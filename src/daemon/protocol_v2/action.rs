@@ -163,7 +163,9 @@ fn quarantine_action(root: &Path, path: &Path, expected: InodeIdentity) -> Resul
         .count()
         >= MAX_ACTION_QUARANTINE
     {
-        bail!("action quarantine capacity exhausted");
+        // Collect instead of failing: the error would propagate out of the
+        // claim path and kill a running daemon over garbage entries.
+        super::linux::gc_quarantine_tail(&quarantine, super::linux::QUARANTINE_RETAINED_ENTRIES)?;
     }
     if inode_identity(path)? != expected {
         bail!("action entry changed before quarantine");
@@ -318,6 +320,13 @@ impl ActionJournal {
         create_private_directory(&root)?;
         create_private_directory(&queue_dir(&root))?;
         create_private_directory(&quarantine_dir(&root))?;
+        // Keep only a tail of quarantined garbage: before this collection, a
+        // full quarantine made every open fail, and under Restart=on-failure
+        // that was a permanent crash-restart loop.
+        super::linux::gc_quarantine_tail(
+            &quarantine_dir(&root),
+            super::linux::QUARANTINE_RETAINED_ENTRIES,
+        )?;
         if fs::read_dir(quarantine_dir(&root))?
             .take(MAX_ACTION_QUARANTINE + 1)
             .count()

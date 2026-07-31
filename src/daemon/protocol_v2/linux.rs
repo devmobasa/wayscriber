@@ -211,6 +211,73 @@ pub(crate) fn read_bounded_regular_file(path: &Path, cap: usize) -> io::Result<V
     Ok(bytes)
 }
 
+/// How many quarantined entries a garbage collection leaves behind for
+/// inspection. Far below the capacity caps, so a quarantine that has been
+/// collected can never trip a fail-stop capacity check again.
+pub(crate) const QUARANTINE_RETAINED_ENTRIES: usize = 64;
+
+/// Deletes the oldest quarantined entries beyond `retain`, newest kept.
+///
+/// Quarantining exists so malformed protocol entries can be inspected, not so
+/// they accumulate: the capacity checks are fail-stop, and before this
+/// collection existed a quarantine that reached its cap made the daemon fail
+/// to open its ledgers — under `Restart=on-failure` a permanent crash-restart
+/// loop until the runtime directory was wiped by hand. Anything that can write
+/// the 0700 runtime directory is the same user, so retaining garbage forever
+/// buys nothing over keeping a tail.
+///
+/// Entries are ranked by ctime, which the rename into quarantine stamps
+/// (mtime travels with the malformed file and can be arbitrary). Removal
+/// failures are logged and skipped — a collection hiccup must not become
+/// another way to wedge the daemon — and a concurrently removed entry is not
+/// an error.
+pub(crate) fn gc_quarantine_tail(dir: &Path, retain: usize) -> io::Result<usize> {
+    let mut entries: Vec<(i64, i64, std::path::PathBuf)> = Vec::new();
+    for entry in std::fs::read_dir(dir)? {
+        let path = entry?.path();
+        match std::fs::symlink_metadata(&path) {
+            Ok(metadata) => entries.push((metadata.ctime(), metadata.ctime_nsec(), path)),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
+    if entries.len() <= retain {
+        return Ok(0);
+    }
+    entries.sort();
+    let excess = entries.len() - retain;
+    let mut removed = 0;
+    for (_, _, path) in entries.into_iter().take(excess) {
+        let is_dir = std::fs::symlink_metadata(&path)
+            .map(|metadata| metadata.is_dir())
+            .unwrap_or(false);
+        let result = if is_dir {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        match result {
+            Ok(()) => {
+                removed += 1;
+                log::debug!("Removed quarantined protocol entry {}", path.display());
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => log::warn!(
+                "Failed to remove quarantined protocol entry {}: {}",
+                path.display(),
+                error
+            ),
+        }
+    }
+    if removed > 0 {
+        log::warn!(
+            "Removed {removed} quarantined protocol entries beyond the {retain}-entry retained tail at {}",
+            dir.display()
+        );
+    }
+    Ok(removed)
+}
+
 pub(crate) fn open_nofollow_directory(path: &Path) -> io::Result<(File, FileIdentity)> {
     let mut options = OpenOptions::new();
     options
