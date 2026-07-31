@@ -47,9 +47,9 @@ pub use field_metadata::{
 };
 #[allow(unused_imports)]
 pub use io::{
-    ConfigEditNotReadBack, ConfigEditOutcome, ConfigEditWrite, ConfigSource, LoadedConfig,
-    QuickColorSlotMissing, ShortcutClaimedOnDisk, persist_keybinding_edit, persist_preset_slot,
-    persist_quick_color,
+    ConfigEditNotReadBack, ConfigEditOutcome, ConfigEditWrite, ConfigSectionError, ConfigSource,
+    LoadedConfig, QuickColorSlotMissing, ShortcutClaimedOnDisk, persist_keybinding_edit,
+    persist_preset_slot, persist_quick_color,
 };
 pub use keybindings::{
     Action, KeyBinding, KeybindingAuthorship, KeybindingConflict, KeybindingsConfig,

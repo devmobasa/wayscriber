@@ -83,6 +83,76 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0] }
     });
 }
 
+/// A value serde cannot map costs its own section for the session — not the
+/// whole file. Before this, one typo threw away every customization with only
+/// a log line, the total-loss variant of #293.
+#[test]
+fn a_bad_value_in_one_section_keeps_every_other_section() {
+    with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).unwrap();
+        let config_file = config_dir.join("config.toml");
+        let original = "[ui]\ntheme = \"drak\"\nshow_status_bar = false\n\n\
+                        [drawing]\ndefault_thickness = 7.0\n\n\
+                        [capture]\nexit_after_capture = true\n";
+        fs::write(&config_file, original).unwrap();
+
+        let loaded = Config::load().expect("a value error must not fail the load");
+
+        assert_eq!(loaded.config.drawing.default_thickness, 7.0);
+        assert!(loaded.config.capture.exit_after_capture);
+        assert!(
+            loaded.config.ui.show_status_bar,
+            "the section holding the bad value falls back to defaults as a whole"
+        );
+        assert_eq!(loaded.section_errors.len(), 1);
+        assert_eq!(loaded.section_errors[0].section, "ui");
+        assert_eq!(
+            fs::read_to_string(&config_file).unwrap(),
+            original,
+            "loading repairs the session, never the file"
+        );
+    });
+}
+
+/// A top-level scalar gets the same treatment as a section.
+#[test]
+fn a_bad_top_level_value_reports_its_own_key() {
+    with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).unwrap();
+        let config_file = config_dir.join("config.toml");
+        fs::write(
+            &config_file,
+            "config_revision = \"three\"\n\n[drawing]\ndefault_thickness = 7.0\n",
+        )
+        .unwrap();
+
+        let loaded = Config::load().expect("a value error must not fail the load");
+
+        assert_eq!(loaded.config.drawing.default_thickness, 7.0);
+        assert_eq!(loaded.section_errors.len(), 1);
+        assert_eq!(loaded.section_errors[0].section, "config_revision");
+        assert_eq!(
+            loaded.config.config_revision, 0,
+            "an unreadable revision behaves like a legacy file without one"
+        );
+    });
+}
+
+/// There is no parsed document to salvage from, so a syntax error still fails
+/// the load (and the caller reports the total fallback).
+#[test]
+fn a_syntax_error_still_fails_the_load() {
+    with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::write(config_dir.join("config.toml"), "not = [valid").unwrap();
+
+        assert!(Config::load().is_err());
+    });
+}
+
 /// Clamping is a load-time repair of the running session, not an edit. A save
 /// that follows it must leave the authored number alone so the user still sees
 /// (and can fix) what they wrote (#293).

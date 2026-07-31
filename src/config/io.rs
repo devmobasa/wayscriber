@@ -26,6 +26,23 @@ pub enum ConfigSource {
     Default,
 }
 
+/// A top-level config entry the load could not understand and replaced with
+/// its defaults for this session. The file keeps the authored value.
+#[derive(Debug, Clone)]
+pub struct ConfigSectionError {
+    /// The top-level key, e.g. `ui` for `[ui]` or `config_revision`.
+    pub section: String,
+    /// The deserialization error, without spans (the value was re-checked from
+    /// the parsed document, not the source text).
+    pub error: String,
+}
+
+impl std::fmt::Display for ConfigSectionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "[{}] {}", self.section, self.error)
+    }
+}
+
 /// Wrapper around [`Config`] that includes metadata about the load location.
 #[derive(Debug)]
 pub struct LoadedConfig {
@@ -33,6 +50,11 @@ pub struct LoadedConfig {
     pub source: ConfigSource,
     /// What validation had to change in memory. Empty for an unvalidated load.
     pub validation: ConfigValidationReport,
+    /// Top-level entries that failed to deserialize and are running on
+    /// defaults for this session. The caller is expected to show these rather
+    /// than let them disappear into the log: before this existed, one bad
+    /// value silently cost the user every customization in the file.
+    pub section_errors: Vec<ConfigSectionError>,
 }
 
 impl Config {
@@ -92,10 +114,11 @@ impl Config {
                 config: Config::default(),
                 source: ConfigSource::Default,
                 validation: ConfigValidationReport::default(),
+                section_errors: Vec::new(),
             });
         };
 
-        let config = Self::read_unvalidated_from(&config_path)?;
+        let (config, section_errors) = Self::read_unvalidated_from(&config_path)?;
 
         info!("Loaded config from {}", config_path.display());
 
@@ -103,6 +126,7 @@ impl Config {
             config,
             source,
             validation: ConfigValidationReport::default(),
+            section_errors,
         })
     }
 
@@ -113,14 +137,67 @@ impl Config {
     /// default, and the result is indistinguishable from a list the user typed.
     /// The presence set is taken from the same text serde sees, so resolution
     /// can tell an authored shortcut from an offer (#293).
-    fn read_unvalidated_from(config_path: &Path) -> Result<Self> {
+    fn read_unvalidated_from(config_path: &Path) -> Result<(Self, Vec<ConfigSectionError>)> {
         let config_str = fs::read_to_string(config_path)
             .with_context(|| format!("Failed to read config from {}", config_path.display()))?;
 
-        let mut config: Self = toml::from_str(&config_str)
-            .with_context(|| format!("Failed to parse config from {}", config_path.display()))?;
-        config.keybinding_authorship = KeybindingAuthorship::from_toml_source(&config_str);
-        Ok(config)
+        let (mut config, section_errors) = match toml::from_str::<Self>(&config_str) {
+            Ok(config) => (config, Vec::new()),
+            // A mapping error in one entry must not cost the session the whole
+            // file: re-parse per top-level entry, keep everything that maps,
+            // and report what had to fall back to defaults. A syntax error is
+            // different — there is no parsed document to salvage from — and
+            // still fails the load.
+            Err(parse_err) => {
+                let table = toml::from_str::<toml::Table>(&config_str).with_context(|| {
+                    format!("Failed to parse config from {}", config_path.display())
+                })?;
+                Self::salvage_sections(table, &parse_err)?
+            }
+        };
+        config.keybinding_authorship = if section_errors
+            .iter()
+            .any(|entry| entry.section == "keybindings")
+        {
+            // The section is running on shipped defaults, which the file
+            // does not describe; presence in the source must not make
+            // those defaults look authored.
+            KeybindingAuthorship::default()
+        } else {
+            KeybindingAuthorship::from_toml_source(&config_str)
+        };
+        Ok((config, section_errors))
+    }
+
+    /// Rebuilds a config from a parsed document one top-level entry at a time,
+    /// dropping only the entries that fail to map.
+    ///
+    /// Every section of [`Config`] is `#[serde(default)]`, so a table holding
+    /// a single entry is a complete probe for that entry. `full_error` is the
+    /// error from the whole-file parse, kept for the (theoretically
+    /// impossible) case where every entry maps individually but the pruned
+    /// document still fails.
+    fn salvage_sections(
+        table: toml::Table,
+        full_error: &toml::de::Error,
+    ) -> Result<(Self, Vec<ConfigSectionError>)> {
+        let mut pruned = table.clone();
+        let mut section_errors = Vec::new();
+        for (key, value) in &table {
+            let mut probe = toml::Table::new();
+            probe.insert(key.clone(), value.clone());
+            if let Err(err) = probe.try_into::<Self>() {
+                section_errors.push(ConfigSectionError {
+                    section: key.clone(),
+                    error: err.message().to_string(),
+                });
+                pruned.remove(key);
+            }
+        }
+        let config = pruned
+            .try_into::<Self>()
+            .with_context(|| format!("Failed to parse config: {}", full_error.message()))?;
+        Ok((config, section_errors))
     }
 
     /// Test-only convenience for exercising the revision-guarded document

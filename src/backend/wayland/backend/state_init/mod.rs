@@ -41,6 +41,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         source,
         exit_after_capture_mode,
         keybindings,
+        load_failure,
     } = config::load(backend.exit_after_capture_mode);
     let config_dir = Config::config_directory_from_source(&source)?;
     let session_options =
@@ -55,6 +56,11 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let tablet_manager = tablet::bind_tablet_manager(&setup, &config);
 
     let mut input_state = input_state::build_input_state(&config);
+    config::notify_config_load_failure(
+        &mut input_state,
+        backend.tokio_runtime.handle(),
+        load_failure.as_ref(),
+    );
     config::notify_invalid_keybindings(
         &mut input_state,
         backend.tokio_runtime.handle(),
