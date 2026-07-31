@@ -294,7 +294,7 @@ fn gif_decoder(
 }
 
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)] // consumed by clipboard paste validation (acceptance wiring)
+#[allow(dead_code)] // informational fields; read by tests and future toast detail
 pub(crate) struct AnimationProbe {
     pub(crate) width: u32,
     pub(crate) height: u32,
@@ -305,7 +305,7 @@ pub(crate) struct AnimationProbe {
 }
 
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)] // consumed by clipboard paste validation (acceptance wiring)
+#[allow(dead_code)] // informational fields; read by tests and future toast detail
 pub(crate) enum AnimationLimit {
     TooManyFrames { limit: usize },
     TooManyDecodedPixels { limit: u64 },
@@ -313,7 +313,7 @@ pub(crate) enum AnimationLimit {
 
 /// Whether a GIF is worth animating, shared by paste validation and playback.
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)] // consumed by clipboard paste validation (acceptance wiring)
+#[allow(dead_code)] // callers match on variants; fields feed tests and future toast detail
 pub(crate) enum AnimationVerdict {
     Animate(AnimationProbe),
     StaticFallback {
@@ -325,7 +325,6 @@ pub(crate) enum AnimationVerdict {
 /// Full validation for untrusted paste payloads: every frame's LZW stream is
 /// decoded (pixels discarded). Budget checks bail early, so an over-budget
 /// GIF only pays for the frames under the cap.
-#[allow(dead_code)] // consumed by clipboard paste validation (acceptance wiring)
 pub(crate) fn gif_animation_verdict(bytes: &[u8]) -> Result<AnimationVerdict, String> {
     gif_verdict_impl(bytes, true)
 }
@@ -333,7 +332,6 @@ pub(crate) fn gif_animation_verdict(bytes: &[u8]) -> Result<AnimationVerdict, St
 /// Metadata-only scan (frame headers, no LZW decode). Cheap enough for the
 /// main thread when only the animate-vs-static verdict is needed for bytes
 /// that already passed full validation at paste time.
-#[allow(dead_code)] // consumed by clipboard paste validation (acceptance wiring)
 pub(crate) fn gif_animation_metadata_verdict(bytes: &[u8]) -> Result<AnimationVerdict, String> {
     gif_verdict_impl(bytes, false)
 }

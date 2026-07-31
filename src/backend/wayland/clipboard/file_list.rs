@@ -1,5 +1,5 @@
 use super::{
-    CLIPBOARD_READ_TIMEOUT, ClipboardPasteResult, ClipboardReadError, MAX_CLIPBOARD_IMAGE_BYTES,
+    CLIPBOARD_READ_TIMEOUT, ClipboardPasteResult, ClipboardReadError, MAX_CLIPBOARD_GIF_BYTES,
     image::decode_clipboard_image, system::read_pipe_with_timeout,
 };
 use crate::file_uri;
@@ -97,7 +97,9 @@ fn parse_clipboard_file_uris(mime_type: &str, bytes: &[u8]) -> Result<Vec<String
 fn read_clipboard_file(path: &Path) -> Result<Vec<u8>, ClipboardReadError> {
     ensure_regular_clipboard_path(path)?;
     let file = open_regular_clipboard_file(path)?;
-    read_pipe_with_timeout(file, MAX_CLIPBOARD_IMAGE_BYTES, CLIPBOARD_READ_TIMEOUT)
+    // The format is unknown until the bytes are sniffed, so read up to the
+    // most permissive cap; decode_clipboard_image enforces per-format limits.
+    read_pipe_with_timeout(file, MAX_CLIPBOARD_GIF_BYTES, CLIPBOARD_READ_TIMEOUT)
 }
 
 fn map_clipboard_file_read_error(path: &Path, err: ClipboardReadError) -> ClipboardPasteResult {
@@ -142,9 +144,9 @@ fn validate_clipboard_file_metadata(
             path.display()
         )));
     }
-    if metadata.len() > MAX_CLIPBOARD_IMAGE_BYTES as u64 {
+    if metadata.len() > MAX_CLIPBOARD_GIF_BYTES as u64 {
         return Err(ClipboardReadError::TooLarge {
-            limit: MAX_CLIPBOARD_IMAGE_BYTES,
+            limit: MAX_CLIPBOARD_GIF_BYTES,
         });
     }
     Ok(())
@@ -316,5 +318,59 @@ mod tests {
             writer.write_image_data(&[255, 0, 0, 255]).unwrap();
         }
         bytes
+    }
+
+    fn tiny_gif() -> Vec<u8> {
+        let palette = [255, 0, 0, 0, 0, 255];
+        let mut bytes = Vec::new();
+        {
+            let mut encoder = gif::Encoder::new(&mut bytes, 2, 2, &palette).unwrap();
+            for color in [0u8, 1u8] {
+                let mut frame = gif::Frame::default();
+                frame.width = 2;
+                frame.height = 2;
+                frame.buffer = vec![color; 4].into();
+                frame.delay = 10;
+                encoder.write_frame(&frame).unwrap();
+            }
+        }
+        bytes
+    }
+
+    #[test]
+    fn uri_list_paste_decodes_gif_files_via_sniffing() {
+        let temp = TempDir::new().unwrap();
+        let image_path = temp.path().join("cat.gif");
+        fs::write(&image_path, tiny_gif()).unwrap();
+        let uri = file_uri_for_path(&image_path);
+        let offered = vec![TEXT_URI_LIST_MIME.to_string()];
+
+        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.into_bytes(), offered);
+
+        match result {
+            ClipboardPasteResult::Image(image) => {
+                assert_eq!(image.mime_type, "image/gif");
+                assert_eq!((image.width, image.height), (2, 2));
+            }
+            other => panic!("expected image result, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn uri_list_paste_rejects_files_over_the_gif_cap() {
+        let temp = TempDir::new().unwrap();
+        let image_path = temp.path().join("huge.gif");
+        let mut bytes = tiny_gif();
+        bytes.resize(super::MAX_CLIPBOARD_GIF_BYTES + 1, 0);
+        fs::write(&image_path, bytes).unwrap();
+        let uri = file_uri_for_path(&image_path);
+        let offered = vec![TEXT_URI_LIST_MIME.to_string()];
+
+        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.into_bytes(), offered);
+
+        assert!(
+            matches!(result, ClipboardPasteResult::TooLarge { .. }),
+            "got {result:?}"
+        );
     }
 }

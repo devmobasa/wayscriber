@@ -25,6 +25,10 @@ pub(super) const WAYSCRIBER_SELECTION_MIME: &str = "application/vnd.wayscriber.s
 // A pasted image is persisted in the visible frame and in the Create undo action.
 // Keep one accepted image comfortably below the default 50 MiB session JSON budget.
 pub(super) const MAX_CLIPBOARD_IMAGE_BYTES: usize = 3 * 1024 * 1024;
+// GIFs carry every animation frame, so the single-frame cap would reject most
+// real-world animations. Sized so base64 of one accepted GIF, duplicated into
+// the Create undo action (~21.3 MiB total), still fits the session budget.
+pub(super) const MAX_CLIPBOARD_GIF_BYTES: usize = 8 * 1024 * 1024;
 pub(super) const MAX_CLIPBOARD_SELECTION_BYTES: usize = 2 * 1024 * 1024;
 pub(super) const MAX_CLIPBOARD_IMAGE_PIXELS: u64 = 48_000_000;
 pub(super) const CLIPBOARD_READ_TIMEOUT: Duration = Duration::from_millis(1500);

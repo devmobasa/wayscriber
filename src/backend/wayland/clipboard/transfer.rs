@@ -1,7 +1,8 @@
 use super::{
     CLIPBOARD_READ_TIMEOUT, ClipboardPasteCompletion, ClipboardPasteResult,
-    ClipboardPublishCompletion, ClipboardReadError, MAX_CLIPBOARD_IMAGE_BYTES,
-    MAX_CLIPBOARD_SELECTION_BYTES, WAYSCRIBER_SELECTION_MIME, file_list, image, system,
+    ClipboardPublishCompletion, ClipboardReadError, MAX_CLIPBOARD_GIF_BYTES,
+    MAX_CLIPBOARD_IMAGE_BYTES, MAX_CLIPBOARD_SELECTION_BYTES, WAYSCRIBER_SELECTION_MIME, file_list,
+    image, system,
 };
 use crate::draw::{EmbeddedImage, Shape};
 use crate::input::state::{
@@ -152,6 +153,8 @@ pub(in crate::backend::wayland) fn resolve_system_clipboard() -> ClipboardPasteR
     );
     let limit = if mime_type == WAYSCRIBER_SELECTION_MIME {
         MAX_CLIPBOARD_SELECTION_BYTES
+    } else if mime_type == "image/gif" {
+        MAX_CLIPBOARD_GIF_BYTES
     } else {
         MAX_CLIPBOARD_IMAGE_BYTES
     };

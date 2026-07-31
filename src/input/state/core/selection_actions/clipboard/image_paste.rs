@@ -22,6 +22,14 @@ impl InputState {
         let image_width = image.width;
         let image_height = image.height;
         let image_bytes = image.bytes.len();
+        // Metadata-only scan (no LZW decode): the payload already passed full
+        // validation on the clipboard worker; this only re-derives the
+        // animate-vs-static verdict for the toast below.
+        let gif_static_fallback = image.mime_type == "image/gif"
+            && matches!(
+                crate::image_decode::gif_animation_metadata_verdict(&image.bytes),
+                Ok(crate::image_decode::AnimationVerdict::StaticFallback { .. })
+            );
         let target_active = self.clipboard_request_targets_active_page(request);
         let max_shapes = self.max_shapes_per_frame;
         let undo_limit = self.undo_stack_limit;
@@ -94,6 +102,13 @@ impl InputState {
             self.invalidate_hit_cache_for(new_id);
             self.set_selection(vec![new_id]);
             self.needs_redraw = true;
+        }
+        if gif_static_fallback {
+            self.push_toast(
+                ToastPriority::Info,
+                "selection.clipboard",
+                Toast::info("GIF exceeds animation limits; pasted as a static image."),
+            );
         }
         log::info!(
             "Pasted external image shape {} from request {} into board '{}' page {}: target_active={}, mime={}, image={}x{}, bytes={}, display_bounds=({}, {}, {}, {}), undo_entries={}",
