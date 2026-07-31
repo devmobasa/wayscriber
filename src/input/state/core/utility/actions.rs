@@ -22,6 +22,7 @@ impl InputState {
 
     pub fn set_action_bindings(&mut self, action_bindings: HashMap<Action, Vec<KeyBinding>>) {
         self.action_bindings = action_bindings;
+        self.keymap_revision = self.keymap_revision.wrapping_add(1);
     }
 
     /// Install a keymap rebuilt after a shortcut edit.
@@ -36,6 +37,7 @@ impl InputState {
     ) {
         self.action_map = action_map;
         self.action_bindings = action_bindings;
+        self.keymap_revision = self.keymap_revision.wrapping_add(1);
         self.needs_redraw = true;
     }
 

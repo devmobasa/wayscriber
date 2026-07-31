@@ -77,6 +77,8 @@ impl InputState {
         tool_settings.step_marker.thickness =
             super::super::super::utility::default_step_marker_size(font_size);
         let mut state = Self {
+            keymap_revision: 0,
+            command_palette_results: std::cell::RefCell::new(None),
             boards: BoardManager::from_config(boards_config),
             current_color: color,
             quick_colors: QuickColorPalette::default(),

@@ -396,6 +396,15 @@ pub struct InputState {
     pub(in crate::input::state::core) action_map: HashMap<KeyBinding, Action>,
     /// Ordered keybindings per action (as configured)
     pub(in crate::input::state::core) action_bindings: HashMap<Action, Vec<KeyBinding>>,
+    /// Bumped whenever the keymap is replaced. Shortcut labels feed command
+    /// scoring, so the palette's result cache keys on this.
+    pub(in crate::input::state::core) keymap_revision: u64,
+    /// Memoized `filtered_commands()` output. The renderer asks for the row
+    /// list twice per frame and each ask re-scored every registry entry with
+    /// per-entry allocations.
+    pub(in crate::input::state::core) command_palette_results: std::cell::RefCell<
+        Option<crate::input::state::core::command_palette::CommandPaletteResults>,
+    >,
     /// Pending backend output action (to be handled by WaylandState).
     pub(in crate::input::state::core) pending_backend_action: Option<PendingBackendAction>,
     /// Durable toolbar chrome changes awaiting their runtime-ui.toml write,

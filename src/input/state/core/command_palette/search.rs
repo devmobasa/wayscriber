@@ -39,9 +39,43 @@ impl CommandPaletteListRow {
     }
 }
 
+/// Memoized `filtered_commands()` output, valid while the inputs it scored
+/// from are unchanged.
+#[derive(Debug)]
+pub(in crate::input::state::core) struct CommandPaletteResults {
+    query: String,
+    recents: Vec<Action>,
+    keymap_revision: u64,
+    results: Vec<&'static CommandEntry>,
+}
+
 impl InputState {
     /// Get the filtered list of commands matching the current query.
+    ///
+    /// Memoized: scoring walks the whole registry and allocates per entry,
+    /// and the renderer asks for the row list twice per frame on top of every
+    /// keystroke and repeat tick. The key is everything `score_command` reads:
+    /// the query, the recents that bias it, and the keymap revision behind the
+    /// shortcut labels it folds in.
     pub fn filtered_commands(&self) -> Vec<&'static CommandEntry> {
+        if let Some(cached) = self.command_palette_results.borrow().as_ref()
+            && cached.query == self.command_palette_query
+            && cached.keymap_revision == self.keymap_revision
+            && cached.recents == self.command_palette_recent
+        {
+            return cached.results.clone();
+        }
+        let results = self.score_filtered_commands();
+        *self.command_palette_results.borrow_mut() = Some(CommandPaletteResults {
+            query: self.command_palette_query.clone(),
+            recents: self.command_palette_recent.clone(),
+            keymap_revision: self.keymap_revision,
+            results: results.clone(),
+        });
+        results
+    }
+
+    fn score_filtered_commands(&self) -> Vec<&'static CommandEntry> {
         let query = normalize_query(&self.command_palette_query);
         let tokens = query_tokens(&query);
 
@@ -431,5 +465,56 @@ mod tests {
         let ui = entry(ActionCategory::UI);
         assert!(category_runs_are_unique(&[zoom, zoom, ui]));
         assert!(!category_runs_are_unique(&[zoom, ui, zoom]));
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use crate::config::keybindings::Action;
+    use crate::input::state::test_support::make_test_input_state;
+
+    /// The cache keys on everything `score_command` reads, so a change to any
+    /// of them has to produce a fresh ranking rather than a stale one.
+    #[test]
+    fn results_follow_the_query_the_recents_and_the_keymap() {
+        let mut state = make_test_input_state();
+
+        state.command_palette_query = "undo".to_string();
+        let undo_results = state.filtered_commands();
+        assert!(!undo_results.is_empty());
+        // A repeat ask is served from the cache and must agree with itself.
+        assert_eq!(
+            state
+                .filtered_commands()
+                .iter()
+                .map(|entry| entry.action)
+                .collect::<Vec<_>>(),
+            undo_results
+                .iter()
+                .map(|entry| entry.action)
+                .collect::<Vec<_>>()
+        );
+
+        state.command_palette_query = "redo".to_string();
+        let redo_first = state.filtered_commands().first().map(|entry| entry.action);
+        let undo_first = undo_results.first().map(|entry| entry.action);
+        assert_ne!(redo_first, undo_first, "a new query must re-rank");
+
+        // Recents bias the ranking, so promoting one has to invalidate.
+        state.command_palette_query = String::new();
+        let before = state.filtered_commands().first().map(|entry| entry.action);
+        state.set_command_palette_recents(vec![Action::ClearCanvas]);
+        let after = state.filtered_commands().first().map(|entry| entry.action);
+        assert_eq!(after, Some(Action::ClearCanvas));
+        assert_ne!(before, after, "a new recent must re-rank");
+
+        // Shortcut labels are scored, so replacing the keymap must invalidate.
+        state.command_palette_query = "undo".to_string();
+        let _ = state.filtered_commands();
+        state.set_action_bindings(std::collections::HashMap::new());
+        assert!(
+            !state.filtered_commands().is_empty(),
+            "a keymap change must produce a fresh ranking, not a stale one"
+        );
     }
 }
