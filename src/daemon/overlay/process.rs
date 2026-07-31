@@ -20,11 +20,12 @@ impl Daemon {
                 warn!("Failed to signal overlay process: {err:#}");
             }
 
-            // Wait on the child's pidfd rather than sleeping between polls: a
-            // pidfd becomes readable exactly when its process exits, and the
-            // daemon runs one thread, so every 50ms spent asleep here was
-            // 50ms of SIGTERM and tray events sitting queued. Shutdown runs
-            // this same path, so the sleep was also latency on quit.
+            // Wait on the child's pidfd rather than waking every 50ms to poll
+            // it. A pidfd becomes readable exactly when its process exits, so
+            // prompt exits are observed immediately and slow exits cost no
+            // periodic wakeups. This termination path is still synchronous:
+            // the daemon event loop remains occupied until the child exits or
+            // the graceful timeout expires.
             let exit_watch = super::super::protocol_v2::open_overlay_pidfd(pid).ok();
             let deadline = super::super::protocol_v2::BootClock::now()?.checked_add(timeout)?;
             loop {

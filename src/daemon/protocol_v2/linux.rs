@@ -358,9 +358,8 @@ pub(crate) fn open_pidfd(pid: u32) -> io::Result<OwnedFd> {
 /// whether it exited.
 ///
 /// A pidfd becomes readable exactly when its process does, so waiting on one
-/// replaces a sleep-poll loop: the daemon runs a single thread, and time spent
-/// sleeping between `try_wait` calls is time SIGTERM and tray events sit
-/// queued and unserviced.
+/// replaces a periodic sleep-poll loop and observes prompt exits without up to
+/// one polling interval of delay.
 pub(crate) fn wait_for_pidfd_exit(fd: BorrowedFd<'_>, timeout: Duration) -> io::Result<bool> {
     let deadline = Instant::now() + timeout;
     loop {
