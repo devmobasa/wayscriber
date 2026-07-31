@@ -526,6 +526,86 @@ fn save_with_backup_preserves_symlinked_config_target_and_backup_contents() {
     });
 }
 
+/// Every value in `config.example.toml` claims to be a configured default.
+/// This pins that claim: the example parsed as a `Config` must serialize to
+/// the same tree as `Config::default()`, so a default changed in code without
+/// updating the example (or vice versa) fails here instead of drifting.
+#[test]
+fn config_example_values_equal_the_compiled_defaults() {
+    // Values with a documented reason to differ:
+    // - page navigation consults the desktop environment at call time; the
+    //   example documents the non-GNOME variant.
+    // - boards.items, drawing.quick_colors, presets.slot_1, and the toolbar
+    //   order lists spell out effective built-in defaults for fields whose
+    //   compiled default is "unset" (or, for boards, author colors in the
+    //   friendlier `{ rgb = ... }` syntax that serializes differently).
+    //   boards.items also hides a known internal inconsistency: the serde
+    //   field default for auto_adjust_pen is true while the hand-built
+    //   transparent default is false.
+    const ALLOWED_DRIFT: &[&str] = &[
+        "keybindings.page_prev",
+        "keybindings.page_next",
+        "boards.items",
+        "drawing.quick_colors",
+        "presets.slot_1",
+        "ui.toolbar.items.order",
+    ];
+
+    let example = include_str!("../../../config.example.toml");
+    let example: Config = toml::from_str(example).expect("config.example.toml should parse");
+    let example = toml::Value::try_from(example).expect("serialize example config");
+    let defaults = toml::Value::try_from(Config::default()).expect("serialize default config");
+
+    let mut drifts = Vec::new();
+    collect_value_drifts("", &example, &defaults, &mut drifts);
+    drifts.retain(|entry| {
+        !ALLOWED_DRIFT
+            .iter()
+            .any(|allowed| entry.starts_with(allowed))
+    });
+    assert!(
+        drifts.is_empty(),
+        "config.example.toml drifted from Config::default():\n{}",
+        drifts.join("\n")
+    );
+}
+
+fn collect_value_drifts(
+    path: &str,
+    example: &toml::Value,
+    defaults: &toml::Value,
+    drifts: &mut Vec<String>,
+) {
+    match (example, defaults) {
+        (toml::Value::Table(example), toml::Value::Table(defaults)) => {
+            let missing = defaults.keys().filter(|key| !example.contains_key(*key));
+            for key in example.keys().chain(missing) {
+                let child = if path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{path}.{key}")
+                };
+                match (example.get(key), defaults.get(key)) {
+                    (Some(example), Some(defaults)) => {
+                        collect_value_drifts(&child, example, defaults, drifts)
+                    }
+                    (Some(example), None) => {
+                        drifts.push(format!("{child}: example has {example}, defaults omit it"))
+                    }
+                    (None, Some(defaults)) => drifts.push(format!(
+                        "{child}: defaults have {defaults}, example omits it"
+                    )),
+                    (None, None) => unreachable!(),
+                }
+            }
+        }
+        (example, defaults) if example == defaults => {}
+        (example, defaults) => {
+            drifts.push(format!("{path}: example {example} vs default {defaults}"))
+        }
+    }
+}
+
 #[test]
 fn config_example_parses_and_documents_current_user_facing_fields() {
     let example = include_str!("../../../config.example.toml");

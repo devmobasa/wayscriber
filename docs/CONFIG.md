@@ -392,13 +392,13 @@ length = 20.0
 angle_degrees = 24.0
 
 # Place the arrowhead at the end of the line instead of the start
-head_at_end = false
+head_at_end = true
 ```
 
 **Defaults:**
 - Length: 20.0px
-- Angle: 30.0°
-- Head at end: false (head at the start)
+- Angle: 24.0°
+- Head at end: true
 
 ### `[presets]` - Quick Tool Slots
 
@@ -1877,11 +1877,11 @@ save_preset_2 = ["Shift+2"]
 save_preset_3 = ["Shift+3"]
 save_preset_4 = ["Shift+4"]
 save_preset_5 = ["Shift+5"]
-clear_preset_1 = []
-clear_preset_2 = []
-clear_preset_3 = []
-clear_preset_4 = []
-clear_preset_5 = []
+clear_preset_1 = ["Ctrl+1"]
+clear_preset_2 = ["Ctrl+2"]
+clear_preset_3 = ["Ctrl+3"]
+clear_preset_4 = ["Ctrl+4"]
+clear_preset_5 = ["Ctrl+5"]
 
 # Help overlay (press F10 while drawing for a full reference)
 ```
