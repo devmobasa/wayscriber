@@ -58,10 +58,18 @@ impl ToolbarEventPolicy {
 /// configurator's Save, or one of the overlay's three scoped edits — a shortcut
 /// rebind, a preset slot, a quick-color swatch — each of which writes its own
 /// key through the audited worker path. Flipping a toolbar preference is not
-/// one of them. An event that changes an authored preference — icons, section
-/// visibility, layout mode, status bar, badges, click highlight, the input HUD
-/// — is `Ephemeral`: it changes the effective value for this run and the next
-/// start reads the configured one back.
+/// one of them.
+///
+/// A preference the user flips from the overlay — icons, section visibility,
+/// layout mode, status bar, badges, click highlight, the input HUD — persists
+/// as a `RuntimeUi` override layered over the authored value instead, so it
+/// survives a restart while `config.toml` reads exactly as written. The
+/// authored value stays the seed the override is measured against, which is
+/// why no toggle may write it: a seed that moved with its own override would
+/// make the override redundant, and reconciliation would drop it.
+///
+/// `Ephemeral` is what is left: drawing state the session file owns, and
+/// one-shot actions that persist nothing of their own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolbarPersistence {
     Ephemeral,
@@ -463,24 +471,17 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         ToolbarEvent::ToggleSideSectionCollapsed(section, _) => {
             ToolbarPersistence::RuntimeUi(Runtime::CollapsedSection(*section))
         }
-        // A section row is an authored preference, not runtime-UI item state:
-        // `runtime_seeds_from_config` deliberately grows no seed for it, so
-        // hiding one changes the effective config for this run and comes back
-        // from `config.toml` on the next start. Every other item keeps its
-        // runtime-UI override.
+        // Section rows were routed to `NamedSection` above; every other item
+        // keeps its own visibility override.
         ToolbarEvent::SetToolbarItemHidden(id, hidden) => {
-            if section_flag_for_item(*id).is_some() {
-                ToolbarPersistence::Ephemeral
-            } else {
-                ToolbarPersistence::RuntimeUi(Runtime::ItemVisibility {
-                    id: *id,
-                    setting: if *hidden {
-                        ToolbarItemVisibilitySetting::Hidden
-                    } else {
-                        ToolbarItemVisibilitySetting::Default
-                    },
-                })
-            }
+            ToolbarPersistence::RuntimeUi(Runtime::ItemVisibility {
+                id: *id,
+                setting: if *hidden {
+                    ToolbarItemVisibilitySetting::Hidden
+                } else {
+                    ToolbarItemVisibilitySetting::Default
+                },
+            })
         }
         ToolbarEvent::MoveToolbarItem { group, .. }
         | ToolbarEvent::StartToolbarItemDrag { group, .. }
@@ -500,8 +501,8 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::ToggleHighlightToolRing(_) => {
             ToolbarPersistence::RuntimeUi(Runtime::ClickHighlight)
         }
-        // Authored preferences below: applying them updates the effective
-        // config for this run only (see `ToolbarPersistence`).
+        // Ephemeral below: drawing state that belongs to the session file, or
+        // one-shot actions that persist nothing of their own.
         ToolbarEvent::SelectTool(_)
         | ToolbarEvent::SetColor(_)
         | ToolbarEvent::SetQuickColor { .. }
