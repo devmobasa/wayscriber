@@ -103,6 +103,7 @@ mod color_picker;
 mod core;
 mod data;
 mod eyedropper;
+mod gif_animation;
 mod gtk_toolbar;
 mod helpers;
 mod input_actions;

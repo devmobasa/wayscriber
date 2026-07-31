@@ -53,6 +53,10 @@ impl WaylandState {
             text_edit_entry_active,
             input_hud_animating,
         ) = record_stage!(advance_animations, {
+            // GIF frames advance on their own per-entry deadlines and emit
+            // their own damage; they intentionally stay out of the
+            // ui_animation_active fold below.
+            self.advance_gif_animations(now);
             (
                 self.input_state.advance_click_highlights(now),
                 self.input_state.advance_preset_feedback(now),

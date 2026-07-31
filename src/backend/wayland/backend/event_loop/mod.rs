@@ -122,7 +122,12 @@ pub(super) fn run_event_loop(
                 state.ui_animation_timeout(now),
                 state.top_strip_fade_timeout(now),
             ),
-            state.inline_toolbar_tooltip_timeout(now),
+            min_timeout(
+                state.inline_toolbar_tooltip_timeout(now),
+                // A due GIF frame must wake the loop on its own schedule; GIFs
+                // are deliberately not part of the ui_animation clock.
+                state.gif_frame_timeout(now),
+            ),
         );
         let toolbar_handoff_timeout = state.toolbar_drag_handoff_timeout(now);
         let autosave_timeout = session_save::autosave_timeout(state, now);
@@ -264,6 +269,12 @@ pub(super) fn run_event_loop(
         state.tick_key_repeat(Instant::now(), conn, qh);
 
         if !capture_active && state.ui_animation_due(std::time::Instant::now()) {
+            state.input_state.needs_redraw = true;
+        }
+
+        // Same gate as the render pass's GIF advance: a due, visible, playing
+        // GIF frame requests the redraw whose advance pass will paint it.
+        if !capture_active && state.gif_frames_due(std::time::Instant::now()) {
             state.input_state.needs_redraw = true;
         }
 
