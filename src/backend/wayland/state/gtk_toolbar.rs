@@ -201,10 +201,12 @@ impl WaylandState {
                     seq,
                     phase,
                 } => {
-                    super::drag_log(format!(
-                        "gtk top receive seq={seq} phase={phase:?} offset=({x:.3},{y:.3}) surface={}x{}",
-                        surface_size.width, surface_size.height,
-                    ));
+                    super::drag_log(|| {
+                        format!(
+                            "gtk top receive seq={seq} phase={phase:?} offset=({x:.3},{y:.3}) surface={}x{}",
+                            surface_size.width, surface_size.height,
+                        )
+                    });
                     self.data.gtk_top_offset_seq = seq;
                     self.apply_gtk_top_offset(x, y, surface_size, phase);
                 }
@@ -215,10 +217,12 @@ impl WaylandState {
                     seq,
                     phase,
                 } => {
-                    super::drag_log(format!(
-                        "gtk side receive seq={seq} phase={phase:?} offset=({x:.3},{y:.3}) surface={}x{}",
-                        surface_size.width, surface_size.height,
-                    ));
+                    super::drag_log(|| {
+                        format!(
+                            "gtk side receive seq={seq} phase={phase:?} offset=({x:.3},{y:.3}) surface={}x{}",
+                            surface_size.width, surface_size.height,
+                        )
+                    });
                     self.data.gtk_side_offset_seq = seq;
                     self.apply_gtk_side_offset(x, y, surface_size, phase);
                 }

@@ -10,16 +10,18 @@ impl WaylandState {
         if !self.toolbar_position_drag_update_allowed(kind) {
             return;
         }
-        drag_log(format!(
-            "relative delta begin: kind={:?}, delta=({:.3}, {:.3}), offsets_before=({}, {})/({}, {})",
-            kind,
-            delta.0,
-            delta.1,
-            self.data.toolbar_top_offset,
-            self.data.toolbar_top_offset_y,
-            self.data.toolbar_side_offset_x,
-            self.data.toolbar_side_offset
-        ));
+        drag_log(|| {
+            format!(
+                "relative delta begin: kind={:?}, delta=({:.3}, {:.3}), offsets_before=({}, {})/({}, {})",
+                kind,
+                delta.0,
+                delta.1,
+                self.data.toolbar_top_offset,
+                self.data.toolbar_top_offset_y,
+                self.data.toolbar_side_offset_x,
+                self.data.toolbar_side_offset
+            )
+        });
         let snapshot = self
             .toolbar
             .last_snapshot()
@@ -39,16 +41,18 @@ impl WaylandState {
 
         self.apply_toolbar_offsets_throttled(&snapshot);
 
-        drag_log(format!(
-            "relative delta applied: kind={:?}, delta=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
-            kind,
-            delta.0,
-            delta.1,
-            self.data.toolbar_top_offset,
-            self.data.toolbar_top_offset_y,
-            self.data.toolbar_side_offset_x,
-            self.data.toolbar_side_offset
-        ));
+        drag_log(|| {
+            format!(
+                "relative delta applied: kind={:?}, delta=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
+                kind,
+                delta.0,
+                delta.1,
+                self.data.toolbar_top_offset,
+                self.data.toolbar_top_offset_y,
+                self.data.toolbar_side_offset_x,
+                self.data.toolbar_side_offset
+            )
+        });
 
         if self.inline_toolbars_render_active() {
             self.input_state.dirty_tracker.mark_full();
@@ -69,15 +73,17 @@ impl WaylandState {
             if commit {
                 self.reconcile_top_base_after_drag();
             }
-            drag_log(format!(
-                "end move drag: offsets=({}, {})/({}, {}), active_kind={:?}, pointer_locked={}",
-                self.data.toolbar_top_offset,
-                self.data.toolbar_top_offset_y,
-                self.data.toolbar_side_offset_x,
-                self.data.toolbar_side_offset,
-                self.data.active_drag_kind,
-                self.pointer_lock_active()
-            ));
+            drag_log(|| {
+                format!(
+                    "end move drag: offsets=({}, {})/({}, {}), active_kind={:?}, pointer_locked={}",
+                    self.data.toolbar_top_offset,
+                    self.data.toolbar_top_offset_y,
+                    self.data.toolbar_side_offset_x,
+                    self.data.toolbar_side_offset,
+                    self.data.active_drag_kind,
+                    self.pointer_lock_active()
+                )
+            });
             self.data.toolbar_move_drag = None;
             self.set_toolbar_dragging(false);
             self.set_pointer_over_toolbar(false);

@@ -295,10 +295,12 @@ fn sat_val_event_for_hit(hue: f64, hit: &HitRegion, x: f64, y: f64) -> ToolbarEv
     let s = ((x - hit.rect.0) / hit.rect.2.max(1.0)).clamp(0.0, 1.0);
     let v = (1.0 - (y - hit.rect.1) / hit.rect.3.max(1.0)).clamp(0.0, 1.0);
     if debug_toolbar_color_logging_enabled() {
-        color_log(format!(
-            "toolbar pick sat/val: pos=({x:.1},{y:.1}) rect={:?} h={hue:.3} s={s:.3} v={v:.3}",
-            hit.rect
-        ));
+        color_log(|| {
+            format!(
+                "toolbar pick sat/val: pos=({x:.1},{y:.1}) rect={:?} h={hue:.3} s={s:.3} v={v:.3}",
+                hit.rect
+            )
+        });
     }
     ToolbarEvent::SetColorHsv { h: hue, s, v }
 }
@@ -308,10 +310,12 @@ fn sat_val_event_for_hit(hue: f64, hit: &HitRegion, x: f64, y: f64) -> ToolbarEv
 fn hue_event_for_hit(sat: f64, val: f64, hit: &HitRegion, x: f64) -> ToolbarEvent {
     let h = ((x - hit.rect.0) / hit.rect.2.max(1.0)).clamp(0.0, 1.0);
     if debug_toolbar_color_logging_enabled() {
-        color_log(format!(
-            "toolbar pick hue: x={x:.1} rect={:?} h={h:.3} s={sat:.3} v={val:.3}",
-            hit.rect
-        ));
+        color_log(|| {
+            format!(
+                "toolbar pick hue: x={x:.1} rect={:?} h={h:.3} s={sat:.3} v={val:.3}",
+                hit.rect
+            )
+        });
     }
     ToolbarEvent::SetColorHsv { h, s: sat, v: val }
 }

@@ -13,5 +13,15 @@ pub use authorship::KeybindingAuthorship;
 pub use binding::KeyBinding;
 pub use config::{KeybindingConflict, KeybindingsConfig};
 
+/// The compiled-in default keymap, built once per process.
+///
+/// Constructing a `KeybindingsConfig` allocates a `Vec<String>` per action —
+/// hundreds of strings — and callers of the "is this action rebindable" check
+/// include the command palette's per-frame tooltip path.
+pub fn default_keybindings() -> &'static KeybindingsConfig {
+    static DEFAULTS: std::sync::OnceLock<KeybindingsConfig> = std::sync::OnceLock::new();
+    DEFAULTS.get_or_init(KeybindingsConfig::default)
+}
+
 #[cfg(test)]
 mod tests;

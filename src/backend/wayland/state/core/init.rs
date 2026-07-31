@@ -93,13 +93,15 @@ impl WaylandState {
         data.toolbar_top_offset_y = positions.top.1;
         data.toolbar_side_offset = positions.side.1;
         data.toolbar_side_offset_x = positions.side.0;
-        drag_log(format!(
-            "load offsets from config seeds and runtime overrides: top_offset=({}, {}), side_offset=({}, {})",
-            data.toolbar_top_offset,
-            data.toolbar_top_offset_y,
-            data.toolbar_side_offset,
-            data.toolbar_side_offset_x
-        ));
+        drag_log(|| {
+            format!(
+                "load offsets from config seeds and runtime overrides: top_offset=({}, {}), side_offset=({}, {})",
+                data.toolbar_top_offset,
+                data.toolbar_top_offset_y,
+                data.toolbar_side_offset,
+                data.toolbar_side_offset_x
+            )
+        });
         let zoom_manager = screencopy_manager.clone();
         let ui_animation_interval =
             WaylandState::ui_animation_interval_from_fps(config.performance.ui_animation_fps);

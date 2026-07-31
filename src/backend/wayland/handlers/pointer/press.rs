@@ -127,13 +127,15 @@ impl WaylandState {
             }
             if button == BTN_LEFT && self.inline_toolbar_press(event.position, Some(conn), Some(qh))
             {
-                drag_log(format!(
-                    "pointer press: inline handled, drag_active={}, pos=({:.3}, {:.3}), surface={}",
-                    self.toolbar_dragging(),
-                    event.position.0,
-                    event.position.1,
-                    surface_id(&event.surface)
-                ));
+                drag_log(|| {
+                    format!(
+                        "pointer press: inline handled, drag_active={}, pos=({:.3}, {:.3}), surface={}",
+                        self.toolbar_dragging(),
+                        event.position.0,
+                        event.position.1,
+                        surface_id(&event.surface)
+                    )
+                });
                 if self.is_move_dragging() {
                     self.lock_pointer_for_drag(qh, &event.surface);
                 }

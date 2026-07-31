@@ -45,10 +45,12 @@ impl WaylandState {
         let width = self.surface.width() as f64;
         let height = self.surface.height() as f64;
         if width == 0.0 || height == 0.0 {
-            drag_log(format!(
-                "skip clamp: surface not configured (width={}, height={})",
-                width, height
-            ));
+            drag_log(|| {
+                format!(
+                    "skip clamp: surface not configured (width={}, height={})",
+                    width, height
+                )
+            });
             return false;
         }
         let (top_w, top_h) = top_size(snapshot);
@@ -86,25 +88,27 @@ impl WaylandState {
         self.data.toolbar_top_offset_y = clamped.top_y;
         self.data.toolbar_side_offset_x = clamped.side_x;
         self.data.toolbar_side_offset = clamped.side_y;
-        drag_log(format!(
-            "clamp offsets: before=({:.3}, {:.3})/({:.3}, {:.3}), after=({:.3}, {:.3})/({:.3}, {:.3}), max=({:.3}, {:.3})/({:.3}, {:.3}), size=({}, {}), top_base_x={:.3}, top_base_y={:.3}",
-            before_top.0,
-            before_top.1,
-            before_side.0,
-            before_side.1,
-            self.data.toolbar_top_offset,
-            self.data.toolbar_top_offset_y,
-            self.data.toolbar_side_offset_x,
-            self.data.toolbar_side_offset,
-            bounds.max_top_x,
-            bounds.max_top_y,
-            bounds.max_side_x,
-            bounds.max_side_y,
-            width,
-            height,
-            top_base_x,
-            top_base_y
-        ));
+        drag_log(|| {
+            format!(
+                "clamp offsets: before=({:.3}, {:.3})/({:.3}, {:.3}), after=({:.3}, {:.3})/({:.3}, {:.3}), max=({:.3}, {:.3})/({:.3}, {:.3}), size=({}, {}), top_base_x={:.3}, top_base_y={:.3}",
+                before_top.0,
+                before_top.1,
+                before_side.0,
+                before_side.1,
+                self.data.toolbar_top_offset,
+                self.data.toolbar_top_offset_y,
+                self.data.toolbar_side_offset_x,
+                self.data.toolbar_side_offset,
+                bounds.max_top_x,
+                bounds.max_top_y,
+                bounds.max_side_x,
+                bounds.max_side_y,
+                width,
+                height,
+                top_base_x,
+                top_base_y
+            )
+        });
         true
     }
 
@@ -113,11 +117,13 @@ impl WaylandState {
         snapshot: &ToolbarSnapshot,
     ) -> (bool, bool) {
         if self.surface.width() == 0 || self.surface.height() == 0 {
-            drag_log(format!(
-                "skip apply_toolbar_offsets: surface not configured (width={}, height={})",
-                self.surface.width(),
-                self.surface.height()
-            ));
+            drag_log(|| {
+                format!(
+                    "skip apply_toolbar_offsets: surface not configured (width={}, height={})",
+                    self.surface.width(),
+                    self.surface.height()
+                )
+            });
             return (false, false);
         }
         let _ = self.clamp_toolbar_offsets(snapshot);
@@ -126,7 +132,7 @@ impl WaylandState {
         // drags use relative deltas instead, so the suppressed real surface can track
         // the preview and avoid a visible catch-up animation on release.
         if self.toolbar_drag_preview_active() && !self.pointer_lock_active() {
-            drag_log("skip apply_toolbar_offsets: drag preview active without pointer lock");
+            drag_log(|| "skip apply_toolbar_offsets: drag preview active without pointer lock");
             return (false, false);
         }
         if self.layer_shell.is_none() {
@@ -146,19 +152,21 @@ impl WaylandState {
                     side_y: self.data.toolbar_side_offset,
                 },
             );
-        drag_log(format!(
-            "apply_toolbar_offsets: top_margin_left={}, top_margin_top={}, side_margin_top={}, side_margin_left={}, offsets=({}, {})/({}, {}), scale={}, top_base_x={}",
-            top_margin_left,
-            top_margin_top,
-            side_margin_top,
-            side_margin_left,
-            self.data.toolbar_top_offset,
-            self.data.toolbar_top_offset_y,
-            self.data.toolbar_side_offset_x,
-            self.data.toolbar_side_offset,
-            self.surface.scale(),
-            top_base_x
-        ));
+        drag_log(|| {
+            format!(
+                "apply_toolbar_offsets: top_margin_left={}, top_margin_top={}, side_margin_top={}, side_margin_left={}, offsets=({}, {})/({}, {}), scale={}, top_base_x={}",
+                top_margin_left,
+                top_margin_top,
+                side_margin_top,
+                side_margin_left,
+                self.data.toolbar_top_offset,
+                self.data.toolbar_top_offset_y,
+                self.data.toolbar_side_offset_x,
+                self.data.toolbar_side_offset,
+                self.surface.scale(),
+                top_base_x
+            )
+        });
         if debug_toolbar_drag_logging_enabled() {
             debug!(
                 "apply_toolbar_offsets: top_margin_left={} (last={:?}), top_margin_top={} (last={:?}), side_margin_top={} (last={:?}), side_margin_left={} (last={:?}), offsets=({}, {})/({}, {}), top_base_x={}",

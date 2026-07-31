@@ -1,6 +1,6 @@
 use super::super::base::InputState;
 use super::{CommandEntry, CommandPaletteListRow};
-use crate::config::KeybindingsConfig;
+use crate::config::keybindings::default_keybindings;
 
 /// Visible rows (commands + group headers) before the list scrolls. Dropped
 /// from 10 when rows grew to the 44px comfort height so the clamped panel
@@ -170,7 +170,7 @@ impl InputState {
         commands: impl IntoIterator<Item = &'a CommandEntry>,
     ) -> f64 {
         let mut required_inner_width: f64 = 0.0;
-        let default_bindings = KeybindingsConfig::default();
+        let default_bindings = default_keybindings();
 
         for command in commands {
             let label_chars = command.label.chars().count() as f64;

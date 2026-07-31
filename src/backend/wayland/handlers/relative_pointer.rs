@@ -15,11 +15,13 @@ impl RelativePointerHandler for WaylandState {
         event: RelativeMotionEvent,
     ) {
         if !self.pointer_lock_active() || !self.is_move_dragging() {
-            drag_log(format!(
-                "relative motion ignored: lock_active={}, drag_active={}",
-                self.pointer_lock_active(),
-                self.is_move_dragging()
-            ));
+            drag_log(|| {
+                format!(
+                    "relative motion ignored: lock_active={}, drag_active={}",
+                    self.pointer_lock_active(),
+                    self.is_move_dragging()
+                )
+            });
             return;
         }
 
@@ -27,17 +29,19 @@ impl RelativePointerHandler for WaylandState {
             return;
         };
 
-        drag_log(format!(
-            "relative drag: kind={:?}, delta=({:.3}, {:.3}), utime={}, offsets=({}, {})/({}, {})",
-            kind,
-            event.delta.0,
-            event.delta.1,
-            event.utime,
-            self.toolbar_top_offset(),
-            self.toolbar_top_offset_y(),
-            self.toolbar_side_offset_x(),
-            self.toolbar_side_offset()
-        ));
+        drag_log(|| {
+            format!(
+                "relative drag: kind={:?}, delta=({:.3}, {:.3}), utime={}, offsets=({}, {})/({}, {})",
+                kind,
+                event.delta.0,
+                event.delta.1,
+                event.utime,
+                self.toolbar_top_offset(),
+                self.toolbar_top_offset_y(),
+                self.toolbar_side_offset_x(),
+                self.toolbar_side_offset()
+            )
+        });
 
         self.apply_toolbar_relative_delta(kind, event.delta);
     }
