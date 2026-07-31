@@ -22,7 +22,14 @@ saved separately so moving through the UI does not rewrite unrelated configurati
 - the side toolbar's dragged position (a side drag also records the top strip's reconciled
   horizontal offset, because moving the palette can change where the strip rests);
 - the active side pane and collapsed side sections;
-- individual toolbar item visibility and toolbar item order; and
+- individual toolbar item visibility and toolbar item order;
+- the toolbar layout preset and which named toolbar sections are shown;
+- the toolbar's own appearance and behaviour toggles — icons vs text labels, extra colours,
+  context-aware UI, preset toasts, the tool preview, and the delay sliders;
+- the status bar, whether its segments respond to clicks, and which segments are shown;
+- the board and page badges, the floating badge, and the zoom chip;
+- the click highlight and the ring the highlight tool keeps on screen;
+- the input HUD and the history pane's custom-step section; and
 - per-board pin state.
 
 The generated file is `$XDG_DATA_HOME/wayscriber/runtime-ui.toml`, normally
@@ -158,13 +165,13 @@ Both `config.toml` mechanisms leave a timestamped `.bak` beside the file.
 | Switch the side pane or collapse a side section | `runtime-ui.toml` | Runtime-UI writer |
 | Hide, show, or reorder an individual toolbar item | `runtime-ui.toml` | Runtime-UI writer |
 | Pin a board | `runtime-ui.toml` | Runtime-UI writer |
-| Switch layout mode (Simple/Regular/Advanced) in the overlay — the Settings segments or the strip's layout button | Nothing — this run only | Configurator → UI → Toolbar for the default |
-| Toggle a toolbar section from Settings | Nothing — this run only | Configurator → UI → Toolbar Visibility for the default |
-| Switch icons ⇄ text labels | Nothing — this run only | Configurator → UI → Toolbar for the default |
-| Toggle the status bar, its interactivity, or one of its items; the board/page badges, floating badge, or zoom chip | Nothing — this run only | Configurator → UI → Status Bar for the default |
-| Toggle click highlight or the highlight-tool ring | Nothing — this run only | Configurator → UI → Click Highlight for the default |
-| Toggle the input HUD | Nothing — this run only | Configurator → UI → Input HUD for the default |
-| Toggle the Step section, delay sliders, tool preview, preset toasts, extra colors, or context-aware UI | Nothing — this run only | Configurator → History or UI → Toolbar for the default |
+| Switch layout mode (Simple/Regular/Advanced) in the overlay — the Settings segments or the strip's layout button | `runtime-ui.toml` | Runtime-UI writer |
+| Toggle a toolbar section from Settings | `runtime-ui.toml` | Runtime-UI writer |
+| Switch icons ⇄ text labels | `runtime-ui.toml` | Runtime-UI writer |
+| Toggle the status bar, its interactivity, or one of its items; the board/page badges, floating badge, or zoom chip | `runtime-ui.toml` | Runtime-UI writer |
+| Toggle click highlight or the highlight-tool ring | `runtime-ui.toml` — both at once | Runtime-UI writer |
+| Toggle the input HUD | `runtime-ui.toml` | Runtime-UI writer |
+| Toggle the Step section, delay sliders, tool preview, preset toasts, extra colors, or context-aware UI | `runtime-ui.toml` | Runtime-UI writer |
 | Save or clear a preset slot in the overlay | `config.toml` — that one `[presets.slot_N]` table | Overlay editor (with a timestamped `.bak`) |
 | Recolor a quick color swatch in the overlay | `config.toml` — that one `[[drawing.quick_colors]]` entry | Overlay editor (with a timestamped `.bak`) |
 | Rename, recolor, add, or delete a board | The session file, for boards marked `persist` | Configurator → Boards for the templates a new session starts from |
@@ -174,8 +181,14 @@ Both `config.toml` mechanisms leave a timestamped `.bak` beside the file.
 | Change pen color, thickness, tool, or font size | Session file | Session autosave (needs `restore_tool_state`) |
 
 Drawings, boards, pages, and per-page pan offsets belong to the session file (see `[session]`).
-Everything else — zoom, freeze, presenter mode, light mode, and any configured default an
-incidental toggle changed — is live state for the run and is not saved at all.
+Everything else — zoom, freeze, presenter mode, light mode — is live state for the run and is not
+saved at all. Presenter and light mode force some of the chrome above on or off while they run;
+what gets saved is the value the mode will restore, so the mode's own housekeeping never becomes
+your preference.
+
+Every chrome toggle in that table is a runtime override layered over the value you authored, so
+your `config.toml` still reads exactly as you wrote it and editing it there still wins: a
+configurator Save reseeds the override, and the field you changed goes back to following the file.
 
 If the graphical configurator can read the file but cannot parse its TOML or known value types, it
 opens a clearly marked repair draft using built-in defaults. Saving that draft first creates a

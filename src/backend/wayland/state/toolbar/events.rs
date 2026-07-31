@@ -11,7 +11,6 @@ use crate::{
 use wayland_client::{Connection, QueueHandle};
 
 mod feedback;
-mod preferences;
 mod presets;
 pub(in crate::backend::wayland) use presets::queue_preset_action;
 mod quick_colors;
@@ -20,9 +19,6 @@ mod session;
 pub(in crate::backend::wayland::state) use session::SessionFileDialogController;
 
 use feedback::{ToolbarPinChange, pin_durability};
-use preferences::{ToolbarPreference, preference_for_event};
-#[cfg(test)]
-use preferences::{UiPreferenceField, apply_toolbar_preference, effective_tool_preview_value};
 use session::populate_session_snapshot;
 
 fn record_drawer_hint_shown(state: &mut OnboardingState) -> bool {
@@ -317,7 +313,6 @@ impl WaylandState {
         };
         // Classified before the apply consumes the event; the effective config
         // is updated from the runtime state the apply leaves behind.
-        let preference = preference_for_event(&event);
         if starts_item_drag {
             // The pairing lives in `persistence_for_event`, so a drag-start
             // whose policy stopped naming an order group is metadata drift,
@@ -367,11 +362,9 @@ impl WaylandState {
                 }
             }
 
-            if let Some(preference) = preference {
-                self.apply_effective_toolbar_preference(preference);
-                if matches!(preference, ToolbarPreference::InputHud) {
-                    self.sync_input_monitor();
-                }
+            // The reader thread follows the HUD's live state, whatever moved it.
+            if runtime_target == Some(ToolbarRuntimeUiPersistenceTarget::InputHud) {
+                self.sync_input_monitor();
             }
         }
         if starts_item_drag && !applied {

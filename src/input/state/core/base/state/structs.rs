@@ -424,7 +424,6 @@ pub struct InputState {
     pub(in crate::input::state::core) pending_keybinding_edits: Vec<KeybindingEditRequest>,
     /// Whether this run already said that an overlay preference toggle is a
     /// current-run change. Said once: every later toggle has the same scope.
-    pub(in crate::input::state::core) process_only_preference_notice_shown: bool,
     /// Pending output focus action (to be handled by WaylandState)
     pub(in crate::input::state::core) pending_output_focus_action: Option<OutputFocusAction>,
     /// Pending zoom action (to be handled by WaylandState)

@@ -559,7 +559,7 @@ fn toolbar_values(
         ),
         Target::ToolbarToolPreview => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarToolPreview,
-            InteractionSeedValue::Bool(input.show_tool_preview),
+            InteractionSeedValue::Bool(user_tool_preview(input)),
         ),
         Target::ToolbarDelaySliders => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarDelaySliders,
@@ -688,6 +688,16 @@ pub(in crate::backend::wayland) fn click_highlight_values(
             InteractionSeedValue::Bool(tool_ring),
         ),
     ])
+}
+
+/// Presenter mode can hold the tool preview hidden while it runs, so what
+/// persists is the value presenter will restore -- the user's own.
+pub(in crate::backend::wayland) fn user_tool_preview(input: &InputState) -> bool {
+    input
+        .presenter_restore
+        .as_ref()
+        .and_then(|restore| restore.show_tool_preview)
+        .unwrap_or(input.show_tool_preview)
 }
 
 /// Presenter mode forces the click highlight on while it runs, so what
