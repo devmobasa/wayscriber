@@ -671,22 +671,17 @@ const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
 /// cannot record because it pins the other one.
 #[test]
 fn gnome_sessions_get_the_unprefixed_page_navigation_defaults() {
-    let _guard = crate::test_env::lock();
-    let saved = std::env::var_os(crate::env_vars::XDG_CURRENT_DESKTOP_ENV);
-    // SAFETY: serialized by the test environment mutex.
-    unsafe { std::env::set_var(crate::env_vars::XDG_CURRENT_DESKTOP_ENV, "GNOME") };
-
-    let defaults = KeybindingsConfig::default();
-    let prev = defaults.board.page_prev.clone();
-    let next = defaults.board.page_next.clone();
-
-    // SAFETY: serialized by the test environment mutex.
-    unsafe {
-        match saved {
-            Some(value) => std::env::set_var(crate::env_vars::XDG_CURRENT_DESKTOP_ENV, value),
-            None => std::env::remove_var(crate::env_vars::XDG_CURRENT_DESKTOP_ENV),
-        }
-    }
+    let (prev, next) = crate::test_env::with_env_var(
+        crate::env_vars::XDG_CURRENT_DESKTOP_ENV,
+        Some(std::ffi::OsStr::new("GNOME")),
+        || {
+            let defaults = KeybindingsConfig::default();
+            (
+                defaults.board.page_prev.clone(),
+                defaults.board.page_next.clone(),
+            )
+        },
+    );
 
     assert_eq!(prev, ["Ctrl+ArrowLeft", "Ctrl+PageUp"]);
     assert_eq!(next, ["Ctrl+ArrowRight", "Ctrl+PageDown"]);
