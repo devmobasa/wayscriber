@@ -46,6 +46,7 @@ pub(super) fn load_normal_session_or_empty(
             }
             LoadSnapshotOutcome::Loaded(_) => {}
             LoadSnapshotOutcome::Empty
+            | LoadSnapshotOutcome::EmptyAfterCorruption { .. }
             | LoadSnapshotOutcome::NonRegularArtifact { .. }
             | LoadSnapshotOutcome::ExpandedTooLarge { .. } => {}
             LoadSnapshotOutcome::LoadedFromBackup(_)
@@ -175,7 +176,9 @@ fn load_contentful_backup(
             );
             Ok(None)
         }
-        LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::NonRegularArtifact { .. } => Ok(None),
+        LoadSnapshotOutcome::Empty
+        | LoadSnapshotOutcome::EmptyAfterCorruption { .. }
+        | LoadSnapshotOutcome::NonRegularArtifact { .. } => Ok(None),
         LoadSnapshotOutcome::ExpandedTooLarge { path, .. } => {
             warn!(
                 "Session backup {} is too large to restore; keeping primary session",
@@ -228,6 +231,7 @@ fn load_contentful_recovery(
         LoadSnapshotOutcome::Loaded(snapshot) if snapshot.has_board_data() => Ok(Some(snapshot)),
         LoadSnapshotOutcome::Loaded(_)
         | LoadSnapshotOutcome::Empty
+        | LoadSnapshotOutcome::EmptyAfterCorruption { .. }
         | LoadSnapshotOutcome::NonRegularArtifact { .. } => Ok(None),
         LoadSnapshotOutcome::ExpandedTooLarge { path, .. } => {
             preserve_unloadable_recovery(&path, "too-large");

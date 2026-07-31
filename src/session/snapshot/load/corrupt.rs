@@ -1,7 +1,12 @@
 use super::*;
 use std::io::ErrorKind;
 
-pub(super) fn backup_corrupt_session(session_path: &Path, options: &SessionOptions) -> Result<()> {
+/// Preserves an unreadable session's bytes and reports where they went, so
+/// the caller can tell the user rather than leaving the loss to the log.
+pub(super) fn backup_corrupt_session(
+    session_path: &Path,
+    options: &SessionOptions,
+) -> Result<PathBuf> {
     let named_primary = is_named_primary_path(session_path, options);
     let bytes = read_session_artifact_bytes(session_path, named_primary)?;
     let primary_path = options.session_file_path();
@@ -28,7 +33,7 @@ pub(super) fn backup_corrupt_session(session_path: &Path, options: &SessionOptio
             session_path.display(),
             backup_path.display()
         );
-        return Ok(());
+        return Ok(backup_path);
     }
     fs::remove_file(session_path).with_context(|| {
         format!(
@@ -36,7 +41,7 @@ pub(super) fn backup_corrupt_session(session_path: &Path, options: &SessionOptio
             session_path.display()
         )
     })?;
-    Ok(())
+    Ok(backup_path)
 }
 
 /// Copy a session written by a newer wayscriber to a content-addressed side

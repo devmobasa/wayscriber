@@ -57,6 +57,12 @@ pub(crate) enum LoadSnapshotOutcome {
     LoadedFromBackup(Box<SessionSnapshot>),
     LoadedFromRecovery(Box<SessionSnapshot>),
     Empty,
+    /// Nothing was restored because the stored session could not be read. Its
+    /// bytes are preserved at `backup_path`; the caller is expected to say so
+    /// rather than let a silent empty canvas stand in for lost drawings.
+    EmptyAfterCorruption {
+        backup_path: PathBuf,
+    },
     NonRegularArtifact {
         path: PathBuf,
     },
@@ -98,7 +104,10 @@ impl LoadSnapshotOutcome {
             Self::Loaded(snapshot)
             | Self::LoadedFromBackup(snapshot)
             | Self::LoadedFromRecovery(snapshot) => snapshot.has_board_data(),
-            Self::Empty | Self::NonRegularArtifact { .. } | Self::ExpandedTooLarge { .. } => false,
+            Self::Empty
+            | Self::EmptyAfterCorruption { .. }
+            | Self::NonRegularArtifact { .. }
+            | Self::ExpandedTooLarge { .. } => false,
         }
     }
 }
@@ -110,6 +119,7 @@ pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>
         | LoadSnapshotOutcome::LoadedFromBackup(snapshot)
         | LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => Ok(Some(*snapshot)),
         LoadSnapshotOutcome::Empty
+        | LoadSnapshotOutcome::EmptyAfterCorruption { .. }
         | LoadSnapshotOutcome::NonRegularArtifact { .. }
         | LoadSnapshotOutcome::ExpandedTooLarge { .. } => Ok(None),
     }
@@ -273,7 +283,7 @@ fn load_snapshot_with_expanded_limit_inner(
             }
             loaded @ LoadSnapshotOutcome::LoadedFromBackup(_) => return Ok(loaded),
             loaded @ LoadSnapshotOutcome::LoadedFromRecovery(_) => return Ok(loaded),
-            LoadSnapshotOutcome::Empty => {
+            LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::EmptyAfterCorruption { .. } => {
                 warn!(
                     "Session recovery artifact {} did not contain usable session data; falling back to normal session {}",
                     recovery_path.display(),
@@ -468,15 +478,16 @@ fn load_snapshot_path_with_outcome(
                 err
             );
             match corrupt_load_action {
-                CorruptLoadAction::Backup => {
-                    if let Err(backup_err) = backup_corrupt_session(session_path, options) {
-                        warn!(
-                            "Failed to back up corrupt session {}: {}",
-                            session_path.display(),
-                            backup_err
-                        );
+                CorruptLoadAction::Backup => match backup_corrupt_session(session_path, options) {
+                    Ok(backup_path) => {
+                        return Ok(LoadSnapshotOutcome::EmptyAfterCorruption { backup_path });
                     }
-                }
+                    Err(backup_err) => warn!(
+                        "Failed to back up corrupt session {}: {}",
+                        session_path.display(),
+                        backup_err
+                    ),
+                },
                 CorruptLoadAction::Preserve => {
                     debug!(
                         "Leaving unloadable {} {} in place because it is suppressed by the session clear marker",

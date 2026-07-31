@@ -6,6 +6,7 @@ pub(super) fn log_named_candidate_outcome(session_path: &Path, outcome: &LoadSna
         LoadSnapshotOutcome::LoadedFromBackup(snapshot) => ("backup", snapshot),
         LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => ("recovery", snapshot),
         LoadSnapshotOutcome::Empty
+        | LoadSnapshotOutcome::EmptyAfterCorruption { .. }
         | LoadSnapshotOutcome::NonRegularArtifact { .. }
         | LoadSnapshotOutcome::ExpandedTooLarge { .. } => return,
     };
@@ -67,7 +68,9 @@ pub(super) fn load_named_candidate_with_fallbacks(
                     max_expanded_size,
                 });
             }
-            LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::NonRegularArtifact { .. } => {}
+            LoadSnapshotOutcome::Empty
+            | LoadSnapshotOutcome::EmptyAfterCorruption { .. }
+            | LoadSnapshotOutcome::NonRegularArtifact { .. } => {}
             LoadSnapshotOutcome::LoadedFromBackup(_)
             | LoadSnapshotOutcome::LoadedFromRecovery(_) => {}
         }
@@ -238,6 +241,7 @@ fn load_named_candidate_suppressed_primary(
         Ok(LoadSnapshotOutcome::Loaded(_)) => Ok(None),
         Ok(
             LoadSnapshotOutcome::Empty
+            | LoadSnapshotOutcome::EmptyAfterCorruption { .. }
             | LoadSnapshotOutcome::NonRegularArtifact { .. }
             | LoadSnapshotOutcome::ExpandedTooLarge { .. },
         ) => Ok(None),
@@ -304,7 +308,9 @@ fn load_named_candidate_contentful_backup(
         CandidateSizeLimit::Configured,
     )? {
         LoadSnapshotOutcome::Loaded(snapshot) if snapshot.has_board_data() => Ok(Some(snapshot)),
-        LoadSnapshotOutcome::Loaded(_) | LoadSnapshotOutcome::Empty => Ok(None),
+        LoadSnapshotOutcome::Loaded(_)
+        | LoadSnapshotOutcome::Empty
+        | LoadSnapshotOutcome::EmptyAfterCorruption { .. } => Ok(None),
         LoadSnapshotOutcome::NonRegularArtifact { .. } => Ok(None),
         LoadSnapshotOutcome::ExpandedTooLarge { path, .. } => Err(anyhow!(
             "named session backup is too large to open without mutating candidate artifacts: {}",
@@ -348,7 +354,9 @@ fn load_named_candidate_contentful_recovery(
         CandidateSizeLimit::ExpandedOnly,
     )? {
         LoadSnapshotOutcome::Loaded(snapshot) if snapshot.has_board_data() => Ok(Some(snapshot)),
-        LoadSnapshotOutcome::Loaded(_) | LoadSnapshotOutcome::Empty => Ok(None),
+        LoadSnapshotOutcome::Loaded(_)
+        | LoadSnapshotOutcome::Empty
+        | LoadSnapshotOutcome::EmptyAfterCorruption { .. } => Ok(None),
         LoadSnapshotOutcome::NonRegularArtifact { .. } => Ok(None),
         LoadSnapshotOutcome::ExpandedTooLarge { path, .. } => Err(anyhow!(
             "named session recovery is too large to open without mutating candidate artifacts: {}",

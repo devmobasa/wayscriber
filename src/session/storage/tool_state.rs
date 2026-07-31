@@ -47,7 +47,9 @@ fn clear_tool_state_for_target(edit_options: &SessionOptions) -> Result<ClearToo
         LoadSnapshotOutcome::Loaded(snapshot)
         | LoadSnapshotOutcome::LoadedFromBackup(snapshot)
         | LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => *snapshot,
-        LoadSnapshotOutcome::Empty => return Ok(ClearToolStateOutcome::NoSession),
+        LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::EmptyAfterCorruption { .. } => {
+            return Ok(ClearToolStateOutcome::NoSession);
+        }
         LoadSnapshotOutcome::NonRegularArtifact { path } => {
             return Err(anyhow!(
                 "cannot clear saved tool state because session artifact is not a regular file: {}",

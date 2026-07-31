@@ -70,6 +70,13 @@ pub(in crate::backend::wayland) fn open_named_session_runtime(
                 candidate_options.session_file_path().display()
             ));
         }
+        LoadSnapshotOutcome::EmptyAfterCorruption { backup_path } => {
+            return Err(anyhow!(
+                "named session file could not be read: {}; a copy of it was saved to {}",
+                candidate_options.session_file_path().display(),
+                backup_path.display()
+            ));
+        }
         LoadSnapshotOutcome::NonRegularArtifact { path } => {
             return Err(anyhow!(
                 "named session file is not a regular file: {}",

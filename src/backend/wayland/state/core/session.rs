@@ -444,6 +444,11 @@ fn named_candidate_snapshot(
             "named session file contains no usable session data: {}",
             options.session_file_path().display()
         )),
+        LoadSnapshotOutcome::EmptyAfterCorruption { backup_path } => Err(anyhow!(
+            "named session file could not be read: {}; a copy of it was saved to {}",
+            options.session_file_path().display(),
+            backup_path.display()
+        )),
         LoadSnapshotOutcome::NonRegularArtifact { path } => Err(anyhow!(
             "named session file is not a regular file: {}",
             path.display()

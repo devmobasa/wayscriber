@@ -506,7 +506,14 @@ fn load_named_corrupt_primary_backs_up_without_removing_selected_file() {
     let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
         .expect("corrupt named primary should be handled");
 
-    assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
+    let LoadSnapshotOutcome::EmptyAfterCorruption { backup_path } = &outcome else {
+        panic!("an unreadable session must report where its bytes went, got {outcome:?}");
+    };
+    assert_eq!(
+        backup_path,
+        &options.backup_file_path(),
+        "the reported path is the one holding the preserved bytes"
+    );
     assert_eq!(
         std::fs::read(&named_path).expect("named primary remains"),
         b"{not valid json",
