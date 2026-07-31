@@ -170,21 +170,6 @@ fn runtime_persistence_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSetting
     }
 }
 
-pub(super) fn section_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {
-    vec![ToolbarSettingsButton {
-        id: ToolbarControlId::ResetToolbarHiddenItems,
-        label: Cow::Borrowed("Restore built-in visibility"),
-        event: ToolbarEvent::ResetToolbarItemHiddenOverrides,
-        icon: ToolbarIcon::Visibility,
-        tooltip: ToolbarTooltip::text(
-            "Restore built-in visibility for individual toolbar items; section preferences are unchanged",
-        ),
-    }]
-    .into_iter()
-    .filter(|button| reset_button_visible(snapshot, button.id))
-    .collect()
-}
-
 pub(super) fn customize_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {
     let back_event = if snapshot.customize_items_group.is_some() {
         ToolbarEvent::SetToolbarItemCustomizationGroup(None)
@@ -241,19 +226,6 @@ fn individual_visibility_differs_from_factory(snapshot: &ToolbarSnapshot) -> boo
         .any(|(id, factory)| {
             item_visibility_setting(&snapshot.resolved_toolbar_items, *id) != *factory
         })
-}
-
-pub(super) fn is_section_toggle_id(id: ToolbarControlId) -> bool {
-    matches!(
-        id,
-        ToolbarControlId::SettingsPresets
-            | ToolbarControlId::SettingsActions
-            | ToolbarControlId::SettingsZoomActions
-            | ToolbarControlId::SettingsAdvancedActions
-            | ToolbarControlId::SettingsBoards
-            | ToolbarControlId::SettingsPages
-            | ToolbarControlId::SettingsStepControls
-    )
 }
 
 fn overlay_item_override_allowed(definition: &ToolbarItemDefinition) -> bool {

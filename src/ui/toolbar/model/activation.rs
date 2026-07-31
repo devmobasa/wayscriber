@@ -1,3 +1,10 @@
+// The shared toolbar model is being adopted incrementally by both frontends,
+// and this file holds staged shapes no renderer reads yet. Scoped here rather
+// than over the whole `model` module so the other ~11.5k lines - the specs,
+// snapshot mapping, and settings panes that are fully live - are policed for
+// dead code again.
+#![allow(dead_code)]
+
 use crate::draw::Color;
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
