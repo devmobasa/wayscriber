@@ -681,6 +681,9 @@ pub struct Theme {
     pub accent_bright: Rgba,
     /// Destructive red (hover/confirm only)
     pub destructive: Rgba,
+    /// Whether this is the light variant. Surfaces that still carry const
+    /// dark tokens branch on it rather than guessing from a color.
+    pub is_light: bool,
 }
 
 impl Theme {
@@ -700,6 +703,7 @@ impl Theme {
             accent: rgba(ACCENT_RGB, 1.0),
             accent_bright: rgba(ACCENT_BRIGHT_RGB, 0.95),
             destructive: rgba(DESTRUCTIVE_RGB, 1.0),
+            is_light: false,
         }
     }
 
@@ -733,6 +737,7 @@ impl Theme {
             accent: rgba(ACCENT_RGB, 1.0),
             accent_bright: rgba(ACCENT_BRIGHT_RGB, 0.95),
             destructive: rgba(DESTRUCTIVE_RGB, 1.0),
+            is_light: true,
         }
     }
 }
@@ -765,6 +770,90 @@ pub fn init(mode: ThemeMode) {
 /// early rendering).
 pub fn current() -> &'static Theme {
     CURRENT.get_or_init(Theme::dark)
+}
+
+/// Popup surface colors that follow the installed theme.
+///
+/// `[ui] theme = "light"` ships, but the modal popups - color picker, command
+/// palette, board picker, context menu, properties panel, tour, onboarding
+/// card, precision entry - painted the const dark tokens directly, so a light
+/// radial menu could float over a dark command palette in the same frame.
+///
+/// These resolve to the const dark value verbatim under a dark theme, so dark
+/// chrome is unchanged, and to the runtime theme's surface under a light one.
+/// Each keeps its own alpha: the popups deliberately differ in translucency,
+/// and collapsing them onto a single token would flatten that.
+pub mod popup {
+    use super::{Rgba, current, overlay};
+
+    /// Resolution split from the accessors so it can be exercised against
+    /// both variants: `current()` is a process-wide `OnceLock`, so a test
+    /// cannot install one theme and then the other.
+    pub(crate) fn surface_for(theme: &super::Theme, dark: Rgba) -> Rgba {
+        if theme.is_light {
+            let (r, g, b, _) = theme.surface_popover;
+            (r, g, b, dark.3)
+        } else {
+            dark
+        }
+    }
+
+    pub(crate) fn border_for(theme: &super::Theme, dark: Rgba) -> Rgba {
+        if theme.is_light {
+            let (r, g, b, _) = theme.border_hairline;
+            (r, g, b, dark.3)
+        } else {
+            dark
+        }
+    }
+
+    fn surface(dark: Rgba) -> Rgba {
+        surface_for(current(), dark)
+    }
+
+    fn border(dark: Rgba) -> Rgba {
+        border_for(current(), dark)
+    }
+
+    pub fn bg_context_menu() -> Rgba {
+        surface(overlay::PANEL_BG_CONTEXT_MENU)
+    }
+
+    pub fn bg_board_picker() -> Rgba {
+        surface(overlay::PANEL_BG_BOARD_PICKER)
+    }
+
+    pub fn bg_properties() -> Rgba {
+        surface(overlay::PANEL_BG_PROPERTIES)
+    }
+
+    pub fn bg_command_palette() -> Rgba {
+        surface(overlay::PANEL_BG_COMMAND_PALETTE)
+    }
+
+    pub fn bg_modal() -> Rgba {
+        surface(overlay::PANEL_BG_MODAL)
+    }
+
+    pub fn border_context_menu() -> Rgba {
+        border(overlay::BORDER_CONTEXT_MENU)
+    }
+
+    pub fn border_board_picker() -> Rgba {
+        border(overlay::BORDER_BOARD_PICKER)
+    }
+
+    pub fn border_properties() -> Rgba {
+        border(overlay::BORDER_PROPERTIES)
+    }
+
+    pub fn border_command_palette() -> Rgba {
+        border(overlay::BORDER_COMMAND_PALETTE)
+    }
+
+    pub fn border_modal() -> Rgba {
+        border(overlay::BORDER_MODAL)
+    }
 }
 
 // ============================================================================
@@ -973,5 +1062,73 @@ mod tests {
         let (mid_bg, mid_text) = Theme::status_palette_for_background(0.5, 0.5, 0.5);
         assert_eq!(mid_bg, [0.85, 0.85, 0.85, 0.85]);
         assert_eq!(mid_text, [0.0, 0.0, 0.0, 1.0]);
+    }
+}
+
+#[cfg(test)]
+mod popup_theme_tests {
+    use super::{Theme, overlay, popup};
+
+    /// Dark chrome must be byte-identical to the const tokens it shipped
+    /// with: the popups deliberately differ in tint and translucency, and
+    /// this change is about light mode, not a dark restyle.
+    #[test]
+    fn dark_popups_keep_their_exact_const_tokens() {
+        let dark = Theme::dark();
+        for (resolved, token) in [
+            (
+                popup::surface_for(&dark, overlay::PANEL_BG_CONTEXT_MENU),
+                overlay::PANEL_BG_CONTEXT_MENU,
+            ),
+            (
+                popup::surface_for(&dark, overlay::PANEL_BG_BOARD_PICKER),
+                overlay::PANEL_BG_BOARD_PICKER,
+            ),
+            (
+                popup::surface_for(&dark, overlay::PANEL_BG_PROPERTIES),
+                overlay::PANEL_BG_PROPERTIES,
+            ),
+            (
+                popup::surface_for(&dark, overlay::PANEL_BG_COMMAND_PALETTE),
+                overlay::PANEL_BG_COMMAND_PALETTE,
+            ),
+            (
+                popup::surface_for(&dark, overlay::PANEL_BG_MODAL),
+                overlay::PANEL_BG_MODAL,
+            ),
+            (
+                popup::border_for(&dark, overlay::BORDER_MODAL),
+                overlay::BORDER_MODAL,
+            ),
+        ] {
+            assert_eq!(resolved, token);
+        }
+    }
+
+    /// The bug: `[ui] theme = "light"` installed a light theme, but the
+    /// popups painted dark constants, so a light radial menu could float over
+    /// a dark command palette in one frame.
+    #[test]
+    fn light_popups_follow_the_theme_and_keep_their_own_alpha() {
+        let light = Theme::light();
+        let (want_r, want_g, want_b, _) = light.surface_popover;
+
+        for token in [
+            overlay::PANEL_BG_CONTEXT_MENU,
+            overlay::PANEL_BG_BOARD_PICKER,
+            overlay::PANEL_BG_PROPERTIES,
+            overlay::PANEL_BG_COMMAND_PALETTE,
+            overlay::PANEL_BG_MODAL,
+        ] {
+            let (r, g, b, a) = popup::surface_for(&light, token);
+            assert_eq!((r, g, b), (want_r, want_g, want_b), "follows the theme");
+            assert_eq!(a, token.3, "keeps its own translucency");
+            assert!(r > 0.5, "a light popup must actually be light");
+        }
+
+        let (br, bg, bb, ba) = popup::border_for(&light, overlay::BORDER_MODAL);
+        let (hr, hg, hb, _) = light.border_hairline;
+        assert_eq!((br, bg, bb), (hr, hg, hb));
+        assert_eq!(ba, overlay::BORDER_MODAL.3);
     }
 }

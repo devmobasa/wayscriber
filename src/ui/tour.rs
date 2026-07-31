@@ -4,8 +4,8 @@ use crate::input::state::{InputState, TourStep};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
-    self, BORDER_MODAL, OVERLAY_DIM_HEAVY, PANEL_BG_MODAL, PROGRESS_FILL, PROGRESS_TRACK,
-    RADIUS_PANEL, SPACING_PANEL, TEXT_DESCRIPTION, TEXT_HINT, TEXT_WHITE,
+    self, OVERLAY_DIM_HEAVY, PROGRESS_FILL, PROGRESS_TRACK, RADIUS_PANEL, SPACING_PANEL,
+    TEXT_DESCRIPTION, TEXT_HINT, TEXT_WHITE,
 };
 use super::primitives::draw_rounded_rect;
 
@@ -55,9 +55,9 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
         dialog_height,
         RADIUS_PANEL,
     );
-    constants::set_color(ctx, PANEL_BG_MODAL);
+    constants::set_color(ctx, crate::ui::theme::popup::bg_modal());
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, BORDER_MODAL);
+    constants::set_color(ctx, crate::ui::theme::popup::border_modal());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
