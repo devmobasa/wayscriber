@@ -81,6 +81,45 @@ fn boottime_deadline_source_arms_absolutely_and_drains_once() {
     assert!(BootClock::now().unwrap().as_nanos() >= deadline.as_nanos());
 }
 
+/// The wait returns on the timeout while the process is alive, and returns
+/// immediately once it has exited - which is what lets the daemon stop
+/// sleeping between `try_wait` calls.
+#[test]
+fn pidfd_wait_times_out_while_alive_and_returns_once_exited() {
+    use std::os::fd::AsFd;
+    use std::time::{Duration, Instant};
+
+    let mut child = std::process::Command::new("/bin/sh")
+        .args(["-c", "sleep 30"])
+        .spawn()
+        .expect("spawn a child to wait on");
+    let fd = linux::open_pidfd(child.id()).expect("pidfd for a live child");
+
+    let started = Instant::now();
+    assert!(
+        !linux::wait_for_pidfd_exit(fd.as_fd(), Duration::from_millis(60))
+            .expect("wait on a live child"),
+        "a live process must not report an exit"
+    );
+    assert!(
+        started.elapsed() >= Duration::from_millis(50),
+        "the wait must actually wait rather than spin"
+    );
+
+    let _ = child.kill();
+    let _ = child.wait();
+    let started = Instant::now();
+    assert!(
+        linux::wait_for_pidfd_exit(fd.as_fd(), Duration::from_secs(5))
+            .expect("wait on an exited child"),
+        "an exited process must be reported"
+    );
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "the exit must be observed immediately, not on a poll tick"
+    );
+}
+
 #[test]
 fn self_pidfd_is_not_readable_while_process_is_alive() {
     let pidfd = linux::open_self_pidfd().unwrap();

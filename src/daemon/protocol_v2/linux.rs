@@ -4,7 +4,7 @@ use std::io::{self, Read};
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const BOOT_ID_PATH: &str = "/proc/sys/kernel/random/boot_id";
 const TIME_NAMESPACE_PATH: &str = "/proc/self/ns/time";
@@ -352,6 +352,44 @@ pub(crate) fn open_pidfd(pid: u32) -> io::Result<OwnedFd> {
     }
     // SAFETY: raw is a new pidfd not wrapped elsewhere.
     Ok(unsafe { OwnedFd::from_raw_fd(raw as i32) })
+}
+
+/// Blocks until the process behind `fd` exits or `timeout` elapses, returning
+/// whether it exited.
+///
+/// A pidfd becomes readable exactly when its process does, so waiting on one
+/// replaces a sleep-poll loop: the daemon runs a single thread, and time spent
+/// sleeping between `try_wait` calls is time SIGTERM and tray events sit
+/// queued and unserviced.
+pub(crate) fn wait_for_pidfd_exit(fd: BorrowedFd<'_>, timeout: Duration) -> io::Result<bool> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Ok(false);
+        }
+        let mut poll_fd = libc::pollfd {
+            fd: fd.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let millis = i32::try_from(remaining.as_millis()).unwrap_or(i32::MAX);
+        // SAFETY: one owned pollfd, valid for the call; the descriptor is
+        // borrowed for at least this long.
+        let ready = unsafe { libc::poll(&mut poll_fd, 1, millis) };
+        if ready < 0 {
+            let error = io::Error::last_os_error();
+            // A signal arriving mid-wait is expected on this thread.
+            if error.kind() == io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(error);
+        }
+        if ready == 0 {
+            return Ok(false);
+        }
+        return Ok(true);
+    }
 }
 
 pub(crate) fn validate_pidfd(fd: BorrowedFd<'_>) -> io::Result<()> {

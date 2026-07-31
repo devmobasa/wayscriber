@@ -17,7 +17,8 @@ pub(crate) use command::{
 };
 pub(crate) use linux::{
     BootClock, BootDeadline, BootDeadlineSource, BootIdentity, CommandQueueWatcher,
-    NamespaceIdentity, ProtocolId, ProtocolToken,
+    NamespaceIdentity, ProtocolId, ProtocolToken, open_pidfd as open_overlay_pidfd,
+    wait_for_pidfd_exit,
 };
 pub(crate) use mode::DaemonControlProtocolMode;
 pub(crate) use runtime::{ClassifiedRuntimeRecord, read_runtime_record, write_runtime_record_v2};
