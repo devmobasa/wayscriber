@@ -11,12 +11,12 @@ use crate::capture::{
     file::FileSaveConfig,
     pipeline::{
         CaptureManagerRequest, CaptureManagerResult, CaptureRequest, deliver_document,
-        deliver_image, perform_capture,
+        deliver_image, perform_capture, render_and_deliver_document, render_and_deliver_image,
     },
     types::{
         CaptureDestination, CaptureError, CaptureOutcome, CaptureStatus, CaptureType,
         DesktopBackdropCaptureRequest, DocumentDeliveryRequest, ImageDeliveryRequest,
-        ImageOperationKind,
+        ImageOperationKind, RenderedDocumentDeliveryRequest, RenderedImageDeliveryRequest,
     },
 };
 
@@ -222,6 +222,20 @@ impl CaptureManager {
         self.try_submit(CaptureManagerRequest::DeliverDocument(request))
     }
 
+    pub fn request_rendered_image_delivery(
+        &mut self,
+        request: RenderedImageDeliveryRequest,
+    ) -> Result<CaptureRequestId, CaptureSubmitError> {
+        self.try_submit(CaptureManagerRequest::RenderAndDeliverImage(request))
+    }
+
+    pub fn request_rendered_document_delivery(
+        &mut self,
+        request: RenderedDocumentDeliveryRequest,
+    ) -> Result<CaptureRequestId, CaptureSubmitError> {
+        self.try_submit(CaptureManagerRequest::RenderAndDeliverDocument(request))
+    }
+
     fn try_submit(
         &mut self,
         request: CaptureManagerRequest,
@@ -399,6 +413,16 @@ async fn run_capture_worker(
             }
             CaptureManagerRequest::DeliverDocument(request) => {
                 deliver_document(request, dependencies.clone())
+                    .await
+                    .map(CaptureManagerResult::Capture)
+            }
+            CaptureManagerRequest::RenderAndDeliverImage(request) => {
+                render_and_deliver_image(request, dependencies.clone())
+                    .await
+                    .map(CaptureManagerResult::Capture)
+            }
+            CaptureManagerRequest::RenderAndDeliverDocument(request) => {
+                render_and_deliver_document(request, dependencies.clone())
                     .await
                     .map(CaptureManagerResult::Capture)
             }

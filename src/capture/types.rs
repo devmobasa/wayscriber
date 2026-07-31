@@ -145,6 +145,33 @@ pub struct ImageDeliveryRequest {
     pub fallback_format_override: Option<ImageFormatMetadata>,
 }
 
+/// Rendering deferred onto the capture worker, so export render + encode work
+/// never runs on the event-loop dispatch thread. `Send` only — the captured
+/// snapshot moves to the worker; it is never shared.
+pub type ImageRenderJob = Box<dyn FnOnce() -> Result<RenderedImage, CaptureError> + Send>;
+
+/// See [`ImageRenderJob`].
+pub type DocumentRenderJob = Box<dyn FnOnce() -> Result<RenderedDocument, CaptureError> + Send>;
+
+/// [`ImageDeliveryRequest`], with the image rendered on the capture worker
+/// instead of the submitting thread.
+pub struct RenderedImageDeliveryRequest {
+    pub render: ImageRenderJob,
+    pub destination: CaptureDestination,
+    pub save_config: Option<crate::capture::file::FileSaveConfig>,
+    pub operation: ImageOperationKind,
+    pub fallback_format_override: Option<ImageFormatMetadata>,
+}
+
+/// [`DocumentDeliveryRequest`], with the document rendered on the capture
+/// worker instead of the submitting thread.
+pub struct RenderedDocumentDeliveryRequest {
+    pub render: DocumentRenderJob,
+    pub destination: CaptureDestination,
+    pub save_config: Option<crate::capture::file::FileSaveConfig>,
+    pub operation: ImageOperationKind,
+}
+
 #[derive(Debug, Clone)]
 pub struct RenderedDocument {
     pub bytes: Vec<u8>,

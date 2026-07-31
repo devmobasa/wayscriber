@@ -184,6 +184,35 @@ impl WaylandState {
             active_request_id,
             completion.result.summary()
         );
+        // A fingerprint probe continues the paste decision here, where the
+        // local fallback shapes live — they must be fetched fresh, not
+        // captured before the probe ran.
+        if let ClipboardPasteResult::SystemFingerprintProbe {
+            generation,
+            expected,
+            current,
+        } = completion.result
+        {
+            if active_request_id != Some(completion.request.id) {
+                log::debug!(
+                    "Ignoring stale clipboard fingerprint probe {}",
+                    completion.request.id
+                );
+                return;
+            }
+            let local_shapes = self
+                .input_state
+                .local_selection_shapes_for_fallback(generation);
+            let plan = transfer::plan_after_fingerprint_probe(
+                completion.request,
+                generation,
+                expected,
+                current,
+                local_shapes,
+            );
+            self.apply_paste_plan(plan);
+            return;
+        }
         let private_payload = match &completion.result {
             ClipboardPasteResult::PrivateSelection(payload)
                 if active_request_id == Some(completion.request.id) =>
@@ -236,18 +265,7 @@ impl WaylandState {
                 generation,
                 expected,
             } => {
-                let current = clipboard::clipboard_fingerprint();
-                let local_shapes = self
-                    .input_state
-                    .local_selection_shapes_for_fallback(generation);
-                let plan = transfer::plan_after_fingerprint_probe(
-                    request,
-                    generation,
-                    expected,
-                    current,
-                    local_shapes,
-                );
-                self.apply_paste_plan(plan);
+                self.start_system_fingerprint_probe(request, generation, expected);
             }
             PasteAction::ReadSystemClipboard { request } => {
                 self.start_system_clipboard_read(request);
@@ -340,6 +358,54 @@ impl WaylandState {
                 }
                 self.input_state.finish_clipboard_paste_request(request.id);
             }
+        }
+    }
+
+    /// Probes the system clipboard fingerprint on the paste worker. The probe
+    /// spawns `wl-paste` twice with a 300 ms timeout each; running it inline
+    /// stalled event dispatch for up to ~600 ms.
+    fn start_system_fingerprint_probe(
+        &mut self,
+        request: ClipboardPasteRequest,
+        generation: u64,
+        expected: Option<crate::input::state::ClipboardFingerprint>,
+    ) {
+        log::info!(
+            "Probing system clipboard fingerprint for paste request {} generation {}",
+            request.id,
+            generation
+        );
+        let context = request.clone();
+        if let Err(failure) =
+            self.clipboard_paste
+                .try_submit(context, "clipboard-fingerprint-probe", move || {
+                    let started = Instant::now();
+                    let current = clipboard::clipboard_fingerprint();
+                    log::info!(
+                        "Fingerprint probe for paste request {} completed in {:?}: found={}",
+                        request.id,
+                        started.elapsed(),
+                        current.is_some()
+                    );
+                    ClipboardPasteCompletion {
+                        request,
+                        result: ClipboardPasteResult::SystemFingerprintProbe {
+                            generation,
+                            expected,
+                            current,
+                        },
+                    }
+                })
+        {
+            let (error, request) = failure.into_parts();
+            log::warn!(
+                "Could not submit clipboard fingerprint probe for request {}: {error}",
+                request.id
+            );
+            self.apply_clipboard_paste_completion(failed_clipboard_paste_completion(
+                request,
+                &error.to_string(),
+            ));
         }
     }
 

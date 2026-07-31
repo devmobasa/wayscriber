@@ -28,6 +28,7 @@ pub(crate) use pipeline::CaptureRequest;
 pub use types::{
     CaptureDestination, CaptureError, CaptureOutcome, CaptureResult, CaptureStatus, CaptureType,
     DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult, DesktopBackdropGeometry,
-    DesktopBackdropOutputGeometry, DocumentDeliveryRequest, ImageDeliveryRequest,
-    ImageFormatMetadata, ImageOperationKind, RenderedDocument, RenderedImage,
+    DesktopBackdropOutputGeometry, DocumentDeliveryRequest, DocumentRenderJob,
+    ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, ImageRenderJob,
+    RenderedDocument, RenderedDocumentDeliveryRequest, RenderedImage, RenderedImageDeliveryRequest,
 };

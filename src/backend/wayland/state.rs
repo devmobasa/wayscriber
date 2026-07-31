@@ -57,8 +57,7 @@ use crate::{
     capture::{
         CaptureDestination, CaptureManager, DesktopBackdropCaptureRequest,
         DesktopBackdropCaptureResult, DesktopBackdropGeometry, DesktopBackdropOutputGeometry,
-        DocumentDeliveryRequest, ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind,
-        RenderedDocument,
+        ImageFormatMetadata, ImageOperationKind, RenderedDocument,
         file::{FileSaveConfig, expand_tilde},
         types::CaptureType,
     },
