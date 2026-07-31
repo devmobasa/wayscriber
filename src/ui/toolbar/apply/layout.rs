@@ -174,6 +174,26 @@ impl InputState {
         self.apply_section_flag(crate::config::ToolbarSectionFlag::TextControls, show)
     }
 
+    /// Applies a section's visibility restored from runtime-UI state.
+    ///
+    /// A restore that already agrees with the configured layout is not a
+    /// choice, and pinning an override for it would stop the section from
+    /// following a later layout-mode switch. Only a genuine disagreement --
+    /// the user having toggled this section -- records one.
+    pub(crate) fn apply_section_visibility_runtime(
+        &mut self,
+        flag: crate::config::ToolbarSectionFlag,
+        visible: bool,
+    ) -> bool {
+        let current = crate::config::resolve_section_visibility(
+            self.toolbar_layout_mode,
+            &self.toolbar_mode_overrides,
+            &self.resolved_toolbar_items,
+        )
+        .get(flag);
+        current != visible && self.apply_section_flag(flag, visible)
+    }
+
     /// Section toggles record an explicit override in the item store (the
     /// single source of truth) and re-derive the mirror booleans, so the
     /// choice survives layout-mode switches.

@@ -103,6 +103,17 @@ fn decode_toolbar(
         &mut wire.passthrough,
     )?;
     decode_id_map(
+        toolbar.remove("sections"),
+        |id| {
+            crate::config::ToolbarSectionFlag::ALL
+                .into_iter()
+                .find(|flag| flag.item_id().as_str() == id)
+                .map(InteractionSeedTarget::SectionVisibility)
+        },
+        &mut wire.model,
+        &mut wire.passthrough,
+    )?;
+    decode_id_map(
         toolbar.remove("status_bar_items"),
         |id| {
             crate::config::StatusBarItem::from_config_id(id)
@@ -211,7 +222,8 @@ fn decode_value(
         | Target::ToolbarToolPreview
         | Target::ToolbarDelaySliders
         | Target::HistoryCustomSection
-        | Target::InputHud => value
+        | Target::InputHud
+        | Target::SectionVisibility(_) => value
             .as_bool()
             .map(InteractionSeedValue::Bool)
             .ok_or_else(|| RuntimeUiWireError::new("boolean override has a non-boolean value")),
@@ -314,6 +326,7 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
     let mut order = Table::new();
     let mut boards_pinned = Table::new();
     let mut status_bar_items = Table::new();
+    let mut sections = Table::new();
 
     for (target, runtime_override) in wire.model.iter() {
         let entry = encode_override(
@@ -360,6 +373,9 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
             InteractionSeedTarget::StatusBarItem(item) => {
                 insert_recognized(&mut status_bar_items, item.config_id(), entry)
             }
+            InteractionSeedTarget::SectionVisibility(flag) => {
+                insert_recognized(&mut sections, flag.item_id().as_str(), entry)
+            }
             InteractionSeedTarget::StatusBar => {
                 insert_recognized(&mut toolbar, "status_bar", entry)
             }
@@ -404,6 +420,7 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
         "status_bar_items",
         Value::Table(status_bar_items),
     );
+    insert_recognized(&mut toolbar, "sections", Value::Table(sections));
 
     let mut boards = restore_table(&wire.passthrough.boards)?;
     insert_recognized(&mut boards, "pinned", Value::Table(boards_pinned));
@@ -463,7 +480,8 @@ fn encode_value(
             | InteractionSeedTarget::ToolbarToolPreview
             | InteractionSeedTarget::ToolbarDelaySliders
             | InteractionSeedTarget::HistoryCustomSection
-            | InteractionSeedTarget::InputHud,
+            | InteractionSeedTarget::InputHud
+            | InteractionSeedTarget::SectionVisibility(_),
             InteractionSeedValue::Bool(value),
         ) => Ok(Value::Boolean(*value)),
         (InteractionSeedTarget::SidePane, InteractionSeedValue::SidePane(value)) => {

@@ -139,6 +139,11 @@ pub(crate) enum InteractionSeedTarget {
     HistoryCustomSection,
     /// The input HUD.
     InputHud,
+    /// Whether one named toolbar section is shown. Distinct from
+    /// `ItemVisibility`: a section's visibility has a layout-mode baseline and
+    /// a legacy mirror behind it, so it is seeded and restored as its own
+    /// value rather than as an individual item override.
+    SectionVisibility(crate::config::ToolbarSectionFlag),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -176,7 +181,8 @@ impl InteractionSeedValue {
                     | Target::ToolbarToolPreview
                     | Target::ToolbarDelaySliders
                     | Target::HistoryCustomSection
-                    | Target::InputHud,
+                    | Target::InputHud
+                    | Target::SectionVisibility(_),
                 Self::Bool(_),
             ) | (Target::SidePane, Self::SidePane(_))
                 | (Target::ItemVisibility(_), Self::Visibility(_))

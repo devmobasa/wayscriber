@@ -11,7 +11,7 @@
 use super::*;
 use crate::config::{
     Config, StatusBarItem, ToolbarItemVisibilitySetting, ToolbarSectionFlag,
-    item_visibility_setting, resolve_section_visibility, section_flag_for_item,
+    item_visibility_setting,
 };
 
 /// One authored preference reachable from an overlay control.
@@ -27,7 +27,6 @@ pub(super) enum ToolbarPreference {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ToolbarPreferenceField {
     LayoutMode,
-    SectionVisibility(ToolbarSectionFlag),
     Icons,
     MoreColors,
     ContextAwareUi,
@@ -63,9 +62,7 @@ impl ToolbarPreference {
     /// exactly these.
     pub(super) fn affects_runtime_ui_seeds(self) -> bool {
         match self {
-            Self::Toolbar(
-                ToolbarPreferenceField::LayoutMode | ToolbarPreferenceField::SectionVisibility(_),
-            ) => true,
+            Self::Toolbar(ToolbarPreferenceField::LayoutMode) => true,
             Self::Toolbar(_)
             | Self::Ui(_)
             | Self::HistoryCustomSection
@@ -88,34 +85,6 @@ pub(super) fn preference_for_event(event: &ToolbarEvent) -> Option<ToolbarPrefer
     let preference = match event {
         ToolbarEvent::ToggleIconMode(_) => Toolbar(Icons),
         ToolbarEvent::ToggleMoreColors(_) => Toolbar(MoreColors),
-        ToolbarEvent::ToggleActionsSection(_) => {
-            Toolbar(SectionVisibility(ToolbarSectionFlag::Actions))
-        }
-        ToolbarEvent::ToggleActionsAdvanced(_) => {
-            Toolbar(SectionVisibility(ToolbarSectionFlag::ActionsAdvanced))
-        }
-        ToolbarEvent::ToggleZoomActions(_) => {
-            Toolbar(SectionVisibility(ToolbarSectionFlag::ZoomActions))
-        }
-        ToolbarEvent::TogglePagesSection(_) => {
-            Toolbar(SectionVisibility(ToolbarSectionFlag::Pages))
-        }
-        ToolbarEvent::ToggleBoardsSection(_) => {
-            Toolbar(SectionVisibility(ToolbarSectionFlag::Boards))
-        }
-        ToolbarEvent::TogglePresets(_) => Toolbar(SectionVisibility(ToolbarSectionFlag::Presets)),
-        ToolbarEvent::ToggleStepSection(_) => {
-            Toolbar(SectionVisibility(ToolbarSectionFlag::StepSection))
-        }
-        ToolbarEvent::ToggleTextControls(_) => {
-            Toolbar(SectionVisibility(ToolbarSectionFlag::TextControls))
-        }
-        // A section row hidden from the customization list is that section's
-        // visibility, not a runtime-UI item override (see
-        // `persistence_for_event`).
-        ToolbarEvent::SetToolbarItemHidden(id, _) => {
-            Toolbar(SectionVisibility(section_flag_for_item(*id)?))
-        }
         ToolbarEvent::ToggleContextAwareUi(_) => Toolbar(ContextAwareUi),
         ToolbarEvent::TogglePresetToasts(_) => Toolbar(PresetToasts),
         ToolbarEvent::ToggleToolPreview(_) => Toolbar(ToolPreview),
@@ -178,7 +147,6 @@ fn apply_toolbar_field(
             let mirrors_changed = rebaseline_legacy_section_flags(config);
             mode_changed || mirrors_changed
         }
-        SectionVisibility(flag) => apply_section_visibility(config, input_state, flag),
         Icons => store(
             &mut config.ui.toolbar.use_icons,
             input_state.toolbar_use_icons,
@@ -240,30 +208,6 @@ fn apply_ui_field(config: &mut Config, input_state: &InputState, field: UiPrefer
             input_state.show_floating_badge_always,
         ),
     }
-}
-
-/// Section visibility lives in the canonical item override plus the legacy
-/// `show_*` mirror the load fold reads back, so both move together.
-fn apply_section_visibility(
-    config: &mut Config,
-    input_state: &InputState,
-    flag: ToolbarSectionFlag,
-) -> bool {
-    let id = flag.item_id();
-    let setting = item_visibility_setting(&input_state.resolved_toolbar_items, id);
-    let visible = resolve_section_visibility(
-        input_state.toolbar_layout_mode,
-        &input_state.toolbar_mode_overrides,
-        &input_state.resolved_toolbar_items,
-    )
-    .get(flag);
-
-    let setting_changed =
-        item_visibility_setting(&config.ui.toolbar.items.resolved(), id) != setting;
-    config.ui.toolbar.items.set_visibility_setting(id, setting);
-    let mirror_changed = section_compatibility_mirror(config, flag) != visible;
-    apply_section_compatibility_mirror(config, flag, visible);
-    setting_changed || mirror_changed
 }
 
 /// Presenter mode forces the click highlight on while it runs, so the value

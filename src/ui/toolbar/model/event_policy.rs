@@ -1,6 +1,6 @@
 use crate::config::{
-    Action, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting, action_label,
-    action_short_label, section_flag_for_item,
+    Action, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting, ToolbarSectionFlag,
+    action_label, action_short_label, section_flag_for_item,
 };
 use crate::input::Tool;
 
@@ -76,6 +76,7 @@ pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
     SideMinimized,
     SidePane,
     CollapsedSection(ToolbarSideSection),
+    NamedSection(crate::config::ToolbarSectionFlag),
     ItemVisibility {
         id: ToolbarItemId,
         setting: ToolbarItemVisibilitySetting,
@@ -383,6 +384,37 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         // Status-bar content is chrome the user arranges from the overlay, so
         // it persists the same way the toolbars do: as a runtime override
         // layered over the configured value, never by writing config.toml.
+        ToolbarEvent::ToggleActionsSection(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::NamedSection(ToolbarSectionFlag::Actions))
+        }
+        ToolbarEvent::ToggleActionsAdvanced(_) => ToolbarPersistence::RuntimeUi(
+            Runtime::NamedSection(ToolbarSectionFlag::ActionsAdvanced),
+        ),
+        ToolbarEvent::ToggleZoomActions(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::NamedSection(ToolbarSectionFlag::ZoomActions))
+        }
+        ToolbarEvent::TogglePagesSection(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::NamedSection(ToolbarSectionFlag::Pages))
+        }
+        ToolbarEvent::ToggleBoardsSection(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::NamedSection(ToolbarSectionFlag::Boards))
+        }
+        ToolbarEvent::TogglePresets(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::NamedSection(ToolbarSectionFlag::Presets))
+        }
+        ToolbarEvent::ToggleStepSection(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::NamedSection(ToolbarSectionFlag::StepSection))
+        }
+        ToolbarEvent::ToggleTextControls(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::NamedSection(ToolbarSectionFlag::TextControls))
+        }
+        // A section row in the customization list is that section's
+        // visibility, not an individual item override.
+        ToolbarEvent::SetToolbarItemHidden(id, _) if section_flag_for_item(*id).is_some() => {
+            ToolbarPersistence::RuntimeUi(Runtime::NamedSection(
+                section_flag_for_item(*id).expect("guarded above"),
+            ))
+        }
         ToolbarEvent::ToggleStatusBar(_) => ToolbarPersistence::RuntimeUi(Runtime::StatusBar),
         ToolbarEvent::ToggleStatusBoardBadge(_) => {
             ToolbarPersistence::RuntimeUi(Runtime::StatusBoardBadge)
@@ -454,15 +486,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         }
         // Authored preferences below: applying them updates the effective
         // config for this run only (see `ToolbarPersistence`).
-        ToolbarEvent::ToggleActionsSection(_)
-        | ToolbarEvent::ToggleActionsAdvanced(_)
-        | ToolbarEvent::ToggleZoomActions(_)
-        | ToolbarEvent::TogglePagesSection(_)
-        | ToolbarEvent::ToggleBoardsSection(_)
-        | ToolbarEvent::TogglePresets(_)
-        | ToolbarEvent::ToggleStepSection(_)
-        | ToolbarEvent::ToggleTextControls(_)
-        | ToolbarEvent::SetToolbarLayoutMode(_)
+        ToolbarEvent::SetToolbarLayoutMode(_)
         | ToolbarEvent::ToggleAllHighlight(_)
         | ToolbarEvent::ToggleHighlightToolRing(_)
         | ToolbarEvent::SelectTool(_)

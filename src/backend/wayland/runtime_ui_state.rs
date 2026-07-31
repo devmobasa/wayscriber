@@ -344,6 +344,17 @@ fn runtime_seeds_from_config(
         InteractionSeedTarget::InputHud,
         InteractionSeedValue::Bool(config.ui.input_hud.enabled),
     )?;
+    let configured_sections = crate::config::resolve_section_visibility(
+        config.ui.toolbar.layout_mode,
+        &config.ui.toolbar.mode_overrides,
+        &config.ui.toolbar.items.resolved(),
+    );
+    for flag in crate::config::ToolbarSectionFlag::ALL {
+        insert(
+            InteractionSeedTarget::SectionVisibility(flag),
+            InteractionSeedValue::Bool(configured_sections.get(flag)),
+        )?;
+    }
     insert(
         InteractionSeedTarget::StatusBarInteractive,
         InteractionSeedValue::Bool(config.ui.status_bar_interactive),
@@ -544,6 +555,17 @@ fn toolbar_values(
             InteractionSeedTarget::InputHud,
             InteractionSeedValue::Bool(input.input_hud_enabled()),
         ),
+        Target::NamedSection(flag) => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::SectionVisibility(flag),
+            InteractionSeedValue::Bool(
+                crate::config::resolve_section_visibility(
+                    input.toolbar_layout_mode,
+                    &input.toolbar_mode_overrides,
+                    &input.resolved_toolbar_items,
+                )
+                .get(flag),
+            ),
+        ),
         Target::StatusBarInteractive => RuntimeUiMutationValues::one(
             InteractionSeedTarget::StatusBarInteractive,
             InteractionSeedValue::Bool(input.status_bar_interactive),
@@ -721,6 +743,13 @@ fn apply_live_toolbar_state(
         && let Some(value) = bool_value(InteractionSeedTarget::InputHud)
     {
         input.set_input_hud_enabled(value);
+    }
+    for flag in crate::config::ToolbarSectionFlag::ALL {
+        if include(&InteractionSeedTarget::SectionVisibility(flag))
+            && let Some(value) = bool_value(InteractionSeedTarget::SectionVisibility(flag))
+        {
+            input.apply_section_visibility_runtime(flag, value);
+        }
     }
     if include(&InteractionSeedTarget::StatusBarInteractive)
         && let Some(value) = bool_value(InteractionSeedTarget::StatusBarInteractive)

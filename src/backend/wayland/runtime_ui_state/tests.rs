@@ -2956,3 +2956,126 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
     assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
     restarted.shutdown_blocking();
 }
+
+/// A durable preference override is measured against a seed derived from the
+/// authored config, so a seed refresh — a session load, a board change, an
+/// output change — must leave it standing. If the toggle also moved the
+/// effective config, the refreshed seed would arrive already equal to the
+/// override and reconciliation would prune it as redundant, quietly undoing
+/// the persistence at the next unrelated refresh.
+#[test]
+fn a_seed_refresh_does_not_prune_persisted_preference_overrides() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    let target = ToolbarRuntimeUiPersistenceTarget::ToolbarIcons;
+    let prepared = runtime
+        .begin_toolbar_mutation(target, &input)
+        .expect("icon toggle permit");
+    input.toolbar_use_icons = !input.toolbar_use_icons;
+    let flipped = input.toolbar_use_icons;
+    runtime.finish_toolbar_mutation(prepared, true, &input);
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+
+    // Whatever else the run does, the seed baseline stays authored.
+    let mut positions = ToolbarPositionSnapshot {
+        top: (0.0, 0.0),
+        side: (0.0, 0.0),
+    };
+    runtime.refresh_config_seeds(&config, &mut input, &mut positions);
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+    assert_eq!(
+        restarted_input.toolbar_use_icons, flipped,
+        "the icon override must outlive an unrelated seed refresh"
+    );
+    restarted.shutdown_blocking();
+}
+
+/// Hiding a toolbar section is a durable choice, and it has to come back
+/// without `config.toml` moving. A section the user never touched keeps
+/// following the layout mode instead of being pinned by the restore.
+#[test]
+fn section_visibility_survives_restart_without_touching_config() {
+    use crate::config::{ToolbarSectionFlag, resolve_section_visibility};
+
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    let live = |input: &InputState, flag| {
+        resolve_section_visibility(
+            input.toolbar_layout_mode,
+            &input.toolbar_mode_overrides,
+            &input.resolved_toolbar_items,
+        )
+        .get(flag)
+    };
+
+    let toggled = ToolbarSectionFlag::Presets;
+    let untouched = ToolbarSectionFlag::Boards;
+    let untouched_before = live(&input, untouched);
+
+    let target = ToolbarRuntimeUiPersistenceTarget::NamedSection(toggled);
+    let prepared = runtime
+        .begin_toolbar_mutation(target, &input)
+        .expect("section toggle permit");
+    let flipped = !live(&input, toggled);
+    assert!(input.apply_toolbar_event(section_toggle(toggled, flipped)));
+    let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+    assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+
+    assert_eq!(
+        live(&restarted_input, toggled),
+        flipped,
+        "the toggled section must come back hidden"
+    );
+    assert_eq!(live(&restarted_input, untouched), untouched_before);
+    assert!(
+        !restarted_input
+            .toolbar_items
+            .resolved()
+            .hidden
+            .contains(&untouched.item_id())
+            && !restarted_input
+                .toolbar_items
+                .resolved()
+                .shown
+                .contains(&untouched.item_id()),
+        "an untouched section keeps following the layout mode"
+    );
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    restarted.shutdown_blocking();
+}
+
+fn section_toggle(flag: crate::config::ToolbarSectionFlag, show: bool) -> ToolbarEvent {
+    use crate::config::ToolbarSectionFlag as Flag;
+    match flag {
+        Flag::Actions => ToolbarEvent::ToggleActionsSection(show),
+        Flag::ActionsAdvanced => ToolbarEvent::ToggleActionsAdvanced(show),
+        Flag::ZoomActions => ToolbarEvent::ToggleZoomActions(show),
+        Flag::Pages => ToolbarEvent::TogglePagesSection(show),
+        Flag::Boards => ToolbarEvent::ToggleBoardsSection(show),
+        Flag::Presets => ToolbarEvent::TogglePresets(show),
+        Flag::StepSection => ToolbarEvent::ToggleStepSection(show),
+        Flag::TextControls => ToolbarEvent::ToggleTextControls(show),
+    }
+}

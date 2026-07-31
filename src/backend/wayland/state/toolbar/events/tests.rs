@@ -265,44 +265,6 @@ fn authored_preference_events() -> Vec<(ToolbarEvent, ToolbarPreference)> {
             ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Advanced),
             Toolbar(Field::LayoutMode),
         ),
-        (
-            ToolbarEvent::ToggleActionsSection(false),
-            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::Actions)),
-        ),
-        (
-            ToolbarEvent::ToggleActionsAdvanced(false),
-            Toolbar(Field::SectionVisibility(
-                ToolbarSectionFlag::ActionsAdvanced,
-            )),
-        ),
-        (
-            ToolbarEvent::ToggleZoomActions(false),
-            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::ZoomActions)),
-        ),
-        (
-            ToolbarEvent::TogglePagesSection(false),
-            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::Pages)),
-        ),
-        (
-            ToolbarEvent::ToggleBoardsSection(false),
-            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::Boards)),
-        ),
-        (
-            ToolbarEvent::TogglePresets(false),
-            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::Presets)),
-        ),
-        (
-            ToolbarEvent::ToggleStepSection(false),
-            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::StepSection)),
-        ),
-        (
-            ToolbarEvent::ToggleTextControls(false),
-            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::TextControls)),
-        ),
-        (
-            ToolbarEvent::SetToolbarItemHidden(ToolbarSectionFlag::Actions.item_id(), true),
-            Toolbar(Field::SectionVisibility(ToolbarSectionFlag::Actions)),
-        ),
         (ToolbarEvent::ToggleAllHighlight(true), ClickHighlight),
         (ToolbarEvent::SelectTool(Tool::Highlight), ClickHighlight),
         (ToolbarEvent::ToggleHighlightToolRing(true), ClickHighlight),
@@ -362,23 +324,31 @@ fn status_bar_content_persists_as_runtime_ui_state() {
     }
 }
 
-/// Section rows are authored config, not runtime-UI item overrides: the seed
-/// registry deliberately has no seed for them. Every other item keeps its
-/// runtime-UI override and owns no authored field.
+/// A section row carries a whole section's visibility, not one item's
+/// override, so it persists under its own target rather than as an
+/// `ItemVisibility` entry -- the seed registry deliberately grows no
+/// `ItemVisibility` seed for a section id. Every other item keeps its item
+/// override. Neither owns an authored field: a durable toggle that also moved
+/// the effective config would move the seed its own override is measured
+/// against (`a_persisted_event_does_not_also_move_the_effective_config`).
 #[test]
-fn named_section_visibility_is_an_authored_preference_not_runtime_state() {
+fn named_section_visibility_persists_under_its_own_target() {
     use crate::config::{ToolbarItemVisibilitySetting, toolbar_item_ids as ids};
 
     for flag in ToolbarSectionFlag::ALL {
-        let event = ToolbarEvent::SetToolbarItemHidden(flag.item_id(), true);
-        assert_eq!(persistence_for(&event), ToolbarPersistence::Ephemeral);
-        assert_eq!(
-            preference_for_event(&event),
-            Some(ToolbarPreference::Toolbar(
-                ToolbarPreferenceField::SectionVisibility(flag)
-            )),
-            "{flag:?} must update its authored section setting"
-        );
+        for event in [
+            ToolbarEvent::SetToolbarItemHidden(flag.item_id(), true),
+            section_toggle_event(flag, false),
+        ] {
+            assert_eq!(
+                persistence_for(&event),
+                ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::NamedSection(
+                    flag
+                )),
+                "{flag:?} must survive a restart"
+            );
+            assert_eq!(preference_for_event(&event), None, "{flag:?}");
+        }
     }
 
     let individual = ToolbarEvent::SetToolbarItemHidden(ids::TOP_TOOL_PEN, true);
@@ -415,13 +385,11 @@ fn runtime_and_ephemeral_events_own_no_authored_preference() {
 /// Only the fields the toolbar seed derivation reads have to reseed; the rest
 /// would spend a full override reconciliation for nothing.
 #[test]
-fn only_section_and_layout_preferences_reseed_runtime_ui() {
+fn only_the_layout_preference_reseeds_runtime_ui() {
     for (event, preference) in authored_preference_events() {
         let expected = matches!(
             preference,
-            ToolbarPreference::Toolbar(
-                ToolbarPreferenceField::LayoutMode | ToolbarPreferenceField::SectionVisibility(_)
-            )
+            ToolbarPreference::Toolbar(ToolbarPreferenceField::LayoutMode)
         );
         assert_eq!(
             preference.affects_runtime_ui_seeds(),
@@ -632,59 +600,6 @@ fn layout_switch_leaves_explicitly_overridden_sections_untouched() {
 
     assert!(!config.ui.toolbar.show_settings_section);
     assert!(folded_section_visibility(&config).show_presets);
-}
-
-#[test]
-fn section_visibility_preference_updates_only_its_canonical_override_and_mirror() {
-    let mut config = crate::config::Config::default();
-    config.ui.toolbar.show_actions_section = true;
-    config.ui.toolbar.show_presets = false;
-    config
-        .ui
-        .toolbar
-        .items
-        .set_hidden(ToolbarSectionFlag::Presets.item_id(), true);
-    let presets_before = config.ui.toolbar.items.clone();
-
-    let mut input_state = make_test_input_state();
-    input_state.toolbar_items = config.ui.toolbar.items.clone();
-    input_state.resolved_toolbar_items = input_state.toolbar_items.resolved();
-    assert!(input_state.set_toolbar_item_hidden(ToolbarSectionFlag::Actions.item_id(), true,));
-
-    assert!(apply_toolbar_preference(
-        &mut config,
-        &input_state,
-        ToolbarPreference::Toolbar(ToolbarPreferenceField::SectionVisibility(
-            ToolbarSectionFlag::Actions
-        )),
-    ));
-
-    assert!(!config.ui.toolbar.show_actions_section);
-    assert!(!config.ui.toolbar.show_presets);
-    assert!(
-        config
-            .ui
-            .toolbar
-            .items
-            .resolved()
-            .hidden
-            .contains(&ToolbarSectionFlag::Actions.item_id())
-    );
-    assert!(
-        config
-            .ui
-            .toolbar
-            .items
-            .resolved()
-            .hidden
-            .contains(&ToolbarSectionFlag::Presets.item_id())
-    );
-    assert_eq!(
-        &config.ui.toolbar.items.hidden[..presets_before.hidden.len()],
-        presets_before.hidden.as_slice(),
-        "all existing hidden overrides keep their positions and values"
-    );
-    assert_eq!(config.ui.toolbar.items.shown, presets_before.shown);
 }
 
 /// Presenter mode owns the click highlight and the HUD while it runs, so its
@@ -1297,5 +1212,19 @@ fn settings_popover_survives_its_own_controls_and_dismisses_on_everything_else()
             event_dismisses_settings_popover(&dismissing),
             "{dismissing:?} must dismiss the Settings popover"
         );
+    }
+}
+
+/// The toolbar toggle event for one named section.
+fn section_toggle_event(flag: ToolbarSectionFlag, show: bool) -> ToolbarEvent {
+    match flag {
+        ToolbarSectionFlag::Actions => ToolbarEvent::ToggleActionsSection(show),
+        ToolbarSectionFlag::ActionsAdvanced => ToolbarEvent::ToggleActionsAdvanced(show),
+        ToolbarSectionFlag::ZoomActions => ToolbarEvent::ToggleZoomActions(show),
+        ToolbarSectionFlag::Pages => ToolbarEvent::TogglePagesSection(show),
+        ToolbarSectionFlag::Boards => ToolbarEvent::ToggleBoardsSection(show),
+        ToolbarSectionFlag::Presets => ToolbarEvent::TogglePresets(show),
+        ToolbarSectionFlag::StepSection => ToolbarEvent::ToggleStepSection(show),
+        ToolbarSectionFlag::TextControls => ToolbarEvent::ToggleTextControls(show),
     }
 }
