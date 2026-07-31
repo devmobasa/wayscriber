@@ -159,22 +159,9 @@ pub fn draw_icon_board(ctx: &Context, x: f64, y: f64, size: f64) {
     let _ = ctx.stroke();
 }
 
-/// Draw a drag-grip glyph: three horizontal bars, as on the toolbar move
-/// handles. Uses the context's current source color.
-#[allow(dead_code)] // referenced by the toolbar-gtk frontend only
-pub fn draw_icon_grip_bars(ctx: &Context, x: f64, y: f64, size: f64) {
-    draw_icon_drag(ctx, x, y, size);
-}
-
 /// Draw the toolbar drag handle.
 pub fn draw_icon_drag(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_drag(ctx, x, y, size);
-}
-
-/// Draw a minimize dash (not an X: the bar collapses to a restore tab).
-#[allow(dead_code)] // referenced by the toolbar-gtk frontend only
-pub fn draw_icon_dash(ctx: &Context, x: f64, y: f64, size: f64) {
-    draw_icon_minimize(ctx, x, y, size);
 }
 
 /// Draw `count` centered horizontal density bars, the layout-cycle glyph
@@ -209,29 +196,6 @@ pub fn draw_icon_layout_regular(ctx: &Context, x: f64, y: f64, size: f64) {
 /// Draw the layout-cycle glyph for the Advanced preset (three density bars).
 pub fn draw_icon_layout_advanced(ctx: &Context, x: f64, y: f64, size: f64) {
     draw_layout_density_bars(ctx, x, y, size, 3);
-}
-
-/// Draw a pushpin glyph ("keep open at startup"): outline when unpinned,
-/// filled when pinned. Geometry mirrors the built-in pin chrome button.
-#[allow(dead_code)] // referenced by the toolbar-gtk frontend only
-pub fn draw_icon_pushpin(ctx: &Context, x: f64, y: f64, size: f64, filled: bool) {
-    if filled {
-        draw_icon_pin(ctx, x, y, size);
-    } else {
-        draw_icon_unpin(ctx, x, y, size);
-    }
-}
-
-/// Outline pushpin with the 4-arg painter shape used by icon widgets.
-#[allow(dead_code)] // referenced by the toolbar-gtk frontend only
-pub fn draw_icon_pin_outline(ctx: &Context, x: f64, y: f64, size: f64) {
-    draw_icon_unpin(ctx, x, y, size);
-}
-
-/// Filled pushpin with the 4-arg painter shape used by icon widgets.
-#[allow(dead_code)] // referenced by the toolbar-gtk frontend only
-pub fn draw_icon_pin_filled(ctx: &Context, x: f64, y: f64, size: f64) {
-    draw_icon_pin(ctx, x, y, size);
 }
 
 pub fn draw_icon_pin(ctx: &Context, x: f64, y: f64, size: f64) {

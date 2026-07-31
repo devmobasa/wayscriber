@@ -12,7 +12,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-#[allow(dead_code)]
 const AUTOSAVE_HISTORY_FALLBACK_DEPTH: usize = 1;
 
 mod payload;
@@ -41,7 +40,6 @@ pub use model::{
 };
 
 /// Persist the provided snapshot to disk according to the configured options.
-#[allow(dead_code)]
 pub fn save_snapshot(snapshot: &SessionSnapshot, options: &SessionOptions) -> Result<()> {
     save_snapshot_with_report(snapshot, options).map(|_| ())
 }

@@ -507,21 +507,3 @@ impl From<std::io::Error> for CaptureError {
         Self::SaveError(value)
     }
 }
-
-/// Status of an ongoing capture operation.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CaptureStatus {
-    /// Capture is idle/not started.
-    Idle,
-    /// Waiting for user permission from portal.
-    AwaitingPermission,
-    /// Capture is in progress.
-    #[allow(dead_code)] // Will be used in Phase 2 for progress UI
-    InProgress,
-    /// Capture completed successfully.
-    Success,
-    /// Capture failed.
-    Failed(String),
-    /// Capture was cancelled by the user.
-    Cancelled(String),
-}

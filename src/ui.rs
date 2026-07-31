@@ -29,8 +29,7 @@ pub use help_overlay::HelpOverlayBindings;
 pub use help_overlay::install_help_hit_map_for_test;
 #[allow(unused_imports)]
 pub use help_overlay::{
-    HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at,
-    invalidate_help_overlay_cache, render_help_overlay,
+    HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at, render_help_overlay,
 };
 pub use input_hud::{input_hud_geometry, render_input_hud};
 pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboarding_card};

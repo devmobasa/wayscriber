@@ -64,37 +64,11 @@ fn copy_via_command(image_data: &[u8]) -> Result<(), CaptureError> {
     Ok(())
 }
 
-/// Check if clipboard functionality is available.
-///
-/// Tests if wl-copy command exists as a basic availability check.
-#[allow(dead_code)] // Will be used in Phase 2 for capability checks
-pub fn is_clipboard_available() -> bool {
-    crate::process_broker::current()
-        .and_then(|broker| {
-            broker.run(
-                crate::process_broker::HelperKind::WlCopy,
-                OsStr::new("wl-copy"),
-                [OsStr::new("--version")],
-                Vec::new(),
-                Duration::from_secs(2),
-                4096,
-            )
-        })
-        .is_ok_and(|output| !output.timed_out && output.status == 0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::cell::Cell;
     use std::rc::Rc;
-
-    #[test]
-    fn test_is_clipboard_available() {
-        // This test will pass or fail depending on system setup
-        // Just ensure it doesn't panic
-        let _available = is_clipboard_available();
-    }
 
     #[test]
     fn copy_to_clipboard_uses_command_success() {

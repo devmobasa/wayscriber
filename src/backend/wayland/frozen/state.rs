@@ -83,7 +83,6 @@ impl FrozenState {
         }
     }
 
-    #[allow(dead_code)]
     pub fn manager_available(&self) -> bool {
         self.manager.is_some()
     }

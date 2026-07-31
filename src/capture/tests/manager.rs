@@ -15,7 +15,7 @@ use crate::capture::{
     dependencies::{CaptureDependencies, CaptureFuture, CaptureSource},
     file::FileSaveConfig,
     manager::{CaptureManager, CapturePoll, CaptureSubmitError},
-    types::{CaptureDestination, CaptureError, CaptureOutcome, CaptureStatus, CaptureType},
+    types::{CaptureDestination, CaptureError, CaptureOutcome, CaptureType},
 };
 
 use super::fixtures::{MockClipboard, MockSaver, MockSource, create_placeholder_image};
@@ -82,13 +82,6 @@ fn rendered_pdf(bytes: Vec<u8>) -> RenderedDocument {
         extension: "pdf".to_string(),
         mime_type: "application/pdf".to_string(),
     }
-}
-
-#[tokio::test]
-async fn test_capture_manager_creation() {
-    let manager = CaptureManager::new(&tokio::runtime::Handle::current());
-    let status = manager.get_status().await;
-    assert_eq!(status, CaptureStatus::Idle);
 }
 
 #[tokio::test]
@@ -304,7 +297,6 @@ async fn test_capture_manager_with_dependencies() {
         other => panic!("Expected success outcome, got {:?}", other),
     }
     assert_eq!(*clipboard_calls.lock().unwrap(), 1);
-    assert_eq!(manager.get_status().await, CaptureStatus::Success);
 }
 
 #[test]
@@ -366,11 +358,6 @@ async fn capture_manager_records_failure_status() {
         }
         other => panic!("Expected failure outcome, got {other:?}"),
     }
-
-    assert!(matches!(
-        manager.get_status().await,
-        CaptureStatus::Failed(_)
-    ));
 }
 
 #[tokio::test]
@@ -409,10 +396,6 @@ async fn capture_manager_preserves_user_cancellation_as_a_terminal_outcome() {
             operation: ImageOperationKind::Screenshot,
             reason,
         }) if reason == "user dismissed portal"
-    ));
-    assert!(matches!(
-        manager.get_status().await,
-        CaptureStatus::Cancelled(reason) if reason == "user dismissed portal"
     ));
 }
 
@@ -526,7 +509,6 @@ async fn request_image_delivery_queues_manager_backed_path() {
     }
     assert_eq!(*saver_handle.calls.lock().unwrap(), 1);
     assert!(captured_types.lock().unwrap().is_empty());
-    assert_eq!(manager.get_status().await, CaptureStatus::Success);
 }
 
 #[tokio::test]
@@ -576,7 +558,6 @@ async fn request_document_delivery_reports_board_pdf_success() {
     }
     assert_eq!(*saver_handle.calls.lock().unwrap(), 1);
     assert!(captured_types.lock().unwrap().is_empty());
-    assert_eq!(manager.get_status().await, CaptureStatus::Success);
 }
 
 #[tokio::test]
@@ -632,12 +613,6 @@ async fn request_image_delivery_records_canvas_save_failure() {
     }
     assert_eq!(*saver_handle.calls.lock().unwrap(), 1);
     assert!(captured_types.lock().unwrap().is_empty());
-    assert!(matches!(
-        manager.get_status().await,
-        CaptureStatus::Failed(ref message)
-            if message.contains("Failed to save canvas export")
-                && !message.to_lowercase().contains("screenshot")
-    ));
 }
 
 #[tokio::test]
@@ -688,11 +663,6 @@ async fn request_document_delivery_records_board_pdf_save_failure() {
     }
     assert_eq!(*saver_handle.calls.lock().unwrap(), 1);
     assert!(captured_types.lock().unwrap().is_empty());
-    assert!(matches!(
-        manager.get_status().await,
-        CaptureStatus::Failed(ref message)
-            if message.contains("Failed to save board PDF export")
-    ));
 }
 
 #[tokio::test]
@@ -742,5 +712,4 @@ async fn request_image_delivery_preserves_clipboard_success_when_file_fails() {
     }
     assert_eq!(*clipboard_calls.lock().unwrap(), 1);
     assert!(captured_types.lock().unwrap().is_empty());
-    assert_eq!(manager.get_status().await, CaptureStatus::Success);
 }

@@ -77,7 +77,6 @@ impl LoadSnapshotOutcome {
 }
 
 /// Attempt to load a previously saved session.
-#[allow(dead_code)]
 pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>> {
     match load_snapshot_with_outcome(options)? {
         LoadSnapshotOutcome::Loaded(snapshot)

@@ -183,9 +183,9 @@ pub(super) struct WaylandState {
     pub(super) xdg_shell: Option<XdgShell>,
     pub(super) activation: Option<ActivationState>,
     pub(super) shm: Shm,
-    #[allow(dead_code)] // Kept for potential future pointer lock support
+    // Both drive pointer lock for toolbar drags; see
+    // state/toolbar/visibility/pointer.rs.
     pub(super) pointer_constraints_state: PointerConstraintsState,
-    #[allow(dead_code)] // Kept for potential future pointer lock support
     pub(super) relative_pointer_state: RelativePointerState,
     pub(super) output_state: OutputState,
     pub(super) seat_state: SeatState,

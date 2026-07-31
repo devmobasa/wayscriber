@@ -9,26 +9,6 @@ use crate::env_vars::{
 };
 use crate::{config::Config, util::Rect};
 
-#[allow(dead_code)]
-pub(in crate::backend::wayland) fn resolve_damage_regions(
-    width: i32,
-    height: i32,
-    mut regions: Vec<Rect>,
-) -> Vec<Rect> {
-    regions.retain(Rect::is_valid);
-
-    if regions.is_empty()
-        && width > 0
-        && height > 0
-        && let Some(full) = Rect::new(0, 0, width, height)
-    {
-        regions.push(full);
-    }
-
-    regions
-}
-
-#[allow(dead_code)]
 pub(in crate::backend::wayland) fn scale_damage_regions(
     regions: Vec<Rect>,
     scale: i32,

@@ -14,7 +14,7 @@ use super::*;
 impl WaylandState {
     pub(super) fn handle_pointer_press(
         &mut self,
-        _conn: &wayland_client::Connection,
+        conn: &wayland_client::Connection,
         qh: &QueueHandle<Self>,
         event: &PointerEvent,
         on_toolbar: bool,
@@ -120,13 +120,12 @@ impl WaylandState {
             // Inline bars share the canvas surface, so their swatch recolor
             // gesture is resolved here rather than in the `on_toolbar` branch.
             if button == BTN_RIGHT
-                && self.inline_toolbar_secondary_press(event.position, Some(_conn), Some(qh))
+                && self.inline_toolbar_secondary_press(event.position, Some(conn), Some(qh))
             {
                 self.refresh_keyboard_interactivity();
                 return;
             }
-            if button == BTN_LEFT
-                && self.inline_toolbar_press(event.position, Some(_conn), Some(qh))
+            if button == BTN_LEFT && self.inline_toolbar_press(event.position, Some(conn), Some(qh))
             {
                 drag_log(format!(
                     "pointer press: inline handled, drag_active={}, pos=({:.3}, {:.3}), surface={}",
@@ -158,7 +157,7 @@ impl WaylandState {
             {
                 self.handle_toolbar_event(
                     ToolbarEvent::EditQuickColor { index },
-                    Some(_conn),
+                    Some(conn),
                     Some(qh),
                 );
                 self.toolbar.mark_dirty();
@@ -188,7 +187,7 @@ impl WaylandState {
                     self.inline_toolbars_active()
                 );
                 self.set_toolbar_dragging(drag);
-                self.handle_toolbar_event(toolbar_event, Some(_conn), Some(qh));
+                self.handle_toolbar_event(toolbar_event, Some(conn), Some(qh));
                 self.toolbar.mark_dirty();
                 self.input_state.needs_redraw = true;
                 self.refresh_keyboard_interactivity();

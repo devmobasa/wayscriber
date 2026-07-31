@@ -14,7 +14,7 @@ use crate::capture::{
         deliver_image, perform_capture, render_and_deliver_document, render_and_deliver_image,
     },
     types::{
-        CaptureDestination, CaptureError, CaptureOutcome, CaptureStatus, CaptureType,
+        CaptureDestination, CaptureError, CaptureOutcome, CaptureType,
         DesktopBackdropCaptureRequest, DocumentDeliveryRequest, ImageDeliveryRequest,
         ImageOperationKind, RenderedDocumentDeliveryRequest, RenderedImageDeliveryRequest,
     },
@@ -115,7 +115,6 @@ pub struct CaptureManager {
     terminal_reported: bool,
     shutdown_requested: Arc<AtomicBool>,
     worker: Option<tokio::task::JoinHandle<()>>,
-    status: Arc<tokio::sync::Mutex<CaptureStatus>>,
 }
 
 impl CaptureManager {
@@ -164,12 +163,10 @@ impl CaptureManager {
     ) -> Self {
         let (request_tx, request_rx) = mpsc::channel::<CaptureCommand>(1);
         let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-        let status = Arc::new(tokio::sync::Mutex::new(CaptureStatus::Idle));
         let shutdown_requested = Arc::new(AtomicBool::new(false));
         let worker = runtime_handle.spawn(run_capture_worker(
             request_rx,
             completion_tx,
-            Arc::clone(&status),
             Arc::new(dependencies),
             notifier,
             Arc::clone(&shutdown_requested),
@@ -184,7 +181,6 @@ impl CaptureManager {
             terminal_reported: false,
             shutdown_requested,
             worker: Some(worker),
-            status,
         }
     }
 
@@ -346,11 +342,6 @@ impl CaptureManager {
         self.disable_worker();
     }
 
-    /// Gets the current informational capture status.
-    pub async fn get_status(&self) -> CaptureStatus {
-        self.status.lock().await.clone()
-    }
-
     /// Stops the owned worker without reporting normal teardown as failure.
     pub fn shutdown(&mut self) {
         self.shutdown_requested.store(true, Ordering::Release);
@@ -380,7 +371,6 @@ impl Drop for CaptureManager {
 async fn run_capture_worker(
     mut request_rx: mpsc::Receiver<CaptureCommand>,
     completion_tx: SyncSender<CaptureCompletion>,
-    status: Arc<tokio::sync::Mutex<CaptureStatus>>,
     dependencies: Arc<CaptureDependencies>,
     notifier: CompletionNotifier,
     shutdown_requested: Arc<AtomicBool>,
@@ -393,7 +383,6 @@ async fn run_capture_worker(
             command.request
         );
         let operation = command.request.operation();
-        *status.lock().await = CaptureStatus::AwaitingPermission;
 
         let result = match command.request {
             CaptureManagerRequest::Capture(request) => {
@@ -427,7 +416,7 @@ async fn run_capture_worker(
                     .map(CaptureManagerResult::Capture)
             }
         };
-        let outcome = outcome_and_status(result, operation, &status).await;
+        let outcome = outcome_from_result(result, operation);
         if !guard.publish(CaptureCompletion {
             id: command.id,
             outcome,
@@ -437,31 +426,26 @@ async fn run_capture_worker(
     }
 }
 
-async fn outcome_and_status(
+fn outcome_from_result(
     result: Result<CaptureManagerResult, CaptureError>,
     operation: ImageOperationKind,
-    status: &tokio::sync::Mutex<CaptureStatus>,
 ) -> CaptureOutcome {
     match result {
         Ok(CaptureManagerResult::Capture(result)) => {
             log::info!("Image operation successful: {:?}", result.saved_path);
-            *status.lock().await = CaptureStatus::Success;
             CaptureOutcome::Success(result)
         }
         Ok(CaptureManagerResult::DesktopBackdrop(result)) => {
             log::info!("Desktop backdrop capture successful");
-            *status.lock().await = CaptureStatus::Success;
             CaptureOutcome::DesktopBackdropSuccess(result)
         }
         Err(CaptureError::Cancelled(reason)) => {
             log::info!("Image operation cancelled: {reason}");
-            *status.lock().await = CaptureStatus::Cancelled(reason.clone());
             CaptureOutcome::Cancelled { operation, reason }
         }
         Err(error) => {
             let message = operation.format_error(&error);
             log::error!("Image operation failed: {message}");
-            *status.lock().await = CaptureStatus::Failed(message.clone());
             CaptureOutcome::Failed { operation, message }
         }
     }
@@ -566,7 +550,6 @@ mod transport_tests {
             terminal_reported: false,
             shutdown_requested: Arc::new(AtomicBool::new(false)),
             worker: None,
-            status: Arc::new(tokio::sync::Mutex::new(CaptureStatus::Idle)),
         };
         (manager, request_rx, completion_tx)
     }
