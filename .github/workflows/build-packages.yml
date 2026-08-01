@@ -280,9 +280,9 @@ jobs:
           ssh -i ~/.ssh/repo_key -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p '${DEPLOY_PATH}/apt' '${DEPLOY_PATH}/rpm'"
           rsync -rlvz --omit-dir-times --delete --no-perms --no-owner --no-group -e "ssh -i ~/.ssh/repo_key -o StrictHostKeyChecking=yes" repo-out/apt/ "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/apt/"
           rsync -rlvz --omit-dir-times --delete --no-perms --no-owner --no-group -e "ssh -i ~/.ssh/repo_key -o StrictHostKeyChecking=yes" repo-out/rpm/ "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/rpm/"
-          if [ -f repo-out/WAYSCRIBER-GPG-KEY.asc ]; then
-            rsync -rlvz --omit-dir-times --no-perms --no-owner --no-group -e "ssh -i ~/.ssh/repo_key -o StrictHostKeyChecking=yes" repo-out/WAYSCRIBER-GPG-KEY.asc "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/"
-          fi
+          # The public key is already copied into /apt/ and /rpm/ above. The
+          # legacy top-level alias is not an install path and is not writable
+          # by this deployment account.
 
   release:
     needs: package
