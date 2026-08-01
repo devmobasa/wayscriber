@@ -272,3 +272,152 @@ fn toolbar_toggle_handles_partial_visibility() {
     assert!(state.toolbar_top_visible());
     assert!(state.toolbar_side_visible());
 }
+
+/// Each chrome action queues its own durable entry carrying the value it
+/// replaced, so persistence does not depend on which handler dispatched it --
+/// a keybinding, a command-palette click, or a menu command all reach the
+/// queue through `handle_action`.
+#[test]
+fn chrome_actions_queue_their_own_durable_entry() {
+    use crate::input::state::PendingToolbarPersistence as Pending;
+
+    for (action, expected) in [
+        (
+            crate::config::Action::ToggleStatusBar,
+            Pending::StatusBar { previous: true },
+        ),
+        (
+            crate::config::Action::ToggleFloatingBadge,
+            Pending::FloatingBadge { previous: true },
+        ),
+        (
+            crate::config::Action::ToggleZoomChip,
+            Pending::ZoomChip { previous: true },
+        ),
+    ] {
+        let mut state = create_test_input_state();
+        state.handle_action(action);
+        assert_eq!(
+            state.take_pending_toolbar_persistence(),
+            vec![expected],
+            "{action:?} must queue its pre-change value"
+        );
+    }
+}
+
+/// Toggling a chrome preference while focus mode is active breaks focus in
+/// the same action. That is still the user choosing, so it still persists --
+/// which a before/after read of the focus flag would get exactly backwards.
+#[test]
+fn a_chrome_toggle_that_breaks_focus_mode_still_persists() {
+    use crate::input::state::PendingToolbarPersistence as Pending;
+
+    let mut state = create_test_input_state();
+    state.handle_action(crate::config::Action::ToggleFocusMode);
+    assert!(state.focus_mode_active());
+    // Focus mode taking chrome over is not a preference.
+    assert!(state.take_pending_toolbar_persistence().is_empty());
+
+    let previous = state.show_status_bar;
+    state.handle_action(crate::config::Action::ToggleStatusBar);
+    assert!(!state.focus_mode_active(), "the toggle breaks focus mode");
+    assert_eq!(
+        state.take_pending_toolbar_persistence(),
+        vec![Pending::StatusBar { previous }],
+    );
+}
+
+/// Focus mode hides chrome on the way in and puts it back on the way out;
+/// neither is the user choosing to live without it.
+#[test]
+fn focus_mode_transitions_queue_no_durable_chrome_change() {
+    let mut state = create_test_input_state();
+
+    state.handle_action(crate::config::Action::ToggleFocusMode);
+    assert!(!state.show_status_bar);
+    assert!(state.take_pending_toolbar_persistence().is_empty());
+
+    state.handle_action(crate::config::Action::ToggleFocusMode);
+    assert!(state.show_status_bar);
+    assert!(state.take_pending_toolbar_persistence().is_empty());
+}
+
+/// The queue coalesces per kind, so a burst across different chrome
+/// preferences keeps one entry each rather than the first swallowing the rest.
+#[test]
+fn a_burst_across_chrome_kinds_keeps_one_entry_each() {
+    use crate::input::state::PendingToolbarPersistence as Pending;
+
+    let mut state = create_test_input_state();
+    state.handle_action(crate::config::Action::ToggleStatusBar);
+    state.handle_action(crate::config::Action::ToggleFloatingBadge);
+    state.handle_action(crate::config::Action::ToggleZoomChip);
+
+    assert_eq!(
+        state.take_pending_toolbar_persistence(),
+        vec![
+            Pending::StatusBar { previous: true },
+            Pending::FloatingBadge { previous: true },
+            Pending::ZoomChip { previous: true },
+        ],
+    );
+}
+
+/// A burst that lands where it started is dropped: nothing durable changed.
+#[test]
+fn a_chrome_toggle_pressed_twice_queues_nothing() {
+    let mut state = create_test_input_state();
+    state.handle_action(crate::config::Action::ToggleStatusBar);
+    state.handle_action(crate::config::Action::ToggleStatusBar);
+
+    assert!(state.show_status_bar);
+    assert!(state.take_pending_toolbar_persistence().is_empty());
+}
+
+/// Selecting the highlight tool switches the click highlight on as a side
+/// effect, and the explicit toggles move it directly; all of them persist.
+#[test]
+fn highlight_actions_queue_the_click_highlight() {
+    use crate::input::state::PendingToolbarPersistence as Pending;
+
+    for action in [
+        crate::config::Action::ToggleClickHighlight,
+        crate::config::Action::ToggleHighlightTool,
+        crate::config::Action::SelectHighlightTool,
+    ] {
+        let mut state = create_test_input_state();
+        let previous_enabled = state.click_highlight_enabled();
+        let previous_tool_ring = state.highlight_tool_ring_enabled();
+        state.handle_action(action);
+        assert_eq!(
+            state.take_pending_toolbar_persistence(),
+            vec![Pending::ClickHighlight {
+                previous_enabled,
+                previous_tool_ring,
+            }],
+            "{action:?} must queue the click highlight"
+        );
+    }
+}
+
+/// A context-menu command is the same durable choice as the keybinding it
+/// mirrors, so it has to reach the queue the same way.
+#[test]
+fn the_context_menu_highlight_command_queues_the_click_highlight() {
+    use crate::input::state::PendingToolbarPersistence as Pending;
+    use crate::input::state::core::MenuCommand;
+
+    let mut state = create_test_input_state();
+    let previous_enabled = state.click_highlight_enabled();
+    let previous_tool_ring = state.highlight_tool_ring_enabled();
+
+    state.execute_menu_command(MenuCommand::ToggleHighlightTool);
+
+    assert_eq!(
+        state.take_pending_toolbar_persistence(),
+        vec![Pending::ClickHighlight {
+            previous_enabled,
+            previous_tool_ring,
+        }],
+    );
+}

@@ -473,6 +473,33 @@ pub enum PendingToolbarPersistence {
         previous_top_pinned: bool,
         previous_side_pinned: bool,
     },
+    /// One chrome preference flipped by a direct action -- a keybinding, a
+    /// command-palette entry, a menu command. Each kind is its own variant so
+    /// the queue's per-discriminant coalescing keeps them apart; a shared
+    /// variant would let the first toggle in a burst swallow the rest.
+    ///
+    /// The action applies before it queues, so the payload carries the
+    /// pre-change value as the runtime-UI preview's rollback. Only the action
+    /// handlers queue these: a mode transition that moves the same field --
+    /// focus, light, or presenter mode taking chrome over and giving it back
+    /// -- is not the user choosing, and never reaches here.
+    StatusBar {
+        previous: bool,
+    },
+    FloatingBadge {
+        previous: bool,
+    },
+    ZoomChip {
+        previous: bool,
+    },
+    InputHud {
+        previous: bool,
+    },
+    /// The click highlight and its tool ring, which move together.
+    ClickHighlight {
+        previous_enabled: bool,
+        previous_tool_ring: bool,
+    },
 }
 
 /// What a shortcut edit should do to one action's binding list.

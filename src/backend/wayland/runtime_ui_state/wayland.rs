@@ -201,14 +201,6 @@ impl WaylandState {
         self.apply_toolbar_runtime_finish(finish);
     }
 
-    /// Persists an input-HUD change the user made outside the toolbar.
-    pub(in crate::backend::wayland) fn persist_input_hud(&mut self, previous_enabled: bool) {
-        self.persist_keyboard_chrome_toggle(
-            ToolbarRuntimeUiPersistenceTarget::InputHud,
-            previous_enabled,
-        );
-    }
-
     /// Persists one boolean chrome toggle the user made outside the toolbar.
     ///
     /// Keyboard and command-palette changes apply inside `InputState` before
@@ -277,6 +269,30 @@ impl WaylandState {
                     previous_top_pinned,
                     previous_side_pinned,
                 } => self.persist_toolbar_visibility(previous_top_pinned, previous_side_pinned),
+                PendingToolbarPersistence::StatusBar { previous } => self
+                    .persist_keyboard_chrome_toggle(
+                        ToolbarRuntimeUiPersistenceTarget::StatusBar,
+                        previous,
+                    ),
+                PendingToolbarPersistence::FloatingBadge { previous } => self
+                    .persist_keyboard_chrome_toggle(
+                        ToolbarRuntimeUiPersistenceTarget::FloatingBadge,
+                        previous,
+                    ),
+                PendingToolbarPersistence::ZoomChip { previous } => self
+                    .persist_keyboard_chrome_toggle(
+                        ToolbarRuntimeUiPersistenceTarget::ZoomChip,
+                        previous,
+                    ),
+                PendingToolbarPersistence::InputHud { previous } => self
+                    .persist_keyboard_chrome_toggle(
+                        ToolbarRuntimeUiPersistenceTarget::InputHud,
+                        previous,
+                    ),
+                PendingToolbarPersistence::ClickHighlight {
+                    previous_enabled,
+                    previous_tool_ring,
+                } => self.persist_click_highlight(previous_enabled, previous_tool_ring),
             }
         }
     }

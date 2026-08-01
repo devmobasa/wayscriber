@@ -3,13 +3,22 @@ use crate::input::state::{Toast, ToastPriority};
 use crate::input::tool::Tool;
 use log::info;
 
-use super::super::InputState;
+use super::super::{InputState, PendingToolbarPersistence};
 
 impl InputState {
     pub(in crate::input::state) fn handle_tool_action(&mut self, action: Action) -> bool {
         if let Some(tool) = Tool::from_select_action(action) {
             if tool == Tool::Highlight {
+                // Picking the highlight tool switches the click highlight on
+                // as a side effect, which is the same durable choice the
+                // explicit toggle makes.
+                let previous_enabled = self.click_highlight_enabled();
+                let previous_tool_ring = self.highlight_tool_ring_enabled();
                 self.set_highlight_tool(true);
+                self.queue_toolbar_persistence(PendingToolbarPersistence::ClickHighlight {
+                    previous_enabled,
+                    previous_tool_ring,
+                });
             }
             self.set_tool_override(Some(tool));
             return true;
@@ -70,7 +79,13 @@ impl InputState {
                 }
             }
             Action::ToggleHighlightTool => {
+                let previous_enabled = self.click_highlight_enabled();
+                let previous_tool_ring = self.highlight_tool_ring_enabled();
                 let enabled = self.toggle_all_highlights();
+                self.queue_toolbar_persistence(PendingToolbarPersistence::ClickHighlight {
+                    previous_enabled,
+                    previous_tool_ring,
+                });
                 let message = if enabled {
                     "Highlight pen enabled"
                 } else {
