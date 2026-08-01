@@ -3235,3 +3235,165 @@ fn keyboard_only_chrome_toggles_survive_restart_without_touching_config() {
     assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
     restarted.shutdown_blocking();
 }
+
+/// A cancelled or rejected preview hands back a rollback snapshot, and the
+/// live UI has to follow it. Every durable chrome preference is covered:
+/// a target the rollback ignored would leave the screen showing a value the
+/// controller already rejected, and the next start disagreeing with it.
+#[test]
+fn a_rollback_restores_every_durable_chrome_preference() {
+    use crate::config::{ToolbarLayoutMode, ToolbarSectionFlag};
+
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut positions = ToolbarPositionSnapshot {
+        top: (0.0, 0.0),
+        side: (0.0, 0.0),
+    };
+
+    // Move every preference away from its configured value, then roll back to
+    // exactly the values the run started with.
+    /// One boolean preference: its seed target, how to read it, how to flip it.
+    type BoolPreference = (
+        InteractionSeedTarget,
+        fn(&InputState) -> bool,
+        fn(&mut InputState),
+    );
+    let bools: Vec<BoolPreference> = vec![
+        (
+            InteractionSeedTarget::StatusBar,
+            |i| i.show_status_bar,
+            |i| i.show_status_bar = !i.show_status_bar,
+        ),
+        (
+            InteractionSeedTarget::StatusBoardBadge,
+            |i| i.show_status_board_badge,
+            |i| i.show_status_board_badge = !i.show_status_board_badge,
+        ),
+        (
+            InteractionSeedTarget::StatusPageBadge,
+            |i| i.show_status_page_badge,
+            |i| i.show_status_page_badge = !i.show_status_page_badge,
+        ),
+        (
+            InteractionSeedTarget::FloatingBadgeAlways,
+            |i| i.show_floating_badge_always,
+            |i| i.show_floating_badge_always = !i.show_floating_badge_always,
+        ),
+        (
+            InteractionSeedTarget::FloatingBadge,
+            |i| i.show_floating_badge,
+            |i| i.show_floating_badge = !i.show_floating_badge,
+        ),
+        (
+            InteractionSeedTarget::ZoomChip,
+            |i| i.show_zoom_chip,
+            |i| i.show_zoom_chip = !i.show_zoom_chip,
+        ),
+        (
+            InteractionSeedTarget::ToolbarIcons,
+            |i| i.toolbar_use_icons,
+            |i| i.toolbar_use_icons = !i.toolbar_use_icons,
+        ),
+        (
+            InteractionSeedTarget::ToolbarMoreColors,
+            |i| i.show_more_colors,
+            |i| i.show_more_colors = !i.show_more_colors,
+        ),
+        (
+            InteractionSeedTarget::ToolbarContextAwareUi,
+            |i| i.context_aware_ui,
+            |i| i.context_aware_ui = !i.context_aware_ui,
+        ),
+        (
+            InteractionSeedTarget::ToolbarPresetToasts,
+            |i| i.show_preset_toasts,
+            |i| i.show_preset_toasts = !i.show_preset_toasts,
+        ),
+        (
+            InteractionSeedTarget::ToolbarToolPreview,
+            |i| i.show_tool_preview,
+            |i| i.show_tool_preview = !i.show_tool_preview,
+        ),
+        (
+            InteractionSeedTarget::ToolbarDelaySliders,
+            |i| i.show_delay_sliders,
+            |i| i.show_delay_sliders = !i.show_delay_sliders,
+        ),
+        (
+            InteractionSeedTarget::HistoryCustomSection,
+            |i| i.custom_section_enabled,
+            |i| i.custom_section_enabled = !i.custom_section_enabled,
+        ),
+        (
+            InteractionSeedTarget::InputHud,
+            |i| i.input_hud_enabled(),
+            |i| {
+                let enabled = !i.input_hud_enabled();
+                i.set_input_hud_enabled(enabled);
+            },
+        ),
+        (
+            InteractionSeedTarget::ClickHighlight,
+            |i| i.click_highlight_enabled(),
+            |i| {
+                let enabled = !i.click_highlight_enabled();
+                i.set_click_highlight_enabled(enabled);
+            },
+        ),
+        (
+            InteractionSeedTarget::ClickHighlightToolRing,
+            |i| i.highlight_tool_ring_enabled(),
+            |i| {
+                let enabled = !i.highlight_tool_ring_enabled();
+                i.set_highlight_tool_ring_enabled(enabled);
+            },
+        ),
+    ];
+
+    let mut values = std::collections::BTreeMap::new();
+    for (target, read, _) in &bools {
+        values.insert(target.clone(), InteractionSeedValue::Bool(read(&input)));
+    }
+    let original_layout = input.toolbar_layout_mode;
+    values.insert(
+        InteractionSeedTarget::ToolbarLayoutMode,
+        InteractionSeedValue::LayoutMode(original_layout),
+    );
+    values.insert(
+        InteractionSeedTarget::SectionVisibility(ToolbarSectionFlag::Presets),
+        InteractionSeedValue::Visibility(crate::config::ToolbarItemVisibilitySetting::Default),
+    );
+
+    for (_, _, flip) in &bools {
+        flip(&mut input);
+    }
+    input.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+        ToolbarLayoutMode::Advanced,
+    ));
+    input.apply_toolbar_event(section_toggle(ToolbarSectionFlag::Presets, false));
+
+    apply_toolbar_runtime_rollback(
+        &mut input,
+        &mut positions,
+        &PreviewRollbackSnapshot { values },
+    );
+
+    let restarted = input_from_config(&config);
+    for (target, read, _) in &bools {
+        assert_eq!(
+            read(&input),
+            read(&restarted),
+            "{target:?} was not rolled back"
+        );
+    }
+    assert_eq!(input.toolbar_layout_mode, original_layout);
+    assert_eq!(
+        crate::config::item_visibility_setting(
+            &input.resolved_toolbar_items,
+            ToolbarSectionFlag::Presets.item_id()
+        ),
+        crate::config::ToolbarItemVisibilitySetting::Default,
+        "the section override was not rolled back"
+    );
+}
