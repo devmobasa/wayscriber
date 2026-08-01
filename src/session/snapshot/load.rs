@@ -1,5 +1,6 @@
 use super::compression::{
-    DEFAULT_MAX_EXPANDED_SESSION_BYTES, ExpandedSessionTooLarge, maybe_decompress_with_limit,
+    DEFAULT_MAX_EXPANDED_SESSION_BYTES, ExpandedSessionTooLarge, is_gzip,
+    maybe_decompress_with_limit,
 };
 use super::history::{
     apply_history_policies, enforce_shape_limits, max_history_depth, strip_history_fields,
@@ -20,6 +21,7 @@ use crate::session::primary::{
 use anyhow::{Context, Result, anyhow};
 use log::{debug, info, warn};
 use serde_json::Value;
+use std::fmt;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -30,7 +32,7 @@ mod markers;
 mod named_candidate;
 mod payload;
 
-use corrupt::backup_corrupt_session;
+use corrupt::{backup_corrupt_session, preserve_newer_version_session};
 use fallback::load_normal_session_or_empty;
 use markers::{
     backup_is_newer_than_primary, clear_marker_metadata, clear_marker_suppresses_artifact,
@@ -55,6 +57,12 @@ pub(crate) enum LoadSnapshotOutcome {
     LoadedFromBackup(Box<SessionSnapshot>),
     LoadedFromRecovery(Box<SessionSnapshot>),
     Empty,
+    /// Nothing was restored because the stored session could not be read. Its
+    /// bytes are preserved at `backup_path`; the caller is expected to say so
+    /// rather than let a silent empty canvas stand in for lost drawings.
+    EmptyAfterCorruption {
+        backup_path: PathBuf,
+    },
     NonRegularArtifact {
         path: PathBuf,
     },
@@ -64,6 +72,31 @@ pub(crate) enum LoadSnapshotOutcome {
     },
 }
 
+/// A too-new session could be read, but no durable copy could be established.
+///
+/// This is deliberately distinct from a malformed session: the generic load
+/// error path backs malformed files up and then continues with an empty
+/// session, which would expose this valid newer file to the save/rotation cycle
+/// preservation exists to prevent.
+#[derive(Debug)]
+struct NewerVersionPreservationFailed {
+    path: PathBuf,
+    details: String,
+}
+
+impl fmt::Display for NewerVersionPreservationFailed {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "could not durably preserve newer-version session {}: {}",
+            self.path.display(),
+            self.details
+        )
+    }
+}
+
+impl std::error::Error for NewerVersionPreservationFailed {}
+
 impl LoadSnapshotOutcome {
     #[allow(dead_code)]
     pub(crate) fn has_board_data(&self) -> bool {
@@ -71,19 +104,22 @@ impl LoadSnapshotOutcome {
             Self::Loaded(snapshot)
             | Self::LoadedFromBackup(snapshot)
             | Self::LoadedFromRecovery(snapshot) => snapshot.has_board_data(),
-            Self::Empty | Self::NonRegularArtifact { .. } | Self::ExpandedTooLarge { .. } => false,
+            Self::Empty
+            | Self::EmptyAfterCorruption { .. }
+            | Self::NonRegularArtifact { .. }
+            | Self::ExpandedTooLarge { .. } => false,
         }
     }
 }
 
 /// Attempt to load a previously saved session.
-#[allow(dead_code)]
 pub fn load_snapshot(options: &SessionOptions) -> Result<Option<SessionSnapshot>> {
     match load_snapshot_with_outcome(options)? {
         LoadSnapshotOutcome::Loaded(snapshot)
         | LoadSnapshotOutcome::LoadedFromBackup(snapshot)
         | LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => Ok(Some(*snapshot)),
         LoadSnapshotOutcome::Empty
+        | LoadSnapshotOutcome::EmptyAfterCorruption { .. }
         | LoadSnapshotOutcome::NonRegularArtifact { .. }
         | LoadSnapshotOutcome::ExpandedTooLarge { .. } => Ok(None),
     }
@@ -247,7 +283,7 @@ fn load_snapshot_with_expanded_limit_inner(
             }
             loaded @ LoadSnapshotOutcome::LoadedFromBackup(_) => return Ok(loaded),
             loaded @ LoadSnapshotOutcome::LoadedFromRecovery(_) => return Ok(loaded),
-            LoadSnapshotOutcome::Empty => {
+            LoadSnapshotOutcome::Empty | LoadSnapshotOutcome::EmptyAfterCorruption { .. } => {
                 warn!(
                     "Session recovery artifact {} did not contain usable session data; falling back to normal session {}",
                     recovery_path.display(),
@@ -424,6 +460,16 @@ fn load_snapshot_path_with_outcome(
                 path: session_path.to_path_buf(),
             })
         }
+        Err(err)
+            if err
+                .downcast_ref::<NewerVersionPreservationFailed>()
+                .is_some() =>
+        {
+            // Fail closed. Treating this as corruption would back it up and
+            // then continue with an empty, saveable session — exactly the
+            // destructive downgrade path this error reports.
+            Err(err)
+        }
         Err(err) => {
             warn!(
                 "Failed to load {} {}; continuing with defaults: {}",
@@ -432,15 +478,16 @@ fn load_snapshot_path_with_outcome(
                 err
             );
             match corrupt_load_action {
-                CorruptLoadAction::Backup => {
-                    if let Err(backup_err) = backup_corrupt_session(session_path, options) {
-                        warn!(
-                            "Failed to back up corrupt session {}: {}",
-                            session_path.display(),
-                            backup_err
-                        );
+                CorruptLoadAction::Backup => match backup_corrupt_session(session_path, options) {
+                    Ok(backup_path) => {
+                        return Ok(LoadSnapshotOutcome::EmptyAfterCorruption { backup_path });
                     }
-                }
+                    Err(backup_err) => warn!(
+                        "Failed to back up corrupt session {}: {}",
+                        session_path.display(),
+                        backup_err
+                    ),
+                },
                 CorruptLoadAction::Preserve => {
                     debug!(
                         "Leaving unloadable {} {} in place because it is suppressed by the session clear marker",
@@ -476,6 +523,18 @@ enum CorruptLoadAction {
     Preserve,
 }
 
+/// What to do with a session file written by a newer wayscriber than this one.
+#[derive(Clone, Copy)]
+enum NewerVersionAction {
+    /// Runtime load of the active session: preserve a copy under a versioned
+    /// side name first, because the empty session this load returns will be
+    /// saved over the file — and with `backup_retention: 1` the second rotation
+    /// destroys the newer-version data for good.
+    Preserve,
+    /// Read-only candidate inspection: must not create or mutate any artifact.
+    LeaveUntouched,
+}
+
 pub(crate) fn load_snapshot_inner(
     session_path: &Path,
     options: &SessionOptions,
@@ -494,5 +553,12 @@ pub(super) fn load_snapshot_inner_with_expanded_limit(
 ) -> Result<Option<LoadedSnapshot>> {
     let no_follow = is_named_primary_path(session_path, options);
     let file = open_session_artifact_for_read(session_path, no_follow)?;
-    load_snapshot_opened_with_expanded_limit(session_path, options, file, max_expanded_size, None)
+    load_snapshot_opened_with_expanded_limit(
+        session_path,
+        options,
+        file,
+        max_expanded_size,
+        None,
+        NewerVersionAction::Preserve,
+    )
 }

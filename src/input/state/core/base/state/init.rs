@@ -77,6 +77,8 @@ impl InputState {
         tool_settings.step_marker.thickness =
             super::super::super::utility::default_step_marker_size(font_size);
         let mut state = Self {
+            keymap_revision: 0,
+            command_palette_results: std::cell::RefCell::new(None),
             boards: BoardManager::from_config(boards_config),
             current_color: color,
             quick_colors: QuickColorPalette::default(),
@@ -214,7 +216,6 @@ impl InputState {
             pending_backend_action: None,
             pending_toolbar_persistence: Vec::new(),
             pending_keybinding_edits: Vec::new(),
-            process_only_preference_notice_shown: false,
             pending_output_focus_action: None,
             pending_zoom_action: None,
             pending_onboarding_usage: PendingOnboardingUsage::default(),

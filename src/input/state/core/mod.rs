@@ -11,6 +11,7 @@ mod ime;
 mod index;
 mod input_hud_controls;
 mod menus;
+pub(crate) mod modal;
 mod properties;
 pub(crate) mod radial_menu;
 mod selection;

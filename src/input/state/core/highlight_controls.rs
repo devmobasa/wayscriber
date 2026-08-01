@@ -37,6 +37,18 @@ impl InputState {
         }
     }
 
+    /// Sets the click highlight to a value restored from runtime-UI state.
+    ///
+    /// Goes through the same toggle the user's own presses do, so the pending
+    /// highlights a disable has to clear are cleared here too.
+    pub fn set_click_highlight_enabled(&mut self, enabled: bool) -> bool {
+        if self.click_highlight_enabled() == enabled {
+            return false;
+        }
+        self.toggle_click_highlight();
+        true
+    }
+
     /// Toggle the click highlight feature and mark the frame for redraw.
     pub fn toggle_click_highlight(&mut self) -> bool {
         let enabled = self.click_highlight.toggle(&mut self.dirty_tracker);

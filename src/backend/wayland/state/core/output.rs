@@ -541,6 +541,27 @@ impl WaylandState {
                 );
                 replace_output_session_snapshot(&mut self.input_state, None, options)?;
             }
+            session::LoadSnapshotOutcome::EmptyAfterCorruption { backup_path } => {
+                // An empty canvas here is indistinguishable from "no session
+                // yet", so without this the user's drawings appear to have
+                // vanished and only the log says the bytes were kept.
+                warn!(
+                    "Session {} could not be read for {}; its bytes were preserved at {}",
+                    options.session_file_path().display(),
+                    context,
+                    backup_path.display()
+                );
+                replace_output_session_snapshot(&mut self.input_state, None, options)?;
+                self.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "session.corrupt",
+                    Toast::error(format!(
+                        "Previous session could not be read; a copy was saved to {}",
+                        backup_path.display()
+                    ))
+                    .duration_ms(20_000),
+                );
+            }
             session::LoadSnapshotOutcome::NonRegularArtifact { path } => {
                 debug!(
                     "Skipping non-regular session artifact {} for {}",

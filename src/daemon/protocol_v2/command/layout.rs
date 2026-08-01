@@ -174,6 +174,36 @@ pub(super) enum QuarantineKind {
     Control,
 }
 
+/// Trims both command quarantine subdirectories to the retained tail. The
+/// caller must hold the admission lock.
+fn gc_quarantine_subdirs(root: &Path) -> Result<usize> {
+    let mut removed = 0;
+    for subdir in ["queue", "control"] {
+        let dir = quarantine_dir(root).join(subdir);
+        removed += super::super::linux::gc_quarantine_tail(
+            &dir,
+            super::super::linux::QUARANTINE_RETAINED_ENTRIES,
+        )
+        .with_context(|| format!("failed to collect quarantine {}", dir.display()))?;
+    }
+    Ok(removed)
+}
+
+/// Opens the ledger with a bounded quarantine: collects the accumulated tail
+/// under the admission lock so a full quarantine can never wedge the daemon
+/// into a fail-stop crash-restart loop. A contended lock skips the collection
+/// — the next open retries it.
+pub(super) fn gc_quarantine(root: &Path) -> Result<()> {
+    let deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
+    let Some(admission) = try_admission_lock(root, deadline)? else {
+        log::warn!("Skipping command quarantine collection: admission lock is contended");
+        return Ok(());
+    };
+    let result = gc_quarantine_subdirs(root);
+    unlock(&admission)?;
+    result.map(|_| ())
+}
+
 pub(super) fn quarantine_entry(root: &Path, source: &Path, kind: QuarantineKind) -> Result<()> {
     let deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
     let admission = admission_lock(root, deadline)?;
@@ -181,9 +211,18 @@ pub(super) fn quarantine_entry(root: &Path, source: &Path, kind: QuarantineKind)
     let control_quarantine = quarantine_dir(root).join("control");
     let count = read_dir_bounded(&queue_quarantine, MAX_COMMAND_QUARANTINE_ENTRIES + 1)?.len()
         + read_dir_bounded(&control_quarantine, MAX_COMMAND_QUARANTINE_ENTRIES + 1)?.len();
-    if count >= MAX_COMMAND_QUARANTINE_ENTRIES {
+    // Collect when this insertion *would* reach the cap, not once it has:
+    // the entry about to be renamed in counts too, and a quarantine sitting
+    // exactly at the cap makes `ensure_capacity` reject every client command,
+    // so nothing would ever arrive to trigger the next collection. Collecting
+    // here (rather than failing) also keeps the error out of `claim_next`,
+    // where it would kill a running daemon over garbage entries. The
+    // admission lock is already held.
+    if count.saturating_add(1) >= MAX_COMMAND_QUARANTINE_ENTRIES
+        && let Err(error) = gc_quarantine_subdirs(root)
+    {
         unlock(&admission)?;
-        bail!("v2 command quarantine capacity exhausted");
+        return Err(error);
     }
     let before = fs::symlink_metadata(source)
         .with_context(|| format!("failed to identify quarantine source {}", source.display()))?;

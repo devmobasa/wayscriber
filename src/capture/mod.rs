@@ -26,8 +26,9 @@ pub use manager::{CaptureManager, CapturePoll, CaptureRequestId, CaptureSubmitEr
 pub(crate) use pipeline::CaptureRequest;
 #[allow(unused_imports)]
 pub use types::{
-    CaptureDestination, CaptureError, CaptureOutcome, CaptureResult, CaptureStatus, CaptureType,
+    CaptureDestination, CaptureError, CaptureOutcome, CaptureResult, CaptureType,
     DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult, DesktopBackdropGeometry,
-    DesktopBackdropOutputGeometry, DocumentDeliveryRequest, ImageDeliveryRequest,
-    ImageFormatMetadata, ImageOperationKind, RenderedDocument, RenderedImage,
+    DesktopBackdropOutputGeometry, DocumentDeliveryRequest, DocumentRenderJob,
+    ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, ImageRenderJob,
+    RenderedDocument, RenderedDocumentDeliveryRequest, RenderedImage, RenderedImageDeliveryRequest,
 };

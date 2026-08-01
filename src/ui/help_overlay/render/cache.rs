@@ -148,12 +148,3 @@ pub(super) fn get_or_build_overlay_layout(
         layout
     })
 }
-
-/// Invalidate the help overlay layout cache.
-/// Call this when style settings change.
-#[allow(dead_code)]
-pub fn invalidate_help_overlay_cache() {
-    LAYOUT_CACHE.with(|cache| {
-        *cache.borrow_mut() = None;
-    });
-}

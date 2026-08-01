@@ -18,7 +18,7 @@ use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 /// V1 shipped. They stay in V1 because an older build decodes them as unknown
 /// keys and preserves them verbatim through `WirePassthrough`, whereas a
 /// version bump would make that build treat the whole file as read-only.
-const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 8] = [
+const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 26] = [
     ("top_pinned", InteractionSeedTarget::TopPinned),
     ("side_pinned", InteractionSeedTarget::SidePinned),
     ("top_minimized", InteractionSeedTarget::TopMinimized),
@@ -27,6 +27,51 @@ const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 8] = [
     ("top_position", InteractionSeedTarget::TopPosition),
     ("side_position", InteractionSeedTarget::SidePosition),
     ("top_display_mode", InteractionSeedTarget::TopDisplayMode),
+    ("layout_mode", InteractionSeedTarget::ToolbarLayoutMode),
+    ("click_highlight", InteractionSeedTarget::ClickHighlight),
+    ("floating_badge", InteractionSeedTarget::FloatingBadge),
+    ("zoom_chip", InteractionSeedTarget::ZoomChip),
+    (
+        "click_highlight_tool_ring",
+        InteractionSeedTarget::ClickHighlightToolRing,
+    ),
+    (
+        "status_bar_interactive",
+        InteractionSeedTarget::StatusBarInteractive,
+    ),
+    ("status_bar", InteractionSeedTarget::StatusBar),
+    (
+        "status_board_badge",
+        InteractionSeedTarget::StatusBoardBadge,
+    ),
+    ("status_page_badge", InteractionSeedTarget::StatusPageBadge),
+    (
+        "floating_badge_always",
+        InteractionSeedTarget::FloatingBadgeAlways,
+    ),
+    ("use_icons", InteractionSeedTarget::ToolbarIcons),
+    ("show_more_colors", InteractionSeedTarget::ToolbarMoreColors),
+    (
+        "context_aware_ui",
+        InteractionSeedTarget::ToolbarContextAwareUi,
+    ),
+    (
+        "show_preset_toasts",
+        InteractionSeedTarget::ToolbarPresetToasts,
+    ),
+    (
+        "show_tool_preview",
+        InteractionSeedTarget::ToolbarToolPreview,
+    ),
+    (
+        "show_delay_sliders",
+        InteractionSeedTarget::ToolbarDelaySliders,
+    ),
+    (
+        "history_custom_section",
+        InteractionSeedTarget::HistoryCustomSection,
+    ),
+    ("input_hud", InteractionSeedTarget::InputHud),
 ];
 
 pub(super) fn decode(root: &mut Table) -> Result<RuntimeUiWireState, RuntimeUiWireError> {
@@ -61,6 +106,26 @@ fn decode_toolbar(
             id.parse::<ToolbarItemId>()
                 .ok()
                 .map(InteractionSeedTarget::ItemVisibility)
+        },
+        &mut wire.model,
+        &mut wire.passthrough,
+    )?;
+    decode_id_map(
+        toolbar.remove("sections"),
+        |id| {
+            crate::config::ToolbarSectionFlag::ALL
+                .into_iter()
+                .find(|flag| flag.item_id().as_str() == id)
+                .map(InteractionSeedTarget::SectionVisibility)
+        },
+        &mut wire.model,
+        &mut wire.passthrough,
+    )?;
+    decode_id_map(
+        toolbar.remove("status_bar_items"),
+        |id| {
+            crate::config::StatusBarItem::from_config_id(id)
+                .map(InteractionSeedTarget::StatusBarItem)
         },
         &mut wire.model,
         &mut wire.passthrough,
@@ -151,7 +216,25 @@ fn decode_value(
         | Target::TopMinimized
         | Target::SideMinimized
         | Target::CollapsedSection(_)
-        | Target::BoardPin(_) => value
+        | Target::BoardPin(_)
+        | Target::StatusBarInteractive
+        | Target::StatusBarItem(_)
+        | Target::StatusBar
+        | Target::StatusBoardBadge
+        | Target::StatusPageBadge
+        | Target::FloatingBadgeAlways
+        | Target::ToolbarIcons
+        | Target::ToolbarMoreColors
+        | Target::ToolbarContextAwareUi
+        | Target::ToolbarPresetToasts
+        | Target::ToolbarToolPreview
+        | Target::ToolbarDelaySliders
+        | Target::HistoryCustomSection
+        | Target::InputHud
+        | Target::ClickHighlight
+        | Target::ClickHighlightToolRing
+        | Target::FloatingBadge
+        | Target::ZoomChip => value
             .as_bool()
             .map(InteractionSeedValue::Bool)
             .ok_or_else(|| RuntimeUiWireError::new("boolean override has a non-boolean value")),
@@ -160,7 +243,7 @@ fn decode_value(
             .and_then(SidePane::from_config_id)
             .map(InteractionSeedValue::SidePane)
             .ok_or_else(|| RuntimeUiWireError::new("side pane override has an unknown value")),
-        Target::ItemVisibility(_) => match value.as_str() {
+        Target::ItemVisibility(_) | Target::SectionVisibility(_) => match value.as_str() {
             Some("default") => Ok(InteractionSeedValue::Visibility(
                 ItemVisibilitySetting::Default,
             )),
@@ -176,6 +259,13 @@ fn decode_value(
         },
         Target::ItemOrder(group) => decode_order(*group, value),
         Target::TopPosition | Target::SidePosition => decode_position(value),
+        Target::ToolbarLayoutMode => value
+            .as_str()
+            .and_then(layout_mode_from_wire_id)
+            .map(InteractionSeedValue::LayoutMode)
+            .ok_or_else(|| {
+                RuntimeUiWireError::new("toolbar layout mode override has an unknown value")
+            }),
         Target::TopDisplayMode => value
             .as_str()
             .and_then(PersistedTopDisplayMode::from_wire_id)
@@ -253,6 +343,8 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
     let mut visibility = Table::new();
     let mut order = Table::new();
     let mut boards_pinned = Table::new();
+    let mut status_bar_items = Table::new();
+    let mut sections = Table::new();
 
     for (target, runtime_override) in wire.model.iter() {
         let entry = encode_override(
@@ -261,44 +353,110 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
             wire.passthrough.entries.get(target),
         )?;
         match target {
-            InteractionSeedTarget::TopPinned => insert_unique(&mut toolbar, "top_pinned", entry)?,
-            InteractionSeedTarget::SidePinned => insert_unique(&mut toolbar, "side_pinned", entry)?,
+            InteractionSeedTarget::TopPinned => {
+                insert_recognized(&mut toolbar, "top_pinned", entry)
+            }
+            InteractionSeedTarget::SidePinned => {
+                insert_recognized(&mut toolbar, "side_pinned", entry)
+            }
             InteractionSeedTarget::TopMinimized => {
-                insert_unique(&mut toolbar, "top_minimized", entry)?
+                insert_recognized(&mut toolbar, "top_minimized", entry)
             }
             InteractionSeedTarget::SideMinimized => {
-                insert_unique(&mut toolbar, "side_minimized", entry)?
+                insert_recognized(&mut toolbar, "side_minimized", entry)
             }
-            InteractionSeedTarget::SidePane => insert_unique(&mut toolbar, "side_pane", entry)?,
+            InteractionSeedTarget::SidePane => insert_recognized(&mut toolbar, "side_pane", entry),
             InteractionSeedTarget::CollapsedSection(section) => {
-                insert_unique(&mut collapsed, section.config_id(), entry)?
+                insert_recognized(&mut collapsed, section.config_id(), entry)
             }
             InteractionSeedTarget::ItemVisibility(item) => {
-                insert_unique(&mut visibility, item.as_str(), entry)?
+                insert_recognized(&mut visibility, item.as_str(), entry)
             }
             InteractionSeedTarget::ItemOrder(group) => {
-                insert_unique(&mut order, order_group_wire_id(*group), entry)?
+                insert_recognized(&mut order, order_group_wire_id(*group), entry)
             }
-            InteractionSeedTarget::BoardPin(id) => insert_unique(&mut boards_pinned, id, entry)?,
+            InteractionSeedTarget::BoardPin(id) => insert_recognized(&mut boards_pinned, id, entry),
             InteractionSeedTarget::TopPosition => {
-                insert_unique(&mut toolbar, "top_position", entry)?
+                insert_recognized(&mut toolbar, "top_position", entry)
             }
             InteractionSeedTarget::SidePosition => {
-                insert_unique(&mut toolbar, "side_position", entry)?
+                insert_recognized(&mut toolbar, "side_position", entry)
+            }
+            InteractionSeedTarget::ToolbarLayoutMode => {
+                insert_recognized(&mut toolbar, "layout_mode", entry)
             }
             InteractionSeedTarget::TopDisplayMode => {
-                insert_unique(&mut toolbar, "top_display_mode", entry)?
+                insert_recognized(&mut toolbar, "top_display_mode", entry)
             }
+            InteractionSeedTarget::StatusBarInteractive => {
+                insert_recognized(&mut toolbar, "status_bar_interactive", entry)
+            }
+            InteractionSeedTarget::StatusBarItem(item) => {
+                insert_recognized(&mut status_bar_items, item.config_id(), entry)
+            }
+            InteractionSeedTarget::SectionVisibility(flag) => {
+                insert_recognized(&mut sections, flag.item_id().as_str(), entry)
+            }
+            InteractionSeedTarget::StatusBar => {
+                insert_recognized(&mut toolbar, "status_bar", entry)
+            }
+            InteractionSeedTarget::StatusBoardBadge => {
+                insert_recognized(&mut toolbar, "status_board_badge", entry)
+            }
+            InteractionSeedTarget::StatusPageBadge => {
+                insert_recognized(&mut toolbar, "status_page_badge", entry)
+            }
+            InteractionSeedTarget::FloatingBadgeAlways => {
+                insert_recognized(&mut toolbar, "floating_badge_always", entry)
+            }
+            InteractionSeedTarget::ToolbarIcons => {
+                insert_recognized(&mut toolbar, "use_icons", entry)
+            }
+            InteractionSeedTarget::ToolbarMoreColors => {
+                insert_recognized(&mut toolbar, "show_more_colors", entry)
+            }
+            InteractionSeedTarget::ToolbarContextAwareUi => {
+                insert_recognized(&mut toolbar, "context_aware_ui", entry)
+            }
+            InteractionSeedTarget::ToolbarPresetToasts => {
+                insert_recognized(&mut toolbar, "show_preset_toasts", entry)
+            }
+            InteractionSeedTarget::ToolbarToolPreview => {
+                insert_recognized(&mut toolbar, "show_tool_preview", entry)
+            }
+            InteractionSeedTarget::ToolbarDelaySliders => {
+                insert_recognized(&mut toolbar, "show_delay_sliders", entry)
+            }
+            InteractionSeedTarget::HistoryCustomSection => {
+                insert_recognized(&mut toolbar, "history_custom_section", entry)
+            }
+            InteractionSeedTarget::InputHud => insert_recognized(&mut toolbar, "input_hud", entry),
+            InteractionSeedTarget::ClickHighlight => {
+                insert_recognized(&mut toolbar, "click_highlight", entry)
+            }
+            InteractionSeedTarget::ClickHighlightToolRing => {
+                insert_recognized(&mut toolbar, "click_highlight_tool_ring", entry)
+            }
+            InteractionSeedTarget::FloatingBadge => {
+                insert_recognized(&mut toolbar, "floating_badge", entry)
+            }
+            InteractionSeedTarget::ZoomChip => insert_recognized(&mut toolbar, "zoom_chip", entry),
         }
     }
-    insert_unique(&mut toolbar, "collapsed_sections", Value::Table(collapsed))?;
-    insert_unique(&mut toolbar, "item_visibility", Value::Table(visibility))?;
-    insert_unique(&mut toolbar, "item_order", Value::Table(order))?;
+    insert_recognized(&mut toolbar, "collapsed_sections", Value::Table(collapsed));
+    insert_recognized(&mut toolbar, "item_visibility", Value::Table(visibility));
+    insert_recognized(&mut toolbar, "item_order", Value::Table(order));
+    insert_recognized(
+        &mut toolbar,
+        "status_bar_items",
+        Value::Table(status_bar_items),
+    );
+    insert_recognized(&mut toolbar, "sections", Value::Table(sections));
 
     let mut boards = restore_table(&wire.passthrough.boards)?;
-    insert_unique(&mut boards, "pinned", Value::Table(boards_pinned))?;
-    insert_unique(&mut root, "toolbar", Value::Table(toolbar))?;
-    insert_unique(&mut root, "boards", Value::Table(boards))?;
+    insert_recognized(&mut boards, "pinned", Value::Table(boards_pinned));
+    insert_recognized(&mut root, "toolbar", Value::Table(toolbar));
+    insert_recognized(&mut root, "boards", Value::Table(boards));
     Ok(Value::Table(root))
 }
 
@@ -315,16 +473,16 @@ fn encode_override(
         ));
     }
     let mut entry = extra.map_or_else(|| Ok(Table::new()), restore_table)?;
-    insert_unique(
+    insert_recognized(
         &mut entry,
         "seed",
         encode_value(target, &runtime_override.seed)?,
-    )?;
-    insert_unique(
+    );
+    insert_recognized(
         &mut entry,
         "value",
         encode_value(target, &runtime_override.value)?,
-    )?;
+    );
     Ok(Value::Table(entry))
 }
 
@@ -339,22 +497,41 @@ fn encode_value(
             | InteractionSeedTarget::TopMinimized
             | InteractionSeedTarget::SideMinimized
             | InteractionSeedTarget::CollapsedSection(_)
-            | InteractionSeedTarget::BoardPin(_),
+            | InteractionSeedTarget::BoardPin(_)
+            | InteractionSeedTarget::StatusBarInteractive
+            | InteractionSeedTarget::StatusBarItem(_)
+            | InteractionSeedTarget::StatusBar
+            | InteractionSeedTarget::StatusBoardBadge
+            | InteractionSeedTarget::StatusPageBadge
+            | InteractionSeedTarget::FloatingBadgeAlways
+            | InteractionSeedTarget::ToolbarIcons
+            | InteractionSeedTarget::ToolbarMoreColors
+            | InteractionSeedTarget::ToolbarContextAwareUi
+            | InteractionSeedTarget::ToolbarPresetToasts
+            | InteractionSeedTarget::ToolbarToolPreview
+            | InteractionSeedTarget::ToolbarDelaySliders
+            | InteractionSeedTarget::HistoryCustomSection
+            | InteractionSeedTarget::InputHud
+            | InteractionSeedTarget::ClickHighlight
+            | InteractionSeedTarget::ClickHighlightToolRing
+            | InteractionSeedTarget::FloatingBadge
+            | InteractionSeedTarget::ZoomChip,
             InteractionSeedValue::Bool(value),
         ) => Ok(Value::Boolean(*value)),
         (InteractionSeedTarget::SidePane, InteractionSeedValue::SidePane(value)) => {
             Ok(Value::String(value.config_id().to_string()))
         }
-        (InteractionSeedTarget::ItemVisibility(_), InteractionSeedValue::Visibility(value)) => {
-            Ok(Value::String(
-                match value {
-                    ItemVisibilitySetting::Default => "default",
-                    ItemVisibilitySetting::Hidden => "hidden",
-                    ItemVisibilitySetting::Shown => "shown",
-                }
-                .to_string(),
-            ))
-        }
+        (
+            InteractionSeedTarget::ItemVisibility(_) | InteractionSeedTarget::SectionVisibility(_),
+            InteractionSeedValue::Visibility(value),
+        ) => Ok(Value::String(
+            match value {
+                ItemVisibilitySetting::Default => "default",
+                ItemVisibilitySetting::Hidden => "hidden",
+                ItemVisibilitySetting::Shown => "shown",
+            }
+            .to_string(),
+        )),
         (InteractionSeedTarget::ItemOrder(group), InteractionSeedValue::ItemOrder(items)) => {
             if items
                 .iter()
@@ -379,6 +556,9 @@ fn encode_value(
             table.insert("x".to_string(), Value::Float(position.x.get()));
             table.insert("y".to_string(), Value::Float(position.y.get()));
             Ok(Value::Table(table))
+        }
+        (InteractionSeedTarget::ToolbarLayoutMode, InteractionSeedValue::LayoutMode(mode)) => {
+            Ok(Value::String(layout_mode_wire_id(*mode).to_string()))
         }
         (InteractionSeedTarget::TopDisplayMode, InteractionSeedValue::TopDisplayMode(mode)) => {
             Ok(Value::String(mode.wire_id().to_string()))
@@ -414,18 +594,24 @@ fn restore_table(source: &BTreeMap<String, String>) -> Result<Table, RuntimeUiWi
         .collect()
 }
 
-fn insert_unique(
-    table: &mut Table,
-    key: impl Into<String>,
-    value: Value,
-) -> Result<(), RuntimeUiWireError> {
+/// Writes a field this build owns, displacing any preserved copy of the same
+/// key.
+///
+/// Preserved (passthrough) keys are values written by some other build that
+/// this one did not understand, so they are re-emitted verbatim. If this build
+/// *does* understand the key, its own value is authoritative by construction
+/// and the preserved copy is stale. Failing here instead - as this used to -
+/// made the whole file unencodable, and because the conflict lives in the
+/// in-memory wire state rather than on disk, the resulting persistence
+/// incident recurred on every retry and no toolbar state could be saved again.
+fn insert_recognized(table: &mut Table, key: impl Into<String>, value: Value) {
     let key = key.into();
     if table.insert(key.clone(), value).is_some() {
-        return Err(RuntimeUiWireError::new(format!(
-            "passthrough conflicts with recognized V1 field {key}"
-        )));
+        log::warn!(
+            "Dropping the preserved runtime-UI value for `{key}`: this build manages that key, \
+             so its own value wins"
+        );
     }
-    Ok(())
 }
 
 fn order_group_wire_id(group: ToolbarItemOrderGroup) -> &'static str {
@@ -463,4 +649,25 @@ fn item_belongs_to_group(id: ToolbarItemId, group: ToolbarItemOrderGroup) -> boo
         .find(|definition| definition.id == id)
         .and_then(toolbar_item_order_group)
         == Some(group)
+}
+
+/// The wire spelling of a layout preset. Independent of the config's serde
+/// naming so a rename there cannot silently reinterpret a stored value.
+fn layout_mode_wire_id(mode: crate::config::ToolbarLayoutMode) -> &'static str {
+    use crate::config::ToolbarLayoutMode as Mode;
+    match mode {
+        Mode::Simple => "simple",
+        Mode::Regular => "regular",
+        Mode::Advanced => "advanced",
+    }
+}
+
+fn layout_mode_from_wire_id(value: &str) -> Option<crate::config::ToolbarLayoutMode> {
+    use crate::config::ToolbarLayoutMode as Mode;
+    match value {
+        "simple" => Some(Mode::Simple),
+        "regular" => Some(Mode::Regular),
+        "advanced" => Some(Mode::Advanced),
+        _ => None,
+    }
 }

@@ -139,29 +139,22 @@ impl WaylandState {
         operation: ImageOperationKind,
         exit_on_success: bool,
     ) {
-        let bytes = match render_board_pdf(&snapshot) {
-            Ok(bytes) => bytes,
-            Err(err) => {
-                let message = operation.format_error(&err);
-                log::error!("Board PDF export failed: {}", message);
-                self.input_state.push_toast(
-                    ToastPriority::Critical,
-                    "capture.pdf",
-                    Toast::error(message),
-                );
-                return;
-            }
-        };
+        // Render on the capture worker, not here: an all-boards export
+        // renders every page of every board plus PDF encoding, which stalled
+        // event dispatch for seconds on multi-board sessions.
+        let render: crate::capture::DocumentRenderJob = Box::new(move || {
+            render_board_pdf(&snapshot).map(|bytes| RenderedDocument {
+                bytes,
+                extension: "pdf".to_string(),
+                mime_type: "application/pdf".to_string(),
+            })
+        });
 
         self.capture.set_exit_on_success(exit_on_success);
         self.capture.mark_in_progress();
 
-        let request = DocumentDeliveryRequest {
-            document: RenderedDocument {
-                bytes,
-                extension: "pdf".to_string(),
-                mime_type: "application/pdf".to_string(),
-            },
+        let request = crate::capture::RenderedDocumentDeliveryRequest {
+            render,
             destination: CaptureDestination::FileOnly,
             save_config: Some(save_config),
             operation,
@@ -170,7 +163,7 @@ impl WaylandState {
         let submission = self
             .capture
             .manager_mut()
-            .request_document_delivery(request);
+            .request_rendered_document_delivery(request);
         self.accept_capture_submission(submission, operation);
     }
 

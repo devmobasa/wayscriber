@@ -7,7 +7,7 @@ use super::{
     CommandPaletteCursorHint,
     layout::{CommandPaletteGeometry, CommandPaletteRowAction},
 };
-use crate::config::{KeyBinding, KeybindingsConfig, action_label};
+use crate::config::{KeyBinding, action_label, keybindings::default_keybindings};
 use crate::configurator_destination::keybindings_destination_for_action;
 use crate::domain::Action;
 use crate::input::events::Key;
@@ -36,10 +36,7 @@ impl InputState {
     /// An action with no `[keybindings]` field has nothing to rebind, so the
     /// affordance explains instead of opening a modal that cannot succeed.
     pub(crate) fn begin_keybinding_capture(&mut self, action: Action) -> bool {
-        if KeybindingsConfig::default()
-            .bindings_for_action(action)
-            .is_none()
-        {
+        if default_keybindings().bindings_for_action(action).is_none() {
             self.push_toast(
                 ToastPriority::Info,
                 "palette.shortcut",
@@ -67,10 +64,7 @@ impl InputState {
         action: Action,
         operation: KeybindingEditOperation,
     ) -> bool {
-        if KeybindingsConfig::default()
-            .bindings_for_action(action)
-            .is_none()
-        {
+        if default_keybindings().bindings_for_action(action).is_none() {
             self.push_toast(
                 ToastPriority::Info,
                 "palette.shortcut",
@@ -113,7 +107,7 @@ impl InputState {
     }
 
     fn open_command_palette_internal(&mut self, track_usage: bool) {
-        self.close_radial_menu();
+        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::CommandPalette);
         self.command_palette_open = true;
         self.clear_command_palette_repeat();
         if track_usage {
@@ -122,17 +116,6 @@ impl InputState {
         self.command_palette_query.clear();
         self.command_palette_selected = 0;
         self.command_palette_scroll = 0;
-        // Close other overlays. Route help through the canonical closer so the
-        // cached pointer hit map is dropped; setting `show_help = false` alone
-        // would leave the previous layout hittable until the next render.
-        if self.show_help {
-            self.close_help_overlay();
-        }
-        if self.tour_active {
-            self.tour_active = false;
-        }
-        self.close_context_menu();
-        self.close_properties_panel();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -535,7 +518,7 @@ impl InputState {
             self.command_palette_selected = actual_index;
 
             if let Some((_, row_action)) = geometry.row_action_at(local_x, local_y)
-                && KeybindingsConfig::default()
+                && default_keybindings()
                     .bindings_for_action(command.action)
                     .is_some()
             {
@@ -629,7 +612,7 @@ impl InputState {
             CommandPaletteListRow::Header(_) => return None,
             CommandPaletteListRow::Command { command, .. } => command,
         };
-        KeybindingsConfig::default().bindings_for_action(command.action)?;
+        default_keybindings().bindings_for_action(command.action)?;
         Some((action.tooltip(), x, y))
     }
 }

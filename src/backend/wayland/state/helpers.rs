@@ -9,26 +9,6 @@ use crate::env_vars::{
 };
 use crate::{config::Config, util::Rect};
 
-#[allow(dead_code)]
-pub(in crate::backend::wayland) fn resolve_damage_regions(
-    width: i32,
-    height: i32,
-    mut regions: Vec<Rect>,
-) -> Vec<Rect> {
-    regions.retain(Rect::is_valid);
-
-    if regions.is_empty()
-        && width > 0
-        && height > 0
-        && let Some(full) = Rect::new(0, 0, width, height)
-    {
-        regions.push(full);
-    }
-
-    regions
-}
-
-#[allow(dead_code)]
 pub(in crate::backend::wayland) fn scale_damage_regions(
     regions: Vec<Rect>,
     scale: i32,
@@ -144,15 +124,19 @@ pub(in crate::backend::wayland) fn toolbar_drag_handoff_delay() -> Duration {
     })
 }
 
-pub(in crate::backend::wayland) fn drag_log(message: impl AsRef<str>) {
+/// Logs a toolbar drag diagnostic. Takes a closure so the message is only
+/// built when drag logging is enabled: call sites run per pointer-motion
+/// event, and an eager `format!` there allocates on every move.
+pub(in crate::backend::wayland) fn drag_log<M: AsRef<str>>(message: impl FnOnce() -> M) {
     if debug_toolbar_drag_logging_enabled() {
-        log::info!("{}", message.as_ref());
+        log::info!("{}", message().as_ref());
     }
 }
 
-pub(in crate::backend::wayland) fn color_log(message: impl AsRef<str>) {
+/// See [`drag_log`]; same lazy contract for color diagnostics.
+pub(in crate::backend::wayland) fn color_log<M: AsRef<str>>(message: impl FnOnce() -> M) {
     if debug_toolbar_color_logging_enabled() {
-        log::info!("{}", message.as_ref());
+        log::info!("{}", message().as_ref());
     }
 }
 

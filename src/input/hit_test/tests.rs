@@ -331,3 +331,40 @@ fn distance_point_to_segment_matches_point_distance_for_zero_length_segment() {
         "distance to zero-length segment should equal point distance"
     );
 }
+
+/// A rectangle stored with negative extents paints normalized, so it has to
+/// be selectable along the outline it actually draws. Hit testing it as a
+/// bare point at its origin left such a shape visible but unclickable.
+#[test]
+fn rect_outline_hit_normalizes_negative_extents() {
+    // The same rectangle expressed from each opposite corner.
+    for point in [(10, 20), (40, 60), (25, 20), (10, 40), (40, 40)] {
+        assert_eq!(
+            shapes::rect_outline_hit(10, 20, 30, 40, 2.0, point, 3.0),
+            shapes::rect_outline_hit(40, 60, -30, -40, 2.0, point, 3.0),
+            "{point:?} must hit both spellings of the same rectangle"
+        );
+        assert!(
+            shapes::rect_outline_hit(40, 60, -30, -40, 2.0, point, 3.0),
+            "{point:?} lies on the painted outline"
+        );
+    }
+
+    // A point well inside the rectangle still misses the outline.
+    assert!(!shapes::rect_outline_hit(
+        40,
+        60,
+        -30,
+        -40,
+        2.0,
+        (25, 40),
+        3.0
+    ));
+}
+
+/// A rectangle with no extent at all is still a point.
+#[test]
+fn rect_outline_hit_treats_a_zero_rect_as_a_point() {
+    assert!(shapes::rect_outline_hit(10, 20, 0, 0, 2.0, (11, 21), 3.0));
+    assert!(!shapes::rect_outline_hit(10, 20, 0, 0, 2.0, (30, 40), 3.0));
+}

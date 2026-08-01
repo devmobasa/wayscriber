@@ -31,6 +31,15 @@ impl ImageOperationKind {
         }
     }
 
+    pub fn save_failure_title(self) -> &'static str {
+        match self {
+            Self::Screenshot => "Screenshot File Not Saved",
+            Self::CanvasExport => "Canvas file not saved",
+            Self::BoardPdfExport => "Board PDF not saved",
+            Self::AllBoardsPdfExport => "All boards PDF not saved",
+        }
+    }
+
     pub fn clipboard_failure_title(self) -> &'static str {
         match self {
             Self::Screenshot => "Screenshot Clipboard Failed",
@@ -134,6 +143,33 @@ pub struct ImageDeliveryRequest {
     pub save_config: Option<crate::capture::file::FileSaveConfig>,
     pub operation: ImageOperationKind,
     pub fallback_format_override: Option<ImageFormatMetadata>,
+}
+
+/// Rendering deferred onto the capture worker, so export render + encode work
+/// never runs on the event-loop dispatch thread. `Send` only — the captured
+/// snapshot moves to the worker; it is never shared.
+pub type ImageRenderJob = Box<dyn FnOnce() -> Result<RenderedImage, CaptureError> + Send>;
+
+/// See [`ImageRenderJob`].
+pub type DocumentRenderJob = Box<dyn FnOnce() -> Result<RenderedDocument, CaptureError> + Send>;
+
+/// [`ImageDeliveryRequest`], with the image rendered on the capture worker
+/// instead of the submitting thread.
+pub struct RenderedImageDeliveryRequest {
+    pub render: ImageRenderJob,
+    pub destination: CaptureDestination,
+    pub save_config: Option<crate::capture::file::FileSaveConfig>,
+    pub operation: ImageOperationKind,
+    pub fallback_format_override: Option<ImageFormatMetadata>,
+}
+
+/// [`DocumentDeliveryRequest`], with the document rendered on the capture
+/// worker instead of the submitting thread.
+pub struct RenderedDocumentDeliveryRequest {
+    pub render: DocumentRenderJob,
+    pub destination: CaptureDestination,
+    pub save_config: Option<crate::capture::file::FileSaveConfig>,
+    pub operation: ImageOperationKind,
 }
 
 #[derive(Debug, Clone)]
@@ -378,6 +414,11 @@ pub struct CaptureResult {
     /// Whether the image was copied to clipboard.
     #[allow(dead_code)] // Will be used in Phase 2 for status notifications
     pub copied_to_clipboard: bool,
+    /// Why a requested file save produced no file, when the operation still
+    /// succeeded through another destination. A successful clipboard copy must
+    /// not silence this: the caller has to tell the user their file was not
+    /// written.
+    pub save_error: Option<String>,
 }
 
 /// Outcome of a capture request (success or failure).
@@ -465,22 +506,4 @@ impl From<std::io::Error> for CaptureError {
     fn from(value: std::io::Error) -> Self {
         Self::SaveError(value)
     }
-}
-
-/// Status of an ongoing capture operation.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CaptureStatus {
-    /// Capture is idle/not started.
-    Idle,
-    /// Waiting for user permission from portal.
-    AwaitingPermission,
-    /// Capture is in progress.
-    #[allow(dead_code)] // Will be used in Phase 2 for progress UI
-    InProgress,
-    /// Capture completed successfully.
-    Success,
-    /// Capture failed.
-    Failed(String),
-    /// Capture was cancelled by the user.
-    Cancelled(String),
 }

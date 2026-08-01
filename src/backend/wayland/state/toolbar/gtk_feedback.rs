@@ -164,18 +164,20 @@ impl WaylandState {
         };
         self.data.toolbar_top_offset = x;
         self.data.toolbar_top_offset_y = y;
-        drag_log(format!(
-            "gtk top final clamp before=({:.3},{:.3}) after=({x:.3},{y:.3}) viewport={}x{} surface={}x{} base=({base_x:.3},{:.3}) end=({:.3},{:.3})",
-            before.0,
-            before.1,
-            self.surface.width(),
-            self.surface.height(),
-            surface_size.width,
-            surface_size.height,
-            Self::TOP_BASE_MARGIN_TOP,
-            Self::TOP_MARGIN_RIGHT,
-            Self::TOP_MARGIN_BOTTOM,
-        ));
+        drag_log(|| {
+            format!(
+                "gtk top final clamp before=({:.3},{:.3}) after=({x:.3},{y:.3}) viewport={}x{} surface={}x{} base=({base_x:.3},{:.3}) end=({:.3},{:.3})",
+                before.0,
+                before.1,
+                self.surface.width(),
+                self.surface.height(),
+                surface_size.width,
+                surface_size.height,
+                Self::TOP_BASE_MARGIN_TOP,
+                Self::TOP_MARGIN_RIGHT,
+                Self::TOP_MARGIN_BOTTOM,
+            )
+        });
     }
 
     fn clamp_gtk_side_offset(&mut self, surface_size: GtkToolbarSurfaceSize) {
@@ -199,19 +201,21 @@ impl WaylandState {
         };
         self.data.toolbar_side_offset_x = x;
         self.data.toolbar_side_offset = y;
-        drag_log(format!(
-            "gtk side final clamp before=({:.3},{:.3}) after=({x:.3},{y:.3}) viewport={}x{} surface={}x{} base=({:.3},{:.3}) end=({:.3},{:.3})",
-            before.0,
-            before.1,
-            self.surface.width(),
-            self.surface.height(),
-            surface_size.width,
-            surface_size.height,
-            Self::SIDE_BASE_MARGIN_LEFT,
-            Self::SIDE_BASE_MARGIN_TOP,
-            Self::SIDE_MARGIN_RIGHT,
-            Self::SIDE_MARGIN_BOTTOM,
-        ));
+        drag_log(|| {
+            format!(
+                "gtk side final clamp before=({:.3},{:.3}) after=({x:.3},{y:.3}) viewport={}x{} surface={}x{} base=({:.3},{:.3}) end=({:.3},{:.3})",
+                before.0,
+                before.1,
+                self.surface.width(),
+                self.surface.height(),
+                surface_size.width,
+                surface_size.height,
+                Self::SIDE_BASE_MARGIN_LEFT,
+                Self::SIDE_BASE_MARGIN_TOP,
+                Self::SIDE_MARGIN_RIGHT,
+                Self::SIDE_MARGIN_BOTTOM,
+            )
+        });
     }
 
     /// On drag end, persist the offset accepted against GTK's measured

@@ -11,8 +11,8 @@ use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::theme::overlay::{
-    BG_INPUT_SELECTION, BORDER_MODAL, INPUT_BG, INPUT_BORDER_FOCUSED, INPUT_CARET, PANEL_BG_MODAL,
-    RADIUS_MD, RADIUS_STD, TEXT_HINT_DIM, TEXT_PRIMARY,
+    BG_INPUT_SELECTION, INPUT_BG, INPUT_BORDER_FOCUSED, INPUT_CARET, RADIUS_MD, RADIUS_STD,
+    TEXT_HINT_DIM, TEXT_PRIMARY,
 };
 
 const POPUP_W: f64 = 180.0;
@@ -53,9 +53,9 @@ pub fn render_precision_entry_popup(
 
     // Panel card.
     draw_rounded_rect(ctx, x, y, POPUP_W, POPUP_H, RADIUS_STD);
-    set_rgba(ctx, PANEL_BG_MODAL);
+    set_rgba(ctx, crate::ui::theme::popup::bg_modal());
     let _ = ctx.fill_preserve();
-    set_rgba(ctx, BORDER_MODAL);
+    set_rgba(ctx, crate::ui::theme::popup::border_modal());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 

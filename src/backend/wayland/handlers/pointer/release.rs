@@ -176,24 +176,28 @@ impl WaylandState {
         }
         if inline_active {
             if button == BTN_LEFT && self.inline_toolbar_release(event.position) {
-                drag_log(format!(
-                    "pointer release: inline handled, pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
-                    event.position.0,
-                    event.position.1,
-                    self.is_move_dragging(),
-                    self.pointer_over_toolbar()
-                ));
+                drag_log(|| {
+                    format!(
+                        "pointer release: inline handled, pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
+                        event.position.0,
+                        event.position.1,
+                        self.is_move_dragging(),
+                        self.pointer_over_toolbar()
+                    )
+                });
                 self.unlock_pointer();
                 return;
             }
             if self.pointer_over_toolbar() || self.toolbar_dragging() {
-                drag_log(format!(
-                    "pointer release: inline end drag, pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
-                    event.position.0,
-                    event.position.1,
-                    self.is_move_dragging(),
-                    self.pointer_over_toolbar()
-                ));
+                drag_log(|| {
+                    format!(
+                        "pointer release: inline end drag, pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
+                        event.position.0,
+                        event.position.1,
+                        self.is_move_dragging(),
+                        self.pointer_over_toolbar()
+                    )
+                });
                 self.end_toolbar_move_drag();
                 self.unlock_pointer();
                 return;
@@ -204,13 +208,15 @@ impl WaylandState {
                 self.finish_toolbar_item_drag(true);
                 self.set_toolbar_dragging(false);
             }
-            drag_log(format!(
-                "pointer release: toolbar end drag, pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
-                event.position.0,
-                event.position.1,
-                self.is_move_dragging(),
-                self.pointer_over_toolbar()
-            ));
+            drag_log(|| {
+                format!(
+                    "pointer release: toolbar end drag, pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
+                    event.position.0,
+                    event.position.1,
+                    self.is_move_dragging(),
+                    self.pointer_over_toolbar()
+                )
+            });
             self.end_toolbar_move_drag();
             self.unlock_pointer();
             return;
@@ -219,10 +225,12 @@ impl WaylandState {
         if button == BTN_LEFT && self.is_move_dragging() {
             self.finish_toolbar_item_drag(true);
             self.set_toolbar_dragging(false);
-            drag_log(format!(
-                "pointer release: main surface end drag, pos=({:.3}, {:.3})",
-                event.position.0, event.position.1
-            ));
+            drag_log(|| {
+                format!(
+                    "pointer release: main surface end drag, pos=({:.3}, {:.3})",
+                    event.position.0, event.position.1
+                )
+            });
             self.end_toolbar_move_drag();
             self.unlock_pointer();
             return;

@@ -655,3 +655,114 @@ fn lock_deadline_is_reported_without_parsing_error_text() {
         unlock(&contender).unwrap();
     });
 }
+
+/// A quarantine at its fail-stop cap used to make every ledger open fail,
+/// which under Restart=on-failure was a permanent crash-restart loop until
+/// the runtime directory was wiped by hand. Opening now collects the
+/// accumulated garbage down to a retained inspection tail.
+#[test]
+fn a_full_quarantine_is_collected_instead_of_wedging_open() {
+    use super::super::linux::QUARANTINE_RETAINED_ENTRIES;
+
+    with_runtime(|| {
+        let token = token();
+        let root = command_root();
+
+        let action_quarantine = root.join("actions").join("quarantine");
+        fs::create_dir_all(&action_quarantine).unwrap();
+        for index in 0..1024 {
+            fs::write(
+                action_quarantine.join(format!("invalid-{index:04}.action")),
+                b"junk",
+            )
+            .unwrap();
+        }
+        let _journal = ActionJournal::open().unwrap();
+        let remaining = fs::read_dir(&action_quarantine).unwrap().count();
+        assert!(
+            remaining <= QUARANTINE_RETAINED_ENTRIES,
+            "action quarantine must be trimmed to the retained tail, found {remaining}"
+        );
+        assert!(remaining > 0, "a tail must be kept for inspection");
+
+        let queue_quarantine = root.join("quarantine").join("queue");
+        fs::create_dir_all(&queue_quarantine).unwrap();
+        for index in 0..1024 {
+            fs::write(
+                queue_quarantine.join(format!("invalid-{index:04}.request")),
+                b"junk",
+            )
+            .unwrap();
+        }
+        let _owner = CommandOwner::open(&token).unwrap();
+        let remaining = fs::read_dir(&queue_quarantine).unwrap().count();
+        assert!(
+            remaining <= QUARANTINE_RETAINED_ENTRIES,
+            "command quarantine must be trimmed to the retained tail, found {remaining}"
+        );
+        assert!(remaining > 0, "a tail must be kept for inspection");
+    });
+}
+
+/// Collection has to happen *before* the quarantine reaches its cap. A
+/// quarantine sitting exactly at the cap makes `ensure_capacity` reject every
+/// client command, and the only other collection trigger is a daemon open —
+/// so the daemon would stay wedged until it restarted.
+#[test]
+fn quarantining_the_last_entry_below_the_cap_keeps_clients_admitted() {
+    with_runtime(|| {
+        let token = token();
+        let owner = CommandOwner::open(&token).unwrap();
+        let queue_quarantine = quarantine_dir(&owner.root).join("queue");
+
+        // One short of the cap: the next quarantined entry would reach it.
+        for index in 0..(MAX_COMMAND_QUARANTINE_ENTRIES - 1) {
+            fs::write(
+                queue_quarantine.join(format!("invalid-{index:04}.request")),
+                b"junk",
+            )
+            .unwrap();
+        }
+        assert!(
+            ensure_capacity(&owner.root).is_ok(),
+            "clients are still admitted one short of the cap"
+        );
+
+        let client = ClientCommand::publish(
+            &DaemonRequestV2 {
+                mode: None,
+                freeze: false,
+                exit_after_capture: false,
+                no_exit_after_capture: false,
+                resume_session: false,
+                no_resume_session: false,
+                session_file: None,
+                overlay_action: None,
+            },
+            &token,
+        )
+        .unwrap();
+        let original = read_dir_bounded(&queue_dir(&owner.root), 1)
+            .unwrap()
+            .pop()
+            .unwrap()
+            .path();
+        let name = original.file_name().unwrap().to_str().unwrap();
+        let (order, identity) = parse_queue_name(name).unwrap();
+        let changed = queue_path(&owner.root, order.checked_add(1).unwrap(), &identity);
+        fs::rename(&original, changed).unwrap();
+
+        assert!(owner.claim_next().unwrap().is_none());
+
+        let remaining = fs::read_dir(&queue_quarantine).unwrap().count();
+        assert!(
+            remaining < MAX_COMMAND_QUARANTINE_ENTRIES,
+            "quarantine must stay below the cap, found {remaining}"
+        );
+        assert!(
+            ensure_capacity(&owner.root).is_ok(),
+            "a quarantined entry must not lock out every future client command"
+        );
+        drop(client);
+    });
+}

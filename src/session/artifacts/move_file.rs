@@ -10,6 +10,7 @@ use crate::session::primary::open_session_artifact_for_read;
 
 use super::{
     SessionArtifactPaths, named_session_artifact_paths, named_session_non_lock_artifact_paths,
+    preserved_newer_version_suffix,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -222,6 +223,17 @@ fn target_path_for_source_artifact(
         }
     }
 
+    if source.parent() == source_artifacts.primary.parent() {
+        let source_name = source.file_name()?.to_str()?;
+        if let Some(suffix) = preserved_newer_version_suffix(&source_artifacts.primary, source_name)
+        {
+            return Some(crate::session::append_path_suffix(
+                &target_artifacts.primary,
+                suffix,
+            ));
+        }
+    }
+
     target_recovery_variant_path(
         source,
         &source_artifacts.recovery,
@@ -359,7 +371,7 @@ fn rollback_moved_artifacts(moved: &[MoveArtifact]) -> Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn rename_artifact_no_replace(source: &Path, target: &Path) -> io::Result<()> {
+pub(crate) fn rename_artifact_no_replace(source: &Path, target: &Path) -> io::Result<()> {
     let source = path_to_cstring(source)?;
     let target = path_to_cstring(target)?;
     // SAFETY: The C strings are valid, NUL-terminated paths. AT_FDCWD makes both paths
@@ -395,7 +407,7 @@ fn path_to_cstring(path: &Path) -> io::Result<std::ffi::CString> {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn rename_artifact_no_replace(source: &Path, target: &Path) -> io::Result<()> {
+pub(crate) fn rename_artifact_no_replace(source: &Path, target: &Path) -> io::Result<()> {
     match fs::symlink_metadata(target) {
         Ok(_) => return Err(io::Error::from(ErrorKind::AlreadyExists)),
         Err(err) if err.kind() == ErrorKind::NotFound => {}

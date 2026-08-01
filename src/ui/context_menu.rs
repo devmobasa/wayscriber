@@ -5,9 +5,8 @@ use crate::ui::theme::Rgba;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
-    self, BG_HOVER, BORDER_CONTEXT_MENU, BORDER_FOCUS, FOCUS_RING_WIDTH, ICON_SUBMENU_ARROW,
-    NAV_HINT_MENU, PANEL_BG_CONTEXT_MENU, RADIUS_PANEL, RADIUS_SM, RADIUS_STD, TEXT_DISABLED,
-    TEXT_HINT, TEXT_PRIMARY,
+    self, BG_HOVER, BORDER_FOCUS, FOCUS_RING_WIDTH, ICON_SUBMENU_ARROW, NAV_HINT_MENU,
+    RADIUS_PANEL, RADIUS_SM, RADIUS_STD, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
 };
 
 /// Footer strip below the menu: darker than the menu surface so the hint reads
@@ -61,9 +60,9 @@ pub fn render_context_menu(
         layout.height,
         RADIUS_PANEL,
     );
-    constants::set_color(ctx, PANEL_BG_CONTEXT_MENU);
+    constants::set_color(ctx, crate::ui::theme::popup::bg_context_menu());
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, BORDER_CONTEXT_MENU);
+    constants::set_color(ctx, crate::ui::theme::popup::border_context_menu());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 

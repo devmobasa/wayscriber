@@ -6,6 +6,7 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
     mut file: fs::File,
     max_expanded_size: u64,
     max_encoded_size: Option<u64>,
+    newer_version_action: NewerVersionAction,
 ) -> Result<Option<LoadedSnapshot>> {
     let mut file_bytes = Vec::new();
     if let Some(max_encoded_size) = max_encoded_size {
@@ -25,10 +26,45 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
             .context("failed to read session file")?;
     }
 
+    // Keep the original encoded payload only when decompression would consume
+    // it. A too-new session must be preserved byte-for-byte, including its gzip
+    // wrapper; ordinary uncompressed loads retain the existing zero-copy path.
+    let encoded_session = is_gzip(&file_bytes).then(|| file_bytes.clone());
     let (decompressed, compressed) = maybe_decompress_with_limit(file_bytes, max_expanded_size)?;
 
     let original_value: Value =
         serde_json::from_slice(&decompressed).context("failed to parse session json")?;
+
+    // The version gate runs on the raw document, before schema
+    // deserialization: a newer release may have changed an existing field
+    // incompatibly, and a deserialization failure would send the file down
+    // the corrupt-backup path — whose backup slot rotation eventually
+    // replaces, exactly the loss preservation exists to prevent.
+    if let Some(version) = original_value.get("version").and_then(Value::as_u64)
+        && version > u64::from(CURRENT_VERSION)
+    {
+        warn!(
+            "Session file {} was written by a newer wayscriber (version {}, supported {}); continuing with an empty session",
+            session_path.display(),
+            version,
+            CURRENT_VERSION
+        );
+        if matches!(newer_version_action, NewerVersionAction::Preserve) {
+            let preservation_bytes = encoded_session.as_deref().unwrap_or(&decompressed);
+            let preserved_path =
+                preserve_newer_version_session(session_path, preservation_bytes, version).map_err(
+                    |err| NewerVersionPreservationFailed {
+                        path: session_path.to_path_buf(),
+                        details: format!("{err:#}"),
+                    },
+                )?;
+            warn!(
+                "Preserved the newer-version session at {}; a newer wayscriber can restore it",
+                preserved_path.display()
+            );
+        }
+        return Ok(None);
+    }
 
     let max_depth = max_history_depth(&original_value);
     let mut working_value = original_value.clone();
@@ -53,14 +89,6 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
                 .context("failed to parse session after stripping history")?
         }
     };
-
-    if session_file.version > CURRENT_VERSION {
-        warn!(
-            "Session file version {} is newer than supported version {}; skipping load",
-            session_file.version, CURRENT_VERSION
-        );
-        return Ok(None);
-    }
 
     let SessionFile {
         active_board_id,

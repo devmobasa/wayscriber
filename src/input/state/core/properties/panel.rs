@@ -52,7 +52,7 @@ impl InputState {
             return false;
         }
 
-        self.close_radial_menu();
+        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::PropertiesPanel);
 
         let panel = (|| {
             let ids = self.selected_shape_ids();

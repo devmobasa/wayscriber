@@ -262,12 +262,6 @@ impl SurfaceState {
         self.frame_callbacks.is_pending()
     }
 
-    /// Returns the current pool generation counter.
-    #[allow(dead_code)]
-    pub fn pool_generation(&self) -> u64 {
-        self.pool_generation
-    }
-
     /// Updates the stored pool size and returns true if it grew.
     ///
     /// Call this after `create_buffer` to detect if the pool grew during allocation.

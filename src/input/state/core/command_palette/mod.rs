@@ -14,6 +14,7 @@ pub(crate) use layout::{
 };
 pub use registry::{CommandEntry, command_palette_entries};
 pub use search::CommandPaletteListRow;
+pub(in crate::input::state::core) use search::CommandPaletteResults;
 pub(crate) use search::{action_meta_token_score, fuzzy_score, query_tokens};
 
 /// Cursor hint for different regions of the command palette.

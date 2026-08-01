@@ -20,7 +20,6 @@ use cache::get_or_build_overlay_layout;
 use frame::draw_overlay_frame;
 use header::{HeaderContent, HeaderHint, draw_hints, draw_version_pill};
 
-pub use cache::invalidate_help_overlay_cache;
 #[cfg(test)]
 pub use hit::install_help_hit_map_for_test;
 pub use hit::{HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at};

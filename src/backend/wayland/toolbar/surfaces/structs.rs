@@ -25,6 +25,9 @@ pub struct ToolbarSurface {
     pub(super) ui_scale: f64,
     pub(crate) configured: bool,
     pub(super) dirty: bool,
+    /// Consecutive failed renders, so a surface that cannot draw reports the
+    /// reason without repeating it on every frame.
+    pub(super) render_failures: u32,
     pub(super) suppressed: bool,
     /// Surface-local rects that accept input; None means the whole surface.
     /// Set when the drawn content does not cover the surface (popovers,
@@ -53,6 +56,7 @@ impl ToolbarSurface {
             ui_scale: 1.0,
             configured: false,
             dirty: false,
+            render_failures: 0,
             suppressed: false,
             input_rects: None,
             input_region_dirty: false,

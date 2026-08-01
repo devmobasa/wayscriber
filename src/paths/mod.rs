@@ -131,7 +131,6 @@ pub fn daemon_pid_file() -> PathBuf {
 }
 
 /// Location for persistent logs.
-#[allow(dead_code)]
 pub fn log_dir() -> PathBuf {
     data_dir()
         .unwrap_or_else(|| home_dir().unwrap_or_else(fallback_runtime_root))

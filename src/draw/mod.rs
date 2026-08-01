@@ -37,7 +37,7 @@ pub use render::{
 pub use shape::{
     ArrowLabel, BlurStyle, EmbeddedImage, EraserBrush, EraserKind, PolygonKind,
     REGULAR_POLYGON_DEFAULT_SIDES, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES, Shape,
-    StepMarkerLabel, clamp_regular_sides, invalidate_text_cache,
+    StepMarkerLabel, clamp_regular_sides,
 };
 
 // Re-export color constants for public API (unused internally but part of public interface)

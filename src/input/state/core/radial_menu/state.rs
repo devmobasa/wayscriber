@@ -16,28 +16,7 @@ impl InputState {
     }
 
     fn open_radial_menu_internal(&mut self, x: f64, y: f64, track_usage: bool) {
-        // Mutual exclusion with other popups
-        if self.show_help {
-            self.toggle_help_overlay();
-        }
-        if self.is_context_menu_open() {
-            self.close_context_menu();
-        }
-        if self.is_color_picker_popup_open() {
-            self.close_color_picker_popup(true);
-        }
-        if self.is_properties_panel_open() {
-            self.close_properties_panel();
-        }
-        if self.is_board_picker_open() {
-            self.close_board_picker();
-        }
-        if self.is_precision_entry_open() {
-            self.cancel_precision_entry();
-        }
-        if self.command_palette_open {
-            self.command_palette_open = false;
-        }
+        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::RadialMenu);
 
         self.radial_menu_state = RadialMenuState::Open {
             center_x: x,

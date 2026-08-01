@@ -541,13 +541,6 @@ fn logical_bounds_in(layout: &pango::Layout) -> LogicalBounds {
     }
 }
 
-/// Clear the text measurement cache.
-/// Call this when font configuration changes.
-#[allow(dead_code)]
-pub fn invalidate_text_cache() {
-    TEXT_CACHE.with(|cache| cache.borrow_mut().clear());
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

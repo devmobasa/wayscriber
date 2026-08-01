@@ -3,9 +3,8 @@ use crate::ui::primitives::draw_rounded_rect;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
-    self, BG_HOVER, BORDER_FOCUS, BORDER_PROPERTIES, DIVIDER, EMPTY_PROPERTIES, FOCUS_RING_WIDTH,
-    PANEL_BG_PROPERTIES, RADIUS_PANEL, RADIUS_SM, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
-    TEXT_SECONDARY, TEXT_TERTIARY,
+    self, BG_HOVER, BORDER_FOCUS, DIVIDER, EMPTY_PROPERTIES, FOCUS_RING_WIDTH, RADIUS_PANEL,
+    RADIUS_SM, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY,
 };
 
 pub fn render_properties_panel(
@@ -50,9 +49,9 @@ pub fn render_properties_panel(
         layout.height,
         RADIUS_PANEL,
     );
-    constants::set_color(ctx, PANEL_BG_PROPERTIES);
+    constants::set_color(ctx, crate::ui::theme::popup::bg_properties());
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, BORDER_PROPERTIES);
+    constants::set_color(ctx, crate::ui::theme::popup::border_properties());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 

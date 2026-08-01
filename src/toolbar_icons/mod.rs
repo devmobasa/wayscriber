@@ -138,3 +138,105 @@ pub(crate) fn top_toolbar_icon_painter(
         I::Tool(T::Eraser) => draw_icon_eraser,
     }
 }
+
+#[cfg(test)]
+mod painter_tests {
+    use super::*;
+    use cairo::{Context, Format, ImageSurface};
+
+    type IconPainter = fn(&Context, f64, f64, f64);
+
+    /// Sizes the chrome actually asks for, including the 18px compact bar
+    /// where thin strokes are most likely to round away to nothing.
+    const SIZES: [i32; 5] = [18, 20, 22, 24, 28];
+
+    /// Every public painter. `svg.rs` covers the newer family through its own
+    /// `render_*` entry points; this covers the shipped surface callers use,
+    /// including the older proportional-style painters that had no coverage.
+    const PAINTERS: [(&str, IconPainter); 64] = [
+        ("arrow", draw_icon_arrow),
+        ("blur", draw_icon_blur),
+        ("board", draw_icon_board),
+        ("chevron_down", draw_icon_chevron_down),
+        ("chevron_left", draw_icon_chevron_left),
+        ("chevron_right", draw_icon_chevron_right),
+        ("circle", draw_icon_circle),
+        ("clear", draw_icon_clear),
+        ("close", draw_icon_close),
+        ("copy", draw_icon_copy),
+        ("delay", draw_icon_delay),
+        ("drag", draw_icon_drag),
+        ("eraser", draw_icon_eraser),
+        ("eyedropper", draw_icon_eyedropper),
+        ("file", draw_icon_file),
+        ("fill", draw_icon_fill),
+        ("freeform_polygon", draw_icon_freeform_polygon),
+        ("freeze", draw_icon_freeze),
+        ("grid", draw_icon_grid),
+        ("highlight", draw_icon_highlight),
+        ("highlight_ring", draw_icon_highlight_ring),
+        ("info", draw_icon_info),
+        ("layers", draw_icon_layers),
+        ("layout_advanced", draw_icon_layout_advanced),
+        ("layout_regular", draw_icon_layout_regular),
+        ("layout_simple", draw_icon_layout_simple),
+        ("line", draw_icon_line),
+        ("lock", draw_icon_lock),
+        ("marker", draw_icon_marker),
+        ("minimize", draw_icon_minimize),
+        ("minus", draw_icon_minus),
+        ("more", draw_icon_more),
+        ("note", draw_icon_note),
+        ("parallelogram", draw_icon_parallelogram),
+        ("paste", draw_icon_paste),
+        ("pen", draw_icon_pen),
+        ("pencil", draw_icon_pencil),
+        ("pin", draw_icon_pin),
+        ("plus", draw_icon_plus),
+        ("polygon", draw_icon_polygon),
+        ("rect", draw_icon_rect),
+        ("refresh", draw_icon_refresh),
+        ("restore", draw_icon_restore),
+        ("rhombus", draw_icon_rhombus),
+        ("save", draw_icon_save),
+        ("screenshot", draw_icon_screenshot),
+        ("search", draw_icon_search),
+        ("select", draw_icon_select),
+        ("session", draw_icon_session),
+        ("settings", draw_icon_settings),
+        ("shape_picker", draw_icon_shape_picker),
+        ("side_minimize", draw_icon_side_minimize),
+        ("sliders", draw_icon_sliders),
+        ("spotlight", draw_icon_spotlight),
+        ("step_marker", draw_icon_step_marker),
+        ("text", draw_icon_text),
+        ("triangle", draw_icon_triangle),
+        ("unfreeze", draw_icon_unfreeze),
+        ("unlock", draw_icon_unlock),
+        ("unpin", draw_icon_unpin),
+        ("visibility", draw_icon_visibility),
+        ("zoom_in", draw_icon_zoom_in),
+        ("zoom_out", draw_icon_zoom_out),
+        ("zoom_reset", draw_icon_zoom_reset),
+    ];
+
+    #[test]
+    fn every_public_icon_paints_something_at_every_chrome_size() {
+        for (name, paint) in PAINTERS {
+            for size in SIZES {
+                let surface = ImageSurface::create(Format::ARgb32, size, size).expect("surface");
+                let ctx = Context::new(&surface).expect("context");
+                ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
+                paint(&ctx, 0.0, 0.0, f64::from(size));
+                surface.flush();
+                let mut painted = false;
+                surface
+                    .with_data(|pixels| {
+                        painted = pixels.chunks_exact(4).any(|pixel| pixel[3] != 0);
+                    })
+                    .expect("surface data");
+                assert!(painted, "{name} painted nothing at {size}px");
+            }
+        }
+    }
+}

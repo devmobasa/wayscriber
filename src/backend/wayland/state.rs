@@ -57,8 +57,7 @@ use crate::{
     capture::{
         CaptureDestination, CaptureManager, DesktopBackdropCaptureRequest,
         DesktopBackdropCaptureResult, DesktopBackdropGeometry, DesktopBackdropOutputGeometry,
-        DocumentDeliveryRequest, ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind,
-        RenderedDocument,
+        ImageFormatMetadata, ImageOperationKind, RenderedDocument,
         file::{FileSaveConfig, expand_tilde},
         types::CaptureType,
     },
@@ -158,6 +157,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub palette_recents: crate::palette_recents::PaletteRecentsWriter,
     pub capture_manager: CaptureManager,
     pub session_options: Option<SessionOptions>,
+    pub session_config_failed: bool,
     pub persistence: crate::backend::wayland::session::PersistenceController,
     pub runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
     pub runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
@@ -184,9 +184,9 @@ pub(super) struct WaylandState {
     pub(super) xdg_shell: Option<XdgShell>,
     pub(super) activation: Option<ActivationState>,
     pub(super) shm: Shm,
-    #[allow(dead_code)] // Kept for potential future pointer lock support
+    // Both drive pointer lock for toolbar drags; see
+    // state/toolbar/visibility/pointer.rs.
     pub(super) pointer_constraints_state: PointerConstraintsState,
-    #[allow(dead_code)] // Kept for potential future pointer lock support
     pub(super) relative_pointer_state: RelativePointerState,
     pub(super) output_state: OutputState,
     pub(super) seat_state: SeatState,
@@ -208,6 +208,9 @@ pub(super) struct WaylandState {
 
     // Configuration
     pub(super) config: Config,
+    /// Authored `[session]` settings were unavailable and the live options are
+    /// defaults. Destructive session actions must refuse to use those options.
+    pub(super) session_config_failed: bool,
     pub(super) runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
     pub(super) runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
     pub(super) runtime_ui_unavailable_previews:

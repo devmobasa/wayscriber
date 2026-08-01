@@ -41,8 +41,12 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         source,
         exit_after_capture_mode,
         keybindings,
+        load_failure,
     } = config::load(backend.exit_after_capture_mode);
     let config_dir = Config::config_directory_from_source(&source)?;
+    let session_config_failed = load_failure
+        .as_ref()
+        .is_some_and(|failure| failure.section_failed("session"));
     let session_options =
         session::build_session_options(&config, &config_dir, backend.named_session_file.clone());
     let runtime_wake = RuntimeWakeSource::new()
@@ -55,6 +59,11 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let tablet_manager = tablet::bind_tablet_manager(&setup, &config);
 
     let mut input_state = input_state::build_input_state(&config);
+    config::notify_config_load_failure(
+        &mut input_state,
+        backend.tokio_runtime.handle(),
+        load_failure.as_ref(),
+    );
     config::notify_invalid_keybindings(
         &mut input_state,
         backend.tokio_runtime.handle(),
@@ -196,6 +205,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         palette_recents,
         capture_manager,
         session_options,
+        session_config_failed,
         persistence,
         runtime_ui,
         runtime_ui_unavailable,

@@ -14,41 +14,31 @@ pub(super) fn save_recovery_snapshot(
     };
 
     let recovery_path = options.recovery_file_path();
-    let tmp_path = temp_path(&recovery_path)?;
     let write_started = Instant::now();
-    {
-        let mut tmp_file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp_path)
-            .with_context(|| {
-                format!(
-                    "failed to open temporary recovery file {}",
-                    tmp_path.display()
-                )
-            })?;
-        tmp_file
-            .write_all(&payload.bytes)
-            .context("failed to write session recovery payload")?;
-        tmp_file
-            .sync_all()
-            .context("failed to sync temporary recovery file")?;
-    }
-    let write_elapsed = write_started.elapsed();
-
-    let replace_started = Instant::now();
-    fs::rename(&tmp_path, &recovery_path).with_context(|| {
+    // Through durable_io: it owns the temp-write/fsync/rename/parent-sync
+    // sequence, keeps the artifact at 0600 like the rest of the session's
+    // private data, and removes its temporary file on every failure path.
+    crate::durable_io::write_atomic(
+        &recovery_path,
+        &payload.bytes,
+        crate::durable_io::AtomicWriteOptions {
+            overwrite: crate::durable_io::OverwriteMode::Replace,
+            permissions: crate::durable_io::PermissionPolicy::FixedMode(0o600),
+            symlink: crate::durable_io::SymlinkPolicy::Reject,
+            sync_file: true,
+            sync_parent: true,
+        },
+    )
+    .with_context(|| {
         format!(
-            "failed to move temporary recovery file {} -> {}",
-            tmp_path.display(),
+            "failed to write session recovery file {}",
             recovery_path.display()
         )
     })?;
     info!(
-        "Session recovery file replace completed for {}: write_and_sync={:?}, rename={:?}, final_size={} bytes",
+        "Session recovery file replace completed for {}: elapsed={:?}, final_size={} bytes",
         recovery_path.display(),
-        write_elapsed,
-        replace_started.elapsed(),
+        write_started.elapsed(),
         payload.final_size()
     );
 
@@ -196,34 +186,29 @@ fn artifact_is_newer_than_marker(
     }
 }
 
+/// Writes a marker file through `durable_io`, which owns the whole
+/// temp-write/fsync/rename/parent-sync dance and removes its temporary file on
+/// every failure path. Markers hold only a timestamp, but the load side decides
+/// what to restore from whether they exist, so their durability is part of the
+/// save contract.
+fn write_session_marker(marker_path: &Path, label: &str) -> Result<()> {
+    crate::durable_io::write_atomic(
+        marker_path,
+        now_rfc3339().as_bytes(),
+        crate::durable_io::AtomicWriteOptions {
+            overwrite: crate::durable_io::OverwriteMode::Replace,
+            permissions: crate::durable_io::PermissionPolicy::FixedMode(0o600),
+            symlink: crate::durable_io::SymlinkPolicy::Reject,
+            sync_file: true,
+            sync_parent: true,
+        },
+    )
+    .with_context(|| format!("failed to write {label} {}", marker_path.display()))
+}
+
 pub(super) fn write_backup_recovery_marker(options: &SessionOptions) -> Result<()> {
     let marker_path = options.backup_recovery_marker_file_path();
-    let tmp_path = temp_path(&marker_path)?;
-    {
-        let mut tmp_file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp_path)
-            .with_context(|| {
-                format!(
-                    "failed to open temporary backup recovery marker {}",
-                    tmp_path.display()
-                )
-            })?;
-        tmp_file
-            .write_all(now_rfc3339().as_bytes())
-            .context("failed to write backup recovery marker")?;
-        tmp_file
-            .sync_all()
-            .context("failed to sync backup recovery marker")?;
-    }
-    fs::rename(&tmp_path, &marker_path).with_context(|| {
-        format!(
-            "failed to move temporary backup recovery marker {} -> {}",
-            tmp_path.display(),
-            marker_path.display()
-        )
-    })?;
+    write_session_marker(&marker_path, "backup recovery marker")?;
     info!(
         "Wrote backup recovery marker {} for contentless non-clear session save",
         marker_path.display()
@@ -233,32 +218,7 @@ pub(super) fn write_backup_recovery_marker(options: &SessionOptions) -> Result<(
 
 pub(super) fn write_recovery_recoverable_marker(options: &SessionOptions) -> Result<()> {
     let marker_path = options.recovery_recoverable_marker_file_path();
-    let tmp_path = temp_path(&marker_path)?;
-    {
-        let mut tmp_file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp_path)
-            .with_context(|| {
-                format!(
-                    "failed to open temporary recovery recoverable marker {}",
-                    tmp_path.display()
-                )
-            })?;
-        tmp_file
-            .write_all(now_rfc3339().as_bytes())
-            .context("failed to write recovery recoverable marker")?;
-        tmp_file
-            .sync_all()
-            .context("failed to sync recovery recoverable marker")?;
-    }
-    fs::rename(&tmp_path, &marker_path).with_context(|| {
-        format!(
-            "failed to move temporary recovery recoverable marker {} -> {}",
-            tmp_path.display(),
-            marker_path.display()
-        )
-    })?;
+    write_session_marker(&marker_path, "recovery recoverable marker")?;
     info!(
         "Wrote recovery recoverable marker {} for contentless non-clear session save",
         marker_path.display()
@@ -268,32 +228,7 @@ pub(super) fn write_recovery_recoverable_marker(options: &SessionOptions) -> Res
 
 pub(super) fn write_clear_marker(options: &SessionOptions) -> Result<()> {
     let marker_path = options.clear_marker_file_path();
-    let tmp_path = temp_path(&marker_path)?;
-    {
-        let mut tmp_file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp_path)
-            .with_context(|| {
-                format!(
-                    "failed to open temporary session clear marker {}",
-                    tmp_path.display()
-                )
-            })?;
-        tmp_file
-            .write_all(now_rfc3339().as_bytes())
-            .context("failed to write session clear marker")?;
-        tmp_file
-            .sync_all()
-            .context("failed to sync session clear marker")?;
-    }
-    fs::rename(&tmp_path, &marker_path).with_context(|| {
-        format!(
-            "failed to move temporary session clear marker {} -> {}",
-            tmp_path.display(),
-            marker_path.display()
-        )
-    })?;
+    write_session_marker(&marker_path, "session clear marker")?;
     info!(
         "Wrote session clear marker {} for empty saved session",
         marker_path.display()

@@ -88,6 +88,12 @@ jobs:
       - name: Check Rust source coverage
         run: ./tools/check-rust-source-coverage.py
 
+      - name: Check process spawn sites
+        run: ./tools/check-process-sites.py
+
+      - name: Check config writers
+        run: ./tools/check-config-writers.py
+
       - name: cargo fmt
         run: cargo fmt --all -- --check
 

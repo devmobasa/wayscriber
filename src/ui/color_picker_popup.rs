@@ -17,9 +17,9 @@ use crate::ui::theme::{Rgba, toolbar as toolbar_theme};
 use crate::ui_text::{UiTextStyle, draw_text_baseline, measure_text};
 
 use super::constants::{
-    self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_INPUT_SELECTION, BORDER_MODAL, INPUT_BG,
-    INPUT_BORDER_FOCUSED, INPUT_CARET, OVERLAY_DIM_MEDIUM, PANEL_BG_MODAL, RADIUS_MD, RADIUS_PANEL,
-    RADIUS_SM, RADIUS_STD, TEXT_HINT_DIM, TEXT_PRIMARY,
+    self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_INPUT_SELECTION, INPUT_BG, INPUT_BORDER_FOCUSED,
+    INPUT_CARET, OVERLAY_DIM_MEDIUM, RADIUS_MD, RADIUS_PANEL, RADIUS_SM, RADIUS_STD, TEXT_HINT_DIM,
+    TEXT_PRIMARY,
 };
 
 // File-local colors with no matching theme token (M1 keep-if-not-matching
@@ -156,9 +156,9 @@ pub fn render_color_picker_popup(
         layout.height,
         RADIUS_PANEL,
     );
-    constants::set_color(ctx, PANEL_BG_MODAL);
+    constants::set_color(ctx, crate::ui::theme::popup::bg_modal());
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, BORDER_MODAL);
+    constants::set_color(ctx, crate::ui::theme::popup::border_modal());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
@@ -666,7 +666,7 @@ fn draw_action_button(
         constants::set_color(ctx, EYEDROPPER_BG);
     }
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, BORDER_MODAL);
+    constants::set_color(ctx, crate::ui::theme::popup::border_modal());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
     constants::set_color(ctx, TEXT_PRIMARY);

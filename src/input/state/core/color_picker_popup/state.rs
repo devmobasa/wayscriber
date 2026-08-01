@@ -84,14 +84,8 @@ impl InputState {
 
     fn open_color_picker_popup_for(&mut self, slot: Option<usize>, color: Color) {
         self.cancel_pending_color_picker_paste();
-        self.close_radial_menu();
-        if self.show_help {
-            self.toggle_help_overlay();
-        }
+        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::ColorPicker);
         self.cancel_active_interaction();
-        self.close_context_menu();
-        self.close_properties_panel();
-        self.close_board_picker();
 
         let tool = self.active_tool();
         let hex = color_to_hex(color);

@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use log::{info, warn};
+use std::os::fd::AsFd;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -19,6 +20,13 @@ impl Daemon {
                 warn!("Failed to signal overlay process: {err:#}");
             }
 
+            // Wait on the child's pidfd rather than waking every 50ms to poll
+            // it. A pidfd becomes readable exactly when its process exits, so
+            // prompt exits are observed immediately and slow exits cost no
+            // periodic wakeups. This termination path is still synchronous:
+            // the daemon event loop remains occupied until the child exits or
+            // the graceful timeout expires.
+            let exit_watch = super::super::protocol_v2::open_overlay_pidfd(pid).ok();
             let deadline = super::super::protocol_v2::BootClock::now()?.checked_add(timeout)?;
             loop {
                 match self.overlay_child.try_wait() {
@@ -47,7 +55,20 @@ impl Daemon {
                             );
                             break;
                         }
-                        thread::sleep(Duration::from_millis(50));
+                        // Without a pidfd (the child raced us to exit, or the
+                        // open failed) fall back to the original pacing.
+                        match exit_watch.as_ref() {
+                            Some(fd) => {
+                                let now = super::super::protocol_v2::BootClock::now()?.as_nanos();
+                                let remaining =
+                                    Duration::from_nanos(deadline.as_nanos().saturating_sub(now));
+                                let _ = super::super::protocol_v2::wait_for_pidfd_exit(
+                                    fd.as_fd(),
+                                    remaining,
+                                );
+                            }
+                            None => thread::sleep(Duration::from_millis(50)),
+                        }
                     }
                     Err(err) => {
                         let forced = self.overlay_child.force_kill_and_wait();

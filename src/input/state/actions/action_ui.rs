@@ -65,9 +65,6 @@ impl InputState {
                         "hidden"
                     }
                 );
-                // An explicit toggle owns the badge for this run; the
-                // configured default is the configurator's to change.
-                self.notify_process_only_preference();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
                 true
@@ -83,7 +80,6 @@ impl InputState {
                         "hidden"
                     }
                 );
-                self.notify_process_only_preference();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
                 true

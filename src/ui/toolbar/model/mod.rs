@@ -28,10 +28,10 @@ pub(crate) use control::{
 };
 #[allow(unused_imports)]
 pub(crate) use event_policy::{
-    ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPreApplyEffect,
-    ToolbarRuntimeUiPersistenceTarget, action_for_apply_preset, action_for_clear_preset,
-    action_for_event, action_for_save_preset, action_for_tool, short_label_for_event,
-    tooltip_label_for_event,
+    ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPopover,
+    ToolbarPreApplyEffect, ToolbarRuntimeUiPersistenceTarget, action_for_apply_preset,
+    action_for_clear_preset, action_for_event, action_for_save_preset, action_for_tool,
+    popovers_for_event, short_label_for_event, tooltip_label_for_event,
 };
 #[allow(unused_imports)]
 pub(crate) use header::{SideHeaderModel, board_chip_label, layout_mode_control};
@@ -512,15 +512,17 @@ mod tests {
 
     #[test]
     fn event_policy_classifies_persistence_and_pre_apply_effects() {
-        // Authored preferences apply to this run; nothing routes them to disk.
+        // Chrome the user arranges from the overlay survives a restart as a
+        // runtime override.
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleStatusBar(false)).persistence,
-            ToolbarPersistence::Ephemeral
+            ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::StatusBar)
         );
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleCustomSection(true)).persistence,
-            ToolbarPersistence::Ephemeral
+            ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::HistoryCustomSection)
         );
+        // Drawing state is not chrome: a thickness change is this run's.
         assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::SetThickness(2.0)).persistence,
             ToolbarPersistence::Ephemeral

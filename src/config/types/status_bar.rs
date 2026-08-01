@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// This is a Rust-side identity shared by the renderer and overlay settings.
 /// TOML keeps the established boolean fields instead of serializing this enum,
 /// so adding an item does not create ordering or unknown-identifier semantics.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum StatusBarItem {
     ActiveOutput,
     SelectionInfo,
@@ -21,6 +21,31 @@ pub enum StatusBarItem {
 }
 
 impl StatusBarItem {
+    /// Stable identifier for this item in `runtime-ui.toml`.
+    ///
+    /// Persisted, so these strings are a compatibility surface: renaming one
+    /// silently drops the user's saved choice for that item.
+    pub fn config_id(self) -> &'static str {
+        match self {
+            Self::ActiveOutput => "active_output",
+            Self::SelectionInfo => "selection_info",
+            Self::Board => "board",
+            Self::Page => "page",
+            Self::Color => "color",
+            Self::Tool => "tool",
+            Self::Size => "size",
+            Self::ContextIndicators => "context_indicators",
+            Self::ToolbarHint => "toolbar_hint",
+            Self::Help => "help",
+            Self::About => "about",
+        }
+    }
+
+    /// The item a persisted identifier names, if this build still has it.
+    pub fn from_config_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|item| item.config_id() == id)
+    }
+
     pub const ALL: [Self; 11] = [
         Self::ActiveOutput,
         Self::SelectionInfo,

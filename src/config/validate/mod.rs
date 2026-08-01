@@ -18,7 +18,9 @@ mod tablet;
 mod ui;
 mod updates;
 
-pub use keybindings::{DefaultShortcutSkipped, InvalidKeybinding, KeybindingConflictResolution};
+pub use keybindings::{
+    DefaultShortcutSkipped, InvalidKeybinding, KeybindingConflictResolution, KeybindingProblem,
+};
 
 /// What loading had to change before a configuration could be used.
 ///

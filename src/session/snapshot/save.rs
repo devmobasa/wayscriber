@@ -9,10 +9,10 @@ use anyhow::{Context, Result, anyhow};
 use log::{debug, info, warn};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-#[allow(dead_code)]
 const AUTOSAVE_HISTORY_FALLBACK_DEPTH: usize = 1;
 
 mod payload;
@@ -41,7 +41,6 @@ pub use model::{
 };
 
 /// Persist the provided snapshot to disk according to the configured options.
-#[allow(dead_code)]
 pub fn save_snapshot(snapshot: &SessionSnapshot, options: &SessionOptions) -> Result<()> {
     save_snapshot_with_report(snapshot, options).map(|_| ())
 }
@@ -248,6 +247,23 @@ fn save_snapshot_with_expanded_limit_and_strategy(
     result
 }
 
+/// Persist a rename by syncing the containing directory, so that a crash after
+/// a reported-successful save cannot roll the replacement back. The load-side
+/// marker logic decides from the presence of files this module renames into
+/// place, so rename durability is part of the save contract - which is why a
+/// sync failure fails the save: the file is in place, but "saved" must not be
+/// reported for a replacement that power loss can still undo. Autosave retries
+/// make the failure recoverable.
+pub(super) fn sync_session_parent_dir(path: &Path, label: &str) -> Result<()> {
+    crate::durable_io::sync_parent_dir(path).with_context(|| {
+        format!(
+            "failed to sync session directory after replacing {} {}",
+            label,
+            path.display()
+        )
+    })
+}
+
 fn prepare_session_parent_for_save(options: &SessionOptions) -> Result<()> {
     if options.is_named_file() {
         crate::session::validate_named_session_file_for_foreground(&options.session_file_path())?;
@@ -261,6 +277,44 @@ fn prepare_session_parent_for_save(options: &SessionOptions) -> Result<()> {
         )
     })?;
     Ok(())
+}
+
+/// Removes a temporary file unless it was defused by a successful rename.
+///
+/// The main save cannot use `durable_io::write_atomic` wholesale: it writes the
+/// payload *before* rotating the previous session into the backup slot, so a
+/// failure to write leaves the original untouched. That ordering means the
+/// temp file outlives its own statement, and every early return between here
+/// and the rename used to leak it - `temp_path` then stepped to `.tmp1`,
+/// `.tmp2`, and nothing ever collected the strays.
+struct TempFileGuard {
+    path: Option<PathBuf>,
+}
+
+impl TempFileGuard {
+    fn new(path: PathBuf) -> Self {
+        Self { path: Some(path) }
+    }
+
+    /// The temp file has been renamed into place; there is nothing to remove.
+    fn defuse(&mut self) {
+        self.path = None;
+    }
+}
+
+impl Drop for TempFileGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.path.take()
+            && let Err(err) = fs::remove_file(&path)
+            && err.kind() != std::io::ErrorKind::NotFound
+        {
+            warn!(
+                "Failed to remove temporary session file {}: {}",
+                path.display(),
+                err
+            );
+        }
+    }
 }
 
 fn save_snapshot_inner(
@@ -361,11 +415,16 @@ fn save_snapshot_inner(
     let final_size = payload_bytes.len();
 
     let tmp_path = temp_path(&session_path)?;
+    let mut temp_guard = TempFileGuard::new(tmp_path.clone());
     let write_started = Instant::now();
     {
         let mut tmp_file = OpenOptions::new()
             .write(true)
             .create_new(true)
+            // Session files hold the user's drawings, the most sensitive thing
+            // this app persists; the umask default of 0644 made them
+            // world-readable.
+            .mode(0o600)
             .open(&tmp_path)
             .with_context(|| {
                 format!(
@@ -409,9 +468,13 @@ fn save_snapshot_inner(
             })?;
             should_mark_backup_recoverable = true;
         } else if options.backup_retention > 0 {
-            if backup_path.exists() {
-                fs::remove_file(&backup_path).ok();
-            }
+            // A session created by an older release may still be 0644. Tighten
+            // it before rotation so the backup does not preserve that legacy
+            // exposure. Opening through the session-artifact helper also
+            // refuses a symlink instead of chmodding its target.
+            crate::session::primary::make_session_artifact_private(&session_path)?;
+            // rename replaces an existing backup atomically; removing it first
+            // would only open a window in which no backup exists at all.
             fs::rename(&session_path, &backup_path).with_context(|| {
                 format!(
                     "failed to rotate previous session file {} -> {}",
@@ -443,6 +506,8 @@ fn save_snapshot_inner(
             session_path.display()
         )
     })?;
+    temp_guard.defuse();
+    sync_session_parent_dir(&session_path, "session file")?;
     let replace_elapsed = replace_started.elapsed();
     info!(
         "Session file replace completed for {}: write_and_sync={:?}, rotate_and_rename={:?}, final_size={} bytes",

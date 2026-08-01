@@ -321,6 +321,25 @@ fn action_meta_covers_surface_actions() {
     );
 }
 
+/// `action_label` falls back to the literal word "Action" for an action with
+/// no metadata, and every user-facing message that names a shortcut goes
+/// through it: conflict toasts, invalid-binding notifications, skipped-default
+/// notices, the migration banner. A configurable action without an entry
+/// therefore tells the user their shortcut collided with "Action".
+#[test]
+fn every_configurable_action_has_a_name_to_show() {
+    let unnamed: Vec<Action> =
+        crate::config::keybindings::KeybindingsConfig::configurable_actions()
+            .iter()
+            .copied()
+            .filter(|action| action_meta(*action).is_none())
+            .collect();
+    assert!(
+        unnamed.is_empty(),
+        "these configurable actions would be shown to the user as \"Action\": {unnamed:?}"
+    );
+}
+
 #[test]
 fn command_palette_actions_match_expected_contract() {
     let actual: HashSet<Action> = action_meta_iter()

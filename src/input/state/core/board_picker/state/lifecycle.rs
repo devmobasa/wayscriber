@@ -18,51 +18,17 @@ impl InputState {
     }
 
     pub(crate) fn open_board_picker(&mut self) {
-        self.close_radial_menu();
-        if self.show_help {
-            self.toggle_help_overlay();
-        }
-        self.cancel_active_interaction();
-        self.close_context_menu();
-        self.close_properties_panel();
-        self.board_picker_clear_search();
-        self.board_picker_drag = None;
-        self.board_picker_page_drag = None;
-        self.board_picker_page_edit = None;
-        let active_index = self.boards.active_index();
-        let active_page = self.boards.active_page_index();
-        self.board_picker_state = BoardPickerState::Open {
-            selected: active_index,
-            hover_index: None,
-            edit: None,
-            mode: BoardPickerMode::Full,
-            focus: BoardPickerFocus::BoardList,
-            page_focus_page_index: None,
-            page_scroll_row: 0,
-            page_scroll_target_page_index: Some(active_page),
-            page_nav_mode: BoardPickerPageNavMode::Normal,
-            page_search_query: String::new(),
-            page_search_cursor: None,
-            page_jump_buffer: String::new(),
-        };
-        let selected_row = self.board_picker_row_for_board(active_index);
-        if let (Some(selected), BoardPickerState::Open { selected: row, .. }) =
-            (selected_row, &mut self.board_picker_state)
-        {
-            *row = selected;
-        }
-        self.dirty_tracker.mark_full();
-        self.needs_redraw = true;
+        self.open_board_picker_with(BoardPickerMode::Full);
     }
 
     pub(crate) fn open_board_picker_quick(&mut self) {
-        self.close_radial_menu();
-        if self.show_help {
-            self.toggle_help_overlay();
-        }
+        self.open_board_picker_with(BoardPickerMode::Quick);
+        self.board_picker_select_recent();
+    }
+
+    fn open_board_picker_with(&mut self, mode: BoardPickerMode) {
+        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::BoardPicker);
         self.cancel_active_interaction();
-        self.close_context_menu();
-        self.close_properties_panel();
         self.board_picker_clear_search();
         self.board_picker_drag = None;
         self.board_picker_page_drag = None;
@@ -73,7 +39,7 @@ impl InputState {
             selected: active_index,
             hover_index: None,
             edit: None,
-            mode: BoardPickerMode::Quick,
+            mode,
             focus: BoardPickerFocus::BoardList,
             page_focus_page_index: None,
             page_scroll_row: 0,
@@ -89,7 +55,6 @@ impl InputState {
         {
             *row = selected;
         }
-        self.board_picker_select_recent();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }

@@ -1,7 +1,7 @@
 use crate::input::state::{PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE};
 use crate::ui::constants::{
-    self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_SELECTION, BORDER_BOARD_PICKER, BORDER_FOCUS,
-    PANEL_BG_BOARD_PICKER, RADIUS_MD, RADIUS_SM, RADIUS_STD, SHADOW_DEEP, TEXT_WHITE,
+    self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_SELECTION, BORDER_FOCUS, RADIUS_MD, RADIUS_SM,
+    RADIUS_STD, SHADOW_DEEP, TEXT_WHITE,
 };
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 use crate::ui::theme::Rgba;
@@ -49,10 +49,10 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
     if is_drop_target {
         constants::set_color(ctx, BG_SELECTION);
     } else {
-        constants::set_color(ctx, PANEL_BG_BOARD_PICKER);
+        constants::set_color(ctx, crate::ui::theme::popup::bg_board_picker());
     }
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, BORDER_BOARD_PICKER);
+    constants::set_color(ctx, crate::ui::theme::popup::border_board_picker());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
@@ -231,7 +231,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
     }
     let _ = ctx.fill_preserve();
 
-    constants::set_color(ctx, BORDER_BOARD_PICKER);
+    constants::set_color(ctx, crate::ui::theme::popup::border_board_picker());
     ctx.set_line_width(1.0);
     if !is_hovered {
         ctx.set_dash(&[4.0, 3.0], 0.0);
@@ -322,9 +322,9 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(args: PagePre
     let _ = ctx.fill();
 
     draw_rounded_rect(ctx, preview_x, preview_y, preview_w, preview_h, RADIUS_MD);
-    constants::set_color(ctx, PANEL_BG_BOARD_PICKER);
+    constants::set_color(ctx, crate::ui::theme::popup::bg_board_picker());
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, BORDER_BOARD_PICKER);
+    constants::set_color(ctx, crate::ui::theme::popup::border_board_picker());
     ctx.set_line_width(1.2);
     let _ = ctx.stroke();
 

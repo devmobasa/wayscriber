@@ -33,7 +33,7 @@ impl InputState {
     /// Open the precise-entry popup prefilled with the target's current
     /// value (selected, so the first keystroke replaces it).
     pub fn open_precision_entry(&mut self, target: PrecisionEntryTarget) {
-        self.close_radial_menu();
+        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::PrecisionEntry);
         let value = match target {
             PrecisionEntryTarget::Thickness => {
                 if self.active_tool().uses_eraser_size()

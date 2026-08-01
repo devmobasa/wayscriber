@@ -10,6 +10,13 @@ use std::path::{Path, PathBuf};
 use super::options::append_path_suffix;
 use super::primary::open_session_artifact_for_read;
 
+/// Stable components of the newer-version preservation side-file grammar.
+/// The snapshot writer and artifact parser share these so lifecycle operations
+/// cannot drift away from the names preservation creates.
+pub(crate) const PRESERVED_SESSION_MARKER: &str = "-preserved-";
+pub(crate) const PRESERVED_SESSION_MOVED_SUFFIX: &str = "-moved";
+
+pub(crate) use move_file::rename_artifact_no_replace;
 pub use move_file::{
     NamedSessionMoveOutcome, NamedSessionMovedArtifact, move_named_session_non_lock_artifacts,
     rollback_named_session_non_lock_artifacts_move,
@@ -78,8 +85,85 @@ pub fn named_session_non_lock_artifact_paths(path: &Path) -> Result<Vec<PathBuf>
         artifacts.clear_marker,
     ];
     collect_recovery_variants(&artifacts.recovery, &mut paths)?;
+    collect_preserved_newer_version_copies(path, &mut paths)?;
     dedupe_paths(&mut paths);
     Ok(paths)
+}
+
+/// Adds the `.vN-preserved-*` copies the downgrade path writes next to a
+/// too-new session, so moving or clearing a named session takes its
+/// recoverable newer-version data along instead of orphaning it under the
+/// old name.
+fn collect_preserved_newer_version_copies(
+    session_path: &Path,
+    paths: &mut Vec<PathBuf>,
+) -> Result<()> {
+    let Some(parent) = session_path.parent() else {
+        return Ok(());
+    };
+    let entries = match fs::read_dir(parent) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(()),
+        Err(err) => {
+            return Err(err).with_context(|| {
+                format!(
+                    "failed to scan preserved newer-version sessions under {}",
+                    parent.display()
+                )
+            });
+        }
+    };
+
+    for entry in entries {
+        let entry = entry.with_context(|| {
+            format!(
+                "failed to inspect preserved newer-version sessions under {}",
+                parent.display()
+            )
+        })?;
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if preserved_newer_version_suffix(session_path, name).is_some() {
+            paths.push(path);
+        }
+    }
+    Ok(())
+}
+
+/// Returns the suffix of an exact preservation side name belonging to
+/// `session_path`. Keeping this parser shared prevents catalog scans from
+/// treating merely similar sibling files as session artifacts.
+fn preserved_newer_version_suffix<'a>(
+    session_path: &Path,
+    candidate_name: &'a str,
+) -> Option<&'a str> {
+    let session_name = session_path.file_name()?.to_str()?;
+    let suffix = candidate_name.strip_prefix(session_name)?;
+    let encoded = suffix.strip_prefix(".v")?;
+    let (version, digest_and_tail) = encoded.split_once(PRESERVED_SESSION_MARKER)?;
+    if version.is_empty() || !version.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+
+    let digest = digest_and_tail.get(..16)?;
+    if !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    let tail = &digest_and_tail[16..];
+    let valid_tail = tail.is_empty()
+        || tail.strip_prefix('-').is_some_and(|counter| {
+            !counter.is_empty() && counter.bytes().all(|b| b.is_ascii_digit())
+        })
+        || tail == PRESERVED_SESSION_MOVED_SUFFIX
+        || tail
+            .strip_prefix(PRESERVED_SESSION_MOVED_SUFFIX)
+            .and_then(|remainder| remainder.strip_prefix('-'))
+            .is_some_and(|counter| {
+                !counter.is_empty() && counter.bytes().all(|byte| byte.is_ascii_digit())
+            });
+    valid_tail.then_some(suffix)
 }
 
 #[allow(dead_code)]
@@ -88,7 +172,11 @@ pub fn clear_named_session_non_lock_artifacts(path: &Path) -> Result<NamedSessio
 
     let artifacts = named_session_artifact_paths(path);
     let recovery_artifacts = removable_recovery_artifact_paths(&artifacts.recovery)?;
-    let removed_primary = remove_artifact_if_exists(&artifacts.primary)?;
+    let mut preserved_newer_versions = Vec::new();
+    collect_preserved_newer_version_copies(path, &mut preserved_newer_versions)?;
+    let removed_preserved_newer_versions = remove_artifacts(&preserved_newer_versions)?;
+    let removed_primary =
+        remove_artifact_if_exists(&artifacts.primary)? || removed_preserved_newer_versions;
     let removed_clear_marker = remove_artifact_if_exists(&artifacts.clear_marker)?;
     let removed_backup = remove_artifact_if_exists(&artifacts.backup)?;
     let removed_backup_marker = remove_artifact_if_exists(&artifacts.backup_recovery_marker)?;

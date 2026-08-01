@@ -50,10 +50,26 @@ pub(in crate::backend::wayland) struct ClipboardPublishCompletion {
 pub(in crate::backend::wayland) enum ClipboardPasteResult {
     PrivateSelection(WayscriberClipboardSelection),
     Image(EmbeddedImage),
+    /// Outcome of an off-thread system-fingerprint probe. The paste decision
+    /// continues on the main thread, where the local fallback shapes live;
+    /// this result only carries what the probe saw.
+    SystemFingerprintProbe {
+        generation: u64,
+        expected: Option<ClipboardFingerprint>,
+        current: Option<ClipboardFingerprint>,
+    },
     ClipboardEmpty,
-    NoSupportedMime { offered: Vec<String> },
-    TooLarge { limit: usize },
-    TooManyPixels { width: u32, height: u32, limit: u64 },
+    NoSupportedMime {
+        offered: Vec<String>,
+    },
+    TooLarge {
+        limit: usize,
+    },
+    TooManyPixels {
+        width: u32,
+        height: u32,
+        limit: u64,
+    },
     DecodeFailed(String),
     ReadTimedOut,
     ClipboardUnavailable(String),
@@ -73,6 +89,15 @@ impl ClipboardPasteResult {
                 image.width,
                 image.height,
                 image.bytes.len()
+            ),
+            Self::SystemFingerprintProbe {
+                generation,
+                expected,
+                current,
+            } => format!(
+                "fingerprint-probe generation={generation} expected={} current={}",
+                expected.is_some(),
+                current.is_some()
             ),
             Self::ClipboardEmpty => "clipboard-empty".to_string(),
             Self::NoSupportedMime { offered } => {

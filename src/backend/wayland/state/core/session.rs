@@ -202,6 +202,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn clear_current_session_runtime(
         &mut self,
     ) -> Result<RuntimeClearSessionReport> {
+        ensure_destructive_session_config_available(self.session_config_failed)?;
         session_save::persistence_barrier(self)?;
         let options = self
             .session_options()
@@ -251,6 +252,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn clear_saved_tool_state_runtime(
         &mut self,
     ) -> Result<RuntimeClearToolStateReport> {
+        ensure_destructive_session_config_available(self.session_config_failed)?;
         let default_tool_state = ToolStateSnapshot::from_config(&self.config);
         let (session_path, outcome) = if let Some(options) = self.session_options().cloned() {
             let path = options.session_file_path();
@@ -442,6 +444,11 @@ fn named_candidate_snapshot(
             "named session file contains no usable session data: {}",
             options.session_file_path().display()
         )),
+        LoadSnapshotOutcome::EmptyAfterCorruption { backup_path } => Err(anyhow!(
+            "named session file could not be read: {}; a copy of it was saved to {}",
+            options.session_file_path().display(),
+            backup_path.display()
+        )),
         LoadSnapshotOutcome::NonRegularArtifact { path } => Err(anyhow!(
             "named session file is not a regular file: {}",
             path.display()
@@ -459,6 +466,15 @@ fn named_candidate_snapshot(
 
 fn session_persistence_enabled(options: &SessionOptions) -> bool {
     options.any_enabled() || options.restore_tool_state || options.persist_history
+}
+
+fn ensure_destructive_session_config_available(section_failed: bool) -> Result<()> {
+    if section_failed {
+        return Err(anyhow!(
+            "config.toml [session] could not be read; refusing to modify saved session data that default settings may mistarget - fix the section and retry"
+        ));
+    }
+    Ok(())
 }
 
 fn clear_tool_state_runtime_message(report: &RuntimeClearToolStateReport) -> String {
@@ -486,6 +502,15 @@ fn clear_tool_state_runtime_message(report: &RuntimeClearToolStateReport) -> Str
 mod tests {
     use super::*;
     use std::time::Instant;
+
+    #[test]
+    fn destructive_session_actions_fail_closed_after_session_config_fallback() {
+        let err = ensure_destructive_session_config_available(true)
+            .expect_err("default-derived session paths must not be mutated");
+        assert!(format!("{err:#}").contains("refusing to modify saved session data"));
+        ensure_destructive_session_config_available(false)
+            .expect("a successfully loaded session section permits mutations");
+    }
 
     fn session_with_pending_transition() -> crate::backend::wayland::session::SessionState {
         let options = SessionOptions::new(PathBuf::from("/tmp"), "source-output");

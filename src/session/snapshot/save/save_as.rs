@@ -1,4 +1,5 @@
 use super::*;
+use std::os::unix::fs::OpenOptionsExt;
 
 #[allow(dead_code)]
 pub(crate) fn save_snapshot_as_with_report(
@@ -58,6 +59,9 @@ pub(crate) fn save_snapshot_as_with_report(
     let mut tmp_file = OpenOptions::new()
         .write(true)
         .create_new(true)
+        // Same 0600 as the configured save: a named session holds the same
+        // drawings, and the umask default made them world-readable.
+        .mode(0o600)
         .open(&tmp_path)
         .with_context(|| {
             format!(
@@ -136,6 +140,7 @@ pub(crate) fn save_snapshot_as_with_report(
             };
             return Err(err).with_context(|| context);
         }
+        sync_session_parent_dir(&session_path, "Save Session As file")?;
         Ok::<(), anyhow::Error>(())
     })();
 

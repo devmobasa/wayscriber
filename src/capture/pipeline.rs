@@ -6,7 +6,8 @@ use crate::capture::{
     types::{
         CaptureDestination, CaptureError, CaptureResult, CaptureType,
         DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult, DocumentDeliveryRequest,
-        ImageDeliveryRequest, ImageOperationKind,
+        ImageDeliveryRequest, ImageOperationKind, RenderedDocumentDeliveryRequest,
+        RenderedImageDeliveryRequest,
     },
 };
 use tokio::task;
@@ -34,12 +35,13 @@ impl fmt::Debug for CaptureRequest {
     }
 }
 
-#[derive(Clone)]
 pub(crate) enum CaptureManagerRequest {
     Capture(CaptureRequest),
     CaptureDesktopBackdrop(DesktopBackdropCaptureRequest),
     DeliverImage(ImageDeliveryRequest),
     DeliverDocument(DocumentDeliveryRequest),
+    RenderAndDeliverImage(RenderedImageDeliveryRequest),
+    RenderAndDeliverDocument(RenderedDocumentDeliveryRequest),
 }
 
 impl CaptureManagerRequest {
@@ -49,6 +51,8 @@ impl CaptureManagerRequest {
             Self::CaptureDesktopBackdrop(request) => request.operation,
             Self::DeliverImage(request) => request.operation,
             Self::DeliverDocument(request) => request.operation,
+            Self::RenderAndDeliverImage(request) => request.operation,
+            Self::RenderAndDeliverDocument(request) => request.operation,
         }
     }
 }
@@ -79,6 +83,16 @@ impl fmt::Debug for CaptureManagerRequest {
                 .field("operation", &request.operation)
                 .field("extension", &request.document.extension)
                 .field("mime_type", &request.document.mime_type)
+                .finish(),
+            Self::RenderAndDeliverImage(request) => f
+                .debug_struct("RenderAndDeliverImage")
+                .field("destination", &request.destination)
+                .field("operation", &request.operation)
+                .finish(),
+            Self::RenderAndDeliverDocument(request) => f
+                .debug_struct("RenderAndDeliverDocument")
+                .field("destination", &request.destination)
+                .field("operation", &request.operation)
                 .finish(),
         }
     }
@@ -173,12 +187,14 @@ pub(crate) async fn perform_capture(
         }
     };
 
-    if matches!(request.destination, CaptureDestination::ClipboardAndFile)
-        && !copied_to_clipboard
-        && let Some(save_error) = save_error
-    {
-        return Err(save_error);
-    }
+    let save_error = match save_error {
+        // Neither destination delivered anything: the whole capture failed.
+        Some(err) if !copied_to_clipboard => return Err(err),
+        // The clipboard copy stands, but the caller must still learn the
+        // requested file was not written.
+        Some(err) => Some(err.to_string()),
+        None => None,
+    };
 
     Ok(CaptureResult {
         image_data,
@@ -186,6 +202,7 @@ pub(crate) async fn perform_capture(
         fallback_format_override: None,
         saved_path,
         copied_to_clipboard,
+        save_error,
     })
 }
 
@@ -249,12 +266,14 @@ pub(crate) async fn deliver_image(
         CaptureDestination::FileOnly => false,
     };
 
-    if matches!(request.destination, CaptureDestination::ClipboardAndFile)
-        && !copied_to_clipboard
-        && let Some(save_error) = save_error
-    {
-        return Err(save_error);
-    }
+    let save_error = match save_error {
+        // Neither destination delivered anything: the whole delivery failed.
+        Some(err) if !copied_to_clipboard => return Err(err),
+        // The clipboard copy stands, but the caller must still learn the
+        // requested file was not written.
+        Some(err) => Some(err.to_string()),
+        None => None,
+    };
 
     Ok(CaptureResult {
         image_data,
@@ -262,7 +281,57 @@ pub(crate) async fn deliver_image(
         fallback_format_override: request.fallback_format_override,
         saved_path,
         copied_to_clipboard,
+        save_error,
     })
+}
+
+/// Runs the deferred render on a blocking worker, then delivers like
+/// [`deliver_image`]. Keeps export render + encode off the submitting thread.
+pub(crate) async fn render_and_deliver_image(
+    request: RenderedImageDeliveryRequest,
+    dependencies: Arc<CaptureDependencies>,
+) -> Result<CaptureResult, CaptureError> {
+    log::info!("Starting deferred image render: {:?}", request.operation);
+    let render = request.render;
+    let image = task::spawn_blocking(render)
+        .await
+        .map_err(|e| CaptureError::ImageError(format!("Render task failed: {}", e)))??;
+    log::info!("Deferred image render completed: {:?}", request.operation);
+    deliver_image(
+        ImageDeliveryRequest {
+            image,
+            destination: request.destination,
+            save_config: request.save_config,
+            operation: request.operation,
+            fallback_format_override: request.fallback_format_override,
+        },
+        dependencies,
+    )
+    .await
+}
+
+/// Runs the deferred render on a blocking worker, then delivers like
+/// [`deliver_document`]. Keeps export render + encode off the submitting
+/// thread.
+pub(crate) async fn render_and_deliver_document(
+    request: RenderedDocumentDeliveryRequest,
+    dependencies: Arc<CaptureDependencies>,
+) -> Result<CaptureResult, CaptureError> {
+    log::info!("Starting deferred document render: {:?}", request.operation);
+    let render = request.render;
+    let document = task::spawn_blocking(render)
+        .await
+        .map_err(|e| CaptureError::ImageError(format!("Render task failed: {}", e)))??;
+    deliver_document(
+        DocumentDeliveryRequest {
+            document,
+            destination: request.destination,
+            save_config: request.save_config,
+            operation: request.operation,
+        },
+        dependencies,
+    )
+    .await
 }
 
 pub(crate) async fn deliver_document(
@@ -309,6 +378,7 @@ pub(crate) async fn deliver_document(
         fallback_format_override: None,
         saved_path: Some(saved_path),
         copied_to_clipboard: false,
+        save_error: None,
     })
 }
 

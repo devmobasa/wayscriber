@@ -154,104 +154,6 @@ fn commit_board_pin_toggle(
     runtime.finish_board_pin_toggle(prepared, true)
 }
 
-/// The seed inputs assembled the way `refresh_runtime_ui_config_seeds` does:
-/// board pins are synced from the config first, then folded into the registry.
-fn seeds_for_config(config: &Config) -> ValidatedInteractionSeeds {
-    let mut input = input_from_config(config);
-    input
-        .boards
-        .sync_pin_seeds_from_config(&config.resolved_boards());
-    runtime_seeds_from_config(config, &board_pin_seeds_from_input(&input))
-        .expect("probe config should produce valid seeds")
-}
-
-/// The same rule for the authored preferences that no longer travel through
-/// the writer. `ToolbarPreference::affects_runtime_ui_seeds` declares the
-/// layout mode and the section fields, because those are exactly the fields
-/// `resolved_toolbar_item_seeds` reads through the legacy fold; every other
-/// authored preference is declared seed-neutral and has to stay that way. The
-/// declared pair is a deliberate superset — a redundant reseed is idempotent,
-/// a missing one leaves overrides reconciling against a stale baseline — so
-/// only the neutral half is asserted here.
-#[test]
-fn no_undeclared_authored_preference_moves_a_runtime_seed() {
-    use crate::config::StatusBarItem;
-
-    /// One authored preference field, changed away from the shipped default.
-    type PreferenceProbe = (&'static str, fn(&mut Config));
-
-    let baseline = Config::default();
-    let baseline_seeds = seeds_for_config(&baseline);
-
-    let seed_neutral: Vec<PreferenceProbe> = vec![
-        ("icons", |config| {
-            config.ui.toolbar.use_icons = !config.ui.toolbar.use_icons;
-        }),
-        ("more colors", |config| {
-            config.ui.toolbar.show_more_colors = !config.ui.toolbar.show_more_colors;
-        }),
-        ("context-aware UI", |config| {
-            config.ui.toolbar.context_aware_ui = !config.ui.toolbar.context_aware_ui;
-        }),
-        ("preset toasts", |config| {
-            config.ui.toolbar.show_preset_toasts = !config.ui.toolbar.show_preset_toasts;
-        }),
-        ("tool preview", |config| {
-            config.ui.toolbar.show_tool_preview = !config.ui.toolbar.show_tool_preview;
-        }),
-        ("delay sliders", |config| {
-            config.ui.toolbar.show_delay_sliders = !config.ui.toolbar.show_delay_sliders;
-        }),
-        ("zoom chip", |config| {
-            config.ui.toolbar.show_zoom_chip = !config.ui.toolbar.show_zoom_chip;
-        }),
-        ("status bar", |config| {
-            config.ui.show_status_bar = !config.ui.show_status_bar;
-        }),
-        ("status bar interactivity", |config| {
-            config.ui.status_bar_interactive = !config.ui.status_bar_interactive;
-        }),
-        ("status bar item", |config| {
-            let visible = config.ui.status_bar_item_visible(StatusBarItem::Tool);
-            config
-                .ui
-                .set_status_bar_item_visible(StatusBarItem::Tool, !visible);
-        }),
-        ("status board badge", |config| {
-            config.ui.show_status_board_badge = !config.ui.show_status_board_badge;
-        }),
-        ("status page badge", |config| {
-            config.ui.show_status_page_badge = !config.ui.show_status_page_badge;
-        }),
-        ("floating badge always", |config| {
-            config.ui.show_floating_badge_always = !config.ui.show_floating_badge_always;
-        }),
-        ("floating badge", |config| {
-            config.ui.show_floating_badge = !config.ui.show_floating_badge;
-        }),
-        ("history custom section", |config| {
-            config.history.custom_section_enabled = !config.history.custom_section_enabled;
-        }),
-        ("click highlight", |config| {
-            config.ui.click_highlight.enabled = !config.ui.click_highlight.enabled;
-            config.ui.click_highlight.show_on_highlight_tool =
-                !config.ui.click_highlight.show_on_highlight_tool;
-        }),
-        ("input HUD", |config| {
-            config.ui.input_hud.enabled = !config.ui.input_hud.enabled;
-        }),
-    ];
-    for (label, change) in seed_neutral {
-        let mut config = baseline.clone();
-        change(&mut config);
-        assert_eq!(
-            seeds_for_config(&config),
-            baseline_seeds,
-            "{label} moves a runtime seed without being declared seed-moving"
-        );
-    }
-}
-
 #[test]
 fn toolbar_seed_registry_covers_every_runtime_routed_target() {
     let config = Config::default();
@@ -267,8 +169,21 @@ fn toolbar_seed_registry_covers_every_runtime_routed_target() {
         InteractionSeedTarget::TopPosition,
         InteractionSeedTarget::SidePosition,
         InteractionSeedTarget::TopDisplayMode,
+        InteractionSeedTarget::ToolbarLayoutMode,
+        InteractionSeedTarget::ClickHighlight,
+        InteractionSeedTarget::ClickHighlightToolRing,
+        InteractionSeedTarget::FloatingBadge,
+        InteractionSeedTarget::ZoomChip,
     ] {
         assert!(seeds.get(&target).is_some(), "missing seed for {target:?}");
+    }
+    for flag in crate::config::ToolbarSectionFlag::ALL {
+        assert!(
+            seeds
+                .get(&InteractionSeedTarget::SectionVisibility(flag))
+                .is_some(),
+            "missing section seed for {flag:?}"
+        );
     }
     for section in ToolbarSideSection::ALL {
         assert!(
@@ -289,7 +204,7 @@ fn toolbar_seed_registry_covers_every_runtime_routed_target() {
             seeds
                 .get(&InteractionSeedTarget::ItemVisibility(flag.item_id()))
                 .is_none(),
-            "authored section {flag:?} must not become a runtime seed"
+            "a section persists under its own target, not as an item override"
         );
     }
     for group in ToolbarItemOrderGroup::ALL {
@@ -2864,4 +2779,459 @@ fn an_authored_display_mode_edit_drops_the_stale_cycle_override() {
     );
     assert_eq!(input.toolbar_top_display_mode, TopDisplayMode::Micro);
     runtime.shutdown_blocking();
+}
+
+/// Status-bar content is chrome the user arranges from the overlay's settings
+/// popover. It used to apply to the current run only, so every toggle came
+/// back on the next launch; it now survives a restart the way the toolbars do,
+/// as a runtime override layered over the configured value, with `config.toml`
+/// still untouched.
+#[test]
+fn status_bar_content_survives_restart_without_touching_config() {
+    use crate::config::StatusBarItem;
+
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    assert!(input.status_bar_interactive, "shipped default");
+    assert!(input.status_bar_item_visible(StatusBarItem::Size));
+
+    let target = ToolbarRuntimeUiPersistenceTarget::StatusBarInteractive;
+    let prepared = runtime
+        .begin_toolbar_mutation(target, &input)
+        .expect("interactivity permit");
+    input.status_bar_interactive = false;
+    let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+    assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
+
+    let target = ToolbarRuntimeUiPersistenceTarget::StatusBarItem(StatusBarItem::Size);
+    let prepared = runtime
+        .begin_toolbar_mutation(target, &input)
+        .expect("item permit");
+    input.set_status_bar_item_visible(StatusBarItem::Size, false);
+    let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+    assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
+
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+
+    assert!(
+        !restarted_input.status_bar_interactive,
+        "clickable-segments stays off across a restart"
+    );
+    assert!(
+        !restarted_input.status_bar_item_visible(StatusBarItem::Size),
+        "a hidden segment stays hidden across a restart"
+    );
+    assert!(
+        restarted_input.status_bar_item_visible(StatusBarItem::Tool),
+        "segments the user did not touch keep their configured value"
+    );
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    restarted.shutdown_blocking();
+}
+
+/// The toolbar and status-bar preference toggles the overlay exposes are
+/// chrome the user arranges, and they used to reset on every launch. Each now
+/// survives a restart as a runtime override, with `config.toml` untouched.
+#[test]
+fn toolbar_preference_toggles_survive_restart_without_touching_config() {
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    // Flip each away from its configured value.
+    type Flip = (ToolbarRuntimeUiPersistenceTarget, fn(&mut InputState));
+    let flips: Vec<Flip> = vec![
+        (ToolbarRuntimeUiPersistenceTarget::StatusBar, |input| {
+            input.show_status_bar = !input.show_status_bar;
+        }),
+        (ToolbarRuntimeUiPersistenceTarget::ToolbarIcons, |input| {
+            input.toolbar_use_icons = !input.toolbar_use_icons;
+        }),
+        (
+            ToolbarRuntimeUiPersistenceTarget::ToolbarContextAwareUi,
+            |input| input.context_aware_ui = !input.context_aware_ui,
+        ),
+        (
+            ToolbarRuntimeUiPersistenceTarget::ToolbarDelaySliders,
+            |input| input.show_delay_sliders = !input.show_delay_sliders,
+        ),
+        (
+            ToolbarRuntimeUiPersistenceTarget::HistoryCustomSection,
+            |input| input.custom_section_enabled = !input.custom_section_enabled,
+        ),
+        (
+            ToolbarRuntimeUiPersistenceTarget::FloatingBadgeAlways,
+            |input| input.show_floating_badge_always = !input.show_floating_badge_always,
+        ),
+    ];
+
+    for (target, flip) in &flips {
+        let prepared = runtime
+            .begin_toolbar_mutation(*target, &input)
+            .unwrap_or_else(|| panic!("{target:?} permit"));
+        flip(&mut input);
+        let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+        assert!(
+            matches!(finish, ToolbarRuntimeFinish::KeepPreview),
+            "{target:?}"
+        );
+    }
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+
+    let expected_status_bar = input.show_status_bar;
+    let expected_icons = input.toolbar_use_icons;
+    let expected_context = input.context_aware_ui;
+    let expected_sliders = input.show_delay_sliders;
+    let expected_custom = input.custom_section_enabled;
+    let expected_badge = input.show_floating_badge_always;
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+
+    assert_eq!(restarted_input.show_status_bar, expected_status_bar);
+    assert_eq!(restarted_input.toolbar_use_icons, expected_icons);
+    assert_eq!(restarted_input.context_aware_ui, expected_context);
+    assert_eq!(restarted_input.show_delay_sliders, expected_sliders);
+    assert_eq!(restarted_input.custom_section_enabled, expected_custom);
+    assert_eq!(restarted_input.show_floating_badge_always, expected_badge);
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    restarted.shutdown_blocking();
+}
+
+/// A durable preference override is measured against a seed derived from the
+/// authored config, so a seed refresh — a session load, a board change, an
+/// output change — must leave it standing. If the toggle also moved the
+/// effective config, the refreshed seed would arrive already equal to the
+/// override and reconciliation would prune it as redundant, quietly undoing
+/// the persistence at the next unrelated refresh.
+#[test]
+fn a_seed_refresh_does_not_prune_persisted_preference_overrides() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    let target = ToolbarRuntimeUiPersistenceTarget::ToolbarIcons;
+    let prepared = runtime
+        .begin_toolbar_mutation(target, &input)
+        .expect("icon toggle permit");
+    input.toolbar_use_icons = !input.toolbar_use_icons;
+    let flipped = input.toolbar_use_icons;
+    runtime.finish_toolbar_mutation(prepared, true, &input);
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+
+    // Whatever else the run does, the seed baseline stays authored.
+    let mut positions = ToolbarPositionSnapshot {
+        top: (0.0, 0.0),
+        side: (0.0, 0.0),
+    };
+    runtime.refresh_config_seeds(&config, &mut input, &mut positions);
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+    assert_eq!(
+        restarted_input.toolbar_use_icons, flipped,
+        "the icon override must outlive an unrelated seed refresh"
+    );
+    restarted.shutdown_blocking();
+}
+
+/// Hiding a toolbar section is a durable choice, and it has to come back
+/// without `config.toml` moving. A section the user never touched keeps
+/// following the layout mode instead of being pinned by the restore.
+#[test]
+fn section_visibility_survives_restart_without_touching_config() {
+    use crate::config::{ToolbarSectionFlag, resolve_section_visibility};
+
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    let live = |input: &InputState, flag| {
+        resolve_section_visibility(
+            input.toolbar_layout_mode,
+            &input.toolbar_mode_overrides,
+            &input.resolved_toolbar_items,
+        )
+        .get(flag)
+    };
+
+    let toggled = ToolbarSectionFlag::Presets;
+    let untouched = ToolbarSectionFlag::Boards;
+    let untouched_before = live(&input, untouched);
+
+    let target = ToolbarRuntimeUiPersistenceTarget::NamedSection(toggled);
+    let prepared = runtime
+        .begin_toolbar_mutation(target, &input)
+        .expect("section toggle permit");
+    let flipped = !live(&input, toggled);
+    assert!(input.apply_toolbar_event(section_toggle(toggled, flipped)));
+    let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+    assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+
+    assert_eq!(
+        live(&restarted_input, toggled),
+        flipped,
+        "the toggled section must come back hidden"
+    );
+    assert_eq!(live(&restarted_input, untouched), untouched_before);
+    assert!(
+        !restarted_input
+            .toolbar_items
+            .resolved()
+            .hidden
+            .contains(&untouched.item_id())
+            && !restarted_input
+                .toolbar_items
+                .resolved()
+                .shown
+                .contains(&untouched.item_id()),
+        "an untouched section keeps following the layout mode"
+    );
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    restarted.shutdown_blocking();
+}
+
+fn section_toggle(flag: crate::config::ToolbarSectionFlag, show: bool) -> ToolbarEvent {
+    use crate::config::ToolbarSectionFlag as Flag;
+    match flag {
+        Flag::Actions => ToolbarEvent::ToggleActionsSection(show),
+        Flag::ActionsAdvanced => ToolbarEvent::ToggleActionsAdvanced(show),
+        Flag::ZoomActions => ToolbarEvent::ToggleZoomActions(show),
+        Flag::Pages => ToolbarEvent::TogglePagesSection(show),
+        Flag::Boards => ToolbarEvent::ToggleBoardsSection(show),
+        Flag::Presets => ToolbarEvent::TogglePresets(show),
+        Flag::StepSection => ToolbarEvent::ToggleStepSection(show),
+        Flag::TextControls => ToolbarEvent::ToggleTextControls(show),
+    }
+}
+
+/// Switching the toolbar layout preset is a durable choice. It restores
+/// before the section settings do, so a section the user pinned keeps its own
+/// visibility while every untouched section follows the restored preset.
+#[test]
+fn toolbar_layout_mode_survives_restart_without_touching_config() {
+    use crate::config::{ToolbarLayoutMode, ToolbarSectionFlag, resolve_section_visibility};
+
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let mut config = Config::default();
+    config.ui.toolbar.layout_mode = ToolbarLayoutMode::Regular;
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    let pinned = ToolbarSectionFlag::Presets;
+    let prepared = runtime
+        .begin_toolbar_mutation(
+            ToolbarRuntimeUiPersistenceTarget::NamedSection(pinned),
+            &input,
+        )
+        .expect("section permit");
+    assert!(input.apply_toolbar_event(section_toggle(pinned, false)));
+    runtime.finish_toolbar_mutation(prepared, true, &input);
+
+    let prepared = runtime
+        .begin_toolbar_mutation(ToolbarRuntimeUiPersistenceTarget::LayoutMode, &input)
+        .expect("layout mode permit");
+    assert!(
+        input.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Advanced
+        ))
+    );
+    let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+    assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+
+    assert_eq!(
+        restarted_input.toolbar_layout_mode,
+        ToolbarLayoutMode::Advanced
+    );
+    let sections = resolve_section_visibility(
+        restarted_input.toolbar_layout_mode,
+        &restarted_input.toolbar_mode_overrides,
+        &restarted_input.resolved_toolbar_items,
+    );
+    assert!(!sections.get(pinned), "the pinned section stays hidden");
+    let baseline = ToolbarLayoutMode::Advanced;
+    for flag in ToolbarSectionFlag::ALL {
+        if flag == pinned {
+            continue;
+        }
+        assert_eq!(
+            sections.get(flag),
+            flag.baseline(baseline, &restarted_input.toolbar_mode_overrides),
+            "{flag:?} must follow the restored preset"
+        );
+    }
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    restarted.shutdown_blocking();
+}
+
+/// The click highlight and its tool ring persist together, from the toolbar
+/// and from the keyboard alike. The keyboard path applies inside `InputState`
+/// before the backend sees it, so it hands its own pre-change values in as the
+/// rollback rather than reading them back off the live state.
+#[test]
+fn click_highlight_survives_restart_from_either_path() {
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    // The toolbar path: begin from the live state, then apply.
+    let target = ToolbarRuntimeUiPersistenceTarget::ClickHighlight;
+    let prepared = runtime
+        .begin_toolbar_mutation(target, &input)
+        .expect("click highlight permit");
+    let ring = !input.highlight_tool_ring_enabled();
+    assert!(input.apply_toolbar_event(ToolbarEvent::ToggleHighlightToolRing(ring)));
+    runtime.finish_toolbar_mutation(prepared, true, &input);
+
+    // The keyboard path: apply first, then persist from the snapshot taken
+    // before the change.
+    let previous_enabled = input.click_highlight_enabled();
+    let previous_ring = input.highlight_tool_ring_enabled();
+    let enabled = !previous_enabled;
+    assert!(input.set_click_highlight_enabled(enabled));
+    let rollback = click_highlight_values(previous_enabled, previous_ring).expect("valid rollback");
+    let prepared = runtime
+        .begin_toolbar_mutation_with_rollback(target, rollback)
+        .expect("keyboard permit");
+    let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+    assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+
+    assert_eq!(restarted_input.click_highlight_enabled(), enabled);
+    assert_eq!(restarted_input.highlight_tool_ring_enabled(), ring);
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    restarted.shutdown_blocking();
+}
+
+/// The status bar, the floating badge and the zoom chip are reachable only
+/// from the keyboard, which applies inside `InputState` before the backend
+/// sees the change. They still persist, through the same targets and the same
+/// pre-change rollback the toolbar controls use.
+#[test]
+fn keyboard_only_chrome_toggles_survive_restart_without_touching_config() {
+    const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
+    let temp = crate::test_temp::tempdir().unwrap();
+    let config_path = temp.path().join("config.toml");
+    let runtime_path = temp.path().join("data/runtime-ui.toml");
+    fs::write(&config_path, AUTHORED).unwrap();
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut runtime = test_runtime(&config, &runtime_path);
+
+    // Each entry reads its own live value, flips it, and returns both -- the
+    // shape the keyboard path has, where the change lands before the persist.
+    type Flip = (
+        ToolbarRuntimeUiPersistenceTarget,
+        fn(&mut InputState) -> (bool, bool),
+    );
+    let flips: Vec<Flip> = vec![
+        (ToolbarRuntimeUiPersistenceTarget::StatusBar, |input| {
+            let previous = input.show_status_bar;
+            input.show_status_bar = !previous;
+            (previous, input.show_status_bar)
+        }),
+        (ToolbarRuntimeUiPersistenceTarget::FloatingBadge, |input| {
+            let previous = input.show_floating_badge;
+            input.show_floating_badge = !previous;
+            (previous, input.show_floating_badge)
+        }),
+        (ToolbarRuntimeUiPersistenceTarget::ZoomChip, |input| {
+            let previous = input.show_zoom_chip;
+            input.show_zoom_chip = !previous;
+            (previous, input.show_zoom_chip)
+        }),
+        (ToolbarRuntimeUiPersistenceTarget::InputHud, |input| {
+            let previous = input.input_hud_enabled();
+            input.set_input_hud_enabled(!previous);
+            (previous, input.input_hud_enabled())
+        }),
+    ];
+
+    let mut expected = Vec::new();
+    for (target, flip) in flips {
+        let seed =
+            single_bool_seed_target(target).unwrap_or_else(|| panic!("{target:?} is a bool"));
+        let (previous, now) = flip(&mut input);
+        let rollback = RuntimeUiMutationValues::one(seed, InteractionSeedValue::Bool(previous))
+            .expect("valid rollback");
+        let prepared = runtime
+            .begin_toolbar_mutation_with_rollback(target, rollback)
+            .unwrap_or_else(|| panic!("{target:?} permit"));
+        let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
+        assert!(
+            matches!(finish, ToolbarRuntimeFinish::KeepPreview),
+            "{target:?}"
+        );
+        expected.push(now);
+    }
+    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
+    runtime.shutdown_blocking();
+
+    let mut restarted_input = input_from_config(&config);
+    let mut restarted = test_runtime(&config, &runtime_path);
+    restarted.apply_startup_state(&mut restarted_input);
+
+    assert_eq!(restarted_input.show_status_bar, expected[0]);
+    assert_eq!(restarted_input.show_floating_badge, expected[1]);
+    assert_eq!(restarted_input.show_zoom_chip, expected[2]);
+    assert_eq!(restarted_input.input_hud_enabled(), expected[3]);
+    assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
+    restarted.shutdown_blocking();
 }

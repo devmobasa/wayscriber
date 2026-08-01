@@ -32,19 +32,22 @@ pub(crate) fn render_pdf_label(
         return;
     }
 
-    ctx.select_font_face(
-        &config.font_family,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-    );
-    ctx.set_font_size(config.font_size);
+    // Pango, not Cairo's "toy" text API: the toy API does no shaping and no
+    // font fallback, so a board named in CJK, Arabic, or any script the
+    // configured family lacks came out as boxes or reordered glyphs in the
+    // exported PDF.
+    let style = crate::ui_text::UiTextStyle {
+        family: &config.font_family,
+        slant: cairo::FontSlant::Normal,
+        weight: cairo::FontWeight::Normal,
+        size: config.font_size,
+    };
 
-    let Some(text) = ellipsize_to_width(ctx, &text, available_width) else {
+    let Some(text) = ellipsize_to_width(&style, &text, available_width) else {
         return;
     };
-    let Ok(extents) = ctx.text_extents(&text) else {
-        return;
-    };
+    let layout = crate::ui_text::text_layout(ctx, style, &text, None);
+    let extents = layout.ink_extents();
     if extents.width() <= 0.0 || extents.height() <= 0.0 {
         return;
     }
@@ -78,8 +81,7 @@ pub(crate) fn render_pdf_label(
     let text_y = box_y + config.padding_y - extents.y_bearing();
     let color = config.text_color;
     ctx.set_source_rgba(color[0], color[1], color[2], color[3]);
-    ctx.move_to(text_x, text_y);
-    let _ = ctx.show_text(&text);
+    layout.show_at_baseline(ctx, text_x, text_y);
     let _ = ctx.restore();
 }
 
@@ -179,12 +181,24 @@ fn label_value<'a>(name: &str, metadata: &'a PdfPageMetadata) -> Option<&'a str>
     }
 }
 
-fn ellipsize_to_width(ctx: &cairo::Context, text: &str, max_width: f64) -> Option<String> {
-    if ctx.text_extents(text).ok()?.width() <= max_width {
+/// Trims `text` until its shaped width fits, appending an ellipsis.
+///
+/// Measures with the same shaper that paints, so a script needing fallback
+/// fonts is fitted by what will actually be drawn rather than by the toy
+/// API's idea of its width.
+fn ellipsize_to_width(
+    style: &crate::ui_text::UiTextStyle<'_>,
+    text: &str,
+    max_width: f64,
+) -> Option<String> {
+    let width_of = |candidate: &str| {
+        crate::ui_text::measure_text(*style, candidate, None).map(|extents| extents.width())
+    };
+
+    if width_of(text)? <= max_width {
         return Some(text.to_string());
     }
-    let ellipsis_width = ctx.text_extents(ELLIPSIS).ok()?.width();
-    if ellipsis_width > max_width {
+    if width_of(ELLIPSIS)? > max_width {
         return None;
     }
 
@@ -200,8 +214,7 @@ fn ellipsize_to_width(ctx: &cairo::Context, text: &str, max_width: f64) -> Optio
             .copied()
             .chain(ELLIPSIS.chars())
             .collect::<String>();
-        let width = ctx.text_extents(&candidate).ok()?.width();
-        if width <= max_width {
+        if width_of(&candidate)? <= max_width {
             best = Some(candidate);
             lo = mid + 1;
         } else if mid == 0 {
@@ -261,6 +274,55 @@ mod tests {
         let text = pdf_label_text(&config, &metadata()).expect("label text");
 
         assert_eq!(text, "5/12");
+    }
+
+    fn label_style() -> crate::ui_text::UiTextStyle<'static> {
+        crate::ui_text::UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Normal,
+            size: 12.0,
+        }
+    }
+
+    /// The reason this went through Pango: Cairo's toy text API does no
+    /// shaping and no font fallback, so scripts the configured family lacks
+    /// measured as nothing and painted as boxes in the exported PDF.
+    #[test]
+    fn non_latin_labels_measure_as_real_text() {
+        let style = label_style();
+        for text in ["ボード 1", "لوحة", "보드", "Доска"] {
+            let extents = crate::ui_text::measure_text(style, text, None).expect("shaped extents");
+            assert!(
+                extents.width() > 0.0,
+                "{text:?} measured as nothing, so it would paint as nothing"
+            );
+        }
+    }
+
+    /// Fitting uses the same shaper as painting, so a label too wide for its
+    /// box is trimmed by what will actually be drawn.
+    #[test]
+    fn ellipsizing_uses_the_shaped_width() {
+        let style = label_style();
+        let long = "ボードボードボードボードボードボード";
+        let full = crate::ui_text::measure_text(style, long, None)
+            .expect("shaped extents")
+            .width();
+
+        let fitted = ellipsize_to_width(&style, long, full / 2.0).expect("a shorter label fits");
+        assert!(fitted.ends_with(ELLIPSIS), "trimmed labels are marked");
+        assert!(fitted.chars().count() < long.chars().count());
+        let fitted_width = crate::ui_text::measure_text(style, &fitted, None)
+            .expect("shaped extents")
+            .width();
+        assert!(fitted_width <= full / 2.0, "the result actually fits");
+
+        // A label that already fits is returned untouched.
+        assert_eq!(
+            ellipsize_to_width(&style, long, full * 2.0).as_deref(),
+            Some(long)
+        );
     }
 
     #[test]

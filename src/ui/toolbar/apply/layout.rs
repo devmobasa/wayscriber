@@ -174,6 +174,20 @@ impl InputState {
         self.apply_section_flag(crate::config::ToolbarSectionFlag::TextControls, show)
     }
 
+    /// Applies a section's visibility restored from runtime-UI state.
+    ///
+    /// What persists is the explicit setting, not the visibility it resolves
+    /// to, so `Default` restores a section to following the layout mode rather
+    /// than pinning it to whatever that mode happened to show.
+    pub(crate) fn apply_section_visibility_runtime(
+        &mut self,
+        flag: crate::config::ToolbarSectionFlag,
+        setting: crate::config::ToolbarItemVisibilitySetting,
+    ) {
+        self.set_toolbar_item_visibility_setting(flag.item_id(), setting);
+        self.refresh_section_visibility();
+    }
+
     /// Section toggles record an explicit override in the item store (the
     /// single source of truth) and re-derive the mirror booleans, so the
     /// choice survives layout-mode switches.
@@ -465,6 +479,18 @@ impl InputState {
         }
         self.needs_redraw = true;
         true
+    }
+
+    /// Applies the layout preset restored from runtime-UI state.
+    ///
+    /// Restoring the mode must not re-run the preset's section defaults: the
+    /// section settings restore on their own right after this, and applying
+    /// defaults here would overwrite an explicit choice with the preset's
+    /// baseline before it got the chance.
+    pub(crate) fn apply_toolbar_layout_mode_runtime(&mut self, mode: ToolbarLayoutMode) {
+        self.toolbar_layout_mode = mode;
+        self.refresh_section_visibility();
+        self.needs_redraw = true;
     }
 
     pub(super) fn apply_toolbar_set_layout_mode(&mut self, mode: ToolbarLayoutMode) -> bool {

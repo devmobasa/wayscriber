@@ -251,6 +251,17 @@ pub(in crate::backend::wayland) fn plan_paste_completion(
             let private_payload = private_payload.expect("private payload resolution required");
             plan_private_selection_completion(request, private_payload)
         }
+        // Handled by the caller before planning, because continuing needs the
+        // current local fallback shapes; reaching this arm is a routing bug.
+        ClipboardPasteResult::SystemFingerprintProbe { .. } => {
+            log::error!(
+                "Fingerprint probe completion for request {} reached the paste planner",
+                request.id
+            );
+            TransferPlan::action(PasteAction::StaleCompletion {
+                request_id: request.id,
+            })
+        }
         ClipboardPasteResult::Image(image) => TransferPlan::with_effects(
             supersede_request_generation(&request),
             PasteAction::ApplyExternalImage { request, image },

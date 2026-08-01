@@ -163,6 +163,42 @@ fn planned_gap(plan: &TopStripPlan) -> f64 {
     }
 }
 
+/// The chrome island's button geometry for one plan.
+///
+/// Both the width planner and the tree builder need these three numbers, and
+/// each used to derive them with its own copy of the same compact/regular
+/// triple - so a retuned compact chrome could make the planned width and the
+/// painted width disagree.
+pub(super) struct ChromeMetrics {
+    pub(super) size: f64,
+    pub(super) gap: f64,
+    pub(super) margin_right: f64,
+}
+
+impl ChromeMetrics {
+    pub(super) fn for_plan(plan: &TopStripPlan) -> Self {
+        if plan.compact {
+            Self {
+                size: TOP_COMPACT_CHROME,
+                gap: TOP_COMPACT_GAP,
+                margin_right: TOP_COMPACT_MARGIN_RIGHT,
+            }
+        } else {
+            Self {
+                size: ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE,
+                gap: ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP,
+                margin_right: ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT,
+            }
+        }
+    }
+
+    /// Width of `count` chrome buttons and the gaps between them, without the
+    /// trailing margin that sits inside the pill.
+    pub(super) fn block_width(&self, count: usize) -> f64 {
+        self.size * count as f64 + self.gap * count.saturating_sub(1) as f64
+    }
+}
+
 /// `(island_gap, island_pad)` for the plan: the clear space between pill
 /// islands and the inner padding between a pill edge and its content.
 fn planned_island_metrics(plan: &TopStripPlan) -> (f64, f64) {
@@ -311,23 +347,8 @@ fn natural_width_planned_at(snapshot: &ToolbarSnapshot, plan: &TopStripPlan, hei
         return left_end;
     }
     let (island_gap, island_pad) = planned_island_metrics(plan);
-    let chrome_size = if plan.compact {
-        TOP_COMPACT_CHROME
-    } else {
-        ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE
-    };
-    let chrome_gap = if plan.compact {
-        TOP_COMPACT_GAP
-    } else {
-        ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP
-    };
-    let chrome = chrome_size * chrome_count as f64
-        + chrome_gap * chrome_count.saturating_sub(1) as f64
-        + if plan.compact {
-            TOP_COMPACT_MARGIN_RIGHT
-        } else {
-            ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT
-        };
+    let metrics = ChromeMetrics::for_plan(plan);
+    let chrome = metrics.block_width(chrome_count) + metrics.margin_right;
     // Gap to the chrome pill, its leading padding, then the chrome block
     // (which carries its own trailing margin inside the pill).
     left_end + island_gap + island_pad + chrome

@@ -118,6 +118,40 @@ pub(crate) enum InteractionSeedTarget {
     TopPosition,
     SidePosition,
     TopDisplayMode,
+    /// Whether status-bar segments respond to clicks.
+    StatusBarInteractive,
+    /// Whether one status-bar segment is shown.
+    StatusBarItem(crate::config::StatusBarItem),
+    /// The status bar as a whole.
+    StatusBar,
+    /// The board and page badges that float over the canvas.
+    StatusBoardBadge,
+    StatusPageBadge,
+    FloatingBadgeAlways,
+    /// Toolbar appearance and behaviour toggles.
+    ToolbarIcons,
+    ToolbarMoreColors,
+    ToolbarContextAwareUi,
+    ToolbarPresetToasts,
+    ToolbarToolPreview,
+    ToolbarDelaySliders,
+    /// The history pane's custom-step section.
+    HistoryCustomSection,
+    /// The input HUD.
+    InputHud,
+    /// Whether one named toolbar section is shown. Distinct from
+    /// `ItemVisibility`: a section's visibility has a layout-mode baseline and
+    /// a legacy mirror behind it, so it is seeded and restored as its own
+    /// value rather than as an individual item override.
+    SectionVisibility(crate::config::ToolbarSectionFlag),
+    /// The toolbar layout preset the strip's layout button cycles through.
+    ToolbarLayoutMode,
+    /// The click highlight, and the ring the highlight tool keeps on screen.
+    ClickHighlight,
+    ClickHighlightToolRing,
+    /// The floating board/page badge, and the zoom chip beside it.
+    FloatingBadge,
+    ZoomChip,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,6 +162,7 @@ pub(crate) enum InteractionSeedValue {
     ItemOrder(Vec<ToolbarItemId>),
     Position(ToolbarPositionSeed),
     TopDisplayMode(PersistedTopDisplayMode),
+    LayoutMode(crate::config::ToolbarLayoutMode),
 }
 
 impl InteractionSeedValue {
@@ -141,16 +176,38 @@ impl InteractionSeedValue {
                     | Target::TopMinimized
                     | Target::SideMinimized
                     | Target::CollapsedSection(_)
-                    | Target::BoardPin(_),
+                    | Target::BoardPin(_)
+                    | Target::StatusBarInteractive
+                    | Target::StatusBarItem(_)
+                    | Target::StatusBar
+                    | Target::StatusBoardBadge
+                    | Target::StatusPageBadge
+                    | Target::FloatingBadgeAlways
+                    | Target::ToolbarIcons
+                    | Target::ToolbarMoreColors
+                    | Target::ToolbarContextAwareUi
+                    | Target::ToolbarPresetToasts
+                    | Target::ToolbarToolPreview
+                    | Target::ToolbarDelaySliders
+                    | Target::HistoryCustomSection
+                    | Target::InputHud
+                    | Target::ClickHighlight
+                    | Target::ClickHighlightToolRing
+                    | Target::FloatingBadge
+                    | Target::ZoomChip,
                 Self::Bool(_),
             ) | (Target::SidePane, Self::SidePane(_))
-                | (Target::ItemVisibility(_), Self::Visibility(_))
+                | (
+                    Target::ItemVisibility(_) | Target::SectionVisibility(_),
+                    Self::Visibility(_)
+                )
                 | (Target::ItemOrder(_), Self::ItemOrder(_))
                 | (
                     Target::TopPosition | Target::SidePosition,
                     Self::Position(_)
                 )
                 | (Target::TopDisplayMode, Self::TopDisplayMode(_))
+                | (Target::ToolbarLayoutMode, Self::LayoutMode(_))
         )
     }
 }

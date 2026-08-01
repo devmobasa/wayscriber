@@ -203,6 +203,7 @@ fn named_session_options_for_catalog_item(
     item: &SessionCatalogItem,
 ) -> Result<wayscriber::session::SessionOptions, String> {
     let loaded = wayscriber::config::Config::load().map_err(|err| err.to_string())?;
+    ensure_session_config_available_for_destructive_action(&loaded)?;
     let mut options = wayscriber::session::options_from_config_for_named_file(
         &loaded.config.session,
         item.path.clone(),
@@ -210,6 +211,18 @@ fn named_session_options_for_catalog_item(
     );
     options.force_resume_persistence();
     Ok(options)
+}
+
+fn ensure_session_config_available_for_destructive_action(
+    loaded: &wayscriber::config::LoadedConfig,
+) -> Result<(), String> {
+    if loaded.section_failed("session") {
+        return Err(
+            "Clear saved tool state is disabled because config.toml [session] could not be read; fix the section and retry"
+                .to_string(),
+        );
+    }
+    Ok(())
 }
 
 fn clear_tool_state_catalog_message(

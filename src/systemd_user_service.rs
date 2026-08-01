@@ -40,14 +40,34 @@ pub fn escape_systemd_env_value(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// The system directories the unit's PATH always ends with, so helper tools
+/// resolve the same way regardless of how the service was installed.
+const BASE_SERVICE_PATH: [&str; 3] = ["/usr/local/bin", "/usr/bin", "/bin"];
+
+/// The single source for `wayscriber.service`.
+///
+/// `packaging/wayscriber.service` is this function's output for a
+/// `/usr/bin` install, pinned by `packaged_service_unit_matches_the_renderer`.
+/// The two used to be maintained by hand and had already drifted apart on the
+/// PATH they set.
 pub fn render_user_service_unit(binary_path: &Path) -> String {
     let quoted_exec = quote_systemd_exec(binary_path);
     let binary_dir = binary_path
         .parent()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|| "/usr/bin".to_string());
-    let escaped_path_env =
-        escape_systemd_env_value(&format!("{binary_dir}:/usr/local/bin:/usr/bin:/bin"));
+    // Prepended so an install outside the system directories still finds its
+    // own helpers first, and skipped when it is already one of them rather
+    // than emitting the directory twice.
+    let service_path = if BASE_SERVICE_PATH.contains(&binary_dir.as_str()) {
+        BASE_SERVICE_PATH.join(":")
+    } else {
+        std::iter::once(binary_dir.as_str())
+            .chain(BASE_SERVICE_PATH)
+            .collect::<Vec<_>>()
+            .join(":")
+    };
+    let escaped_path_env = escape_systemd_env_value(&service_path);
     format!(
         "[Unit]\nDescription=Wayscriber - Screen annotation tool for Wayland\nDocumentation=https://wayscriber.com\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n[Service]\nType=simple\nExecStartPre=/bin/sh -c '[ -n \"${WAYLAND_DISPLAY_ENV}\" ] && [ -S \"${XDG_RUNTIME_DIR_ENV}/${WAYLAND_DISPLAY_ENV}\" ]'\nExecStart={} --daemon\nRestart=on-failure\nRestartSec=5\nRestartPreventExitStatus=75\nSuccessExitStatus=75\nEnvironment=\"{PATH_ENV}={}\"\n\n[Install]\nWantedBy=graphical-session.target\n",
         quoted_exec, escaped_path_env
@@ -80,6 +100,37 @@ mod tests {
         assert_eq!(
             quote_systemd_exec(Path::new("/tmp/My Apps/wayscriber")),
             "\"/tmp/My Apps/wayscriber\""
+        );
+    }
+
+    /// `packaging/wayscriber.service` is the renderer's output for the
+    /// packaged install path, not a second hand-maintained copy. The two had
+    /// already drifted - the packaged unit set a PATH without the binary
+    /// directory the renderer prepends - which is the class of bug this pins.
+    #[test]
+    fn packaged_service_unit_matches_the_renderer() {
+        let packaged = include_str!("../packaging/wayscriber.service");
+        let rendered = render_user_service_unit(Path::new("/usr/bin/wayscriber"));
+        assert_eq!(
+            packaged, rendered,
+            "packaging/wayscriber.service is generated; write this instead:\n{rendered}"
+        );
+    }
+
+    /// An install outside the system directories puts its own directory first
+    /// so helper lookups find it, and a system install does not repeat one.
+    #[test]
+    fn service_path_lists_the_binary_directory_once() {
+        let system = render_user_service_unit(Path::new("/usr/bin/wayscriber"));
+        assert!(
+            system.contains("Environment=\"PATH=/usr/local/bin:/usr/bin:/bin\""),
+            "unexpected system PATH: {system}"
+        );
+
+        let local = render_user_service_unit(Path::new("/home/u/.local/bin/wayscriber"));
+        assert!(
+            local.contains("Environment=\"PATH=/home/u/.local/bin:/usr/local/bin:/usr/bin:/bin\""),
+            "unexpected local PATH: {local}"
         );
     }
 

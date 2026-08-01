@@ -16,7 +16,7 @@ use super::overrides::{ToolbarModeOverride, ToolbarModeOverrides};
 
 /// The section-level visibility flags with a stable item id each, so an
 /// explicit user choice survives layout-mode switches.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ToolbarSectionFlag {
     Actions,
     ActionsAdvanced,

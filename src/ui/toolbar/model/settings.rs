@@ -218,6 +218,9 @@ impl ToolbarSettingsModel {
         })
     }
 
+    /// Read by the GTK settings pane when it refreshes a toggle in place;
+    /// the built-in frontend rebuilds from the spec instead.
+    #[cfg_attr(not(feature = "toolbar-gtk"), allow(dead_code))]
     pub(crate) fn toggles(&self) -> &[ToolbarSettingsToggle] {
         &self.toggles
     }

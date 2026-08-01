@@ -3,8 +3,8 @@ use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
-    self, BORDER_BOARD_PICKER, NAV_HINT_BOARD_PICKER, OVERLAY_DIM_LIGHT, OVERLAY_DIM_MEDIUM,
-    PANEL_BG_BOARD_PICKER, RADIUS_PANEL, TEXT_HINT, TEXT_PRIMARY, TEXT_TERTIARY,
+    self, NAV_HINT_BOARD_PICKER, OVERLAY_DIM_LIGHT, OVERLAY_DIM_MEDIUM, RADIUS_PANEL, TEXT_HINT,
+    TEXT_PRIMARY, TEXT_TERTIARY,
 };
 
 mod helpers;
@@ -52,9 +52,9 @@ pub fn render_board_picker(
         layout.height,
         RADIUS_PANEL,
     );
-    constants::set_color(ctx, PANEL_BG_BOARD_PICKER);
+    constants::set_color(ctx, crate::ui::theme::popup::bg_board_picker());
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, BORDER_BOARD_PICKER);
+    constants::set_color(ctx, crate::ui::theme::popup::border_board_picker());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 

@@ -4,14 +4,13 @@ use crate::{
     input::InputState,
     onboarding::OnboardingState,
     ui::toolbar::model::{
-        ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPreApplyEffect,
-        ToolbarRuntimeUiPersistenceTarget,
+        ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPopover,
+        ToolbarPreApplyEffect, ToolbarRuntimeUiPersistenceTarget, popovers_for_event,
     },
 };
 use wayland_client::{Connection, QueueHandle};
 
 mod feedback;
-mod preferences;
 mod presets;
 pub(in crate::backend::wayland) use presets::queue_preset_action;
 mod quick_colors;
@@ -20,12 +19,6 @@ mod session;
 pub(in crate::backend::wayland::state) use session::SessionFileDialogController;
 
 use feedback::{ToolbarPinChange, pin_durability};
-use preferences::{ToolbarPreference, preference_for_event};
-#[cfg(test)]
-use preferences::{
-    ToolbarPreferenceField, UiPreferenceField, apply_toolbar_preference,
-    effective_tool_preview_value,
-};
 use session::populate_session_snapshot;
 
 fn record_drawer_hint_shown(state: &mut OnboardingState) -> bool {
@@ -42,156 +35,19 @@ fn toolbar_event_blocked_by_modal(input_state: &InputState) -> bool {
     input_state.command_palette_is_engaged()
 }
 
-/// The top overflow menu is a plain flyout: any event other than the two menu
-/// toggles dismisses it (selecting a dropped tool, an unrelated keybinding, etc.).
-fn event_dismisses_top_overflow(event: &ToolbarEvent) -> bool {
-    !matches!(
-        event,
-        ToolbarEvent::ToggleShapePicker(_) | ToolbarEvent::ToggleTopOverflow(_)
-    )
-}
-
-/// The precise-entry popup dismisses on any toolbar interaction other
-/// than its own open/commit/cancel events (mirroring the overflow flyout).
-fn event_dismisses_precision_entry(event: &ToolbarEvent) -> bool {
-    !matches!(
-        event,
-        ToolbarEvent::OpenPrecisionEntry(_)
-            | ToolbarEvent::CommitPrecisionEntry { .. }
-            | ToolbarEvent::CancelPrecisionEntry
-    )
-}
-
-/// The Shapes popover dismisses on everything the overflow does *except* its own
-/// inline options: the Fill checkbox and the polygon-sides stepper live inside
-/// the popover, so using them must not close it out from under the pointer.
-fn event_dismisses_shape_picker(event: &ToolbarEvent) -> bool {
-    event_dismisses_top_overflow(event)
-        && !matches!(
-            event,
-            ToolbarEvent::ToggleFill(_) | ToolbarEvent::NudgePolygonSides(_)
-        )
-}
-
-/// Events shared by the overflow-anchored popovers that never dismiss them:
-/// their own open/close toggles (mutual exclusion lives in the apply layer)
-/// and the internal scrollbar.
-fn event_spared_by_top_menu_popovers(event: &ToolbarEvent) -> bool {
-    matches!(
-        event,
-        ToolbarEvent::ToggleSessionPopover(_)
-            | ToolbarEvent::ToggleSettingsPopover(_)
-            | ToolbarEvent::ToggleCanvasPopover(_)
-            | ToolbarEvent::ScrollTopPopover(_)
-    )
-}
-
-/// The Canvas popover hosts the board/page/zoom/advanced/step controls, so
-/// those events must not close it out from under the pointer; everything
-/// else dismisses it like the overflow flyout.
-fn event_dismisses_canvas_popover(event: &ToolbarEvent) -> bool {
-    !event_spared_by_top_menu_popovers(event)
-        && !matches!(
-            event,
-            ToolbarEvent::BoardPrev
-                | ToolbarEvent::BoardNext
-                | ToolbarEvent::BoardNew
-                | ToolbarEvent::BoardDuplicate
-                | ToolbarEvent::BoardDelete
-                | ToolbarEvent::PagePrev
-                | ToolbarEvent::PageNext
-                | ToolbarEvent::PageNew
-                | ToolbarEvent::PageDuplicate
-                | ToolbarEvent::PageDelete
-                | ToolbarEvent::ZoomIn
-                | ToolbarEvent::ZoomOut
-                | ToolbarEvent::ResetZoom
-                | ToolbarEvent::ToggleZoomLock
-                | ToolbarEvent::UndoAll
-                | ToolbarEvent::RedoAll
-                | ToolbarEvent::UndoAllDelayed
-                | ToolbarEvent::RedoAllDelayed
-                | ToolbarEvent::ToggleFreeze
-                | ToolbarEvent::ToggleCustomSection(_)
-                | ToolbarEvent::ToggleDelaySliders(_)
-                | ToolbarEvent::SetCustomUndoSteps(_)
-                | ToolbarEvent::SetCustomRedoSteps(_)
-                | ToolbarEvent::CustomUndo
-                | ToolbarEvent::CustomRedo
-                | ToolbarEvent::SetCustomUndoDelay(_)
-                | ToolbarEvent::SetCustomRedoDelay(_)
-                | ToolbarEvent::SetUndoDelay(_)
-                | ToolbarEvent::SetRedoDelay(_)
-        )
-}
-
-/// The Session popover hosts the session controls, so those events must not
-/// close it out from under the pointer; everything else dismisses it like
-/// the overflow flyout.
-fn event_dismisses_session_popover(event: &ToolbarEvent) -> bool {
-    !event_spared_by_top_menu_popovers(event)
-        && !matches!(
-            event,
-            ToolbarEvent::OpenSession
-                | ToolbarEvent::OpenRecentSession(_)
-                | ToolbarEvent::SaveSessionAs
-                | ToolbarEvent::SaveSessionAsConfirm(_)
-                | ToolbarEvent::SaveSessionAsCancel
-                | ToolbarEvent::SessionInfo
-                | ToolbarEvent::ClearSession
-                | ToolbarEvent::OpenConfigurator
-        )
-}
-
-/// The Settings popover hosts the full Settings-pane control set (layout
-/// mode, toggles, buttons, and the customization sub-panel), so all of
-/// those events keep it open; everything else dismisses it.
-fn event_dismisses_settings_popover(event: &ToolbarEvent) -> bool {
-    !event_spared_by_top_menu_popovers(event)
-        && !matches!(
-            event,
-            ToolbarEvent::SetToolbarLayoutMode(_)
-                | ToolbarEvent::ToggleContextAwareUi(_)
-                | ToolbarEvent::ToggleIconMode(_)
-                | ToolbarEvent::ToggleTextControls(_)
-                | ToolbarEvent::ToggleStatusBar(_)
-                | ToolbarEvent::SetStatusBarInteractive(_)
-                | ToolbarEvent::SetStatusBarItemVisible(_, _)
-                | ToolbarEvent::ToggleStatusBoardBadge(_)
-                | ToolbarEvent::ToggleStatusPageBadge(_)
-                | ToolbarEvent::ToggleFloatingBadgeAlways(_)
-                | ToolbarEvent::TogglePresetToasts(_)
-                | ToolbarEvent::ToggleInputHud(_)
-                | ToolbarEvent::TogglePresets(_)
-                | ToolbarEvent::ToggleActionsSection(_)
-                | ToolbarEvent::ToggleZoomActions(_)
-                | ToolbarEvent::ToggleActionsAdvanced(_)
-                | ToolbarEvent::ToggleBoardsSection(_)
-                | ToolbarEvent::TogglePagesSection(_)
-                | ToolbarEvent::ToggleStepSection(_)
-                | ToolbarEvent::SetToolbarItemCustomizationOpen(_)
-                | ToolbarEvent::SetToolbarItemCustomizationGroup(_)
-                | ToolbarEvent::SetStatusBarContentsOpen(_)
-                | ToolbarEvent::SetToolbarItemHidden(_, _)
-                | ToolbarEvent::MoveToolbarItem { .. }
-                | ToolbarEvent::StartToolbarItemDrag { .. }
-                | ToolbarEvent::DragToolbarItemOver { .. }
-                | ToolbarEvent::ResetToolbarItemOrder(_)
-                | ToolbarEvent::ResetToolbarItemHiddenOverrides
-                | ToolbarEvent::OpenCommandPalette
-                | ToolbarEvent::OpenConfigurator
-                | ToolbarEvent::OpenConfigFile
-                | ToolbarEvent::OpenAbout
-                | ToolbarEvent::RequestRuntimeUiReset
-                | ToolbarEvent::ConfirmUnsupportedRuntimeUiReset
-                | ToolbarEvent::CancelUnsupportedRuntimeUiReset
-                | ToolbarEvent::RetryRuntimeUiPersistence
-                | ToolbarEvent::DiscardPendingRuntimeUiAndAdoptDisk
-                | ToolbarEvent::RequestPreserveInvalidRuntimeUiReset
-                | ToolbarEvent::ConfirmPreserveInvalidRuntimeUiReset
-                | ToolbarEvent::CancelPreserveInvalidRuntimeUiReset
-                | ToolbarEvent::CancelRuntimeUiRecovery
-        )
+/// Whether `event` dismisses `popover`.
+///
+/// Every popover here is a flyout: anything that is not part of it closes it.
+/// "Part of it" is declared once, as the event's owning popover in
+/// `ToolbarEventPolicy`, so a new control cannot be added to a popover and
+/// forgotten in that popover's dismissal rule - which used to close it out
+/// from under the pointer the first time the control was used.
+///
+/// The three overflow-anchored menus additionally spare each other's toggles
+/// and the shared scrollbar: switching between them is one gesture, and the
+/// switch itself is what closes the previous one.
+fn event_dismisses_popover(event: &ToolbarEvent, popover: ToolbarPopover) -> bool {
+    !popovers_for_event(event).contains(&popover)
 }
 
 impl WaylandState {
@@ -324,21 +180,21 @@ impl WaylandState {
         // Toolbar actions win over the modal sampler: cancel without sampling,
         // then apply the requested toolbar event normally.
         if self.input_state.is_precision_entry_open()
-            && event_dismisses_precision_entry(&event)
+            && event_dismisses_popover(&event, ToolbarPopover::PrecisionEntry)
             && self.input_state.cancel_precision_entry()
         {
             self.toolbar.mark_dirty();
         }
-        let dismiss_overflow =
-            self.input_state.toolbar_top_overflow_open && event_dismisses_top_overflow(&event);
-        let dismiss_shapes =
-            self.input_state.toolbar_shapes_expanded && event_dismisses_shape_picker(&event);
+        let dismiss_overflow = self.input_state.toolbar_top_overflow_open
+            && event_dismisses_popover(&event, ToolbarPopover::TopOverflow);
+        let dismiss_shapes = self.input_state.toolbar_shapes_expanded
+            && event_dismisses_popover(&event, ToolbarPopover::ShapePicker);
         let dismiss_session = self.input_state.toolbar_session_popover_open
-            && event_dismisses_session_popover(&event);
+            && event_dismisses_popover(&event, ToolbarPopover::Session);
         let dismiss_settings = self.input_state.toolbar_settings_popover_open
-            && event_dismisses_settings_popover(&event);
-        let dismiss_canvas =
-            self.input_state.toolbar_canvas_popover_open && event_dismisses_canvas_popover(&event);
+            && event_dismisses_popover(&event, ToolbarPopover::Settings);
+        let dismiss_canvas = self.input_state.toolbar_canvas_popover_open
+            && event_dismisses_popover(&event, ToolbarPopover::Canvas);
         if dismiss_overflow
             || dismiss_shapes
             || dismiss_session
@@ -396,10 +252,12 @@ impl WaylandState {
             (ToolbarBackendRoute::MoveTopToolbar, ToolbarEvent::MoveTopToolbar { x, y }) => {
                 let inline_active = self.inline_toolbars_active();
                 let coord_is_screen = inline_active;
-                drag_log(format!(
-                    "toolbar move event: kind=Top, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
-                    *x, *y, coord_is_screen, inline_active
-                ));
+                drag_log(|| {
+                    format!(
+                        "toolbar move event: kind=Top, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
+                        *x, *y, coord_is_screen, inline_active
+                    )
+                });
                 if !self.begin_toolbar_move_drag(MoveDragKind::Top, (*x, *y), coord_is_screen) {
                     return;
                 }
@@ -413,10 +271,12 @@ impl WaylandState {
             (ToolbarBackendRoute::MoveSideToolbar, ToolbarEvent::MoveSideToolbar { x, y }) => {
                 let inline_active = self.inline_toolbars_active();
                 let coord_is_screen = inline_active;
-                drag_log(format!(
-                    "toolbar move event: kind=Side, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
-                    *x, *y, coord_is_screen, inline_active
-                ));
+                drag_log(|| {
+                    format!(
+                        "toolbar move event: kind=Side, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
+                        *x, *y, coord_is_screen, inline_active
+                    )
+                });
                 if !self.begin_toolbar_move_drag(MoveDragKind::Side, (*x, *y), coord_is_screen) {
                     return;
                 }
@@ -453,10 +313,17 @@ impl WaylandState {
         };
         // Classified before the apply consumes the event; the effective config
         // is updated from the runtime state the apply leaves behind.
-        let preference = preference_for_event(&event);
         if starts_item_drag {
+            // The pairing lives in `persistence_for_event`, so a drag-start
+            // whose policy stopped naming an order group is metadata drift,
+            // not an impossible state. Refusing the drag keeps the toolbar
+            // usable; panicking here took the whole overlay down with it.
             let Some(ToolbarRuntimeUiPersistenceTarget::ItemOrder(group)) = runtime_target else {
-                unreachable!("item drag start must carry its order-group runtime target");
+                log::error!(
+                    "Ignoring a toolbar item drag: {event:?} starts one but its policy names no \
+                     order group to persist it under"
+                );
+                return;
             };
             if !self.begin_toolbar_item_drag_preview(group) {
                 return;
@@ -495,11 +362,9 @@ impl WaylandState {
                 }
             }
 
-            if let Some(preference) = preference {
-                self.apply_effective_toolbar_preference(preference);
-                if matches!(preference, ToolbarPreference::InputHud) {
-                    self.sync_input_monitor();
-                }
+            // The reader thread follows the HUD's live state, whatever moved it.
+            if runtime_target == Some(ToolbarRuntimeUiPersistenceTarget::InputHud) {
+                self.sync_input_monitor();
             }
         }
         if starts_item_drag && !applied {

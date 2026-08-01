@@ -10,9 +10,9 @@ use crate::input::state::{
 use crate::ui_text::{UiTextStyle, draw_text_baseline, measure_text};
 
 use super::constants::{
-    self, BORDER_COMMAND_PALETTE, EMPTY_COMMAND_PALETTE, EMPTY_COMMAND_SUGGESTIONS, INPUT_BG,
-    INPUT_BORDER_FOCUSED, OVERLAY_DIM_MEDIUM, PANEL_BG_COMMAND_PALETTE, RADIUS_LG, RADIUS_STD,
-    SHADOW, TEXT_DESCRIPTION, TEXT_PLACEHOLDER, TEXT_WHITE,
+    self, EMPTY_COMMAND_PALETTE, EMPTY_COMMAND_SUGGESTIONS, INPUT_BG, INPUT_BORDER_FOCUSED,
+    OVERLAY_DIM_MEDIUM, RADIUS_LG, RADIUS_STD, SHADOW, TEXT_DESCRIPTION, TEXT_PLACEHOLDER,
+    TEXT_WHITE,
 };
 use super::primitives::{draw_rounded_rect, text_extents_for};
 use super::theme::Rgba;
@@ -51,7 +51,7 @@ const FRAME_SHADOW_SOFT: (f64, f64, f64, f64) = (0.0, 0.0, 0.0, 0.22);
 const TOOLTIP_PADDING_X: f64 = 8.0;
 const TOOLTIP_PADDING_Y: f64 = 5.0;
 const TOOLTIP_POINTER_OFFSET: f64 = 12.0;
-/// Action tooltip surface: darker than PANEL_BG_COMMAND_PALETTE so the
+/// Action tooltip surface: darker than crate::ui::theme::popup::bg_command_palette() so the
 /// tooltip reads above the palette (no matching theme token; kept).
 const TOOLTIP_BG: Rgba = (0.04, 0.05, 0.07, 0.98);
 /// Scrollbar track/thumb white-alpha ladder.
@@ -393,11 +393,11 @@ fn draw_command_palette_frame(
     );
     let _ = ctx.fill();
 
-    constants::set_color(ctx, PANEL_BG_COMMAND_PALETTE);
+    constants::set_color(ctx, crate::ui::theme::popup::bg_command_palette());
     draw_rounded_rect(ctx, x, y, palette_width, height, RADIUS_LG);
     let _ = ctx.fill();
 
-    constants::set_color(ctx, BORDER_COMMAND_PALETTE);
+    constants::set_color(ctx, crate::ui::theme::popup::border_command_palette());
     draw_rounded_rect(ctx, x, y, palette_width, height, RADIUS_LG);
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();

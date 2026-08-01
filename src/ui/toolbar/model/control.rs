@@ -1,3 +1,10 @@
+// The shared toolbar model is being adopted incrementally by both frontends,
+// and this file holds staged shapes no renderer reads yet. Scoped here rather
+// than over the whole `model` module so the other ~11.5k lines - the specs,
+// snapshot mapping, and settings panes that are fully live - are policed for
+// dead code again.
+#![allow(dead_code)]
+
 use std::borrow::Cow;
 use std::collections::HashSet;
 
@@ -94,18 +101,6 @@ pub(crate) struct ToolbarControlPresentation {
     pub(crate) icon: Option<ToolbarIcon>,
     pub(crate) role: ToolbarControlRole,
     pub(crate) payload: ToolbarPresentationPayload,
-}
-
-impl ToolbarControlPresentation {
-    pub(crate) fn button(label: impl Into<Cow<'static, str>>, tooltip: ToolbarTooltip) -> Self {
-        Self {
-            label: label.into(),
-            tooltip,
-            icon: None,
-            role: ToolbarControlRole::Button,
-            payload: ToolbarPresentationPayload::None,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

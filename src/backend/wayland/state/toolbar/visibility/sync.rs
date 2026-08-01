@@ -102,10 +102,7 @@ impl WaylandState {
         if side_visible != self.toolbar.is_side_visible() {
             self.toolbar.set_side_visible(side_visible);
             self.input_state.needs_redraw = true;
-            drag_log(format!(
-                "toolbar visibility change: side -> {}",
-                side_visible
-            ));
+            drag_log(|| format!("toolbar visibility change: side -> {}", side_visible));
         }
 
         let any_visible = self.toolbar.is_visible();
@@ -128,16 +125,18 @@ impl WaylandState {
                 self.toolbar_needs_recreate(),
                 self.surface.scale()
             );
-            drag_log(format!(
-                "toolbar sync: top_offset=({}, {}), side_offset=({}, {}), inline_active={}, layer_shell={}, needs_recreate={}",
-                self.data.toolbar_top_offset,
-                self.data.toolbar_top_offset_y,
-                self.data.toolbar_side_offset,
-                self.data.toolbar_side_offset_x,
-                inline_active,
-                self.layer_shell.is_some(),
-                self.toolbar_needs_recreate()
-            ));
+            drag_log(|| {
+                format!(
+                    "toolbar sync: top_offset=({}, {}), side_offset=({}, {}), inline_active={}, layer_shell={}, needs_recreate={}",
+                    self.data.toolbar_top_offset,
+                    self.data.toolbar_top_offset_y,
+                    self.data.toolbar_side_offset,
+                    self.data.toolbar_side_offset_x,
+                    inline_active,
+                    self.layer_shell.is_some(),
+                    self.toolbar_needs_recreate()
+                )
+            });
         }
 
         // Warn the user when layer-shell is unavailable and we're forced to inline fallback.

@@ -2,8 +2,8 @@ use log::{debug, info, warn};
 
 use crate::backend::ExitAfterCaptureMode;
 use crate::config::{
-    Action, Config, ConfigSource, ConfigValidationReport, DefaultShortcutSkipped,
-    InvalidKeybinding, KeybindingConflictResolution,
+    Action, Config, ConfigSectionError, ConfigSource, ConfigValidationReport,
+    DefaultShortcutSkipped, InvalidKeybinding, KeybindingConflictResolution,
 };
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};
@@ -23,6 +23,31 @@ pub(super) struct LoadedConfig {
     /// Shortcut strings this load had to drop, and duplicates it had to
     /// resolve, in memory.
     pub(super) keybindings: ConfigValidationReport,
+    /// What of the authored file this session is not running on.
+    pub(super) load_failure: Option<ConfigLoadFailure>,
+}
+
+/// Authored configuration this load had to replace with defaults. Reported to
+/// the user like the keybinding problems below: a `log::warn` alone hid the
+/// total-loss variant of this for as long as it hid #293.
+pub(super) enum ConfigLoadFailure {
+    /// The whole file was unreadable (I/O or TOML syntax); every setting is a
+    /// default.
+    File { error: String },
+    /// Named top-level sections were unreadable; those sections are defaults,
+    /// the rest of the file is in effect.
+    Sections(Vec<ConfigSectionError>),
+}
+
+impl ConfigLoadFailure {
+    /// Whether `section` is running on defaults because authored config could
+    /// not be read. A whole-file failure necessarily includes every section.
+    pub(super) fn section_failed(&self, section: &str) -> bool {
+        match self {
+            Self::File { .. } => true,
+            Self::Sections(sections) => sections.iter().any(|entry| entry.section == section),
+        }
+    }
 }
 
 /// Reads the configuration. Nothing here writes it: `config.toml` is an
@@ -30,14 +55,38 @@ pub(super) struct LoadedConfig {
 /// mistyped shortcut, or a contested key is reported to the user instead of
 /// being repaired behind their back.
 pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
-    let (config, source, keybindings) = match Config::load() {
-        Ok(loaded) => (loaded.config, loaded.source, loaded.validation),
+    let (config, source, keybindings, load_failure) = match Config::load() {
+        Ok(loaded) => {
+            let load_failure = if loaded.section_errors.is_empty() {
+                None
+            } else {
+                warn!(
+                    "Config sections could not be read and are using defaults: {}",
+                    loaded
+                        .section_errors
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                );
+                Some(ConfigLoadFailure::Sections(loaded.section_errors))
+            };
+            (
+                loaded.config,
+                loaded.source,
+                loaded.validation,
+                load_failure,
+            )
+        }
         Err(e) => {
             warn!("Failed to load config: {}. Using defaults.", e);
             (
                 Config::default(),
                 ConfigSource::Default,
                 ConfigValidationReport::default(),
+                Some(ConfigLoadFailure::File {
+                    error: format!("{e:#}"),
+                }),
             )
         }
     };
@@ -63,7 +112,69 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
         source,
         exit_after_capture_mode,
         keybindings,
+        load_failure,
     }
+}
+
+/// Tells the user which part of their configuration this session is not
+/// running on.
+///
+/// Loading never repairs the file, so a bad value keeps coming back at every
+/// launch until the user fixes it — and they can only do that if startup says
+/// so. Before this, a single mistyped value threw away every customization in
+/// the file with nothing but a log line.
+pub(super) fn notify_config_load_failure(
+    input_state: &mut InputState,
+    tokio_handle: &tokio::runtime::Handle,
+    failure: Option<&ConfigLoadFailure>,
+) {
+    let Some(failure) = failure else {
+        return;
+    };
+
+    let (toast_text, notification_body) = match failure {
+        ConfigLoadFailure::File { error } => (
+            "Config file could not be read; all settings are using defaults".to_string(),
+            format!(
+                "{error}\nNothing was changed in {}; fix the file to get your settings back.",
+                config_path_display()
+            ),
+        ),
+        ConfigLoadFailure::Sections(sections) => {
+            let names = sections
+                .iter()
+                .map(|entry| format!("[{}]", entry.section))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let details = sections
+                .iter()
+                .map(|entry| format!("• {entry}."))
+                .collect::<Vec<_>>()
+                .join("\n");
+            (
+                format!("Config {names} could not be read; using defaults for it"),
+                format!(
+                    "{details}\nNothing was changed in {}; fix the value there to get the section back.",
+                    config_path_display()
+                ),
+            )
+        }
+    };
+
+    input_state.push_toast(
+        ToastPriority::Action,
+        "config.load-failure",
+        Toast::warning(toast_text)
+            .action("Settings", Action::OpenConfigurator)
+            .duration_ms(KEYBINDING_CONFLICT_TOAST_MS),
+    );
+    notification::send_notification_with_timeout_async(
+        tokio_handle,
+        "Configuration Not Loaded".to_string(),
+        notification_body,
+        Some("dialog-warning".to_string()),
+        KEYBINDING_CONFLICT_NOTIFICATION_TIMEOUT_MS,
+    );
 }
 
 /// Tells the user which shortcut collided and which action lost it.
@@ -544,6 +655,53 @@ mod tests {
                 ExitAfterCaptureMode::Auto
             ));
             assert!(!loaded.config.capture.exit_after_capture);
+            assert!(
+                matches!(loaded.load_failure, Some(ConfigLoadFailure::File { .. })),
+                "a total fallback must be reported, not only logged"
+            );
+            assert!(
+                loaded
+                    .load_failure
+                    .as_ref()
+                    .is_some_and(|failure| failure.section_failed("session")),
+                "a whole-file fallback must fail closed for session mutations"
+            );
+        });
+    }
+
+    /// One bad value costs its own section for the session; everything else
+    /// the user authored stays in effect, and startup says which section is
+    /// running on defaults.
+    #[test]
+    fn load_keeps_the_rest_of_the_file_when_one_section_is_invalid() {
+        with_temp_config_home(|_| {
+            let path = Config::get_config_path().expect("config path");
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("create config dir");
+            }
+            let original = "[ui]\ntheme = \"drak\"\n\n[capture]\nexit_after_capture = true\n";
+            fs::write(&path, original).expect("write config with a bad value");
+
+            let loaded = load(ExitAfterCaptureMode::Auto);
+
+            assert!(matches!(loaded.source, ConfigSource::Primary));
+            assert!(
+                loaded.config.capture.exit_after_capture,
+                "sections that map cleanly must stay in effect"
+            );
+            let Some(ConfigLoadFailure::Sections(sections)) = &loaded.load_failure else {
+                panic!("expected a per-section load failure report");
+            };
+            assert_eq!(sections.len(), 1);
+            assert_eq!(sections[0].section, "ui");
+            let failure = loaded.load_failure.as_ref().expect("section failure");
+            assert!(failure.section_failed("ui"));
+            assert!(!failure.section_failed("session"));
+            assert_eq!(
+                fs::read_to_string(&path).expect("read config"),
+                original,
+                "loading repairs the session, never the file"
+            );
         });
     }
 }

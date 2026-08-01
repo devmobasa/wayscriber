@@ -426,6 +426,10 @@ async fn deliver_image_clipboard_and_file_keeps_clipboard_success_when_file_fail
 
     assert!(result.saved_path.is_none());
     assert!(result.copied_to_clipboard);
+    assert!(
+        result.save_error.is_some(),
+        "the clipboard success must not swallow the save failure"
+    );
     assert_eq!(*clipboard.calls.lock().unwrap(), 1);
 }
 
@@ -606,6 +610,10 @@ async fn test_perform_capture_clipboard_and_file_save_failure_still_copies() {
     let result = perform_capture(request, Arc::new(deps)).await.unwrap();
     assert!(result.saved_path.is_none());
     assert!(result.copied_to_clipboard);
+    assert!(
+        result.save_error.is_some(),
+        "the clipboard success must not swallow the save failure"
+    );
     assert_eq!(*saver_handle.calls.lock().unwrap(), 1);
     assert_eq!(*clipboard_handle.calls.lock().unwrap(), 1);
 }

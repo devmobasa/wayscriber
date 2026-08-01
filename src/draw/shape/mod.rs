@@ -12,7 +12,6 @@ pub use polygon::{
     PolygonKind, REGULAR_POLYGON_DEFAULT_SIDES, REGULAR_POLYGON_MAX_SIDES,
     REGULAR_POLYGON_MIN_SIDES, clamp_regular_sides,
 };
-pub use text_cache::invalidate_text_cache;
 pub use types::{
     ArrowLabel, BlurStyle, EmbeddedImage, EraserBrush, EraserKind, Shape, StepMarkerLabel,
 };

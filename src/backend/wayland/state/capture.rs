@@ -205,20 +205,11 @@ impl WaylandState {
             }
         };
 
+        // Render on the capture worker, not here: re-rendering the canvas at
+        // physical resolution plus PNG encoding froze event dispatch for the
+        // whole export on large surfaces.
         let snapshot = self.canvas_export_snapshot();
-        let rendered = match render_canvas_png(&snapshot) {
-            Ok(rendered) => rendered,
-            Err(err) => {
-                let message = ImageOperationKind::CanvasExport.format_error(&err);
-                log::error!("Canvas export failed: {}", message);
-                self.input_state.push_toast(
-                    ToastPriority::Critical,
-                    "capture",
-                    Toast::error(message),
-                );
-                return;
-            }
-        };
+        let render: crate::capture::ImageRenderJob = Box::new(move || render_canvas_png(&snapshot));
 
         let save_config = if matches!(destination, CaptureDestination::ClipboardOnly) {
             None
@@ -226,7 +217,9 @@ impl WaylandState {
             Some(FileSaveConfig {
                 save_directory: expand_tilde(&self.config.capture.save_directory),
                 filename_template: self.config.capture.filename_template.clone(),
-                format: rendered.format.extension.clone(),
+                // The delivery pipeline replaces this with the rendered
+                // image's real extension.
+                format: ImageFormatMetadata::png().extension,
             })
         };
 
@@ -234,15 +227,18 @@ impl WaylandState {
         self.capture.set_exit_on_success(exit_on_success);
         self.capture.mark_in_progress();
 
-        let request = ImageDeliveryRequest {
-            image: rendered,
+        let request = crate::capture::RenderedImageDeliveryRequest {
+            render,
             destination,
             save_config,
             operation: ImageOperationKind::CanvasExport,
             fallback_format_override: Some(ImageFormatMetadata::png()),
         };
 
-        let submission = self.capture.manager_mut().request_image_delivery(request);
+        let submission = self
+            .capture
+            .manager_mut()
+            .request_rendered_image_delivery(request);
         self.accept_capture_submission(submission, ImageOperationKind::CanvasExport);
     }
 

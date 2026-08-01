@@ -16,8 +16,7 @@ use super::super::node::{
 };
 use super::super::tree::WidgetTree;
 use super::{
-    MINI_LABEL_FONT_SIZE, TOP_CHIP_SIZE, TOP_COMPACT_CHROME, TOP_COMPACT_GAP,
-    TOP_COMPACT_MARGIN_RIGHT, TOP_DIVIDER_SPAN, TOP_LABEL_FONT_SIZE, TOP_SWATCH_GAP,
+    MINI_LABEL_FONT_SIZE, TOP_CHIP_SIZE, TOP_DIVIDER_SPAN, TOP_LABEL_FONT_SIZE, TOP_SWATCH_GAP,
     TOP_SWATCH_SIZE, TopStripPlan, bar_band_height, base_bar_height, planned_button_size,
     planned_gap, planned_island_metrics, planned_use_icons,
 };
@@ -282,26 +281,13 @@ pub(super) fn build_top_view_planned(
     }
 
     // --- Right-aligned chrome island --------------------------------------------
-    let chrome_size = if plan.compact {
-        TOP_COMPACT_CHROME
-    } else {
-        ToolbarLayoutSpec::TOP_PIN_BUTTON_SIZE
-    };
+    let chrome_metrics = super::ChromeMetrics::for_plan(plan);
+    let chrome_size = chrome_metrics.size;
+    let chrome_gap = chrome_metrics.gap;
     let chrome_y = (base_height - chrome_size) / 2.0;
-    let chrome_gap = if plan.compact {
-        TOP_COMPACT_GAP
-    } else {
-        ToolbarLayoutSpec::TOP_PIN_BUTTON_GAP
-    };
-    let chrome_margin_right = if plan.compact {
-        TOP_COMPACT_MARGIN_RIGHT
-    } else {
-        ToolbarLayoutSpec::TOP_PIN_BUTTON_MARGIN_RIGHT
-    };
     let chrome_count = spec.chrome().len();
-    let chrome_width =
-        chrome_size * chrome_count as f64 + chrome_gap * chrome_count.saturating_sub(1) as f64;
-    let mut chrome_x = width - chrome_margin_right - chrome_width;
+    let chrome_width = chrome_metrics.block_width(chrome_count);
+    let mut chrome_x = width - chrome_metrics.margin_right - chrome_width;
     if chrome_count > 0 {
         let pill_left = chrome_x - island_pad;
         tree.push(WidgetNode::decor(

@@ -83,6 +83,76 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0] }
     });
 }
 
+/// A value serde cannot map costs its own section for the session — not the
+/// whole file. Before this, one typo threw away every customization with only
+/// a log line, the total-loss variant of #293.
+#[test]
+fn a_bad_value_in_one_section_keeps_every_other_section() {
+    with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).unwrap();
+        let config_file = config_dir.join("config.toml");
+        let original = "[ui]\ntheme = \"drak\"\nshow_status_bar = false\n\n\
+                        [drawing]\ndefault_thickness = 7.0\n\n\
+                        [capture]\nexit_after_capture = true\n";
+        fs::write(&config_file, original).unwrap();
+
+        let loaded = Config::load().expect("a value error must not fail the load");
+
+        assert_eq!(loaded.config.drawing.default_thickness, 7.0);
+        assert!(loaded.config.capture.exit_after_capture);
+        assert!(
+            loaded.config.ui.show_status_bar,
+            "the section holding the bad value falls back to defaults as a whole"
+        );
+        assert_eq!(loaded.section_errors.len(), 1);
+        assert_eq!(loaded.section_errors[0].section, "ui");
+        assert_eq!(
+            fs::read_to_string(&config_file).unwrap(),
+            original,
+            "loading repairs the session, never the file"
+        );
+    });
+}
+
+/// A top-level scalar gets the same treatment as a section.
+#[test]
+fn a_bad_top_level_value_reports_its_own_key() {
+    with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).unwrap();
+        let config_file = config_dir.join("config.toml");
+        fs::write(
+            &config_file,
+            "config_revision = \"three\"\n\n[drawing]\ndefault_thickness = 7.0\n",
+        )
+        .unwrap();
+
+        let loaded = Config::load().expect("a value error must not fail the load");
+
+        assert_eq!(loaded.config.drawing.default_thickness, 7.0);
+        assert_eq!(loaded.section_errors.len(), 1);
+        assert_eq!(loaded.section_errors[0].section, "config_revision");
+        assert_eq!(
+            loaded.config.config_revision, 0,
+            "an unreadable revision behaves like a legacy file without one"
+        );
+    });
+}
+
+/// There is no parsed document to salvage from, so a syntax error still fails
+/// the load (and the caller reports the total fallback).
+#[test]
+fn a_syntax_error_still_fails_the_load() {
+    with_temp_config_home(|config_root| {
+        let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::write(config_dir.join("config.toml"), "not = [valid").unwrap();
+
+        assert!(Config::load().is_err());
+    });
+}
+
 /// Clamping is a load-time repair of the running session, not an edit. A save
 /// that follows it must leave the authored number alone so the user still sees
 /// (and can fix) what they wrote (#293).
@@ -454,6 +524,109 @@ fn save_with_backup_preserves_symlinked_config_target_and_backup_contents() {
             "symlink target permissions should be preserved"
         );
     });
+}
+
+/// Every value in `config.example.toml` claims to be a configured default.
+/// This pins that claim: the example parsed as a `Config` must serialize to
+/// the same tree as `Config::default()`, so a default changed in code without
+/// updating the example (or vice versa) fails here instead of drifting.
+#[test]
+fn config_example_values_equal_the_compiled_defaults() {
+    // Values with a documented reason to differ. Page navigation used to be
+    // listed here too; the comparison now scrubs the desktop environment
+    // instead, so the example's non-GNOME variant is checked everywhere.
+    // - boards.items, drawing.quick_colors, presets.slot_1, and the toolbar
+    //   order lists spell out effective built-in defaults for fields whose
+    //   compiled default is "unset" (or, for boards, author colors in the
+    //   friendlier `{ rgb = ... }` syntax that serializes differently).
+    //   boards.items also hides a known internal inconsistency: the serde
+    //   field default for auto_adjust_pen is true while the hand-built
+    //   transparent default is false.
+    const ALLOWED_DRIFT: &[&str] = &[
+        "boards.items",
+        "drawing.quick_colors",
+        "presets.slot_1",
+        "ui.toolbar.items.order",
+    ];
+
+    // Both sides are built under the same scrubbed environment: parsing the
+    // example runs serde's default functions for every key it omits, and some
+    // of those consult the desktop environment, so computing one side under
+    // GNOME and the other without it compares two different machines.
+    let (example, defaults) = crate::test_env::with_scrubbed_desktop_env(|| {
+        let example = include_str!("../../../config.example.toml");
+        let example: Config = toml::from_str(example).expect("config.example.toml should parse");
+        (
+            toml::Value::try_from(example).expect("serialize example config"),
+            toml::Value::try_from(Config::default()).expect("serialize default config"),
+        )
+    });
+
+    let mut drifts = Vec::new();
+    collect_value_drifts("", &example, &defaults, &mut drifts);
+    // Match the allowlist against whole path segments: a bare `starts_with`
+    // over `presets.slot_1` would also exempt a future `presets.slot_10`.
+    drifts.retain(|drift| {
+        !ALLOWED_DRIFT
+            .iter()
+            .any(|allowed| drift.path == *allowed || drift.path.starts_with(&format!("{allowed}.")))
+    });
+    assert!(
+        drifts.is_empty(),
+        "config.example.toml drifted from Config::default():\n{}",
+        drifts
+            .iter()
+            .map(|drift| format!("{}: {}", drift.path, drift.detail))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+/// One disagreement between the example and the compiled defaults. The path
+/// is kept separate from the prose so the allowlist can match path segments
+/// rather than message prefixes.
+struct ValueDrift {
+    path: String,
+    detail: String,
+}
+
+fn collect_value_drifts(
+    path: &str,
+    example: &toml::Value,
+    defaults: &toml::Value,
+    drifts: &mut Vec<ValueDrift>,
+) {
+    match (example, defaults) {
+        (toml::Value::Table(example), toml::Value::Table(defaults)) => {
+            let missing = defaults.keys().filter(|key| !example.contains_key(*key));
+            for key in example.keys().chain(missing) {
+                let child = if path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{path}.{key}")
+                };
+                match (example.get(key), defaults.get(key)) {
+                    (Some(example), Some(defaults)) => {
+                        collect_value_drifts(&child, example, defaults, drifts)
+                    }
+                    (Some(example), None) => drifts.push(ValueDrift {
+                        path: child,
+                        detail: format!("example has {example}, defaults omit it"),
+                    }),
+                    (None, Some(defaults)) => drifts.push(ValueDrift {
+                        path: child,
+                        detail: format!("defaults have {defaults}, example omits it"),
+                    }),
+                    (None, None) => unreachable!(),
+                }
+            }
+        }
+        (example, defaults) if example == defaults => {}
+        (example, defaults) => drifts.push(ValueDrift {
+            path: path.to_string(),
+            detail: format!("example {example} vs default {defaults}"),
+        }),
+    }
 }
 
 #[test]

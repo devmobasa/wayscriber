@@ -767,6 +767,77 @@ pub fn current() -> &'static Theme {
     CURRENT.get_or_init(Theme::dark)
 }
 
+/// Popup surface colors used by the legacy popup renderers.
+///
+/// These renderers still use the dark overlay palette for text, inputs, hover
+/// states, dividers, and nested cards. Switching only their outer card to the
+/// light theme makes near-white text disappear on a white surface. Keep the
+/// complete legacy palette together until each popup migrates all of its
+/// tokens; a partial surface-only migration is less usable than a consistently
+/// dark popup.
+pub mod popup {
+    use super::{Rgba, current, overlay};
+
+    /// Resolution split from the accessors so it can be exercised against
+    /// both variants: `current()` is a process-wide `OnceLock`, so a test
+    /// cannot install one theme and then the other.
+    pub(crate) fn surface_for(_theme: &super::Theme, dark: Rgba) -> Rgba {
+        dark
+    }
+
+    pub(crate) fn border_for(_theme: &super::Theme, dark: Rgba) -> Rgba {
+        dark
+    }
+
+    fn surface(dark: Rgba) -> Rgba {
+        surface_for(current(), dark)
+    }
+
+    fn border(dark: Rgba) -> Rgba {
+        border_for(current(), dark)
+    }
+
+    pub fn bg_context_menu() -> Rgba {
+        surface(overlay::PANEL_BG_CONTEXT_MENU)
+    }
+
+    pub fn bg_board_picker() -> Rgba {
+        surface(overlay::PANEL_BG_BOARD_PICKER)
+    }
+
+    pub fn bg_properties() -> Rgba {
+        surface(overlay::PANEL_BG_PROPERTIES)
+    }
+
+    pub fn bg_command_palette() -> Rgba {
+        surface(overlay::PANEL_BG_COMMAND_PALETTE)
+    }
+
+    pub fn bg_modal() -> Rgba {
+        surface(overlay::PANEL_BG_MODAL)
+    }
+
+    pub fn border_context_menu() -> Rgba {
+        border(overlay::BORDER_CONTEXT_MENU)
+    }
+
+    pub fn border_board_picker() -> Rgba {
+        border(overlay::BORDER_BOARD_PICKER)
+    }
+
+    pub fn border_properties() -> Rgba {
+        border(overlay::BORDER_PROPERTIES)
+    }
+
+    pub fn border_command_palette() -> Rgba {
+        border(overlay::BORDER_COMMAND_PALETTE)
+    }
+
+    pub fn border_modal() -> Rgba {
+        border(overlay::BORDER_MODAL)
+    }
+}
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -973,5 +1044,73 @@ mod tests {
         let (mid_bg, mid_text) = Theme::status_palette_for_background(0.5, 0.5, 0.5);
         assert_eq!(mid_bg, [0.85, 0.85, 0.85, 0.85]);
         assert_eq!(mid_text, [0.0, 0.0, 0.0, 1.0]);
+    }
+}
+
+#[cfg(test)]
+mod popup_theme_tests {
+    use super::{Theme, overlay, popup};
+
+    /// Dark chrome must be byte-identical to the const tokens it shipped
+    /// with: the popups deliberately differ in tint and translucency, and
+    /// this change is about light mode, not a dark restyle.
+    #[test]
+    fn dark_popups_keep_their_exact_const_tokens() {
+        let dark = Theme::dark();
+        for (resolved, token) in [
+            (
+                popup::surface_for(&dark, overlay::PANEL_BG_CONTEXT_MENU),
+                overlay::PANEL_BG_CONTEXT_MENU,
+            ),
+            (
+                popup::surface_for(&dark, overlay::PANEL_BG_BOARD_PICKER),
+                overlay::PANEL_BG_BOARD_PICKER,
+            ),
+            (
+                popup::surface_for(&dark, overlay::PANEL_BG_PROPERTIES),
+                overlay::PANEL_BG_PROPERTIES,
+            ),
+            (
+                popup::surface_for(&dark, overlay::PANEL_BG_COMMAND_PALETTE),
+                overlay::PANEL_BG_COMMAND_PALETTE,
+            ),
+            (
+                popup::surface_for(&dark, overlay::PANEL_BG_MODAL),
+                overlay::PANEL_BG_MODAL,
+            ),
+            (
+                popup::border_for(&dark, overlay::BORDER_MODAL),
+                overlay::BORDER_MODAL,
+            ),
+        ] {
+            assert_eq!(resolved, token);
+        }
+    }
+
+    /// A popup cannot migrate only its outer surface: its foreground, input,
+    /// hover, divider, and nested-card tokens have to move as one palette or
+    /// the light surface leaves the existing near-white text unreadable.
+    #[test]
+    fn light_mode_keeps_the_complete_legacy_popup_palette_together() {
+        let light = Theme::light();
+
+        for token in [
+            overlay::PANEL_BG_CONTEXT_MENU,
+            overlay::PANEL_BG_BOARD_PICKER,
+            overlay::PANEL_BG_PROPERTIES,
+            overlay::PANEL_BG_COMMAND_PALETTE,
+            overlay::PANEL_BG_MODAL,
+        ] {
+            assert_eq!(
+                popup::surface_for(&light, token),
+                token,
+                "surface-only theming would make the legacy light text unreadable"
+            );
+        }
+
+        assert_eq!(
+            popup::border_for(&light, overlay::BORDER_MODAL),
+            overlay::BORDER_MODAL
+        );
     }
 }

@@ -46,6 +46,14 @@ fn clear_named_session_non_lock_artifacts_preserves_lock_and_sibling() {
     }
     let rotated_recovery = PathBuf::from(format!("{}.old", artifacts.recovery.display()));
     std::fs::write(&rotated_recovery, b"rotated").unwrap();
+    let preserved = append_path_suffix(&artifacts.primary, ".v2-preserved-0123456789abcdef");
+    let preserved_moved =
+        append_path_suffix(&artifacts.primary, ".v3-preserved-fedcba9876543210-moved-1");
+    let similar_sibling =
+        append_path_suffix(&artifacts.primary, ".version-preserved-not-a-session");
+    std::fs::write(&preserved, b"newer").unwrap();
+    std::fs::write(&preserved_moved, b"newer moved").unwrap();
+    std::fs::write(&similar_sibling, b"sibling").unwrap();
 
     let outcome = clear_named_session_non_lock_artifacts(&path).unwrap();
 
@@ -61,6 +69,8 @@ fn clear_named_session_non_lock_artifacts_preserves_lock_and_sibling() {
         &artifacts.recovery_recoverable_marker,
         &artifacts.clear_marker,
         &rotated_recovery,
+        &preserved,
+        &preserved_moved,
     ] {
         assert!(!path.exists(), "{} should be removed", path.display());
     }
@@ -68,6 +78,10 @@ fn clear_named_session_non_lock_artifacts_preserves_lock_and_sibling() {
     assert!(sibling_artifacts.primary.exists());
     assert!(sibling_artifacts.backup.exists());
     assert!(sibling_artifacts.lock.exists());
+    assert!(
+        similar_sibling.exists(),
+        "similar sibling must be preserved"
+    );
 }
 
 #[test]

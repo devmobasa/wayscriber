@@ -2,59 +2,9 @@ use super::helpers;
 use super::*;
 use crate::util::Rect;
 
-// NOTE: The renderer now uses per-buffer damage tracking via BufferDamageTracker.
+// NOTE: The renderer uses per-buffer damage tracking via BufferDamageTracker.
 // Each buffer slot is tracked by its canvas memory address (stable across SlotPool
-// reuse), ensuring correct incremental damage with multi-buffering. These helper
-// functions are used for diagnostic logging and damage region processing.
-#[test]
-fn resolve_damage_returns_full_when_empty() {
-    let regions = helpers::resolve_damage_regions(1920, 1080, Vec::new());
-    assert_eq!(regions.len(), 1);
-    assert_eq!(regions[0], Rect::new(0, 0, 1920, 1080).unwrap());
-}
-
-#[test]
-fn resolve_damage_filters_invalid_rects() {
-    let regions = helpers::resolve_damage_regions(
-        800,
-        600,
-        vec![
-            Rect {
-                x: 10,
-                y: 10,
-                width: 50,
-                height: 40,
-            },
-            Rect {
-                x: 0,
-                y: 0,
-                width: 0,
-                height: 10,
-            },
-        ],
-    );
-
-    assert_eq!(regions.len(), 1);
-    assert_eq!(regions[0], Rect::new(10, 10, 50, 40).unwrap());
-}
-
-#[test]
-fn resolve_damage_preserves_existing_regions() {
-    let regions = helpers::resolve_damage_regions(
-        800,
-        600,
-        vec![Rect {
-            x: 5,
-            y: 5,
-            width: 20,
-            height: 30,
-        }],
-    );
-
-    assert_eq!(regions.len(), 1);
-    assert_eq!(regions[0], Rect::new(5, 5, 20, 30).unwrap());
-}
-
+// reuse), ensuring correct incremental damage with multi-buffering.
 #[test]
 fn per_buffer_damage_tracking_is_implemented() {
     // The BufferDamageTracker tracks damage per buffer slot using the canvas
@@ -146,8 +96,8 @@ fn damage_summary_truncates_after_five_regions() {
 }
 
 #[test]
-fn resolve_then_scale_damage_regions_keeps_full_region() {
-    let regions = helpers::resolve_damage_regions(100, 50, Vec::new());
+fn scale_damage_regions_scales_by_buffer_scale() {
+    let regions = vec![Rect::new(0, 0, 100, 50).unwrap()];
     let scaled = scale_damage_regions(regions, 2);
     assert_eq!(scaled.len(), 1);
     assert_eq!(scaled[0], Rect::new(0, 0, 200, 100).unwrap());
