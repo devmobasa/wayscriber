@@ -148,7 +148,10 @@ impl InputState {
                 self.close_context_menu();
             }
             MenuCommand::ToggleHighlightTool => {
-                self.toggle_all_highlights();
+                // Through the action, not the primitive: the action is what
+                // queues the durable click-highlight change, and the other
+                // chrome commands in this menu already route the same way.
+                self.handle_action(Action::ToggleHighlightTool);
                 self.close_context_menu();
             }
             MenuCommand::OpenPagesMenu => {

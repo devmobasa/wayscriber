@@ -134,6 +134,7 @@ pub(super) fn handle_pending_actions(
         state.handle_zoom_action(action);
     }
     state.sync_zoom_board_mode();
+    state.sync_input_monitor_if_changed();
 
     handle_capture_results(state);
 }

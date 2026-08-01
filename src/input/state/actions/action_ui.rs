@@ -40,6 +40,9 @@ impl InputState {
                     return true;
                 }
                 self.break_focus_mode();
+                self.queue_toolbar_persistence(PendingToolbarPersistence::StatusBar {
+                    previous: self.show_status_bar,
+                });
                 self.show_status_bar = !self.show_status_bar;
                 // Redraw only. Status-bar visibility is a this-run preference
                 // that no longer enters `ToolStateSnapshot`, so marking the
@@ -56,6 +59,9 @@ impl InputState {
             }
             Action::ToggleFloatingBadge => {
                 self.break_focus_mode();
+                self.queue_toolbar_persistence(PendingToolbarPersistence::FloatingBadge {
+                    previous: self.show_floating_badge,
+                });
                 self.show_floating_badge = !self.show_floating_badge;
                 info!(
                     "Floating board/page badge {}",
@@ -71,6 +77,9 @@ impl InputState {
             }
             Action::ToggleZoomChip => {
                 self.break_focus_mode();
+                self.queue_toolbar_persistence(PendingToolbarPersistence::ZoomChip {
+                    previous: self.show_zoom_chip,
+                });
                 self.show_zoom_chip = !self.show_zoom_chip;
                 info!(
                     "Zoom chip {}",
@@ -88,7 +97,13 @@ impl InputState {
                 if self.presenter_mode && self.presenter_mode_config.enable_click_highlight {
                     return true;
                 }
+                let previous_enabled = self.click_highlight_enabled();
+                let previous_tool_ring = self.highlight_tool_ring_enabled();
                 let enabled = self.toggle_click_highlight();
+                self.queue_toolbar_persistence(PendingToolbarPersistence::ClickHighlight {
+                    previous_enabled,
+                    previous_tool_ring,
+                });
                 let message = if enabled {
                     "Click highlight enabled"
                 } else {
@@ -103,7 +118,9 @@ impl InputState {
                 if self.presenter_mode && self.presenter_mode_config.enable_input_hud {
                     return true;
                 }
+                let previous = self.input_hud_enabled();
                 let enabled = self.toggle_input_hud();
+                self.queue_toolbar_persistence(PendingToolbarPersistence::InputHud { previous });
                 if enabled {
                     // The effective source is only known after the backend
                     // reconciles the reader thread; the enable announcement is

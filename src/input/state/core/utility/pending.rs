@@ -61,6 +61,21 @@ impl InputState {
                 previous_top_pinned != self.toolbar_top_pinned
                     || previous_side_pinned != self.toolbar_side_pinned
             }
+            PendingToolbarPersistence::StatusBar { previous } => previous != self.show_status_bar,
+            PendingToolbarPersistence::FloatingBadge { previous } => {
+                previous != self.show_floating_badge
+            }
+            PendingToolbarPersistence::ZoomChip { previous } => previous != self.show_zoom_chip,
+            PendingToolbarPersistence::InputHud { previous } => {
+                previous != self.input_hud_enabled()
+            }
+            PendingToolbarPersistence::ClickHighlight {
+                previous_enabled,
+                previous_tool_ring,
+            } => {
+                previous_enabled != self.click_highlight_enabled()
+                    || previous_tool_ring != self.highlight_tool_ring_enabled()
+            }
         });
         entries
     }

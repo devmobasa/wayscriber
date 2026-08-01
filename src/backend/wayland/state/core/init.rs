@@ -243,6 +243,7 @@ impl WaylandState {
             input_monitor: None,
             input_hud_system_warned: false,
             input_hud_announce_pending: false,
+            last_input_hud_request: None,
             session_dialog: super::super::toolbar::SessionFileDialogController::new(runtime_wake),
             durable_action_finish: None,
             durable_action_retry_at: None,
