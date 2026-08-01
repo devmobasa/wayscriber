@@ -70,6 +70,12 @@ impl InputState {
 
     /// Take the pending source announcement set by a runtime enable; the
     /// backend consumes it after reconciling the reader thread.
+    /// Whether an announcement is waiting, without consuming it: the
+    /// event-loop reconciliation checks this to decide whether to sync at all.
+    pub fn has_input_hud_source_announce(&self) -> bool {
+        self.input_hud.has_source_announce()
+    }
+
     pub fn take_input_hud_source_announce(&mut self) -> bool {
         self.input_hud.take_source_announce()
     }

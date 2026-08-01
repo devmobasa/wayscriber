@@ -164,6 +164,11 @@ impl InputHudState {
         self.enabled
     }
 
+    /// Whether a source announcement is waiting, without consuming it.
+    pub fn has_source_announce(&self) -> bool {
+        self.announce_source_pending
+    }
+
     /// Take the pending "announce the effective source" request set by a
     /// runtime enable. The backend consumes this after `sync_input_monitor`
     /// has reconciled the reader thread, so the announcement can never claim

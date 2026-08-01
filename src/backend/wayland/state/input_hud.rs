@@ -73,12 +73,35 @@ pub(super) fn resolve_input_hud_source(
 }
 
 impl WaylandState {
+    /// Reconcile the reader thread only when the HUD request actually moved.
+    ///
+    /// Called once per event-loop pass, after every drain that could have
+    /// changed it -- a queued toggle, a runtime-UI rollback, a seed refresh --
+    /// so no individual path has to remember to sync. `sync_input_monitor`
+    /// itself probes for readable devices, which is why this is a comparison
+    /// rather than an unconditional call.
+    pub(in crate::backend::wayland) fn sync_input_monitor_if_changed(&mut self) {
+        let request = (
+            self.input_state.input_hud_enabled(),
+            self.input_state.input_hud_configured_mode(),
+        );
+        if self.last_input_hud_request != Some(request)
+            || self.input_state.has_input_hud_source_announce()
+        {
+            self.sync_input_monitor();
+        }
+    }
+
     /// Reconcile the reader thread with the HUD's live enabled flag and mode.
     ///
     /// Cheap and idempotent, so every path that can flip the toggle (keyboard
     /// action, command palette, toolbar checkbox, presenter mode) can call it
     /// unconditionally.
     pub(in crate::backend::wayland) fn sync_input_monitor(&mut self) {
+        self.last_input_hud_request = Some((
+            self.input_state.input_hud_enabled(),
+            self.input_state.input_hud_configured_mode(),
+        ));
         if self.input_state.take_input_hud_source_announce() {
             self.input_hud_announce_pending = true;
         }

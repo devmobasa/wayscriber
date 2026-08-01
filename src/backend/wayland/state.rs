@@ -236,6 +236,16 @@ pub(super) struct WaylandState {
     /// across the reader thread's readiness handshake, so the toast names the
     /// source the HUD actually ended up with.
     pub(super) input_hud_announce_pending: bool,
+    /// The HUD request the reader thread was last reconciled against.
+    ///
+    /// Every path that can move the HUD has to reach `sync_input_monitor`, and
+    /// they do not all run through one handler: a command-palette entry
+    /// clicked with the mouse, and a rollback undoing a rejected write, both
+    /// change the flag somewhere else entirely. The event loop compares this
+    /// against the live request each pass instead of asking each of them to
+    /// remember, so the reader can never be left running for a HUD that is
+    /// already off.
+    pub(super) last_input_hud_request: Option<(bool, crate::config::InputHudMode)>,
     pub(super) clipboard_publish: ClipboardOperationController<u64, ClipboardPublishCompletion>,
     pub(super) clipboard_paste:
         ClipboardOperationController<ClipboardPasteRequest, ClipboardPasteCompletion>,
