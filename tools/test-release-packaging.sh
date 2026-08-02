@@ -8,6 +8,7 @@ CONFIGURATOR_PACKAGE_CONFIG="${REPO_ROOT}/packaging/package.configurator.yaml"
 RELEASE_WORKFLOW="${REPO_ROOT}/.github/workflows/build-packages.yml"
 CI_WORKFLOW="${REPO_ROOT}/.github/workflows/ci.yml"
 PACKAGE_SCRIPT="${REPO_ROOT}/tools/package.sh"
+ARCH_INSTALLER_CHECKER="${REPO_ROOT}/tools/check-arch-installer-manifest.sh"
 INSTALL_SCRIPT="${REPO_ROOT}/tools/install-gtk4-layer-shell.sh"
 STATIC_LINK_VERIFIER="${REPO_ROOT}/tools/verify-static-gtk4-layer-shell.sh"
 WORK_DIR="$(mktemp -d)"
@@ -58,6 +59,73 @@ assert_contains "${WORK_DIR}/release-package-job.yml" "'%{VERSION}-%{RELEASE}\\n
 assert_contains "${WORK_DIR}/release-package-job.yml" "grep -Eq '/usr/bin/wayscriber$'"
 assert_contains "${WORK_DIR}/release-package-job.yml" 'wayscriber-configurator-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz'
 assert_contains "${WORK_DIR}/release-package-job.yml" "grep -Eq '/usr/bin/wayscriber-configurator$'"
+assert_contains "${WORK_DIR}/release-package-job.yml" "Check direct Arch installer compatibility"
+assert_contains "${WORK_DIR}/release-package-job.yml" "https://wayscriber.com/arch-install.sh"
+assert_contains "${WORK_DIR}/release-package-job.yml" "./tools/check-arch-installer-manifest.sh"
+assert_contains "${WORK_DIR}/release-package-job.yml" 'wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz'
+assert_not_contains "${WORK_DIR}/release-package-job.yml" 'sh "$RUNNER_TEMP/arch-install.sh"'
+test -x "${ARCH_INSTALLER_CHECKER}"
+assert_contains "${ARCH_INSTALLER_CHECKER}" "The installer is parsed as data and is not run."
+
+# The deployed installer is parsed as a strict data contract. Unsupported
+# shell syntax must fail instead of silently omitting a required release file.
+ARCH_INSTALLER_FIXTURE_ROOT="wayscriber-v0.0.0-linux-x86_64"
+ARCH_INSTALLER_FIXTURE_STAGE="${WORK_DIR}/arch-installer-stage"
+ARCH_INSTALLER_FIXTURE_ARCHIVE="${WORK_DIR}/arch-installer.tar.gz"
+ARCH_INSTALLER_VALID_FIXTURE="${WORK_DIR}/arch-installer-valid.sh"
+ARCH_INSTALLER_MALFORMED_FIXTURE="${WORK_DIR}/arch-installer-malformed.sh"
+ARCH_INSTALLER_MALFORMED_OUTPUT="${WORK_DIR}/arch-installer-malformed-output"
+mkdir -p \
+    "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/bin" \
+    "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/lib/systemd/user"
+touch "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/bin/wayscriber"
+chmod 0755 "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/bin/wayscriber"
+cat > "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/lib/systemd/user/wayscriber.service" <<'EOF'
+[Service]
+ExecStart="/usr/bin/wayscriber" --daemon
+EOF
+chmod 0644 "${ARCH_INSTALLER_FIXTURE_STAGE}/${ARCH_INSTALLER_FIXTURE_ROOT}/usr/lib/systemd/user/wayscriber.service"
+tar -czf "${ARCH_INSTALLER_FIXTURE_ARCHIVE}" \
+    -C "${ARCH_INSTALLER_FIXTURE_STAGE}" "${ARCH_INSTALLER_FIXTURE_ROOT}"
+
+cat > "${ARCH_INSTALLER_VALID_FIXTURE}" <<'EOF'
+#!/bin/sh
+# ARCH_INSTALL_MANIFEST_BEGIN
+release_manifest() {
+    printf '%s\n' \
+        '0755 bin/wayscriber' \
+        '0644 lib/systemd/user/wayscriber.service'
+}
+# ARCH_INSTALL_MANIFEST_END
+EOF
+"${ARCH_INSTALLER_CHECKER}" \
+    --installer "${ARCH_INSTALLER_VALID_FIXTURE}" \
+    --archive "${ARCH_INSTALLER_FIXTURE_ARCHIVE}" >/dev/null
+
+cat > "${ARCH_INSTALLER_MALFORMED_FIXTURE}" <<'EOF'
+#!/bin/sh
+# ARCH_INSTALL_MANIFEST_BEGIN
+release_manifest() {
+    printf '%s\n' \
+        '0755 bin/wayscriber' \
+        '0644 lib/systemd/user/wayscriber.service' \
+        "0644 share/foo"
+}
+# ARCH_INSTALL_MANIFEST_END
+EOF
+set +e
+"${ARCH_INSTALLER_CHECKER}" \
+    --installer "${ARCH_INSTALLER_MALFORMED_FIXTURE}" \
+    --archive "${ARCH_INSTALLER_FIXTURE_ARCHIVE}" \
+    >"${ARCH_INSTALLER_MALFORMED_OUTPUT}" 2>&1
+ARCH_INSTALLER_MALFORMED_STATUS=$?
+set -e
+if [[ ${ARCH_INSTALLER_MALFORMED_STATUS} -eq 0 ]]; then
+    echo "Expected unsupported installer manifest syntax to fail" >&2
+    exit 1
+fi
+assert_contains "${ARCH_INSTALLER_MALFORMED_OUTPUT}" \
+    "unsupported installer manifest syntax"
 
 # Ordinary CI exercises the dynamic source-build path, while a dedicated step
 # checks the static release path.

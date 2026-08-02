@@ -112,6 +112,17 @@ jobs:
         run: |
           ./tools/package.sh
 
+      - name: Check direct Arch installer compatibility
+        run: |
+          curl --disable --fail --silent --show-error --location \
+            --proto '=https' --proto-redir '=https' \
+            --retry 3 --connect-timeout 15 --max-time 60 --max-filesize 1048576 \
+            --output "$RUNNER_TEMP/arch-install.sh" \
+            https://wayscriber.com/arch-install.sh
+          ./tools/check-arch-installer-manifest.sh \
+            --installer "$RUNNER_TEMP/arch-install.sh" \
+            --archive "dist/wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz"
+
       - name: Verify packaged metadata and retained licenses
         run: |
           # Keep these floors aligned with MAX_GLIBC_VERSION in tools/package.sh.

@@ -195,12 +195,12 @@ Pick the path that matches your setup:
 |----------|-----|
 | Fast CLI install with auto-updates on Debian/Ubuntu/Mint/Pop!_OS | [Debian and Ubuntu](#debian-and-ubuntu) |
 | Fast CLI install with auto-updates on Fedora/Nobara or RHEL/Rocky/Alma 10+ | [Fedora and RHEL](#fedora-and-rhel) |
-| Arch, Manjaro, CachyOS, or another Arch-based distro | [AUR](#arch-linux-aur), preferably `wayscriber-bin` for the prebuilt package |
+| Arch, Manjaro, CachyOS, or another Arch-based distro | [AUR or direct release installer](#arch-linux-aur); prefer `wayscriber-bin` when the AUR is available |
 | NixOS, or the Nix package manager on another distro | [NixOS and Nix](#nixos-and-nix) — `nixpkgs` for the standard install, the project flake for the newest release and the Configurator |
 | One-off package (browser or terminal) without adding a repo | [GitHub Releases](#github-releases-one-off) |
 | Hacking on wayscriber or building a local binary | [From source](#from-source) |
 
-Distro repositories, the AUR, and declarative NixOS installs are the best default for CLI users because they follow the normal system update flow. Packages installed with `nix profile` are updated separately with `nix profile upgrade`. GitHub `.deb`/`.rpm` downloads are one-off installs (no auto-updates); use them only when you do not want to add a repo.
+Distro repositories, the AUR, and declarative NixOS installs are the best default for CLI users because they follow the normal system update flow. Packages installed with `nix profile` are updated separately with `nix profile upgrade`. GitHub `.deb`/`.rpm` downloads and the direct Arch release installer are not automatic update channels; rerun or replace them when you want a newer release.
 
 Install the main `wayscriber` package first. `wayscriber-configurator` is an optional GUI settings app and does not include the `wayscriber` binary.
 
@@ -251,7 +251,9 @@ For a one-off `.rpm` without adding the repo, see [GitHub Releases](#github-rele
 ### Arch Linux (AUR)
 
 Also use this path for Manjaro, CachyOS, and other Arch-based distros.
-The examples use `yay` as the default AUR helper; equivalent `paru` commands are shown for each package.
+The AUR is recommended because pacman tracks the installed files and your AUR helper
+handles upgrades. The examples use `yay` as the default helper; equivalent `paru`
+commands are shown for each package.
 
 ```bash
 # Prebuilt binary:
@@ -266,6 +268,39 @@ paru -S wayscriber
 yay -S wayscriber-configurator
 paru -S wayscriber-configurator
 ```
+
+If the AUR is unavailable or has not caught up with the latest release, use the direct
+x86_64 release installer instead. Download it so you can inspect it before running it:
+
+```bash
+curl -fsSL https://wayscriber.com/arch-install.sh -o arch-install.sh
+sh arch-install.sh --dry-run
+sh arch-install.sh
+```
+
+The dry run verifies the latest stable release, its checksum and install manifest, the
+required Arch packages, and package ownership without installing files. The full run
+installs allowlisted files under `/usr/local`, refuses to shadow a pacman-owned Wayscriber
+installation, and does not start or restart the user service. To update this installation,
+download a fresh script, rerun it, then restart `wayscriber.service` when ready.
+
+Remove the direct installation before moving to the AUR. Otherwise, `/usr/local/bin` and
+`/usr/local/lib/systemd/user` continue to take priority over the package files under
+`/usr`:
+
+```bash
+systemctl --user disable --now wayscriber.service
+curl -fsSL https://wayscriber.com/arch-install.sh -o arch-install.sh
+sh arch-install.sh --uninstall --dry-run
+sh arch-install.sh --uninstall
+yay -S wayscriber-bin
+systemctl --user enable --now wayscriber.service
+```
+
+The uninstaller removes only unmanaged files in the direct install manifest, including
+the same files from the legacy `/usr` location. It leaves pacman-owned files and your user
+configuration and data unchanged, and refuses actual removal while the service is active
+or enabled.
 
 ### NixOS and Nix
 
@@ -493,7 +528,9 @@ cargo build --release --no-default-features --features tablet-input,portal,tray
 ### Screenshot tools
 
 `wl-clipboard`, `grim`, and `slurp` are installed automatically by deb/rpm/AUR packages.
-If you build from source or use the tarball, install them manually:
+The direct Arch release installer checks that they are already installed and prints the
+required `pacman` command if they are missing. If you build from source or use the tarball,
+install them manually:
 
 ```bash
 sudo apt-get install wl-clipboard grim slurp   # Debian/Ubuntu

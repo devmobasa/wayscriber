@@ -2,9 +2,10 @@
 
 ## Installation
 
-### Package installs (recommended when available)
+### Package and direct release installs
 
-If you installed wayscriber via a package (deb/rpm/aur), enable the user service:
+If you installed wayscriber via a package (deb/rpm/aur) or the direct Arch release
+installer, enable the user service:
 
 ```bash
 systemctl --user enable --now wayscriber.service

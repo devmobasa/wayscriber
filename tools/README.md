@@ -94,6 +94,18 @@ Packaging-only hotfix policy:
   - Generates checksums.txt and manifest.json
   - Usage: `./tools/package.sh [--version <ver>] [--formats tar,deb,rpm]`
 
+- **check-arch-installer-manifest.sh** - Check direct Arch installer compatibility
+  - Strictly parses the installer's static allowlist as data; it never executes the installer, and unsupported manifest syntax fails closed
+  - Requires the archive file set, modes, and service command to match what the installer accepts
+  - Runs against the deployed installer during release packaging
+  - Usage: `./tools/check-arch-installer-manifest.sh --installer FILE --archive FILE`
+
+  When the tarball file manifest changes, build and check the new tarball locally, deploy
+  the matching website installer, and only then push the `v*` tag. Until the tag publishes
+  the new release, the updated live installer can fail closed against the previous release;
+  keep that compatibility window short. A tag pushed before the installer deployment fails
+  the release job's direct Arch installer check.
+
 - **build-package-repos.sh** - Build apt/rpm repositories
   - Assembles Debian (apt) and Fedora (dnf/yum) repos from built packages
   - Handles GPG signing for packages and repo metadata
