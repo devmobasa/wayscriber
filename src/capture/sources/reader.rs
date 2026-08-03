@@ -12,7 +12,7 @@ use std::{fs, thread, time::Duration};
 pub fn read_image_from_uri(uri: &str) -> Result<Vec<u8>, CaptureError> {
     let path = decode_file_uri(uri)?;
 
-    log::debug!("Reading screenshot from: {}", path.display());
+    log::debug!("Reading screenshot from the portal temporary file");
 
     // Wait briefly for portal to flush the file to disk (some portals write asynchronously)
     const MAX_ATTEMPTS: usize = 60; // up to 3 seconds total
@@ -27,16 +27,14 @@ pub fn read_image_from_uri(uri: &str) -> Result<Vec<u8>, CaptureError> {
             }
             Ok(_) => {
                 log::trace!(
-                    "Portal screenshot file {} still empty (attempt {}/{})",
-                    path.display(),
+                    "Portal screenshot file still empty (attempt {}/{})",
                     attempt + 1,
                     MAX_ATTEMPTS
                 );
             }
             Err(e) => {
                 log::trace!(
-                    "Portal screenshot file {} not ready yet (attempt {}/{}): {}",
-                    path.display(),
+                    "Portal screenshot file not ready yet (attempt {}/{}): {}",
                     attempt + 1,
                     MAX_ATTEMPTS,
                     e
@@ -46,9 +44,7 @@ pub fn read_image_from_uri(uri: &str) -> Result<Vec<u8>, CaptureError> {
 
         if attempt + 1 == MAX_ATTEMPTS {
             return Err(CaptureError::ImageError(format!(
-                "Portal screenshot file {} not ready after {} attempts",
-                path.display(),
-                MAX_ATTEMPTS
+                "Portal screenshot file was not ready after {MAX_ATTEMPTS} attempts"
             )));
         }
 
@@ -62,13 +58,9 @@ pub fn read_image_from_uri(uri: &str) -> Result<Vec<u8>, CaptureError> {
 
     // Clean up portal temp file to prevent accumulation
     if let Err(e) = fs::remove_file(&path) {
-        log::warn!(
-            "Failed to remove portal temp file {}: {}",
-            path.display(),
-            e
-        );
+        log::warn!("Failed to remove portal screenshot temporary file: {e}");
     } else {
-        log::debug!("Removed portal temp file: {}", path.display());
+        log::debug!("Removed portal screenshot temporary file");
     }
 
     Ok(data)

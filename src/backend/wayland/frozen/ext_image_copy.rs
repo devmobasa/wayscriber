@@ -24,8 +24,8 @@ use wayland_protocols::ext::{
 
 use crate::input::InputState;
 
-use super::image::copy_shm_argb;
-use super::state::{DirectCaptureBackend, DirectCaptureContext, FrozenState};
+use super::image::{copy_shm_argb, validate_shm_buffer_layout};
+use super::state::{DirectCaptureAttempt, DirectCaptureContext, FrozenState};
 
 const MAX_CONSTRAINT_RETRIES: u8 = 2;
 
@@ -173,12 +173,10 @@ impl FrozenState {
         let session = managers
             .capture
             .create_session(&source, Options::empty(), qh, ());
-        self.ext_capture = Some(ExtImageCopySession::new(source, session, pool));
-        self.direct_capture = Some(DirectCaptureContext::new(
-            DirectCaptureBackend::ExtImageCopy,
-            target_output_id,
-            source_geometry,
-        ));
+        self.direct_capture = Some(DirectCaptureAttempt::ExtImageCopy {
+            session: Box::new(ExtImageCopySession::new(source, session, pool)),
+            context: DirectCaptureContext::new(target_output_id, source_geometry),
+        });
         debug!("Requested ext-image-copy capture constraints for active output");
         Ok(())
     }
@@ -191,19 +189,21 @@ impl FrozenState {
     where
         State: Dispatch<ExtImageCopyCaptureFrameV1, ()> + 'static,
     {
+        if !matches!(
+            self.direct_capture.as_ref(),
+            Some(DirectCaptureAttempt::ExtImageCopy { .. })
+        ) {
+            debug!("Ignoring ext-image-copy session event without an active ext capture");
+            return false;
+        }
+
         let result = match event {
             SessionEvent::BufferSize { width, height } => {
-                let capture = self
-                    .ext_capture
-                    .as_mut()
-                    .context("ext-image-copy capture session missing");
+                let capture = self.ext_capture_mut();
                 capture.map(|capture| capture.constraints.record_size(width, height))
             }
             SessionEvent::ShmFormat { format } => {
-                let capture = self
-                    .ext_capture
-                    .as_mut()
-                    .context("ext-image-copy capture session missing");
+                let capture = self.ext_capture_mut();
                 capture.map(|capture| capture.constraints.record_format(format))
             }
             SessionEvent::Done => self.finish_constraint_batch(qh),
@@ -226,10 +226,7 @@ impl FrozenState {
         State: Dispatch<ExtImageCopyCaptureFrameV1, ()> + 'static,
     {
         let constraints = {
-            let capture = self
-                .ext_capture
-                .as_mut()
-                .context("ext-image-copy capture session missing")?;
+            let capture = self.ext_capture_mut()?;
             capture.constraints.finish_batch(capture.frame.is_some())
         };
         if let Some(constraints) = constraints {
@@ -248,54 +245,36 @@ impl FrozenState {
     where
         State: Dispatch<ExtImageCopyCaptureFrameV1, ()> + 'static,
     {
-        let capture = self
-            .ext_capture
-            .as_mut()
-            .context("ext-image-copy capture session missing")?;
+        let capture = self.ext_capture_mut()?;
         if capture.frame.is_some() {
             anyhow::bail!("ext-image-copy frame submitted while another frame is pending");
         }
         let (width, height) = constraints
             .size
             .context("compositor omitted the ext-image-copy buffer size")?;
-        if width == 0 || height == 0 {
-            anyhow::bail!("compositor advertised an empty ext-image-copy buffer");
-        }
         let format = select_shm_format(&constraints.formats)
             .context("compositor did not advertise an ARGB/XRGB shared-memory format")?;
         let stride = width
             .checked_mul(4)
-            .and_then(|value| i32::try_from(value).ok())
             .context("ext-image-copy buffer stride overflow")?;
-        let total_size = usize::try_from(stride)
-            .ok()
-            .and_then(|stride| {
-                usize::try_from(height)
-                    .ok()
-                    .and_then(|height| stride.checked_mul(height))
-            })
-            .context("ext-image-copy buffer size overflow")?;
-        let buffer_width = i32::try_from(width)
-            .context("ext-image-copy buffer width exceeds the Wayland limit")?;
-        let buffer_height = i32::try_from(height)
-            .context("ext-image-copy buffer height exceeds the Wayland limit")?;
-        if total_size > capture.pool.len() {
-            capture.pool.resize(total_size)?;
+        let layout = validate_shm_buffer_layout(width, height, stride)?;
+        if layout.total_size > capture.pool.len() {
+            capture.pool.resize(layout.total_size)?;
         }
         let (buffer, _) = capture
             .pool
-            .create_buffer(buffer_width, buffer_height, stride, format)
+            .create_buffer(layout.width, layout.height, layout.stride, format)
             .context("Failed to create ext-image-copy buffer")?;
         let frame = capture.session.create_frame(qh, ());
         frame.attach_buffer(buffer.wl_buffer());
-        frame.damage_buffer(0, 0, buffer_width, buffer_height);
+        frame.damage_buffer(0, 0, layout.width, layout.height);
         frame.capture();
         capture.frame = Some(ExtImageCopyFrame {
             proxy: frame,
             buffer,
             width,
             height,
-            stride,
+            stride: layout.stride,
             format,
             transform: None,
         });
@@ -311,6 +290,14 @@ impl FrozenState {
     where
         State: Dispatch<ExtImageCopyCaptureFrameV1, ()> + 'static,
     {
+        if !matches!(
+            self.direct_capture.as_ref(),
+            Some(DirectCaptureAttempt::ExtImageCopy { .. })
+        ) {
+            debug!("Ignoring ext-image-copy frame event without an active ext capture");
+            return false;
+        }
+
         match event {
             FrameEvent::Ready => match self.finish_ext_frame() {
                 Ok(true) => input_state.needs_redraw = true,
@@ -352,7 +339,7 @@ impl FrozenState {
                 return self.fail_ext_capture();
             }
             FrameEvent::Transform { transform } => {
-                if let Some(capture) = self.ext_capture.as_mut()
+                if let Ok(capture) = self.ext_capture_mut()
                     && let Some(frame) = capture.frame.as_mut()
                     && let WEnum::Value(transform) = transform
                 {
@@ -370,10 +357,7 @@ impl FrozenState {
         State: Dispatch<ExtImageCopyCaptureFrameV1, ()> + 'static,
     {
         let replacement = {
-            let capture = self
-                .ext_capture
-                .as_mut()
-                .context("ext-image-copy capture session missing")?;
+            let capture = self.ext_capture_mut()?;
             let frame = capture
                 .frame
                 .take()
@@ -388,16 +372,10 @@ impl FrozenState {
     }
 
     fn finish_ext_frame(&mut self) -> Result<bool> {
-        let frame = self
-            .ext_capture
-            .as_mut()
-            .context("ext-image-copy capture session missing")?;
+        let frame = self.ext_capture_mut()?;
         let frame = frame.frame.take().context("ext-image-copy frame missing")?;
         let result: Result<_> = (|| {
-            let capture = self
-                .ext_capture
-                .as_mut()
-                .context("ext-image-copy capture session missing")?;
+            let capture = self.ext_capture_mut()?;
             let canvas = frame
                 .buffer
                 .canvas(&mut capture.pool)
@@ -414,23 +392,16 @@ impl FrozenState {
         })();
         frame.proxy.destroy();
         let (image, output_transform) = result?;
-        let capture = self
-            .ext_capture
-            .take()
-            .context("ext-image-copy capture session missing after frame completion")?;
-        capture.destroy();
-        let context = self
-            .direct_capture
-            .take()
-            .context("ext-image-copy direct capture context missing")?;
-        if context.backend != DirectCaptureBackend::ExtImageCopy {
-            anyhow::bail!("ext-image-copy completed with a mismatched direct backend context");
-        }
+        let (capture, context) = self
+            .take_ext_capture()
+            .context("ext-image-copy capture attempt missing after frame completion")?;
+        (*capture).destroy();
         if !context.output_matches(self.active_output_id) {
             return Ok(false);
         }
         self.set_pending_output_image_with_transform(
             image,
+            context.target_output_id,
             context.source_geometry,
             output_transform,
         );
@@ -438,11 +409,30 @@ impl FrozenState {
     }
 
     fn fail_ext_capture(&mut self) -> bool {
-        if let Some(capture) = self.ext_capture.take() {
-            capture.destroy();
+        if let Some((capture, _)) = self.take_ext_capture() {
+            (*capture).destroy();
+            true
+        } else {
+            false
         }
-        self.direct_capture = None;
-        true
+    }
+
+    fn ext_capture_mut(&mut self) -> Result<&mut ExtImageCopySession> {
+        match self.direct_capture.as_mut() {
+            Some(DirectCaptureAttempt::ExtImageCopy { session, .. }) => Ok(session.as_mut()),
+            _ => anyhow::bail!("ext-image-copy capture session missing"),
+        }
+    }
+
+    fn take_ext_capture(&mut self) -> Option<(Box<ExtImageCopySession>, DirectCaptureContext)> {
+        let attempt = self.direct_capture.take()?;
+        match attempt {
+            DirectCaptureAttempt::ExtImageCopy { session, context } => Some((session, context)),
+            attempt @ DirectCaptureAttempt::WlrScreencopy { .. } => {
+                self.direct_capture = Some(attempt);
+                None
+            }
+        }
     }
 }
 

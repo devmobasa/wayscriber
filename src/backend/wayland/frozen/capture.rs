@@ -23,8 +23,8 @@ use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::Z
 
 use crate::input::InputState;
 
-use super::image::copy_shm_argb;
-use super::state::{DirectCaptureBackend, DirectCaptureContext, FrozenCaptureBackend, FrozenState};
+use super::image::{copy_shm_argb, validate_shm_buffer_layout};
+use super::state::{DirectCaptureAttempt, DirectCaptureContext, FrozenCaptureBackend, FrozenState};
 
 /// Internal capture session tracking a single screencopy frame.
 pub(super) struct CaptureSession {
@@ -81,12 +81,7 @@ impl CaptureSession {
 impl FrozenState {
     /// Start a screencopy capture for the active output.
     pub fn start_capture(&mut self) -> Result<()> {
-        if self.capture.is_some()
-            || self.ext_capture.is_some()
-            || self.direct_capture.is_some()
-            || self.portal_in_progress
-            || self.preflight_pending
-        {
+        if self.direct_capture.is_some() || self.portal_in_progress || self.preflight_pending {
             warn!("Frozen-mode capture already in progress; ignoring toggle");
             return Ok(());
         }
@@ -239,18 +234,24 @@ impl FrozenState {
         let frame = manager.capture_output(0, &output, qh, ());
         let mut capture = CaptureSession::new(frame);
         capture.pool = Some(pool);
-        self.capture = Some(capture);
-        self.direct_capture = Some(DirectCaptureContext::new(
-            DirectCaptureBackend::WlrScreencopy,
-            target_output_id,
-            source_geometry,
-        ));
+        self.direct_capture = Some(DirectCaptureAttempt::WlrScreencopy {
+            session: Box::new(capture),
+            context: DirectCaptureContext::new(target_output_id, source_geometry),
+        });
 
         Ok(())
     }
 
     /// Handle screencopy frame events.
     pub fn handle_frame_event(&mut self, event: FrameEvent, input_state: &mut InputState) -> bool {
+        if !matches!(
+            self.direct_capture.as_ref(),
+            Some(DirectCaptureAttempt::WlrScreencopy { .. })
+        ) {
+            debug!("Ignoring screencopy frame event without an active WLR frozen capture");
+            return false;
+        }
+
         match event {
             FrameEvent::Buffer {
                 format,
@@ -274,7 +275,10 @@ impl FrozenState {
                 }
             }
             FrameEvent::Flags { flags } => {
-                if let Some(capture) = self.capture.as_mut() {
+                if let Some(DirectCaptureAttempt::WlrScreencopy {
+                    session: capture, ..
+                }) = self.direct_capture.as_mut()
+                {
                     let raw_flags = match flags {
                         WEnum::Value(v) => v.bits(),
                         WEnum::Unknown(raw) => raw,
@@ -292,7 +296,10 @@ impl FrozenState {
                 }
                 Err(err) => {
                     warn!("Frozen capture ready handling failed: {}", err);
-                    return self.fail_wlr_capture();
+                    // `on_ready` owns and destroys the completed WLR attempt,
+                    // including error paths, so only the fallback decision
+                    // remains here.
+                    return true;
                 }
             },
             FrameEvent::Failed => {
@@ -305,11 +312,19 @@ impl FrozenState {
     }
 
     fn fail_wlr_capture(&mut self) -> bool {
-        if let Some(capture) = self.capture.take() {
-            capture.frame.destroy();
+        let Some(capture) = self.direct_capture.take() else {
+            return false;
+        };
+        match capture {
+            DirectCaptureAttempt::WlrScreencopy { session, .. } => {
+                session.frame.destroy();
+                true
+            }
+            capture @ DirectCaptureAttempt::ExtImageCopy { .. } => {
+                self.direct_capture = Some(capture);
+                false
+            }
         }
-        self.direct_capture = None;
-        true
     }
 
     fn on_buffer(
@@ -319,10 +334,10 @@ impl FrozenState {
         height: u32,
         stride: u32,
     ) -> Result<()> {
-        let capture = self
-            .capture
-            .as_mut()
-            .context("No capture session present for buffer event")?;
+        let capture = match self.direct_capture.as_mut() {
+            Some(DirectCaptureAttempt::WlrScreencopy { session, .. }) => session,
+            _ => anyhow::bail!("No WLR capture session present for buffer event"),
+        };
 
         let format = match format {
             WEnum::Value(fmt) => fmt,
@@ -331,19 +346,19 @@ impl FrozenState {
             }
         };
 
+        let layout = validate_shm_buffer_layout(width, height, stride)?;
         capture.width = width;
         capture.height = height;
-        capture.stride = stride as i32;
+        capture.stride = layout.stride;
         capture.format = Some(format);
 
         // Resize pool and create buffer
         let pool = capture.pool.as_mut().context("Capture pool missing")?;
-        let total_size = (capture.stride as usize) * (height as usize);
-        if total_size > pool.len() {
-            pool.resize(total_size)?;
+        if layout.total_size > pool.len() {
+            pool.resize(layout.total_size)?;
         }
         let (buffer, _) = pool
-            .create_buffer(width as i32, height as i32, capture.stride, format)
+            .create_buffer(layout.width, layout.height, layout.stride, format)
             .context("Failed to create capture buffer")?;
         capture.buffer = Some(buffer);
         capture.request_copy();
@@ -351,19 +366,26 @@ impl FrozenState {
     }
 
     fn on_buffer_done(&mut self) -> Result<()> {
-        let capture = self
-            .capture
-            .as_mut()
-            .context("No capture session present for buffer_done")?;
+        let capture = match self.direct_capture.as_mut() {
+            Some(DirectCaptureAttempt::WlrScreencopy { session, .. }) => session,
+            _ => anyhow::bail!("No WLR capture session present for buffer_done"),
+        };
         capture.request_copy();
         Ok(())
     }
 
     fn on_ready(&mut self) -> Result<bool> {
-        let mut capture = self
-            .capture
+        let attempt = self
+            .direct_capture
             .take()
-            .context("No capture session present for ready event")?;
+            .context("No WLR capture attempt present for ready event")?;
+        let (mut capture, context) = match attempt {
+            DirectCaptureAttempt::WlrScreencopy { session, context } => (session, context),
+            attempt @ DirectCaptureAttempt::ExtImageCopy { .. } => {
+                self.direct_capture = Some(attempt);
+                anyhow::bail!("No WLR capture attempt present for ready event");
+            }
+        };
         let result = (|| {
             let pool = capture.pool.as_mut().context("Capture pool missing")?;
             let buffer = capture.buffer.as_ref().context("Capture buffer missing")?;
@@ -382,18 +404,11 @@ impl FrozenState {
         })();
         capture.frame.destroy();
         let image = result?;
-        let context = self
-            .direct_capture
-            .take()
-            .context("WLR direct capture context missing")?;
-        if context.backend != DirectCaptureBackend::WlrScreencopy {
-            anyhow::bail!("WLR capture completed with a mismatched direct backend context");
-        }
         if !context.output_matches(self.active_output_id) {
             return Ok(false);
         }
 
-        self.set_pending_output_image(image, context.source_geometry);
+        self.set_pending_output_image(image, context.target_output_id, context.source_geometry);
 
         Ok(true)
     }

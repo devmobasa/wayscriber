@@ -1,6 +1,53 @@
 use anyhow::{Context, Result};
 use wayland_client::protocol::{wl_output, wl_shm};
 
+pub(super) struct ShmBufferLayout {
+    pub(super) width: i32,
+    pub(super) height: i32,
+    pub(super) stride: i32,
+    pub(super) total_size: usize,
+}
+
+/// Validate compositor-owned dimensions before allocating or creating a
+/// `wl_buffer` from them.
+pub(super) fn validate_shm_buffer_layout(
+    width: u32,
+    height: u32,
+    stride: u32,
+) -> Result<ShmBufferLayout> {
+    if width == 0 || height == 0 {
+        anyhow::bail!("Frozen capture advertised an empty SHM buffer");
+    }
+
+    let buffer_width =
+        i32::try_from(width).context("Frozen capture width exceeds the Wayland limit")?;
+    let buffer_height =
+        i32::try_from(height).context("Frozen capture height exceeds the Wayland limit")?;
+    let buffer_stride =
+        i32::try_from(stride).context("Frozen capture stride exceeds the Wayland limit")?;
+    let row_bytes = width
+        .checked_mul(4)
+        .context("Frozen capture row size overflow")?;
+    if stride < row_bytes {
+        anyhow::bail!("Frozen capture stride is smaller than its pixel row");
+    }
+    let total_size = usize::try_from(stride)
+        .ok()
+        .and_then(|stride| {
+            usize::try_from(height)
+                .ok()
+                .and_then(|height| stride.checked_mul(height))
+        })
+        .context("Frozen capture buffer size overflow")?;
+
+    Ok(ShmBufferLayout {
+        width: buffer_width,
+        height: buffer_height,
+        stride: buffer_stride,
+        total_size,
+    })
+}
+
 /// CPU-side frozen image ready for Cairo rendering.
 pub struct FrozenImage {
     pub width: u32,
@@ -240,5 +287,25 @@ mod tests {
         assert_eq!(image.data, vec![1, 2, 3, 255]);
 
         assert!(copy_shm_argb(&[1, 2, 3], 1, 1, 4, wl_shm::Format::Argb8888, false,).is_err());
+    }
+
+    #[test]
+    fn shm_layout_rejects_invalid_compositor_dimensions_before_allocation() {
+        assert!(validate_shm_buffer_layout(0, 1, 4).is_err());
+        assert!(validate_shm_buffer_layout(1, 0, 4).is_err());
+        assert!(validate_shm_buffer_layout(2, 1, 4).is_err());
+        assert!(validate_shm_buffer_layout(u32::MAX, 1, u32::MAX).is_err());
+        assert!(validate_shm_buffer_layout(1, 1, u32::MAX).is_err());
+    }
+
+    #[test]
+    fn shm_layout_accepts_padding_and_returns_checked_wayland_values() {
+        let layout = validate_shm_buffer_layout(2, 3, 12)
+            .expect("the test establishes positive in-range dimensions and sufficient stride");
+
+        assert_eq!(layout.width, 2);
+        assert_eq!(layout.height, 3);
+        assert_eq!(layout.stride, 12);
+        assert_eq!(layout.total_size, 36);
     }
 }

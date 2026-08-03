@@ -429,9 +429,10 @@ mod tests {
     }
 
     #[test]
-    fn generated_portal_handle_tokens_have_independent_random_suffixes() {
-        let first = next_handle_token().expect("generate first secure token");
-        let second = next_handle_token().expect("generate second secure token");
+    fn generated_portal_handle_tokens_have_independent_random_suffixes() -> Result<(), CaptureError>
+    {
+        let first = next_handle_token()?;
+        let second = next_handle_token()?;
 
         assert_ne!(first, second);
         assert_eq!(
@@ -441,6 +442,7 @@ mod tests {
         assert_eq!(second.len(), first.len());
         assert!(portal_request_path_for_unique_name(":1.42", &first).is_ok());
         assert!(portal_request_path_for_unique_name(":1.42", &second).is_ok());
+        Ok(())
     }
 
     #[test]
