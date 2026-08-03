@@ -319,17 +319,15 @@ impl WaylandState {
 
         match reason {
             OverlaySuppression::Frozen => {
-                let Some(use_fallback) = self.frozen.take_preflight_pending() else {
+                let Some(backend) = self.frozen.take_preflight_pending() else {
                     log::warn!("Frozen capture barrier completed without a pending preflight");
                     self.cancel_overlay_capture_preflight(reason);
                     return;
                 };
-                if let Err(err) = self.frozen.begin_preflight_capture(
-                    use_fallback,
-                    &self.shm,
-                    qh,
-                    &self.tokio_handle,
-                ) {
+                if let Err(err) =
+                    self.frozen
+                        .begin_preflight_capture(backend, &self.shm, qh, &self.tokio_handle)
+                {
                     log::warn!("Frozen preflight capture failed: {err}");
                     self.frozen.cancel(&mut self.input_state);
                 }

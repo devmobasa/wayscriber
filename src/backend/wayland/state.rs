@@ -78,7 +78,7 @@ use super::{
         ClipboardOperationController, ClipboardOperationIdSource, ClipboardPasteCompletion,
         ClipboardPublishCompletion,
     },
-    frozen::FrozenState,
+    frozen::{ExtImageCopyManagers, FrozenState},
     overlay_passthrough::set_surface_clickthrough,
     session::SessionState,
     surface::SurfaceState,
@@ -170,6 +170,8 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub main_surface_uses_overlay_layer: bool,
     pub pending_freeze_on_start: bool,
     pub screencopy_manager: Option<ScreencopyManager>,
+    pub ext_image_copy_managers: Option<ExtImageCopyManagers>,
+    pub portal_freeze_supported: bool,
     pub text_input_manager: Option<ZwpTextInputManagerV3>,
     #[cfg(feature = "tablet-input")]
     pub tablet_manager: Option<ZwpTabletManagerV2>,

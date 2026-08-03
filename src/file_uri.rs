@@ -6,18 +6,18 @@ use std::os::unix::ffi::OsStringExt;
 pub(crate) fn decode_file_uri(uri: &str) -> Result<PathBuf, String> {
     let raw = uri
         .strip_prefix("file://")
-        .ok_or_else(|| format!("Invalid file URI '{uri}'"))?;
+        .ok_or_else(|| "Invalid file URI scheme".to_string())?;
 
     let path_part = if raw.starts_with("localhost/") {
         &raw["localhost".len()..]
     } else if raw.starts_with('/') {
         raw
     } else {
-        return Err(format!("Unsupported file URI host in '{uri}'"));
+        return Err("Unsupported file URI host".to_string());
     };
 
     let decoded = percent_decode(path_part)
-        .map_err(|err| format!("Invalid percent-encoding in '{uri}': {err}"))?;
+        .map_err(|err| format!("Invalid percent-encoding in file URI: {err}"))?;
 
     #[cfg(unix)]
     {
@@ -28,7 +28,7 @@ pub(crate) fn decode_file_uri(uri: &str) -> Result<PathBuf, String> {
     #[cfg(not(unix))]
     {
         let path = String::from_utf8(decoded)
-            .map_err(|err| format!("Non-UTF8 path in URI '{uri}': {err}"))?;
+            .map_err(|err| format!("Non-UTF8 path in file URI: {err}"))?;
         Ok(PathBuf::from(path))
     }
 }
@@ -72,14 +72,27 @@ mod tests {
 
     #[test]
     fn decode_file_uri_rejects_non_file_schemes() {
-        let err = decode_file_uri("http://example.com/file.png").expect_err("expected error");
+        let uri = "http://private.example/screenshot.png";
+        let err = decode_file_uri(uri).expect_err("expected error");
         assert!(err.contains("Invalid file URI"));
+        assert!(!err.contains(uri));
     }
 
     #[test]
     fn decode_file_uri_rejects_unsupported_hosts() {
-        let err = decode_file_uri("file://example.com/path.png").expect_err("expected error");
+        let uri = "file://private.example/screenshot.png";
+        let err = decode_file_uri(uri).expect_err("expected error");
         assert!(err.contains("Unsupported file URI host"));
+        assert!(!err.contains(uri));
+    }
+
+    #[test]
+    fn decode_file_uri_redacts_invalid_percent_encoded_locations() {
+        let uri = "file:///home/private-user/%ZZ.png";
+        let err = decode_file_uri(uri).expect_err("expected error");
+        assert!(err.contains("Invalid percent-encoding in file URI"));
+        assert!(!err.contains(uri));
+        assert!(!err.contains("private-user"));
     }
 
     #[test]

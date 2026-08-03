@@ -40,6 +40,7 @@ SYSTEM_LIBRARIES: dict[str, tuple[str, ...]] = {
     "anyhow": (),
     "cairo-rs": ("cairo",),
     "flate2": (),
+    "getrandom": (),
     "glib": (),
     "gtk4": ("gtk4",),
     "gtk4-layer-shell": ("gtk4-layer-shell",),

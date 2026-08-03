@@ -3230,6 +3230,7 @@ dependencies = [
  "anyhow",
  "cairo-rs",
  "flate2",
+ "getrandom 0.3.4",
  "glib",
  "gtk4",
  "gtk4-layer-shell",

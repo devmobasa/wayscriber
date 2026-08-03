@@ -20,7 +20,7 @@ workspace = true
 [dependencies]
 # Wayland
 wayland-client = "0.31"
-wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
+wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"] }
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 smithay-client-toolkit = { version = "0.20", default-features = false, features = ["calloop", "xkbcommon"] }
 
@@ -53,6 +53,7 @@ tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time", "syn
 
 # Screenshot capture
 zbus = { version = "5.0", optional = true, default-features = false, features = ["tokio"] }
+getrandom = { version = "0.3", optional = true }
 serde_json = "1.0"
 png = "0.18"
 
@@ -72,7 +73,7 @@ xkbcommon = { version = "0.8", optional = true }
 tablet-input = []
 # D-Bus dependent functionality (portal capture, notifications, tray)
 dbus = ["zbus"]
-portal = ["dbus"]
+portal = ["dbus", "dep:getrandom"]
 tray = ["dbus", "ksni"]
 config-schema = ["dep:schemars"]
 # GTK4-rendered toolbars on layer-shell compositors; the built-in Cairo

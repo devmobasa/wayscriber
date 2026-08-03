@@ -104,14 +104,17 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         };
     input_state.set_session_preflight_options(session_options.clone());
     let screencopy_supported = setup.screencopy_manager.is_some();
+    let image_copy_capture_supported = setup.ext_image_copy_managers.is_some();
     let portal_freeze_supported = screenshot_portal_available(&backend.tokio_runtime);
-    let frozen_supported = screencopy_supported || portal_freeze_supported;
+    let direct_capture_supported = screencopy_supported || image_copy_capture_supported;
+    let frozen_supported = direct_capture_supported || portal_freeze_supported;
     let tokio_handle = backend.tokio_runtime.handle().clone();
 
     // Set compositor capabilities based on detected Wayland protocols
     input_state.compositor_capabilities = CompositorCapabilities {
         layer_shell: setup.layer_shell_available,
         screencopy: screencopy_supported,
+        image_copy_capture: image_copy_capture_supported,
         freeze_capture: frozen_supported,
         pointer_constraints: setup
             .state_globals
@@ -190,7 +193,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
 
     let freeze_on_start = if backend.freeze_on_start && !frozen_supported {
         warn!(
-            "Frozen mode unavailable: no screencopy backend and no screenshot portal backend; ignoring --freeze"
+            "Frozen mode unavailable: no direct capture backend and no screenshot portal backend; ignoring --freeze"
         );
         false
     } else {
@@ -218,6 +221,8 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         main_surface_uses_overlay_layer: output_prefs.main_surface_uses_overlay_layer,
         pending_freeze_on_start: freeze_on_start,
         screencopy_manager: setup.screencopy_manager,
+        ext_image_copy_managers: setup.ext_image_copy_managers,
+        portal_freeze_supported,
         text_input_manager: setup.text_input_manager,
         #[cfg(feature = "tablet-input")]
         tablet_manager,

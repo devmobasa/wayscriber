@@ -1,4 +1,5 @@
 use log::info;
+use std::time::{Duration, Instant};
 use wayland_client::protocol::wl_output;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
@@ -11,10 +12,13 @@ use crate::input::InputState;
 
 use super::PortalCaptureResult;
 use super::capture::CaptureSession;
+use super::ext_image_copy::{ExtImageCopyManagers, ExtImageCopySession};
 
 struct PendingFrozenImage {
     image: FrozenImage,
+    target_output_id: Option<u32>,
     source_geometry: Option<OutputGeometry>,
+    output_transform: Option<wl_output::Transform>,
     needs_output_transform: bool,
     source: FrozenCaptureSource,
 }
@@ -25,14 +29,93 @@ enum FrozenCaptureSource {
     Desktop,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::backend::wayland) enum FrozenCaptureBackend {
+    WlrScreencopy,
+    ExtImageCopy,
+    Portal,
+}
+
+pub(super) enum DirectCaptureAttempt {
+    WlrScreencopy {
+        session: Box<CaptureSession>,
+        context: DirectCaptureContext,
+    },
+    ExtImageCopy {
+        session: Box<ExtImageCopySession>,
+        context: DirectCaptureContext,
+    },
+}
+
+impl DirectCaptureAttempt {
+    fn backend(&self) -> FrozenCaptureBackend {
+        match self {
+            Self::WlrScreencopy { .. } => FrozenCaptureBackend::WlrScreencopy,
+            Self::ExtImageCopy { .. } => FrozenCaptureBackend::ExtImageCopy,
+        }
+    }
+
+    fn context(&self) -> &DirectCaptureContext {
+        match self {
+            Self::WlrScreencopy { context, .. } | Self::ExtImageCopy { context, .. } => context,
+        }
+    }
+
+    fn destroy(self) {
+        match self {
+            Self::WlrScreencopy { session, .. } => session.frame.destroy(),
+            Self::ExtImageCopy { session, .. } => (*session).destroy(),
+        }
+    }
+}
+
+pub(super) const DIRECT_CAPTURE_TIMEOUT: Duration = Duration::from_secs(3);
+
+pub(super) struct DirectCaptureContext {
+    pub(super) target_output_id: u32,
+    pub(super) source_geometry: Option<OutputGeometry>,
+    started_at: Instant,
+}
+
+impl DirectCaptureContext {
+    pub(super) fn new(target_output_id: u32, source_geometry: Option<OutputGeometry>) -> Self {
+        Self::new_at(target_output_id, source_geometry, Instant::now())
+    }
+
+    fn new_at(
+        target_output_id: u32,
+        source_geometry: Option<OutputGeometry>,
+        started_at: Instant,
+    ) -> Self {
+        Self {
+            target_output_id,
+            source_geometry,
+            started_at,
+        }
+    }
+
+    fn timeout(&self, now: Instant) -> Duration {
+        self.started_at
+            .checked_add(DIRECT_CAPTURE_TIMEOUT)
+            .map(|deadline| deadline.saturating_duration_since(now))
+            .unwrap_or(Duration::ZERO)
+    }
+
+    pub(super) fn output_matches(&self, current_output_id: Option<u32>) -> bool {
+        current_output_id == Some(self.target_output_id)
+    }
+}
+
 /// End-to-end controller for frozen mode capture and image storage.
 #[allow(clippy::type_complexity)]
 pub struct FrozenState {
     pub(super) manager: Option<ZwlrScreencopyManagerV1>,
+    pub(super) ext_managers: Option<ExtImageCopyManagers>,
+    pub(super) portal_available: bool,
     pub(super) active_output: Option<wl_output::WlOutput>,
     pub(super) active_output_id: Option<u32>,
     pub(super) active_geometry: Option<OutputGeometry>,
-    pub(super) capture: Option<CaptureSession>,
+    pub(super) direct_capture: Option<DirectCaptureAttempt>,
     pub(super) image: Option<FrozenImage>,
     image_target_dimensions: Option<(u32, u32)>,
     image_generation: u64,
@@ -41,7 +124,7 @@ pub struct FrozenState {
     pub(super) portal_target_output_id: Option<u32>,
     pub(super) runtime_wake: Option<RuntimeWakeHandle>,
     pub(super) preflight_pending: bool,
-    pub(super) preflight_use_fallback: bool,
+    pub(super) preflight_backend: Option<FrozenCaptureBackend>,
     pub(super) capture_done: bool,
     pending_image: Option<PendingFrozenImage>,
 }
@@ -49,26 +132,40 @@ pub struct FrozenState {
 impl FrozenState {
     #[cfg(test)]
     pub fn new(manager: Option<ZwlrScreencopyManagerV1>) -> Self {
-        Self::new_inner(manager, None)
+        Self::new_inner(manager, None, false, None)
     }
 
+    #[cfg(test)]
     pub(in crate::backend::wayland) fn new_with_runtime_wake(
         manager: Option<ZwlrScreencopyManagerV1>,
         runtime_wake: RuntimeWakeHandle,
     ) -> Self {
-        Self::new_inner(manager, Some(runtime_wake))
+        Self::new_inner(manager, None, true, Some(runtime_wake))
+    }
+
+    pub(in crate::backend::wayland) fn new_with_backends(
+        manager: Option<ZwlrScreencopyManagerV1>,
+        ext_managers: Option<ExtImageCopyManagers>,
+        portal_available: bool,
+        runtime_wake: RuntimeWakeHandle,
+    ) -> Self {
+        Self::new_inner(manager, ext_managers, portal_available, Some(runtime_wake))
     }
 
     fn new_inner(
         manager: Option<ZwlrScreencopyManagerV1>,
+        ext_managers: Option<ExtImageCopyManagers>,
+        portal_available: bool,
         runtime_wake: Option<RuntimeWakeHandle>,
     ) -> Self {
         Self {
             manager,
+            ext_managers,
+            portal_available,
             active_output: None,
             active_output_id: None,
             active_geometry: None,
-            capture: None,
+            direct_capture: None,
             image: None,
             image_target_dimensions: None,
             image_generation: 0,
@@ -77,14 +174,25 @@ impl FrozenState {
             portal_target_output_id: None,
             runtime_wake,
             preflight_pending: false,
-            preflight_use_fallback: false,
+            preflight_backend: None,
             capture_done: false,
             pending_image: None,
         }
     }
 
-    pub fn manager_available(&self) -> bool {
-        self.manager.is_some()
+    pub(in crate::backend::wayland) fn preferred_backend(&self) -> Option<FrozenCaptureBackend> {
+        select_capture_backend(
+            self.manager.is_some(),
+            self.ext_managers.is_some(),
+            self.portal_available,
+        )
+    }
+
+    pub(super) fn next_backend_after(
+        &self,
+        failed: FrozenCaptureBackend,
+    ) -> Option<FrozenCaptureBackend> {
+        next_capture_backend_after(failed, self.ext_managers.is_some(), self.portal_available)
     }
 
     pub fn set_active_output(&mut self, output: Option<wl_output::WlOutput>, id: Option<u32>) {
@@ -118,11 +226,31 @@ impl FrozenState {
     pub fn set_pending_output_image(
         &mut self,
         image: FrozenImage,
+        target_output_id: u32,
         source_geometry: Option<OutputGeometry>,
     ) {
         self.pending_image = Some(PendingFrozenImage {
             image,
+            target_output_id: Some(target_output_id),
             source_geometry,
+            output_transform: None,
+            needs_output_transform: true,
+            source: FrozenCaptureSource::ActiveOutput,
+        });
+    }
+
+    pub(super) fn set_pending_output_image_with_transform(
+        &mut self,
+        image: FrozenImage,
+        target_output_id: u32,
+        source_geometry: Option<OutputGeometry>,
+        output_transform: Option<wl_output::Transform>,
+    ) {
+        self.pending_image = Some(PendingFrozenImage {
+            image,
+            target_output_id: Some(target_output_id),
+            source_geometry,
+            output_transform,
             needs_output_transform: true,
             source: FrozenCaptureSource::ActiveOutput,
         });
@@ -131,11 +259,14 @@ impl FrozenState {
     pub fn set_pending_desktop_image(
         &mut self,
         image: FrozenImage,
+        target_output_id: Option<u32>,
         source_geometry: Option<OutputGeometry>,
     ) {
         self.pending_image = Some(PendingFrozenImage {
             image,
+            target_output_id,
             source_geometry,
+            output_transform: None,
             needs_output_transform: false,
             source: FrozenCaptureSource::Desktop,
         });
@@ -146,26 +277,49 @@ impl FrozenState {
     }
 
     pub fn is_in_progress(&self) -> bool {
-        self.capture.is_some()
+        self.direct_capture.is_some()
             || self.portal_in_progress
             || self.preflight_pending
             || self.pending_image.is_some()
     }
 
-    pub fn take_preflight_pending(&mut self) -> Option<bool> {
+    pub(in crate::backend::wayland) fn take_preflight_pending(
+        &mut self,
+    ) -> Option<FrozenCaptureBackend> {
         if !self.preflight_pending {
             return None;
         }
-        let use_fallback = self.preflight_use_fallback;
         self.preflight_pending = false;
-        self.preflight_use_fallback = false;
-        Some(use_fallback)
+        self.preflight_backend.take()
     }
 
     pub fn take_capture_done(&mut self) -> bool {
         let done = self.capture_done;
         self.capture_done = false;
         done
+    }
+
+    pub(in crate::backend::wayland) fn direct_capture_timeout(
+        &self,
+        now: Instant,
+    ) -> Option<Duration> {
+        self.direct_capture
+            .as_ref()
+            .map(|capture| capture.context().timeout(now))
+    }
+
+    pub(in crate::backend::wayland) fn take_timed_out_direct_capture(
+        &mut self,
+        now: Instant,
+    ) -> Option<FrozenCaptureBackend> {
+        let capture = self.direct_capture.as_ref()?;
+        if !capture.context().timeout(now).is_zero() {
+            return None;
+        }
+        let backend = capture.backend();
+        let capture = self.direct_capture.take()?;
+        capture.destroy();
+        Some(backend)
     }
 
     pub fn activate_pending_image(
@@ -177,15 +331,27 @@ impl FrozenState {
         let Some(pending) = self.pending_image.take() else {
             return Ok(false);
         };
+        if !crate::backend::wayland::portal_capture::portal_output_matches(
+            pending.target_output_id,
+            self.active_output_id,
+        ) {
+            info!("Pending frozen capture discarded after the active output changed");
+            self.capture_done = true;
+            input_state.set_frozen_active(false);
+            input_state.needs_redraw = true;
+            return Ok(false);
+        }
         let mut image = pending.image;
 
         if pending.needs_output_transform {
-            let output_transform = pending
-                .source_geometry
-                .as_ref()
-                .or(self.active_geometry.as_ref())
-                .map(|geo| geo.transform)
-                .unwrap_or(wl_output::Transform::Normal);
+            let output_transform = pending.output_transform.unwrap_or_else(|| {
+                pending
+                    .source_geometry
+                    .as_ref()
+                    .or(self.active_geometry.as_ref())
+                    .map(|geo| geo.transform)
+                    .unwrap_or(wl_output::Transform::Normal)
+            });
             image = image.with_output_transform(output_transform);
         }
 
@@ -275,11 +441,11 @@ impl FrozenState {
     }
 
     pub fn cancel(&mut self, input_state: &mut InputState) {
-        if let Some(capture) = self.capture.take() {
-            capture.frame.destroy();
+        if let Some(capture) = self.direct_capture.take() {
+            capture.destroy();
         }
         self.preflight_pending = false;
-        self.preflight_use_fallback = false;
+        self.preflight_backend = None;
         self.portal_in_progress = false;
         if let Some(mut task) = self.portal_task.take() {
             task.cancel();
@@ -305,15 +471,98 @@ impl FrozenState {
     }
 }
 
+fn select_capture_backend(
+    wlr_screencopy: bool,
+    ext_image_copy: bool,
+    portal: bool,
+) -> Option<FrozenCaptureBackend> {
+    if wlr_screencopy {
+        Some(FrozenCaptureBackend::WlrScreencopy)
+    } else if ext_image_copy {
+        Some(FrozenCaptureBackend::ExtImageCopy)
+    } else if portal {
+        Some(FrozenCaptureBackend::Portal)
+    } else {
+        None
+    }
+}
+
+fn next_capture_backend_after(
+    failed: FrozenCaptureBackend,
+    ext_image_copy: bool,
+    portal: bool,
+) -> Option<FrozenCaptureBackend> {
+    match failed {
+        FrozenCaptureBackend::WlrScreencopy if ext_image_copy => {
+            Some(FrozenCaptureBackend::ExtImageCopy)
+        }
+        FrozenCaptureBackend::WlrScreencopy | FrozenCaptureBackend::ExtImageCopy if portal => {
+            Some(FrozenCaptureBackend::Portal)
+        }
+        FrozenCaptureBackend::WlrScreencopy
+        | FrozenCaptureBackend::ExtImageCopy
+        | FrozenCaptureBackend::Portal => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::input::state::test_support::make_test_input_state;
 
     #[test]
+    fn capture_backend_priority_is_wlr_then_ext_then_portal() {
+        assert_eq!(
+            select_capture_backend(true, true, true),
+            Some(FrozenCaptureBackend::WlrScreencopy)
+        );
+        assert_eq!(
+            select_capture_backend(false, true, true),
+            Some(FrozenCaptureBackend::ExtImageCopy)
+        );
+        assert_eq!(
+            select_capture_backend(false, false, true),
+            Some(FrozenCaptureBackend::Portal)
+        );
+        assert_eq!(select_capture_backend(false, false, false), None);
+        assert_eq!(
+            next_capture_backend_after(FrozenCaptureBackend::WlrScreencopy, true, true),
+            Some(FrozenCaptureBackend::ExtImageCopy)
+        );
+        assert_eq!(
+            next_capture_backend_after(FrozenCaptureBackend::WlrScreencopy, false, true),
+            Some(FrozenCaptureBackend::Portal)
+        );
+        assert_eq!(
+            next_capture_backend_after(FrozenCaptureBackend::ExtImageCopy, true, true),
+            Some(FrozenCaptureBackend::Portal)
+        );
+        assert_eq!(
+            next_capture_backend_after(FrozenCaptureBackend::Portal, true, true),
+            None
+        );
+    }
+
+    #[test]
+    fn direct_capture_context_tracks_its_deadline_and_output_identity() {
+        let started_at = Instant::now();
+        let capture = DirectCaptureContext::new_at(7, None, started_at);
+
+        assert_eq!(capture.timeout(started_at), DIRECT_CAPTURE_TIMEOUT);
+        assert_eq!(
+            capture.timeout(started_at + DIRECT_CAPTURE_TIMEOUT),
+            Duration::ZERO
+        );
+        assert!(capture.output_matches(Some(7)));
+        assert!(!capture.output_matches(Some(8)));
+        assert!(!capture.output_matches(None));
+    }
+
+    #[test]
     fn active_output_capture_accepts_native_fractional_scale_dimensions() {
         let mut state = FrozenState::new(None);
         let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(7));
         state.set_pending_output_image(
             FrozenImage {
                 width: 10,
@@ -321,6 +570,7 @@ mod tests {
                 stride: 40,
                 data: vec![0; 10 * 10 * 4],
             },
+            7,
             None,
         );
 
@@ -341,6 +591,31 @@ mod tests {
     }
 
     #[test]
+    fn active_output_capture_uses_protocol_transform_without_output_geometry() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(7));
+        state.set_pending_output_image_with_transform(
+            FrozenImage {
+                width: 2,
+                height: 1,
+                stride: 8,
+                data: vec![1, 0, 0, 255, 2, 0, 0, 255],
+            },
+            7,
+            None,
+            Some(wl_output::Transform::_90),
+        );
+
+        state
+            .activate_pending_image(1, 2, &mut input_state)
+            .expect("capture transform should orient the frozen image");
+
+        let image = state.image().expect("the frozen image should be active");
+        assert_eq!((image.width, image.height), (1, 2));
+    }
+
+    #[test]
     fn desktop_capture_still_requires_a_crop_covering_the_target() {
         let mut state = FrozenState::new(None);
         let mut input_state = make_test_input_state();
@@ -352,6 +627,7 @@ mod tests {
                 data: vec![0; 4 * 3 * 4],
             },
             None,
+            None,
         );
 
         assert!(
@@ -360,6 +636,34 @@ mod tests {
                 .is_err()
         );
         assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
+    }
+
+    #[test]
+    fn pending_capture_is_discarded_if_output_changes_before_activation() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(7));
+        state.set_pending_output_image(
+            FrozenImage {
+                width: 1,
+                height: 1,
+                stride: 4,
+                data: vec![0; 4],
+            },
+            7,
+            None,
+        );
+
+        state.set_active_output(None, Some(8));
+        let activated = state
+            .activate_pending_image(1, 1, &mut input_state)
+            .expect("the stale-output path is a handled non-error outcome");
+
+        assert!(!activated);
+        assert!(state.image().is_none());
+        assert!(!state.has_pending_image());
+        assert!(state.take_capture_done());
         assert!(!input_state.frozen_active());
     }
 

@@ -2,8 +2,14 @@
 
 use super::types::{CaptureError, CaptureType};
 use std::collections::HashMap;
-use zbus::zvariant::OwnedValue;
+use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 use zbus::{Connection, proxy};
+
+const PORTAL_DESTINATION: &str = "org.freedesktop.portal.Desktop";
+const PORTAL_REQUEST_PATH_PREFIX: &str = "/org/freedesktop/portal/desktop/request";
+const PORTAL_OPTION_HANDLE_TOKEN_KEY: &str = "handle_token";
+const PORTAL_HANDLE_RANDOM_BYTES: usize = 16;
+const LOWERCASE_HEX: &[u8; 16] = b"0123456789abcdef";
 
 /// D-Bus proxy for the xdg-desktop-portal Screenshot interface.
 #[proxy(
@@ -12,6 +18,10 @@ use zbus::{Connection, proxy};
     default_path = "/org/freedesktop/portal/desktop"
 )]
 trait Screenshot {
+    /// Maximum Screenshot interface version supported by the selected portal backend.
+    #[zbus(property, name = "version")]
+    fn version(&self) -> zbus::Result<u32>;
+
     /// Take a screenshot.
     ///
     /// # Arguments
@@ -87,6 +97,7 @@ pub async fn capture_via_portal(capture_type: CaptureType) -> Result<String, Cap
 
         match capture_once(&connection, &proxy, attempt.options).await {
             Ok(uri) => return Ok(uri),
+            Err(err @ CaptureError::Cancelled(_)) => return Err(err),
             Err(err) => {
                 log::warn!("Portal capture attempt '{}' failed: {}", attempt.label, err);
                 last_error = Some(err);
@@ -117,50 +128,127 @@ fn portal_attempts(capture_type: CaptureType) -> Vec<PortalAttempt> {
 async fn capture_once(
     connection: &Connection,
     proxy: &ScreenshotProxy<'_>,
-    options: HashMap<String, zbus::zvariant::Value<'static>>,
+    mut options: HashMap<String, zbus::zvariant::Value<'static>>,
 ) -> Result<String, CaptureError> {
+    let handle_token = next_handle_token()?;
+    let request_path = portal_request_path(connection, &handle_token)?;
+    options.insert(
+        PORTAL_OPTION_HANDLE_TOKEN_KEY.to_string(),
+        handle_token.into(),
+    );
     log::debug!("Calling portal screenshot with options: {:?}", options);
 
-    // Call screenshot method - this returns a Request object path.
-    let request_path = proxy
-        .screenshot("", options)
-        .await
-        .map_err(map_portal_call_error)?;
-
-    log::info!("Screenshot request created: {:?}", request_path);
-
-    // Create a proxy for the Request object to receive Response signal.
+    // Portal backends may complete non-interactive screenshots before the
+    // Screenshot method reply reaches us. Subscribe at the predicted request
+    // path first so that fast Response signals cannot be lost.
     let request_proxy = RequestProxy::builder(connection)
-        .path(request_path)
+        .destination(PORTAL_DESTINATION)
+        .map_err(CaptureError::DBusError)?
+        .path(request_path.clone())
         .map_err(CaptureError::DBusError)?
         .build()
         .await
         .map_err(CaptureError::DBusError)?;
-
-    // Wait for the Response signal.
     let mut response_stream = request_proxy
         .receive_response()
         .await
         .map_err(CaptureError::DBusError)?;
+    let returned_path = proxy
+        .screenshot("", options)
+        .await
+        .map_err(map_portal_call_error)?;
+
+    log::info!("Screenshot request created: {:?}", returned_path);
 
     log::debug!("Waiting for Response signal...");
 
-    // Get the first (and only) response.
-    let response_signal = crate::zbus_stream::next(&mut response_stream)
-        .await
-        .ok_or_else(|| CaptureError::InvalidResponse("No Response signal received".to_string()))?;
+    // Most portals honor handle_token, which lets us install the signal match
+    // before calling Screenshot. Older implementations may return a different
+    // path; switch to that path as required by the Request compatibility
+    // contract instead of rejecting an otherwise valid request.
+    let response_signal = if returned_path == request_path {
+        crate::zbus_stream::next(&mut response_stream).await
+    } else {
+        log::warn!(
+            "Screenshot portal returned a different request path; updating Response subscription"
+        );
+        let returned_request_proxy = RequestProxy::builder(connection)
+            .destination(PORTAL_DESTINATION)
+            .map_err(CaptureError::DBusError)?
+            .path(returned_path)
+            .map_err(CaptureError::DBusError)?
+            .build()
+            .await
+            .map_err(CaptureError::DBusError)?;
+        let mut returned_response_stream = returned_request_proxy
+            .receive_response()
+            .await
+            .map_err(CaptureError::DBusError)?;
+        crate::zbus_stream::next(&mut returned_response_stream).await
+    }
+    .ok_or_else(|| CaptureError::InvalidResponse("No Response signal received".to_string()))?;
 
     let args = response_signal.args().map_err(|e| {
         CaptureError::InvalidResponse(format!("Failed to parse response args: {}", e))
     })?;
 
     log::debug!(
-        "Response signal received: code={}, results={:?}",
+        "Response signal received: code={}, result_keys={:?}",
         args.response,
-        args.results
+        args.results.keys().collect::<Vec<_>>()
     );
 
     parse_response(args.response, &args.results)
+}
+
+fn next_handle_token() -> Result<String, CaptureError> {
+    let mut random = [0_u8; PORTAL_HANDLE_RANDOM_BYTES];
+    getrandom::fill(&mut random).map_err(|error| {
+        CaptureError::InvalidResponse(format!(
+            "Failed to generate a secure portal handle token: {error}"
+        ))
+    })?;
+    Ok(handle_token_from_random(&random))
+}
+
+fn handle_token_from_random(random: &[u8; PORTAL_HANDLE_RANDOM_BYTES]) -> String {
+    let mut token = String::with_capacity("wayscriber_".len() + random.len() * 2);
+    token.push_str("wayscriber_");
+    for byte in random {
+        token.push(char::from(LOWERCASE_HEX[usize::from(byte >> 4)]));
+        token.push(char::from(LOWERCASE_HEX[usize::from(byte & 0x0f)]));
+    }
+    token
+}
+
+fn portal_request_path(
+    connection: &Connection,
+    handle_token: &str,
+) -> Result<OwnedObjectPath, CaptureError> {
+    let unique_name = connection.unique_name().ok_or_else(|| {
+        CaptureError::InvalidResponse("Session bus connection has no unique D-Bus name".to_string())
+    })?;
+    portal_request_path_for_unique_name(unique_name.as_str(), handle_token)
+}
+
+fn portal_request_path_for_unique_name(
+    unique_name: &str,
+    handle_token: &str,
+) -> Result<OwnedObjectPath, CaptureError> {
+    if handle_token.is_empty()
+        || !handle_token
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    {
+        return Err(CaptureError::InvalidResponse(
+            "Portal handle token is not a valid D-Bus object-path element".to_string(),
+        ));
+    }
+    let sender = unique_name.trim_start_matches(':').replace('.', "_");
+    OwnedObjectPath::try_from(format!(
+        "{PORTAL_REQUEST_PATH_PREFIX}/{sender}/{handle_token}"
+    ))
+    .map_err(|error| CaptureError::InvalidResponse(format!("Invalid portal request path: {error}")))
 }
 
 fn parse_response(
@@ -182,12 +270,14 @@ fn parse_response(
                 CaptureError::InvalidResponse(format!("URI is not a string: {}", e))
             })?;
 
-            log::info!("Screenshot captured successfully: {}", uri_str);
+            log::info!("Screenshot captured successfully");
             Ok(uri_str.to_string())
         }
         1 => {
-            log::warn!("Screenshot cancelled by user");
-            Err(CaptureError::PermissionDenied)
+            log::info!("Screenshot cancelled by user");
+            Err(CaptureError::Cancelled(
+                "portal screenshot request was cancelled by the user".to_string(),
+            ))
         }
         code => {
             log::error!("Screenshot failed with code {}", code);
@@ -200,11 +290,16 @@ fn parse_response(
 }
 
 fn map_portal_call_error(err: zbus::Error) -> CaptureError {
-    log::error!("Portal screenshot call failed: {}", err);
     let message = err.to_string();
-    if message.contains("Cancelled") || message.contains("denied") {
+    let lowercase_message = message.to_ascii_lowercase();
+    if lowercase_message.contains("cancelled") || lowercase_message.contains("canceled") {
+        log::info!("Portal screenshot call was cancelled");
+        CaptureError::Cancelled("portal screenshot request was cancelled".to_string())
+    } else if lowercase_message.contains("denied") {
+        log::warn!("Portal screenshot permission was denied");
         CaptureError::PermissionDenied
     } else {
+        log::error!("Portal screenshot call failed: {err}");
         CaptureError::DBusError(err)
     }
 }
@@ -239,12 +334,13 @@ fn build_active_window_interactive_options() -> HashMap<String, zbus::zvariant::
 }
 
 /// Check if xdg-desktop-portal is available on the system.
-#[allow(dead_code)] // Will be used in Phase 2 for capability detection
 pub async fn is_portal_available() -> bool {
     match Connection::session().await {
         Ok(connection) => {
-            // Try to create the proxy.
-            ScreenshotProxy::new(&connection).await.is_ok()
+            let Ok(proxy) = ScreenshotProxy::new(&connection).await else {
+                return false;
+            };
+            proxy.version().await.is_ok()
         }
         Err(_) => false,
     }
@@ -301,5 +397,57 @@ mod tests {
             options.get(PORTAL_OPTION_INTERACTIVE_KEY),
             Some(&zbus::zvariant::Value::from(true))
         );
+    }
+
+    #[test]
+    fn portal_request_path_uses_the_dbus_unique_name_and_handle_token() {
+        assert_eq!(
+            portal_request_path_for_unique_name(":1.42", "wayscriber_7_9")
+                .expect("valid request path")
+                .as_str(),
+            "/org/freedesktop/portal/desktop/request/1_42/wayscriber_7_9"
+        );
+    }
+
+    #[test]
+    fn portal_request_path_rejects_an_invalid_handle_token() {
+        assert!(
+            portal_request_path_for_unique_name(":1.42", "invalid/token").is_err(),
+            "a handle token must remain one D-Bus object-path element"
+        );
+    }
+
+    #[test]
+    fn portal_handle_token_is_a_128_bit_random_object_path_element() {
+        let token = handle_token_from_random(&[
+            0x00, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76,
+            0x54, 0x32,
+        ]);
+
+        assert_eq!(token, "wayscriber_000123456789abcdeffedcba98765432");
+        assert!(portal_request_path_for_unique_name(":1.42", &token).is_ok());
+    }
+
+    #[test]
+    fn generated_portal_handle_tokens_have_independent_random_suffixes() -> Result<(), CaptureError>
+    {
+        let first = next_handle_token()?;
+        let second = next_handle_token()?;
+
+        assert_ne!(first, second);
+        assert_eq!(
+            first.len(),
+            "wayscriber_".len() + PORTAL_HANDLE_RANDOM_BYTES * 2
+        );
+        assert_eq!(second.len(), first.len());
+        assert!(portal_request_path_for_unique_name(":1.42", &first).is_ok());
+        assert!(portal_request_path_for_unique_name(":1.42", &second).is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn portal_response_code_one_preserves_user_cancellation() {
+        let error = parse_response(1, &HashMap::new()).expect_err("response 1 must cancel");
+        assert!(matches!(error, CaptureError::Cancelled(_)));
     }
 }

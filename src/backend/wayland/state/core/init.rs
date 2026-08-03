@@ -25,6 +25,8 @@ impl WaylandState {
             main_surface_uses_overlay_layer,
             pending_freeze_on_start,
             screencopy_manager,
+            ext_image_copy_managers,
+            portal_freeze_supported,
             text_input_manager,
             #[cfg(feature = "tablet-input")]
             tablet_manager,
@@ -167,7 +169,12 @@ impl WaylandState {
             ui_animation_next_tick: None,
             ui_animation_interval,
             capture: CaptureState::new(capture_manager),
-            frozen: FrozenState::new_with_runtime_wake(screencopy_manager, runtime_wake.clone()),
+            frozen: FrozenState::new_with_backends(
+                screencopy_manager,
+                ext_image_copy_managers,
+                portal_freeze_supported,
+                runtime_wake.clone(),
+            ),
             zoom: ZoomState::new_with_runtime_wake(zoom_manager, runtime_wake.clone()),
             perf: perf::PerfMetrics::from_env(),
             exit_after_capture_mode,

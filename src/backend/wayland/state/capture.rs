@@ -1,4 +1,5 @@
 use super::*;
+use crate::backend::wayland::frozen::FrozenCaptureBackend;
 use crate::capture::{CaptureRequest, CaptureRequestId, CaptureSubmitError};
 use crate::input::state::{Toast, ToastPriority};
 
@@ -18,6 +19,20 @@ fn should_exit_after_capture(mode: ExitAfterCaptureMode, destination: CaptureDes
 }
 
 impl WaylandState {
+    pub(in crate::backend::wayland) fn continue_frozen_capture_after_failure(
+        &mut self,
+        failed_backend: FrozenCaptureBackend,
+        qh: &QueueHandle<Self>,
+    ) {
+        if let Err(error) =
+            self.frozen
+                .begin_fallback_capture(failed_backend, &self.shm, qh, &self.tokio_handle)
+        {
+            log::warn!("No frozen capture fallback succeeded after {failed_backend:?}: {error:#}");
+            self.frozen.cancel(&mut self.input_state);
+        }
+    }
+
     fn should_exit_after_capture(&self, destination: CaptureDestination) -> bool {
         should_exit_after_capture(self.exit_after_capture_mode, destination)
     }

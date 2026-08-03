@@ -23,18 +23,29 @@ pub(super) fn poll_portal_captures(state: &mut WaylandState, now: Instant) {
     state.apply_capture_completion();
 }
 
-pub(super) fn poll_capture_deadlines(state: &mut WaylandState, now: Instant) {
+pub(super) fn poll_capture_deadlines(
+    state: &mut WaylandState,
+    qh: &wayland_client::QueueHandle<WaylandState>,
+    now: Instant,
+) {
     state.poll_overlay_capture_barrier_timeout(now);
+    if let Some(backend) = state.frozen.take_timed_out_direct_capture(now) {
+        warn!("{backend:?} frozen capture timed out; trying the next backend");
+        state.continue_frozen_capture_after_failure(backend, qh);
+    }
 }
 
 pub(super) fn capture_timeout(state: &WaylandState, now: Instant) -> Option<Duration> {
     super::min_timeout(
         state.overlay_capture_barrier_timeout(now),
         super::min_timeout(
-            state.frozen.portal_timeout(now),
+            state.frozen.direct_capture_timeout(now),
             super::min_timeout(
-                state.zoom.portal_timeout(now),
-                state.xdg_frozen_fullscreen_timeout(now),
+                state.frozen.portal_timeout(now),
+                super::min_timeout(
+                    state.zoom.portal_timeout(now),
+                    state.xdg_frozen_fullscreen_timeout(now),
+                ),
             ),
         ),
     )
@@ -146,7 +157,7 @@ fn handle_frozen_toggle(state: &mut WaylandState) {
 
     if !state.frozen_enabled() {
         warn!(
-            "Frozen mode unavailable: no screencopy backend and no screenshot portal backend; ignoring toggle"
+            "Frozen mode unavailable: no direct capture backend and no screenshot portal backend; ignoring toggle"
         );
         state.input_state.push_toast(
             ToastPriority::Info,
@@ -159,12 +170,6 @@ fn handle_frozen_toggle(state: &mut WaylandState) {
         state.restore_xdg_after_frozen();
         state.frozen.unfreeze(&mut state.input_state);
     } else {
-        let use_fallback = !state.frozen.manager_available();
-        if use_fallback {
-            warn!("Frozen mode: screencopy unavailable, using portal fallback");
-        } else {
-            info!("Frozen mode: using screencopy fast path");
-        }
         if !state.enter_overlay_suppression(OverlaySuppression::Frozen) {
             warn!("Frozen mode requested while overlay is suppressed; ignoring toggle");
             state.input_state.push_toast(
@@ -174,10 +179,7 @@ fn handle_frozen_toggle(state: &mut WaylandState) {
             );
             return;
         }
-        if let Err(err) = state
-            .frozen
-            .start_capture(use_fallback, &state.tokio_handle)
-        {
+        if let Err(err) = state.frozen.start_capture() {
             warn!("Frozen capture failed to start: {}", err);
             state.exit_overlay_suppression(OverlaySuppression::Frozen);
             state.frozen.cancel(&mut state.input_state);

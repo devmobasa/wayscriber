@@ -6,6 +6,7 @@ fn compositor_capabilities_limitations_summary_returns_none_when_fully_available
         CompositorCapabilities {
             layer_shell: true,
             screencopy: true,
+            image_copy_capture: false,
             freeze_capture: true,
             pointer_constraints: true,
             desktop_environment: Default::default(),
@@ -22,6 +23,7 @@ fn compositor_capabilities_limitations_summary_lists_missing_features_in_order()
         CompositorCapabilities {
             layer_shell: false,
             screencopy: true,
+            image_copy_capture: false,
             freeze_capture: true,
             pointer_constraints: false,
             desktop_environment: Default::default(),
@@ -39,6 +41,7 @@ fn compositor_capabilities_reports_portal_freeze_without_hiding_limitations() {
     let caps = CompositorCapabilities {
         layer_shell: true,
         screencopy: false,
+        image_copy_capture: false,
         freeze_capture: true,
         pointer_constraints: true,
         desktop_environment: Default::default(),
@@ -50,4 +53,21 @@ fn compositor_capabilities_reports_portal_freeze_without_hiding_limitations() {
         caps.limitations_summary(),
         Some("Freeze uses portal capture".to_string())
     );
+}
+
+#[test]
+fn compositor_capabilities_accepts_ext_image_copy_as_direct_capture() {
+    let caps = CompositorCapabilities {
+        layer_shell: true,
+        screencopy: false,
+        image_copy_capture: true,
+        freeze_capture: true,
+        pointer_constraints: true,
+        desktop_environment: Default::default(),
+        shell_mode: Default::default(),
+    };
+
+    assert!(caps.direct_capture_available());
+    assert!(caps.all_available());
+    assert_eq!(caps.limitations_summary(), None);
 }
