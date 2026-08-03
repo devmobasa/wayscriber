@@ -1,7 +1,7 @@
 use super::super::fields::{
     DragColorOption, DragMouseButton, DragToolField, DragToolOption, FontStyleOption,
     FontWeightOption, OverrideOption, QuadField, TextField, ToggleField, ToolbarLayoutModeOption,
-    ToolbarOverrideField, TripletField,
+    ToolbarOverrideField,
 };
 use super::draft::ConfigDraft;
 use wayscriber::config::{
@@ -413,25 +413,6 @@ impl ConfigDraft {
             }
             #[cfg(feature = "tablet-input")]
             TextField::TabletPressureScaleStep => self.tablet_pressure_thickness_scale_step = value,
-        }
-    }
-
-    pub fn set_triplet(&mut self, field: TripletField, index: usize, value: String) {
-        match field {
-            TripletField::DrawingColorRgb => {
-                if let Some(slot) = self.drawing_color.rgb.get_mut(index) {
-                    *slot = value;
-                }
-            }
-            TripletField::QuickColorRgb(quick_color_index) => {
-                if let Some(component) = self
-                    .drawing_quick_colors
-                    .get_mut(quick_color_index)
-                    .and_then(|entry| entry.color.rgb.get_mut(index))
-                {
-                    *component = value;
-                }
-            }
         }
     }
 

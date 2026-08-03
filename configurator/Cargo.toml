@@ -10,8 +10,13 @@ workspace = true
 [dependencies]
 # The configurator edits config and service files; it does not call portal D-Bus APIs directly.
 wayscriber = { path = "..", default-features = false }
-iced = { version = "0.14", default-features = false, features = ["tokio", "tiny-skia", "wayland"] }
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
+relm4 = { version = "0.11", features = ["libadwaita"] }
+# Feature floor pinned to the release runner's Ubuntu LTS: 24.04 ships
+# libadwaita 1.5, and every API this crate uses exists by 1.4. Newer distro
+# runtimes (Arch 1.9+) still apply their styling to the same binary.
+libadwaita = { version = "0.9", features = ["v1_4"] }
+gtk4 = { version = "0.11", features = ["v4_10"] }
 
 [features]
 default = ["tablet-input"]

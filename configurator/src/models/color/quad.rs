@@ -40,14 +40,4 @@ impl ColorQuadInput {
         }
         Ok(out)
     }
-
-    pub fn summary(&self) -> String {
-        [
-            self.components[0].trim(),
-            self.components[1].trim(),
-            self.components[2].trim(),
-            self.components[3].trim(),
-        ]
-        .join(", ")
-    }
 }

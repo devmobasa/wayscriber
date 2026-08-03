@@ -1,49 +1,24 @@
-use iced::Task;
-
-use crate::messages::Message;
 use crate::models::color::{
-    hex_from_rgb, hex_from_rgba, parse_hex, parse_quad_values, parse_triplet_values,
+    hex_field_error, hex_from_rgb, hex_from_rgba, parse_hex, parse_quad_values,
+    parse_triplet_values,
 };
 use crate::models::util::format_float;
-use crate::models::{ColorPickerId, ColorPickerValue, QuadField};
+use crate::models::{ColorPickerId, QuadField};
 
+use super::super::effects::Effect;
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
 impl ConfiguratorApp {
-    pub(super) fn handle_color_picker_toggled(&mut self, id: ColorPickerId) -> Task<Message> {
-        if self.color_picker_open == Some(id) {
-            self.color_picker_open = None;
-            return Task::none();
-        }
-
-        self.color_picker_open = Some(id);
-        self.sync_color_picker_hex_for_id(id);
-        Task::none()
-    }
-
-    pub(super) fn handle_color_picker_advanced_toggled(
-        &mut self,
-        id: ColorPickerId,
-        value: bool,
-    ) -> Task<Message> {
-        if value {
-            self.color_picker_advanced.insert(id);
-        } else {
-            self.color_picker_advanced.remove(&id);
-        }
-        Task::none()
-    }
-
     pub(super) fn handle_color_picker_hex_changed(
         &mut self,
         id: ColorPickerId,
         value: String,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         self.color_picker_hex.insert(id, value.clone());
 
         if let Some((rgb, alpha)) = parse_hex(&value) {
-            let alpha = if self.color_picker_uses_alpha(id) {
+            let alpha = if id.uses_alpha() {
                 alpha.or_else(|| self.current_alpha_for_id(id))
             } else {
                 None
@@ -52,23 +27,34 @@ impl ConfiguratorApp {
         }
 
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_color_picker_changed(
-        &mut self,
-        id: ColorPickerId,
-        value: ColorPickerValue,
-    ) -> Task<Message> {
-        self.status = StatusMessage::idle();
-        self.apply_color_picker_value(id, value.rgb, value.alpha);
-        self.refresh_dirty_flag();
-        Task::none()
+    /// How many color fields hold text that is not a color.
+    ///
+    /// [`Self::handle_color_picker_hex_changed`] keeps every keystroke as text
+    /// and only writes a value the parser accepted into the draft, so text it
+    /// rejects is an edit that has not landed anywhere. Saving over it would
+    /// write whatever last parsed and then let the reload's
+    /// [`Self::sync_all_color_picker_hex`] replace the text with that value —
+    /// the user's half-typed color gone without a word. Counting them is what
+    /// lets the Save path refuse instead.
+    ///
+    /// An emptied field counts too: every picker here edits a required color,
+    /// so clearing one is the same unwritable edit as mistyping one, and the
+    /// same silent overwrite would follow. [`hex_field_error`] is the single
+    /// predicate this and the rows' error styling share, so the fields the
+    /// user sees marked are exactly the fields counted here.
+    pub(crate) fn invalid_color_hex_count(&self) -> usize {
+        self.color_picker_hex
+            .values()
+            .filter(|text| hex_field_error(text).is_some())
+            .count()
     }
 
     pub(super) fn sync_color_picker_hex_for_id(&mut self, id: ColorPickerId) {
         if let Some((rgb, alpha)) = self.current_color_for_id(id) {
-            let hex = if self.color_picker_uses_alpha(id) {
+            let hex = if id.uses_alpha() {
                 let alpha = alpha.unwrap_or(1.0);
                 hex_from_rgba([rgb[0], rgb[1], rgb[2], alpha])
             } else {
@@ -304,21 +290,6 @@ impl ConfiguratorApp {
     fn current_alpha_for_id(&self, id: ColorPickerId) -> Option<f64> {
         self.current_color_for_id(id).and_then(|(_, alpha)| alpha)
     }
-
-    fn color_picker_uses_alpha(&self, id: ColorPickerId) -> bool {
-        matches!(
-            id,
-            ColorPickerId::StatusBarBg
-                | ColorPickerId::StatusBarText
-                | ColorPickerId::HighlightFill
-                | ColorPickerId::HighlightOutline
-                | ColorPickerId::HelpBg
-                | ColorPickerId::HelpBorder
-                | ColorPickerId::HelpText
-                | ColorPickerId::ExportPdfLabelText
-                | ColorPickerId::ExportPdfLabelBackground
-        )
-    }
 }
 
 fn normalized_drawing_rgb(values: &[String; 3]) -> Option<[f64; 3]> {
@@ -341,33 +312,11 @@ fn format_rgb255(value: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ColorMode, ColorPickerValue};
-
-    #[test]
-    fn drawing_color_picker_writes_rgb255_components_and_hex() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
-        app.draft.drawing_color.mode = ColorMode::Rgb;
-
-        let _ = app.handle_color_picker_changed(
-            ColorPickerId::DrawingColor,
-            ColorPickerValue {
-                rgb: [0.0, 0.5, 1.0],
-                alpha: None,
-            },
-        );
-
-        assert_eq!(app.draft.drawing_color.rgb, ["0", "128", "255"]);
-        assert_eq!(
-            app.color_picker_hex
-                .get(&ColorPickerId::DrawingColor)
-                .map(String::as_str),
-            Some("#0080FF")
-        );
-    }
+    use crate::models::ColorMode;
 
     #[test]
     fn drawing_color_picker_hex_writes_rgb255_components() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         app.draft.drawing_color.mode = ColorMode::Rgb;
 
         let _ =
@@ -378,7 +327,7 @@ mod tests {
 
     #[test]
     fn quick_color_picker_hex_writes_slot_rgb255_components() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         app.draft.drawing_quick_colors.entries[1].color.mode = ColorMode::Rgb;
 
         let _ = app
@@ -387,6 +336,20 @@ mod tests {
         assert_eq!(
             app.draft.drawing_quick_colors.entries[1].color.rgb,
             ["18", "52", "86"]
+        );
+    }
+
+    #[test]
+    fn explicit_opaque_alpha_replaces_the_previous_translucency() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.draft.help_bg_color.components[3] = "0.25".to_string();
+
+        let _ = app.handle_color_picker_hex_changed(ColorPickerId::HelpBg, "#123456FF".to_string());
+
+        assert_eq!(app.draft.help_bg_color.components[3], "1");
+        assert_eq!(
+            app.color_picker_hex.get(&ColorPickerId::HelpBg),
+            Some(&"#123456FF".to_string())
         );
     }
 }

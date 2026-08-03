@@ -45,25 +45,6 @@ impl AppSearchSummary {
         self.query.is_active()
     }
 
-    pub(crate) fn raw_query(&self) -> &str {
-        self.query.raw()
-    }
-
-    pub(crate) fn has_raw_input(&self) -> bool {
-        self.query.has_raw_input()
-    }
-
-    pub(crate) fn total_matches(&self) -> usize {
-        if !self.is_active() {
-            return 0;
-        }
-        self.tabs.iter().map(TabSearchSummary::match_count).sum()
-    }
-
-    pub(crate) fn tabs(&self) -> &[TabSearchSummary] {
-        &self.tabs
-    }
-
     pub(crate) fn tab(&self, tab: TabId) -> Option<&TabSearchSummary> {
         self.tabs.iter().find(|summary| summary.tab == tab)
     }
@@ -118,10 +99,6 @@ impl TabSearchSummary {
             session_item_ids: Vec::new(),
             keybinding_fields: Vec::new(),
         }
-    }
-
-    pub(crate) fn tab(&self) -> TabId {
-        self.tab
     }
 
     pub(crate) fn show_all(&self) -> bool {
@@ -196,25 +173,6 @@ impl TabSearchSummary {
             || self.session_catalog_all_items
             || !self.session_item_ids.is_empty()
             || !self.keybinding_fields.is_empty()
-    }
-
-    fn match_count(&self) -> usize {
-        let count = self.areas.len()
-            + self.ui_tabs.len()
-            + self.keybinding_tabs.len()
-            + self.direct_keybinding_tabs.len()
-            + self.board_indices.len()
-            + self.preset_slots.len()
-            + self.render_profile_indices.len()
-            + self.render_profile_mapping_indices.len()
-            + usize::from(self.session_catalog_all_items)
-            + self.session_item_ids.len()
-            + self.keybinding_fields.len();
-        if self.show_all() && count == 0 {
-            1
-        } else {
-            count.max(1)
-        }
     }
 
     pub(super) fn add_area(&mut self, area: SearchArea) {

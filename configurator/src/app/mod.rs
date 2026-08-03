@@ -1,14 +1,13 @@
 mod blocking_jobs;
+mod component;
 mod daemon_setup;
-mod entry;
+mod effects;
 mod io;
-pub(crate) mod scroll;
+mod pages;
 mod search;
 mod session_catalog;
 mod startup;
 mod state;
-mod subscription;
 mod update;
-mod view;
 
-pub(crate) use entry::run;
+pub(crate) use component::run;

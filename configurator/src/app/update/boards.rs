@@ -1,14 +1,12 @@
-use iced::Task;
-
-use crate::messages::Message;
 use crate::models::{
     BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorPickerId,
 };
 
+use super::super::effects::Effect;
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
 impl ConfiguratorApp {
-    pub(super) fn handle_boards_add_item(&mut self) -> Task<Message> {
+    pub(super) fn handle_boards_add_item(&mut self) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         let new_item = self.draft.boards.new_item();
         self.draft.boards.items.push(new_item);
@@ -16,10 +14,10 @@ impl ConfiguratorApp {
         self.clear_board_color_pickers();
         self.draft.boards.ensure_default_exists();
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_boards_remove_item(&mut self, index: usize) -> Task<Message> {
+    pub(super) fn handle_boards_remove_item(&mut self, index: usize) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if index < self.draft.boards.items.len() {
             self.draft.boards.items.remove(index);
@@ -30,23 +28,23 @@ impl ConfiguratorApp {
             self.draft.boards.ensure_default_exists();
             self.refresh_dirty_flag();
         }
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_boards_move_item(&mut self, index: usize, up: bool) -> Task<Message> {
+    pub(super) fn handle_boards_move_item(&mut self, index: usize, up: bool) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         let len = self.draft.boards.items.len();
         if len <= 1 {
-            return Task::none();
+            return Vec::new();
         }
         let target = if up {
             if index == 0 {
-                return Task::none();
+                return Vec::new();
             }
             index - 1
         } else {
             if index + 1 >= len {
-                return Task::none();
+                return Vec::new();
             }
             index + 1
         };
@@ -56,10 +54,10 @@ impl ConfiguratorApp {
         }
         self.clear_board_color_pickers();
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_boards_duplicate_item(&mut self, index: usize) -> Task<Message> {
+    pub(super) fn handle_boards_duplicate_item(&mut self, index: usize) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(item) = self.draft.boards.items.get(index).cloned() {
             let mut duplicate = item;
@@ -74,21 +72,21 @@ impl ConfiguratorApp {
             self.draft.boards.ensure_default_exists();
             self.refresh_dirty_flag();
         }
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_boards_collapse_toggled(&mut self, index: usize) -> Task<Message> {
+    pub(super) fn handle_boards_collapse_toggled(&mut self, index: usize) -> Vec<Effect> {
         if let Some(value) = self.boards_collapsed.get_mut(index) {
             *value = !*value;
         }
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_boards_default_changed(&mut self, value: String) -> Task<Message> {
+    pub(super) fn handle_boards_default_changed(&mut self, value: String) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         self.draft.boards.default_board = value;
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_boards_item_text_changed(
@@ -96,7 +94,7 @@ impl ConfiguratorApp {
         index: usize,
         field: BoardItemTextField,
         value: String,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         let old_effective_id = self.draft.boards.effective_id_for_index(index);
         if let Some(item) = self.draft.boards.items.get_mut(index) {
@@ -122,20 +120,28 @@ impl ConfiguratorApp {
         }
         self.draft.boards.ensure_default_exists();
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_boards_background_kind_changed(
         &mut self,
         index: usize,
         value: BoardBackgroundOption,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
-        if let Some(item) = self.draft.boards.items.get_mut(index) {
+        let changed = if let Some(item) = self.draft.boards.items.get_mut(index) {
             item.background_kind = value;
+            true
+        } else {
+            false
+        };
+        if changed && value != BoardBackgroundOption::Color {
+            // The picker is no longer reachable. Drop any half-typed buffer
+            // and restore its canonical draft value so it cannot block Save.
+            self.sync_color_picker_hex_for_id(ColorPickerId::BoardBackground(index));
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_boards_background_color_changed(
@@ -143,27 +149,35 @@ impl ConfiguratorApp {
         index: usize,
         component: usize,
         value: String,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(item) = self.draft.boards.items.get_mut(index) {
             item.background_color.set_component(component, value);
         }
         self.sync_color_picker_hex_for_id(ColorPickerId::BoardBackground(index));
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_boards_default_pen_enabled_changed(
         &mut self,
         index: usize,
         value: bool,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
-        if let Some(item) = self.draft.boards.items.get_mut(index) {
+        let changed = if let Some(item) = self.draft.boards.items.get_mut(index) {
             item.default_pen_color.enabled = value;
+            true
+        } else {
+            false
+        };
+        if changed && !value {
+            // Disabling the override hides this required-looking editor, so
+            // abandon any incomplete text with the control that held it.
+            self.sync_color_picker_hex_for_id(ColorPickerId::BoardPen(index));
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_boards_default_pen_color_changed(
@@ -171,14 +185,14 @@ impl ConfiguratorApp {
         index: usize,
         component: usize,
         value: String,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(item) = self.draft.boards.items.get_mut(index) {
             item.default_pen_color.color.set_component(component, value);
         }
         self.sync_color_picker_hex_for_id(ColorPickerId::BoardPen(index));
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_boards_item_toggle_changed(
@@ -186,7 +200,7 @@ impl ConfiguratorApp {
         index: usize,
         field: BoardItemToggleField,
         value: bool,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(item) = self.draft.boards.items.get_mut(index) {
             match field {
@@ -196,23 +210,11 @@ impl ConfiguratorApp {
             }
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     fn clear_board_color_pickers(&mut self) {
-        if matches!(
-            self.color_picker_open,
-            Some(ColorPickerId::BoardBackground(_) | ColorPickerId::BoardPen(_))
-        ) {
-            self.color_picker_open = None;
-        }
         self.color_picker_hex.retain(|id, _| {
-            !matches!(
-                id,
-                ColorPickerId::BoardBackground(_) | ColorPickerId::BoardPen(_)
-            )
-        });
-        self.color_picker_advanced.retain(|id| {
             !matches!(
                 id,
                 ColorPickerId::BoardBackground(_) | ColorPickerId::BoardPen(_)
@@ -225,11 +227,10 @@ impl ConfiguratorApp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::ColorPickerId;
 
     #[test]
     fn add_item_updates_boards_and_collapsed_state() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         let before = app.draft.boards.items.len();
 
         let _ = app.handle_boards_add_item();
@@ -241,7 +242,7 @@ mod tests {
 
     #[test]
     fn duplicate_item_inserts_copy_with_new_id() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         let before = app.draft.boards.items.len();
         let original_id = app
             .draft
@@ -259,14 +260,40 @@ mod tests {
     }
 
     #[test]
-    fn remove_item_clears_board_color_picker_when_targeting_board_entry() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+    fn remove_item_keeps_collapsed_state_in_step_with_the_board_list() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         let _ = app.handle_boards_add_item();
-        app.color_picker_open = Some(ColorPickerId::BoardBackground(0));
 
         let _ = app.handle_boards_remove_item(0);
 
-        assert!(app.color_picker_open.is_none());
         assert_eq!(app.boards_collapsed.len(), app.draft.boards.items.len());
+    }
+
+    #[test]
+    fn hiding_a_board_background_color_releases_its_invalid_hex() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        let _ = app.handle_boards_background_kind_changed(0, BoardBackgroundOption::Color);
+        let _ = app.handle_color_picker_hex_changed(
+            ColorPickerId::BoardBackground(0),
+            "#12zz".to_string(),
+        );
+        assert_eq!(app.invalid_color_hex_count(), 1);
+
+        let _ = app.handle_boards_background_kind_changed(0, BoardBackgroundOption::Transparent);
+
+        assert_eq!(app.invalid_color_hex_count(), 0);
+    }
+
+    #[test]
+    fn disabling_a_board_pen_override_releases_its_invalid_hex() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        let _ = app.handle_boards_default_pen_enabled_changed(0, true);
+        let _ =
+            app.handle_color_picker_hex_changed(ColorPickerId::BoardPen(0), "#12zz".to_string());
+        assert_eq!(app.invalid_color_hex_count(), 1);
+
+        let _ = app.handle_boards_default_pen_enabled_changed(0, false);
+
+        assert_eq!(app.invalid_color_hex_count(), 0);
     }
 }

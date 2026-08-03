@@ -1,24 +1,15 @@
 use std::path::PathBuf;
 
-use iced::Task;
+use crate::models::{SessionCatalogActionResult, SessionCatalogItem, SessionCatalogOperation};
 
-use crate::app::session_catalog::{
-    clear_session_catalog_entry, clear_session_catalog_tool_state_entry,
-    duplicate_session_catalog_entry, forget_session_catalog_entry, load_session_catalog,
-    move_session_catalog_entry, rename_session_catalog_entry, reveal_session_catalog_entry,
-    session_clear_cached_status_blocker, session_clear_tool_state_cached_status_blocker,
-    session_duplicate_cached_status_blocker, session_move_cached_status_blocker,
-};
-use crate::messages::Message;
-use crate::models::{SessionCatalogActionResult, SessionCatalogItem};
-
+use super::super::effects::Effect;
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
 impl ConfiguratorApp {
     pub(super) fn handle_session_catalog_loaded(
         &mut self,
         result: Result<Vec<SessionCatalogItem>, String>,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         match result {
             Ok(items) => {
                 self.session_catalog.replace_items(items);
@@ -37,220 +28,207 @@ impl ConfiguratorApp {
                     StatusMessage::error(format!("Failed to load session catalog: {err}"));
             }
         }
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_session_catalog_refresh_requested(&mut self) -> Task<Message> {
+    pub(super) fn handle_session_catalog_refresh_requested(&mut self) -> Vec<Effect> {
         if self.session_catalog.busy {
-            return Task::none();
+            return Vec::new();
         }
         self.session_catalog.is_loading = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Loading sessions...");
-        Task::perform(load_session_catalog(), Message::SessionCatalogLoaded)
+        vec![Effect::LoadSessionCatalog]
     }
 
-    pub(super) fn handle_session_catalog_forget_requested(&mut self, id: String) -> Task<Message> {
+    pub(super) fn handle_session_catalog_forget_requested(&mut self, id: String) -> Vec<Effect> {
         if self.session_catalog.busy {
-            return Task::none();
+            return Vec::new();
         }
         self.session_catalog.busy = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Forgetting session metadata...");
-        Task::perform(
-            forget_session_catalog_entry(id),
-            Message::SessionCatalogActionCompleted,
-        )
+        vec![Effect::ForgetSessionEntry { id }]
     }
 
     pub(super) fn handle_session_catalog_rename_input_changed(
         &mut self,
         id: String,
         value: String,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.session_catalog.rename_inputs.insert(id, value);
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_session_catalog_rename_requested(&mut self, id: String) -> Task<Message> {
+    pub(super) fn handle_session_catalog_rename_requested(&mut self, id: String) -> Vec<Effect> {
         if self.session_catalog.busy {
-            return Task::none();
+            return Vec::new();
         }
         let Some(item) = self.session_catalog.item(&id) else {
             self.status = StatusMessage::error("Session is no longer in the catalog.");
-            return Task::none();
+            return Vec::new();
         };
         let display_name = self.session_catalog.rename_value(&id, &item.display_name);
         if display_name.trim().is_empty() {
             self.status = StatusMessage::error("Session display name cannot be empty.");
-            return Task::none();
+            return Vec::new();
         }
 
         self.session_catalog.busy = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Renaming session...");
-        Task::perform(
-            rename_session_catalog_entry(id, display_name),
-            Message::SessionCatalogActionCompleted,
-        )
+        vec![Effect::RenameSessionEntry { id, display_name }]
     }
 
     pub(super) fn handle_session_catalog_duplicate_input_changed(
         &mut self,
         id: String,
         value: String,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.session_catalog.duplicate_inputs.insert(id, value);
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_session_catalog_duplicate_requested(
-        &mut self,
-        id: String,
-    ) -> Task<Message> {
+    pub(super) fn handle_session_catalog_duplicate_requested(&mut self, id: String) -> Vec<Effect> {
         if self.session_catalog.busy {
-            return Task::none();
+            return Vec::new();
         }
-        if let Some(blocker) = session_duplicate_cached_status_blocker(self.daemon_status.as_ref())
+        if let Some(blocker) =
+            SessionCatalogOperation::Duplicate.cached_status_blocker(self.daemon_status.as_ref())
         {
             self.status = StatusMessage::warning(blocker);
-            return Task::none();
+            return Vec::new();
         }
         let Some(item) = self.session_catalog.item(&id) else {
             self.status = StatusMessage::error("Session is no longer in the catalog.");
-            return Task::none();
+            return Vec::new();
         };
         let target = self.session_catalog.duplicate_value(&id, &item.path);
         if target.trim().is_empty() {
             self.status = StatusMessage::error("Duplicate Session target cannot be empty.");
-            return Task::none();
+            return Vec::new();
         }
 
         self.session_catalog.busy = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Duplicating session...");
-        Task::perform(
-            duplicate_session_catalog_entry(id, PathBuf::from(target)),
-            Message::SessionCatalogActionCompleted,
-        )
+        vec![Effect::DuplicateSessionEntry {
+            id,
+            target: PathBuf::from(target),
+        }]
     }
 
     pub(super) fn handle_session_catalog_move_input_changed(
         &mut self,
         id: String,
         value: String,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.session_catalog.move_inputs.insert(id, value);
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_session_catalog_move_requested(&mut self, id: String) -> Task<Message> {
+    pub(super) fn handle_session_catalog_move_requested(&mut self, id: String) -> Vec<Effect> {
         if self.session_catalog.busy {
-            return Task::none();
+            return Vec::new();
         }
-        if let Some(blocker) = session_move_cached_status_blocker(self.daemon_status.as_ref()) {
+        if let Some(blocker) =
+            SessionCatalogOperation::Move.cached_status_blocker(self.daemon_status.as_ref())
+        {
             self.status = StatusMessage::warning(blocker);
-            return Task::none();
+            return Vec::new();
         }
         let Some(item) = self.session_catalog.item(&id) else {
             self.status = StatusMessage::error("Session is no longer in the catalog.");
-            return Task::none();
+            return Vec::new();
         };
         let target = self.session_catalog.move_value(&id, &item.path);
         if target.trim().is_empty() {
             self.status = StatusMessage::error("Move Session target cannot be empty.");
-            return Task::none();
+            return Vec::new();
         }
 
         self.session_catalog.busy = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Moving session...");
-        Task::perform(
-            move_session_catalog_entry(id, PathBuf::from(target)),
-            Message::SessionCatalogActionCompleted,
-        )
+        vec![Effect::MoveSessionEntry {
+            id,
+            target: PathBuf::from(target),
+        }]
     }
 
-    pub(super) fn handle_session_catalog_reveal_requested(&mut self, id: String) -> Task<Message> {
+    pub(super) fn handle_session_catalog_reveal_requested(&mut self, id: String) -> Vec<Effect> {
         if self.session_catalog.busy {
-            return Task::none();
+            return Vec::new();
         }
         self.session_catalog.busy = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Opening session folder...");
-        Task::perform(
-            reveal_session_catalog_entry(id),
-            Message::SessionCatalogActionCompleted,
-        )
+        vec![Effect::RevealSessionEntry { id }]
     }
 
     pub(super) fn handle_session_catalog_clear_tool_state_requested(
         &mut self,
         id: String,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         if self.session_catalog.busy {
-            return Task::none();
+            return Vec::new();
         }
-        if let Some(blocker) =
-            session_clear_tool_state_cached_status_blocker(self.daemon_status.as_ref())
+        if let Some(blocker) = SessionCatalogOperation::ClearToolState
+            .cached_status_blocker(self.daemon_status.as_ref())
         {
             self.status = StatusMessage::warning(blocker);
-            return Task::none();
+            return Vec::new();
         }
         if self.session_catalog.item(&id).is_none() {
             self.status = StatusMessage::error("Session is no longer in the catalog.");
-            return Task::none();
+            return Vec::new();
         }
 
         self.session_catalog.busy = true;
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::info("Clearing saved tool state...");
-        Task::perform(
-            clear_session_catalog_tool_state_entry(id),
-            Message::SessionCatalogActionCompleted,
-        )
+        vec![Effect::ClearSessionToolState { id }]
     }
 
-    pub(super) fn handle_session_catalog_clear_requested(&mut self, id: String) -> Task<Message> {
+    pub(super) fn handle_session_catalog_clear_requested(&mut self, id: String) -> Vec<Effect> {
         if self.session_catalog.busy {
-            return Task::none();
+            return Vec::new();
         }
-        if let Some(blocker) = session_clear_cached_status_blocker(self.daemon_status.as_ref()) {
+        if let Some(blocker) =
+            SessionCatalogOperation::Clear.cached_status_blocker(self.daemon_status.as_ref())
+        {
             self.status = StatusMessage::warning(blocker);
-            return Task::none();
+            return Vec::new();
         }
         self.session_catalog.pending_clear_id = Some(id);
         self.status = StatusMessage::warning(
             "Clear saved data removes the selected session primary and non-lock sidecars. Press Confirm Clear to continue.",
         );
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_session_catalog_clear_confirmed(&mut self, id: String) -> Task<Message> {
+    pub(super) fn handle_session_catalog_clear_confirmed(&mut self, id: String) -> Vec<Effect> {
         if self.session_catalog.busy {
-            return Task::none();
+            return Vec::new();
         }
         if self.session_catalog.pending_clear_id.as_deref() != Some(id.as_str()) {
-            return Task::none();
+            return Vec::new();
         }
         self.session_catalog.busy = true;
         self.status = StatusMessage::info("Clearing saved session data...");
-        Task::perform(
-            clear_session_catalog_entry(id),
-            Message::SessionCatalogActionCompleted,
-        )
+        vec![Effect::ClearSessionEntry { id }]
     }
 
-    pub(super) fn handle_session_catalog_clear_canceled(&mut self) -> Task<Message> {
+    pub(super) fn handle_session_catalog_clear_canceled(&mut self) -> Vec<Effect> {
         self.session_catalog.pending_clear_id = None;
         self.status = StatusMessage::idle();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_session_catalog_action_completed(
         &mut self,
         result: Result<SessionCatalogActionResult, String>,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.session_catalog.busy = false;
         self.session_catalog.pending_clear_id = None;
         match result {
@@ -266,7 +244,7 @@ impl ConfiguratorApp {
                 self.status = StatusMessage::error(err);
             }
         }
-        Task::none()
+        Vec::new()
     }
 
     fn status_text(&self) -> Option<&str> {

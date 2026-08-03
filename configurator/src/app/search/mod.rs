@@ -4,18 +4,12 @@ mod terms;
 mod tests;
 mod types;
 
-use iced::keyboard::{self, Key, key};
-use iced::{Task, event};
-
-use crate::messages::Message;
 use crate::models::{SearchQuery, TabId};
 
-use super::scroll;
+use super::effects::Effect;
 use super::state::ConfiguratorApp;
 
 pub(crate) use types::{AppSearchSummary, SearchArea, TabSearchSummary};
-
-pub(crate) const SEARCH_INPUT_ID: &str = "configurator-search-input";
 
 impl ConfiguratorApp {
     pub(crate) fn search_summary(&self) -> AppSearchSummary {
@@ -63,93 +57,40 @@ impl ConfiguratorApp {
         }
     }
 
-    pub(super) fn handle_search_changed(&mut self, value: String) -> Task<Message> {
-        self.search_input_focus_hint = true;
+    pub(super) fn handle_search_changed(&mut self, value: String) -> Vec<Effect> {
         self.search_query = SearchQuery::new(value);
         self.align_active_tabs_for_search();
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_search_cleared(&mut self) -> Task<Message> {
+    pub(super) fn handle_search_cleared(&mut self) -> Vec<Effect> {
         self.search_query = SearchQuery::default();
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_search_focus_requested(&mut self) -> Task<Message> {
-        self.search_input_focus_hint = true;
-        iced::widget::operation::focus(SEARCH_INPUT_ID)
+    /// Asks the shell to put the caret in the search box once.
+    ///
+    /// The request is a serial rather than a task: the model cannot reach a
+    /// widget, and the shell honors each new serial exactly once.
+    pub(super) fn handle_search_focus_requested(&mut self) -> Vec<Effect> {
+        self.search_focus_serial = self.search_focus_serial.saturating_add(1);
+        Vec::new()
     }
 
-    pub(super) fn handle_startup_search_focus_config_fallback(&mut self) -> Task<Message> {
+    /// A click, tap, or Tab press observed before the initial config load
+    /// finished: the deferred startup focus offer is answered by the user's
+    /// own navigation and must not fire later.
+    pub(super) fn handle_startup_interaction_observed(&mut self) -> Vec<Effect> {
+        self.startup_search_focus_pending = false;
+        Vec::new()
+    }
+
+    pub(super) fn handle_startup_search_focus_config_fallback(&mut self) -> Vec<Effect> {
         if !self.startup_search_focus_pending {
-            return Task::none();
+            return Vec::new();
         }
 
         self.startup_search_focus_pending = false;
         self.handle_search_focus_requested()
-    }
-
-    pub(super) fn handle_search_focus_observed(&mut self, is_focused: bool) -> Task<Message> {
-        self.search_input_focus_hint = is_focused;
-        Task::none()
-    }
-
-    pub(super) fn handle_pointer_pressed(&mut self) -> Task<Message> {
-        self.cancel_startup_search_focus();
-        self.observe_search_focus()
-    }
-
-    pub(super) fn handle_keyboard_event(
-        &mut self,
-        event: keyboard::Event,
-        status: event::Status,
-    ) -> Task<Message> {
-        let keyboard::Event::KeyPressed { key, modifiers, .. } = &event else {
-            return Task::none();
-        };
-
-        match key.as_ref() {
-            Key::Character("f") | Key::Character("F") if modifiers.command() => {
-                self.handle_search_focus_requested()
-            }
-            Key::Named(key::Named::Escape) if self.search_query.has_raw_input() => {
-                let should_refocus_search = self.search_input_focus_hint;
-                self.search_query = SearchQuery::default();
-                if should_refocus_search {
-                    self.handle_search_focus_requested()
-                } else {
-                    Task::none()
-                }
-            }
-            Key::Named(key::Named::Tab) => {
-                self.cancel_startup_search_focus();
-                self.observe_search_focus()
-            }
-            _ => content_scroll_action_for_status(&event, status, self.search_input_focus_hint)
-                .map_or_else(Task::none, scroll::ContentScrollAction::task),
-        }
-    }
-
-    fn cancel_startup_search_focus(&mut self) {
-        self.startup_search_focus_pending = false;
-    }
-
-    fn observe_search_focus(&self) -> Task<Message> {
-        iced::widget::operation::is_focused(SEARCH_INPUT_ID).map(Message::SearchFocusObserved)
-    }
-}
-
-fn content_scroll_action_for_status(
-    event: &keyboard::Event,
-    status: event::Status,
-    allow_captured_edges: bool,
-) -> Option<scroll::ContentScrollAction> {
-    let action = scroll::content_scroll_action_for_event(event)?;
-    if status == event::Status::Ignored
-        || (allow_captured_edges && action.can_scroll_when_captured())
-    {
-        Some(action)
-    } else {
-        None
     }
 }

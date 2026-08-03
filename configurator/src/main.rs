@@ -8,11 +8,11 @@ mod test_temp;
 
 use models::{StartupRequest, startup_usage};
 
-fn main() -> iced::Result {
+fn main() {
     let startup = StartupRequest::from_args(std::env::args_os());
     if startup.wants_help() {
         print!("{}", startup_usage());
-        return Ok(());
+        return;
     }
 
     app::run(startup)

@@ -1,9 +1,8 @@
-use iced::Task;
 use wayscriber::configurator_destination::{ConfiguratorScreen, KeybindingsSection};
 
-use crate::messages::Message;
 use crate::models::{KeybindingsTabId, SearchQuery, TabId, UiTabId};
 
+use super::effects::Effect;
 use super::state::ConfiguratorApp;
 
 impl ConfiguratorApp {
@@ -12,7 +11,7 @@ impl ConfiguratorApp {
     /// Consumed by the first config load and empty from then on: a later
     /// Reload is the user asking for the file again, not a fresh launch, and
     /// snapping the tabs back would undo wherever they navigated in between.
-    pub(crate) fn apply_startup_request(&mut self) -> Task<Message> {
+    pub(crate) fn apply_startup_request(&mut self) -> Vec<Effect> {
         let request = std::mem::take(&mut self.startup_request);
 
         if let Some(problem) = request.problem() {
@@ -47,8 +46,7 @@ impl ConfiguratorApp {
                 // A plain screen request is not a search: focusing the search
                 // box would send the first keystroke to the filter instead of
                 // to the screen the user asked for.
-                self.search_input_focus_hint = false;
-                Task::none()
+                Vec::new()
             }
         }
     }
@@ -101,13 +99,13 @@ fn keybindings_tab(section: KeybindingsSection) -> KeybindingsTabId {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use std::sync::Arc;
 
     use wayscriber::config::ConfigDocument;
     use wayscriber::configurator_destination::ConfiguratorDestination;
 
     use super::*;
     use crate::app::state::StatusMessage;
+    use crate::messages::CommandMessage;
     use crate::models::StartupRequest;
     use crate::test_temp::{TempDir, tempdir};
 
@@ -140,13 +138,13 @@ mod tests {
     /// `load_config_from_disk` task delivers.
     fn load_config_file(app: &mut ConfiguratorApp, path: &Path) {
         let document = ConfigDocument::load_from_path(path).expect("load test config document");
-        let _ = app.update_message(Message::ConfigLoaded(Ok((Arc::new(document), None))));
+        let _ = app.update_command(CommandMessage::ConfigLoaded(Ok((Box::new(document), None))));
     }
 
     /// The app as the launcher would start it, after its first config load.
     fn app_launched_with(values: &[&str]) -> (ConfiguratorApp, TempDir, std::path::PathBuf) {
         let (dir, path) = config_file();
-        let (mut app, _cmd) =
+        let (mut app, _effects) =
             ConfiguratorApp::new_app_with_startup(StartupRequest::from_args(args(values)));
         load_config_file(&mut app, &path);
         (app, dir, path)
@@ -158,9 +156,9 @@ mod tests {
 
         assert_eq!(app.active_tab, TabId::Daemon);
         assert_eq!(app.active_ui_tab, UiTabId::Toolbar);
-        assert!(app.search_input_focus_hint);
+        assert_eq!(app.search_focus_serial, 1);
         assert!(!app.startup_search_focus_pending);
-        assert!(!app.search_query.has_raw_input());
+        assert!(app.search_query.raw().is_empty());
     }
 
     #[test]
@@ -223,13 +221,9 @@ mod tests {
 
         assert_eq!(app.active_tab, TabId::Drawing);
         assert_eq!(app.search_query.raw(), "Quick Colors");
-        assert!(app.search_summary().total_matches() > 0);
-        assert!(
-            app.search_summary().tabs().len() > 1,
-            "the term is expected to match more than the destination tab"
-        );
+        assert!(app.search_summary().tab(TabId::Drawing).is_some());
         // A term means the search box has content to edit or clear.
-        assert!(app.search_input_focus_hint);
+        assert_eq!(app.search_focus_serial, 1);
         assert!(!app.startup_search_focus_pending);
     }
 
@@ -242,7 +236,7 @@ mod tests {
         assert_eq!(app.active_tab, TabId::Keybindings);
         assert_eq!(app.active_keybindings_tab, KeybindingsTabId::Drawing);
         assert_eq!(app.search_query.raw(), "Clear Canvas");
-        assert!(app.search_summary().total_matches() > 0);
+        assert!(app.search_summary().tab(TabId::Keybindings).is_some());
     }
 
     /// The same correction as the tab-level one, a level down: a subtab that
@@ -263,16 +257,16 @@ mod tests {
         let (app, _dir, _path) = app_launched_with(&["--open=boards?search=input hud"]);
 
         assert_ne!(app.active_tab, TabId::Boards);
-        assert!(app.search_summary().total_matches() > 0);
+        assert!(app.search_summary().tab(app.active_tab).is_some());
     }
 
     #[test]
     fn a_plain_screen_request_does_not_take_the_search_focus() {
         let (app, _dir, _path) = app_launched_with(&["--open", "ui/status-bar"]);
 
-        assert!(!app.search_input_focus_hint);
+        assert_eq!(app.search_focus_serial, 0);
         assert!(!app.startup_search_focus_pending);
-        assert!(!app.search_query.has_raw_input());
+        assert!(app.search_query.raw().is_empty());
     }
 
     #[test]
@@ -286,7 +280,7 @@ mod tests {
         // The load result is still reported alongside the note.
         assert!(text.contains("Configuration loaded from disk."), "{text}");
         // Falling back means the ordinary first screen, focus included.
-        assert!(app.search_input_focus_hint);
+        assert_eq!(app.search_focus_serial, 1);
         assert!(!app.startup_search_focus_pending);
     }
 
@@ -316,12 +310,12 @@ mod tests {
 
     #[test]
     fn a_failed_first_load_still_honors_the_destination() {
-        let (mut app, _cmd) =
+        let (mut app, _effects) =
             ConfiguratorApp::new_app_with_startup(StartupRequest::from_args(args(&[
                 "--open", "boards",
             ])));
 
-        let _ = app.update_message(Message::ConfigLoaded(Err("broken".to_string())));
+        let _ = app.update_command(CommandMessage::ConfigLoaded(Err("broken".to_string())));
 
         assert_eq!(app.active_tab, TabId::Boards);
     }

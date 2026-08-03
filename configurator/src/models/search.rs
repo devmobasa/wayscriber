@@ -19,10 +19,6 @@ impl SearchQuery {
         &self.raw
     }
 
-    pub(crate) fn has_raw_input(&self) -> bool {
-        !self.raw.is_empty()
-    }
-
     pub(crate) fn is_active(&self) -> bool {
         !self.tokens.is_empty()
     }
@@ -74,17 +70,6 @@ mod tests {
     #[test]
     fn inactive_query_matches_everything() {
         assert!(SearchQuery::new("  ").matches_text("Boards"));
-    }
-
-    #[test]
-    fn raw_input_state_is_separate_from_active_tokens() {
-        let punctuation = SearchQuery::new("/");
-        assert!(punctuation.has_raw_input());
-        assert!(!punctuation.is_active());
-
-        let empty = SearchQuery::new("");
-        assert!(!empty.has_raw_input());
-        assert!(!empty.is_active());
     }
 
     #[test]

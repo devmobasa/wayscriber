@@ -76,16 +76,16 @@
             cargoLock.lockFile = ./Cargo.lock;
             buildAndTestSubdir = "configurator";
 
-            nativeBuildInputs = with pkgs; [ pkg-config makeWrapper ];
+            nativeBuildInputs = with pkgs; [ pkg-config wrapGAppsHook4 ];
 
-            # Iced GUI toolkit dependencies
+            # GTK4/libadwaita GUI toolkit dependencies
             buildInputs = with pkgs; [
               cairo
               pango
               wayland
               libxkbcommon
-              vulkan-loader
-              libGL
+              gtk4
+              libadwaita
             ];
 
             postInstall = ''
@@ -101,15 +101,6 @@
                 $out/share/icons/hicolor/scalable/apps/wayscriber-configurator.svg
               install -Dm644 README.md $out/share/doc/wayscriber-configurator/README.md
               install -Dm644 LICENSE $out/share/licenses/wayscriber-configurator/LICENSE
-
-              # Wrap binary to find GL/Vulkan libraries at runtime (Iced uses dlopen)
-              wrapProgram $out/bin/wayscriber-configurator \
-                --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath [
-                  pkgs.vulkan-loader
-                  pkgs.libGL
-                  pkgs.wayland
-                  pkgs.libxkbcommon
-                ]}
             '';
 
             meta = with pkgs.lib; {
@@ -138,8 +129,7 @@
             libxkbcommon
             gtk4
             gtk4-layer-shell
-            vulkan-loader
-            libGL
+            libadwaita
           ];
         };
       });

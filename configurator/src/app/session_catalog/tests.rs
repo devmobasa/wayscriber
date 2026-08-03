@@ -55,63 +55,68 @@ fn daemon_status(active: bool) -> DaemonRuntimeStatus {
 }
 
 #[test]
-fn session_clear_cached_status_blocker_blocks_running_daemon() {
+fn clear_policy_blocks_running_daemon() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let status = daemon_status(true);
 
-    let blocker =
-        session_clear_cached_status_blocker(Some(&status)).expect("daemon should block clear");
+    let blocker = SessionCatalogOperation::Clear
+        .cached_status_blocker(Some(&status))
+        .expect("daemon should block clear");
 
     assert!(blocker.contains("background service"));
 }
 
 #[test]
-fn session_clear_cached_status_blocker_allows_inactive_daemon() {
+fn clear_policy_allows_inactive_daemon() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let status = daemon_status(false);
 
-    let blocker = session_clear_cached_status_blocker(Some(&status));
+    let blocker = SessionCatalogOperation::Clear.cached_status_blocker(Some(&status));
 
     assert!(blocker.is_none(), "{blocker:?}");
 }
 
 #[test]
-fn session_duplicate_cached_status_blocker_uses_duplicate_status_message() {
+fn duplicate_policy_uses_duplicate_status_message() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let blocker = session_duplicate_cached_status_blocker(None)
+    let blocker = SessionCatalogOperation::Duplicate
+        .cached_status_blocker(None)
         .expect("unknown status should block duplicate");
 
     assert!(blocker.contains("Duplicate Session"));
 }
 
 #[test]
-fn session_move_cached_status_blocker_uses_move_status_message() {
+fn move_policy_uses_move_status_message() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let blocker =
-        session_move_cached_status_blocker(None).expect("unknown status should block move");
+    let blocker = SessionCatalogOperation::Move
+        .cached_status_blocker(None)
+        .expect("unknown status should block move");
 
     assert!(blocker.contains("Move Session"));
 }
 
 #[test]
-fn session_clear_cached_status_blocker_blocks_unknown_daemon_status() {
+fn clear_policy_blocks_unknown_daemon_status() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let blocker =
-        session_clear_cached_status_blocker(None).expect("unknown status should block clear");
+    let blocker = SessionCatalogOperation::Clear
+        .cached_status_blocker(None)
+        .expect("unknown status should block clear");
 
     assert!(blocker.contains("status finishes loading"));
 }
 
 #[test]
-fn session_clear_tool_state_cached_status_blocker_uses_tool_state_status_message() {
+fn clear_tool_state_policy_uses_tool_state_status_message() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let blocker = session_clear_tool_state_cached_status_blocker(None)
+    let blocker = SessionCatalogOperation::ClearToolState
+        .cached_status_blocker(None)
         .expect("unknown status should block tool reset");
 
     assert!(blocker.contains("Clear saved tool state"));
@@ -125,7 +130,7 @@ fn session_clear_transaction_guard_blocks_manual_daemon_lock() {
     let _daemon_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Daemon).unwrap();
     let error = acquire_runtime_lock_for_inactive_operation(
         RuntimeLockKind::Daemon,
-        CatalogOperation::Clear,
+        SessionCatalogOperation::Clear,
     )
     .expect_err("held daemon lock should block the transaction");
 
@@ -140,10 +145,10 @@ fn cached_status_blocker_does_not_probe_runtime_locks() {
     let _overlay_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Overlay).unwrap();
     let status = daemon_status(false);
 
-    let blocker = session_clear_cached_status_blocker(Some(&status));
+    let blocker = SessionCatalogOperation::Clear.cached_status_blocker(Some(&status));
 
     assert!(blocker.is_none(), "{blocker:?}");
-    let blocker = session_move_cached_status_blocker(Some(&status));
+    let blocker = SessionCatalogOperation::Move.cached_status_blocker(Some(&status));
 
     assert!(blocker.is_none(), "{blocker:?}");
 }
@@ -156,17 +161,17 @@ fn clear_runtime_guards_hold_daemon_and_overlay_locks() {
     let _overlay_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Overlay).unwrap();
 
     assert!(matches!(
-        runtime_lock_active(RuntimeLockKind::Daemon, CatalogOperation::Clear),
+        runtime_lock_active(RuntimeLockKind::Daemon, SessionCatalogOperation::Clear),
         Ok(true)
     ));
     assert!(matches!(
-        runtime_lock_active(RuntimeLockKind::Overlay, CatalogOperation::Clear),
+        runtime_lock_active(RuntimeLockKind::Overlay, SessionCatalogOperation::Clear),
         Ok(true)
     ));
 }
 
 #[test]
-fn session_artifact_status_label_reports_size_when_present() {
+fn session_artifact_status_reports_size_when_present() {
     let item = SessionCatalogItem {
         id: "s-1".to_string(),
         display_name: "Lecture".to_string(),
@@ -186,7 +191,7 @@ fn session_artifact_status_label_reports_size_when_present() {
         },
     };
 
-    assert_eq!(session_artifact_status_label(&item), "primary · 4.0 KiB");
+    assert_eq!(item.artifacts.status_label(), "primary · 4.0 KiB");
 }
 
 #[test]

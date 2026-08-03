@@ -25,9 +25,7 @@ pub use pressure::{PressureThicknessEditModeOption, PressureThicknessEntryModeOp
 pub use session::{SessionCompressionOption, SessionStorageModeOption};
 pub use status::StatusPositionOption;
 pub use theme::{ReducedMotionOption, UiThemeOption};
-pub use toggles::{
-    PresetTextField, PresetToggleField, QuadField, TextField, ToggleField, TripletField,
-};
+pub use toggles::{PresetTextField, PresetToggleField, QuadField, TextField, ToggleField};
 pub use tool::{DragColorOption, DragMouseButton, DragToolField, DragToolOption, ToolOption};
 pub use toolbar::{
     OverrideOption, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,

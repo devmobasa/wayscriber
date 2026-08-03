@@ -12,7 +12,7 @@ pub mod tab;
 pub mod util;
 
 pub use color::{ColorMode, ColorQuadInput, ColorTripletInput, NamedColorOption};
-pub use color_picker::{ColorPickerId, ColorPickerValue};
+pub use color_picker::ColorPickerId;
 pub use config::{
     BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ConfigDraft,
     RenderProfileExportOption, RenderProfileMappingDraft, RenderProfileMappingSide,
@@ -31,12 +31,13 @@ pub use fields::{
     PresetToggleField, QuadField, ReducedMotionOption, SessionCompressionOption,
     SessionStorageModeOption, StatusPositionOption, TextField, ToggleField, ToolOption,
     ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
-    ToolbarSideLayoutOption, TripletField, UiThemeOption, ZoomChipDisplayOption,
+    ToolbarSideLayoutOption, UiThemeOption, ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 pub use fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 pub use keybindings::KeybindingField;
 pub(crate) use search::SearchQuery;
+pub(crate) use session::SessionCatalogOperation;
 pub use session::{SessionCatalogActionResult, SessionCatalogItem, SessionCatalogState};
 pub(crate) use startup::{StartupRequest, startup_usage};
 pub use tab::{KeybindingsTabId, TabId, UiTabId};

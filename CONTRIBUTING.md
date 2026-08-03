@@ -19,7 +19,7 @@ The repository is one Cargo workspace using Rust 1.95 and edition 2024:
 
 - the root `wayscriber` package owns the overlay, daemon, CLI, shared domain/config/session code,
   rendering, and integration tests;
-- `wayscriber-configurator` is the Iced GUI package under `configurator/`;
+- `wayscriber-configurator` is the GTK4/libadwaita (Relm4) GUI package under `configurator/`;
 - root `Cargo.lock` is the single lockfile for both packages.
 
 The workspace default member is only the root package. Use `-p wayscriber-configurator` or
