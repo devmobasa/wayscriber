@@ -32,6 +32,7 @@ pub(super) struct OverlayLayout {
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build_overlay_layout(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     style: &crate::config::HelpOverlayStyle,
     screen_width: u32,
     screen_height: u32,
@@ -80,7 +81,7 @@ pub(super) fn build_overlay_layout(
     };
 
     let metrics = RenderMetrics::from_style(style, screen_width, screen_height);
-    let palette = RenderPalette::from_style(style);
+    let palette = RenderPalette::from_style(style, theme);
 
     let max_search_width = (screen_width as f64 * 0.9 - metrics.padding * 2.0).max(0.0);
     let nav_state = build_nav_state(

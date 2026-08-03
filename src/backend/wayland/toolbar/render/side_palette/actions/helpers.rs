@@ -63,6 +63,7 @@ struct TextActionButtonGeometry {
 
 struct ActionButtonRenderContext<'a> {
     ctx: &'a cairo::Context,
+    theme: &'a crate::ui::theme::Theme,
     hits: &'a mut Vec<HitRegion>,
     hover: Option<(f64, f64)>,
     snapshot: &'a ToolbarSnapshot,
@@ -70,6 +71,7 @@ struct ActionButtonRenderContext<'a> {
 
 pub(super) fn render_icon_action_group(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     hits: &mut Vec<HitRegion>,
     hover: Option<(f64, f64)>,
     snapshot: &ToolbarSnapshot,
@@ -78,6 +80,7 @@ pub(super) fn render_icon_action_group(
 ) -> (f64, bool) {
     let mut render_ctx = ActionButtonRenderContext {
         ctx,
+        theme,
         hits,
         hover,
         snapshot,
@@ -119,8 +122,10 @@ pub(super) fn render_icon_action_group(
 /// One left-aligned run of square icon buttons plus a right-aligned run
 /// (destructive actions), separated by the leftover width — the mockup's
 /// "Undo Redo ......... Clear" row.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render_icon_action_row_split(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     hits: &mut Vec<HitRegion>,
     hover: Option<(f64, f64)>,
     snapshot: &ToolbarSnapshot,
@@ -133,6 +138,7 @@ pub(super) fn render_icon_action_row_split(
     }
     let mut render_ctx = ActionButtonRenderContext {
         ctx,
+        theme,
         hits,
         hover,
         snapshot,
@@ -176,6 +182,7 @@ pub(super) fn render_icon_action_row_split(
 
 pub(super) fn render_text_action_group(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     hits: &mut Vec<HitRegion>,
     hover: Option<(f64, f64)>,
     snapshot: &ToolbarSnapshot,
@@ -184,6 +191,7 @@ pub(super) fn render_text_action_group(
 ) -> (f64, bool) {
     let mut render_ctx = ActionButtonRenderContext {
         ctx,
+        theme,
         hits,
         hover,
         snapshot,
@@ -257,6 +265,7 @@ fn render_icon_action_button(
         if is_destructive {
             draw_destructive_button(
                 render_ctx.ctx,
+                render_ctx.theme,
                 geometry.x,
                 geometry.y,
                 geometry.button_size,
@@ -266,6 +275,7 @@ fn render_icon_action_button(
         } else {
             draw_button(
                 render_ctx.ctx,
+                render_ctx.theme,
                 geometry.x,
                 geometry.y,
                 geometry.button_size,
@@ -336,6 +346,7 @@ fn render_text_action_button(
     } else if action.event.is_destructive() {
         draw_destructive_button(
             render_ctx.ctx,
+            render_ctx.theme,
             layout.x,
             layout.y,
             layout.width,
@@ -345,6 +356,7 @@ fn render_text_action_button(
     } else {
         draw_button(
             render_ctx.ctx,
+            render_ctx.theme,
             layout.x,
             layout.y,
             layout.width,

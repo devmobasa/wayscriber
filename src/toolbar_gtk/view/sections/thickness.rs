@@ -79,6 +79,7 @@ fn thickness_card(ctx: &mut SectionCtx, tool_context: &ToolContext) -> gtk4::Wid
     // (eraser size when `thickness_targets_eraser`), like the built-in.
     let sender = ctx.feedback.clone();
     let slider = SliderRow::new(
+        ctx.theme,
         ctx.scale,
         (spec.min, spec.max),
         snapshot.thickness,

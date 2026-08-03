@@ -10,9 +10,9 @@ use crate::input::state::{
 use crate::ui_text::{UiTextStyle, draw_text_baseline, measure_text};
 
 use super::constants::{
-    self, EMPTY_COMMAND_PALETTE, EMPTY_COMMAND_SUGGESTIONS, INPUT_BG, INPUT_BORDER_FOCUSED,
-    OVERLAY_DIM_MEDIUM, RADIUS_LG, RADIUS_STD, SHADOW, TEXT_DESCRIPTION, TEXT_PLACEHOLDER,
-    TEXT_WHITE,
+    self, EMPTY_COMMAND_PALETTE, EMPTY_COMMAND_SUGGESTIONS, INPUT_BG, OVERLAY_DIM_MEDIUM,
+    RADIUS_LG, RADIUS_STD, SHADOW, TEXT_DESCRIPTION, TEXT_PLACEHOLDER, TEXT_WHITE,
+    input_border_focused,
 };
 use super::primitives::{draw_rounded_rect, text_extents_for};
 use super::theme::Rgba;
@@ -63,6 +63,7 @@ const SCROLL_THUMB: Rgba = (1.0, 1.0, 1.0, 0.35);
 /// Render the command palette if open.
 pub fn render_command_palette(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     input_state: &InputState,
     screen_width: u32,
     screen_height: u32,
@@ -101,13 +102,22 @@ pub fn render_command_palette(
 
     cursor_y = draw_command_palette_input(
         ctx,
+        theme,
         inner_x,
         cursor_y,
         inner_width,
         &input_state.command_palette_query,
     );
 
-    render_command_palette_rows(ctx, input_state, &rows, inner_x, inner_width, cursor_y);
+    render_command_palette_rows(
+        ctx,
+        theme,
+        input_state,
+        &rows,
+        inner_x,
+        inner_width,
+        cursor_y,
+    );
 
     if rows.is_empty() && !input_state.command_palette_query.is_empty() {
         draw_command_palette_empty_state(
@@ -405,6 +415,7 @@ fn draw_command_palette_frame(
 
 fn draw_command_palette_input(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     inner_x: f64,
     mut cursor_y: f64,
     inner_width: f64,
@@ -420,7 +431,7 @@ fn draw_command_palette_input(
     );
     constants::set_color(ctx, INPUT_BG);
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, INPUT_BORDER_FOCUSED);
+    constants::set_color(ctx, input_border_focused(theme));
     ctx.set_line_width(1.5);
     let _ = ctx.stroke();
 
@@ -452,6 +463,7 @@ fn draw_command_palette_input(
 
 fn render_command_palette_rows(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     input_state: &InputState,
     rows: &[CommandPaletteListRow],
     inner_x: f64,
@@ -479,6 +491,7 @@ fn render_command_palette_rows(
                 let is_selected = *command_index == input_state.command_palette_selected;
                 render_command_row(
                     ctx,
+                    theme,
                     input_state,
                     command,
                     &styles,

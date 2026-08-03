@@ -1290,6 +1290,59 @@ fn config_draft_round_trips_ui_theme() {
 }
 
 #[test]
+fn config_draft_round_trips_ui_accent_color() {
+    let mut config = Config::default();
+    config.ui.accent_color = wayscriber::config::AccentColor::new("#FF7800");
+
+    let mut draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.ui_accent_color, "#FF7800");
+
+    draft.set_text(TextField::UiAccentColor, "orange".to_string());
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+    assert_eq!(
+        round_trip.ui.accent_color,
+        wayscriber::config::AccentColor::new("orange")
+    );
+}
+
+/// Clearing the field means "back to the default", not an empty accent
+/// string that the runtime would warn about on every launch.
+#[test]
+fn config_draft_maps_an_emptied_accent_color_to_the_default() {
+    let mut config = Config::default();
+    config.ui.accent_color = wayscriber::config::AccentColor::new("#FF7800");
+
+    let mut draft = ConfigDraft::from_config(&config);
+    draft.set_text(TextField::UiAccentColor, "  ".to_string());
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+    assert_eq!(
+        round_trip.ui.accent_color,
+        wayscriber::config::AccentColor::default()
+    );
+}
+
+/// A typo must surface as a form error, not save cleanly and then be
+/// silently replaced by the system accent at runtime.
+#[test]
+fn config_draft_rejects_an_unrecognized_accent_color() {
+    let config = Config::default();
+    let mut draft = ConfigDraft::from_config(&config);
+    draft.set_text(TextField::UiAccentColor, "chartreuse".to_string());
+
+    let errors = draft
+        .to_config(&config)
+        .expect_err("expected accent color validation errors");
+    assert!(
+        errors.iter().any(|err| err.field == "ui.accent_color"),
+        "expected a ui.accent_color error, got {errors:?}"
+    );
+}
+
+#[test]
 fn config_draft_round_trips_ui_reduced_motion() {
     let mut config = Config::default();
     config.ui.reduced_motion = ReducedMotion::On;

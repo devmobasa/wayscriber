@@ -27,7 +27,7 @@ use std::time::Instant;
 
 use super::widgets::constants::set_color;
 use super::widgets::{draw_panel_background, draw_round_rect, draw_tooltip_with_delay};
-use crate::ui::theme::Rgba;
+use crate::ui::theme::{Rgba, Theme};
 
 /// Scrollbar track tint: a white wash with no theme token (value-coincides
 /// with COLOR_DIVIDER but is a control surface, not a separator). The thumb
@@ -38,6 +38,7 @@ use crate::ui::theme::toolbar::COLOR_SCROLLBAR_SLIDER as COLOR_SCROLLBAR_THUMB;
 
 pub(super) struct SidePaletteLayout<'a> {
     pub(super) ctx: &'a cairo::Context,
+    pub(super) theme: &'a Theme,
     pub(super) width: f64,
     pub(super) snapshot: &'a ToolbarSnapshot,
     pub(super) hits: &'a mut Vec<HitRegion>,
@@ -53,6 +54,7 @@ pub(super) struct SidePaletteLayout<'a> {
 impl<'a> SidePaletteLayout<'a> {
     fn new(
         ctx: &'a cairo::Context,
+        theme: &'a Theme,
         width: f64,
         snapshot: &'a ToolbarSnapshot,
         hits: &'a mut Vec<HitRegion>,
@@ -66,6 +68,7 @@ impl<'a> SidePaletteLayout<'a> {
         let section_gap = ToolbarLayoutSpec::SIDE_SECTION_GAP;
         Self {
             ctx,
+            theme,
             width,
             snapshot,
             hits,
@@ -195,8 +198,10 @@ pub(super) struct ColorSectionInfo {
     pub(super) picker_h: f64,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_side_palette(
     ctx: &cairo::Context,
+    theme: &Theme,
     width: f64,
     height: f64,
     snapshot: &ToolbarSnapshot,
@@ -211,7 +216,7 @@ pub fn render_side_palette(
         return Ok(());
     }
 
-    let mut layout = SidePaletteLayout::new(ctx, width, snapshot, hits, hover);
+    let mut layout = SidePaletteLayout::new(ctx, theme, width, snapshot, hits, hover);
 
     let content_top = header::draw_header(&mut layout);
 

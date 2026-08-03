@@ -11,11 +11,11 @@ use crate::backend::wayland::toolbar::view::{
 use crate::ui_text::UiTextStyle;
 
 use super::widgets::constants::{
-    COLOR_ACCENT, COLOR_BADGE_BACKGROUND, COLOR_BADGE_BORDER, COLOR_ICON_DEFAULT, COLOR_LABEL_HINT,
+    COLOR_BADGE_BACKGROUND, COLOR_BADGE_BORDER, COLOR_ICON_DEFAULT, COLOR_LABEL_HINT,
     COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, COLOR_TEXT_DISABLED, COLOR_TEXT_SECONDARY,
-    COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL,
-    PRESET_SLOT_ICON_RATIO, PRESET_SLOT_SWATCH_INSET, PRESET_SLOT_SWATCH_RADIUS,
-    PRESET_SLOT_SWATCH_RATIO, set_color,
+    COLOR_TRACK_BACKGROUND, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, PRESET_SLOT_ICON_RATIO,
+    PRESET_SLOT_SWATCH_INSET, PRESET_SLOT_SWATCH_RADIUS, PRESET_SLOT_SWATCH_RATIO, color_accent,
+    color_text_on_accent, color_track_knob, set_color,
 };
 use super::widgets::{
     draw_button, draw_checkbox, draw_destructive_button, draw_disabled_button,
@@ -36,9 +36,14 @@ const TEXT_BUTTON_LABEL_INSET: f64 = 6.0;
 
 /// Paint every node of `tree` in order. `hover` is in the same logical space
 /// as the tree's rects.
-pub fn paint_tree(ctx: &cairo::Context, tree: &WidgetTree, hover: Option<(f64, f64)>) {
+pub fn paint_tree(
+    ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
+    tree: &WidgetTree,
+    hover: Option<(f64, f64)>,
+) {
     for node in tree.nodes() {
-        paint_node(ctx, node, hover);
+        paint_node(ctx, theme, node, hover);
     }
 }
 
@@ -63,6 +68,7 @@ fn label_style(size: f64, bold: bool) -> UiTextStyle<'static> {
 
 fn paint_button_body(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     rect: (f64, f64, f64, f64),
     style: ButtonStyle,
     hover: bool,
@@ -71,9 +77,9 @@ fn paint_button_body(
     if style.disabled {
         draw_disabled_button(ctx, x, y, w, h);
     } else if style.destructive {
-        draw_destructive_button(ctx, x, y, w, h, hover);
+        draw_destructive_button(ctx, theme, x, y, w, h, hover);
     } else {
-        draw_button(ctx, x, y, w, h, style.active, hover);
+        draw_button(ctx, theme, x, y, w, h, style.active, hover);
     }
 }
 
@@ -162,7 +168,12 @@ fn paint_shortcut_badge(ctx: &cairo::Context, node: &WidgetNode) {
     );
 }
 
-fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>) {
+fn paint_node(
+    ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
+    node: &WidgetNode,
+    hover: Option<(f64, f64)>,
+) {
     let (x, y, w, h) = node.rect;
     let is_hover = hovered(node, hover) && node.interact.is_some();
     match &node.kind {
@@ -186,9 +197,11 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             icon_size,
             style,
         } => {
-            paint_button_body(ctx, node.rect, *style, is_hover);
+            paint_button_body(ctx, theme, node.rect, *style, is_hover);
             if style.disabled {
                 set_color(ctx, COLOR_TEXT_DISABLED);
+            } else if style.active {
+                set_color(ctx, color_text_on_accent(theme));
             } else {
                 set_icon_color(ctx, is_hover);
             }
@@ -207,7 +220,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             (glyph.0)(ctx, icon_x, icon_y, *icon_size);
         }
         WidgetKind::TextButton { label, style } => {
-            paint_button_body(ctx, node.rect, *style, is_hover);
+            paint_button_body(ctx, theme, node.rect, *style, is_hover);
             let text_style = label_style(label.size, label.bold);
             let display = ellipsize_to_width(
                 ctx,
@@ -217,6 +230,17 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             );
             if style.disabled {
                 draw_label_center_color(ctx, text_style, x, y, w, h, &display, COLOR_TEXT_DISABLED);
+            } else if style.active {
+                draw_label_center_color(
+                    ctx,
+                    text_style,
+                    x,
+                    y,
+                    w,
+                    h,
+                    &display,
+                    color_text_on_accent(theme),
+                );
             } else {
                 draw_label_center(ctx, text_style, x, y, w, h, &display);
             }
@@ -274,6 +298,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             });
             draw_segmented_control(
                 ctx,
+                theme,
                 x,
                 y,
                 w,
@@ -295,7 +320,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             let _ = ctx.fill();
             let knob_r = (h / 2.0).min(7.0);
             let knob_x = x + knob_r + t.clamp(0.0, 1.0) * (w - knob_r * 2.0);
-            set_color(ctx, COLOR_TRACK_KNOB);
+            set_color(ctx, color_track_knob(theme));
             ctx.arc(knob_x, y + h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
             let _ = ctx.fill();
         }
@@ -317,7 +342,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             draw_round_rect(ctx, x + 1.5, y + 1.5, w - 3.0, h - 3.0, 4.5);
             let _ = ctx.stroke();
             if *selected {
-                set_color(ctx, COLOR_ACCENT);
+                set_color(ctx, color_accent(theme));
                 ctx.set_line_width(2.0);
                 draw_round_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, 7.0);
                 let _ = ctx.stroke();
@@ -334,7 +359,13 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             label,
             active,
         } => {
-            paint_button_body(ctx, node.rect, ButtonStyle::active(*active), is_hover);
+            paint_button_body(
+                ctx,
+                theme,
+                node.rect,
+                ButtonStyle::active(*active),
+                is_hover,
+            );
             match glyph {
                 // Filled slot: the saved tool glyph in the neutral foreground
                 // so a dark preset color never renders it invisible against
@@ -342,7 +373,14 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
                 // corner swatch instead (the side-palette convention).
                 Some(glyph) => {
                     let icon_size = (w.min(h) * PRESET_SLOT_ICON_RATIO).round();
-                    set_color(ctx, COLOR_TEXT_SECONDARY);
+                    set_color(
+                        ctx,
+                        if *active {
+                            color_text_on_accent(theme)
+                        } else {
+                            COLOR_TEXT_SECONDARY
+                        },
+                    );
                     (glyph.0)(
                         ctx,
                         x + (w - icon_size) / 2.0,
@@ -362,7 +400,11 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
                         w,
                         h,
                         label,
-                        COLOR_TEXT_SECONDARY,
+                        if *active {
+                            color_text_on_accent(theme)
+                        } else {
+                            COLOR_TEXT_SECONDARY
+                        },
                     );
                 }
             }
@@ -391,7 +433,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             );
         }
         WidgetKind::PinButton { pinned } => {
-            draw_pin_button(ctx, x, y, w, *pinned, is_hover);
+            draw_pin_button(ctx, theme, x, y, w, *pinned, is_hover);
         }
         WidgetKind::MinimizeButton => draw_minimize_button(ctx, x, y, w, is_hover),
         WidgetKind::Popover { caret_x, caret_up } => {
@@ -463,7 +505,7 @@ mod tests {
                     selected: false,
                 },
             );
-            paint_node(&ctx, &node, None);
+            paint_node(&ctx, &crate::ui::theme::Theme::dark(), &node, None);
         }
         let mut surface = surface;
         pixel_at(&mut surface, 4 + size as i32 / 2, 4 + size as i32 / 2)
@@ -487,7 +529,7 @@ mod tests {
                     style: ButtonStyle::plain(),
                 },
             );
-            paint_node(&ctx, &node, None);
+            paint_node(&ctx, &crate::ui::theme::Theme::dark(), &node, None);
         }
 
         let mut surface = surface;

@@ -5,8 +5,8 @@ use crate::ui::theme::Rgba;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
-    self, BG_HOVER, BORDER_FOCUS, FOCUS_RING_WIDTH, ICON_SUBMENU_ARROW, NAV_HINT_MENU,
-    RADIUS_PANEL, RADIUS_SM, RADIUS_STD, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
+    self, BG_HOVER, FOCUS_RING_WIDTH, ICON_SUBMENU_ARROW, NAV_HINT_MENU, RADIUS_PANEL, RADIUS_SM,
+    RADIUS_STD, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY, border_focus,
 };
 
 /// Footer strip below the menu: darker than the menu surface so the hint reads
@@ -19,6 +19,7 @@ const HINT_FOOTER_TEXT: Rgba = (0.65, 0.68, 0.75, 1.0);
 /// Renders a floating context menu for shape or canvas actions.
 pub fn render_context_menu(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     input_state: &InputState,
     _screen_width: u32,
     _screen_height: u32,
@@ -89,7 +90,7 @@ pub fn render_context_menu(
 
         if is_focused && !is_hovered {
             // Draw focus ring (outline) when keyboard navigating
-            constants::set_color(ctx, BORDER_FOCUS);
+            constants::set_color(ctx, border_focus(theme));
             ctx.set_line_width(FOCUS_RING_WIDTH);
             draw_rounded_rect(
                 ctx,

@@ -134,6 +134,7 @@ impl WaylandState {
             if self.input_state.show_status_bar {
                 crate::ui::render_status_bar(
                     ctx,
+                    &self.theme,
                     &self.input_state,
                     &self.config.ui.status_bar_style,
                     width,
@@ -147,6 +148,7 @@ impl WaylandState {
             if self.zoom_chip_visible() {
                 crate::ui::render_zoom_chip(
                     ctx,
+                    &self.theme,
                     &self.input_state,
                     &self.config.ui.status_bar_style,
                     width,
@@ -173,6 +175,7 @@ impl WaylandState {
                 let bindings = crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);
                 let scroll_max = crate::ui::render_help_overlay(
                     ctx,
+                    &self.theme,
                     &self.config.ui.help_overlay_style,
                     width,
                     height,
@@ -194,7 +197,7 @@ impl WaylandState {
             if self.input_state.is_board_picker_open() {
                 self.input_state
                     .update_board_picker_layout(ctx, width, height);
-                crate::ui::render_board_picker(ctx, &self.input_state, width, height);
+                crate::ui::render_board_picker(ctx, &self.theme, &self.input_state, width, height);
             } else {
                 self.input_state.clear_board_picker_layout();
             }
@@ -202,7 +205,13 @@ impl WaylandState {
             if self.input_state.is_color_picker_popup_open() {
                 self.input_state
                     .update_color_picker_popup_layout(width, height);
-                crate::ui::render_color_picker_popup(ctx, &self.input_state, width, height);
+                crate::ui::render_color_picker_popup(
+                    ctx,
+                    &self.theme,
+                    &self.input_state,
+                    width,
+                    height,
+                );
             } else {
                 self.input_state.clear_color_picker_popup_layout();
             }
@@ -219,6 +228,7 @@ impl WaylandState {
                 );
                 crate::ui::render_precision_entry_popup(
                     ctx,
+                    &self.theme,
                     &self.input_state,
                     width,
                     height,
@@ -237,7 +247,13 @@ impl WaylandState {
                     .input_state
                     .radial_menu_mark_painted_if_due(std::time::Instant::now())
                 {
-                    crate::ui::render_radial_menu(ctx, &self.input_state, width, height);
+                    crate::ui::render_radial_menu(
+                        ctx,
+                        &self.theme,
+                        &self.input_state,
+                        width,
+                        height,
+                    );
                 }
             } else {
                 self.input_state.clear_radial_menu_layout();
@@ -255,7 +271,13 @@ impl WaylandState {
                 } else {
                     self.input_state.clear_properties_panel_layout();
                 }
-                crate::ui::render_properties_panel(ctx, &self.input_state, width, height);
+                crate::ui::render_properties_panel(
+                    ctx,
+                    &self.theme,
+                    &self.input_state,
+                    width,
+                    height,
+                );
 
                 if self.input_state.is_context_menu_open() {
                     self.input_state
@@ -265,7 +287,7 @@ impl WaylandState {
                 }
 
                 // Render context menu if open
-                crate::ui::render_context_menu(ctx, &self.input_state, width, height);
+                crate::ui::render_context_menu(ctx, &self.theme, &self.input_state, width, height);
             } else {
                 self.input_state.clear_context_menu_layout();
                 self.input_state.clear_properties_panel_layout();
@@ -284,8 +306,8 @@ impl WaylandState {
             if let Some(card) = self.first_run_onboarding_card() {
                 crate::ui::render_onboarding_card(ctx, width, height, &card);
             }
-            crate::ui::render_command_palette(ctx, &self.input_state, width, height);
-            crate::ui::render_tour(ctx, &self.input_state, width, height);
+            crate::ui::render_command_palette(ctx, &self.theme, &self.input_state, width, height);
+            crate::ui::render_tour(ctx, &self.theme, &self.input_state, width, height);
         } else {
             self.input_state.clear_context_menu_layout();
         }

@@ -41,6 +41,7 @@ fn side_palette_swatch_selects_on_primary_and_recolors_on_secondary() {
     let mut updaters: Vec<crate::toolbar_gtk::view::Updater> = Vec::new();
     let ctx = SectionCtx {
         snapshot: &snapshot,
+        theme: crate::ui::theme::Theme::dark(),
         feedback: FeedbackSender::new(tx),
         scale: 1.0,
         use_icons: true,

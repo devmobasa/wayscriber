@@ -1,5 +1,6 @@
 use crate::config::enums::{
-    RadialMenuMouseBinding, ReducedMotion, StatusPosition, UiTheme, XdgFocusLossBehavior,
+    AccentColor, RadialMenuMouseBinding, ReducedMotion, StatusPosition, UiTheme,
+    XdgFocusLossBehavior,
 };
 use crate::env_vars::DESKTOP_ENV_KEYS;
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,15 @@ pub struct UiConfig {
     /// `auto` currently resolves to dark chrome.
     #[serde(default)]
     pub theme: UiTheme,
+
+    /// Accent color for chrome highlights (active tool, selection, focus).
+    ///
+    /// `"system"` (default) follows the desktop accent via the settings
+    /// portal, `"default"` pins the built-in blue, and a `#RRGGBB` hex
+    /// string or palette color name pins a custom accent. Applied at
+    /// startup.
+    #[serde(default)]
+    pub accent_color: AccentColor,
 
     /// Reduced-motion preference: auto (default), on, or off.
     ///
@@ -172,6 +182,7 @@ impl Default for UiConfig {
     fn default() -> Self {
         Self {
             theme: UiTheme::default(),
+            accent_color: AccentColor::default(),
             reduced_motion: ReducedMotion::default(),
             show_status_bar: default_show_status(),
             status_bar_interactive: default_status_bar_interactive(),

@@ -108,7 +108,14 @@ fn render_status_bar_draws_for_all_positions() {
     for position in positions {
         let (mut surface, ctx) = surface_with_context(400, 200);
         input.update_status_hud_layout(position, &style, 400, 200);
-        wayscriber::ui::render_status_bar(&ctx, &input, &style, 400, 200);
+        wayscriber::ui::render_status_bar(
+            &ctx,
+            &wayscriber::ui::theme::Theme::dark(),
+            &input,
+            &style,
+            400,
+            200,
+        );
         drop(ctx);
         assert!(
             surface_has_pixels(&mut surface),
@@ -124,7 +131,20 @@ fn render_help_overlay_draws_content() {
     let input = make_input_state();
     let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
     wayscriber::ui::render_help_overlay(
-        &ctx, &style, 800, 600, true, 0, &bindings, "", false, true, true, 0.0, false,
+        &ctx,
+        &wayscriber::ui::theme::Theme::dark(),
+        &style,
+        800,
+        600,
+        true,
+        0,
+        &bindings,
+        "",
+        false,
+        true,
+        true,
+        0.0,
+        false,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -142,7 +162,14 @@ fn render_status_bar_draws_in_board_modes() {
         input.switch_board(board_id);
         let (mut surface, ctx) = surface_with_context(400, 200);
         input.update_status_hud_layout(StatusPosition::BottomLeft, &style, 400, 200);
-        wayscriber::ui::render_status_bar(&ctx, &input, &style, 400, 200);
+        wayscriber::ui::render_status_bar(
+            &ctx,
+            &wayscriber::ui::theme::Theme::dark(),
+            &input,
+            &style,
+            400,
+            200,
+        );
         drop(ctx);
         assert!(
             surface_has_pixels(&mut surface),
@@ -158,7 +185,20 @@ fn render_help_overlay_without_frozen_shortcuts_draws_content() {
     let input = make_input_state();
     let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
     wayscriber::ui::render_help_overlay(
-        &ctx, &style, 800, 600, false, 0, &bindings, "", false, true, true, 0.0, false,
+        &ctx,
+        &wayscriber::ui::theme::Theme::dark(),
+        &style,
+        800,
+        600,
+        false,
+        0,
+        &bindings,
+        "",
+        false,
+        true,
+        true,
+        0.0,
+        false,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -174,7 +214,13 @@ fn render_command_palette_with_query_draws_content() {
     input.command_palette_open = true;
     input.command_palette_query = "tool".to_string();
 
-    wayscriber::ui::render_command_palette(&ctx, &input, 900, 700);
+    wayscriber::ui::render_command_palette(
+        &ctx,
+        &wayscriber::ui::theme::Theme::dark(),
+        &input,
+        900,
+        700,
+    );
 
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -186,7 +232,13 @@ fn render_keybinding_capture_draws_content() {
     let mut input = make_input_state();
     input.keybinding_capture_action = Some(Action::SelectPenTool);
 
-    wayscriber::ui::render_command_palette(&ctx, &input, 800, 600);
+    wayscriber::ui::render_command_palette(
+        &ctx,
+        &wayscriber::ui::theme::Theme::dark(),
+        &input,
+        800,
+        600,
+    );
 
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -309,7 +361,20 @@ fn help_overlay_footer_offers_clickable_replay_and_about() {
     let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
     wayscriber::ui::clear_help_overlay_hit_map();
     wayscriber::ui::render_help_overlay(
-        &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,
+        &ctx,
+        &wayscriber::ui::theme::Theme::dark(),
+        &style,
+        1400,
+        1000,
+        true,
+        0,
+        &bindings,
+        "",
+        false,
+        true,
+        true,
+        0.0,
+        false,
     );
     drop(ctx);
 

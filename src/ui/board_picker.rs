@@ -1,5 +1,6 @@
 use crate::input::InputState;
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
+use crate::ui::theme::Theme;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
@@ -18,6 +19,7 @@ use rows::render_board_rows;
 
 pub fn render_board_picker(
     ctx: &cairo::Context,
+    theme: &Theme,
     input_state: &InputState,
     screen_width: u32,
     screen_height: u32,
@@ -133,10 +135,10 @@ pub fn render_board_picker(
         );
     }
 
-    render_board_rows(ctx, input_state, layout, board_count, max_count);
-    render_board_palette(ctx, input_state, layout);
+    render_board_rows(ctx, theme, input_state, layout, board_count, max_count);
+    render_board_palette(ctx, theme, input_state, layout);
 
-    render_page_panel(ctx, input_state, layout, screen_width, screen_height);
+    render_page_panel(ctx, theme, input_state, layout, screen_width, screen_height);
 
     let _ = ctx.restore();
 }

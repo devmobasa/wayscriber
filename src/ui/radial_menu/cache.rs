@@ -6,9 +6,8 @@
 //! sub-ring, the size value arc, and the center well stay dynamic on top.
 //! The cache key covers everything the base bakes in — surface resolution,
 //! palette + recents, binding hints, the slice table, and the active
-//! tool/color state — so any change invalidates the surface. The theme is
-//! process-fixed (`theme::init` is first-writer-wins), so it is not part of
-//! the key.
+//! tool/color state, and the runtime theme — so any change invalidates the
+//! surface.
 
 use std::cell::RefCell;
 
@@ -42,6 +41,8 @@ pub(super) struct BaseKey {
     actives: String,
     /// Compass slice table + parent children fingerprint.
     slices: String,
+    /// Runtime palette baked into wedge fills, borders, labels, and glyphs.
+    theme: theme::Theme,
 }
 
 struct CachedBase {
@@ -65,7 +66,7 @@ pub(super) fn paint_base(
 ) {
     let extent = base_extent(layout);
     let scale = base_scale(ctx);
-    let key = base_cache_key(input_state, swatches, extent, scale);
+    let key = base_cache_key(input_state, theme, swatches, extent, scale);
 
     let surface = BASE_CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
@@ -122,6 +123,7 @@ fn base_scale(ctx: &cairo::Context) -> f64 {
 /// Build the cache key for the current input state.
 pub(super) fn base_cache_key(
     input_state: &InputState,
+    theme: &theme::Theme,
     swatches: &[RadialRingSwatch],
     extent: f64,
     scale: f64,
@@ -170,6 +172,7 @@ pub(super) fn base_cache_key(
             color_key(&active_color),
         ),
         slices,
+        theme: *theme,
     }
 }
 
@@ -213,7 +216,13 @@ mod tests {
     const EXTENT: f64 = 192.0;
 
     fn key_for(state: &InputState) -> BaseKey {
-        base_cache_key(state, &state.radial_ring_swatches(), EXTENT, 1.0)
+        base_cache_key(
+            state,
+            &theme::Theme::dark(),
+            &state.radial_ring_swatches(),
+            EXTENT,
+            1.0,
+        )
     }
 
     /// The same state must produce the same key (a stable key is what makes
@@ -224,16 +233,33 @@ mod tests {
         assert_eq!(key_for(&state), key_for(&state));
     }
 
-    /// Every baked-in input invalidates the key: scale, palette, recents,
-    /// and the active tool/color snapshot.
+    /// Every baked-in input invalidates the key: scale, theme, palette,
+    /// recents, and the active tool/color snapshot.
     #[test]
     fn base_cache_key_changes_with_each_baked_input() {
         let mut state = make_test_input_state();
         let base = key_for(&state);
 
         // Resolution / device scale
-        let scaled = base_cache_key(&state, &state.radial_ring_swatches(), EXTENT, 2.0);
+        let scaled = base_cache_key(
+            &state,
+            &theme::Theme::dark(),
+            &state.radial_ring_swatches(),
+            EXTENT,
+            2.0,
+        );
         assert_ne!(base, scaled, "device scale must be part of the key");
+
+        // Runtime palette (selected wedges and their foreground are baked in)
+        let custom_theme = theme::Theme::dark_with_accent((1.0, 1.0, 0.0));
+        let themed = base_cache_key(
+            &state,
+            &custom_theme,
+            &state.radial_ring_swatches(),
+            EXTENT,
+            1.0,
+        );
+        assert_ne!(base, themed, "runtime theme must be part of the key");
 
         // Recents arc
         state.apply_color_from_ui(Color {
@@ -306,7 +332,7 @@ mod tests {
         let surface = render_base_surface(
             &state,
             &layout,
-            theme::current(),
+            &theme::Theme::dark(),
             &state.radial_ring_swatches(),
             EXTENT,
             1.0,
@@ -322,7 +348,7 @@ mod tests {
         let data = surface.data().expect("pixel data");
         let covered = (0..samples)
             .filter(|step| {
-                let angle = std::f64::consts::TAU * f64::from(*step) / f64::from(samples);
+                let angle = std::f64::consts::TAU * (*step as f64) / samples as f64;
                 let x = (EXTENT + radius * angle.cos()).round() as usize;
                 let y = (EXTENT + radius * angle.sin()).round() as usize;
                 // ARGB32 is native-endian, so alpha is the last byte.

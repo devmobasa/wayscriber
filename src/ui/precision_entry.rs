@@ -11,8 +11,8 @@ use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::theme::overlay::{
-    BG_INPUT_SELECTION, INPUT_BG, INPUT_BORDER_FOCUSED, INPUT_CARET, RADIUS_MD, RADIUS_STD,
-    TEXT_HINT_DIM, TEXT_PRIMARY,
+    INPUT_BG, RADIUS_MD, RADIUS_STD, TEXT_HINT_DIM, TEXT_PRIMARY, bg_input_selection,
+    input_border_focused, input_caret,
 };
 
 const POPUP_W: f64 = 180.0;
@@ -35,6 +35,7 @@ fn set_rgba(ctx: &cairo::Context, color: super::theme::Rgba) {
 /// the strip's style pill), clamped to the screen.
 pub fn render_precision_entry_popup(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     input_state: &InputState,
     screen_width: u32,
     screen_height: u32,
@@ -82,7 +83,7 @@ pub fn render_precision_entry_popup(
     draw_rounded_rect(ctx, x + PAD, field_y, field_w, FIELD_H, RADIUS_MD);
     set_rgba(ctx, INPUT_BG);
     let _ = ctx.fill_preserve();
-    set_rgba(ctx, INPUT_BORDER_FOCUSED);
+    set_rgba(ctx, input_border_focused(theme));
     ctx.set_line_width(1.5);
     let _ = ctx.stroke();
 
@@ -103,7 +104,7 @@ pub fn render_precision_entry_popup(
     if entry.selected && !entry.buffer.is_empty() {
         // Replace-on-type selection highlight behind the prefilled value.
         let advance = buffer_advance(&entry.buffer);
-        set_rgba(ctx, BG_INPUT_SELECTION);
+        set_rgba(ctx, bg_input_selection(theme));
         ctx.rectangle(text_x - 2.0, field_y + 5.0, advance + 4.0, FIELD_H - 10.0);
         let _ = ctx.fill();
     }
@@ -113,7 +114,7 @@ pub fn render_precision_entry_popup(
     // Caret after the buffer (before the unit suffix).
     if !entry.selected {
         let caret_x = text_x + buffer_advance(&entry.buffer) + 1.0;
-        set_rgba(ctx, INPUT_CARET);
+        set_rgba(ctx, input_caret(theme));
         ctx.rectangle(caret_x, field_y + 6.0, 1.5, FIELD_H - 12.0);
         let _ = ctx.fill();
     }

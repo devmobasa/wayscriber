@@ -43,6 +43,7 @@ pub(super) fn run(
     mut updates: LatestValueReceiver<GtkToolbarUpdate>,
     feedback: FeedbackPublisher,
     health: BridgeHealth,
+    theme: crate::ui::theme::Theme,
 ) {
     let guard = std::rc::Rc::new(FailureGuard {
         health: health.clone(),
@@ -84,7 +85,10 @@ pub(super) fn run(
             let mut windows: Option<super::view::Windows> = None;
             while let Some(update) = updates.recv().await {
                 let windows = windows.get_or_insert_with(|| {
-                    super::view::Windows::new(super::widgets::FeedbackSender::new(feedback.clone()))
+                    super::view::Windows::new(
+                        super::widgets::FeedbackSender::new(feedback.clone()),
+                        theme,
+                    )
                 });
                 let result = windows.apply(&update).await;
                 if let Err(err) = result {

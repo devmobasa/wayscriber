@@ -14,8 +14,10 @@ use crate::ui::toolbar::ToolbarSnapshot;
 use super::paint::paint_tree;
 use super::widgets::draw_tooltip_with_delay;
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_top_strip(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     width: f64,
     height: f64,
     snapshot: &ToolbarSnapshot,
@@ -31,11 +33,11 @@ pub fn render_top_strip(
     let fade = snapshot.top_fade.clamp(0.0, 1.0);
     if fade < 1.0 {
         ctx.push_group();
-        paint_tree(ctx, &tree, hover);
+        paint_tree(ctx, theme, &tree, hover);
         let _ = ctx.pop_group_to_source();
         let _ = ctx.paint_with_alpha(fade);
     } else {
-        paint_tree(ctx, &tree, hover);
+        paint_tree(ctx, theme, &tree, hover);
     }
     hits.extend(tree.to_hit_regions());
     draw_tooltip_with_delay(ctx, hits, hover, width, height, false, hover_start);

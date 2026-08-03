@@ -9,6 +9,7 @@ use super::*;
 /// layout cached on `InputState` by `update_status_hud_layout`.
 pub fn render_status_bar(
     ctx: &cairo::Context,
+    theme: &theme::Theme,
     input_state: &InputState,
     style: &crate::config::StatusBarStyle,
     screen_width: u32,
@@ -36,7 +37,7 @@ pub fn render_status_bar(
         layout.pill_height,
         STATUS_BAR_CORNER_RADIUS,
         (bg_color[0], bg_color[1], bg_color[2], bg_color[3]),
-        theme::current().border_hairline,
+        theme.border_hairline,
         None,
     );
 

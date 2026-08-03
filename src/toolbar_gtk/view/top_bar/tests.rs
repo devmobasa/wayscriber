@@ -1547,7 +1547,10 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     // sizes everything from the tester's desktop theme, and a text-scaling
     // factor alone inflates the rows past the budgets' headroom.
     let css_provider = gtk4::CssProvider::new();
-    css_provider.load_from_string(&crate::toolbar_gtk::css::stylesheet(1.0));
+    css_provider.load_from_string(&crate::toolbar_gtk::css::stylesheet(
+        &crate::ui::theme::Theme::dark(),
+        1.0,
+    ));
     if let Some(display) = gtk4::gdk::Display::default() {
         gtk4::style_context_add_provider_for_display(
             &display,

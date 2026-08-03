@@ -645,6 +645,11 @@ Controls visual indicators, overlays, and UI styling.
 # Options: "auto", "dark", "light" ("auto" currently resolves to dark)
 theme = "auto"
 
+# Accent color for chrome highlights (active tool, selection, focus)
+# Options: "system" (follow the desktop accent via the settings portal),
+# "default" (the built-in blue), "#RRGGBB" hex, or a palette color name
+accent_color = "system"
+
 # Reduce UI motion (disable animations)
 # Options: "auto", "on", "off"
 reduced_motion = "auto"
@@ -796,6 +801,7 @@ enabled = true
 
 **Theme & Motion:**
 - **Theme**: `theme` selects the overlay chrome theme — `"auto"` (default), `"dark"`, or `"light"`. `"auto"` currently resolves to dark chrome; `"light"` takes effect progressively as overlay surfaces adopt the runtime theme (until then it also renders dark).
+- **Accent color**: `accent_color` selects the accent used for chrome highlights (active tool, selection, focus rings, sliders) in both the built-in and GTK toolbars. `"system"` (default) reads the desktop accent from the settings portal (`org.freedesktop.appearance` / `accent-color`) at startup and falls back to the built-in blue when no portal or preference exists; `"default"` pins the built-in blue; a `"#RRGGBB"` hex string or palette color name pins a fixed custom accent. In daemon mode a changed system accent is picked up the next time the overlay is toggled on.
 - **Reduced motion**: `reduced_motion = "on"` disables overlay chrome animations (toast and flash fades render instantly; coverage extends to more surfaces as they adopt the shared animation envelopes). `"off"` keeps full motion. `"auto"` (default) is reserved for a future desktop-portal query of the system reduce-motion preference and currently behaves like `"off"` (full motion).
 
 **UI Styling:**

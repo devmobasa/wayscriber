@@ -1,12 +1,12 @@
 use super::constants::{
-    COLOR_ACCENT_BRIGHT, COLOR_ACCENT_GLOW, COLOR_BUTTON_ACTIVE, COLOR_BUTTON_DEFAULT,
-    COLOR_BUTTON_DESTRUCTIVE_HOVER, COLOR_BUTTON_DISABLED, COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT,
-    COLOR_CLOSE_HOVER, COLOR_DRAG_HANDLE, COLOR_DRAG_HANDLE_HOVER, COLOR_FOCUS_RING,
-    COLOR_ICON_HOVER, COLOR_ICON_HOVER_BG, COLOR_PIN_ACTIVE, COLOR_PIN_DEFAULT, COLOR_PIN_HOVER,
-    COLOR_SEGMENT_ACTIVE, COLOR_SEGMENT_BG, COLOR_SEGMENT_DIVIDER, COLOR_SEGMENT_HOVER,
-    COLOR_SEGMENT_TEXT_ACTIVE, COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY,
-    COLOR_TEXT_TERTIARY, RADIUS_LG, RADIUS_STD, SEGMENT_PADDING, SEGMENT_RADIUS,
-    SEGMENT_SELECTED_RADIUS, set_color,
+    COLOR_BUTTON_DEFAULT, COLOR_BUTTON_DESTRUCTIVE_HOVER, COLOR_BUTTON_DISABLED,
+    COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT, COLOR_CLOSE_HOVER, COLOR_DRAG_HANDLE,
+    COLOR_DRAG_HANDLE_HOVER, COLOR_ICON_HOVER, COLOR_ICON_HOVER_BG, COLOR_PIN_DEFAULT,
+    COLOR_PIN_HOVER, COLOR_SEGMENT_BG, COLOR_SEGMENT_DIVIDER, COLOR_SEGMENT_HOVER,
+    COLOR_SEGMENT_TEXT_INACTIVE, COLOR_TEXT_PRIMARY, COLOR_TEXT_TERTIARY, RADIUS_LG, RADIUS_STD,
+    SEGMENT_PADDING, SEGMENT_RADIUS, SEGMENT_SELECTED_RADIUS, color_accent_bright,
+    color_accent_glow, color_button_active, color_focus_ring, color_pin_active,
+    color_segment_active, color_segment_text_active, color_text_on_accent, set_color,
 };
 use super::draw_round_rect;
 use crate::ui::theme::{DESTRUCTIVE_RGB, Rgba, rgba};
@@ -136,6 +136,7 @@ fn draw_collapse_button(
 
 pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     x: f64,
     y: f64,
     size: f64,
@@ -148,14 +149,14 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
 
     // Draw outer glow when pinned for visual feedback
     if pinned {
-        set_color(ctx, COLOR_ACCENT_GLOW);
+        set_color(ctx, color_accent_glow(theme));
         ctx.arc(cx, cy, r + 2.0, 0.0, PI * 2.0);
         let _ = ctx.fill();
     }
 
     // Use circle shape for visual consistency with close button
     let color = if pinned {
-        COLOR_PIN_ACTIVE
+        color_pin_active(theme)
     } else if hover {
         COLOR_PIN_HOVER
     } else {
@@ -165,7 +166,14 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
     ctx.arc(cx, cy, r, 0.0, PI * 2.0);
     let _ = ctx.fill();
 
-    set_color(ctx, COLOR_TEXT_PRIMARY);
+    set_color(
+        ctx,
+        if pinned {
+            color_text_on_accent(theme)
+        } else {
+            COLOR_TEXT_PRIMARY
+        },
+    );
     let icon_size = size * 0.62;
     let icon_x = x + (size - icon_size) / 2.0;
     let icon_y = y + (size - icon_size) / 2.0;
@@ -176,8 +184,10 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(in crate::backend::wayland::toolbar::render) fn draw_button(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     x: f64,
     y: f64,
     w: f64,
@@ -194,13 +204,13 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_button(
 
     // Active state: add outer glow ring
     if active {
-        set_color(ctx, COLOR_ACCENT_GLOW);
+        set_color(ctx, color_accent_glow(theme));
         draw_round_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, RADIUS_LG + 2.0);
         let _ = ctx.fill();
     }
 
     let color = if active {
-        COLOR_BUTTON_ACTIVE
+        color_button_active(theme)
     } else if hover {
         COLOR_BUTTON_HOVER
     } else {
@@ -212,7 +222,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_button(
 
     // Active state: add bottom indicator line
     if active {
-        set_color(ctx, COLOR_ACCENT_BRIGHT);
+        set_color(ctx, color_accent_bright(theme));
         let indicator_w = w * 0.5;
         let indicator_h = 2.5;
         let indicator_x = x + (w - indicator_w) / 2.0;
@@ -241,13 +251,14 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_disabled_button(
 #[allow(dead_code)]
 pub(in crate::backend::wayland::toolbar::render) fn draw_focus_ring(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     x: f64,
     y: f64,
     w: f64,
     h: f64,
     radius: f64,
 ) {
-    set_color(ctx, COLOR_FOCUS_RING);
+    set_color(ctx, color_focus_ring(theme));
     ctx.set_line_width(2.0);
     draw_round_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, radius + 2.0);
     let _ = ctx.stroke();
@@ -258,6 +269,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_focus_ring(
 /// only on hover so the bar never carries a persistent red tile.
 pub(in crate::backend::wayland::toolbar::render) fn draw_destructive_button(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     x: f64,
     y: f64,
     w: f64,
@@ -265,7 +277,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_destructive_button(
     hover: bool,
 ) {
     if !hover {
-        draw_button(ctx, x, y, w, h, false, false);
+        draw_button(ctx, theme, x, y, w, h, false, false);
         return;
     }
 
@@ -284,6 +296,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_destructive_button(
 #[allow(clippy::too_many_arguments)]
 pub(in crate::backend::wayland::toolbar::render) fn draw_segmented_control(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     x: f64,
     y: f64,
     w: f64,
@@ -320,7 +333,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_segmented_control(
         h - padding * 2.0,
         inner_radius,
     );
-    set_color(ctx, COLOR_SEGMENT_ACTIVE);
+    set_color(ctx, color_segment_active(theme));
     let _ = ctx.fill();
 
     // Draw hover effect on inactive segment
@@ -354,7 +367,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_segmented_control(
     // Draw labels
     for (i, label) in [labels.0, labels.1].iter().enumerate() {
         let text_color = if i == active_segment {
-            COLOR_SEGMENT_TEXT_ACTIVE
+            color_segment_text_active(theme)
         } else {
             COLOR_SEGMENT_TEXT_INACTIVE
         };

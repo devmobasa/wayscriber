@@ -44,7 +44,13 @@ const HINT_LABEL_LIFT: f64 = 6.0;
 const HINT_LABEL_DROP: f64 = 8.0;
 
 /// Render the radial menu overlay.
-pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width: u32, height: u32) {
+pub fn render_radial_menu(
+    ctx: &cairo::Context,
+    theme: &theme::Theme,
+    input_state: &InputState,
+    width: u32,
+    height: u32,
+) {
     let (hover, expanded_sub_ring, size_dragging) = match &input_state.radial_menu_state {
         RadialMenuState::Open {
             hover,
@@ -60,7 +66,6 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
         None => return,
     };
 
-    let theme = theme::current();
     let swatches = input_state.radial_ring_swatches();
     let _ = ctx.save();
 
@@ -575,7 +580,9 @@ fn stroke_wedge_border(ctx: &cairo::Context, theme: &theme::Theme, is_active: bo
 
 /// Label/glyph color for a wedge's content.
 fn wedge_content_color(theme: &theme::Theme, is_hovered: bool, is_active: bool) -> Rgba {
-    if is_hovered || is_active {
+    if is_active {
+        theme.text_on_accent
+    } else if is_hovered {
         theme.text_primary
     } else {
         theme.text_secondary
@@ -756,4 +763,20 @@ fn center_glyph(input_state: &InputState, active_tool: Tool) -> ToolbarIconPaint
 /// Check whether two colors are approximately equal.
 fn colors_match(a: &crate::draw::Color, b: &crate::draw::Color) -> bool {
     (a.r - b.r).abs() < 0.01 && (a.g - b.g).abs() < 0.01 && (a.b - b.b).abs() < 0.01
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn active_wedge_content_uses_the_contrast_foreground() {
+        let theme = theme::Theme::dark_with_accent((1.0, 1.0, 0.0));
+
+        assert_eq!(
+            wedge_content_color(&theme, false, true),
+            theme.text_on_accent
+        );
+        assert_eq!(wedge_content_color(&theme, true, false), theme.text_primary);
+    }
 }

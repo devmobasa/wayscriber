@@ -368,6 +368,13 @@ interval_hours = 24
 # "light" takes effect as overlay surfaces adopt the runtime theme)
 theme = "auto"
 
+# Accent color for chrome highlights (active tool, selection, focus)
+# Options: "system" (follow the desktop accent via the settings portal,
+# falling back to the built-in blue), "default" (the built-in blue), or a
+# fixed color as "#RRGGBB" hex or a palette name (e.g. "orange").
+# Applied at startup.
+accent_color = "system"
+
 # Reduce UI motion (disable animations)
 # Options: "auto", "on", "off". "on" disables UI animations. "auto" is
 # reserved for a future desktop-portal (system preference) query and

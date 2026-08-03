@@ -63,9 +63,7 @@ impl Frame<'_> {
     }
 }
 
-pub(super) fn draw_about(ctx: &cairo::Context, frame: &Frame<'_>) {
-    let theme = theme::current();
-
+pub(super) fn draw_about(ctx: &cairo::Context, theme: &Theme, frame: &Frame<'_>) {
     backdrop(ctx, frame.plan, theme);
     header(ctx, frame, theme);
     update_card(ctx, frame, theme);
@@ -98,7 +96,7 @@ fn header(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
                 ctx,
                 style,
                 (x, plan.icon.1 + plan.icon.3 * 0.72),
-                (1.0, 1.0, 1.0, 1.0),
+                theme.text_on_accent,
                 "W",
             );
         }
@@ -459,9 +457,10 @@ mod tests {
             },
             UpdateState::Failed("Network unreachable".to_string()),
         ];
+        let theme = Theme::dark();
 
         for state in &states {
-            draw_about(&ctx, &frame_for(&plan, &content, state));
+            draw_about(&ctx, &theme, &frame_for(&plan, &content, state));
             assert_eq!(ctx.status(), Ok(()), "state {state:?} failed to paint");
         }
     }
@@ -472,17 +471,18 @@ mod tests {
         let plan = layout::plan(&content);
         let ctx = context(&plan);
         let update = UpdateState::Unknown(crate::update_check::Freshness::default());
+        let theme = Theme::dark();
 
         let mut frame = frame_for(&plan, &content, &update);
         frame.hover = Some(Element::Link(0));
         frame.focus = Some(Element::Close);
         frame.notice = Some("Copied to clipboard");
-        draw_about(&ctx, &frame);
+        draw_about(&ctx, &theme, &frame);
 
         frame.hover = Some(Element::UpdateCard);
         frame.focus = Some(Element::Button(0));
         frame.notice = None;
-        draw_about(&ctx, &frame);
+        draw_about(&ctx, &theme, &frame);
 
         assert_eq!(ctx.status(), Ok(()));
     }

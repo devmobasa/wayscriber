@@ -70,6 +70,15 @@ impl ConfiguratorApp {
             text("\"Auto\" currently uses the dark theme; \"Light\" takes effect as overlay surfaces adopt the runtime theme.")
                 .size(12)
                 .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+            labeled_input(
+                "Accent color",
+                &self.draft.ui_accent_color,
+                &self.defaults.ui_accent_color,
+                TextField::UiAccentColor,
+            ),
+            text("\"system\" follows the desktop accent via the settings portal, \"default\" keeps the built-in blue, or set \"#RRGGBB\" / a palette color name. Applied at startup.")
+                .size(12)
+                .style(theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
             labeled_control(
                 "Reduced motion",
                 reduced_motion.width(Length::Fill).into(),

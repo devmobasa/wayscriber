@@ -11,14 +11,16 @@ use super::bridge::FeedbackPublisher;
 use super::icons::{IconPainter, IconWidget};
 use crate::config::ToolbarRebindModifier;
 use crate::draw::Color;
-use crate::ui::theme::{ACCENT_RGB, Rgba, rgba, set_color};
+use crate::ui::theme::{Rgba, Theme, accent_rgb, rgba, set_color};
 use crate::ui::toolbar::ToolbarEvent;
 
 pub(super) use crate::ui::theme::toolbar::{COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK};
 /// Filled (dragged) portion of the slider track: the accent at reduced
 /// alpha so it stays quieter than the knob (same tint as
-/// COLOR_SEGMENT_ACTIVE).
-const COLOR_TRACK_FILL: Rgba = rgba(ACCENT_RGB, 0.55);
+/// color_segment_active).
+fn color_track_fill(theme: &Theme) -> Rgba {
+    rgba(accent_rgb(theme), 0.55)
+}
 
 /// Sender the view hands to every control closure. Clones share the configured
 /// rebind chord and modifier state captured from the actual GTK click.
@@ -476,7 +478,13 @@ pub(super) struct SwatchButton {
 }
 
 impl SwatchButton {
-    pub(super) fn new(color: Color, selected: bool, diameter: f64, tooltip: &str) -> Self {
+    pub(super) fn new(
+        theme: Theme,
+        color: Color,
+        selected: bool,
+        diameter: f64,
+        tooltip: &str,
+    ) -> Self {
         let button = sized_button(diameter, diameter);
         button.add_css_class("swatch");
         button.set_tooltip_text(Some(tooltip));
@@ -509,7 +517,7 @@ impl SwatchButton {
             rounded_rect_path(ctx, 4.5, 4.5, size - 9.0, size - 9.0, 3.5);
             let _ = ctx.stroke();
             if draw_selected.get() {
-                set_color(ctx, super::css::ACCENT);
+                set_color(ctx, super::css::color_accent(&theme));
                 ctx.set_line_width(2.0);
                 rounded_rect_path(ctx, 1.0, 1.0, size - 2.0, size - 2.0, 6.0);
                 let _ = ctx.stroke();
@@ -561,6 +569,7 @@ pub(super) struct SliderState {
 impl SliderRow {
     /// `on_change` fires continuously during a drag with the new value.
     pub(super) fn new(
+        theme: Theme,
         scale: f64,
         (min, max): (f64, f64),
         initial: f64,
@@ -594,13 +603,13 @@ impl SliderRow {
             let _ = ctx.fill();
             // Filled portion (accent at reduced alpha)
             rounded_rect_path(ctx, 0.0, track_y, (w * t).max(track_h), track_h, radius);
-            set_color(ctx, COLOR_TRACK_FILL);
+            set_color(ctx, color_track_fill(&theme));
             let _ = ctx.fill();
             // Knob
             let knob_r = (h / 2.0).min(7.0);
             let knob_x = knob_r + t * (w - knob_r * 2.0);
             ctx.arc(knob_x, h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
-            set_color(ctx, super::css::TRACK_KNOB);
+            set_color(ctx, super::css::color_track_knob(&theme));
             let _ = ctx.fill();
         });
 

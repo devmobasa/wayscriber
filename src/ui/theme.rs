@@ -23,8 +23,6 @@
 
 pub mod css;
 
-use std::sync::OnceLock;
-
 /// RGB color tuple (0.0–1.0 channels).
 pub type Rgb = (f64, f64, f64);
 
@@ -40,12 +38,101 @@ pub const fn rgba(rgb: Rgb, alpha: f64) -> Rgba {
 // CORE PALETTE — shared RGB roots
 // ============================================================================
 
-/// The one saturated accent: #3584E4 (GNOME blue). Every accent-family token
-/// in `overlay`/`toolbar` derives from this root.
-pub const ACCENT_RGB: Rgb = (0.2078, 0.5176, 0.8941);
+/// The built-in accent root: #3584E4 (GNOME blue). A constructed runtime
+/// [`Theme`] uses this unless it receives a system or custom accent root.
+pub const DEFAULT_ACCENT_RGB: Rgb = (0.2078, 0.5176, 0.8941);
 
-/// Lighter accent tint root (focus borders, carets, bright indicators).
-pub const ACCENT_BRIGHT_RGB: Rgb = (0.41, 0.72, 1.0);
+/// Lighter tint of the built-in accent (focus borders, carets, bright
+/// indicators), hand-tuned to pair with [`DEFAULT_ACCENT_RGB`].
+pub const DEFAULT_ACCENT_BRIGHT_RGB: Rgb = (0.41, 0.72, 1.0);
+
+/// Blend factor toward white for the bright tint derived from a non-default
+/// accent root (the default root keeps its hand-tuned pair instead).
+const ACCENT_BRIGHT_BLEND: f64 = 0.35;
+
+/// Minimum WCAG contrast the white foreground must keep against the accent
+/// fill before the near-black foreground takes over. 3:1 is the WCAG 2.1
+/// threshold for UI components (SC 1.4.11), which active-control glyphs
+/// are; white wins at the threshold so the default blue (3.77:1) keeps its
+/// historical white foreground.
+const WHITE_ON_ACCENT_MIN_CONTRAST: f64 = 3.0;
+
+/// Foreground on accent fills when white holds enough contrast (the
+/// historical pure white).
+const TEXT_ON_ACCENT_LIGHT: Rgba = (1.0, 1.0, 1.0, 1.0);
+
+/// Foreground on accent fills when white would wash out (near-black, never
+/// pure black, per the light-chrome convention). Opaque because the GTK
+/// sheet emits it as `#rrggbb`.
+const TEXT_ON_ACCENT_DARK: Rgba = (0.05, 0.05, 0.08, 1.0);
+
+/// The active accent root, read from the borrowed runtime [`Theme`].
+/// Every accent-family token in `overlay`/`toolbar` derives from this at
+/// call time.
+pub fn accent_rgb(theme: &Theme) -> Rgb {
+    let (r, g, b, _) = theme.accent;
+    (r, g, b)
+}
+
+/// The active bright accent tint (focus borders, carets, bright
+/// indicators), read from the borrowed runtime [`Theme`].
+pub fn accent_bright_rgb(theme: &Theme) -> Rgb {
+    let (r, g, b, _) = theme.accent_bright;
+    (r, g, b)
+}
+
+/// Bright tint for an accent root: the hand-tuned pair for the default root
+/// (byte-identical rendering when no accent is customized), a fixed blend
+/// toward white for anything else.
+fn derive_accent_bright(root: Rgb) -> Rgb {
+    if root == DEFAULT_ACCENT_RGB {
+        return DEFAULT_ACCENT_BRIGHT_RGB;
+    }
+    let (r, g, b, _) = lerp_color(rgba(root, 1.0), (1.0, 1.0, 1.0, 1.0), ACCENT_BRIGHT_BLEND);
+    (r, g, b)
+}
+
+/// Foreground for text and glyphs painted over an accent fill, chosen by
+/// actual WCAG contrast against the accent: white while it holds the 3:1
+/// UI-component floor (every historical accent), otherwise near-black —
+/// which is then always the stronger candidate, since white drops below
+/// 3:1 only on fills light enough to give the dark foreground more than
+/// 6:1.
+fn derive_text_on_accent(root: Rgb) -> Rgba {
+    let accent = wcag_relative_luminance(root.0, root.1, root.2);
+    let white = wcag_relative_luminance(
+        TEXT_ON_ACCENT_LIGHT.0,
+        TEXT_ON_ACCENT_LIGHT.1,
+        TEXT_ON_ACCENT_LIGHT.2,
+    );
+    if wcag_contrast_ratio(white, accent) >= WHITE_ON_ACCENT_MIN_CONTRAST {
+        TEXT_ON_ACCENT_LIGHT
+    } else {
+        TEXT_ON_ACCENT_DARK
+    }
+}
+
+/// Linearize one gamma-encoded sRGB channel (IEC 61966-2-1).
+fn srgb_linear(channel: f64) -> f64 {
+    if channel <= 0.04045 {
+        channel / 12.92
+    } else {
+        ((channel + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+/// WCAG relative luminance of a gamma-encoded sRGB color. Distinct from
+/// [`relative_luminance`], which weighs the raw channels and stays as the
+/// cheap heuristic for the status palette and cursor outline.
+fn wcag_relative_luminance(r: f64, g: f64, b: f64) -> f64 {
+    0.2126 * srgb_linear(r) + 0.7152 * srgb_linear(g) + 0.0722 * srgb_linear(b)
+}
+
+/// WCAG contrast ratio between two relative luminances (1:1–21:1).
+fn wcag_contrast_ratio(a: f64, b: f64) -> f64 {
+    let (lighter, darker) = if a >= b { (a, b) } else { (b, a) };
+    (lighter + 0.05) / (darker + 0.05)
+}
 
 /// Destructive red root: #F5333F-family (Clear hover, delete confirm).
 pub const DESTRUCTIVE_RGB: Rgb = (0.9608, 0.2, 0.2471);
@@ -58,7 +145,7 @@ pub const SHADOW_RGBA: Rgba = (0.0, 0.0, 0.0, 0.30);
 // ============================================================================
 
 pub mod overlay {
-    use super::{ACCENT_BRIGHT_RGB, ACCENT_RGB, Rgba, rgba};
+    use super::{Rgba, Theme, accent_bright_rgb, accent_rgb, rgba};
 
     // ---- Overlay dimming ----
     /// Popover/quick overlay dimming (e.g., board picker quick mode)
@@ -129,25 +216,43 @@ pub mod overlay {
     /// surface. Sits below the accent-filled selected state.
     pub const BG_HOVER_WASH: Rgba = (1.0, 1.0, 1.0, 0.08);
     /// Keyboard focus border color (lighter tint of the accent)
-    pub const BORDER_FOCUS: Rgba = rgba(ACCENT_BRIGHT_RGB, 0.9);
+    pub fn border_focus(theme: &Theme) -> Rgba {
+        rgba(accent_bright_rgb(theme), 0.9)
+    }
     /// Selection/highlight background
     pub const BG_SELECTION: Rgba = (0.22, 0.28, 0.38, 0.9);
     /// Active/selected item indicator
     pub const BG_SELECTED_INDICATOR: Rgba = (0.33, 0.42, 0.58, 0.9);
-    /// Accent color for highlights and active elements: #3584E4
-    pub const ACCENT_PRIMARY: Rgba = rgba(ACCENT_RGB, 0.9);
+    /// Accent color for highlights and active elements
+    pub fn accent_primary(theme: &Theme) -> Rgba {
+        rgba(accent_rgb(theme), 0.9)
+    }
+    /// Foreground for text/glyphs over an accent fill on overlay surfaces
+    /// (primary dialog buttons, accent-washed action buttons); flips to
+    /// near-black on light accents like the toolbar's on-accent token.
+    pub fn text_on_accent(theme: &Theme) -> Rgba {
+        theme.text_on_accent
+    }
     /// Lighter tint of the accent (hover feedback, bright borders)
-    pub const ACCENT_BRIGHT: Rgba = rgba(ACCENT_BRIGHT_RGB, 0.95);
+    pub fn accent_bright(theme: &Theme) -> Rgba {
+        rgba(accent_bright_rgb(theme), 0.95)
+    }
     /// Command palette/input selection highlight (accent at reduced alpha)
-    pub const BG_INPUT_SELECTION: Rgba = rgba(ACCENT_RGB, 0.4);
+    pub fn bg_input_selection(theme: &Theme) -> Rgba {
+        rgba(accent_rgb(theme), 0.4)
+    }
 
     // ---- Input elements ----
     /// Input field background
     pub const INPUT_BG: Rgba = (0.10, 0.10, 0.12, 1.0);
     /// Input field border (focused): accent at reduced alpha
-    pub const INPUT_BORDER_FOCUSED: Rgba = rgba(ACCENT_RGB, 0.6);
+    pub fn input_border_focused(theme: &Theme) -> Rgba {
+        rgba(accent_rgb(theme), 0.6)
+    }
     /// Caret/cursor color (accent-bright, fully opaque for visibility)
-    pub const INPUT_CARET: Rgba = rgba(ACCENT_BRIGHT_RGB, 1.0);
+    pub fn input_caret(theme: &Theme) -> Rgba {
+        rgba(accent_bright_rgb(theme), 1.0)
+    }
 
     // ---- Dividers ----
     /// Standard divider line
@@ -177,11 +282,15 @@ pub mod overlay {
     /// Progress bar track/background
     pub const PROGRESS_TRACK: Rgba = (0.30, 0.30, 0.35, 1.0);
     /// Progress bar fill (the accent)
-    pub const PROGRESS_FILL: Rgba = rgba(ACCENT_RGB, 1.0);
+    pub fn progress_fill(theme: &Theme) -> Rgba {
+        rgba(accent_rgb(theme), 1.0)
+    }
 
     // ---- Special element colors ----
     /// Pin icon active (the accent - unified with other active states)
-    pub const ICON_PIN_ACTIVE: Rgba = rgba(ACCENT_RGB, 0.95);
+    pub fn icon_pin_active(theme: &Theme) -> Rgba {
+        rgba(accent_rgb(theme), 0.95)
+    }
     /// Pin icon inactive
     pub const ICON_PIN_INACTIVE: Rgba = (0.60, 0.65, 0.72, 0.5);
     /// Drag handle dots
@@ -318,15 +427,27 @@ pub mod overlay {
 // ============================================================================
 
 pub mod toolbar {
-    use super::{ACCENT_BRIGHT_RGB, ACCENT_RGB, DESTRUCTIVE_RGB, Rgb, Rgba, rgba};
+    use super::{DESTRUCTIVE_RGB, Rgb, Rgba, Theme, accent_bright_rgb, accent_rgb, rgba};
 
     // ---- Accent family ----
-    /// The one saturated accent color (active tool, selected value): #3584E4
-    pub const COLOR_ACCENT: Rgba = rgba(ACCENT_RGB, 1.0);
+    /// The one saturated accent color (active tool, selected value)
+    pub fn color_accent(theme: &Theme) -> Rgba {
+        rgba(accent_rgb(theme), 1.0)
+    }
+    /// Foreground for text/glyphs painted over an accent fill (active
+    /// buttons, the pinned pin, active segments): white on dark accents,
+    /// near-black on light ones so active controls stay readable.
+    pub fn color_text_on_accent(theme: &Theme) -> Rgba {
+        theme.text_on_accent
+    }
     /// Soft accent glow halo behind active elements
-    pub const COLOR_ACCENT_GLOW: Rgba = rgba(ACCENT_RGB, 0.25);
+    pub fn color_accent_glow(theme: &Theme) -> Rgba {
+        rgba(accent_rgb(theme), 0.25)
+    }
     /// Lighter accent tint (active-button bottom indicator)
-    pub const COLOR_ACCENT_BRIGHT: Rgba = rgba(ACCENT_BRIGHT_RGB, 0.95);
+    pub fn color_accent_bright(theme: &Theme) -> Rgba {
+        rgba(accent_bright_rgb(theme), 0.95)
+    }
 
     // ---- Text ----
     /// White text/icon color with high opacity
@@ -351,11 +472,15 @@ pub mod toolbar {
     /// Icon hover background glow (subtle highlight behind icons on hover)
     pub const COLOR_ICON_HOVER_BG: Rgba = (1.0, 1.0, 1.0, 0.15);
     /// Keyboard focus ring color (accent at reduced alpha)
-    pub const COLOR_FOCUS_RING: Rgba = rgba(ACCENT_RGB, 0.9);
+    pub fn color_focus_ring(theme: &Theme) -> Rgba {
+        rgba(accent_rgb(theme), 0.9)
+    }
 
     // ---- Button states ----
     /// Active/selected button background (the accent)
-    pub const COLOR_BUTTON_ACTIVE: Rgba = COLOR_ACCENT;
+    pub fn color_button_active(theme: &Theme) -> Rgba {
+        color_accent(theme)
+    }
     /// Hovered button background
     pub const COLOR_BUTTON_HOVER: Rgba = (0.35, 0.35, 0.45, 0.85);
     /// Default button background
@@ -385,7 +510,9 @@ pub mod toolbar {
 
     // ---- Pin button ----
     /// Pinned state (the accent - unified with other active states)
-    pub const COLOR_PIN_ACTIVE: Rgba = COLOR_ACCENT;
+    pub fn color_pin_active(theme: &Theme) -> Rgba {
+        color_accent(theme)
+    }
     /// Pin button hover
     pub const COLOR_PIN_HOVER: Rgba = (0.35, 0.35, 0.45, 0.85);
     /// Pin button default
@@ -402,11 +529,16 @@ pub mod toolbar {
     /// Segmented control outer background
     pub const COLOR_SEGMENT_BG: Rgba = (0.15, 0.17, 0.22, 0.85);
     /// Active segment background: the accent at reduced alpha, deliberately
-    /// quieter than COLOR_ACCENT so segmented-control selection (Ico/Txt,
+    /// quieter than `color_accent` so segmented-control selection (Ico/Txt,
     /// Simple/Full) never competes with the active-tool highlight
-    pub const COLOR_SEGMENT_ACTIVE: Rgba = rgba(ACCENT_RGB, 0.55);
-    /// Active segment text color
-    pub const COLOR_SEGMENT_TEXT_ACTIVE: Rgba = (1.0, 1.0, 1.0, 1.0);
+    pub fn color_segment_active(theme: &Theme) -> Rgba {
+        rgba(accent_rgb(theme), 0.55)
+    }
+    /// Active segment text color (on-accent, since the active segment is an
+    /// accent fill)
+    pub fn color_segment_text_active(theme: &Theme) -> Rgba {
+        color_text_on_accent(theme)
+    }
     /// Inactive segment text color
     pub const COLOR_SEGMENT_TEXT_INACTIVE: Rgba = (0.65, 0.68, 0.75, 0.9);
     /// Hovered (inactive) segment background
@@ -451,7 +583,9 @@ pub mod toolbar {
     /// Slider track background
     pub const COLOR_TRACK_BACKGROUND: Rgba = (0.5, 0.5, 0.6, 0.6);
     /// Slider knob (accent at reduced alpha)
-    pub const COLOR_TRACK_KNOB: Rgba = rgba(ACCENT_RGB, 0.9);
+    pub fn color_track_knob(theme: &Theme) -> Rgba {
+        rgba(accent_rgb(theme), 0.9)
+    }
 
     // ---- Card/panel backgrounds ----
     /// Main panel background
@@ -541,8 +675,9 @@ pub mod toolbar {
     /// Hairline border on GTK panels and popovers (matches the runtime
     /// `Theme::dark` `border_hairline`)
     pub const COLOR_PANEL_BORDER: Rgba = (1.0, 1.0, 1.0, 0.10);
-    /// Foreground on filled controls (active/pinned/destructive fills and the
-    /// checked checkbox glyph): pure white
+    /// Foreground on fixed-color fills (destructive hover/press and the
+    /// checked checkbox glyph): pure white. Accent fills use
+    /// [`color_text_on_accent`] instead, which flips for light accents.
     pub const COLOR_TEXT_ON_FILL: Rgba = (1.0, 1.0, 1.0, 1.0);
     /// Drag handle at rest (quiet until hovered)
     pub const COLOR_DRAG_HANDLE: Rgba = (1.0, 1.0, 1.0, 0.45);
@@ -655,7 +790,7 @@ pub mod toolbar {
 /// Chrome color set for one theme variant. Consumed by surfaces as they
 /// migrate to runtime theming (M2+); the const tokens above remain the
 /// canonical dark values in the meantime.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Theme {
     /// Floating island/pill surfaces
     pub surface_pill: Rgba,
@@ -679,14 +814,36 @@ pub struct Theme {
     pub accent: Rgba,
     /// Bright accent tint (focus borders, carets)
     pub accent_bright: Rgba,
+    /// Foreground for text/glyphs on accent fills (luminance-derived so
+    /// light accents keep active controls readable)
+    pub text_on_accent: Rgba,
     /// Destructive red (hover/confirm only)
     pub destructive: Rgba,
 }
 
 impl Theme {
+    /// Construct the runtime theme selected by configuration.
+    pub fn from_mode(mode: ThemeMode, accent_root: Option<Rgb>) -> Self {
+        let accent_root = match accent_root {
+            Some(root) => root,
+            None => DEFAULT_ACCENT_RGB,
+        };
+        match mode {
+            ThemeMode::Light => Self::light_with_accent(accent_root),
+            ThemeMode::Auto | ThemeMode::Dark => Self::dark_with_accent(accent_root),
+        }
+    }
+
     /// The default OSD-dark chrome (canonical values, matching the const
     /// tokens above).
     pub fn dark() -> Self {
+        Self::dark_with_accent(DEFAULT_ACCENT_RGB)
+    }
+
+    /// Dark chrome carrying the given accent root (`[ui] accent_color`).
+    /// The bright tint and on-accent foreground derive from the root here,
+    /// at construction, so the palette is a plain value on the theme.
+    pub fn dark_with_accent(accent_root: Rgb) -> Self {
         Self {
             surface_pill: toolbar::COLOR_PANEL_BACKGROUND,
             surface_popover: overlay::PANEL_BG_BOARD_PICKER,
@@ -697,15 +854,16 @@ impl Theme {
             text_secondary: toolbar::COLOR_TEXT_SECONDARY,
             text_tertiary: toolbar::COLOR_LABEL_HINT,
             shadow: SHADOW_RGBA,
-            accent: rgba(ACCENT_RGB, 1.0),
-            accent_bright: rgba(ACCENT_BRIGHT_RGB, 0.95),
+            accent: rgba(accent_root, 1.0),
+            accent_bright: rgba(derive_accent_bright(accent_root), 0.95),
+            text_on_accent: derive_text_on_accent(accent_root),
             destructive: rgba(DESTRUCTIVE_RGB, 1.0),
         }
     }
 
     /// Status chrome palette `(bg, text)` that contrasts with a solid board
     /// background: light boards get dark chrome, dark boards get light
-    /// chrome. Board adaptivity is orthogonal to the installed variant
+    /// chrome. Board adaptivity is orthogonal to the constructed variant
     /// (`ThemeMode::Auto` still resolves the overall theme to dark), so this
     /// is an associated helper rather than a method on the active theme.
     pub fn status_palette_for_background(r: f64, g: f64, b: f64) -> ([f64; 4], [f64; 4]) {
@@ -719,6 +877,11 @@ impl Theme {
     /// Light chrome variant (for light solid boards once surfaces consume
     /// the runtime theme). Accent/radii/spacing match dark.
     pub fn light() -> Self {
+        Self::light_with_accent(DEFAULT_ACCENT_RGB)
+    }
+
+    /// Light chrome carrying the given accent root (`[ui] accent_color`).
+    pub fn light_with_accent(accent_root: Rgb) -> Self {
         Self {
             surface_pill: (0.980, 0.980, 0.988, 0.88),
             surface_popover: (1.0, 1.0, 1.0, 0.97),
@@ -730,8 +893,9 @@ impl Theme {
             text_secondary: (0.0, 0.0, 0.024, 0.6),
             text_tertiary: (0.0, 0.0, 0.024, 0.4),
             shadow: (0.0, 0.0, 0.0, 0.18),
-            accent: rgba(ACCENT_RGB, 1.0),
-            accent_bright: rgba(ACCENT_BRIGHT_RGB, 0.95),
+            accent: rgba(accent_root, 1.0),
+            accent_bright: rgba(derive_accent_bright(accent_root), 0.95),
+            text_on_accent: derive_text_on_accent(accent_root),
             destructive: rgba(DESTRUCTIVE_RGB, 1.0),
         }
     }
@@ -749,24 +913,6 @@ pub enum ThemeMode {
     Light,
 }
 
-static CURRENT: OnceLock<Theme> = OnceLock::new();
-
-/// Install the theme for this process. Call once at startup after config is
-/// loaded; later calls are no-ops (first writer wins).
-pub fn init(mode: ThemeMode) {
-    let theme = match mode {
-        ThemeMode::Light => Theme::light(),
-        ThemeMode::Auto | ThemeMode::Dark => Theme::dark(),
-    };
-    let _ = CURRENT.set(theme);
-}
-
-/// The active theme. Falls back to dark if `init` was never called (tests,
-/// early rendering).
-pub fn current() -> &'static Theme {
-    CURRENT.get_or_init(Theme::dark)
-}
-
 /// Popup surface colors used by the legacy popup renderers.
 ///
 /// These renderers still use the dark overlay palette for text, inputs, hover
@@ -776,25 +922,25 @@ pub fn current() -> &'static Theme {
 /// tokens; a partial surface-only migration is less usable than a consistently
 /// dark popup.
 pub mod popup {
-    use super::{Rgba, current, overlay};
+    use super::{Rgba, overlay};
 
-    /// Resolution split from the accessors so it can be exercised against
-    /// both variants: `current()` is a process-wide `OnceLock`, so a test
-    /// cannot install one theme and then the other.
+    /// Resolution split from the accessors so both variants can be exercised.
+    #[cfg(test)]
     pub(crate) fn surface_for(_theme: &super::Theme, dark: Rgba) -> Rgba {
         dark
     }
 
+    #[cfg(test)]
     pub(crate) fn border_for(_theme: &super::Theme, dark: Rgba) -> Rgba {
         dark
     }
 
     fn surface(dark: Rgba) -> Rgba {
-        surface_for(current(), dark)
+        dark
     }
 
     fn border(dark: Rgba) -> Rgba {
-        border_for(current(), dark)
+        dark
     }
 
     pub fn bg_context_menu() -> Rgba {
@@ -932,35 +1078,100 @@ mod tests {
 
     #[test]
     fn accent_family_tokens_share_the_accent_root() {
+        let theme = Theme::dark_with_accent((0.4, 0.5, 0.6));
+        let root = accent_rgb(&theme);
+        let primary = overlay::accent_primary(&theme);
+        let accent = toolbar::color_accent(&theme);
+        let segment = toolbar::color_segment_active(&theme);
+        assert_eq!((primary.0, primary.1, primary.2), root);
+        assert_eq!((accent.0, accent.1, accent.2), root);
+        assert_eq!((segment.0, segment.1, segment.2), root);
+    }
+
+    #[test]
+    fn derive_accent_bright_keeps_the_hand_tuned_pair_for_the_default_root() {
         assert_eq!(
-            (
-                overlay::ACCENT_PRIMARY.0,
-                overlay::ACCENT_PRIMARY.1,
-                overlay::ACCENT_PRIMARY.2
-            ),
-            ACCENT_RGB
+            derive_accent_bright(DEFAULT_ACCENT_RGB),
+            DEFAULT_ACCENT_BRIGHT_RGB
+        );
+    }
+
+    /// The accent palette is a plain value on the constructed theme.
+    #[test]
+    fn theme_with_accent_carries_the_derived_palette() {
+        let root = (0.8, 0.2, 0.1);
+        let theme = Theme::dark_with_accent(root);
+        assert_eq!(theme.accent, rgba(root, 1.0));
+        assert_eq!(theme.accent_bright, rgba(derive_accent_bright(root), 0.95));
+        assert_eq!(theme.text_on_accent, TEXT_ON_ACCENT_LIGHT);
+    }
+
+    #[test]
+    fn light_accents_take_a_dark_on_accent_foreground() {
+        // GNOME yellow (#F6D32D) and pure white must not carry white glyphs.
+        assert_eq!(
+            derive_text_on_accent((0.965, 0.827, 0.176)),
+            TEXT_ON_ACCENT_DARK
+        );
+        assert_eq!(derive_text_on_accent((1.0, 1.0, 1.0)), TEXT_ON_ACCENT_DARK);
+        assert_eq!(
+            Theme::dark_with_accent((1.0, 1.0, 1.0)).text_on_accent,
+            TEXT_ON_ACCENT_DARK
+        );
+        // Mid-brightness orange (#E48035): raw-channel luminance says white,
+        // but white only reaches ~2.8:1 there — WCAG contrast must flip it.
+        assert_eq!(
+            derive_text_on_accent((228.0 / 255.0, 128.0 / 255.0, 53.0 / 255.0)),
+            TEXT_ON_ACCENT_DARK
+        );
+        // The default blue (3.77:1 for white) keeps the historical white
+        // foreground, as does GNOME red (#E01B24, ~4.8:1).
+        assert_eq!(
+            derive_text_on_accent(DEFAULT_ACCENT_RGB),
+            TEXT_ON_ACCENT_LIGHT
         );
         assert_eq!(
-            (
-                toolbar::COLOR_ACCENT.0,
-                toolbar::COLOR_ACCENT.1,
-                toolbar::COLOR_ACCENT.2
-            ),
-            ACCENT_RGB
-        );
-        assert_eq!(
-            (
-                toolbar::COLOR_SEGMENT_ACTIVE.0,
-                toolbar::COLOR_SEGMENT_ACTIVE.1,
-                toolbar::COLOR_SEGMENT_ACTIVE.2
-            ),
-            ACCENT_RGB
+            derive_text_on_accent((224.0 / 255.0, 27.0 / 255.0, 36.0 / 255.0)),
+            TEXT_ON_ACCENT_LIGHT
         );
     }
 
     #[test]
-    fn current_falls_back_to_dark_without_init() {
-        assert_eq!(*current(), Theme::dark());
+    fn wcag_helpers_match_the_specified_anchors() {
+        // sRGB linearization: black and white are fixed points; 8-bit 128
+        // linearizes to ~0.2158.
+        assert_eq!(srgb_linear(0.0), 0.0);
+        assert!((srgb_linear(1.0) - 1.0).abs() < 1e-9);
+        assert!((srgb_linear(128.0 / 255.0) - 0.2158).abs() < 1e-3);
+        // White over black is the full 21:1 range; equal luminances are 1:1.
+        assert!((wcag_relative_luminance(1.0, 1.0, 1.0) - 1.0).abs() < 1e-9);
+        assert_eq!(wcag_relative_luminance(0.0, 0.0, 0.0), 0.0);
+        assert!((wcag_contrast_ratio(1.0, 0.0) - 21.0).abs() < 1e-9);
+        assert!((wcag_contrast_ratio(0.4, 0.4) - 1.0).abs() < 1e-9);
+        // Order of arguments must not matter.
+        assert_eq!(wcag_contrast_ratio(0.1, 0.7), wcag_contrast_ratio(0.7, 0.1));
+    }
+
+    #[test]
+    fn derive_accent_bright_blends_custom_roots_toward_white() {
+        let root = (0.8, 0.2, 0.1);
+        let bright = derive_accent_bright(root);
+        for (bright_channel, root_channel) in
+            [(bright.0, root.0), (bright.1, root.1), (bright.2, root.2)]
+        {
+            let expected = root_channel + (1.0 - root_channel) * ACCENT_BRIGHT_BLEND;
+            assert!((bright_channel - expected).abs() < 1e-9);
+            assert!(bright_channel > root_channel);
+            assert!(bright_channel <= 1.0);
+        }
+    }
+
+    #[test]
+    fn from_mode_constructs_independent_runtime_themes() {
+        let dark = Theme::from_mode(ThemeMode::Dark, Some((0.1, 0.2, 0.3)));
+        let light = Theme::from_mode(ThemeMode::Light, Some((0.8, 0.9, 1.0)));
+        assert_eq!(dark, Theme::dark_with_accent((0.1, 0.2, 0.3)));
+        assert_eq!(light, Theme::light_with_accent((0.8, 0.9, 1.0)));
     }
 
     #[test]

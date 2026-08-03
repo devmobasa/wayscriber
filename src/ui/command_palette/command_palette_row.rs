@@ -10,7 +10,7 @@ use crate::input::state::{
 use crate::ui::text_highlight::{HighlightStyle, draw_highlight, find_match_range};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
-use super::super::constants::{self, BG_INPUT_SELECTION, RADIUS_SM, TEXT_DESCRIPTION, TEXT_WHITE};
+use super::super::constants::{self, RADIUS_SM, TEXT_DESCRIPTION, TEXT_WHITE, bg_input_selection};
 use super::super::primitives::{draw_rounded_rect, text_extents_for};
 use super::{
     COMMAND_PALETTE_FONT_FAMILY, COMMAND_PALETTE_SHORTCUT_BADGE_GAP,
@@ -48,6 +48,7 @@ pub(super) fn command_palette_row_styles() -> CommandPaletteRowStyle {
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_command_row(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     input_state: &InputState,
     cmd: &ActionMeta,
     styles: &CommandPaletteRowStyle,
@@ -65,7 +66,7 @@ pub(super) fn render_command_row(
             COMMAND_PALETTE_ITEM_HEIGHT - 2.0,
             RADIUS_SM,
         );
-        constants::set_color(ctx, BG_INPUT_SELECTION);
+        constants::set_color(ctx, bg_input_selection(theme));
         let _ = ctx.fill();
     }
 
@@ -91,6 +92,7 @@ pub(super) fn render_command_row(
     // sit on top; fuzzy-only (subsequence) matches draw nothing.
     draw_label_match_highlights(
         ctx,
+        theme,
         &input_state.command_palette_query,
         cmd.label,
         label_x,
@@ -194,6 +196,7 @@ fn render_command_row_label(
 /// drawn by the caller afterwards, over these boxes.
 fn draw_label_match_highlights(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     query: &str,
     label: &str,
     label_x: f64,
@@ -205,7 +208,7 @@ fn draw_label_match_highlights(
         return;
     }
     let query_lower = query.to_ascii_lowercase();
-    let (hr, hg, hb, ha) = constants::with_alpha(constants::ACCENT_PRIMARY, 0.30);
+    let (hr, hg, hb, ha) = constants::with_alpha(constants::accent_primary(theme), 0.30);
     let style = HighlightStyle {
         font_family: COMMAND_PALETTE_FONT_FAMILY,
         font_size: label_size,

@@ -8,7 +8,7 @@ use crate::ui::constants::{
     self, BG_HOVER, DIVIDER_LIGHT, RADIUS_SM, TEXT_HINT, TEXT_SECONDARY, TEXT_TERTIARY, TEXT_WHITE,
 };
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
-use crate::ui::theme::Rgba;
+use crate::ui::theme::{Rgba, Theme};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 // File-local colors with no matching theme token (kept from the pre-theme
@@ -28,6 +28,7 @@ use thumbnail::{
 
 pub(super) fn render_page_panel(
     ctx: &cairo::Context,
+    theme: &Theme,
     input_state: &InputState,
     layout: BoardPickerLayout,
     screen_width: u32,
@@ -137,6 +138,7 @@ pub(super) fn render_page_panel(
         });
         render_page_thumbnail(PageThumbnailArgs {
             ctx,
+            theme,
             frame: page,
             background: &board.spec.background,
             x: thumb_x,

@@ -116,6 +116,7 @@ impl ConfigDraft {
             performance_ui_animation_fps: config.performance.ui_animation_fps.to_string(),
 
             ui_theme: UiThemeOption::from_theme(config.ui.theme),
+            ui_accent_color: config.ui.accent_color.as_str().to_string(),
             ui_reduced_motion: ReducedMotionOption::from_reduced_motion(config.ui.reduced_motion),
             ui_show_status_bar: config.ui.show_status_bar,
             ui_status_bar_interactive: config.ui.status_bar_interactive,

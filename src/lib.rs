@@ -38,6 +38,7 @@ pub(crate) mod runtime_ui_state;
 pub mod session;
 mod session_override;
 pub mod shortcut_hint;
+mod system_accent;
 pub mod systemd_user_service;
 #[cfg(test)]
 pub(crate) mod test_env;

@@ -1,5 +1,5 @@
 use super::super::widgets::constants::{
-    COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, SPACING_STD,
+    COLOR_TRACK_BACKGROUND, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, SPACING_STD, color_track_knob,
     set_color,
 };
 use super::super::widgets::*;
@@ -19,6 +19,7 @@ use super::section_header::draw_collapsible_header;
 
 pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
+    let theme = layout.theme;
     let snapshot = layout.snapshot;
     let hover = layout.hover;
     let x = layout.x;
@@ -76,6 +77,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
                 .unwrap_or(false);
             draw_button(
                 ctx,
+                theme,
                 minus_x,
                 thickness_slider_row_y,
                 btn_size,
@@ -106,6 +108,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
                 .unwrap_or(false);
             draw_button(
                 ctx,
+                theme,
                 plus_x,
                 thickness_slider_row_y,
                 btn_size,
@@ -136,7 +139,7 @@ pub(super) fn draw_thickness_section(layout: &mut SidePaletteLayout, y: &mut f64
             set_color(ctx, COLOR_TRACK_BACKGROUND);
             draw_round_rect(ctx, track_x, thickness_track_y, track_w, track_h, 4.0);
             let _ = ctx.fill();
-            set_color(ctx, COLOR_TRACK_KNOB);
+            set_color(ctx, color_track_knob(theme));
             ctx.arc(
                 knob_x,
                 thickness_track_y + track_h / 2.0,
@@ -242,6 +245,7 @@ fn draw_polygon_sides_section(
     label_style: UiTextStyle<'static>,
 ) {
     let ctx = layout.ctx;
+    let theme = layout.theme;
     let snapshot = layout.snapshot;
     let hover = layout.hover;
     let x = layout.x;
@@ -274,7 +278,16 @@ fn draw_polygon_sides_section(
     let minus_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, minus_x, row_y, btn_size, btn_size))
         .unwrap_or(false);
-    draw_button(ctx, minus_x, row_y, btn_size, btn_size, false, minus_hover);
+    draw_button(
+        ctx,
+        theme,
+        minus_x,
+        row_y,
+        btn_size,
+        btn_size,
+        false,
+        minus_hover,
+    );
     set_icon_color(ctx, minus_hover);
     toolbar_icons::draw_icon_minus(
         ctx,
@@ -294,7 +307,9 @@ fn draw_polygon_sides_section(
     let plus_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, plus_x, row_y, btn_size, btn_size))
         .unwrap_or(false);
-    draw_button(ctx, plus_x, row_y, btn_size, btn_size, false, plus_hover);
+    draw_button(
+        ctx, theme, plus_x, row_y, btn_size, btn_size, false, plus_hover,
+    );
     set_icon_color(ctx, plus_hover);
     toolbar_icons::draw_icon_plus(
         ctx,

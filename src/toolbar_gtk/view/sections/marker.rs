@@ -38,6 +38,7 @@ pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget
 
     let sender = ctx.feedback.clone();
     let slider = SliderRow::new(
+        ctx.theme,
         ctx.scale,
         (spec.min, spec.max),
         ctx.snapshot.marker_opacity,

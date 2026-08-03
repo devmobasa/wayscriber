@@ -1,5 +1,5 @@
 use super::super::widgets::constants::{
-    COLOR_TRACK_BACKGROUND, COLOR_TRACK_KNOB, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, SPACING_STD,
+    COLOR_TRACK_BACKGROUND, FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, SPACING_STD, color_track_knob,
     set_color,
 };
 use super::super::widgets::*;
@@ -16,6 +16,7 @@ use super::section_header::draw_collapsible_header;
 
 pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
+    let theme = layout.theme;
     let snapshot = layout.snapshot;
     let hover = layout.hover;
     let x = layout.x;
@@ -63,6 +64,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
         .unwrap_or(false);
     draw_button(
         ctx,
+        theme,
         minus_x,
         marker_slider_row_y,
         btn_size,
@@ -93,6 +95,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
         .unwrap_or(false);
     draw_button(
         ctx,
+        theme,
         plus_x,
         marker_slider_row_y,
         btn_size,
@@ -123,7 +126,7 @@ pub(super) fn draw_marker_opacity_section(layout: &mut SidePaletteLayout, y: &mu
     set_color(ctx, COLOR_TRACK_BACKGROUND);
     draw_round_rect(ctx, track_x, marker_track_y, track_w, track_h, 4.0);
     let _ = ctx.fill();
-    set_color(ctx, COLOR_TRACK_KNOB);
+    set_color(ctx, color_track_knob(theme));
     ctx.arc(
         knob_x,
         marker_track_y + track_h / 2.0,

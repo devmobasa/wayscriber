@@ -233,8 +233,13 @@ impl WaylandState {
 
         // No hover tracking yet; pass None. Can be updated when we record pointer positions per surface.
         let render_profile = self.input_state.active_ui_render_profile().cloned();
-        self.toolbar
-            .render(&self.shm, snapshot, None, render_profile.as_ref());
+        self.toolbar.render(
+            &self.shm,
+            snapshot,
+            &self.theme,
+            None,
+            render_profile.as_ref(),
+        );
         self.toolbar.apply_input_regions(&self.compositor_state);
     }
 

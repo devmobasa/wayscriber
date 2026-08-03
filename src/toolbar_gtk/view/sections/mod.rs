@@ -34,6 +34,7 @@ use super::Updater;
 /// that keep the built widgets in sync with later snapshots.
 pub(in crate::toolbar_gtk) struct SectionCtx<'a> {
     pub(in crate::toolbar_gtk) snapshot: &'a ToolbarSnapshot,
+    pub(in crate::toolbar_gtk) theme: crate::ui::theme::Theme,
     pub(in crate::toolbar_gtk) feedback: FeedbackSender,
     pub(in crate::toolbar_gtk) scale: f64,
     pub(in crate::toolbar_gtk) use_icons: bool,
@@ -191,6 +192,7 @@ pub(in crate::toolbar_gtk) fn command_row(
 /// thickness/text block grouping.
 pub(in crate::toolbar_gtk) fn build_pane_content(
     snapshot: &ToolbarSnapshot,
+    theme: crate::ui::theme::Theme,
     feedback: FeedbackSender,
     scale: f64,
     updaters: &mut Vec<Updater>,
@@ -198,6 +200,7 @@ pub(in crate::toolbar_gtk) fn build_pane_content(
     let content = gtk4::Box::new(gtk4::Orientation::Vertical, (12.0 * scale).round() as i32);
     let mut ctx = SectionCtx {
         snapshot,
+        theme,
         feedback,
         scale,
         use_icons: snapshot.use_icons,

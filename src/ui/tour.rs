@@ -4,13 +4,19 @@ use crate::input::state::{InputState, TourStep};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
-    self, OVERLAY_DIM_HEAVY, PROGRESS_FILL, PROGRESS_TRACK, RADIUS_PANEL, SPACING_PANEL,
-    TEXT_DESCRIPTION, TEXT_HINT, TEXT_WHITE,
+    self, OVERLAY_DIM_HEAVY, PROGRESS_TRACK, RADIUS_PANEL, SPACING_PANEL, TEXT_DESCRIPTION,
+    TEXT_HINT, TEXT_WHITE, progress_fill,
 };
 use super::primitives::draw_rounded_rect;
 
 /// Render the guided tour overlay.
-pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, height: u32) {
+pub fn render_tour(
+    ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
+    input_state: &InputState,
+    width: u32,
+    height: u32,
+) {
     let Some(step) = input_state.current_tour_step() else {
         return;
     };
@@ -116,7 +122,7 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
 
     let filled_width =
         progress_width * ((input_state.tour_step + 1) as f64 / TourStep::COUNT as f64);
-    constants::set_color(ctx, PROGRESS_FILL);
+    constants::set_color(ctx, progress_fill(theme));
     draw_rounded_rect(ctx, content_x, progress_y, filled_width, 6.0, 3.0);
     let _ = ctx.fill();
     y += progress_height + 16.0;

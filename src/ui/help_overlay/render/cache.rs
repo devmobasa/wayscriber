@@ -48,6 +48,7 @@ impl StyleKey {
 #[derive(Clone, PartialEq)]
 struct LayoutCacheKey {
     style: StyleKey,
+    theme: crate::ui::theme::Theme,
     screen_width: u32,
     screen_height: u32,
     frozen_enabled: bool,
@@ -76,6 +77,7 @@ thread_local! {
 #[allow(clippy::too_many_arguments)]
 pub(super) fn get_or_build_overlay_layout(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     style: &crate::config::HelpOverlayStyle,
     screen_width: u32,
     screen_height: u32,
@@ -95,6 +97,7 @@ pub(super) fn get_or_build_overlay_layout(
 ) -> OverlayLayout {
     let key = LayoutCacheKey {
         style: StyleKey::from_style(style),
+        theme: *theme,
         screen_width,
         screen_height,
         frozen_enabled,
@@ -121,6 +124,7 @@ pub(super) fn get_or_build_overlay_layout(
         // Cache miss - build new layout
         let layout = build_overlay_layout(
             ctx,
+            theme,
             style,
             screen_width,
             screen_height,

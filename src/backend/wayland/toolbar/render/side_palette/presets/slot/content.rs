@@ -23,6 +23,7 @@ const COLOR_EMPTY_SLOT_DASH: Rgba = (1.0, 1.0, 1.0, 0.35);
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw_preset_content(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     snapshot: &ToolbarSnapshot,
     hits: &mut Vec<HitRegion>,
     layout_spec: &PresetSlotLayout,
@@ -74,6 +75,7 @@ pub(super) fn draw_preset_content(
             layout_spec.slot_row_y + layout_spec.slot_size - layout_spec.swatch_size - 4.0;
         draw_swatch(
             ctx,
+            theme,
             swatch_x,
             swatch_y,
             layout_spec.swatch_size,

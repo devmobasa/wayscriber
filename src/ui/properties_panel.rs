@@ -3,12 +3,13 @@ use crate::ui::primitives::draw_rounded_rect;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
-    self, BG_HOVER, BORDER_FOCUS, DIVIDER, EMPTY_PROPERTIES, FOCUS_RING_WIDTH, RADIUS_PANEL,
-    RADIUS_SM, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY,
+    self, BG_HOVER, DIVIDER, EMPTY_PROPERTIES, FOCUS_RING_WIDTH, RADIUS_PANEL, RADIUS_SM,
+    TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, border_focus,
 };
 
 pub fn render_properties_panel(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     input_state: &InputState,
     _screen_width: u32,
     _screen_height: u32,
@@ -130,7 +131,7 @@ pub fn render_properties_panel(
 
             if is_focused && !is_hovered {
                 // Draw focus ring for keyboard navigation
-                constants::set_color(ctx, BORDER_FOCUS);
+                constants::set_color(ctx, border_focus(theme));
                 ctx.set_line_width(FOCUS_RING_WIDTH);
                 draw_rounded_rect(
                     ctx,

@@ -58,6 +58,7 @@ fn text_size_card(ctx: &mut SectionCtx) -> gtk4::Widget {
 
     let sender = ctx.feedback.clone();
     let slider = SliderRow::new(
+        ctx.theme,
         ctx.scale,
         (min, max),
         snapshot.font_size,

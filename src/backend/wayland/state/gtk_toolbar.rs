@@ -83,7 +83,7 @@ impl WaylandState {
         };
         match resolve_frontend(request, preconditions) {
             ToolbarFrontend::Gtk => {
-                self.gtk_toolbar = GtkToolbarBridge::spawn(runtime_wake);
+                self.gtk_toolbar = GtkToolbarBridge::spawn(runtime_wake, self.theme);
                 if self.gtk_toolbar.is_some() {
                     log::info!("GTK toolbars enabled; built-in toolbar surfaces stay unmapped");
                 } else {

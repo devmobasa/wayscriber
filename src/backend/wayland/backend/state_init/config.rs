@@ -18,6 +18,7 @@ const KEYBINDING_CONFLICT_NOTIFICATION_LIMIT: usize = 5;
 
 pub(super) struct LoadedConfig {
     pub(super) config: Config,
+    pub(super) theme: crate::ui::theme::Theme,
     pub(super) source: ConfigSource,
     pub(super) exit_after_capture_mode: ExitAfterCaptureMode,
     /// Shortcut strings this load had to drop, and duplicates it had to
@@ -91,10 +92,11 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
         }
     };
 
-    // Install process-wide UI preferences before any surface renders. The
-    // daemon spawns fresh overlay processes that re-enter this load path, so
-    // this single call site covers both direct and daemon-managed overlays.
-    crate::ui::theme::init(config.ui.theme.to_theme_mode());
+    // Resolve immutable UI preferences before constructing runtime state.
+    // The accent may consult the settings portal; the resulting theme is an
+    // owned value passed to each renderer instead of ambient process state.
+    let accent_root = crate::system_accent::resolve_configured_accent(&config.ui.accent_color);
+    let theme = crate::ui::theme::Theme::from_mode(config.ui.theme.to_theme_mode(), accent_root);
     crate::ui::anim::set_motion_enabled(config.ui.reduced_motion.motion_enabled());
 
     let exit_after_capture_mode = match backend_exit_mode {
@@ -109,6 +111,7 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
 
     LoadedConfig {
         config,
+        theme,
         source,
         exit_after_capture_mode,
         keybindings,
@@ -381,6 +384,7 @@ fn config_path_display() -> String {
 
 fn log_config(config: &Config) {
     debug!("  Theme: {:?}", config.ui.theme);
+    debug!("  Accent: {:?}", config.ui.accent_color);
     debug!("  Reduced motion: {:?}", config.ui.reduced_motion);
     debug!("  Color: {:?}", config.drawing.default_color);
     debug!("  Thickness: {:.1}px", config.drawing.default_thickness);

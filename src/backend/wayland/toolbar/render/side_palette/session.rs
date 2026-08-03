@@ -185,9 +185,26 @@ fn draw_save_as_overwrite_confirmation(
             .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
             .unwrap_or(false);
         if destructive {
-            draw_destructive_button(layout.ctx, item.x, item.y, item.w, item.h, hover);
+            draw_destructive_button(
+                layout.ctx,
+                layout.theme,
+                item.x,
+                item.y,
+                item.w,
+                item.h,
+                hover,
+            );
         } else {
-            draw_button(layout.ctx, item.x, item.y, item.w, item.h, false, hover);
+            draw_button(
+                layout.ctx,
+                layout.theme,
+                item.x,
+                item.y,
+                item.w,
+                item.h,
+                false,
+                hover,
+            );
         }
         draw_label_center(
             layout.ctx,
@@ -225,9 +242,9 @@ fn draw_session_button(
         .unwrap_or(false)
         && button.enabled;
     if matches!(button.event, ToolbarEvent::ClearSession) && button.enabled {
-        draw_destructive_button(layout.ctx, x, y, w, h, hover);
+        draw_destructive_button(layout.ctx, layout.theme, x, y, w, h, hover);
     } else {
-        draw_button(layout.ctx, x, y, w, h, false, hover);
+        draw_button(layout.ctx, layout.theme, x, y, w, h, false, hover);
     }
 
     if layout.snapshot.use_icons {
@@ -319,6 +336,7 @@ fn draw_recent_sessions(
             .unwrap_or(false);
         draw_button(
             layout.ctx,
+            layout.theme,
             layout.x,
             y,
             layout.content_width,

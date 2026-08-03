@@ -1,7 +1,7 @@
 use crate::input::state::{PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE};
 use crate::ui::constants::{
-    self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_SELECTION, BORDER_FOCUS, RADIUS_MD, RADIUS_SM,
-    RADIUS_STD, SHADOW_DEEP, TEXT_WHITE,
+    self, BG_SELECTION, RADIUS_MD, RADIUS_SM, RADIUS_STD, SHADOW_DEEP, TEXT_WHITE, accent_bright,
+    accent_primary, border_focus,
 };
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 use crate::ui::theme::Rgba;
@@ -25,6 +25,7 @@ use super::types::{PREVIEW_SCALE, PageContentArgs, PagePreviewArgs, PageThumbnai
 pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
     let PageThumbnailArgs {
         ctx,
+        theme,
         frame,
         background,
         x,
@@ -69,7 +70,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
     });
 
     if is_active {
-        constants::set_color(ctx, ACCENT_PRIMARY);
+        constants::set_color(ctx, accent_primary(theme));
         ctx.set_line_width(2.0);
         draw_rounded_rect(
             ctx,
@@ -85,7 +86,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
     if is_search_match {
         // Lighter tint of the accent so a search hit stays distinguishable
         // from the active-page ring while staying in the accent family.
-        constants::set_color(ctx, constants::with_alpha(ACCENT_BRIGHT, 0.82));
+        constants::set_color(ctx, constants::with_alpha(accent_bright(theme), 0.82));
         ctx.set_line_width(1.25);
         draw_rounded_rect(
             ctx,
@@ -99,7 +100,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
     }
 
     if is_keyboard_focused {
-        constants::set_color(ctx, BORDER_FOCUS);
+        constants::set_color(ctx, border_focus(theme));
         ctx.set_line_width(1.5);
         draw_rounded_rect(
             ctx,
@@ -114,6 +115,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
 
     draw_thumbnail_actions(
         ctx,
+        theme,
         x,
         y,
         width,
@@ -130,6 +132,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
 #[allow(clippy::too_many_arguments)]
 fn draw_thumbnail_actions(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     x: f64,
     y: f64,
     width: f64,
@@ -161,6 +164,7 @@ fn draw_thumbnail_actions(
     );
     draw_duplicate_icon(
         ctx,
+        theme,
         duplicate_x,
         icon_y,
         icon_size,

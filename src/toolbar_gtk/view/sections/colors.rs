@@ -666,6 +666,7 @@ fn rect_swatch(
     area.set_content_height(ctx.px(SWATCH));
     area.set_can_target(false);
     let draw_selected = selected_cell.clone();
+    let theme = ctx.theme;
     area.set_draw_func(move |_, cr, width, height| {
         let size = f64::from(width.min(height));
         let fill_path =
@@ -686,7 +687,7 @@ fn rect_swatch(
         let _ = cr.stroke();
 
         if draw_selected.get() {
-            set_color(cr, super::super::super::css::ACCENT);
+            set_color(cr, super::super::super::css::color_accent(&theme));
             cr.set_line_width(2.0);
             rounded_rect_path(cr, 1.0, 1.0, size - 2.0, size - 2.0, 6.0);
             let _ = cr.stroke();

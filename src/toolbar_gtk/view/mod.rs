@@ -413,6 +413,7 @@ where
 }
 
 pub(super) struct Windows {
+    theme: crate::ui::theme::Theme,
     top: top_bar::TopBar,
     side: side_bar::SideBar,
     tooltip_capture: capture_suppression::TooltipCapture,
@@ -424,9 +425,9 @@ pub(super) struct Windows {
 }
 
 impl Windows {
-    pub(super) fn new(feedback: FeedbackSender) -> Self {
+    pub(super) fn new(feedback: FeedbackSender, theme: crate::ui::theme::Theme) -> Self {
         let css_provider = gtk4::CssProvider::new();
-        css_provider.load_from_string(&super::css::stylesheet(1.0));
+        css_provider.load_from_string(&super::css::stylesheet(&theme, 1.0));
         if let Some(display) = gtk4::gdk::Display::default() {
             gtk4::style_context_add_provider_for_display(
                 &display,
@@ -435,8 +436,9 @@ impl Windows {
             );
         }
         Self {
-            top: top_bar::TopBar::new(feedback.clone()),
-            side: side_bar::SideBar::new(feedback.clone()),
+            theme,
+            top: top_bar::TopBar::new(feedback.clone(), theme),
+            side: side_bar::SideBar::new(feedback.clone(), theme),
             tooltip_capture: capture_suppression::TooltipCapture::new(),
             css_provider,
             css_scale_milli: 1000,
@@ -589,7 +591,7 @@ impl Windows {
         let milli = (scale * 1000.0).round() as i64;
         if milli != self.css_scale_milli {
             self.css_provider
-                .load_from_string(&super::css::stylesheet(scale));
+                .load_from_string(&super::css::stylesheet(&self.theme, scale));
             self.css_scale_milli = milli;
         }
     }

@@ -8,10 +8,12 @@ use crate::ui_text::UiTextStyle;
 
 use super::super::super::widgets::constants::{FONT_FAMILY_DEFAULT, FONT_SIZE_LABEL, set_color};
 use super::super::super::widgets::*;
-use super::{COLOR_DELAY_KNOB, COLOR_DELAY_TRACK};
+use super::{COLOR_DELAY_TRACK, color_delay_knob};
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn draw_custom_rows(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     hits: &mut Vec<HitRegion>,
     x: f64,
     y: f64,
@@ -27,6 +29,7 @@ pub(super) fn draw_custom_rows(
     };
     let mut context = CustomRowContext {
         ctx,
+        theme,
         hits,
         x,
         card_w,
@@ -41,6 +44,7 @@ pub(super) fn draw_custom_rows(
 
 struct CustomRowContext<'a> {
     ctx: &'a cairo::Context,
+    theme: &'a crate::ui::theme::Theme,
     hits: &'a mut Vec<HitRegion>,
     x: f64,
     card_w: f64,
@@ -74,7 +78,9 @@ impl<'a> CustomRowContext<'a> {
 
         if self.snapshot.use_icons {
             let icon_size = 20.0;
-            draw_button(self.ctx, self.x, y, btn_w, row_h, false, btn_hover);
+            draw_button(
+                self.ctx, self.theme, self.x, y, btn_w, row_h, false, btn_hover,
+            );
             set_icon_color(self.ctx, btn_hover);
             if is_undo {
                 toolbar_icons::draw_icon_step_undo(
@@ -92,7 +98,9 @@ impl<'a> CustomRowContext<'a> {
                 );
             }
         } else {
-            draw_button(self.ctx, self.x, y, btn_w, row_h, false, btn_hover);
+            draw_button(
+                self.ctx, self.theme, self.x, y, btn_w, row_h, false, btn_hover,
+            );
             draw_label_left(
                 self.ctx,
                 self.label_style,
@@ -124,7 +132,16 @@ impl<'a> CustomRowContext<'a> {
             .hover
             .map(|(hx, hy)| point_in_rect(hx, hy, steps_x, y, steps_btn_w, row_h))
             .unwrap_or(false);
-        draw_button(self.ctx, steps_x, y, steps_btn_w, row_h, false, minus_hover);
+        draw_button(
+            self.ctx,
+            self.theme,
+            steps_x,
+            y,
+            steps_btn_w,
+            row_h,
+            false,
+            minus_hover,
+        );
         set_icon_color(self.ctx, minus_hover);
         toolbar_icons::draw_icon_minus(
             self.ctx,
@@ -166,6 +183,7 @@ impl<'a> CustomRowContext<'a> {
             .unwrap_or(false);
         draw_button(
             self.ctx,
+            self.theme,
             steps_plus_x,
             y,
             steps_btn_w,
@@ -210,7 +228,7 @@ impl<'a> CustomRowContext<'a> {
             slider_r,
             delay_ms as f64 / 1000.0,
         );
-        set_color(self.ctx, COLOR_DELAY_KNOB);
+        set_color(self.ctx, color_delay_knob(self.theme));
         self.ctx.arc(
             knob_x,
             slider_y + slider_h / 2.0,

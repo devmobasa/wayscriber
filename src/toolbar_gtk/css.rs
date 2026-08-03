@@ -9,17 +9,16 @@
 use crate::ui::theme::css::GtkStylesheetValues;
 
 // Tokens the GTK widgets also paint directly (swatch fills and the slider
-// DrawingArea); re-exported under their pre-M1 local names.
+// DrawingArea).
 pub(super) use crate::ui::theme::toolbar::{
-    COLOR_ACCENT as ACCENT, COLOR_TRACK_BACKGROUND as TRACK_BACKGROUND,
-    COLOR_TRACK_KNOB as TRACK_KNOB,
+    COLOR_TRACK_BACKGROUND as TRACK_BACKGROUND, color_accent, color_track_knob,
 };
 
 pub(super) const CAPTURE_TRANSPARENT_CLASS: &str = "wayscriber-capture-transparent";
 
 /// Full stylesheet at the given toolbar scale.
-pub(super) fn stylesheet(scale: f64) -> String {
-    let v = GtkStylesheetValues::new(scale);
+pub(super) fn stylesheet(theme: &crate::ui::theme::Theme, scale: f64) -> String {
+    let v = GtkStylesheetValues::new(theme, scale);
     format!(
         r#"
 window.wayscriber-toolbar {{
@@ -82,7 +81,7 @@ window.wayscriber-toolbar {{
 }}
 .wayscriber-toolbar button.active {{
     background-color: {accent};
-    color: {text_on_fill};
+    color: {text_on_accent};
     box-shadow: 0 0 0 {glow_ring_width}px {accent_glow},
         inset 0 -{indicator_height}px 0 0 {accent_bright};
 }}
@@ -121,7 +120,7 @@ window.wayscriber-toolbar {{
 }}
 .wayscriber-toolbar button.chrome.pinned {{
     background-color: {accent};
-    color: {text_on_fill};
+    color: {text_on_accent};
     box-shadow: 0 0 0 {glow_ring_width}px {accent_glow};
 }}
 .wayscriber-toolbar button.chrome.minimize {{
@@ -334,6 +333,7 @@ tooltip.{capture_transparent_class} {{
         text_primary = v.text_primary,
         text_disabled = v.text_disabled,
         text_on_fill = v.text_on_fill,
+        text_on_accent = v.text_on_accent,
         icon_default = v.icon_default,
         button_default = v.button_default,
         button_hover = v.button_hover,
@@ -421,16 +421,19 @@ mod tests {
     /// appears in the output, and every color in the output matches a row.
     /// Adding a color to the stylesheet therefore means adding its theme
     /// token here; a hand-edited literal fails the no-rogue-color test.
-    fn emitted_colors() -> Vec<(&'static str, String)> {
+    fn emitted_colors(theme: &crate::ui::theme::Theme) -> Vec<(&'static str, String)> {
         vec![
             // Routed through rgba_css (three-decimal alpha).
             (
                 "COLOR_PANEL_BACKGROUND",
                 rgba_css(t::COLOR_PANEL_BACKGROUND),
             ),
-            ("COLOR_ACCENT", rgba_css(t::COLOR_ACCENT)),
-            ("COLOR_ACCENT_GLOW", rgba_css(t::COLOR_ACCENT_GLOW)),
-            ("COLOR_ACCENT_BRIGHT", rgba_css(t::COLOR_ACCENT_BRIGHT)),
+            ("color_accent", rgba_css(t::color_accent(theme))),
+            ("color_accent_glow", rgba_css(t::color_accent_glow(theme))),
+            (
+                "color_accent_bright",
+                rgba_css(t::color_accent_bright(theme)),
+            ),
             ("COLOR_TEXT_PRIMARY", rgba_css(t::COLOR_TEXT_PRIMARY)),
             ("COLOR_TEXT_DISABLED", rgba_css(t::COLOR_TEXT_DISABLED)),
             ("COLOR_ICON_DEFAULT", rgba_css(t::COLOR_ICON_DEFAULT)),
@@ -445,7 +448,10 @@ mod tests {
                 "COLOR_BUTTON_DESTRUCTIVE_ACTIVE",
                 rgba_css(t::COLOR_BUTTON_DESTRUCTIVE_ACTIVE),
             ),
-            ("COLOR_SEGMENT_ACTIVE", rgba_css(t::COLOR_SEGMENT_ACTIVE)),
+            (
+                "color_segment_active",
+                rgba_css(t::color_segment_active(theme)),
+            ),
             (
                 "COLOR_CHECKBOX_DEFAULT",
                 rgba_css(t::COLOR_CHECKBOX_DEFAULT),
@@ -533,6 +539,10 @@ mod tests {
                 transparent_css(t::COLOR_POPOVER_SHADOW),
             ),
             ("COLOR_TEXT_ON_FILL", hex_css(t::COLOR_TEXT_ON_FILL)),
+            (
+                "color_text_on_accent",
+                hex_css(t::color_text_on_accent(theme)),
+            ),
         ]
     }
 
@@ -566,8 +576,9 @@ mod tests {
 
     #[test]
     fn every_theme_token_color_appears_in_the_stylesheet() {
-        let css = stylesheet(1.0);
-        for (token, value) in emitted_colors() {
+        let theme = crate::ui::theme::Theme::dark();
+        let css = stylesheet(&theme, 1.0);
+        for (token, value) in emitted_colors(&theme) {
             assert!(
                 css.contains(&value),
                 "stylesheet no longer emits {token} as {value}"
@@ -577,8 +588,9 @@ mod tests {
 
     #[test]
     fn stylesheet_has_no_color_literal_outside_the_theme_tokens() {
-        let css = stylesheet(1.0);
-        let known: std::collections::HashSet<String> = emitted_colors()
+        let theme = crate::ui::theme::Theme::dark();
+        let css = stylesheet(&theme, 1.0);
+        let known: std::collections::HashSet<String> = emitted_colors(&theme)
             .into_iter()
             .map(|(_, value)| value)
             .collect();
@@ -598,7 +610,7 @@ mod tests {
 
     #[test]
     fn capture_suppression_clears_private_native_popup_chrome() {
-        let css = stylesheet(1.0);
+        let css = stylesheet(&crate::ui::theme::Theme::dark(), 1.0);
         assert!(css.contains(&format!("tooltip.{CAPTURE_TRANSPARENT_CLASS} {{")));
         assert!(css.contains(&format!(
             "popover.{CAPTURE_TRANSPARENT_CLASS} > contents {{"

@@ -453,7 +453,7 @@ pub struct GtkToolbarBridge {
 impl GtkToolbarBridge {
     /// Spawns the GTK thread. Returns `None` only when the OS thread cannot be
     /// created; GTK-level failures are published asynchronously and wake the runtime.
-    pub fn spawn(runtime_wake: RuntimeWakeHandle) -> Option<Self> {
+    pub fn spawn(runtime_wake: RuntimeWakeHandle, theme: crate::ui::theme::Theme) -> Option<Self> {
         let (updates, update_rx) = latest_value_channel();
         let (completion_tx, completion_rx) = std::sync::mpsc::channel();
         let health = BridgeHealth::new(runtime_wake);
@@ -464,7 +464,7 @@ impl GtkToolbarBridge {
             .name("gtk-toolbar".into())
             .spawn(move || {
                 let _completion = ThreadCompletion(completion_tx);
-                super::runtime::run(update_rx, thread_feedback, thread_health);
+                super::runtime::run(update_rx, thread_feedback, thread_health, theme);
             });
         match spawned {
             Ok(thread) => Some(Self {

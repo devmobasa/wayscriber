@@ -122,6 +122,7 @@ impl SideBar {
         let mut content_updaters = Vec::new();
         let content = sections::build_pane_content(
             snapshot,
+            self.theme,
             self.feedback.clone(),
             scale,
             &mut content_updaters,

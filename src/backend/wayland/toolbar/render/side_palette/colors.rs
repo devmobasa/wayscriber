@@ -20,6 +20,7 @@ pub(super) fn draw_colors_section(
     y: &mut f64,
 ) -> Option<ColorSectionInfo> {
     let ctx = layout.ctx;
+    let theme = layout.theme;
     let snapshot = layout.snapshot;
     let hover = layout.hover;
     let x = layout.x;
@@ -65,12 +66,21 @@ pub(super) fn draw_colors_section(
     let picker_w = content_width;
     let picker_h = draw_color_picker_area(ctx, hits, snapshot, x, picker_y, picker_w);
     let (preview_row_y, preview_size) =
-        draw_preview_swatch_and_icon(ctx, hits, hover, snapshot, x, picker_y, picker_h);
+        draw_preview_swatch_and_icon(ctx, theme, hits, hover, snapshot, x, picker_y, picker_h);
 
     // Shared with the popup and the GTK entry so all three readouts agree,
     // including the eight-digit form a translucent color needs.
     let hex = crate::input::state::color_to_hex(snapshot.color);
-    draw_hex_input(ctx, hits, hover, x, preview_row_y, preview_size, &hex);
+    draw_hex_input(
+        ctx,
+        theme,
+        hits,
+        hover,
+        x,
+        preview_row_y,
+        preview_size,
+        &hex,
+    );
 
     let mut row_y = preview_row_y + preview_size + ToolbarLayoutSpec::SIDE_COLOR_PREVIEW_GAP_BOTTOM;
     let basic_toggle = if snapshot.show_more_colors || expanded_colors.is_empty() {
@@ -84,6 +94,7 @@ pub(super) fn draw_colors_section(
     };
     draw_color_swatch_row(
         ctx,
+        theme,
         hits,
         hover,
         snapshot,
@@ -106,6 +117,7 @@ pub(super) fn draw_colors_section(
             let is_last_row = row_index + 1 == rows.len();
             draw_color_swatch_row(
                 ctx,
+                theme,
                 hits,
                 hover,
                 snapshot,

@@ -1,12 +1,12 @@
 use crate::draw::Color;
 use crate::input::{BoardBackground, InputState};
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
-use crate::ui::theme::Rgba;
+use crate::ui::theme::{Rgba, Theme};
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
 use super::constants::{
-    self, ACCENT_PRIMARY, BG_SELECTED_INDICATOR, BG_SELECTION, DIVIDER_LIGHT, ICON_PIN_ACTIVE,
-    ICON_PIN_INACTIVE, INPUT_CARET, TEXT_ACTIVE, TEXT_HINT, TEXT_SECONDARY,
+    self, BG_SELECTED_INDICATOR, BG_SELECTION, DIVIDER_LIGHT, ICON_PIN_INACTIVE, TEXT_ACTIVE,
+    TEXT_HINT, TEXT_SECONDARY, accent_primary, icon_pin_active, input_caret,
 };
 use super::helpers::{
     SWATCH_EDGE, board_slot_hint, draw_drag_handle, draw_open_icon, draw_pin_icon,
@@ -18,6 +18,7 @@ const SWATCH_TRANSPARENT_OUTLINE: Rgba = (0.62, 0.68, 0.76, 0.85);
 
 pub(super) fn render_board_rows(
     ctx: &cairo::Context,
+    theme: &Theme,
     input_state: &InputState,
     layout: crate::input::state::BoardPickerLayout,
     board_count: usize,
@@ -195,7 +196,7 @@ pub(super) fn render_board_rows(
                 }
             }
             if is_active_board {
-                constants::set_color(ctx, ACCENT_PRIMARY);
+                constants::set_color(ctx, accent_primary(theme));
                 draw_rounded_rect(
                     ctx,
                     swatch_x - 2.0,
@@ -233,10 +234,10 @@ pub(super) fn render_board_rows(
             let (color, filled) = if board.spec.pinned {
                 (
                     Color {
-                        r: ICON_PIN_ACTIVE.0,
-                        g: ICON_PIN_ACTIVE.1,
-                        b: ICON_PIN_ACTIVE.2,
-                        a: ICON_PIN_ACTIVE.3,
+                        r: icon_pin_active(theme).0,
+                        g: icon_pin_active(theme).1,
+                        b: icon_pin_active(theme).2,
+                        a: icon_pin_active(theme).3,
                     },
                     true,
                 )
@@ -319,7 +320,7 @@ pub(super) fn render_board_rows(
             );
             let advance = extents.x_advance();
             let caret_x = name_x + advance + 2.0;
-            constants::set_color(ctx, INPUT_CARET);
+            constants::set_color(ctx, input_caret(theme));
             ctx.set_line_width(1.0);
             ctx.move_to(caret_x, row_center - layout.body_font_size * 0.5);
             ctx.line_to(caret_x, row_center + layout.body_font_size * 0.5);
@@ -359,7 +360,7 @@ pub(super) fn render_board_rows(
                     );
                     let advance = extents.x_advance();
                     let caret_x = hint_x + advance + 2.0;
-                    constants::set_color(ctx, INPUT_CARET);
+                    constants::set_color(ctx, input_caret(theme));
                     ctx.set_line_width(1.0);
                     ctx.move_to(caret_x, row_center - layout.body_font_size * 0.5);
                     ctx.line_to(caret_x, row_center + layout.body_font_size * 0.5);

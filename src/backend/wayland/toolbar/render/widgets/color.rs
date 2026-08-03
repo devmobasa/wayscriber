@@ -1,5 +1,5 @@
 use super::constants::{
-    COLOR_ACCENT, COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, set_color,
+    COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK, color_accent, set_color,
 };
 use super::draw_round_rect;
 use crate::draw::Color;
@@ -19,6 +19,7 @@ const COLOR_INDICATOR_RING: Rgba = (1.0, 1.0, 1.0, 0.9);
 /// presenting it as an opaque color.
 pub(in crate::backend::wayland::toolbar::render) fn draw_swatch(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     x: f64,
     y: f64,
     size: f64,
@@ -43,7 +44,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_swatch(
     let _ = ctx.stroke();
 
     if active {
-        set_color(ctx, COLOR_ACCENT);
+        set_color(ctx, color_accent(theme));
         ctx.set_line_width(2.0);
         draw_round_rect(ctx, x - 2.0, y - 2.0, size + 4.0, size + 4.0, 7.0);
         let _ = ctx.stroke();
@@ -161,7 +162,15 @@ mod tests {
             let ctx = Context::new(&surface).expect("context");
             ctx.set_source_rgb(1.0, 1.0, 1.0);
             let _ = ctx.paint();
-            draw_swatch(&ctx, 4.0, 4.0, size, color, false);
+            draw_swatch(
+                &ctx,
+                &crate::ui::theme::Theme::dark(),
+                4.0,
+                4.0,
+                size,
+                color,
+                false,
+            );
         }
         let mut surface = surface;
         pixel_at(&mut surface, 4 + size as i32 / 2, 4 + size as i32 / 2)

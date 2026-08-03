@@ -152,6 +152,7 @@ pub(in crate::backend::wayland) struct WaylandGlobals {
 pub(in crate::backend::wayland) struct WaylandStateInit {
     pub globals: WaylandGlobals,
     pub config: Config,
+    pub theme: crate::ui::theme::Theme,
     pub input_state: InputState,
     pub onboarding: crate::onboarding::OnboardingStore,
     pub palette_recents: crate::palette_recents::PaletteRecentsWriter,
@@ -210,6 +211,7 @@ pub(super) struct WaylandState {
 
     // Configuration
     pub(super) config: Config,
+    pub(super) theme: crate::ui::theme::Theme,
     /// Authored `[session]` settings were unavailable and the live options are
     /// defaults. Destructive session actions must refuse to use those options.
     pub(super) session_config_failed: bool,

@@ -13,6 +13,7 @@ use super::section_header::draw_collapsible_header;
 
 pub(super) fn draw_step_marker_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
+    let theme = layout.theme;
     let snapshot = layout.snapshot;
     let hover = layout.hover;
     let x = layout.x;
@@ -68,7 +69,16 @@ pub(super) fn draw_step_marker_section(layout: &mut SidePaletteLayout, y: &mut f
     let reset_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, x, reset_y, content_width, reset_h))
         .unwrap_or(false);
-    draw_button(ctx, x, reset_y, content_width, reset_h, false, reset_hover);
+    draw_button(
+        ctx,
+        theme,
+        x,
+        reset_y,
+        content_width,
+        reset_h,
+        false,
+        reset_hover,
+    );
     draw_label_center(
         ctx,
         label_style,

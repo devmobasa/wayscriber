@@ -1,9 +1,11 @@
 use crate::input::BoardBackground;
+use crate::ui::theme::Theme;
 
 pub(in crate::ui::board_picker::page_panel) const PREVIEW_SCALE: f64 = 1.6;
 
 pub(in crate::ui::board_picker::page_panel) struct PageThumbnailArgs<'a> {
     pub(in crate::ui::board_picker::page_panel) ctx: &'a cairo::Context,
+    pub(in crate::ui::board_picker::page_panel) theme: &'a Theme,
     pub(in crate::ui::board_picker::page_panel) frame: &'a crate::draw::Frame,
     pub(in crate::ui::board_picker::page_panel) background: &'a BoardBackground,
     pub(in crate::ui::board_picker::page_panel) x: f64,

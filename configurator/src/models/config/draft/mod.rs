@@ -75,6 +75,7 @@ pub struct ConfigDraft {
     pub performance_ui_animation_fps: String,
 
     pub ui_theme: UiThemeOption,
+    pub ui_accent_color: String,
     pub ui_reduced_motion: ReducedMotionOption,
     pub ui_show_status_bar: bool,
     pub ui_status_bar_interactive: bool,

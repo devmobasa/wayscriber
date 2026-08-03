@@ -1,11 +1,24 @@
 use super::super::draft::ConfigDraft;
 use super::super::parse::{parse_field, parse_u64_field, parse_usize_field};
 use crate::models::error::FormError;
-use wayscriber::config::{Config, XdgFocusLossBehavior};
+use wayscriber::config::{AccentColor, Config, XdgFocusLossBehavior};
 
 impl ConfigDraft {
     pub(super) fn apply_ui(&self, config: &mut Config, errors: &mut Vec<FormError>) {
         config.ui.theme = self.ui_theme.to_theme();
+        // An emptied field means "back to the default"; anything else must
+        // resolve, so a typo is a visible form error instead of a value the
+        // runtime would silently replace with the system accent.
+        let accent_color = self.ui_accent_color.trim();
+        if accent_color.is_empty() {
+            config.ui.accent_color = AccentColor::default();
+        } else {
+            let accent_color = AccentColor::new(accent_color);
+            match accent_color.try_mode() {
+                Ok(_) => config.ui.accent_color = accent_color,
+                Err(message) => errors.push(FormError::new("ui.accent_color", message)),
+            }
+        }
         config.ui.reduced_motion = self.ui_reduced_motion.to_reduced_motion();
         config.ui.show_status_bar = self.ui_show_status_bar;
         config.ui.status_bar_interactive = self.ui_status_bar_interactive;

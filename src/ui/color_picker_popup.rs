@@ -17,9 +17,9 @@ use crate::ui::theme::{Rgba, toolbar as toolbar_theme};
 use crate::ui_text::{UiTextStyle, draw_text_baseline, measure_text};
 
 use super::constants::{
-    self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_INPUT_SELECTION, INPUT_BG, INPUT_BORDER_FOCUSED,
-    INPUT_CARET, OVERLAY_DIM_MEDIUM, RADIUS_MD, RADIUS_PANEL, RADIUS_SM, RADIUS_STD, TEXT_HINT_DIM,
-    TEXT_PRIMARY,
+    self, INPUT_BG, OVERLAY_DIM_MEDIUM, RADIUS_MD, RADIUS_PANEL, RADIUS_SM, RADIUS_STD,
+    TEXT_HINT_DIM, TEXT_PRIMARY, accent_bright, accent_primary, bg_input_selection,
+    input_border_focused, input_caret, text_on_accent,
 };
 
 // File-local colors with no matching theme token (M1 keep-if-not-matching
@@ -116,6 +116,7 @@ fn union_bounds(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> (f64, f64, 
 /// Render the color picker popup.
 pub fn render_color_picker_popup(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     input_state: &InputState,
     screen_width: u32,
     screen_height: u32,
@@ -243,6 +244,7 @@ pub fn render_color_picker_popup(
     // Hex input field
     draw_hex_input(
         ctx,
+        theme,
         layout.hex_input_x,
         layout.hex_input_y,
         layout.hex_input_w,
@@ -269,6 +271,7 @@ pub fn render_color_picker_popup(
         .unwrap_or(false);
     draw_action_button(
         ctx,
+        theme,
         layout.copy_btn_x,
         layout.copy_btn_y,
         size,
@@ -278,6 +281,7 @@ pub fn render_color_picker_popup(
     );
     draw_action_button(
         ctx,
+        theme,
         layout.paste_btn_x,
         layout.paste_btn_y,
         size,
@@ -287,6 +291,7 @@ pub fn render_color_picker_popup(
     );
     draw_action_button(
         ctx,
+        theme,
         layout.eyedropper_btn_x,
         layout.eyedropper_btn_y,
         size,
@@ -312,6 +317,7 @@ pub fn render_color_picker_popup(
             .unwrap_or(false);
         draw_button(
             ctx,
+            theme,
             default_x,
             default_y,
             layout.btn_width,
@@ -325,6 +331,7 @@ pub fn render_color_picker_popup(
     // OK button
     draw_button(
         ctx,
+        theme,
         layout.ok_btn_x,
         layout.ok_btn_y,
         layout.btn_width,
@@ -337,6 +344,7 @@ pub fn render_color_picker_popup(
     // Cancel button
     draw_button(
         ctx,
+        theme,
         layout.cancel_btn_x,
         layout.cancel_btn_y,
         layout.btn_width,
@@ -562,6 +570,7 @@ fn draw_preview_swatch(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: C
 #[allow(clippy::too_many_arguments)]
 fn draw_hex_input(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     x: f64,
     y: f64,
     w: f64,
@@ -574,7 +583,7 @@ fn draw_hex_input(
     // Outer glow when focused - red if invalid, accent if valid
     if focused {
         if valid {
-            constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.2));
+            constants::set_color(ctx, constants::with_alpha(accent_primary(theme), 0.2));
         } else {
             constants::set_color(ctx, HEX_INVALID_GLOW);
         }
@@ -592,7 +601,7 @@ fn draw_hex_input(
         constants::set_color(ctx, HEX_INVALID_BORDER);
         ctx.set_line_width(2.0);
     } else if focused {
-        constants::set_color(ctx, INPUT_BORDER_FOCUSED);
+        constants::set_color(ctx, input_border_focused(theme));
         ctx.set_line_width(2.0);
     } else {
         constants::set_color(ctx, INPUT_BORDER_IDLE);
@@ -621,7 +630,7 @@ fn draw_hex_input(
 
     // Draw selection highlight when selected (full text selected)
     if selected {
-        constants::set_color(ctx, BG_INPUT_SELECTION);
+        constants::set_color(ctx, bg_input_selection(theme));
         draw_rounded_rect(
             ctx,
             text_x - 2.0,
@@ -638,7 +647,7 @@ fn draw_hex_input(
 
     // Cursor when focused (at end of text)
     if focused {
-        constants::set_color(ctx, INPUT_CARET);
+        constants::set_color(ctx, input_caret(theme));
         let cursor_x = text_x + extents.width() + 2.0;
         ctx.set_line_width(1.5);
         ctx.move_to(cursor_x, y + 4.0);
@@ -650,8 +659,10 @@ fn draw_hex_input(
 /// Draw one square action button (copy / paste / eyedropper) on the popup's
 /// preview row: a neutral rounded fill washed with the accent on hover, and a
 /// centered icon.
+#[allow(clippy::too_many_arguments)]
 fn draw_action_button(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     x: f64,
     y: f64,
     size: f64,
@@ -661,7 +672,7 @@ fn draw_action_button(
 ) {
     draw_rounded_rect(ctx, x, y, size, size, RADIUS_MD);
     if hovered {
-        constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.8));
+        constants::set_color(ctx, constants::with_alpha(accent_primary(theme), 0.8));
     } else {
         constants::set_color(ctx, EYEDROPPER_BG);
     }
@@ -669,7 +680,14 @@ fn draw_action_button(
     constants::set_color(ctx, crate::ui::theme::popup::border_modal());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
-    constants::set_color(ctx, TEXT_PRIMARY);
+    constants::set_color(
+        ctx,
+        if hovered {
+            text_on_accent(theme)
+        } else {
+            TEXT_PRIMARY
+        },
+    );
     icon(
         ctx,
         x + (size - icon_size) / 2.0,
@@ -759,6 +777,7 @@ fn action_tooltip_geometry(
 #[allow(clippy::too_many_arguments)]
 fn draw_button(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     x: f64,
     y: f64,
     w: f64,
@@ -770,7 +789,7 @@ fn draw_button(
     // Hover glow effect
     if hover {
         let glow_color = if primary {
-            constants::with_alpha(ACCENT_PRIMARY, 0.25)
+            constants::with_alpha(accent_primary(theme), 0.25)
         } else {
             BUTTON_HOVER_GLOW
         };
@@ -783,10 +802,10 @@ fn draw_button(
     if primary {
         if hover {
             // Accent nudged towards accent-bright so hover reads brighter
-            let fill = constants::lerp_color(ACCENT_PRIMARY, ACCENT_BRIGHT, 0.25);
+            let fill = constants::lerp_color(accent_primary(theme), accent_bright(theme), 0.25);
             constants::set_color(ctx, constants::with_alpha(fill, 0.98));
         } else {
-            constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.95));
+            constants::set_color(ctx, constants::with_alpha(accent_primary(theme), 0.95));
         }
     } else if hover {
         constants::set_color(ctx, BUTTON_SECONDARY_BG_HOVER);
@@ -799,9 +818,9 @@ fn draw_button(
     // Border - stronger on hover
     if primary {
         if hover {
-            constants::set_color(ctx, ACCENT_BRIGHT);
+            constants::set_color(ctx, accent_bright(theme));
         } else {
-            constants::set_color(ctx, constants::with_alpha(ACCENT_BRIGHT, 0.9));
+            constants::set_color(ctx, constants::with_alpha(accent_bright(theme), 0.9));
         }
     } else if hover {
         constants::set_color(ctx, BUTTON_SECONDARY_BORDER_HOVER);
@@ -819,7 +838,14 @@ fn draw_button(
         weight: cairo::FontWeight::Bold,
         size: 13.0,
     };
-    constants::set_color(ctx, TEXT_PRIMARY);
+    constants::set_color(
+        ctx,
+        if primary {
+            text_on_accent(theme)
+        } else {
+            TEXT_PRIMARY
+        },
+    );
 
     let extents = text_extents_for(
         ctx,

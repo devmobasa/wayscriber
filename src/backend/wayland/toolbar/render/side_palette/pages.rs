@@ -16,6 +16,7 @@ use super::section_header::draw_collapsible_header;
 
 pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
+    let theme = layout.theme;
     let snapshot = layout.snapshot;
     let hover = layout.hover;
     let x = layout.x;
@@ -80,9 +81,9 @@ pub(super) fn draw_pages_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         if !button.enabled {
             draw_disabled_button(ctx, bx, by, btn_w, btn_h);
         } else if button.event.is_destructive() {
-            draw_destructive_button(ctx, bx, by, btn_w, btn_h, is_hover);
+            draw_destructive_button(ctx, theme, bx, by, btn_w, btn_h, is_hover);
         } else {
-            draw_button(ctx, bx, by, btn_w, btn_h, false, is_hover);
+            draw_button(ctx, theme, bx, by, btn_w, btn_h, false, is_hover);
         }
         if use_icons {
             if button.enabled {

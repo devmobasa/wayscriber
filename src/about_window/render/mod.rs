@@ -59,6 +59,7 @@ impl AboutWindowState {
 
         draw::draw_about(
             &ctx,
+            &self.theme,
             &draw::Frame {
                 plan: &self.plan,
                 content: &self.content,

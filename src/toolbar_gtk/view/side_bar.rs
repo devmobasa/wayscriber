@@ -38,6 +38,7 @@ const END_MARGIN: (f64, f64) = (0.0, 24.0);
 
 pub(in crate::toolbar_gtk) struct SideBar {
     pub(in crate::toolbar_gtk) window: gtk4::Window,
+    theme: crate::ui::theme::Theme,
     feedback: FeedbackSender,
     root: gtk4::Box,
     capture_surface: CaptureSurfaceContent,
@@ -65,7 +66,10 @@ pub(in crate::toolbar_gtk) struct SideBar {
 }
 
 impl SideBar {
-    pub(in crate::toolbar_gtk) fn new(feedback: FeedbackSender) -> Self {
+    pub(in crate::toolbar_gtk) fn new(
+        feedback: FeedbackSender,
+        theme: crate::ui::theme::Theme,
+    ) -> Self {
         let window = gtk4::Window::new();
         window.add_css_class("wayscriber-toolbar");
         window.init_layer_shell();
@@ -107,6 +111,7 @@ impl SideBar {
 
         Self {
             window,
+            theme,
             feedback,
             root,
             capture_surface,

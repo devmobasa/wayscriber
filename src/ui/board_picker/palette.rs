@@ -1,7 +1,8 @@
 use crate::input::{BoardBackground, InputState};
 use crate::ui::primitives::draw_rounded_rect;
+use crate::ui::theme::Theme;
 
-use super::constants::{self, INPUT_CARET, RADIUS_SM};
+use super::constants::{self, RADIUS_SM, input_caret};
 use super::helpers::{BOARD_PALETTE, SWATCH_EDGE};
 
 const PALETTE_SWATCH_SIZE: f64 = 18.0;
@@ -9,6 +10,7 @@ const PALETTE_SWATCH_GAP: f64 = 6.0;
 
 pub(super) fn render_board_palette(
     ctx: &cairo::Context,
+    theme: &Theme,
     input_state: &InputState,
     layout: crate::input::state::BoardPickerLayout,
 ) {
@@ -58,7 +60,7 @@ pub(super) fn render_board_palette(
             let _ = ctx.stroke();
 
             if active_color.map(|active| active == color).unwrap_or(false) {
-                constants::set_color(ctx, INPUT_CARET);
+                constants::set_color(ctx, input_caret(theme));
                 ctx.set_line_width(1.5);
                 draw_rounded_rect(
                     ctx,

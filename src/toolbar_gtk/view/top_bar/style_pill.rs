@@ -70,6 +70,7 @@ impl TopBar {
             match control {
                 model::StylePillControl::ColorChip => {
                     let chip = SwatchButton::new(
+                        self.theme,
                         snapshot.color,
                         control.active(snapshot),
                         sz(CHIP_SIZE),
@@ -93,6 +94,7 @@ impl TopBar {
                 model::StylePillControl::QuickSwatch(index) => {
                     let entry_color = snapshot.quick_colors.rendered_entries()[index].color;
                     let swatch = SwatchButton::new(
+                        self.theme,
                         entry_color,
                         control.active(snapshot),
                         sz(SWATCH_SIZE),
@@ -131,6 +133,7 @@ impl TopBar {
                     };
                     let sender = self.feedback.clone();
                     let slider = SliderRow::new(
+                        self.theme,
                         scale,
                         (slider_spec.min, slider_spec.max),
                         value,

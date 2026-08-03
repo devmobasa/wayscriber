@@ -345,6 +345,7 @@ fn set_island_widget_id(_widget: &impl IsA<gtk4::Widget>, _island: model::TopToo
 
 pub(in crate::toolbar_gtk) struct TopBar {
     pub(in crate::toolbar_gtk) window: gtk4::Window,
+    theme: crate::ui::theme::Theme,
     feedback: FeedbackSender,
     root: gtk4::Box,
     capture_surface: CaptureSurfaceContent,
@@ -398,7 +399,10 @@ pub(in crate::toolbar_gtk) struct TopBar {
 }
 
 impl TopBar {
-    pub(in crate::toolbar_gtk) fn new(feedback: FeedbackSender) -> Self {
+    pub(in crate::toolbar_gtk) fn new(
+        feedback: FeedbackSender,
+        theme: crate::ui::theme::Theme,
+    ) -> Self {
         let window = gtk4::Window::new();
         window.add_css_class("wayscriber-toolbar");
         window.init_layer_shell();
@@ -422,7 +426,7 @@ impl TopBar {
         // for now; fixing it would require wl_surface input-region surgery
         // on the GTK window.
 
-        Self::with_window(feedback, window)
+        Self::with_window(feedback, window, theme)
     }
 
     /// Build an unpresented GTK widget tree without layer-shell side effects.
@@ -431,10 +435,14 @@ impl TopBar {
     fn new_for_test(feedback: FeedbackSender) -> Self {
         let window = gtk4::Window::new();
         window.add_css_class("wayscriber-toolbar");
-        Self::with_window(feedback, window)
+        Self::with_window(feedback, window, crate::ui::theme::Theme::dark())
     }
 
-    fn with_window(feedback: FeedbackSender, window: gtk4::Window) -> Self {
+    fn with_window(
+        feedback: FeedbackSender,
+        window: gtk4::Window,
+        theme: crate::ui::theme::Theme,
+    ) -> Self {
         let root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         root.add_css_class("panel");
         let capture_surface = CaptureSurfaceContent::new(&root);
@@ -456,6 +464,7 @@ impl TopBar {
 
         Self {
             window,
+            theme,
             feedback,
             root,
             capture_surface,

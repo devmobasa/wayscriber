@@ -133,6 +133,9 @@ pub struct GtkStylesheetValues {
     pub field_border_hover: String,
     pub scrollbar_slider: String,
     pub text_on_fill: String,
+    /// Foreground on accent fills (active buttons, pinned chrome);
+    /// luminance-derived so light accents keep active controls readable.
+    pub text_on_accent: String,
     // ---- Scaled metrics (px) ----
     pub radius_panel: i32,
     pub radius_card: i32,
@@ -180,7 +183,7 @@ impl GtkStylesheetValues {
     /// Build the full value set at the given toolbar scale. Non-finite
     /// scales fall back to 1.0; finite scales clamp to the 0.5–3.0 range
     /// the sheet has always supported.
-    pub fn new(scale: f64) -> Self {
+    pub fn new(theme: &super::Theme, scale: f64) -> Self {
         let scale = if scale.is_finite() {
             scale.clamp(0.5, 3.0)
         } else {
@@ -190,9 +193,9 @@ impl GtkStylesheetValues {
         use toolbar as t;
         Self {
             panel: rgba_css(t::COLOR_PANEL_BACKGROUND),
-            accent: rgba_css(t::COLOR_ACCENT),
-            accent_glow: rgba_css(t::COLOR_ACCENT_GLOW),
-            accent_bright: rgba_css(t::COLOR_ACCENT_BRIGHT),
+            accent: rgba_css(t::color_accent(theme)),
+            accent_glow: rgba_css(t::color_accent_glow(theme)),
+            accent_bright: rgba_css(t::color_accent_bright(theme)),
             text_primary: rgba_css(t::COLOR_TEXT_PRIMARY),
             text_disabled: rgba_css(t::COLOR_TEXT_DISABLED),
             icon_default: rgba_css(t::COLOR_ICON_DEFAULT),
@@ -201,7 +204,7 @@ impl GtkStylesheetValues {
             button_disabled: rgba_css(t::COLOR_BUTTON_DISABLED),
             button_destructive_hover: rgba_css(t::COLOR_BUTTON_DESTRUCTIVE_HOVER),
             button_destructive_active: rgba_css(t::COLOR_BUTTON_DESTRUCTIVE_ACTIVE),
-            segment_active: rgba_css(t::COLOR_SEGMENT_ACTIVE),
+            segment_active: rgba_css(t::color_segment_active(theme)),
             checkbox_default: rgba_css(t::COLOR_CHECKBOX_DEFAULT),
             checkbox_hover: rgba_css(t::COLOR_CHECKBOX_HOVER),
             checkbox_checked: rgba_css(t::COLOR_CHECKBOX_CHECKED),
@@ -232,6 +235,7 @@ impl GtkStylesheetValues {
             field_border_hover: rgba_css_compact(t::COLOR_FIELD_BORDER_HOVER),
             scrollbar_slider: rgba_css_compact(t::COLOR_SCROLLBAR_SLIDER),
             text_on_fill: hex_css(t::COLOR_TEXT_ON_FILL),
+            text_on_accent: hex_css(t::color_text_on_accent(theme)),
             radius_panel: px(t::RADIUS_PANEL),
             radius_card: px(t::RADIUS_CARD),
             radius_button: px(t::RADIUS_LG),
@@ -278,7 +282,11 @@ mod tests {
 
     #[test]
     fn rgba_css_rounds_channels_to_8_bit_and_pads_alpha_to_three_decimals() {
-        assert_eq!(rgba_css(toolbar::COLOR_ACCENT), "rgba(53, 132, 228, 1.000)");
+        let theme = super::super::Theme::dark();
+        assert_eq!(
+            rgba_css(toolbar::color_accent(&theme)),
+            "rgba(53, 132, 228, 1.000)"
+        );
         assert_eq!(
             rgba_css((0.95, 0.95, 0.95, 0.9)),
             "rgba(242, 242, 242, 0.900)"
@@ -320,14 +328,18 @@ mod tests {
 
     #[test]
     fn new_clamps_scale_and_maps_non_finite_to_unity() {
+        let theme = super::super::Theme::dark();
         assert_eq!(
-            GtkStylesheetValues::new(f64::NAN),
-            GtkStylesheetValues::new(1.0)
+            GtkStylesheetValues::new(&theme, f64::NAN),
+            GtkStylesheetValues::new(&theme, 1.0)
         );
         assert_eq!(
-            GtkStylesheetValues::new(100.0),
-            GtkStylesheetValues::new(3.0)
+            GtkStylesheetValues::new(&theme, 100.0),
+            GtkStylesheetValues::new(&theme, 3.0)
         );
-        assert_eq!(GtkStylesheetValues::new(0.1), GtkStylesheetValues::new(0.5));
+        assert_eq!(
+            GtkStylesheetValues::new(&theme, 0.1),
+            GtkStylesheetValues::new(&theme, 0.5)
+        );
     }
 }

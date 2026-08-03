@@ -35,15 +35,18 @@ use interaction::Element;
 use layout::Plan;
 
 pub fn run_about_window() -> Result<()> {
-    // Chrome colors come from the same `[ui] theme` key as the overlay, so the
-    // dialog matches the toolbars the user already sees.
-    match Config::load() {
-        Ok(loaded) => crate::ui::theme::init(loaded.config.ui.theme.to_theme_mode()),
+    // Chrome colors come from the same `[ui] theme` and `[ui] accent_color`
+    // keys as the overlay, so the dialog matches the toolbars the user
+    // already sees.
+    let config = match Config::load() {
+        Ok(loaded) => loaded.config,
         Err(err) => {
             debug!("About dialog falling back to the default theme: {err}");
-            crate::ui::theme::init(Config::default().ui.theme.to_theme_mode());
+            Config::default()
         }
-    }
+    };
+    let accent_root = crate::system_accent::resolve_configured_accent(&config.ui.accent_color);
+    let theme = crate::ui::theme::Theme::from_mode(config.ui.theme.to_theme_mode(), accent_root);
 
     let conn = Connection::connect_to_env().context("Failed to connect to Wayland compositor")?;
     let (globals, mut event_queue) =
@@ -80,6 +83,7 @@ pub fn run_about_window() -> Result<()> {
         seat_state,
         xdg_shell,
         window,
+        theme,
         content,
         plan,
     );
@@ -124,6 +128,7 @@ struct AboutWindowState {
     #[allow(dead_code)]
     xdg_shell: XdgShell,
     window: Window,
+    theme: crate::ui::theme::Theme,
     pool: Option<SlotPool>,
     width: u32,
     height: u32,

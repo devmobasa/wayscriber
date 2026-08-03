@@ -2,6 +2,7 @@ use smithay_client_toolkit::shm::Shm;
 
 use super::structs::ToolbarSurfaceManager;
 use crate::render_profiles::RenderColorProfile;
+use crate::ui::theme::Theme;
 use crate::ui::toolbar::ToolbarSnapshot;
 
 impl ToolbarSurfaceManager {
@@ -9,6 +10,7 @@ impl ToolbarSurfaceManager {
         &mut self,
         shm: &Shm,
         snapshot: &ToolbarSnapshot,
+        theme: &Theme,
         hover: Option<(f64, f64)>,
         render_profile: Option<&RenderColorProfile>,
     ) {
@@ -25,7 +27,7 @@ impl ToolbarSurfaceManager {
                 render_profile,
                 |ctx, w, h, snap, hits, hov, hov_start| {
                     crate::backend::wayland::toolbar::render_top_strip(
-                        ctx, w, h, snap, hits, hov, hov_start,
+                        ctx, theme, w, h, snap, hits, hov, hov_start,
                     )
                 },
             ) {
@@ -47,7 +49,7 @@ impl ToolbarSurfaceManager {
                 render_profile,
                 |ctx, w, h, snap, hits, hov, hov_start| {
                     crate::backend::wayland::toolbar::render_side_palette(
-                        ctx, w, h, snap, hits, hov, hov_start,
+                        ctx, theme, w, h, snap, hits, hov, hov_start,
                     )
                 },
             ) {

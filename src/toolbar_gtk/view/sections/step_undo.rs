@@ -179,6 +179,7 @@ fn custom_row(ctx: &mut SectionCtx, body: &gtk4::Box, is_undo: bool) {
     let initial_secs = row_delay_secs(snapshot, is_undo);
     let slider_sender = ctx.feedback.clone();
     let slider = SliderRow::new(
+        ctx.theme,
         ctx.scale,
         (spec.min, spec.max),
         initial_secs,
@@ -260,6 +261,7 @@ fn global_delay_slider(ctx: &SectionCtx, is_undo: bool, delay_ms: u64) -> Slider
     let spec = model::ToolbarSliderSpec::DELAY_SECONDS;
     let sender = ctx.feedback.clone();
     let slider = SliderRow::new(
+        ctx.theme,
         ctx.scale,
         (spec.min, spec.max),
         delay_ms as f64 / 1000.0,

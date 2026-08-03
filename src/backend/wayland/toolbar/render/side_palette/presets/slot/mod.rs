@@ -50,6 +50,7 @@ pub(super) fn draw_preset_slot(
     slot_index: usize,
 ) -> Option<Color> {
     let ctx = layout.ctx;
+    let theme = layout.theme;
     let snapshot = layout.snapshot;
     let hits = &mut layout.hits;
     let hover = layout.hover;
@@ -104,6 +105,7 @@ pub(super) fn draw_preset_slot(
 
     draw_button(
         ctx,
+        theme,
         slot_x,
         layout_spec.slot_row_y,
         layout_spec.slot_size,
@@ -185,6 +187,7 @@ pub(super) fn draw_preset_slot(
 
     let hover_preset_color = content::draw_preset_content(
         ctx,
+        theme,
         snapshot,
         hits,
         layout_spec,

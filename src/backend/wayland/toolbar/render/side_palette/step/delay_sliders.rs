@@ -9,7 +9,7 @@ use super::super::super::widgets::constants::{
     FONT_FAMILY_DEFAULT, FONT_SIZE_SECONDARY, set_color,
 };
 use super::super::super::widgets::draw_round_rect;
-use super::{COLOR_DELAY_KNOB, COLOR_DELAY_TRACK};
+use super::{COLOR_DELAY_TRACK, color_delay_knob};
 use crate::ui::theme::Rgba;
 
 /// Slider label text: COLOR_LABEL_HINT gray at +0.1 alpha — kept to avoid
@@ -18,6 +18,7 @@ const COLOR_SLIDER_LABEL: Rgba = (0.7, 0.7, 0.75, 0.9);
 
 pub(super) fn draw_delay_sliders(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     hits: &mut Vec<HitRegion>,
     x: f64,
     slider_start_y: f64,
@@ -58,7 +59,7 @@ pub(super) fn draw_delay_sliders(
         slider_knob_r,
         snapshot.undo_all_delay_ms as f64 / 1000.0,
     );
-    set_color(ctx, COLOR_DELAY_KNOB);
+    set_color(ctx, color_delay_knob(theme));
     ctx.arc(
         undo_knob_x,
         undo_slider_y + slider_h / 2.0,
@@ -109,7 +110,7 @@ pub(super) fn draw_delay_sliders(
         slider_knob_r,
         snapshot.redo_all_delay_ms as f64 / 1000.0,
     );
-    set_color(ctx, COLOR_DELAY_KNOB);
+    set_color(ctx, color_delay_knob(theme));
     ctx.arc(
         redo_knob_x,
         redo_slider_y + slider_h / 2.0,

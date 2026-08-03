@@ -38,6 +38,7 @@ const FOOTER_PILL_GAP: f64 = 10.0;
 #[allow(clippy::too_many_arguments)]
 pub fn render_help_overlay(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     style: &crate::config::HelpOverlayStyle,
     screen_width: u32,
     screen_height: u32,
@@ -119,6 +120,7 @@ pub fn render_help_overlay(
 
     let layout = get_or_build_overlay_layout(
         ctx,
+        theme,
         style,
         screen_width,
         screen_height,

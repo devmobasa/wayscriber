@@ -82,6 +82,7 @@ impl WaylandState {
             }
             if let Err(err) = render_top_strip(
                 ctx,
+                &self.theme,
                 top_base_w,
                 top_base_h,
                 snapshot,
@@ -131,6 +132,7 @@ impl WaylandState {
             }
             if let Err(err) = render_side_palette(
                 ctx,
+                &self.theme,
                 side_base_w,
                 side_base_h,
                 snapshot,

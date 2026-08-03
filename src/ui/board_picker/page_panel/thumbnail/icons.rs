@@ -1,7 +1,7 @@
 use std::f64::consts::PI;
 
 use crate::ui::constants::{self, TEXT_TERTIARY, TEXT_WHITE};
-use crate::ui::theme::{ACCENT_RGB, Rgb};
+use crate::ui::theme::{Rgb, Theme, accent_rgb};
 
 /// Delete-icon circle: softer than DESTRUCTIVE_RGB — the small filled disc
 /// reads harsh at full saturation (kept from the pre-theme literal).
@@ -50,20 +50,33 @@ pub(super) fn draw_delete_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, 
     let _ = ctx.stroke();
 }
 
-pub(super) fn draw_duplicate_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64, alpha: f64) {
+pub(super) fn draw_duplicate_icon(
+    ctx: &cairo::Context,
+    theme: &Theme,
+    x: f64,
+    y: f64,
+    size: f64,
+    alpha: f64,
+) {
     let radius = size * 0.5;
 
     ctx.arc(x, y, radius, 0.0, PI * 2.0);
-    constants::set_color_alpha(ctx, ACCENT_RGB, alpha);
+    constants::set_color_alpha(ctx, accent_rgb(theme), alpha);
     let _ = ctx.fill();
-    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, alpha * 0.6));
+    constants::set_color(
+        ctx,
+        constants::with_alpha(theme.text_on_accent, alpha * 0.6),
+    );
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
     let page_w = size * 0.42;
     let page_h = size * 0.54;
     let offset = size * 0.12;
-    constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, alpha.min(0.95)));
+    constants::set_color(
+        ctx,
+        constants::with_alpha(theme.text_on_accent, alpha.min(0.95)),
+    );
     ctx.set_line_width(1.4);
 
     ctx.rectangle(

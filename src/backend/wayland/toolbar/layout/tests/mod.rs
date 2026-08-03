@@ -21,7 +21,14 @@ fn rendered_side_hits(snapshot: &ToolbarSnapshot) -> Vec<HitRegion> {
     let ctx = cairo::Context::new(&surface).unwrap();
     let mut hits = Vec::new();
     crate::backend::wayland::toolbar::render_side_palette(
-        &ctx, w as f64, h as f64, snapshot, &mut hits, None, None,
+        &ctx,
+        &crate::ui::theme::Theme::dark(),
+        w as f64,
+        h as f64,
+        snapshot,
+        &mut hits,
+        None,
+        None,
     )
     .unwrap();
     hits
@@ -659,6 +666,7 @@ fn preset_slots_save_on_empty_click_and_clear_on_hover_badge() {
     let mut hovered_hits = Vec::new();
     crate::backend::wayland::toolbar::render_side_palette(
         &ctx,
+        &crate::ui::theme::Theme::dark(),
         w as f64,
         h as f64,
         &snapshot,
@@ -872,7 +880,14 @@ fn font_size_nudge_hits_use_slider_spec_step() {
     let ctx = cairo::Context::new(&surface).unwrap();
     let mut hits = Vec::new();
     crate::backend::wayland::toolbar::render_side_palette(
-        &ctx, w as f64, h as f64, &snapshot, &mut hits, None, None,
+        &ctx,
+        &crate::ui::theme::Theme::dark(),
+        w as f64,
+        h as f64,
+        &snapshot,
+        &mut hits,
+        None,
+        None,
     )
     .unwrap();
 

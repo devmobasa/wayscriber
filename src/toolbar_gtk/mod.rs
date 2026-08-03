@@ -206,7 +206,10 @@ mod disabled {
     pub struct GtkToolbarBridge {}
 
     impl GtkToolbarBridge {
-        pub fn spawn(_runtime_wake: RuntimeWakeHandle) -> Option<Self> {
+        pub fn spawn(
+            _runtime_wake: RuntimeWakeHandle,
+            _theme: crate::ui::theme::Theme,
+        ) -> Option<Self> {
             None
         }
 

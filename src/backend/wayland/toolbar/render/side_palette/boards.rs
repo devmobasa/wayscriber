@@ -22,6 +22,7 @@ const COLOR_BINDING_HINT: Rgba = (0.55, 0.58, 0.65, 0.9);
 
 pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
+    let theme = layout.theme;
     let snapshot = layout.snapshot;
     let hover = layout.hover;
     let x = layout.x;
@@ -108,9 +109,9 @@ pub(super) fn draw_boards_section(layout: &mut SidePaletteLayout, y: &mut f64) {
         if !button.enabled {
             draw_disabled_button(ctx, bx, by, btn_w, btn_h);
         } else if button.event.is_destructive() {
-            draw_destructive_button(ctx, bx, by, btn_w, btn_h, is_hover);
+            draw_destructive_button(ctx, theme, bx, by, btn_w, btn_h, is_hover);
         } else {
-            draw_button(ctx, bx, by, btn_w, btn_h, false, is_hover);
+            draw_button(ctx, theme, bx, by, btn_w, btn_h, false, is_hover);
         }
         if use_icons {
             if button.enabled {

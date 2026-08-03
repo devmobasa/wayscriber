@@ -521,6 +521,7 @@ fn widen_narrow_buttons(buttons: &mut [ZoomChipButton], pill_x: f64, pill_width:
 /// `update_zoom_chip_layout`.
 pub fn render_zoom_chip(
     ctx: &cairo::Context,
+    theme: &theme::Theme,
     input_state: &InputState,
     style: &StatusBarStyle,
     screen_width: u32,
@@ -548,7 +549,7 @@ pub fn render_zoom_chip(
         layout.pill_height,
         ZOOM_CHIP_CORNER_RADIUS,
         (bg_color[0], bg_color[1], bg_color[2], bg_color[3]),
-        theme::current().border_hairline,
+        theme.border_hairline,
         None,
     );
 
@@ -600,7 +601,7 @@ pub fn render_zoom_chip(
                 // locked state reads without a separate label; every other run
                 // uses the shared chip text color.
                 if run.button == Some(ZoomChipButtonKind::Lock) && layout.lock_active {
-                    let (ar, ag, ab, aa) = theme::current().accent;
+                    let (ar, ag, ab, aa) = theme.accent;
                     ctx.set_source_rgba(ar, ag, ab, aa);
                 } else {
                     ctx.set_source_rgba(r, g, b, a);

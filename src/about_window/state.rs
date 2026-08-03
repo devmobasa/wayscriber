@@ -23,6 +23,7 @@ impl AboutWindowState {
         seat_state: super::SeatState,
         xdg_shell: super::XdgShell,
         window: super::Window,
+        theme: crate::ui::theme::Theme,
         content: AboutContent,
         plan: Plan,
     ) -> Self {
@@ -40,6 +41,7 @@ impl AboutWindowState {
             seat_state,
             xdg_shell,
             window,
+            theme,
             pool: None,
             width,
             height,

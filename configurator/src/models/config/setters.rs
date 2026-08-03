@@ -346,6 +346,7 @@ impl ConfigDraft {
             TextField::HistoryCustomRedoDelayMs => self.history_custom_redo_delay_ms = value,
             TextField::HistoryCustomUndoSteps => self.history_custom_undo_steps = value,
             TextField::HistoryCustomRedoSteps => self.history_custom_redo_steps = value,
+            TextField::UiAccentColor => self.ui_accent_color = value,
             TextField::UiPreferredOutput => self.ui_preferred_output = value,
             TextField::StatusFontSize => self.status_font_size = value,
             TextField::StatusPadding => self.status_padding = value,

@@ -73,6 +73,89 @@ impl UiTheme {
     }
 }
 
+/// Accent color of the overlay chrome (`[ui] accent_color`).
+///
+/// `"system"` (the default) follows the desktop accent color via the
+/// settings portal and falls back to the built-in blue when no portal or
+/// preference exists. `"default"` pins the built-in blue. Anything else is
+/// a fixed custom accent: a `#RRGGBB` hex string or a palette color name
+/// (the [`ColorSpec`] name set).
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct AccentColor(String);
+
+/// What an [`AccentColor`] string resolves to.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AccentColorMode {
+    /// Follow the desktop accent from the settings portal.
+    System,
+    /// The built-in accent.
+    Default,
+    /// A fixed custom accent.
+    Custom(Color),
+}
+
+impl Default for AccentColor {
+    fn default() -> Self {
+        Self("system".to_string())
+    }
+}
+
+impl AccentColor {
+    /// Builds the setting from any accepted string form; validation happens
+    /// in [`AccentColor::try_mode`], while [`AccentColor::mode`] provides the
+    /// runtime fallback.
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    /// The configured string as written (for editors like the configurator).
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Resolves the configured string, reporting an unrecognized value as an
+    /// error message. Editors (the configurator) surface the error to the
+    /// user; the runtime goes through [`AccentColor::mode`] instead.
+    pub fn try_mode(&self) -> Result<AccentColorMode, String> {
+        let raw = self.0.trim();
+        if raw.eq_ignore_ascii_case("system") {
+            return Ok(AccentColorMode::System);
+        }
+        if raw.eq_ignore_ascii_case("default") {
+            return Ok(AccentColorMode::Default);
+        }
+        match crate::util::parse_config_hex_color(raw) {
+            Ok(color) => Ok(AccentColorMode::Custom(color)),
+            Err(ConfigHexColorError::MissingHash) => match crate::util::name_to_color(raw) {
+                Some(color) => Ok(AccentColorMode::Custom(color)),
+                None => Err(format!(
+                    "Unknown accent color '{raw}': use \"system\", \"default\", \
+                     a #RRGGBB hex color, or a palette color name"
+                )),
+            },
+            Err(err) => Err(format!(
+                "Invalid accent hex color '{raw}' ({err:?}): use \"system\", \
+                 \"default\", a #RRGGBB hex color, or a palette color name"
+            )),
+        }
+    }
+
+    /// Resolves the configured string. Unrecognized values warn and follow
+    /// the system accent (the default), mirroring [`ColorSpec::to_color`]'s
+    /// warn-and-fall-back contract.
+    pub fn mode(&self) -> AccentColorMode {
+        match self.try_mode() {
+            Ok(mode) => mode,
+            Err(message) => {
+                warn!("{message}; following the system accent");
+                AccentColorMode::System
+            }
+        }
+    }
+}
+
 /// Reduced-motion preference (`[ui] reduced_motion`).
 ///
 /// `on` disables UI animations. `auto` is reserved for a future desktop-portal
@@ -256,5 +339,76 @@ mod tests {
             }
             _ => panic!("expected rgb variant"),
         }
+    }
+
+    #[test]
+    fn accent_color_defaults_to_system() {
+        assert_eq!(AccentColor::default().mode(), AccentColorMode::System);
+    }
+
+    #[test]
+    fn accent_color_keywords_are_case_insensitive_and_trimmed() {
+        assert_eq!(AccentColor::new(" System ").mode(), AccentColorMode::System);
+        assert_eq!(AccentColor::new("DEFAULT").mode(), AccentColorMode::Default);
+    }
+
+    #[test]
+    fn accent_color_accepts_hex_and_palette_names() {
+        assert_eq!(
+            AccentColor::new("#FF7800").mode(),
+            AccentColorMode::Custom(Color {
+                r: 1.0,
+                g: 120.0 / 255.0,
+                b: 0.0,
+                a: 1.0,
+            })
+        );
+        assert_eq!(
+            AccentColor::new("orange").mode(),
+            AccentColorMode::Custom(PALETTE_ORANGE)
+        );
+    }
+
+    #[test]
+    fn accent_color_falls_back_to_system_for_unrecognized_values() {
+        for value in ["chartreuse", "#12345", "#GG0000"] {
+            assert_eq!(
+                AccentColor::new(value).mode(),
+                AccentColorMode::System,
+                "{value} should fall back to the system accent"
+            );
+        }
+    }
+
+    #[test]
+    fn accent_color_round_trips_through_toml_as_a_plain_string() {
+        #[derive(Serialize, Deserialize)]
+        struct Wrapper {
+            accent_color: AccentColor,
+        }
+        let parsed: Wrapper = toml::from_str("accent_color = \"#3584E4\"")
+            .expect("the fixture TOML above is a valid accent_color assignment");
+        assert!(matches!(
+            parsed.accent_color.mode(),
+            AccentColorMode::Custom(_)
+        ));
+        let serialized = toml::to_string(&parsed)
+            .expect("the fixture wrapper holds only a string-backed accent color");
+        assert_eq!(serialized.trim(), "accent_color = \"#3584E4\"");
+    }
+
+    #[test]
+    fn accent_color_try_mode_reports_unrecognized_values() {
+        for value in ["chartreuse", "#12345", "#GG0000"] {
+            let result = AccentColor::new(value).try_mode();
+            assert!(
+                result.is_err(),
+                "{value} should be reported as invalid, got {result:?}"
+            );
+        }
+        assert_eq!(
+            AccentColor::new("system").try_mode(),
+            Ok(AccentColorMode::System)
+        );
     }
 }

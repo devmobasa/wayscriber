@@ -27,6 +27,7 @@ use helpers::{
 
 pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
+    let theme = layout.theme;
     let snapshot = layout.snapshot;
     let hover = layout.hover;
     let x = layout.x;
@@ -67,6 +68,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
     if use_icons {
         render_icon_action_sections(
             ctx,
+            theme,
             hits,
             hover,
             snapshot,
@@ -78,6 +80,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
     } else {
         render_text_action_sections(
             ctx,
+            theme,
             hits,
             hover,
             snapshot,
@@ -95,6 +98,7 @@ pub(super) fn draw_actions_section(layout: &mut SidePaletteLayout, y: &mut f64) 
 #[allow(clippy::too_many_arguments)]
 fn render_icon_action_sections(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     hits: &mut Vec<HitRegion>,
     hover: Option<(f64, f64)>,
     snapshot: &ToolbarSnapshot,
@@ -134,9 +138,11 @@ fn render_icon_action_sections(
                 .iter()
                 .cloned()
                 .partition(|action| !action.event.is_destructive());
-            render_icon_action_row_split(ctx, hits, hover, snapshot, layout, &leading, &trailing)
+            render_icon_action_row_split(
+                ctx, theme, hits, hover, snapshot, layout, &leading, &trailing,
+            )
         } else {
-            render_icon_action_group(ctx, hits, hover, snapshot, layout, &actions)
+            render_icon_action_group(ctx, theme, hits, hover, snapshot, layout, &actions)
         };
         if has_rows {
             action_y = next_y;
@@ -171,6 +177,7 @@ fn draw_group_sub_label(
 #[allow(clippy::too_many_arguments)]
 fn render_text_action_sections(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     hits: &mut Vec<HitRegion>,
     hover: Option<(f64, f64)>,
     snapshot: &ToolbarSnapshot,
@@ -199,6 +206,7 @@ fn render_text_action_sections(
             text_group_layout(content_width, action_col_gap, group.kind);
         let (next_y, has_rows) = render_text_action_group(
             ctx,
+            theme,
             hits,
             hover,
             snapshot,

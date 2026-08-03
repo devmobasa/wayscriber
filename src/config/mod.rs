@@ -38,7 +38,8 @@ pub use document::{
     ConfigWriteLockTimeout,
 };
 pub use enums::{
-    RadialMenuMouseBinding, ReducedMotion, StatusPosition, UiTheme, XdgFocusLossBehavior,
+    AccentColor, AccentColorMode, RadialMenuMouseBinding, ReducedMotion, StatusPosition, UiTheme,
+    XdgFocusLossBehavior,
 };
 pub use field_metadata::{
     PERFORMANCE_BUFFER_COUNT_MAX, PERFORMANCE_BUFFER_COUNT_MIN, PERFORMANCE_BUFFER_COUNTS,

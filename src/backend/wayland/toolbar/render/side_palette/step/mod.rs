@@ -16,13 +16,15 @@ use crate::ui::theme::Rgba;
 /// step rows. Darker than COLOR_TRACK_BACKGROUND — snapping would visibly
 /// lighten these tracks.
 const COLOR_DELAY_TRACK: Rgba = (0.4, 0.4, 0.45, 0.7);
-/// Delay-slider knob: legacy pre-unification accent blue, kept to avoid a
-/// visible hue shift. TODO(theme-consolidation): converge on
-/// COLOR_TRACK_KNOB.
-const COLOR_DELAY_KNOB: Rgba = (0.25, 0.5, 0.95, 0.9);
+/// Delay-slider knob: the shared accent-driven track knob, so a configured
+/// accent recolors every slider knob together.
+fn color_delay_knob(theme: &crate::ui::theme::Theme) -> Rgba {
+    crate::ui::theme::toolbar::color_track_knob(theme)
+}
 
 pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
+    let theme = layout.theme;
     let snapshot = layout.snapshot;
     let hover = layout.hover;
     let x = layout.x;
@@ -119,7 +121,7 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let custom_y = delay_toggle_y + custom_toggle_h + toggle_gap;
 
     if snapshot.custom_section_enabled {
-        custom_rows::draw_custom_rows(ctx, hits, x, custom_y, card_w, snapshot, hover);
+        custom_rows::draw_custom_rows(ctx, theme, hits, x, custom_y, card_w, snapshot, hover);
     }
 
     if snapshot.show_delay_sliders {
@@ -128,7 +130,15 @@ pub(super) fn draw_step_section(layout: &mut SidePaletteLayout, y: &mut f64) {
             + toggles_h
             + custom_content_h
             + ToolbarLayoutSpec::SIDE_STEP_SLIDER_TOP_PADDING;
-        delay_sliders::draw_delay_sliders(ctx, hits, x, slider_start_y, content_width, snapshot);
+        delay_sliders::draw_delay_sliders(
+            ctx,
+            theme,
+            hits,
+            x,
+            slider_start_y,
+            content_width,
+            snapshot,
+        );
     }
 
     *y += custom_card_h + section_gap;

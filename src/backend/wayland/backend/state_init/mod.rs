@@ -38,6 +38,7 @@ pub(super) struct BackendRuntime {
 pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Result<BackendRuntime> {
     let config::LoadedConfig {
         config,
+        theme,
         source,
         exit_after_capture_mode,
         keybindings,
@@ -203,6 +204,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let mut state = WaylandState::new(WaylandStateInit {
         globals: setup.state_globals,
         config,
+        theme,
         input_state,
         onboarding,
         palette_recents,

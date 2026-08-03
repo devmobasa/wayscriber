@@ -117,6 +117,7 @@ pub enum TextField {
     HistoryCustomRedoDelayMs,
     HistoryCustomUndoSteps,
     HistoryCustomRedoSteps,
+    UiAccentColor,
     UiPreferredOutput,
     StatusFontSize,
     StatusPadding,

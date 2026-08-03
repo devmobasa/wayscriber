@@ -334,6 +334,7 @@ impl TopBar {
         let mut updaters = Vec::new();
         let mut ctx = super::super::sections::SectionCtx {
             snapshot,
+            theme: self.theme,
             feedback: self.feedback.clone(),
             scale,
             use_icons: snapshot.use_icons,
@@ -362,6 +363,7 @@ impl TopBar {
         let mut scratch_updaters = Vec::new();
         let mut ctx = super::super::sections::SectionCtx {
             snapshot,
+            theme: self.theme,
             feedback: self.feedback.clone(),
             scale,
             use_icons: snapshot.use_icons,
@@ -393,6 +395,7 @@ impl TopBar {
         let mut updaters = Vec::new();
         let mut ctx = super::super::sections::SectionCtx {
             snapshot,
+            theme: self.theme,
             feedback: self.feedback.clone(),
             scale,
             use_icons: snapshot.use_icons,

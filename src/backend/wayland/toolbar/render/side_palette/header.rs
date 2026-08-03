@@ -35,6 +35,7 @@ const COLOR_CHEVRON: Rgba = (0.7, 0.72, 0.78, 0.7);
 /// scrolls or moves when panes or sections change.
 pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     let ctx = layout.ctx;
+    let theme = layout.theme;
     let snapshot = layout.snapshot;
     let hits = &mut layout.hits;
     let hover = layout.hover;
@@ -91,6 +92,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     let chip_y = row1_y + (row1_h - chip_h) / 2.0;
     draw_board_chip(
         ctx,
+        theme,
         hits,
         hover,
         &header_model,
@@ -104,7 +106,15 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
     let pin_hover = hover
         .map(|(hx, hy)| point_in_rect(hx, hy, pin_x, btn_y, btn_size, btn_size))
         .unwrap_or(false);
-    draw_pin_button(ctx, pin_x, btn_y, btn_size, snapshot.side_pinned, pin_hover);
+    draw_pin_button(
+        ctx,
+        theme,
+        pin_x,
+        btn_y,
+        btn_size,
+        snapshot.side_pinned,
+        pin_hover,
+    );
     hits.push(HitRegion {
         focus_id: None,
         rect: (pin_x, btn_y, btn_size, btn_size),
@@ -143,7 +153,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
         let tab_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, tab_x, nav_y, tab_w, nav_h))
             .unwrap_or(false);
-        draw_button(ctx, tab_x, nav_y, tab_w, nav_h, selected, tab_hover);
+        draw_button(ctx, theme, tab_x, nav_y, tab_w, nav_h, selected, tab_hover);
         draw_label_center(ctx, nav_style, tab_x, nav_y, tab_w, nav_h, pane.label());
         hits.push(HitRegion {
             focus_id: None,
@@ -161,6 +171,7 @@ pub(super) fn draw_header(layout: &mut SidePaletteLayout) -> f64 {
 #[allow(clippy::too_many_arguments)]
 fn draw_board_chip(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     hits: &mut Vec<HitRegion>,
     hover: Option<(f64, f64)>,
     header_model: &SideHeaderModel,
@@ -201,7 +212,7 @@ fn draw_board_chip(
     let dot_x = chip_x + 6.0;
     let dot_y = chip_y + (chip_h - dot_size) * 0.5;
     if let Some(color) = board_chip.and_then(|chip| chip.color) {
-        draw_swatch(ctx, dot_x, dot_y, dot_size, color, false);
+        draw_swatch(ctx, theme, dot_x, dot_y, dot_size, color, false);
     } else {
         set_color(ctx, COLOR_BOARD_CHIP_EMPTY_DOT);
         ctx.set_line_width(1.0);

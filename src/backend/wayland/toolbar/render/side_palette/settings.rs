@@ -16,6 +16,7 @@ use super::section_header::draw_collapsible_header;
 
 pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64) {
     let ctx = layout.ctx;
+    let theme = layout.theme;
     let snapshot = layout.snapshot;
     let hover = layout.hover;
     let x = layout.x;
@@ -78,6 +79,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
         let mode_control = crate::ui::toolbar::model::layout_mode_control(snapshot.layout_mode);
         draw_layout_mode_segments(
             ctx,
+            theme,
             hits,
             hover,
             &mode_control,
@@ -176,9 +178,18 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
             .unwrap_or(false);
         if button.event.is_destructive() {
-            draw_destructive_button(ctx, item.x, item.y, item.w, item.h, button_hover);
+            draw_destructive_button(ctx, theme, item.x, item.y, item.w, item.h, button_hover);
         } else {
-            draw_button(ctx, item.x, item.y, item.w, item.h, false, button_hover);
+            draw_button(
+                ctx,
+                theme,
+                item.x,
+                item.y,
+                item.w,
+                item.h,
+                false,
+                button_hover,
+            );
         }
         if use_icons {
             // Icon plus a left-aligned label: the icon-only glyphs were
@@ -257,7 +268,16 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
         let group_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, item.w, item.h))
             .unwrap_or(false);
-        draw_button(ctx, item.x, item.y, item.w, item.h, false, group_hover);
+        draw_button(
+            ctx,
+            theme,
+            item.x,
+            item.y,
+            item.w,
+            item.h,
+            false,
+            group_hover,
+        );
         draw_label_center(
             ctx,
             label_style,
@@ -322,7 +342,16 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
             let handle_hover = hover
                 .map(|(hx, hy)| point_in_rect(hx, hy, item.x, item.y, handle_w, item.h))
                 .unwrap_or(false);
-            draw_button(ctx, item.x, item.y, handle_w, item.h, false, handle_hover);
+            draw_button(
+                ctx,
+                theme,
+                item.x,
+                item.y,
+                handle_w,
+                item.h,
+                false,
+                handle_hover,
+            );
             draw_label_center(ctx, toggle_style, item.x, item.y, handle_w, item.h, "=");
         }
         let checkbox_x = item.x + handle_w + if order.is_some() { order_gap } else { 0.0 };
@@ -365,6 +394,7 @@ pub(super) fn draw_settings_section(layout: &mut SidePaletteLayout, y: &mut f64)
                         .unwrap_or(false);
                 draw_button(
                     ctx,
+                    theme,
                     button_x,
                     item.y,
                     move_btn_w,
@@ -448,6 +478,7 @@ fn draw_back_icon(ctx: &cairo::Context, x: f64, y: f64, size: f64) {
 #[allow(clippy::too_many_arguments)]
 fn draw_layout_mode_segments(
     ctx: &cairo::Context,
+    theme: &crate::ui::theme::Theme,
     hits: &mut Vec<HitRegion>,
     hover: Option<(f64, f64)>,
     control: &crate::ui::toolbar::model::ToolbarControl,
@@ -477,7 +508,7 @@ fn draw_layout_mode_segments(
         let is_hover = hover
             .map(|(hx, hy)| point_in_rect(hx, hy, seg_x, y, seg_w, h))
             .unwrap_or(false);
-        draw_button(ctx, seg_x, y, seg_w, h, index == active, is_hover);
+        draw_button(ctx, theme, seg_x, y, seg_w, h, index == active, is_hover);
         draw_label_center(ctx, label_style, seg_x, y, seg_w, h, segment.label.as_ref());
         hits.push(HitRegion {
             focus_id: None,
