@@ -6,6 +6,7 @@ use wayland_protocols_wlr::screencopy::v1::client::{
     zwlr_screencopy_manager_v1::{Event as ManagerEvent, ZwlrScreencopyManagerV1},
 };
 
+use super::super::frozen::FrozenCaptureBackend;
 use super::super::state::WaylandState;
 
 impl Dispatch<ZwlrScreencopyManagerV1, ()> for WaylandState {
@@ -28,14 +29,15 @@ impl Dispatch<ZwlrScreencopyFrameV1, ()> for WaylandState {
         event: FrameEvent,
         _data: &(),
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
     ) {
         if state.zoom.is_in_progress() {
             state.zoom.handle_frame_event(event, &mut state.input_state);
-        } else {
-            state
-                .frozen
-                .handle_frame_event(event, &mut state.input_state);
+        } else if state
+            .frozen
+            .handle_frame_event(event, &mut state.input_state)
+        {
+            state.continue_frozen_capture_after_failure(FrozenCaptureBackend::WlrScreencopy, qh);
         }
     }
 }

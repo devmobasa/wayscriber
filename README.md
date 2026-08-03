@@ -174,7 +174,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 - Presenter mode (<kbd>Ctrl+Shift+M</kbd>): hides UI, forces click highlights
 - Input HUD (<kbd>Ctrl+Shift+K</kbd>): on-screen keystroke and click chips for demos and screencasts (opt-in system-wide capture via the `input-monitor` build feature — see [docs/CONFIG.md](docs/CONFIG.md#uiinput_hud---input-hud-keystrokes-and-clicks))
 - Light passthrough (layer-shell): draw while input passes through to the app underneath — see [Light passthrough mode](#light-passthrough-mode)
-- Screen freeze (<kbd>Ctrl+Shift+F</kbd>): pause the display while apps keep running. On GNOME, this uses the screenshot portal when available
+- Screen freeze (<kbd>Ctrl+Shift+F</kbd>): pause the display while apps keep running. Freeze prefers compositor-native `wlr-screencopy` or `ext-image-copy-capture` and falls back to the screenshot portal when available
 - Spotlight: drag an ellipse to dim everything around it; stack several to highlight multiple areas. Dim strength and edge softness are configurable under `[spotlight]`
 
 ### Callouts and zoom

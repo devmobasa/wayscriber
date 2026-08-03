@@ -22,18 +22,18 @@ pub(crate) fn screenshot_portal_available(_runtime: &tokio::runtime::Runtime) ->
 }
 
 #[cfg(feature = "portal")]
-pub(crate) async fn capture_via_portal_fullscreen_bytes() -> Result<Vec<u8>, String> {
+pub(crate) async fn capture_via_portal_fullscreen_bytes()
+-> Result<Vec<u8>, crate::capture::types::CaptureError> {
     use crate::capture::sources::portal::capture_via_portal_bytes;
     use crate::capture::types::CaptureType;
 
-    capture_via_portal_bytes(CaptureType::FullScreen)
-        .await
-        .map_err(|error| format!("Portal capture failed: {error}"))
+    capture_via_portal_bytes(CaptureType::FullScreen).await
 }
 
 #[cfg(not(feature = "portal"))]
-pub(crate) async fn capture_via_portal_fullscreen_bytes() -> Result<Vec<u8>, String> {
-    Err("Portal capture is disabled (feature flag)".to_string())
+pub(crate) async fn capture_via_portal_fullscreen_bytes()
+-> Result<Vec<u8>, crate::capture::types::CaptureError> {
+    Err(crate::capture::types::CaptureError::PortalUnavailable)
 }
 
 pub(crate) const fn portal_output_matches(target: Option<u32>, current: Option<u32>) -> bool {

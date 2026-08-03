@@ -14,12 +14,19 @@ use smithay_client_toolkit::{
     shm::Shm,
 };
 use wayland_client::{Connection, EventQueue, globals::registry_queue_init};
+use wayland_protocols::ext::{
+    image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
+    image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
+};
 use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
 
-use super::super::state::{WaylandGlobals, WaylandState};
+use super::super::{
+    frozen::ExtImageCopyManagers,
+    state::{WaylandGlobals, WaylandState},
+};
 
 // Freeze/zoom capture currently consumes wl_shm buffer events and ignores linux-dmabuf.
 // Version 3 can negotiate linux-dmabuf-only frames on newer wlroots/NVIDIA stacks, so
@@ -34,6 +41,7 @@ pub(super) struct WaylandSetup {
     pub(super) qh: wayland_client::QueueHandle<WaylandState>,
     pub(super) state_globals: WaylandGlobals,
     pub(super) screencopy_manager: Option<ZwlrScreencopyManagerV1>,
+    pub(super) ext_image_copy_managers: Option<ExtImageCopyManagers>,
     pub(super) text_input_manager: Option<ZwpTextInputManagerV3>,
     pub(super) layer_shell_available: bool,
 }
@@ -135,6 +143,27 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
         }
     };
 
+    let ext_image_copy_manager = globals
+        .bind::<ExtImageCopyCaptureManagerV1, _, _>(&qh, 1..=1, ())
+        .ok();
+    let ext_output_source_manager = globals
+        .bind::<ExtOutputImageCaptureSourceManagerV1, _, _>(&qh, 1..=1, ())
+        .ok();
+    let ext_image_copy_managers = match (ext_image_copy_manager, ext_output_source_manager) {
+        (Some(capture), Some(output_source)) => {
+            debug!("Bound ext-image-copy-capture output backend");
+            Some(ExtImageCopyManagers::new(capture, output_source))
+        }
+        (capture, output_source) => {
+            debug!(
+                "ext-image-copy-capture output backend unavailable: capture_manager={}, output_source_manager={}",
+                capture.is_some(),
+                output_source.is_some()
+            );
+            None
+        }
+    };
+
     // IME / text-input-v3 for the text and sticky-note tools. Optional: when
     // the compositor lacks it, editing falls back to the raw keysym path
     // (single-key characters only).
@@ -175,6 +204,7 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
         qh,
         state_globals,
         screencopy_manager,
+        ext_image_copy_managers,
         text_input_manager,
         layer_shell_available,
     })

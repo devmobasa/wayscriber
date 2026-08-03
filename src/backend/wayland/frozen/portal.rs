@@ -9,12 +9,13 @@ use crate::backend::wayland::portal_capture::{
 };
 use crate::backend::wayland::portal_task::{PortalPoll, PortalTask};
 use crate::capture::sources::frozen::decode_image_to_argb;
+use crate::capture::types::CaptureError;
 use crate::input::InputState;
 
 use super::state::FrozenState;
 
 impl FrozenState {
-    pub(super) fn capture_via_portal(
+    pub(in crate::backend::wayland) fn capture_via_portal(
         &mut self,
         tokio_handle: &tokio::runtime::Handle,
     ) -> Result<()> {
@@ -43,8 +44,8 @@ impl FrozenState {
             async {
                 let bytes = capture_via_portal_fullscreen_bytes().await?;
 
-                let (data, width, height) =
-                    decode_image_to_argb(&bytes).map_err(|e| format!("Decode failed: {}", e))?;
+                let (data, width, height) = decode_image_to_argb(&bytes)
+                    .map_err(|error| CaptureError::ImageError(format!("Decode failed: {error}")))?;
 
                 Ok((
                     target_output_id,
@@ -105,8 +106,26 @@ impl FrozenState {
 
                 self.finish_portal_task();
             }
-            PortalPoll::Ready(Err(err)) | PortalPoll::Failed(err) => {
+            PortalPoll::Ready(Err(CaptureError::Cancelled(reason))) => {
+                log::info!("Portal frozen capture cancelled: {reason}");
+                input_state.set_frozen_active(false);
+                input_state.needs_redraw = true;
+                self.finish_portal_task();
+                self.capture_done = true;
+            }
+            PortalPoll::Ready(Err(err)) => {
                 warn!("Portal frozen capture failed: {err}");
+                input_state.push_toast(
+                    ToastPriority::Critical,
+                    "freeze",
+                    Toast::error("Freeze could not capture the screen."),
+                );
+                input_state.set_frozen_active(false);
+                self.finish_portal_task();
+                self.capture_done = true;
+            }
+            PortalPoll::Failed(err) => {
+                warn!("Portal frozen capture task failed: {err}");
                 input_state.push_toast(
                     ToastPriority::Critical,
                     "freeze",
@@ -206,7 +225,7 @@ mod tests {
                 })
             } else {
                 PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
-                    Err("portal denied".to_string())
+                    Err(CaptureError::PermissionDenied)
                 })
             });
             frozen.portal_in_progress = true;
@@ -246,6 +265,30 @@ mod tests {
             assert!(frozen.take_capture_done());
             assert!(!input.frozen_active());
         }
+    }
+
+    #[tokio::test]
+    async fn user_cancellation_restores_quietly_without_an_error_toast() {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
+        let mut input = make_test_input_state();
+        frozen.portal_task = Some(PortalTask::spawn(
+            &tokio::runtime::Handle::current(),
+            wake.handle(),
+            async {
+                Err(CaptureError::Cancelled(
+                    "user closed the chooser".to_string(),
+                ))
+            },
+        ));
+        frozen.portal_in_progress = true;
+
+        poll_until_finished(&mut frozen, &mut input).await;
+
+        assert!(!frozen.is_in_progress());
+        assert!(frozen.take_capture_done());
+        assert!(!input.frozen_active());
+        assert!(input.ui_toast.is_none());
     }
 
     #[tokio::test]

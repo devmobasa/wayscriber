@@ -1,4 +1,5 @@
-use wayland_client::protocol::wl_output;
+use anyhow::{Context, Result};
+use wayland_client::protocol::{wl_output, wl_shm};
 
 /// CPU-side frozen image ready for Cairo rendering.
 pub struct FrozenImage {
@@ -33,6 +34,78 @@ impl FrozenImage {
 
         self
     }
+}
+
+/// Copy a compositor-provided SHM buffer into tightly packed Cairo-compatible
+/// ARGB data while validating every advertised dimension and row boundary.
+pub(super) fn copy_shm_argb(
+    canvas: &[u8],
+    width: u32,
+    height: u32,
+    stride: i32,
+    format: wl_shm::Format,
+    y_invert: bool,
+) -> Result<FrozenImage> {
+    if !matches!(format, wl_shm::Format::Argb8888 | wl_shm::Format::Xrgb8888) {
+        anyhow::bail!("Unsupported frozen capture SHM format: {format:?}");
+    }
+
+    let width = usize::try_from(width).context("Frozen capture width does not fit in memory")?;
+    let height = usize::try_from(height).context("Frozen capture height does not fit in memory")?;
+    let row_bytes = width
+        .checked_mul(4)
+        .context("Frozen capture row size overflow")?;
+    let stride = usize::try_from(stride).context("Frozen capture stride is negative")?;
+    if stride < row_bytes {
+        anyhow::bail!("Frozen capture stride is smaller than its pixel row");
+    }
+
+    let image_size = row_bytes
+        .checked_mul(height)
+        .context("Frozen capture image size overflow")?;
+    let mut data = vec![0; image_size];
+    for source_row in 0..height {
+        let source_start = source_row
+            .checked_mul(stride)
+            .context("Frozen capture source row offset overflow")?;
+        let source_end = source_start
+            .checked_add(row_bytes)
+            .context("Frozen capture source row end overflow")?;
+        let target_row = if y_invert {
+            height - 1 - source_row
+        } else {
+            source_row
+        };
+        let target_start = target_row
+            .checked_mul(row_bytes)
+            .context("Frozen capture target row offset overflow")?;
+        let target_end = target_start
+            .checked_add(row_bytes)
+            .context("Frozen capture target row end overflow")?;
+        let source = canvas
+            .get(source_start..source_end)
+            .context("Frozen capture buffer is shorter than advertised")?;
+        let target = data
+            .get_mut(target_start..target_end)
+            .context("Frozen capture image allocation is shorter than expected")?;
+        target.copy_from_slice(source);
+    }
+
+    if format == wl_shm::Format::Xrgb8888 {
+        for pixel in data.chunks_exact_mut(4) {
+            pixel[3] = 0xff;
+        }
+    }
+
+    let width = u32::try_from(width).context("Frozen capture width exceeds u32")?;
+    let height = u32::try_from(height).context("Frozen capture height exceeds u32")?;
+    let stride = i32::try_from(row_bytes).context("Frozen capture packed stride exceeds i32")?;
+    Ok(FrozenImage {
+        width,
+        height,
+        stride,
+        data,
+    })
 }
 
 fn transform_argb(
@@ -139,5 +212,33 @@ mod tests {
 
         assert_eq!((transformed.width, transformed.height), (3, 2));
         assert_eq!(values(&transformed), vec![3, 2, 1, 6, 5, 4]);
+    }
+
+    #[test]
+    fn shm_copy_removes_padding_and_applies_y_invert() {
+        let image = copy_shm_argb(
+            &[
+                1, 0, 0, 255, 2, 0, 0, 255, 9, 9, 9, 9, //
+                3, 0, 0, 255, 4, 0, 0, 255, 8, 8, 8, 8,
+            ],
+            2,
+            2,
+            12,
+            wl_shm::Format::Argb8888,
+            true,
+        )
+        .expect("valid padded SHM buffer");
+
+        assert_eq!(values(&image), vec![3, 4, 1, 2]);
+        assert_eq!(image.stride, 8);
+    }
+
+    #[test]
+    fn shm_copy_makes_xrgb_pixels_opaque_and_rejects_short_buffers() {
+        let image = copy_shm_argb(&[1, 2, 3, 0], 1, 1, 4, wl_shm::Format::Xrgb8888, false)
+            .expect("valid XRGB buffer");
+        assert_eq!(image.data, vec![1, 2, 3, 255]);
+
+        assert!(copy_shm_argb(&[1, 2, 3], 1, 1, 4, wl_shm::Format::Argb8888, false,).is_err());
     }
 }

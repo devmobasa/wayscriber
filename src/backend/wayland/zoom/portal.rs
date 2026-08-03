@@ -8,6 +8,7 @@ use crate::backend::wayland::portal_capture::{
 };
 use crate::backend::wayland::portal_task::{PortalPoll, PortalTask};
 use crate::capture::sources::frozen::decode_image_to_argb;
+use crate::capture::types::CaptureError;
 use crate::input::InputState;
 
 use super::state::ZoomState;
@@ -41,8 +42,8 @@ impl ZoomState {
             async {
                 let bytes = capture_via_portal_fullscreen_bytes().await?;
 
-                let (mut data, mut width, mut height) =
-                    decode_image_to_argb(&bytes).map_err(|e| format!("Decode failed: {}", e))?;
+                let (mut data, mut width, mut height) = decode_image_to_argb(&bytes)
+                    .map_err(|error| CaptureError::ImageError(format!("Decode failed: {error}")))?;
 
                 if let Some(geo) = geo {
                     let (phys_w, phys_h) = geo.physical_size();
@@ -136,8 +137,16 @@ impl ZoomState {
                 input_state.needs_redraw = true;
                 self.capture_done = true;
             }
-            PortalPoll::Ready(Err(err)) | PortalPoll::Failed(err) => {
+            PortalPoll::Ready(Err(CaptureError::Cancelled(reason))) => {
+                log::info!("Portal zoom capture cancelled: {reason}");
+                self.finish_failed_portal_task(input_state);
+            }
+            PortalPoll::Ready(Err(err)) => {
                 warn!("Portal zoom capture failed: {err}");
+                self.finish_failed_portal_task(input_state);
+            }
+            PortalPoll::Failed(err) => {
+                warn!("Portal zoom capture task failed: {err}");
                 self.finish_failed_portal_task(input_state);
             }
             PortalPoll::Pending => {}
@@ -230,7 +239,7 @@ mod tests {
                 })
             } else {
                 PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
-                    Err("portal denied".to_string())
+                    Err(CaptureError::PermissionDenied)
                 })
             });
             zoom.portal_in_progress = true;

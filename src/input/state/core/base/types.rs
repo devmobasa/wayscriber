@@ -377,6 +377,7 @@ pub(crate) enum HistoryMode {
 pub struct CompositorCapabilities {
     pub layer_shell: bool,
     pub screencopy: bool,
+    pub image_copy_capture: bool,
     pub freeze_capture: bool,
     pub pointer_constraints: bool,
     pub desktop_environment: DesktopEnvironment,
@@ -399,8 +400,12 @@ pub enum ShellMode {
 }
 
 impl CompositorCapabilities {
+    pub fn direct_capture_available(&self) -> bool {
+        self.screencopy || self.image_copy_capture
+    }
+
     pub fn all_available(&self) -> bool {
-        self.layer_shell && self.screencopy && self.pointer_constraints
+        self.layer_shell && self.direct_capture_available() && self.pointer_constraints
     }
 
     pub fn limitations_summary(&self) -> Option<String> {
@@ -410,7 +415,7 @@ impl CompositorCapabilities {
         }
         if !self.freeze_capture {
             issues.push("Freeze unavailable");
-        } else if !self.screencopy {
+        } else if !self.direct_capture_available() {
             issues.push("Freeze uses portal capture");
         }
         if !self.pointer_constraints {

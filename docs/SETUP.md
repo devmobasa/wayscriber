@@ -181,7 +181,7 @@ Then use the configurator's Daemon tab, or create a GNOME custom shortcut that r
 wayscriber --daemon-toggle
 ```
 
-Freeze works on GNOME when the screenshot portal is available and responsive; the first use may show a desktop permission prompt. Portal capture can be slower than compositor screencopy, and mixed-DPI or multi-monitor setups may depend on client-side crop behavior.
+Freeze prefers compositor-native `wlr-screencopy` or `ext-image-copy-capture` when either protocol is available, then falls back to the screenshot portal. On GNOME, Freeze works when that portal is available and responsive; the first use may show a desktop permission prompt. Portal capture can be slower than direct compositor capture, and mixed-DPI or multi-monitor setups may depend on client-side crop behavior.
 
 Light passthrough mode is not available in the regular app on stock GNOME Wayland. GNOME's xdg-shell fallback does not expose the shell-level overlay behavior needed to keep annotations visible while input goes to apps underneath, so `--light-toggle` is intentionally disabled instead of pretending to pass input through. A GNOME Shell extension companion would be the real path for that workflow.
 
