@@ -1284,7 +1284,7 @@ show_status_bar = true
 length = 20.0
 
 # Arrowhead half-angle in degrees (15-60). Smaller is a sharper, narrower head.
-angle_degrees = 24.0
+angle_degrees = 26.0
 
 # Place the arrowhead at the end of the line instead of the start
 head_at_end = true

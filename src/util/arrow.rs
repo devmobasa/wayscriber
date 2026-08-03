@@ -1,9 +1,11 @@
 /// Half-width of the shaft at the tail, as a fraction of its half-width where it
 /// meets the arrowhead. The taper is what makes an arrow read as directional
-/// rather than as a plain line with a triangle stuck on the end — but it stays
-/// mild, so the shaft keeps real weight along its length instead of thinning to
-/// a wire behind the head.
-const TAIL_TAPER_RATIO: f64 = 0.55;
+/// rather than as a plain line with a triangle stuck on the end, and a strong one
+/// gives the shaft a drawn, brush-like swell into the head.
+///
+/// [`MIN_TAIL_HALF_WIDTH`] is what keeps this from thinning a hairline stroke
+/// into nothing, so the ratio can stay aggressive without breaking thin pens.
+const TAIL_TAPER_RATIO: f64 = 0.25;
 
 /// Head length as a multiple of stroke width.
 ///
@@ -11,12 +13,25 @@ const TAIL_TAPER_RATIO: f64 = 0.55;
 /// head that reads as a thin line with a nub on the end. Kept modest, though:
 /// past roughly three times the stroke the head starts to overpower the shaft.
 /// `arrow.length` stays meaningful as the floor, so hairline strokes still get a
-/// visible head.
+/// visible head without inheriting a head sized for a thick one.
 const HEAD_LENGTH_PER_THICKNESS: f64 = 3.0;
 
 /// Floor for the tapered tail so thin arrows keep a visible tail instead of
 /// fading into sub-pixel coverage.
 const MIN_TAIL_HALF_WIDTH: f64 = 0.55;
+
+/// Where the shaft joins the head, as a fraction of the distance from the tip
+/// back to the arrowhead base.
+///
+/// At `1.0` the shaft meets the base flush and the whole rear of the head is one
+/// straight line across, which reads as a triangle parked on a stick. Pulling
+/// the join forward bevels each rear edge inward so the head wedges into the
+/// shaft instead.
+///
+/// This has to stay shallow. Around `0.8` the bevel deepens into a real gap
+/// between barb and shaft and the head stops reading as part of the same arrow —
+/// the silhouette splits into a triangle balanced on a neck.
+const HEAD_SWEEP_RATIO: f64 = 0.90;
 
 /// Arrowhead triangle geometry used by hit-testing and dirty-region bounds.
 #[derive(Debug, Clone, Copy)]
@@ -110,6 +125,20 @@ impl ArrowAxis {
             self.tip.1 + self.toward_tail.1 * self.head_length,
         )
     }
+
+    /// Point on the shaft axis where the shaft joins the head.
+    ///
+    /// Sits just forward of [`ArrowAxis::base`], so each rear edge bevels
+    /// inward instead of running straight across. Stays inside the head
+    /// triangle, which is what lets hit-testing and dirty-region bounds keep
+    /// using that triangle alone.
+    fn notch(&self) -> (f64, f64) {
+        let along = self.head_length * HEAD_SWEEP_RATIO;
+        (
+            self.tip.0 + self.toward_tail.0 * along,
+            self.tip.1 + self.toward_tail.1 * along,
+        )
+    }
 }
 
 /// Calculates arrowhead triangle points matching the renderer's geometry model.
@@ -149,6 +178,10 @@ pub(crate) fn calculate_arrowhead_triangle_custom(
 /// The tail is narrower than the shoulder where the shaft meets the head, and
 /// both are emitted as one closed polygon so there is no seam to show through a
 /// semi-transparent color and no width step at the shoulders.
+///
+/// The shoulders sit slightly forward of the head base, so the rear of the head
+/// bevels into the shaft rather than running straight across it. The outline
+/// stays within the head triangle that hit-testing and dirty-region bounds use.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn calculate_arrow_outline(
     tip_x: i32,
@@ -169,9 +202,13 @@ pub(crate) fn calculate_arrow_outline(
         arrow_angle,
     )?;
     let base = axis.base();
+    let notch = axis.notch();
 
-    // The shaft never pokes outside the head it feeds into.
-    let shoulder_half = (thick / 2.0).min(axis.head_half_base);
+    // The shaft never pokes outside the head it feeds into, which has already
+    // narrowed by `HEAD_SWEEP_RATIO` by the time it reaches the notch. The
+    // `thick * 0.6` floor on the head keeps that product above `thick / 2`, so
+    // the shaft still joins at its full width.
+    let shoulder_half = (thick / 2.0).min(axis.head_half_base * HEAD_SWEEP_RATIO);
     let tail_half = (shoulder_half * TAIL_TAPER_RATIO)
         .max(MIN_TAIL_HALF_WIDTH)
         .min(shoulder_half);
@@ -179,11 +216,11 @@ pub(crate) fn calculate_arrow_outline(
     Some(ArrowOutline {
         points: [
             axis.offset(axis.tail, 1.0, tail_half),
-            axis.offset(base, 1.0, shoulder_half),
+            axis.offset(notch, 1.0, shoulder_half),
             axis.offset(base, 1.0, axis.head_half_base),
             axis.tip,
             axis.offset(base, -1.0, axis.head_half_base),
-            axis.offset(base, -1.0, shoulder_half),
+            axis.offset(notch, -1.0, shoulder_half),
             axis.offset(axis.tail, -1.0, tail_half),
         ],
     })

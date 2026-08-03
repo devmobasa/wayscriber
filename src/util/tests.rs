@@ -120,6 +120,14 @@ fn perpendicular_offset(point: (f64, f64), tip: (f64, f64), tail: (f64, f64)) ->
     (axis.0 * to_point.1 - axis.1 * to_point.0) / axis_len
 }
 
+/// How far `point` sits back from the tip, measured along the tip -> tail axis.
+fn axial_offset(point: (f64, f64), tip: (f64, f64), tail: (f64, f64)) -> f64 {
+    let axis = (tail.0 - tip.0, tail.1 - tip.1);
+    let axis_len = (axis.0 * axis.0 + axis.1 * axis.1).sqrt();
+    let to_point = (point.0 - tip.0, point.1 - tip.1);
+    (axis.0 * to_point.0 + axis.1 * to_point.1) / axis_len
+}
+
 #[test]
 fn arrow_outline_handles_degenerate_lines() {
     assert!(calculate_arrow_outline(5, 5, 5, 5, 2.0, 15.0, 45.0).is_none());
@@ -136,6 +144,91 @@ fn arrow_outline_head_matches_the_head_triangle() {
     assert!(distance(outline.points[2], triangle.left) < 1e-9);
     assert!(distance(outline.points[3], triangle.tip) < 1e-9);
     assert!(distance(outline.points[4], triangle.right) < 1e-9);
+}
+
+#[test]
+fn arrow_outline_bevels_the_rear_edge_into_the_shaft() {
+    // The rear of the head must not be one straight line across: the shoulders
+    // sit forward of the base so each rear edge bevels inward to the shaft.
+    let tip = (90.0, 40.0);
+    let tail = (10.0, 70.0);
+    let triangle = calculate_arrowhead_triangle_custom(90, 40, 10, 70, 6.0, 20.0, 30.0)
+        .expect("non-degenerate line should yield geometry");
+    let outline = calculate_arrow_outline(90, 40, 10, 70, 6.0, 20.0, 30.0)
+        .expect("non-degenerate line should yield geometry");
+
+    let base_along = axial_offset(triangle.left, tip, tail);
+    for shoulder in [outline.points[1], outline.points[5]] {
+        let along = axial_offset(shoulder, tip, tail);
+        assert!(
+            along < base_along - 1e-9,
+            "shoulder sits {along} from the tip, level with the base at \
+             {base_along}: the rear edge would run straight across"
+        );
+    }
+}
+
+#[test]
+fn arrow_outline_bevel_stays_shallow_enough_to_read_as_one_arrow() {
+    // Deepening the bevel past roughly a fifth of the head opens a visible gap
+    // between barb and shaft, and the head stops reading as part of the arrow.
+    let tip = (90.0, 40.0);
+    let tail = (10.0, 70.0);
+    let triangle = calculate_arrowhead_triangle_custom(90, 40, 10, 70, 6.0, 20.0, 30.0)
+        .expect("non-degenerate line should yield geometry");
+    let outline = calculate_arrow_outline(90, 40, 10, 70, 6.0, 20.0, 30.0)
+        .expect("non-degenerate line should yield geometry");
+
+    let base_along = axial_offset(triangle.left, tip, tail);
+    for shoulder in [outline.points[1], outline.points[5]] {
+        let cut = base_along - axial_offset(shoulder, tip, tail);
+        assert!(
+            cut <= base_along * 0.2,
+            "bevel cuts {cut} back from a {base_along}-long head, over the fifth \
+             that keeps the head joined to the shaft"
+        );
+    }
+}
+
+#[test]
+fn arrow_outline_shoulders_stay_inside_the_head_triangle() {
+    // Hit-testing and dirty-region bounds use the head triangle alone, so the
+    // shoulders must not poke past it. A thick stroke on a narrow angle is the
+    // worst case: the head sits at its floor width and the shaft is widest.
+    let tip = (100.0, 0.0);
+    let tail = (0.0, 0.0);
+    let outline = calculate_arrow_outline(100, 0, 0, 0, 20.0, 5.0, 15.0)
+        .expect("non-degenerate line should yield geometry");
+    let triangle = calculate_arrowhead_triangle_custom(100, 0, 0, 0, 20.0, 5.0, 15.0)
+        .expect("non-degenerate line should yield geometry");
+
+    let head_half = perpendicular_offset(triangle.left, tip, tail).abs();
+    let head_length = axial_offset(triangle.left, tip, tail);
+    for shoulder in [outline.points[1], outline.points[5]] {
+        let along = axial_offset(shoulder, tip, tail);
+        let across = perpendicular_offset(shoulder, tip, tail).abs();
+        // The triangle narrows linearly from the base toward the tip.
+        let allowed = head_half * along / head_length;
+        assert!(
+            across <= allowed + 1e-9,
+            "shoulder is {across} off-axis where the head only allows {allowed}"
+        );
+    }
+}
+
+#[test]
+fn arrow_outline_keeps_full_shaft_width_on_thick_strokes() {
+    // Clamping the shoulders to the narrowed head must not thin the shaft below
+    // the requested stroke.
+    let tip = (100.0, 0.0);
+    let tail = (0.0, 0.0);
+    let outline = calculate_arrow_outline(100, 0, 0, 0, 20.0, 5.0, 15.0)
+        .expect("non-degenerate line should yield geometry");
+    let shoulder_half = perpendicular_offset(outline.points[1], tip, tail).abs();
+    assert!(
+        (shoulder_half - 10.0).abs() < 1e-9,
+        "shaft narrowed to {shoulder_half} instead of half the 20.0 stroke"
+    );
 }
 
 #[test]

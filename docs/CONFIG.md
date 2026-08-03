@@ -402,7 +402,7 @@ Controls the appearance of arrow annotations.
 length = 20.0
 
 # Arrowhead half-angle in degrees (15-60). Smaller is a sharper, narrower head.
-angle_degrees = 24.0
+angle_degrees = 26.0
 
 # Place the arrowhead at the end of the line instead of the start
 head_at_end = true
@@ -410,7 +410,7 @@ head_at_end = true
 
 **Defaults:**
 - Length: 20.0px
-- Angle: 24.0°
+- Angle: 26.0°
 - Head at end: true
 
 ### `[presets]` - Quick Tool Slots

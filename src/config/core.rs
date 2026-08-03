@@ -43,7 +43,7 @@ pub const CURRENT_CONFIG_REVISION: u32 = 3;
 ///
 /// [arrow]
 /// length = 20.0
-/// angle_degrees = 24.0
+/// angle_degrees = 26.0
 /// head_at_end = true
 ///
 /// [performance]

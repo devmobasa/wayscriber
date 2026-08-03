@@ -267,14 +267,15 @@ mod tests {
             a: 1.0,
         };
 
-        // Horizontal arrow of length 400 at 10px thick: the head is 3x the stroke
-        // (30px), so the shoulder sits at x = 390 and the sample points below fall
-        // clearly on the tail, the shaft, and the head.
+        // Horizontal arrow of length 400 at 10px thick: the head is 3x the
+        // stroke (30px), so the head base sits at x = 390 and the bevelled
+        // shoulder at x = 393. The samples below land on the tail, on the bare
+        // shaft behind the head, and across the head itself.
         render_arrow(&ctx, 20, 60, 420, 60, red, 10.0, 20.0, 24.0, true);
 
         drop(ctx);
         let near_tail = painted_column_height(&mut surface, 25, 120);
-        let near_shoulder = painted_column_height(&mut surface, 385, 120);
+        let near_shoulder = painted_column_height(&mut surface, 370, 120);
         let across_head = painted_column_height(&mut surface, 398, 120);
 
         assert!(near_tail > 0, "tail should still paint");
