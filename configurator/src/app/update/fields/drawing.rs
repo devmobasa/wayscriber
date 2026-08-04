@@ -1,4 +1,10 @@
-use super::*;
+use crate::models::{
+    ColorMode, ColorPickerId, DragColorOption, DragMouseButton, DragToolField, DragToolOption,
+    EraserModeOption, NamedColorOption,
+};
+
+use super::super::super::effects::Effect;
+use super::super::super::state::{ConfiguratorApp, StatusMessage};
 
 impl ConfiguratorApp {
     pub(in crate::app::update) fn handle_color_mode_changed(

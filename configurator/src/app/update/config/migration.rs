@@ -1,4 +1,10 @@
-use super::*;
+use wayscriber::config::{ConfigDocument, MigrationPreview};
+
+use crate::models::KeybindingField;
+
+use super::super::super::effects::Effect;
+use super::super::super::state::{ConfiguratorApp, StatusMessage};
+use super::status::list_with_overflow;
 
 impl ConfiguratorApp {
     /// Recomputes what a migration would propose for the document now in hand.

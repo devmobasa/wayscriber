@@ -1,6 +1,9 @@
 use super::*;
 use wayscriber::config::{ColorSpec, Config};
 
+use crate::app::state::ConfiguratorApp;
+use crate::models::{ColorMode, ColorPickerId, NamedColorOption};
+
 #[test]
 fn quick_color_mode_change_to_rgb_materializes_named_hex_preview() {
     let (mut app, _effects) = ConfiguratorApp::new_app();

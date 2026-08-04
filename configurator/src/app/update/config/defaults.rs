@@ -1,4 +1,7 @@
-use super::*;
+use super::super::super::effects::Effect;
+use super::super::super::state::{
+    ConfiguratorApp, ConfirmationPrompt, PendingConfirmation, StatusMessage,
+};
 
 impl ConfiguratorApp {
     /// Arms the confirmation, and only that.

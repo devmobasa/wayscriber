@@ -3,17 +3,13 @@ mod drawing;
 mod tests;
 mod ui;
 
-use wayscriber::config::{PerformanceFieldId, ToolbarItemId, ToolbarItemOrderGroup};
+use wayscriber::config::PerformanceFieldId;
 
 use crate::models::{
-    ColorMode, ColorPickerId, DragColorOption, DragMouseButton, DragToolField, DragToolOption,
-    EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
-    InputHudPositionOption, KeybindingField, NamedColorOption, OverrideOption, PdfFitModeOption,
+    FontStyleOption, FontWeightOption, KeybindingField, PdfFitModeOption,
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
-    ReducedMotionOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
-    TextField, ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, ToolbarSideLayoutOption, UiThemeOption, ZoomChipDisplayOption,
+    SessionCompressionOption, SessionStorageModeOption, TextField, ToggleField,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};

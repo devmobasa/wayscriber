@@ -1,4 +1,9 @@
-use super::*;
+use wayscriber::config::{
+    ConfigDiagnosticKind, ConfigDocument, ConfigValidationReport, InvalidKeybinding,
+    KeybindingConflictResolution, MigrationPreview,
+};
+
+use super::super::super::state::StatusMessage;
 
 const SHOWN_DIAGNOSTICS: usize = 8;
 

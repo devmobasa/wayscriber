@@ -1,10 +1,12 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use wayscriber::config::{Action, CURRENT_CONFIG_REVISION};
+use wayscriber::config::{Action, CURRENT_CONFIG_REVISION, Config, ConfigDocument};
 
 use super::*;
-use crate::models::{ColorPickerId, ToggleField};
+use crate::app::effects::Effect;
+use crate::app::state::{ConfiguratorApp, StatusMessage};
+use crate::models::{ColorPickerId, KeybindingField, ToggleField};
 use crate::test_temp::TempDir;
 
 fn status_contains(status: &StatusMessage, needle: &str) -> bool {
