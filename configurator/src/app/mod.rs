@@ -1,4 +1,5 @@
 mod blocking_jobs;
+mod chrome;
 mod component;
 mod daemon_setup;
 mod effects;

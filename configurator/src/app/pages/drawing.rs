@@ -1,13 +1,16 @@
 //! Drawing page: default color, quick colors, drawing defaults, per-button
 //! drag tool mapping, and font controls.
 //!
-//! Two shapes here go past the plain row helpers. A section that only applies
-//! in one mode — named versus RGB color, the open drag button — is a boxed
-//! list added to its area's group, so the group keeps owning search
+//! Three shapes here go past the plain row helpers. A section that only
+//! applies in one mode — named versus RGB color, the open drag button — is a
+//! boxed list added to its area's group, so the group keeps owning search
 //! visibility while the section's own binding answers only the model
 //! question. Quick colors are a dynamic list: rows are rebuilt when the entry
 //! count changes and refreshed in place otherwise, which keeps the row the
-//! user is typing in alive.
+//! user is typing in alive. The named/RGB mode row comes from
+//! [`chrome`](super::super::chrome), which picks the widget this build's
+//! libadwaita floor allows; the page adds the row it gets back to the group
+//! like any other and never asks which channel it is on.
 
 use relm4::prelude::*;
 use relm4::{adw, gtk};
@@ -27,6 +30,7 @@ use crate::models::{
     ToggleField,
 };
 
+use super::super::chrome;
 use super::super::search::{AppSearchSummary, SearchArea};
 use super::super::state::ConfiguratorApp;
 use super::color_rows::{ResolvedColor, color_row, dialog_hex, mark_hex_error, set_swatch_blocked};
@@ -68,15 +72,17 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 // ---------------------------------------------------------------------------
 
 fn build_default_color(page: &mut PageBuilder) {
+    let (mode_row, mode_binding) = chrome::mode_toggle(
+        page.sender(),
+        "Color mode",
+        "A palette name or hex string, or explicit RGB components.",
+        COLOR_MODES.to_vec(),
+        vec!["Named color".to_string(), "RGB color".to_string()],
+        |app| app.draft.drawing_color.mode,
+        Message::ColorModeChanged,
+    );
     page.group_in_area("Default color", SearchArea::DrawingColor)
-        .combo_row(
-            "Color mode",
-            "A palette name or hex string, or explicit RGB components.",
-            COLOR_MODES.to_vec(),
-            vec!["Named color".to_string(), "RGB color".to_string()],
-            |app| app.draft.drawing_color.mode,
-            Message::ColorModeChanged,
-        );
+        .chrome_row(&mode_row, mode_binding);
 
     let named = conditional_section(page, |app| app.draft.drawing_color.mode == ColorMode::Named);
     section_combo_row(

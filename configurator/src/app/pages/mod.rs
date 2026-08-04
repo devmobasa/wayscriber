@@ -354,6 +354,21 @@ impl PageBuilder {
         self
     }
 
+    /// Adds a row built by [`chrome`](super::chrome) to the current group,
+    /// together with the refresh binding that row came with.
+    ///
+    /// Chrome owns the controls whose widget differs between libadwaita
+    /// channels, so it returns the row rather than adding it: joining the
+    /// group here is what gives the row the group's search visibility, the
+    /// same way the plain row helpers get it. The binding is registered as
+    /// chrome handed it over, because only chrome knows which widget write
+    /// its channel has to block.
+    pub(crate) fn chrome_row(&mut self, row: &adw::PreferencesRow, binding: Binding) -> &mut Self {
+        self.group.add(row);
+        self.bindings.push(binding);
+        self
+    }
+
     /// Adds a fully custom row or widget to the current group.
     pub(crate) fn custom(&mut self, widget: &impl IsA<gtk::Widget>) -> &mut Self {
         self.group.add(widget);
