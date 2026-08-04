@@ -1,0 +1,52 @@
+{
+  "_fixture": "Cases replayed by `./tools/check-cargo-lanes.py --self-test`. Each fixture text is checked against the real `.github/workflows/ci.yml` contract in tools/cargo-lanes.json, so the expectations cannot drift away from the live rules.",
+  "cases": [
+    {
+      "name": "ci-complete",
+      "why": "A trimmed but contract-complete workflow must be accepted, so a failing negative case cannot be explained by a rule that rejects everything.",
+      "expect": "pass",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-complete.yml"
+    },
+    {
+      "name": "ci-missing-static-linkage",
+      "why": "Deleting the static gtk4-layer-shell linkage step silently weakens CI, which .github/AGENTS.md forbids.",
+      "expect": "fail",
+      "expect_error_contains": "occurrence(s) of the allowlisted command `cargo build --locked --bin wayscriber`",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-missing-static-linkage.yml"
+    },
+    {
+      "name": "ci-stale-clippy-command",
+      "why": "A replaced raw command must not come back beside the driver call.",
+      "expect": "fail",
+      "expect_error_contains": "the raw command `cargo clippy --workspace --all-targets --all-features -- -D warnings` is back",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-stale-clippy-command.yml"
+    },
+    {
+      "name": "ci-duplicate-driver-call",
+      "why": "Each routed consumer must be invoked exactly once per entry point.",
+      "expect": "fail",
+      "expect_error_contains": "expected exactly one `./tools/run-cargo-consumer.py ci-ubuntu` invocation, found 2",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-duplicate-driver-call.yml"
+    },
+    {
+      "name": "ci-missing-arch-gate",
+      "why": "Dropping the Arch job would leave the config-modern lane uncompiled by any hosted check.",
+      "expect": "fail",
+      "expect_error_contains": "expected exactly one `./tools/run-cargo-consumer.py ci-arch` invocation, found 0",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-missing-arch-gate.yml"
+    },
+    {
+      "name": "ci-unallowlisted-cargo",
+      "why": "A new raw workspace Cargo command outside the manifest and the allowlist must fail.",
+      "expect": "fail",
+      "expect_error_contains": "raw Cargo command `cargo build --workspace --bins`",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-unallowlisted-cargo.yml"
+    }
+  ]
+}

@@ -9,9 +9,16 @@
 
 ## Invariants
 - Preserve release/version/package semantics, including packaging-only hotfix behavior.
-- Keep `tools/lint-and-test.sh` aligned with CI.
-- Keep `check-rust-source-coverage.py` aligned with the workspace's all-feature and
-  no-default-feature target matrix; intentional exceptions must be narrow and documented.
+- Keep `tools/lint-and-test.sh` aligned with CI. Both call `./tools/run-cargo-consumer.py`,
+  so alignment means editing `tools/cargo-lanes.json`, not the callers.
+- `tools/cargo-lanes.json` is the only place a Cargo package/feature matrix is declared.
+  A new raw `cargo` command in an entry point must become a lane operation or an
+  `allowed_non_lane_cargo` entry with a reason; `./tools/check-cargo-lanes.py` fails otherwise.
+- `check-rust-source-coverage.py` consumes the manifest's `source-coverage` vectors, so it
+  cannot drift from the lint/test matrix. Those vectors have no modern libadwaita lane;
+  the compensating rule is that no Rust source file may be reachable only under `adw-modern`.
+- Every rule in `check-cargo-lanes.py` must keep a fixture in `tools/fixtures/cargo-lanes/`
+  that proves it rejects what it claims to reject.
 - Avoid platform-specific assumptions unless the script is explicitly platform-specific.
 
 ## Coupled Changes

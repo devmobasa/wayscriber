@@ -1,0 +1,40 @@
+# Fixture, not a live workflow. A raw workspace Cargo command was added
+# outside both the lane manifest and the non-lane allowlist.
+name: Checks (fixture)
+
+jobs:
+  lint-and-test:
+    name: Rust lint and test
+    steps:
+      - name: Check dynamic gtk4-layer-shell linkage
+        run: |
+          cargo build --locked --bin wayscriber
+          readelf -d target/debug/wayscriber | grep -Eq 'Shared library: \[libgtk4-layer-shell\.so'
+
+      - name: Check Cargo lane contract
+        run: |
+          ./tools/check-cargo-lanes.py --self-test
+          ./tools/check-cargo-lanes.py
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: extra build
+        run: cargo build --workspace --bins
+
+      - name: Cargo lane matrix
+        run: ./tools/run-cargo-consumer.py ci-ubuntu
+
+      - name: Check static gtk4-layer-shell linkage
+        env:
+          SYSTEM_DEPS_GTK4_LAYER_SHELL_0_LINK: static
+        run: |
+          cargo build --locked --bin wayscriber
+          bash tools/verify-static-gtk4-layer-shell.sh target/debug/wayscriber
+
+  configurator-modern-arch:
+    name: Configurator modern (Arch)
+    container: archlinux:latest
+    steps:
+      - name: Cargo lane matrix (modern)
+        run: ./tools/run-cargo-consumer.py ci-arch

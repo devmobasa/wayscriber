@@ -1,0 +1,79 @@
+{
+  "_fixture": "Negative fixture 1: the default feature closure reaches adw-modern, which would make every deb/rpm baseline build demand libadwaita 1.7.",
+  "workspace_root": "/fixture",
+  "workspace_members": [
+    "path+file:///fixture#wayscriber@0.0.0",
+    "path+file:///fixture/configurator#wayscriber-configurator@0.0.0"
+  ],
+  "packages": [
+    {
+      "name": "wayscriber",
+      "id": "path+file:///fixture#wayscriber@0.0.0",
+      "manifest_path": "/fixture/Cargo.toml",
+      "features": {
+        "default": [
+          "tablet-input"
+        ],
+        "tablet-input": []
+      },
+      "dependencies": []
+    },
+    {
+      "name": "wayscriber-configurator",
+      "id": "path+file:///fixture/configurator#wayscriber-configurator@0.0.0",
+      "manifest_path": "/fixture/configurator/Cargo.toml",
+      "features": {
+        "default": [
+          "tablet-input",
+          "adw-modern"
+        ],
+        "tablet-input": [
+          "wayscriber/tablet-input"
+        ],
+        "adw-modern": [
+          "libadwaita/v1_7"
+        ]
+      },
+      "dependencies": [
+        {
+          "name": "gtk4",
+          "kind": null,
+          "optional": false,
+          "uses_default_features": true,
+          "features": [
+            "v4_10"
+          ],
+          "target": null
+        },
+        {
+          "name": "libadwaita",
+          "kind": null,
+          "optional": false,
+          "uses_default_features": true,
+          "features": [
+            "v1_4"
+          ],
+          "target": null
+        },
+        {
+          "name": "relm4",
+          "kind": null,
+          "optional": false,
+          "uses_default_features": true,
+          "features": [
+            "libadwaita"
+          ],
+          "target": null
+        },
+        {
+          "name": "wayscriber",
+          "kind": null,
+          "optional": false,
+          "uses_default_features": false,
+          "features": [],
+          "target": null
+        }
+      ]
+    }
+  ]
+}

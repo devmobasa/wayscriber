@@ -97,8 +97,14 @@ Preserve the intent of the root package features:
 - `toolbar-gtk` — GTK layer-shell toolbar frontend;
 - `config-schema` — schema export support.
 
-The configurator has its own `tablet-input` feature forwarding to the root package. Full CI covers
-all features and no default features across the workspace.
+The configurator has its own `tablet-input` feature forwarding to the root package, plus
+`adw-modern`, which raises the libadwaita API floor to 1.7. `adw-modern` is off by default and is
+never passed by the deb/rpm builds, which stay on the 1.4 baseline; only channels that guarantee a
+libadwaita runtime of 1.7 or newer enable it.
+
+Full CI covers the root package with all features, the configurator at its libadwaita baseline, and
+the workspace with no default features. The modern configurator lane runs in a separate Arch job,
+because Ubuntu 24.04 cannot compile it.
 
 ## Tests and linting
 
@@ -116,10 +122,25 @@ Before submitting a broad or cross-package change, run the local CI entry point:
 ./tools/lint-and-test.sh
 ```
 
-It checks release/package metadata, package layout, Rust source coverage, formatting, strict
-all-feature Clippy, all-feature tests, and no-default-feature tests. The source-coverage gate uses
-current rustc dep-info and rejects tracked or unignored `.rs` files that are outside the supported
-Cargo target/feature matrix.
+It checks release/package metadata, package layout, the Cargo lane contract, Rust source coverage,
+and formatting, then runs the whole Cargo matrix through
+`./tools/run-cargo-consumer.py lint-and-test`.
+
+The matrix is data, not script text: `tools/cargo-lanes.json` declares each lane and the exact
+command every consumer runs, and `tools/lint-and-test.sh`, `clean.sh`, and both CI jobs call the
+driver by consumer name. Change the matrix in the manifest. `./tools/check-cargo-lanes.py` fails
+when a caller grows its own `cargo` command, when a replaced command comes back, or when the
+configurator feature graph drifts off its declared libadwaita floors.
+
+To run one lane while iterating, copy its command out of the manifest, for example:
+
+```bash
+cargo clippy -p wayscriber --all-features --all-targets -- -D warnings
+```
+
+The source-coverage gate uses current rustc dep-info from the manifest's `source-coverage` vectors
+and rejects tracked or unignored `.rs` files that are outside them. Those vectors have no modern
+libadwaita lane, so no Rust source file may be reachable only under `adw-modern`.
 
 For offline work, prefetch dependencies first:
 

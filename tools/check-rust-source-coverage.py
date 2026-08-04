@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Fail when a repository Rust source is absent from the supported Cargo matrix."""
+"""Fail when a repository Rust source is absent from the supported Cargo matrix.
+
+The matrix is not defined here. It is the `source-coverage` consumer in
+`tools/cargo-lanes.json`, loaded through `tools/cargo_lanes.py`, so this gate and
+the lint/test/CI matrices cannot drift apart. Those vectors deliberately exclude
+the modern libadwaita lane, which Ubuntu cannot compile; the compensating rule is
+that no Rust source file may be reachable only under `adw-modern`.
+"""
 
 from __future__ import annotations
 
@@ -10,12 +17,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-CARGO_CONFIGURATIONS = (
-    ("all features", "--all-features"),
-    ("no default features", "--no-default-features"),
-)
+from cargo_lanes import REPO_ROOT, ManifestError, Operation, load_manifest
+
+
+SOURCE_COVERAGE_CONSUMER = "source-coverage"
 EXPLICIT_ENTRY_POINTS = {Path("build.rs")}
 
 
@@ -67,16 +74,8 @@ def dep_info_for_artifact(filename: Path) -> Path | None:
     return next((candidate for candidate in candidates if candidate.is_file()), None)
 
 
-def cargo_dep_info(package_ids: set[str], configuration_flag: str) -> set[Path]:
-    command = [
-        "cargo",
-        "check",
-        "--workspace",
-        "--locked",
-        "--all-targets",
-        configuration_flag,
-        "--message-format=json-render-diagnostics",
-    ]
+def cargo_dep_info(package_ids: set[str], operation: Operation) -> set[Path]:
+    command = list(operation.argv)
     try:
         process = subprocess.Popen(
             command,
@@ -189,12 +188,21 @@ def repository_rust_sources() -> set[Path]:
 
 def main() -> int:
     try:
+        operations = load_manifest().consumer(SOURCE_COVERAGE_CONSUMER).operations
+    except ManifestError as error:
+        print(f"Rust source coverage check failed: {error}", file=sys.stderr)
+        return 2
+
+    try:
         package_ids = workspace_package_ids()
 
         dep_info_paths: set[Path] = set()
-        for label, flag in CARGO_CONFIGURATIONS:
-            print(f"Checking Rust source coverage ({label})...", file=sys.stderr)
-            dep_info_paths.update(cargo_dep_info(package_ids, flag))
+        for operation in operations:
+            print(
+                f"Checking Rust source coverage ({operation.label}, lane {operation.lane})...",
+                file=sys.stderr,
+            )
+            dep_info_paths.update(cargo_dep_info(package_ids, operation))
 
         covered = set(EXPLICIT_ENTRY_POINTS)
         for dep_info_path in dep_info_paths:
@@ -206,18 +214,26 @@ def main() -> int:
         return 2
 
     if uncovered:
+        lanes = ", ".join(operation.lane for operation in operations)
         print(
             f"Rust source coverage check failed: {len(uncovered)} source file(s) are not compiled "
-            "by the supported Cargo matrix:",
+            f"by the `{SOURCE_COVERAGE_CONSUMER}` lanes ({lanes}):",
             file=sys.stderr,
         )
         for path in uncovered:
             print(f"- {path.as_posix()}", file=sys.stderr)
+        print(
+            "\nA file reachable only under a feature no source-coverage lane enables is not "
+            "covered. In particular, no Rust source may be reachable only under `adw-modern`: "
+            "that channel has no lane here because Ubuntu cannot compile it.",
+            file=sys.stderr,
+        )
         return 1
 
+    lanes = ", ".join(operation.lane for operation in operations)
     print(
         f"Rust source coverage OK: {len(repository_sources)} source files covered across "
-        f"{len(CARGO_CONFIGURATIONS)} Cargo configurations "
+        f"{len(operations)} Cargo lane vector(s) ({lanes}) "
         f"({len(dep_info_paths)} current dep-info files)."
     )
     return 0

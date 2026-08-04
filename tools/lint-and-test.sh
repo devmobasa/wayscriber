@@ -9,12 +9,10 @@ bash tools/check-version-consistency.sh
 bash tools/test-package-repo-layout.sh
 bash tools/test-release-packaging.sh
 ./tools/check-nixpkgs-recipe.py
+./tools/check-cargo-lanes.py --self-test
+./tools/check-cargo-lanes.py
 ./tools/check-rust-source-coverage.py
 ./tools/check-process-sites.py
 ./tools/check-config-writers.py
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo build --workspace --all-features --bins
-cargo test --workspace --all-features
-cargo build --workspace --no-default-features --bins
-cargo test --workspace --no-default-features
+./tools/run-cargo-consumer.py lint-and-test

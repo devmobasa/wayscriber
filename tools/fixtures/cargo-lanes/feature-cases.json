@@ -1,0 +1,76 @@
+{
+  "_fixture": "Cases replayed by `./tools/check-cargo-lanes.py --self-test`. Each case supplies metadata-shaped documents instead of running Cargo, so the rules are proved to reject what they claim to reject without editing the working tree.",
+  "cases": [
+    {
+      "name": "healthy-matrix",
+      "why": "The unmodified feature graph and lane resolutions must be accepted, so a failing negative case cannot be explained by a rule that rejects everything.",
+      "expect": "pass",
+      "packages": "metadata/healthy-packages.json",
+      "lanes": {
+        "config-baseline": "metadata/healthy-lane-config-baseline.json",
+        "workspace-minimal": "metadata/healthy-lane-workspace-minimal.json",
+        "config-modern": "metadata/healthy-lane-config-modern.json"
+      }
+    },
+    {
+      "name": "default-enables-adw-modern",
+      "why": "The default closure must never reach adw-modern.",
+      "expect": "fail",
+      "expect_error_contains": "`default` feature closure reaches `adw-modern`",
+      "packages": "metadata/packages-default-enables-modern.json",
+      "lanes": {
+        "config-baseline": "metadata/healthy-lane-config-baseline.json",
+        "workspace-minimal": "metadata/healthy-lane-workspace-minimal.json",
+        "config-modern": "metadata/healthy-lane-config-modern.json"
+      }
+    },
+    {
+      "name": "modern-moves-to-v1_8",
+      "why": "adw-modern is pinned to libadwaita/v1_7; moving it is a separate decision.",
+      "expect": "fail",
+      "expect_error_contains": "libadwaita/v1_8",
+      "packages": "metadata/packages-modern-targets-v1_8.json",
+      "lanes": {
+        "config-baseline": "metadata/healthy-lane-config-baseline.json",
+        "workspace-minimal": "metadata/healthy-lane-workspace-minimal.json",
+        "config-modern": "metadata/lane-config-modern-v1_8.json"
+      }
+    },
+    {
+      "name": "direct-base-moves-to-v1_5",
+      "why": "The direct libadwaita edge carries the deb/rpm baseline floor and must stay ['v1_4'].",
+      "expect": "fail",
+      "expect_error_contains": "dependency declares features ['v1_5'], expected exactly ['v1_4']",
+      "packages": "metadata/packages-base-floor-v1_5.json",
+      "lanes": {
+        "config-baseline": "metadata/lane-config-baseline-base-v1_5.json",
+        "workspace-minimal": "metadata/lane-workspace-minimal-base-v1_5.json",
+        "config-modern": "metadata/healthy-lane-config-modern.json"
+      }
+    },
+    {
+      "name": "unrouted-declared-feature",
+      "why": "A declared non-default feature that no lane closure enables is never compiled or tested.",
+      "expect": "fail",
+      "expect_error_contains": "experimental-chrome",
+      "packages": "metadata/packages-unrouted-feature.json",
+      "lanes": {
+        "config-baseline": "metadata/healthy-lane-config-baseline.json",
+        "workspace-minimal": "metadata/healthy-lane-workspace-minimal.json",
+        "config-modern": "metadata/healthy-lane-config-modern.json"
+      }
+    },
+    {
+      "name": "transitive-dependency-raises-baseline-floor",
+      "why": "Every direct edge assertion passes, yet relm4 enables libadwaita/v1_5 in the baseline lane. Only the resolved-floor assertion catches it.",
+      "expect": "fail",
+      "expect_error_contains": "enables `v1_5` but the lane declares floor `v1_4`",
+      "packages": "metadata/healthy-packages.json",
+      "lanes": {
+        "config-baseline": "metadata/lane-config-baseline-transitive-v1_5.json",
+        "workspace-minimal": "metadata/healthy-lane-workspace-minimal.json",
+        "config-modern": "metadata/healthy-lane-config-modern.json"
+      }
+    }
+  ]
+}

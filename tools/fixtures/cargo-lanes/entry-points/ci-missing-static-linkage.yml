@@ -1,0 +1,32 @@
+# Fixture, not a live workflow. The static gtk4-layer-shell linkage step
+# was deleted, so one allowlisted `cargo build --locked --bin wayscriber`
+# occurrence is gone. Silently weakening CI must fail the check. The line
+# above also proves comment lines never satisfy the allowlist.
+name: Checks (fixture)
+
+jobs:
+  lint-and-test:
+    name: Rust lint and test
+    steps:
+      - name: Check dynamic gtk4-layer-shell linkage
+        run: |
+          cargo build --locked --bin wayscriber
+          readelf -d target/debug/wayscriber | grep -Eq 'Shared library: \[libgtk4-layer-shell\.so'
+
+      - name: Check Cargo lane contract
+        run: |
+          ./tools/check-cargo-lanes.py --self-test
+          ./tools/check-cargo-lanes.py
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: Cargo lane matrix
+        run: ./tools/run-cargo-consumer.py ci-ubuntu
+
+  configurator-modern-arch:
+    name: Configurator modern (Arch)
+    container: archlinux:latest
+    steps:
+      - name: Cargo lane matrix (modern)
+        run: ./tools/run-cargo-consumer.py ci-arch

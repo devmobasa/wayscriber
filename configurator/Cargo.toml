@@ -21,3 +21,9 @@ gtk4 = { version = "0.11", features = ["v4_10"] }
 [features]
 default = ["tablet-input"]
 tablet-input = ["wayscriber/tablet-input"]
+# Opt-in modern libadwaita API channel. Off by default and never passed by the
+# deb/rpm baseline builds, which stay on the `v1_4` floor declared above. Only
+# channels that guarantee a libadwaita runtime of at least 1.7 (Arch/AUR, and
+# Nix when the pinned libadwaita is new enough) enable it. Moving this to a
+# later `v1_*` is a separate decision, not a routine bump.
+adw-modern = ["libadwaita/v1_7"]

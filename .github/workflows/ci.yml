@@ -86,6 +86,11 @@ jobs:
       - name: Check nixpkgs recipe dependencies
         run: ./tools/check-nixpkgs-recipe.py
 
+      - name: Check Cargo lane contract
+        run: |
+          ./tools/check-cargo-lanes.py --self-test
+          ./tools/check-cargo-lanes.py
+
       - name: Check Rust source coverage
         run: ./tools/check-rust-source-coverage.py
 
@@ -98,14 +103,10 @@ jobs:
       - name: cargo fmt
         run: cargo fmt --all -- --check
 
-      - name: cargo clippy (all features)
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-
-      - name: cargo test (all features)
-        run: cargo test --workspace --all-features
-
-      - name: cargo test (no default features)
-        run: cargo test --workspace --no-default-features
+      - name: Cargo lane matrix
+        # Lanes, flags, and order live in tools/cargo-lanes.json; edit the
+        # manifest, never this step.
+        run: ./tools/run-cargo-consumer.py ci-ubuntu
 
       - name: Check static gtk4-layer-shell linkage
         env:
@@ -128,6 +129,34 @@ jobs:
           name: wayscriber-code-health
           path: code-health-report.txt
           if-no-files-found: warn
+
+  configurator-modern-arch:
+    name: Configurator modern (Arch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: archlinux:latest
+    steps:
+      # Before checkout on purpose: the base image ships neither git (which
+      # actions/checkout needs) nor python, jq, or a Rust toolchain.
+      - name: Bootstrap Arch container
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed \
+            git python jq rustup pkgconf gcc shadow util-linux \
+            gtk4 libadwaita glib2 cairo pango gdk-pixbuf2 graphene \
+            wayland libxkbcommon
+          rustup toolchain install 1.95.0 --profile minimal --component clippy
+          rustup default 1.95.0
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cargo lane matrix (modern libadwaita)
+        # config-modern is the only lane that compiles `adw-modern`. It needs a
+        # libadwaita runtime of at least 1.7, which Ubuntu 24.04 does not ship,
+        # so this job is where that channel is built, linted, and tested.
+        run: ./tools/run-cargo-consumer.py ci-arch
 
   nix-flake:
     name: Nix flake

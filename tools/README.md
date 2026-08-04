@@ -21,8 +21,38 @@ Helper scripts for development, installation, packaging, and release workflows.
   - Does not fail on reported findings; intended for baseline visibility before adding quality gates
   - Usage: `./tools/code-health-report.sh`
 
+- **cargo-lanes.json** - The Cargo build/lint/test matrix, as data
+  - Declares the lanes (`root-full`, `config-baseline`, `workspace-minimal`, `config-modern`), the ordered operations each consumer runs, the entry points that must call the driver, and the non-lane Cargo commands that stay raw
+  - Every operation stores its complete Cargo argv, so flags such as `--all-targets` or `-D warnings` belong to one consumer and never leak into another. `clean` stays lenient on purpose
+  - `config-modern` is the only lane that enables `adw-modern`; it needs libadwaita 1.7 or newer, so only the Arch job runs it
+  - Change the matrix here, never in a caller
+
+- **cargo_lanes.py** - Loader for `cargo-lanes.json`
+  - Stdlib-only Python (3.10 or newer), imported by the driver and the checkers
+  - Validates the schema strictly and returns typed lanes, consumers, operations, and entry-point expectations
+  - Not a command; it is imported, not run
+
+- **run-cargo-consumer.py** - Run one consumer's Cargo operations
+  - Runs the operations in manifest order, labels each one, streams its output, and stops at the first failure
+  - Usage: `./tools/run-cargo-consumer.py <consumer>` (run with no argument to list the consumers)
+
+- **check-cargo-lanes.py** - Guard the configurator feature graph and the Cargo entry points
+  - Feature and floor guard: reads live `cargo metadata` and asserts the declared feature edges, that the `default` closure cannot reach `adw-modern`, that each lane resolves exactly the libadwaita floor it declares (this catches a transitive dependency raising the floor), and that every declared configurator feature is enabled by some lane's resolved closure
+  - Floor resolution is metadata-only, so the modern lane is verified on machines with no libadwaita 1.7 runtime
+  - Entry-point contract: each entry point must call the driver exactly once per routed consumer, must not contain the raw commands the manifest replaced, and must still contain the allowlisted non-lane Cargo commands
+  - `--self-test` replays the stored fixtures in `tools/fixtures/cargo-lanes/` instead of the working tree
+  - Runs as a hard gate in `tools/lint-and-test.sh` and GitHub CI
+  - Usage: `./tools/check-cargo-lanes.py [--self-test]`
+
+- **fixtures/cargo-lanes/** - Inputs for the `check-cargo-lanes.py` self-test
+  - `feature-cases.json` and `metadata/` hold `cargo metadata`-shaped documents for one healthy case and the five negative cases (default gaining `adw-modern`, `adw-modern` moving to `v1_8`, the direct libadwaita edge moving to `v1_5`, an unrouted declared feature, and a transitive dependency raising the baseline floor)
+  - `entry-point-cases.json` and `entry-points/` hold workflow texts for one complete case and five broken ones
+  - Each case states whether it must pass or fail, and a failing case states the message it must produce
+  - See `tools/fixtures/cargo-lanes/README.md`
+
 - **check-rust-source-coverage.py** - Reject Rust sources outside the supported Cargo module graph
-  - Uses current rustc dep-info from all-target/all-feature and no-default-feature checks
+  - Uses current rustc dep-info from the `source-coverage` vectors in `cargo-lanes.json` (`root-full`, `config-baseline`, `workspace-minimal`), so this gate cannot drift away from the lint/test matrix
+  - Those vectors have no modern lane, because Ubuntu cannot compile it. The compensating rule is that no Rust source file may be reachable only under `adw-modern`; a modern-only file would show up here as uncovered
   - Runs as a hard gate in local and GitHub CI
   - Usage: `./tools/check-rust-source-coverage.py`
 

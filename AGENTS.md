@@ -28,7 +28,9 @@
 
 ## Validation
 - Full local CI is `./tools/lint-and-test.sh`.
-- That script runs version/package checks, `cargo fmt --all -- --check`, clippy with all targets/features, all-feature tests, and no-default-feature tests.
+- That script runs version/package checks, `cargo fmt --all -- --check`, and then the whole Cargo matrix through `./tools/run-cargo-consumer.py lint-and-test`.
+- The matrix itself lives in `tools/cargo-lanes.json`: the root package with all features, the configurator at its libadwaita baseline, and the workspace with no default features. Change the matrix there, not in a caller; `./tools/check-cargo-lanes.py` fails when a caller grows its own `cargo` command.
+- `cargo clippy --workspace --all-features` is no longer the portable whole-matrix command: the configurator's `adw-modern` feature needs libadwaita 1.7, so it has its own lane that only the Arch job runs (`./tools/run-cargo-consumer.py ci-arch`).
 - For docs-only `AGENTS.md` edits, make new files visible to Git before whitespace checks, for example `rg --files --hidden -g AGENTS.md -0 | xargs -0 git add -N --` followed by `git diff --check`.
 - On PowerShell, use `rg --files --hidden -g AGENTS.md | ForEach-Object { git add -N -- $_ }` followed by `git diff --check`.
 - If you do not want to alter the index, run an explicit trailing-whitespace check across the untracked `AGENTS.md` files instead of relying on plain `git diff --check`.

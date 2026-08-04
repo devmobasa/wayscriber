@@ -1,0 +1,383 @@
+{
+  "schema_version": 1,
+  "notes": [
+    "Single executable source of truth for the repository's Cargo build/lint/test matrix.",
+    "A lane names a package/feature selection. A consumer names an ordered list of",
+    "operations; every operation stores its complete Cargo argv, so flags such as",
+    "--all-targets or -D warnings belong to the consumer-operation tuple and never to a",
+    "global operation kind. `clean` is deliberately lenient and `source-coverage` keeps",
+    "the JSON diagnostic stream its dep-info collection needs.",
+    "`covers_configurator` marks the lanes that actually compile wayscriber-configurator;",
+    "only those lanes may satisfy the every-declared-feature-is-routed rule.",
+    "`libadwaita_floor` is the highest v1_* feature the lane may resolve on the libadwaita",
+    "node. root-full does not compile the configurator, so it asserts no floor.",
+    "Edit this file with tools/check-cargo-lanes.py in mind: it validates the schema, the",
+    "feature graph, the resolved floors, and the entry points listed below."
+  ],
+  "driver": "./tools/run-cargo-consumer.py",
+  "lanes": {
+    "root-full": {
+      "description": "Root wayscriber package with every optional feature enabled.",
+      "args": ["-p", "wayscriber", "--all-features"],
+      "covers_configurator": false,
+      "libadwaita_floor": null
+    },
+    "config-baseline": {
+      "description": "Configurator at the deb/rpm baseline: the default feature set spelled out, libadwaita pinned to the v1_4 floor.",
+      "args": [
+        "-p",
+        "wayscriber-configurator",
+        "--no-default-features",
+        "--features",
+        "tablet-input"
+      ],
+      "covers_configurator": true,
+      "libadwaita_floor": "v1_4"
+    },
+    "workspace-minimal": {
+      "description": "Whole workspace with no default features; guards the no-default build of both crates.",
+      "args": ["--workspace", "--no-default-features"],
+      "covers_configurator": true,
+      "libadwaita_floor": "v1_4"
+    },
+    "config-modern": {
+      "description": "Configurator on the opt-in modern libadwaita channel; needs a libadwaita runtime of at least 1.7, so it runs on Arch only.",
+      "args": ["-p", "wayscriber-configurator", "--features", "adw-modern"],
+      "covers_configurator": true,
+      "libadwaita_floor": "v1_7"
+    }
+  },
+  "consumers": {
+    "lint-and-test": {
+      "description": "Full local CI matrix: strict clippy, binaries, and tests for every portable lane.",
+      "caller": "tools/lint-and-test.sh",
+      "operations": [
+        {
+          "lane": "root-full",
+          "label": "clippy (root, all features)",
+          "argv": [
+            "cargo",
+            "clippy",
+            "-p",
+            "wayscriber",
+            "--all-features",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+          ]
+        },
+        {
+          "lane": "root-full",
+          "label": "build (root, all features)",
+          "argv": ["cargo", "build", "-p", "wayscriber", "--all-features", "--bins"]
+        },
+        {
+          "lane": "root-full",
+          "label": "test (root, all features)",
+          "argv": ["cargo", "test", "-p", "wayscriber", "--all-features"]
+        },
+        {
+          "lane": "config-baseline",
+          "label": "clippy (configurator, baseline)",
+          "argv": [
+            "cargo",
+            "clippy",
+            "-p",
+            "wayscriber-configurator",
+            "--no-default-features",
+            "--features",
+            "tablet-input",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+          ]
+        },
+        {
+          "lane": "config-baseline",
+          "label": "build (configurator, baseline)",
+          "argv": [
+            "cargo",
+            "build",
+            "-p",
+            "wayscriber-configurator",
+            "--no-default-features",
+            "--features",
+            "tablet-input",
+            "--bins"
+          ]
+        },
+        {
+          "lane": "config-baseline",
+          "label": "test (configurator, baseline)",
+          "argv": [
+            "cargo",
+            "test",
+            "-p",
+            "wayscriber-configurator",
+            "--no-default-features",
+            "--features",
+            "tablet-input"
+          ]
+        },
+        {
+          "lane": "workspace-minimal",
+          "label": "build (workspace, no default features)",
+          "argv": ["cargo", "build", "--workspace", "--no-default-features", "--bins"]
+        },
+        {
+          "lane": "workspace-minimal",
+          "label": "test (workspace, no default features)",
+          "argv": ["cargo", "test", "--workspace", "--no-default-features"]
+        }
+      ]
+    },
+    "ci-ubuntu": {
+      "description": "Hosted Ubuntu gate: the lint-and-test matrix without the redundant binary builds.",
+      "caller": ".github/workflows/ci.yml job `Rust lint and test`",
+      "operations": [
+        {
+          "lane": "root-full",
+          "label": "clippy (root, all features)",
+          "argv": [
+            "cargo",
+            "clippy",
+            "-p",
+            "wayscriber",
+            "--all-features",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+          ]
+        },
+        {
+          "lane": "root-full",
+          "label": "test (root, all features)",
+          "argv": ["cargo", "test", "-p", "wayscriber", "--all-features"]
+        },
+        {
+          "lane": "config-baseline",
+          "label": "clippy (configurator, baseline)",
+          "argv": [
+            "cargo",
+            "clippy",
+            "-p",
+            "wayscriber-configurator",
+            "--no-default-features",
+            "--features",
+            "tablet-input",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+          ]
+        },
+        {
+          "lane": "config-baseline",
+          "label": "test (configurator, baseline)",
+          "argv": [
+            "cargo",
+            "test",
+            "-p",
+            "wayscriber-configurator",
+            "--no-default-features",
+            "--features",
+            "tablet-input"
+          ]
+        },
+        {
+          "lane": "workspace-minimal",
+          "label": "test (workspace, no default features)",
+          "argv": ["cargo", "test", "--workspace", "--no-default-features"]
+        }
+      ]
+    },
+    "clean": {
+      "description": "Lenient developer lint after formatting: lane arguments only, no --all-targets and no -D warnings, preserving clean.sh's pre-manifest behavior.",
+      "caller": "clean.sh",
+      "operations": [
+        {
+          "lane": "root-full",
+          "label": "clippy (root, all features)",
+          "argv": ["cargo", "clippy", "-p", "wayscriber", "--all-features"]
+        },
+        {
+          "lane": "config-baseline",
+          "label": "clippy (configurator, baseline)",
+          "argv": [
+            "cargo",
+            "clippy",
+            "-p",
+            "wayscriber-configurator",
+            "--no-default-features",
+            "--features",
+            "tablet-input"
+          ]
+        }
+      ]
+    },
+    "source-coverage": {
+      "description": "Dep-info collection for the Rust source-coverage gate; the JSON message format is load bearing. There is deliberately no config-modern vector: Ubuntu cannot compile it, and no Rust source file may be reachable only under adw-modern.",
+      "caller": "tools/check-rust-source-coverage.py",
+      "operations": [
+        {
+          "lane": "root-full",
+          "label": "check (root, all features)",
+          "argv": [
+            "cargo",
+            "check",
+            "-p",
+            "wayscriber",
+            "--all-features",
+            "--locked",
+            "--all-targets",
+            "--message-format=json-render-diagnostics"
+          ]
+        },
+        {
+          "lane": "config-baseline",
+          "label": "check (configurator, baseline)",
+          "argv": [
+            "cargo",
+            "check",
+            "-p",
+            "wayscriber-configurator",
+            "--no-default-features",
+            "--features",
+            "tablet-input",
+            "--locked",
+            "--all-targets",
+            "--message-format=json-render-diagnostics"
+          ]
+        },
+        {
+          "lane": "workspace-minimal",
+          "label": "check (workspace, no default features)",
+          "argv": [
+            "cargo",
+            "check",
+            "--workspace",
+            "--no-default-features",
+            "--locked",
+            "--all-targets",
+            "--message-format=json-render-diagnostics"
+          ]
+        }
+      ]
+    },
+    "ci-arch": {
+      "description": "Arch pull-request gate for the modern libadwaita channel; the only consumer that compiles adw-modern.",
+      "caller": ".github/workflows/ci.yml job `Configurator modern (Arch)`",
+      "operations": [
+        {
+          "lane": "config-modern",
+          "label": "check (configurator, modern)",
+          "argv": [
+            "cargo",
+            "check",
+            "-p",
+            "wayscriber-configurator",
+            "--features",
+            "adw-modern",
+            "--locked",
+            "--all-targets"
+          ]
+        },
+        {
+          "lane": "config-modern",
+          "label": "clippy (configurator, modern)",
+          "argv": [
+            "cargo",
+            "clippy",
+            "-p",
+            "wayscriber-configurator",
+            "--features",
+            "adw-modern",
+            "--locked",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+          ]
+        },
+        {
+          "lane": "config-modern",
+          "label": "test (configurator, modern)",
+          "argv": [
+            "cargo",
+            "test",
+            "-p",
+            "wayscriber-configurator",
+            "--features",
+            "adw-modern",
+            "--locked"
+          ]
+        }
+      ]
+    }
+  },
+  "entry_points": {
+    "tools/lint-and-test.sh": {
+      "description": "Local full-CI entry point.",
+      "driver_consumers": ["lint-and-test"],
+      "loader_consumers": [],
+      "removed_commands": [
+        "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+        "cargo build --workspace --all-features --bins",
+        "cargo test --workspace --all-features",
+        "cargo build --workspace --no-default-features --bins",
+        "cargo test --workspace --no-default-features"
+      ]
+    },
+    "clean.sh": {
+      "description": "Lenient format-and-lint helper.",
+      "driver_consumers": ["clean"],
+      "loader_consumers": [],
+      "removed_commands": ["cargo clippy --workspace --all-features"]
+    },
+    ".github/workflows/ci.yml": {
+      "description": "Hosted checks workflow: the Ubuntu matrix plus the Arch modern gate.",
+      "driver_consumers": ["ci-ubuntu", "ci-arch"],
+      "loader_consumers": [],
+      "removed_commands": [
+        "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+        "cargo test --workspace --all-features",
+        "cargo test --workspace --no-default-features"
+      ]
+    },
+    "tools/check-rust-source-coverage.py": {
+      "description": "Imports tools/cargo_lanes.py instead of invoking the driver, because it needs the streamed Cargo JSON messages.",
+      "driver_consumers": [],
+      "loader_consumers": ["source-coverage"],
+      "removed_commands": []
+    }
+  },
+  "allowed_non_lane_cargo": [
+    {
+      "entry_point": "tools/lint-and-test.sh",
+      "command": "cargo fmt --all -- --check",
+      "occurrences": 1,
+      "reason": "Formatting gate; it selects no package and no feature, so it is not a lane."
+    },
+    {
+      "entry_point": "clean.sh",
+      "command": "cargo fmt",
+      "occurrences": 1,
+      "reason": "Formatting pass that runs before the lenient clippy consumer."
+    },
+    {
+      "entry_point": ".github/workflows/ci.yml",
+      "command": "cargo fmt --all -- --check",
+      "occurrences": 1,
+      "reason": "Formatting gate; it selects no package and no feature, so it is not a lane."
+    },
+    {
+      "entry_point": ".github/workflows/ci.yml",
+      "command": "cargo build --locked --bin wayscriber",
+      "occurrences": 2,
+      "reason": "gtk4-layer-shell linkage proofs (dynamic, then static under SYSTEM_DEPS_GTK4_LAYER_SHELL_0_LINK). Each inspects the produced binary, so it cannot be folded into a lane; deleting either weakens CI."
+    }
+  ]
+}

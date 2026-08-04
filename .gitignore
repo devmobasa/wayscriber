@@ -6,6 +6,10 @@
 # Keep Cargo.lock for binaries for reproducible builds (uncomment to ignore for libs)
 # Cargo.lock
 
+# Python bytecode from the tools/ checkers
+__pycache__/
+*.py[cod]
+
 # Editors/OS
 .idea/
 .vscode/

@@ -1,0 +1,79 @@
+{
+  "_fixture": "Companion resolution for negative fixture 3: the direct libadwaita dependency itself declares v1_5, so the baseline lane resolves v1_5.",
+  "workspace_root": "/fixture",
+  "packages": [
+    {
+      "name": "wayscriber",
+      "id": "path+file:///fixture#wayscriber@0.0.0",
+      "manifest_path": "/fixture/Cargo.toml"
+    },
+    {
+      "name": "wayscriber-configurator",
+      "id": "path+file:///fixture/configurator#wayscriber-configurator@0.0.0",
+      "manifest_path": "/fixture/configurator/Cargo.toml"
+    },
+    {
+      "name": "gtk4",
+      "id": "registry+https://github.com/rust-lang/crates.io-index#gtk4@0.11.0",
+      "manifest_path": "/fixture/vendor/gtk4/Cargo.toml"
+    },
+    {
+      "name": "libadwaita",
+      "id": "registry+https://github.com/rust-lang/crates.io-index#libadwaita@0.9.0",
+      "manifest_path": "/fixture/vendor/libadwaita/Cargo.toml"
+    },
+    {
+      "name": "relm4",
+      "id": "registry+https://github.com/rust-lang/crates.io-index#relm4@0.11.0",
+      "manifest_path": "/fixture/vendor/relm4/Cargo.toml"
+    }
+  ],
+  "resolve": {
+    "root": "path+file:///fixture/configurator#wayscriber-configurator@0.0.0",
+    "nodes": [
+      {
+        "id": "path+file:///fixture#wayscriber@0.0.0",
+        "features": [
+          "tablet-input"
+        ],
+        "deps": []
+      },
+      {
+        "id": "path+file:///fixture/configurator#wayscriber-configurator@0.0.0",
+        "features": [
+          "tablet-input"
+        ],
+        "deps": []
+      },
+      {
+        "id": "registry+https://github.com/rust-lang/crates.io-index#gtk4@0.11.0",
+        "features": [
+          "v4_2",
+          "v4_4",
+          "v4_6",
+          "v4_8",
+          "v4_10"
+        ],
+        "deps": []
+      },
+      {
+        "id": "registry+https://github.com/rust-lang/crates.io-index#libadwaita@0.9.0",
+        "features": [
+          "v1_1",
+          "v1_2",
+          "v1_3",
+          "v1_4",
+          "v1_5"
+        ],
+        "deps": []
+      },
+      {
+        "id": "registry+https://github.com/rust-lang/crates.io-index#relm4@0.11.0",
+        "features": [
+          "libadwaita"
+        ],
+        "deps": []
+      }
+    ]
+  }
+}

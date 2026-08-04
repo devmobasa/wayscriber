@@ -25,5 +25,5 @@
 
 ## Validation
 - Use focused tests near changed state/session/toolbar helpers when available.
-- Run `cargo clippy --workspace --all-targets --all-features -- -D warnings` for protocol/runtime changes.
+- Run `cargo clippy -p wayscriber --all-features --all-targets -- -D warnings` for protocol/runtime changes. That is the `root-full` lane in `tools/cargo-lanes.json`; run `./tools/run-cargo-consumer.py lint-and-test` for the whole matrix.
 - Run full local CI for broad event-loop, feature-gate, or runtime lifecycle changes.
