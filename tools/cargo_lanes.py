@@ -29,6 +29,7 @@ SCHEMA_VERSION = 1
 # compiles while the floor and routing guards keep asserting from `lane.args`.
 SELECTOR_ARGUMENTS = frozenset(
     {
+        "-F",
         "-p",
         "--package",
         "--workspace",
@@ -38,6 +39,7 @@ SELECTOR_ARGUMENTS = frozenset(
         "--no-default-features",
     }
 )
+SHORT_SELECTOR_PREFIXES = ("-F", "-p")
 
 
 class ManifestError(RuntimeError):
@@ -218,7 +220,16 @@ def _parse_operation(consumer: str, index: int, raw: object, lanes: dict[str, La
     # selection: the command would compile something the lane never describes
     # while every guard that reads `lane.args` kept asserting the lane's story.
     for argument in argv[2 + len(lane.args) :]:
-        if argument.split("=", maxsplit=1)[0] not in SELECTOR_ARGUMENTS:
+        long_or_bare = argument.split("=", maxsplit=1)[0]
+        attached_short = next(
+            (
+                prefix
+                for prefix in SHORT_SELECTOR_PREFIXES
+                if argument.startswith(prefix) and len(argument) > len(prefix)
+            ),
+            None,
+        )
+        if long_or_bare not in SELECTOR_ARGUMENTS and attached_short is None:
             continue
         raise ManifestError(
             f"{where}.argv: `{argument}` selects packages or features after the lane "

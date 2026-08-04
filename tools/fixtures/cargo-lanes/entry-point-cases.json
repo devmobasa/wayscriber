@@ -65,6 +65,38 @@
       "file": "entry-points/ci-wrapped-cargo.yml"
     },
     {
+      "name": "ci-shell-control-cargo",
+      "why": "A shell control word and the `command` builtin are prefixes, not exemptions; the command after them must still be judged.",
+      "expect": "fail",
+      "expect_error_contains": "raw Cargo command `cargo build --workspace --bins`",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-shell-prefixed-cargo.yml"
+    },
+    {
+      "name": "ci-env-option-cargo",
+      "why": "The operand of `env -u` belongs to the wrapper; it must be consumed before the wrapped Cargo command is judged.",
+      "expect": "fail",
+      "expect_error_contains": "raw Cargo command `cargo check --workspace --all-targets`",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-shell-prefixed-cargo.yml"
+    },
+    {
+      "name": "ci-sudo-option-cargo",
+      "why": "The user operand of `sudo -u` belongs to the wrapper; it must not hide the Cargo command that follows.",
+      "expect": "fail",
+      "expect_error_contains": "raw Cargo command `cargo doc --workspace --no-deps`",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-shell-prefixed-cargo.yml"
+    },
+    {
+      "name": "ci-shell-evaluator-cargo",
+      "why": "A command string passed to `bash -c` is still executed by the entry point and must be scanned for raw Cargo commands.",
+      "expect": "fail",
+      "expect_error_contains": "raw Cargo command `cargo bench --workspace --no-run`",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-shell-prefixed-cargo.yml"
+    },
+    {
       "name": "ci-path-qualified-cargo",
       "why": "Same fixture, other half of the rule: spelling the program with a directory must not launder it, and the reported command keeps the path so it cannot be mistaken for the allowlisted spelling.",
       "expect": "fail",
@@ -110,6 +142,14 @@
       "expect_error_contains": "expected the file to import tools/cargo_lanes.py",
       "entry_point": "tools/check-rust-source-coverage.py",
       "file": "entry-points/coverage-missing-import.py"
+    },
+    {
+      "name": "coverage-unused-loader-import",
+      "why": "An unused loader import beside inlined Cargo vectors must not satisfy the contract; the checker has to read the routed consumer's operations from the manifest.",
+      "expect": "fail",
+      "expect_error_contains": "does not read its operations from `load_manifest().consumer(...)`",
+      "entry_point": "tools/check-rust-source-coverage.py",
+      "file": "entry-points/coverage-unused-loader-import.py"
     }
   ]
 }

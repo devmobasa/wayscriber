@@ -23,8 +23,9 @@ Four modes, one rule set:
   claim there; `tools/test-release-packaging.sh` runs this against it;
 * `--self-test` -- replay fixtures for the gates a healthy tree cannot exercise: a
   `.gitignore` whose negation chain has been deleted, a `.SRCINFO` with a package
-  section repeated, and two Cargo builds joined on one line with the modern
-  feature on the wrong one. Each must be rejected, and for the stated reason.
+  section repeated, two Cargo builds joined on one line with the modern feature
+  on the wrong one, and a baseline configurator rebuild after a modern one. Each
+  must be rejected, and for the stated reason.
 
 Validation is asymmetric on purpose. `.SRCINFO` cannot represent a build body, so
 the modern-feature rule is asserted against the PKGBUILD alone; the two files are
@@ -186,7 +187,7 @@ def check_modern_feature(pkgbuild_text: str, origin: str, errors: list[str]) -> 
         errors.append(f"{origin}: no cargo build command found")
         return
 
-    configurator_with_feature = 0
+    configurator_builds = 0
     for words in commands:
         manifests = option_values(words, "--manifest-path")
         features = {
@@ -202,14 +203,19 @@ def check_modern_feature(pkgbuild_text: str, origin: str, errors: list[str]) -> 
                 f"configurator (`--manifest-path {CONFIGURATOR_MANIFEST}`): "
                 f"{' '.join(words)}"
             )
-        if builds_configurator and MODERN_FEATURE in features:
-            configurator_with_feature += 1
+        if builds_configurator:
+            configurator_builds += 1
+            if MODERN_FEATURE not in features:
+                errors.append(
+                    f"{origin}: every configurator build command must pass "
+                    f"`--features {MODERN_FEATURE}`; this baseline rebuild could replace the "
+                    f"modern artifact: {' '.join(words)}"
+                )
 
-    if configurator_with_feature == 0:
+    if configurator_builds == 0:
         errors.append(
-            f"{origin}: the configurator build command must pass "
-            f"`--features {MODERN_FEATURE}`; this channel targets Arch, which always "
-            "ships libadwaita >= 1.7"
+            f"{origin}: no configurator build command uses "
+            f"`--manifest-path {CONFIGURATOR_MANIFEST}`"
         )
 
 
@@ -606,6 +612,14 @@ SELF_TEST_CORRECT_FEATURE = (
     f"--features {MODERN_FEATURE}\n"
     "}\n"
 )
+SELF_TEST_LATE_BASELINE_REBUILD = (
+    "build() {\n"
+    '    cd "$pkgname-$pkgver" && '
+    "cargo build --frozen --release --bins --manifest-path configurator/Cargo.toml "
+    f"--features {MODERN_FEATURE} && "
+    "cargo build --frozen --release --bins --manifest-path configurator/Cargo.toml\n"
+    "}\n"
+)
 
 
 def self_test_build_segmentation() -> tuple[list[str], int]:
@@ -615,16 +629,17 @@ def self_test_build_segmentation() -> tuple[list[str], int]:
     for name, text, expectation in (
         ("joined-builds-correct-feature", SELF_TEST_CORRECT_FEATURE, "pass"),
         ("joined-builds-misplaced-feature", SELF_TEST_MISPLACED_FEATURE, "fail"),
+        ("late-baseline-configurator-rebuild", SELF_TEST_LATE_BASELINE_REBUILD, "fail"),
     ):
         errors: list[str] = []
         check_modern_feature(text, f"{name} (self-test recipe)", errors)
         cases += 1
-        failures += judge(
-            name,
-            expectation,
-            f"`{MODERN_FEATURE}` is passed to a build that is not the configurator",
-            errors,
+        needle = (
+            "configurator build command must pass"
+            if name == "late-baseline-configurator-rebuild"
+            else f"`{MODERN_FEATURE}` is passed to a build that is not the configurator"
         )
+        failures += judge(name, expectation, needle, errors)
     return failures, cases
 
 

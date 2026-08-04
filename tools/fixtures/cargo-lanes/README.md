@@ -13,16 +13,17 @@ tree or running Cargo.
   kind: one contract-complete workflow plus texts that each break one rule (a
   deleted linkage step, a reintroduced raw command, a duplicated driver call, a
   missing Arch gate, a driver call for a consumer the manifest does not declare,
-  and raw Cargo commands in four spellings — plain, environment-prefixed, behind
-  a wrapper with its own operands, and path-qualified). For the loader kind: one
-  checker text that imports `tools/cargo_lanes.py` and names its consumer, one
-  with both gone, and one where the consumer name survives in a label after the
-  import was deleted.
+  and raw Cargo commands hidden by environment assignments, wrappers, wrapper
+  option operands, shell control words, shell evaluators, or a qualified path).
+  For the loader kind: one checker text that reads its consumer's operations
+  from `tools/cargo_lanes.py`, one with the loader gone, one where only the
+  consumer label survives, and one with an unused loader import beside inlined
+  vectors.
 - `manifest-cases.json` — whole manifests replayed through
-  `tools/cargo_lanes.py`: the smallest one the loader accepts, plus two whose
+  `tools/cargo_lanes.py`: the smallest one the loader accepts, plus three whose
   operation argv appends its own package or feature selection after the lane
-  arguments (once as `--features adw-modern`, once as `--package=` past a bare
-  `--`). Those two compile something the lane they are labeled with never
+  arguments (as `--features adw-modern`, Cargo's short `-F` alias, and
+  `--package=` past a bare `--`). Those three compile something the lane they are labeled with never
   describes, which every guard that reads `lane.args` would keep missing.
 - `metadata/*.json` — `cargo metadata` documents trimmed to the fields the guard
   reads. `healthy-packages.json` is the `--no-deps` shape; `*-lane-*.json` are

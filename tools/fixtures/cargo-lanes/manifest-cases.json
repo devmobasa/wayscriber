@@ -15,6 +15,13 @@
       "file": "manifests/operation-tail-features.json"
     },
     {
+      "name": "operation-tail-short-features",
+      "why": "Cargo's `-F` alias selects the same feature graph as `--features`; accepting the short spelling would let an operation compile the modern channel while its lane still declares the v1_4 baseline.",
+      "expect": "fail",
+      "expect_error_contains": "`-F` selects packages or features after the lane arguments",
+      "file": "manifests/operation-tail-short-features.json"
+    },
+    {
       "name": "operation-tail-package-after-dashdash",
       "why": "The same drift past a bare `--` and in the `--package=` spelling: a scan that stops at `--`, or that only compares whole tokens, would accept it.",
       "expect": "fail",

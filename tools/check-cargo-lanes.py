@@ -26,6 +26,7 @@ reading the working tree, proving each rule rejects what it claims to reject.
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import shlex
@@ -74,8 +75,10 @@ ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 # read afterwards is the program that actually runs.
 COMMAND_WRAPPERS = frozenset(
     {
+        "command",
         "sudo",
         "env",
+        "exec",
         "nice",
         "ionice",
         "time",
@@ -90,6 +93,48 @@ COMMAND_WRAPPERS = frozenset(
         "doas",
     }
 )
+
+# Wrapper options whose following token is data for the wrapper, not the
+# program it runs. Options with an attached value (`-ubuilder` or
+# `--user=builder`) need no entry: skipping that one token already reaches the
+# command. Keep this table about arity, while COMMAND_WRAPPERS owns which
+# programs are transparent.
+WRAPPER_OPTION_OPERANDS: dict[str, frozenset[str]] = {
+    "env": frozenset({"-u", "--unset", "-C", "--chdir", "-S", "--split-string"}),
+    "exec": frozenset({"-a"}),
+    "ionice": frozenset({"-c", "--class", "-n", "--classdata", "-p", "--pid"}),
+    "nice": frozenset({"-n", "--adjustment"}),
+    "stdbuf": frozenset({"-i", "--input", "-o", "--output", "-e", "--error"}),
+    "sudo": frozenset(
+        {
+            "-C",
+            "--close-from",
+            "-D",
+            "--chdir",
+            "-g",
+            "--group",
+            "-h",
+            "--host",
+            "-p",
+            "--prompt",
+            "-R",
+            "--chroot",
+            "-T",
+            "--command-timeout",
+            "-u",
+            "--user",
+        }
+    ),
+    "time": frozenset({"-f", "--format", "-o", "--output"}),
+    "timeout": frozenset({"-k", "--kill-after", "-s", "--signal"}),
+    "xvfb-run": frozenset({"-e", "--error-file", "-f", "--auth-file", "-n", "--server-num"}),
+}
+
+# These tokens introduce or modify the command that follows. They are shell
+# grammar, not executable programs, so `if command cargo ...` must be judged
+# from `cargo` just like a bare invocation.
+SHELL_COMMAND_PREFIXES = frozenset({"!", "if", "then", "elif", "while", "until", "do", "else"})
+SHELL_EVALUATORS = frozenset({"bash", "dash", "sh", "zsh"})
 
 # The wrappers that take a bare number before the command: `timeout 300 cargo
 # test`, `nice 10 cargo build`. Consuming it is what keeps the number from
@@ -448,33 +493,32 @@ def command_tokens(segment: str) -> list[str]:
         return segment.split()
 
 
-def cargo_invocation(segment: str) -> str | None:
-    """The Cargo command this segment runs, or `None` if it runs something else.
-
-    Environment assignments and wrapper programs are consumed first, so
-    `RUSTFLAGS="-A warnings" cargo test`, `sudo cargo ...`, `env cargo ...`,
-    `timeout 300 cargo ...`, `xvfb-run cargo ...` and `/usr/bin/cargo ...` all
-    answer with the Cargo command they hide. The answer keeps the tokens from
-    the head onward, so an allowlisted command still compares equal after the
-    prefix is stripped, while a path-qualified `cargo` stays visibly different
-    from the allowlisted spelling.
-    """
-    tokens = command_tokens(segment)
+def command_head_index(tokens: list[str]) -> int | None:
+    """Return the executable token after shell prefixes and transparent wrappers."""
     index = 0
     while index < len(tokens):
         token = tokens[index]
-        if ENV_ASSIGNMENT.match(token):
+        if token in SHELL_COMMAND_PREFIXES or ENV_ASSIGNMENT.match(token):
             index += 1
             continue
+
         name = program_name(token)
         if name not in COMMAND_WRAPPERS:
-            break
+            return index
+
         index += 1
+        operand_options = WRAPPER_OPTION_OPERANDS.get(name, frozenset())
         while index < len(tokens) and tokens[index].startswith("-"):
+            option = tokens[index]
             index += 1
+            if option == "--":
+                break
+            if "=" not in option and option in operand_options and index < len(tokens):
+                index += 1
+
         # Every bare number, not just the first: `timeout -k 10 300 cargo test`
-        # spends one on the option above and one on the duration, and stopping
-        # after the first would read `300` as the program.
+        # spends one on the option above and one on the duration. The wrapper
+        # has to consume both before the actual program can be read.
         while (
             name in NUMERIC_OPERAND_WRAPPERS
             and index < len(tokens)
@@ -482,9 +526,37 @@ def cargo_invocation(segment: str) -> str | None:
         ):
             index += 1
 
-    if index >= len(tokens) or program_name(tokens[index]) != CARGO_PROGRAM:
+    return None
+
+
+def cargo_invocation(tokens: list[str]) -> str | None:
+    """The Cargo command these tokens run, or `None` for another program.
+
+    Environment assignments and wrapper programs are consumed first, so
+    `RUSTFLAGS="-A warnings" cargo test`, `sudo -u builder cargo ...`,
+    `if command cargo ...`, and `/usr/bin/cargo ...` all answer with the Cargo
+    command they hide. The answer keeps the tokens from the head onward, so an
+    allowlisted command still compares equal after the prefix is stripped,
+    while a path-qualified `cargo` stays visibly different from the allowlist.
+    """
+    index = command_head_index(tokens)
+    if index is None or program_name(tokens[index]) != CARGO_PROGRAM:
         return None
     return " ".join(tokens[index:])
+
+
+def evaluated_shell_command(tokens: list[str]) -> str | None:
+    """Return the command string an actual shell head receives through `-c`."""
+    index = command_head_index(tokens)
+    if index is None or program_name(tokens[index]) not in SHELL_EVALUATORS:
+        return None
+    for option_index in range(index + 1, len(tokens) - 1):
+        option = tokens[option_index]
+        if option == "-c" or (
+            option.startswith("-") and not option.startswith("--") and "c" in option[1:]
+        ):
+            return tokens[option_index + 1]
+    return None
 
 
 def cargo_invocations(command: str) -> list[str]:
@@ -493,10 +565,76 @@ def cargo_invocations(command: str) -> list[str]:
     for segment in SHELL_OPERATOR.split(command):
         if not segment.strip():
             continue
-        invocation = cargo_invocation(segment)
+        tokens = command_tokens(segment)
+        invocation = cargo_invocation(tokens)
         if invocation is not None:
             found.append(invocation)
+        nested = evaluated_shell_command(tokens)
+        if nested is not None:
+            found.extend(cargo_invocations(nested))
     return found
+
+
+def constant_strings(tree: ast.AST) -> dict[str, str]:
+    """Module-level string constants available to the loader-consumer expression."""
+    values: dict[str, str] = {}
+    for statement in getattr(tree, "body", []):
+        target: ast.expr | None = None
+        value: ast.expr | None = None
+        if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+            target = statement.targets[0]
+            value = statement.value
+        elif isinstance(statement, ast.AnnAssign):
+            target = statement.target
+            value = statement.value
+        if (
+            isinstance(target, ast.Name)
+            and isinstance(value, ast.Constant)
+            and isinstance(value.value, str)
+        ):
+            values[target.id] = value.value
+    return values
+
+
+def loader_consumers_in_use(text: str) -> tuple[set[str], str | None]:
+    """Consumers whose operations are read from the shared manifest loader."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as error:
+        return set(), f"could not parse Python entry point: {error}"
+
+    constants = constant_strings(tree)
+    consumers: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Attribute) or node.attr != "operations":
+            continue
+        consumer_call = node.value
+        if (
+            not isinstance(consumer_call, ast.Call)
+            or not isinstance(consumer_call.func, ast.Attribute)
+            or consumer_call.func.attr != "consumer"
+            or len(consumer_call.args) != 1
+        ):
+            continue
+        load_call = consumer_call.func.value
+        if not isinstance(load_call, ast.Call):
+            continue
+        loader = load_call.func
+        calls_loader = (isinstance(loader, ast.Name) and loader.id == "load_manifest") or (
+            isinstance(loader, ast.Attribute)
+            and loader.attr == "load_manifest"
+            and isinstance(loader.value, ast.Name)
+            and loader.value.id == "cargo_lanes"
+        )
+        if not calls_loader:
+            continue
+
+        argument = consumer_call.args[0]
+        if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+            consumers.add(argument.value)
+        elif isinstance(argument, ast.Name) and argument.id in constants:
+            consumers.add(constants[argument.id])
+    return consumers, None
 
 
 def check_entry_point(manifest: Manifest, path: str, text: str) -> list[str]:
@@ -542,12 +680,15 @@ def check_entry_point(manifest: Manifest, path: str, text: str) -> list[str]:
             f"name(s) {', '.join(entry.loader_consumers)} can sit in an inlined vector list "
             "long after the loader is gone, and then manifest edits stop reaching this gate"
         )
+    used_loader_consumers, loader_parse_error = loader_consumers_in_use(text)
+    if entry.loader_consumers and loader_parse_error is not None:
+        errors.append(f"{path}: {loader_parse_error}")
     for consumer in entry.loader_consumers:
-        quoted = (f'"{consumer}"', f"'{consumer}'")
-        if not any(token in line for _, line in lines for token in quoted):
+        if consumer not in used_loader_consumers:
             errors.append(
                 f"{path}: expected the file to consume the `{consumer}` operations through "
-                "tools/cargo_lanes.py, but its name never appears"
+                "tools/cargo_lanes.py, but it does not read its operations from "
+                "`load_manifest().consumer(...)`"
             )
 
     for command in entry.removed_commands:
