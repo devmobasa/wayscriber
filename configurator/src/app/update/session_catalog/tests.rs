@@ -88,7 +88,7 @@ fn status_contains(status: &StatusMessage, needle: &str) -> bool {
 
 #[test]
 fn rename_input_change_does_not_dirty_config() {
-    let (mut app, _task) = ConfiguratorApp::new_app();
+    let (mut app, _effects) = ConfiguratorApp::new_app();
     app.is_dirty = false;
 
     let _ =
@@ -103,7 +103,7 @@ fn rename_input_change_does_not_dirty_config() {
 
 #[test]
 fn duplicate_input_change_does_not_dirty_config() {
-    let (mut app, _task) = ConfiguratorApp::new_app();
+    let (mut app, _effects) = ConfiguratorApp::new_app();
     app.is_dirty = false;
 
     let _ = app.handle_session_catalog_duplicate_input_changed(
@@ -120,7 +120,7 @@ fn duplicate_input_change_does_not_dirty_config() {
 
 #[test]
 fn move_input_change_does_not_dirty_config() {
-    let (mut app, _task) = ConfiguratorApp::new_app();
+    let (mut app, _effects) = ConfiguratorApp::new_app();
     app.is_dirty = false;
 
     let _ = app.handle_session_catalog_move_input_changed(
@@ -139,14 +139,15 @@ fn move_input_change_does_not_dirty_config() {
 fn duplicate_request_blocks_without_daemon_status() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let (mut app, _task) = ConfiguratorApp::new_app();
+    let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
     app.daemon_status = None;
 
-    let _ = app.handle_session_catalog_duplicate_requested("s-1".to_string());
+    let effects = app.handle_session_catalog_duplicate_requested("s-1".to_string());
 
+    assert!(effects.is_empty());
     assert!(!app.session_catalog.busy);
     assert!(status_contains(&app.status, "status finishes loading"));
 }
@@ -155,14 +156,18 @@ fn duplicate_request_blocks_without_daemon_status() {
 fn duplicate_request_sets_busy_when_safe() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let (mut app, _task) = ConfiguratorApp::new_app();
+    let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
     app.daemon_status = Some(inactive_daemon_status());
 
-    let _ = app.handle_session_catalog_duplicate_requested("s-1".to_string());
+    let effects = app.handle_session_catalog_duplicate_requested("s-1".to_string());
 
+    assert!(matches!(
+        effects.as_slice(),
+        [Effect::DuplicateSessionEntry { id, .. }] if id == "s-1"
+    ));
     assert!(app.session_catalog.busy);
     assert!(status_contains(&app.status, "Duplicating session"));
 }
@@ -171,14 +176,15 @@ fn duplicate_request_sets_busy_when_safe() {
 fn move_request_blocks_without_daemon_status() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let (mut app, _task) = ConfiguratorApp::new_app();
+    let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
     app.daemon_status = None;
 
-    let _ = app.handle_session_catalog_move_requested("s-1".to_string());
+    let effects = app.handle_session_catalog_move_requested("s-1".to_string());
 
+    assert!(effects.is_empty());
     assert!(!app.session_catalog.busy);
     assert!(status_contains(&app.status, "status finishes loading"));
 }
@@ -187,14 +193,18 @@ fn move_request_blocks_without_daemon_status() {
 fn move_request_sets_busy_when_safe() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let (mut app, _task) = ConfiguratorApp::new_app();
+    let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
     app.daemon_status = Some(inactive_daemon_status());
 
-    let _ = app.handle_session_catalog_move_requested("s-1".to_string());
+    let effects = app.handle_session_catalog_move_requested("s-1".to_string());
 
+    assert!(matches!(
+        effects.as_slice(),
+        [Effect::MoveSessionEntry { id, .. }] if id == "s-1"
+    ));
     assert!(app.session_catalog.busy);
     assert!(status_contains(&app.status, "Moving session"));
 }
@@ -203,7 +213,7 @@ fn move_request_sets_busy_when_safe() {
 fn clear_request_blocks_without_daemon_status() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let (mut app, _task) = ConfiguratorApp::new_app();
+    let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
@@ -219,7 +229,7 @@ fn clear_request_blocks_without_daemon_status() {
 fn clear_tool_state_request_blocks_without_daemon_status() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let (mut app, _task) = ConfiguratorApp::new_app();
+    let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
@@ -236,14 +246,18 @@ fn clear_tool_state_request_blocks_without_daemon_status() {
 fn clear_tool_state_request_sets_busy_when_safe() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let (mut app, _task) = ConfiguratorApp::new_app();
+    let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
     app.daemon_status = Some(inactive_daemon_status());
 
-    let _ = app.handle_session_catalog_clear_tool_state_requested("s-1".to_string());
+    let effects = app.handle_session_catalog_clear_tool_state_requested("s-1".to_string());
 
+    assert!(matches!(
+        effects.as_slice(),
+        [Effect::ClearSessionToolState { id }] if id == "s-1"
+    ));
     assert!(app.session_catalog.busy);
     assert!(app.session_catalog.pending_clear_id.is_none());
     assert!(status_contains(&app.status, "Clearing saved tool state"));
@@ -253,21 +267,23 @@ fn clear_tool_state_request_sets_busy_when_safe() {
 fn clear_request_sets_pending_confirmation_when_safe() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
-    let (mut app, _task) = ConfiguratorApp::new_app();
+    let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
     app.session_catalog
         .replace_items(vec![catalog_item("s-1", "Lecture")]);
     app.daemon_status = Some(inactive_daemon_status());
 
-    let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
+    let effects = app.handle_session_catalog_clear_requested("s-1".to_string());
 
+    // Confirmation first: nothing is cleared until the user says so again.
+    assert!(effects.is_empty());
     assert_eq!(app.session_catalog.pending_clear_id.as_deref(), Some("s-1"));
     assert!(status_contains(&app.status, "Confirm Clear"));
 }
 
 #[test]
 fn action_completed_replaces_catalog_items() {
-    let (mut app, _task) = ConfiguratorApp::new_app();
+    let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog.busy = true;
 
     let _ = app.handle_session_catalog_action_completed(Ok(SessionCatalogActionResult {
@@ -284,7 +300,7 @@ fn action_completed_replaces_catalog_items() {
 
 #[test]
 fn warning_action_completed_sets_warning_status() {
-    let (mut app, _task) = ConfiguratorApp::new_app();
+    let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog.busy = true;
 
     let _ = app.handle_session_catalog_action_completed(Ok(SessionCatalogActionResult {

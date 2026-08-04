@@ -4,8 +4,7 @@ use super::super::fields::{
     InputHudPositionOption, OverrideOption, PdfFitModeOption, PdfLabelContentModeOption,
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption, QuadField,
     ReducedMotionOption, SessionStorageModeOption, TextField, ToggleField, ToolOption,
-    ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption, TripletField,
-    UiThemeOption,
+    ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption, UiThemeOption,
 };
 
 #[test]
@@ -802,7 +801,6 @@ fn render_profile_selection_options_include_selectable_off() {
         RenderProfileSelectionOption::from_active("missing", &ids),
         RenderProfileSelectionOption::Off
     );
-    assert_eq!(RenderProfileSelectionOption::Off.profile_id(), "");
 }
 
 #[test]
@@ -834,9 +832,6 @@ fn setters_update_draft_state() {
     draft.set_text(TextField::DrawingColorName, "green".to_string());
     assert_eq!(draft.drawing_color.name, "green");
     assert_eq!(draft.drawing_color.selected_named, NamedColorOption::Green);
-
-    draft.set_triplet(TripletField::DrawingColorRgb, 1, "0.5".to_string());
-    assert_eq!(draft.drawing_color.rgb[1], "0.5");
 
     draft.set_quad(QuadField::StatusBarBg, 2, "0.75".to_string());
     assert_eq!(draft.status_bar_bg_color.components[2], "0.75");

@@ -80,13 +80,6 @@ impl RenderProfileSelectionOption {
             Self::Off
         }
     }
-
-    pub fn profile_id(self) -> String {
-        match self {
-            Self::Off => String::new(),
-            Self::Profile(id) => id,
-        }
-    }
 }
 
 impl std::fmt::Display for RenderProfileSelectionOption {

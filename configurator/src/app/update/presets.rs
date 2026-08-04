@@ -1,43 +1,42 @@
-use iced::Task;
 use wayscriber::config::PRESET_SLOTS_MAX;
 
-use crate::messages::Message;
 use crate::models::{
     ColorMode, NamedColorOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,
     PresetToggleField,
 };
 
+use super::super::effects::Effect;
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
 impl ConfiguratorApp {
-    pub(super) fn handle_preset_slot_count_changed(&mut self, count: usize) -> Task<Message> {
+    pub(super) fn handle_preset_slot_count_changed(&mut self, count: usize) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         self.draft.presets.slot_count = count;
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_preset_slot_enabled_changed(
         &mut self,
         slot_index: usize,
         enabled: bool,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
             slot.enabled = enabled;
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_preset_collapse_toggled(&mut self, slot_index: usize) -> Task<Message> {
+    pub(super) fn handle_preset_collapse_toggled(&mut self, slot_index: usize) -> Vec<Effect> {
         if let Some(collapsed) = self.preset_collapsed.get_mut(slot_index.saturating_sub(1)) {
             *collapsed = !*collapsed;
         }
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_preset_reset_slot(&mut self, slot_index: usize) -> Task<Message> {
+    pub(super) fn handle_preset_reset_slot(&mut self, slot_index: usize) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let (Some(slot), Some(default_slot)) = (
             self.draft.presets.slot_mut(slot_index),
@@ -48,10 +47,10 @@ impl ConfiguratorApp {
             slot.enabled = enabled;
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_preset_duplicate_slot(&mut self, slot_index: usize) -> Task<Message> {
+    pub(super) fn handle_preset_duplicate_slot(&mut self, slot_index: usize) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         let target_index = slot_index + 1;
         if target_index <= PRESET_SLOTS_MAX
@@ -68,27 +67,27 @@ impl ConfiguratorApp {
             }
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_preset_tool_changed(
         &mut self,
         slot_index: usize,
         tool: crate::models::ToolOption,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
             slot.set_tool(tool);
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_preset_color_mode_changed(
         &mut self,
         slot_index: usize,
         mode: ColorMode,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
             slot.color.mode = mode;
@@ -102,14 +101,14 @@ impl ConfiguratorApp {
             }
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_preset_named_color_selected(
         &mut self,
         slot_index: usize,
         option: NamedColorOption,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
             slot.color.selected_named = option;
@@ -118,7 +117,7 @@ impl ConfiguratorApp {
             }
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_preset_color_component_changed(
@@ -126,7 +125,7 @@ impl ConfiguratorApp {
         slot_index: usize,
         component: usize,
         value: String,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(slot) = self.draft.presets.slot_mut(slot_index)
             && let Some(entry) = slot.color.rgb.get_mut(component)
@@ -134,7 +133,7 @@ impl ConfiguratorApp {
             *entry = value;
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_preset_text_changed(
@@ -142,7 +141,7 @@ impl ConfiguratorApp {
         slot_index: usize,
         field: PresetTextField,
         value: String,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
             match field {
@@ -161,7 +160,7 @@ impl ConfiguratorApp {
             }
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_preset_toggle_option_changed(
@@ -169,7 +168,7 @@ impl ConfiguratorApp {
         slot_index: usize,
         field: PresetToggleField,
         value: crate::models::OverrideOption,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
             match field {
@@ -182,32 +181,32 @@ impl ConfiguratorApp {
             }
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_preset_eraser_kind_changed(
         &mut self,
         slot_index: usize,
         value: PresetEraserKindOption,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
             slot.eraser_kind = value;
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 
     pub(super) fn handle_preset_eraser_mode_changed(
         &mut self,
         slot_index: usize,
         value: PresetEraserModeOption,
-    ) -> Task<Message> {
+    ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
             slot.eraser_mode = value;
         }
         self.refresh_dirty_flag();
-        Task::none()
+        Vec::new()
     }
 }

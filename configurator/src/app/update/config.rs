@@ -1,35 +1,28 @@
-use std::path::PathBuf;
-use std::sync::Arc;
-
-use iced::Task;
 use wayscriber::config::{
     Config, ConfigDiagnosticKind, ConfigDocument, ConfigValidationReport, InvalidKeybinding,
     KeybindingConflictResolution, MigrationPreview,
 };
 
-use crate::messages::Message;
+use crate::messages::ConfigSaveResult;
 use crate::models::error::FormError;
 use crate::models::{ConfigDraft, KeybindingField};
 
-use super::super::io::{load_config_from_disk, save_config_to_disk};
+use super::super::effects::Effect;
 use super::super::state::{ConfiguratorApp, StatusMessage};
 
 impl ConfiguratorApp {
     pub(super) fn handle_config_loaded(
         &mut self,
-        result: Result<(Arc<ConfigDocument>, Option<String>), String>,
-    ) -> Task<Message> {
+        result: Result<(Box<ConfigDocument>, Option<String>), String>,
+    ) -> Vec<Effect> {
         self.is_loading = false;
         match result {
             Ok((document, repair_warning)) => {
                 let draft = ConfigDraft::from_config(document.config());
                 self.draft = draft.clone();
                 self.baseline = draft;
-                self.base_document = Some(document.clone());
                 self.override_mode = self.draft.ui_toolbar_layout_mode;
                 self.boards_collapsed = vec![false; self.draft.boards.items.len()];
-                self.color_picker_open = None;
-                self.color_picker_advanced.clear();
                 self.color_picker_hex.clear();
                 self.sync_all_color_picker_hex();
                 self.is_dirty = false;
@@ -43,6 +36,9 @@ impl ConfiguratorApp {
                         ))
                     },
                 );
+                // Last, so everything above reads the document by reference and
+                // the model takes ownership of exactly one copy.
+                self.base_document = Some(*document);
             }
             Err(err) => {
                 self.status =
@@ -57,74 +53,89 @@ impl ConfiguratorApp {
         self.apply_startup_request()
     }
 
-    pub(super) fn handle_reload_requested(&mut self) -> Task<Message> {
+    pub(super) fn handle_reload_requested(&mut self) -> Vec<Effect> {
         if !self.is_loading && !self.is_saving {
             self.is_loading = true;
             self.defaults_reset_pending = false;
             self.status = StatusMessage::info("Reloading configuration...");
-            return Task::perform(load_config_from_disk(), Message::ConfigLoaded);
+            return vec![Effect::LoadConfig];
         }
 
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_reset_to_defaults_requested(&mut self) -> Task<Message> {
-        if !self.is_loading && !self.is_saving {
+    /// One button drives the two-step reset: the first press arms the
+    /// confirm (the shell relabels the button "Confirm reset?"), the second
+    /// press while armed applies the defaults. Any other edit disarms it
+    /// through `refresh_dirty_flag`, which is the old Cancel path.
+    pub(super) fn handle_reset_to_defaults_requested(&mut self) -> Vec<Effect> {
+        if self.is_loading || self.is_saving {
+            return Vec::new();
+        }
+
+        if !self.defaults_reset_pending {
             self.defaults_reset_pending = true;
             self.status = StatusMessage::warning(
-                "Defaults will replace the current draft with built-in defaults. Press Confirm Defaults to continue.",
+                "Defaults will replace the current draft with built-in defaults. Press \"Confirm reset?\" to continue.",
             );
+            return Vec::new();
         }
 
-        Task::none()
-    }
-
-    pub(super) fn handle_reset_to_defaults_canceled(&mut self) -> Task<Message> {
+        self.draft = self.defaults.clone();
+        self.override_mode = self.draft.ui_toolbar_layout_mode;
+        self.boards_collapsed = vec![false; self.draft.boards.items.len()];
+        self.color_picker_hex.clear();
+        self.sync_all_color_picker_hex();
         self.defaults_reset_pending = false;
-        self.status = StatusMessage::idle();
-        Task::none()
+        self.status = StatusMessage::info("Loaded default configuration (not saved).");
+        self.refresh_dirty_flag();
+        Vec::new()
     }
 
-    pub(super) fn handle_reset_to_defaults_confirmed(&mut self) -> Task<Message> {
-        if self.defaults_reset_pending && !self.is_loading && !self.is_saving {
-            self.draft = self.defaults.clone();
-            self.override_mode = self.draft.ui_toolbar_layout_mode;
-            self.boards_collapsed = vec![false; self.draft.boards.items.len()];
-            self.color_picker_open = None;
-            self.color_picker_advanced.clear();
-            self.color_picker_hex.clear();
-            self.sync_all_color_picker_hex();
-            self.defaults_reset_pending = false;
-            self.status = StatusMessage::info("Loaded default configuration (not saved).");
-            self.refresh_dirty_flag();
-        }
-
-        Task::none()
-    }
-
-    pub(super) fn handle_save_requested(&mut self) -> Task<Message> {
+    pub(super) fn handle_save_requested(&mut self) -> Vec<Effect> {
         // `is_loading` counts too: a reload replaces the draft and base
         // document when it lands, so a save started underneath it would write
         // the pre-reload draft and then be judged against a document it never
         // saw — leaving stale fields marked clean and the next save rejected.
         if self.is_saving || self.is_loading {
-            return Task::none();
+            return Vec::new();
         }
         self.defaults_reset_pending = false;
-        let Some(document) = self.base_document.clone() else {
+
+        // Before the document moves anywhere: a hex field the parser rejects
+        // was never applied to the draft, so saving would write the last value
+        // that did parse and the reload would wipe the text the user is still
+        // fixing.
+        let invalid_hex = self.invalid_color_hex_count();
+        if invalid_hex > 0 {
+            self.status = StatusMessage::error(invalid_color_hex_message(invalid_hex));
+            return Vec::new();
+        }
+
+        // The write needs the document itself, so the model gives up its only
+        // copy here and gets one back from `handle_config_saved` either way.
+        // Taking it is also the "nothing loaded" check: there is one `Option`
+        // to read, and reading it is what moves the value.
+        let Some(document) = self.base_document.take() else {
             self.status = StatusMessage::error(
                 "Configuration has not loaded successfully. Reload before saving.",
             );
-            return Task::none();
+            return Vec::new();
         };
 
         match self.prepare_config_to_save(&document) {
             Ok(config) => {
                 self.is_saving = true;
                 self.status = StatusMessage::info("Saving configuration...");
-                Task::perform(save_config_to_disk(document, config), Message::ConfigSaved)
+                vec![Effect::SaveConfig {
+                    document: Box::new(document),
+                    config: Box::new(config),
+                }]
             }
             Err(errors) => {
+                // No write starts, so the document goes straight back: this
+                // handler must not be a way to lose it.
+                self.base_document = Some(document);
                 let message = errors
                     .into_iter()
                     .map(|err| format!("{}: {}", err.field, err.message))
@@ -133,7 +144,7 @@ impl ConfiguratorApp {
                 self.status = StatusMessage::error(format!(
                     "Cannot save due to validation errors:\n{message}"
                 ));
-                Task::none()
+                Vec::new()
             }
         }
     }
@@ -156,10 +167,7 @@ impl ConfiguratorApp {
         Ok(config)
     }
 
-    pub(super) fn handle_config_saved(
-        &mut self,
-        result: Result<(Option<PathBuf>, Arc<ConfigDocument>), String>,
-    ) -> Task<Message> {
+    pub(super) fn handle_config_saved(&mut self, result: ConfigSaveResult) -> Vec<Effect> {
         self.is_saving = false;
         // Either outcome answers this write; a failed one wrote nothing, so
         // there is no resolution to report for it.
@@ -170,10 +178,7 @@ impl ConfiguratorApp {
                 self.last_backup_path = backup.clone();
                 self.draft = draft.clone();
                 self.baseline = draft;
-                self.base_document = Some(saved_document.clone());
                 self.boards_collapsed = vec![false; self.draft.boards.items.len()];
-                self.color_picker_open = None;
-                self.color_picker_advanced.clear();
                 self.color_picker_hex.clear();
                 self.sync_all_color_picker_hex();
                 self.is_dirty = false;
@@ -191,13 +196,26 @@ impl ConfiguratorApp {
                     status = status.with_note(&note);
                 }
                 self.status = status;
+                self.base_document = Some(*saved_document);
             }
-            Err(err) => {
-                self.status = StatusMessage::error(format!("Failed to save configuration: {err}"));
+            Err((document, err)) => {
+                // The write borrowed the model's only document; a failure hands
+                // it straight back so the draft stays savable. The one case
+                // with nothing to hand back is a blocking job that never
+                // returned, which leaves a reload as the way forward.
+                let restored = document.is_some();
+                self.base_document = document.map(|document| *document);
+                let mut message = format!("Failed to save configuration: {err}");
+                if !restored {
+                    message.push_str(
+                        "\nThe loaded configuration did not come back from the failed write. Reload before saving again.",
+                    );
+                }
+                self.status = StatusMessage::error(message);
             }
         }
 
-        Task::none()
+        Vec::new()
     }
 
     /// Recomputes what a migration would propose for the document now in hand.
@@ -220,12 +238,12 @@ impl ConfiguratorApp {
         self.migration_preview = MigrationPreview::for_authored_config(document.authored_config());
     }
 
-    pub(super) fn handle_migration_apply_requested(&mut self) -> Task<Message> {
+    pub(super) fn handle_migration_apply_requested(&mut self) -> Vec<Effect> {
         if self.is_loading || self.is_saving {
-            return Task::none();
+            return Vec::new();
         }
         let Some(preview) = self.pending_migration().cloned() else {
-            return Task::none();
+            return Vec::new();
         };
 
         let mut applied = 0usize;
@@ -272,28 +290,43 @@ impl ConfiguratorApp {
         self.status = StatusMessage::info(message);
         self.refresh_dirty_flag();
 
-        Task::none()
+        Vec::new()
     }
 
-    pub(super) fn handle_migration_dismissed(&mut self) -> Task<Message> {
+    pub(super) fn handle_migration_dismissed(&mut self) -> Vec<Effect> {
         // Left silent on purpose: the status banner may be carrying the load
         // diagnostics for this file, and hiding the offer is not worth losing
         // them over.
         //
         // Recorded against the file the offer was about, not the path that
         // reached it: only a reload landing on that same file is the reload
-        // this answer covers. With no document loaded there is no offer on
-        // screen and nothing to answer.
-        self.migration_dismissed = self
-            .base_document
-            .as_ref()
-            .map(|document| document.destination().to_path_buf());
+        // this answer covers. Without a document in hand there is no file to
+        // name — no load has produced one, or a running save is holding it —
+        // and an answer already given stands rather than being cleared.
+        if let Some(document) = self.base_document.as_ref() {
+            self.migration_dismissed = Some(document.destination().to_path_buf());
+        }
 
-        Task::none()
+        Vec::new()
     }
 }
 
 const SHOWN_DIAGNOSTICS: usize = 8;
+
+/// Why a save was refused before it began.
+///
+/// The count is all the banner can give: which rows are at fault is the row's
+/// own job to show, and the fix is the same for every one of them — type a
+/// color. Clearing the field is not a way out: the picker edits a color the
+/// config requires, so an empty field is refused like any other text that is
+/// not a color.
+fn invalid_color_hex_message(count: usize) -> String {
+    if count == 1 {
+        return "1 color field does not hold a color. Enter #RRGGBB or #RRGGBBAA before saving."
+            .to_string();
+    }
+    format!("{count} color fields do not hold a color. Enter #RRGGBB or #RRGGBBAA before saving.")
+}
 
 fn config_document_status(document: &ConfigDocument, success: &str) -> StatusMessage {
     let diagnostics = document.diagnostics();
@@ -430,10 +463,42 @@ fn list_with_overflow(entries: &[&str], separator: &str) -> String {
     }
 }
 
+/// The migration offer as the banner shows it, with its whole change list in
+/// view.
+///
+/// The list is not behind a Review button: a recipe proposes at most a handful
+/// of shortcuts, and putting Apply next to something the user has not read yet
+/// is the one thing this flow exists to avoid.
+pub(crate) fn migration_offer_text(preview: &MigrationPreview) -> String {
+    let mut lines = vec![
+        "Configuration update available".to_string(),
+        format!(
+            "Shortcut defaults changed since this configuration was written. Applying updates this draft only; nothing reaches the file until you press Save, which also records revision {}.",
+            preview.proposed_revision()
+        ),
+    ];
+    for change in preview.changes() {
+        lines.push(format!(
+            "{} ({}): {} → {}",
+            change.action_label(),
+            change.config_key(),
+            binding_summary(change.before()),
+            binding_summary(change.after()),
+        ));
+    }
+    lines.join("\n")
+}
+
+fn binding_summary(bindings: &[String]) -> String {
+    if bindings.is_empty() {
+        return "unbound".to_string();
+    }
+    bindings.join(", ")
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use wayscriber::config::{Action, CURRENT_CONFIG_REVISION};
@@ -454,7 +519,7 @@ mod tests {
 
     static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-    fn temp_config_document(name: &str, contents: &str) -> (PathBuf, Arc<ConfigDocument>) {
+    fn temp_config_document(name: &str, contents: &str) -> (PathBuf, Box<ConfigDocument>) {
         let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "wayscriber-configurator-update-config-{}-{sequence}-{name}.toml",
@@ -462,13 +527,12 @@ mod tests {
         ));
         std::fs::write(&path, contents).expect("write test config");
         let document = ConfigDocument::load_from_path(&path).expect("load test config document");
-        (path, Arc::new(document))
+        (path, Box::new(document))
     }
 
     #[test]
     fn handle_config_loaded_success_resets_loading_and_dirty_state() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
-        app.color_picker_open = Some(ColorPickerId::StatusBarBg);
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         app.is_dirty = true;
 
         let (path, document) = temp_config_document("loaded", "");
@@ -476,7 +540,6 @@ mod tests {
 
         assert!(!app.is_loading);
         assert!(!app.is_dirty);
-        assert!(app.color_picker_open.is_none());
         assert_eq!(app.boards_collapsed.len(), app.draft.boards.items.len());
         assert!(status_contains(
             &app.status,
@@ -487,38 +550,44 @@ mod tests {
 
     #[test]
     fn handle_config_loaded_uses_startup_search_focus_fallback_once() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
 
         let (first_path, first) = temp_config_document("focus-first", "");
         let _ = app.handle_config_loaded(Ok((first, None)));
 
-        assert!(app.search_input_focus_hint);
+        assert_eq!(app.search_focus_serial, 1);
         assert!(!app.startup_search_focus_pending);
 
-        app.search_input_focus_hint = false;
+        // A reload is not a relaunch: the offer was answered by the first load,
+        // so the caret stays wherever the user put it.
         let (second_path, second) = temp_config_document("focus-second", "");
         let _ = app.handle_config_loaded(Ok((second, None)));
 
-        assert!(!app.search_input_focus_hint);
+        assert_eq!(app.search_focus_serial, 1);
         let _ = std::fs::remove_file(first_path);
         let _ = std::fs::remove_file(second_path);
     }
 
     #[test]
     fn handle_config_loaded_error_preserves_the_last_good_document_and_draft() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         let (path, document) = temp_config_document("before-reload-error", "");
-        let _ = app.handle_config_loaded(Ok((document.clone(), None)));
+        let destination = document.destination().to_path_buf();
+        let _ = app.handle_config_loaded(Ok((document, None)));
         app.draft.capture_enabled = !app.draft.capture_enabled;
         let draft = app.draft.clone();
 
         let _ = app.handle_config_loaded(Err("broken".to_string()));
 
         assert!(!app.is_loading);
-        assert!(Arc::ptr_eq(
-            app.base_document.as_ref().expect("last good document"),
-            &document
-        ));
+        assert_eq!(
+            app.base_document
+                .as_ref()
+                .expect("last good document")
+                .destination(),
+            destination,
+            "a failed reload keeps the document the last good load produced"
+        );
         assert_eq!(app.draft, draft);
         assert!(status_contains(
             &app.status,
@@ -529,7 +598,7 @@ mod tests {
 
     #[test]
     fn handle_config_loaded_repair_document_allows_saving() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         let (path, document) = temp_config_document("repair", "");
 
         let _ = app.handle_config_loaded(Ok((
@@ -551,7 +620,7 @@ mod tests {
 
     #[test]
     fn handle_config_loaded_surfaces_preserved_unknown_settings() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         let (path, document) =
             temp_config_document("unknown", "future_configurator_option = true\n");
 
@@ -568,7 +637,7 @@ mod tests {
     /// spelled out in the file, which is what makes it their conflict.
     #[test]
     fn handle_config_loaded_surfaces_resolved_shortcut_conflicts() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         let (path, document) = temp_config_document(
             "shortcut-conflict",
             &format!(
@@ -596,7 +665,7 @@ mod tests {
     /// about in the release notes simply is not theirs (#293).
     #[test]
     fn handle_config_loaded_surfaces_skipped_default_shortcuts() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         let (path, document) = temp_config_document(
             "skipped-default",
             &format!(
@@ -627,7 +696,7 @@ mod tests {
     /// nothing else wrong in the file, this section is the entire warning.
     #[test]
     fn handle_config_loaded_surfaces_shortcuts_that_could_not_be_parsed() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         let (path, document) = temp_config_document(
             "invalid-shortcut",
             &format!(
@@ -654,7 +723,7 @@ mod tests {
     /// sentence: they need different fixes, and one of them needs no fix.
     #[test]
     fn handle_config_loaded_separates_every_keybinding_diagnostic_kind() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         let (path, document) = temp_config_document(
             "invalid-and-conflicting",
             &format!(
@@ -680,13 +749,14 @@ mod tests {
 
     #[test]
     fn handle_save_requested_blocks_without_loaded_document() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         // A fresh app is still running its startup load; this test is about
         // the load having finished without producing a document.
         app.is_loading = false;
 
-        let _ = app.handle_save_requested();
+        let effects = app.handle_save_requested();
 
+        assert!(effects.is_empty());
         assert!(!app.is_saving);
         assert!(status_contains(
             &app.status,
@@ -696,21 +766,232 @@ mod tests {
 
     #[test]
     fn handle_save_requested_sets_saving_for_valid_draft() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         app.is_saving = false;
         let (path, document) = temp_config_document("save-request", "");
         let _ = app.handle_config_loaded(Ok((document, None)));
 
-        let _ = app.handle_save_requested();
+        let effects = app.handle_save_requested();
 
+        assert!(matches!(effects.as_slice(), [Effect::SaveConfig { .. }]));
         assert!(app.is_saving);
         assert!(status_contains(&app.status, "Saving configuration..."));
         let _ = std::fs::remove_file(path);
     }
 
+    /// The document is the model's only copy, and the write needs it moved. It
+    /// therefore leaves while the write runs and the result brings one back —
+    /// the saved document on success.
+    #[test]
+    fn the_running_save_holds_the_document_and_the_result_returns_one() {
+        let (mut app, _dir, _path) = app_with_config_file("");
+
+        let (document, config) = save_effect(&mut app);
+
+        assert!(
+            app.base_document.is_none(),
+            "the write holds the document while it runs"
+        );
+        let (saved, backup) = document
+            .save_with_backup(*config)
+            .expect("the document saves")
+            .into_parts();
+        let _ = app.handle_config_saved(Ok((backup, Box::new(saved))));
+
+        assert!(
+            app.base_document.is_some(),
+            "a finished save hands a document back"
+        );
+    }
+
+    /// A write that failed wrote nothing, so the document it borrowed is still
+    /// the one the editor is against: it comes back, and the next Save works.
+    #[test]
+    fn a_failed_save_hands_the_document_back() {
+        let (mut app, _dir, _path) = app_with_config_file("");
+        app.draft.drawing_default_thickness = "6".to_string();
+        app.refresh_dirty_flag();
+
+        let (document, _config) = save_effect(&mut app);
+        assert!(app.base_document.is_none());
+
+        let _ = app.handle_config_saved(Err((Some(document), "Permission denied".to_string())));
+
+        assert!(!app.is_saving);
+        assert!(
+            app.base_document.is_some(),
+            "the document the failed write borrowed must return to the model"
+        );
+        assert!(app.is_dirty, "the draft is still unsaved");
+        assert!(status_contains(
+            &app.status,
+            "Failed to save configuration: Permission denied"
+        ));
+        assert!(
+            !status_contains(&app.status, "Reload before saving again"),
+            "the document came back, so there is nothing to reload for: {:?}",
+            app.status
+        );
+
+        // The proof that it came back whole: the very next Save is accepted.
+        let effects = app.handle_save_requested();
+        assert!(matches!(effects.as_slice(), [Effect::SaveConfig { .. }]));
+    }
+
+    /// The one failure with nothing to hand back is a blocking job that never
+    /// returned. Saving again cannot work until a reload produces a document,
+    /// so the status has to say so.
+    #[test]
+    fn a_save_whose_job_never_returned_asks_for_a_reload() {
+        let (mut app, _dir, _path) = app_with_config_file("");
+        let (_document, _config) = save_effect(&mut app);
+
+        let _ =
+            app.handle_config_saved(Err((None, "config save blocking job panicked".to_string())));
+
+        assert!(app.base_document.is_none());
+        assert!(status_contains(&app.status, "Reload before saving again"));
+    }
+
+    /// A draft the converter rejects never reaches a write, so the document
+    /// must be back in the model by the time the handler returns.
+    #[test]
+    fn a_draft_the_converter_rejects_keeps_the_document() {
+        let (mut app, _dir, _path) = app_with_config_file("");
+        app.draft.drawing_default_thickness = "thick".to_string();
+
+        let effects = app.handle_save_requested();
+
+        assert!(effects.is_empty());
+        assert!(!app.is_saving);
+        assert!(
+            app.base_document.is_some(),
+            "a refused save must not take the document with it"
+        );
+        assert!(status_contains(
+            &app.status,
+            "Cannot save due to validation"
+        ));
+    }
+
+    /// Hex text the parser rejects was never applied to the draft, so a save
+    /// would write the last value that did parse and the reload would replace
+    /// the text with it. The Save is refused instead.
+    #[test]
+    fn a_color_field_holding_invalid_hex_blocks_the_save() {
+        let (mut app, _dir, _path) = app_with_config_file("");
+        app.draft.drawing_default_thickness = "6".to_string();
+        app.refresh_dirty_flag();
+        let _ = app.handle_color_picker_hex_changed(ColorPickerId::HelpBg, "#12zz".to_string());
+
+        assert_eq!(app.invalid_color_hex_count(), 1);
+
+        let effects = app.handle_save_requested();
+
+        assert!(effects.is_empty());
+        assert!(!app.is_saving);
+        assert!(app.base_document.is_some(), "nothing was written or taken");
+        assert!(status_contains(&app.status, "1 color field"));
+        assert!(status_contains(
+            &app.status,
+            "Enter #RRGGBB or #RRGGBBAA before saving"
+        ));
+    }
+
+    /// The one way out of the refusal: type a color that parses.
+    #[test]
+    fn correcting_the_color_field_allows_the_save_again() {
+        let (mut app, _dir, _path) = app_with_config_file("");
+        app.draft.drawing_default_thickness = "6".to_string();
+        app.refresh_dirty_flag();
+        let _ = app.handle_color_picker_hex_changed(ColorPickerId::HelpBg, "#12zz".to_string());
+        assert!(app.handle_save_requested().is_empty());
+
+        let _ = app.handle_color_picker_hex_changed(ColorPickerId::HelpBg, "#102030".to_string());
+
+        assert_eq!(app.invalid_color_hex_count(), 0);
+        assert!(matches!(
+            app.handle_save_requested().as_slice(),
+            [Effect::SaveConfig { .. }]
+        ));
+    }
+
+    /// Clearing is not a way out. The picker edits a color the config
+    /// requires, so an empty field is an edit the save cannot write: letting
+    /// it through would keep the previous color and put it straight back in
+    /// the field on the next reload.
+    #[test]
+    fn clearing_the_color_field_keeps_the_save_blocked() {
+        for cleared in ["", "   "] {
+            let (mut app, _dir, _path) = app_with_config_file("");
+            app.draft.drawing_default_thickness = "6".to_string();
+            app.refresh_dirty_flag();
+
+            let _ = app.handle_color_picker_hex_changed(ColorPickerId::HelpBg, cleared.to_string());
+
+            assert_eq!(app.invalid_color_hex_count(), 1, "{cleared:?}");
+            let effects = app.handle_save_requested();
+            assert!(effects.is_empty(), "{cleared:?} must not reach a save");
+            assert!(status_contains(&app.status, "1 color field"));
+        }
+    }
+
+    /// Deleting the row a refused color was in has to release the save with
+    /// it: the field is gone from the screen, so nothing is left to fix.
+    #[test]
+    fn removing_a_quick_color_releases_the_save_its_hex_had_refused() {
+        let (mut app, _dir, _path) = app_with_config_file("");
+        let _ = app.handle_quick_color_added();
+        let last = app.draft.drawing_quick_colors.entries.len() - 1;
+        let _ = app
+            .handle_color_picker_hex_changed(ColorPickerId::QuickColor(last), "#12zz".to_string());
+        assert!(app.handle_save_requested().is_empty());
+
+        let _ = app.handle_quick_color_removed(last);
+
+        assert_eq!(app.invalid_color_hex_count(), 0);
+        assert!(matches!(
+            app.handle_save_requested().as_slice(),
+            [Effect::SaveConfig { .. }]
+        ));
+    }
+
+    /// The transient the empty rule could have wedged: editing a component
+    /// resyncs that picker's hex, so a normal edit never leaves the field
+    /// blank and the save gate never closes behind the user's back.
+    #[test]
+    fn applying_a_color_leaves_the_field_holding_that_color() {
+        let (mut app, _dir, _path) = app_with_config_file("");
+        let _ = app.handle_color_picker_hex_changed(ColorPickerId::HelpBg, String::new());
+        assert_eq!(app.invalid_color_hex_count(), 1);
+
+        let _ = app.handle_color_picker_hex_changed(ColorPickerId::HelpBg, "#102030".to_string());
+
+        assert_eq!(app.invalid_color_hex_count(), 0);
+    }
+
+    /// Several bad fields are one refusal, and the count is what tells the user
+    /// how much is left to fix.
+    #[test]
+    fn every_invalid_color_field_is_counted_for_the_refusal() {
+        let (mut app, _dir, _path) = app_with_config_file("");
+        let _ = app.handle_color_picker_hex_changed(ColorPickerId::HelpBg, "#12zz".to_string());
+        let _ = app.handle_color_picker_hex_changed(ColorPickerId::HelpText, "nope".to_string());
+
+        assert_eq!(app.invalid_color_hex_count(), 2);
+
+        let _ = app.handle_save_requested();
+
+        assert!(status_contains(&app.status, "2 color fields"));
+        assert!(status_contains(
+            &app.status,
+            "Enter #RRGGBB or #RRGGBBAA before saving"
+        ));
+    }
+
     #[test]
     fn reset_to_defaults_requires_confirmation() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         app.is_loading = false;
         app.draft.capture_enabled = !app.defaults.capture_enabled;
         let changed_draft = app.draft.clone();
@@ -719,31 +1000,40 @@ mod tests {
 
         assert!(app.defaults_reset_pending);
         assert_eq!(app.draft, changed_draft);
-        assert!(status_contains(&app.status, "Confirm Defaults"));
+        assert!(status_contains(&app.status, "Confirm reset?"));
+    }
 
-        let _ = app.handle_reset_to_defaults_confirmed();
+    /// The same button applies the reset once the confirm is armed — the
+    /// wiring gap where "Confirm reset?" could never fire.
+    #[test]
+    fn reset_to_defaults_second_press_applies_the_defaults() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.is_loading = false;
+        app.draft.capture_enabled = !app.defaults.capture_enabled;
+        app.baseline.capture_enabled = !app.defaults.capture_enabled;
 
-        assert!(!app.defaults_reset_pending);
+        let _ = app.handle_reset_to_defaults_requested();
+        let _ = app.handle_reset_to_defaults_requested();
+
         assert_eq!(app.draft, app.defaults);
+        assert!(!app.defaults_reset_pending);
         assert!(status_contains(&app.status, "Loaded default configuration"));
+        assert!(
+            app.is_dirty,
+            "defaults differing from the loaded baseline must read as dirty"
+        );
     }
 
     #[test]
     fn reset_to_defaults_confirmation_is_canceled_by_draft_edit() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         app.is_loading = false;
 
         let _ = app.handle_reset_to_defaults_requested();
         let _ = app.handle_toggle_changed(ToggleField::CaptureEnabled, !app.draft.capture_enabled);
-        let edited_draft = app.draft.clone();
 
         assert!(!app.defaults_reset_pending);
         assert!(matches!(app.status, StatusMessage::Idle));
-
-        let _ = app.handle_reset_to_defaults_confirmed();
-
-        assert_eq!(app.draft, edited_draft);
-        assert_ne!(app.draft, app.defaults);
     }
 
     /// The reviewer's case: the file spells `undo` out and never mentions
@@ -762,7 +1052,7 @@ mod tests {
             .keybindings
             .set(KeybindingField::ClearCanvas, "Ctrl+Alt+U".to_string());
 
-        let document = app.base_document.clone().expect("a loaded document");
+        let document = app.base_document.as_ref().expect("a loaded document");
         let mut config = app
             .draft
             .to_config(document.config())
@@ -862,9 +1152,9 @@ mod tests {
     /// judged against a document it never saw.
     #[test]
     fn save_is_refused_while_a_reload_is_in_flight() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         let (path, document) = temp_config_document("save-during-reload", "");
-        app.base_document = Some(document);
+        app.base_document = Some(*document);
         app.is_loading = true;
         app.is_dirty = true;
         let before = app.status.clone();
@@ -886,7 +1176,7 @@ mod tests {
 
     #[test]
     fn handle_config_saved_success_clears_dirty_and_records_backup() {
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         app.is_saving = true;
         app.is_dirty = true;
         app.draft.capture_enabled = !app.draft.capture_enabled;
@@ -894,6 +1184,7 @@ mod tests {
         let (path, document) = temp_config_document("saved", "");
 
         let _ = app.handle_config_saved(Ok((Some(backup.clone()), document)));
+        assert!(app.base_document.is_some());
 
         assert!(!app.is_saving);
         assert!(!app.is_dirty);
@@ -914,30 +1205,37 @@ mod tests {
         let dir = crate::test_temp::tempdir().expect("temporary test directory");
         let path = dir.path().join("config.toml");
         std::fs::write(&path, contents).expect("write test config");
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         load_config_file(&mut app, &path);
         (app, dir, path)
     }
 
     fn load_config_file(app: &mut ConfiguratorApp, path: &Path) {
         let document = ConfigDocument::load_from_path(path).expect("load test config document");
-        let _ = app.handle_config_loaded(Ok((Arc::new(document), None)));
+        let _ = app.handle_config_loaded(Ok((Box::new(document), None)));
     }
 
-    /// The Save path with the executor left out: `handle_save_requested`
-    /// builds exactly this config, and `save_config_to_disk` performs exactly
-    /// this write before handing the outcome back to `handle_config_saved`.
+    /// The Save path with the executor left out: the handler produces exactly
+    /// this effect, and `save_config_to_disk` performs exactly this write
+    /// before handing the outcome back to `handle_config_saved`.
     fn save_draft(app: &mut ConfiguratorApp) -> Option<PathBuf> {
-        let document = app.base_document.clone().expect("a loaded document");
-        let config = app
-            .prepare_config_to_save(&document)
-            .expect("the draft converts to a config");
+        let (document, config) = save_effect(app);
         let (saved, backup) = document
-            .save_with_backup(config)
+            .save_with_backup(*config)
             .expect("the document saves")
             .into_parts();
-        let _ = app.handle_config_saved(Ok((backup.clone(), Arc::new(saved))));
+        let _ = app.handle_config_saved(Ok((backup.clone(), Box::new(saved))));
         backup
+    }
+
+    /// The write a Save asked for, unpacked.
+    fn save_effect(app: &mut ConfiguratorApp) -> (Box<ConfigDocument>, Box<Config>) {
+        let mut effects = app.handle_save_requested();
+        assert_eq!(effects.len(), 1, "a Save asks for exactly one write");
+        match effects.remove(0) {
+            Effect::SaveConfig { document, config } => (document, config),
+            other => panic!("a Save must ask for a write, not {other:?}"),
+        }
     }
 
     /// One setting exactly as the saved file spells it, with the line wrapping
@@ -1046,6 +1344,31 @@ mod tests {
             app.pending_migration().is_none(),
             "the reloaded file is current, so there is nothing left to offer"
         );
+    }
+
+    /// The banner is the only place the user reads what Apply would do, so it
+    /// has to name every proposed change as before → after.
+    #[test]
+    fn the_migration_offer_text_lists_every_proposed_change() {
+        let (app, _dir, _path) = app_with_config_file(LEGACY_REVISION_ZERO_CONFIG);
+        let preview = app.pending_migration().expect("the fixture is out of date");
+
+        let text = migration_offer_text(preview);
+
+        let mut lines = text.lines();
+        assert_eq!(lines.next(), Some("Configuration update available"));
+        assert!(
+            lines
+                .next()
+                .is_some_and(|line| line.contains("nothing reaches the file until you press Save")),
+            "{text}"
+        );
+        let changes = lines.collect::<Vec<_>>();
+        assert_eq!(changes.len(), preview.changes().len());
+        for (line, change) in changes.iter().zip(preview.changes()) {
+            assert!(line.contains(change.config_key()), "{line}");
+            assert!(line.contains(" → "), "{line}");
+        }
     }
 
     /// Dismissing answers the question for this app run. A reload recomputes
@@ -1271,7 +1594,7 @@ mod tests {
         let link = dir.path().join("config.toml");
         symlink(&first, &link).expect("link the config path at the first profile");
 
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         load_config_file(&mut app, &link);
         assert!(app.pending_migration().is_some());
 
@@ -1312,7 +1635,7 @@ mod tests {
         assert!(app.pending_migration().is_none());
 
         let dir = crate::test_temp::tempdir().expect("temporary test directory");
-        let (mut app, _cmd) = ConfiguratorApp::new_app();
+        let (mut app, _effects) = ConfiguratorApp::new_app();
         load_config_file(&mut app, &dir.path().join("missing.toml"));
 
         assert!(app.pending_migration().is_none());

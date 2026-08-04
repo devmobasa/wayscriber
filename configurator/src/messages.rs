@@ -1,43 +1,65 @@
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use wayscriber::config::{ConfigDocument, ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::models::{
     BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, ColorPickerId,
-    ColorPickerValue, DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DragColorOption,
-    DragMouseButton, DragToolField, DragToolOption, EraserModeOption, FontStyleOption,
-    FontWeightOption, InputHudModeOption, InputHudPositionOption, KeybindingField,
-    KeybindingsTabId, NamedColorOption, OverrideOption, PdfFitModeOption,
-    PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
+    DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DragColorOption, DragMouseButton,
+    DragToolField, DragToolOption, EraserModeOption, FontStyleOption, FontWeightOption,
+    InputHudModeOption, InputHudPositionOption, KeybindingField, KeybindingsTabId,
+    NamedColorOption, OverrideOption, PdfFitModeOption, PdfLabelContentModeOption,
+    PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
-    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField,
     ReducedMotionOption, RenderProfileExportOption, RenderProfileMappingSide,
     RenderProfileTextField, SessionCatalogActionResult, SessionCatalogItem,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
     ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, ToolbarSideLayoutOption, TripletField, UiTabId, UiThemeOption,
+    ToolbarRebindModifierOption, ToolbarSideLayoutOption, UiTabId, UiThemeOption,
     ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 
-#[derive(Debug, Clone)]
-pub enum Message {
-    ConfigLoaded(Result<(Arc<ConfigDocument>, Option<String>), String>),
-    ReloadRequested,
-    ResetToDefaultsRequested,
-    ResetToDefaultsConfirmed,
-    ResetToDefaultsCanceled,
-    SaveRequested,
-    ConfigSaved(Result<(Option<PathBuf>, Arc<ConfigDocument>), String>),
-    MigrationApplyRequested,
-    MigrationDismissed,
+/// What a finished write reports back: the document it produced and any backup
+/// it made, or why nothing was written.
+///
+/// Both arms carry a document, because the model gave its only copy away to
+/// start the write and needs one back. The failure arm's is `None` in exactly
+/// one case: a blocking job that never returned took the document it was
+/// holding with it, leaving a reload as the way forward.
+pub type ConfigSaveResult =
+    Result<(Option<PathBuf>, Box<ConfigDocument>), (Option<Box<ConfigDocument>>, String)>;
+
+/// What a finished `Effect` reports back.
+///
+/// Separate from [`Message`] because none of these can come from a widget:
+/// they are the results of jobs the update layer asked for, they carry values
+/// (the config document above all) that are moved rather than copied, and
+/// nothing may clone them.
+#[derive(Debug)]
+pub enum CommandMessage {
+    ConfigLoaded(Result<(Box<ConfigDocument>, Option<String>), String>),
+    ConfigSaved(ConfigSaveResult),
     DaemonStatusLoaded(u64, Result<DaemonRuntimeStatus, String>),
-    DaemonShortcutInputChanged(String),
-    DaemonActionRequested(DaemonAction),
     DaemonActionCompleted(Result<DaemonActionResult, String>),
     SessionCatalogLoaded(Result<Vec<SessionCatalogItem>, String>),
+    SessionCatalogActionCompleted(Result<SessionCatalogActionResult, String>),
+}
+
+/// What the user asked for, always from a widget.
+///
+/// Cloned by the page builders that hand one message to a button closure, so
+/// every payload here stays cheap to copy.
+#[derive(Debug, Clone)]
+pub enum Message {
+    ReloadRequested,
+    ResetToDefaultsRequested,
+    SaveRequested,
+    MigrationApplyRequested,
+    MigrationDismissed,
+    DaemonShortcutInputChanged(String),
+    DaemonActionRequested(DaemonAction),
     SessionCatalogRefreshRequested,
     SessionCatalogForgetRequested(String),
     SessionCatalogRenameInputChanged(String, String),
@@ -51,24 +73,18 @@ pub enum Message {
     SessionCatalogClearRequested(String),
     SessionCatalogClearConfirmed(String),
     SessionCatalogClearCanceled,
-    SessionCatalogActionCompleted(Result<SessionCatalogActionResult, String>),
     SearchChanged(String),
     SearchCleared,
     SearchFocusRequested,
-    SearchFocusObserved(bool),
-    KeyboardEvent(iced::keyboard::Event, iced::event::Status),
-    PointerPressed,
+    /// The user clicked, tapped, or Tab-navigated before the initial config
+    /// load landed; any still-pending startup search focus stands down.
+    StartupInteractionObserved,
     TabSelected(TabId),
     UiTabSelected(UiTabId),
     KeybindingsTabSelected(KeybindingsTabId),
     ToggleChanged(ToggleField, bool),
     TextChanged(TextField, String),
-    TripletChanged(TripletField, usize, String),
-    QuadChanged(QuadField, usize, String),
-    ColorPickerToggled(ColorPickerId),
-    ColorPickerAdvancedToggled(ColorPickerId, bool),
     ColorPickerHexChanged(ColorPickerId, String),
-    ColorPickerChanged(ColorPickerId, ColorPickerValue),
     ColorModeChanged(ColorMode),
     NamedColorSelected(NamedColorOption),
     QuickColorAdded,

@@ -34,9 +34,9 @@ fn color_input_hex_preview_and_known_conversion() {
     assert_eq!(input.rgb, ["255", "179", "186"]);
 
     let preview = input.preview_color().expect("hex preview should resolve");
-    assert!((preview.r - 1.0).abs() < f32::EPSILON);
-    assert!((preview.g - (179.0f32 / 255.0)).abs() < f32::EPSILON);
-    assert!((preview.b - (186.0f32 / 255.0)).abs() < f32::EPSILON);
+    assert!((preview.r - 1.0).abs() < f64::EPSILON);
+    assert!((preview.g - (179.0 / 255.0)).abs() < f64::EPSILON);
+    assert!((preview.b - (186.0 / 255.0)).abs() < f64::EPSILON);
 
     let round_trip = input
         .to_known_color_spec_with_field("drawing.quick_colors[0].color")
@@ -171,20 +171,6 @@ fn color_triplet_input_reports_invalid_component() {
         .to_array("board.whiteboard_color")
         .expect_err("expected error");
     assert_eq!(err.field, "board.whiteboard_color[1]");
-}
-
-#[test]
-fn color_quad_input_summary_trims_components() {
-    let input = ColorQuadInput {
-        components: [
-            " 0.1 ".to_string(),
-            "0.2".to_string(),
-            " 0.3".to_string(),
-            "0.4 ".to_string(),
-        ],
-    };
-
-    assert_eq!(input.summary(), "0.1, 0.2, 0.3, 0.4");
 }
 
 #[test]

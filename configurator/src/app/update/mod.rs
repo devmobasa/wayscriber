@@ -8,33 +8,49 @@ mod render_profiles;
 mod session_catalog;
 mod tabs;
 
-use iced::Task;
+use crate::messages::{CommandMessage, Message};
 
-use crate::messages::Message;
-
+use super::effects::Effect;
 use super::state::ConfiguratorApp;
 
+pub(crate) use config::migration_offer_text;
+
 impl ConfiguratorApp {
-    pub(crate) fn update_message(&mut self, message: Message) -> Task<Message> {
+    /// Dispatch for what a finished effect reports back.
+    ///
+    /// Separate from [`Self::update_message`] only because the payloads are:
+    /// a command result carries values that are moved into the model rather
+    /// than copied into a widget closure.
+    pub(crate) fn update_command(&mut self, message: CommandMessage) -> Vec<Effect> {
         match message {
-            Message::ConfigLoaded(result) => self.handle_config_loaded(result),
-            Message::ReloadRequested => self.handle_reload_requested(),
-            Message::ResetToDefaultsRequested => self.handle_reset_to_defaults_requested(),
-            Message::ResetToDefaultsConfirmed => self.handle_reset_to_defaults_confirmed(),
-            Message::ResetToDefaultsCanceled => self.handle_reset_to_defaults_canceled(),
-            Message::SaveRequested => self.handle_save_requested(),
-            Message::ConfigSaved(result) => self.handle_config_saved(result),
-            Message::MigrationApplyRequested => self.handle_migration_apply_requested(),
-            Message::MigrationDismissed => self.handle_migration_dismissed(),
-            Message::DaemonStatusLoaded(request_id, result) => {
+            CommandMessage::ConfigLoaded(result) => self.handle_config_loaded(result),
+            CommandMessage::ConfigSaved(result) => self.handle_config_saved(result),
+            CommandMessage::DaemonStatusLoaded(request_id, result) => {
                 self.handle_daemon_status_loaded(request_id, result)
             }
+            CommandMessage::DaemonActionCompleted(result) => {
+                self.handle_daemon_action_completed(result)
+            }
+            CommandMessage::SessionCatalogLoaded(result) => {
+                self.handle_session_catalog_loaded(result)
+            }
+            CommandMessage::SessionCatalogActionCompleted(result) => {
+                self.handle_session_catalog_action_completed(result)
+            }
+        }
+    }
+
+    pub(crate) fn update_message(&mut self, message: Message) -> Vec<Effect> {
+        match message {
+            Message::ReloadRequested => self.handle_reload_requested(),
+            Message::ResetToDefaultsRequested => self.handle_reset_to_defaults_requested(),
+            Message::SaveRequested => self.handle_save_requested(),
+            Message::MigrationApplyRequested => self.handle_migration_apply_requested(),
+            Message::MigrationDismissed => self.handle_migration_dismissed(),
             Message::DaemonShortcutInputChanged(value) => {
                 self.handle_daemon_shortcut_input_changed(value)
             }
             Message::DaemonActionRequested(action) => self.handle_daemon_action_requested(action),
-            Message::DaemonActionCompleted(result) => self.handle_daemon_action_completed(result),
-            Message::SessionCatalogLoaded(result) => self.handle_session_catalog_loaded(result),
             Message::SessionCatalogRefreshRequested => {
                 self.handle_session_catalog_refresh_requested()
             }
@@ -72,36 +88,18 @@ impl ConfiguratorApp {
                 self.handle_session_catalog_clear_confirmed(id)
             }
             Message::SessionCatalogClearCanceled => self.handle_session_catalog_clear_canceled(),
-            Message::SessionCatalogActionCompleted(result) => {
-                self.handle_session_catalog_action_completed(result)
-            }
             Message::SearchChanged(value) => self.handle_search_changed(value),
             Message::SearchCleared => self.handle_search_cleared(),
             Message::SearchFocusRequested => self.handle_search_focus_requested(),
-            Message::SearchFocusObserved(is_focused) => {
-                self.handle_search_focus_observed(is_focused)
-            }
-            Message::KeyboardEvent(event, status) => self.handle_keyboard_event(event, status),
-            Message::PointerPressed => self.handle_pointer_pressed(),
+            Message::StartupInteractionObserved => self.handle_startup_interaction_observed(),
             Message::TabSelected(tab) => self.handle_tab_selected(tab),
             Message::UiTabSelected(tab) => self.handle_ui_tab_selected(tab),
             Message::KeybindingsTabSelected(tab) => self.handle_keybindings_tab_selected(tab),
             Message::ToggleChanged(field, value) => self.handle_toggle_changed(field, value),
             Message::TextChanged(field, value) => self.handle_text_changed(field, value),
-            Message::TripletChanged(field, index, value) => {
-                self.handle_triplet_changed(field, index, value)
-            }
-            Message::QuadChanged(field, index, value) => {
-                self.handle_quad_changed(field, index, value)
-            }
-            Message::ColorPickerToggled(id) => self.handle_color_picker_toggled(id),
-            Message::ColorPickerAdvancedToggled(id, value) => {
-                self.handle_color_picker_advanced_toggled(id, value)
-            }
             Message::ColorPickerHexChanged(id, value) => {
                 self.handle_color_picker_hex_changed(id, value)
             }
-            Message::ColorPickerChanged(id, value) => self.handle_color_picker_changed(id, value),
             Message::ColorModeChanged(mode) => self.handle_color_mode_changed(mode),
             Message::NamedColorSelected(option) => self.handle_named_color_selected(option),
             Message::QuickColorAdded => self.handle_quick_color_added(),

@@ -4,6 +4,8 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use wayscriber::session::catalog::CatalogEntry;
 
+use super::daemon::DaemonRuntimeStatus;
+
 const PATH_LABEL_MAX_CHARS: usize = 96;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +40,90 @@ impl SessionCatalogActionResult {
             message: message.into(),
             items,
             warning: true,
+        }
+    }
+}
+
+/// A saved-session operation whose availability depends on daemon/runtime
+/// state. This pure policy is shared by update handlers, page sensitivity,
+/// and the side-effect adapter that rechecks immediately before mutation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SessionCatalogOperation {
+    Clear,
+    ClearToolState,
+    Duplicate,
+    Move,
+}
+
+impl SessionCatalogOperation {
+    pub(crate) fn cached_status_blocker(
+        self,
+        status: Option<&DaemonRuntimeStatus>,
+    ) -> Option<&'static str> {
+        match status {
+            Some(status) if status.service_active => Some(self.running_daemon_message()),
+            Some(_) => None,
+            None => Some(self.waiting_for_status_message()),
+        }
+    }
+
+    pub(crate) fn running_daemon_message(self) -> &'static str {
+        match self {
+            Self::Clear => {
+                "Clear saved data is disabled while the background service or a manually started daemon is running. Stop it first or clear from the overlay."
+            }
+            Self::ClearToolState => {
+                "Clear saved tool state is disabled while the background service or a manually started daemon is running. Use the overlay command palette for the active session or stop it first."
+            }
+            Self::Duplicate => {
+                "Duplicate Session is disabled while the background service or a manually started daemon is running. Stop it first or duplicate from the overlay after opening the session."
+            }
+            Self::Move => {
+                "Move Session is disabled while the background service or a manually started daemon is running. Stop it first or move from the overlay after opening the session."
+            }
+        }
+    }
+
+    pub(crate) fn running_overlay_message(self) -> &'static str {
+        match self {
+            Self::Clear => {
+                "Clear saved data is disabled while an overlay is running. Use the overlay Clear action for the active session."
+            }
+            Self::ClearToolState => {
+                "Clear saved tool state is disabled while an overlay is running. Use the command palette for the active session."
+            }
+            Self::Duplicate => {
+                "Duplicate Session is disabled while an overlay is running. Use Save As from the overlay for the active session."
+            }
+            Self::Move => {
+                "Move Session is disabled while an overlay is running. Active session moves must use a runtime transaction."
+            }
+        }
+    }
+
+    pub(crate) fn waiting_for_status_message(self) -> &'static str {
+        match self {
+            Self::Clear => {
+                "Clear saved data is disabled until background service status finishes loading."
+            }
+            Self::ClearToolState => {
+                "Clear saved tool state is disabled until background service status finishes loading."
+            }
+            Self::Duplicate => {
+                "Duplicate Session is disabled until background service status finishes loading."
+            }
+            Self::Move => {
+                "Move Session is disabled until background service status finishes loading."
+            }
+        }
+    }
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Clear => "Clear saved data",
+            Self::ClearToolState => "Clear saved tool state",
+            Self::Duplicate => "Duplicate Session",
+            Self::Move => "Move Session",
         }
     }
 }

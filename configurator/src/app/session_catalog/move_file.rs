@@ -1,12 +1,14 @@
 use std::path::{Path, PathBuf};
 
-use crate::models::{DaemonRuntimeStatus, SessionCatalogActionResult, SessionCatalogItem};
+use crate::models::{
+    DaemonRuntimeStatus, SessionCatalogActionResult, SessionCatalogItem, SessionCatalogOperation,
+};
 
 use super::super::blocking_jobs::{BlockingJobKind, run_blocking};
 use super::super::daemon_setup::load_daemon_runtime_status_sync;
 use super::{
-    CatalogOperation, RuntimeLockKind, acquire_runtime_lock_for_inactive_operation,
-    load_session_catalog_sync, service_status_blocker,
+    RuntimeLockKind, acquire_runtime_lock_for_inactive_operation, load_session_catalog_sync,
+    service_status_blocker,
 };
 
 pub(crate) async fn move_session_catalog_entry(
@@ -35,13 +37,13 @@ fn move_session_catalog_entry_sync(
 
     let _daemon_lock = acquire_runtime_lock_for_inactive_operation(
         RuntimeLockKind::Daemon,
-        CatalogOperation::Move,
+        SessionCatalogOperation::Move,
     )?;
     let _overlay_lock = acquire_runtime_lock_for_inactive_operation(
         RuntimeLockKind::Overlay,
-        CatalogOperation::Move,
+        SessionCatalogOperation::Move,
     )?;
-    if let Some(blocker) = service_status_blocker(Some(status), CatalogOperation::Move) {
+    if let Some(blocker) = service_status_blocker(Some(status), SessionCatalogOperation::Move) {
         return Err(blocker);
     }
 

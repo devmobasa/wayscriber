@@ -1,13 +1,13 @@
-# Wayscriber Configurator (Iced)
+# Wayscriber Configurator (GTK4)
 
-Native Rust desktop UI for editing `~/.config/wayscriber/config.toml`. The application is built on [`iced`](https://github.com/iced-rs/iced) and reuses the `wayscriber::Config` types directly, so validation and defaults match the CLI. It also retains the original TOML document so comments, ordering, and settings unknown to this build survive a save.
+Native Rust desktop UI for editing `~/.config/wayscriber/config.toml`. The application is built on GTK4 and libadwaita through [Relm4](https://relm4.org) and reuses the `wayscriber::Config` types directly, so validation and defaults match the CLI. It also retains the original TOML document so comments, ordering, and settings unknown to this build survive a save.
 
 `config.toml` changes only through an explicit user edit action, never automatically. This program writes it when you press **Save**; the overlay writes it from three narrow editors — shortcut editing, preset slots, and the quick-color palette — each of which rewrites only its own key and backs the file up first. Nothing else in Wayscriber — daemon, tray, startup, shutdown, validation — ever changes it, so an incidental preference toggle applies to that run and sends you here for a durable change.
 
 ## Prerequisites
 
 - Rust toolchain 1.95 or newer.
-- System dependencies required by `iced`'s Wayland `tiny-skia` renderer.
+- System development packages for GTK 4 and libadwaita.
 
 ## Run It
 
@@ -16,9 +16,9 @@ cd configurator
 cargo run
 ```
 
-The configurator uses Iced's software `tiny-skia` renderer on Wayland. It does
-not compile the GPU renderer or portal D-Bus implementation into the
-configurator binary.
+The configurator renders through GTK 4 and libadwaita. It does not compile the
+overlay's GPU renderer or the portal D-Bus implementation into the configurator
+binary.
 
 The window loads the current config, lets you tweak values across the tabbed sections, and writes
 changes back through the guarded `ConfigDocument` save interface when you press Save. Loading,

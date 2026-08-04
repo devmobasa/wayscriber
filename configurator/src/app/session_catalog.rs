@@ -5,7 +5,9 @@ use std::process::Command;
 
 use wayscriber::session::try_lock_exclusive;
 
-use crate::models::{DaemonRuntimeStatus, SessionCatalogActionResult, SessionCatalogItem};
+use crate::models::{
+    DaemonRuntimeStatus, SessionCatalogActionResult, SessionCatalogItem, SessionCatalogOperation,
+};
 
 use super::blocking_jobs::{BlockingJobKind, run_blocking};
 use super::daemon_setup::load_daemon_runtime_status_sync;
@@ -88,13 +90,14 @@ pub(super) async fn clear_session_catalog_entry(
         let item = find_session_catalog_item(&id)?;
         let _daemon_lock = acquire_runtime_lock_for_inactive_operation(
             RuntimeLockKind::Daemon,
-            CatalogOperation::Clear,
+            SessionCatalogOperation::Clear,
         )?;
         let _overlay_lock = acquire_runtime_lock_for_inactive_operation(
             RuntimeLockKind::Overlay,
-            CatalogOperation::Clear,
+            SessionCatalogOperation::Clear,
         )?;
-        if let Some(blocker) = service_status_blocker(Some(&status), CatalogOperation::Clear) {
+        if let Some(blocker) = service_status_blocker(Some(&status), SessionCatalogOperation::Clear)
+        {
             return Err(blocker);
         }
 
@@ -121,14 +124,14 @@ pub(super) async fn clear_session_catalog_tool_state_entry(
         let item = find_session_catalog_item(&id)?;
         let _daemon_lock = acquire_runtime_lock_for_inactive_operation(
             RuntimeLockKind::Daemon,
-            CatalogOperation::ClearToolState,
+            SessionCatalogOperation::ClearToolState,
         )?;
         let _overlay_lock = acquire_runtime_lock_for_inactive_operation(
             RuntimeLockKind::Overlay,
-            CatalogOperation::ClearToolState,
+            SessionCatalogOperation::ClearToolState,
         )?;
         if let Some(blocker) =
-            service_status_blocker(Some(&status), CatalogOperation::ClearToolState)
+            service_status_blocker(Some(&status), SessionCatalogOperation::ClearToolState)
         {
             return Err(blocker);
         }
@@ -145,43 +148,11 @@ pub(super) async fn clear_session_catalog_tool_state_entry(
     .await
 }
 
-pub(super) fn session_clear_cached_status_blocker(
-    status: Option<&DaemonRuntimeStatus>,
-) -> Option<String> {
-    service_status_blocker(status, CatalogOperation::Clear)
-}
-
-pub(super) fn session_clear_tool_state_cached_status_blocker(
-    status: Option<&DaemonRuntimeStatus>,
-) -> Option<String> {
-    service_status_blocker(status, CatalogOperation::ClearToolState)
-}
-
-pub(super) fn session_duplicate_cached_status_blocker(
-    status: Option<&DaemonRuntimeStatus>,
-) -> Option<String> {
-    service_status_blocker(status, CatalogOperation::Duplicate)
-}
-
-pub(super) fn session_move_cached_status_blocker(
-    status: Option<&DaemonRuntimeStatus>,
-) -> Option<String> {
-    service_status_blocker(status, CatalogOperation::Move)
-}
-
 fn service_status_blocker(
     status: Option<&DaemonRuntimeStatus>,
-    operation: CatalogOperation,
+    operation: SessionCatalogOperation,
 ) -> Option<String> {
-    match status {
-        Some(status) if status.service_active => Some(
-            operation
-                .running_message(RuntimeLockKind::Daemon)
-                .to_string(),
-        ),
-        Some(_) => None,
-        None => Some(operation.waiting_for_status_message().to_string()),
-    }
+    operation.cached_status_blocker(status).map(str::to_string)
 }
 
 fn load_session_catalog_sync() -> Result<Vec<SessionCatalogItem>, String> {
@@ -272,14 +243,6 @@ enum RuntimeLockKind {
     Overlay,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum CatalogOperation {
-    Clear,
-    ClearToolState,
-    Duplicate,
-    Move,
-}
-
 impl RuntimeLockKind {
     fn path(self) -> PathBuf {
         match self {
@@ -296,56 +259,11 @@ impl RuntimeLockKind {
     }
 }
 
-impl CatalogOperation {
-    fn running_message(self, kind: RuntimeLockKind) -> &'static str {
-        match (self, kind) {
-            (Self::Clear, RuntimeLockKind::Daemon) => {
-                "Clear saved data is disabled while the background service or a manually started daemon is running. Stop it first or clear from the overlay."
-            }
-            (Self::Clear, RuntimeLockKind::Overlay) => {
-                "Clear saved data is disabled while an overlay is running. Use the overlay Clear action for the active session."
-            }
-            (Self::ClearToolState, RuntimeLockKind::Daemon) => {
-                "Clear saved tool state is disabled while the background service or a manually started daemon is running. Use the overlay command palette for the active session or stop it first."
-            }
-            (Self::ClearToolState, RuntimeLockKind::Overlay) => {
-                "Clear saved tool state is disabled while an overlay is running. Use the command palette for the active session."
-            }
-            (Self::Duplicate, RuntimeLockKind::Daemon) => {
-                "Duplicate Session is disabled while the background service or a manually started daemon is running. Stop it first or duplicate from the overlay after opening the session."
-            }
-            (Self::Duplicate, RuntimeLockKind::Overlay) => {
-                "Duplicate Session is disabled while an overlay is running. Use Save As from the overlay for the active session."
-            }
-            (Self::Move, RuntimeLockKind::Daemon) => {
-                "Move Session is disabled while the background service or a manually started daemon is running. Stop it first or move from the overlay after opening the session."
-            }
-            (Self::Move, RuntimeLockKind::Overlay) => {
-                "Move Session is disabled while an overlay is running. Active session moves must use a runtime transaction."
-            }
-        }
-    }
-
-    fn waiting_for_status_message(self) -> &'static str {
-        match self {
-            Self::Clear => {
-                "Clear saved data is disabled until background service status finishes loading."
-            }
-            Self::ClearToolState => {
-                "Clear saved tool state is disabled until background service status finishes loading."
-            }
-            Self::Duplicate => {
-                "Duplicate Session is disabled until background service status finishes loading."
-            }
-            Self::Move => {
-                "Move Session is disabled until background service status finishes loading."
-            }
-        }
-    }
-}
-
 #[cfg(test)]
-fn runtime_lock_active(kind: RuntimeLockKind, operation: CatalogOperation) -> Result<bool, String> {
+fn runtime_lock_active(
+    kind: RuntimeLockKind,
+    operation: SessionCatalogOperation,
+) -> Result<bool, String> {
     let path = kind.path();
     let file = match OpenOptions::new().read(true).write(true).open(&path) {
         Ok(file) => file,
@@ -377,12 +295,12 @@ fn runtime_lock_active(kind: RuntimeLockKind, operation: CatalogOperation) -> Re
 
 #[cfg(test)]
 fn acquire_runtime_lock_for_clear(kind: RuntimeLockKind) -> Result<File, String> {
-    acquire_runtime_lock_for_inactive_operation(kind, CatalogOperation::Clear)
+    acquire_runtime_lock_for_inactive_operation(kind, SessionCatalogOperation::Clear)
 }
 
 fn acquire_runtime_lock_for_inactive_operation(
     kind: RuntimeLockKind,
-    operation: CatalogOperation,
+    operation: SessionCatalogOperation,
 ) -> Result<File, String> {
     let path = kind.path();
     if let Some(parent) = path.parent() {
@@ -414,7 +332,11 @@ fn acquire_runtime_lock_for_inactive_operation(
     match try_lock_exclusive(&file) {
         Ok(()) => Ok(file),
         Err(err) if err.kind() == ErrorKind::WouldBlock => {
-            Err(operation.running_message(kind).to_string())
+            let message = match kind {
+                RuntimeLockKind::Daemon => operation.running_daemon_message(),
+                RuntimeLockKind::Overlay => operation.running_overlay_message(),
+            };
+            Err(message.to_string())
         }
         Err(err) => Err(format!(
             "{} is disabled because the {} lock could not be reserved: {} ({err})",
@@ -425,24 +347,9 @@ fn acquire_runtime_lock_for_inactive_operation(
     }
 }
 
-impl CatalogOperation {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Clear => "Clear saved data",
-            Self::ClearToolState => "Clear saved tool state",
-            Self::Duplicate => "Duplicate Session",
-            Self::Move => "Move Session",
-        }
-    }
-}
-
 #[cfg(test)]
 fn drop_lock(file: File) {
     drop(file);
-}
-
-pub(super) fn session_artifact_status_label(item: &SessionCatalogItem) -> String {
-    item.artifacts.status_label()
 }
 
 #[cfg(test)]

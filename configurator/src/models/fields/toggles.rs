@@ -83,7 +83,7 @@ pub enum ToggleField {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Copy for cheap capture in iced callback closures.
+/// Copy for cheap capture in GTK signal-handler closures.
 pub enum PresetToggleField {
     FillEnabled,
     TextBackgroundEnabled,
@@ -173,7 +173,7 @@ pub enum TextField {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Copy for cheap capture in iced callback closures.
+/// Copy for cheap capture in GTK signal-handler closures.
 pub enum PresetTextField {
     Name,
     ColorName,
@@ -182,12 +182,6 @@ pub enum PresetTextField {
     FontSize,
     ArrowLength,
     ArrowAngle,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TripletField {
-    DrawingColorRgb,
-    QuickColorRgb(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

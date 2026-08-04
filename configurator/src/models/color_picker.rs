@@ -17,8 +17,20 @@ pub enum ColorPickerId {
     ExportPdfLabelBackground,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct ColorPickerValue {
-    pub rgb: [f64; 3],
-    pub alpha: Option<f64>,
+impl ColorPickerId {
+    /// Whether this picker edits a four-component color rather than RGB.
+    pub(crate) fn uses_alpha(self) -> bool {
+        matches!(
+            self,
+            Self::StatusBarBg
+                | Self::StatusBarText
+                | Self::HighlightFill
+                | Self::HighlightOutline
+                | Self::HelpBg
+                | Self::HelpBorder
+                | Self::HelpText
+                | Self::ExportPdfLabelText
+                | Self::ExportPdfLabelBackground
+        )
+    }
 }
