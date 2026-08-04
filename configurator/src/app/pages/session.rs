@@ -8,6 +8,15 @@
 //! card would render — entry contents, button sensitivity, the two-step
 //! clear, search filtering — is written in place by those closures, with the
 //! entry handlers blocked so a refresh is never mistaken for typing.
+//!
+//! The two-step clear is the one thing a card cannot own. At most one row may
+//! be armed, and the confirmation has to survive the rebuild that replaces
+//! every card, so the page-level binding holds it: it reconciles the id on
+//! screen against the model's pending id through
+//! [`dialog`](super::super::dialog) and hands each card the answer. What that
+//! confirmation looks like belongs to [`chrome`](super::super::chrome) —
+//! inline buttons on the baseline floor, a dialog on the modern one — so
+//! nothing here asks which channel it is on.
 
 use relm4::prelude::*;
 use relm4::{adw, gtk};
@@ -21,6 +30,8 @@ use crate::models::{
     SessionStorageModeOption, TabId, TextField, ToggleField,
 };
 
+use super::super::chrome::{self, PresentedConfirmation};
+use super::super::dialog::{Confirmation, DialogTransition, reconcile};
 use super::super::search::{AppSearchSummary, SearchArea};
 use super::super::state::ConfiguratorApp;
 use super::{BuiltPage, PageBuilder, set_text_blocked};
@@ -213,6 +224,12 @@ fn catalog_section(page: &mut PageBuilder) {
 
     page.custom(&body);
     let mut cards: Vec<BoundCatalogCard> = Vec::new();
+    // The armed confirmation lives here rather than in a card's refresh
+    // closure. Those closures are `Fn` and are replaced wholesale whenever
+    // the catalog's shape changes, while at most one question stands across
+    // the whole page — so the page-level binding, which is `FnMut` and
+    // outlives every card, is the one owner that can hold it.
+    let mut presented: Option<PresentedClear> = None;
     page.bind(move |app, summary| {
         let catalog = &app.session_catalog;
         let gates = CatalogGates::of(app);
@@ -239,11 +256,103 @@ fn catalog_section(page: &mut PageBuilder) {
         {
             cards = rebuild_items(&list, &layout, &sender);
         }
+
+        // The identity of a clear confirmation is the session id it names.
+        // Bound to its own statement so the read of what is on screen is over
+        // before the transition is applied to it.
+        let transition = reconcile(
+            presented.as_ref().map(|clear| &clear.id),
+            catalog.pending_clear_id.as_ref(),
+        );
+        presented = apply_clear_transition(presented.take(), transition, &list, &sender, app);
+
+        let armed = presented.as_ref().map(|clear| clear.id.as_str());
         for (item, card) in catalog.items.iter().zip(cards.iter()) {
-            let values = catalog_row_values(app, summary, &gates, item);
+            let values = catalog_row_values(app, summary, &gates, armed, item);
             (card.refresh)(&values);
         }
     });
+}
+
+/// The clear confirmation this page has on screen, and the session it asks
+/// about.
+struct PresentedClear {
+    id: String,
+    chrome: PresentedConfirmation,
+}
+
+/// Applies one reconciliation step to the confirmation on screen.
+///
+/// Closing always precedes presenting, so the page never holds two questions
+/// at once, and a close from here is reconciliation rather than an answer:
+/// the model has already moved past the question, so nothing is sent back.
+fn apply_clear_transition(
+    presented: Option<PresentedClear>,
+    transition: DialogTransition<String>,
+    parent: &gtk::Box,
+    sender: &ComponentSender<ConfiguratorApp>,
+    app: &ConfiguratorApp,
+) -> Option<PresentedClear> {
+    match transition {
+        DialogTransition::Unchanged => presented,
+        DialogTransition::Close(_) => {
+            close_presented(presented);
+            None
+        }
+        DialogTransition::Present(id) | DialogTransition::Replace { present: id, .. } => {
+            close_presented(presented);
+            Some(present_clear(id, parent, sender, app))
+        }
+    }
+}
+
+fn close_presented(presented: Option<PresentedClear>) {
+    if let Some(clear) = presented {
+        chrome::close_confirmation(clear.chrome);
+    }
+}
+
+fn present_clear(
+    id: String,
+    parent: &gtk::Box,
+    sender: &ComponentSender<ConfiguratorApp>,
+    app: &ConfiguratorApp,
+) -> PresentedClear {
+    let heading = {
+        // The display name if the catalog still lists the row, the id
+        // otherwise: a question already accepted stays answerable even if the
+        // catalog reloads underneath it.
+        let name = app
+            .session_catalog
+            .items
+            .iter()
+            .find(|item| item.id == id)
+            .map_or(id.as_str(), |item| item.display_name.as_str());
+        format!("Clear saved data for \"{name}\"?")
+    };
+    let chrome = chrome::present_confirmation(
+        sender,
+        parent,
+        &heading,
+        CLEAR_CONFIRMATION_BODY,
+        &clear_confirmation(&id),
+    );
+    PresentedClear { id, chrome }
+}
+
+/// What clearing one session's saved data does, in the words the status line
+/// already uses for the same question.
+const CLEAR_CONFIRMATION_BODY: &str = "This removes the session's primary file and its non-lock sidecars. Boards and configuration are not affected.";
+
+/// The question for one row, in the two messages that answer it. Built the
+/// same way for the card's inline controls and for the dialog, so the answer
+/// names the same row either way.
+fn clear_confirmation(id: &str) -> Confirmation {
+    Confirmation::new(
+        "Confirm Clear",
+        Message::SessionCatalogClearConfirmed(id.to_string()),
+        Message::SessionCatalogClearCanceled,
+    )
 }
 
 /// Everything a rebuilt card would render, and nothing else.
@@ -345,6 +454,7 @@ fn catalog_row_values(
     app: &ConfiguratorApp,
     summary: &AppSearchSummary,
     gates: &CatalogGates,
+    armed: Option<&str>,
     item: &SessionCatalogItem,
 ) -> CatalogRowValues {
     let catalog = &app.session_catalog;
@@ -362,7 +472,10 @@ fn catalog_row_values(
         actions_enabled: !gates.busy,
         tool_state_enabled: !gates.busy && !gates.tool_state_blocked,
         clear_enabled: !gates.busy && !gates.clear_blocked,
-        clear_armed: clear_armed(catalog.pending_clear_id.as_deref(), id),
+        // The id the page has on screen, not the model's pending id: the
+        // reducer decides when a question goes up and comes down, and every
+        // card reads the same answer it gave.
+        clear_armed: clear_armed(armed, id),
         rename,
         duplicate,
         move_target,
@@ -499,20 +612,12 @@ fn item_card(item: &CatalogItemLayout, sender: &ComponentSender<ConfiguratorApp>
     clear.add_css_class("destructive-action");
     danger.append(&clear);
 
-    // Both halves of the two-step clear exist from the start; arming the
-    // pending id swaps which one is visible.
-    let confirm = row_box();
-    let confirm_button = message_button(
-        "Confirm Clear",
-        sender,
-        Message::SessionCatalogClearConfirmed(item.id.clone()),
-    );
-    confirm_button.add_css_class("destructive-action");
-    confirm.append(&confirm_button);
-    let cancel_button = message_button("Cancel", sender, Message::SessionCatalogClearCanceled);
-    cancel_button.add_css_class("flat");
-    confirm.append(&cancel_button);
-    danger.append(&confirm);
+    // The half that answers exists from the start, on the channels that
+    // answer inline: arming the row swaps which half is visible. The modern
+    // channel attaches nothing here, because its dialog is the whole
+    // affordance and the button that asks keeps its place.
+    let confirm = chrome::confirmation_controls(sender, &clear_confirmation(&item.id));
+    confirm.attach(&danger);
 
     let forget = message_button(
         "Forget",
@@ -540,9 +645,12 @@ fn item_card(item: &CatalogItemLayout, sender: &ComponentSender<ConfiguratorApp>
         set_sensitive(&forget, values.actions_enabled);
         set_sensitive(&tool_state, values.tool_state_enabled);
 
-        set_visible(&clear, !values.clear_armed);
+        // The button that asks steps aside only for controls that take its
+        // place; a dialog takes no space in this row, so on that channel it
+        // stays where it is behind a modal question it cannot receive.
+        set_visible(&clear, !(values.clear_armed && confirm.is_inline()));
         set_sensitive(&clear, values.clear_enabled);
-        set_visible(&confirm, values.clear_armed);
+        confirm.set_presented(values.clear_armed);
     });
 
     CatalogRow { card, refresh }
@@ -591,8 +699,8 @@ fn input_row(row: InputRow<'_>, sender: &ComponentSender<ConfiguratorApp>) -> In
     }
 }
 
-fn clear_armed(pending: Option<&str>, id: &str) -> bool {
-    pending == Some(id)
+fn clear_armed(armed: Option<&str>, id: &str) -> bool {
+    armed == Some(id)
 }
 
 fn item_visible(summary: &AppSearchSummary, id: &str) -> bool {
@@ -755,6 +863,7 @@ mod tests {
             &app,
             &summary,
             &CatalogGates::of(&app),
+            None,
             &app.session_catalog.items[0],
         );
         assert_eq!(values.rename, "First draft");
@@ -795,6 +904,7 @@ mod tests {
             &app,
             &summary,
             &CatalogGates::of(&app),
+            None,
             &app.session_catalog.items[0],
         );
         assert!(idle.actions_enabled);
@@ -807,6 +917,7 @@ mod tests {
             &app,
             &summary,
             &CatalogGates::of(&app),
+            None,
             &app.session_catalog.items[0],
         );
         assert!(changed.rename_enabled);
@@ -816,6 +927,7 @@ mod tests {
             &app,
             &summary,
             &CatalogGates::of(&app),
+            None,
             &app.session_catalog.items[0],
         );
         assert!(!busy.actions_enabled);
@@ -831,19 +943,37 @@ mod tests {
         assert!(!clear_armed(None, "one"));
     }
 
+    /// What one refresh leaves as the identity on screen, applied without the
+    /// chrome record so the test builds no widget. The arms mirror
+    /// [`apply_clear_transition`] exactly; only the payload differs.
+    fn next_presented(presented: Option<String>, app: &ConfiguratorApp) -> Option<String> {
+        match reconcile(
+            presented.as_ref(),
+            app.session_catalog.pending_clear_id.as_ref(),
+        ) {
+            DialogTransition::Unchanged => presented,
+            DialogTransition::Close(_) => None,
+            DialogTransition::Present(id) | DialogTransition::Replace { present: id, .. } => {
+                Some(id)
+            }
+        }
+    }
+
     /// Confirming consumes the pending id as it sets the catalog busy, so the
-    /// card leaves its armed state in the same refresh that starts the work:
-    /// the Confirm/Cancel pair goes away and the button that asks comes back
-    /// unpressable, rather than offering a confirm the model would refuse.
+    /// next refresh reads the reducer's close row: the Confirm/Cancel pair
+    /// goes away and the button that asks comes back unpressable, rather than
+    /// offering a confirm the model would refuse.
     #[test]
     fn a_confirmed_clear_collapses_the_armed_row_into_the_busy_one() {
         let mut app = app_with_items(vec![test_item("one", "First")]);
         app.session_catalog.pending_clear_id = Some("one".to_string());
         let summary = app.search_summary();
+        let presented = next_presented(None, &app);
         let armed = catalog_row_values(
             &app,
             &summary,
             &CatalogGates::of(&app),
+            presented.as_deref(),
             &app.session_catalog.items[0],
         );
         assert!(armed.clear_armed);
@@ -852,15 +982,53 @@ mod tests {
         // answered question consumed, the clear running.
         app.session_catalog.pending_clear_id = None;
         app.session_catalog.busy = true;
+        let presented = next_presented(presented, &app);
         let running = catalog_row_values(
             &app,
             &summary,
             &CatalogGates::of(&app),
+            presented.as_deref(),
             &app.session_catalog.items[0],
         );
 
+        assert!(presented.is_none());
         assert!(!running.clear_armed);
         assert!(!running.clear_enabled);
+    }
+
+    /// Exactly one card is armed at a time, and arming another moves the
+    /// question rather than adding one: the row that was armed goes back to
+    /// offering its ask, and only the newly accepted row answers.
+    #[test]
+    fn arming_another_card_leaves_exactly_one_armed() {
+        let mut app = app_with_items(vec![test_item("one", "First"), test_item("two", "Second")]);
+        app.session_catalog.pending_clear_id = Some("one".to_string());
+        let summary = app.search_summary();
+        let presented = next_presented(None, &app);
+        assert_eq!(presented.as_deref(), Some("one"));
+
+        app.session_catalog.pending_clear_id = Some("two".to_string());
+        let presented = next_presented(presented, &app);
+        assert_eq!(presented.as_deref(), Some("two"));
+
+        let gates = CatalogGates::of(&app);
+        let first = catalog_row_values(
+            &app,
+            &summary,
+            &gates,
+            presented.as_deref(),
+            &app.session_catalog.items[0],
+        );
+        let second = catalog_row_values(
+            &app,
+            &summary,
+            &gates,
+            presented.as_deref(),
+            &app.session_catalog.items[1],
+        );
+
+        assert!(!first.clear_armed);
+        assert!(second.clear_armed);
     }
 
     #[test]

@@ -33,6 +33,14 @@
 //!   be invisible to every lane that walks the tree, and the checker would
 //!   report it as unreachable source.
 //!
+//! A twin may render nothing. The confirmation controls below are that case:
+//! the modern channel answers in a dialog, so its inline half builds no
+//! widget at all rather than leaving a second way to answer the same
+//! question behind the dialog. The record and its methods stay
+//! always-compiled either way, so the caller reveals, presents, and closes
+//! without asking which channel it is on. *Which* question is up is not
+//! decided here at all — [`super::dialog`] owns that, channel-neutrally.
+//!
 //! When the baseline floor reaches the modern floor, delete every
 //! `cfg(not(feature = "adw-modern"))` half and collapse what is left.
 
@@ -43,6 +51,7 @@ use adw::prelude::*;
 
 use crate::messages::Message;
 
+use super::dialog::{CANCEL_RESPONSE, CONFIRM_RESPONSE, Confirmation};
 use super::pages::Binding;
 use super::state::ConfiguratorApp;
 
@@ -180,4 +189,233 @@ fn set_active_blocked(toggles: &adw::ToggleGroup, handler: &SignalHandlerId, ind
     toggles.block_signal(handler);
     toggles.set_active(index);
     toggles.unblock_signal(handler);
+}
+
+// ---------------------------------------------------------------------------
+// Confirmations
+// ---------------------------------------------------------------------------
+//
+// A destructive action asks before it acts, and the two channels ask
+// differently: the baseline floor has no dialog worth using, so the answer is
+// a pair of buttons beside the control that asked, while the modern floor has
+// `AdwAlertDialog` and uses it. That makes a twin pair with an unusual shape —
+// one channel's affordance is *nothing* — so the pair is written as two
+// constructors over one always-compiled record, and the caller reveals,
+// presents, and closes without ever asking which channel it is on.
+//
+// Which of the two is showing is not decided here: [`super::dialog`] owns
+// that, channel-neutrally, and both constructors below are what its
+// `Present`/`Close` outputs land on.
+
+/// The inline Confirm/Cancel controls a channel answers with, if it has any.
+///
+/// Baseline: the pair of buttons, hidden until the question is up. Modern:
+/// nothing at all — the dialog is the whole affordance, and a second set of
+/// controls sitting behind it would be a second way to answer one question.
+pub(crate) struct ConfirmationControls {
+    /// `None` in the modern channel.
+    row: Option<gtk::Widget>,
+}
+
+impl ConfirmationControls {
+    /// Adds the controls to the container the consumer answers in.
+    ///
+    /// Nothing is added in the modern channel, which is what keeps the
+    /// caller's container free of an empty box it would have to reason about.
+    pub(crate) fn attach(&self, parent: &gtk::Box) {
+        if let Some(row) = &self.row {
+            parent.append(row);
+        }
+    }
+
+    /// Puts the controls on screen, or takes them off.
+    ///
+    /// This is the baseline channel's whole reading of `Present`/`Close`. In
+    /// the modern channel it is a no-op: the dialog was already presented and
+    /// closed by the twin below.
+    pub(crate) fn set_presented(&self, presented: bool) {
+        let Some(row) = &self.row else {
+            return;
+        };
+        // The widget's own flag, never `is_visible`: a row inside a hidden
+        // card reports invisible while its own flag still says otherwise, and
+        // skipping the write there would leak the stale state the moment the
+        // card comes back.
+        if row.get_visible() != presented {
+            row.set_visible(presented);
+        }
+    }
+
+    /// Whether this channel answers in the caller's own layout.
+    ///
+    /// The control that asks steps aside only for controls that take its
+    /// place. A dialog takes no space in the row it came from, so in the
+    /// modern channel the control that asks stays exactly where it was and
+    /// the caller reads `false` here to say so.
+    pub(crate) fn is_inline(&self) -> bool {
+        self.row.is_some()
+    }
+}
+
+/// Inline Confirm/Cancel controls — baseline twin.
+///
+/// Built hidden, because the question is not up yet: the owner reveals them
+/// when [`super::dialog::reconcile`] says to and hides them again on the
+/// close row, so a rebuilt card never flashes an armed state it does not
+/// have.
+#[cfg(not(feature = "adw-modern"))]
+pub(crate) fn confirmation_controls(
+    sender: &ComponentSender<ConfiguratorApp>,
+    confirmation: &Confirmation,
+) -> ConfirmationControls {
+    let row = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(6)
+        .visible(false)
+        .build();
+
+    let confirm = response_button(
+        sender,
+        confirmation,
+        CONFIRM_RESPONSE,
+        confirmation.confirm_label(),
+    );
+    confirm.add_css_class("destructive-action");
+    row.append(&confirm);
+
+    let cancel = response_button(sender, confirmation, CANCEL_RESPONSE, "Cancel");
+    cancel.add_css_class("flat");
+    row.append(&cancel);
+
+    ConfirmationControls {
+        row: Some(row.upcast()),
+    }
+}
+
+/// One button that answers with a named response.
+///
+/// The response id is the same vocabulary the dialog uses, and the message it
+/// sends comes from the same [`Confirmation::message_for`]: the two channels
+/// differ in what the user presses, never in what the press means.
+#[cfg(not(feature = "adw-modern"))]
+fn response_button(
+    sender: &ComponentSender<ConfiguratorApp>,
+    confirmation: &Confirmation,
+    response: &'static str,
+    label: &str,
+) -> gtk::Button {
+    let button = gtk::Button::builder()
+        .label(label)
+        .valign(gtk::Align::Center)
+        .build();
+    let sender = sender.clone();
+    let confirmation = confirmation.clone();
+    button.connect_clicked(move |_| sender.input(confirmation.message_for(response)));
+    button
+}
+
+/// Inline Confirm/Cancel controls — modern twin, which renders none.
+#[cfg(feature = "adw-modern")]
+pub(crate) fn confirmation_controls(
+    _sender: &ComponentSender<ConfiguratorApp>,
+    _confirmation: &Confirmation,
+) -> ConfirmationControls {
+    ConfirmationControls { row: None }
+}
+
+/// The confirmation a channel currently has on screen — baseline twin.
+///
+/// There is nothing to hold: the inline controls belong to the card or the
+/// header that built them, and revealing them is all presenting means here.
+/// The record is the fact that a question is up, and no more.
+#[cfg(not(feature = "adw-modern"))]
+pub(crate) struct PresentedConfirmation;
+
+/// The confirmation a channel currently has on screen — modern twin.
+///
+/// The dialog and the handler that turns a user answer into a message are
+/// held together because closing on the reconcile path has to silence the
+/// handler before it closes the dialog: `AdwAlertDialog` reports a close it
+/// got no answer for as its close response, which would otherwise arrive as
+/// a Cancel the user never gave.
+#[cfg(feature = "adw-modern")]
+pub(crate) struct PresentedConfirmation {
+    dialog: adw::AlertDialog,
+    response_handler_id: SignalHandlerId,
+}
+
+/// Puts a confirmation on screen — baseline twin.
+///
+/// The heading and body have no place in this channel: the model already put
+/// the same warning on the status line, and the answer is the pair of buttons
+/// the caller revealed. So this only records that the question is up.
+#[cfg(not(feature = "adw-modern"))]
+pub(crate) fn present_confirmation(
+    _sender: &ComponentSender<ConfiguratorApp>,
+    _parent: &impl IsA<gtk::Widget>,
+    _heading: &str,
+    _body: &str,
+    _confirmation: &Confirmation,
+) -> PresentedConfirmation {
+    PresentedConfirmation
+}
+
+/// Puts a confirmation on screen — modern twin.
+///
+/// An `AdwAlertDialog` over `parent`'s window, with Cancel as both the close
+/// response and the default, so Escape and the system close control land on
+/// the answer that withdraws a destructive question. Every way the dialog can
+/// end reaches the same [`Confirmation::message_for`] the baseline buttons
+/// use, so the update layer sees one protocol.
+#[cfg(feature = "adw-modern")]
+pub(crate) fn present_confirmation(
+    sender: &ComponentSender<ConfiguratorApp>,
+    parent: &impl IsA<gtk::Widget>,
+    heading: &str,
+    body: &str,
+    confirmation: &Confirmation,
+) -> PresentedConfirmation {
+    let dialog = adw::AlertDialog::new(Some(heading), Some(body));
+    dialog.add_response(CANCEL_RESPONSE, "Cancel");
+    dialog.add_response(CONFIRM_RESPONSE, confirmation.confirm_label());
+    dialog.set_response_appearance(CONFIRM_RESPONSE, adw::ResponseAppearance::Destructive);
+    dialog.set_default_response(Some(CANCEL_RESPONSE));
+    dialog.set_close_response(CANCEL_RESPONSE);
+
+    let response_handler_id = {
+        let sender = sender.clone();
+        let confirmation = confirmation.clone();
+        dialog.connect_response(None, move |_, response| {
+            sender.input(confirmation.message_for(response));
+        })
+    };
+
+    dialog.present(Some(parent));
+    PresentedConfirmation {
+        dialog,
+        response_handler_id,
+    }
+}
+
+/// Takes a confirmation off screen because the model no longer holds it —
+/// baseline twin.
+///
+/// Nothing to close: hiding the inline controls is the owner's next write,
+/// driven by the same close row that got it here.
+#[cfg(not(feature = "adw-modern"))]
+pub(crate) fn close_confirmation(_presented: PresentedConfirmation) {}
+
+/// Takes a confirmation off screen because the model no longer holds it —
+/// modern twin.
+///
+/// The handler is blocked *before* the dialog closes. This close is
+/// reconciliation, not an answer — the model already acted on, or withdrew,
+/// the question — and `AdwAlertDialog` would otherwise report the close
+/// response, sending a Cancel that answers a question nobody is asking.
+#[cfg(feature = "adw-modern")]
+pub(crate) fn close_confirmation(presented: PresentedConfirmation) {
+    presented
+        .dialog
+        .block_signal(&presented.response_handler_id);
+    presented.dialog.force_close();
 }

@@ -16,6 +16,8 @@ use adw::prelude::*;
 use crate::messages::{CommandMessage, Message};
 use crate::models::{StartupRequest, TabId};
 
+use super::chrome::{self, ConfirmationControls, PresentedConfirmation};
+use super::dialog::{Confirmation, DialogTransition, reconcile};
 use super::effects::Effect;
 use super::pages::{self, Binding};
 use super::search::AppSearchSummary;
@@ -55,8 +57,16 @@ pub(crate) struct AppWidgets {
     migration_seen: String,
     save_button: gtk::Button,
     defaults_button: gtk::Button,
-    defaults_confirm_button: gtk::Button,
-    defaults_cancel_button: gtk::Button,
+    /// The controls that answer the Defaults question inline, on the channels
+    /// that answer inline at all.
+    defaults_controls: ConfirmationControls,
+    /// The Defaults question this shell has on screen.
+    ///
+    /// The Defaults control is shell chrome, not a page row, so there is no
+    /// page binding to hold it — it lives here and is reached only through
+    /// the `&mut Self::Widgets` that `update_view` already holds, which is
+    /// what keeps one owner without shared ownership or interior mutability.
+    defaults_confirmation: Option<PresentedConfirmation>,
     reload_button: gtk::Button,
     sidebar_rows: Vec<(TabId, gtk::ListBoxRow)>,
     sidebar: gtk::ListBox,
@@ -168,10 +178,10 @@ impl Component for ConfiguratorApp {
             reload_button.connect_clicked(move |_| sender.input(Message::ReloadRequested));
         }
         // Asking for the reset and answering for it are different messages,
-        // so they are different controls: while the confirmation stands, the
-        // button that asks steps aside for the pair that answers. All three
-        // exist from the start and visibility picks between them, which is
-        // what keeps a repeat of the same press from ever applying defaults.
+        // so they are different controls, and a repeat of the press that asks
+        // can never apply defaults. What answers is the channel's business:
+        // chrome hands back inline Confirm/Cancel buttons where the floor has
+        // no dialog worth using, and nothing where it does.
         let defaults_button = gtk::Button::with_label("Defaults");
         {
             let sender = sender.clone();
@@ -179,32 +189,10 @@ impl Component for ConfiguratorApp {
                 sender.input(Message::ResetToDefaultsRequested);
             });
         }
-        let defaults_confirm_button = gtk::Button::builder()
-            .label("Confirm Defaults")
-            .visible(false)
-            .css_classes(["destructive-action"])
-            .build();
-        {
-            let sender = sender.clone();
-            defaults_confirm_button.connect_clicked(move |_| {
-                sender.input(Message::ResetToDefaultsConfirmed);
-            });
-        }
-        let defaults_cancel_button = gtk::Button::builder()
-            .label("Cancel")
-            .visible(false)
-            .css_classes(["flat"])
-            .build();
-        {
-            let sender = sender.clone();
-            defaults_cancel_button.connect_clicked(move |_| {
-                sender.input(Message::ResetToDefaultsCanceled);
-            });
-        }
+        let defaults_controls = chrome::confirmation_controls(&sender, &defaults_confirmation());
         let defaults_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         defaults_box.append(&defaults_button);
-        defaults_box.append(&defaults_confirm_button);
-        defaults_box.append(&defaults_cancel_button);
+        defaults_controls.attach(&defaults_box);
 
         let save_button = gtk::Button::with_label("Save");
         save_button.add_css_class("suggested-action");
@@ -354,8 +342,8 @@ impl Component for ConfiguratorApp {
             migration_seen: String::new(),
             save_button,
             defaults_button,
-            defaults_confirm_button,
-            defaults_cancel_button,
+            defaults_controls,
+            defaults_confirmation: None,
             reload_button,
             sidebar_rows,
             sidebar,
@@ -385,7 +373,7 @@ impl Component for ConfiguratorApp {
         }
     }
 
-    fn update_view(&self, widgets: &mut Self::Widgets, _sender: ComponentSender<Self>) {
+    fn update_view(&self, widgets: &mut Self::Widgets, sender: ComponentSender<Self>) {
         // Header chrome.
         let subtitle = if self.is_dirty { "Unsaved changes" } else { "" };
         if widgets.window_title.subtitle() != subtitle {
@@ -405,13 +393,10 @@ impl Component for ConfiguratorApp {
         if widgets.reload_button.is_sensitive() == busy {
             widgets.reload_button.set_sensitive(!busy);
         }
-        // The armed confirmation is the model's, so which of the two Defaults
-        // affordances is on screen follows it: asking is offered until the
-        // question stands, answering only while it does.
-        let defaults_armed = self.defaults_reset_pending;
-        set_visible(&widgets.defaults_button, !defaults_armed);
-        set_visible(&widgets.defaults_confirm_button, defaults_armed);
-        set_visible(&widgets.defaults_cancel_button, defaults_armed);
+        // The armed confirmation is the model's, so the question on screen
+        // follows it — and only it: a request the model refused never became
+        // pending, so it never reaches this reconcile and never presents.
+        reconcile_defaults_confirmation(self, widgets, &sender);
 
         // Status strip.
         let (status_text, status_class) = match &self.status {
@@ -480,6 +465,81 @@ impl Component for ConfiguratorApp {
         for binding in &mut widgets.bindings {
             binding(self, &summary);
         }
+    }
+}
+
+/// The identity of the Defaults question.
+///
+/// There is one draft to replace, so the question is either the one standing
+/// or there is none at all. The reducer's table is over identities either
+/// way; this one has a single inhabitant, which is what makes "present it
+/// once" and "close it silently on reconcile" fall out unchanged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DefaultsQuestion;
+
+/// The Defaults question, in the two messages that answer it.
+///
+/// Built the same way for the inline controls and for the dialog, so the
+/// update layer sees one protocol whichever channel asked.
+fn defaults_confirmation() -> Confirmation {
+    Confirmation::new(
+        "Confirm Defaults",
+        Message::ResetToDefaultsConfirmed,
+        Message::ResetToDefaultsCanceled,
+    )
+}
+
+const DEFAULTS_CONFIRMATION_HEADING: &str = "Replace the draft with built-in defaults?";
+
+const DEFAULTS_CONFIRMATION_BODY: &str =
+    "Every unsaved edit in the current draft is lost. Nothing reaches disk until you save.";
+
+/// Brings the Defaults question on screen in step with the model.
+///
+/// Closing always precedes presenting, so the shell never holds two, and a
+/// close from here is reconciliation rather than an answer: the model already
+/// applied or withdrew the reset, so nothing is sent back to it.
+fn reconcile_defaults_confirmation(
+    app: &ConfiguratorApp,
+    widgets: &mut AppWidgets,
+    sender: &ComponentSender<ConfiguratorApp>,
+) {
+    let presented = widgets
+        .defaults_confirmation
+        .as_ref()
+        .map(|_| DefaultsQuestion);
+    let accepted = app.defaults_reset_pending.then_some(DefaultsQuestion);
+
+    match reconcile(presented.as_ref(), accepted.as_ref()) {
+        DialogTransition::Unchanged => {}
+        DialogTransition::Close(_) => close_defaults_confirmation(widgets),
+        DialogTransition::Present(_) | DialogTransition::Replace { .. } => {
+            close_defaults_confirmation(widgets);
+            let confirmation = chrome::present_confirmation(
+                sender,
+                &widgets.defaults_button,
+                DEFAULTS_CONFIRMATION_HEADING,
+                DEFAULTS_CONFIRMATION_BODY,
+                &defaults_confirmation(),
+            );
+            widgets.defaults_confirmation = Some(confirmation);
+        }
+    }
+
+    // The inline controls follow what is presented, and the button that asks
+    // steps aside only for controls that take its place — never for a dialog,
+    // which takes no space in the header it came from.
+    let presented = widgets.defaults_confirmation.is_some();
+    widgets.defaults_controls.set_presented(presented);
+    set_visible(
+        &widgets.defaults_button,
+        !(presented && widgets.defaults_controls.is_inline()),
+    );
+}
+
+fn close_defaults_confirmation(widgets: &mut AppWidgets) {
+    if let Some(confirmation) = widgets.defaults_confirmation.take() {
+        chrome::close_confirmation(confirmation);
     }
 }
 
