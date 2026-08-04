@@ -138,6 +138,9 @@ jobs:
           grep -Fq '/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell' <<< "$deb_files"
           configurator_deb_depends="$(dpkg-deb -f dist/wayscriber-configurator-amd64.deb Depends)"
           grep -Fq 'libc6 (>= 2.39)' <<< "$configurator_deb_depends"
+          # The baseline configurator artifact is built against the v1_4
+          # libadwaita API and must declare that runtime floor.
+          grep -Fq 'libadwaita-1-0 (>= 1.4)' <<< "$configurator_deb_depends"
 
           mkdir -p "$RUNNER_TEMP/rpmdb"
           test "$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qp --qf '%{VERSION}-%{RELEASE}\n' dist/wayscriber-x86_64.rpm)" = "$expected_package_version"
@@ -150,6 +153,9 @@ jobs:
           grep -Fxq '/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell' <<< "$rpm_files"
           configurator_rpm_requires="$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qp --requires dist/wayscriber-configurator-x86_64.rpm)"
           grep -Fxq 'glibc >= 2.39' <<< "$configurator_rpm_requires"
+          # The baseline configurator artifact is built against the v1_4
+          # libadwaita API and must declare that runtime floor.
+          grep -Fxq 'libadwaita >= 1.4' <<< "$configurator_rpm_requires"
 
           tar_files="$(tar -tzf "dist/wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz")"
           grep -Eq '/usr/bin/wayscriber$' <<< "$tar_files"
@@ -164,8 +170,14 @@ jobs:
             ubuntu:24.04 \
             bash -euxo pipefail -c '
               apt-get update
-              DEBIAN_FRONTEND=noninteractive apt-get install -y /dist/wayscriber-amd64.deb
+              DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                /dist/wayscriber-amd64.deb \
+                /dist/wayscriber-configurator-amd64.deb
               wayscriber --version
+              # The configurator is a GUI program. Installing it proves its
+              # declared runtime floors (libadwaita-1-0 (>= 1.4) among them)
+              # resolve on a clean 24.04; it is never launched here.
+              test -x /usr/bin/wayscriber-configurator
             '
 
       - name: Upload tarball
@@ -410,10 +422,14 @@ jobs:
           git config --global user.email "$AUR_GIT_EMAIL"
 
       - name: Clone AUR repos
+        # Intentionally all-or-nothing: every clone happens in this step, before
+        # the next step mutates any channel. A failed configurator clone aborts
+        # the AUR publish with nothing half-published, so none of these clones
+        # may be made optional with `|| true`.
         run: |
           GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber.git aur-wayscriber
           GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber-bin.git aur-wayscriber-bin
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber-configurator.git aur-wayscriber-configurator || true
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber-configurator.git aur-wayscriber-configurator
 
       - name: Update AUR from manifest
         env:

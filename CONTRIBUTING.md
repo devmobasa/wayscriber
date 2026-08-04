@@ -122,9 +122,14 @@ Before submitting a broad or cross-package change, run the local CI entry point:
 ./tools/lint-and-test.sh
 ```
 
-It checks release/package metadata, package layout, the Cargo lane contract, Rust source coverage,
-and formatting, then runs the whole Cargo matrix through
+It checks release/package metadata, package layout, the AUR template contract, the Cargo lane
+contract, Rust source coverage, and formatting, then runs the whole Cargo matrix through
 `./tools/run-cargo-consumer.py lint-and-test`.
+
+Two packaging checks need tools Ubuntu CI does not have and run in the `Configurator modern (Arch)`
+job instead: `./tools/check-srcinfo-canonical.py` compares `packaging/.SRCINFO` and the configurator
+AUR template pair against live `makepkg --printsrcinfo` output. On a machine with makepkg you can
+run it locally; regenerate a stale `.SRCINFO` rather than relaxing the comparison.
 
 The matrix is data, not script text: `tools/cargo-lanes.json` declares each lane and the exact
 command every consumer runs, and `tools/lint-and-test.sh`, `clean.sh`, and both CI jobs call the

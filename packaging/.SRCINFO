@@ -15,7 +15,7 @@ pkgbase = wayscriber
 	depends = glibc
 	depends = gtk4
 	depends = gtk4-layer-shell
-	depends = libadwaita
+	depends = libadwaita>=1.7
 	depends = wl-clipboard
 	depends = grim
 	depends = slurp

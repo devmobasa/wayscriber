@@ -74,7 +74,9 @@ overrides:
       - libpangocairo-1.0-0
       - libxkbcommon0
       - libgtk-4-1
-      - libadwaita-1-0
+      # Baseline artifacts target the v1_4 libadwaita API; adw-modern is never
+      # passed on this build path (see packaging/AGENTS.md).
+      - libadwaita-1-0 (>= 1.4)
       - libstdc++6
   rpm:
     depends:
@@ -85,7 +87,9 @@ overrides:
       - pango
       - libxkbcommon
       - gtk4
-      - libadwaita
+      # Baseline artifacts target the v1_4 libadwaita API; adw-modern is never
+      # passed on this build path (see packaging/AGENTS.md).
+      - libadwaita >= 1.4
       - libstdc++
     rpm:
       arch: x86_64

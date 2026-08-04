@@ -46,6 +46,13 @@ packaging/**
 !packaging/nixpkgs/
 !packaging/nixpkgs/package.nix
 !packaging/nixpkgs/README.md
+# The external wayscriber-configurator AUR recipe is owned here as a template
+# pair. `packaging/**` ignores directories too, so the whole parent chain has to
+# be re-included or git never descends far enough to see the templates.
+!packaging/aur/
+!packaging/aur/wayscriber-configurator/
+!packaging/aur/wayscriber-configurator/PKGBUILD.tmpl
+!packaging/aur/wayscriber-configurator/.SRCINFO.tmpl
 !packaging/wayscriber.desktop
 !packaging/wayscriber-configurator.desktop
 

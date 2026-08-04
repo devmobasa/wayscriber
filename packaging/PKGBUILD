@@ -15,7 +15,7 @@ depends=(
     'glibc'
     'gtk4'
     'gtk4-layer-shell'
-    'libadwaita'
+    'libadwaita>=1.7'
     'wl-clipboard'
     'grim'
     'slurp'
@@ -39,7 +39,9 @@ build() {
     export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR=target
     cargo build --frozen --release --bins
-    cargo build --frozen --release --bins --manifest-path configurator/Cargo.toml
+    # Arch always ships libadwaita >= 1.7, so the configurator is built on the
+    # modern channel here. The wayscriber binary never receives adw-modern.
+    cargo build --frozen --release --bins --manifest-path configurator/Cargo.toml --features adw-modern
 }
 
 package() {

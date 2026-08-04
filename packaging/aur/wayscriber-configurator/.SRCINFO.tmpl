@@ -1,0 +1,22 @@
+pkgbase = wayscriber-configurator
+	pkgdesc = GUI configurator for wayscriber (GTK4/libadwaita)
+	pkgver = @VERSION@
+	pkgrel = @PKGREL@
+	url = https://wayscriber.com
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	makedepends = cargo
+	depends = cairo
+	depends = wayland
+	depends = pango
+	depends = gcc-libs
+	depends = glibc
+	depends = libxkbcommon
+	depends = gtk4
+	depends = libadwaita>=1.7
+	optdepends = wayscriber: integrate with the running daemon and CLI
+	source = wayscriber-@VERSION@.tar.gz::https://github.com/devmobasa/wayscriber/archive/refs/tags/v@VERSION@.tar.gz
+	sha256sums = @SOURCE_SHA256@
+
+pkgname = wayscriber-configurator

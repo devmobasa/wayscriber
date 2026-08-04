@@ -86,6 +86,12 @@ jobs:
       - name: Check nixpkgs recipe dependencies
         run: ./tools/check-nixpkgs-recipe.py
 
+      - name: Check AUR templates
+        # The external wayscriber-configurator recipe is owned here as a template
+        # pair. This gate needs no makepkg, so it runs on every PR; the Arch job
+        # adds the canonical makepkg comparison on top.
+        run: ./tools/check-aur-templates.py
+
       - name: Check Cargo lane contract
         run: |
           ./tools/check-cargo-lanes.py --self-test
@@ -158,10 +164,63 @@ jobs:
         # so this job is where that channel is built, linted, and tested.
         run: ./tools/run-cargo-consumer.py ci-arch
 
+      - name: Prepare unprivileged makepkg user
+        # makepkg refuses to run as root and aborts with E_FS_PERMISSIONS on a
+        # root-owned working directory, so the canonical .SRCINFO comparisons
+        # below run as `builder` in a directory that belongs to `builder`.
+        # `--printsrcinfo` needs no fakeroot and builds nothing.
+        run: |
+          useradd -m builder
+          install -d -o builder -g builder /tmp/srcinfo-canonical
+
+      - name: Check AUR templates
+        run: ./tools/check-aur-templates.py
+
+      - name: Canonical .SRCINFO - checked-in packaging pair
+        # packaging/.SRCINFO is generated but committed by hand, so nothing else
+        # notices a PKGBUILD edit that never reached it.
+        run: |
+          ./tools/check-srcinfo-canonical.py \
+            --pkgbuild packaging/PKGBUILD \
+            --srcinfo packaging/.SRCINFO \
+            --label 'packaging/PKGBUILD vs packaging/.SRCINFO' \
+            --builder-user builder \
+            --work-root /tmp/srcinfo-canonical \
+            --refresh-task './tools/bump-version.sh (it regenerates packaging/.SRCINFO)'
+
+      - name: Canonical .SRCINFO - AUR template pair (normal release)
+        run: |
+          ./tools/check-srcinfo-canonical.py \
+            --pkgbuild packaging/aur/wayscriber-configurator/PKGBUILD.tmpl \
+            --srcinfo packaging/aur/wayscriber-configurator/.SRCINFO.tmpl \
+            --token VERSION=1.2.3 \
+            --token PKGREL=1 \
+            --token SOURCE_SHA256=abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789 \
+            --label 'wayscriber-configurator template pair (normal release)' \
+            --builder-user builder \
+            --work-root /tmp/srcinfo-canonical \
+            --refresh-task 'render PKGBUILD.tmpl, run makepkg --printsrcinfo on it, and re-tokenize the result into .SRCINFO.tmpl'
+
+      - name: Canonical .SRCINFO - AUR template pair (hotfix)
+        run: |
+          ./tools/check-srcinfo-canonical.py \
+            --pkgbuild packaging/aur/wayscriber-configurator/PKGBUILD.tmpl \
+            --srcinfo packaging/aur/wayscriber-configurator/.SRCINFO.tmpl \
+            --token VERSION=1.2.3.1 \
+            --token PKGREL=4 \
+            --token SOURCE_SHA256=abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789 \
+            --label 'wayscriber-configurator template pair (hotfix)' \
+            --builder-user builder \
+            --work-root /tmp/srcinfo-canonical \
+            --refresh-task 'render PKGBUILD.tmpl, run makepkg --printsrcinfo on it, and re-tokenize the result into .SRCINFO.tmpl'
+
   nix-flake:
     name: Nix flake
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # A real (not dry-run) configurator build compiles the whole GTK4 stack from
+    # whatever the nixpkgs channel provides, which does not fit in 20 minutes on
+    # a cold cache.
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -184,3 +243,9 @@ jobs:
 
       - name: Check flake package instantiation
         run: nix build .#wayscriber .#wayscriber-configurator --no-link --dry-run
+
+      - name: Build configurator package
+        # The dry-run above only evaluates. This is the one place the flake's
+        # `buildFeatures` conditional is actually compiled, so a channel whose
+        # libadwaita crosses 1.7 flips the feature on under a real build.
+        run: nix build .#wayscriber-configurator --no-link

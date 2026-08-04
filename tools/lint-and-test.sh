@@ -9,6 +9,7 @@ bash tools/check-version-consistency.sh
 bash tools/test-package-repo-layout.sh
 bash tools/test-release-packaging.sh
 ./tools/check-nixpkgs-recipe.py
+./tools/check-aur-templates.py
 ./tools/check-cargo-lanes.py --self-test
 ./tools/check-cargo-lanes.py
 ./tools/check-rust-source-coverage.py

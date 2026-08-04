@@ -76,6 +76,17 @@
             cargoLock.lockFile = ./Cargo.lock;
             buildAndTestSubdir = "configurator";
 
+            # `adw-modern` targets the libadwaita v1_7 API. Nixpkgs channels move
+            # independently, so the feature follows the libadwaita this flake
+            # actually builds against instead of being pinned on. `buildFeatures`
+            # (not `cargoBuildFlags`) is used because `checkFeatures` defaults to
+            # it, keeping the build and check feature sets aligned. The bare
+            # names `lib` and `libadwaita` are unbound here, so both paths are
+            # qualified through `pkgs`.
+            buildFeatures = pkgs.lib.optionals
+              (pkgs.lib.versionAtLeast pkgs.libadwaita.version "1.7")
+              [ "adw-modern" ];
+
             nativeBuildInputs = with pkgs; [ pkg-config wrapGAppsHook4 ];
 
             # GTK4/libadwaita GUI toolkit dependencies

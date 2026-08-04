@@ -8,6 +8,8 @@
 #   - curl
 #   - sha256sum
 #   - perl
+#   - python3 (only for the wayscriber-configurator channel, which validates its
+#     rendered recipe with tools/check-aur-templates.py)
 #   - access to AUR clones (dirs provided via flags/env)
 #
 # Example (CI):
@@ -30,7 +32,10 @@ MANIFEST="${REPO_ROOT}/dist/manifest.json"
 AUR_SOURCE_DIR="${AUR_SOURCE_DIR:-${REPO_ROOT}/../aur-wayscriber}"
 AUR_BIN_DIR="${AUR_BIN_DIR:-${REPO_ROOT}/../aur-wayscriber-bin}"
 AUR_CONFIG_DIR="${AUR_CONFIG_DIR:-${REPO_ROOT}/../aur-wayscriber-configurator}"
+CONFIGURATOR_TEMPLATE_DIR="${REPO_ROOT}/packaging/aur/wayscriber-configurator"
 DO_PUSH=0
+NO_CONFIGURATOR=0
+SOURCE_ARCHIVE_SHA="${AUR_SOURCE_ARCHIVE_SHA256:-}"
 
 usage() {
     cat <<'EOF'
@@ -43,8 +48,20 @@ Flags:
   --source-dir <path>      wayscriber AUR repo path
   --bin-dir <path>         wayscriber-bin AUR repo path
   --config-dir <path>      wayscriber-configurator AUR repo path
+  --no-configurator        Skip the wayscriber-configurator channel on purpose.
+                           Without it a missing --config-dir is a hard error:
+                           that channel is required, so a silent skip would
+                           publish a release the configurator never reaches.
+  --source-sha256 <sha>    Use this sha256 for the source tag archive instead of
+                           downloading it. Fixtures and offline reruns need this;
+                           it is also the documented recovery path when the
+                           GitHub download fails.
   --push                   Git add/commit/push changes (default: dry-run)
   -h, --help               Show this help
+
+Environment:
+  AUR_SOURCE_ARCHIVE_SHA256  Same as --source-sha256.
+  AUR_SOURCE_DIR / AUR_BIN_DIR / AUR_CONFIG_DIR  Default clone paths.
 EOF
 }
 
@@ -55,6 +72,8 @@ while [[ $# -gt 0 ]]; do
         --source-dir) AUR_SOURCE_DIR="$2"; shift 2 ;;
         --bin-dir) AUR_BIN_DIR="$2"; shift 2 ;;
         --config-dir) AUR_CONFIG_DIR="$2"; shift 2 ;;
+        --no-configurator) NO_CONFIGURATOR=1; shift ;;
+        --source-sha256) SOURCE_ARCHIVE_SHA="$2"; shift 2 ;;
         --push) DO_PUSH=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; usage; exit 1 ;;
@@ -67,6 +86,26 @@ need git
 need curl
 need sha256sum
 need perl
+
+# Python is only needed by the configurator channel's template validation, so it
+# is discovered here but demanded at the point of use.
+PYTHON=""
+for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 \
+        && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info[0] == 3 else 1)' >/dev/null 2>&1; then
+        PYTHON="$candidate"
+        break
+    fi
+done
+
+CLEANUP_DIRS=()
+cleanup() {
+    local dir
+    for dir in "${CLEANUP_DIRS[@]+"${CLEANUP_DIRS[@]}"}"; do
+        [[ -n "$dir" ]] && rm -rf "$dir"
+    done
+}
+trap cleanup EXIT
 
 [[ -f "$MANIFEST" ]] || { echo "Manifest not found: $MANIFEST" >&2; exit 1; }
 
@@ -88,10 +127,28 @@ read_pkgrel_from_pkgbuild() {
     fi
 }
 
-next_pkgrel() {
+# Resolve a directory to an absolute path. Callers receive relative clone paths
+# from CI, and a relative path read after a `pushd` resolves against the clone
+# itself (dir/dir/PKGBUILD), which silently pins every release to pkgrel=1.
+absolute_dir() {
     local dir="$1"
-    local pkgfile="$dir/PKGBUILD"
-    local current_pkgver current_pkgrel
+    (cd "$dir" >/dev/null 2>&1 && pwd) || {
+        echo "Not a directory: $dir" >&2
+        exit 1
+    }
+}
+
+# Call this before entering the clone, never after.
+next_pkgrel() {
+    local dir_abs pkgfile current_pkgver current_pkgrel
+    dir_abs="$(absolute_dir "$1")"
+    pkgfile="${dir_abs}/PKGBUILD"
+
+    if [[ ! -f "$pkgfile" ]]; then
+        echo "No PKGBUILD in ${dir_abs}; starting at pkgrel=1" >&2
+        echo 1
+        return
+    fi
 
     current_pkgver="$(read_pkgver_from_pkgbuild "$pkgfile")"
     current_pkgrel="$(read_pkgrel_from_pkgbuild "$pkgfile")"
@@ -108,19 +165,36 @@ sha_for() {
     jq -r --arg n "$name" '.artifacts[] | select(.name==$n) | .sha256' "$MANIFEST"
 }
 
-SOURCE_ARCHIVE_SHA=""
-
 source_archive_url() {
     printf 'https://github.com/devmobasa/wayscriber/archive/refs/tags/v%s.tar.gz' "$VERSION"
 }
 
+# The checksum is written into published recipes, so every failure on this path
+# is fatal and named. A swallowed download would otherwise publish the sha256 of
+# an empty file.
 source_archive_sha() {
     if [[ -z "$SOURCE_ARCHIVE_SHA" ]]; then
-        local tmp
+        local url tmp
+        url="$(source_archive_url)"
         tmp="$(mktemp)"
-        curl -fsSL "$(source_archive_url)" -o "$tmp"
+        if ! curl -fsSL "$url" -o "$tmp"; then
+            rm -f "$tmp"
+            echo "Failed to download the source archive: ${url}" >&2
+            echo "Pass --source-sha256 (or set AUR_SOURCE_ARCHIVE_SHA256) to supply it directly." >&2
+            exit 1
+        fi
+        if [[ ! -s "$tmp" ]]; then
+            rm -f "$tmp"
+            echo "Downloaded an empty source archive from ${url}" >&2
+            exit 1
+        fi
         SOURCE_ARCHIVE_SHA="$(sha256sum "$tmp" | awk '{print $1}')"
         rm -f "$tmp"
+    fi
+
+    if [[ ! "$SOURCE_ARCHIVE_SHA" =~ ^[0-9a-fA-F]{64}$ ]]; then
+        echo "Source archive checksum is not a sha256 digest: '${SOURCE_ARCHIVE_SHA}'" >&2
+        exit 1
     fi
 
     printf '%s' "$SOURCE_ARCHIVE_SHA"
@@ -285,8 +359,10 @@ update_source() {
     local dir="$1"
     local pkgrel
     [[ -d "$dir" ]] || { echo "Skip source: $dir not found" >&2; return; }
-    pushd "$dir" >/dev/null
+    # Before the pushd: next_pkgrel resolves its argument, and a relative clone
+    # path read from inside the clone points at nothing.
     pkgrel="$(next_pkgrel "$dir")"
+    pushd "$dir" >/dev/null
     local source_sha source_url
     source_sha="$(source_archive_sha)"
     source_url="$(source_archive_url)"
@@ -317,31 +393,80 @@ update_source() {
     popd >/dev/null
 }
 
+# Render one checked-in template into a destination file, substituting the three
+# release-time tokens. An unresolved token is fatal: a published recipe carrying
+# `@VERSION@` would install nothing.
+render_configurator_template() {
+    local template="$1" destination="$2" pkgrel="$3" source_sha="$4"
+
+    [[ -f "$template" ]] || {
+        echo "Missing AUR template: $template" >&2
+        exit 1
+    }
+
+    TEMPLATE_VERSION="$VERSION" TEMPLATE_PKGREL="$pkgrel" TEMPLATE_SHA256="$source_sha" \
+        perl -pe '
+            s/\@VERSION\@/$ENV{TEMPLATE_VERSION}/g;
+            s/\@PKGREL\@/$ENV{TEMPLATE_PKGREL}/g;
+            s/\@SOURCE_SHA256\@/$ENV{TEMPLATE_SHA256}/g;
+        ' "$template" > "$destination"
+
+    if grep -Eq '@[A-Za-z0-9_]+@' "$destination"; then
+        echo "Unresolved template token in ${destination}:" >&2
+        grep -nE '@[A-Za-z0-9_]+@' "$destination" >&2
+        exit 1
+    fi
+}
+
+# The external wayscriber-configurator recipe is owned by this repository as a
+# template pair, so the whole file is regenerated rather than patched in place.
 update_configurator() {
     local dir="$1"
-    local pkgrel
-    [[ -d "$dir" ]] || { echo "Skip configurator: $dir not found" >&2; return; }
-    pushd "$dir" >/dev/null
+    local pkgrel source_sha rendered
+
+    if [[ "$NO_CONFIGURATOR" -eq 1 ]]; then
+        echo "Skipping the wayscriber-configurator channel: --no-configurator was passed." >&2
+        echo "That channel is required by default; this flag exists for reruns and fixtures" >&2
+        echo "that have no configurator clone." >&2
+        return
+    fi
+
+    [[ -d "$dir" ]] || {
+        echo "wayscriber-configurator AUR clone not found: $dir" >&2
+        echo "This channel is required. Clone it, or pass --no-configurator to skip it" >&2
+        echo "deliberately. A silent skip would leave the configurator on an old release." >&2
+        exit 1
+    }
+
+    [[ -n "$PYTHON" ]] || {
+        echo "python3 is required to validate the rendered wayscriber-configurator recipe" >&2
+        exit 1
+    }
+
+    # Both reads happen before the pushd below. next_pkgrel resolves its argument
+    # against the current directory, and CI passes a relative --config-dir.
     pkgrel="$(next_pkgrel "$dir")"
-    local source_sha source_url
     source_sha="$(source_archive_sha)"
-    source_url="$(source_archive_url)"
 
-    remove_pkgbuild_array_item PKGBUILD git
-    remove_srcinfo_field_value .SRCINFO makedepends git
-    ensure_libxkbcommon_dependency
-    replace_line PKGBUILD '^pkgver=.*' "pkgver=${VERSION}"
-    replace_line PKGBUILD '^pkgrel=.*' "pkgrel=${pkgrel}"
-    replace_pkgbuild_array PKGBUILD source 'source=("wayscriber-$pkgver.tar.gz::https://github.com/devmobasa/wayscriber/archive/refs/tags/v$pkgver.tar.gz")'
-    replace_pkgbuild_array PKGBUILD sha256sums "sha256sums=('${source_sha}')"
-    replace_line PKGBUILD '^    cd wayscriber$' '    cd "wayscriber-$pkgver"'
-    rewrite_packaging_asset_paths
+    rendered="$(mktemp -d)"
+    CLEANUP_DIRS+=("$rendered")
+    render_configurator_template \
+        "${CONFIGURATOR_TEMPLATE_DIR}/PKGBUILD.tmpl" "${rendered}/PKGBUILD" "$pkgrel" "$source_sha"
+    render_configurator_template \
+        "${CONFIGURATOR_TEMPLATE_DIR}/.SRCINFO.tmpl" "${rendered}/.SRCINFO" "$pkgrel" "$source_sha"
 
-    set_srcinfo_field .SRCINFO pkgver "${VERSION}"
-    set_srcinfo_field .SRCINFO pkgrel "${pkgrel}"
-    set_srcinfo_field .SRCINFO source "wayscriber-${VERSION}.tar.gz::${source_url}"
-    set_srcinfo_field .SRCINFO sha256sums "${source_sha}"
+    # Validate the render, never the clone: nothing reaches the published recipe
+    # until the pair passes.
+    "$PYTHON" "${REPO_ROOT}/tools/check-aur-templates.py" --pair "$rendered"
 
+    # Stage both files inside the clone, then rename them into place back to
+    # back, so a PKGBUILD is never published against the previous .SRCINFO.
+    cp "${rendered}/PKGBUILD" "${dir}/.PKGBUILD.rendered"
+    cp "${rendered}/.SRCINFO" "${dir}/.SRCINFO.rendered"
+    mv -f "${dir}/.PKGBUILD.rendered" "${dir}/PKGBUILD"
+    mv -f "${dir}/.SRCINFO.rendered" "${dir}/.SRCINFO"
+
+    pushd "$dir" >/dev/null
     git status --short
     if [[ "$DO_PUSH" -eq 1 && -n "$(git status --porcelain)" ]]; then
         commit_metadata_changes "wayscriber-configurator ${VERSION}"

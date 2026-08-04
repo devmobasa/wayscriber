@@ -770,12 +770,15 @@ EOF
 git -C "${AUR_BIN_DIR}" init -q
 git -C "${AUR_BIN_DIR}" add PKGBUILD .SRCINFO
 
+# The configurator channel is required, so this case must opt out of it
+# explicitly; its own fixtures below cover render, skip, and missing-clone.
 bash "${REPO_ROOT}/tools/update-aur-from-manifest.sh" \
     --version 9.9.9 \
     --manifest "${MANIFEST}" \
     --source-dir "${WORK_DIR}/missing-source" \
     --bin-dir "${AUR_BIN_DIR}" \
-    --config-dir "${WORK_DIR}/missing-config" >/dev/null
+    --config-dir "${WORK_DIR}/missing-config" \
+    --no-configurator >/dev/null
 
 assert_contains "${AUR_BIN_DIR}/PKGBUILD" "'gtk4'"
 assert_contains "${AUR_BIN_DIR}/.SRCINFO" "depends = gtk4"
@@ -789,5 +792,159 @@ assert_contains "${AUR_BIN_DIR}/PKGBUILD" 'install -Dm644 "${srcdir_tmp}/usr/sha
 
 assert_contains "${REPO_ROOT}/packaging/PKGBUILD" "'gtk4-layer-shell'"
 assert_contains "${REPO_ROOT}/packaging/.SRCINFO" "depends = gtk4-layer-shell"
+
+# The checked-in Arch recipe builds the configurator on the modern libadwaita
+# channel; the wayscriber binary must never receive that feature.
+assert_contains "${REPO_ROOT}/packaging/PKGBUILD" \
+    'cargo build --frozen --release --bins --manifest-path configurator/Cargo.toml --features adw-modern'
+assert_not_contains "${REPO_ROOT}/packaging/PKGBUILD" \
+    'cargo build --frozen --release --bins --features adw-modern'
+assert_contains "${REPO_ROOT}/packaging/PKGBUILD" "'libadwaita>=1.7'"
+assert_contains "${REPO_ROOT}/packaging/.SRCINFO" "depends = libadwaita>=1.7"
+
+# Prebuilt configurator artifacts stay on the v1_4 baseline and must declare the
+# matching runtime floor in both package formats.
+assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- libadwaita-1-0 (>= 1.4)"
+assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- libadwaita >= 1.4"
+assert_contains "${WORK_DIR}/release-package-job.yml" \
+    "grep -Fq 'libadwaita-1-0 (>= 1.4)' <<< \"\$configurator_deb_depends\""
+assert_contains "${WORK_DIR}/release-package-job.yml" \
+    "grep -Fxq 'libadwaita >= 1.4' <<< \"\$configurator_rpm_requires\""
+assert_contains "${WORK_DIR}/release-package-job.yml" \
+    "/dist/wayscriber-configurator-amd64.deb"
+
+# The configurator AUR clone is required: every clone happens before any channel
+# is mutated, so a failed clone must abort the publish rather than be skipped.
+assert_not_contains "${RELEASE_WORKFLOW}" \
+    "git clone ssh://aur@aur.archlinux.org/wayscriber-configurator.git aur-wayscriber-configurator || true"
+
+# Exercise the wayscriber-configurator template channel end to end. Every case
+# stays offline: `curl` is stubbed to fail loudly, so a fixture that reaches for
+# the network fails instead of silently depending on it.
+AUR_CONFIG_FAKE_BIN="${WORK_DIR}/aur-config-fake-bin"
+mkdir -p "${AUR_CONFIG_FAKE_BIN}"
+cat > "${AUR_CONFIG_FAKE_BIN}/curl" <<'EOF'
+#!/usr/bin/env bash
+echo 'AUR_TEST_NETWORK_ACCESS' >&2
+exit 97
+EOF
+chmod +x "${AUR_CONFIG_FAKE_BIN}/curl"
+
+AUR_FIXTURE_SHA='abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789'
+
+write_configurator_clone() {
+    local dir="$1" pkgver="$2" pkgrel="$3"
+    mkdir -p "${dir}"
+    cat > "${dir}/PKGBUILD" <<EOF
+pkgname=wayscriber-configurator
+pkgver=${pkgver}
+pkgrel=${pkgrel}
+EOF
+    {
+        printf 'pkgbase = wayscriber-configurator\n'
+        printf '\tpkgver = %s\n' "${pkgver}"
+        printf '\tpkgrel = %s\n' "${pkgrel}"
+        printf '\npkgname = wayscriber-configurator\n'
+    } > "${dir}/.SRCINFO"
+    git -C "${dir}" init -q
+    git -C "${dir}" add PKGBUILD .SRCINFO
+}
+
+run_configurator_updater() {
+    local cwd="$1"
+    shift
+    (
+        cd "${cwd}"
+        PATH="${AUR_CONFIG_FAKE_BIN}:${PATH}" \
+            bash "${REPO_ROOT}/tools/update-aur-from-manifest.sh" \
+                --version 9.9.9 \
+                --manifest "${MANIFEST}" \
+                --source-dir "${WORK_DIR}/missing-source" \
+                --bin-dir "${WORK_DIR}/missing-bin" \
+                "$@"
+    )
+}
+
+expect_configurator_failure() {
+    local expected_message="$1" cwd="$2"
+    shift 2
+    local output_file="${WORK_DIR}/aur-config-failure-output"
+
+    set +e
+    run_configurator_updater "${cwd}" "$@" >"${output_file}" 2>&1
+    local test_status=$?
+    set -e
+
+    if [[ ${test_status} -eq 0 ]]; then
+        echo "Expected the AUR updater to fail with: ${expected_message}" >&2
+        cat "${output_file}" >&2
+        exit 1
+    fi
+    assert_contains "${output_file}" "${expected_message}"
+}
+
+assert_no_unresolved_tokens() {
+    local file="$1"
+    if grep -Eq '@[A-Za-z0-9_]+@' "${file}"; then
+        echo "Rendered ${file} still contains a template token:" >&2
+        grep -nE '@[A-Za-z0-9_]+@' "${file}" >&2
+        exit 1
+    fi
+}
+
+# Normal release: a clone on an older version restarts at pkgrel=1 and receives a
+# complete rendered pair.
+AUR_CONFIG_NORMAL="${WORK_DIR}/aur-config-normal"
+write_configurator_clone "${AUR_CONFIG_NORMAL}" 9.9.8 5
+run_configurator_updater "${WORK_DIR}" \
+    --config-dir "${AUR_CONFIG_NORMAL}" \
+    --source-sha256 "${AUR_FIXTURE_SHA}" >/dev/null
+
+assert_contains "${AUR_CONFIG_NORMAL}/PKGBUILD" "pkgver=9.9.9"
+assert_contains "${AUR_CONFIG_NORMAL}/PKGBUILD" "pkgrel=1"
+assert_contains "${AUR_CONFIG_NORMAL}/PKGBUILD" "sha256sums=('${AUR_FIXTURE_SHA}')"
+assert_contains "${AUR_CONFIG_NORMAL}/PKGBUILD" \
+    "--manifest-path configurator/Cargo.toml --features adw-modern"
+assert_contains "${AUR_CONFIG_NORMAL}/PKGBUILD" "'libadwaita>=1.7'"
+assert_contains "${AUR_CONFIG_NORMAL}/.SRCINFO" "pkgver = 9.9.9"
+assert_contains "${AUR_CONFIG_NORMAL}/.SRCINFO" "pkgrel = 1"
+assert_contains "${AUR_CONFIG_NORMAL}/.SRCINFO" "sha256sums = ${AUR_FIXTURE_SHA}"
+assert_no_unresolved_tokens "${AUR_CONFIG_NORMAL}/PKGBUILD"
+assert_no_unresolved_tokens "${AUR_CONFIG_NORMAL}/.SRCINFO"
+"${REPO_ROOT}/tools/check-aur-templates.py" --pair "${AUR_CONFIG_NORMAL}" >/dev/null
+
+# Hotfix rerun through a RELATIVE --config-dir. pkgrel is read before the updater
+# enters the clone, so the relative path still resolves; reading it afterwards
+# would look at aur-config-hotfix/aur-config-hotfix/PKGBUILD and pin pkgrel to 1.
+AUR_CONFIG_HOTFIX="${WORK_DIR}/aur-config-hotfix"
+write_configurator_clone "${AUR_CONFIG_HOTFIX}" 9.9.9 3
+run_configurator_updater "${WORK_DIR}" \
+    --config-dir aur-config-hotfix \
+    --source-sha256 "${AUR_FIXTURE_SHA}" >/dev/null
+
+assert_contains "${AUR_CONFIG_HOTFIX}/PKGBUILD" "pkgrel=4"
+assert_contains "${AUR_CONFIG_HOTFIX}/.SRCINFO" "pkgrel = 4"
+assert_no_unresolved_tokens "${AUR_CONFIG_HOTFIX}/PKGBUILD"
+assert_no_unresolved_tokens "${AUR_CONFIG_HOTFIX}/.SRCINFO"
+
+# A missing clone is a hard error unless the skip is explicit.
+expect_configurator_failure "wayscriber-configurator AUR clone not found" "${WORK_DIR}" \
+    --config-dir "${WORK_DIR}/missing-config" \
+    --source-sha256 "${AUR_FIXTURE_SHA}"
+
+AUR_CONFIG_SKIP_OUTPUT="${WORK_DIR}/aur-config-skip-output"
+run_configurator_updater "${WORK_DIR}" \
+    --config-dir "${WORK_DIR}/missing-config" \
+    --no-configurator >"${AUR_CONFIG_SKIP_OUTPUT}" 2>&1
+assert_contains "${AUR_CONFIG_SKIP_OUTPUT}" "--no-configurator was passed"
+
+# Without an explicit checksum the download failure must be loud, and nothing may
+# reach the clone before it.
+AUR_CONFIG_OFFLINE="${WORK_DIR}/aur-config-offline"
+write_configurator_clone "${AUR_CONFIG_OFFLINE}" 9.9.8 5
+expect_configurator_failure "Failed to download the source archive" "${WORK_DIR}" \
+    --config-dir "${AUR_CONFIG_OFFLINE}"
+assert_contains "${AUR_CONFIG_OFFLINE}/PKGBUILD" "pkgver=9.9.8"
+assert_not_contains "${AUR_CONFIG_OFFLINE}/PKGBUILD" "adw-modern"
 
 echo "Release packaging contract checks passed."
