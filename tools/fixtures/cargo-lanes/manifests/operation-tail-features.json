@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "notes": [
+    "Fixture, never loaded by a real run. `minimal-healthy.json` after the",
+    "modern channel's feature was appended to the operation's argv tail. The",
+    "lane span still matches the baseline lane verbatim, so validating only",
+    "the span would accept it: the operation would compile the modern channel",
+    "while the floor and routing guards kept reading `v1_4` off the lane."
+  ],
+  "driver": "./tools/run-cargo-consumer.py",
+  "lanes": {
+    "config-baseline": {
+      "description": "Configurator at the deb/rpm baseline, libadwaita pinned to the v1_4 floor.",
+      "args": [
+        "-p",
+        "wayscriber-configurator",
+        "--no-default-features",
+        "--features",
+        "tablet-input"
+      ],
+      "covers_configurator": true,
+      "libadwaita_floor": "v1_4"
+    }
+  },
+  "consumers": {
+    "fixture-gate": {
+      "description": "One clippy operation on the baseline lane.",
+      "caller": "fixtures/entry.sh",
+      "operations": [
+        {
+          "lane": "config-baseline",
+          "label": "clippy (configurator, baseline)",
+          "argv": [
+            "cargo",
+            "clippy",
+            "-p",
+            "wayscriber-configurator",
+            "--no-default-features",
+            "--features",
+            "tablet-input",
+            "--all-targets",
+            "--features",
+            "adw-modern",
+            "--",
+            "-D",
+            "warnings"
+          ]
+        }
+      ]
+    }
+  },
+  "entry_points": {
+    "fixtures/entry.sh": {
+      "description": "Fixture entry point; no file of this name is ever read.",
+      "driver_consumers": ["fixture-gate"],
+      "loader_consumers": [],
+      "removed_commands": []
+    }
+  },
+  "allowed_non_lane_cargo": []
+}

@@ -22,6 +22,23 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = REPO_ROOT / "tools" / "cargo-lanes.json"
 SCHEMA_VERSION = 1
 
+# Everything that picks packages or features. A lane owns that selection, so
+# after the lane arguments an operation may only carry flags that change how
+# Cargo reports or how hard it lints. Appending `--no-default-features` or
+# `--features adw-modern` here would change what a lane-labeled command
+# compiles while the floor and routing guards keep asserting from `lane.args`.
+SELECTOR_ARGUMENTS = frozenset(
+    {
+        "-p",
+        "--package",
+        "--workspace",
+        "--exclude",
+        "--features",
+        "--all-features",
+        "--no-default-features",
+    }
+)
+
 
 class ManifestError(RuntimeError):
     """The lane manifest is missing, unreadable, or does not match the schema."""
@@ -195,6 +212,19 @@ def _parse_operation(consumer: str, index: int, raw: object, lanes: dict[str, La
         raise ManifestError(
             f"{where}.argv: lane arguments must follow the subcommand verbatim; "
             f"expected {list(lane.args)} at position 2, found {list(lane_span)}"
+        )
+    # The tail is checked too, and past a bare `--` as well. Validating only the
+    # lane span would let an operation append its own package or feature
+    # selection: the command would compile something the lane never describes
+    # while every guard that reads `lane.args` kept asserting the lane's story.
+    for argument in argv[2 + len(lane.args) :]:
+        if argument.split("=", maxsplit=1)[0] not in SELECTOR_ARGUMENTS:
+            continue
+        raise ManifestError(
+            f"{where}.argv: `{argument}` selects packages or features after the lane "
+            f"arguments, so this operation no longer compiles what lane {lane_name!r} "
+            f"({list(lane.args)}) describes. Add a lane for the selection you want and "
+            "label the operation with it"
         )
     return Operation(
         consumer=consumer,

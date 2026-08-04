@@ -98,6 +98,27 @@ for candidate in python3 python; do
     fi
 done
 
+# The configurator channel runs last, after update_source and update_bin have
+# already committed and pushed. Its preconditions are therefore checked here,
+# before any channel is touched: a missing clone or a missing python3 found at
+# the point of use would abort a release that had already published two of its
+# three channels, leaving the configurator on the old version with no way back
+# but a manual publish. update_configurator keeps the same checks; this one
+# exists so they cannot be reached too late.
+if [[ "$NO_CONFIGURATOR" -ne 1 ]]; then
+    [[ -d "$AUR_CONFIG_DIR" ]] || {
+        echo "wayscriber-configurator AUR clone not found: $AUR_CONFIG_DIR" >&2
+        echo "This channel is required. Clone it, or pass --no-configurator to skip it" >&2
+        echo "deliberately. A silent skip would leave the configurator on an old release." >&2
+        exit 1
+    }
+    [[ -n "$PYTHON" ]] || {
+        echo "python3 is required to validate the rendered wayscriber-configurator recipe" >&2
+        echo "Install it, or pass --no-configurator to skip that channel deliberately." >&2
+        exit 1
+    }
+fi
+
 CLEANUP_DIRS=()
 cleanup() {
     local dir

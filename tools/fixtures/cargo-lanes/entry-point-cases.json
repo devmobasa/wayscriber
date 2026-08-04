@@ -49,6 +49,38 @@
       "file": "entry-points/ci-unallowlisted-cargo.yml"
     },
     {
+      "name": "ci-env-prefixed-cargo",
+      "why": "The same raw command behind an environment assignment must fail too. `RUSTFLAGS=... cargo test` does not start the line, so a start-of-line or after-an-operator detector passes it, and the workflow compiles a vector no lane describes.",
+      "expect": "fail",
+      "expect_error_contains": "raw Cargo command `cargo test --workspace --all-features`",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-env-prefixed-cargo.yml"
+    },
+    {
+      "name": "ci-wrapped-cargo",
+      "why": "A wrapper program with its own operands hides the command just as well: `timeout -k 10 300 cargo test` must be read past the wrapper, its option, and both bare numbers before the head is judged.",
+      "expect": "fail",
+      "expect_error_contains": "raw Cargo command `cargo test --workspace --all-features`",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-wrapped-cargo.yml"
+    },
+    {
+      "name": "ci-path-qualified-cargo",
+      "why": "Same fixture, other half of the rule: spelling the program with a directory must not launder it, and the reported command keeps the path so it cannot be mistaken for the allowlisted spelling.",
+      "expect": "fail",
+      "expect_error_contains": "raw Cargo command `/usr/bin/cargo build --workspace --bins`",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-wrapped-cargo.yml"
+    },
+    {
+      "name": "ci-unknown-consumer",
+      "why": "A driver call naming a consumer the manifest does not declare must fail while the workflow is read, not when the job reaches the step.",
+      "expect": "fail",
+      "expect_error_contains": "which is not a consumer declared in tools/cargo-lanes.json",
+      "entry_point": ".github/workflows/ci.yml",
+      "file": "entry-points/ci-unknown-consumer.yml"
+    },
+    {
       "name": "coverage-complete",
       "why": "A loader entry point that imports tools/cargo_lanes.py and names its consumer must be accepted, so the negative case below cannot be explained by a rule that rejects every checker text.",
       "expect": "pass",
@@ -62,6 +94,22 @@
       "expect_error_contains": "expected the file to consume the `source-coverage` operations through",
       "entry_point": "tools/check-rust-source-coverage.py",
       "file": "entry-points/coverage-missing-loader.py"
+    },
+    {
+      "name": "coverage-missing-loader-import",
+      "why": "Same fixture, the other half of the loader rule: with the import gone the file cannot be reading the manifest, whatever names it still contains.",
+      "expect": "fail",
+      "expect_error_contains": "expected the file to import tools/cargo_lanes.py",
+      "entry_point": "tools/check-rust-source-coverage.py",
+      "file": "entry-points/coverage-missing-loader.py"
+    },
+    {
+      "name": "coverage-missing-import",
+      "why": "The state a name-presence rule cannot see: the vectors are inlined and the import is gone, but the consumer name survives in a printed label. Without the import assertion this file passes the loader rule while the manifest reaches nothing in it.",
+      "expect": "fail",
+      "expect_error_contains": "expected the file to import tools/cargo_lanes.py",
+      "entry_point": "tools/check-rust-source-coverage.py",
+      "file": "entry-points/coverage-missing-import.py"
     }
   ]
 }

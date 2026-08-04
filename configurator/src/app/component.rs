@@ -510,6 +510,11 @@ fn reconcile_defaults_confirmation(
         .map(|_| DefaultsQuestion);
     let accepted = app.defaults_reset_pending.then_some(DefaultsQuestion);
 
+    // Recorded here rather than acted on here: the controls focus lands on are
+    // still hidden at this point, and GTK refuses focus to a widget that is
+    // not on screen. The reveal is a few lines down; the focus follows it.
+    let mut arming = false;
+
     match reconcile(presented.as_ref(), accepted.as_ref()) {
         DialogTransition::Unchanged => {}
         DialogTransition::Close(_) => close_defaults_confirmation(widgets),
@@ -523,6 +528,7 @@ fn reconcile_defaults_confirmation(
                 &defaults_confirmation(),
             );
             widgets.defaults_confirmation = Some(confirmation);
+            arming = true;
         }
     }
 
@@ -535,6 +541,14 @@ fn reconcile_defaults_confirmation(
         &widgets.defaults_button,
         !(presented && widgets.defaults_controls.is_inline()),
     );
+
+    // The write above hid the button the user just pressed, so on the channel
+    // that answers inline the keyboard has nowhere to go until focus is moved
+    // onto the control that replaced it. On the modern channel this is a no-op
+    // and the dialog focuses its own default response.
+    if arming {
+        widgets.defaults_controls.focus_confirm();
+    }
 }
 
 fn close_defaults_confirmation(widgets: &mut AppWidgets) {

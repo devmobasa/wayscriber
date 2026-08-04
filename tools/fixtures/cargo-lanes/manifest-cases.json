@@ -1,0 +1,25 @@
+{
+  "_fixture": "Cases replayed by `./tools/check-cargo-lanes.py --self-test`. Each file is loaded through the real `tools/cargo_lanes.py` loader, so these expectations cannot drift away from the schema the live manifest is held to.",
+  "cases": [
+    {
+      "name": "minimal-healthy",
+      "why": "The smallest manifest the loader accepts must load, so a rejected negative case cannot be explained by a loader that refuses every small manifest.",
+      "expect": "pass",
+      "file": "manifests/minimal-healthy.json"
+    },
+    {
+      "name": "operation-tail-features",
+      "why": "An operation whose argv tail appends `--features adw-modern` compiles the modern channel while the lane it is labeled with still says v1_4; the floor and routing guards read the lane, so nothing else would notice.",
+      "expect": "fail",
+      "expect_error_contains": "`--features` selects packages or features after the lane arguments",
+      "file": "manifests/operation-tail-features.json"
+    },
+    {
+      "name": "operation-tail-package-after-dashdash",
+      "why": "The same drift past a bare `--` and in the `--package=` spelling: a scan that stops at `--`, or that only compares whole tokens, would accept it.",
+      "expect": "fail",
+      "expect_error_contains": "`--package=wayscriber` selects packages or features after the lane arguments",
+      "file": "manifests/operation-tail-package-after-dashdash.json"
+    }
+  ]
+}

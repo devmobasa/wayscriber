@@ -40,13 +40,17 @@ Helper scripts for development, installation, packaging, and release workflows.
   - Feature and floor guard: reads live `cargo metadata` and asserts the declared feature edges, that the `default` closure cannot reach `adw-modern`, that each lane resolves exactly the libadwaita floor it declares (this catches a transitive dependency raising the floor), and that every declared configurator feature is enabled by some lane's resolved closure
   - Floor resolution is metadata-only, so the modern lane is verified on machines with no libadwaita 1.7 runtime
   - Entry-point contract: each entry point must call the driver exactly once per routed consumer, must not contain the raw commands the manifest replaced, and must still contain the allowlisted non-lane Cargo commands
+  - Raw-command detection tokenizes each line, splits it on shell operators, and skips environment assignments and wrapper programs before reading the head, so `RUSTFLAGS=... cargo test`, `sudo cargo ...`, `timeout -k 10 300 cargo ...`, `xvfb-run cargo ...`, and `/usr/bin/cargo ...` are all raw Cargo commands. The same normalization counts the allowlisted commands, so an allowlisted command that gains a prefix still counts exactly once
+  - An entry point that consumes the manifest through the loader must import `cargo_lanes`, not merely mention its consumer by name: the name survives in a printed label long after the vectors have been inlined
+  - Schema: a lane owns package and feature selection, so an operation's argv may not add `-p`, `--package`, `--workspace`, `--exclude`, `--features`, `--all-features`, or `--no-default-features` after the lane arguments, in any spelling and on either side of a bare `--`
   - `--self-test` replays the stored fixtures in `tools/fixtures/cargo-lanes/` instead of the working tree
   - Runs as a hard gate in `tools/lint-and-test.sh` and GitHub CI
   - Usage: `./tools/check-cargo-lanes.py [--self-test]`
 
 - **fixtures/cargo-lanes/** - Inputs for the `check-cargo-lanes.py` self-test
   - `feature-cases.json` and `metadata/` hold `cargo metadata`-shaped documents for one healthy case and the five negative cases (default gaining `adw-modern`, `adw-modern` moving to `v1_8`, the direct libadwaita edge moving to `v1_5`, an unrouted declared feature, and a transitive dependency raising the baseline floor)
-  - `entry-point-cases.json` and `entry-points/` hold workflow texts for one complete case and five broken ones
+  - `entry-point-cases.json` and `entry-points/` hold workflow texts for one complete case and the broken ones (a deleted linkage step, a reintroduced raw command, a duplicated driver call, a missing Arch gate, an undeclared consumer, and raw Cargo commands spelled plainly, environment-prefixed, wrapped, and path-qualified), plus checker texts for the loader entry point with its import and consumer name intact, with both gone, and with only the import gone
+  - `manifest-cases.json` and `manifests/` hold whole manifests for the schema rules: the smallest one the loader accepts, and two whose operation argv selects its own package or feature after the lane arguments
   - Each case states whether it must pass or fail, and a failing case states the message it must produce
   - See `tools/fixtures/cargo-lanes/README.md`
 
@@ -185,10 +189,12 @@ hashes, so build-level changes still need a pull request from us. See
   - Agreement alone is not the test: the live external recipe agreed with its own `.SRCINFO` while declaring none of the GTK4 dependencies, so the required set is asserted outright
   - Reads both files with a conservative parser and never runs `bash eval` on a recipe
   - Structure means exactly one `pkgbase = wayscriber-configurator` and one `pkgname = wayscriber-configurator` section and nothing else: a duplicated section repeats fields the PKGBUILD already declares, so the agreement check cannot see it while makepkg reads a second package out of the recipe
+  - Build commands are read one invocation at a time, segmented on the shell separators `shlex` emits as standalone tokens, so a recipe that joins two `cargo build` calls with `&&` is still judged per invocation instead of as one blob whose options all run together
   - `--pair DIR` validates an already-rendered pair; `update-aur-from-manifest.sh` uses it on its temporary render before anything reaches a clone
-  - `--self-test` replays the fixtures for the rules a healthy tree cannot exercise: a throwaway repository whose tracked template pair is ignored because the `.gitignore` negation chain was deleted, and a rendered `.SRCINFO` with a package section repeated. Both must be rejected, and the ignore fixture also asserts that the default `git check-ignore` still accepts it, since that disagreement is what `--no-index` exists for
+  - `--pkgbuild PATH` runs the build-command rule alone against any PKGBUILD. `tools/test-release-packaging.sh` points it at `packaging/PKGBUILD`, the combined Arch recipe, where the dependency and `.SRCINFO` rules describe a package set that file never had but the modern-feature claim is the same one
+  - `--self-test` replays the fixtures for the rules a healthy tree cannot exercise: a throwaway repository whose tracked template pair is ignored because the `.gitignore` negation chain was deleted, a rendered `.SRCINFO` with a package section repeated, and two Cargo builds joined on one line with the modern feature on the wrong one. Each must be rejected, and the ignore fixture also asserts that the default `git check-ignore` still accepts it, since that disagreement is what `--no-index` exists for
   - Needs no makepkg, so it runs as a hard gate in `tools/lint-and-test.sh` and hosted Ubuntu CI
-  - Usage: `./tools/check-aur-templates.py [--pair DIR | --self-test]`
+  - Usage: `./tools/check-aur-templates.py [--pair DIR | --pkgbuild PATH | --self-test]`
 
 - **check-srcinfo-canonical.py** - Compare a checked-in .SRCINFO with what makepkg generates
   - Runs the real `makepkg --printsrcinfo` on the PKGBUILD and compares. Parsed field-multiset equality blocks; a byte-level difference is a warning that names the regenerate task, so a rolling makepkg serialization change cannot fail unrelated pull requests

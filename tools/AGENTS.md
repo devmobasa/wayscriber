@@ -14,13 +14,20 @@
 - `tools/cargo-lanes.json` is the only place a Cargo package/feature matrix is declared.
   A new raw `cargo` command in an entry point must become a lane operation or an
   `allowed_non_lane_cargo` entry with a reason; `./tools/check-cargo-lanes.py` fails otherwise.
+  An environment prefix, a wrapper program, or a path-qualified `cargo` does not exempt a
+  command: the checker reads the head of every command on the line, not the head of the line.
+- A lane owns package and feature selection. An operation's argv may not add its own
+  selector after the lane arguments — not past a bare `--` either — or the command stops
+  compiling what the lane it is labeled with describes while the floor and routing guards
+  keep asserting the lane's story.
 - `check-rust-source-coverage.py` consumes the manifest's `source-coverage` vectors, so it
   cannot drift from the lint/test matrix. Those vectors have no modern libadwaita lane;
   the compensating rule is that no Rust source file may be reachable only under `adw-modern`.
 - Every rule in `check-cargo-lanes.py` must keep a fixture in `tools/fixtures/cargo-lanes/`
   that proves it rejects what it claims to reject.
 - Same obligation for `check-aur-templates.py`: a gate a healthy tree cannot exercise
-  (the unignored proof, the `.SRCINFO` section counts) keeps a `--self-test` fixture.
+  (the unignored proof, the `.SRCINFO` section counts, two Cargo builds joined on one line
+  with the modern feature on the wrong one) keeps a `--self-test` fixture.
 - Avoid platform-specific assumptions unless the script is explicitly platform-specific.
 
 ## Coupled Changes

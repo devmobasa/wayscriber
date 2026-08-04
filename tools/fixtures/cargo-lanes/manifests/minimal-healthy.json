@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "notes": [
+    "Fixture, never loaded by a real run. The smallest manifest the loader",
+    "accepts: one lane, one consumer whose single operation carries the lane",
+    "arguments verbatim and nothing that selects packages or features after",
+    "them, and one entry point that calls the consumer. It exists so the",
+    "negative manifest fixtures beside it cannot be explained by a loader that",
+    "rejects every small manifest."
+  ],
+  "driver": "./tools/run-cargo-consumer.py",
+  "lanes": {
+    "config-baseline": {
+      "description": "Configurator at the deb/rpm baseline, libadwaita pinned to the v1_4 floor.",
+      "args": [
+        "-p",
+        "wayscriber-configurator",
+        "--no-default-features",
+        "--features",
+        "tablet-input"
+      ],
+      "covers_configurator": true,
+      "libadwaita_floor": "v1_4"
+    }
+  },
+  "consumers": {
+    "fixture-gate": {
+      "description": "One clippy operation on the baseline lane.",
+      "caller": "fixtures/entry.sh",
+      "operations": [
+        {
+          "lane": "config-baseline",
+          "label": "clippy (configurator, baseline)",
+          "argv": [
+            "cargo",
+            "clippy",
+            "-p",
+            "wayscriber-configurator",
+            "--no-default-features",
+            "--features",
+            "tablet-input",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+          ]
+        }
+      ]
+    }
+  },
+  "entry_points": {
+    "fixtures/entry.sh": {
+      "description": "Fixture entry point; no file of this name is ever read.",
+      "driver_consumers": ["fixture-gate"],
+      "loader_consumers": [],
+      "removed_commands": []
+    }
+  },
+  "allowed_non_lane_cargo": []
+}

@@ -8,7 +8,7 @@ does not contain. What this repository owns is the template pair
 release. That makes the templates the only reviewable copy of the recipe, so they
 are checked here rather than after publication.
 
-Three modes, one rule set:
+Four modes, one rule set:
 
 * no arguments -- render the checked-in templates with fixture values and validate
   the result, plus the template-only gates (token vocabulary, and the
@@ -16,10 +16,15 @@ Three modes, one rule set:
   them);
 * `--pair DIR` -- validate an already-rendered `PKGBUILD`/`.SRCINFO` pair. The
   updater calls this on its temporary render before anything reaches the clone;
-* `--self-test` -- replay fixtures for the two gates a healthy tree cannot
-  exercise: a `.gitignore` whose negation chain has been deleted, and a `.SRCINFO`
-  with a package section repeated. Both must be rejected, and for the stated
-  reason.
+* `--pkgbuild PATH` -- validate the cargo build commands of any PKGBUILD, and
+  only those. `packaging/PKGBUILD` is a combined recipe for both binaries, so the
+  dependency and `.SRCINFO` rules describe a package set it never had, but the
+  claim that `adw-modern` reaches the configurator build and no other is the same
+  claim there; `tools/test-release-packaging.sh` runs this against it;
+* `--self-test` -- replay fixtures for the gates a healthy tree cannot exercise: a
+  `.gitignore` whose negation chain has been deleted, a `.SRCINFO` with a package
+  section repeated, and two Cargo builds joined on one line with the modern
+  feature on the wrong one. Each must be rejected, and for the stated reason.
 
 Validation is asymmetric on purpose. `.SRCINFO` cannot represent a build body, so
 the modern-feature rule is asserted against the PKGBUILD alone; the two files are
@@ -64,6 +69,11 @@ FIXTURE_VALUES = {
 CONFIGURATOR_MANIFEST = "configurator/Cargo.toml"
 MODERN_FEATURE = "adw-modern"
 AUR_PKGNAME = "wayscriber-configurator"
+
+# Where one line stops being one command. A recipe joins a `cd` to the build it
+# applies to, and a combined recipe joins two builds, so a line is not an
+# invocation.
+SHELL_SEPARATORS = frozenset({"&&", "||", ";", "|", "&"})
 
 # The sections this recipe has, each exactly once. It is a single-package build,
 # so anything else in the file describes a package this channel never publishes.
@@ -124,6 +134,25 @@ def check_token_vocabulary(text: str, origin: str, errors: list[str]) -> set[str
     return used
 
 
+def command_segments(words: list[str]) -> list[list[str]]:
+    """Split one tokenized line into the commands a shell would run separately.
+
+    `shlex` emits an unquoted separator as a standalone token and keeps a
+    quoted one inside the word it belongs to, so splitting on the standalone
+    ones is what separates `cd x && cargo build A && cargo build B` into the
+    invocations it actually runs. Without this the whole line is one blob:
+    every per-invocation rule sees the union of both commands' options and can
+    no longer tell which build received which feature.
+    """
+    segments: list[list[str]] = [[]]
+    for word in words:
+        if word in SHELL_SEPARATORS:
+            segments.append([])
+            continue
+        segments[-1].append(word)
+    return [segment for segment in segments if segment]
+
+
 def cargo_build_commands(pkgbuild_text: str, origin: str, errors: list[str]) -> list[list[str]]:
     commands: list[list[str]] = []
     for number, raw_line in enumerate(pkgbuild_text.splitlines(), start=1):
@@ -135,8 +164,9 @@ def cargo_build_commands(pkgbuild_text: str, origin: str, errors: list[str]) -> 
         except ValueError as error:
             errors.append(f"{origin}:{number}: could not split build command: {error}")
             continue
-        if "cargo" in words and "build" in words:
-            commands.append(words)
+        for segment in command_segments(words):
+            if "cargo" in segment and "build" in segment:
+                commands.append(segment)
     return commands
 
 
@@ -389,6 +419,20 @@ def check_templates(errors: list[str]) -> None:
     )
 
 
+def check_pkgbuild_build_commands(path: Path, errors: list[str]) -> None:
+    """Run the build-command rule alone against an arbitrary PKGBUILD.
+
+    The template pair is not the only recipe this repository owns that builds
+    the configurator. `packaging/PKGBUILD` is a combined Arch recipe for both
+    binaries, and the claim that matters there is this same one: the modern
+    feature reaches the configurator build and no other. Only that rule runs.
+    The dependency and .SRCINFO rules describe the single-package channel this
+    file publishes, and asserting them against a combined recipe would fail it
+    for a contract it never had.
+    """
+    check_modern_feature(read_text(path), path.as_posix(), errors)
+
+
 def check_rendered_pair(directory: Path, errors: list[str]) -> None:
     pkgbuild_path = directory / "PKGBUILD"
     srcinfo_path = directory / ".SRCINFO"
@@ -541,10 +585,57 @@ def self_test_srcinfo_sections() -> tuple[list[str], int]:
     return failures, cases
 
 
+# Two Cargo invocations joined on one line, which is how a recipe ties a `cd`
+# to the build it applies to. The feature sits on the wrong one: the
+# configurator build is plain and the root build carries `adw-modern`. Read as
+# a single blob the line looks correct — the manifest path and the feature are
+# both somewhere in it — so this is exactly the mistake a line-at-a-time rule
+# cannot see.
+SELF_TEST_MISPLACED_FEATURE = (
+    "build() {\n"
+    '    cd "$pkgname-$pkgver" && '
+    "cargo build --frozen --release --bins --manifest-path configurator/Cargo.toml && "
+    f"cargo build --frozen --release --bins --features {MODERN_FEATURE}\n"
+    "}\n"
+)
+SELF_TEST_CORRECT_FEATURE = (
+    "build() {\n"
+    '    cd "$pkgname-$pkgver" && '
+    "cargo build --frozen --release --bins && "
+    "cargo build --frozen --release --bins --manifest-path configurator/Cargo.toml "
+    f"--features {MODERN_FEATURE}\n"
+    "}\n"
+)
+
+
+def self_test_build_segmentation() -> tuple[list[str], int]:
+    """Each Cargo invocation on a joined line is judged on its own."""
+    failures: list[str] = []
+    cases = 0
+    for name, text, expectation in (
+        ("joined-builds-correct-feature", SELF_TEST_CORRECT_FEATURE, "pass"),
+        ("joined-builds-misplaced-feature", SELF_TEST_MISPLACED_FEATURE, "fail"),
+    ):
+        errors: list[str] = []
+        check_modern_feature(text, f"{name} (self-test recipe)", errors)
+        cases += 1
+        failures += judge(
+            name,
+            expectation,
+            f"`{MODERN_FEATURE}` is passed to a build that is not the configurator",
+            errors,
+        )
+    return failures, cases
+
+
 def run_self_test() -> tuple[list[str], int]:
     ignore_failures, ignore_cases = self_test_unignored_gate()
     section_failures, section_cases = self_test_srcinfo_sections()
-    return ignore_failures + section_failures, ignore_cases + section_cases
+    segment_failures, segment_cases = self_test_build_segmentation()
+    return (
+        ignore_failures + section_failures + segment_failures,
+        ignore_cases + section_cases + segment_cases,
+    )
 
 
 def main() -> int:
@@ -557,14 +648,30 @@ def main() -> int:
         "instead of the checked-in templates",
     )
     parser.add_argument(
+        "--pkgbuild",
+        metavar="PATH",
+        type=Path,
+        help="validate the cargo build commands of any PKGBUILD, without the "
+        "dependency and .SRCINFO rules that describe this channel alone",
+    )
+    parser.add_argument(
         "--self-test",
         action="store_true",
-        help="replay the fixtures that prove the unignored and .SRCINFO section "
-        "gates reject what they claim to reject",
+        help="replay the fixtures that prove the unignored, .SRCINFO section, "
+        "and build-command gates reject what they claim to reject",
     )
     arguments = parser.parse_args()
-    if arguments.self_test and arguments.pair is not None:
-        parser.error("--self-test replays fixtures and takes no --pair")
+    modes = [
+        name
+        for name, chosen in (
+            ("--pair", arguments.pair is not None),
+            ("--pkgbuild", arguments.pkgbuild is not None),
+            ("--self-test", arguments.self_test),
+        )
+        if chosen
+    ]
+    if len(modes) > 1:
+        parser.error(f"{' and '.join(modes)} are separate modes; pass one")
 
     label = "self-test" if arguments.self_test else "check"
     errors: list[str] = []
@@ -573,6 +680,12 @@ def main() -> int:
         if arguments.self_test:
             errors, cases = run_self_test()
             summary = f"AUR template self-test OK: {cases} fixture(s) behaved as declared."
+        elif arguments.pkgbuild is not None:
+            check_pkgbuild_build_commands(arguments.pkgbuild, errors)
+            summary = (
+                f"{arguments.pkgbuild} build commands OK: `{MODERN_FEATURE}` reaches the "
+                "configurator build and no other."
+            )
         elif arguments.pair is None:
             check_templates(errors)
             summary = (

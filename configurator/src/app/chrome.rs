@@ -215,6 +215,10 @@ fn set_active_blocked(toggles: &adw::ToggleGroup, handler: &SignalHandlerId, ind
 pub(crate) struct ConfirmationControls {
     /// `None` in the modern channel.
     row: Option<gtk::Widget>,
+    /// The control keyboard focus lands on when the question comes up, kept
+    /// beside the row because the row is a container and focus belongs on one
+    /// button in it. `None` in the modern channel.
+    confirm: Option<gtk::Button>,
 }
 
 impl ConfirmationControls {
@@ -243,6 +247,39 @@ impl ConfirmationControls {
         // card comes back.
         if row.get_visible() != presented {
             row.set_visible(presented);
+        }
+    }
+
+    /// Whether the question is currently up in this channel's own layout.
+    ///
+    /// Read before [`Self::set_presented`] writes, this is what tells a caller
+    /// that has no transition in hand whether the next write reveals the
+    /// controls or merely repeats what is already on screen. Always `false` in
+    /// the modern channel, which puts nothing in the caller's layout.
+    pub(crate) fn is_presented(&self) -> bool {
+        self.row.as_ref().is_some_and(|row| row.get_visible())
+    }
+
+    /// Moves keyboard focus onto Confirm.
+    ///
+    /// Call it on the write that reveals the controls, and only there. Arming
+    /// hides the control that asked, and hiding the focused widget leaves the
+    /// window with no focus at all: the question would be on screen with no
+    /// way to answer it from the keyboard, which is a regression against the
+    /// relabel-in-place control this pair replaced. Focusing on every refresh
+    /// instead would be its own bug — it would drag focus off Cancel while the
+    /// user was reaching for it.
+    ///
+    /// Order matters: GTK refuses focus to a widget that is not on screen, so
+    /// this runs after the reveal, never in the same breath as the decision to
+    /// reveal. A refusal is not actionable here — there is no focus to restore
+    /// and nothing to undo — so the answer is dropped.
+    ///
+    /// No-op in the modern channel: `AdwAlertDialog` is modal and focuses its
+    /// own default response, and there is no inline control to focus anyway.
+    pub(crate) fn focus_confirm(&self) {
+        if let Some(confirm) = &self.confirm {
+            confirm.grab_focus();
         }
     }
 
@@ -289,6 +326,7 @@ pub(crate) fn confirmation_controls(
 
     ConfirmationControls {
         row: Some(row.upcast()),
+        confirm: Some(confirm),
     }
 }
 
@@ -320,7 +358,10 @@ pub(crate) fn confirmation_controls(
     _sender: &ComponentSender<ConfiguratorApp>,
     _confirmation: &Confirmation,
 ) -> ConfirmationControls {
-    ConfirmationControls { row: None }
+    ConfirmationControls {
+        row: None,
+        confirm: None,
+    }
 }
 
 /// The confirmation a channel currently has on screen — baseline twin.

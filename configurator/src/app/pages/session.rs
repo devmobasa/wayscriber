@@ -648,9 +648,21 @@ fn item_card(item: &CatalogItemLayout, sender: &ComponentSender<ConfiguratorApp>
         // The button that asks steps aside only for controls that take its
         // place; a dialog takes no space in this row, so on that channel it
         // stays where it is behind a modal question it cannot receive.
+        //
+        // Read before the write below, this says the question is coming up on
+        // this card now rather than already being up: only that refresh moves
+        // focus, so a later refresh cannot drag it off Cancel while the user is
+        // reaching for it.
+        let arming = values.clear_armed && !confirm.is_presented();
         set_visible(&clear, !(values.clear_armed && confirm.is_inline()));
         set_sensitive(&clear, values.clear_enabled);
         confirm.set_presented(values.clear_armed);
+        if arming {
+            // The card just hid the button the user pressed. Focus follows the
+            // reveal, never precedes it: GTK refuses focus to a widget that is
+            // not on screen yet.
+            confirm.focus_confirm();
+        }
     });
 
     CatalogRow { card, refresh }

@@ -142,6 +142,14 @@ fi
 # the exact commit/checksum stamp rather than matching on version alone.
 assert_contains "${PACKAGE_SCRIPT}" 'SYSTEM_DEPS_GTK4_LAYER_SHELL_0_LINK=static'
 assert_contains "${PACKAGE_SCRIPT}" 'verify-static-gtk4-layer-shell.sh'
+
+# packaging/AGENTS.md: "deb and rpm builds never pass adw-modern. Those
+# artifacts are the baseline channel; they declare libadwaita-1-0 (>= 1.4) and
+# libadwaita >= 1.4". package.sh is what builds them, so the feature appearing
+# anywhere in it would raise the real runtime floor of a package that goes on
+# advertising the old one, and the release workflow's dependency assertions
+# would keep passing while the binary refused to start on Ubuntu 24.04.
+assert_not_contains "${PACKAGE_SCRIPT}" 'adw-modern'
 assert_contains "${INSTALL_SCRIPT}" 'PIN_STAMP='
 assert_contains "${INSTALL_SCRIPT}" 'commit=%s'
 assert_contains "${INSTALL_SCRIPT}" 'archive_sha256=%s'
@@ -802,6 +810,41 @@ assert_not_contains "${REPO_ROOT}/packaging/PKGBUILD" \
 assert_contains "${REPO_ROOT}/packaging/PKGBUILD" "'libadwaita>=1.7'"
 assert_contains "${REPO_ROOT}/packaging/.SRCINFO" "depends = libadwaita>=1.7"
 
+# The same claim, asserted by the rule instead of by substring. The two
+# assertions above describe the recipe's current line shape: they go blind the
+# moment the two builds are joined with `&&`, because then neither exact line
+# exists and both patterns are satisfied by absence. The checker reads each
+# cargo build invocation on its own, so it keeps answering the real question --
+# which build received the feature.
+"${REPO_ROOT}/tools/check-aur-templates.py" --pkgbuild "${REPO_ROOT}/packaging/PKGBUILD" >/dev/null
+
+# And that mode must reject the drift it exists to catch: the real recipe with
+# the feature moved off the configurator build and onto the wayscriber one.
+PACKAGING_DRIFT_DIR="${WORK_DIR}/packaging-drift"
+PACKAGING_DRIFT_OUTPUT="${WORK_DIR}/packaging-drift-output"
+mkdir -p "${PACKAGING_DRIFT_DIR}"
+# `#` delimiters and literal indentation, no `|` and no capture groups: those
+# characters are shell operators, and a Cargo command spelled out between them
+# reads as an invocation to tools/check-cargo-lanes.py. A recipe this file
+# builds to be rejected is not a command this file runs.
+sed \
+    -e 's#    cargo build --frozen --release --bins --manifest-path configurator/Cargo.toml --features adw-modern#    cargo build --frozen --release --bins --manifest-path configurator/Cargo.toml#' \
+    -e 's#^    cargo build --frozen --release --bins$#    cargo build --frozen --release --bins --features adw-modern#' \
+    "${REPO_ROOT}/packaging/PKGBUILD" > "${PACKAGING_DRIFT_DIR}/PKGBUILD"
+assert_contains "${PACKAGING_DRIFT_DIR}/PKGBUILD" \
+    'cargo build --frozen --release --bins --features adw-modern'
+set +e
+"${REPO_ROOT}/tools/check-aur-templates.py" --pkgbuild "${PACKAGING_DRIFT_DIR}/PKGBUILD" \
+    >"${PACKAGING_DRIFT_OUTPUT}" 2>&1
+PACKAGING_DRIFT_STATUS=$?
+set -e
+if [[ ${PACKAGING_DRIFT_STATUS} -eq 0 ]]; then
+    echo "--pkgbuild accepted a recipe that builds wayscriber with adw-modern" >&2
+    exit 1
+fi
+assert_contains "${PACKAGING_DRIFT_OUTPUT}" \
+    "is passed to a build that is not the configurator"
+
 # Prebuilt configurator artifacts stay on the v1_4 baseline and must declare the
 # matching runtime floor in both package formats.
 assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- libadwaita-1-0 (>= 1.4)"
@@ -927,10 +970,132 @@ assert_contains "${AUR_CONFIG_HOTFIX}/.SRCINFO" "pkgrel = 4"
 assert_no_unresolved_tokens "${AUR_CONFIG_HOTFIX}/PKGBUILD"
 assert_no_unresolved_tokens "${AUR_CONFIG_HOTFIX}/.SRCINFO"
 
+# The source channel, on the same terms. This is where the path-safe
+# next_pkgrel bug was originally live: it resolves its argument before the
+# updater enters the clone, so a RELATIVE --source-dir must still find the
+# PKGBUILD it is about to bump. Read afterwards it would look at
+# aur-source-hotfix/aur-source-hotfix/PKGBUILD, find nothing, and pin every
+# release to pkgrel=1.
+write_source_clone() {
+    local dir="$1" pkgver="$2" pkgrel="$3"
+    mkdir -p "${dir}"
+    cat > "${dir}/PKGBUILD" <<EOF
+pkgname=wayscriber
+pkgver=${pkgver}
+pkgrel=${pkgrel}
+depends=(
+    'gcc-libs'
+    'wl-clipboard'
+)
+source=("wayscriber-\$pkgver.tar.gz::https://example.invalid/old.tar.gz")
+sha256sums=('old')
+EOF
+    {
+        printf 'pkgbase = wayscriber\n'
+        printf '\tpkgver = %s\n' "${pkgver}"
+        printf '\tpkgrel = %s\n' "${pkgrel}"
+        printf '\tdepends = gcc-libs\n'
+        printf '\tdepends = wl-clipboard\n'
+        printf '\tsource = wayscriber-%s.tar.gz::https://example.invalid/old.tar.gz\n' "${pkgver}"
+        printf '\tsha256sums = old\n'
+        printf '\npkgname = wayscriber\n'
+    } > "${dir}/.SRCINFO"
+    git -C "${dir}" init -q
+    git -C "${dir}" add PKGBUILD .SRCINFO
+}
+
+# Same isolation the configurator fixtures use: the other channels are pointed
+# at directories that do not exist, and the stubbed curl turns any reach for the
+# network into a loud failure rather than a silent dependency on it.
+run_source_updater() {
+    local cwd="$1"
+    shift
+    (
+        cd "${cwd}"
+        PATH="${AUR_CONFIG_FAKE_BIN}:${PATH}" \
+            bash "${REPO_ROOT}/tools/update-aur-from-manifest.sh" \
+                --manifest "${MANIFEST}" \
+                --bin-dir "${WORK_DIR}/missing-bin" \
+                --config-dir "${WORK_DIR}/missing-config" \
+                --no-configurator \
+                "$@"
+    )
+}
+
+# Hotfix rerun: same version, so the release number advances by one.
+AUR_SOURCE_HOTFIX="${WORK_DIR}/aur-source-hotfix"
+write_source_clone "${AUR_SOURCE_HOTFIX}" 9.9.9 3
+run_source_updater "${WORK_DIR}" \
+    --version 9.9.9 \
+    --source-dir aur-source-hotfix \
+    --source-sha256 "${AUR_FIXTURE_SHA}" >/dev/null
+
+assert_contains "${AUR_SOURCE_HOTFIX}/PKGBUILD" "pkgver=9.9.9"
+assert_contains "${AUR_SOURCE_HOTFIX}/PKGBUILD" "pkgrel=4"
+assert_contains "${AUR_SOURCE_HOTFIX}/.SRCINFO" "pkgrel = 4"
+assert_contains "${AUR_SOURCE_HOTFIX}/PKGBUILD" "sha256sums=('${AUR_FIXTURE_SHA}')"
+assert_contains "${AUR_SOURCE_HOTFIX}/.SRCINFO" "sha256sums = ${AUR_FIXTURE_SHA}"
+
+# New version: the release number restarts, whatever it had reached before.
+AUR_SOURCE_RELEASE="${WORK_DIR}/aur-source-release"
+write_source_clone "${AUR_SOURCE_RELEASE}" 9.9.8 5
+run_source_updater "${WORK_DIR}" \
+    --version 9.9.9 \
+    --source-dir aur-source-release \
+    --source-sha256 "${AUR_FIXTURE_SHA}" >/dev/null
+
+assert_contains "${AUR_SOURCE_RELEASE}/PKGBUILD" "pkgver=9.9.9"
+assert_contains "${AUR_SOURCE_RELEASE}/PKGBUILD" "pkgrel=1"
+assert_contains "${AUR_SOURCE_RELEASE}/.SRCINFO" "pkgrel = 1"
+
 # A missing clone is a hard error unless the skip is explicit.
 expect_configurator_failure "wayscriber-configurator AUR clone not found" "${WORK_DIR}" \
     --config-dir "${WORK_DIR}/missing-config" \
     --source-sha256 "${AUR_FIXTURE_SHA}"
+
+# ...and that error must arrive before any other channel is touched. The
+# configurator is published last, so a precondition checked at its point of use
+# aborts a run that has already committed and pushed the source and bin
+# channels, leaving the configurator behind with no way back but a manual
+# publish. Seed a real source clone, ask for a configurator clone that does not
+# exist, and require the clone to come back byte-identical.
+AUR_SOURCE_UNTOUCHED="${WORK_DIR}/aur-source-untouched"
+AUR_PRECONDITION_OUTPUT="${WORK_DIR}/aur-precondition-output"
+write_source_clone "${AUR_SOURCE_UNTOUCHED}" 9.9.8 5
+AUR_SOURCE_UNTOUCHED_BEFORE="$(
+    sha256sum "${AUR_SOURCE_UNTOUCHED}/PKGBUILD" "${AUR_SOURCE_UNTOUCHED}/.SRCINFO"
+)"
+
+set +e
+(
+    cd "${WORK_DIR}"
+    PATH="${AUR_CONFIG_FAKE_BIN}:${PATH}" \
+        bash "${REPO_ROOT}/tools/update-aur-from-manifest.sh" \
+            --version 9.9.9 \
+            --manifest "${MANIFEST}" \
+            --source-dir aur-source-untouched \
+            --bin-dir "${WORK_DIR}/missing-bin" \
+            --config-dir "${WORK_DIR}/missing-config" \
+            --source-sha256 "${AUR_FIXTURE_SHA}"
+) >"${AUR_PRECONDITION_OUTPUT}" 2>&1
+AUR_PRECONDITION_STATUS=$?
+set -e
+
+if [[ ${AUR_PRECONDITION_STATUS} -eq 0 ]]; then
+    echo "A missing configurator clone must abort the release" >&2
+    cat "${AUR_PRECONDITION_OUTPUT}" >&2
+    exit 1
+fi
+assert_contains "${AUR_PRECONDITION_OUTPUT}" "wayscriber-configurator AUR clone not found"
+assert_contains "${AUR_PRECONDITION_OUTPUT}" "--no-configurator"
+assert_contains "${AUR_SOURCE_UNTOUCHED}/PKGBUILD" "pkgver=9.9.8"
+assert_contains "${AUR_SOURCE_UNTOUCHED}/PKGBUILD" "pkgrel=5"
+assert_not_contains "${AUR_SOURCE_UNTOUCHED}/PKGBUILD" "${AUR_FIXTURE_SHA}"
+[[ "$(sha256sum "${AUR_SOURCE_UNTOUCHED}/PKGBUILD" "${AUR_SOURCE_UNTOUCHED}/.SRCINFO")" \
+    == "${AUR_SOURCE_UNTOUCHED_BEFORE}" ]] || {
+    echo "The source channel was modified before the required configurator clone was checked" >&2
+    exit 1
+}
 
 AUR_CONFIG_SKIP_OUTPUT="${WORK_DIR}/aur-config-skip-output"
 run_configurator_updater "${WORK_DIR}" \

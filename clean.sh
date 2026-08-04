@@ -2,6 +2,10 @@
 # Format the project, then lint every portable Cargo lane leniently.
 set -euo pipefail
 
+# Both commands below are repository-wide, and the driver is named by a path
+# relative to the root, so run from the root whatever the caller's directory is.
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Format first so clippy runs on the normalized code.
 cargo fmt
 

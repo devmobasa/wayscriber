@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -40,6 +41,7 @@ from cargo_lanes import REPO_ROOT, Lane, Manifest, ManifestError, load_manifest
 FIXTURE_ROOT = REPO_ROOT / "tools" / "fixtures" / "cargo-lanes"
 FEATURE_CASES = FIXTURE_ROOT / "feature-cases.json"
 ENTRY_POINT_CASES = FIXTURE_ROOT / "entry-point-cases.json"
+MANIFEST_CASES = FIXTURE_ROOT / "manifest-cases.json"
 
 CONFIGURATOR_PACKAGE = "wayscriber-configurator"
 LIBADWAITA_PACKAGE = "libadwaita"
@@ -56,7 +58,50 @@ EXPECTED_FEATURE_EDGES: dict[str, tuple[str, ...]] = {
 EXPECTED_LIBADWAITA_BASE_FEATURES: tuple[str, ...] = ("v1_4",)
 
 VERSION_FEATURE = re.compile(r"^v(\d+)_(\d+)$")
-CARGO_COMMAND_START = re.compile(r"(?:^|[;&|(]\s*|\$\(\s*)cargo(?=\s|$)")
+
+# Where one line stops being one command. Splitting here is what makes the
+# scan below read the *head* of every command on the line rather than the head
+# of the line.
+SHELL_OPERATOR = re.compile(r"\$\(|\|\||&&|[;&|(){}`]")
+
+# A leading `NAME=value` token is the shell setting a variable for the command
+# that follows, not the command. Matching only the name side is deliberate: the
+# value may be quoted and contain anything, and a regex that tries to describe
+# the value stops matching the moment it does.
+ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+# Commands that run another command. Their own tokens are skipped so the head
+# read afterwards is the program that actually runs.
+COMMAND_WRAPPERS = frozenset(
+    {
+        "sudo",
+        "env",
+        "nice",
+        "ionice",
+        "time",
+        "timeout",
+        "xvfb-run",
+        "dbus-run-session",
+        "stdbuf",
+        "nohup",
+        "setarch",
+        "runuser",
+        "su",
+        "doas",
+    }
+)
+
+# The wrappers that take a bare number before the command: `timeout 300 cargo
+# test`, `nice 10 cargo build`. Consuming it is what keeps the number from
+# being read as the program.
+NUMERIC_OPERAND_WRAPPERS = frozenset({"timeout", "nice", "ionice"})
+NUMERIC_OPERAND = re.compile(r"^\d+(?:\.\d+)?[smhd]?$")
+
+CARGO_PROGRAM = "cargo"
+
+# Loader entry points must reach the manifest through the shared module, not
+# merely mention a consumer name.
+LOADER_IMPORT = re.compile(r"^\s*(?:import\s+cargo_lanes\b|from\s+cargo_lanes\s+import\s)")
 
 
 class GuardError(RuntimeError):
@@ -385,6 +430,75 @@ def normalized_command(line: str) -> str:
     return text
 
 
+def program_name(token: str) -> str:
+    """The basename of a command token, so `/usr/bin/cargo` reads as `cargo`."""
+    return token.rsplit("/", maxsplit=1)[-1]
+
+
+def command_tokens(segment: str) -> list[str]:
+    """Split one command segment into shell words.
+
+    Cutting the line on operators first can land inside a quoted string, and
+    `shlex` refuses an unbalanced quote. A whitespace split still exposes the
+    head token, which is the only thing this scan reads.
+    """
+    try:
+        return shlex.split(segment)
+    except ValueError:
+        return segment.split()
+
+
+def cargo_invocation(segment: str) -> str | None:
+    """The Cargo command this segment runs, or `None` if it runs something else.
+
+    Environment assignments and wrapper programs are consumed first, so
+    `RUSTFLAGS="-A warnings" cargo test`, `sudo cargo ...`, `env cargo ...`,
+    `timeout 300 cargo ...`, `xvfb-run cargo ...` and `/usr/bin/cargo ...` all
+    answer with the Cargo command they hide. The answer keeps the tokens from
+    the head onward, so an allowlisted command still compares equal after the
+    prefix is stripped, while a path-qualified `cargo` stays visibly different
+    from the allowlisted spelling.
+    """
+    tokens = command_tokens(segment)
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if ENV_ASSIGNMENT.match(token):
+            index += 1
+            continue
+        name = program_name(token)
+        if name not in COMMAND_WRAPPERS:
+            break
+        index += 1
+        while index < len(tokens) and tokens[index].startswith("-"):
+            index += 1
+        # Every bare number, not just the first: `timeout -k 10 300 cargo test`
+        # spends one on the option above and one on the duration, and stopping
+        # after the first would read `300` as the program.
+        while (
+            name in NUMERIC_OPERAND_WRAPPERS
+            and index < len(tokens)
+            and NUMERIC_OPERAND.match(tokens[index])
+        ):
+            index += 1
+
+    if index >= len(tokens) or program_name(tokens[index]) != CARGO_PROGRAM:
+        return None
+    return " ".join(tokens[index:])
+
+
+def cargo_invocations(command: str) -> list[str]:
+    """Every Cargo command one line runs, in order."""
+    found: list[str] = []
+    for segment in SHELL_OPERATOR.split(command):
+        if not segment.strip():
+            continue
+        invocation = cargo_invocation(segment)
+        if invocation is not None:
+            found.append(invocation)
+    return found
+
+
 def check_entry_point(manifest: Manifest, path: str, text: str) -> list[str]:
     entry = manifest.entry_points[path]
     errors: list[str] = []
@@ -421,6 +535,13 @@ def check_entry_point(manifest: Manifest, path: str, text: str) -> list[str]:
                 f"{', '.join(entry.driver_consumers) or 'none'})"
             )
 
+    if entry.loader_consumers and not any(LOADER_IMPORT.match(line) for _, line in lines):
+        errors.append(
+            f"{path}: expected the file to import tools/cargo_lanes.py "
+            "(`import cargo_lanes` or `from cargo_lanes import ...`); the routed consumer "
+            f"name(s) {', '.join(entry.loader_consumers)} can sit in an inlined vector list "
+            "long after the loader is gone, and then manifest edits stop reaching this gate"
+        )
     for consumer in entry.loader_consumers:
         quoted = (f'"{consumer}"', f"'{consumer}'")
         if not any(token in line for _, line in lines for token in quoted):
@@ -441,14 +562,17 @@ def check_entry_point(manifest: Manifest, path: str, text: str) -> list[str]:
     allowed = manifest.allowed_for(path)
     allowed_commands = {entry_command.command for entry_command in allowed}
     counted: dict[str, int] = {command: 0 for command in allowed_commands}
+    # One normalization answers both questions. An allowlisted command that
+    # picks up an environment prefix is still that command and must still count
+    # exactly once, and a raw command that hides behind the same prefix is
+    # still raw.
     for number, line in lines:
-        command = normalized_command(line)
-        if command in counted:
-            counted[command] += 1
-            continue
-        if CARGO_COMMAND_START.search(command):
+        for invocation in cargo_invocations(normalized_command(line)):
+            if invocation in counted:
+                counted[invocation] += 1
+                continue
             errors.append(
-                f"{path}:{number}: raw Cargo command `{command}` is neither a lane operation "
+                f"{path}:{number}: raw Cargo command `{invocation}` is neither a lane operation "
                 "nor an allowlisted non-lane command; move it into tools/cargo-lanes.json or "
                 "record it in allowed_non_lane_cargo with a reason"
             )
@@ -610,8 +734,35 @@ def run_entry_point_fixtures(manifest: Manifest) -> list[str]:
     return failures
 
 
+def run_manifest_fixtures() -> list[str]:
+    """Replay whole manifests through the loader that validates the live one.
+
+    The schema rules have no other fixture shape: they reject a document, not a
+    metadata graph or an entry-point text, so each case here is a manifest file
+    the loader must accept or refuse for the stated reason.
+    """
+    failures: list[str] = []
+    for case in load_cases(MANIFEST_CASES):
+        name = str(case.get("name", "<unnamed>"))
+        fixture_file = case.get("file")
+        if not isinstance(fixture_file, str):
+            failures.append(f"self-test case `{name}`: `file` is missing")
+            continue
+        try:
+            load_manifest(FIXTURE_ROOT / fixture_file)
+            produced: list[str] = []
+        except ManifestError as error:
+            produced = [str(error)]
+        failures += judge_case(name, case, produced)
+    return failures
+
+
 def run_self_test(manifest: Manifest) -> list[str]:
-    return run_feature_fixtures(manifest) + run_entry_point_fixtures(manifest)
+    return (
+        run_feature_fixtures(manifest)
+        + run_entry_point_fixtures(manifest)
+        + run_manifest_fixtures()
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -647,9 +798,11 @@ def main(argv: list[str]) -> int:
     if self_test:
         feature_cases = len(load_cases(FEATURE_CASES))
         entry_cases = len(load_cases(ENTRY_POINT_CASES))
+        manifest_cases = len(load_cases(MANIFEST_CASES))
         print(
-            f"Cargo lane self-test OK: {feature_cases} feature/floor fixture(s) and "
-            f"{entry_cases} entry-point fixture(s) behaved as declared."
+            f"Cargo lane self-test OK: {feature_cases} feature/floor fixture(s), "
+            f"{entry_cases} entry-point fixture(s), and {manifest_cases} manifest "
+            "fixture(s) behaved as declared."
         )
         return 0
 
