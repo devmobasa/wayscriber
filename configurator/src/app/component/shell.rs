@@ -76,6 +76,20 @@ pub(super) fn build(
     sidebar_box.set_margin_end(6);
     sidebar_box.append(&search_entry);
     sidebar_box.append(&sidebar_scroll);
+    let build_identity = gtk::Label::builder()
+        .label(format!(
+            "Version {} · commit {}",
+            wayscriber::build_info::version(),
+            wayscriber::build_info::commit_hash()
+        ))
+        .css_classes(["dim-label"])
+        .halign(gtk::Align::Start)
+        .selectable(true)
+        .margin_start(6)
+        .margin_end(6)
+        .margin_bottom(6)
+        .build();
+    sidebar_box.append(&build_identity);
     let sidebar_page = adw::NavigationPage::builder()
         .title("Wayscriber")
         .child(&sidebar_box)
