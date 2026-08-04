@@ -831,6 +831,38 @@ mod tests {
         assert!(!clear_armed(None, "one"));
     }
 
+    /// Confirming consumes the pending id as it sets the catalog busy, so the
+    /// card leaves its armed state in the same refresh that starts the work:
+    /// the Confirm/Cancel pair goes away and the button that asks comes back
+    /// unpressable, rather than offering a confirm the model would refuse.
+    #[test]
+    fn a_confirmed_clear_collapses_the_armed_row_into_the_busy_one() {
+        let mut app = app_with_items(vec![test_item("one", "First")]);
+        app.session_catalog.pending_clear_id = Some("one".to_string());
+        let summary = app.search_summary();
+        let armed = catalog_row_values(
+            &app,
+            &summary,
+            &CatalogGates::of(&app),
+            &app.session_catalog.items[0],
+        );
+        assert!(armed.clear_armed);
+
+        // What `handle_session_catalog_clear_confirmed` leaves behind: the
+        // answered question consumed, the clear running.
+        app.session_catalog.pending_clear_id = None;
+        app.session_catalog.busy = true;
+        let running = catalog_row_values(
+            &app,
+            &summary,
+            &CatalogGates::of(&app),
+            &app.session_catalog.items[0],
+        );
+
+        assert!(!running.clear_armed);
+        assert!(!running.clear_enabled);
+    }
+
     #[test]
     fn whole_number_validation_matches_the_old_hints() {
         assert_eq!(validate_whole_number("1000", 1000, u64::MAX), None);
