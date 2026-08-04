@@ -45,6 +45,8 @@ assert_not_contains "${WORK_DIR}/package-overrides.yml" "- libgtk4-layer-shell0"
 assert_not_contains "${WORK_DIR}/package-overrides.yml" "- gtk4-layer-shell"
 assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- libc6 (>= 2.39)"
 assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- glibc >= 2.39"
+assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- libadwaita-1-0 (>= 1.4)"
+assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- libadwaita >= 1.4"
 
 # Release jobs must not silently raise the glibc floor when ubuntu-latest
 # changes; the package job is the binary floor's defining runner.
@@ -59,6 +61,12 @@ assert_contains "${WORK_DIR}/release-package-job.yml" "'%{VERSION}-%{RELEASE}\\n
 assert_contains "${WORK_DIR}/release-package-job.yml" "grep -Eq '/usr/bin/wayscriber$'"
 assert_contains "${WORK_DIR}/release-package-job.yml" 'wayscriber-configurator-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz'
 assert_contains "${WORK_DIR}/release-package-job.yml" "grep -Eq '/usr/bin/wayscriber-configurator$'"
+assert_contains "${WORK_DIR}/release-package-job.yml" \
+    "grep -Fq 'libadwaita-1-0 (>= 1.4)' <<< \"\$configurator_deb_depends\""
+assert_contains "${WORK_DIR}/release-package-job.yml" \
+    "grep -Fxq 'libadwaita >= 1.4' <<< \"\$configurator_rpm_requires\""
+assert_contains "${WORK_DIR}/release-package-job.yml" \
+    "/dist/wayscriber-configurator-amd64.deb"
 assert_contains "${WORK_DIR}/release-package-job.yml" "Check direct Arch installer compatibility"
 assert_contains "${WORK_DIR}/release-package-job.yml" "https://wayscriber.com/arch-install.sh"
 assert_contains "${WORK_DIR}/release-package-job.yml" "./tools/check-arch-installer-manifest.sh"
@@ -775,7 +783,8 @@ bash "${REPO_ROOT}/tools/update-aur-from-manifest.sh" \
     --manifest "${MANIFEST}" \
     --source-dir "${WORK_DIR}/missing-source" \
     --bin-dir "${AUR_BIN_DIR}" \
-    --config-dir "${WORK_DIR}/missing-config" >/dev/null
+    --config-dir "${WORK_DIR}/missing-config" \
+    --no-configurator >/dev/null
 
 assert_contains "${AUR_BIN_DIR}/PKGBUILD" "'gtk4'"
 assert_contains "${AUR_BIN_DIR}/.SRCINFO" "depends = gtk4"
@@ -789,5 +798,415 @@ assert_contains "${AUR_BIN_DIR}/PKGBUILD" 'install -Dm644 "${srcdir_tmp}/usr/sha
 
 assert_contains "${REPO_ROOT}/packaging/PKGBUILD" "'gtk4-layer-shell'"
 assert_contains "${REPO_ROOT}/packaging/.SRCINFO" "depends = gtk4-layer-shell"
+assert_contains "${REPO_ROOT}/packaging/PKGBUILD" "'libadwaita>=1.4'"
+assert_contains "${REPO_ROOT}/packaging/.SRCINFO" "depends = libadwaita>=1.4"
+
+# The configurator AUR channel is required by default. The hosted clone step
+# must fail before the updater runs rather than silently publish two channels.
+assert_not_contains "${RELEASE_WORKFLOW}" \
+    "git clone ssh://aur@aur.archlinux.org/wayscriber-configurator.git aur-wayscriber-configurator || true"
+
+AUR_SOURCE_SHA='abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789'
+AUR_FAKE_BIN="${WORK_DIR}/aur-fake-bin"
+AUR_REAL_GIT="$(command -v git)"
+mkdir -p "${AUR_FAKE_BIN}"
+cat > "${AUR_FAKE_BIN}/curl" <<'EOF'
+#!/usr/bin/env bash
+output=""
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "-o" ]]; then
+        output="$2"
+        shift 2
+    else
+        shift
+    fi
+done
+case "${AUR_TEST_CURL_MODE:-fail}" in
+    empty)
+        : > "${output:?curl fixture did not receive -o}"
+        exit 0
+        ;;
+    *)
+        echo 'AUR_TEST_NETWORK_ACCESS' >&2
+        exit 97
+        ;;
+esac
+EOF
+cat > "${AUR_FAKE_BIN}/git" <<'EOF'
+#!/usr/bin/env bash
+for arg in "$@"; do
+    if [[ "$arg" == "push" && -n "${AUR_TEST_GIT_LOG:-}" ]]; then
+        printf 'push %s\n' "$*" >> "${AUR_TEST_GIT_LOG}"
+        exit 96
+    fi
+done
+exec "${AUR_TEST_REAL_GIT:?}" "$@"
+EOF
+chmod +x "${AUR_FAKE_BIN}/curl" "${AUR_FAKE_BIN}/git"
+
+commit_aur_fixture() {
+    local dir="$1"
+    git -C "${dir}" -c user.name='Wayscriber Test' \
+        -c user.email='wayscriber-test@example.invalid' \
+        commit -qm 'test fixture'
+}
+
+assert_clean_checkout_at_head() {
+    local dir="$1" expected_head="$2" context="$3"
+    [[ "$(git -C "${dir}" rev-parse HEAD)" == "${expected_head}" ]] || {
+        echo "${context}: checkout HEAD changed" >&2
+        exit 1
+    }
+    [[ -z "$(git -C "${dir}" status --porcelain)" ]] || {
+        echo "${context}: checkout worktree changed" >&2
+        git -C "${dir}" status --short >&2
+        exit 1
+    }
+}
+
+write_source_clone() {
+    local dir="$1" pkgver="$2" pkgrel="$3"
+    mkdir -p "${dir}"
+    cat > "${dir}/PKGBUILD" <<EOF
+pkgname=wayscriber
+pkgver=${pkgver}
+pkgrel=${pkgrel}
+install=wayscriber.install
+depends=(
+    'gcc-libs'
+    'wl-clipboard'
+)
+makedepends=(
+    'git'
+)
+source=("old.tar.gz::https://example.invalid/old.tar.gz")
+sha256sums=('old')
+package() {
+    cd "\$pkgname"
+}
+EOF
+    cat > "${dir}/.SRCINFO" <<EOF
+pkgbase = wayscriber
+	pkgver = ${pkgver}
+	pkgrel = ${pkgrel}
+	install = wayscriber.install
+	depends = gcc-libs
+	depends = wl-clipboard
+	makedepends = git
+	source = old.tar.gz::https://example.invalid/old.tar.gz
+	sha256sums = old
+
+pkgname = wayscriber
+EOF
+    touch "${dir}/wayscriber.install"
+    git -C "${dir}" init -q
+    git -C "${dir}" add PKGBUILD .SRCINFO wayscriber.install
+    commit_aur_fixture "${dir}"
+}
+
+write_configurator_clone() {
+    local dir="$1" pkgver="$2" pkgrel="$3"
+    mkdir -p "${dir}"
+    cat > "${dir}/PKGBUILD" <<EOF
+pkgname=wayscriber-configurator
+pkgver=${pkgver}
+pkgrel=${pkgrel}
+pkgdesc='GUI configurator for wayscriber (Iced)'
+depends=(
+    'gcc-libs'
+)
+makedepends=(
+    'git'
+)
+source=("old.tar.gz::https://example.invalid/old.tar.gz")
+sha256sums=('old')
+build() {
+    cd wayscriber
+}
+EOF
+    cat > "${dir}/.SRCINFO" <<EOF
+pkgbase = wayscriber-configurator
+	pkgdesc = GUI configurator for wayscriber (Iced)
+	pkgver = ${pkgver}
+	pkgrel = ${pkgrel}
+	depends = gcc-libs
+	makedepends = git
+	source = old.tar.gz::https://example.invalid/old.tar.gz
+	sha256sums = old
+
+pkgname = wayscriber-configurator
+EOF
+    git -C "${dir}" init -q
+    git -C "${dir}" add PKGBUILD .SRCINFO
+    commit_aur_fixture "${dir}"
+}
+
+run_aur_updater() {
+    local cwd="$1"
+    shift
+    local version_args=()
+    if [[ "${AUR_TEST_USE_MANIFEST_VERSION:-0}" -eq 0 ]]; then
+        version_args=(--version 9.9.9)
+    fi
+    (
+        cd "${cwd}"
+        AUR_TEST_CURL_MODE="${AUR_TEST_CURL_MODE:-fail}" \
+            AUR_TEST_GIT_LOG="${AUR_TEST_GIT_LOG:-}" \
+            AUR_TEST_REAL_GIT="${AUR_REAL_GIT}" \
+            PATH="${AUR_FAKE_BIN}:${PATH}" \
+            bash "${REPO_ROOT}/tools/update-aur-from-manifest.sh" \
+                "${version_args[@]}" \
+                --manifest "${MANIFEST}" \
+                "$@"
+    )
+}
+
+expect_aur_failure() {
+    local expected="$1" cwd="$2"
+    shift 2
+    local output="${WORK_DIR}/aur-failure-output"
+
+    if run_aur_updater "${cwd}" "$@" >"${output}" 2>&1; then
+        echo "Expected AUR updater failure containing: ${expected}" >&2
+        exit 1
+    fi
+    assert_contains "${output}" "${expected}"
+}
+
+expect_invalid_aur_version() {
+    local expected="$1" manifest="$2"
+    shift 2
+    local push_log="${WORK_DIR}/aur-invalid-version-push-log"
+
+    AUR_TEST_USE_MANIFEST_VERSION=1 \
+        AUR_TEST_GIT_LOG="${push_log}" \
+        expect_aur_failure "${expected}" "${WORK_DIR}" \
+        --manifest "${manifest}" \
+        --source-dir aur-invalid-version-source \
+        --bin-dir missing-bin \
+        --config-dir missing-config \
+        --no-configurator \
+        --source-sha256 "${AUR_SOURCE_SHA}" \
+        --push \
+        "$@"
+    assert_clean_checkout_at_head \
+        "${AUR_INVALID_VERSION_SOURCE}" \
+        "${AUR_INVALID_VERSION_HEAD}" \
+        "invalid release version"
+    [[ ! -s "${push_log}" ]] || {
+        echo "AUR updater pushed for an invalid release version" >&2
+        exit 1
+    }
+}
+
+# Release identity is validated before checkout discovery or mutation. A JSON
+# string is required when the manifest supplies it, and both input routes use
+# the same MAJOR.MINOR.PATCH[.HOTFIX] grammar as the rest of the release tools.
+AUR_INVALID_VERSION_SOURCE="${WORK_DIR}/aur-invalid-version-source"
+AUR_VERSION_MISSING_MANIFEST="${WORK_DIR}/manifest-version-missing.json"
+AUR_VERSION_NULL_MANIFEST="${WORK_DIR}/manifest-version-null.json"
+AUR_VERSION_ARRAY_MANIFEST="${WORK_DIR}/manifest-version-array.json"
+AUR_VERSION_OBJECT_MANIFEST="${WORK_DIR}/manifest-version-object.json"
+AUR_VERSION_MALFORMED_MANIFEST="${WORK_DIR}/manifest-version-malformed.json"
+write_source_clone "${AUR_INVALID_VERSION_SOURCE}" 9.9.8 2
+AUR_INVALID_VERSION_HEAD="$(git -C "${AUR_INVALID_VERSION_SOURCE}" rev-parse HEAD)"
+cat > "${AUR_VERSION_MISSING_MANIFEST}" <<'EOF'
+{"artifacts":[]}
+EOF
+cat > "${AUR_VERSION_NULL_MANIFEST}" <<'EOF'
+{"version":null,"artifacts":[]}
+EOF
+cat > "${AUR_VERSION_ARRAY_MANIFEST}" <<'EOF'
+{"version":[9,9,9],"artifacts":[]}
+EOF
+cat > "${AUR_VERSION_OBJECT_MANIFEST}" <<'EOF'
+{"version":{"major":9,"minor":9,"patch":9},"artifacts":[]}
+EOF
+cat > "${AUR_VERSION_MALFORMED_MANIFEST}" <<'EOF'
+{"version":"9.9","artifacts":[]}
+EOF
+expect_invalid_aur_version "Manifest version must be a string" \
+    "${AUR_VERSION_MISSING_MANIFEST}"
+expect_invalid_aur_version "Manifest version must be a string" \
+    "${AUR_VERSION_NULL_MANIFEST}"
+expect_invalid_aur_version "Manifest version must be a string" \
+    "${AUR_VERSION_ARRAY_MANIFEST}"
+expect_invalid_aur_version "Manifest version must be a string" \
+    "${AUR_VERSION_OBJECT_MANIFEST}"
+expect_invalid_aur_version "Invalid manifest version '9.9'" \
+    "${AUR_VERSION_MALFORMED_MANIFEST}"
+expect_invalid_aur_version "Invalid --version 'release-9.9.9'" \
+    "${MANIFEST}" \
+    --version release-9.9.9
+
+# Relative clone paths used to be resolved after pushd, turning `dir/PKGBUILD`
+# into `dir/dir/PKGBUILD` and resetting same-version hotfixes to pkgrel=1.
+AUR_SOURCE_HOTFIX="${WORK_DIR}/aur-source-hotfix"
+write_source_clone "${AUR_SOURCE_HOTFIX}" 9.9.9 3
+run_aur_updater "${WORK_DIR}" \
+    --source-dir aur-source-hotfix \
+    --bin-dir missing-bin \
+    --config-dir missing-config \
+    --no-configurator \
+    --source-sha256 "${AUR_SOURCE_SHA}" >/dev/null
+assert_contains "${AUR_SOURCE_HOTFIX}/PKGBUILD" "pkgrel=4"
+assert_contains "${AUR_SOURCE_HOTFIX}/.SRCINFO" "pkgrel = 4"
+
+AUR_CONFIG_HOTFIX="${WORK_DIR}/aur-config-hotfix"
+write_configurator_clone "${AUR_CONFIG_HOTFIX}" 9.9.9 3
+run_aur_updater "${WORK_DIR}" \
+    --source-dir missing-source \
+    --bin-dir missing-bin \
+    --config-dir aur-config-hotfix \
+    --source-sha256 "${AUR_SOURCE_SHA}" >/dev/null
+assert_contains "${AUR_CONFIG_HOTFIX}/PKGBUILD" "pkgrel=4"
+assert_contains "${AUR_CONFIG_HOTFIX}/.SRCINFO" "pkgrel = 4"
+assert_contains "${AUR_CONFIG_HOTFIX}/PKGBUILD" \
+    "pkgdesc='GUI configurator for wayscriber (GTK4/libadwaita)'"
+assert_contains "${AUR_CONFIG_HOTFIX}/PKGBUILD" "'gtk4'"
+assert_contains "${AUR_CONFIG_HOTFIX}/PKGBUILD" "'libadwaita>=1.4'"
+assert_not_contains "${AUR_CONFIG_HOTFIX}/PKGBUILD" "(Iced)"
+assert_contains "${AUR_CONFIG_HOTFIX}/.SRCINFO" \
+    "pkgdesc = GUI configurator for wayscriber (GTK4/libadwaita)"
+assert_contains "${AUR_CONFIG_HOTFIX}/.SRCINFO" "depends = gtk4"
+assert_contains "${AUR_CONFIG_HOTFIX}/.SRCINFO" "depends = libadwaita>=1.4"
+assert_not_contains "${AUR_CONFIG_HOTFIX}/.SRCINFO" "(Iced)"
+
+# A missing required configurator clone aborts before an earlier source channel
+# is touched. Skipping it remains available, but only as an explicit decision.
+AUR_PREFLIGHT_SOURCE="${WORK_DIR}/aur-preflight-source"
+write_source_clone "${AUR_PREFLIGHT_SOURCE}" 9.9.9 3
+cp "${AUR_PREFLIGHT_SOURCE}/PKGBUILD" "${WORK_DIR}/aur-preflight-source.before"
+expect_aur_failure "wayscriber-configurator AUR clone not found" "${WORK_DIR}" \
+    --source-dir aur-preflight-source \
+    --bin-dir missing-bin \
+    --config-dir missing-config \
+    --source-sha256 "${AUR_SOURCE_SHA}"
+cmp "${WORK_DIR}/aur-preflight-source.before" "${AUR_PREFLIGHT_SOURCE}/PKGBUILD"
+
+AUR_NOT_GIT="${WORK_DIR}/aur-not-git"
+mkdir -p "${AUR_NOT_GIT}"
+touch "${AUR_NOT_GIT}/PKGBUILD" "${AUR_NOT_GIT}/.SRCINFO"
+expect_aur_failure "wayscriber AUR path is not a Git worktree" "${WORK_DIR}" \
+    --source-dir aur-not-git \
+    --bin-dir missing-bin \
+    --config-dir missing-config \
+    --no-configurator \
+    --source-sha256 "${AUR_SOURCE_SHA}"
+
+AUR_SKIP_OUTPUT="${WORK_DIR}/aur-skip-output"
+run_aur_updater "${WORK_DIR}" \
+    --source-dir missing-source \
+    --bin-dir missing-bin \
+    --config-dir missing-config \
+    --no-configurator >"${AUR_SKIP_OUTPUT}" 2>&1
+assert_contains "${AUR_SKIP_OUTPUT}" "--no-configurator was passed"
+
+# Download and checksum validation also run before mutation. The fake curl
+# makes accidental network use deterministic and proves the clone stays intact.
+AUR_CHECKSUM_SOURCE="${WORK_DIR}/aur-checksum-source"
+write_source_clone "${AUR_CHECKSUM_SOURCE}" 9.9.8 2
+cp "${AUR_CHECKSUM_SOURCE}/PKGBUILD" "${WORK_DIR}/aur-checksum-source.before"
+expect_aur_failure "Failed to download the source archive" "${WORK_DIR}" \
+    --source-dir aur-checksum-source \
+    --bin-dir missing-bin \
+    --config-dir missing-config \
+    --no-configurator
+cmp "${WORK_DIR}/aur-checksum-source.before" "${AUR_CHECKSUM_SOURCE}/PKGBUILD"
+
+AUR_TEST_CURL_MODE=empty expect_aur_failure \
+    "Downloaded an empty source archive" "${WORK_DIR}" \
+    --source-dir aur-checksum-source \
+    --bin-dir missing-bin \
+    --config-dir missing-config \
+    --no-configurator
+cmp "${WORK_DIR}/aur-checksum-source.before" "${AUR_CHECKSUM_SOURCE}/PKGBUILD"
+
+expect_aur_failure "Source archive checksum is not a sha256 digest" "${WORK_DIR}" \
+    --source-dir aur-checksum-source \
+    --bin-dir missing-bin \
+    --config-dir missing-config \
+    --no-configurator \
+    --source-sha256 invalid
+
+# Binary artifact lookup is a cardinality-and-shape contract, not merely a
+# nonempty string check. All failures happen before the bin checkout mutates.
+AUR_BIN_MISSING_MANIFEST="${WORK_DIR}/manifest-bin-missing.json"
+AUR_BIN_DUPLICATE_MANIFEST="${WORK_DIR}/manifest-bin-duplicate.json"
+AUR_BIN_DUPLICATE_NULL_MANIFEST="${WORK_DIR}/manifest-bin-duplicate-null.json"
+AUR_BIN_MALFORMED_MANIFEST="${WORK_DIR}/manifest-bin-malformed.json"
+cp "${AUR_BIN_DIR}/PKGBUILD" "${WORK_DIR}/aur-bin-checksum.before"
+cat > "${AUR_BIN_MISSING_MANIFEST}" <<'EOF'
+{"version":"9.9.9","artifacts":[]}
+EOF
+cat > "${AUR_BIN_DUPLICATE_MANIFEST}" <<EOF
+{"version":"9.9.9","artifacts":[
+  {"name":"wayscriber-v9.9.9-linux-x86_64.tar.gz","sha256":"${AUR_SOURCE_SHA}"},
+  {"name":"wayscriber-v9.9.9-linux-x86_64.tar.gz","sha256":"${AUR_SOURCE_SHA}"}
+]}
+EOF
+cat > "${AUR_BIN_DUPLICATE_NULL_MANIFEST}" <<EOF
+{"version":"9.9.9","artifacts":[
+  {"name":"wayscriber-v9.9.9-linux-x86_64.tar.gz","sha256":"${AUR_SOURCE_SHA}"},
+  {"name":"wayscriber-v9.9.9-linux-x86_64.tar.gz","sha256":null}
+]}
+EOF
+cat > "${AUR_BIN_MALFORMED_MANIFEST}" <<'EOF'
+{"version":"9.9.9","artifacts":[
+  {"name":"wayscriber-v9.9.9-linux-x86_64.tar.gz","sha256":"not-a-digest"}
+]}
+EOF
+expect_aur_failure "found 0" "${WORK_DIR}" \
+    --manifest "${AUR_BIN_MISSING_MANIFEST}" \
+    --source-dir missing-source \
+    --bin-dir "${AUR_BIN_DIR}" \
+    --config-dir missing-config \
+    --no-configurator
+expect_aur_failure "found 2" "${WORK_DIR}" \
+    --manifest "${AUR_BIN_DUPLICATE_MANIFEST}" \
+    --source-dir missing-source \
+    --bin-dir "${AUR_BIN_DIR}" \
+    --config-dir missing-config \
+    --no-configurator
+expect_aur_failure "found 2" "${WORK_DIR}" \
+    --manifest "${AUR_BIN_DUPLICATE_NULL_MANIFEST}" \
+    --source-dir missing-source \
+    --bin-dir "${AUR_BIN_DIR}" \
+    --config-dir missing-config \
+    --no-configurator
+expect_aur_failure "not a 64-character hexadecimal digest" "${WORK_DIR}" \
+    --manifest "${AUR_BIN_MALFORMED_MANIFEST}" \
+    --source-dir missing-source \
+    --bin-dir "${AUR_BIN_DIR}" \
+    --config-dir missing-config \
+    --no-configurator
+cmp "${WORK_DIR}/aur-bin-checksum.before" "${AUR_BIN_DIR}/PKGBUILD"
+
+# A deterministic failure in the last selected checkout must happen before
+# any earlier checkout is committed or pushed. This configurator fixture lacks
+# the dependency anchor needed by its GTK migration.
+AUR_LATE_SOURCE="${WORK_DIR}/aur-late-source"
+AUR_LATE_CONFIG="${WORK_DIR}/aur-late-config"
+AUR_PUSH_LOG="${WORK_DIR}/aur-push-log"
+write_source_clone "${AUR_LATE_SOURCE}" 9.9.8 1
+write_configurator_clone "${AUR_LATE_CONFIG}" 9.9.8 1
+AUR_LATE_SOURCE_HEAD="$(git -C "${AUR_LATE_SOURCE}" rev-parse HEAD)"
+sed -i "/'gcc-libs'/d" "${AUR_LATE_CONFIG}/PKGBUILD"
+sed -i '/depends = gcc-libs/d' "${AUR_LATE_CONFIG}/.SRCINFO"
+AUR_TEST_GIT_LOG="${AUR_PUSH_LOG}" expect_aur_failure \
+    "missing dependency anchor 'gcc-libs'" "${WORK_DIR}" \
+    --source-dir aur-late-source \
+    --bin-dir missing-bin \
+    --config-dir aur-late-config \
+    --source-sha256 "${AUR_SOURCE_SHA}" \
+    --push
+assert_clean_checkout_at_head \
+    "${AUR_LATE_SOURCE}" \
+    "${AUR_LATE_SOURCE_HEAD}" \
+    "late configurator preflight failure"
+[[ ! -s "${AUR_PUSH_LOG}" ]] || {
+    echo "AUR updater pushed before every selected checkout was prepared" >&2
+    exit 1
+}
 
 echo "Release packaging contract checks passed."

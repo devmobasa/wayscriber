@@ -509,7 +509,11 @@ fn item_card(item: &CatalogItemLayout, sender: &ComponentSender<ConfiguratorApp>
     );
     confirm_button.add_css_class("destructive-action");
     confirm.append(&confirm_button);
-    let cancel_button = message_button("Cancel", sender, Message::SessionCatalogClearCanceled);
+    let cancel_button = message_button(
+        "Cancel",
+        sender,
+        Message::SessionCatalogClearCanceled(item.id.clone()),
+    );
     cancel_button.add_css_class("flat");
     confirm.append(&cancel_button);
     danger.append(&confirm);
@@ -540,9 +544,15 @@ fn item_card(item: &CatalogItemLayout, sender: &ComponentSender<ConfiguratorApp>
         set_sensitive(&forget, values.actions_enabled);
         set_sensitive(&tool_state, values.tool_state_enabled);
 
+        let clear_arming = values.clear_armed && !confirm.get_visible();
         set_visible(&clear, !values.clear_armed);
         set_sensitive(&clear, values.clear_enabled);
         set_visible(&confirm, values.clear_armed);
+        if clear_arming {
+            // The destructive action just stepped aside. Move keyboard focus
+            // to the revealed answer rather than leaving it hidden.
+            confirm_button.grab_focus();
+        }
     });
 
     CatalogRow { card, refresh }
@@ -829,6 +839,38 @@ mod tests {
         assert!(clear_armed(Some("one"), "one"));
         assert!(!clear_armed(Some("one"), "two"));
         assert!(!clear_armed(None, "one"));
+    }
+
+    /// Confirming consumes the pending id as it sets the catalog busy, so the
+    /// card leaves its armed state in the same refresh that starts the work:
+    /// the Confirm/Cancel pair goes away and the button that asks comes back
+    /// unpressable, rather than offering a confirm the model would refuse.
+    #[test]
+    fn a_confirmed_clear_collapses_the_armed_row_into_the_busy_one() {
+        let mut app = app_with_items(vec![test_item("one", "First")]);
+        app.session_catalog.pending_clear_id = Some("one".to_string());
+        let summary = app.search_summary();
+        let armed = catalog_row_values(
+            &app,
+            &summary,
+            &CatalogGates::of(&app),
+            &app.session_catalog.items[0],
+        );
+        assert!(armed.clear_armed);
+
+        // What `handle_session_catalog_clear_confirmed` leaves behind: the
+        // answered question consumed, the clear running.
+        app.session_catalog.pending_clear_id = None;
+        app.session_catalog.busy = true;
+        let running = catalog_row_values(
+            &app,
+            &summary,
+            &CatalogGates::of(&app),
+            &app.session_catalog.items[0],
+        );
+
+        assert!(!running.clear_armed);
+        assert!(!running.clear_enabled);
     }
 
     #[test]

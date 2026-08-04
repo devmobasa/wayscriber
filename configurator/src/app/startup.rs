@@ -110,13 +110,7 @@ mod tests {
     use crate::test_temp::{TempDir, tempdir};
 
     fn status_text(status: &StatusMessage) -> String {
-        match status {
-            StatusMessage::Info(text)
-            | StatusMessage::Success(text)
-            | StatusMessage::Error(text)
-            | StatusMessage::Warning(text) => text.clone(),
-            StatusMessage::Idle => String::new(),
-        }
+        status.text().unwrap_or_default().to_string()
     }
 
     fn args(values: &[&str]) -> Vec<std::ffi::OsString> {

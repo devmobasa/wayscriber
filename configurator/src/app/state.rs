@@ -71,6 +71,25 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) startup_request: StartupRequest,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConfirmationPrompt {
+    DefaultsReset,
+    SessionClear,
+}
+
+impl ConfirmationPrompt {
+    pub(crate) fn message(self) -> &'static str {
+        match self {
+            ConfirmationPrompt::DefaultsReset => {
+                "Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue."
+            }
+            ConfirmationPrompt::SessionClear => {
+                "Clear saved data removes the selected session primary and non-lock sidecars. Press Confirm Clear to continue."
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum StatusMessage {
     Idle,
@@ -78,6 +97,7 @@ pub(crate) enum StatusMessage {
     Success(String),
     Error(String),
     Warning(String),
+    Confirmation(ConfirmationPrompt),
 }
 
 impl StatusMessage {
@@ -101,6 +121,25 @@ impl StatusMessage {
         StatusMessage::Warning(message.into())
     }
 
+    pub(crate) fn confirmation(prompt: ConfirmationPrompt) -> Self {
+        StatusMessage::Confirmation(prompt)
+    }
+
+    pub(crate) fn is_confirmation(&self, prompt: ConfirmationPrompt) -> bool {
+        matches!(self, StatusMessage::Confirmation(current) if *current == prompt)
+    }
+
+    pub(crate) fn text(&self) -> Option<&str> {
+        match self {
+            StatusMessage::Idle => None,
+            StatusMessage::Info(text)
+            | StatusMessage::Success(text)
+            | StatusMessage::Error(text)
+            | StatusMessage::Warning(text) => Some(text.as_str()),
+            StatusMessage::Confirmation(prompt) => Some(prompt.message()),
+        }
+    }
+
     /// Adds a sentence without discarding what is already there.
     ///
     /// The load status can be carrying this file's diagnostics, and a note
@@ -111,6 +150,9 @@ impl StatusMessage {
             StatusMessage::Info(text)
             | StatusMessage::Success(text)
             | StatusMessage::Warning(text) => StatusMessage::warning(format!("{text}\n{note}")),
+            StatusMessage::Confirmation(prompt) => {
+                StatusMessage::warning(format!("{}\n{note}", prompt.message()))
+            }
             // A failed load is the more urgent of the two; keep its styling.
             StatusMessage::Error(text) => StatusMessage::error(format!("{text}\n{note}")),
         }

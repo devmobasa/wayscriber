@@ -138,6 +138,9 @@ hashes, so build-level changes still need a pull request from us. See
 - **update-aur-from-manifest.sh** - CI-friendly AUR update
   - Updates multiple AUR packages using checksums from manifest.json
   - Designed for CI automation after artifacts are built
+  - Requires the configurator AUR clone unless `--no-configurator` is passed explicitly
+  - Supports `--source-sha256` for offline/recovery runs
+  - Previews and validates every selected recipe in an isolated copy before modifying checkouts, then pushes sequentially
   - Usage: `./tools/update-aur-from-manifest.sh --version <ver> --manifest dist/manifest.json --push`
 
 ---

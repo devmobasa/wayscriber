@@ -138,6 +138,7 @@ jobs:
           grep -Fq '/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell' <<< "$deb_files"
           configurator_deb_depends="$(dpkg-deb -f dist/wayscriber-configurator-amd64.deb Depends)"
           grep -Fq 'libc6 (>= 2.39)' <<< "$configurator_deb_depends"
+          grep -Fq 'libadwaita-1-0 (>= 1.4)' <<< "$configurator_deb_depends"
 
           mkdir -p "$RUNNER_TEMP/rpmdb"
           test "$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qp --qf '%{VERSION}-%{RELEASE}\n' dist/wayscriber-x86_64.rpm)" = "$expected_package_version"
@@ -150,6 +151,7 @@ jobs:
           grep -Fxq '/usr/share/licenses/wayscriber/LICENSE.gtk4-layer-shell' <<< "$rpm_files"
           configurator_rpm_requires="$(rpm --dbpath "$RUNNER_TEMP/rpmdb" -qp --requires dist/wayscriber-configurator-x86_64.rpm)"
           grep -Fxq 'glibc >= 2.39' <<< "$configurator_rpm_requires"
+          grep -Fxq 'libadwaita >= 1.4' <<< "$configurator_rpm_requires"
 
           tar_files="$(tar -tzf "dist/wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz")"
           grep -Eq '/usr/bin/wayscriber$' <<< "$tar_files"
@@ -164,8 +166,13 @@ jobs:
             ubuntu:24.04 \
             bash -euxo pipefail -c '
               apt-get update
-              DEBIAN_FRONTEND=noninteractive apt-get install -y /dist/wayscriber-amd64.deb
+              DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                /dist/wayscriber-amd64.deb \
+                /dist/wayscriber-configurator-amd64.deb
               wayscriber --version
+              # Installing proves the configurator runtime dependencies resolve
+              # on the supported LTS. Do not launch this foreground GUI here.
+              test -x /usr/bin/wayscriber-configurator
             '
 
       - name: Upload tarball
@@ -413,7 +420,7 @@ jobs:
         run: |
           GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber.git aur-wayscriber
           GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber-bin.git aur-wayscriber-bin
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber-configurator.git aur-wayscriber-configurator || true
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber-configurator.git aur-wayscriber-configurator
 
       - name: Update AUR from manifest
         env:

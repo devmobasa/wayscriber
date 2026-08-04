@@ -15,7 +15,7 @@ depends=(
     'glibc'
     'gtk4'
     'gtk4-layer-shell'
-    'libadwaita'
+    'libadwaita>=1.4'
     'wl-clipboard'
     'grim'
     'slurp'

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::models::{SessionCatalogActionResult, SessionCatalogItem, SessionCatalogOperation};
 
 use super::super::effects::Effect;
-use super::super::state::{ConfiguratorApp, StatusMessage};
+use super::super::state::{ConfiguratorApp, ConfirmationPrompt, StatusMessage};
 
 impl ConfiguratorApp {
     pub(super) fn handle_session_catalog_loaded(
@@ -201,9 +201,7 @@ impl ConfiguratorApp {
             return Vec::new();
         }
         self.session_catalog.pending_clear_id = Some(id);
-        self.status = StatusMessage::warning(
-            "Clear saved data removes the selected session primary and non-lock sidecars. Press Confirm Clear to continue.",
-        );
+        self.status = StatusMessage::confirmation(ConfirmationPrompt::SessionClear);
         Vec::new()
     }
 
@@ -214,14 +212,28 @@ impl ConfiguratorApp {
         if self.session_catalog.pending_clear_id.as_deref() != Some(id.as_str()) {
             return Vec::new();
         }
+        // Answered, so the question is gone: the row leaves its armed state
+        // for the busy one in the same refresh instead of showing a Confirm
+        // Clear the model would now refuse. The completion path clears this
+        // too, which from here is redundant rather than load-bearing.
+        self.session_catalog.pending_clear_id = None;
         self.session_catalog.busy = true;
         self.status = StatusMessage::info("Clearing saved session data...");
         vec![Effect::ClearSessionEntry { id }]
     }
 
-    pub(super) fn handle_session_catalog_clear_canceled(&mut self) -> Vec<Effect> {
+    pub(super) fn handle_session_catalog_clear_canceled(&mut self, id: String) -> Vec<Effect> {
+        if self.session_catalog.pending_clear_id.as_deref() != Some(id.as_str()) {
+            return Vec::new();
+        }
+
         self.session_catalog.pending_clear_id = None;
-        self.status = StatusMessage::idle();
+        if self
+            .status
+            .is_confirmation(ConfirmationPrompt::SessionClear)
+        {
+            self.status = StatusMessage::idle();
+        }
         Vec::new()
     }
 
@@ -248,13 +260,7 @@ impl ConfiguratorApp {
     }
 
     fn status_text(&self) -> Option<&str> {
-        match &self.status {
-            StatusMessage::Info(message)
-            | StatusMessage::Success(message)
-            | StatusMessage::Error(message)
-            | StatusMessage::Warning(message) => Some(message.as_str()),
-            StatusMessage::Idle => None,
-        }
+        self.status.text()
     }
 }
 

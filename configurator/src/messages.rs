@@ -54,7 +54,15 @@ pub enum CommandMessage {
 #[derive(Debug, Clone)]
 pub enum Message {
     ReloadRequested,
+    /// Asks for the reset and arms the confirmation; it never replaces the
+    /// draft on its own.
     ResetToDefaultsRequested,
+    /// Answers an armed confirmation with yes. Applying belongs to this
+    /// message alone, so the control that asks and the control that answers
+    /// are separate in every channel.
+    ResetToDefaultsConfirmed,
+    /// Answers an armed confirmation with no.
+    ResetToDefaultsCanceled,
     SaveRequested,
     MigrationApplyRequested,
     MigrationDismissed,
@@ -72,7 +80,7 @@ pub enum Message {
     SessionCatalogClearToolStateRequested(String),
     SessionCatalogClearRequested(String),
     SessionCatalogClearConfirmed(String),
-    SessionCatalogClearCanceled,
+    SessionCatalogClearCanceled(String),
     SearchChanged(String),
     SearchCleared,
     SearchFocusRequested,
