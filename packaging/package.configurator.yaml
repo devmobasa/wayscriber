@@ -74,7 +74,8 @@ overrides:
       - libpangocairo-1.0-0
       - libxkbcommon0
       - libgtk-4-1
-      - libadwaita-1-0
+      # Keep this aligned with the libadwaita feature floor in Cargo.toml.
+      - libadwaita-1-0 (>= 1.4)
       - libstdc++6
   rpm:
     depends:
@@ -85,7 +86,8 @@ overrides:
       - pango
       - libxkbcommon
       - gtk4
-      - libadwaita
+      # Keep this aligned with the libadwaita feature floor in Cargo.toml.
+      - libadwaita >= 1.4
       - libstdc++
     rpm:
       arch: x86_64

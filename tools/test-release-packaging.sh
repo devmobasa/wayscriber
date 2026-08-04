@@ -45,6 +45,8 @@ assert_not_contains "${WORK_DIR}/package-overrides.yml" "- libgtk4-layer-shell0"
 assert_not_contains "${WORK_DIR}/package-overrides.yml" "- gtk4-layer-shell"
 assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- libc6 (>= 2.39)"
 assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- glibc >= 2.39"
+assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- libadwaita-1-0 (>= 1.4)"
+assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- libadwaita >= 1.4"
 
 # Release jobs must not silently raise the glibc floor when ubuntu-latest
 # changes; the package job is the binary floor's defining runner.
@@ -59,6 +61,12 @@ assert_contains "${WORK_DIR}/release-package-job.yml" "'%{VERSION}-%{RELEASE}\\n
 assert_contains "${WORK_DIR}/release-package-job.yml" "grep -Eq '/usr/bin/wayscriber$'"
 assert_contains "${WORK_DIR}/release-package-job.yml" 'wayscriber-configurator-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz'
 assert_contains "${WORK_DIR}/release-package-job.yml" "grep -Eq '/usr/bin/wayscriber-configurator$'"
+assert_contains "${WORK_DIR}/release-package-job.yml" \
+    "grep -Fq 'libadwaita-1-0 (>= 1.4)' <<< \"\$configurator_deb_depends\""
+assert_contains "${WORK_DIR}/release-package-job.yml" \
+    "grep -Fxq 'libadwaita >= 1.4' <<< \"\$configurator_rpm_requires\""
+assert_contains "${WORK_DIR}/release-package-job.yml" \
+    "/dist/wayscriber-configurator-amd64.deb"
 assert_contains "${WORK_DIR}/release-package-job.yml" "Check direct Arch installer compatibility"
 assert_contains "${WORK_DIR}/release-package-job.yml" "https://wayscriber.com/arch-install.sh"
 assert_contains "${WORK_DIR}/release-package-job.yml" "./tools/check-arch-installer-manifest.sh"
