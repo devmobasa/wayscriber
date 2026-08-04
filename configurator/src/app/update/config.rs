@@ -78,9 +78,7 @@ impl ConfiguratorApp {
         }
 
         self.defaults_reset_pending = true;
-        self.status = StatusMessage::warning(
-            "Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue.",
-        );
+        self.status = StatusMessage::warning(DEFAULTS_CONFIRMATION_HINT);
         Vec::new()
     }
 
@@ -107,18 +105,23 @@ impl ConfiguratorApp {
         Vec::new()
     }
 
-    /// Stands the confirmation down and takes its hint off the status line.
+    /// Stands the confirmation down, and takes its hint off the status line
+    /// only while that hint is what the line still holds.
     ///
     /// Guarded on the same flag as the confirm: with nothing armed there is
     /// no question to withdraw, so a stray cancel must not wipe a status the
-    /// user is reading.
+    /// user is reading. Disarming and clearing are separate because another
+    /// operation may have replaced the hint with newer feedback while the
+    /// question remained open.
     pub(super) fn handle_reset_to_defaults_canceled(&mut self) -> Vec<Effect> {
         if !self.defaults_reset_pending {
             return Vec::new();
         }
 
         self.defaults_reset_pending = false;
-        self.status = StatusMessage::idle();
+        if is_defaults_confirmation_hint(&self.status) {
+            self.status = StatusMessage::idle();
+        }
         Vec::new()
     }
 
@@ -342,6 +345,12 @@ impl ConfiguratorApp {
 }
 
 const SHOWN_DIAGNOSTICS: usize = 8;
+
+const DEFAULTS_CONFIRMATION_HINT: &str = "Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue.";
+
+fn is_defaults_confirmation_hint(status: &StatusMessage) -> bool {
+    matches!(status, StatusMessage::Warning(text) if text == DEFAULTS_CONFIRMATION_HINT)
+}
 
 /// Why a save was refused before it began.
 ///
@@ -1110,6 +1119,21 @@ mod tests {
         // Nothing is armed now, so the confirm that follows it is inert.
         let _ = app.handle_reset_to_defaults_confirmed();
         assert_eq!(app.draft, changed_draft);
+    }
+
+    #[test]
+    fn reset_to_defaults_canceled_keeps_status_that_replaced_the_hint() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.is_loading = false;
+
+        let _ = app.handle_reset_to_defaults_requested();
+        app.status = StatusMessage::error("Failed to clear session s-1: nope");
+
+        let _ = app.handle_reset_to_defaults_canceled();
+
+        assert!(!app.defaults_reset_pending);
+        assert!(matches!(app.status, StatusMessage::Error(_)));
+        assert!(status_contains(&app.status, "Failed to clear session s-1"));
     }
 
     /// A cancel with nothing armed has no question to withdraw, so it must

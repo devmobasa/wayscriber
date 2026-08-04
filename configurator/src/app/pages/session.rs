@@ -540,9 +540,15 @@ fn item_card(item: &CatalogItemLayout, sender: &ComponentSender<ConfiguratorApp>
         set_sensitive(&forget, values.actions_enabled);
         set_sensitive(&tool_state, values.tool_state_enabled);
 
+        let clear_arming = values.clear_armed && !confirm.get_visible();
         set_visible(&clear, !values.clear_armed);
         set_sensitive(&clear, values.clear_enabled);
         set_visible(&confirm, values.clear_armed);
+        if clear_arming {
+            // The destructive action just stepped aside. Move keyboard focus
+            // to the revealed answer rather than leaving it hidden.
+            confirm_button.grab_focus();
+        }
     });
 
     CatalogRow { card, refresh }

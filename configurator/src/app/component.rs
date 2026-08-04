@@ -409,9 +409,15 @@ impl Component for ConfiguratorApp {
         // affordances is on screen follows it: asking is offered until the
         // question stands, answering only while it does.
         let defaults_armed = self.defaults_reset_pending;
+        let defaults_arming = defaults_armed && !widgets.defaults_confirm_button.get_visible();
         set_visible(&widgets.defaults_button, !defaults_armed);
         set_visible(&widgets.defaults_confirm_button, defaults_armed);
         set_visible(&widgets.defaults_cancel_button, defaults_armed);
+        if defaults_arming {
+            // The Defaults button just stepped aside. Keep keyboard users in
+            // the revealed flow instead of leaving focus on a hidden widget.
+            widgets.defaults_confirm_button.grab_focus();
+        }
 
         // Status strip.
         let (status_text, status_class) = match &self.status {
