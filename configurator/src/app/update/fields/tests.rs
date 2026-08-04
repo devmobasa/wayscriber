@@ -1,4 +1,3 @@
-
 use super::*;
 use wayscriber::config::{ColorSpec, Config};
 
