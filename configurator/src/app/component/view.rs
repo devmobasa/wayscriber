@@ -1,4 +1,10 @@
-use super::*;
+use relm4::{adw, gtk};
+
+use adw::prelude::*;
+
+use super::super::pages;
+use super::super::state::{ConfiguratorApp, StatusMessage};
+use super::AppWidgets;
 
 pub(super) fn refresh(app: &ConfiguratorApp, widgets: &mut AppWidgets) {
     // Header chrome.

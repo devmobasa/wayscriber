@@ -15,16 +15,11 @@ mod view;
 use relm4::prelude::*;
 use relm4::{adw, gtk};
 
-use adw::prelude::*;
-
 use crate::messages::{CommandMessage, Message};
 use crate::models::{StartupRequest, TabId};
 
-use super::effects::Effect;
-use super::pages::{self, Binding};
-use super::search::AppSearchSummary;
-use super::state::{ConfiguratorApp, StatusMessage};
-use super::{daemon_setup, io, session_catalog};
+use super::pages::Binding;
+use super::state::ConfiguratorApp;
 
 /// GApplication id. A valid dotted id is required by GLib; the window still
 /// advertises this as its Wayland app-id, so compositor rules and the

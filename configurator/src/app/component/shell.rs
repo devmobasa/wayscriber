@@ -1,4 +1,14 @@
-use super::*;
+use relm4::{ComponentSender, adw, gtk};
+
+use adw::prelude::*;
+
+use crate::messages::Message;
+use crate::models::TabId;
+
+use super::super::pages::{self, Binding};
+use super::super::search::AppSearchSummary;
+use super::super::state::ConfiguratorApp;
+use super::AppWidgets;
 
 pub(super) fn build(
     root: &adw::ApplicationWindow,
