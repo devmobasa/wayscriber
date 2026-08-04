@@ -235,6 +235,10 @@ pub(super) fn build(
     {
         let sender = sender.clone();
         let controller = gtk::EventControllerKey::new();
+        // Run before focused-widget keybindings so Escape always disarms the
+        // model-owned confirmation. The handler still returns Proceed, which
+        // lets widgets such as SearchEntry perform their own Escape behavior.
+        controller.set_propagation_phase(gtk::PropagationPhase::Capture);
         controller.connect_key_pressed(move |_, key, _, modifiers| {
             if modifiers.contains(gtk::gdk::ModifierType::CONTROL_MASK)
                 && matches!(key, gtk::gdk::Key::f | gtk::gdk::Key::F)
