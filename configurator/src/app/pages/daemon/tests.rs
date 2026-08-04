@@ -1,4 +1,3 @@
-
 use super::*;
 use crate::models::{DesktopEnvironment, ShortcutBackend};
 
