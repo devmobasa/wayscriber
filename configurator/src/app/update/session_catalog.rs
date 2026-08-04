@@ -214,6 +214,11 @@ impl ConfiguratorApp {
         if self.session_catalog.pending_clear_id.as_deref() != Some(id.as_str()) {
             return Vec::new();
         }
+        // Answered, so the question is gone: the row leaves its armed state
+        // for the busy one in the same refresh instead of showing a Confirm
+        // Clear the model would now refuse. The completion path clears this
+        // too, which from here is redundant rather than load-bearing.
+        self.session_catalog.pending_clear_id = None;
         self.session_catalog.busy = true;
         self.status = StatusMessage::info("Clearing saved session data...");
         vec![Effect::ClearSessionEntry { id }]

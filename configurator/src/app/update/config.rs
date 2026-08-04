@@ -64,20 +64,35 @@ impl ConfiguratorApp {
         Vec::new()
     }
 
-    /// One button drives the two-step reset: the first press arms the
-    /// confirm (the shell relabels the button "Confirm reset?"), the second
-    /// press while armed applies the defaults. Any other edit disarms it
-    /// through `refresh_dirty_flag`, which is the old Cancel path.
+    /// Arms the confirmation, and only that.
+    ///
+    /// Asking is one message and answering is another, so no amount of
+    /// pressing the control that asks can replace the draft: a repeat while
+    /// the confirmation already stands is nothing, which is what makes a
+    /// double-click on "Defaults" harmless. Any other edit disarms it through
+    /// `refresh_dirty_flag`, which is the same standing-down the Cancel
+    /// control asks for explicitly.
     pub(super) fn handle_reset_to_defaults_requested(&mut self) -> Vec<Effect> {
-        if self.is_loading || self.is_saving {
+        if self.is_loading || self.is_saving || self.defaults_reset_pending {
             return Vec::new();
         }
 
+        self.defaults_reset_pending = true;
+        self.status = StatusMessage::warning(
+            "Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue.",
+        );
+        Vec::new()
+    }
+
+    /// Applies the defaults, and only while the confirmation this answers is
+    /// still armed.
+    ///
+    /// The pending flag is the whole guard: every transition that could have
+    /// invalidated the question — a load, a save, a reload, an edit to the
+    /// draft the user is about to lose — clears it, so a confirmation that
+    /// outlived its question answers nothing.
+    pub(super) fn handle_reset_to_defaults_confirmed(&mut self) -> Vec<Effect> {
         if !self.defaults_reset_pending {
-            self.defaults_reset_pending = true;
-            self.status = StatusMessage::warning(
-                "Defaults will replace the current draft with built-in defaults. Press \"Confirm reset?\" to continue.",
-            );
             return Vec::new();
         }
 
@@ -89,6 +104,21 @@ impl ConfiguratorApp {
         self.defaults_reset_pending = false;
         self.status = StatusMessage::info("Loaded default configuration (not saved).");
         self.refresh_dirty_flag();
+        Vec::new()
+    }
+
+    /// Stands the confirmation down and takes its hint off the status line.
+    ///
+    /// Guarded on the same flag as the confirm: with nothing armed there is
+    /// no question to withdraw, so a stray cancel must not wipe a status the
+    /// user is reading.
+    pub(super) fn handle_reset_to_defaults_canceled(&mut self) -> Vec<Effect> {
+        if !self.defaults_reset_pending {
+            return Vec::new();
+        }
+
+        self.defaults_reset_pending = false;
+        self.status = StatusMessage::idle();
         Vec::new()
     }
 
@@ -1000,20 +1030,38 @@ mod tests {
 
         assert!(app.defaults_reset_pending);
         assert_eq!(app.draft, changed_draft);
-        assert!(status_contains(&app.status, "Confirm reset?"));
+        assert!(status_contains(&app.status, "Confirm Defaults"));
     }
 
-    /// The same button applies the reset once the confirm is armed — the
-    /// wiring gap where "Confirm reset?" could never fire.
+    /// Asking twice is still asking: the request message cannot apply the
+    /// defaults, so a double press on "Defaults" leaves the draft alone with
+    /// the question still standing.
     #[test]
-    fn reset_to_defaults_second_press_applies_the_defaults() {
+    fn reset_to_defaults_repeated_request_is_a_no_op() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.is_loading = false;
+        app.draft.capture_enabled = !app.defaults.capture_enabled;
+        let changed_draft = app.draft.clone();
+
+        let _ = app.handle_reset_to_defaults_requested();
+        let _ = app.handle_reset_to_defaults_requested();
+
+        assert!(app.defaults_reset_pending);
+        assert_eq!(app.draft, changed_draft);
+        assert!(status_contains(&app.status, "Confirm Defaults"));
+    }
+
+    /// The confirm is the only message that replaces the draft, and it
+    /// disarms the question it answered.
+    #[test]
+    fn reset_to_defaults_confirmed_applies_the_defaults() {
         let (mut app, _effects) = ConfiguratorApp::new_app();
         app.is_loading = false;
         app.draft.capture_enabled = !app.defaults.capture_enabled;
         app.baseline.capture_enabled = !app.defaults.capture_enabled;
 
         let _ = app.handle_reset_to_defaults_requested();
-        let _ = app.handle_reset_to_defaults_requested();
+        let _ = app.handle_reset_to_defaults_confirmed();
 
         assert_eq!(app.draft, app.defaults);
         assert!(!app.defaults_reset_pending);
@@ -1022,6 +1070,59 @@ mod tests {
             app.is_dirty,
             "defaults differing from the loaded baseline must read as dirty"
         );
+    }
+
+    /// A confirm with nothing armed answers no question, so it must not
+    /// replace a draft the user was never warned about.
+    #[test]
+    fn reset_to_defaults_confirmed_without_a_request_changes_nothing() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.is_loading = false;
+        app.draft.capture_enabled = !app.defaults.capture_enabled;
+        let changed_draft = app.draft.clone();
+
+        let _ = app.handle_reset_to_defaults_confirmed();
+
+        assert_eq!(app.draft, changed_draft);
+        assert!(!app.defaults_reset_pending);
+        assert!(
+            !status_contains(&app.status, "Loaded default configuration"),
+            "an unarmed confirm reports nothing, because it did nothing"
+        );
+    }
+
+    /// Cancel withdraws the question and takes its warning off the status
+    /// line, leaving the draft exactly as the user left it.
+    #[test]
+    fn reset_to_defaults_canceled_disarms_and_clears_the_hint() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.is_loading = false;
+        app.draft.capture_enabled = !app.defaults.capture_enabled;
+        let changed_draft = app.draft.clone();
+
+        let _ = app.handle_reset_to_defaults_requested();
+        let _ = app.handle_reset_to_defaults_canceled();
+
+        assert!(!app.defaults_reset_pending);
+        assert_eq!(app.draft, changed_draft);
+        assert!(matches!(app.status, StatusMessage::Idle));
+
+        // Nothing is armed now, so the confirm that follows it is inert.
+        let _ = app.handle_reset_to_defaults_confirmed();
+        assert_eq!(app.draft, changed_draft);
+    }
+
+    /// A cancel with nothing armed has no question to withdraw, so it must
+    /// not wipe the status the user is reading.
+    #[test]
+    fn reset_to_defaults_canceled_without_a_request_keeps_the_status() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.is_loading = false;
+        app.status = StatusMessage::error("Failed to load config from disk: nope");
+
+        let _ = app.handle_reset_to_defaults_canceled();
+
+        assert!(status_contains(&app.status, "Failed to load config"));
     }
 
     #[test]
@@ -1034,6 +1135,22 @@ mod tests {
 
         assert!(!app.defaults_reset_pending);
         assert!(matches!(app.status, StatusMessage::Idle));
+    }
+
+    /// The disarming an edit does is what the confirm is guarded on: the
+    /// stale answer to a withdrawn question must not throw the edit away.
+    #[test]
+    fn a_draft_edit_between_request_and_confirm_refuses_the_confirm() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.is_loading = false;
+
+        let _ = app.handle_reset_to_defaults_requested();
+        let _ = app.handle_toggle_changed(ToggleField::CaptureEnabled, !app.draft.capture_enabled);
+        let edited_draft = app.draft.clone();
+        let _ = app.handle_reset_to_defaults_confirmed();
+
+        assert_eq!(app.draft, edited_draft);
+        assert_ne!(app.draft, app.defaults);
     }
 
     /// The reviewer's case: the file spells `undo` out and never mentions

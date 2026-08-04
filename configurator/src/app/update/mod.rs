@@ -44,6 +44,8 @@ impl ConfiguratorApp {
         match message {
             Message::ReloadRequested => self.handle_reload_requested(),
             Message::ResetToDefaultsRequested => self.handle_reset_to_defaults_requested(),
+            Message::ResetToDefaultsConfirmed => self.handle_reset_to_defaults_confirmed(),
+            Message::ResetToDefaultsCanceled => self.handle_reset_to_defaults_canceled(),
             Message::SaveRequested => self.handle_save_requested(),
             Message::MigrationApplyRequested => self.handle_migration_apply_requested(),
             Message::MigrationDismissed => self.handle_migration_dismissed(),

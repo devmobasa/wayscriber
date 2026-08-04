@@ -55,6 +55,8 @@ pub(crate) struct AppWidgets {
     migration_seen: String,
     save_button: gtk::Button,
     defaults_button: gtk::Button,
+    defaults_confirm_button: gtk::Button,
+    defaults_cancel_button: gtk::Button,
     reload_button: gtk::Button,
     sidebar_rows: Vec<(TabId, gtk::ListBoxRow)>,
     sidebar: gtk::ListBox,
@@ -165,6 +167,11 @@ impl Component for ConfiguratorApp {
             let sender = sender.clone();
             reload_button.connect_clicked(move |_| sender.input(Message::ReloadRequested));
         }
+        // Asking for the reset and answering for it are different messages,
+        // so they are different controls: while the confirmation stands, the
+        // button that asks steps aside for the pair that answers. All three
+        // exist from the start and visibility picks between them, which is
+        // what keeps a repeat of the same press from ever applying defaults.
         let defaults_button = gtk::Button::with_label("Defaults");
         {
             let sender = sender.clone();
@@ -172,6 +179,33 @@ impl Component for ConfiguratorApp {
                 sender.input(Message::ResetToDefaultsRequested);
             });
         }
+        let defaults_confirm_button = gtk::Button::builder()
+            .label("Confirm Defaults")
+            .visible(false)
+            .css_classes(["destructive-action"])
+            .build();
+        {
+            let sender = sender.clone();
+            defaults_confirm_button.connect_clicked(move |_| {
+                sender.input(Message::ResetToDefaultsConfirmed);
+            });
+        }
+        let defaults_cancel_button = gtk::Button::builder()
+            .label("Cancel")
+            .visible(false)
+            .css_classes(["flat"])
+            .build();
+        {
+            let sender = sender.clone();
+            defaults_cancel_button.connect_clicked(move |_| {
+                sender.input(Message::ResetToDefaultsCanceled);
+            });
+        }
+        let defaults_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        defaults_box.append(&defaults_button);
+        defaults_box.append(&defaults_confirm_button);
+        defaults_box.append(&defaults_cancel_button);
+
         let save_button = gtk::Button::with_label("Save");
         save_button.add_css_class("suggested-action");
         {
@@ -183,7 +217,7 @@ impl Component for ConfiguratorApp {
             .title_widget(&window_title)
             .build();
         header.pack_start(&reload_button);
-        header.pack_start(&defaults_button);
+        header.pack_start(&defaults_box);
         header.pack_end(&save_button);
 
         // ---- Status + migration strip -----------------------------------
@@ -320,6 +354,8 @@ impl Component for ConfiguratorApp {
             migration_seen: String::new(),
             save_button,
             defaults_button,
+            defaults_confirm_button,
+            defaults_cancel_button,
             reload_button,
             sidebar_rows,
             sidebar,
@@ -369,14 +405,13 @@ impl Component for ConfiguratorApp {
         if widgets.reload_button.is_sensitive() == busy {
             widgets.reload_button.set_sensitive(!busy);
         }
-        let defaults_label = if self.defaults_reset_pending {
-            "Confirm reset?"
-        } else {
-            "Defaults"
-        };
-        if widgets.defaults_button.label().as_deref() != Some(defaults_label) {
-            widgets.defaults_button.set_label(defaults_label);
-        }
+        // The armed confirmation is the model's, so which of the two Defaults
+        // affordances is on screen follows it: asking is offered until the
+        // question stands, answering only while it does.
+        let defaults_armed = self.defaults_reset_pending;
+        set_visible(&widgets.defaults_button, !defaults_armed);
+        set_visible(&widgets.defaults_confirm_button, defaults_armed);
+        set_visible(&widgets.defaults_cancel_button, defaults_armed);
 
         // Status strip.
         let (status_text, status_class) = match &self.status {
@@ -445,6 +480,16 @@ impl Component for ConfiguratorApp {
         for binding in &mut widgets.bindings {
             binding(self, &summary);
         }
+    }
+}
+
+/// Writes the widget's own visibility flag, never `is_visible`: a widget
+/// inside a hidden parent reports invisible while its own flag still says
+/// otherwise, and skipping the write there would leak the stale state the
+/// moment the parent comes back.
+fn set_visible(widget: &impl IsA<gtk::Widget>, visible: bool) {
+    if widget.get_visible() != visible {
+        widget.set_visible(visible);
     }
 }
 
