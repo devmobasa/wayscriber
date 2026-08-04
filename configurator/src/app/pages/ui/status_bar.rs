@@ -1,4 +1,12 @@
-use super::*;
+use relm4::ComponentSender;
+
+use crate::messages::Message;
+use crate::models::{ColorPickerId, StatusPositionOption, TabId, TextField, ToggleField};
+
+use super::super::super::state::ConfiguratorApp;
+use super::super::color_rows::color_row;
+use super::super::{BuiltPage, PageBuilder};
+use super::{options, quad_color};
 
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let (positions, position_labels) = options(StatusPositionOption::list(), |value| value.label());

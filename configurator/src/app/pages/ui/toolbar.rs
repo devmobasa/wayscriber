@@ -1,4 +1,14 @@
-use super::*;
+use relm4::ComponentSender;
+
+use crate::messages::Message;
+use crate::models::{
+    OverrideOption, TabId, TextField, ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField,
+    ToolbarRebindModifierOption, ToolbarSideLayoutOption, ZoomChipDisplayOption,
+};
+
+use super::super::super::state::ConfiguratorApp;
+use super::super::{BuiltPage, PageBuilder};
+use super::{note, options};
 
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let (layout_modes, layout_labels) =

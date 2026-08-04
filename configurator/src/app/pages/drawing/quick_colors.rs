@@ -1,4 +1,20 @@
-use super::*;
+use relm4::{ComponentSender, adw, gtk};
+
+use adw::prelude::*;
+
+use wayscriber::config::{QUICK_COLOR_RENDER_LIMIT, QuickColorSlot};
+
+use crate::messages::Message;
+use crate::models::{ColorMode, ColorPickerId, NamedColorOption, TextField};
+
+use super::super::super::search::SearchArea;
+use super::super::super::state::ConfiguratorApp;
+use super::super::color_rows::{ResolvedColor, dialog_hex, mark_hex_error, set_swatch_blocked};
+use super::super::{PageBuilder, set_selected_blocked, set_text_blocked};
+use super::{
+    COLOR_MODES, boxed_list, color_dialog_button, combo_row_widget, connect_combo, icon_button,
+    named_color_labels, resolved, select_if_changed, set_error_if_changed, set_visible_if_changed,
+};
 
 pub(super) fn build(page: &mut PageBuilder) {
     page.group_in_area("Quick colors", SearchArea::DrawingColor);

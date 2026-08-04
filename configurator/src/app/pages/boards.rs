@@ -32,24 +32,17 @@ mod tests;
 use relm4::prelude::*;
 use relm4::{adw, gtk};
 
-use adw::prelude::*;
-use gtk::glib::SignalHandlerId;
-
 use crate::messages::Message;
-use crate::models::color::parse_triplet_values;
 use crate::models::{
-    BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorPickerId,
-    ColorTripletInput, TabId, TextField, ToggleField,
+    BoardBackgroundOption, ColorPickerId, ColorTripletInput, TabId, TextField, ToggleField,
 };
+use adw::prelude::*;
 
 use super::super::search::{AppSearchSummary, SearchArea, TabSearchSummary};
 use super::super::state::ConfiguratorApp;
-use super::color_rows::{dialog_hex, mark_hex_error, set_swatch_blocked};
-use super::{BuiltPage, PageBuilder, set_text_blocked};
-use color::*;
-use header::*;
-use rows::*;
-use section::*;
+use super::{BuiltPage, PageBuilder};
+use rows::{is_collapsed, note_label, picker_hex, sync_combo, validate_min};
+use section::{BoundBoardSection, rebuild_sections};
 
 /// `GTK_INVALID_LIST_POSITION`: what a `GtkSingleSelection` reads as "nothing
 /// is selected", which is how the Iced pick list rendered an unknown default.

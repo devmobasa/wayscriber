@@ -1,4 +1,14 @@
-use super::*;
+use crate::messages::Message;
+use crate::models::color::ColorInput;
+use crate::models::{ColorMode, ColorPickerId, NamedColorOption, TextField};
+
+use super::super::super::search::SearchArea;
+use super::super::PageBuilder;
+use super::super::color_rows::color_row;
+use super::{
+    COLOR_MODES, conditional_section, named_color_labels, resolved, section_combo_row,
+    section_entry_row,
+};
 
 pub(super) fn build(page: &mut PageBuilder) {
     page.group_in_area("Default color", SearchArea::DrawingColor)

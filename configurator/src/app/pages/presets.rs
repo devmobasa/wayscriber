@@ -12,23 +12,21 @@
 mod color;
 mod rows;
 
+use relm4::adw;
 use relm4::prelude::*;
-use relm4::{adw, gtk};
 
 use adw::prelude::*;
 use wayscriber::config::{PRESET_SLOTS_MAX, PRESET_SLOTS_MIN};
 
-use gtk::glib::SignalHandlerId;
-
 use crate::messages::Message;
 use crate::models::{
-    ColorMode, NamedColorOption, OverrideOption, PresetEraserKindOption, PresetEraserModeOption,
-    PresetTextField, PresetToggleField, TabId, ToolOption,
+    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, TabId,
+    ToolOption,
 };
 
 use super::super::search::{AppSearchSummary, SearchArea};
 use super::super::state::ConfiguratorApp;
-use super::{BuiltPage, PageBuilder, set_selected_blocked, set_text_blocked, validate_u32_range};
+use super::{BuiltPage, PageBuilder};
 use color::build_color_rows;
 use rows::{SlotBuilder, labels_of, slot_button};
 

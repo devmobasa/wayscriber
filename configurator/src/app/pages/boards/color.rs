@@ -1,4 +1,17 @@
-use super::*;
+use relm4::{ComponentSender, gtk};
+
+use gtk::glib::SignalHandlerId;
+use gtk::prelude::*;
+
+use crate::messages::Message;
+use crate::models::ColorPickerId;
+use crate::models::color::parse_triplet_values;
+
+use super::super::super::state::ConfiguratorApp;
+use super::super::color_rows::{dialog_hex, mark_hex_error, set_swatch_blocked};
+use super::super::set_text_blocked;
+use super::ColorValues;
+use super::rows::{plain_row, row_content_box};
 
 /// The Iced view's triplet picker: a hex field, a popup picker, and the three
 /// raw components. The native color dialog stands in for the popup; both feed

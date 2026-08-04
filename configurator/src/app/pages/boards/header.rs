@@ -1,4 +1,11 @@
-use super::*;
+use relm4::{ComponentSender, gtk};
+
+use gtk::prelude::*;
+
+use crate::messages::Message;
+
+use super::super::super::state::ConfiguratorApp;
+use super::rows::{connect_button, plain_row, row_content_box, set_label};
 
 /// The header's two labels, which restate the id and name rows below them.
 pub(super) struct HeaderRow {

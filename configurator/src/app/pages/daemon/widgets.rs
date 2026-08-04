@@ -1,4 +1,11 @@
-use super::*;
+use relm4::{ComponentSender, gtk};
+
+use gtk::prelude::*;
+
+use crate::messages::Message;
+use crate::models::DaemonAction;
+
+use super::super::super::state::ConfiguratorApp;
 
 pub(super) fn column_box() -> gtk::Box {
     gtk::Box::builder()

@@ -1,5 +1,10 @@
 use super::rows::{SlotBuilder, color_swatch, labels_of};
-use super::*;
+use relm4::adw::prelude::*;
+
+use crate::messages::Message;
+use crate::models::{ColorMode, NamedColorOption, PresetTextField};
+
+use super::super::validate_u32_range;
 
 /// The slot's color block: a mode chooser with a live preview, then the
 /// rows the chosen mode edits.

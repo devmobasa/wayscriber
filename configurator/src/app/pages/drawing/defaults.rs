@@ -1,4 +1,9 @@
-use super::*;
+use crate::messages::Message;
+use crate::models::{EraserModeOption, TextField, ToggleField};
+
+use super::super::super::search::SearchArea;
+use super::super::PageBuilder;
+use super::{validate_f64_range, validate_usize_min, validate_usize_range};
 
 pub(super) fn build(page: &mut PageBuilder) {
     page.group_in_area("Drawing defaults", SearchArea::DrawingDefaults)

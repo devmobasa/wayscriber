@@ -1,5 +1,16 @@
 use super::rows::{connect_button, plain_row, row_content_box, side_label};
-use super::*;
+use relm4::{ComponentSender, gtk};
+
+use gtk::glib::SignalHandlerId;
+use gtk::prelude::*;
+
+use crate::messages::Message;
+use crate::models::color::parse_hex;
+use crate::models::{ColorPickerId, RenderProfileMappingSide};
+
+use super::super::super::state::ConfiguratorApp;
+use super::super::color_rows::{dialog_hex, mark_hex_error, set_swatch_blocked};
+use super::super::set_text_blocked;
 
 /// One side of a mapping: the hex field the Iced view had, plus the native
 /// color dialog standing in for its popup picker.

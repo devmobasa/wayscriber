@@ -1,4 +1,13 @@
-use super::*;
+use relm4::{ComponentSender, adw, gtk};
+
+use adw::prelude::*;
+use gtk::glib::SignalHandlerId;
+
+use crate::messages::Message;
+use crate::models::{ColorPickerId, RenderProfileTextField};
+
+use super::super::super::state::ConfiguratorApp;
+use super::NO_SELECTION;
 
 pub(super) fn build_header_row(
     index: usize,

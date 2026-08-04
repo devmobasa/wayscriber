@@ -1,4 +1,12 @@
-use super::*;
+use relm4::ComponentSender;
+
+use crate::messages::Message;
+use crate::models::{ReducedMotionOption, TabId, TextField, ToggleField, UiThemeOption};
+
+use super::super::super::search::SearchArea;
+use super::super::super::state::ConfiguratorApp;
+use super::super::{BuiltPage, PageBuilder};
+use super::options;
 
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let (themes, theme_labels) = options(UiThemeOption::list(), |value| value.label());

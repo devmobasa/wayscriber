@@ -32,20 +32,15 @@ mod tests;
 use relm4::prelude::*;
 use relm4::{adw, gtk};
 
-use adw::prelude::*;
-use gtk::glib::SignalHandlerId;
-
 use crate::messages::Message;
-use crate::models::color::parse_hex;
 use crate::models::{
-    ColorPickerId, RenderProfileExportOption, RenderProfileMappingSide,
-    RenderProfileSelectionOption, RenderProfileTextField, TabId,
+    ColorPickerId, RenderProfileExportOption, RenderProfileSelectionOption, TabId,
 };
+use adw::prelude::*;
 
 use super::super::search::{AppSearchSummary, SearchArea, TabSearchSummary};
 use super::super::state::ConfiguratorApp;
-use super::color_rows::{dialog_hex, mark_hex_error, set_swatch_blocked};
-use super::{BuiltPage, PageBuilder, set_text_blocked};
+use super::{BuiltPage, PageBuilder};
 use rows::{picker_hex, selected_string, sync_combo};
 use section::{BoundProfileSection, rebuild_sections};
 

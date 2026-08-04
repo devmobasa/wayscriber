@@ -1,4 +1,15 @@
-use super::*;
+use relm4::{ComponentSender, adw, gtk};
+
+use adw::prelude::*;
+use gtk::glib::SignalHandlerId;
+
+use crate::messages::Message;
+use crate::models::{
+    BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorPickerId,
+};
+
+use super::super::super::state::ConfiguratorApp;
+use super::NO_SELECTION;
 
 /// An entry row whose text the model owns, kept with the handler a refresh
 /// has to block before writing it.

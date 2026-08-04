@@ -1,4 +1,10 @@
-use super::*;
+use relm4::gtk;
+
+use gtk::prelude::*;
+
+use crate::models::{DaemonRuntimeStatus, ShortcutApplyCapability};
+
+use super::super::super::state::ConfiguratorApp;
 
 /// Emphasis for a status line, mapped to the Adwaita state classes that
 /// stand in for the Iced view's literal colors.

@@ -16,32 +16,19 @@ mod status_bar;
 mod toolbar;
 mod toolbar_visibility;
 
+use relm4::gtk;
 use relm4::prelude::*;
-use relm4::{adw, gtk};
 
-use adw::prelude::*;
-use gtk::glib;
-
-use wayscriber::config::{
-    ResolvedToolbarItems, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemId,
-    ToolbarItemOrderGroup, ToolbarItemSurface, ToolbarItemsConfig, toolbar_item_definitions,
-    toolbar_item_ids, toolbar_item_order_group,
-};
+use gtk::prelude::*;
 
 use crate::messages::Message;
 use crate::models::color::parse_quad_values;
-use crate::models::{
-    ColorPickerId, InputHudModeOption, InputHudPositionOption, OverrideOption,
-    PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
-    StatusPositionOption, TabId, TextField, ToggleField, ToolbarLayoutModeOption,
-    ToolbarOverrideField, ToolbarRebindModifierOption, ToolbarSideLayoutOption, UiTabId,
-    UiThemeOption, ZoomChipDisplayOption,
-};
+use crate::models::{TabId, UiTabId};
 
 use super::super::search::SearchArea;
 use super::super::state::ConfiguratorApp;
-use super::color_rows::{ResolvedColor, color_row};
-use super::{Binding, BuiltPage, PageBuilder, validate_u32_range};
+use super::color_rows::ResolvedColor;
+use super::{Binding, BuiltPage};
 
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut bindings: Vec<Binding> = Vec::new();

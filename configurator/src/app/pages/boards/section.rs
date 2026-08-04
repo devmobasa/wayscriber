@@ -1,4 +1,18 @@
-use super::*;
+use relm4::{ComponentSender, adw, gtk};
+
+use adw::prelude::*;
+
+use crate::messages::Message;
+use crate::models::{
+    BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorPickerId,
+};
+
+use super::super::super::state::ConfiguratorApp;
+use super::super::set_text_blocked;
+use super::color::build_color_row;
+use super::header::build_header_row;
+use super::rows::{build_kind_row, build_text_row, build_toggle_row};
+use super::{BoardValues, SectionLayout};
 
 /// One section's refresh: built beside its row, so it owns that row's typed
 /// widget handles and the signal handler ids guarding each write. No

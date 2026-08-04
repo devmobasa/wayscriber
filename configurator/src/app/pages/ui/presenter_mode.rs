@@ -1,4 +1,11 @@
-use super::*;
+use relm4::ComponentSender;
+
+use crate::messages::Message;
+use crate::models::{PresenterToolBehaviorOption, PresenterToolbarModeOption, TabId, ToggleField};
+
+use super::super::super::state::ConfiguratorApp;
+use super::super::{BuiltPage, PageBuilder};
+use super::{note, options};
 
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let (toolbar_modes, toolbar_mode_labels) =

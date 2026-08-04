@@ -1,5 +1,13 @@
 use super::*;
-use crate::models::{DesktopEnvironment, ShortcutBackend};
+use crate::models::{
+    DaemonRuntimeStatus, DesktopEnvironment, LightShortcutApplyCapability, ShortcutApplyCapability,
+    ShortcutBackend,
+};
+
+use super::status::{
+    Tone, feedback_tone, light_controls_details, missing_tools, overall_status, service_status,
+    shortcut_placeholder,
+};
 
 fn shown_all() -> ShownAreas {
     ShownAreas {

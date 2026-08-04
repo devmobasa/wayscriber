@@ -1,4 +1,20 @@
-use super::*;
+use relm4::{ComponentSender, adw, gtk};
+
+use adw::prelude::*;
+use gtk::glib;
+
+use wayscriber::config::{
+    ResolvedToolbarItems, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemId,
+    ToolbarItemOrderGroup, ToolbarItemSurface, ToolbarItemsConfig, toolbar_item_definitions,
+    toolbar_item_ids, toolbar_item_order_group,
+};
+
+use crate::messages::Message;
+use crate::models::TabId;
+
+use super::super::super::state::ConfiguratorApp;
+use super::super::{BuiltPage, PageBuilder};
+use super::note;
 
 /// One preferences group of item rows: a surface/category batch, or one of
 /// the three order groups the configurator can reorder.

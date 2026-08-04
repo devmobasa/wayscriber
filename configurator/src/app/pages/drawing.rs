@@ -21,22 +21,15 @@ use relm4::{adw, gtk};
 use adw::prelude::*;
 use gtk::glib;
 
-use wayscriber::config::{DragButtonConfig, QUICK_COLOR_RENDER_LIMIT, QuickColorSlot};
 use wayscriber::draw::Color;
 
 use crate::messages::Message;
-use crate::models::color::ColorInput;
 use crate::models::util::format_float;
-use crate::models::{
-    ColorMode, ColorPickerId, DragColorOption, DragMouseButton, DragToolField, DragToolOption,
-    EraserModeOption, FontStyleOption, FontWeightOption, NamedColorOption, TabId, TextField,
-    ToggleField,
-};
+use crate::models::{ColorMode, DragMouseButton, DragToolField, NamedColorOption, TabId};
 
-use super::super::search::{AppSearchSummary, SearchArea};
 use super::super::state::ConfiguratorApp;
-use super::color_rows::{ResolvedColor, color_row, dialog_hex, mark_hex_error, set_swatch_blocked};
-use super::{BuiltPage, PageBuilder, set_selected_blocked, set_text_blocked};
+use super::color_rows::ResolvedColor;
+use super::{BuiltPage, PageBuilder, set_text_blocked};
 
 /// Mouse buttons that carry a drag mapping section, in the order the old
 /// view listed them.

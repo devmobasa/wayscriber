@@ -13,21 +13,17 @@ mod status;
 mod tests;
 mod widgets;
 
+use relm4::adw;
 use relm4::prelude::*;
-use relm4::{adw, gtk};
 
 use adw::prelude::*;
 
-use crate::messages::Message;
-use crate::models::{
-    DaemonAction, DaemonRuntimeStatus, LightShortcutApplyCapability, ShortcutApplyCapability, TabId,
-};
+use crate::models::TabId;
 
 use super::super::search::{AppSearchSummary, SearchArea};
 use super::super::state::ConfiguratorApp;
-use super::{Binding, BuiltPage, set_text_blocked};
-use status::*;
-use widgets::*;
+use super::{Binding, BuiltPage};
+use widgets::set_visible;
 
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let page = adw::PreferencesPage::new();

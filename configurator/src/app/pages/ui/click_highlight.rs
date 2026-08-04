@@ -1,4 +1,12 @@
-use super::*;
+use relm4::ComponentSender;
+
+use crate::messages::Message;
+use crate::models::{ColorPickerId, TabId, TextField, ToggleField};
+
+use super::super::super::state::ConfiguratorApp;
+use super::super::color_rows::color_row;
+use super::super::{BuiltPage, PageBuilder, validate_u32_range};
+use super::{quad_color, validate_f64_range};
 
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut page = PageBuilder::new(sender, TabId::Ui);
