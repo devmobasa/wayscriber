@@ -413,7 +413,7 @@ jobs:
         run: |
           GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber.git aur-wayscriber
           GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber-bin.git aur-wayscriber-bin
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber-configurator.git aur-wayscriber-configurator || true
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o StrictHostKeyChecking=yes" git clone ssh://aur@aur.archlinux.org/wayscriber-configurator.git aur-wayscriber-configurator
 
       - name: Update AUR from manifest
         env:

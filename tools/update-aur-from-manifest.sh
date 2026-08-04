@@ -31,6 +31,8 @@ AUR_SOURCE_DIR="${AUR_SOURCE_DIR:-${REPO_ROOT}/../aur-wayscriber}"
 AUR_BIN_DIR="${AUR_BIN_DIR:-${REPO_ROOT}/../aur-wayscriber-bin}"
 AUR_CONFIG_DIR="${AUR_CONFIG_DIR:-${REPO_ROOT}/../aur-wayscriber-configurator}"
 DO_PUSH=0
+NO_CONFIGURATOR=0
+SOURCE_ARCHIVE_SHA="${AUR_SOURCE_ARCHIVE_SHA256:-}"
 
 usage() {
     cat <<'EOF'
@@ -43,8 +45,13 @@ Flags:
   --source-dir <path>      wayscriber AUR repo path
   --bin-dir <path>         wayscriber-bin AUR repo path
   --config-dir <path>      wayscriber-configurator AUR repo path
+  --no-configurator        Deliberately skip the configurator AUR channel
+  --source-sha256 <sha>    Use this source archive checksum without downloading
   --push                   Git add/commit/push changes (default: dry-run)
   -h, --help               Show this help
+
+The configurator channel is required unless --no-configurator is passed. The
+checksum can also be supplied through AUR_SOURCE_ARCHIVE_SHA256.
 EOF
 }
 
@@ -55,6 +62,8 @@ while [[ $# -gt 0 ]]; do
         --source-dir) AUR_SOURCE_DIR="$2"; shift 2 ;;
         --bin-dir) AUR_BIN_DIR="$2"; shift 2 ;;
         --config-dir) AUR_CONFIG_DIR="$2"; shift 2 ;;
+        --no-configurator) NO_CONFIGURATOR=1; shift ;;
+        --source-sha256) SOURCE_ARCHIVE_SHA="$2"; shift 2 ;;
         --push) DO_PUSH=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; usage; exit 1 ;;
@@ -88,10 +97,23 @@ read_pkgrel_from_pkgbuild() {
     fi
 }
 
-next_pkgrel() {
+absolute_dir() {
     local dir="$1"
-    local pkgfile="$dir/PKGBUILD"
-    local current_pkgver current_pkgrel
+    (cd "$dir" >/dev/null 2>&1 && pwd -P) || {
+        echo "Not a directory: $dir" >&2
+        return 1
+    }
+}
+
+next_pkgrel() {
+    local dir_abs pkgfile current_pkgver current_pkgrel
+    dir_abs="$(absolute_dir "$1")"
+    pkgfile="${dir_abs}/PKGBUILD"
+
+    [[ -f "$pkgfile" ]] || {
+        echo "Missing AUR recipe: $pkgfile" >&2
+        return 1
+    }
 
     current_pkgver="$(read_pkgver_from_pkgbuild "$pkgfile")"
     current_pkgrel="$(read_pkgrel_from_pkgbuild "$pkgfile")"
@@ -108,22 +130,48 @@ sha_for() {
     jq -r --arg n "$name" '.artifacts[] | select(.name==$n) | .sha256' "$MANIFEST"
 }
 
-SOURCE_ARCHIVE_SHA=""
-
 source_archive_url() {
     printf 'https://github.com/devmobasa/wayscriber/archive/refs/tags/v%s.tar.gz' "$VERSION"
 }
 
 source_archive_sha() {
     if [[ -z "$SOURCE_ARCHIVE_SHA" ]]; then
-        local tmp
+        local tmp url
+        url="$(source_archive_url)"
         tmp="$(mktemp)"
-        curl -fsSL "$(source_archive_url)" -o "$tmp"
+        if ! curl -fsSL "$url" -o "$tmp"; then
+            rm -f "$tmp"
+            echo "Failed to download the source archive: ${url}" >&2
+            echo "Pass --source-sha256 or set AUR_SOURCE_ARCHIVE_SHA256 to supply it directly." >&2
+            return 1
+        fi
+        if [[ ! -s "$tmp" ]]; then
+            rm -f "$tmp"
+            echo "Downloaded an empty source archive from ${url}" >&2
+            return 1
+        fi
         SOURCE_ARCHIVE_SHA="$(sha256sum "$tmp" | awk '{print $1}')"
         rm -f "$tmp"
     fi
 
+    if [[ ! "$SOURCE_ARCHIVE_SHA" =~ ^[0-9a-fA-F]{64}$ ]]; then
+        echo "Source archive checksum is not a sha256 digest: '${SOURCE_ARCHIVE_SHA}'" >&2
+        return 1
+    fi
+
     printf '%s' "$SOURCE_ARCHIVE_SHA"
+}
+
+require_recipe() {
+    local channel="$1" dir="$2"
+    [[ -d "$dir" ]] || {
+        echo "${channel} AUR clone not found: $dir" >&2
+        return 1
+    }
+    [[ -f "$dir/PKGBUILD" && -f "$dir/.SRCINFO" ]] || {
+        echo "${channel} AUR clone is missing PKGBUILD or .SRCINFO: $dir" >&2
+        return 1
+    }
 }
 
 replace_line() {
@@ -285,8 +333,8 @@ update_source() {
     local dir="$1"
     local pkgrel
     [[ -d "$dir" ]] || { echo "Skip source: $dir not found" >&2; return; }
-    pushd "$dir" >/dev/null
     pkgrel="$(next_pkgrel "$dir")"
+    pushd "$dir" >/dev/null
     local source_sha source_url
     source_sha="$(source_archive_sha)"
     source_url="$(source_archive_url)"
@@ -320,9 +368,9 @@ update_source() {
 update_configurator() {
     local dir="$1"
     local pkgrel
-    [[ -d "$dir" ]] || { echo "Skip configurator: $dir not found" >&2; return; }
-    pushd "$dir" >/dev/null
+    require_recipe "wayscriber-configurator" "$dir"
     pkgrel="$(next_pkgrel "$dir")"
+    pushd "$dir" >/dev/null
     local source_sha source_url
     source_sha="$(source_archive_sha)"
     source_url="$(source_archive_url)"
@@ -352,6 +400,31 @@ update_configurator() {
 
 echo "Updating AUR using manifest: ${MANIFEST}"
 echo "Version: ${VERSION}"
+
+# The configurator is a release channel, not a best-effort extra. Check all
+# known late failures before any earlier channel can commit and push.
+if [[ "$NO_CONFIGURATOR" -eq 0 ]]; then
+    require_recipe "wayscriber-configurator" "$AUR_CONFIG_DIR"
+fi
+if [[ -d "$AUR_SOURCE_DIR" ]]; then
+    require_recipe "wayscriber" "$AUR_SOURCE_DIR"
+fi
+if [[ -d "$AUR_BIN_DIR" ]]; then
+    require_recipe "wayscriber-bin" "$AUR_BIN_DIR"
+    bin_sha="$(sha_for "wayscriber-v${VERSION}-linux-x86_64.tar.gz")"
+    [[ -n "$bin_sha" && "$bin_sha" != "null" ]] || {
+        echo "Bin checksum missing in manifest" >&2
+        exit 1
+    }
+fi
+if [[ -d "$AUR_SOURCE_DIR" || ( "$NO_CONFIGURATOR" -eq 0 && -d "$AUR_CONFIG_DIR" ) ]]; then
+    SOURCE_ARCHIVE_SHA="$(source_archive_sha)"
+fi
+
 update_source "${AUR_SOURCE_DIR}"
 update_bin "${AUR_BIN_DIR}"
-update_configurator "${AUR_CONFIG_DIR}"
+if [[ "$NO_CONFIGURATOR" -eq 1 ]]; then
+    echo "Skipping wayscriber-configurator: --no-configurator was passed." >&2
+else
+    update_configurator "${AUR_CONFIG_DIR}"
+fi

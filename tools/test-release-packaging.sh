@@ -775,7 +775,8 @@ bash "${REPO_ROOT}/tools/update-aur-from-manifest.sh" \
     --manifest "${MANIFEST}" \
     --source-dir "${WORK_DIR}/missing-source" \
     --bin-dir "${AUR_BIN_DIR}" \
-    --config-dir "${WORK_DIR}/missing-config" >/dev/null
+    --config-dir "${WORK_DIR}/missing-config" \
+    --no-configurator >/dev/null
 
 assert_contains "${AUR_BIN_DIR}/PKGBUILD" "'gtk4'"
 assert_contains "${AUR_BIN_DIR}/.SRCINFO" "depends = gtk4"
@@ -789,5 +790,184 @@ assert_contains "${AUR_BIN_DIR}/PKGBUILD" 'install -Dm644 "${srcdir_tmp}/usr/sha
 
 assert_contains "${REPO_ROOT}/packaging/PKGBUILD" "'gtk4-layer-shell'"
 assert_contains "${REPO_ROOT}/packaging/.SRCINFO" "depends = gtk4-layer-shell"
+
+# The configurator AUR channel is required by default. The hosted clone step
+# must fail before the updater runs rather than silently publish two channels.
+assert_not_contains "${RELEASE_WORKFLOW}" \
+    "git clone ssh://aur@aur.archlinux.org/wayscriber-configurator.git aur-wayscriber-configurator || true"
+
+AUR_SOURCE_SHA='abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789'
+AUR_FAKE_BIN="${WORK_DIR}/aur-fake-bin"
+mkdir -p "${AUR_FAKE_BIN}"
+cat > "${AUR_FAKE_BIN}/curl" <<'EOF'
+#!/usr/bin/env bash
+echo 'AUR_TEST_NETWORK_ACCESS' >&2
+exit 97
+EOF
+chmod +x "${AUR_FAKE_BIN}/curl"
+
+write_source_clone() {
+    local dir="$1" pkgver="$2" pkgrel="$3"
+    mkdir -p "${dir}"
+    cat > "${dir}/PKGBUILD" <<EOF
+pkgname=wayscriber
+pkgver=${pkgver}
+pkgrel=${pkgrel}
+install=wayscriber.install
+depends=(
+    'gcc-libs'
+    'wl-clipboard'
+)
+makedepends=(
+    'git'
+)
+source=("old.tar.gz::https://example.invalid/old.tar.gz")
+sha256sums=('old')
+package() {
+    cd "\$pkgname"
+}
+EOF
+    cat > "${dir}/.SRCINFO" <<EOF
+pkgbase = wayscriber
+	pkgver = ${pkgver}
+	pkgrel = ${pkgrel}
+	install = wayscriber.install
+	depends = gcc-libs
+	depends = wl-clipboard
+	makedepends = git
+	source = old.tar.gz::https://example.invalid/old.tar.gz
+	sha256sums = old
+
+pkgname = wayscriber
+EOF
+    touch "${dir}/wayscriber.install"
+    git -C "${dir}" init -q
+    git -C "${dir}" add PKGBUILD .SRCINFO wayscriber.install
+}
+
+write_configurator_clone() {
+    local dir="$1" pkgver="$2" pkgrel="$3"
+    mkdir -p "${dir}"
+    cat > "${dir}/PKGBUILD" <<EOF
+pkgname=wayscriber-configurator
+pkgver=${pkgver}
+pkgrel=${pkgrel}
+depends=(
+    'gcc-libs'
+)
+makedepends=(
+    'git'
+)
+source=("old.tar.gz::https://example.invalid/old.tar.gz")
+sha256sums=('old')
+build() {
+    cd wayscriber
+}
+EOF
+    cat > "${dir}/.SRCINFO" <<EOF
+pkgbase = wayscriber-configurator
+	pkgver = ${pkgver}
+	pkgrel = ${pkgrel}
+	depends = gcc-libs
+	makedepends = git
+	source = old.tar.gz::https://example.invalid/old.tar.gz
+	sha256sums = old
+
+pkgname = wayscriber-configurator
+EOF
+    git -C "${dir}" init -q
+    git -C "${dir}" add PKGBUILD .SRCINFO
+}
+
+run_aur_updater() {
+    local cwd="$1"
+    shift
+    (
+        cd "${cwd}"
+        PATH="${AUR_FAKE_BIN}:${PATH}" \
+            bash "${REPO_ROOT}/tools/update-aur-from-manifest.sh" \
+                --version 9.9.9 \
+                --manifest "${MANIFEST}" \
+                "$@"
+    )
+}
+
+expect_aur_failure() {
+    local expected="$1" cwd="$2"
+    shift 2
+    local output="${WORK_DIR}/aur-failure-output"
+
+    set +e
+    run_aur_updater "${cwd}" "$@" >"${output}" 2>&1
+    local status=$?
+    set -e
+    if [[ ${status} -eq 0 ]]; then
+        echo "Expected AUR updater failure containing: ${expected}" >&2
+        exit 1
+    fi
+    assert_contains "${output}" "${expected}"
+}
+
+# Relative clone paths used to be resolved after pushd, turning `dir/PKGBUILD`
+# into `dir/dir/PKGBUILD` and resetting same-version hotfixes to pkgrel=1.
+AUR_SOURCE_HOTFIX="${WORK_DIR}/aur-source-hotfix"
+write_source_clone "${AUR_SOURCE_HOTFIX}" 9.9.9 3
+run_aur_updater "${WORK_DIR}" \
+    --source-dir aur-source-hotfix \
+    --bin-dir missing-bin \
+    --config-dir missing-config \
+    --no-configurator \
+    --source-sha256 "${AUR_SOURCE_SHA}" >/dev/null
+assert_contains "${AUR_SOURCE_HOTFIX}/PKGBUILD" "pkgrel=4"
+assert_contains "${AUR_SOURCE_HOTFIX}/.SRCINFO" "pkgrel = 4"
+
+AUR_CONFIG_HOTFIX="${WORK_DIR}/aur-config-hotfix"
+write_configurator_clone "${AUR_CONFIG_HOTFIX}" 9.9.9 3
+run_aur_updater "${WORK_DIR}" \
+    --source-dir missing-source \
+    --bin-dir missing-bin \
+    --config-dir aur-config-hotfix \
+    --source-sha256 "${AUR_SOURCE_SHA}" >/dev/null
+assert_contains "${AUR_CONFIG_HOTFIX}/PKGBUILD" "pkgrel=4"
+assert_contains "${AUR_CONFIG_HOTFIX}/.SRCINFO" "pkgrel = 4"
+
+# A missing required configurator clone aborts before an earlier source channel
+# is touched. Skipping it remains available, but only as an explicit decision.
+AUR_PREFLIGHT_SOURCE="${WORK_DIR}/aur-preflight-source"
+write_source_clone "${AUR_PREFLIGHT_SOURCE}" 9.9.9 3
+cp "${AUR_PREFLIGHT_SOURCE}/PKGBUILD" "${WORK_DIR}/aur-preflight-source.before"
+expect_aur_failure "wayscriber-configurator AUR clone not found" "${WORK_DIR}" \
+    --source-dir aur-preflight-source \
+    --bin-dir missing-bin \
+    --config-dir missing-config \
+    --source-sha256 "${AUR_SOURCE_SHA}"
+cmp "${WORK_DIR}/aur-preflight-source.before" "${AUR_PREFLIGHT_SOURCE}/PKGBUILD"
+
+AUR_SKIP_OUTPUT="${WORK_DIR}/aur-skip-output"
+run_aur_updater "${WORK_DIR}" \
+    --source-dir missing-source \
+    --bin-dir missing-bin \
+    --config-dir missing-config \
+    --no-configurator >"${AUR_SKIP_OUTPUT}" 2>&1
+assert_contains "${AUR_SKIP_OUTPUT}" "--no-configurator was passed"
+
+# Download and checksum validation also run before mutation. The fake curl
+# makes accidental network use deterministic and proves the clone stays intact.
+AUR_CHECKSUM_SOURCE="${WORK_DIR}/aur-checksum-source"
+write_source_clone "${AUR_CHECKSUM_SOURCE}" 9.9.8 2
+cp "${AUR_CHECKSUM_SOURCE}/PKGBUILD" "${WORK_DIR}/aur-checksum-source.before"
+expect_aur_failure "Failed to download the source archive" "${WORK_DIR}" \
+    --source-dir aur-checksum-source \
+    --bin-dir missing-bin \
+    --config-dir missing-config \
+    --no-configurator
+cmp "${WORK_DIR}/aur-checksum-source.before" "${AUR_CHECKSUM_SOURCE}/PKGBUILD"
+
+expect_aur_failure "Source archive checksum is not a sha256 digest" "${WORK_DIR}" \
+    --source-dir aur-checksum-source \
+    --bin-dir missing-bin \
+    --config-dir missing-config \
+    --no-configurator \
+    --source-sha256 invalid
 
 echo "Release packaging contract checks passed."
