@@ -9,7 +9,7 @@
 
 ## Invariants
 - Keep CI aligned with `./tools/lint-and-test.sh`.
-- Keep Linux system dependencies aligned with real build needs for Wayland, Cairo, Pango, Iced, D-Bus, packaging, and Nix checks.
+- Keep Linux system dependencies aligned with real build needs for Wayland, Cairo, Pango, GTK4/libadwaita, D-Bus, packaging, and Nix checks.
 - Do not weaken release checks or skip package layout/version validation without a documented reason.
 
 ## Coupled Changes
