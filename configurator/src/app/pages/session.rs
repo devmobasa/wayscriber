@@ -509,7 +509,11 @@ fn item_card(item: &CatalogItemLayout, sender: &ComponentSender<ConfiguratorApp>
     );
     confirm_button.add_css_class("destructive-action");
     confirm.append(&confirm_button);
-    let cancel_button = message_button("Cancel", sender, Message::SessionCatalogClearCanceled);
+    let cancel_button = message_button(
+        "Cancel",
+        sender,
+        Message::SessionCatalogClearCanceled(item.id.clone()),
+    );
     cancel_button.add_css_class("flat");
     confirm.append(&cancel_button);
     danger.append(&confirm);

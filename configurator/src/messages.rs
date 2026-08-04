@@ -80,7 +80,7 @@ pub enum Message {
     SessionCatalogClearToolStateRequested(String),
     SessionCatalogClearRequested(String),
     SessionCatalogClearConfirmed(String),
-    SessionCatalogClearCanceled,
+    SessionCatalogClearCanceled(String),
     SearchChanged(String),
     SearchCleared,
     SearchFocusRequested,

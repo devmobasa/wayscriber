@@ -89,7 +89,9 @@ impl ConfiguratorApp {
             Message::SessionCatalogClearConfirmed(id) => {
                 self.handle_session_catalog_clear_confirmed(id)
             }
-            Message::SessionCatalogClearCanceled => self.handle_session_catalog_clear_canceled(),
+            Message::SessionCatalogClearCanceled(id) => {
+                self.handle_session_catalog_clear_canceled(id)
+            }
             Message::SearchChanged(value) => self.handle_search_changed(value),
             Message::SearchCleared => self.handle_search_cleared(),
             Message::SearchFocusRequested => self.handle_search_focus_requested(),

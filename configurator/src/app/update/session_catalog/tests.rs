@@ -77,13 +77,7 @@ fn inactive_daemon_status() -> crate::models::DaemonRuntimeStatus {
 }
 
 fn status_contains(status: &StatusMessage, needle: &str) -> bool {
-    match status {
-        StatusMessage::Info(text)
-        | StatusMessage::Success(text)
-        | StatusMessage::Error(text)
-        | StatusMessage::Warning(text) => text.contains(needle),
-        StatusMessage::Idle => false,
-    }
+    status.text().is_some_and(|text| text.contains(needle))
 }
 
 #[test]
@@ -281,12 +275,79 @@ fn clear_request_sets_pending_confirmation_when_safe() {
     assert!(status_contains(&app.status, "Confirm Clear"));
 }
 
+#[test]
+fn clear_canceled_disarms_and_clears_its_confirmation_status() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.session_catalog = SessionCatalogState::loading();
+    app.session_catalog
+        .replace_items(vec![catalog_item("s-1", "Lecture")]);
+    app.daemon_status = Some(inactive_daemon_status());
+    let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
+
+    let effects = app.handle_session_catalog_clear_canceled("s-1".to_string());
+
+    assert!(effects.is_empty());
+    assert!(app.session_catalog.pending_clear_id.is_none());
+    assert!(matches!(app.status, StatusMessage::Idle));
+}
+
+#[test]
+fn clear_canceled_preserves_status_that_replaced_its_confirmation() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.session_catalog = SessionCatalogState::loading();
+    app.session_catalog
+        .replace_items(vec![catalog_item("s-1", "Lecture")]);
+    app.daemon_status = Some(inactive_daemon_status());
+    let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
+    app.status = StatusMessage::error("A newer session operation failed");
+
+    let _ = app.handle_session_catalog_clear_canceled("s-1".to_string());
+
+    assert!(app.session_catalog.pending_clear_id.is_none());
+    assert!(matches!(app.status, StatusMessage::Error(_)));
+    assert!(status_contains(
+        &app.status,
+        "newer session operation failed"
+    ));
+}
+
+#[test]
+fn stray_clear_cancel_preserves_unrelated_status() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.session_catalog.pending_clear_id = None;
+    app.status = StatusMessage::success("A completed operation");
+
+    let _ = app.handle_session_catalog_clear_canceled("s-1".to_string());
+
+    assert!(matches!(app.status, StatusMessage::Success(_)));
+    assert!(status_contains(&app.status, "completed operation"));
+}
+
+#[test]
+fn stale_clear_cancel_does_not_disarm_a_newer_confirmation() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.session_catalog = SessionCatalogState::loading();
+    app.session_catalog.replace_items(vec![
+        catalog_item("s-1", "Lecture"),
+        catalog_item("s-2", "Workshop"),
+    ]);
+    app.daemon_status = Some(inactive_daemon_status());
+    let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
+    let _ = app.handle_session_catalog_clear_requested("s-2".to_string());
+
+    let effects = app.handle_session_catalog_clear_canceled("s-1".to_string());
+
+    assert!(effects.is_empty());
+    assert_eq!(app.session_catalog.pending_clear_id.as_deref(), Some("s-2"));
+    assert!(status_contains(&app.status, "Confirm Clear"));
+}
+
 /// The confirm answers the question, so the question is consumed with it:
 /// the armed row has nothing left to re-confirm, while the work it started —
 /// the busy flag, the status, the effect — is untouched.
 #[test]
 fn clear_confirmed_consumes_the_pending_confirmation() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().expect("temporary test directory");
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
@@ -310,7 +371,7 @@ fn clear_confirmed_consumes_the_pending_confirmation() {
 /// stale one from a dialog — must not start it again.
 #[test]
 fn clear_confirmed_twice_starts_only_one_clear() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().expect("temporary test directory");
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();
@@ -332,7 +393,7 @@ fn clear_confirmed_twice_starts_only_one_clear() {
 /// starts a clear nor consumes the confirmation that is armed.
 #[test]
 fn clear_confirmed_for_another_row_leaves_the_pending_one_armed() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = crate::test_temp::tempdir().expect("temporary test directory");
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog = SessionCatalogState::loading();

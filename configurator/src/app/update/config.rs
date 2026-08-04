@@ -8,7 +8,7 @@ use crate::models::error::FormError;
 use crate::models::{ConfigDraft, KeybindingField};
 
 use super::super::effects::Effect;
-use super::super::state::{ConfiguratorApp, StatusMessage};
+use super::super::state::{ConfiguratorApp, ConfirmationPrompt, StatusMessage};
 
 impl ConfiguratorApp {
     pub(super) fn handle_config_loaded(
@@ -78,7 +78,7 @@ impl ConfiguratorApp {
         }
 
         self.defaults_reset_pending = true;
-        self.status = StatusMessage::warning(DEFAULTS_CONFIRMATION_HINT);
+        self.status = StatusMessage::confirmation(ConfirmationPrompt::DefaultsReset);
         Vec::new()
     }
 
@@ -119,7 +119,10 @@ impl ConfiguratorApp {
         }
 
         self.defaults_reset_pending = false;
-        if is_defaults_confirmation_hint(&self.status) {
+        if self
+            .status
+            .is_confirmation(ConfirmationPrompt::DefaultsReset)
+        {
             self.status = StatusMessage::idle();
         }
         Vec::new()
@@ -346,12 +349,6 @@ impl ConfiguratorApp {
 
 const SHOWN_DIAGNOSTICS: usize = 8;
 
-const DEFAULTS_CONFIRMATION_HINT: &str = "Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue.";
-
-fn is_defaults_confirmation_hint(status: &StatusMessage) -> bool {
-    matches!(status, StatusMessage::Warning(text) if text == DEFAULTS_CONFIRMATION_HINT)
-}
-
 /// Why a save was refused before it began.
 ///
 /// The count is all the banner can give: which rows are at fault is the row's
@@ -547,13 +544,7 @@ mod tests {
     use crate::test_temp::TempDir;
 
     fn status_contains(status: &StatusMessage, needle: &str) -> bool {
-        match status {
-            StatusMessage::Info(text)
-            | StatusMessage::Success(text)
-            | StatusMessage::Error(text)
-            | StatusMessage::Warning(text) => text.contains(needle),
-            StatusMessage::Idle => false,
-        }
+        status.text().is_some_and(|text| text.contains(needle))
     }
 
     static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);

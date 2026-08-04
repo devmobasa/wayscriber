@@ -426,6 +426,7 @@ impl Component for ConfiguratorApp {
             StatusMessage::Success(text) => (text.as_str(), Some("success")),
             StatusMessage::Warning(text) => (text.as_str(), Some("warning")),
             StatusMessage::Error(text) => (text.as_str(), Some("error")),
+            StatusMessage::Confirmation(prompt) => (prompt.message(), Some("warning")),
         };
         if widgets.status_label.text() != status_text {
             widgets.status_label.set_text(status_text);
