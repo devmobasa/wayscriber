@@ -89,8 +89,11 @@ jobs:
       - name: Check AUR templates
         # The external wayscriber-configurator recipe is owned here as a template
         # pair. This gate needs no makepkg, so it runs on every PR; the Arch job
-        # adds the canonical makepkg comparison on top.
-        run: ./tools/check-aur-templates.py
+        # adds the canonical makepkg comparison on top. The self-test replays the
+        # fixtures for the two rules a healthy tree cannot exercise.
+        run: |
+          ./tools/check-aur-templates.py --self-test
+          ./tools/check-aur-templates.py
 
       - name: Check Cargo lane contract
         run: |

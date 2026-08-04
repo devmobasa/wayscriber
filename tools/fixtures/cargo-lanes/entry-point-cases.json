@@ -47,6 +47,21 @@
       "expect_error_contains": "raw Cargo command `cargo build --workspace --bins`",
       "entry_point": ".github/workflows/ci.yml",
       "file": "entry-points/ci-unallowlisted-cargo.yml"
+    },
+    {
+      "name": "coverage-complete",
+      "why": "A loader entry point that imports tools/cargo_lanes.py and names its consumer must be accepted, so the negative case below cannot be explained by a rule that rejects every checker text.",
+      "expect": "pass",
+      "entry_point": "tools/check-rust-source-coverage.py",
+      "file": "entry-points/coverage-complete.py"
+    },
+    {
+      "name": "coverage-missing-loader",
+      "why": "The one entry point that consumes its vectors through the loader instead of the driver must keep doing so; with the import and the consumer name gone, the source-coverage matrix forks from tools/cargo-lanes.json and manifest edits stop reaching this gate.",
+      "expect": "fail",
+      "expect_error_contains": "expected the file to consume the `source-coverage` operations through",
+      "entry_point": "tools/check-rust-source-coverage.py",
+      "file": "entry-points/coverage-missing-loader.py"
     }
   ]
 }

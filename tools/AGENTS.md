@@ -19,6 +19,8 @@
   the compensating rule is that no Rust source file may be reachable only under `adw-modern`.
 - Every rule in `check-cargo-lanes.py` must keep a fixture in `tools/fixtures/cargo-lanes/`
   that proves it rejects what it claims to reject.
+- Same obligation for `check-aur-templates.py`: a gate a healthy tree cannot exercise
+  (the unignored proof, the `.SRCINFO` section counts) keeps a `--self-test` fixture.
 - Avoid platform-specific assumptions unless the script is explicitly platform-specific.
 
 ## Coupled Changes

@@ -178,19 +178,22 @@ hashes, so build-level changes still need a pull request from us. See
   - `PKGBUILD.tmpl` and `.SRCINFO.tmpl` are the only reviewable copy of a recipe that otherwise lives in a repository this checkout does not contain
   - Tokens `@VERSION@`, `@PKGREL@`, and `@SOURCE_SHA256@` are substituted at release time
   - `.SRCINFO.tmpl` is generated: render `PKGBUILD.tmpl`, run `makepkg --printsrcinfo` on the render, then put the tokens back. Never hand-edit it
-  - `packaging/**` is gitignored, so the whole parent chain is re-included in `.gitignore`; `check-aur-templates.py` proves that with a `git check-ignore` exit-1 gate
+  - `packaging/**` is gitignored, so the whole parent chain is re-included in `.gitignore`; `check-aur-templates.py` proves that with a `git check-ignore --no-index` exit-1 gate. `--no-index` is the load-bearing half: the pair is tracked, and for a tracked file the default form reports nothing whatever the ignore rules say
 
 - **check-aur-templates.py** - Guard the external configurator AUR recipe
   - Renders the checked-in templates with fixture values and asserts: no unresolved token, the configurator build command passes `--features adw-modern` and no other build command does, `depends` contains `libadwaita>=1.7`, `gtk4`, and `libxkbcommon`, `makedepends` contains `cargo`, the `.SRCINFO` structure is well formed, and the two files agree on every field `.SRCINFO` can express
   - Agreement alone is not the test: the live external recipe agreed with its own `.SRCINFO` while declaring none of the GTK4 dependencies, so the required set is asserted outright
   - Reads both files with a conservative parser and never runs `bash eval` on a recipe
+  - Structure means exactly one `pkgbase = wayscriber-configurator` and one `pkgname = wayscriber-configurator` section and nothing else: a duplicated section repeats fields the PKGBUILD already declares, so the agreement check cannot see it while makepkg reads a second package out of the recipe
   - `--pair DIR` validates an already-rendered pair; `update-aur-from-manifest.sh` uses it on its temporary render before anything reaches a clone
+  - `--self-test` replays the fixtures for the rules a healthy tree cannot exercise: a throwaway repository whose tracked template pair is ignored because the `.gitignore` negation chain was deleted, and a rendered `.SRCINFO` with a package section repeated. Both must be rejected, and the ignore fixture also asserts that the default `git check-ignore` still accepts it, since that disagreement is what `--no-index` exists for
   - Needs no makepkg, so it runs as a hard gate in `tools/lint-and-test.sh` and hosted Ubuntu CI
-  - Usage: `./tools/check-aur-templates.py [--pair DIR]`
+  - Usage: `./tools/check-aur-templates.py [--pair DIR | --self-test]`
 
 - **check-srcinfo-canonical.py** - Compare a checked-in .SRCINFO with what makepkg generates
   - Runs the real `makepkg --printsrcinfo` on the PKGBUILD and compares. Parsed field-multiset equality blocks; a byte-level difference is a warning that names the regenerate task, so a rolling makepkg serialization change cannot fail unrelated pull requests
   - Repeat `--token NAME=VALUE` to compare the AUR template pair without contacting the AUR
+  - A relative `--pkgbuild`/`--srcinfo` is read from the repository root, so the documented commands work from any subdirectory; an absolute path is used as given
   - makepkg refuses to run as root, so `--builder-user` runs it through `runuser` in a directory owned by that account
   - Needs makepkg, so it runs in the `Configurator modern (Arch)` job (for both `packaging/PKGBUILD` and the template pair), not in the portable lint script
   - Usage: `./tools/check-srcinfo-canonical.py --pkgbuild FILE --srcinfo FILE [--token NAME=VALUE] [--builder-user USER]`

@@ -8,13 +8,18 @@ does not contain. What this repository owns is the template pair
 release. That makes the templates the only reviewable copy of the recipe, so they
 are checked here rather than after publication.
 
-Two modes, one rule set:
+Three modes, one rule set:
 
 * no arguments -- render the checked-in templates with fixture values and validate
   the result, plus the template-only gates (token vocabulary, and the
-  `git check-ignore` exit-1 proof that `packaging/**` has not swallowed them);
+  `git check-ignore --no-index` exit-1 proof that `packaging/**` has not swallowed
+  them);
 * `--pair DIR` -- validate an already-rendered `PKGBUILD`/`.SRCINFO` pair. The
-  updater calls this on its temporary render before anything reaches the clone.
+  updater calls this on its temporary render before anything reaches the clone;
+* `--self-test` -- replay fixtures for the two gates a healthy tree cannot
+  exercise: a `.gitignore` whose negation chain has been deleted, and a `.SRCINFO`
+  with a package section repeated. Both must be rejected, and for the stated
+  reason.
 
 Validation is asymmetric on purpose. `.SRCINFO` cannot represent a build body, so
 the modern-feature rule is asserted against the PKGBUILD alone; the two files are
@@ -31,6 +36,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from pathlib import Path
 
@@ -57,6 +63,14 @@ FIXTURE_VALUES = {
 
 CONFIGURATOR_MANIFEST = "configurator/Cargo.toml"
 MODERN_FEATURE = "adw-modern"
+AUR_PKGNAME = "wayscriber-configurator"
+
+# The sections this recipe has, each exactly once. It is a single-package build,
+# so anything else in the file describes a package this channel never publishes.
+EXPECTED_SECTIONS: tuple[tuple[str, str], ...] = (
+    ("pkgbase", AUR_PKGNAME),
+    ("pkgname", AUR_PKGNAME),
+)
 
 REQUIRED_DEPENDS = ("libadwaita>=1.7", "gtk4", "libxkbcommon")
 REQUIRED_MAKEDEPENDS = ("cargo",)
@@ -185,15 +199,45 @@ def check_required_dependencies(
             )
 
 
+def check_srcinfo_sections(srcinfo: Srcinfo, origin: str, errors: list[str]) -> None:
+    """Each expected section occurs exactly once, and no other section occurs.
+
+    Counting only the missing case would accept a file with the `pkgname`
+    section appended twice: a duplicate repeats fields the PKGBUILD already
+    declares, so the cross-file agreement check sees nothing wrong with it,
+    while makepkg reads a second package out of the same recipe.
+    """
+    counted = Counter((section.kind, section.name) for section in srcinfo.sections)
+
+    for kind, name in EXPECTED_SECTIONS:
+        found = counted[(kind, name)]
+        if found == 0:
+            errors.append(f"{origin}: no `{kind} = {name}` section")
+        elif found > 1:
+            errors.append(
+                f"{origin}: {found} `{kind} = {name}` sections, expected exactly one; a "
+                "duplicate repeats fields the PKGBUILD already declares, so cross-file "
+                "agreement cannot see it, and makepkg reads a second package out of it"
+            )
+
+    unexpected = sorted(
+        f"{kind} = {name}" for kind, name in counted if (kind, name) not in EXPECTED_SECTIONS
+    )
+    if unexpected:
+        errors.append(
+            f"{origin}: unexpected section(s) {', '.join(unexpected)}; this channel publishes "
+            f"the single package {AUR_PKGNAME}"
+        )
+
+
 def check_srcinfo_structure(srcinfo: Srcinfo, origin: str, errors: list[str]) -> None:
+    check_srcinfo_sections(srcinfo, origin, errors)
+
     try:
         base = srcinfo.base
     except MetadataError as error:
         errors.append(f"{origin}: {error}")
         return
-
-    if not srcinfo.packages:
-        errors.append(f"{origin}: no pkgname section")
 
     for field in SINGLETON_FIELDS:
         count = len(base.values(field))
@@ -277,16 +321,22 @@ def validate_pair(
     check_shared_metadata(assignments, srcinfo, pkgbuild_origin, srcinfo_origin, errors)
 
 
-def check_unignored(path: Path, errors: list[str]) -> None:
-    """`git check-ignore` must exit 1 for a tracked template.
+def check_unignored(path: Path, root: Path, errors: list[str]) -> None:
+    """`git check-ignore --no-index` must exit 1 for the template.
 
-    The non-verbose form is required: `-v` exits 0 for a negation match too, so
-    it cannot tell "not ignored" from "ignored".
+    Both halves of that command carry the rule. The non-verbose form is
+    required because `-v` exits 0 for a negation match too, so it cannot tell
+    "not ignored" from "ignored". `--no-index` is required because these
+    templates are tracked, and for a tracked file the default form reports
+    nothing whatever the ignore rules say: without it the gate would keep
+    passing after the `.gitignore` negation chain was deleted, and the first
+    person to clone and re-add the pair would find it unaddable while the
+    release kept publishing a stale recipe.
     """
     try:
         result = subprocess.run(
-            ["git", "check-ignore", path.as_posix()],
-            cwd=REPO_ROOT,
+            ["git", "check-ignore", "--no-index", path.as_posix()],
+            cwd=root,
             check=False,
             capture_output=True,
             text=True,
@@ -297,7 +347,7 @@ def check_unignored(path: Path, errors: list[str]) -> None:
 
     if result.returncode != 1:
         errors.append(
-            f"{path}: git check-ignore exited {result.returncode}, expected 1 "
+            f"{path}: git check-ignore --no-index exited {result.returncode}, expected 1 "
             "(the file is ignored, so the release would publish a stale recipe); "
             "re-include the whole parent chain in .gitignore"
         )
@@ -328,7 +378,7 @@ def check_templates(errors: list[str]) -> None:
         )
 
     for path in (PKGBUILD_TEMPLATE, SRCINFO_TEMPLATE):
-        check_unignored(path, errors)
+        check_unignored(path, REPO_ROOT, errors)
 
     validate_pair(
         render(pkgbuild_template_text, FIXTURE_VALUES),
@@ -351,6 +401,152 @@ def check_rendered_pair(directory: Path, errors: list[str]) -> None:
     )
 
 
+# The `.gitignore` shape the real repository has: `packaging/**` swallows the
+# templates, and the parent chain is re-included one level at a time. The
+# fixtures below are built with and without the negations.
+SELF_TEST_IGNORE_RULE = "packaging/**"
+SELF_TEST_NEGATIONS = (
+    "!packaging/aur/",
+    "!packaging/aur/wayscriber-configurator/",
+    "!packaging/aur/wayscriber-configurator/PKGBUILD.tmpl",
+    "!packaging/aur/wayscriber-configurator/.SRCINFO.tmpl",
+)
+
+
+def run_git(arguments: list[str], cwd: Path) -> None:
+    try:
+        result = subprocess.run(
+            ["git", *arguments], cwd=cwd, check=False, capture_output=True, text=True
+        )
+    except OSError as error:
+        raise TemplateError(f"could not run `git {' '.join(arguments)}`: {error}") from error
+    if result.returncode != 0:
+        detail = result.stderr.strip() or f"exit status {result.returncode}"
+        raise TemplateError(f"`git {' '.join(arguments)}` failed in {cwd}: {detail}")
+
+
+def build_ignore_fixture(root: Path, *, negations: bool) -> None:
+    """Build a throwaway repository whose template pair is tracked.
+
+    Tracked is the point of the fixture. With the pair untracked both forms of
+    `git check-ignore` agree, so a fixture built that way would pass whichever
+    form the gate uses and would prove nothing about the flag.
+    """
+    (root / TEMPLATE_DIR).mkdir(parents=True, exist_ok=True)
+    ignore_lines = [SELF_TEST_IGNORE_RULE, *(SELF_TEST_NEGATIONS if negations else ())]
+    (root / ".gitignore").write_text("\n".join(ignore_lines) + "\n", encoding="utf-8")
+    for template in (PKGBUILD_TEMPLATE, SRCINFO_TEMPLATE):
+        (root / template).write_text("fixture, never rendered\n", encoding="utf-8")
+
+    run_git(["init", "--quiet"], root)
+    run_git(
+        [
+            "add",
+            "--force",
+            ".gitignore",
+            PKGBUILD_TEMPLATE.as_posix(),
+            SRCINFO_TEMPLATE.as_posix(),
+        ],
+        root,
+    )
+
+
+def index_form_accepts(root: Path) -> bool:
+    """Whether the default `git check-ignore` reports the fixture unignored."""
+    result = subprocess.run(
+        ["git", "check-ignore", PKGBUILD_TEMPLATE.as_posix()],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 1
+
+
+def judge(name: str, expectation: str, needle: str, produced: list[str]) -> list[str]:
+    if expectation == "pass":
+        if produced:
+            return [
+                f"self-test case `{name}` was expected to pass but reported:\n"
+                + "\n".join(f"    {message}" for message in produced)
+            ]
+        return []
+    if not produced:
+        return [
+            f"self-test case `{name}` was expected to fail but every rule accepted it; "
+            "the gate it targets is not enforced"
+        ]
+    if not any(needle in message for message in produced):
+        return [
+            f"self-test case `{name}` failed for the wrong reason; expected a message "
+            f"containing {needle!r} but got:\n"
+            + "\n".join(f"    {message}" for message in produced)
+        ]
+    return []
+
+
+def self_test_unignored_gate() -> tuple[list[str], int]:
+    """The unignored gate must follow the `.gitignore`, not the index."""
+    failures: list[str] = []
+    cases = 0
+    with tempfile.TemporaryDirectory(prefix="aur-template-self-test-") as raw:
+        base = Path(raw)
+        for negations, expectation in ((True, "pass"), (False, "fail")):
+            name = "negation-chain-present" if negations else "negation-chain-deleted"
+            root = base / name
+            root.mkdir()
+            build_ignore_fixture(root, negations=negations)
+            cases += 1
+
+            errors: list[str] = []
+            check_unignored(PKGBUILD_TEMPLATE, root, errors)
+            failures += judge(name, expectation, "expected 1", errors)
+
+            # The rejecting case only proves the flag while the default form
+            # still accepts the same tree: that disagreement is the whole
+            # defect, so a fixture that lost it has stopped testing anything.
+            if not negations and not index_form_accepts(root):
+                failures.append(
+                    f"self-test case `{name}` no longer proves the flag: the default "
+                    "`git check-ignore` already rejects this tracked file, so `--no-index` "
+                    "is not what makes the gate notice the deleted negations"
+                )
+    return failures, cases
+
+
+def self_test_srcinfo_sections() -> tuple[list[str], int]:
+    """A repeated package section must be rejected outright."""
+    pkgbuild_text = render(read_text(REPO_ROOT / PKGBUILD_TEMPLATE), FIXTURE_VALUES)
+    srcinfo_text = render(read_text(REPO_ROOT / SRCINFO_TEMPLATE), FIXTURE_VALUES)
+    duplicated = f"{srcinfo_text.rstrip()}\n\npkgname = {AUR_PKGNAME}\n"
+
+    failures: list[str] = []
+    cases = 0
+    for name, text, expectation in (
+        ("rendered-pair", srcinfo_text, "pass"),
+        ("duplicate-pkgname-section", duplicated, "fail"),
+    ):
+        errors: list[str] = []
+        validate_pair(
+            pkgbuild_text,
+            text,
+            f"{PKGBUILD_TEMPLATE.as_posix()} (self-test render)",
+            f"{SRCINFO_TEMPLATE.as_posix()} (self-test render)",
+            errors,
+        )
+        cases += 1
+        failures += judge(
+            name, expectation, f"`pkgname = {AUR_PKGNAME}` sections, expected exactly one", errors
+        )
+    return failures, cases
+
+
+def run_self_test() -> tuple[list[str], int]:
+    ignore_failures, ignore_cases = self_test_unignored_gate()
+    section_failures, section_cases = self_test_srcinfo_sections()
+    return ignore_failures + section_failures, ignore_cases + section_cases
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -360,27 +556,46 @@ def main() -> int:
         help="validate an already-rendered PKGBUILD/.SRCINFO pair in DIR "
         "instead of the checked-in templates",
     )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="replay the fixtures that prove the unignored and .SRCINFO section "
+        "gates reject what they claim to reject",
+    )
     arguments = parser.parse_args()
+    if arguments.self_test and arguments.pair is not None:
+        parser.error("--self-test replays fixtures and takes no --pair")
 
+    label = "self-test" if arguments.self_test else "check"
     errors: list[str] = []
+    summary = ""
     try:
-        if arguments.pair is None:
+        if arguments.self_test:
+            errors, cases = run_self_test()
+            summary = f"AUR template self-test OK: {cases} fixture(s) behaved as declared."
+        elif arguments.pair is None:
             check_templates(errors)
-            subject = "AUR template pair"
+            summary = (
+                "AUR template pair OK: modern build flag, required dependencies, "
+                "and .SRCINFO agreement hold."
+            )
         else:
             check_rendered_pair(arguments.pair, errors)
-            subject = f"rendered AUR pair in {arguments.pair}"
+            summary = (
+                f"rendered AUR pair in {arguments.pair} OK: modern build flag, required "
+                "dependencies, and .SRCINFO agreement hold."
+            )
     except TemplateError as error:
-        print(f"AUR template check failed: {error}", file=sys.stderr)
+        print(f"AUR template {label} failed: {error}", file=sys.stderr)
         return 2
 
     if errors:
-        print("AUR template check failed:", file=sys.stderr)
+        print(f"AUR template {label} failed:", file=sys.stderr)
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
 
-    print(f"{subject} OK: modern build flag, required dependencies, and .SRCINFO agreement hold.")
+    print(summary)
     return 0
 
 

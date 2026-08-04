@@ -78,9 +78,7 @@ impl ConfiguratorApp {
         }
 
         self.defaults_reset_pending = true;
-        self.status = StatusMessage::warning(
-            "Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue.",
-        );
+        self.status = StatusMessage::warning(DEFAULTS_CONFIRMATION_HINT);
         Vec::new()
     }
 
@@ -107,18 +105,26 @@ impl ConfiguratorApp {
         Vec::new()
     }
 
-    /// Stands the confirmation down and takes its hint off the status line.
+    /// Stands the confirmation down, and takes its hint off the status line
+    /// only while that hint is what the line still holds.
     ///
     /// Guarded on the same flag as the confirm: with nothing armed there is
     /// no question to withdraw, so a stray cancel must not wipe a status the
-    /// user is reading.
+    /// user is reading. Disarming and clearing are separate for the same
+    /// reason. The question can stand for as long as the user leaves it
+    /// standing, and anything that finishes underneath it — a session
+    /// operation reporting a failure, say — writes its own message over the
+    /// hint. That message is newer than the question, so the cancel that
+    /// withdraws the question has no claim on it.
     pub(super) fn handle_reset_to_defaults_canceled(&mut self) -> Vec<Effect> {
         if !self.defaults_reset_pending {
             return Vec::new();
         }
 
         self.defaults_reset_pending = false;
-        self.status = StatusMessage::idle();
+        if is_defaults_confirmation_hint(&self.status) {
+            self.status = StatusMessage::idle();
+        }
         Vec::new()
     }
 
@@ -342,6 +348,22 @@ impl ConfiguratorApp {
 }
 
 const SHOWN_DIAGNOSTICS: usize = 8;
+
+/// The hint the armed Defaults question puts on the status line.
+///
+/// One copy, because the cancel that withdraws the question recognizes its own
+/// hint by comparing against it. A second spelling of the sentence would drift,
+/// and a cancel that no longer recognizes the hint leaves it on screen after
+/// the question behind it is gone.
+const DEFAULTS_CONFIRMATION_HINT: &str = "Defaults will replace the current draft with built-in defaults. Press \"Confirm Defaults\" to continue.";
+
+/// Whether the status line still carries the Defaults hint and nothing newer.
+///
+/// Kind and text both: the hint is a warning the model wrote itself, so the
+/// same sentence arriving as an error is somebody else's message.
+fn is_defaults_confirmation_hint(status: &StatusMessage) -> bool {
+    matches!(status, StatusMessage::Warning(text) if text == DEFAULTS_CONFIRMATION_HINT)
+}
 
 /// Why a save was refused before it began.
 ///
@@ -1110,6 +1132,26 @@ mod tests {
         // Nothing is armed now, so the confirm that follows it is inert.
         let _ = app.handle_reset_to_defaults_confirmed();
         assert_eq!(app.draft, changed_draft);
+    }
+
+    /// The question can stand for as long as the user leaves it standing, so
+    /// what finished underneath it has already replaced the hint by the time
+    /// the cancel arrives. Withdrawing the question is not a reason to throw
+    /// that away: it is the newer message, and the user has not read it yet.
+    #[test]
+    fn reset_to_defaults_canceled_keeps_a_status_that_replaced_the_hint() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.is_loading = false;
+
+        let _ = app.handle_reset_to_defaults_requested();
+        // What a completion handler does while the question is still armed.
+        app.status = StatusMessage::error("Failed to clear session s-1: nope");
+
+        let _ = app.handle_reset_to_defaults_canceled();
+
+        assert!(!app.defaults_reset_pending, "the cancel still disarms");
+        assert!(matches!(app.status, StatusMessage::Error(_)));
+        assert!(status_contains(&app.status, "Failed to clear session s-1"));
     }
 
     /// A cancel with nothing armed has no question to withdraw, so it must

@@ -35,6 +35,7 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pkgbuild_meta import MetadataError, parse_srcinfo
@@ -44,6 +45,20 @@ TOKEN_RE = re.compile(r"@[A-Za-z0-9_]+@")
 
 class CanonicalError(RuntimeError):
     """The canonical .SRCINFO comparison could not be carried out."""
+
+
+def resolve_input(path: Path) -> Path:
+    """Anchor a relative input at the repository, not at the caller.
+
+    The documented commands name repository-relative paths
+    (`--pkgbuild packaging/PKGBUILD`), and the CI jobs pass exactly those. Read
+    against the working directory they would only resolve from the repository
+    root, so running the documented command from any subdirectory would fail on
+    a missing file. An absolute path is the caller's own choice and is left
+    alone. Messages keep quoting the path as it was given, because that is the
+    string the reader typed.
+    """
+    return path if path.is_absolute() else REPO_ROOT / path
 
 
 def read_text(path: Path) -> str:
@@ -195,9 +210,11 @@ def main() -> int:
     try:
         tokens = dict(parse_token(raw) for raw in arguments.token)
         pkgbuild_text = render(
-            read_text(arguments.pkgbuild), tokens, arguments.pkgbuild.as_posix()
+            read_text(resolve_input(arguments.pkgbuild)), tokens, arguments.pkgbuild.as_posix()
         )
-        expected_text = render(read_text(arguments.srcinfo), tokens, arguments.srcinfo.as_posix())
+        expected_text = render(
+            read_text(resolve_input(arguments.srcinfo)), tokens, arguments.srcinfo.as_posix()
+        )
 
         work_dir = prepare_work_dir(arguments.work_root, arguments.builder_user)
         write_pkgbuild(work_dir, pkgbuild_text, arguments.builder_user)
