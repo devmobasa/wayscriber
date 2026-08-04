@@ -16,7 +16,6 @@ pub struct SessionCatalogState {
     pub move_inputs: HashMap<String, String>,
     pub is_loading: bool,
     pub busy: bool,
-    pub pending_clear_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -137,7 +136,6 @@ impl SessionCatalogState {
             move_inputs: HashMap::new(),
             is_loading: true,
             busy: false,
-            pending_clear_id: None,
         }
     }
 
@@ -169,7 +167,6 @@ impl SessionCatalogState {
         self.items = items;
         self.is_loading = false;
         self.busy = false;
-        self.pending_clear_id = None;
     }
 
     pub fn rename_value(&self, id: &str, fallback: &str) -> String {

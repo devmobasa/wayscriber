@@ -63,6 +63,9 @@ pub enum Message {
     ResetToDefaultsConfirmed,
     /// Answers an armed confirmation with no.
     ResetToDefaultsCanceled,
+    /// Cancels whichever destructive confirmation currently owns the answer
+    /// controls. Used by the window-level Escape key binding.
+    ActiveConfirmationCanceled,
     SaveRequested,
     MigrationApplyRequested,
     MigrationDismissed,
