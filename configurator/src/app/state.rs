@@ -35,7 +35,12 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) is_loading: bool,
     pub(crate) is_saving: bool,
     pub(crate) is_dirty: bool,
-    pub(crate) defaults_reset_pending: bool,
+    /// The destructive question the user can currently answer.
+    ///
+    /// One typed identity owns both confirmation surfaces so opening one
+    /// replaces the other instead of leaving two independently armed actions
+    /// on screen.
+    pub(crate) pending_confirmation: Option<PendingConfirmation>,
     /// What an accepted migration would change in the loaded configuration.
     /// Held here rather than in `status` so an expired or replaced status
     /// message cannot take the offer away with it.
@@ -75,6 +80,21 @@ pub(crate) struct ConfiguratorApp {
 pub(crate) enum ConfirmationPrompt {
     DefaultsReset,
     SessionClear,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PendingConfirmation {
+    DefaultsReset,
+    SessionClear(String),
+}
+
+impl PendingConfirmation {
+    pub(crate) fn prompt(&self) -> ConfirmationPrompt {
+        match self {
+            PendingConfirmation::DefaultsReset => ConfirmationPrompt::DefaultsReset,
+            PendingConfirmation::SessionClear(_) => ConfirmationPrompt::SessionClear,
+        }
+    }
 }
 
 impl ConfirmationPrompt {
@@ -194,7 +214,7 @@ impl ConfiguratorApp {
             is_loading: true,
             is_saving: false,
             is_dirty: false,
-            defaults_reset_pending: false,
+            pending_confirmation: None,
             migration_preview: None,
             migration_dismissed: None,
             pending_save_validation: ConfigValidationReport::default(),
@@ -227,8 +247,34 @@ impl ConfiguratorApp {
     }
 
     pub(super) fn refresh_dirty_flag(&mut self) {
-        self.defaults_reset_pending = false;
+        self.clear_defaults_confirmation();
         self.is_dirty = self.draft != self.baseline;
+    }
+
+    pub(crate) fn defaults_reset_pending(&self) -> bool {
+        matches!(
+            self.pending_confirmation,
+            Some(PendingConfirmation::DefaultsReset)
+        )
+    }
+
+    pub(crate) fn pending_session_clear_id(&self) -> Option<&str> {
+        match self.pending_confirmation.as_ref() {
+            Some(PendingConfirmation::SessionClear(id)) => Some(id.as_str()),
+            Some(PendingConfirmation::DefaultsReset) | None => None,
+        }
+    }
+
+    pub(super) fn clear_defaults_confirmation(&mut self) {
+        if self.defaults_reset_pending() {
+            self.pending_confirmation = None;
+        }
+    }
+
+    pub(super) fn clear_session_confirmation(&mut self) {
+        if self.pending_session_clear_id().is_some() {
+            self.pending_confirmation = None;
+        }
     }
 
     /// The migration offer to show, if there is one to show.

@@ -321,6 +321,12 @@ impl Component for ConfiguratorApp {
                     sender.input(Message::SearchFocusRequested);
                     return gtk::glib::Propagation::Stop;
                 }
+                if key == gtk::gdk::Key::Escape {
+                    // The model owns which destructive question is current.
+                    // Propagate as well so a widget with its own Escape
+                    // behavior does not lose it when no confirmation exists.
+                    sender.input(Message::ActiveConfirmationCanceled);
+                }
                 // Tab is the user moving focus deliberately; a still-pending
                 // startup search focus must not steal it back later.
                 if matches!(key, gtk::gdk::Key::Tab | gtk::gdk::Key::ISO_Left_Tab) {
@@ -408,8 +414,13 @@ impl Component for ConfiguratorApp {
         // The armed confirmation is the model's, so which of the two Defaults
         // affordances is on screen follows it: asking is offered until the
         // question stands, answering only while it does.
-        let defaults_armed = self.defaults_reset_pending;
-        let defaults_arming = defaults_armed && !widgets.defaults_confirm_button.get_visible();
+        let defaults_armed = self.defaults_reset_pending();
+        let defaults_was_armed = widgets.defaults_confirm_button.get_visible();
+        let defaults_arming = defaults_armed && !defaults_was_armed;
+        let defaults_return_focus = !defaults_armed
+            && defaults_was_armed
+            && (widgets.defaults_confirm_button.has_focus()
+                || widgets.defaults_cancel_button.has_focus());
         set_visible(&widgets.defaults_button, !defaults_armed);
         set_visible(&widgets.defaults_confirm_button, defaults_armed);
         set_visible(&widgets.defaults_cancel_button, defaults_armed);
@@ -417,6 +428,10 @@ impl Component for ConfiguratorApp {
             // The Defaults button just stepped aside. Keep keyboard users in
             // the revealed flow instead of leaving focus on a hidden widget.
             widgets.defaults_confirm_button.grab_focus();
+        } else if defaults_return_focus {
+            // Cancel and Confirm both remove the answer controls. Return the
+            // keyboard user to the action that owns this header location.
+            widgets.defaults_button.grab_focus();
         }
 
         // Status strip.

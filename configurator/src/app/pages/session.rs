@@ -237,11 +237,23 @@ fn catalog_section(page: &mut PageBuilder) {
             .map(|card| &card.layout)
             .eq(layout.items.iter())
         {
-            cards = rebuild_items(&list, &layout, &sender);
+            cards = rebuild_items(&list, &layout, &sender, &body);
         }
         for (item, card) in catalog.items.iter().zip(cards.iter()) {
             let values = catalog_row_values(app, summary, &gates, item);
             (card.refresh)(&values);
+        }
+
+        // Confirm can temporarily park focus on the catalog while every row
+        // action is disabled. Once the operation finishes, return to the
+        // enabled Refresh action and remove the structural box from the normal
+        // tab chain. If the user already moved focus elsewhere, only remove the
+        // temporary focusability; do not steal focus back.
+        if should_release_catalog_focus_fallback(gates.busy, body.is_focusable()) {
+            if body.has_focus() {
+                refresh.grab_focus();
+            }
+            body.set_focusable(false);
         }
     });
 }
@@ -362,7 +374,7 @@ fn catalog_row_values(
         actions_enabled: !gates.busy,
         tool_state_enabled: !gates.busy && !gates.tool_state_blocked,
         clear_enabled: !gates.busy && !gates.clear_blocked,
-        clear_armed: clear_armed(catalog.pending_clear_id.as_deref(), id),
+        clear_armed: clear_armed(app.pending_session_clear_id(), id),
         rename,
         duplicate,
         move_target,
@@ -382,6 +394,7 @@ fn rebuild_items(
     list: &gtk::Box,
     layout: &CatalogLayout,
     sender: &ComponentSender<ConfiguratorApp>,
+    catalog_focus_target: &gtk::Box,
 ) -> Vec<BoundCatalogCard> {
     // Draining the list, not walking it for a control: the cards that replace
     // these carry their own refresh closures.
@@ -391,7 +404,7 @@ fn rebuild_items(
 
     let mut cards = Vec::with_capacity(layout.items.len());
     for item in &layout.items {
-        let built = item_card(item, sender);
+        let built = item_card(item, sender, catalog_focus_target);
         list.append(&built.card);
         cards.push(BoundCatalogCard {
             layout: item.clone(),
@@ -408,7 +421,11 @@ struct CatalogRow {
     refresh: CatalogRowRefresh,
 }
 
-fn item_card(item: &CatalogItemLayout, sender: &ComponentSender<ConfiguratorApp>) -> CatalogRow {
+fn item_card(
+    item: &CatalogItemLayout,
+    sender: &ComponentSender<ConfiguratorApp>,
+    catalog_focus_target: &gtk::Box,
+) -> CatalogRow {
     let card = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .css_classes(["card"])
@@ -528,6 +545,7 @@ fn item_card(item: &CatalogItemLayout, sender: &ComponentSender<ConfiguratorApp>
     content.append(&danger);
 
     let handle = card.clone();
+    let catalog_focus_target = catalog_focus_target.clone();
     let refresh: CatalogRowRefresh = Box::new(move |values| {
         set_visible(&handle, values.visible);
 
@@ -544,14 +562,36 @@ fn item_card(item: &CatalogItemLayout, sender: &ComponentSender<ConfiguratorApp>
         set_sensitive(&forget, values.actions_enabled);
         set_sensitive(&tool_state, values.tool_state_enabled);
 
-        let clear_arming = values.clear_armed && !confirm.get_visible();
+        let clear_was_armed = confirm.get_visible();
+        let answer_has_focus = confirm_button.has_focus() || cancel_button.has_focus();
+        let focus_after_refresh = clear_focus_after_refresh(
+            clear_was_armed,
+            values.clear_armed,
+            values.clear_enabled,
+            answer_has_focus,
+        );
+        if focus_after_refresh == ClearFocusTarget::Catalog {
+            // Confirm enters the busy state and disables the row's actions.
+            // Temporarily make the stable page target focusable and move there
+            // before hiding the focused answer controls. The page binding
+            // removes it from the tab chain as soon as the catalog is idle.
+            catalog_focus_target.set_focusable(true);
+            catalog_focus_target.grab_focus();
+        }
         set_visible(&clear, !values.clear_armed);
         set_sensitive(&clear, values.clear_enabled);
         set_visible(&confirm, values.clear_armed);
-        if clear_arming {
-            // The destructive action just stepped aside. Move keyboard focus
-            // to the revealed answer rather than leaving it hidden.
-            confirm_button.grab_focus();
+        match focus_after_refresh {
+            ClearFocusTarget::Confirm => {
+                // The destructive action just stepped aside. Move keyboard
+                // focus to the revealed answer rather than leaving it hidden.
+                confirm_button.grab_focus();
+            }
+            ClearFocusTarget::ClearAction => {
+                // Cancel restores the still-enabled action in this row.
+                clear.grab_focus();
+            }
+            ClearFocusTarget::Catalog | ClearFocusTarget::Unchanged => {}
         }
     });
 
@@ -603,6 +643,37 @@ fn input_row(row: InputRow<'_>, sender: &ComponentSender<ConfiguratorApp>) -> In
 
 fn clear_armed(pending: Option<&str>, id: &str) -> bool {
     pending == Some(id)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClearFocusTarget {
+    Unchanged,
+    Confirm,
+    ClearAction,
+    Catalog,
+}
+
+fn clear_focus_after_refresh(
+    was_armed: bool,
+    is_armed: bool,
+    clear_enabled: bool,
+    answer_has_focus: bool,
+) -> ClearFocusTarget {
+    if is_armed && !was_armed {
+        return ClearFocusTarget::Confirm;
+    }
+    if was_armed && !is_armed && answer_has_focus {
+        return if clear_enabled {
+            ClearFocusTarget::ClearAction
+        } else {
+            ClearFocusTarget::Catalog
+        };
+    }
+    ClearFocusTarget::Unchanged
+}
+
+fn should_release_catalog_focus_fallback(catalog_busy: bool, fallback_focusable: bool) -> bool {
+    !catalog_busy && fallback_focusable
 }
 
 fn item_visible(summary: &AppSearchSummary, id: &str) -> bool {
@@ -754,7 +825,9 @@ mod tests {
         app.session_catalog
             .rename_inputs
             .insert("one".to_string(), "First draft".to_string());
-        app.session_catalog.pending_clear_id = Some("one".to_string());
+        app.pending_confirmation = Some(crate::app::state::PendingConfirmation::SessionClear(
+            "one".to_string(),
+        ));
         app.session_catalog.busy = true;
 
         assert_eq!(catalog_layout(&app), baseline);
@@ -848,7 +921,9 @@ mod tests {
     #[test]
     fn a_confirmed_clear_collapses_the_armed_row_into_the_busy_one() {
         let mut app = app_with_items(vec![test_item("one", "First")]);
-        app.session_catalog.pending_clear_id = Some("one".to_string());
+        app.pending_confirmation = Some(crate::app::state::PendingConfirmation::SessionClear(
+            "one".to_string(),
+        ));
         let summary = app.search_summary();
         let armed = catalog_row_values(
             &app,
@@ -860,7 +935,7 @@ mod tests {
 
         // What `handle_session_catalog_clear_confirmed` leaves behind: the
         // answered question consumed, the clear running.
-        app.session_catalog.pending_clear_id = None;
+        app.pending_confirmation = None;
         app.session_catalog.busy = true;
         let running = catalog_row_values(
             &app,
@@ -871,6 +946,46 @@ mod tests {
 
         assert!(!running.clear_armed);
         assert!(!running.clear_enabled);
+    }
+
+    #[test]
+    fn clear_confirmation_focus_has_enabled_targets_for_every_transition() {
+        assert_eq!(
+            clear_focus_after_refresh(false, true, true, false),
+            ClearFocusTarget::Confirm,
+            "arming focuses the newly revealed confirmation"
+        );
+        assert_eq!(
+            clear_focus_after_refresh(true, false, true, true),
+            ClearFocusTarget::ClearAction,
+            "cancel returns to the restored clear action"
+        );
+        assert_eq!(
+            clear_focus_after_refresh(true, false, false, true),
+            ClearFocusTarget::Catalog,
+            "confirm moves away from the row actions disabled by busy state"
+        );
+        assert_eq!(
+            clear_focus_after_refresh(true, false, false, false),
+            ClearFocusTarget::Unchanged,
+            "a pointer-triggered transition does not steal keyboard focus"
+        );
+    }
+
+    #[test]
+    fn catalog_focus_fallback_leaves_the_tab_chain_when_busy_work_finishes() {
+        assert!(
+            !should_release_catalog_focus_fallback(true, true),
+            "the temporary target remains available while row actions are disabled"
+        );
+        assert!(
+            should_release_catalog_focus_fallback(false, true),
+            "an idle refresh returns focus to an action and removes the fallback"
+        );
+        assert!(
+            !should_release_catalog_focus_fallback(false, false),
+            "ordinary idle browsing does not add or manage a structural tab stop"
+        );
     }
 
     #[test]

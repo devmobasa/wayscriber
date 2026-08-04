@@ -130,6 +130,27 @@ fn move_input_change_does_not_dirty_config() {
 }
 
 #[test]
+fn catalog_load_clears_only_a_session_confirmation() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.pending_confirmation = Some(PendingConfirmation::SessionClear("s-1".to_string()));
+
+    let _ = app.handle_session_catalog_loaded(Ok(vec![catalog_item("s-1", "Lecture")]));
+
+    assert!(app.pending_confirmation.is_none());
+}
+
+#[test]
+fn catalog_load_preserves_a_defaults_confirmation() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.is_loading = false;
+    let _ = app.handle_reset_to_defaults_requested();
+
+    let _ = app.handle_session_catalog_loaded(Ok(vec![catalog_item("s-1", "Lecture")]));
+
+    assert!(app.defaults_reset_pending());
+}
+
+#[test]
 fn duplicate_request_blocks_without_daemon_status() {
     let temp = crate::test_temp::tempdir().unwrap();
     let _env = RuntimeEnvGuard::set_xdg_runtime_dir(temp.path());
@@ -215,7 +236,7 @@ fn clear_request_blocks_without_daemon_status() {
 
     let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
 
-    assert!(app.session_catalog.pending_clear_id.is_none());
+    assert!(app.pending_session_clear_id().is_none());
     assert!(status_contains(&app.status, "status finishes loading"));
 }
 
@@ -253,7 +274,7 @@ fn clear_tool_state_request_sets_busy_when_safe() {
         [Effect::ClearSessionToolState { id }] if id == "s-1"
     ));
     assert!(app.session_catalog.busy);
-    assert!(app.session_catalog.pending_clear_id.is_none());
+    assert!(app.pending_session_clear_id().is_none());
     assert!(status_contains(&app.status, "Clearing saved tool state"));
 }
 
@@ -271,8 +292,55 @@ fn clear_request_sets_pending_confirmation_when_safe() {
 
     // Confirmation first: nothing is cleared until the user says so again.
     assert!(effects.is_empty());
-    assert_eq!(app.session_catalog.pending_clear_id.as_deref(), Some("s-1"));
+    assert_eq!(app.pending_session_clear_id(), Some("s-1"));
     assert!(status_contains(&app.status, "Confirm Clear"));
+}
+
+#[test]
+fn clear_request_rejects_a_session_that_is_no_longer_present() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.session_catalog = SessionCatalogState::loading();
+    app.daemon_status = Some(inactive_daemon_status());
+
+    let effects = app.handle_session_catalog_clear_requested("missing".to_string());
+
+    assert!(effects.is_empty());
+    assert!(app.pending_confirmation.is_none());
+    assert!(status_contains(&app.status, "no longer in the catalog"));
+}
+
+#[test]
+fn session_clear_request_replaces_the_defaults_confirmation() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.is_loading = false;
+    app.session_catalog = SessionCatalogState::loading();
+    app.session_catalog
+        .replace_items(vec![catalog_item("s-1", "Lecture")]);
+    app.daemon_status = Some(inactive_daemon_status());
+    let _ = app.handle_reset_to_defaults_requested();
+
+    let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
+
+    assert!(!app.defaults_reset_pending());
+    assert_eq!(app.pending_session_clear_id(), Some("s-1"));
+    assert!(status_contains(&app.status, "Confirm Clear"));
+}
+
+#[test]
+fn defaults_request_replaces_the_session_clear_confirmation() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.is_loading = false;
+    app.session_catalog = SessionCatalogState::loading();
+    app.session_catalog
+        .replace_items(vec![catalog_item("s-1", "Lecture")]);
+    app.daemon_status = Some(inactive_daemon_status());
+    let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
+
+    let _ = app.handle_reset_to_defaults_requested();
+
+    assert!(app.defaults_reset_pending());
+    assert!(app.pending_session_clear_id().is_none());
+    assert!(status_contains(&app.status, "Confirm Defaults"));
 }
 
 #[test]
@@ -287,7 +355,23 @@ fn clear_canceled_disarms_and_clears_its_confirmation_status() {
     let effects = app.handle_session_catalog_clear_canceled("s-1".to_string());
 
     assert!(effects.is_empty());
-    assert!(app.session_catalog.pending_clear_id.is_none());
+    assert!(app.pending_session_clear_id().is_none());
+    assert!(matches!(app.status, StatusMessage::Idle));
+}
+
+#[test]
+fn active_confirmation_cancel_disarms_session_clear() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.session_catalog = SessionCatalogState::loading();
+    app.session_catalog
+        .replace_items(vec![catalog_item("s-1", "Lecture")]);
+    app.daemon_status = Some(inactive_daemon_status());
+    let _ = app.handle_session_catalog_clear_requested("s-1".to_string());
+
+    let effects = app.handle_active_confirmation_canceled();
+
+    assert!(effects.is_empty());
+    assert!(app.pending_confirmation.is_none());
     assert!(matches!(app.status, StatusMessage::Idle));
 }
 
@@ -303,7 +387,7 @@ fn clear_canceled_preserves_status_that_replaced_its_confirmation() {
 
     let _ = app.handle_session_catalog_clear_canceled("s-1".to_string());
 
-    assert!(app.session_catalog.pending_clear_id.is_none());
+    assert!(app.pending_session_clear_id().is_none());
     assert!(matches!(app.status, StatusMessage::Error(_)));
     assert!(status_contains(
         &app.status,
@@ -314,7 +398,7 @@ fn clear_canceled_preserves_status_that_replaced_its_confirmation() {
 #[test]
 fn stray_clear_cancel_preserves_unrelated_status() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.session_catalog.pending_clear_id = None;
+    app.pending_confirmation = None;
     app.status = StatusMessage::success("A completed operation");
 
     let _ = app.handle_session_catalog_clear_canceled("s-1".to_string());
@@ -338,7 +422,7 @@ fn stale_clear_cancel_does_not_disarm_a_newer_confirmation() {
     let effects = app.handle_session_catalog_clear_canceled("s-1".to_string());
 
     assert!(effects.is_empty());
-    assert_eq!(app.session_catalog.pending_clear_id.as_deref(), Some("s-2"));
+    assert_eq!(app.pending_session_clear_id(), Some("s-2"));
     assert!(status_contains(&app.status, "Confirm Clear"));
 }
 
@@ -362,7 +446,7 @@ fn clear_confirmed_consumes_the_pending_confirmation() {
         effects.as_slice(),
         [Effect::ClearSessionEntry { id }] if id == "s-1"
     ));
-    assert!(app.session_catalog.pending_clear_id.is_none());
+    assert!(app.pending_session_clear_id().is_none());
     assert!(app.session_catalog.busy);
     assert!(status_contains(&app.status, "Clearing saved session data"));
 }
@@ -385,7 +469,7 @@ fn clear_confirmed_twice_starts_only_one_clear() {
 
     assert!(effects.is_empty());
     assert!(app.session_catalog.busy);
-    assert!(app.session_catalog.pending_clear_id.is_none());
+    assert!(app.pending_session_clear_id().is_none());
     assert!(status_contains(&app.status, "Clearing saved session data"));
 }
 
@@ -408,16 +492,16 @@ fn clear_confirmed_for_another_row_leaves_the_pending_one_armed() {
 
     assert!(effects.is_empty());
     assert!(!app.session_catalog.busy);
-    assert_eq!(app.session_catalog.pending_clear_id.as_deref(), Some("s-1"));
+    assert_eq!(app.pending_session_clear_id(), Some("s-1"));
 }
 
-/// Completion clears the pending id too. Nothing reaches it armed anymore,
+/// Completion clears the pending identity too. Nothing reaches it armed anymore,
 /// but the clear stays: it is what covers every other action's completion.
 #[test]
 fn action_completed_still_clears_a_pending_confirmation() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.session_catalog.busy = true;
-    app.session_catalog.pending_clear_id = Some("s-1".to_string());
+    app.pending_confirmation = Some(PendingConfirmation::SessionClear("s-1".to_string()));
 
     let _ = app.handle_session_catalog_action_completed(Ok(SessionCatalogActionResult {
         message: "Cleared.".to_string(),
@@ -425,7 +509,7 @@ fn action_completed_still_clears_a_pending_confirmation() {
         warning: false,
     }));
 
-    assert!(app.session_catalog.pending_clear_id.is_none());
+    assert!(app.pending_session_clear_id().is_none());
     assert!(!app.session_catalog.busy);
 }
 

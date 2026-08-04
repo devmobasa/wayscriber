@@ -46,6 +46,7 @@ impl ConfiguratorApp {
             Message::ResetToDefaultsRequested => self.handle_reset_to_defaults_requested(),
             Message::ResetToDefaultsConfirmed => self.handle_reset_to_defaults_confirmed(),
             Message::ResetToDefaultsCanceled => self.handle_reset_to_defaults_canceled(),
+            Message::ActiveConfirmationCanceled => self.handle_active_confirmation_canceled(),
             Message::SaveRequested => self.handle_save_requested(),
             Message::MigrationApplyRequested => self.handle_migration_apply_requested(),
             Message::MigrationDismissed => self.handle_migration_dismissed(),

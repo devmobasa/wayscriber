@@ -8,7 +8,9 @@ use crate::models::error::FormError;
 use crate::models::{ConfigDraft, KeybindingField};
 
 use super::super::effects::Effect;
-use super::super::state::{ConfiguratorApp, ConfirmationPrompt, StatusMessage};
+use super::super::state::{
+    ConfiguratorApp, ConfirmationPrompt, PendingConfirmation, StatusMessage,
+};
 
 impl ConfiguratorApp {
     pub(super) fn handle_config_loaded(
@@ -26,7 +28,7 @@ impl ConfiguratorApp {
                 self.color_picker_hex.clear();
                 self.sync_all_color_picker_hex();
                 self.is_dirty = false;
-                self.defaults_reset_pending = false;
+                self.clear_defaults_confirmation();
                 self.refresh_migration_preview(&document);
                 self.status = repair_warning.map_or_else(
                     || config_document_status(&document, "Configuration loaded from disk."),
@@ -56,7 +58,7 @@ impl ConfiguratorApp {
     pub(super) fn handle_reload_requested(&mut self) -> Vec<Effect> {
         if !self.is_loading && !self.is_saving {
             self.is_loading = true;
-            self.defaults_reset_pending = false;
+            self.clear_defaults_confirmation();
             self.status = StatusMessage::info("Reloading configuration...");
             return vec![Effect::LoadConfig];
         }
@@ -73,11 +75,11 @@ impl ConfiguratorApp {
     /// `refresh_dirty_flag`, which is the same standing-down the Cancel
     /// control asks for explicitly.
     pub(super) fn handle_reset_to_defaults_requested(&mut self) -> Vec<Effect> {
-        if self.is_loading || self.is_saving || self.defaults_reset_pending {
+        if self.is_loading || self.is_saving || self.defaults_reset_pending() {
             return Vec::new();
         }
 
-        self.defaults_reset_pending = true;
+        self.pending_confirmation = Some(PendingConfirmation::DefaultsReset);
         self.status = StatusMessage::confirmation(ConfirmationPrompt::DefaultsReset);
         Vec::new()
     }
@@ -85,12 +87,12 @@ impl ConfiguratorApp {
     /// Applies the defaults, and only while the confirmation this answers is
     /// still armed.
     ///
-    /// The pending flag is the whole guard: every transition that could have
+    /// The typed pending identity is the whole guard: every transition that could have
     /// invalidated the question — a load, a save, a reload, an edit to the
     /// draft the user is about to lose — clears it, so a confirmation that
     /// outlived its question answers nothing.
     pub(super) fn handle_reset_to_defaults_confirmed(&mut self) -> Vec<Effect> {
-        if !self.defaults_reset_pending {
+        if !self.defaults_reset_pending() {
             return Vec::new();
         }
 
@@ -99,7 +101,7 @@ impl ConfiguratorApp {
         self.boards_collapsed = vec![false; self.draft.boards.items.len()];
         self.color_picker_hex.clear();
         self.sync_all_color_picker_hex();
-        self.defaults_reset_pending = false;
+        self.clear_defaults_confirmation();
         self.status = StatusMessage::info("Loaded default configuration (not saved).");
         self.refresh_dirty_flag();
         Vec::new()
@@ -114,15 +116,32 @@ impl ConfiguratorApp {
     /// operation may have replaced the hint with newer feedback while the
     /// question remained open.
     pub(super) fn handle_reset_to_defaults_canceled(&mut self) -> Vec<Effect> {
-        if !self.defaults_reset_pending {
+        if !self.defaults_reset_pending() {
             return Vec::new();
         }
 
-        self.defaults_reset_pending = false;
+        self.clear_defaults_confirmation();
         if self
             .status
             .is_confirmation(ConfirmationPrompt::DefaultsReset)
         {
+            self.status = StatusMessage::idle();
+        }
+        Vec::new()
+    }
+
+    /// Cancels the one confirmation currently owned by the model.
+    ///
+    /// Escape does not know which inline controls are visible; the typed
+    /// pending identity does. Taking that identity first makes a repeated key
+    /// press a no-op, and the status is cleared only while it still belongs to
+    /// the same question.
+    pub(super) fn handle_active_confirmation_canceled(&mut self) -> Vec<Effect> {
+        let Some(pending) = self.pending_confirmation.take() else {
+            return Vec::new();
+        };
+
+        if self.status.is_confirmation(pending.prompt()) {
             self.status = StatusMessage::idle();
         }
         Vec::new()
@@ -136,7 +155,7 @@ impl ConfiguratorApp {
         if self.is_saving || self.is_loading {
             return Vec::new();
         }
-        self.defaults_reset_pending = false;
+        self.clear_defaults_confirmation();
 
         // Before the document moves anywhere: a hex field the parser rejects
         // was never applied to the draft, so saving would write the last value
@@ -218,7 +237,7 @@ impl ConfiguratorApp {
                 self.color_picker_hex.clear();
                 self.sync_all_color_picker_hex();
                 self.is_dirty = false;
-                self.defaults_reset_pending = false;
+                self.clear_defaults_confirmation();
                 // The file just changed, so the offer has to be recomputed
                 // against it: an applied migration leaves nothing to propose,
                 // and an unrelated save leaves the same proposal standing.
@@ -1028,7 +1047,7 @@ mod tests {
 
         let _ = app.handle_reset_to_defaults_requested();
 
-        assert!(app.defaults_reset_pending);
+        assert!(app.defaults_reset_pending());
         assert_eq!(app.draft, changed_draft);
         assert!(status_contains(&app.status, "Confirm Defaults"));
     }
@@ -1046,7 +1065,7 @@ mod tests {
         let _ = app.handle_reset_to_defaults_requested();
         let _ = app.handle_reset_to_defaults_requested();
 
-        assert!(app.defaults_reset_pending);
+        assert!(app.defaults_reset_pending());
         assert_eq!(app.draft, changed_draft);
         assert!(status_contains(&app.status, "Confirm Defaults"));
     }
@@ -1064,7 +1083,7 @@ mod tests {
         let _ = app.handle_reset_to_defaults_confirmed();
 
         assert_eq!(app.draft, app.defaults);
-        assert!(!app.defaults_reset_pending);
+        assert!(!app.defaults_reset_pending());
         assert!(status_contains(&app.status, "Loaded default configuration"));
         assert!(
             app.is_dirty,
@@ -1084,7 +1103,7 @@ mod tests {
         let _ = app.handle_reset_to_defaults_confirmed();
 
         assert_eq!(app.draft, changed_draft);
-        assert!(!app.defaults_reset_pending);
+        assert!(!app.defaults_reset_pending());
         assert!(
             !status_contains(&app.status, "Loaded default configuration"),
             "an unarmed confirm reports nothing, because it did nothing"
@@ -1103,7 +1122,7 @@ mod tests {
         let _ = app.handle_reset_to_defaults_requested();
         let _ = app.handle_reset_to_defaults_canceled();
 
-        assert!(!app.defaults_reset_pending);
+        assert!(!app.defaults_reset_pending());
         assert_eq!(app.draft, changed_draft);
         assert!(matches!(app.status, StatusMessage::Idle));
 
@@ -1122,7 +1141,7 @@ mod tests {
 
         let _ = app.handle_reset_to_defaults_canceled();
 
-        assert!(!app.defaults_reset_pending);
+        assert!(!app.defaults_reset_pending());
         assert!(matches!(app.status, StatusMessage::Error(_)));
         assert!(status_contains(&app.status, "Failed to clear session s-1"));
     }
@@ -1141,6 +1160,33 @@ mod tests {
     }
 
     #[test]
+    fn active_confirmation_cancel_uses_the_typed_owner() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.is_loading = false;
+
+        let _ = app.handle_reset_to_defaults_requested();
+        let effects = app.handle_active_confirmation_canceled();
+
+        assert!(effects.is_empty());
+        assert!(app.pending_confirmation.is_none());
+        assert!(matches!(app.status, StatusMessage::Idle));
+    }
+
+    #[test]
+    fn active_confirmation_cancel_preserves_newer_feedback() {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.is_loading = false;
+
+        let _ = app.handle_reset_to_defaults_requested();
+        app.status = StatusMessage::error("A newer operation failed");
+        let _ = app.handle_active_confirmation_canceled();
+
+        assert!(app.pending_confirmation.is_none());
+        assert!(matches!(app.status, StatusMessage::Error(_)));
+        assert!(status_contains(&app.status, "newer operation failed"));
+    }
+
+    #[test]
     fn reset_to_defaults_confirmation_is_canceled_by_draft_edit() {
         let (mut app, _effects) = ConfiguratorApp::new_app();
         app.is_loading = false;
@@ -1148,7 +1194,7 @@ mod tests {
         let _ = app.handle_reset_to_defaults_requested();
         let _ = app.handle_toggle_changed(ToggleField::CaptureEnabled, !app.draft.capture_enabled);
 
-        assert!(!app.defaults_reset_pending);
+        assert!(!app.defaults_reset_pending());
         assert!(matches!(app.status, StatusMessage::Idle));
     }
 
