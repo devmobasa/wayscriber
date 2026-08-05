@@ -10,6 +10,7 @@ CI_WORKFLOW="${REPO_ROOT}/.github/workflows/ci.yml"
 PACKAGE_SCRIPT="${REPO_ROOT}/tools/package.sh"
 ARCH_INSTALLER_CHECKER="${REPO_ROOT}/tools/check-arch-installer-manifest.sh"
 INSTALL_SCRIPT="${REPO_ROOT}/tools/install-gtk4-layer-shell.sh"
+CONFIGURATOR_INSTALL_SCRIPT="${REPO_ROOT}/tools/install-configurator.sh"
 STATIC_LINK_VERIFIER="${REPO_ROOT}/tools/verify-static-gtk4-layer-shell.sh"
 WORK_DIR="$(mktemp -d)"
 
@@ -33,6 +34,100 @@ assert_not_contains() {
         exit 1
     fi
 }
+
+# A direct configurator install is a complete desktop application install, not
+# only a binary copy. Exercise every character that needs a second escaping
+# pass in a quoted desktop-entry Exec value without touching the live database.
+CONFIG_INSTALL_REPO="${WORK_DIR}/configurator-install-repo"
+CONFIG_INSTALL_PREFIX="${WORK_DIR}/configurator % install\\root\"quote\`tick\$cash"
+CONFIG_INSTALL_FAKE_BIN="${WORK_DIR}/configurator-install-fake-bin"
+mkdir -p \
+    "${CONFIG_INSTALL_REPO}/tools" \
+    "${CONFIG_INSTALL_REPO}/packaging/icons" \
+    "${CONFIG_INSTALL_REPO}/target/release" \
+    "${CONFIG_INSTALL_FAKE_BIN}"
+cp "${CONFIGURATOR_INSTALL_SCRIPT}" \
+    "${CONFIG_INSTALL_REPO}/tools/install-configurator.sh"
+cp "${REPO_ROOT}/packaging/wayscriber-configurator.desktop" \
+    "${CONFIG_INSTALL_REPO}/packaging/wayscriber-configurator.desktop"
+cp "${REPO_ROOT}/packaging/icons/wayscriber-configurator.svg" \
+    "${CONFIG_INSTALL_REPO}/packaging/icons/wayscriber-configurator.svg"
+for size in 16 19 22 24 38 64 128; do
+    cp "${REPO_ROOT}/packaging/icons/wayscriber-configurator-${size}.png" \
+        "${CONFIG_INSTALL_REPO}/packaging/icons/wayscriber-configurator-${size}.png"
+done
+cat > "${CONFIG_INSTALL_REPO}/target/release/wayscriber-configurator" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat > "${CONFIG_INSTALL_FAKE_BIN}/cargo" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x \
+    "${CONFIG_INSTALL_REPO}/target/release/wayscriber-configurator" \
+    "${CONFIG_INSTALL_FAKE_BIN}/cargo"
+(
+    cd "${WORK_DIR}"
+    PATH="${CONFIG_INSTALL_FAKE_BIN}:${PATH}" \
+        WAYSCRIBER_INSTALL_DIR="${CONFIG_INSTALL_PREFIX}/bin" \
+        bash "${CONFIG_INSTALL_REPO}/tools/install-configurator.sh" >/dev/null
+)
+test -x "${CONFIG_INSTALL_PREFIX}/bin/wayscriber-configurator"
+CONFIG_INSTALL_DESKTOP="${CONFIG_INSTALL_PREFIX}/share/applications/wayscriber-configurator.desktop"
+test -f "${CONFIG_INSTALL_DESKTOP}"
+assert_contains "${CONFIG_INSTALL_DESKTOP}" \
+    'configurator %% install\\\\root\\"quote\\`tick\\$cash/bin/wayscriber-configurator"'
+assert_contains "${CONFIG_INSTALL_DESKTOP}" \
+    'TryExec='"${WORK_DIR}"'/configurator % install\\root"quote`tick$cash/bin/wayscriber-configurator'
+assert_contains "${CONFIG_INSTALL_DESKTOP}" "Icon=wayscriber-configurator"
+for size in 16 19 22 24 38 64 128; do
+    test -f "${CONFIG_INSTALL_PREFIX}/share/icons/hicolor/${size}x${size}/apps/wayscriber-configurator.png"
+done
+test -f "${CONFIG_INSTALL_PREFIX}/share/icons/hicolor/scalable/apps/wayscriber-configurator.svg"
+test -f "${CONFIG_INSTALL_PREFIX}/share/pixmaps/wayscriber-configurator.png"
+if command -v desktop-file-validate >/dev/null 2>&1; then
+    desktop-file-validate "${CONFIG_INSTALL_DESKTOP}"
+fi
+
+# Binary and application-data destinations are independently configurable.
+# A fake sudo records escalation while safely discarding writes to a synthetic
+# privileged root; writable paths must never appear in that log.
+CONFIG_INSTALL_SUDO_LOG="${WORK_DIR}/configurator-install-sudo.log"
+cat > "${CONFIG_INSTALL_FAKE_BIN}/sudo" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${CONFIG_INSTALL_SUDO_LOG:?}"
+if [[ "$*" == *"${CONFIG_INSTALL_PRIVILEGED_ROOT:?}"* ]]; then
+    exit 0
+fi
+exec "$@"
+EOF
+chmod +x "${CONFIG_INSTALL_FAKE_BIN}/sudo"
+
+CONFIG_INSTALL_PRIVILEGED_ROOT="/root/wayscriber-configurator-installer-test"
+CONFIG_INSTALL_MIXED_DATA="${WORK_DIR}/configurator-mixed-data"
+PATH="${CONFIG_INSTALL_FAKE_BIN}:${PATH}" \
+    CONFIG_INSTALL_SUDO_LOG="${CONFIG_INSTALL_SUDO_LOG}" \
+    CONFIG_INSTALL_PRIVILEGED_ROOT="${CONFIG_INSTALL_PRIVILEGED_ROOT}" \
+    WAYSCRIBER_INSTALL_DIR="${CONFIG_INSTALL_PRIVILEGED_ROOT}/bin" \
+    WAYSCRIBER_DATA_DIR="${CONFIG_INSTALL_MIXED_DATA}" \
+    bash "${CONFIG_INSTALL_REPO}/tools/install-configurator.sh" >/dev/null
+assert_contains "${CONFIG_INSTALL_SUDO_LOG}" "${CONFIG_INSTALL_PRIVILEGED_ROOT}/bin"
+assert_not_contains "${CONFIG_INSTALL_SUDO_LOG}" "${CONFIG_INSTALL_MIXED_DATA}"
+test -f "${CONFIG_INSTALL_MIXED_DATA}/applications/wayscriber-configurator.desktop"
+
+: > "${CONFIG_INSTALL_SUDO_LOG}"
+CONFIG_INSTALL_MIXED_BIN="${WORK_DIR}/configurator-mixed-bin"
+CONFIG_INSTALL_PRIVILEGED_DATA="${CONFIG_INSTALL_PRIVILEGED_ROOT}/share"
+PATH="${CONFIG_INSTALL_FAKE_BIN}:${PATH}" \
+    CONFIG_INSTALL_SUDO_LOG="${CONFIG_INSTALL_SUDO_LOG}" \
+    CONFIG_INSTALL_PRIVILEGED_ROOT="${CONFIG_INSTALL_PRIVILEGED_ROOT}" \
+    WAYSCRIBER_INSTALL_DIR="${CONFIG_INSTALL_MIXED_BIN}" \
+    WAYSCRIBER_DATA_DIR="${CONFIG_INSTALL_PRIVILEGED_DATA}" \
+    bash "${CONFIG_INSTALL_REPO}/tools/install-configurator.sh" >/dev/null
+assert_contains "${CONFIG_INSTALL_SUDO_LOG}" "${CONFIG_INSTALL_PRIVILEGED_DATA}"
+assert_not_contains "${CONFIG_INSTALL_SUDO_LOG}" "${CONFIG_INSTALL_MIXED_BIN}"
+test -x "${CONFIG_INSTALL_MIXED_BIN}/wayscriber-configurator"
 
 # Prebuilt deb/rpm packages must declare the supported ABI floors, while the
 # statically embedded layer-shell implementation must not remain a dependency.
@@ -923,6 +1018,13 @@ sha256sums=('old')
 build() {
     cd wayscriber
 }
+package() {
+    cd wayscriber
+
+    install -Dm755 "target/release/wayscriber-configurator" "\$pkgdir/usr/bin/wayscriber-configurator"
+    install -Dm644 README.md "\$pkgdir/usr/share/doc/\$pkgname/README.md"
+    [ -f LICENSE ] && install -Dm644 LICENSE "\$pkgdir/usr/share/licenses/\$pkgname/LICENSE" || true
+}
 EOF
     cat > "${dir}/.SRCINFO" <<EOF
 pkgbase = wayscriber-configurator
@@ -1071,6 +1173,14 @@ assert_contains "${AUR_CONFIG_HOTFIX}/.SRCINFO" \
 assert_contains "${AUR_CONFIG_HOTFIX}/.SRCINFO" "depends = gtk4"
 assert_contains "${AUR_CONFIG_HOTFIX}/.SRCINFO" "depends = libadwaita>=1.4"
 assert_not_contains "${AUR_CONFIG_HOTFIX}/.SRCINFO" "(Iced)"
+assert_contains "${AUR_CONFIG_HOTFIX}/PKGBUILD" \
+    'packaging/wayscriber-configurator.desktop'
+for size in 16 19 22 24 38 64 128; do
+    assert_contains "${AUR_CONFIG_HOTFIX}/PKGBUILD" \
+        "packaging/icons/wayscriber-configurator-${size}.png"
+done
+assert_contains "${AUR_CONFIG_HOTFIX}/PKGBUILD" \
+    'packaging/icons/wayscriber-configurator.svg'
 
 # A missing required configurator clone aborts before an earlier source channel
 # is touched. Skipping it remains available, but only as an explicit decision.

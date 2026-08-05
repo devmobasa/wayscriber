@@ -46,7 +46,8 @@ Helper scripts for development, installation, packaging, and release workflows.
   - Usage: `./tools/install.sh`
 
 - **install-configurator.sh** - Install configurator only
-  - Builds and installs wayscriber-configurator
+  - Builds and installs wayscriber-configurator, its desktop entry, and icons
+  - Uses the matching `share` directory or `$WAYSCRIBER_DATA_DIR` for application data
   - Usage: `./tools/install-configurator.sh`
 
 - **fetch-all-deps.sh** - Prefetch dependencies

@@ -297,6 +297,41 @@ rewrite_packaging_asset_paths() {
     ' PKGBUILD
 }
 
+ensure_configurator_desktop_assets() {
+    local marker='# Wayscriber configurator desktop integration'
+    local binary_install='    install -Dm755 "target/release/wayscriber-configurator" "$pkgdir/usr/bin/wayscriber-configurator"'
+    local asset_block
+
+    if grep -Fq "$marker" PKGBUILD; then
+        return
+    fi
+    if grep -Fq 'packaging/wayscriber-configurator.desktop' PKGBUILD; then
+        echo "wayscriber-configurator PKGBUILD has unmanaged desktop integration" >&2
+        return 1
+    fi
+    grep -Fq "$binary_install" PKGBUILD || {
+        echo "wayscriber-configurator PKGBUILD has no binary install line to extend" >&2
+        return 1
+    }
+
+    asset_block="${marker}
+    install -Dm644 packaging/wayscriber-configurator.desktop \"\$pkgdir/usr/share/applications/wayscriber-configurator.desktop\"
+    install -Dm644 packaging/icons/wayscriber-configurator-16.png \"\$pkgdir/usr/share/icons/hicolor/16x16/apps/wayscriber-configurator.png\"
+    install -Dm644 packaging/icons/wayscriber-configurator-19.png \"\$pkgdir/usr/share/icons/hicolor/19x19/apps/wayscriber-configurator.png\"
+    install -Dm644 packaging/icons/wayscriber-configurator-22.png \"\$pkgdir/usr/share/icons/hicolor/22x22/apps/wayscriber-configurator.png\"
+    install -Dm644 packaging/icons/wayscriber-configurator-24.png \"\$pkgdir/usr/share/icons/hicolor/24x24/apps/wayscriber-configurator.png\"
+    install -Dm644 packaging/icons/wayscriber-configurator-38.png \"\$pkgdir/usr/share/icons/hicolor/38x38/apps/wayscriber-configurator.png\"
+    install -Dm644 packaging/icons/wayscriber-configurator-64.png \"\$pkgdir/usr/share/icons/hicolor/64x64/apps/wayscriber-configurator.png\"
+    install -Dm644 packaging/icons/wayscriber-configurator-128.png \"\$pkgdir/usr/share/icons/hicolor/128x128/apps/wayscriber-configurator.png\"
+    install -Dm644 packaging/icons/wayscriber-configurator.svg \"\$pkgdir/usr/share/icons/hicolor/scalable/apps/wayscriber-configurator.svg\"
+    install -Dm644 packaging/icons/wayscriber-configurator-128.png \"\$pkgdir/usr/share/pixmaps/wayscriber-configurator.png\""
+    CONFIGURATOR_ASSET_BLOCK="$asset_block" perl -0pi -e '
+        my $anchor = q{    install -Dm755 "target/release/wayscriber-configurator" "$pkgdir/usr/bin/wayscriber-configurator"};
+        s{^\Q$anchor\E$}{$anchor . "\n\n" . $ENV{CONFIGURATOR_ASSET_BLOCK}}me
+            or die "Failed to add wayscriber-configurator desktop integration\n";
+    ' PKGBUILD
+}
+
 ensure_libxkbcommon_dependency() {
     if ! grep -Eq "^[[:space:]]*'libxkbcommon'[[:space:]]*$" PKGBUILD; then
         sed -i "/^[[:space:]]*'gcc-libs'/i\\    'libxkbcommon'" PKGBUILD
@@ -424,6 +459,22 @@ validate_configurator_recipe() {
         echo "wayscriber-configurator recipe lacks GTK4/libadwaita metadata" >&2
         return 1
     }
+    grep -Fq 'packaging/wayscriber-configurator.desktop' PKGBUILD \
+        && grep -Fq 'packaging/icons/wayscriber-configurator.svg' PKGBUILD \
+        && grep -Fq '$pkgdir/usr/share/applications/wayscriber-configurator.desktop' PKGBUILD \
+        && grep -Fq '$pkgdir/usr/share/icons/hicolor/scalable/apps/wayscriber-configurator.svg' PKGBUILD \
+        && grep -Fq '$pkgdir/usr/share/pixmaps/wayscriber-configurator.png' PKGBUILD || {
+        echo "wayscriber-configurator recipe lacks desktop launcher assets" >&2
+        return 1
+    }
+    local size
+    for size in 16 19 22 24 38 64 128; do
+        grep -Fq "packaging/icons/wayscriber-configurator-${size}.png" PKGBUILD \
+            && grep -Fq "\$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/wayscriber-configurator.png" PKGBUILD || {
+            echo "wayscriber-configurator recipe lacks the ${size}x${size} launcher icon" >&2
+            return 1
+        }
+    done
     popd >/dev/null
 }
 
@@ -534,6 +585,7 @@ update_configurator() {
     replace_pkgbuild_array PKGBUILD sha256sums "sha256sums=('${source_sha}')"
     replace_line PKGBUILD '^    cd wayscriber$' '    cd "wayscriber-$pkgver"'
     rewrite_packaging_asset_paths
+    ensure_configurator_desktop_assets
 
     set_srcinfo_field .SRCINFO pkgver "${VERSION}"
     set_srcinfo_field .SRCINFO pkgrel "${pkgrel}"
