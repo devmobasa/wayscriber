@@ -11,7 +11,9 @@
 
 ## Invariants
 - Keep `package.wayscriber.yaml`, `package.configurator.yaml`, `PKGBUILD`, `.SRCINFO`, desktop files, service unit, icons, and release scripts aligned.
-- A new system library requirement must reach `nixpkgs/package.nix` and `flake.nix` together; the nixpkgs bot bumps versions but never build inputs.
+- A new system library needed by an output both recipes build — that is, the `wayscriber` binary — must reach `nixpkgs/package.nix` and `flake.nix` together; the nixpkgs bot bumps versions but never build inputs.
+- `nixpkgs/package.nix` ships the `wayscriber` binary only, so a system library only the configurator needs belongs in `flake.nix` alone and must not be added to the nixpkgs recipe.
+- The configurator's libadwaita Cargo feature floor (`v1_4` in `configurator/Cargo.toml`) must stay buildable on the release runner's Ubuntu LTS (24.04 ships libadwaita 1.5); raise it only together with a runner/base-image bump and the workflow dependency lists.
 - Packaging hotfix versions may differ from Cargo versions only according to the existing versioning policy.
 - Do not change daemon service semantics without checking daemon runtime and configurator daemon setup.
 

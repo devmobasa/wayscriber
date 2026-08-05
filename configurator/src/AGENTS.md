@@ -4,15 +4,15 @@
 - Applies to configurator source code under `configurator/src/`.
 
 ## Architecture
-- `main.rs` starts the Iced app.
+- `main.rs` starts the Relm4 app.
 - `messages.rs` defines the top-level message surface.
-- `app/` owns state, update handlers, views, subscriptions, side effects, search, daemon setup, and session catalog workflows.
+- `app/` owns state, update handlers, the GTK shell and its pages, effects, search, daemon setup, and session catalog workflows.
 - `models/` owns draft/editable data and conversion to/from core wayscriber types.
 - `test_env.rs` and `test_temp.rs` provide isolated test helpers.
 
 ## Invariants
 - Keep message routing explicit and centralized.
-- Keep view code side-effect free; route I/O and process work through update tasks or app-side helper modules.
+- Keep page code side-effect free; route I/O and process work through effects or app-side helper modules.
 - Preserve `default-features = false` use of the core crate.
 
 ## Coupled Changes

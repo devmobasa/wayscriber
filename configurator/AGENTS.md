@@ -2,21 +2,21 @@
 
 ## Scope
 - Applies to the `wayscriber-configurator` crate.
-- This is a separate Iced desktop crate that reuses core `wayscriber` config and session types.
+- This is a separate GTK4/libadwaita desktop crate, built on Relm4, that reuses core `wayscriber` config and session types.
 
 ## Architecture
 - `configurator/src/main.rs` is the binary entry point.
 - `configurator/src/messages.rs` owns top-level UI messages.
-- `configurator/src/app/` owns app state, update logic, views, daemon setup, search, subscriptions, I/O, and session catalog operations.
+- `configurator/src/app/` owns app state, update logic, the GTK shell and its pages, effects, daemon setup, search, I/O, and session catalog operations.
 - `configurator/src/models/` owns editable models, parsing, validation, conversion to core config/session types, labels, search data, and reusable fields.
 
 ## Invariants
 - Keep `wayscriber` dependency usage compatible with `default-features = false`; do not pull portal D-Bus or tray runtime behavior into the configurator binary.
-- Views should emit messages and render state; file/process work belongs in update tasks or side-effect modules.
+- Pages should emit messages and render state; file/process work belongs in effects or side-effect modules.
 - Invalid user input should remain visible and actionable instead of being silently coerced or dropped.
 
 ## Coupled Changes
-- Main config changes often require configurator draft models, setters, `to_config/`, views, updates, labels, search terms, docs, and tests.
+- Main config changes often require configurator draft models, setters, `to_config/`, pages, updates, labels, search terms, docs, and tests.
 - Daemon setup changes must stay aligned with `src/daemon/`, `src/systemd_user_service.rs`, `src/shortcut_hint.rs`, and `packaging/wayscriber.service`.
 - Session catalog changes must stay aligned with `src/session/` lock, artifact, catalog, and path behavior.
 
