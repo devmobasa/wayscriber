@@ -55,6 +55,7 @@ https://github.com/user-attachments/assets/4b5ed159-8d1c-44cb-8fe4-e0f2ea41d818
 - [Getting help](#getting-help)
 - [Controls reference](#controls-reference)
 - [Configuration](#configuration)
+  - [Configurator (GUI)](#configurator-gui)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [Roadmap](#roadmap)
@@ -202,7 +203,7 @@ Pick the path that matches your setup:
 
 Distro repositories, the AUR, and declarative NixOS installs are the best default for CLI users because they follow the normal system update flow. Packages installed with `nix profile` are updated separately with `nix profile upgrade`. GitHub `.deb`/`.rpm` downloads and the direct Arch release installer are not automatic update channels; rerun or replace them when you want a newer release.
 
-Install the main `wayscriber` package first. `wayscriber-configurator` is an optional GUI settings app and does not include the `wayscriber` binary.
+Install the main `wayscriber` package first. [`wayscriber-configurator`](#configurator-gui) is an optional GUI settings app and does not include the `wayscriber` binary.
 
 ### Debian and Ubuntu
 
@@ -555,7 +556,7 @@ Once the overlay is up:
 - <kbd>F1</kbd> or <kbd>F10</kbd> — help overlay
 - <kbd>Shift+F1</kbd> — quick reference
 - <kbd>Ctrl+K</kbd> / <kbd>Ctrl+Shift+P</kbd> — command palette
-- <kbd>F11</kbd> — configurator
+- <kbd>F11</kbd> — [configurator](#configurator-gui)
 - <kbd>Escape</kbd> — hide or exit
 
 For daily use, set up [daemon mode](#daemon-mode-recommended): toggles are faster and session state survives between activations.
@@ -947,7 +948,7 @@ mkdir -p ~/.config/wayscriber
 cp config.example.toml ~/.config/wayscriber/config.toml
 ```
 
-**Or use the GUI configurator:**
+**Or use the [GUI configurator](#configurator-gui):**
 ```bash
 wayscriber-configurator   # or press F11
 ```
@@ -967,6 +968,46 @@ minimized/pane/collapsed state, individual toolbar item visibility/order, and bo
 in the overlay are direct interaction state and are saved separately in the generated
 `$XDG_DATA_HOME/wayscriber/runtime-ui.toml` file. Inspect, recover, or reset those runtime
 preferences from the overlay Settings panel; see [Configuration Guide](docs/CONFIG.md#configured-defaults-and-runtime-ui-preferences).
+
+### Configurator (GUI)
+
+`wayscriber-configurator` is a native GTK4/libadwaita app built with Relm4, shipped as its own optional package. Open it any time with <kbd>F11</kbd> from the overlay, or run `wayscriber-configurator`.
+
+It covers most of `config.toml`: drawing and arrow defaults, rendering profiles and performance, UI and toolbar layout, presenter mode, history, capture and PDF export, boards, sessions, tablet input, presets, and keybindings. A few things stay hand-edited — `[tray]`, `[updates]`, `[spotlight]`, the `[tablet.stylus_button]` action mappings, and full multi-board setup under `[boards]` — and the configurator leaves all of them untouched when it saves.
+
+[![The wayscriber configurator editing settings on a Wayland desktop](https://wayscriber.com/img/poster-configurator.webp)](https://wayscriber.com/#configurator)
+
+- Edits authored defaults with validation and automatic backups — your comments, ordering, and keys unknown to this build all survive a save
+- ~130 rebindable actions in a searchable list; <kbd>Ctrl+Shift+E</kbd> on a command palette row opens that shortcut directly
+- Installs and manages the daemon service, and applies global shortcuts on GNOME and KDE
+- Manages sessions: rename, duplicate, move, or clear saved boards and tool state
+- Runtime UI preferences stay in a separate file and are never overwritten
+
+<details>
+<summary>More configurator screenshots</summary>
+
+| | |
+| :---: | :---: |
+| ![Configurator Colors page with default and quick colors](https://wayscriber.com/img/configurator-colors.webp)<br>**Colors** | ![Configurator Rendering page with buffer and animation settings](https://wayscriber.com/img/configurator-rendering.webp)<br>**Rendering** |
+| ![Configurator Preferences page](https://wayscriber.com/img/configurator-preferences.webp)<br>**Preferences** | ![Configurator Keybindings page with searchable actions](https://wayscriber.com/img/configurator-keybindings.webp)<br>**Keybindings** |
+
+</details>
+
+<details>
+<summary>Configurator demo video</summary>
+
+[View demo (wayscriber.com)](https://wayscriber.com/media/configurator.webm)
+
+<!--
+  To embed an inline player here, drag media/configurator.mp4 from the website repo
+  into a comment box on any issue or PR in this repository (do not submit the comment),
+  then paste the resulting https://github.com/user-attachments/assets/<uuid> URL on its
+  own line below. GitHub only renders video for its own attachment URLs.
+-->
+
+</details>
+
+It is a separate optional package — install the main `wayscriber` package first, then add it from [Installation](#installation). Full reference: https://wayscriber.com/docs/configuration/configurator.html
 
 ### Key sections
 

@@ -4,6 +4,8 @@ Native Rust desktop UI for editing `~/.config/wayscriber/config.toml`. The appli
 
 `config.toml` changes only through an explicit user edit action, never automatically. This program writes it when you press **Save**; the overlay writes it from three narrow editors — shortcut editing, preset slots, and the quick-color palette — each of which rewrites only its own key and backs the file up first. Nothing else in Wayscriber — daemon, tray, startup, shutdown, validation — ever changes it, so an incidental preference toggle applies to that run and sends you here for a durable change.
 
+This file covers building and running the configurator from source. For screenshots, a demo video, and the user-facing walkthrough, see [Configurator (GUI)](../README.md#configurator-gui) and https://wayscriber.com/docs/configuration/configurator.html
+
 ## Prerequisites
 
 - Rust toolchain 1.95 or newer.
