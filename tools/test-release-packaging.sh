@@ -12,6 +12,7 @@ ARCH_INSTALLER_CHECKER="${REPO_ROOT}/tools/check-arch-installer-manifest.sh"
 INSTALL_SCRIPT="${REPO_ROOT}/tools/install-gtk4-layer-shell.sh"
 CONFIGURATOR_INSTALL_SCRIPT="${REPO_ROOT}/tools/install-configurator.sh"
 STATIC_LINK_VERIFIER="${REPO_ROOT}/tools/verify-static-gtk4-layer-shell.sh"
+VERSION_CHECKER="${REPO_ROOT}/tools/check-version-consistency.sh"
 WORK_DIR="$(mktemp -d)"
 
 cleanup() {
@@ -129,6 +130,27 @@ assert_contains "${CONFIG_INSTALL_SUDO_LOG}" "${CONFIG_INSTALL_PRIVILEGED_DATA}"
 assert_not_contains "${CONFIG_INSTALL_SUDO_LOG}" "${CONFIG_INSTALL_MIXED_BIN}"
 test -x "${CONFIG_INSTALL_MIXED_BIN}/wayscriber-configurator"
 
+VERSION_FAILURE_COUNT=0
+expect_version_consistency_failure() {
+    local expected="$1" fixture_root="$2"
+    VERSION_FAILURE_COUNT=$((VERSION_FAILURE_COUNT + 1))
+    local output="${WORK_DIR}/version-failure-${VERSION_FAILURE_COUNT}.log"
+
+    set +e
+    (
+        cd "${fixture_root}"
+        bash tools/check-version-consistency.sh
+    ) >"${output}" 2>&1
+    local status=$?
+    set -e
+
+    if [[ ${status} -eq 0 ]]; then
+        echo "Expected version consistency check to fail: ${expected}" >&2
+        exit 1
+    fi
+    assert_contains "${output}" "${expected}"
+}
+
 # Prebuilt deb/rpm packages must declare the supported ABI floors, while the
 # statically embedded layer-shell implementation must not remain a dependency.
 sed -n '/^overrides:/,$p' "${PACKAGE_CONFIG}" > "${WORK_DIR}/package-overrides.yml"
@@ -142,6 +164,137 @@ assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- libc6 (>= 2.39)"
 assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- glibc >= 2.39"
 assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- libadwaita-1-0 (>= 1.4)"
 assert_contains "${CONFIGURATOR_PACKAGE_CONFIG}" "- libadwaita >= 1.4"
+
+# One supported libadwaita floor governs compilation and every package
+# channel. Exercise the real consistency checker, then mutation-check each
+# independently editable metadata surface so a partial floor bump cannot pass.
+LIBADWAITA_FLOOR_REPO="${WORK_DIR}/libadwaita-floor-repo"
+mkdir -p \
+    "${LIBADWAITA_FLOOR_REPO}/.github/workflows" \
+    "${LIBADWAITA_FLOOR_REPO}/configurator" \
+    "${LIBADWAITA_FLOOR_REPO}/packaging" \
+    "${LIBADWAITA_FLOOR_REPO}/tools"
+cp "${REPO_ROOT}/Cargo.toml" \
+    "${REPO_ROOT}/Cargo.lock" \
+    "${REPO_ROOT}/README.md" \
+    "${REPO_ROOT}/flake.nix" \
+    "${LIBADWAITA_FLOOR_REPO}/"
+cp "${REPO_ROOT}/configurator/Cargo.toml" \
+    "${LIBADWAITA_FLOOR_REPO}/configurator/Cargo.toml"
+cp "${REPO_ROOT}/packaging/PKGBUILD" \
+    "${REPO_ROOT}/packaging/.SRCINFO" \
+    "${REPO_ROOT}/packaging/package.configurator.yaml" \
+    "${LIBADWAITA_FLOOR_REPO}/packaging/"
+cp "${VERSION_CHECKER}" \
+    "${LIBADWAITA_FLOOR_REPO}/tools/check-version-consistency.sh"
+cp "${RELEASE_WORKFLOW}" \
+    "${LIBADWAITA_FLOOR_REPO}/.github/workflows/build-packages.yml"
+cp "${REPO_ROOT}/tools/update-aur-from-manifest.sh" \
+    "${LIBADWAITA_FLOOR_REPO}/tools/update-aur-from-manifest.sh"
+(
+    cd "${LIBADWAITA_FLOOR_REPO}"
+    bash tools/check-version-consistency.sh >/dev/null
+)
+
+sed -i 's/features = \["v1_4"\]/features = ["v1_5"]/' \
+    "${LIBADWAITA_FLOOR_REPO}/configurator/Cargo.toml"
+expect_version_consistency_failure \
+    "configurator/Cargo.toml libadwaita features: expected ['v1_4'], got ['v1_5']" \
+    "${LIBADWAITA_FLOOR_REPO}"
+cp "${REPO_ROOT}/configurator/Cargo.toml" \
+    "${LIBADWAITA_FLOOR_REPO}/configurator/Cargo.toml"
+
+sed -i 's/libadwaita-1-0 (>= 1.4)/libadwaita-1-0 (>= 1.5)/' \
+    "${LIBADWAITA_FLOOR_REPO}/packaging/package.configurator.yaml"
+expect_version_consistency_failure \
+    "configurator deb libadwaita floor: expected 1.4, got 1.5" \
+    "${LIBADWAITA_FLOOR_REPO}"
+cp "${REPO_ROOT}/packaging/package.configurator.yaml" \
+    "${LIBADWAITA_FLOOR_REPO}/packaging/package.configurator.yaml"
+
+sed -i 's/libadwaita >= 1.4/libadwaita >= 1.5/' \
+    "${LIBADWAITA_FLOOR_REPO}/packaging/package.configurator.yaml"
+expect_version_consistency_failure \
+    "configurator rpm libadwaita floor: expected 1.4, got 1.5" \
+    "${LIBADWAITA_FLOOR_REPO}"
+cp "${REPO_ROOT}/packaging/package.configurator.yaml" \
+    "${LIBADWAITA_FLOOR_REPO}/packaging/package.configurator.yaml"
+
+sed -i 's/libadwaita>=1.4/libadwaita>=1.5/' \
+    "${LIBADWAITA_FLOOR_REPO}/packaging/PKGBUILD"
+expect_version_consistency_failure \
+    "packaging/PKGBUILD libadwaita floor: expected 1.4, got 1.5" \
+    "${LIBADWAITA_FLOOR_REPO}"
+cp "${REPO_ROOT}/packaging/PKGBUILD" \
+    "${LIBADWAITA_FLOOR_REPO}/packaging/PKGBUILD"
+
+sed -i 's/libadwaita>=1.4/libadwaita>=1.5/' \
+    "${LIBADWAITA_FLOOR_REPO}/packaging/.SRCINFO"
+expect_version_consistency_failure \
+    "packaging/.SRCINFO libadwaita floor: expected 1.4, got 1.5" \
+    "${LIBADWAITA_FLOOR_REPO}"
+
+cp "${REPO_ROOT}/packaging/.SRCINFO" \
+    "${LIBADWAITA_FLOOR_REPO}/packaging/.SRCINFO"
+sed -i '/configurator_deb_depends/ s/libadwaita-1-0 (>= 1.4)/libadwaita-1-0 (>= 1.5)/' \
+    "${LIBADWAITA_FLOOR_REPO}/.github/workflows/build-packages.yml"
+expect_version_consistency_failure \
+    "release workflow deb libadwaita floor: expected 1.4, got 1.5" \
+    "${LIBADWAITA_FLOOR_REPO}"
+cp "${RELEASE_WORKFLOW}" \
+    "${LIBADWAITA_FLOOR_REPO}/.github/workflows/build-packages.yml"
+
+sed -i '/configurator_rpm_requires/ s/libadwaita >= 1.4/libadwaita >= 1.5/' \
+    "${LIBADWAITA_FLOOR_REPO}/.github/workflows/build-packages.yml"
+expect_version_consistency_failure \
+    "release workflow rpm libadwaita floor: expected 1.4, got 1.5" \
+    "${LIBADWAITA_FLOOR_REPO}"
+cp "${RELEASE_WORKFLOW}" \
+    "${LIBADWAITA_FLOOR_REPO}/.github/workflows/build-packages.yml"
+
+sed -i \
+    "s/ensure_runtime_dependency 'libadwaita>=1.4'/ensure_runtime_dependency 'libadwaita>=1.5'/" \
+    "${LIBADWAITA_FLOOR_REPO}/tools/update-aur-from-manifest.sh"
+expect_version_consistency_failure \
+    "AUR updater generated libadwaita floor: expected 1.4, got 1.5" \
+    "${LIBADWAITA_FLOOR_REPO}"
+cp "${REPO_ROOT}/tools/update-aur-from-manifest.sh" \
+    "${LIBADWAITA_FLOOR_REPO}/tools/update-aur-from-manifest.sh"
+
+sed -i '/grep -Eq.*libadwaita/ s/libadwaita>=1.4/libadwaita>=1.5/' \
+    "${LIBADWAITA_FLOOR_REPO}/tools/update-aur-from-manifest.sh"
+expect_version_consistency_failure \
+    "AUR updater PKGBUILD validation floor: expected 1.4, got 1.5" \
+    "${LIBADWAITA_FLOOR_REPO}"
+cp "${REPO_ROOT}/tools/update-aur-from-manifest.sh" \
+    "${LIBADWAITA_FLOOR_REPO}/tools/update-aur-from-manifest.sh"
+
+sed -i '/grep -Fxq.*depends = libadwaita/ s/libadwaita>=1.4/libadwaita>=1.5/' \
+    "${LIBADWAITA_FLOOR_REPO}/tools/update-aur-from-manifest.sh"
+expect_version_consistency_failure \
+    "AUR updater .SRCINFO validation floor: expected 1.4, got 1.5" \
+    "${LIBADWAITA_FLOOR_REPO}"
+
+# Updating every metadata floor is still incomplete until the package runner
+# moves to a reviewed release-platform contract that supports the new ABI.
+cp "${REPO_ROOT}/packaging/.SRCINFO" \
+    "${LIBADWAITA_FLOOR_REPO}/packaging/.SRCINFO"
+sed -i 's/supported_libadwaita_floor = "1.4"/supported_libadwaita_floor = "1.7"/' \
+    "${LIBADWAITA_FLOOR_REPO}/tools/check-version-consistency.sh"
+sed -i 's/features = \["v1_4"\]/features = ["v1_7"]/' \
+    "${LIBADWAITA_FLOOR_REPO}/configurator/Cargo.toml"
+sed -i 's/1\.4/1.7/g' \
+    "${LIBADWAITA_FLOOR_REPO}/packaging/PKGBUILD" \
+    "${LIBADWAITA_FLOOR_REPO}/packaging/.SRCINFO" \
+    "${LIBADWAITA_FLOOR_REPO}/packaging/package.configurator.yaml" \
+    "${LIBADWAITA_FLOOR_REPO}/.github/workflows/build-packages.yml"
+cp "${REPO_ROOT}/tools/update-aur-from-manifest.sh" \
+    "${LIBADWAITA_FLOOR_REPO}/tools/update-aur-from-manifest.sh"
+sed -i 's/1\.4/1.7/g' \
+    "${LIBADWAITA_FLOOR_REPO}/tools/update-aur-from-manifest.sh"
+expect_version_consistency_failure \
+    "release package runner ubuntu-24.04 libadwaita floor: expected 1.4, got 1.7" \
+    "${LIBADWAITA_FLOOR_REPO}"
 
 # Release jobs must not silently raise the glibc floor when ubuntu-latest
 # changes; the package job is the binary floor's defining runner.

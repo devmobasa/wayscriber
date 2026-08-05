@@ -13,6 +13,10 @@ Checks that release/version metadata agrees across:
   * packaging/.SRCINFO
   * flake.nix
 
+Also keeps the configurator's supported libadwaita floor at 1.4 across its
+Cargo feature, package metadata, release assertions, and AUR generation.
+Raise that floor only as a coordinated release-platform change.
+
 Also rejects hardcoded release tags in README.md install examples, which go
 stale on the next release. Use a placeholder such as RELEASE_TAG, or link to
 the latest release, instead.
@@ -85,6 +89,12 @@ errors = []
 
 version_re = re.compile(r"^\d+\.\d+\.\d+(?:\.\d+)?$")
 checksum_re = re.compile(r"^[0-9a-fA-F]{64}$")
+supported_libadwaita_floor = "1.4"
+# A floor raise must add a reviewed runner contract instead of inheriting the
+# previous Ubuntu base image by accident.
+release_runner_libadwaita_floors = {
+    "ubuntu-24.04": "1.4",
+}
 
 def read_text(path):
     return (root / path).read_text(encoding="utf-8")
@@ -103,6 +113,59 @@ def cargo_version(path):
         errors.append(f"{path}: missing package version")
         return ""
     return version_match.group(1)
+
+def cargo_libadwaita_features(path):
+    text = read_text(path)
+    if tomllib is not None:
+        dependency = tomllib.loads(text).get("dependencies", {}).get("libadwaita")
+        if not isinstance(dependency, dict):
+            errors.append(f"{path}: missing structured libadwaita dependency")
+            return []
+        features = dependency.get("features", [])
+        if not isinstance(features, list) or not all(
+            isinstance(feature, str) for feature in features
+        ):
+            errors.append(f"{path}: libadwaita features must be a string list")
+            return []
+        return features
+
+    dependency_match = re.search(r"(?m)^libadwaita\s*=\s*\{([^\n]+)\}$", text)
+    if not dependency_match:
+        errors.append(f"{path}: missing structured libadwaita dependency")
+        return []
+    features_match = re.search(r"features\s*=\s*\[([^\]]*)\]", dependency_match.group(1))
+    if not features_match:
+        return []
+    return re.findall(r'"([^"]+)"', features_match.group(1))
+
+def single_metadata_floor(label, path, pattern):
+    matches = re.findall(pattern, read_text(path), re.MULTILINE)
+    if len(matches) != 1:
+        errors.append(f"{label}: expected one libadwaita floor, found {len(matches)}")
+        return None
+    return matches[0]
+
+def workflow_job_runner(path, job_name):
+    text = read_text(path)
+    job_match = re.search(
+        rf"(?m)^  {re.escape(job_name)}:[ \t]*$",
+        text,
+    )
+    if not job_match:
+        errors.append(f"{path}: missing {job_name} job")
+        return None
+
+    remaining = text[job_match.end():]
+    next_job_match = re.search(r"(?m)^  [A-Za-z0-9_-]+:[ \t]*$", remaining)
+    job_text = remaining[:next_job_match.start()] if next_job_match else remaining
+    runners = re.findall(r"(?m)^    runs-on:[ \t]*([^#\n]+?)[ \t]*$", job_text)
+    if len(runners) != 1:
+        errors.append(
+            f"{path} {job_name} job: expected one literal runs-on value, "
+            f"found {len(runners)}"
+        )
+        return None
+    return runners[0]
 
 def lock_package_version(path, package):
     pattern = re.compile(
@@ -164,6 +227,83 @@ def require_template_sha256sums(label, values):
 root_version = cargo_version("Cargo.toml")
 config_version = cargo_version("configurator/Cargo.toml")
 require_equal("configurator/Cargo.toml", config_version, root_version)
+
+expected_libadwaita_feature = "v" + supported_libadwaita_floor.replace(".", "_")
+libadwaita_features = cargo_libadwaita_features("configurator/Cargo.toml")
+if libadwaita_features != [expected_libadwaita_feature]:
+    errors.append(
+        "configurator/Cargo.toml libadwaita features: "
+        f"expected [{expected_libadwaita_feature!r}], got {libadwaita_features!r}"
+    )
+
+libadwaita_floors = {
+    "configurator deb libadwaita floor": single_metadata_floor(
+        "configurator deb libadwaita floor",
+        "packaging/package.configurator.yaml",
+        r"^\s*-\s*libadwaita-1-0 \(>= ([0-9]+\.[0-9]+)\)\s*$",
+    ),
+    "configurator rpm libadwaita floor": single_metadata_floor(
+        "configurator rpm libadwaita floor",
+        "packaging/package.configurator.yaml",
+        r"^\s*-\s*libadwaita >= ([0-9]+\.[0-9]+)\s*$",
+    ),
+    "packaging/PKGBUILD libadwaita floor": single_metadata_floor(
+        "packaging/PKGBUILD libadwaita floor",
+        "packaging/PKGBUILD",
+        r"^\s*'libadwaita>=([0-9]+\.[0-9]+)'\s*$",
+    ),
+    "packaging/.SRCINFO libadwaita floor": single_metadata_floor(
+        "packaging/.SRCINFO libadwaita floor",
+        "packaging/.SRCINFO",
+        r"^\s*depends = libadwaita>=([0-9]+\.[0-9]+)\s*$",
+    ),
+    "release workflow deb libadwaita floor": single_metadata_floor(
+        "release workflow deb libadwaita floor",
+        ".github/workflows/build-packages.yml",
+        r'''^\s*grep -Fq 'libadwaita-1-0 \(>= ([0-9]+\.[0-9]+)\)' <<< "\$configurator_deb_depends"\s*$''',
+    ),
+    "release workflow rpm libadwaita floor": single_metadata_floor(
+        "release workflow rpm libadwaita floor",
+        ".github/workflows/build-packages.yml",
+        r'''^\s*grep -Fxq 'libadwaita >= ([0-9]+\.[0-9]+)' <<< "\$configurator_rpm_requires"\s*$''',
+    ),
+    "AUR updater generated libadwaita floor": single_metadata_floor(
+        "AUR updater generated libadwaita floor",
+        "tools/update-aur-from-manifest.sh",
+        r"^\s*ensure_runtime_dependency 'libadwaita>=([0-9]+\.[0-9]+)' gcc-libs\s*$",
+    ),
+    "AUR updater PKGBUILD validation floor": single_metadata_floor(
+        "AUR updater PKGBUILD validation floor",
+        "tools/update-aur-from-manifest.sh",
+        r'''^\s*&& grep -Eq "[^"\n]*libadwaita>=([0-9]+\.[0-9]+)[^"\n]*" PKGBUILD''',
+    ),
+    "AUR updater .SRCINFO validation floor": single_metadata_floor(
+        "AUR updater .SRCINFO validation floor",
+        "tools/update-aur-from-manifest.sh",
+        r"^\s*&& grep -Fxq .*depends = libadwaita>=([0-9]+\.[0-9]+).*\.SRCINFO",
+    ),
+}
+for label, floor in libadwaita_floors.items():
+    if floor is not None:
+        require_equal(label, floor, supported_libadwaita_floor)
+
+release_package_runner = workflow_job_runner(
+    ".github/workflows/build-packages.yml",
+    "package",
+)
+if release_package_runner is not None:
+    release_runner_floor = release_runner_libadwaita_floors.get(release_package_runner)
+    if release_runner_floor is None:
+        errors.append(
+            "release package runner libadwaita floor: "
+            f"no reviewed contract for {release_package_runner}"
+        )
+    else:
+        require_equal(
+            f"release package runner {release_package_runner} libadwaita floor",
+            supported_libadwaita_floor,
+            release_runner_floor,
+        )
 
 require_equal(
     "Cargo.lock wayscriber",
@@ -230,6 +370,7 @@ if errors:
 
 print(
     f"Version consistency OK: Cargo={root_version}, "
-    f"packaging={expected_packaging_version}, checksum=SKIP"
+    f"packaging={expected_packaging_version}, checksum=SKIP, "
+    f"libadwaita={supported_libadwaita_floor}"
 )
 PY
