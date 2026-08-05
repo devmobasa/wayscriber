@@ -98,6 +98,9 @@ CONFIG_INSTALL_SUDO_LOG="${WORK_DIR}/configurator-install-sudo.log"
 cat > "${CONFIG_INSTALL_FAKE_BIN}/sudo" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "${CONFIG_INSTALL_SUDO_LOG:?}"
+if [[ "${CONFIG_INSTALL_DISCARD_SUDO:-0}" == 1 ]]; then
+    exit 0
+fi
 if [[ "$*" == *"${CONFIG_INSTALL_PRIVILEGED_ROOT:?}"* ]]; then
     exit 0
 fi
@@ -150,6 +153,44 @@ expect_version_consistency_failure() {
     fi
     assert_contains "${output}" "${expected}"
 }
+
+# Trimming trailing separators must not turn the filesystem root into the
+# invocation directory. Discard the deliberately privileged writes after sudo
+# records their normalized destinations.
+: > "${CONFIG_INSTALL_SUDO_LOG}"
+CONFIG_INSTALL_ROOT_CWD="${WORK_DIR}/configurator-root-cwd"
+CONFIG_INSTALL_ROOT_DATA="${WORK_DIR}/configurator-root-data"
+mkdir -p "${CONFIG_INSTALL_ROOT_CWD}"
+(
+    cd "${CONFIG_INSTALL_ROOT_CWD}"
+    PATH="${CONFIG_INSTALL_FAKE_BIN}:${PATH}" \
+        CONFIG_INSTALL_SUDO_LOG="${CONFIG_INSTALL_SUDO_LOG}" \
+        CONFIG_INSTALL_PRIVILEGED_ROOT="${CONFIG_INSTALL_PRIVILEGED_ROOT}" \
+        CONFIG_INSTALL_DISCARD_SUDO=1 \
+        WAYSCRIBER_INSTALL_DIR=/ \
+        WAYSCRIBER_DATA_DIR="${CONFIG_INSTALL_ROOT_DATA}" \
+        bash "${CONFIG_INSTALL_REPO}/tools/install-configurator.sh" >/dev/null
+)
+assert_contains "${CONFIG_INSTALL_SUDO_LOG}" "install -d /"
+CONFIG_INSTALL_ROOT_DESKTOP="${CONFIG_INSTALL_ROOT_DATA}/applications/wayscriber-configurator.desktop"
+assert_contains "${CONFIG_INSTALL_ROOT_DESKTOP}" 'Exec="/wayscriber-configurator"'
+assert_contains "${CONFIG_INSTALL_ROOT_DESKTOP}" 'TryExec=/wayscriber-configurator'
+
+: > "${CONFIG_INSTALL_SUDO_LOG}"
+CONFIG_INSTALL_ROOT_BIN="${WORK_DIR}/configurator-root-bin"
+(
+    cd "${CONFIG_INSTALL_ROOT_CWD}"
+    PATH="${CONFIG_INSTALL_FAKE_BIN}:${PATH}" \
+        CONFIG_INSTALL_SUDO_LOG="${CONFIG_INSTALL_SUDO_LOG}" \
+        CONFIG_INSTALL_PRIVILEGED_ROOT="${CONFIG_INSTALL_PRIVILEGED_ROOT}" \
+        CONFIG_INSTALL_DISCARD_SUDO=1 \
+        WAYSCRIBER_INSTALL_DIR="${CONFIG_INSTALL_ROOT_BIN}" \
+        WAYSCRIBER_DATA_DIR=/ \
+        bash "${CONFIG_INSTALL_REPO}/tools/install-configurator.sh" >/dev/null
+)
+test -x "${CONFIG_INSTALL_ROOT_BIN}/wayscriber-configurator"
+assert_contains "${CONFIG_INSTALL_SUDO_LOG}" "/applications/wayscriber-configurator.desktop"
+test ! -e "${CONFIG_INSTALL_ROOT_CWD}/applications/wayscriber-configurator.desktop"
 
 # Prebuilt deb/rpm packages must declare the supported ABI floors, while the
 # statically embedded layer-shell implementation must not remain a dependency.

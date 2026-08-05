@@ -20,14 +20,24 @@ die() {
     exit 1
 }
 
-INSTALL_DIR="${INSTALL_DIR%/}"
+trim_trailing_slashes() {
+    local path="$1"
+
+    while [ "${path%/}" != "$path" ] && [ -n "${path%/}" ]; do
+        path="${path%/}"
+    done
+    printf '%s' "$path"
+}
+
+INSTALL_DIR="$(trim_trailing_slashes "$INSTALL_DIR")"
 case "$INSTALL_DIR" in
     /*) ;;
     *) INSTALL_DIR="$PWD/$INSTALL_DIR" ;;
 esac
+INSTALL_TARGET="${INSTALL_DIR%/}/$BINARY_NAME"
 
 if [ -n "${WAYSCRIBER_DATA_DIR:-}" ]; then
-    DATA_DIR="${WAYSCRIBER_DATA_DIR%/}"
+    DATA_DIR="$(trim_trailing_slashes "$WAYSCRIBER_DATA_DIR")"
     case "$DATA_DIR" in
         /*) ;;
         *) DATA_DIR="$PWD/$DATA_DIR" ;;
@@ -97,14 +107,14 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 "${BINARY_SUDO[@]}" install -d "$INSTALL_DIR"
-echo "Installing configurator to $INSTALL_DIR/$BINARY_NAME"
-"${BINARY_SUDO[@]}" install -Dm755 "$BIN_PATH" "$INSTALL_DIR/$BINARY_NAME"
+echo "Installing configurator to $INSTALL_TARGET"
+"${BINARY_SUDO[@]}" install -Dm755 "$BIN_PATH" "$INSTALL_TARGET"
 
 DESKTOP_SOURCE="$PROJECT_ROOT/packaging/$DESKTOP_NAME"
 DESKTOP_TEMP="$(mktemp)"
 trap 'rm -f "$DESKTOP_TEMP"' EXIT
-EXEC_PATH="$(desktop_exec_path "$INSTALL_DIR/$BINARY_NAME")"
-TRY_EXEC_PATH="$(desktop_string_path "$INSTALL_DIR/$BINARY_NAME")"
+EXEC_PATH="$(desktop_exec_path "$INSTALL_TARGET")"
+TRY_EXEC_PATH="$(desktop_string_path "$INSTALL_TARGET")"
 while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
         Exec=*) printf 'Exec="%s"\n' "$EXEC_PATH" ;;
@@ -140,4 +150,4 @@ fi
 echo ""
 echo "✅ Configurator installation complete!"
 echo ""
-echo "Run: $INSTALL_DIR/$BINARY_NAME --help"
+echo "Run: $INSTALL_TARGET --help"
