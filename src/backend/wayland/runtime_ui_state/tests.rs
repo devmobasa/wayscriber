@@ -234,6 +234,7 @@ fn pins_rollback(top: bool) -> PreviewRollbackSnapshot {
             InteractionSeedTarget::TopPinned,
             InteractionSeedValue::Bool(top),
         )]),
+        derive_toolbar_visibility_from_pins: true,
     }
 }
 

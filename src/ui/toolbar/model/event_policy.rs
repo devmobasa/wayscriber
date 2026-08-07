@@ -299,6 +299,9 @@ pub(crate) fn popovers_for_event(event: &ToolbarEvent) -> &'static [ToolbarPopov
         | ToolbarEvent::ZoomOut
         | ToolbarEvent::ResetZoom
         | ToolbarEvent::ToggleZoomLock
+        | ToolbarEvent::Undo
+        | ToolbarEvent::Redo
+        | ToolbarEvent::ClearCanvas { .. }
         | ToolbarEvent::UndoAll
         | ToolbarEvent::RedoAll
         | ToolbarEvent::UndoAllDelayed
@@ -662,6 +665,16 @@ mod popover_affinity_tests {
 
         // Hosted controls.
         assert!(popovers_for_event(&ToolbarEvent::ZoomIn).contains(&P::Canvas));
+        for event in [
+            ToolbarEvent::Undo,
+            ToolbarEvent::Redo,
+            ToolbarEvent::ClearCanvas { instant: false },
+        ] {
+            assert!(
+                popovers_for_event(&event).contains(&P::Canvas),
+                "Canvas action {event:?} must keep its owning popover open"
+            );
+        }
         assert!(popovers_for_event(&ToolbarEvent::SessionInfo).contains(&P::Session));
         assert!(popovers_for_event(&ToolbarEvent::ToggleIconMode(true)).contains(&P::Settings));
         assert!(popovers_for_event(&ToolbarEvent::ToggleFill(true)).contains(&P::ShapePicker));
@@ -669,7 +682,6 @@ mod popover_affinity_tests {
         // Foreign controls close it.
         assert!(!popovers_for_event(&ToolbarEvent::ZoomIn).contains(&P::Settings));
         assert!(!popovers_for_event(&ToolbarEvent::SessionInfo).contains(&P::Canvas));
-        assert!(popovers_for_event(&ToolbarEvent::Undo).is_empty());
 
         // The pairs that genuinely belong to two popovers.
         let configurator = popovers_for_event(&ToolbarEvent::OpenConfigurator);

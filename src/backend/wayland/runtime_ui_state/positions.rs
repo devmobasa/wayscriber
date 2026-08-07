@@ -56,7 +56,10 @@ pub(super) fn position_rollback(
             );
         }
     }
-    PreviewRollbackSnapshot { values }
+    PreviewRollbackSnapshot {
+        values,
+        derive_toolbar_visibility_from_pins: false,
+    }
 }
 
 /// The committed values for a finished drag, or `None` when any guarded offset

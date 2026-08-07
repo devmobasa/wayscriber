@@ -118,6 +118,8 @@ impl ToolbarRuntimeState {
     ) -> Option<PreparedToolbarMutation> {
         let rollback = PreviewRollbackSnapshot {
             values: rollback_values.values().clone(),
+            derive_toolbar_visibility_from_pins: target
+                == ToolbarRuntimeUiPersistenceTarget::ToolbarVisibility,
         };
         let scope = RuntimeUiMutationScope::batch(rollback_values.targets());
         match self.controller.begin_runtime_preview(scope, rollback) {
@@ -168,6 +170,7 @@ impl ToolbarRuntimeState {
         };
         let rollback = PreviewRollbackSnapshot {
             values: values.values().clone(),
+            derive_toolbar_visibility_from_pins: false,
         };
         let scope = RuntimeUiMutationScope::one(InteractionSeedTarget::ItemOrder(group));
         match self.controller.begin_runtime_preview(scope, rollback) {

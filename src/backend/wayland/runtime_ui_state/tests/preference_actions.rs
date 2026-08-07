@@ -262,7 +262,10 @@ fn a_rollback_restores_every_durable_chrome_preference() {
     apply_toolbar_runtime_rollback(
         &mut input,
         &mut positions,
-        &PreviewRollbackSnapshot { values },
+        &PreviewRollbackSnapshot {
+            values,
+            derive_toolbar_visibility_from_pins: false,
+        },
     );
 
     let restarted = input_from_config(&config);

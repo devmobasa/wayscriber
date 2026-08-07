@@ -110,6 +110,33 @@ fn a_rolled_back_show_toggle_re_hides_the_toolbar() {
     );
 }
 
+/// The pin button changes restart policy, not current visibility. Rolling its
+/// preview back must restore only the pin and leave the visible screen alone.
+#[test]
+fn a_rolled_back_pin_button_keeps_a_visible_unpinned_toolbar_visible() {
+    let config = Config::default();
+    let mut input = input_from_config(&config);
+    let mut positions = config_positions(&config);
+    assert!(input.toolbar_visible && input.toolbar_top_visible);
+    // Post-click state: the button pinned an already-visible toolbar.
+    input.toolbar_top_pinned = true;
+    let rollback = PreviewRollbackSnapshot {
+        values: BTreeMap::from([(
+            InteractionSeedTarget::TopPinned,
+            InteractionSeedValue::Bool(false),
+        )]),
+        derive_toolbar_visibility_from_pins: false,
+    };
+
+    apply_toolbar_runtime_rollback(&mut input, &mut positions, &rollback);
+
+    assert!(!input.toolbar_top_pinned);
+    assert!(
+        input.toolbar_visible && input.toolbar_top_visible,
+        "pin rollback must not derive live visibility from the restored pin"
+    );
+}
+
 /// End-to-end through the store's forced-rollback path: a visibility toggle
 /// abandoned behind a failed reset barrier resolves to a drained rollback,
 /// and applying it restores the pre-toggle screen, not just the pins.

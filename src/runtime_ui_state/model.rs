@@ -286,4 +286,9 @@ impl RuntimeUiMutationPermit {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct PreviewRollbackSnapshot {
     pub(crate) values: BTreeMap<InteractionSeedTarget, InteractionSeedValue>,
+    /// Keyboard visibility toggles persist through the pin target but also
+    /// change the current screen. Pin-button previews use the same value
+    /// target without changing live visibility, so the rollback must carry
+    /// which behavior created it instead of inferring that from `TopPinned`.
+    pub(crate) derive_toolbar_visibility_from_pins: bool,
 }

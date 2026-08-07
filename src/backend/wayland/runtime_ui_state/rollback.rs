@@ -80,19 +80,11 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
             }
         }
     }
-    // The visibility toggle persists the top pin; the pin button persists the
-    // same key but is deliberately decoupled from live visibility, so a
-    // rolled-back toggle must re-derive the live visibility flag — otherwise
-    // the screen disagrees with the restored pin (and with the next start).
-    // The toggle arm skips no-op pin writes, so every snapshot that lands here
-    // crossed a genuine pin transition and the derived flag is exactly the
-    // startup (pin-derived) form of the pre-toggle screen. The display mode is
-    // deliberately not restored: the persisted type has no `Hidden`, and none
-    // is needed — after a hide-rollback the still-`Hidden` live mode
-    // reproduces the pre-toggle screen, after a show-rollback the strip is
-    // hidden either way, and any future show unfolds `Hidden` to `Full`
-    // regardless.
-    if rollback.values.contains_key(&Target::TopPinned) {
+    // The keyboard visibility toggle persists through the top pin and changes
+    // the current screen; the pin button persists the same key but deliberately
+    // leaves live visibility alone. The preview records which path created the
+    // rollback so this cannot be guessed incorrectly from `TopPinned` alone.
+    if rollback.derive_toolbar_visibility_from_pins {
         input.derive_toolbar_visibility_from_pins();
     }
     input.needs_redraw = true;

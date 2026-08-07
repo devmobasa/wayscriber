@@ -133,6 +133,7 @@ impl UnavailablePersistencePreviews {
         };
         self.item_drag = Some(PreviewRollbackSnapshot {
             values: values.values().clone(),
+            derive_toolbar_visibility_from_pins: false,
         });
         true
     }
