@@ -162,10 +162,7 @@ fn a_seed_refresh_does_not_prune_persisted_preference_overrides() {
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
 
     // Whatever else the run does, the seed baseline stays authored.
-    let mut positions = ToolbarPositionSnapshot {
-        top: (0.0, 0.0),
-        side: (0.0, 0.0),
-    };
+    let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     runtime.refresh_config_seeds(&config, &mut input, &mut positions);
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
     runtime.shutdown_blocking();

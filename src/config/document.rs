@@ -29,6 +29,10 @@ use merge::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigDiagnosticKind {
     UnknownSetting,
+    /// A setting this build no longer models, authored by an older build that
+    /// did. Loading ignores the value and leaves it in the file: nothing the
+    /// user wrote is deleted on their behalf.
+    RetiredSetting,
     /// A shortcut two actions both claim. Loading drops it from one of them
     /// for the session; the file is left exactly as authored.
     KeybindingConflict,
@@ -64,6 +68,11 @@ impl fmt::Display for ConfigDiagnostic {
             ConfigDiagnosticKind::UnknownSetting => {
                 write!(formatter, "unrecognized setting `{}`", self.path)
             }
+            ConfigDiagnosticKind::RetiredSetting => write!(
+                formatter,
+                "retired setting `{}` is preserved but no longer used",
+                self.path
+            ),
             ConfigDiagnosticKind::KeybindingConflict => match &self.detail {
                 Some(detail) => write!(formatter, "{detail}"),
                 None => write!(formatter, "conflicting keybinding in `{}`", self.path),
@@ -806,7 +815,11 @@ fn parse_typed_config(input: &str) -> Result<ParsedConfig> {
     let mut diagnostics: Vec<ConfigDiagnostic> = ignored
         .into_iter()
         .map(|path| ConfigDiagnostic {
-            kind: ConfigDiagnosticKind::UnknownSetting,
+            kind: if is_retired_path(&path) {
+                ConfigDiagnosticKind::RetiredSetting
+            } else {
+                ConfigDiagnosticKind::UnknownSetting
+            },
             path,
             detail: None,
         })
@@ -888,6 +901,36 @@ fn collect_flattened_unknown_paths(
         }
     }
     Ok(())
+}
+
+/// Settings a previous build modeled and this one does not, matched by exact
+/// path so a typo next to a retired key still reads as a typo.
+const RETIRED_SETTING_PATHS: &[&str] = &[
+    "ui.toolbar.collapsed_sections",
+    "ui.toolbar.items.order.actions",
+    "ui.toolbar.items.order.boards",
+    "ui.toolbar.items.order.pages",
+    "ui.toolbar.items.order.presets",
+    "ui.toolbar.items.order.sessions",
+    "ui.toolbar.items.order.side_sections",
+    "ui.toolbar.items.order.tool_options",
+    "ui.toolbar.mode_overrides.advanced.show_settings_section",
+    // `full` is the historical alias for the `regular` mode table; a file may
+    // spell either one.
+    "ui.toolbar.mode_overrides.full.show_settings_section",
+    "ui.toolbar.mode_overrides.regular.show_settings_section",
+    "ui.toolbar.mode_overrides.simple.show_settings_section",
+    "ui.toolbar.show_settings_section",
+    "ui.toolbar.side_active_pane",
+    "ui.toolbar.side_layout",
+    "ui.toolbar.side_minimized",
+    "ui.toolbar.side_offset",
+    "ui.toolbar.side_offset_x",
+    "ui.toolbar.side_pinned",
+];
+
+fn is_retired_path(path: &str) -> bool {
+    RETIRED_SETTING_PATHS.contains(&path)
 }
 
 fn is_known_feature_gated_path(_path: &str) -> bool {

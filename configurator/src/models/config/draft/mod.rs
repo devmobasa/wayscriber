@@ -1,6 +1,7 @@
 mod from_config;
 
 use super::super::color::{ColorInput, ColorQuadInput};
+use super::super::fields::ZoomChipDisplayOption;
 use super::super::fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
     InputHudPositionOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
@@ -11,7 +12,6 @@ use super::super::fields::{
 };
 #[cfg(feature = "tablet-input")]
 use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
-use super::super::fields::{ToolbarSideLayoutOption, ZoomChipDisplayOption};
 use super::super::keybindings::KeybindingsDraft;
 use super::boards::BoardsDraft;
 use super::presets::PresetsDraft;
@@ -99,12 +99,10 @@ pub struct ConfigDraft {
     pub ui_xdg_keep_on_focus_loss: bool,
     pub ui_command_palette_toast_duration_ms: String,
     pub ui_toolbar_top_pinned: bool,
-    pub ui_toolbar_side_pinned: bool,
     pub ui_toolbar_use_icons: bool,
     pub ui_toolbar_show_more_colors: bool,
     pub ui_toolbar_show_preset_toasts: bool,
     pub ui_toolbar_layout_mode: ToolbarLayoutModeOption,
-    pub ui_toolbar_side_layout: ToolbarSideLayoutOption,
     pub ui_toolbar_zoom_chip_display: ZoomChipDisplayOption,
     pub ui_toolbar_show_zoom_chip: bool,
     pub ui_toolbar_rebind_modifier: ToolbarRebindModifierOption,
@@ -117,15 +115,12 @@ pub struct ConfigDraft {
     pub ui_toolbar_show_boards_section: bool,
     pub ui_toolbar_show_step_section: bool,
     pub ui_toolbar_show_text_controls: bool,
-    pub ui_toolbar_show_settings_section: bool,
     pub ui_toolbar_show_delay_sliders: bool,
     pub ui_toolbar_show_marker_opacity_section: bool,
     pub ui_toolbar_show_tool_preview: bool,
     pub ui_toolbar_force_inline: bool,
     pub ui_toolbar_top_offset: String,
     pub ui_toolbar_top_offset_y: String,
-    pub ui_toolbar_side_offset: String,
-    pub ui_toolbar_side_offset_x: String,
     pub ui_toolbar_mode_overrides: ToolbarModeOverridesDraft,
     pub ui_status_position: StatusPositionOption,
     pub status_font_size: String,

@@ -117,7 +117,6 @@ impl InputState {
             self.show_tool_preview = restore.show_tool_preview;
             self.toolbar_visible = restore.toolbar_visible;
             self.toolbar_top_visible = restore.toolbar_top_visible;
-            self.toolbar_side_visible = restore.toolbar_side_visible;
             self.set_tool_override(restore.tool_override);
             if self.click_highlight_enabled() != restore.click_highlight_enabled {
                 self.toggle_click_highlight();
@@ -156,7 +155,6 @@ impl InputState {
             show_tool_preview: self.show_tool_preview,
             toolbar_visible: self.toolbar_visible,
             toolbar_top_visible: self.toolbar_top_visible,
-            toolbar_side_visible: self.toolbar_side_visible,
             click_highlight_enabled: self.click_highlight_enabled(),
             tool_override: self.tool_override(),
         });
@@ -165,7 +163,6 @@ impl InputState {
         self.show_tool_preview = false;
         self.toolbar_visible = false;
         self.toolbar_top_visible = false;
-        self.toolbar_side_visible = false;
         self.set_tool_override(Some(Tool::Pen));
         if self.click_highlight_forced_in_light_mode() && !self.click_highlight_enabled() {
             self.toggle_click_highlight();

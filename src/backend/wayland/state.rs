@@ -85,8 +85,8 @@ use super::{
     toolbar::{
         ToolbarSurfaceManager,
         hit::{drag_intent_for_hit, intent_for_hit, quick_color_slot_for_hit},
-        layout::{side_size, top_size},
-        render::{render_side_palette, render_top_strip},
+        layout::top_size,
+        render::render_top_strip,
     },
     toolbar_intent::intent_to_event,
     zoom::ZoomState,
@@ -130,10 +130,9 @@ pub(in crate::backend::wayland) use self::perf::{
     PerfRenderProfileKind, PerfRenderSkipReason, damage_covers_logical_surface,
 };
 pub(super) use helpers::{
-    color_log, damage_summary, debug_damage_logging_enabled, debug_toolbar_color_logging_enabled,
-    debug_toolbar_drag_logging_enabled, drag_log, force_inline_toolbars_requested,
-    scale_damage_regions, surface_id, toolbar_drag_preview_enabled, toolbar_drag_throttle_interval,
-    toolbar_pointer_lock_enabled,
+    damage_summary, debug_damage_logging_enabled, debug_toolbar_drag_logging_enabled, drag_log,
+    force_inline_toolbars_requested, scale_damage_regions, surface_id,
+    toolbar_drag_preview_enabled, toolbar_drag_throttle_interval, toolbar_pointer_lock_enabled,
 };
 
 pub(in crate::backend::wayland) struct WaylandGlobals {
@@ -484,14 +483,9 @@ impl WaylandState {
     const TOP_MARGIN_RIGHT: f64 = 12.0;
     const TOP_BASE_MARGIN_TOP: f64 = 12.0;
     const TOP_MARGIN_BOTTOM: f64 = 0.0;
-    const SIDE_BASE_MARGIN_TOP: f64 = 24.0;
-    const SIDE_MARGIN_BOTTOM: f64 = 24.0;
-    const SIDE_BASE_MARGIN_LEFT: f64 = 24.0;
-    const SIDE_MARGIN_RIGHT: f64 = 0.0;
     const INLINE_TOP_Y: f64 = Self::TOP_BASE_MARGIN_TOP;
-    const INLINE_SIDE_X: f64 = 24.0;
+    const INLINE_TOP_X: f64 = 24.0;
     const TOOLBAR_CONFIGURE_FAIL_THRESHOLD: u32 = 180;
-    const INLINE_TOP_PUSH: f64 = 16.0;
     const ZOOM_STEP_KEY: f64 = 1.2;
     const ZOOM_STEP_SCROLL: f64 = 1.1;
     pub(super) const ZOOM_PAN_STEP: f64 = 32.0;

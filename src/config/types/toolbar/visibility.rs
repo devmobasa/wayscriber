@@ -2,7 +2,7 @@
 //!
 //! Effective visibility = explicit user overrides (`items.shown` /
 //! `items.hidden`) layered over the layout-mode baseline
-//! (`section_defaults()` adjusted by `mode_overrides`). The nine legacy
+//! (`section_defaults()` adjusted by `mode_overrides`). The eight legacy
 //! `show_*` booleans become derived mirrors of this resolver: they are
 //! still read everywhere and still written to config so configs written by
 //! this version keep working in older ones, but the overrides are the
@@ -89,7 +89,7 @@ pub fn section_flag_for_item(id: ToolbarItemId) -> Option<ToolbarSectionFlag> {
         .find(|flag| flag.item_id() == id)
 }
 
-/// Effective values for the nine legacy section booleans.
+/// Effective values for the eight legacy section booleans.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ToolbarSectionVisibility {
     pub show_actions_section: bool,
@@ -100,7 +100,6 @@ pub struct ToolbarSectionVisibility {
     pub show_presets: bool,
     pub show_step_section: bool,
     pub show_text_controls: bool,
-    pub show_settings_section: bool,
 }
 
 impl ToolbarSectionVisibility {
@@ -174,9 +173,6 @@ pub fn resolve_section_visibility(
         show_presets: value(ToolbarSectionFlag::Presets),
         show_step_section: value(ToolbarSectionFlag::StepSection),
         show_text_controls: value(ToolbarSectionFlag::TextControls),
-        // Settings is navigation and the only route back to customization.
-        // The serialized legacy key remains readable, but no longer hides it.
-        show_settings_section: true,
     }
 }
 
@@ -222,6 +218,23 @@ pub fn fold_legacy_section_flags(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_live_section_flag_uses_its_retained_item_id() {
+        assert_eq!(
+            ToolbarSectionFlag::ALL.map(|flag| flag.item_id()),
+            [
+                ids::SIDE_GROUP_ACTIONS,
+                ids::SIDE_GROUP_ACTIONS_ADVANCED,
+                ids::SIDE_GROUP_ZOOM_ACTIONS,
+                ids::SIDE_GROUP_PAGES,
+                ids::SIDE_GROUP_BOARDS,
+                ids::SIDE_GROUP_PRESETS,
+                ids::SIDE_GROUP_STEP_UNDO,
+                ids::SIDE_GROUP_TEXT_CONTROLS,
+            ]
+        );
+    }
 
     #[test]
     fn baseline_follows_mode_defaults_and_overrides() {
@@ -273,7 +286,6 @@ mod tests {
             show_presets: true,
             show_step_section: false,
             show_text_controls: true,
-            show_settings_section: true,
         };
 
         let changed =
@@ -322,18 +334,5 @@ mod tests {
             resolved.unknown_shown,
             vec!["future.mystery-id".to_string()]
         );
-    }
-
-    #[test]
-    fn settings_visibility_key_is_compatibility_only() {
-        let mut items = ToolbarItemsConfig::default();
-        items.hidden.push(ids::SIDE_GROUP_SETTINGS.to_string());
-
-        let visibility = resolve_section_visibility(
-            ToolbarLayoutMode::Simple,
-            &ToolbarModeOverrides::default(),
-            &items.resolved(),
-        );
-        assert!(visibility.show_settings_section);
     }
 }

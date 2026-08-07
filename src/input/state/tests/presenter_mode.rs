@@ -127,7 +127,6 @@ fn presenter_mode_restores_status_bar_toolbars_and_tool_override_on_exit() {
     state.show_status_bar = true;
     state.toolbar_visible = true;
     state.toolbar_top_visible = true;
-    state.toolbar_side_visible = true;
     state.set_tool_override(Some(Tool::Arrow));
 
     state.toggle_presenter_mode();
@@ -140,7 +139,6 @@ fn presenter_mode_restores_status_bar_toolbars_and_tool_override_on_exit() {
     assert!(state.show_status_bar);
     assert!(state.toolbar_visible);
     assert!(state.toolbar_top_visible);
-    assert!(state.toolbar_side_visible);
     assert_eq!(state.tool_override(), Some(Tool::Arrow));
 }
 
@@ -149,14 +147,10 @@ fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
     use crate::config::{PresenterToolbarMode, TopDisplayMode};
 
     let mut state = create_test_input_state();
-    // Side-palette assertions below need the deprecated Panel escape hatch
-    // (the struct default is Pill, which retires the side surface).
-    state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Panel);
     state.presenter_mode_config.hide_toolbars = true;
     state.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Micro;
     state.toolbar_visible = true;
     state.toolbar_top_visible = true;
-    state.toolbar_side_visible = true;
     state.toolbar_top_minimized = true;
 
     state.toggle_presenter_mode();
@@ -170,8 +164,6 @@ fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
         !state.toolbar_top_minimized,
         "the chip replaces the restore tab"
     );
-    assert!(!state.toolbar_side_visible(), "side toolbars still hide");
-
     state.toggle_presenter_mode();
     assert!(!state.presenter_mode);
     assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Full);
@@ -179,7 +171,6 @@ fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
         state.toolbar_top_minimized,
         "minimize state restored on exit"
     );
-    assert!(state.toolbar_side_visible());
 }
 
 #[test]
@@ -192,7 +183,6 @@ fn presenter_hidden_mapping_keeps_todays_behavior() {
 
     state.toggle_presenter_mode();
     assert!(!state.toolbar_top_visible());
-    assert!(!state.toolbar_side_visible());
     assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Full);
 }
 

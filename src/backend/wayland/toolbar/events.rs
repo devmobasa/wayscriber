@@ -13,26 +13,11 @@ pub enum HitKind {
         max: f64,
     },
     DragSetFontSize,
-    /// 2-D saturation/value area; the fixed hue rides along so the drag
-    /// handler can rebuild the full color from the pointer position and the
-    /// hit rect alone (payload rects are banned — the rect IS the region).
-    PickSatVal {
-        hue: f64,
-    },
-    /// Hue bar; the fixed saturation/value ride along like PickSatVal's hue.
-    PickHue {
-        sat: f64,
-        val: f64,
-    },
     DragUndoDelay,
     DragRedoDelay,
     DragCustomUndoDelay,
     DragCustomRedoDelay,
     DragMoveTop,
-    DragMoveSide,
-    DragScrollSide {
-        max_scroll: f64,
-    },
     /// Internal scrollbar of the top strip's Canvas/Session/Settings popover.
     DragScrollTopPopover {
         max_scroll: f64,
@@ -53,8 +38,6 @@ pub enum ToolbarCursorHint {
     Pointer,
     /// Grab cursor for sliders and drag handles.
     Grab,
-    /// Crosshair for color pickers.
-    Crosshair,
 }
 
 impl HitKind {
@@ -70,11 +53,8 @@ impl HitKind {
             | HitKind::DragCustomUndoDelay
             | HitKind::DragCustomRedoDelay
             | HitKind::DragMoveTop
-            | HitKind::DragMoveSide
-            | HitKind::DragScrollSide { .. }
             | HitKind::DragScrollTopPopover { .. }
             | HitKind::DragToolbarItem { .. } => ToolbarCursorHint::Grab,
-            HitKind::PickSatVal { .. } | HitKind::PickHue { .. } => ToolbarCursorHint::Crosshair,
         }
     }
 }

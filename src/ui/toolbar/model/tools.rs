@@ -7,7 +7,7 @@
 
 use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, toolbar_item_ids as ids};
 use crate::input::Tool;
-use crate::ui::toolbar::{ToolbarSideSection, ToolbarSnapshot};
+use crate::ui::toolbar::ToolbarSnapshot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SemanticToolIcon {
@@ -84,40 +84,6 @@ const POLYGON_TOOLS: [Tool; 5] = [
     Tool::RegularPolygon,
     Tool::FreeformPolygon,
 ];
-
-/// Which pane a side section belongs to. The Draw pane holds per-tool
-/// drawing properties; Canvas holds canvas management; Session and Settings
-/// are their own panes.
-pub(crate) fn pane_for_section(
-    section: crate::ui::toolbar::ToolbarSideSection,
-) -> crate::ui::toolbar::SidePane {
-    use crate::ui::toolbar::{SidePane, ToolbarSideSection as S};
-    match section {
-        S::Colors
-        | S::Presets
-        | S::Thickness
-        | S::EraserMode
-        | S::PolygonSides
-        | S::ArrowLabels
-        | S::StepMarkers
-        | S::MarkerOpacity
-        | S::TextSize
-        | S::Font => SidePane::Draw,
-        S::Actions | S::Boards | S::Pages | S::StepUndo => SidePane::Canvas,
-        S::Session => SidePane::Session,
-        S::Settings => SidePane::Settings,
-    }
-}
-
-/// User-ordered side sections filtered to the active pane.
-pub(crate) fn ordered_pane_sections(
-    snapshot: &ToolbarSnapshot,
-) -> Vec<crate::ui::toolbar::ToolbarSideSection> {
-    ordered_side_sections(snapshot)
-        .into_iter()
-        .filter(|section| pane_for_section(*section) == snapshot.active_side_pane)
-        .collect()
-}
 
 pub(crate) fn top_tool_buttons(simple: bool) -> &'static [Tool] {
     if simple {
@@ -452,51 +418,6 @@ pub(crate) fn is_fill_tool(tool: Tool) -> bool {
             | Tool::RegularPolygon
             | Tool::FreeformPolygon
     )
-}
-
-pub(crate) fn ordered_side_sections(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSideSection> {
-    snapshot
-        .resolved_toolbar_items
-        .order
-        .ordered_ids(ToolbarItemOrderGroup::SideSections)
-        .iter()
-        .filter_map(|id| side_section_for_toolbar_item_id(*id))
-        .collect()
-}
-
-fn side_section_for_toolbar_item_id(id: ToolbarItemId) -> Option<ToolbarSideSection> {
-    [
-        (ids::SIDE_GROUP_COLORS, ToolbarSideSection::Colors),
-        (ids::SIDE_GROUP_PRESETS, ToolbarSideSection::Presets),
-        (ids::SIDE_GROUP_THICKNESS, ToolbarSideSection::Thickness),
-        (ids::SIDE_GROUP_ERASER_MODE, ToolbarSideSection::EraserMode),
-        (
-            ids::SIDE_GROUP_POLYGON_SIDES,
-            ToolbarSideSection::PolygonSides,
-        ),
-        (
-            ids::SIDE_GROUP_ARROW_LABELS,
-            ToolbarSideSection::ArrowLabels,
-        ),
-        (
-            ids::SIDE_GROUP_STEP_MARKERS,
-            ToolbarSideSection::StepMarkers,
-        ),
-        (
-            ids::SIDE_GROUP_MARKER_OPACITY,
-            ToolbarSideSection::MarkerOpacity,
-        ),
-        (ids::SIDE_GROUP_TEXT_SIZE, ToolbarSideSection::TextSize),
-        (ids::SIDE_GROUP_FONT, ToolbarSideSection::Font),
-        (ids::SIDE_GROUP_ACTIONS, ToolbarSideSection::Actions),
-        (ids::SIDE_GROUP_BOARDS, ToolbarSideSection::Boards),
-        (ids::SIDE_GROUP_PAGES, ToolbarSideSection::Pages),
-        (ids::SIDE_GROUP_STEP_UNDO, ToolbarSideSection::StepUndo),
-        (ids::SIDE_GROUP_SESSION, ToolbarSideSection::Session),
-        (ids::SIDE_GROUP_SETTINGS, ToolbarSideSection::Settings),
-    ]
-    .into_iter()
-    .find_map(|(candidate, section)| (candidate == id).then_some(section))
 }
 
 pub(crate) fn current_shape_tool(active_tool: Tool, tool_override: Option<Tool>) -> Option<Tool> {

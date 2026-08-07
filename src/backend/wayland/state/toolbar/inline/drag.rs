@@ -12,17 +12,12 @@ impl WaylandState {
         use crate::backend::wayland::toolbar_intent::ToolbarIntent;
         use crate::ui::toolbar::ToolbarEvent;
 
-        match self.data.toolbar_move_drag {
-            Some(MoveDrag {
-                kind: MoveDragKind::Top,
-                ..
-            }) => Some(ToolbarIntent(ToolbarEvent::MoveTopToolbar { x, y })),
-            Some(MoveDrag {
-                kind: MoveDragKind::Side,
-                ..
-            }) => Some(ToolbarIntent(ToolbarEvent::MoveSideToolbar { x, y })),
-            None => None,
-        }
+        self.data.toolbar_move_drag.as_ref().map(
+            |MoveDrag {
+                 kind: MoveDragKind::Top,
+                 ..
+             }| ToolbarIntent(ToolbarEvent::MoveTopToolbar { x, y }),
+        )
     }
 
     /// Returns true if we're currently in a toolbar move drag operation.

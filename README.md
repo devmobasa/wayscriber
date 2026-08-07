@@ -963,11 +963,16 @@ quitting Wayscriber never changes the file on its own. An incidental preference 
 the current run and offers a route to the configurator screen that owns its default.
 
 Toolbar pins (updated by the pin buttons and by the toolbar show/hide keybinding, so the next
-start matches what was on screen), dragged positions, the top strip's display form,
-minimized/pane/collapsed state, individual toolbar item visibility/order, and board pins changed
-in the overlay are direct interaction state and are saved separately in the generated
+start matches what was on screen), dragged top-strip positions, the top strip's display form and
+minimized state, individual toolbar item visibility/order, and board pins changed in the overlay
+are direct interaction state and are saved separately in the generated
 `$XDG_DATA_HOME/wayscriber/runtime-ui.toml` file. Inspect, recover, or reset those runtime
-preferences from the overlay Settings panel; see [Configuration Guide](docs/CONFIG.md#configured-defaults-and-runtime-ui-preferences).
+preferences from the overlay Settings popover; see [Configuration Guide](docs/CONFIG.md#configured-defaults-and-runtime-ui-preferences).
+
+The unified top toolbar is the only layout. Older panel keys such as `side_layout` remain
+readable and are preserved on save, but they no longer affect the running overlay; the
+configurator reports them as retired settings you can remove. Historically named `side.*`
+item IDs still customize top-toolbar controls and must not be renamed.
 
 ### Configurator (GUI)
 
@@ -1081,7 +1086,7 @@ See [Session manager examples](examples/session-manager.md) for complete CLI, ov
 
 - Config values seed startup defaults. When `restore_tool_state` is enabled (default), the last-used tool settings saved in the session (including arrow head placement) override those config defaults on startup. Run `wayscriber --clear-tool-state` to remove only that saved tool layer so config defaults apply next startup while saved boards/history remain. In a running overlay, use Command Palette → Reset Tool Defaults to clear the saved layer and immediately apply config defaults to the active tools.
 - `--session-file` uses exactly the selected file, implies persistence for that overlay run, rejects directories/symlinks/special files, and does not create missing parent directories. A running daemon can launch a hidden overlay with a named target; if the overlay is already visible, hide it before switching to a different named session.
-- The overlay Session panel lives in the side toolbar's Settings drawer. It can open an existing named session, save the current overlay as another named session, show session info, clear the active session, reopen recent named sessions, and jump to the configurator. The Open/Save As dialogs use `zenity` or `kdialog`; Save As appends `.wayscriber-session` when no extension is supplied and asks before replacing existing session artifacts.
+- The overlay Session controls live in the top toolbar's Session popover (overflow menu → Session...). They can open an existing named session, save the current overlay as another named session, show session info, clear the active session, reopen recent named sessions, and jump to the configurator. The Open/Save As dialogs use `zenity` or `kdialog`; Save As appends `.wayscriber-session` when no extension is supplied and asks before replacing existing session artifacts.
 - The configurator Session tab manages recent named sessions recorded when named-session targets are opened or saved from the CLI, daemon, or overlay. It can rename catalog labels, reveal files, and forget metadata without touching files. Clear Tool State removes only the saved tool layer; Clear Saved Data removes session files. Duplicate, Move, Clear Tool State, and Clear are disabled while an overlay, manually started daemon, or background service is active.
 
 </details>

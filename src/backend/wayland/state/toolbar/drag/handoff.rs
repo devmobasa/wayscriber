@@ -6,24 +6,18 @@ fn reset_gtk_drag_lifecycle(
     handoff_at: &mut Option<Instant>,
     frozen_top_base_x: &mut Option<f64>,
     top_rebase: &mut Option<(f64, f64)>,
-    side_rebase: &mut Option<(f64, f64)>,
     top_blocked: &mut bool,
-    side_blocked: &mut bool,
 ) -> bool {
     let had_state = preview.is_some()
         || handoff_at.is_some()
         || frozen_top_base_x.is_some()
         || top_rebase.is_some()
-        || side_rebase.is_some()
-        || *top_blocked
-        || *side_blocked;
+        || *top_blocked;
     *preview = None;
     *handoff_at = None;
     *frozen_top_base_x = None;
     *top_rebase = None;
-    *side_rebase = None;
     *top_blocked = false;
-    *side_blocked = false;
     had_state
 }
 
@@ -81,8 +75,7 @@ impl WaylandState {
         &mut self,
         kind: crate::toolbar_gtk::GtkToolbarKind,
     ) {
-        let snapshot = self.toolbar_snapshot();
-        let frozen_top_base_x = self.inline_top_base_x(&snapshot);
+        let frozen_top_base_x = self.inline_top_base_x();
         drag_log(|| {
             format!(
                 "begin GTK {:?} drag preview (park transparent input surface, freeze top base at {frozen_top_base_x:.3})",
@@ -115,9 +108,7 @@ impl WaylandState {
             &mut self.data.toolbar_drag_handoff_at,
             &mut self.data.drag_top_base_x,
             &mut self.data.gtk_top_drag_rebase,
-            &mut self.data.gtk_side_drag_rebase,
             &mut self.data.gtk_top_drag_blocked,
-            &mut self.data.gtk_side_drag_blocked,
         );
         if had_state {
             drag_log(|| "cancel GTK drag lifecycle (restore built-in toolbar rendering)");
@@ -169,25 +160,19 @@ mod tests {
         let mut handoff_at = Some(Instant::now());
         let mut frozen_top_base_x = Some(42.0);
         let mut top_rebase = Some((1.0, 2.0));
-        let mut side_rebase = Some((3.0, 4.0));
         let mut top_blocked = true;
-        let mut side_blocked = true;
 
         assert!(reset_gtk_drag_lifecycle(
             &mut preview,
             &mut handoff_at,
             &mut frozen_top_base_x,
             &mut top_rebase,
-            &mut side_rebase,
             &mut top_blocked,
-            &mut side_blocked,
         ));
         assert_eq!(preview, None);
         assert_eq!(handoff_at, None);
         assert_eq!(frozen_top_base_x, None);
         assert_eq!(top_rebase, None);
-        assert_eq!(side_rebase, None);
         assert!(!top_blocked);
-        assert!(!side_blocked);
     }
 }

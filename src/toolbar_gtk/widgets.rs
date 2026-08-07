@@ -14,7 +14,7 @@ use crate::draw::Color;
 use crate::ui::theme::{ACCENT_RGB, Rgba, rgba, set_color};
 use crate::ui::toolbar::ToolbarEvent;
 
-pub(super) use crate::ui::theme::toolbar::{COLOR_SWATCH_HAIRLINE, COLOR_SWATCH_HAIRLINE_DARK};
+pub(super) use crate::ui::theme::toolbar::COLOR_SWATCH_HAIRLINE;
 /// Filled (dragged) portion of the slider track: the accent at reduced
 /// alpha so it stays quieter than the knob (same tint as
 /// COLOR_SEGMENT_ACTIVE).
@@ -193,75 +193,6 @@ pub(super) fn sized_button(width: f64, height: f64) -> gtk4::Button {
     button.set_focusable(false);
     button.connect_clicked(release_window_keyboard_focus);
     button
-}
-
-/// Request layer-shell keyboard focus only while an editable field owns GTK
-/// focus, then return it to the canvas when editing finishes.
-pub(super) fn keyboard_on_demand_for_entry(entry: &gtk4::Entry) {
-    entry.connect_has_focus_notify(|entry| {
-        if entry.has_focus() {
-            set_entry_keyboard_mode(entry, true);
-            // Pointer focus positions the caret after focus is assigned. Wait
-            // until that click finishes so the field starts as one atomic
-            // value that typing or copying can replace/read immediately.
-            let weak = entry.downgrade();
-            gtk4::glib::idle_add_local_once(move || {
-                if let Some(entry) = weak.upgrade()
-                    && entry.has_focus()
-                {
-                    entry.select_region(0, -1);
-                }
-            });
-        } else {
-            release_window_keyboard_focus(entry);
-        }
-    });
-    entry.connect_activate(|entry| {
-        release_entry_keyboard_focus(entry);
-    });
-
-    let key = gtk4::EventControllerKey::new();
-    key.connect_key_pressed(|controller, keyval, _, _| {
-        if keyval == gtk4::gdk::Key::Escape {
-            if let Some(entry) = controller.widget().and_downcast::<gtk4::Entry>() {
-                release_entry_keyboard_focus(&entry);
-            }
-            return gtk4::glib::Propagation::Stop;
-        }
-        gtk4::glib::Propagation::Proceed
-    });
-    entry.add_controller(key);
-
-    // GtkText normally opens its context menu with Copy disabled when the
-    // caret has no selection. A hex color is one atomic value, so make an
-    // unselected secondary click target the whole token while preserving any
-    // deliberate partial selection the user already made.
-    let context_click = gtk4::GestureClick::new();
-    context_click.set_button(gtk4::gdk::BUTTON_SECONDARY);
-    context_click.set_propagation_phase(gtk4::PropagationPhase::Capture);
-    context_click.connect_pressed(|gesture, _, _, _| {
-        let Some(entry) = gesture.widget().and_downcast::<gtk4::Entry>() else {
-            return;
-        };
-        if entry.selection_bounds().is_none() {
-            entry.select_region(0, -1);
-        }
-    });
-    entry.add_controller(context_click);
-}
-
-fn release_entry_keyboard_focus(entry: &gtk4::Entry) {
-    release_window_keyboard_focus(entry);
-}
-
-fn set_entry_keyboard_mode(entry: &gtk4::Entry, editing: bool) {
-    if let Some(window) = entry.root().and_downcast::<gtk4::Window>() {
-        window.set_keyboard_mode(if editing {
-            KeyboardMode::OnDemand
-        } else {
-            KeyboardMode::None
-        });
-    }
 }
 
 fn release_window_keyboard_focus(widget: &impl IsA<gtk4::Widget>) {

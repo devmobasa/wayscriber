@@ -22,7 +22,6 @@ fn light_mode_enters_passthrough_and_hides_heavy_ui() {
     state.show_status_bar = true;
     state.toolbar_visible = true;
     state.toolbar_top_visible = true;
-    state.toolbar_side_visible = true;
     state.show_tool_preview = true;
     state.set_tool_override(Some(Tool::Arrow));
 
@@ -34,7 +33,6 @@ fn light_mode_enters_passthrough_and_hides_heavy_ui() {
     assert!(!state.show_status_bar);
     assert!(!state.toolbar_visible);
     assert!(!state.toolbar_top_visible);
-    assert!(!state.toolbar_side_visible);
     assert!(!state.show_tool_preview);
     assert_eq!(state.tool_override(), Some(Tool::Pen));
 }
@@ -73,7 +71,6 @@ fn light_mode_restores_previous_ui_and_tool_on_exit() {
     state.show_status_bar = true;
     state.toolbar_visible = true;
     state.toolbar_top_visible = false;
-    state.toolbar_side_visible = true;
     state.show_tool_preview = true;
     state.set_tool_override(Some(Tool::Marker));
 
@@ -86,7 +83,6 @@ fn light_mode_restores_previous_ui_and_tool_on_exit() {
     assert!(state.show_status_bar);
     assert!(state.toolbar_visible);
     assert!(!state.toolbar_top_visible);
-    assert!(state.toolbar_side_visible);
     assert!(state.show_tool_preview);
     assert_eq!(state.tool_override(), Some(Tool::Marker));
 }

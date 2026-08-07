@@ -470,13 +470,12 @@ pub enum PendingToolbarPersistence {
     DisplayMode {
         previous: crate::config::TopDisplayMode,
     },
-    /// Both pin flags driven by the keyboard visibility toggle (F9). The
-    /// toggle already applied, so the payload carries the pre-change pins for
-    /// the runtime-UI preview's rollback; the pin buttons persist via their
-    /// exact event-policy targets instead.
+    /// The pin flag driven by the keyboard visibility toggle (F9). The
+    /// toggle already applied, so the payload carries the pre-change pin for
+    /// the runtime-UI preview's rollback; the pin button persists via its
+    /// exact event-policy target instead.
     Visibility {
         previous_top_pinned: bool,
-        previous_side_pinned: bool,
     },
     /// One chrome preference flipped by a direct action -- a keybinding, a
     /// command-palette entry, a menu command. Each kind is its own variant so

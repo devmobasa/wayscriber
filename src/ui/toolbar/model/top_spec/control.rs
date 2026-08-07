@@ -72,8 +72,8 @@ pub(crate) enum TopToolbarControl {
     Utility(TopToolbarUtility),
     /// One saved-preset slot (0-based index) in the presets island. Left
     /// click applies the saved preset when the slot is filled, or saves the
-    /// current setup into it when the slot is empty (the side-palette
-    /// convention). Renders as a compact button showing the saved tool glyph
+    /// current setup into it when the slot is empty. Renders as a compact
+    /// button showing the saved tool glyph
     /// in the neutral foreground with the preset color as a separate corner
     /// swatch, or the 1-based slot number when empty.
     Preset(usize),
@@ -141,8 +141,8 @@ impl TopToolbarControl {
             Self::Tool(tool) => ToolbarEvent::SelectTool(tool),
             Self::ShapePicker => ToolbarEvent::ToggleShapePicker(!snapshot.shape_picker_open),
             Self::Utility(utility) => utility_event(utility, snapshot),
-            // Filled slots apply; empty slots save the current setup, reusing
-            // the side-palette click convention (the slot is 1-based).
+            // Filled slots apply; empty slots save the current setup (the slot
+            // is 1-based).
             Self::Preset(index) => {
                 let slot = index + 1;
                 if preset_slot(snapshot, index).is_some() {

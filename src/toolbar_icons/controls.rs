@@ -210,10 +210,6 @@ pub fn draw_icon_minimize(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_minimize(ctx, x, y, size);
 }
 
-pub fn draw_icon_side_minimize(ctx: &Context, x: f64, y: f64, size: f64) {
-    super::svg::render_side_minimize(ctx, x, y, size);
-}
-
 pub fn draw_icon_restore(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_restore(ctx, x, y, size);
 }

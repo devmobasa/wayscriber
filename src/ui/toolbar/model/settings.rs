@@ -9,7 +9,7 @@ use crate::config::{
 };
 
 use super::super::{ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSnapshot};
-use super::activation::{ToolbarActivation, ToolbarControlId};
+use super::activation::ToolbarControlId;
 use super::control::{ToolbarIcon, ToolbarTooltip};
 
 mod helpers;
@@ -29,18 +29,9 @@ pub(crate) struct ToolbarSettingsModel {
 }
 
 impl ToolbarSettingsModel {
-    pub(crate) fn from_snapshot(snapshot: &ToolbarSnapshot) -> Option<Self> {
-        // The Settings pane is navigation, not a hideable section: it is the
-        // single customization surface, so it must always be reachable.
-        if snapshot.active_side_pane != crate::ui::toolbar::SidePane::Settings {
-            return None;
-        }
-        Self::build(snapshot)
-    }
-
-    /// The same model for the top strip's Settings popover, which ignores
-    /// the side palette's pane selection (under `side_layout = "pill"` the
-    /// popover is the only Settings surface).
+    /// The model for the top strip's Settings popover. Settings is
+    /// navigation, not a hideable section: it is the single customization
+    /// surface, so it must always be reachable.
     pub(crate) fn for_popover(snapshot: &ToolbarSnapshot) -> Option<Self> {
         Self::build(snapshot)
     }
@@ -368,7 +359,7 @@ pub(crate) struct ToolbarSettingsItemOverride {
     pub(crate) id: ToolbarItemId,
     pub(crate) label: Cow<'static, str>,
     pub(crate) shown: bool,
-    pub(crate) activation: ToolbarActivation,
+    pub(crate) activation: ToolbarEvent,
     pub(crate) tooltip: ToolbarTooltip,
     pub(crate) order: Option<ToolbarSettingsItemOrder>,
 }
@@ -397,23 +388,23 @@ impl ToolbarSettingsItemOverride {
                     index,
                     can_move_up: index > 0,
                     can_move_down: index + 1 < len,
-                    move_up: ToolbarActivation::Click(ToolbarEvent::MoveToolbarItem {
+                    move_up: ToolbarEvent::MoveToolbarItem {
                         group: order_group,
                         id,
                         delta: -1,
-                    }),
-                    move_down: ToolbarActivation::Click(ToolbarEvent::MoveToolbarItem {
+                    },
+                    move_down: ToolbarEvent::MoveToolbarItem {
                         group: order_group,
                         id,
                         delta: 1,
-                    }),
+                    },
                 })
             });
         Self {
             id,
             label: Cow::Borrowed(definition.label),
             shown: !hidden,
-            activation: ToolbarActivation::Click(ToolbarEvent::SetToolbarItemHidden(id, !hidden)),
+            activation: ToolbarEvent::SetToolbarItemHidden(id, !hidden),
             tooltip: ToolbarTooltip::text(format!("{}: uncheck to hide", definition.label)),
             order,
         }
@@ -426,8 +417,8 @@ pub(crate) struct ToolbarSettingsItemOrder {
     pub(crate) index: usize,
     pub(crate) can_move_up: bool,
     pub(crate) can_move_down: bool,
-    pub(crate) move_up: ToolbarActivation,
-    pub(crate) move_down: ToolbarActivation,
+    pub(crate) move_up: ToolbarEvent,
+    pub(crate) move_down: ToolbarEvent,
 }
 
 #[derive(Debug, Clone)]
@@ -435,7 +426,7 @@ pub(crate) struct ToolbarSettingsToggle {
     pub(crate) id: ToolbarControlId,
     pub(crate) label: Cow<'static, str>,
     pub(crate) checked: bool,
-    pub(crate) activation: ToolbarActivation,
+    pub(crate) activation: ToolbarEvent,
     pub(crate) tooltip: ToolbarTooltip,
     /// Label too long for a half-width cell: the toggle takes a full row.
     pub(crate) wide: bool,
@@ -453,7 +444,7 @@ impl ToolbarSettingsToggle {
             id,
             label: Cow::Borrowed(label),
             checked,
-            activation: ToolbarActivation::Click(event),
+            activation: event,
             tooltip: ToolbarTooltip::text(tooltip),
             wide: false,
         }
@@ -470,6 +461,8 @@ pub(crate) struct ToolbarSettingsButton {
     pub(crate) id: ToolbarControlId,
     pub(crate) label: Cow<'static, str>,
     pub(crate) event: ToolbarEvent,
+    /// Consumed by the GTK settings popover; the built-in popover is text-only.
+    #[cfg_attr(not(feature = "toolbar-gtk"), allow(dead_code))]
     pub(crate) icon: ToolbarIcon,
     pub(crate) tooltip: ToolbarTooltip,
 }
@@ -631,9 +624,7 @@ mod tests {
             .iter()
             .skip(1)
             .filter_map(|toggle| match &toggle.activation {
-                ToolbarActivation::Click(ToolbarEvent::SetStatusBarItemVisible(item, _)) => {
-                    Some(*item)
-                }
+                ToolbarEvent::SetStatusBarItemVisible(item, _) => Some(*item),
                 _ => None,
             })
             .collect();

@@ -6,49 +6,32 @@ use crate::backend::wayland::toolbar::events::ToolbarCursorHint;
 use crate::backend::wayland::toolbar::surfaces::ToolbarSurface;
 use crate::ui::toolbar::ToolbarSnapshot;
 
-/// Tracks the lifetime and visibility of the top + side toolbar surfaces.
+/// Tracks the lifetime and visibility of the top toolbar surface.
 #[derive(Debug)]
 pub struct ToolbarSurfaceManager {
-    /// Combined visibility flag (true when any toolbar visible)
-    pub(super) visible: bool,
     /// Whether the top toolbar is visible
     pub(super) top_visible: bool,
-    /// Whether the side toolbar is visible
-    pub(super) side_visible: bool,
     pub(super) suppressed: bool,
     pub(super) top: ToolbarSurface,
-    pub(super) side: ToolbarSurface,
     pub(super) top_hover: Option<(f64, f64)>,
-    pub(super) side_hover: Option<(f64, f64)>,
     /// Timestamp when top hover started (for tooltip delay).
     pub(super) top_hover_start: Option<Instant>,
-    /// Timestamp when side hover started (for tooltip delay).
-    pub(super) side_hover_start: Option<Instant>,
     pub(super) last_snapshot: Option<ToolbarSnapshot>,
 }
 
 impl Default for ToolbarSurfaceManager {
     fn default() -> Self {
         Self {
-            visible: false,
             top_visible: false,
-            side_visible: false,
             suppressed: false,
-            // Anchor top/side toolbars to both axes they offset along so margins take effect.
+            // Anchor the top toolbar to both axes it offsets along so margins take effect.
             top: ToolbarSurface::new(
                 "wayscriber-toolbar-top",
                 Anchor::TOP | Anchor::LEFT,
                 (12, 12, 0, 12),
             ),
-            side: ToolbarSurface::new(
-                "wayscriber-toolbar-side",
-                Anchor::LEFT | Anchor::TOP,
-                (24, 0, 24, 24),
-            ),
             top_hover: None,
-            side_hover: None,
             top_hover_start: None,
-            side_hover_start: None,
             last_snapshot: None,
         }
     }
@@ -59,13 +42,10 @@ impl ToolbarSurfaceManager {
         Self::default()
     }
 
-    /// Get cursor hint for the currently hovered toolbar, if any.
+    /// Get cursor hint for the top toolbar when hovered.
     pub fn cursor_hint(&self) -> Option<ToolbarCursorHint> {
         if self.top_hover.is_some() {
             return self.top.cursor_hint();
-        }
-        if self.side_hover.is_some() {
-            return self.side.cursor_hint();
         }
         None
     }

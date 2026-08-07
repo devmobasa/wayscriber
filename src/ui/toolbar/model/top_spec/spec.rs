@@ -236,13 +236,10 @@ impl TopToolbarSpec {
 
     /// Overflow menu content, in menu order: the destructive Clear first,
     /// then the width-dropped tools and utilities in configured order, then
-    /// the Canvas/Session/Settings popover entries. The three menu entries
-    /// appear in every layout (`side_layout = "panel"` included): under
-    /// `pill` they are the only surface hosting those functions, and under
-    /// `panel` the popovers are transient quick surfaces that cannot be
-    /// confused with the pinned side panes — so they are unconditional rather
-    /// than pill-gated. Like the restore controls they are not hideable
-    /// items: under `pill` they must always be reachable.
+    /// the Canvas/Session/Settings popover entries. Those three popover hosts
+    /// are the only surfaces for those functions on the unified top toolbar,
+    /// so they are unconditional rather than width-gated. Like the restore
+    /// controls they are not hideable items and must always be reachable.
     fn overflow_controls(
         clear_visible: bool,
         plan: &TopStripPlan,

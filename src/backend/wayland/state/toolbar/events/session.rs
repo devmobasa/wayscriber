@@ -12,12 +12,9 @@ pub(super) fn populate_session_snapshot(
     let active_path = options.map(|options| options.session_file_path());
     snapshot.active_session_name = active_path.as_deref().map(session_display_name);
     snapshot.active_session_path = active_path.clone();
-    // Recents are only read (from the catalog on disk) while a surface that
-    // shows them is up: the side palette's Session pane or the top strip's
-    // Session popover.
-    let session_surface_open = snapshot.active_side_pane == crate::ui::toolbar::SidePane::Session
-        || snapshot.session_popover_open;
-    snapshot.recent_sessions = if session_surface_open {
+    // Recents are only read (from the catalog on disk) while the top strip's
+    // Session popover is up.
+    snapshot.recent_sessions = if snapshot.session_popover_open {
         recent_session_snapshots(active_path.as_deref())
     } else {
         Vec::new()

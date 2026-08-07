@@ -388,7 +388,7 @@ pub(super) fn build_top_view_planned(
         }
     }
 
-    // --- Canvas/Session/Settings popovers: the re-hosted side panes ----------
+    // --- Canvas/Session/Settings popovers -----------------------------------
     if let Some(anchor) = overflow_anchor {
         // Match GTK's native popovers: these large panels attach directly to
         // the overflow button and cover the detached style pill beneath it.

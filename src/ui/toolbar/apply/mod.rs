@@ -50,7 +50,6 @@ impl InputState {
             ToolbarEvent::SetColor(color) => self.apply_toolbar_set_color(color),
             ToolbarEvent::SetQuickColor { color, .. } => self.apply_toolbar_set_color(color),
             ToolbarEvent::EditQuickColor { index } => self.apply_toolbar_edit_quick_color(index),
-            ToolbarEvent::SetColorHsv { h, s, v } => self.apply_toolbar_set_color_hsv(h, s, v),
             ToolbarEvent::SetThickness(value) => self.apply_toolbar_set_thickness(value),
             ToolbarEvent::SetMarkerOpacity(value) => self.apply_toolbar_set_marker_opacity(value),
             ToolbarEvent::SetEraserMode(mode) => self.apply_toolbar_set_eraser_mode(mode),
@@ -154,13 +153,8 @@ impl InputState {
                 self.apply_toolbar_set_top_minimized(minimized)
             }
             ToolbarEvent::SetTopDisplayMode(mode) => self.apply_toolbar_set_top_display_mode(mode),
-            ToolbarEvent::SetSideMinimized(minimized) => {
-                self.apply_toolbar_set_side_minimized(minimized)
-            }
             ToolbarEvent::CloseTopToolbar => self.apply_toolbar_set_top_minimized(true),
-            ToolbarEvent::CloseSideToolbar => self.apply_toolbar_set_side_minimized(true),
             ToolbarEvent::PinTopToolbar(pin) => self.apply_toolbar_pin_top_toolbar(pin),
-            ToolbarEvent::PinSideToolbar(pin) => self.apply_toolbar_pin_side_toolbar(pin),
             ToolbarEvent::ToggleIconMode(use_icons) => {
                 self.apply_toolbar_toggle_icon_mode(use_icons)
             }
@@ -218,11 +212,6 @@ impl InputState {
             ToolbarEvent::ToggleFloatingBadgeAlways(show) => {
                 self.apply_toolbar_toggle_floating_badge_always(show)
             }
-            ToolbarEvent::SetSidePane(pane) => self.apply_toolbar_set_side_pane(pane),
-            ToolbarEvent::ScrollSidePane(offset) => self.apply_toolbar_scroll_side_pane(offset),
-            ToolbarEvent::ToggleSideSectionCollapsed(section, collapsed) => {
-                self.apply_toolbar_toggle_side_section_collapsed(section, collapsed)
-            }
             ToolbarEvent::SetToolbarLayoutMode(mode) => self.apply_toolbar_set_layout_mode(mode),
             ToolbarEvent::SetToolbarItemHidden(id, hidden) => {
                 self.apply_toolbar_set_item_hidden(id, hidden)
@@ -263,7 +252,7 @@ impl InputState {
             | ToolbarEvent::SaveSessionAsCancel
             | ToolbarEvent::SessionInfo
             | ToolbarEvent::ClearSession => false,
-            ToolbarEvent::MoveTopToolbar { .. } | ToolbarEvent::MoveSideToolbar { .. } => false,
+            ToolbarEvent::MoveTopToolbar { .. } => false,
         }
     }
 }

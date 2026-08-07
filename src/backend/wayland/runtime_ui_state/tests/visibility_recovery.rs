@@ -19,7 +19,7 @@ fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
     fs::create_dir(&store_dir).unwrap();
     let runtime_path = store_dir.join("runtime-ui.toml");
     let config = Config::default();
-    assert!(config.ui.toolbar.top_pinned && config.ui.toolbar.side_pinned);
+    assert!(config.ui.toolbar.top_pinned);
     let mut input = input_from_config(&config);
     let mut runtime = test_runtime(&config, &runtime_path);
 
@@ -53,14 +53,13 @@ fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
         input.take_pending_toolbar_persistence(),
         vec![PendingToolbarPersistence::Visibility {
             previous_top_pinned: true,
-            previous_side_pinned: true,
         }],
         "the deferred entry must survive the settled recovery"
     );
     let prepared = runtime
         .begin_toolbar_mutation_with_rollback(
             ToolbarRuntimeUiPersistenceTarget::ToolbarVisibility,
-            pins_rollback_values(true, true),
+            pins_rollback_values(true),
         )
         .expect("visibility permit after recovery settled");
     assert!(matches!(
@@ -79,7 +78,6 @@ fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
         "the recovery must have landed the write that originally failed"
     );
     assert!(!restarted_input.toolbar_top_pinned);
-    assert!(!restarted_input.toolbar_side_pinned);
     assert!(
         !restarted_input.toolbar_visible,
         "the toggle pressed during the recovery barrier must survive the exit"
@@ -101,7 +99,7 @@ fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
     let mut input = input_from_config(&config);
     let mut positions = config_positions(&config);
 
-    input.handle_action(Action::ToggleToolbar); // hide, pins → false/false
+    input.handle_action(Action::ToggleToolbar); // hide, pin → false
     assert!(!input.toolbar_visible());
     input.take_pending_toolbar_persistence(); // the write whose rollback arrives below
 
@@ -109,18 +107,18 @@ fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
     input.toggle_presenter_mode();
     assert!(input.presenter_mode);
 
-    apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(true, true));
+    apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(true));
 
-    assert!(input.toolbar_top_pinned && input.toolbar_side_pinned);
+    assert!(input.toolbar_top_pinned);
     assert!(
-        !input.toolbar_visible && !input.toolbar_top_visible && !input.toolbar_side_visible,
+        !input.toolbar_visible && !input.toolbar_top_visible,
         "the live presenter-hidden flags must not move under the owner"
     );
 
     input.toggle_presenter_mode();
     assert!(!input.presenter_mode);
     assert!(
-        input.toolbar_visible && input.toolbar_top_visible && input.toolbar_side_visible,
+        input.toolbar_visible && input.toolbar_top_visible,
         "presenter exit must restore visibility agreeing with the rolled-back pins"
     );
 }
@@ -146,25 +144,25 @@ fn a_deferred_hide_rollback_lands_in_the_focus_mode_snapshot() {
         720,
     );
 
-    input.handle_action(Action::ToggleToolbar); // hide, pins → false/false
+    input.handle_action(Action::ToggleToolbar); // hide, pin → false
     assert!(!input.toolbar_visible());
     input.take_pending_toolbar_persistence(); // the write whose rollback arrives below
 
     input.handle_action(Action::ToggleFocusMode);
     assert!(input.focus_mode_active());
 
-    apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(true, true));
+    apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(true));
 
-    assert!(input.toolbar_top_pinned && input.toolbar_side_pinned);
+    assert!(input.toolbar_top_pinned);
     assert!(
-        !input.toolbar_visible && !input.toolbar_top_visible && !input.toolbar_side_visible,
+        !input.toolbar_visible && !input.toolbar_top_visible,
         "the live focus-hidden flags must not move under the owner"
     );
 
     input.handle_action(Action::ToggleFocusMode); // restore
     assert!(!input.focus_mode_active());
     assert!(
-        input.toolbar_visible && input.toolbar_top_visible && input.toolbar_side_visible,
+        input.toolbar_visible && input.toolbar_top_visible,
         "focus exit must restore visibility agreeing with the rolled-back pins"
     );
 }
@@ -181,25 +179,25 @@ fn a_deferred_hide_rollback_lands_in_the_light_mode_snapshot() {
     // Light mode refuses to start without layer-shell passthrough support.
     input.compositor_capabilities.layer_shell = true;
 
-    input.handle_action(Action::ToggleToolbar); // hide, pins → false/false
+    input.handle_action(Action::ToggleToolbar); // hide, pin → false
     assert!(!input.toolbar_visible());
     input.take_pending_toolbar_persistence(); // the write whose rollback arrives below
 
     input.handle_action(Action::ToggleLightMode);
     assert!(input.light_mode);
 
-    apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(true, true));
+    apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(true));
 
-    assert!(input.toolbar_top_pinned && input.toolbar_side_pinned);
+    assert!(input.toolbar_top_pinned);
     assert!(
-        !input.toolbar_visible && !input.toolbar_top_visible && !input.toolbar_side_visible,
+        !input.toolbar_visible && !input.toolbar_top_visible,
         "the live light-mode-hidden flags must not move under the owner"
     );
 
     input.handle_action(Action::ToggleLightMode); // exit restores the snapshot
     assert!(!input.light_mode);
     assert!(
-        input.toolbar_visible && input.toolbar_top_visible && input.toolbar_side_visible,
+        input.toolbar_visible && input.toolbar_top_visible,
         "light-mode exit must restore visibility agreeing with the rolled-back pins"
     );
 }

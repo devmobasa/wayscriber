@@ -138,9 +138,6 @@ impl ConfiguratorApp {
             Message::ToolbarLayoutModeChanged(option) => {
                 self.handle_toolbar_layout_mode_changed(option)
             }
-            Message::ToolbarSideLayoutChanged(option) => {
-                self.handle_toolbar_side_layout_changed(option)
-            }
             Message::ToolbarZoomChipDisplayChanged(option) => {
                 self.handle_toolbar_zoom_chip_display_changed(option)
             }

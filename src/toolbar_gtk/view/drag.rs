@@ -1,8 +1,7 @@
 //! Shared GTK toolbar move-drag state and geometry.
 //!
-//! Top and side toolbar adapters both keep their GTK input surface parked
-//! while the main overlay renders a moving preview. This module owns the
-//! lifecycle mechanics that must remain identical across those adapters.
+//! The top toolbar adapter keeps its GTK input surface parked while the
+//! main overlay renders a moving preview. This module owns that lifecycle.
 
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
@@ -160,13 +159,6 @@ pub(super) fn cancel_move_drag(
     let surface_size = crate::toolbar_gtk::GtkToolbarSurfaceSize::from_window(window);
     let end = match kind {
         GtkToolbarKind::Top => GtkToolbarFeedback::SetTopOffset {
-            x,
-            y,
-            surface_size,
-            seq: seq.get(),
-            phase: GtkToolbarDragPhase::End,
-        },
-        GtkToolbarKind::Side => GtkToolbarFeedback::SetSideOffset {
             x,
             y,
             surface_size,

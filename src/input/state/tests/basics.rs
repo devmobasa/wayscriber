@@ -225,54 +225,6 @@ fn test_adjust_font_size_multiple_adjustments() {
     assert_eq!(state.current_font_size, 34.0);
 }
 
-#[test]
-fn toolbar_toggle_handles_partial_visibility() {
-    let mut state = create_test_input_state();
-    // Partial visibility is a side-palette scenario: opt into the
-    // deprecated Panel escape hatch (the struct default is Pill).
-    state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Panel);
-    // Simulate config: top pinned, side not pinned
-    state.init_toolbar_from_config(
-        crate::config::ToolbarLayoutMode::Regular,
-        crate::config::ToolbarModeOverrides::default(),
-        crate::config::ToolbarItemsConfig::default(),
-        true,  // top_pinned
-        false, // side_pinned
-        true,  // use_icons
-        1.0,   // scale
-        false, // show_more_colors
-        true,  // show_actions_section
-        false, // show_actions_advanced
-        true,  // show_zoom_actions
-        true,  // show_pages_section
-        true,  // show_boards_section
-        true,  // show_presets
-        false, // show_step_section
-        false, // show_text_controls
-        true,  // context_aware_ui
-        true,  // show_settings_section
-        false, // show_delay_sliders
-        false, // show_marker_opacity_section
-        true,  // show_preset_toasts
-        false, // show_tool_preview
-    );
-    assert!(state.toolbar_top_visible());
-    assert!(!state.toolbar_side_visible());
-    assert!(state.toolbar_visible());
-
-    // Toggle off
-    let _ = state.set_toolbar_visible(!state.toolbar_visible());
-    assert!(!state.toolbar_visible());
-    assert!(!state.toolbar_top_visible());
-    assert!(!state.toolbar_side_visible());
-
-    // Toggle on
-    let _ = state.set_toolbar_visible(!state.toolbar_visible());
-    assert!(state.toolbar_visible());
-    assert!(state.toolbar_top_visible());
-    assert!(state.toolbar_side_visible());
-}
-
 /// Each chrome action queues its own durable entry carrying the value it
 /// replaced, so persistence does not depend on which handler dispatched it --
 /// a keybinding, a command-palette click, or a menu command all reach the

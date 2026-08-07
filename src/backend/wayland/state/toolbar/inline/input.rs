@@ -10,25 +10,14 @@ impl WaylandState {
         if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
             return None;
         }
-        if self.toolbar.is_top_visible()
-            && point_in_surface(self.data.inline_top_rect, position)
-            && let Some(intent) = self
-                .data
-                .inline_top_hits
-                .iter()
-                .find_map(|hit| intent_for_hit(hit, position.0, position.1))
+        if !self.toolbar.is_top_visible() || !point_in_surface(self.data.inline_top_rect, position)
         {
-            return Some(intent);
+            return None;
         }
-        if self.toolbar.is_side_visible() && point_in_surface(self.data.inline_side_rect, position)
-        {
-            return self
-                .data
-                .inline_side_hits
-                .iter()
-                .find_map(|hit| intent_for_hit(hit, position.0, position.1));
-        }
-        None
+        self.data
+            .inline_top_hits
+            .iter()
+            .find_map(|hit| intent_for_hit(hit, position.0, position.1))
     }
 
     /// The quick-color slot an inline-toolbar secondary press targets, read
@@ -37,25 +26,14 @@ impl WaylandState {
         if !self.inline_toolbars_active() || !self.toolbar.is_visible() {
             return None;
         }
-        if self.toolbar.is_top_visible()
-            && point_in_surface(self.data.inline_top_rect, position)
-            && let Some(index) = self
-                .data
-                .inline_top_hits
-                .iter()
-                .find_map(|hit| quick_color_slot_for_hit(hit, position.0, position.1))
+        if !self.toolbar.is_top_visible() || !point_in_surface(self.data.inline_top_rect, position)
         {
-            return Some(index);
+            return None;
         }
-        if self.toolbar.is_side_visible() && point_in_surface(self.data.inline_side_rect, position)
-        {
-            return self
-                .data
-                .inline_side_hits
-                .iter()
-                .find_map(|hit| quick_color_slot_for_hit(hit, position.0, position.1));
-        }
-        None
+        self.data
+            .inline_top_hits
+            .iter()
+            .find_map(|hit| quick_color_slot_for_hit(hit, position.0, position.1))
     }
 
     /// Secondary press on an inline-toolbar swatch: opens the picker bound to
@@ -86,25 +64,14 @@ impl WaylandState {
         if let Some(intent) = self.move_drag_intent(position.0, position.1) {
             return Some(intent);
         }
-        if self.toolbar.is_top_visible()
-            && point_in_surface(self.data.inline_top_rect, position)
-            && let Some(intent) = self
-                .data
-                .inline_top_hits
-                .iter()
-                .find_map(|hit| drag_intent_for_hit(hit, position.0, position.1))
+        if !self.toolbar.is_top_visible() || !point_in_surface(self.data.inline_top_rect, position)
         {
-            return Some(intent);
+            return None;
         }
-        if self.toolbar.is_side_visible() && point_in_surface(self.data.inline_side_rect, position)
-        {
-            return self
-                .data
-                .inline_side_hits
-                .iter()
-                .find_map(|hit| drag_intent_for_hit(hit, position.0, position.1));
-        }
-        None
+        self.data
+            .inline_top_hits
+            .iter()
+            .find_map(|hit| drag_intent_for_hit(hit, position.0, position.1))
     }
 
     pub(in crate::backend::wayland) fn inline_toolbar_motion(
@@ -120,25 +87,16 @@ impl WaylandState {
         self.input_state.update_pointer_position(mx, my);
 
         let was_top_hover = self.data.inline_top_hover;
-        let was_side_hover = self.data.inline_side_hover;
         let was_top_hit = was_top_hover.and_then(|(x, y)| {
             self.data
                 .inline_top_hits
                 .iter()
                 .position(|hit| hit.contains(x, y))
         });
-        let was_side_hit = was_side_hover.and_then(|(x, y)| {
-            self.data
-                .inline_side_hits
-                .iter()
-                .position(|hit| hit.contains(x, y))
-        });
 
         self.data.inline_top_hover = None;
-        self.data.inline_side_hover = None;
 
         let top_visible = self.toolbar.is_top_visible();
-        let side_visible = self.toolbar.is_side_visible();
         let mut over_toolbar = false;
 
         if top_visible
@@ -152,19 +110,6 @@ impl WaylandState {
             self.data.inline_top_hover = Some(position);
         } else {
             self.data.inline_top_hover_start = None;
-        }
-
-        if side_visible
-            && let Some((x, y, w, h)) = self.data.inline_side_rect
-            && geometry::point_in_rect(position.0, position.1, x, y, w, h)
-        {
-            over_toolbar = true;
-            if was_side_hover.is_none() {
-                self.data.inline_side_hover_start = Some(Instant::now());
-            }
-            self.data.inline_side_hover = Some(position);
-        } else {
-            self.data.inline_side_hover_start = None;
         }
 
         if self.toolbar_dragging()
@@ -186,23 +131,11 @@ impl WaylandState {
                 .iter()
                 .position(|hit| hit.contains(x, y))
         });
-        let side_hit = self.data.inline_side_hover.and_then(|(x, y)| {
-            self.data
-                .inline_side_hits
-                .iter()
-                .position(|hit| hit.contains(x, y))
-        });
         let top_target_changed = inline_hover_target_changed(
             was_top_hover,
             was_top_hit,
             self.data.inline_top_hover,
             top_hit,
-        );
-        let side_target_changed = inline_hover_target_changed(
-            was_side_hover,
-            was_side_hit,
-            self.data.inline_side_hover,
-            side_hit,
         );
         if top_target_changed {
             self.data.inline_top_tooltip_pending = inline_tooltip_pending(
@@ -210,21 +143,13 @@ impl WaylandState {
                 hit_has_tooltip(&self.data.inline_top_hits, top_hit),
             );
         }
-        if side_target_changed {
-            self.data.inline_side_tooltip_pending = inline_tooltip_pending(
-                self.data.inline_side_hover_start,
-                hit_has_tooltip(&self.data.inline_side_hits, side_hit),
-            );
-        }
-        if top_target_changed || side_target_changed {
+        if top_target_changed {
             // The inline toolbar and annotations share the main surface's SHM
             // swapchain. Refresh every slot when hover visuals change so a
             // compositor cannot resurface a buffer containing older toolbar or
             // annotation pixels during rapid pointer motion.
             self.mark_inline_toolbar_full_damage();
-        } else if was_top_hover != self.data.inline_top_hover
-            || was_side_hover != self.data.inline_side_hover
-        {
+        } else if was_top_hover != self.data.inline_top_hover {
             // Preserve motion-driven tooltip timing without paying for a full
             // swapchain refresh while the pointer stays on the same control.
             self.toolbar.mark_dirty();
@@ -235,8 +160,8 @@ impl WaylandState {
             self.set_pointer_over_toolbar(true);
         } else if !self.toolbar_dragging() {
             self.set_pointer_over_toolbar(false);
-            if self.data.toolbar_focus_target.is_some() {
-                self.data.toolbar_focus_target = None;
+            if self.data.toolbar_focus_active {
+                self.data.toolbar_focus_active = false;
                 self.clear_inline_toolbar_focus();
                 self.mark_inline_toolbar_full_damage();
             }
@@ -276,19 +201,13 @@ impl WaylandState {
         if !self.inline_toolbars_active() {
             return;
         }
-        let had_hover =
-            self.data.inline_top_hover.is_some() || self.data.inline_side_hover.is_some();
-        let had_focus = self.data.inline_top_focus_index.is_some()
-            || self.data.inline_side_focus_index.is_some()
-            || self.data.inline_top_focus_id.is_some()
-            || self.data.inline_side_focus_id.is_some();
+        let had_hover = self.data.inline_top_hover.is_some();
+        let had_focus =
+            self.data.inline_top_focus_index.is_some() || self.data.inline_top_focus_id.is_some();
         self.data.inline_top_hover = None;
-        self.data.inline_side_hover = None;
         self.data.inline_top_hover_start = None;
-        self.data.inline_side_hover_start = None;
         self.data.inline_top_tooltip_pending = false;
-        self.data.inline_side_tooltip_pending = false;
-        self.data.toolbar_focus_target = None;
+        self.data.toolbar_focus_active = false;
         self.clear_inline_toolbar_focus();
         self.set_pointer_over_toolbar(false);
         // Don't clear drag state if we're in a move drag - the drag continues outside

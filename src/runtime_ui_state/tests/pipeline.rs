@@ -175,7 +175,7 @@ fn rapid_non_coalesced_writes_chain_acknowledged_revisions() {
     let mut controller = controller();
     let first = commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
     let request_a = controller.take_source_mutation().expect("first request");
-    let second = commit_bool(&mut controller, InteractionSeedTarget::SidePinned, true);
+    let second = commit_bool(&mut controller, InteractionSeedTarget::TopMinimized, true);
     assert!(controller.take_source_mutation().is_none());
 
     let revision_a = present_revision("r1");
@@ -201,8 +201,8 @@ fn staged_replacements_coalesce_but_flush_waits_for_the_latest_snapshot() {
     let mut controller = controller();
     let first = commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
     let request_a = controller.take_source_mutation().unwrap();
-    let second = commit_bool(&mut controller, InteractionSeedTarget::SidePinned, true);
-    let third = commit_bool(&mut controller, InteractionSeedTarget::SidePinned, false);
+    let second = commit_bool(&mut controller, InteractionSeedTarget::TopMinimized, true);
+    let third = commit_bool(&mut controller, InteractionSeedTarget::TopMinimized, false);
     let flush = controller.request_flush(third).unwrap();
     assert!(controller.flush_outcome(flush).is_none());
 
@@ -254,7 +254,7 @@ fn completed_receipts_and_flushes_can_be_consumed_without_losing_flush_history()
     );
     assert!(controller.flush_outcome(durable_flush).is_none());
 
-    let second = commit_bool(&mut controller, InteractionSeedTarget::SidePinned, true);
+    let second = commit_bool(&mut controller, InteractionSeedTarget::TopMinimized, true);
     let second_request = controller.take_source_mutation().unwrap();
     let barrier =
         match controller.submit_source_mutation(SourceMutationResult::SourceChangedBeforeMutation {
@@ -297,7 +297,7 @@ fn flush_is_rejected_while_external_authority_reconciliation_is_active() {
         &persisted_request,
         present_revision("persisted-before-conflict"),
     );
-    commit_bool(&mut controller, InteractionSeedTarget::SidePinned, true);
+    commit_bool(&mut controller, InteractionSeedTarget::TopMinimized, true);
     let conflicting_request = controller.take_source_mutation().unwrap();
     let barrier =
         match controller.submit_source_mutation(SourceMutationResult::SourceChangedBeforeMutation {

@@ -76,7 +76,7 @@ fn recovery_prunes_override_when_board_id_is_removed_and_readded_with_same_seed(
 fn recovery_captures_replacements_fenced_by_a_flush_before_closing_barrier() {
     let mut controller = controller();
     commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
-    let second = commit_bool(&mut controller, InteractionSeedTarget::SidePinned, true);
+    let second = commit_bool(&mut controller, InteractionSeedTarget::TopMinimized, true);
     let flush = controller.request_flush(second).unwrap();
     let (_, incident) = fail_current_replace(&mut controller, "first write failed");
     assert!(matches!(
@@ -137,7 +137,7 @@ fn recovery_captures_replacements_fenced_by_a_flush_before_closing_barrier() {
 fn failed_reset_prerequisite_captures_replacements_fenced_by_a_flush() {
     let mut controller = controller();
     commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
-    let second = commit_bool(&mut controller, InteractionSeedTarget::SidePinned, true);
+    let second = commit_bool(&mut controller, InteractionSeedTarget::TopMinimized, true);
     let flush = controller.request_flush(second).unwrap();
     let reset_through = match controller.request_supported_reset() {
         RequestResetResult::Started { through, .. } => through,
@@ -270,7 +270,7 @@ fn reload_cleanup_is_written_even_when_failed_reset_has_no_retry_snapshot() {
 fn reload_during_cleanup_acknowledgement_recomputes_and_writes_again() {
     let mut original = controller();
     commit_bool(&mut original, InteractionSeedTarget::TopPinned, true);
-    commit_bool(&mut original, InteractionSeedTarget::SidePinned, true);
+    commit_bool(&mut original, InteractionSeedTarget::TopMinimized, true);
     let first_persisted = original.take_source_mutation().unwrap();
     apply_request(&mut original, &first_persisted, present_revision("r0.5"));
     let persisted = original.take_source_mutation().unwrap();

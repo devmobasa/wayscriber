@@ -1,7 +1,7 @@
 use super::super::base::InputState;
 use crate::config::{
     RadialMenuMouseBinding, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting,
-    ToolbarSideLayout, TopDisplayMode, factory_individual_toolbar_item_visibility_settings,
+    TopDisplayMode, factory_individual_toolbar_item_visibility_settings,
 };
 use crate::domain::Action;
 use crate::input::state::{Toast, ToastPriority};
@@ -10,19 +10,16 @@ use crate::input::state::{Toast, ToastPriority};
 pub(crate) const CLEAR_UNDO_TOAST_MS: u64 = 2000;
 
 impl InputState {
-    /// Sets toolbar visibility flag (controls both top and side). Returns true if toggled.
+    /// Sets the toolbar visibility flag. Returns true if toggled.
     pub fn set_toolbar_visible(&mut self, visible: bool) -> bool {
-        // Showing must also count a cycle-hidden (F2) top strip as a
-        // change: under the default pill side layout every raw flag can be
-        // true while no surface is visible, and the raw-flag comparison
-        // alone would swallow the restore (F9, the onboarding toast's Show
-        // action, and the status-bar hint chip all dispatch ToggleToolbar
-        // into this setter).
+        // Showing must also count a cycle-hidden (F2) top strip as a change:
+        // the raw flag can be true while no surface is visible, and the
+        // raw-flag comparison alone would swallow the restore (F9, the
+        // onboarding toast's Show action, and the status-bar hint chip all
+        // dispatch ToggleToolbar into this setter).
         let unhide_top = visible && self.toolbar_top_display_mode == TopDisplayMode::Hidden;
-        let any_change = unhide_top
-            || self.toolbar_visible != visible
-            || self.toolbar_top_visible != visible
-            || self.toolbar_side_visible != visible;
+        let any_change =
+            unhide_top || self.toolbar_visible != visible || self.toolbar_top_visible != visible;
 
         if !any_change {
             return false;
@@ -30,7 +27,6 @@ impl InputState {
 
         self.toolbar_visible = visible;
         self.toolbar_top_visible = visible;
-        self.toolbar_side_visible = visible;
         // Showing toolbars always brings the top strip back: a cycle-hidden
         // strip (F2) reverts to its full form when F9 shows the bars again.
         if visible && self.toolbar_top_display_mode == TopDisplayMode::Hidden {
@@ -41,7 +37,7 @@ impl InputState {
         true
     }
 
-    /// Re-derive the three live visibility flags from the pin flags — the
+    /// Re-derive the live visibility flags from the pin flag — the
     /// same rule startup applies — and refresh the status HUD layout, which
     /// follows toolbar visibility (see `set_toolbar_visible`). Used when a
     /// rolled-back visibility toggle hands the pre-toggle pins back:
@@ -49,7 +45,6 @@ impl InputState {
     /// the screen to match what a restart would show.
     pub(crate) fn derive_toolbar_visibility_from_pins(&mut self) {
         let top = self.toolbar_top_pinned;
-        let side = self.toolbar_side_pinned;
         // A rollback can resolve long after the toggle (a failed write
         // barrier holds it), by which time a transient chrome owner —
         // focus mode, presenter mode with `hide_toolbars`, or light mode —
@@ -66,8 +61,7 @@ impl InputState {
         // snapshot exists and there is no restore-order ambiguity.
         if let Some(restore) = self.focus_mode_restore.as_mut() {
             restore.toolbar_top_visible = top;
-            restore.toolbar_side_visible = side;
-            restore.toolbar_visible = top || side;
+            restore.toolbar_visible = top;
             return;
         }
         // Presenter tracks toolbar visibility only when `hide_toolbars`
@@ -77,19 +71,16 @@ impl InputState {
             && restore.toolbar_visible.is_some()
         {
             restore.toolbar_top_visible = Some(top);
-            restore.toolbar_side_visible = Some(side);
-            restore.toolbar_visible = Some(top || side);
+            restore.toolbar_visible = Some(top);
             return;
         }
         if let Some(restore) = self.light_mode_restore.as_mut() {
             restore.toolbar_top_visible = top;
-            restore.toolbar_side_visible = side;
-            restore.toolbar_visible = top || side;
+            restore.toolbar_visible = top;
             return;
         }
         self.toolbar_top_visible = top;
-        self.toolbar_side_visible = side;
-        self.toolbar_visible = self.toolbar_top_visible || self.toolbar_side_visible;
+        self.toolbar_visible = top;
         self.refresh_status_hud_layout();
     }
 
@@ -156,50 +147,22 @@ impl InputState {
             .unwrap_or(self.toolbar_top_display_mode);
         let restores_top_toolbar = restore.toolbar_top_visible == Some(true)
             && restored_top_mode != TopDisplayMode::Hidden;
-        let restores_side_toolbar = restore.toolbar_side_visible == Some(true)
-            && self.toolbar_side_layout == ToolbarSideLayout::Panel;
 
-        restores_status_bar || restores_top_toolbar || restores_side_toolbar
+        restores_status_bar || restores_top_toolbar
     }
 
-    /// Returns whether any toolbar surface is effectively visible: the top
-    /// strip (not cycle-hidden) or the side palette (not retired by
-    /// `side_layout = "pill"`). Raw visibility flags that cannot produce a
-    /// surface do not count, so the F9 toggle always has a visible effect
-    /// on its first press.
+    /// Returns whether the toolbar is effectively visible: the top strip and
+    /// not cycle-hidden. A raw visibility flag that cannot produce a surface
+    /// does not count, so the F9 toggle always has a visible effect on its
+    /// first press.
     pub fn toolbar_visible(&self) -> bool {
-        self.toolbar_top_visible() || self.toolbar_side_visible()
+        self.toolbar_top_visible()
     }
 
     /// Returns whether the top toolbar surface is visible. The cycle
-    /// action's Hidden display mode hides the top strip without touching
-    /// the side toolbar.
+    /// action's Hidden display mode hides the top strip.
     pub fn toolbar_top_visible(&self) -> bool {
         self.toolbar_top_visible && self.toolbar_top_display_mode != TopDisplayMode::Hidden
-    }
-
-    /// Returns whether the side toolbar is visible. Under the default
-    /// `side_layout = "pill"` the side palette is retired: its surface never
-    /// appears (layer-shell, inline fallback, or GTK), regardless of the
-    /// visibility toggles. The deprecated `"panel"` escape hatch keeps the
-    /// classic behavior.
-    ///
-    /// Invariant: the `InputState` struct-field default matches the config
-    /// default (`Pill`), so tests exercise the shipping layout unless they
-    /// opt into the deprecated `Panel` escape hatch explicitly; startup
-    /// still applies the configured value via
-    /// [`Self::init_toolbar_side_layout_from_config`].
-    pub fn toolbar_side_visible(&self) -> bool {
-        self.toolbar_side_visible
-            && self.toolbar_side_layout == crate::config::ToolbarSideLayout::Panel
-    }
-
-    /// Restore the persisted side layout (called at startup).
-    pub fn init_toolbar_side_layout_from_config(
-        &mut self,
-        layout: crate::config::ToolbarSideLayout,
-    ) {
-        self.toolbar_side_layout = layout;
     }
 
     /// Store the configured toolbar shortcut-rebind modifier (called at
@@ -219,7 +182,6 @@ impl InputState {
         mode_overrides: crate::config::ToolbarModeOverrides,
         items: crate::config::ToolbarItemsConfig,
         top_pinned: bool,
-        side_pinned: bool,
         use_icons: bool,
         scale: f64,
         show_more_colors: bool,
@@ -232,17 +194,14 @@ impl InputState {
         show_step_section: bool,
         show_text_controls: bool,
         context_aware_ui: bool,
-        show_settings_section: bool,
         show_delay_sliders: bool,
         show_marker_opacity_section: bool,
         show_preset_toasts: bool,
         show_tool_preview: bool,
     ) {
         self.toolbar_top_pinned = top_pinned;
-        self.toolbar_side_pinned = side_pinned;
         self.toolbar_top_visible = top_pinned;
-        self.toolbar_side_visible = side_pinned;
-        self.toolbar_visible = top_pinned || side_pinned;
+        self.toolbar_visible = top_pinned;
         self.toolbar_use_icons = use_icons;
         self.toolbar_scale = scale;
         self.toolbar_layout_mode = layout_mode;
@@ -259,7 +218,6 @@ impl InputState {
         self.show_step_section = show_step_section;
         self.show_text_controls = show_text_controls;
         self.context_aware_ui = context_aware_ui;
-        self.show_settings_section = show_settings_section;
         self.show_delay_sliders = show_delay_sliders;
         self.show_marker_opacity_section = show_marker_opacity_section;
         self.show_preset_toasts = show_preset_toasts;
@@ -276,7 +234,6 @@ impl InputState {
             show_presets: self.show_presets,
             show_step_section: self.show_step_section,
             show_text_controls: self.show_text_controls,
-            show_settings_section: self.show_settings_section,
         };
         legacy.apply_mode_override(self.toolbar_mode_overrides.for_mode(layout_mode));
         if crate::config::fold_legacy_section_flags(
@@ -307,14 +264,12 @@ impl InputState {
         self.show_presets = visibility.show_presets;
         self.show_step_section = visibility.show_step_section;
         self.show_text_controls = visibility.show_text_controls;
-        self.show_settings_section = visibility.show_settings_section;
     }
 
-    /// Restore the persisted minimize state of both bars (called at
-    /// startup). Minimized bars come back as their edge restore tabs.
-    pub fn init_toolbar_minimized_from_config(&mut self, top: bool, side: bool) {
+    /// Restore the persisted minimize state of the top strip (called at
+    /// startup). A minimized strip comes back as its edge restore tab.
+    pub fn init_toolbar_minimized_from_config(&mut self, top: bool) {
         self.toolbar_top_minimized = top;
-        self.toolbar_side_minimized = side;
     }
 
     /// Restore the persisted top-strip display form (called at startup).
@@ -373,7 +328,7 @@ impl InputState {
 
     fn show_top_strip_surface(&mut self) {
         self.toolbar_top_visible = true;
-        self.toolbar_visible = self.toolbar_top_visible || self.toolbar_side_visible;
+        self.toolbar_visible = true;
     }
 
     /// Advance the top strip through Full → Micro → Hidden → Full and
@@ -386,22 +341,6 @@ impl InputState {
         };
         self.set_top_display_mode(next);
         next
-    }
-
-    /// Restore the persisted side-palette pane and collapsed sections
-    /// (called at startup). Unknown ids are ignored; they are preserved in
-    /// the config file itself for forward compatibility.
-    pub fn init_toolbar_side_panes_from_config(
-        &mut self,
-        active_pane_id: &str,
-        collapsed_section_ids: &[String],
-    ) {
-        self.toolbar_side_pane =
-            crate::ui::toolbar::SidePane::from_config_id(active_pane_id).unwrap_or_default();
-        self.toolbar_collapsed_side_sections = collapsed_section_ids
-            .iter()
-            .filter_map(|id| crate::ui::toolbar::ToolbarSideSection::from_config_id(id))
-            .collect();
     }
 
     pub fn set_toolbar_item_hidden(&mut self, id: ToolbarItemId, hidden: bool) -> bool {
@@ -585,7 +524,6 @@ impl InputState {
 mod tests {
     use crate::config::{ToolbarItemsConfig, toolbar_item_ids as ids};
     use crate::input::state::test_support::make_test_input_state;
-    use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 
     #[test]
     fn init_folds_legacy_section_booleans_into_explicit_overrides() {
@@ -596,7 +534,6 @@ mod tests {
             crate::config::ToolbarLayoutMode::Regular,
             crate::config::ToolbarModeOverrides::default(),
             crate::config::ToolbarItemsConfig::default(),
-            true,
             true,
             true,
             1.0,
@@ -610,7 +547,6 @@ mod tests {
             false, // step
             true,  // text controls
             true,  // context aware ui
-            true,  // settings section
             false,
             false,
             true,
@@ -628,63 +564,6 @@ mod tests {
             crate::config::ToolbarLayoutMode::Advanced,
         ));
         assert!(!state.show_zoom_actions);
-    }
-
-    #[test]
-    fn pill_side_layout_retires_the_side_surface_and_panel_restores_it() {
-        let mut state = make_test_input_state();
-        // The struct-field default matches the config default (Pill), so
-        // tests exercise the shipping layout unless they opt into the
-        // deprecated Panel escape hatch explicitly.
-        assert_eq!(
-            state.toolbar_side_layout,
-            crate::config::ToolbarSideLayout::Pill
-        );
-        assert_eq!(
-            crate::config::ToolbarSideLayout::default(),
-            crate::config::ToolbarSideLayout::Pill
-        );
-
-        // The default Pill layout retires the side surface: it never
-        // reports visible, even through the plain visibility toggles.
-        assert!(!state.toolbar_side_visible());
-        state.set_toolbar_visible(true);
-        assert!(!state.toolbar_side_visible());
-        // The top strip is unaffected by the side retirement.
-        assert!(state.toolbar_top_visible());
-
-        // The deprecated escape hatch restores the classic behavior.
-        state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Panel);
-        assert!(state.toolbar_side_visible());
-    }
-
-    #[test]
-    fn side_pane_config_restore_ignores_unknown_ids() {
-        let mut state = make_test_input_state();
-        state.init_toolbar_side_panes_from_config(
-            "session",
-            &[
-                "colors".to_string(),
-                "unknown-id".to_string(),
-                "step-undo".to_string(),
-            ],
-        );
-        assert_eq!(state.toolbar_side_pane, SidePane::Session);
-        assert!(
-            state
-                .toolbar_collapsed_side_sections
-                .contains(&ToolbarSideSection::Colors)
-        );
-        assert!(
-            state
-                .toolbar_collapsed_side_sections
-                .contains(&ToolbarSideSection::StepUndo)
-        );
-        assert_eq!(state.toolbar_collapsed_side_sections.len(), 2);
-
-        state.init_toolbar_side_panes_from_config("bogus", &[]);
-        assert_eq!(state.toolbar_side_pane, SidePane::Draw);
-        assert!(state.toolbar_collapsed_side_sections.is_empty());
     }
 
     #[test]

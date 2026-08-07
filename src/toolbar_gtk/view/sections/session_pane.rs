@@ -6,37 +6,18 @@ use gtk4::prelude::*;
 
 use crate::label_format::format_binding_label;
 use crate::toolbar_icons;
-use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection, model};
+use crate::ui::toolbar::session_format::strip_session_extension;
+use crate::ui::toolbar::{ToolbarEvent, model};
 
 use super::super::super::icons::{IconPainter, IconWidget};
 use super::super::super::widgets::send_event;
-use super::{SectionCtx, section_card};
+use super::SectionCtx;
 
-pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget> {
-    let session = model::ToolbarSessionModel::from_snapshot(ctx.snapshot)?;
-    let card = section_card(
-        ctx,
-        ToolbarSideSection::Session,
-        ToolbarSideSection::Session.label(),
-    );
-    card.body.append(&content(ctx, &session, true));
-    Some(card.root.upcast())
-}
-
-/// The pane's content for the top strip's Session popover: identical
-/// controls without the collapsible-card chrome. Live updates come from
-/// content-key rebuilds in the popover host, so no updaters register.
+/// The pane's content for the top strip's Session popover. Live updates come
+/// from content-key rebuilds in the popover host, so no updaters register.
 pub(in crate::toolbar_gtk) fn build_popover_content(
-    ctx: &mut SectionCtx,
+    ctx: &SectionCtx,
     session: &model::ToolbarSessionModel,
-) -> gtk4::Box {
-    content(ctx, session, false)
-}
-
-fn content(
-    ctx: &mut SectionCtx,
-    session: &model::ToolbarSessionModel,
-    register_updaters: bool,
 ) -> gtk4::Box {
     let column = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(6.0));
     let name_label = gtk4::Label::new(Some(&session.active_name));
@@ -52,7 +33,6 @@ fn content(
     column.append(&path_label);
 
     // A pending Save-As overwrite confirmation replaces the button grid.
-    let mut handles: Vec<gtk4::Button> = Vec::new();
     if let Some(confirmation) = session.overwrite_confirmation.as_ref() {
         column.append(&overwrite_confirmation_rows(ctx, confirmation));
     } else {
@@ -70,26 +50,12 @@ fn content(
                 1,
                 1,
             );
-            handles.push(button);
         }
         column.append(&grid);
     }
 
     for recent in &session.recents {
         column.append(&recent_row(ctx, recent));
-    }
-
-    if register_updaters {
-        ctx.updaters.push(Box::new(move |snapshot| {
-            let Some(session) = model::ToolbarSessionModel::from_snapshot(snapshot) else {
-                return;
-            };
-            name_label.set_text(&session.active_name);
-            path_label.set_text(&session.active_path_label);
-            for (handle, button_model) in handles.iter().zip(session.buttons.iter()) {
-                handle.set_sensitive(button_model.enabled);
-            }
-        }));
     }
     column
 }
@@ -191,13 +157,4 @@ fn recent_row(ctx: &SectionCtx, recent: &model::ToolbarSessionRecent) -> gtk4::B
         send_event(&sender, event.clone());
     });
     button
-}
-
-/// Drop the constant session-file extension in list rows; it costs the
-/// characters that distinguish one session from another.
-fn strip_session_extension(value: &str) -> &str {
-    value
-        .strip_suffix(".wayscriber-session")
-        .or_else(|| value.strip_suffix(".wayscriber"))
-        .unwrap_or(value)
 }

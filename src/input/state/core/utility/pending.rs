@@ -56,11 +56,7 @@ impl InputState {
             }
             PendingToolbarPersistence::Visibility {
                 previous_top_pinned,
-                previous_side_pinned,
-            } => {
-                previous_top_pinned != self.toolbar_top_pinned
-                    || previous_side_pinned != self.toolbar_side_pinned
-            }
+            } => previous_top_pinned != self.toolbar_top_pinned,
             PendingToolbarPersistence::StatusBar { previous } => previous != self.show_status_bar,
             PendingToolbarPersistence::FloatingBadge { previous } => {
                 previous != self.show_floating_badge

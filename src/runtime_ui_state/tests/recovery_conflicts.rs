@@ -5,7 +5,7 @@ fn external_conflict_discards_old_snapshots_and_chains_from_installed_authority(
     let mut controller = controller();
     let first = commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
     let request = controller.take_source_mutation().unwrap();
-    let second = commit_bool(&mut controller, InteractionSeedTarget::SidePinned, true);
+    let second = commit_bool(&mut controller, InteractionSeedTarget::TopMinimized, true);
     let external = present_revision("external");
     let result =
         controller.submit_source_mutation(SourceMutationResult::SourceChangedBeforeMutation {
@@ -484,7 +484,7 @@ fn shutdown_during_external_cleanup_closes_after_a_late_reload() {
     commit_bool(&mut wire_source, InteractionSeedTarget::TopPinned, true);
     let first = wire_source.take_source_mutation().unwrap();
     apply_request(&mut wire_source, &first, present_revision("wire-1"));
-    commit_bool(&mut wire_source, InteractionSeedTarget::SidePinned, true);
+    commit_bool(&mut wire_source, InteractionSeedTarget::TopMinimized, true);
     let second = wire_source.take_source_mutation().unwrap();
     let SourceMutationKind::Replace(external_wire) = second.kind else {
         unreachable!();
@@ -557,7 +557,7 @@ fn invalid_external_authority_discards_pre_change_preview_rollback() {
             rollback,
         )
         .unwrap();
-    commit_bool(&mut controller, InteractionSeedTarget::SidePinned, true);
+    commit_bool(&mut controller, InteractionSeedTarget::TopMinimized, true);
     let write = controller.take_source_mutation().unwrap();
     let invalid = invalid_observation("malformed-external");
     let barrier =

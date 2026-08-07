@@ -135,10 +135,7 @@ fn a_rollback_restores_every_durable_chrome_preference() {
 
     let config = Config::default();
     let mut input = input_from_config(&config);
-    let mut positions = ToolbarPositionSnapshot {
-        top: (0.0, 0.0),
-        side: (0.0, 0.0),
-    };
+    let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
 
     // Move every preference away from its configured value, then roll back to
     // exactly the values the run started with.
@@ -265,7 +262,10 @@ fn a_rollback_restores_every_durable_chrome_preference() {
     apply_toolbar_runtime_rollback(
         &mut input,
         &mut positions,
-        &PreviewRollbackSnapshot { values },
+        &PreviewRollbackSnapshot {
+            values,
+            derive_toolbar_visibility_from_pins: false,
+        },
     );
 
     let restarted = input_from_config(&config);

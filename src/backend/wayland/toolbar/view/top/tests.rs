@@ -1202,6 +1202,7 @@ fn canvas_popover_sections_are_gated_by_their_display_toggles() {
     let build_open = |mutate: &dyn Fn(&mut ToolbarSnapshot)| {
         let mut s = snapshot();
         s.canvas_popover_open = true;
+        s.show_actions_section = false;
         s.show_boards_section = false;
         s.show_pages_section = false;
         s.show_zoom_actions = false;
@@ -1210,6 +1211,28 @@ fn canvas_popover_sections_are_gated_by_their_display_toggles() {
         mutate(&mut s);
         build(&s)
     };
+
+    let actions = build_open(&|s| {
+        s.show_actions_section = true;
+        s.undo_available = true;
+        s.redo_available = true;
+    });
+    assert!(canvas_tree_has_event(&actions, &ToolbarEvent::Undo));
+    assert!(canvas_tree_has_event(&actions, &ToolbarEvent::Redo));
+    assert!(canvas_tree_has_event(
+        &actions,
+        &ToolbarEvent::ClearCanvas { instant: false }
+    ));
+    let redo = actions
+        .node_by_id(&"top.menu.canvas.actions.redo".into())
+        .expect("redo action");
+    let clear = actions
+        .node_by_id(&"top.menu.canvas.actions.clear-canvas".into())
+        .expect("clear action");
+    assert!(
+        clear.rect.0 - (redo.rect.0 + redo.rect.2) >= menus::CANVAS_DESTRUCTIVE_GUARD_GAP - 1e-9,
+        "destructive Clear must be isolated from safe actions"
+    );
 
     let boards = build_open(&|s| s.show_boards_section = true);
     assert!(
@@ -1472,8 +1495,7 @@ fn session_popover_re_hosts_the_session_pane_content() {
             .expect("recent row");
         assert_eq!(node.interact.as_ref().unwrap().event, recent.event());
     }
-    // Meta labels are decor; the pane's collapsible header is side chrome
-    // and deliberately absent.
+    // Meta labels are decor; this popover has no collapsible header.
     assert!(tree.node_by_id(&"top.menu.session.name".into()).is_some());
     assert!(tree.node_by_id(&"top.menu.session.path".into()).is_some());
 
@@ -1552,7 +1574,7 @@ fn settings_popover_re_hosts_the_settings_pane_content() {
             .expect("mode segment");
         assert_eq!(
             node.interact.as_ref().unwrap().event,
-            segment.activation.compatibility_event()
+            segment.activation.clone()
         );
         assert!(matches!(
             &node.kind,
@@ -1570,7 +1592,7 @@ fn settings_popover_re_hosts_the_settings_pane_content() {
             .unwrap_or_else(|| panic!("toggle {index} ({})", toggle.label));
         assert_eq!(
             node.interact.as_ref().unwrap().event,
-            toggle.activation.compatibility_event(),
+            toggle.activation.clone(),
             "{}",
             toggle.label
         );
@@ -1648,7 +1670,7 @@ fn settings_popover_customization_rows_keep_reorder_and_drag_events() {
         seen += 1;
         assert_eq!(
             check.interact.as_ref().unwrap().event,
-            item.activation.compatibility_event()
+            item.activation.clone()
         );
         let order = item.order.as_ref().expect("top tools rows are orderable");
         let drag = tree
@@ -1664,10 +1686,7 @@ fn settings_popover_customization_rows_keep_reorder_and_drag_events() {
             .expect("move up");
         assert_eq!(
             up.interact.as_ref().map(|interact| &interact.event),
-            order
-                .can_move_up
-                .then(|| order.move_up.compatibility_event())
-                .as_ref()
+            order.can_move_up.then(|| order.move_up.clone()).as_ref()
         );
         let down = tree
             .node_by_id(&format!("top.menu.settings.item.{index}.down").into())
@@ -1676,7 +1695,7 @@ fn settings_popover_customization_rows_keep_reorder_and_drag_events() {
             down.interact.as_ref().map(|interact| &interact.event),
             order
                 .can_move_down
-                .then(|| order.move_down.compatibility_event())
+                .then(|| order.move_down.clone())
                 .as_ref()
         );
     }
@@ -1786,7 +1805,7 @@ fn tall_content_fills_a_tall_screen_without_scrolling() {
     snapshot.settings_popover_open = true;
     snapshot.customize_items_open = true;
     snapshot.customize_items_group =
-        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::SideSections);
+        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopControls);
 
     // Without a known output height, the fixed fallback cap still scrolls.
     let (natural, capped) =
@@ -1877,8 +1896,7 @@ fn popover_height_budget_is_relative_to_the_toolbar_surface_origin() {
 }
 
 /// The wheel path scrolls the open popover against the same bounds the
-/// tree's scrollbar drags against — the popover must stay wheel-scrollable
-/// like the side panes it re-hosts (and the GTK `ScrolledWindow`).
+/// tree's scrollbar drags against, matching the GTK `ScrolledWindow`.
 #[test]
 fn top_popover_scroll_bounds_serve_the_wheel_path() {
     let mut snapshot = snapshot();

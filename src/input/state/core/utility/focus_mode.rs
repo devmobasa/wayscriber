@@ -116,7 +116,6 @@ impl InputState {
             self.show_status_bar = restore.show_status_bar;
             self.toolbar_visible = restore.toolbar_visible;
             self.toolbar_top_visible = restore.toolbar_top_visible;
-            self.toolbar_side_visible = restore.toolbar_side_visible;
             self.toolbar_top_display_mode = restore.toolbar_top_display_mode;
             self.show_floating_badge = restore.show_floating_badge;
             self.show_zoom_chip = restore.show_zoom_chip;
@@ -148,7 +147,6 @@ impl InputState {
             show_status_bar: self.show_status_bar,
             toolbar_visible: self.toolbar_visible,
             toolbar_top_visible: self.toolbar_top_visible,
-            toolbar_side_visible: self.toolbar_side_visible,
             toolbar_top_display_mode: self.toolbar_top_display_mode,
             show_floating_badge: self.show_floating_badge,
             show_zoom_chip: self.show_zoom_chip,
@@ -157,7 +155,6 @@ impl InputState {
         // comes back as micro on restore.
         self.toolbar_visible = false;
         self.toolbar_top_visible = false;
-        self.toolbar_side_visible = false;
         self.show_status_bar = false;
         self.show_floating_badge = false;
         self.show_zoom_chip = false;

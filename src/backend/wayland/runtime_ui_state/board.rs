@@ -119,6 +119,7 @@ impl ToolbarRuntimeState {
             values: [(target.clone(), InteractionSeedValue::Bool(current))]
                 .into_iter()
                 .collect(),
+            derive_toolbar_visibility_from_pins: false,
         };
         let session = match self
             .controller
@@ -211,6 +212,7 @@ impl ToolbarRuntimeState {
             values: [(target.clone(), InteractionSeedValue::Bool(current))]
                 .into_iter()
                 .collect(),
+            derive_toolbar_visibility_from_pins: false,
         };
         let session = match self
             .controller

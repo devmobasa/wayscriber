@@ -8,18 +8,13 @@ use crate::ui::toolbar::ToolbarEvent;
 
 /// Stable identity of a widget across rebuilds of the tree.
 ///
-/// Ids are dotted paths (e.g. `top.tool.pen`, `side.draw.colors.swatch.3`)
+/// Ids are dotted paths (e.g. `top.tool.pen`, `top.menu.settings.toggle.0`)
 /// so keyboard focus survives a rebuild even when node indices shift, and
 /// golden dumps stay readable.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WidgetId(Cow<'static, str>);
 
 impl WidgetId {
-    #[allow(dead_code)] // Reserved for the side-palette tree port; top ids use From directly.
-    pub fn new(id: impl Into<Cow<'static, str>>) -> Self {
-        Self(id.into())
-    }
-
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -138,9 +133,6 @@ impl ButtonStyle {
 pub enum WidgetKind {
     /// Full-surface panel background.
     Panel,
-    /// Rounded group-card background.
-    #[allow(dead_code)] // Used by the staged side-palette tree port.
-    Card,
     /// Thin separator line.
     Divider { vertical: bool },
     /// Drag grip for moving a toolbar.
@@ -156,9 +148,6 @@ pub enum WidgetKind {
         label: LabelSpec,
         style: ButtonStyle,
     },
-    /// Standalone icon glyph (no button body).
-    #[allow(dead_code)] // Used by the staged side-palette tree port.
-    Icon { glyph: IconFn },
     /// Standalone text.
     Label(LabelSpec),
     /// Small labelled checkbox.
@@ -186,8 +175,8 @@ pub enum WidgetKind {
     /// A presets-island slot. Filled slots draw the saved tool glyph in the
     /// neutral foreground and carry the preset `color` as a separate corner
     /// swatch, so a dark preset color never renders the glyph invisible
-    /// against the slot body (the side-palette convention). Empty slots
-    /// (`glyph` is `None`) draw the 1-based slot number carried in `label`.
+    /// against the slot body. Empty slots (`glyph` is `None`) draw the 1-based
+    /// slot number carried in `label`.
     /// `active` marks the slot whose preset is currently applied.
     PresetSlot {
         glyph: Option<IconFn>,

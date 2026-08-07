@@ -15,10 +15,6 @@ const SHORTCUT_COACH_COOLDOWN: Duration = Duration::from_secs(90);
 /// Maximum coach hints shown per session.
 const SHORTCUT_COACH_SESSION_CAP: u32 = 2;
 
-const PANEL_DEPRECATION_MESSAGE: &str = "Side panel deprecated \u{2014} use the new homes:\n\
-     Drawing \u{2192} style pill \u{b7} Canvas \u{2192} \u{201c}Canvas\u{2026}\u{201d} / zoom chip / status bar\n\
-     Presets \u{2192} top strip \u{b7} Session/Settings \u{2192} overflow";
-
 /// The visible status-HUD entry that can open the board picker. The hint must
 /// not advertise the pill when both configurable Board/Page segments are
 /// absent: the remaining color/tool/help segments perform different actions.
@@ -114,7 +110,6 @@ impl WaylandState {
         // Show capability warning toast first if applicable.
         self.apply_capability_toast();
         // Honest legacy notice: nudge panel-mode users toward the new homes.
-        self.apply_panel_deprecation_notice();
         // Capture the coach's slow-path signal before apply_first_run_progress
         // drains pending_onboarding_usage.
         let coach_slow_path = self
@@ -430,52 +425,6 @@ impl WaylandState {
                 "capability.limitations",
                 Toast::warning(message).once_per_content(),
             );
-        }
-    }
-
-    /// Left-panel deprecation, made honest: when the user is running the
-    /// deprecated legacy side palette (`side_layout = "panel"`), show a
-    /// once-per-session notice pointing at the concrete new homes for each
-    /// retired pane. Reuses the capability-toast once-per-session pattern: the
-    /// session-only `*_shown` flag prevents repeats within one launch. No config
-    /// key gates it: the notice only appears at all under the deprecated layout
-    /// the user opted into.
-    fn apply_panel_deprecation_notice(&mut self) {
-        // Only the deprecated legacy side palette; the pill default already
-        // re-homed everything, so there is nothing to explain there.
-        if self.input_state.toolbar_side_layout != crate::config::ToolbarSideLayout::Panel {
-            return;
-        }
-        if self.data.panel_deprecation_notice_shown {
-            return; // once per session
-        }
-        if !self.surface.is_configured() || self.overlay_suppressed() {
-            return;
-        }
-        if self.input_state.presenter_mode
-            || self.input_state.show_help
-            || self.input_state.command_palette_open
-            || self.input_state.tour_active
-        {
-            return;
-        }
-        // Don't nag during first-run onboarding; wait until it is finished or
-        // skipped.
-        if self.onboarding.state().first_run_active() {
-            return;
-        }
-        // Never clobber real feedback: only when the toast queue is idle.
-        if !self.input_state.toasts_idle() {
-            return;
-        }
-
-        let outcome = self.input_state.push_toast(
-            ToastPriority::Info,
-            "onboarding.panel_deprecation",
-            Toast::info(PANEL_DEPRECATION_MESSAGE).once_per_content(),
-        );
-        if outcome.accepted() {
-            self.data.panel_deprecation_notice_shown = true;
         }
     }
 }

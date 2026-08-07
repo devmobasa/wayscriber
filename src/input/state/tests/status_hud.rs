@@ -291,16 +291,15 @@ fn status_hud_click_toolbar_hint_returns_toggle_toolbar_action() {
     assert!(!input.is_radial_menu_open());
 }
 
-/// End-to-end recovery in the shipping default state: pill side layout
-/// (side palette retired) with the top strip F2-cycled to Hidden leaves
-/// every raw visibility flag true while no surface is visible. The hint
+/// End-to-end recovery in the shipping top-only state: F2-cycling the top
+/// strip to Hidden leaves every raw visibility flag true while no surface is
+/// visible. The hint
 /// chip must appear there, and dispatching its returned action must
 /// actually restore the toolbar — the advertised recovery cannot be a
 /// no-op.
 #[test]
-fn status_hud_toolbar_hint_recovers_cycle_hidden_strip_under_pill_layout() {
+fn status_hud_toolbar_hint_recovers_cycle_hidden_top_strip() {
     let mut input = create_test_input_state();
-    input.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Pill);
     input.handle_action(Action::CycleToolbarDisplay); // micro
     input.handle_action(Action::CycleToolbarDisplay); // hidden
     assert!(!input.toolbar_visible());

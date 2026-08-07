@@ -12,14 +12,12 @@ impl WaylandState {
         }
         drag_log(|| {
             format!(
-                "relative delta begin: kind={:?}, delta=({:.3}, {:.3}), offsets_before=({}, {})/({}, {})",
+                "relative delta begin: kind={:?}, delta=({:.3}, {:.3}), offsets_before=({}, {})",
                 kind,
                 delta.0,
                 delta.1,
                 self.data.toolbar_top_offset,
-                self.data.toolbar_top_offset_y,
-                self.data.toolbar_side_offset_x,
-                self.data.toolbar_side_offset
+                self.data.toolbar_top_offset_y
             )
         });
         let snapshot = self
@@ -33,24 +31,18 @@ impl WaylandState {
                 self.data.toolbar_top_offset += delta.0;
                 self.data.toolbar_top_offset_y += delta.1;
             }
-            MoveDragKind::Side => {
-                self.data.toolbar_side_offset_x += delta.0;
-                self.data.toolbar_side_offset += delta.1;
-            }
         }
 
         self.apply_toolbar_offsets_throttled(&snapshot);
 
         drag_log(|| {
             format!(
-                "relative delta applied: kind={:?}, delta=({:.3}, {:.3}), offsets=({}, {})/({}, {})",
+                "relative delta applied: kind={:?}, delta=({:.3}, {:.3}), offsets=({}, {})",
                 kind,
                 delta.0,
                 delta.1,
                 self.data.toolbar_top_offset,
-                self.data.toolbar_top_offset_y,
-                self.data.toolbar_side_offset_x,
-                self.data.toolbar_side_offset
+                self.data.toolbar_top_offset_y
             )
         });
 
@@ -75,11 +67,9 @@ impl WaylandState {
             }
             drag_log(|| {
                 format!(
-                    "end move drag: offsets=({}, {})/({}, {}), active_kind={:?}, pointer_locked={}",
+                    "end move drag: offsets=({}, {}), active_kind={:?}, pointer_locked={}",
                     self.data.toolbar_top_offset,
                     self.data.toolbar_top_offset_y,
-                    self.data.toolbar_side_offset_x,
-                    self.data.toolbar_side_offset,
                     self.data.active_drag_kind,
                     self.pointer_lock_active()
                 )

@@ -219,9 +219,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
 fn item_sections(built_in: &ResolvedToolbarItems) -> Vec<ItemSection> {
     let mut sections: Vec<ItemSection> = Vec::new();
     for definition in toolbar_item_definitions() {
-        if definition.id == toolbar_item_ids::SIDE_GROUP_SETTINGS
-            || definition.id == toolbar_item_ids::TOP_CHROME_OVERFLOW
-        {
+        if definition.id == toolbar_item_ids::TOP_CHROME_OVERFLOW {
             continue;
         }
 
@@ -277,10 +275,6 @@ fn configurator_order_group(
         ToolbarItemOrderGroup::TopControls => {
             Some((ToolbarItemOrderGroup::TopControls, "Controls"))
         }
-        ToolbarItemOrderGroup::SideSections => {
-            Some((ToolbarItemOrderGroup::SideSections, "Sections"))
-        }
-        _ => None,
     }
 }
 
@@ -333,7 +327,7 @@ fn visibility_label(visible: bool) -> &'static str {
 fn surface_label(surface: ToolbarItemSurface) -> &'static str {
     match surface {
         ToolbarItemSurface::Top => "Top toolbar",
-        ToolbarItemSurface::Side => "Side toolbar",
+        ToolbarItemSurface::Popover => "Popover sections",
     }
 }
 
@@ -348,6 +342,5 @@ fn category_label(category: ToolbarItemCategory) -> &'static str {
         ToolbarItemCategory::Board => "Boards",
         ToolbarItemCategory::Setting => "Settings",
         ToolbarItemCategory::Session => "Sessions",
-        ToolbarItemCategory::ToolOption => "Tool options",
     }
 }

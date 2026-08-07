@@ -301,8 +301,8 @@ pub fn top_extra_height(snapshot: &ToolbarSnapshot) -> f64 {
 
 /// Scroll bounds for the open Canvas/Session/Settings popover as
 /// (natural_height, viewport_height), both in pre-scale spec units; `None`
-/// while no menu popover is open. The wheel path scrolls against these the
-/// way `side_scroll_bounds` served the retired side palette.
+/// while no menu popover is open. The wheel path and scrollbar drag use these
+/// same bounds.
 pub fn top_popover_scroll_bounds(snapshot: &ToolbarSnapshot) -> Option<(f64, f64)> {
     let plan = plan_top_strip(snapshot);
     menus::menu_scroll_bounds_planned(snapshot, &plan)

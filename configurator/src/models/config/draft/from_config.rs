@@ -1,4 +1,5 @@
 use super::super::super::color::{ColorInput, ColorQuadInput};
+use super::super::super::fields::ZoomChipDisplayOption;
 use super::super::super::fields::{
     EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
     InputHudPositionOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
@@ -11,7 +12,6 @@ use super::super::super::fields::{
 use super::super::super::fields::{
     PressureThicknessEditModeOption, PressureThicknessEntryModeOption,
 };
-use super::super::super::fields::{ToolbarSideLayoutOption, ZoomChipDisplayOption};
 use super::super::super::keybindings::KeybindingsDraft;
 use super::super::super::util::format_float;
 use super::super::boards::BoardsDraft;
@@ -38,7 +38,6 @@ impl ConfigDraft {
             show_presets: config.ui.toolbar.show_presets,
             show_step_section: config.ui.toolbar.show_step_section,
             show_text_controls: config.ui.toolbar.show_text_controls,
-            show_settings_section: config.ui.toolbar.show_settings_section,
         };
         legacy_toolbar_visibility.apply_mode_override(
             config
@@ -146,15 +145,11 @@ impl ConfigDraft {
                 .command_palette_toast_duration_ms
                 .to_string(),
             ui_toolbar_top_pinned: config.ui.toolbar.top_pinned,
-            ui_toolbar_side_pinned: config.ui.toolbar.side_pinned,
             ui_toolbar_use_icons: config.ui.toolbar.use_icons,
             ui_toolbar_show_more_colors: config.ui.toolbar.show_more_colors,
             ui_toolbar_show_preset_toasts: config.ui.toolbar.show_preset_toasts,
             ui_toolbar_layout_mode: ToolbarLayoutModeOption::from_mode(
                 config.ui.toolbar.layout_mode,
-            ),
-            ui_toolbar_side_layout: ToolbarSideLayoutOption::from_config(
-                config.ui.toolbar.side_layout,
             ),
             ui_toolbar_zoom_chip_display: ZoomChipDisplayOption::from_config(
                 config.ui.toolbar.zoom_chip_display,
@@ -172,15 +167,12 @@ impl ConfigDraft {
             ui_toolbar_show_boards_section: toolbar_visibility.show_boards_section,
             ui_toolbar_show_step_section: toolbar_visibility.show_step_section,
             ui_toolbar_show_text_controls: toolbar_visibility.show_text_controls,
-            ui_toolbar_show_settings_section: toolbar_visibility.show_settings_section,
             ui_toolbar_show_delay_sliders: config.ui.toolbar.show_delay_sliders,
             ui_toolbar_show_marker_opacity_section: config.ui.toolbar.show_marker_opacity_section,
             ui_toolbar_show_tool_preview: config.ui.toolbar.show_tool_preview,
             ui_toolbar_force_inline: config.ui.toolbar.force_inline,
             ui_toolbar_top_offset: format_float(config.ui.toolbar.top_offset),
             ui_toolbar_top_offset_y: format_float(config.ui.toolbar.top_offset_y),
-            ui_toolbar_side_offset: format_float(config.ui.toolbar.side_offset),
-            ui_toolbar_side_offset_x: format_float(config.ui.toolbar.side_offset_x),
             ui_toolbar_mode_overrides: ToolbarModeOverridesDraft::from_config(
                 &config.ui.toolbar.mode_overrides,
             ),

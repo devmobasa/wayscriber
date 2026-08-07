@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     ToolbarBackendKind, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides,
-    ToolbarRebindModifier, ToolbarSideLayout, TopDisplayMode, ZoomChipDisplay,
+    ToolbarRebindModifier, TopDisplayMode, ZoomChipDisplay,
 };
 
 /// Toolbar visibility and pinning configuration.
 ///
-/// Controls which toolbar panels are visible on startup and whether they
-/// remain pinned (saved to config) when closed.
+/// Controls whether the top toolbar is visible on startup and whether it
+/// remains pinned (saved to config) when closed.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolbarConfig {
@@ -32,10 +32,6 @@ pub struct ToolbarConfig {
     #[serde(default = "default_toolbar_top_pinned")]
     pub top_pinned: bool,
 
-    /// Show the side toolbar (colors, settings) on startup
-    #[serde(default = "default_toolbar_side_pinned")]
-    pub side_pinned: bool,
-
     /// Start the top toolbar minimized to its edge restore tab
     #[serde(default)]
     pub top_minimized: bool,
@@ -45,28 +41,6 @@ pub struct ToolbarConfig {
     /// governed by `top_pinned`.
     #[serde(default)]
     pub top_display_mode: TopDisplayMode,
-
-    /// Start the side toolbar minimized to its edge restore tab
-    #[serde(default)]
-    pub side_minimized: bool,
-
-    /// Where the side-palette functions live ("pill", "panel"). The default
-    /// "pill" retires the side palette: drawing properties live in the
-    /// contextual style pill, canvas management in the status HUD/board
-    /// picker, and Session/Settings in popovers on the top strip's
-    /// overflow menu. "panel" is the legacy escape hatch restoring the
-    /// classic side palette (deprecated; removal planned one release after
-    /// the pill default).
-    #[serde(default)]
-    pub side_layout: ToolbarSideLayout,
-
-    /// Side-palette pane restored at startup ("draw", "canvas", "session", "settings")
-    #[serde(default = "default_side_active_pane")]
-    pub side_active_pane: String,
-
-    /// Side-palette sections collapsed to their header row
-    #[serde(default)]
-    pub collapsed_sections: Vec<String>,
 
     /// Use icons instead of text labels in toolbars
     #[serde(default = "default_toolbar_use_icons")]
@@ -103,15 +77,15 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_zoom_chip")]
     pub show_zoom_chip: bool,
 
-    /// Show the Pages section in the side toolbar
+    /// Show the Pages section
     #[serde(default = "default_show_pages_section")]
     pub show_pages_section: bool,
 
-    /// Show the Boards section in the side toolbar
+    /// Show the Boards section
     #[serde(default = "default_show_boards_section")]
     pub show_boards_section: bool,
 
-    /// Show the presets section in the side toolbar
+    /// Show the presets section
     #[serde(default = "default_show_presets")]
     pub show_presets: bool,
 
@@ -123,15 +97,11 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_text_controls")]
     pub show_text_controls: bool,
 
-    /// Deprecated compatibility mirror. Settings navigation is always reachable.
-    #[serde(default = "default_show_settings_section")]
-    pub show_settings_section: bool,
-
     /// Show delay sliders in Step Undo/Redo section
     #[serde(default = "default_show_delay_sliders")]
     pub show_delay_sliders: bool,
 
-    /// Show the marker opacity slider section in the side toolbar
+    /// Show the marker opacity slider section
     #[serde(default = "default_show_marker_opacity_section")]
     pub show_marker_opacity_section: bool,
 
@@ -155,14 +125,6 @@ pub struct ToolbarConfig {
     #[serde(default)]
     pub top_offset_y: f64,
 
-    /// Saved vertical offset for the side toolbar (layer-shell/inline)
-    #[serde(default)]
-    pub side_offset: f64,
-
-    /// Saved horizontal offset for the side toolbar (layer-shell/inline)
-    #[serde(default)]
-    pub side_offset_x: f64,
-
     /// Force inline toolbars even when layer-shell is available (debug/compatibility).
     #[serde(default)]
     pub force_inline: bool,
@@ -180,15 +142,10 @@ impl Default for ToolbarConfig {
             mode_overrides: ToolbarModeOverrides::default(),
             items: ToolbarItemsConfig::default(),
             top_pinned: default_toolbar_top_pinned(),
-            side_pinned: default_toolbar_side_pinned(),
             top_minimized: false,
             top_display_mode: TopDisplayMode::default(),
             zoom_chip_display: ZoomChipDisplay::default(),
             show_zoom_chip: default_show_zoom_chip(),
-            side_minimized: false,
-            side_layout: ToolbarSideLayout::default(),
-            side_active_pane: default_side_active_pane(),
-            collapsed_sections: Vec::new(),
             use_icons: default_toolbar_use_icons(),
             scale: default_toolbar_scale(),
             show_more_colors: default_show_more_colors(),
@@ -200,7 +157,6 @@ impl Default for ToolbarConfig {
             show_presets: default_show_presets(),
             show_step_section: default_show_step_section(),
             show_text_controls: default_show_text_controls(),
-            show_settings_section: default_show_settings_section(),
             show_delay_sliders: default_show_delay_sliders(),
             show_marker_opacity_section: default_show_marker_opacity_section(),
             context_aware_ui: default_context_aware_ui(),
@@ -208,8 +164,6 @@ impl Default for ToolbarConfig {
             show_tool_preview: default_show_tool_preview(),
             top_offset: 0.0,
             top_offset_y: 0.0,
-            side_offset: 0.0,
-            side_offset_x: 0.0,
             force_inline: false,
             rebind_modifier: ToolbarRebindModifier::default(),
         }
@@ -218,14 +172,6 @@ impl Default for ToolbarConfig {
 
 fn default_toolbar_top_pinned() -> bool {
     true
-}
-
-fn default_toolbar_side_pinned() -> bool {
-    true
-}
-
-fn default_side_active_pane() -> String {
-    "draw".to_string()
 }
 
 fn default_toolbar_use_icons() -> bool {
@@ -277,10 +223,6 @@ fn default_show_step_section() -> bool {
 }
 
 fn default_show_text_controls() -> bool {
-    true
-}
-
-fn default_show_settings_section() -> bool {
     true
 }
 

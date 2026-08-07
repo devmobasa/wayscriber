@@ -85,10 +85,8 @@ fn every_opener_ends_the_tour() {
 fn an_opener_that_ends_the_tour_restores_pinned_chrome() {
     let mut state = create_test_input_state();
     state.toolbar_top_pinned = true;
-    state.toolbar_side_pinned = true;
     state.start_tour();
     state.toolbar_top_visible = false;
-    state.toolbar_side_visible = false;
     state.toolbar_visible = false;
 
     state.toggle_command_palette();

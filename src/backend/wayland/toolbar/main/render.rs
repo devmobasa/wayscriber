@@ -12,58 +12,35 @@ impl ToolbarSurfaceManager {
         hover: Option<(f64, f64)>,
         render_profile: Option<&RenderColorProfile>,
     ) {
-        // Render top toolbar if visible
-        if self.is_top_visible() {
-            self.top.set_ui_scale(snapshot.toolbar_scale);
-            let top_hover = hover.or(self.top_hover).or(self.top.focused_hover());
-            let top_hover_start = self.top_hover_start;
-            if let Err(err) = self.top.render(
-                shm,
-                snapshot,
-                top_hover,
-                top_hover_start,
-                render_profile,
-                |ctx, w, h, snap, hits, hov, hov_start| {
-                    crate::backend::wayland::toolbar::render_top_strip(
-                        ctx, w, h, snap, hits, hov, hov_start,
-                    )
-                },
-            ) {
-                self.top.report_render_failure(&err);
-            }
-            self.top.sync_top_input_region(snapshot);
+        if !self.is_top_visible() {
+            return;
         }
-
-        // Render side toolbar if visible
-        if self.is_side_visible() {
-            self.side.set_ui_scale(snapshot.toolbar_scale);
-            let side_hover = hover.or(self.side_hover).or(self.side.focused_hover());
-            let side_hover_start = self.side_hover_start;
-            if let Err(err) = self.side.render(
-                shm,
-                snapshot,
-                side_hover,
-                side_hover_start,
-                render_profile,
-                |ctx, w, h, snap, hits, hov, hov_start| {
-                    crate::backend::wayland::toolbar::render_side_palette(
-                        ctx, w, h, snap, hits, hov, hov_start,
-                    )
-                },
-            ) {
-                self.side.report_render_failure(&err);
-            }
+        self.top.set_ui_scale(snapshot.toolbar_scale);
+        let top_hover = hover.or(self.top_hover).or(self.top.focused_hover());
+        let top_hover_start = self.top_hover_start;
+        if let Err(err) = self.top.render(
+            shm,
+            snapshot,
+            top_hover,
+            top_hover_start,
+            render_profile,
+            |ctx, w, h, snap, hits, hov, hov_start| {
+                crate::backend::wayland::toolbar::render_top_strip(
+                    ctx, w, h, snap, hits, hov, hov_start,
+                )
+            },
+        ) {
+            self.top.report_render_failure(&err);
         }
+        self.top.sync_top_input_region(snapshot);
     }
 
     pub fn mark_dirty(&mut self) {
         self.top.mark_dirty();
-        self.side.mark_dirty();
     }
 
     pub fn needs_render(&self) -> bool {
-        (self.top_visible && self.top.needs_render())
-            || (self.side_visible && self.side.needs_render())
+        self.top_visible && self.top.needs_render()
     }
 
     /// Store the latest snapshot and report whether it differs from the previous one.

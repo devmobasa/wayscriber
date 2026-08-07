@@ -32,7 +32,6 @@ impl ConfigDraft {
         self.ui_toolbar_show_presets = visibility.show_presets;
         self.ui_toolbar_show_step_section = visibility.show_step_section;
         self.ui_toolbar_show_text_controls = visibility.show_text_controls;
-        self.ui_toolbar_show_settings_section = visibility.show_settings_section;
     }
 
     fn set_toolbar_section_visible(&mut self, flag: ToolbarSectionFlag, visible: bool) {
@@ -187,7 +186,6 @@ impl ConfigDraft {
             ToggleField::UiXdgFullscreen => self.ui_xdg_fullscreen = value,
             ToggleField::UiXdgKeepOnFocusLoss => self.ui_xdg_keep_on_focus_loss = value,
             ToggleField::UiToolbarTopPinned => self.ui_toolbar_top_pinned = value,
-            ToggleField::UiToolbarSidePinned => self.ui_toolbar_side_pinned = value,
             ToggleField::UiToolbarUseIcons => self.ui_toolbar_use_icons = value,
             ToggleField::UiToolbarShowMoreColors => self.ui_toolbar_show_more_colors = value,
             ToggleField::UiToolbarPresetToasts => self.ui_toolbar_show_preset_toasts = value,
@@ -385,8 +383,6 @@ impl ConfigDraft {
             TextField::ExportPdfLabelPaddingY => self.export_pdf_label_padding_y = value,
             TextField::ToolbarTopOffset => self.ui_toolbar_top_offset = value,
             TextField::ToolbarTopOffsetY => self.ui_toolbar_top_offset_y = value,
-            TextField::ToolbarSideOffset => self.ui_toolbar_side_offset = value,
-            TextField::ToolbarSideOffsetX => self.ui_toolbar_side_offset_x = value,
             TextField::BoardsMaxCount => self.boards.max_count = value,
             TextField::SessionCustomDirectory => self.session_custom_directory = value,
             TextField::SessionMaxShapesPerFrame => self.session_max_shapes_per_frame = value,

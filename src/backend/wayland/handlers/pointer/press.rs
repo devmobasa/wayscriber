@@ -174,11 +174,7 @@ impl WaylandState {
             {
                 handled = true;
                 let toolbar_event = intent_to_event(intent, self.toolbar.last_snapshot());
-                if matches!(
-                    toolbar_event,
-                    ToolbarEvent::MoveTopToolbar { .. } | ToolbarEvent::MoveSideToolbar { .. }
-                ) && drag
-                {
+                if matches!(toolbar_event, ToolbarEvent::MoveTopToolbar { .. }) && drag {
                     self.lock_pointer_for_drag(qh, &event.surface);
                 }
                 log::info!(

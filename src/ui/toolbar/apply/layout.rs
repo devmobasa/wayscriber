@@ -1,6 +1,6 @@
 use crate::config::{ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode};
 use crate::input::InputState;
-use crate::ui::toolbar::{ToolbarItemCustomizeGroup, ToolbarSideSection};
+use crate::ui::toolbar::ToolbarItemCustomizeGroup;
 
 impl InputState {
     /// Close every open top-strip menu/popover (shapes picker, overflow, and
@@ -72,6 +72,9 @@ impl InputState {
             self.toolbar_session_popover_open = false;
             self.toolbar_settings_popover_open = false;
             self.toolbar_canvas_popover_open = false;
+            self.toolbar_customize_items_open = false;
+            self.toolbar_customize_items_group = None;
+            self.toolbar_status_bar_contents_open = false;
         }
         self.needs_redraw = true;
         true
@@ -97,27 +100,9 @@ impl InputState {
         true
     }
 
-    pub(super) fn apply_toolbar_set_side_minimized(&mut self, minimized: bool) -> bool {
-        if self.toolbar_side_minimized == minimized {
-            return false;
-        }
-        self.toolbar_side_minimized = minimized;
-        self.needs_redraw = true;
-        true
-    }
-
     pub(super) fn apply_toolbar_pin_top_toolbar(&mut self, pin: bool) -> bool {
         if self.toolbar_top_pinned != pin {
             self.toolbar_top_pinned = pin;
-            true
-        } else {
-            false
-        }
-    }
-
-    pub(super) fn apply_toolbar_pin_side_toolbar(&mut self, pin: bool) -> bool {
-        if self.toolbar_side_pinned != pin {
-            self.toolbar_side_pinned = pin;
             true
         } else {
             false
@@ -427,60 +412,6 @@ impl InputState {
         true
     }
 
-    pub(crate) fn apply_toolbar_set_side_pane(
-        &mut self,
-        pane: crate::ui::toolbar::SidePane,
-    ) -> bool {
-        let mut changed = false;
-        if self.toolbar_side_pane != pane {
-            self.toolbar_side_pane = pane;
-            changed = true;
-        }
-        // Leaving the Settings pane closes its nested sub-panels.
-        if pane != crate::ui::toolbar::SidePane::Settings
-            && (self.toolbar_customize_items_open
-                || self.toolbar_customize_items_group.is_some()
-                || self.toolbar_status_bar_contents_open)
-        {
-            self.toolbar_customize_items_open = false;
-            self.toolbar_customize_items_group = None;
-            self.toolbar_status_bar_contents_open = false;
-            changed = true;
-        }
-        if changed {
-            self.needs_redraw = true;
-        }
-        changed
-    }
-
-    pub(super) fn apply_toolbar_scroll_side_pane(&mut self, offset: f64) -> bool {
-        let pane = self.toolbar_side_pane.index();
-        let offset = offset.max(0.0);
-        if (self.toolbar_side_scroll[pane] - offset).abs() < 0.5 {
-            return false;
-        }
-        self.toolbar_side_scroll[pane] = offset;
-        self.needs_redraw = true;
-        true
-    }
-
-    pub(super) fn apply_toolbar_toggle_side_section_collapsed(
-        &mut self,
-        section: ToolbarSideSection,
-        collapsed: bool,
-    ) -> bool {
-        let changed = if collapsed {
-            self.toolbar_collapsed_side_sections.insert(section)
-        } else {
-            self.toolbar_collapsed_side_sections.remove(&section)
-        };
-        if !changed {
-            return false;
-        }
-        self.needs_redraw = true;
-        true
-    }
-
     /// Applies the layout preset restored from runtime-UI state.
     ///
     /// Restoring the mode must not re-run the preset's section defaults: the
@@ -556,7 +487,6 @@ impl InputState {
         if !open {
             self.toolbar_customize_items_group = None;
         }
-        self.toolbar_side_pane = crate::ui::toolbar::SidePane::Settings;
         self.needs_redraw = true;
         true
     }
@@ -571,7 +501,6 @@ impl InputState {
         self.toolbar_customize_items_open = true;
         self.toolbar_customize_items_group = group;
         self.toolbar_status_bar_contents_open = false;
-        self.toolbar_side_pane = crate::ui::toolbar::SidePane::Settings;
         self.needs_redraw = true;
         true
     }
@@ -585,7 +514,6 @@ impl InputState {
             self.toolbar_customize_items_open = false;
             self.toolbar_customize_items_group = None;
         }
-        self.toolbar_side_pane = crate::ui::toolbar::SidePane::Settings;
         self.needs_redraw = true;
         true
     }
@@ -659,45 +587,28 @@ mod tests {
     }
 
     #[test]
-    fn minimize_keeps_bars_visible_and_close_is_an_alias() {
+    fn minimize_keeps_the_strip_visible_and_close_is_an_alias() {
         let mut state = make_test_input_state();
-        // The side-palette visibility assertion below needs the deprecated
-        // Panel escape hatch (the struct default is Pill, which retires the
-        // side surface).
-        state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Panel);
 
-        // The deprecated Close events now minimize: the surface stays
+        // The deprecated Close event now minimizes: the surface stays
         // visible as a restore tab instead of vanishing.
         state.apply_toolbar_event(ToolbarEvent::CloseTopToolbar);
         assert!(state.toolbar_top_minimized);
         assert!(state.toolbar_top_visible());
 
-        state.apply_toolbar_event(ToolbarEvent::CloseSideToolbar);
-        assert!(state.toolbar_side_minimized);
-        assert!(state.toolbar_side_visible());
-
         state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(false));
-        state.apply_toolbar_event(ToolbarEvent::SetSideMinimized(false));
         assert!(!state.toolbar_top_minimized);
-        assert!(!state.toolbar_side_minimized);
     }
 
     #[test]
     fn pin_application_defers_persistence_confirmation_to_backend() {
         let mut state = make_test_input_state();
         let top_pinned = !state.toolbar_top_pinned;
-        let side_pinned = !state.toolbar_side_pinned;
 
         assert!(state.apply_toolbar_event(ToolbarEvent::PinTopToolbar(top_pinned)));
         assert!(
             state.ui_toast.is_none(),
             "input application does not yet know whether the runtime mutation is durable"
-        );
-
-        assert!(state.apply_toolbar_event(ToolbarEvent::PinSideToolbar(side_pinned)));
-        assert!(
-            state.ui_toast.is_none(),
-            "the backend emits persistence-aware pin feedback after finishing the mutation"
         );
     }
 

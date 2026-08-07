@@ -83,24 +83,6 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_minimize_button(
     );
 }
 
-/// Minimize the vertical side palette into its edge restore tab.
-pub(in crate::backend::wayland::toolbar::render) fn draw_side_minimize_button(
-    ctx: &cairo::Context,
-    x: f64,
-    y: f64,
-    size: f64,
-    hover: bool,
-) {
-    draw_collapse_button(
-        ctx,
-        x,
-        y,
-        size,
-        hover,
-        crate::toolbar_icons::draw_icon_side_minimize,
-    );
-}
-
 fn draw_collapse_button(
     ctx: &cairo::Context,
     x: f64,

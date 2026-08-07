@@ -47,7 +47,7 @@ fn supported_reset_waits_for_in_flight_write_and_publishes_epoch_on_ack() {
         .unwrap();
     let first = commit_bool(&mut controller, InteractionSeedTarget::TopPinned, true);
     let request_a = controller.take_source_mutation().unwrap();
-    let held = commit_bool(&mut controller, InteractionSeedTarget::SidePinned, true);
+    let held = commit_bool(&mut controller, InteractionSeedTarget::TopMinimized, true);
     let old_epoch = controller.authority_epoch();
     let (barrier, reset_through, publish_epoch) = match controller.request_supported_reset() {
         RequestResetResult::Started {
@@ -341,7 +341,7 @@ fn unsupported_reset_conflict_retains_live_only_authority_for_unsupported_source
     );
     let untouched = controller
         .begin_runtime_preview(
-            RuntimeUiMutationScope::one(InteractionSeedTarget::SidePinned),
+            RuntimeUiMutationScope::one(InteractionSeedTarget::TopMinimized),
             PreviewRollbackSnapshot::default(),
         )
         .unwrap();
@@ -394,7 +394,7 @@ fn unsupported_reset_conflict_retains_live_only_authority_for_unsupported_source
             untouched,
             RuntimePreviewFinishIntent::Commit(
                 RuntimeUiMutationValues::one(
-                    InteractionSeedTarget::SidePinned,
+                    InteractionSeedTarget::TopMinimized,
                     InteractionSeedValue::Bool(true),
                 )
                 .unwrap(),
@@ -583,7 +583,7 @@ fn retained_authority_failure_resolves_previews_before_a_later_staged_reload() {
     );
     let mut side_rollback = PreviewRollbackSnapshot::default();
     side_rollback.values.insert(
-        InteractionSeedTarget::SidePinned,
+        InteractionSeedTarget::TopMinimized,
         InteractionSeedValue::Bool(false),
     );
     let top = controller
@@ -594,7 +594,7 @@ fn retained_authority_failure_resolves_previews_before_a_later_staged_reload() {
         .unwrap();
     let side = controller
         .begin_runtime_preview(
-            RuntimeUiMutationScope::one(InteractionSeedTarget::SidePinned),
+            RuntimeUiMutationScope::one(InteractionSeedTarget::TopMinimized),
             side_rollback,
         )
         .unwrap();

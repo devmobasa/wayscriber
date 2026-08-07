@@ -14,7 +14,7 @@ pub struct PresenterModeConfig {
 
     /// What `hide_toolbars` does to the top strip: "hidden" removes it
     /// entirely (default, today's behavior); "micro" collapses it to the
-    /// 44px micro chip instead. Side toolbars always hide.
+    /// 44px micro chip instead.
     #[serde(default)]
     pub toolbar_mode: PresenterToolbarMode,
 
@@ -64,10 +64,10 @@ impl Default for PresenterModeConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum PresenterToolbarMode {
-    /// Hide the top strip along with the side toolbars.
+    /// Hide the top strip.
     #[default]
     Hidden,
-    /// Collapse the top strip to the micro chip; side toolbars still hide.
+    /// Collapse the top strip to the micro chip.
     Micro,
 }
 

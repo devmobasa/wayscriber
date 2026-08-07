@@ -149,21 +149,17 @@ impl InputState {
                     // (focus mode, presenter mode) bypass this path on purpose
                     // and stay run-only.
                     let previous_top_pinned = self.toolbar_top_pinned;
-                    let previous_side_pinned = self.toolbar_side_pinned;
                     self.toolbar_top_pinned = now_visible;
-                    self.toolbar_side_pinned = now_visible;
-                    // Persist only when a pin actually moves. A show from a
-                    // cycle-hidden strip under the pill layout (and a hide
-                    // with both surfaces already unpinned) changes no pin:
-                    // the write would be byte-identical, and its only
-                    // observable effect would be a rollback that re-derives
-                    // pin-true visibility for a screen that was effectively
-                    // hidden before the press. The unfold itself stays
-                    // runtime-only, exactly like F2's hidden rung.
-                    if previous_top_pinned != now_visible || previous_side_pinned != now_visible {
+                    // Persist only when the pin actually moves. A show from a
+                    // cycle-hidden strip changes no pin: the write would be
+                    // byte-identical, and its only observable effect would be
+                    // a rollback that re-derives pin-true visibility for a
+                    // screen that was effectively hidden before the press. The
+                    // unfold itself stays runtime-only, exactly like F2's
+                    // hidden rung.
+                    if previous_top_pinned != now_visible {
                         self.queue_toolbar_persistence(PendingToolbarPersistence::Visibility {
                             previous_top_pinned,
-                            previous_side_pinned,
                         });
                     }
                     self.pending_onboarding_usage.used_toolbar_toggle = true;
@@ -192,9 +188,7 @@ impl InputState {
                     crate::config::TopDisplayMode::Micro => Toast::info("Toolbar: micro"),
                     crate::config::TopDisplayMode::Hidden => {
                         // The hidden rung teaches its own way back: another
-                        // cycle press always lands on Full (unlike
-                        // ToggleToolbar, which would hide a still-visible
-                        // side palette instead of restoring the strip).
+                        // cycle press always lands on Full.
                         let label =
                             match self.action_binding_primary_label(Action::CycleToolbarDisplay) {
                                 Some(binding) => format!("Show ({binding})"),

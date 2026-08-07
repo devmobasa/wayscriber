@@ -64,10 +64,7 @@ fn global_runtime_reset_clears_board_pin_override_and_live_value() {
     let drain = settle_runtime(&mut runtime);
     assert!(drain.rollbacks.is_empty());
     assert!(drain.rebuild_live);
-    let mut positions = ToolbarPositionSnapshot {
-        top: (0.0, 0.0),
-        side: (0.0, 0.0),
-    };
+    let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     runtime.apply_live_state(&mut input, &mut positions);
     assert!(!board_pinned(&input, "whiteboard"));
     assert!(!runtime_path.exists());

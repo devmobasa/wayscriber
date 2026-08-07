@@ -384,18 +384,6 @@ fn draw_minimize(ctx: &Context) {
     stroke(ctx);
 }
 
-fn draw_side_minimize(ctx: &Context) {
-    ctx.move_to(5.0, 5.0);
-    ctx.line_to(8.0, 5.0);
-    ctx.line_to(8.0, 19.0);
-    ctx.line_to(5.0, 19.0);
-    stroke(ctx);
-    ctx.move_to(15.5, 8.5);
-    ctx.line_to(12.0, 12.0);
-    ctx.line_to(15.5, 15.5);
-    stroke(ctx);
-}
-
 fn draw_restore(ctx: &Context) {
     ctx.move_to(5.0, 5.0);
     ctx.line_to(5.0, 8.0);
@@ -585,7 +573,6 @@ renderers!(
     (render_pin, draw_pin),
     (render_unpin, draw_unpin),
     (render_minimize, draw_minimize),
-    (render_side_minimize, draw_side_minimize),
     (render_restore, draw_restore),
     (render_close, draw_close),
     (render_rect, draw_rectangle),
@@ -609,7 +596,7 @@ mod tests {
     type IconRender = fn(&Context, f64, f64, f64);
 
     const SIZES: [i32; 5] = [18, 20, 22, 24, 28];
-    const ICONS: [(&str, IconRender); 34] = [
+    const ICONS: [(&str, IconRender); 33] = [
         ("drag", render_drag),
         ("select", render_select),
         ("pen", render_pen),
@@ -630,7 +617,6 @@ mod tests {
         ("pin", render_pin),
         ("unpin", render_unpin),
         ("minimize", render_minimize),
-        ("side_minimize", render_side_minimize),
         ("restore", render_restore),
         ("close", render_close),
         ("rectangle", render_rect),

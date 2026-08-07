@@ -3,7 +3,7 @@ use wayscriber::config::{ToolbarItemId, ToolbarItemOrderGroup};
 use crate::models::{
     InputHudModeOption, InputHudPositionOption, OverrideOption, ReducedMotionOption,
     StatusPositionOption, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, ToolbarSideLayoutOption, UiThemeOption, ZoomChipDisplayOption,
+    ToolbarRebindModifierOption, UiThemeOption, ZoomChipDisplayOption,
 };
 
 use super::super::super::effects::Effect;
@@ -66,16 +66,6 @@ impl ConfiguratorApp {
     ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         self.draft.apply_toolbar_layout_mode(option);
-        self.refresh_dirty_flag();
-        Vec::new()
-    }
-
-    pub(in crate::app::update) fn handle_toolbar_side_layout_changed(
-        &mut self,
-        option: ToolbarSideLayoutOption,
-    ) -> Vec<Effect> {
-        self.status = StatusMessage::idle();
-        self.draft.ui_toolbar_side_layout = option;
         self.refresh_dirty_flag();
         Vec::new()
     }

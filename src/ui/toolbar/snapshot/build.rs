@@ -10,21 +10,12 @@ use super::types::{PresetFeedbackSnapshot, PresetSlotSnapshot, ToolbarSnapshot};
 impl ToolbarSnapshot {
     #[allow(dead_code)]
     pub fn from_input(state: &InputState) -> Self {
-        Self::from_input_with_options(state, ToolbarBindingHints::default(), false)
+        Self::from_input_with_bindings(state, ToolbarBindingHints::default())
     }
 
-    #[allow(dead_code)]
     pub fn from_input_with_bindings(
         state: &InputState,
         binding_hints: ToolbarBindingHints,
-    ) -> Self {
-        Self::from_input_with_options(state, binding_hints, false)
-    }
-
-    pub fn from_input_with_options(
-        state: &InputState,
-        binding_hints: ToolbarBindingHints,
-        show_drawer_hint: bool,
     ) -> Self {
         let frame = state.boards.active_frame();
         let active_tool = state.active_tool();
@@ -99,8 +90,6 @@ impl ToolbarSnapshot {
                 })
             })
             .collect();
-        let active_side_pane = state.toolbar_side_pane;
-        let side_scroll = state.toolbar_side_scroll[state.toolbar_side_pane.index()];
         let customize_items_open = state.toolbar_customize_items_open;
         let customize_items_group = state.toolbar_customize_items_group;
         let status_bar_contents_open = state.toolbar_status_bar_contents_open;
@@ -109,14 +98,12 @@ impl ToolbarSnapshot {
         let show_pages_section = state.show_pages_section;
         let show_boards_section = state.show_boards_section;
         let show_step_section = state.show_step_section;
-        let show_settings_section = state.show_settings_section;
         let delay_actions_enabled = state.show_step_section && state.show_delay_sliders;
 
         Self {
             active_tool,
             tool_override: state.tool_override(),
             color: state.color_for_tool(active_tool),
-            picker_hsv: state.toolbar_picker_hsv,
             quick_colors: state.quick_colors.clone(),
             thickness: thickness_value,
             eraser_size: state.eraser_size,
@@ -160,7 +147,6 @@ impl ToolbarSnapshot {
             custom_undo_steps: state.custom_undo_steps,
             custom_redo_steps: state.custom_redo_steps,
             top_pinned: state.toolbar_top_pinned,
-            side_pinned: state.toolbar_side_pinned,
             use_icons: state.toolbar_use_icons,
             toolbar_scale: state.toolbar_scale,
             layout_mode: state.toolbar_layout_mode,
@@ -177,8 +163,6 @@ impl ToolbarSnapshot {
             show_step_section,
             show_text_controls: state.show_text_controls,
             context_aware_ui: state.context_aware_ui,
-            show_settings_section,
-            collapsed_side_sections: state.toolbar_collapsed_side_sections.clone(),
             show_tool_preview: state.show_tool_preview,
             show_status_bar: state.show_status_bar,
             status_bar_interactive: state.status_bar_interactive,
@@ -209,22 +193,17 @@ impl ToolbarSnapshot {
             // Fade is owned by the backend engine; renderers see 1.0 until
             // the backend publishes the animated value.
             top_fade: 1.0,
-            side_minimized: state.toolbar_side_minimized,
             selection_properties: if active_tool == crate::input::Tool::Select {
                 state.selection_pill_entries()
             } else {
                 Vec::new()
             },
             top_viewport_max: None,
-            active_side_pane,
-            side_scroll,
-            side_viewport_max: None,
             top_available_height: None,
             customize_items_open,
             customize_items_group,
             status_bar_contents_open,
             binding_hints,
-            show_drawer_hint,
             is_transparent: state.board_is_transparent(),
             render_profile_generation: state.render_profile_generation(),
             active_session_name: None,

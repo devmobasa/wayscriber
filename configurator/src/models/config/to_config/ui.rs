@@ -44,12 +44,10 @@ impl ConfigDraft {
             |value| config.ui.command_palette_toast_duration_ms = value,
         );
         config.ui.toolbar.top_pinned = self.ui_toolbar_top_pinned;
-        config.ui.toolbar.side_pinned = self.ui_toolbar_side_pinned;
         config.ui.toolbar.use_icons = self.ui_toolbar_use_icons;
         config.ui.toolbar.show_more_colors = self.ui_toolbar_show_more_colors;
         config.ui.toolbar.show_preset_toasts = self.ui_toolbar_show_preset_toasts;
         config.ui.toolbar.layout_mode = self.ui_toolbar_layout_mode.to_mode();
-        config.ui.toolbar.side_layout = self.ui_toolbar_side_layout.to_config();
         config.ui.toolbar.zoom_chip_display = self.ui_toolbar_zoom_chip_display.to_config();
         config.ui.toolbar.show_zoom_chip = self.ui_toolbar_show_zoom_chip;
         config.ui.toolbar.rebind_modifier = self.ui_toolbar_rebind_modifier.to_config();
@@ -68,7 +66,6 @@ impl ConfigDraft {
         config.ui.toolbar.show_boards_section = visibility.show_boards_section;
         config.ui.toolbar.show_step_section = visibility.show_step_section;
         config.ui.toolbar.show_text_controls = visibility.show_text_controls;
-        config.ui.toolbar.show_settings_section = visibility.show_settings_section;
         config.ui.toolbar.show_delay_sliders = self.ui_toolbar_show_delay_sliders;
         config.ui.toolbar.show_marker_opacity_section = self.ui_toolbar_show_marker_opacity_section;
         config.ui.toolbar.show_tool_preview = self.ui_toolbar_show_tool_preview;
@@ -84,18 +81,6 @@ impl ConfigDraft {
             "ui.toolbar.top_offset_y",
             errors,
             |value| config.ui.toolbar.top_offset_y = value,
-        );
-        parse_field(
-            &self.ui_toolbar_side_offset,
-            "ui.toolbar.side_offset",
-            errors,
-            |value| config.ui.toolbar.side_offset = value,
-        );
-        parse_field(
-            &self.ui_toolbar_side_offset_x,
-            "ui.toolbar.side_offset_x",
-            errors,
-            |value| config.ui.toolbar.side_offset_x = value,
         );
         config.ui.status_bar_position = self.ui_status_position.to_status_position();
         parse_field(

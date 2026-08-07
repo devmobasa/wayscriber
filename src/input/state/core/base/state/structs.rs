@@ -42,9 +42,8 @@ use crate::input::{
 };
 use crate::render_profiles::RenderProfileSet;
 use crate::session::SessionOptions;
-use crate::ui::toolbar::ToolbarSideSection;
 use crate::util::Rect;
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -54,7 +53,6 @@ pub(crate) struct PresenterRestore {
     pub(crate) show_tool_preview: Option<bool>,
     pub(crate) toolbar_visible: Option<bool>,
     pub(crate) toolbar_top_visible: Option<bool>,
-    pub(crate) toolbar_side_visible: Option<bool>,
     /// Top-strip form/minimize state before presenter mapped the strip to
     /// the micro chip (`[presenter_mode] toolbar_mode = "micro"`).
     pub(crate) toolbar_top_display_mode: Option<crate::config::TopDisplayMode>,
@@ -71,7 +69,6 @@ pub(crate) struct FocusModeRestore {
     pub(crate) show_status_bar: bool,
     pub(crate) toolbar_visible: bool,
     pub(crate) toolbar_top_visible: bool,
-    pub(crate) toolbar_side_visible: bool,
     pub(crate) toolbar_top_display_mode: crate::config::TopDisplayMode,
     pub(crate) show_floating_badge: bool,
     pub(crate) show_zoom_chip: bool,
@@ -83,7 +80,6 @@ pub(crate) struct LightModeRestore {
     pub(crate) show_tool_preview: bool,
     pub(crate) toolbar_visible: bool,
     pub(crate) toolbar_top_visible: bool,
-    pub(crate) toolbar_side_visible: bool,
     pub(crate) click_highlight_enabled: bool,
     pub(crate) tool_override: Option<Tool>,
 }
@@ -274,20 +270,16 @@ pub struct InputState {
     pub light_mode_drawing: bool,
     /// Previous UI state to restore after light mode exits
     pub(crate) light_mode_restore: Option<LightModeRestore>,
-    /// Whether both toolbars are visible (combined flag, prefer top/side specific)
+    /// Whether the toolbar is visible (combined flag, prefer `toolbar_top_visible`)
     pub toolbar_visible: bool,
     /// Whether the top toolbar panel is visible
     pub toolbar_top_visible: bool,
-    /// Whether the side toolbar panel is visible
-    pub toolbar_side_visible: bool,
     /// Whether fill is enabled for fill-capable shapes (rect, ellipse)
     pub fill_enabled: bool,
     /// Current side count for regular polygon drawing.
     pub polygon_sides: u8,
     /// Whether the top toolbar is pinned (saved to config, opens at startup)
     pub toolbar_top_pinned: bool,
-    /// Whether the side toolbar is pinned (saved to config, opens at startup)
-    pub toolbar_side_pinned: bool,
     /// Whether to use icons instead of text labels in toolbars
     pub toolbar_use_icons: bool,
     /// Scale factor for toolbar UI (icons + layout)
@@ -329,26 +321,10 @@ pub struct InputState {
     pub(crate) last_draw_activity: Instant,
     /// Precise numeric entry popup opened from a pill numeral, when open.
     pub(crate) precision_entry: Option<crate::input::state::PrecisionEntryState>,
-    /// Whether the side palette is minimized to its edge restore tab.
-    pub toolbar_side_minimized: bool,
-    /// Where the side-palette functions live. Under the default `Pill`
-    /// layout the side surface never appears; the deprecated `Panel`
-    /// escape hatch keeps the classic side palette. Startup init applies
-    /// the config value; this struct field deliberately defaults to
-    /// `Panel` so side-palette tests exercise the panel without setup.
-    pub toolbar_side_layout: crate::config::ToolbarSideLayout,
     /// Modifier chord that turns a toolbar click into shortcut rebinding.
     /// Used to generate onboarding copy (the tour's rebind hint) without
     /// hardcoding key strings. Startup init applies the config value.
     pub toolbar_rebind_modifier: crate::config::ToolbarRebindModifier,
-    /// Last HSV triple committed from the side palette's color picker;
-    /// preserves hue/saturation across gray colors where RGB loses them.
-    pub toolbar_picker_hsv: Option<(f64, f64, f64)>,
-    /// Whether the toolbar drawer is open
-    /// Active toolbar drawer tab
-    pub toolbar_side_pane: crate::ui::toolbar::SidePane,
-    /// Runtime scroll offsets per side-palette pane (Draw/Canvas/Session/Settings).
-    pub toolbar_side_scroll: [f64; 4],
     /// Whether the Settings drawer is showing the toolbar item customization sub-panel
     pub toolbar_customize_items_open: bool,
     /// Selected toolbar item customization group in the Settings drawer sub-panel
@@ -507,7 +483,7 @@ pub struct InputState {
     pub custom_section_enabled: bool,
     /// Whether to show the delay sliders in Actions section
     pub show_delay_sliders: bool,
-    /// Whether to show the marker opacity slider in the side toolbar
+    /// Whether to keep the marker opacity control available in the style pill
     pub show_marker_opacity_section: bool,
     /// Whether to show preset action toast notifications
     pub show_preset_toasts: bool,
@@ -638,10 +614,6 @@ pub struct InputState {
     pub show_text_controls: bool,
     /// Whether to enable context-aware UI that shows/hides controls based on active tool
     pub context_aware_ui: bool,
-    /// Whether to show the Settings section
-    pub show_settings_section: bool,
-    /// Side drawer sections whose body content is collapsed for this runtime.
-    pub toolbar_collapsed_side_sections: BTreeSet<ToolbarSideSection>,
     /// Number of preset slots to display
     pub preset_slot_count: usize,
     /// Preset slots for quick tool switching

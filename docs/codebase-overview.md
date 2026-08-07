@@ -162,8 +162,10 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
   and surface input regions.
 - `src/toolbar_gtk/view/top_bar/` exhaustively adapts the same contract to GTK widgets while
   retaining GTK sizing, CSS, updater closures, drag gestures, and popover lifecycle.
-- Shape-picker compound rows and all side-palette layout remain frontend-specific. Their existing
-  tool/section ordering still comes from the shared toolbar model.
+- Shape-picker compound rows remain frontend-specific adapters over the shared top model. Canvas,
+  Session, and Settings live in top popovers built from the same shared models; there is no side
+  palette layout path. The [toolbar item ID compatibility inventory](toolbar-item-id-compatibility.md)
+  records which historical `side.*` serialized IDs still feed those models.
 
 ---
 
@@ -383,18 +385,20 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 - `src/runtime_ui_state/` owns the versioned wire model, seed/override reconciliation, guarded
   mutation pipeline, exact source revisions, pinned-directory store operations, recovery barriers,
   cancellation capabilities, and per-mutation durability outcomes.
-- Every seed target is runtime-owned: pins, minimize, side pane, collapsed sections, item
-  visibility/order, board pins, both toolbar positions, and the top strip's display form. Authored
-  `config.toml` values are the seeds; direct manipulation writes overrides. `top_position`,
-  `side_position`, and `top_display_mode` were added to wire V1 additively — an older build decodes
-  them as unknown keys and preserves them verbatim, which a version bump would not allow.
+- Every live seed target is runtime-owned: top pin/minimize, item visibility/order, board pins, the
+  top toolbar position, and the top strip's display form. Authored `config.toml` values are the
+  seeds; direct manipulation writes overrides. `top_position` and `top_display_mode` were added to
+  wire V1 additively — an older build decodes them as unknown keys and preserves them verbatim,
+  which a version bump would not allow. Retired panel keys such as `side_position`, side pane, and
+  collapsed sections stay only as raw passthrough (or are pruned from recognized maps) and are not
+  modeled seeds.
 - The persisted display form is `full`/`micro` only. The cycle action's `hidden` rung and presenter
   mode's forced mapping stay live-only; the override is computed with `TopDisplayMode::persisted()`
   and presenter-restore precedence so neither can be written.
-- A committed side drag stages both position overrides in one mutation scope because completing it
-  reconciles the top strip's horizontal base. Retained position overrides are applied on top of the
-  authored seeds at startup and clamped on the first apply against real output geometry, not on
-  load, so an override recorded on a disconnected monitor degrades instead of being discarded.
+- A committed top-toolbar drag stages the top position override. Retained position overrides are
+  applied on top of the authored seeds at startup and clamped on the first apply against real
+  output geometry, not on load, so an override recorded on a disconnected monitor degrades instead
+  of being discarded.
 - `src/backend/wayland/runtime_ui_state.rs` adapts toolbar and board interactions to that controller.
   `coordinator.rs` owns previews and writer transport, `lifecycle.rs` retains the exact active
   incident/recovery capabilities and publishes safe toolbar diagnostics, and `wayland.rs` applies
@@ -418,7 +422,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 **Modules:**
 - `src/session/`: target options, primary-file validation, snapshot load/save, sidecars, clear/recovery markers, saved tool-state reset, locks, catalog metadata, and inactive file operations.
 - `src/backend/wayland/session/`: runtime Open, Save As, Clear, and saved tool-state reset transactions for the active overlay.
-- `src/backend/wayland/state/toolbar/events/session.rs`: overlay Session panel routing for Open, Save As, Info, Clear, recent sessions, and configurator launch.
+- `src/backend/wayland/state/toolbar/events/session.rs`: overlay Session popover routing for Open, Save As, Info, Clear, recent sessions, and configurator launch.
 - `src/daemon/`: accepts daemon-toggle requests that carry an optional named session target.
 
 **Flow:**

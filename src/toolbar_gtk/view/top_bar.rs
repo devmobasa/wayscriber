@@ -102,8 +102,8 @@ type ShapesContentKey = (Tool, Option<Tool>, bool, u8);
 /// active states).
 type OverflowContentKey = (Tool, Option<Tool>, bool, bool, bool, bool, bool, bool);
 
-/// Snapshot inputs the Canvas popover content renders from — the Boards /
-/// Pages / Advanced / Zoom command sections plus the Step Undo/Redo config
+/// Snapshot inputs the Canvas popover content renders from — the Actions /
+/// Boards / Pages / Advanced / Zoom command sections plus the Step Undo/Redo config
 /// are a pure function of these. Enabled states and glyph faces that shift
 /// without a structure rebuild are captured so the popover stays fresh.
 ///
@@ -121,6 +121,7 @@ type OverflowContentKey = (Tool, Option<Tool>, bool, bool, bool, bool, bool, boo
 struct CanvasMenuContentKey {
     items: crate::config::ResolvedToolbarItems,
     use_icons: bool,
+    show_actions_section: bool,
     show_boards_section: bool,
     show_pages_section: bool,
     show_zoom_actions: bool,
@@ -147,6 +148,7 @@ impl CanvasMenuContentKey {
         Self {
             items: snapshot.resolved_toolbar_items.clone(),
             use_icons: snapshot.use_icons,
+            show_actions_section: snapshot.show_actions_section,
             show_boards_section: snapshot.show_boards_section,
             show_pages_section: snapshot.show_pages_section,
             show_zoom_actions: snapshot.show_zoom_actions,
@@ -252,7 +254,7 @@ struct StructureKey {
     layout_mode: ToolbarLayoutMode,
     scale_milli: i64,
     /// Exact renderer-neutral top structure. Using the full resolved item store
-    /// here made side-only section changes tear down this bar and its popovers.
+    /// here made popover-only section changes tear down this bar and its popovers.
     top_spec: model::TopToolbarSpec,
     quick_colors: crate::config::QuickColorPalette,
     binding_hints: crate::ui::toolbar::ToolbarBindingHints,
@@ -388,7 +390,7 @@ pub(in crate::toolbar_gtk) struct TopBar {
     move_drag: Option<gtk4::GestureDrag>,
     move_drag_cancel: Option<Rc<dyn Fn()>>,
     offsets: Rc<Cell<(f64, f64)>>,
-    /// Base X in spec units from the backend (side palette pushes it).
+    /// Base X in spec units supplied by the backend placement owner.
     base_x: Rc<Cell<f64>>,
     /// Monotonic counter for outgoing drag offsets; stale echoes from the
     /// backend are ignored by comparing against it.

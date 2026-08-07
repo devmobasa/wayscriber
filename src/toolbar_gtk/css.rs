@@ -230,30 +230,11 @@ window.wayscriber-toolbar {{
     outline-color: transparent;
 }}
 
-/* ===== Side palette ==================================================== */
-.wayscriber-toolbar .header-band {{
-    background-color: {header_band};
-    border-radius: {radius_card}px;
-    padding: {spacing_sm}px {spacing_md}px;
-}}
-.wayscriber-toolbar .card {{
-    background-color: {card};
-    border-radius: {radius_card}px;
-    padding: {pad_std}px;
-}}
+/* ===== Popover / strip shared chrome =================================== */
 .wayscriber-toolbar .section-title {{
     color: {section_title};
     font-size: {font_label}px;
     font-weight: {weight_bold};
-}}
-.wayscriber-toolbar button.section-header {{
-    background: none;
-    background-color: transparent;
-    box-shadow: none;
-    padding: {spacing_xs}px 0;
-}}
-.wayscriber-toolbar button.section-header:hover {{
-    background-color: {section_header_hover};
 }}
 .wayscriber-toolbar button.tab {{
     font-size: {font_tooltip}px;
@@ -265,27 +246,14 @@ window.wayscriber-toolbar {{
     box-shadow: none;
 }}
 /* The style pill's Sans│Mono segment gets horizontal breathing room and a
-   rounded pill (M7-C3). Scoped to `.pill` so the Settings-pane and
-   side-palette tabs keep their prior flush styling (M7-C5) and the builtin —
-   whose segmented-control metrics are pill-only — stays matched. */
+   rounded pill. Scoped to `.pill` so Settings layout-mode tabs keep their
+   flush styling and the builtin segmented-control metrics stay matched. */
 .wayscriber-toolbar .pill button.tab {{
     padding: {spacing_xs}px {segment_pad_h}px;
     border-radius: {radius_button}px;
 }}
 .wayscriber-toolbar .pill button.tab.active {{
     border-radius: {radius_button}px;
-}}
-.wayscriber-toolbar button.board-chip {{
-    background-color: {field_bg};
-    border: {hairline}px solid {field_border};
-    border-radius: {radius_lg_fixed}px;
-    padding: {spacing_xxs}px {spacing_std}px;
-    font-size: {font_label}px;
-    font-weight: {weight_bold};
-}}
-.wayscriber-toolbar button.board-chip:hover {{
-    background-color: {field_bg_hover};
-    border-color: {field_border_hover};
 }}
 .wayscriber-toolbar entry {{
     background-color: {field_bg};
@@ -360,18 +328,12 @@ tooltip.{capture_transparent_class} {{
         badge_border = v.badge_border,
         popover_shadow = v.popover_shadow,
         popover_shadow_clear = v.popover_shadow_clear,
-        header_band = v.header_band,
-        card = v.card,
         section_title = v.section_title,
-        section_header_hover = v.section_header_hover,
         field_bg = v.field_bg,
-        field_bg_hover = v.field_bg_hover,
         field_border = v.field_border,
-        field_border_hover = v.field_border_hover,
         scrollbar_slider = v.scrollbar_slider,
         capture_transparent_class = CAPTURE_TRANSPARENT_CLASS,
         radius_panel = v.radius_panel,
-        radius_card = v.radius_card,
         radius_button = v.radius_button,
         radius_sm = v.radius_sm,
         radius_full = v.radius_full,
@@ -396,7 +358,6 @@ tooltip.{capture_transparent_class} {{
         indicator_height = v.indicator_height,
         spacing_xxs = v.spacing_xxs,
         spacing_xs = v.spacing_xs,
-        spacing_sm = v.spacing_sm,
         spacing_md = v.spacing_md,
         spacing_std = v.spacing_std,
         scrollbar_radius = v.scrollbar_radius,
@@ -494,34 +455,17 @@ mod tests {
                 "COLOR_POPOVER_SHADOW",
                 rgba_css_compact(t::COLOR_POPOVER_SHADOW),
             ),
-            ("COLOR_HEADER_BAND", rgba_css_compact(t::COLOR_HEADER_BAND)),
-            (
-                "COLOR_CARD_BACKGROUND",
-                rgba_css_compact(t::COLOR_CARD_BACKGROUND),
-            ),
             (
                 "COLOR_LABEL_SECTION",
                 rgba_css_compact(t::COLOR_LABEL_SECTION),
-            ),
-            (
-                "COLOR_SECTION_HEADER_HOVER",
-                rgba_css_compact(t::COLOR_SECTION_HEADER_HOVER),
             ),
             (
                 "COLOR_FIELD_BACKGROUND",
                 rgba_css_compact(t::COLOR_FIELD_BACKGROUND),
             ),
             (
-                "COLOR_FIELD_BACKGROUND_HOVER",
-                rgba_css_compact(t::COLOR_FIELD_BACKGROUND_HOVER),
-            ),
-            (
                 "COLOR_FIELD_BORDER",
                 rgba_css_compact(t::COLOR_FIELD_BORDER),
-            ),
-            (
-                "COLOR_FIELD_BORDER_HOVER",
-                rgba_css_compact(t::COLOR_FIELD_BORDER_HOVER),
             ),
             (
                 "COLOR_SCROLLBAR_SLIDER",

@@ -1,10 +1,9 @@
-//! GTK toolbar windows: owns the top strip and side palette, the shared
+//! GTK toolbar windows: owns the top strip, the shared
 //! stylesheet, and output pinning.
 
 mod capture_suppression;
 mod drag;
 mod sections;
-mod side_bar;
 mod top_bar;
 
 use gtk4::prelude::*;
@@ -414,7 +413,6 @@ where
 
 pub(super) struct Windows {
     top: top_bar::TopBar,
-    side: side_bar::SideBar,
     tooltip_capture: capture_suppression::TooltipCapture,
     css_provider: gtk4::CssProvider,
     css_scale_milli: i64,
@@ -436,7 +434,6 @@ impl Windows {
         }
         Self {
             top: top_bar::TopBar::new(feedback.clone()),
-            side: side_bar::SideBar::new(feedback.clone()),
             tooltip_capture: capture_suppression::TooltipCapture::new(),
             css_provider,
             css_scale_milli: 1000,
@@ -466,7 +463,6 @@ impl Windows {
         self.tooltip_capture
             .set_suppressed(update.capture_suppressed);
         let top_mapped = self.top.apply(update);
-        let side_mapped = self.side.apply(update);
         self.refresh_popup_capture_sources();
         if let CaptureUpdatePlan::ApplyAndAcknowledge(generation) = capture_plan {
             let proof = async {
@@ -474,7 +470,7 @@ impl Windows {
                 // regions together. Confirming this first presentation proves
                 // both changes reached the compositor before the GTK main
                 // context is allowed to settle queued popup work.
-                self.wait_for_capture_paints(generation, top_mapped, side_mapped)
+                self.wait_for_capture_paints(generation, top_mapped)
                     .await?;
 
                 let display = gtk4::gdk::Display::default().ok_or_else(|| {
@@ -543,14 +539,10 @@ impl Windows {
         &self,
         generation: u64,
         top_mapped: bool,
-        side_mapped: bool,
     ) -> Result<(), String> {
         let mut targets = Vec::new();
         if top_mapped {
             targets.push(self.top.capture_target());
-        }
-        if side_mapped {
-            targets.push(self.side.capture_target());
         }
         targets.extend(self.top.capture_popover_targets());
         targets.extend(self.tooltip_capture.capture_popover_targets());
@@ -570,10 +562,7 @@ impl Windows {
     }
 
     fn popup_capture_roots(&self) -> Vec<gtk4::Widget> {
-        let mut roots = vec![
-            self.top.window.clone().upcast::<gtk4::Widget>(),
-            self.side.window.clone().upcast::<gtk4::Widget>(),
-        ];
+        let mut roots = vec![self.top.window.clone().upcast::<gtk4::Widget>()];
         roots.extend(self.top.tooltip_roots());
         roots
     }
@@ -608,7 +597,6 @@ impl Windows {
         self.pinned_output = update.output_name.clone();
         // None lets the compositor pick, matching a missing preference.
         self.top.window.set_monitor(monitor.as_ref());
-        self.side.window.set_monitor(monitor.as_ref());
     }
 }
 
@@ -668,17 +656,6 @@ mod tests {
             false,
             4,
             4,
-        ));
-    }
-
-    #[test]
-    fn another_bars_preview_does_not_hide_this_surface() {
-        assert!(!drag_visual_should_be_hidden(
-            Some(GtkToolbarKind::Side),
-            GtkToolbarKind::Top,
-            false,
-            7,
-            7,
         ));
     }
 

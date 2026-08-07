@@ -1,6 +1,6 @@
 //! GTK4 toolbar frontend.
 //!
-//! Renders the top strip and side palette as GTK4 windows on their own
+//! Renders the top strip as a GTK4 window on its own
 //! layer-shell surfaces, replacing the built-in Cairo toolbars on
 //! compositors where those would have used separate layer surfaces anyway.
 //! The built-in toolbars stay compiled in as the fallback everywhere else:
@@ -56,18 +56,15 @@ pub(crate) fn drag_debug_log(message: impl AsRef<str>) {
 pub struct GtkToolbarUpdate {
     pub snapshot: ToolbarSnapshot,
     pub top_visible: bool,
-    pub side_visible: bool,
-    /// Drag offsets relative to each bar's base margins, already clamped
-    /// by the backend.
+    /// Drag offset relative to the bar's base margins, already clamped by the
+    /// backend.
     pub top_offset: (f64, f64),
-    pub side_offset: (f64, f64),
-    /// Highest drag sequence number the backend has drained per bar; the
-    /// GTK side ignores offset echoes older than its own counter so a
-    /// mid-drag mirror can never snap a just-released bar backwards.
+    /// Highest drag sequence number the backend has drained; the GTK side
+    /// ignores offset echoes older than its own counter so a mid-drag mirror
+    /// can never snap a just-released bar backwards.
     pub top_offset_seq: u64,
-    pub side_offset_seq: u64,
-    /// Base X for the top strip in spec units (the side palette pushes it
-    /// right when they would overlap), mirroring the backend clamp math.
+    /// Base X for the top strip in spec units, mirroring the backend clamp
+    /// math.
     pub top_base_x: f64,
     /// Connector name of the output hosting the overlay (e.g. "DP-1"),
     /// used to pin the GTK bars to the same monitor.
@@ -93,11 +90,10 @@ pub struct GtkToolbarUpdate {
     pub capture_suppression_generation: Option<u64>,
 }
 
-/// Identifies one of the two GTK toolbar surfaces.
+/// Identifies a GTK toolbar surface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GtkToolbarKind {
     Top,
-    Side,
 }
 
 /// Explicit lifecycle for a GTK move gesture. The backend starts the inline
@@ -161,26 +157,15 @@ pub enum GtkToolbarFeedback {
         event: ToolbarEvent,
         rebind_requested: bool,
     },
-    /// Pointer entered/left a GTK toolbar window (top strip or side
-    /// palette). GTK runs on its own Wayland connection, so the backend
-    /// cannot observe this hover itself; it drives the top-strip idle-fade
-    /// restore/hold. Both windows report through this one flag — the
-    /// pointer can only be over one of them, and leave precedes enter when
-    /// it crosses between them.
+    /// Pointer entered/left the GTK top strip. GTK runs on its own Wayland
+    /// connection, so the backend cannot observe this hover itself; it drives
+    /// the top-strip idle-fade restore/hold.
     TopHover { hovered: bool },
     /// Drag-to-move lifecycle for the top bar. `End` is when the offsets get
     /// clamped and persisted; `seq` is the bar's monotonically increasing
     /// drag counter (see
     /// [`GtkToolbarUpdate::top_offset_seq`]).
     SetTopOffset {
-        x: f64,
-        y: f64,
-        surface_size: GtkToolbarSurfaceSize,
-        seq: u64,
-        phase: GtkToolbarDragPhase,
-    },
-    /// Drag-to-move progress for the side palette.
-    SetSideOffset {
         x: f64,
         y: f64,
         surface_size: GtkToolbarSurfaceSize,

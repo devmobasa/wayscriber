@@ -18,15 +18,15 @@ pub struct ToolbarModeOverride {
     #[serde(default)]
     pub show_zoom_actions: Option<bool>,
 
-    /// Show the Pages section in the side toolbar
+    /// Show the Pages section
     #[serde(default)]
     pub show_pages_section: Option<bool>,
 
-    /// Show the Boards section in the side toolbar
+    /// Show the Boards section
     #[serde(default)]
     pub show_boards_section: Option<bool>,
 
-    /// Show the presets section in the side toolbar
+    /// Show the presets section
     #[serde(default)]
     pub show_presets: Option<bool>,
 
@@ -37,10 +37,6 @@ pub struct ToolbarModeOverride {
     /// Keep text controls visible even when text is not active
     #[serde(default)]
     pub show_text_controls: Option<bool>,
-
-    /// Deprecated compatibility field. Settings navigation is always reachable.
-    #[serde(default)]
-    pub show_settings_section: Option<bool>,
 }
 
 /// Mode-specific overrides for toolbar layout presets.

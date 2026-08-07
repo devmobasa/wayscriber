@@ -8,7 +8,7 @@ fn coalesced_a_to_b_to_a_reload_invalidates_pre_barrier_permit() {
             InteractionSeedTarget::TopPinned,
         ))
         .unwrap();
-    commit_bool(&mut controller, InteractionSeedTarget::SidePinned, true);
+    commit_bool(&mut controller, InteractionSeedTarget::TopMinimized, true);
     let (_, incident) = fail_current_replace(&mut controller, "temporary");
     assert!(matches!(
         controller.update_seeds(test_seeds(true, false)),
@@ -205,7 +205,7 @@ fn atomic_batch_rejects_when_one_guard_changes() {
     let permit = controller
         .begin_mutation(RuntimeUiMutationScope::batch([
             InteractionSeedTarget::TopPinned,
-            InteractionSeedTarget::SidePinned,
+            InteractionSeedTarget::TopMinimized,
         ]))
         .unwrap();
     controller.update_seeds(test_seeds(false, true));
@@ -218,7 +218,7 @@ fn atomic_batch_rejects_when_one_guard_changes() {
                 InteractionSeedValue::Bool(true),
             ),
             (
-                InteractionSeedTarget::SidePinned,
+                InteractionSeedTarget::TopMinimized,
                 InteractionSeedValue::Bool(false),
             ),
         ])
@@ -258,7 +258,7 @@ fn removed_and_reused_board_target_rejects_old_permit() {
 }
 
 #[test]
-fn position_permit_is_rejected_only_by_relevant_seed_reload() {
+fn position_permit_survives_an_unrelated_seed_reload() {
     let mut controller = controller();
     let top = controller
         .begin_mutation(RuntimeUiMutationScope::one(
@@ -276,39 +276,5 @@ fn position_permit_is_rejected_only_by_relevant_seed_reload() {
             .unwrap(),
         ),
         CommitResult::Accepted { .. }
-    ));
-
-    // A side drag also owns the reconciled top offset, so a reload of either
-    // position seed invalidates its permit.
-    let side = controller
-        .begin_mutation(RuntimeUiMutationScope::batch([
-            InteractionSeedTarget::TopPosition,
-            InteractionSeedTarget::SidePosition,
-        ]))
-        .unwrap();
-    let mut changed = test_seeds(false, true);
-    changed
-        .insert(
-            InteractionSeedTarget::SidePosition,
-            InteractionSeedValue::Position(ToolbarPositionSeed::new(31.0, 41.0).unwrap()),
-        )
-        .unwrap();
-    controller.update_seeds(changed);
-    assert!(matches!(
-        controller.commit(
-            side,
-            RuntimeUiMutationValues::batch([
-                (
-                    InteractionSeedTarget::TopPosition,
-                    InteractionSeedValue::Position(ToolbarPositionSeed::new(12.0, 22.0).unwrap()),
-                ),
-                (
-                    InteractionSeedTarget::SidePosition,
-                    InteractionSeedValue::Position(ToolbarPositionSeed::new(32.0, 42.0).unwrap()),
-                ),
-            ])
-            .unwrap(),
-        ),
-        CommitResult::RejectedSeedChanged { .. }
     ));
 }
