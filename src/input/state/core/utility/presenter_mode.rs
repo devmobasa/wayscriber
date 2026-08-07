@@ -30,9 +30,6 @@ impl InputState {
                 if let Some(value) = restore.toolbar_top_visible {
                     self.toolbar_top_visible = value;
                 }
-                if let Some(value) = restore.toolbar_side_visible {
-                    self.toolbar_side_visible = value;
-                }
                 if let Some(value) = restore.toolbar_top_display_mode {
                     self.toolbar_top_display_mode = value;
                 }
@@ -79,7 +76,6 @@ impl InputState {
             show_tool_preview: None,
             toolbar_visible: None,
             toolbar_top_visible: None,
-            toolbar_side_visible: None,
             toolbar_top_display_mode: None,
             toolbar_top_minimized: None,
             click_highlight_enabled: None,
@@ -103,19 +99,15 @@ impl InputState {
         if config.hide_toolbars {
             restore.toolbar_visible = Some(self.toolbar_visible);
             restore.toolbar_top_visible = Some(self.toolbar_top_visible);
-            restore.toolbar_side_visible = Some(self.toolbar_side_visible);
             match config.toolbar_mode {
                 crate::config::PresenterToolbarMode::Hidden => {
                     self.toolbar_visible = false;
                     self.toolbar_top_visible = false;
-                    self.toolbar_side_visible = false;
                 }
                 crate::config::PresenterToolbarMode::Micro => {
-                    // The top strip stays up as the micro chip; side (and
-                    // bottom) toolbars keep the hidden behavior.
+                    // The top strip stays up as the micro chip.
                     restore.toolbar_top_display_mode = Some(self.toolbar_top_display_mode);
                     restore.toolbar_top_minimized = Some(self.toolbar_top_minimized);
-                    self.toolbar_side_visible = false;
                     self.set_top_display_mode(crate::config::TopDisplayMode::Micro);
                 }
             }

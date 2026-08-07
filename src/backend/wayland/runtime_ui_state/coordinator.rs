@@ -63,8 +63,7 @@ impl ToolbarRuntimeState {
         apply_live_toolbar_state(input, self.controller.live_state(), |_| true);
         apply_live_board_state(input, self.controller.live_state(), |_| true);
         input.toolbar_top_visible = input.toolbar_top_pinned;
-        input.toolbar_side_visible = input.toolbar_side_pinned;
-        input.toolbar_visible = input.toolbar_top_visible || input.toolbar_side_visible;
+        input.toolbar_visible = input.toolbar_top_visible;
     }
 
     /// Layer retained position overrides on top of the authored seeds the
@@ -310,9 +309,7 @@ impl ToolbarRuntimeState {
                     .expect("aborted position drag was just observed")
                     .session,
             );
-            // A side drag is guarded by both position seeds because its final
-            // save can reconcile the top X offset. If only one guard changes,
-            // the changed target must come from the new live authority while
+            // A changed guard must come from the new live authority while
             // every other previewed target returns to its pre-drag value.
             rollback
                 .values

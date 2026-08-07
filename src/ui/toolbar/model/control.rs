@@ -11,7 +11,8 @@ use std::collections::HashSet;
 use crate::config::Action;
 use crate::draw::Color;
 
-use super::activation::{ToolbarActivation, ToolbarControlId};
+use super::super::ToolbarEvent;
+use super::activation::ToolbarControlId;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ToolbarControl {
@@ -30,7 +31,7 @@ pub(crate) enum ToolbarControlKind {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ToolbarSingleControl {
-    pub(crate) activation: ToolbarActivation,
+    pub(crate) activation: ToolbarEvent,
     pub(crate) action: Option<Action>,
 }
 
@@ -88,7 +89,7 @@ impl ToolbarSegmentedControl {
 pub(crate) struct ToolbarSegment {
     pub(crate) id: ToolbarControlId,
     pub(crate) label: Cow<'static, str>,
-    pub(crate) activation: ToolbarActivation,
+    pub(crate) activation: ToolbarEvent,
     pub(crate) action: Option<Action>,
     pub(crate) tooltip: ToolbarTooltip,
     pub(crate) enabled: bool,

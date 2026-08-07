@@ -1,5 +1,4 @@
 use super::*;
-use crate::backend::wayland::toolbar::ToolbarFocusTarget;
 use wayland_client::protocol::wl_surface;
 
 impl WaylandState {
@@ -53,23 +52,9 @@ impl WaylandState {
         self.data.toolbar_top_offset_y
     }
 
-    pub(in crate::backend::wayland) fn toolbar_side_offset(&self) -> f64 {
-        self.data.toolbar_side_offset
-    }
-
-    pub(in crate::backend::wayland) fn toolbar_side_offset_x(&self) -> f64 {
-        self.data.toolbar_side_offset_x
-    }
-
-    pub(in crate::backend::wayland) fn restore_toolbar_offsets(
-        &mut self,
-        top: (f64, f64),
-        side: (f64, f64),
-    ) {
+    pub(in crate::backend::wayland) fn restore_toolbar_offsets(&mut self, top: (f64, f64)) {
         self.data.toolbar_top_offset = top.0;
         self.data.toolbar_top_offset_y = top.1;
-        self.data.toolbar_side_offset_x = side.0;
-        self.data.toolbar_side_offset = side.1;
     }
 
     pub(in crate::backend::wayland) fn inline_toolbars_active(&self) -> bool {
@@ -87,12 +72,10 @@ impl WaylandState {
         surface: &wl_surface::WlSurface,
         position: (f64, f64),
     ) -> Option<(f64, f64)> {
-        let target = self.toolbar.focus_target_for_surface(surface)?;
-        let kind = match target {
-            ToolbarFocusTarget::Top => MoveDragKind::Top,
-            ToolbarFocusTarget::Side => MoveDragKind::Side,
-        };
-        Some(self.local_to_screen_coords(kind, position))
+        if !self.toolbar.is_focusable_surface(surface) {
+            return None;
+        }
+        Some(self.local_to_screen_coords(MoveDragKind::Top, position))
     }
 
     pub(in crate::backend::wayland) fn set_suppress_next_release(&mut self, value: bool) {

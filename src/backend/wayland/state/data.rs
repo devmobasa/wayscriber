@@ -1,13 +1,12 @@
 use std::time::Instant;
 
-use crate::backend::wayland::toolbar::{ToolbarFocusTarget, hit::HitRegion};
+use crate::backend::wayland::toolbar::hit::HitRegion;
 
 use super::capture::OverlayCaptureBarrier;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MoveDragKind {
     Top,
-    Side,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -97,29 +96,20 @@ pub struct StateData {
     pub(super) toolbar_layer_shell_missing_logged: bool,
     pub(super) inline_toolbars: bool,
     pub(super) inline_top_hits: Vec<HitRegion>,
-    pub(super) inline_side_hits: Vec<HitRegion>,
     pub(super) inline_top_rect: Option<(f64, f64, f64, f64)>,
-    pub(super) inline_side_rect: Option<(f64, f64, f64, f64)>,
     pub(super) inline_top_hover: Option<(f64, f64)>,
-    pub(super) inline_side_hover: Option<(f64, f64)>,
     pub(super) inline_top_hover_start: Option<Instant>,
-    pub(super) inline_side_hover_start: Option<Instant>,
     pub(super) inline_top_tooltip_pending: bool,
-    pub(super) inline_side_tooltip_pending: bool,
     pub(super) inline_top_focus_index: Option<usize>,
-    pub(super) inline_side_focus_index: Option<usize>,
     pub(super) inline_top_focus_id: Option<String>,
-    pub(super) inline_side_focus_id: Option<String>,
-    pub(super) toolbar_focus_target: Option<ToolbarFocusTarget>,
+    /// True while keyboard focus is routed into the top toolbar.
+    pub(super) toolbar_focus_active: bool,
     pub(super) toolbar_top_offset: f64,
     pub(super) toolbar_top_offset_y: f64,
-    pub(super) toolbar_side_offset: f64,
-    pub(super) toolbar_side_offset_x: f64,
     pub(super) toolbar_configure_miss_count: u32,
     /// Highest GTK drag sequence numbers drained per bar; echoed in
     /// updates so the GTK side can discard stale offset mirrors.
     pub(super) gtk_top_offset_seq: u64,
-    pub(super) gtk_side_offset_seq: u64,
     /// GTK surface currently parked at its drag origin while the main overlay
     /// renders the moving toolbar preview.
     pub(super) gtk_drag_preview: Option<crate::toolbar_gtk::GtkToolbarKind>,
@@ -127,18 +117,14 @@ pub struct StateData {
     /// start-relative GTK drag. They discard fenced motion if the exact same
     /// preview later resumes.
     pub(super) gtk_top_drag_rebase: Option<(f64, f64)>,
-    pub(super) gtk_side_drag_rebase: Option<(f64, f64)>,
     /// A GTK drag that emitted feedback while a modal was engaged stays
     /// blocked until its matching drag-end feedback arrives.
     pub(super) gtk_top_drag_blocked: bool,
-    pub(super) gtk_side_drag_blocked: bool,
     /// Pointer is over the GTK top toolbar window (reported via feedback;
     /// GTK runs on its own connection). Restores the top-strip idle fade.
     pub(super) gtk_top_hover: bool,
     pub(super) last_applied_top_margin: Option<i32>,
-    pub(super) last_applied_side_margin: Option<i32>,
     pub(super) last_applied_top_margin_top: Option<i32>,
-    pub(super) last_applied_side_margin_left: Option<i32>,
     pub(super) toolbar_move_drag: Option<MoveDrag>,
     pub(super) active_drag_kind: Option<MoveDragKind>,
     pub(super) drag_top_base_x: Option<f64>,
@@ -203,9 +189,6 @@ pub struct StateData {
     /// per-session cap). Session-only; the across-session cap and learned
     /// suppression live in the persisted onboarding state.
     pub(super) shortcut_coach: super::onboarding::ShortcutCoachSession,
-    /// Once-per-session guard for the legacy side-panel deprecation notice
-    /// (M9).
-    pub(super) panel_deprecation_notice_shown: bool,
 }
 
 impl StateData {
@@ -228,37 +211,23 @@ impl StateData {
             toolbar_layer_shell_missing_logged: false,
             inline_toolbars: false,
             inline_top_hits: Vec::new(),
-            inline_side_hits: Vec::new(),
             inline_top_rect: None,
-            inline_side_rect: None,
             inline_top_hover: None,
-            inline_side_hover: None,
             inline_top_hover_start: None,
-            inline_side_hover_start: None,
             inline_top_tooltip_pending: false,
-            inline_side_tooltip_pending: false,
             inline_top_focus_index: None,
-            inline_side_focus_index: None,
             inline_top_focus_id: None,
-            inline_side_focus_id: None,
-            toolbar_focus_target: None,
+            toolbar_focus_active: false,
             toolbar_top_offset: 0.0,
             toolbar_top_offset_y: 0.0,
-            toolbar_side_offset: 0.0,
-            toolbar_side_offset_x: 0.0,
             toolbar_configure_miss_count: 0,
             gtk_top_offset_seq: 0,
-            gtk_side_offset_seq: 0,
             gtk_drag_preview: None,
             gtk_top_drag_rebase: None,
-            gtk_side_drag_rebase: None,
             gtk_top_drag_blocked: false,
             gtk_top_hover: false,
-            gtk_side_drag_blocked: false,
             last_applied_top_margin: None,
-            last_applied_side_margin: None,
             last_applied_top_margin_top: None,
-            last_applied_side_margin_left: None,
             toolbar_move_drag: None,
             active_drag_kind: None,
             drag_top_base_x: None,
@@ -302,7 +271,6 @@ impl StateData {
             prev_tool_preview_damage: None,
             top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade::new(),
             shortcut_coach: super::onboarding::ShortcutCoachSession::default(),
-            panel_deprecation_notice_shown: false,
         }
     }
 }

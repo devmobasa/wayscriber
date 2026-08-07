@@ -194,37 +194,10 @@ pub(super) fn apply_live_toolbar_state(
     {
         input.toolbar_top_pinned = value;
     }
-    if include(&InteractionSeedTarget::SidePinned)
-        && let Some(value) = bool_value(InteractionSeedTarget::SidePinned)
-    {
-        input.toolbar_side_pinned = value;
-    }
     if include(&InteractionSeedTarget::TopMinimized)
         && let Some(value) = bool_value(InteractionSeedTarget::TopMinimized)
     {
         input.apply_toolbar_set_top_minimized(value);
-    }
-    if include(&InteractionSeedTarget::SideMinimized)
-        && let Some(value) = bool_value(InteractionSeedTarget::SideMinimized)
-    {
-        input.toolbar_side_minimized = value;
-    }
-    if include(&InteractionSeedTarget::SidePane)
-        && let Some(InteractionSeedValue::SidePane(pane)) =
-            live.get(&InteractionSeedTarget::SidePane)
-    {
-        input.apply_toolbar_set_side_pane(*pane);
-    }
-    for section in ToolbarSideSection::ALL {
-        let target = InteractionSeedTarget::CollapsedSection(section);
-        if !include(&target) {
-            continue;
-        }
-        if bool_value(target) == Some(true) {
-            input.toolbar_collapsed_side_sections.insert(section);
-        } else {
-            input.toolbar_collapsed_side_sections.remove(&section);
-        }
     }
     for id in resettable_individual_toolbar_item_ids() {
         let target = InteractionSeedTarget::ItemVisibility(id);
@@ -255,12 +228,6 @@ pub(super) fn apply_live_toolbar_positions(
             live.get(&InteractionSeedTarget::TopPosition)
     {
         positions.top = (position.x.get(), position.y.get());
-    }
-    if include(&InteractionSeedTarget::SidePosition)
-        && let Some(InteractionSeedValue::Position(position)) =
-            live.get(&InteractionSeedTarget::SidePosition)
-    {
-        positions.side = (position.x.get(), position.y.get());
     }
 }
 

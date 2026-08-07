@@ -1,22 +1,19 @@
 //! Canvas/Session/Settings popovers anchored to the top strip's overflow toggle.
 //!
-//! With `[ui.toolbar] side_layout = "pill"` the side palette is retired, so
-//! the Canvas, Session, and Settings panes are re-hosted here as popovers
-//! opened from the matching overflow-menu entries. Their content reuses the
-//! renderer-neutral models and events the side panes render, minus the side
-//! palette's chrome (pane tabs, collapsible section headers).
+//! Canvas, Session, and Settings live here as popovers opened from the
+//! matching overflow-menu entries. Their content reuses the renderer-neutral
+//! models and events shared with the GTK top bar.
 //!
 //! Content taller than [`MENU_MAX_CONTENT_H`] scrolls internally behind a
-//! proportional scrollbar (the side palette's scroll pattern): the tree
-//! painter has no clip, so rows are either fully inside the viewport or
-//! withheld entirely (paint and hits alike).
+//! proportional scrollbar. The tree painter has no clip, so rows are either
+//! fully inside the viewport or withheld entirely (paint and hits alike).
 
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
-use crate::backend::wayland::toolbar::render::side_palette::session::{
+use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
+use crate::ui::toolbar::session_format::{
     strip_session_extension, truncate_middle, truncate_start,
 };
-use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
 use crate::ui_text::{UiTextStyle, measure_text};
 
@@ -24,9 +21,8 @@ use super::super::node::{ButtonStyle, Interaction, LabelSpec, WidgetKind, Widget
 use super::super::popover;
 use super::super::tree::WidgetTree;
 
-/// Content width inside the popover padding (mirrors the side palette's
-/// content column). Shared with the GTK popover viewport via the theme
-/// token so the frontends cannot drift.
+/// Content width inside the popover padding. Shared with the GTK popover
+/// viewport via the theme token so the frontends cannot drift.
 pub(super) const MENU_CONTENT_W: f64 = crate::ui::theme::toolbar::MENU_CONTENT_W;
 /// Content column for the Canvas popover. It matches the text-menu width so
 /// the Step Undo/Redo cluster has comfortable spacing, and is shared with the
@@ -59,10 +55,13 @@ const MENU_ITEM_GAP: f64 = 4.0;
 pub(super) const MENU_ANCHOR_GAP: f64 = 6.0;
 pub(super) const MENU_BOTTOM_MARGIN: f64 = 4.0;
 /// Floor so a pathologically short output never collapses the popover to
-/// nothing (mirrors the side palette's `MIN_SIDE_VIEWPORT`).
+/// nothing.
 const MENU_MIN_VIEWPORT: f64 = 160.0;
 /// Gap between two Canvas-popover sections (Boards/Pages/Advanced/Zoom/Step).
 const CANVAS_SECTION_GAP: f64 = 8.0;
+/// Extra separation between safe commands and destructive commands in a
+/// Canvas row. This matches the GTK adapter's guarded split.
+pub(super) const CANVAS_DESTRUCTIVE_GUARD_GAP: f64 = 12.0;
 const CANVAS_STEP_ROW_H: f64 = 24.0;
 const CANVAS_STEP_BTN_W: f64 = 66.0;
 const CANVAS_STEPPER_W: f64 = 24.0;
@@ -410,7 +409,7 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
                         LabelSpec::new(segment.label.as_ref(), MENU_LABEL_FONT, true),
                         ButtonStyle::active(active == Some(segment.id)),
                         Some(Interaction::click(
-                            segment.activation.compatibility_event(),
+                            segment.activation.clone(),
                             segment.tooltip.as_string(),
                         )),
                     ));
@@ -438,7 +437,7 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
                     label: LabelSpec::new(toggle.label.as_ref(), MENU_META_FONT, true),
                 },
                 Some(Interaction::click(
-                    toggle.activation.compatibility_event(),
+                    toggle.activation.clone(),
                     toggle.tooltip.as_string(),
                 )),
             ));
@@ -594,7 +593,7 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
                     label: LabelSpec::new(item.label.as_ref(), MENU_META_FONT, true),
                 },
                 Some(Interaction::click(
-                    item.activation.compatibility_event(),
+                    item.activation.clone(),
                     item.tooltip.as_string(),
                 )),
             ));
@@ -630,7 +629,7 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
                         },
                         enabled.then(|| {
                             Interaction::click(
-                                activation.compatibility_event(),
+                                activation.clone(),
                                 Some(format!("{} {}", tooltip, item.label)),
                             )
                         }),
@@ -676,6 +675,9 @@ fn canvas_button_suffix(event: &ToolbarEvent) -> &'static str {
         ToolbarEvent::PageNew => "page-new",
         ToolbarEvent::PageDuplicate => "page-duplicate",
         ToolbarEvent::PageDelete => "page-delete",
+        ToolbarEvent::Undo => "undo",
+        ToolbarEvent::Redo => "redo",
+        ToolbarEvent::ClearCanvas { .. } => "clear-canvas",
         ToolbarEvent::ZoomIn => "zoom-in",
         ToolbarEvent::ZoomOut => "zoom-out",
         ToolbarEvent::ResetZoom => "reset-zoom",
@@ -690,8 +692,8 @@ fn canvas_button_suffix(event: &ToolbarEvent) -> &'static str {
 }
 
 /// One Canvas-popover command section: a bold section header over a single
-/// row of the group's buttons, laid out edge-to-edge like the side pane's
-/// command rows. Advances `y` past the rendered rows.
+/// edge-to-edge row of the group's buttons. Advances `y` past the rendered
+/// rows.
 fn push_canvas_command_section(
     nodes: &mut Vec<WidgetNode>,
     y: &mut f64,
@@ -708,19 +710,26 @@ fn push_canvas_command_section(
     ));
     *y += MENU_HEADER_H + MENU_ITEM_GAP;
 
-    let columns = group.buttons.len().clamp(1, 5);
-    let button_w = row_item_width(CANVAS_MENU_CONTENT_W, columns, MENU_GAP);
-    let grid = grid_layout(
-        0.0,
-        *y,
-        button_w,
-        MENU_BUTTON_H,
-        MENU_GAP,
-        MENU_GAP,
-        columns,
-        group.buttons.len(),
-    );
-    for (item, button) in grid.items.iter().zip(group.buttons.iter()) {
+    let (safe, destructive): (Vec<_>, Vec<_>) = group
+        .buttons
+        .iter()
+        .partition(|button| !button.event.is_destructive());
+    let split = !safe.is_empty() && !destructive.is_empty();
+    let ordinary_gaps = safe.len().saturating_sub(1) + destructive.len().saturating_sub(1);
+    let total_gap = ordinary_gaps as f64 * MENU_GAP
+        + if split {
+            CANVAS_DESTRUCTIVE_GUARD_GAP
+        } else {
+            0.0
+        };
+    let button_w = (CANVAS_MENU_CONTENT_W - total_gap) / group.buttons.len().max(1) as f64;
+    let mut x = 0.0;
+    for (index, button) in safe.iter().chain(destructive.iter()).enumerate() {
+        if split && index == safe.len() {
+            x += CANVAS_DESTRUCTIVE_GUARD_GAP;
+        } else if index > 0 {
+            x += MENU_GAP;
+        }
         let label = button.short_label(snapshot, noun);
         let style = if !button.enabled {
             ButtonStyle::disabled()
@@ -738,15 +747,16 @@ fn push_canvas_command_section(
                 "top.menu.canvas.{key}.{}",
                 canvas_button_suffix(&button.event)
             ),
-            (item.x, item.y, item.w, item.h),
+            (x, *y, button_w, MENU_BUTTON_H),
             LabelSpec::new(label, MENU_LABEL_FONT, true),
             style,
             button
                 .enabled
                 .then(|| Interaction::click(button.event.clone(), Some(tooltip))),
         ));
+        x += button_w;
     }
-    *y += grid.height;
+    *y += MENU_BUTTON_H;
 }
 
 /// One Step Undo/Redo row: the multi-step button, the −/count/+ stepper
@@ -972,16 +982,21 @@ fn push_canvas_step_section(nodes: &mut Vec<WidgetNode>, y: &mut f64, snapshot: 
     }
 }
 
-/// Canvas popover content: the re-homed side Canvas pane minus its
-/// collapsible-card chrome — the Boards, Pages, Advanced, and Zoom command
-/// sections (each gated on its display toggle) followed by the Step
-/// Undo/Redo configuration. `None` when every section is toggled off.
+/// Canvas popover content: Actions, Boards, Pages, Advanced, and Zoom command
+/// sections (each gated on its display toggle), followed by the Step Undo/Redo
+/// configuration. `None` when every section is toggled off.
 fn canvas_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> {
     let mut nodes = Vec::new();
     let mut y = 0.0;
     let mut rendered = false;
 
     let sections = [
+        (
+            "actions",
+            "Actions",
+            "Action",
+            model::toolbar_actions_model_for_popover(snapshot),
+        ),
         (
             "boards",
             "Boards",

@@ -225,8 +225,8 @@ impl TopBar {
     /// A presets-island slot button: a filled slot draws the saved tool
     /// glyph in the neutral foreground with the preset color as a separate
     /// corner swatch in a DrawingArea child, so a dark preset color never
-    /// renders the glyph invisible against the slot body (the side-palette
-    /// convention). An empty slot shows its 1-based number as a plain label.
+    /// renders the glyph invisible against the slot body. An empty slot shows
+    /// its 1-based number as a plain label.
     /// Clicking applies a filled slot or saves the current setup into an empty
     /// one (the shared spec owns the event).
     pub(super) fn preset_button(

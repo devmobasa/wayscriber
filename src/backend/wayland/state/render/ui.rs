@@ -214,7 +214,7 @@ impl WaylandState {
                 let snapshot = self.toolbar_snapshot();
                 let (_, top_h) = crate::backend::wayland::toolbar::top_size(&snapshot);
                 let anchor = (
-                    self.inline_top_base_x(&snapshot) + self.data.toolbar_top_offset,
+                    self.inline_top_base_x() + self.data.toolbar_top_offset,
                     self.inline_top_base_y() + self.data.toolbar_top_offset_y + top_h as f64 + 8.0,
                 );
                 crate::ui::render_precision_entry_popup(

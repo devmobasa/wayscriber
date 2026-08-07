@@ -2,101 +2,19 @@ use std::borrow::Cow;
 
 use crate::config::ToolbarLayoutMode;
 
-use super::super::{ToolbarEvent, ToolbarSnapshot};
-use super::activation::{ToolbarActivation, ToolbarControlId, ToolbarDragTarget};
+use super::super::ToolbarEvent;
+use super::activation::ToolbarControlId;
 use super::control::{
-    ToolbarBoardChipPresentation, ToolbarControl, ToolbarControlKind, ToolbarControlPresentation,
-    ToolbarControlRole, ToolbarIcon, ToolbarPresentationPayload, ToolbarSegment,
-    ToolbarSegmentedControl, ToolbarSingleControl, ToolbarTooltip,
+    ToolbarControl, ToolbarControlKind, ToolbarControlPresentation, ToolbarControlRole,
+    ToolbarPresentationPayload, ToolbarSegment, ToolbarSegmentedControl, ToolbarTooltip,
 };
-
-#[derive(Debug, Clone)]
-pub(crate) struct SideHeaderModel {
-    pub(crate) drag: ToolbarControl,
-    pub(crate) pin: ToolbarControl,
-    pub(crate) close: ToolbarControl,
-    pub(crate) board_chip: ToolbarControl,
-}
-
-impl SideHeaderModel {
-    pub(crate) fn from_snapshot(snapshot: &ToolbarSnapshot) -> Self {
-        Self {
-            drag: drag_control(
-                ToolbarControlId::DragSide,
-                ToolbarDragTarget::MoveSideToolbar,
-            ),
-            pin: single_button(
-                ToolbarControlId::PinSide,
-                ToolbarEvent::PinSideToolbar(!snapshot.side_pinned),
-                if snapshot.side_pinned {
-                    "Pinned (click to unpin)"
-                } else {
-                    "Pin toolbar"
-                },
-                snapshot.side_pinned,
-                ToolbarControlRole::Button,
-            ),
-            close: single_button(
-                ToolbarControlId::CloseSide,
-                ToolbarEvent::SetSideMinimized(true),
-                "Minimize (leaves a restore tab)",
-                false,
-                ToolbarControlRole::Button,
-            ),
-            board_chip: board_chip_control(snapshot),
-        }
-    }
-}
-
-pub(crate) fn board_chip_label(snapshot: &ToolbarSnapshot) -> String {
-    let board_index = snapshot.board_index + 1;
-    let board_count = snapshot.board_count.max(1);
-    let name = snapshot.board_name.trim();
-    let board_label = if board_count > 1 {
-        if name.is_empty() {
-            format!("Board {}/{}", board_index, board_count)
-        } else {
-            format!("Board {}/{} · {}", board_index, board_count, name)
-        }
-    } else if name.is_empty() {
-        "Board".to_string()
-    } else {
-        format!("Board · {}", name)
-    };
-    let pages = snapshot.page_count.max(1);
-    if pages > 1 {
-        let page = (snapshot.page_index + 1).min(pages);
-        format!("{board_label} · p.{page}/{pages}")
-    } else {
-        board_label
-    }
-}
-
-fn drag_control(id: ToolbarControlId, target: ToolbarDragTarget) -> ToolbarControl {
-    ToolbarControl {
-        id,
-        kind: ToolbarControlKind::Single(ToolbarSingleControl {
-            activation: ToolbarActivation::Drag(target),
-            action: None,
-        }),
-        enabled: true,
-        active: false,
-        presentation: ToolbarControlPresentation {
-            label: Cow::Borrowed("Drag toolbar"),
-            tooltip: ToolbarTooltip::text("Drag toolbar"),
-            icon: None,
-            role: ToolbarControlRole::DragHandle,
-            payload: ToolbarPresentationPayload::None,
-        },
-    }
-}
 
 pub(crate) fn layout_mode_control(mode: ToolbarLayoutMode) -> ToolbarControl {
     let segment = |id, label: &'static str, target: ToolbarLayoutMode, tooltip: &'static str| {
         ToolbarSegment {
             id,
             label: Cow::Borrowed(label),
-            activation: ToolbarActivation::Click(ToolbarEvent::SetToolbarLayoutMode(target)),
+            activation: ToolbarEvent::SetToolbarLayoutMode(target),
             action: None,
             tooltip: ToolbarTooltip::text(tooltip),
             enabled: true,
@@ -135,57 +53,6 @@ pub(crate) fn layout_mode_control(mode: ToolbarLayoutMode) -> ToolbarControl {
         "Toolbar layout",
         segments,
     )
-}
-
-fn board_chip_control(snapshot: &ToolbarSnapshot) -> ToolbarControl {
-    let label = board_chip_label(snapshot);
-    ToolbarControl {
-        id: ToolbarControlId::BoardChip,
-        kind: ToolbarControlKind::Single(ToolbarSingleControl {
-            activation: ToolbarActivation::Click(ToolbarEvent::ToggleBoardPicker),
-            action: crate::config::Action::BoardPicker.into(),
-        }),
-        enabled: true,
-        active: false,
-        presentation: ToolbarControlPresentation {
-            label: Cow::Owned(label.clone()),
-            tooltip: ToolbarTooltip::text("Board settings"),
-            icon: Some(ToolbarIcon::Board),
-            role: ToolbarControlRole::BoardChip,
-            payload: ToolbarPresentationPayload::BoardChip(ToolbarBoardChipPresentation {
-                label,
-                color: snapshot.board_color,
-                board_index: snapshot.board_index,
-                board_count: snapshot.board_count,
-                page_count: snapshot.page_count,
-            }),
-        },
-    }
-}
-
-fn single_button(
-    id: ToolbarControlId,
-    event: ToolbarEvent,
-    tooltip: &'static str,
-    active: bool,
-    role: ToolbarControlRole,
-) -> ToolbarControl {
-    ToolbarControl {
-        id,
-        kind: ToolbarControlKind::Single(ToolbarSingleControl {
-            activation: ToolbarActivation::Click(event),
-            action: None,
-        }),
-        enabled: true,
-        active,
-        presentation: ToolbarControlPresentation {
-            label: Cow::Borrowed(tooltip),
-            tooltip: ToolbarTooltip::text(tooltip),
-            icon: None,
-            role,
-            payload: ToolbarPresentationPayload::None,
-        },
-    }
 }
 
 fn segmented_control(

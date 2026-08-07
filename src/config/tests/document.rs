@@ -41,6 +41,14 @@ fn diagnostic_paths(document: &ConfigDocument) -> Vec<&str> {
         .collect()
 }
 
+fn diagnostic_kinds(document: &ConfigDocument) -> Vec<(ConfigDiagnosticKind, &str)> {
+    document
+        .diagnostics()
+        .iter()
+        .map(|diagnostic| (diagnostic.kind(), diagnostic.path()))
+        .collect()
+}
+
 /// A save writes the caller's one change. Values that only differ because
 /// loading clamped them keep their authored text: persisting them would let an
 /// unrelated save rewrite settings the user never touched (#293).
@@ -1975,6 +1983,357 @@ future_font_weight = 600
         assert!(
             paths.iter().any(|path| path.ends_with(expected)),
             "missing diagnostic for {expected}: {paths:?}"
+        );
+    }
+}
+
+/// A v0.9.23 panel-era toolbar table must load top-only, report every retired
+/// inventory path as `RetiredSetting`, keep a similarly named typo as
+/// `UnknownSetting`, and survive an unrelated save without rewriting the
+/// retired values, comments, numeric spelling, or retained item IDs.
+#[test]
+fn retired_toolbar_settings_are_preserved_and_diagnosed() {
+    let temp = TempConfig::new("retired-toolbar");
+    temp.write(
+        r#"# Keep this panel-era header.
+
+[ui.toolbar]
+# retired side seeds
+side_layout = "panel"
+side_pinned = true
+side_minimized = false
+side_active_pane = "canvas"
+collapsed_sections = ["colors", "session"]
+# non-canonical numeric spelling must survive
+side_offset = 12
+side_offset_x = 3.50
+show_settings_section = false
+top_pinned = true
+# typo next to a retired key must stay UnknownSetting
+side_layot = "panel"
+
+[ui.toolbar.mode_overrides.simple]
+show_settings_section = false
+
+[ui.toolbar.mode_overrides.regular]
+show_settings_section = true
+
+[ui.toolbar.mode_overrides.advanced]
+show_settings_section = false
+
+[ui.toolbar.items]
+hidden = [
+  "side.session.info",
+  "side.pages.delete",
+  "side.actions.freeze",
+  "side.boards.delete",
+  "side.future.unknown",
+]
+shown = [
+  "side.group.presets",
+  "side.settings.about",
+  "side.actions.zoom-in",
+  "side.boards.picker",
+]
+
+[ui.toolbar.items.order]
+side_sections = [
+  "side.group.pages",
+  "side.group.boards",
+]
+actions = [
+  "side.actions.zoom-in",
+  "side.actions.freeze",
+]
+pages = [
+  "side.pages.previous",
+]
+boards = [
+  "side.boards.picker",
+  "side.boards.delete",
+]
+presets = [
+  "side.group.presets",
+]
+tool_options = [
+  "side.tool-options.thickness",
+]
+sessions = [
+  "side.session.info",
+]
+top_tools = [
+  "top.tool.pen",
+]
+top_controls = [
+  "top.utility.clear-canvas",
+  "top.utility.text",
+]
+
+[ui.toolbar.future_extension]
+enabled = true
+"#,
+    );
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load retired toolbar");
+    let kinds = diagnostic_kinds(&document);
+    let retired: Vec<&str> = kinds
+        .iter()
+        .filter_map(|(kind, path)| (*kind == ConfigDiagnosticKind::RetiredSetting).then_some(*path))
+        .collect();
+    let unknown: Vec<&str> = kinds
+        .iter()
+        .filter_map(|(kind, path)| (*kind == ConfigDiagnosticKind::UnknownSetting).then_some(*path))
+        .collect();
+
+    for path in [
+        "ui.toolbar.side_layout",
+        "ui.toolbar.side_pinned",
+        "ui.toolbar.side_minimized",
+        "ui.toolbar.side_active_pane",
+        "ui.toolbar.collapsed_sections",
+        "ui.toolbar.side_offset",
+        "ui.toolbar.side_offset_x",
+        "ui.toolbar.show_settings_section",
+        "ui.toolbar.mode_overrides.simple.show_settings_section",
+        "ui.toolbar.mode_overrides.regular.show_settings_section",
+        "ui.toolbar.mode_overrides.advanced.show_settings_section",
+        "ui.toolbar.items.order.side_sections",
+        "ui.toolbar.items.order.actions",
+        "ui.toolbar.items.order.pages",
+        "ui.toolbar.items.order.boards",
+        "ui.toolbar.items.order.presets",
+        "ui.toolbar.items.order.tool_options",
+        "ui.toolbar.items.order.sessions",
+    ] {
+        assert!(
+            retired.contains(&path),
+            "missing RetiredSetting for {path}: {retired:?}"
+        );
+        assert!(
+            !unknown.contains(&path),
+            "{path} must not be UnknownSetting: {unknown:?}"
+        );
+    }
+
+    assert!(
+        unknown.contains(&"ui.toolbar.side_layot"),
+        "typo must stay UnknownSetting: {unknown:?}"
+    );
+    assert!(
+        unknown.iter().any(|path| path.contains("future_extension")),
+        "extension data must stay UnknownSetting: {unknown:?}"
+    );
+
+    assert!(document.config().ui.toolbar.top_pinned);
+    let assert_active_item_contract = |items: &crate::config::ResolvedToolbarItems| {
+        use crate::config::toolbar_item_ids as ids;
+
+        for id in [
+            ids::SIDE_SESSION_INFO,
+            ids::SIDE_PAGES_DELETE,
+            ids::SIDE_ACTIONS_FREEZE,
+            ids::SIDE_BOARDS_DELETE,
+        ] {
+            assert!(
+                items.hidden.contains(&id),
+                "missing retained hidden id {id}"
+            );
+        }
+        for id in [
+            ids::SIDE_GROUP_PRESETS,
+            ids::SIDE_SETTINGS_ABOUT,
+            ids::SIDE_ACTIONS_ZOOM_IN,
+            ids::SIDE_BOARDS_PICKER,
+        ] {
+            assert!(items.shown.contains(&id), "missing retained shown id {id}");
+        }
+
+        assert_eq!(
+            items
+                .order
+                .ordered_ids(crate::config::ToolbarItemOrderGroup::TopTools)
+                .first(),
+            Some(&ids::TOP_TOOL_PEN),
+            "active top_tools order must remain effective"
+        );
+        assert_eq!(
+            &items
+                .order
+                .ordered_ids(crate::config::ToolbarItemOrderGroup::TopControls)[..2],
+            &[ids::TOP_UTILITY_CLEAR_CANVAS, ids::TOP_UTILITY_TEXT],
+            "active top_controls order must remain effective"
+        );
+    };
+    assert_active_item_contract(&document.config().ui.toolbar.items.resolved());
+
+    let mut updated = document.config().clone();
+    updated.drawing.default_thickness = 7.0;
+    let outcome = document
+        .save_with_backup(updated)
+        .expect("unrelated save with retired toolbar");
+    let saved = fs::read_to_string(&temp.path).expect("read saved retired toolbar");
+
+    for preserved in [
+        "# Keep this panel-era header.",
+        "side_layout = \"panel\"",
+        "side_pinned = true",
+        "side_minimized = false",
+        "side_active_pane = \"canvas\"",
+        "collapsed_sections = [\"colors\", \"session\"]",
+        "side_offset = 12",
+        "side_offset_x = 3.50",
+        "show_settings_section = false",
+        "side_sections = [",
+        "actions = [",
+        "pages = [",
+        "boards = [",
+        "presets = [",
+        "tool_options = [",
+        "sessions = [",
+        "top_tools = [",
+        "top_controls = [",
+        "\"side.session.info\"",
+        "\"side.pages.delete\"",
+        "\"side.actions.freeze\"",
+        "\"side.boards.delete\"",
+        "\"side.actions.zoom-in\"",
+        "\"side.boards.picker\"",
+        "\"side.future.unknown\"",
+        "\"side.group.presets\"",
+        "\"side.settings.about\"",
+        "\"side.tool-options.thickness\"",
+        "side_layot = \"panel\"",
+        "[ui.toolbar.future_extension]",
+        "enabled = true",
+        "default_thickness = 7.0",
+    ] {
+        assert!(
+            saved.contains(preserved),
+            "missing preserved text after unrelated save: {preserved}\n{saved}"
+        );
+    }
+
+    let reloaded_kinds = diagnostic_kinds(outcome.document());
+    let reloaded_retired: Vec<&str> = reloaded_kinds
+        .iter()
+        .filter_map(|(kind, path)| (*kind == ConfigDiagnosticKind::RetiredSetting).then_some(*path))
+        .collect();
+    let reloaded_unknown: Vec<&str> = reloaded_kinds
+        .iter()
+        .filter_map(|(kind, path)| (*kind == ConfigDiagnosticKind::UnknownSetting).then_some(*path))
+        .collect();
+    for path in [
+        "ui.toolbar.side_layout",
+        "ui.toolbar.side_pinned",
+        "ui.toolbar.side_minimized",
+        "ui.toolbar.side_active_pane",
+        "ui.toolbar.collapsed_sections",
+        "ui.toolbar.side_offset",
+        "ui.toolbar.side_offset_x",
+        "ui.toolbar.show_settings_section",
+        "ui.toolbar.mode_overrides.simple.show_settings_section",
+        "ui.toolbar.mode_overrides.regular.show_settings_section",
+        "ui.toolbar.mode_overrides.advanced.show_settings_section",
+        "ui.toolbar.items.order.side_sections",
+        "ui.toolbar.items.order.actions",
+        "ui.toolbar.items.order.pages",
+        "ui.toolbar.items.order.boards",
+        "ui.toolbar.items.order.presets",
+        "ui.toolbar.items.order.tool_options",
+        "ui.toolbar.items.order.sessions",
+    ] {
+        assert!(
+            reloaded_retired.contains(&path),
+            "post-save document lost RetiredSetting for {path}: {reloaded_retired:?}"
+        );
+    }
+    assert!(
+        reloaded_unknown.contains(&"ui.toolbar.side_layot"),
+        "post-save typo must stay UnknownSetting: {reloaded_unknown:?}"
+    );
+    assert!(
+        reloaded_unknown
+            .iter()
+            .any(|path| path.contains("future_extension")),
+        "post-save extension data must stay UnknownSetting: {reloaded_unknown:?}"
+    );
+    assert_active_item_contract(&outcome.document().config().ui.toolbar.items.resolved());
+}
+
+/// The historical `full` alias for the regular mode table must keep its
+/// authored spelling on an unrelated save, and the retired nested field must
+/// classify under the path serde_ignored actually emits.
+#[test]
+fn retired_full_alias_show_settings_section_is_diagnosed_and_spelling_preserved() {
+    let temp = TempConfig::new("retired-full-alias");
+    temp.write(
+        r#"# alias fixture
+[ui.toolbar.mode_overrides.full]
+# regular-mode alias spelling
+show_settings_section = false
+show_presets = true
+"#,
+    );
+
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load full alias fixture");
+    let kinds = diagnostic_kinds(&document);
+    let retired_paths: Vec<&str> = kinds
+        .iter()
+        .filter_map(|(kind, path)| (*kind == ConfigDiagnosticKind::RetiredSetting).then_some(*path))
+        .collect();
+    assert!(
+        retired_paths
+            .iter()
+            .any(|path| path.contains("show_settings_section")),
+        "expected a RetiredSetting for show_settings_section, got {retired_paths:?}"
+    );
+    let observed = retired_paths
+        .iter()
+        .copied()
+        .find(|path| path.contains("show_settings_section"))
+        .expect("retired path");
+    assert_eq!(
+        observed, "ui.toolbar.mode_overrides.full.show_settings_section",
+        "observed full-alias retired path: {observed}"
+    );
+
+    let mut updated = document.config().clone();
+    updated.drawing.default_thickness = 5.0;
+    document
+        .save_with_backup(updated)
+        .expect("unrelated save of full alias fixture");
+    let saved = fs::read_to_string(&temp.path).expect("read full alias save");
+    assert!(
+        saved.contains("[ui.toolbar.mode_overrides.full]"),
+        "untouched full alias spelling must survive:\n{saved}"
+    );
+    assert!(
+        !saved.contains("[ui.toolbar.mode_overrides.regular]"),
+        "unrelated save must not canonicalize the full alias:\n{saved}"
+    );
+    assert!(saved.contains("show_settings_section = false"));
+    assert!(saved.contains("show_presets = true"));
+    assert!(saved.contains("default_thickness = 5.0"));
+}
+
+/// Default/new configs must not emit retired toolbar keys.
+#[test]
+fn default_config_omits_retired_toolbar_keys() {
+    let serialized = toml::to_string_pretty(&Config::default()).expect("serialize default config");
+    for retired in [
+        "side_layout",
+        "side_pinned",
+        "side_minimized",
+        "side_active_pane",
+        "collapsed_sections",
+        "side_offset",
+        "side_offset_x",
+        "show_settings_section",
+        "side_sections",
+    ] {
+        assert!(
+            !serialized.contains(retired),
+            "default config must omit retired key {retired}:\n{serialized}"
         );
     }
 }

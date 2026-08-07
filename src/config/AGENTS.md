@@ -15,6 +15,7 @@
 - Preserve serde compatibility, documented defaults, validation warning behavior, and feature-gated schema output.
 - Do not silently drop invalid user config; validation should make coercion or rejection explicit.
 - Keep action labels/categories aligned with help overlay, command palette, keybindings, configurator labels, and docs.
+- **Exception (top-only toolbar retirement):** panel-era typed fields may leave the serde model when they are deliberately retired. Authored `config.toml` values for those exact paths stay in the raw document as `RetiredSetting` (see `RETIRED_SETTING_PATHS` in `document.rs`) rather than as inert typed fields. This is a documented Rust source-compatibility break; do not treat it as a silent unknown-key drop.
 
 ## Coupled Changes
 - Any config field change may require `config.example.toml`, `docs/CONFIG.md`, configurator draft/models/views/update code, tests, and schema behavior.

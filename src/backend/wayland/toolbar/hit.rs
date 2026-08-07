@@ -1,4 +1,3 @@
-use crate::backend::wayland::state::{color_log, debug_toolbar_color_logging_enabled};
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar_intent::ToolbarIntent;
 use crate::ui::toolbar::ToolbarEvent;
@@ -13,8 +12,8 @@ pub const MIN_HIT_TARGET: f64 = 24.0;
 
 #[derive(Clone, Debug)]
 pub struct HitRegion {
-    /// Stable tree identity for keyboard focus. Hand-rendered side hits do
-    /// not have one yet and fall back to their visual-order index.
+    /// Stable tree identity for keyboard focus. Non-focusable hits leave this
+    /// unset and fall back to their visual-order index.
     pub focus_id: Option<String>,
     pub rect: (f64, f64, f64, f64), // x, y, w, h
     pub event: ToolbarEvent,
@@ -154,8 +153,6 @@ fn event_for_hit(hit: &HitRegion, x: f64, y: f64, phase: HitPhase) -> Option<Too
             hit,
             x,
         ),
-        PickSatVal { hue } => sat_val_event_for_hit(hue, hit, x, y),
-        PickHue { sat, val } => hue_event_for_hit(sat, val, hit, x),
         DragUndoDelay => slider_event_for_hit(
             ToolbarSliderTarget::UndoDelay,
             ToolbarSliderSpec::DELAY_SECONDS,
@@ -181,8 +178,6 @@ fn event_for_hit(hit: &HitRegion, x: f64, y: f64, phase: HitPhase) -> Option<Too
             x,
         ),
         DragMoveTop => ToolbarEvent::MoveTopToolbar { x, y },
-        DragMoveSide => ToolbarEvent::MoveSideToolbar { x, y },
-        DragScrollSide { max_scroll } => scroll_event_for_hit(max_scroll, hit, y),
         DragScrollTopPopover { max_scroll } => popover_scroll_event_for_hit(max_scroll, hit, y),
         // Phase-sensitive: the press opens the gesture, motion reports where
         // it is now.
@@ -238,44 +233,8 @@ pub fn drag_intent_for_hit(hit: &HitRegion, x: f64, y: f64) -> Option<ToolbarInt
     event_for_hit(hit, x, y, HitPhase::Drag).map(ToolbarIntent)
 }
 
-/// Map a pointer position inside the saturation/value area to a full HSV
-/// color; saturation follows x, value follows inverted y, hue is fixed.
-fn sat_val_event_for_hit(hue: f64, hit: &HitRegion, x: f64, y: f64) -> ToolbarEvent {
-    let s = ((x - hit.rect.0) / hit.rect.2.max(1.0)).clamp(0.0, 1.0);
-    let v = (1.0 - (y - hit.rect.1) / hit.rect.3.max(1.0)).clamp(0.0, 1.0);
-    if debug_toolbar_color_logging_enabled() {
-        color_log(|| {
-            format!(
-                "toolbar pick sat/val: pos=({x:.1},{y:.1}) rect={:?} h={hue:.3} s={s:.3} v={v:.3}",
-                hit.rect
-            )
-        });
-    }
-    ToolbarEvent::SetColorHsv { h: hue, s, v }
-}
-
-/// Map a pointer x inside the hue bar to a full HSV color; hue follows x,
-/// saturation and value are fixed.
-fn hue_event_for_hit(sat: f64, val: f64, hit: &HitRegion, x: f64) -> ToolbarEvent {
-    let h = ((x - hit.rect.0) / hit.rect.2.max(1.0)).clamp(0.0, 1.0);
-    if debug_toolbar_color_logging_enabled() {
-        color_log(|| {
-            format!(
-                "toolbar pick hue: x={x:.1} rect={:?} h={h:.3} s={sat:.3} v={val:.3}",
-                hit.rect
-            )
-        });
-    }
-    ToolbarEvent::SetColorHsv { h, s: sat, v: val }
-}
-
-/// Map a pointer y within the scrollbar track to an absolute scroll offset.
-fn scroll_event_for_hit(max_scroll: f64, hit: &HitRegion, pointer_y: f64) -> ToolbarEvent {
-    ToolbarEvent::ScrollSidePane(scroll_offset_for_hit(max_scroll, hit, pointer_y))
-}
-
-/// The popover scrollbar shares the side-scrollbar pointer mapping but
-/// targets the popovers' own scroll offset.
+/// Map a pointer y within the popover scrollbar track to an absolute scroll
+/// offset.
 fn popover_scroll_event_for_hit(max_scroll: f64, hit: &HitRegion, pointer_y: f64) -> ToolbarEvent {
     ToolbarEvent::ScrollTopPopover(scroll_offset_for_hit(max_scroll, hit, pointer_y))
 }
@@ -565,73 +524,6 @@ mod tests {
         assert_set_thickness(right.0, 20.0);
         assert!(intent_for_hit(&hit, 99.0, 10.0).is_none());
         assert!(drag_intent_for_hit(&hit, 301.0, 10.0).is_none());
-    }
-
-    #[test]
-    fn sat_val_hit_maps_pointer_to_full_hsv_color() {
-        let hit = HitRegion {
-            focus_id: None,
-            rect: (100.0, 50.0, 200.0, 80.0),
-            event: ToolbarEvent::SetColorHsv {
-                h: 0.5,
-                s: 0.5,
-                v: 0.5,
-            },
-            kind: HitKind::PickSatVal { hue: 0.5 },
-            tooltip: None,
-        };
-
-        let (intent, start_drag) = intent_for_hit(&hit, 200.0, 90.0).expect("press intent");
-        assert!(start_drag);
-        match intent.0 {
-            ToolbarEvent::SetColorHsv { h, s, v } => {
-                assert!((h - 0.5).abs() < 1e-9);
-                assert!((s - 0.5).abs() < 1e-9);
-                assert!((v - 0.5).abs() < 1e-9);
-            }
-            other => panic!("unexpected event: {other:?}"),
-        }
-
-        // The top-right corner is full saturation and value; the mapping
-        // derives from the hit rect itself, not an embedded payload rect.
-        let drag = drag_intent_for_hit(&hit, 300.0, 50.0).expect("drag intent");
-        match drag.0 {
-            ToolbarEvent::SetColorHsv { h, s, v } => {
-                assert!((h - 0.5).abs() < 1e-9);
-                assert!((s - 1.0).abs() < 1e-9);
-                assert!((v - 1.0).abs() < 1e-9);
-            }
-            other => panic!("unexpected event: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn hue_hit_maps_pointer_x_and_keeps_sat_val() {
-        let hit = HitRegion {
-            focus_id: None,
-            rect: (100.0, 150.0, 200.0, 14.0),
-            event: ToolbarEvent::SetColorHsv {
-                h: 0.0,
-                s: 0.25,
-                v: 0.75,
-            },
-            kind: HitKind::PickHue {
-                sat: 0.25,
-                val: 0.75,
-            },
-            tooltip: None,
-        };
-
-        let (intent, start_drag) = intent_for_hit(&hit, 150.0, 157.0).expect("press intent");
-        assert!(start_drag);
-        match intent.0 {
-            ToolbarEvent::SetColorHsv { h, s, v } => {
-                assert!((h - 0.25).abs() < 1e-9);
-                assert!((s - 0.25).abs() < 1e-9);
-                assert!((v - 0.75).abs() < 1e-9);
-            }
-            other => panic!("unexpected event: {other:?}"),
-        }
     }
 
     #[test]

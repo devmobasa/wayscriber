@@ -4,7 +4,7 @@ use crate::config::{
 };
 use crate::input::Tool;
 
-use super::super::{ToolbarEvent, ToolbarSideSection};
+use super::super::ToolbarEvent;
 
 /// The popover an event belongs to, if any.
 ///
@@ -32,7 +32,6 @@ pub(crate) struct ToolbarEventPolicy {
     /// The popovers this event operates inside, so it does not dismiss them.
     pub(crate) popovers: &'static [ToolbarPopover],
     pub(crate) backend_route: ToolbarBackendRoute,
-    pub(crate) pre_apply_effects: Vec<ToolbarPreApplyEffect>,
     pub(crate) tablet_thickness_sensitive: bool,
 }
 
@@ -42,7 +41,6 @@ impl ToolbarEventPolicy {
             persistence: persistence_for_event(event),
             popovers: popovers_for_event(event),
             backend_route: backend_route_for_event(event),
-            pre_apply_effects: pre_apply_effects_for_event(event),
             tablet_thickness_sensitive: matches!(
                 event,
                 ToolbarEvent::SetThickness(_) | ToolbarEvent::NudgeThickness(_)
@@ -79,11 +77,7 @@ pub(crate) enum ToolbarPersistence {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
     TopPinned,
-    SidePinned,
     TopMinimized,
-    SideMinimized,
-    SidePane,
-    CollapsedSection(ToolbarSideSection),
     NamedSection(crate::config::ToolbarSectionFlag),
     LayoutMode,
     ClickHighlight,
@@ -126,12 +120,6 @@ pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
 pub(crate) enum ToolbarBackendRoute {
     ApplyToInput,
     MoveTopToolbar,
-    MoveSideToolbar,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ToolbarPreApplyEffect {
-    RecordDrawerHintShown,
 }
 
 pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
@@ -387,8 +375,6 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
     use ToolbarRuntimeUiPersistenceTarget as Runtime;
     match event {
         ToolbarEvent::PinTopToolbar(_) => ToolbarPersistence::RuntimeUi(Runtime::TopPinned),
-        ToolbarEvent::PinSideToolbar(_) => ToolbarPersistence::RuntimeUi(Runtime::SidePinned),
-        ToolbarEvent::SetSidePane(_) => ToolbarPersistence::RuntimeUi(Runtime::SidePane),
         ToolbarEvent::SetTopMinimized(_) | ToolbarEvent::CloseTopToolbar => {
             ToolbarPersistence::RuntimeUi(Runtime::TopMinimized)
         }
@@ -465,12 +451,6 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         ToolbarEvent::SetStatusBarItemVisible(item, _) => {
             ToolbarPersistence::RuntimeUi(Runtime::StatusBarItem(*item))
         }
-        ToolbarEvent::SetSideMinimized(_) | ToolbarEvent::CloseSideToolbar => {
-            ToolbarPersistence::RuntimeUi(Runtime::SideMinimized)
-        }
-        ToolbarEvent::ToggleSideSectionCollapsed(section, _) => {
-            ToolbarPersistence::RuntimeUi(Runtime::CollapsedSection(*section))
-        }
         // Section rows were routed to `NamedSection` above; every other item
         // keeps its own visibility override.
         ToolbarEvent::SetToolbarItemHidden(id, hidden) => {
@@ -509,7 +489,6 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         // Opening the recolor popup persists nothing; accepting it writes the
         // palette through the popup's own pending-edit path.
         | ToolbarEvent::EditQuickColor { .. }
-        | ToolbarEvent::SetColorHsv { .. }
         | ToolbarEvent::SetThickness(_)
         | ToolbarEvent::NudgeThickness(_)
         | ToolbarEvent::SetMarkerOpacity(_)
@@ -597,33 +576,19 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::CancelPrecisionEntry
         | ToolbarEvent::AdjustSelectionProperty { .. }
         | ToolbarEvent::PickScreenColor
-        | ToolbarEvent::ScrollSidePane(_)
         | ToolbarEvent::DragToolbarItemOver { .. }
         | ToolbarEvent::SetToolbarItemCustomizationOpen(_)
         | ToolbarEvent::SetToolbarItemCustomizationGroup(_)
         | ToolbarEvent::SetStatusBarContentsOpen(_)
         | ToolbarEvent::ToggleShapePicker(_)
-        | ToolbarEvent::MoveTopToolbar { .. }
-        | ToolbarEvent::MoveSideToolbar { .. } => ToolbarPersistence::Ephemeral,
+        | ToolbarEvent::MoveTopToolbar { .. } => ToolbarPersistence::Ephemeral,
     }
 }
 
 fn backend_route_for_event(event: &ToolbarEvent) -> ToolbarBackendRoute {
     match event {
         ToolbarEvent::MoveTopToolbar { .. } => ToolbarBackendRoute::MoveTopToolbar,
-        ToolbarEvent::MoveSideToolbar { .. } => ToolbarBackendRoute::MoveSideToolbar,
         _ => ToolbarBackendRoute::ApplyToInput,
-    }
-}
-
-fn pre_apply_effects_for_event(event: &ToolbarEvent) -> Vec<ToolbarPreApplyEffect> {
-    if matches!(
-        event,
-        ToolbarEvent::SetSidePane(pane) if *pane != crate::ui::toolbar::SidePane::Draw
-    ) {
-        vec![ToolbarPreApplyEffect::RecordDrawerHintShown]
-    } else {
-        Vec::new()
     }
 }
 
@@ -677,7 +642,6 @@ mod popover_affinity_tests {
         for group in [
             ToolbarItemOrderGroup::TopTools,
             ToolbarItemOrderGroup::TopControls,
-            ToolbarItemOrderGroup::SideSections,
         ] {
             let event = ToolbarEvent::StartToolbarItemDrag {
                 group,

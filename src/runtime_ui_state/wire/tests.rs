@@ -1,6 +1,8 @@
 use super::*;
 use crate::runtime_ui_state::{
-    InteractionSeedTarget, InteractionSeedValue, PersistedTopDisplayMode, ToolbarPositionSeed,
+    InteractionSeedTarget, InteractionSeedValue, PersistedTopDisplayMode, RuntimeStatePathIdentity,
+    RuntimeStateSourceRevision, RuntimeUiStateController, ToolbarPositionSeed,
+    ValidatedInteractionSeeds,
 };
 
 #[test]
@@ -98,7 +100,7 @@ fn unknown_ids_and_unknown_order_items_are_pruned() {
     let source = br#"
 version = 1
 
-[toolbar.collapsed_sections.future-section]
+[toolbar.sections.future-section]
 seed = false
 value = true
 
@@ -149,14 +151,6 @@ fn malformed_file_without_version_is_invalid() {
 fn every_v1_override_shape_round_trips() {
     let source = br#"version = 1
 
-[toolbar.side_pane]
-seed = "draw"
-value = "canvas"
-
-[toolbar.collapsed_sections.colors]
-seed = false
-value = true
-
 [toolbar.item_visibility."top.tool.pen"]
 seed = "default"
 value = "hidden"
@@ -169,10 +163,6 @@ value = ["top.tool.marker", "top.tool.pen"]
 seed = { x = 0.0, y = 0.0 }
 value = { x = -12.5, y = 48.0 }
 
-[toolbar.side_position]
-seed = { x = 1.0, y = 2.0 }
-value = { x = 3.25, y = -4.5 }
-
 [toolbar.top_display_mode]
 seed = "full"
 value = "micro"
@@ -184,7 +174,7 @@ value = true
     let decoded = decode_runtime_ui_file(source);
     assert_eq!(decoded.status, RuntimeUiFileStatus::Supported);
     let wire = decoded.supported_wire.unwrap();
-    assert_eq!(wire.model.iter().count(), 8);
+    assert_eq!(wire.model.iter().count(), 5);
     let encoded = encode_runtime_ui_file(&wire).unwrap();
     let reparsed = decode_runtime_ui_file(&encoded);
     assert_eq!(reparsed.supported_wire, Some(wire));
@@ -197,10 +187,6 @@ fn position_and_display_mode_overrides_decode_to_their_typed_values() {
 [toolbar.top_position]
 seed = { x = 0.0, y = 0.0 }
 value = { x = -12.5, y = 48.0 }
-
-[toolbar.side_position]
-seed = { x = 1.0, y = 2.0 }
-value = { x = 3.25, y = -4.5 }
 
 [toolbar.top_display_mode]
 seed = "full"
@@ -215,14 +201,6 @@ value = "micro"
             .map(|entry| &entry.value),
         Some(&InteractionSeedValue::Position(
             ToolbarPositionSeed::new(-12.5, 48.0).unwrap()
-        ))
-    );
-    assert_eq!(
-        wire.model
-            .get(&InteractionSeedTarget::SidePosition)
-            .map(|entry| &entry.seed),
-        Some(&InteractionSeedValue::Position(
-            ToolbarPositionSeed::new(1.0, 2.0).unwrap()
         ))
     );
     assert_eq!(
@@ -303,7 +281,7 @@ value = { x = 1.0 }
 "#
         .as_slice(),
         br#"version = 1
-[toolbar.side_position]
+[toolbar.top_position]
 seed = { x = 0.0, y = 0.0 }
 value = { x = 1.0, y = 2.0, z = 3.0 }
 "#
@@ -351,14 +329,141 @@ fn duplicate_normalized_recognized_ids_are_invalid() {
     let decoded = decode_runtime_ui_file(
         br#"version = 1
 
+[toolbar.item_visibility."top.tool.pen"]
+seed = "default"
+value = "hidden"
+
+[toolbar.item_visibility." top.tool.pen "]
+seed = "hidden"
+value = "default"
+"#,
+    );
+    assert_eq!(decoded.status, RuntimeUiFileStatus::Invalid);
+}
+
+/// The retired side palette left five raw shapes behind in existing files.
+/// This build no longer models them, so they must survive a rewrite verbatim
+/// and contribute nothing to the live model.
+#[test]
+fn retired_side_entries_are_inert_passthrough() {
+    let source = br#"version = 1
+
+[toolbar.top_pinned]
+seed = false
+value = true
+
+[toolbar.side_pinned]
+seed = false
+value = true
+
+[toolbar.side_minimized]
+seed = false
+value = true
+
+[toolbar.side_pane]
+seed = "draw"
+value = "canvas"
+
+[toolbar.side_position]
+seed = { x = 1.0, y = 2.0 }
+value = { x = 3.25, y = -4.5 }
+
 [toolbar.collapsed_sections.colors]
 seed = false
 value = true
 
-[toolbar.collapsed_sections."COLORS"]
-seed = true
-value = false
-"#,
+[toolbar.item_order.side_sections]
+seed = ["side.group.colors"]
+value = ["side.group.pages"]
+
+[toolbar.item_order.tool_options]
+seed = ["side.tool-options.thickness"]
+value = ["side.tool-options.fill"]
+
+[toolbar.item_order.actions]
+seed = ["side.actions.undo"]
+value = ["side.actions.redo"]
+"#;
+    let decoded = decode_runtime_ui_file(source);
+    assert_eq!(decoded.status, RuntimeUiFileStatus::Supported);
+    let wire = decoded.supported_wire.expect("supported wire");
+    assert_eq!(
+        wire.model.iter().count(),
+        1,
+        "only top_pinned is modeled; the side entries stay raw"
     );
-    assert_eq!(decoded.status, RuntimeUiFileStatus::Invalid);
+
+    let mut seeds = ValidatedInteractionSeeds::new();
+    seeds
+        .insert(
+            InteractionSeedTarget::TopPinned,
+            InteractionSeedValue::Bool(false),
+        )
+        .expect("valid top-pinned seed");
+    let controller = RuntimeUiStateController::new_with_authority(
+        seeds,
+        RuntimeStateSourceRevision::present(
+            RuntimeStatePathIdentity::direct("/tmp/retired-side-runtime-ui.toml"),
+            source.to_vec(),
+        ),
+        RuntimeUiFileStatus::Supported,
+        wire.clone(),
+    );
+    assert_eq!(
+        controller
+            .live_state()
+            .get(&InteractionSeedTarget::TopPinned),
+        Some(&InteractionSeedValue::Bool(true)),
+        "the supported model is applied"
+    );
+    assert_eq!(
+        controller.model().iter().count(),
+        1,
+        "retired side values do not become live entries during application"
+    );
+
+    let encoded = encode_runtime_ui_file(&wire).expect("encode");
+    let text = String::from_utf8(encoded.clone()).unwrap();
+    let parsed: toml::Value = toml::from_str(&text).expect("encoded TOML");
+    let toolbar = parsed
+        .get("toolbar")
+        .and_then(toml::Value::as_table)
+        .expect("toolbar table");
+    for retired in [
+        "side_pinned",
+        "side_minimized",
+        "side_pane",
+        "side_position",
+        "collapsed_sections",
+    ] {
+        assert!(
+            toolbar.contains_key(retired),
+            "retired toolbar key `{retired}` must be preserved"
+        );
+    }
+    assert_eq!(
+        toolbar
+            .get("side_position")
+            .and_then(toml::Value::as_table)
+            .and_then(|position| position.get("value"))
+            .and_then(toml::Value::as_table)
+            .and_then(|value| value.get("x"))
+            .and_then(toml::Value::as_float),
+        Some(3.25),
+        "raw side_position values survive"
+    );
+    // `item_order` is a recognized map, so retired group ids are pruned by
+    // the same unknown-ID contract that prunes unknown item ids. Authored
+    // config.toml uses RetiredSetting preservation instead.
+    let item_order = toolbar.get("item_order").and_then(toml::Value::as_table);
+    for pruned in ["side_sections", "tool_options", "actions"] {
+        assert!(
+            item_order.is_none_or(|order| !order.contains_key(pruned)),
+            "retired order group `{pruned}` is pruned, not preserved"
+        );
+    }
+
+    let reparsed = decode_runtime_ui_file(&encoded);
+    assert_eq!(reparsed.status, RuntimeUiFileStatus::Supported);
+    assert_eq!(reparsed.supported_wire, Some(wire));
 }

@@ -5,60 +5,24 @@
 use gtk4::prelude::*;
 
 use crate::toolbar_icons;
-use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection, ToolbarSnapshot, model};
+use crate::ui::toolbar::{ToolbarEvent, model};
 
 use super::super::super::icons::{IconPainter, IconWidget};
 use super::super::super::widgets::{send_event, set_active_class, text_button};
-use super::{SectionCtx, section_card};
+use super::SectionCtx;
 
-type SettingsModelSource = fn(&ToolbarSnapshot) -> Option<model::ToolbarSettingsModel>;
-
-pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget> {
-    let settings_model = model::ToolbarSettingsModel::from_snapshot(ctx.snapshot)?;
-    let customizing = ctx.snapshot.customize_items_open;
-    let title = if customizing {
-        "Customize toolbar"
-    } else {
-        ToolbarSideSection::Settings.label()
-    };
-    let card = section_card(ctx, ToolbarSideSection::Settings, title);
-    if customizing {
-        // The customization sub-panel is a dedicated view: it stays open
-        // even while the Settings section is flagged collapsed.
-        card.body.set_visible(true);
-    }
-    card.body.append(&content(
-        ctx,
-        &settings_model,
-        model::ToolbarSettingsModel::from_snapshot,
-    ));
-    Some(card.root.upcast())
-}
-
-/// The pane's content for the top strip's Settings popover: identical
-/// controls without the collapsible-card chrome. The popover host retains the
-/// registered updaters so ordinary checkbox echoes update in place.
+/// The pane's content for the top strip's Settings popover. The popover host
+/// retains the registered updaters so ordinary checkbox echoes update in
+/// place.
 pub(in crate::toolbar_gtk) fn build_popover_content(
     ctx: &mut SectionCtx,
     settings_model: &model::ToolbarSettingsModel,
-) -> gtk4::Box {
-    content(
-        ctx,
-        settings_model,
-        model::ToolbarSettingsModel::for_popover,
-    )
-}
-
-fn content(
-    ctx: &mut SectionCtx,
-    settings_model: &model::ToolbarSettingsModel,
-    model_source: SettingsModelSource,
 ) -> gtk4::Box {
     let column = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(6.0));
     if !ctx.snapshot.customize_items_open {
         column.append(&layout_mode_segments(ctx));
     }
-    if let Some(grid) = toggle_grid(ctx, settings_model, model_source) {
+    if let Some(grid) = toggle_grid(ctx, settings_model) {
         column.append(&grid);
     }
     for notice in settings_model.notices() {
@@ -107,7 +71,7 @@ fn layout_mode_segments(ctx: &mut SectionCtx) -> gtk4::Box {
         }
         set_active_class(&button, active == Some(segment.id));
         let sender = ctx.feedback.clone();
-        let event = segment.activation.compatibility_event();
+        let event = segment.activation.clone();
         button.connect_clicked(move |_| {
             send_event(&sender, event.clone());
         });
@@ -169,7 +133,6 @@ fn settings_toggle_event(template: &ToolbarEvent, checked: bool) -> ToolbarEvent
 fn toggle_grid(
     ctx: &mut SectionCtx,
     settings_model: &model::ToolbarSettingsModel,
-    model_source: SettingsModelSource,
 ) -> Option<gtk4::Grid> {
     let rows = settings_model.toggle_rows();
     if rows.is_empty() {
@@ -190,7 +153,7 @@ fn toggle_grid(
             if let Some(tooltip) = toggle.tooltip.as_string() {
                 check.set_tooltip_text(Some(&tooltip));
             }
-            let event = toggle.activation.compatibility_event();
+            let event = toggle.activation.clone();
             let sender = ctx.feedback.clone();
             let handler = check.connect_toggled(move |check| {
                 send_event(&sender, settings_toggle_event(&event, check.is_active()));
@@ -205,7 +168,7 @@ fn toggle_grid(
         }
     }
     ctx.updaters.push(Box::new(move |snapshot| {
-        let Some(fresh) = model_source(snapshot) else {
+        let Some(fresh) = model::ToolbarSettingsModel::for_popover(snapshot) else {
             return;
         };
         for handle in &handles {
@@ -356,7 +319,7 @@ fn item_override_rows(
                 );
                 button.set_sensitive(enabled);
                 let sender = ctx.feedback.clone();
-                let event = activation.compatibility_event();
+                let event = activation.clone();
                 button.connect_clicked(move |_| {
                     send_event(&sender, event.clone());
                 });

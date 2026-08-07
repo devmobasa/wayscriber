@@ -4,8 +4,8 @@ use super::first_run::{
     first_run_step_eyebrow, quick_access_completed, radial_flick_completed, shortcut_rebind_footer,
 };
 use super::{
-    PANEL_DEPRECATION_MESSAGE, canvas_popover_hint_relevant, capability_toast_message,
-    shortcut_coach_should_fire, status_bar_board_picker_entry,
+    canvas_popover_hint_relevant, capability_toast_message, shortcut_coach_should_fire,
+    status_bar_board_picker_entry,
 };
 use crate::config::{RadialMenuMouseBinding, ToolbarRebindModifier};
 use crate::input::state::CompositorCapabilities;
@@ -225,31 +225,6 @@ fn status_bar_hint_requires_a_visible_board_picker_segment() {
     input.show_status_board_badge = false;
     input.show_status_page_badge = false;
     assert_eq!(status_bar_board_picker_entry(&input), None);
-}
-
-#[test]
-fn panel_deprecation_notice_is_multiline_and_names_every_new_home() {
-    assert!(PANEL_DEPRECATION_MESSAGE.lines().count() >= 3);
-    for expected in [
-        "style pill",
-        "Canvas\u{2026}",
-        "zoom chip",
-        "status bar",
-        "top strip",
-        "Session/Settings",
-        "overflow",
-    ] {
-        assert!(
-            PANEL_DEPRECATION_MESSAGE.contains(expected),
-            "missing {expected:?}: {PANEL_DEPRECATION_MESSAGE:?}"
-        );
-    }
-    assert!(
-        PANEL_DEPRECATION_MESSAGE
-            .lines()
-            .all(|line| line.chars().count() <= 80),
-        "keep each unwrapped toast line within ordinary screen widths"
-    );
 }
 
 #[test]

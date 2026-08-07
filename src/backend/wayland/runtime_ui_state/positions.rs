@@ -1,21 +1,19 @@
 use super::*;
 
-/// One of the two toolbar positions a move drag can write.
+/// The toolbar position a move drag can write.
 ///
-/// Position drags only ever touch these two overrides. Naming them as their own
-/// type keeps the seed target and the snapshot field that feeds it in lockstep,
-/// so neither has to be recovered from the other at runtime.
+/// Naming it as its own type keeps the seed target and the snapshot field that
+/// feeds it in lockstep, so neither has to be recovered from the other at
+/// runtime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PositionDragTarget {
     Top,
-    Side,
 }
 
 impl PositionDragTarget {
     fn offsets(self, positions: ToolbarPositionSnapshot) -> (f64, f64) {
         match self {
             Self::Top => positions.top,
-            Self::Side => positions.side,
         }
     }
 }
@@ -24,20 +22,14 @@ impl From<PositionDragTarget> for InteractionSeedTarget {
     fn from(target: PositionDragTarget) -> Self {
         match target {
             PositionDragTarget::Top => Self::TopPosition,
-            PositionDragTarget::Side => Self::SidePosition,
         }
     }
 }
 
 /// The override targets a toolbar drag of `kind` may write.
-///
-/// A side drag can change whether the side palette overlaps the top strip, and
-/// drag completion reconciles the top strip's X offset against that new base,
-/// so it owns both position targets in one mutation scope.
 fn position_drag_targets(kind: MoveDragKind) -> &'static [PositionDragTarget] {
     match kind {
         MoveDragKind::Top => &[PositionDragTarget::Top],
-        MoveDragKind::Side => &[PositionDragTarget::Top, PositionDragTarget::Side],
     }
 }
 

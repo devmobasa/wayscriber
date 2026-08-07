@@ -314,10 +314,6 @@ impl GtkToolbarFeedback {
                 phase: GtkToolbarDragPhase::Move,
                 ..
             } => Some(GtkToolbarKind::Top),
-            Self::SetSideOffset {
-                phase: GtkToolbarDragPhase::Move,
-                ..
-            } => Some(GtkToolbarKind::Side),
             _ => None,
         }
     }
@@ -329,7 +325,6 @@ impl GtkToolbarFeedback {
     fn drag_kind(&self) -> Option<GtkToolbarKind> {
         match self {
             Self::SetTopOffset { .. } => Some(GtkToolbarKind::Top),
-            Self::SetSideOffset { .. } => Some(GtkToolbarKind::Side),
             Self::Event { .. }
             | Self::TopHover { .. }
             | Self::CaptureSuppressionReady { .. }
@@ -549,13 +544,6 @@ mod tests {
                 seq,
                 phase,
             },
-            GtkToolbarKind::Side => GtkToolbarFeedback::SetSideOffset {
-                x: 0.0,
-                y: seq as f64,
-                surface_size: SURFACE,
-                seq,
-                phase,
-            },
         }
     }
 
@@ -714,11 +702,11 @@ mod tests {
     #[test]
     fn capture_suppression_ack_reclaims_a_move_and_remains_an_ordered_boundary() {
         let (_wake, health, publisher) = channel();
-        let start = drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Start, 1);
+        let start = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Start, 1);
         publisher.publish(start.clone()).unwrap();
         for seq in 2..=GTK_FEEDBACK_CAPACITY as u64 {
             publisher
-                .publish(drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, seq))
+                .publish(drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, seq))
                 .unwrap();
         }
 
@@ -733,7 +721,7 @@ mod tests {
     }
 
     #[test]
-    fn reclaimed_move_is_appended_after_event_boundary_and_other_kind() {
+    fn reclaimed_move_is_appended_after_the_event_boundary() {
         let (_wake, health, publisher) = channel();
         for seq in 0..(GTK_FEEDBACK_CAPACITY - 2) as u64 {
             publisher
@@ -741,20 +729,15 @@ mod tests {
                 .unwrap();
         }
         publisher.publish(event()).unwrap();
-        publisher
-            .publish(drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, 1))
-            .unwrap();
+        let kept_move = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 1);
+        publisher.publish(kept_move.clone()).unwrap();
 
         let latest_top = drag(GtkToolbarKind::Top, GtkToolbarDragPhase::Move, 999);
         publisher.publish(latest_top.clone()).unwrap();
 
         let drained = publisher.drain(GTK_FEEDBACK_CAPACITY);
         assert_eq!(drained.len(), GTK_FEEDBACK_CAPACITY);
-        assert_eq!(drained[GTK_FEEDBACK_CAPACITY - 3], event());
-        assert_eq!(
-            drained[GTK_FEEDBACK_CAPACITY - 2],
-            drag(GtkToolbarKind::Side, GtkToolbarDragPhase::Move, 1)
-        );
+        assert_eq!(drained[GTK_FEEDBACK_CAPACITY - 2], event());
         assert_eq!(drained.last(), Some(&latest_top));
         assert!(!health.failed());
     }

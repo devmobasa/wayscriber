@@ -1,30 +1,16 @@
-// The shared toolbar model is being adopted incrementally by both frontends,
-// and this file holds staged shapes no renderer reads yet. Scoped here rather
-// than over the whole `model` module so the other ~11.5k lines - the specs,
-// snapshot mapping, and settings panes that are fully live - are policed for
-// dead code again.
-#![allow(dead_code)]
-
-use crate::draw::Color;
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
 use super::super::ToolbarEvent;
 
+// Activation payloads are plain `ToolbarEvent` values on model controls. The
+// historical module name now groups the IDs and slider math used to construct
+// those event-bearing controls; it does not define an activation abstraction.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum ToolbarControlId {
-    DragTop,
-    DragSide,
-    IconModeIcons,
-    IconModeText,
     LayoutModeSimple,
     LayoutModeRegular,
     LayoutModeAdvanced,
-    PinTop,
-    PinSide,
-    CloseTop,
-    CloseSide,
-    DrawerMore,
-    BoardChip,
     SettingsContextAwareUi,
     SettingsIconMode,
     SettingsTextControls,
@@ -68,37 +54,6 @@ pub(crate) enum ToolbarControlId {
     AdoptRuntimeUiFromDisk,
     PreserveInvalidRuntimeUi,
     CancelRuntimeUiRecovery,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) enum ToolbarActivation {
-    Click(ToolbarEvent),
-    Drag(ToolbarDragTarget),
-    Slider(ToolbarSlider),
-    ColorPicker(ToolbarColorPicker),
-    None,
-}
-
-impl ToolbarActivation {
-    pub(crate) fn compatibility_event(&self) -> ToolbarEvent {
-        match self {
-            Self::Click(event) => event.clone(),
-            Self::Drag(ToolbarDragTarget::MoveTopToolbar) => {
-                ToolbarEvent::MoveTopToolbar { x: 0.0, y: 0.0 }
-            }
-            Self::Drag(ToolbarDragTarget::MoveSideToolbar) => {
-                ToolbarEvent::MoveSideToolbar { x: 0.0, y: 0.0 }
-            }
-            Self::Slider(slider) => slider.event_for_value(slider.value),
-            Self::ColorPicker(_) | Self::None => ToolbarEvent::OpenColorPickerPopup,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ToolbarDragTarget {
-    MoveTopToolbar,
-    MoveSideToolbar,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -199,6 +154,8 @@ impl ToolbarSliderSpec {
         self.value_from_t(Self::t_from_pointer_x(pointer_x, hit_x, hit_w))
     }
 
+    /// Inset travel for the slider geometry contract exercised below.
+    #[cfg(test)]
     pub(crate) fn knob_center_x(
         self,
         track_x: f64,
@@ -215,19 +172,9 @@ impl ToolbarSliderSpec {
     }
 }
 
-/// Convert normalized delay slider position [0, 1] to seconds.
-pub(crate) fn delay_secs_from_t(t: f64) -> f64 {
-    ToolbarSliderSpec::DELAY_SECONDS.value_from_t(t)
-}
-
 /// Convert a delay in milliseconds to normalized slider position [0, 1].
 pub(crate) fn delay_t_from_ms(delay_ms: u64) -> f64 {
     ToolbarSliderSpec::DELAY_SECONDS.t_from_value(delay_ms as f64 / 1000.0)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct ToolbarColorPicker {
-    pub(crate) color: Color,
 }
 
 #[cfg(test)]
@@ -300,12 +247,18 @@ mod tests {
     }
 
     #[test]
-    fn delay_helpers_use_delay_slider_spec() {
-        assert_close(delay_secs_from_t(0.0), ToolbarSliderSpec::DELAY_SECONDS.min);
-        assert_close(delay_secs_from_t(1.0), ToolbarSliderSpec::DELAY_SECONDS.max);
+    fn delay_helper_uses_delay_slider_spec() {
+        assert_close(
+            ToolbarSliderSpec::DELAY_SECONDS.value_from_t(0.0),
+            ToolbarSliderSpec::DELAY_SECONDS.min,
+        );
+        assert_close(
+            ToolbarSliderSpec::DELAY_SECONDS.value_from_t(1.0),
+            ToolbarSliderSpec::DELAY_SECONDS.max,
+        );
 
         let t = delay_t_from_ms(2525);
-        assert_close(delay_secs_from_t(t), 2.525);
+        assert_close(ToolbarSliderSpec::DELAY_SECONDS.value_from_t(t), 2.525);
     }
 
     #[test]

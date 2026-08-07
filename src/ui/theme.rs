@@ -434,13 +434,12 @@ pub mod toolbar {
 
     // ---- Preset slot (M7-C2) ----
     /// Tool-glyph size inside a presets-island slot, as a fraction of the
-    /// slot's shorter side (mirrors the side-palette preset icon ratio).
+    /// slot's shorter side.
     pub const PRESET_SLOT_ICON_RATIO: f64 = 0.5;
     /// Corner color-swatch size inside a filled presets-island slot, as a
     /// fraction of the slot's shorter side. The saved preset color rides here
     /// as a separate accent so the tool glyph can stay a neutral, always-legible
-    /// foreground rather than being tinted invisible by a dark preset color
-    /// (the side-palette convention, M7-C2 legibility fix).
+    /// foreground rather than being tinted invisible by a dark preset color.
     pub const PRESET_SLOT_SWATCH_RATIO: f64 = 0.4;
     /// Inset of the corner color swatch from the slot's bottom-right edge.
     pub const PRESET_SLOT_SWATCH_INSET: f64 = SPACING_XS;
@@ -575,6 +574,8 @@ pub mod toolbar {
     pub const COLOR_FIELD_BORDER_HOVER: Rgba = rgba(FIELD_BORDER_RGB, 0.70);
     /// Scrollbar slider fill
     pub const COLOR_SCROLLBAR_SLIDER: Rgba = (1.0, 1.0, 1.0, 0.35);
+    /// Scrollbar track behind the slider
+    pub const COLOR_SCROLLBAR_TRACK: Rgba = (1.0, 1.0, 1.0, 0.08);
     /// Inner hairline that keeps a swatch fill defined against the panel
     /// (shared by the builtin renderer and the GTK swatch widget).
     pub const COLOR_SWATCH_HAIRLINE: Rgba = (1.0, 1.0, 1.0, 0.16);
@@ -593,9 +594,8 @@ pub mod toolbar {
     /// Compact-mode counterpart of [`ISLAND_PAD`] (the last-resort
     /// tightened presentation), shared the same way.
     pub const COMPACT_ISLAND_PAD: f64 = 4.0;
-    /// Session/Settings popover content-column width, in spec units
-    /// (mirrors the retired side palette's content column). One source for
-    /// both frontends: the builtin popover tree builds its rows at this
+    /// Session/Settings popover content-column width, in spec units. One source
+    /// serves both frontends: the builtin popover tree builds its rows at this
     /// width and the GTK popover sizes its viewport from it.
     pub const MENU_CONTENT_W: f64 = 232.0;
     /// Canvas popover content-column width, in spec units. It is wider than

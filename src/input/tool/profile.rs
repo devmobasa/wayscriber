@@ -46,7 +46,7 @@ pub(crate) enum ToolSizeSource {
     EraserSize,
 }
 
-/// Side-toolbar control family exposed by a tool.
+/// Contextual style-pill control family exposed by a tool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolControlGroup {
     None,

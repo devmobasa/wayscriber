@@ -1,115 +1,74 @@
 use super::*;
-use crate::backend::wayland::toolbar::ToolbarFocusTarget;
 use crate::backend::wayland::toolbar::hit::{
     focus_hover_point, focused_event, next_focus_index, resolve_focus_index,
 };
 use crate::input::Key;
 
 impl WaylandState {
-    pub(in crate::backend::wayland) fn inline_toolbar_focus_hover(
-        &self,
-        target: ToolbarFocusTarget,
-    ) -> Option<(f64, f64)> {
-        let hits = match target {
-            ToolbarFocusTarget::Top => &self.data.inline_top_hits,
-            ToolbarFocusTarget::Side => &self.data.inline_side_hits,
-        };
+    fn inline_focus_index(&self) -> Option<usize> {
+        self.data.inline_top_focus_index
+    }
+
+    fn inline_focus_id(&self) -> Option<&str> {
+        self.data.inline_top_focus_id.as_deref()
+    }
+
+    pub(in crate::backend::wayland) fn inline_toolbar_focus_hover(&self) -> Option<(f64, f64)> {
+        let hits = &self.data.inline_top_hits;
         focus_hover_point(
             hits,
-            resolve_focus_index(
-                hits,
-                self.inline_focus_index(target),
-                self.inline_focus_id(target),
-            ),
+            resolve_focus_index(hits, self.inline_focus_index(), self.inline_focus_id()),
         )
     }
 
-    pub(in crate::backend::wayland) fn inline_toolbar_focus_next(
-        &mut self,
-        target: ToolbarFocusTarget,
-        reverse: bool,
-    ) -> bool {
-        let hits = match target {
-            ToolbarFocusTarget::Top => &self.data.inline_top_hits,
-            ToolbarFocusTarget::Side => &self.data.inline_side_hits,
-        };
-        let current = resolve_focus_index(
-            hits,
-            self.inline_focus_index(target),
-            self.inline_focus_id(target),
-        );
+    pub(in crate::backend::wayland) fn inline_toolbar_focus_next(&mut self, reverse: bool) -> bool {
+        let hits = &self.data.inline_top_hits;
+        let current = resolve_focus_index(hits, self.inline_focus_index(), self.inline_focus_id());
         let next = next_focus_index(hits, current, reverse);
         if next != current {
             let id = next.and_then(|index| hits[index].focus_id.clone());
-            *self.inline_focus_index_mut(target) = next;
-            self.set_inline_focus_id(target, id);
+            self.data.inline_top_focus_index = next;
+            self.data.inline_top_focus_id = id;
             self.mark_inline_toolbar_full_damage();
             return true;
         }
         false
     }
 
-    pub(in crate::backend::wayland) fn inline_toolbar_focused_event(
-        &self,
-        target: ToolbarFocusTarget,
-    ) -> Option<ToolbarEvent> {
-        let hits = match target {
-            ToolbarFocusTarget::Top => &self.data.inline_top_hits,
-            ToolbarFocusTarget::Side => &self.data.inline_side_hits,
-        };
+    pub(in crate::backend::wayland) fn inline_toolbar_focused_event(&self) -> Option<ToolbarEvent> {
+        let hits = &self.data.inline_top_hits;
         focused_event(
             hits,
-            resolve_focus_index(
-                hits,
-                self.inline_focus_index(target),
-                self.inline_focus_id(target),
-            ),
+            resolve_focus_index(hits, self.inline_focus_index(), self.inline_focus_id()),
         )
     }
 
-    pub(in crate::backend::wayland) fn inline_toolbar_focus_target_from_hover(
-        &self,
-    ) -> Option<ToolbarFocusTarget> {
-        if self.data.inline_top_hover.is_some() {
-            Some(ToolbarFocusTarget::Top)
-        } else if self.data.inline_side_hover.is_some() {
-            Some(ToolbarFocusTarget::Side)
-        } else {
-            None
-        }
+    pub(in crate::backend::wayland) fn toolbar_focus_active(&self) -> bool {
+        self.data.toolbar_focus_active
     }
 
-    pub(in crate::backend::wayland) fn toolbar_focus_target(&self) -> Option<ToolbarFocusTarget> {
-        self.data.toolbar_focus_target
-    }
-
-    pub(in crate::backend::wayland) fn set_toolbar_focus_target(
-        &mut self,
-        target: Option<ToolbarFocusTarget>,
-    ) {
-        self.data.toolbar_focus_target = target;
+    pub(in crate::backend::wayland) fn set_toolbar_focus_active(&mut self, active: bool) {
+        self.data.toolbar_focus_active = active;
     }
 
     pub(in crate::backend::wayland) fn clear_toolbar_focus(&mut self) {
-        self.data.toolbar_focus_target = None;
+        self.data.toolbar_focus_active = false;
         self.toolbar.clear_focus();
-        let had_inline_focus = self.data.inline_top_focus_index.is_some()
-            || self.data.inline_side_focus_index.is_some()
-            || self.data.inline_top_focus_id.is_some()
-            || self.data.inline_side_focus_id.is_some();
+        let had_inline_focus =
+            self.data.inline_top_focus_index.is_some() || self.data.inline_top_focus_id.is_some();
         self.clear_inline_toolbar_focus();
         if self.inline_toolbars_active() && had_inline_focus {
             self.mark_inline_toolbar_full_damage();
         }
     }
 
-    pub(in crate::backend::wayland) fn toolbar_focus_target_from_hover(
-        &self,
-    ) -> Option<ToolbarFocusTarget> {
+    /// Whether the pointer currently hovers the toolbar in the active
+    /// placement, which is what seeds keyboard focus on the first Tab.
+    pub(in crate::backend::wayland) fn toolbar_hovered(&self) -> bool {
         if self.inline_toolbars_active() {
-            self.inline_toolbar_focus_target_from_hover()
+            self.data.inline_top_hover.is_some()
         } else {
-            self.toolbar.hovered_target()
+            self.toolbar.is_hovered()
         }
     }
 
@@ -145,24 +104,14 @@ impl WaylandState {
         let is_tab = matches!(key, Key::Tab);
         let is_activate = matches!(key, Key::Return | Key::Space);
 
-        let mut target = self.toolbar_focus_target();
-        if target.is_none() {
-            target = self.toolbar_focus_target_from_hover();
-            if target.is_none() {
+        if !self.toolbar_focus_active() {
+            if !self.toolbar_hovered() {
                 return false;
             }
-            self.data.toolbar_focus_target = target;
+            self.data.toolbar_focus_active = true;
         }
 
-        let target = match target {
-            Some(target) => target,
-            None => return false,
-        };
-        if matches!(target, ToolbarFocusTarget::Top) && !self.toolbar.is_top_visible() {
-            self.clear_toolbar_focus();
-            return false;
-        }
-        if matches!(target, ToolbarFocusTarget::Side) && !self.toolbar.is_side_visible() {
+        if !self.toolbar.is_top_visible() {
             self.clear_toolbar_focus();
             return false;
         }
@@ -170,18 +119,18 @@ impl WaylandState {
         if is_tab {
             let reverse = self.input_state.modifiers.shift;
             if self.inline_toolbars_active() {
-                self.inline_toolbar_focus_next(target, reverse);
+                self.inline_toolbar_focus_next(reverse);
             } else {
-                self.toolbar.focus_next(target, reverse);
+                self.toolbar.focus_next(reverse);
             }
             return true;
         }
 
         if is_activate {
             let event = if self.inline_toolbars_active() {
-                self.inline_toolbar_focused_event(target)
+                self.inline_toolbar_focused_event()
             } else {
-                self.toolbar.focused_event(target)
+                self.toolbar.focused_event()
             };
             if let Some(event) = event {
                 self.handle_toolbar_event(event, conn, qh);

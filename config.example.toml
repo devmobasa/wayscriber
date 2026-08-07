@@ -518,14 +518,10 @@ layout_mode = "regular"
 # choice
 top_pinned = true
 
-# Show side toolbar on startup (pinned)
-side_pinned = true
-
-# Start toolbars minimized to their edge restore tabs
-# The minimize button updates these; a minimized bar always leaves a
+# Start the top toolbar minimized to its edge restore tab
+# The minimize button updates this; a minimized bar always leaves a
 # clickable tab on screen to bring it back
 top_minimized = false
-side_minimized = false
 
 # Display form of the top strip restored at startup: "full" or "micro"
 # (one 44px round chip: active tool glyph + a ring in the current color).
@@ -535,24 +531,15 @@ side_minimized = false
 # runtime-only and comes back per top_pinned
 top_display_mode = "full"
 
-# Where the side-palette functions live: "pill" (default) or "panel".
-# "pill" retires the standalone side palette: drawing properties live in
-# the top strip's contextual style pill, canvas management in the status
-# HUD and board picker, and the Session/Settings panes in popovers opened
-# from the top strip's overflow menu ("Session..." / "Settings...").
-# "panel" is the legacy escape hatch restoring the classic four-pane side
-# palette (side_active_pane, collapsed_sections, side_pinned, and
-# side_minimized apply only under "panel"); it is deprecated and planned
-# for removal one release after the pill default
-side_layout = "pill"
-
-# Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
-# The overlay updates this as you switch panes (legacy side_layout = "panel" only)
-side_active_pane = "draw"
-
-# Side-palette sections collapsed to their header row
-# The overlay updates this as you collapse/expand sections
-collapsed_sections = []
+# The unified top toolbar is the only layout. Drawing properties live in
+# the top strip's contextual style pill; canvas management in the status
+# HUD, board picker, and Canvas overflow popover; Session/Settings in
+# popovers from the top strip's overflow menu. Older keys such as
+# side_layout, side_pinned, side_minimized, side_active_pane,
+# collapsed_sections, side_offset(_x), show_settings_section, and the
+# retired items.order lists (side_sections, actions, pages, boards,
+# presets, tool_options, sessions) remain readable and are preserved on
+# save, but they no longer affect the running overlay.
 
 # Use icons instead of text labels in toolbars
 # Icons are more compact; text labels are more explicit
@@ -565,7 +552,7 @@ scale = 1.0
 # When enabled, displays additional color options beyond the basic 8
 show_more_colors = false
 
-# Show basic actions (undo/redo/clear) in side toolbar
+# Show basic actions (undo/redo/clear) in the Canvas overflow popover
 show_actions_section = true
 
 # Show advanced actions (undo all, delay, freeze, etc.)
@@ -591,7 +578,7 @@ show_pages_section = true
 # Show board controls section (prev/next/new/del)
 show_boards_section = true
 
-# Show presets section in side toolbar
+# Show presets island in the top strip
 show_presets = true
 
 # Show step undo/redo section
@@ -600,15 +587,11 @@ show_step_section = false
 # Keep text controls visible even when text is inactive
 show_text_controls = true
 
-# Deprecated compatibility mirror. Settings navigation is always reachable;
-# this value is preserved for older Wayscriber versions but is otherwise ignored.
-show_settings_section = true
-
-# Show timing delay sliders in side toolbar
+# Show timing delay sliders in the Canvas popover's Step section
 # Allows configuring delayed undo/redo all timing
 show_delay_sliders = false
 
-# Show marker opacity slider in side toolbar even when the marker tool isn't active
+# Keep the marker opacity control available in the style pill even when the marker tool isn't active
 # Enable to keep marker transparency control visible at all times
 show_marker_opacity_section = false
 
@@ -623,17 +606,13 @@ show_preset_toasts = true
 # Show cursor tool preview bubble near the pointer
 show_tool_preview = false
 
-# Authored default toolbar offsets (layer-shell/inline). Dragging a toolbar
-# persists its position to runtime-ui.toml instead of rewriting these;
+# Authored default top-toolbar offsets (layer-shell/inline). Dragging the
+# strip persists its position to runtime-ui.toml instead of rewriting these;
 # editing these values again takes over from the saved drag.
 # Horizontal offset for the top toolbar
 top_offset = 0.0
 # Vertical offset for the top toolbar (move top bar down/up)
 top_offset_y = 0.0
-# Vertical offset for the side toolbar
-side_offset = 0.0
-# Horizontal offset for the side toolbar (move side bar left/right)
-side_offset_x = 0.0
 
 # Force inline toolbars even when layer-shell is available
 force_inline = false
@@ -663,8 +642,8 @@ shown = []
 [ui.toolbar.items.order]
 # Optional order overrides. Empty lists use the built-in order.
 # Known IDs omitted from a non-empty list are appended in the default order.
-# Side section ordering uses runtime block representatives; detailed sections
-# such as eraser-mode, polygon-sides, and font remain visibility-only IDs.
+# Historically named side.* item IDs still customize top-toolbar controls
+# (Canvas/Session/Settings popovers, section visibility); do not rename them.
 top_tools = [
   "top.tool.select",
   "top.tool.pen",
@@ -683,21 +662,6 @@ top_controls = [
   "top.utility.screenshot",
   "top.utility.clear-canvas",
   "top.utility.highlight",
-]
-side_sections = [
-  "side.group.colors",
-  "side.group.presets",
-  "side.group.thickness",
-  "side.group.arrow-labels",
-  "side.group.step-markers",
-  "side.group.marker-opacity",
-  "side.group.text-size",
-  "side.group.actions",
-  "side.group.boards",
-  "side.group.pages",
-  "side.group.step-undo",
-  "side.group.session",
-  "side.group.settings",
 ]
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -815,7 +779,7 @@ hide_toolbars = true
 hide_tool_preview = true
 
 # What hide_toolbars does to the top strip: "hidden" removes it entirely,
-# "micro" collapses it to the 44px micro chip (side toolbars always hide)
+# "micro" collapses it to the 44px micro chip
 toolbar_mode = "hidden"
 
 # Close the help overlay when entering presenter mode

@@ -81,22 +81,6 @@ const DEFAULT_TOP_CONTROLS_ORDER: &[ToolbarItemId] = &[
     ids::TOP_UTILITY_HIGHLIGHT,
 ];
 
-const DEFAULT_SIDE_SECTIONS_ORDER: &[ToolbarItemId] = &[
-    ids::SIDE_GROUP_COLORS,
-    ids::SIDE_GROUP_PRESETS,
-    ids::SIDE_GROUP_THICKNESS,
-    ids::SIDE_GROUP_ARROW_LABELS,
-    ids::SIDE_GROUP_STEP_MARKERS,
-    ids::SIDE_GROUP_MARKER_OPACITY,
-    ids::SIDE_GROUP_TEXT_SIZE,
-    ids::SIDE_GROUP_ACTIONS,
-    ids::SIDE_GROUP_BOARDS,
-    ids::SIDE_GROUP_PAGES,
-    ids::SIDE_GROUP_STEP_UNDO,
-    ids::SIDE_GROUP_SESSION,
-    ids::SIDE_GROUP_SETTINGS,
-];
-
 impl Default for ToolbarItemsConfig {
     fn default() -> Self {
         Self {
@@ -312,9 +296,7 @@ pub(crate) fn factory_individual_toolbar_item_visibility_settings()
 /// Canonical visibility-customization predicate shared by the settings UI,
 /// runtime-state seed builder, and factory reset implementation.
 pub(crate) fn toolbar_item_visibility_override_allowed(definition: &ToolbarItemDefinition) -> bool {
-    definition.group != Some(ToolbarGroupId::Settings)
-        && definition.id != ids::SIDE_GROUP_SETTINGS
-        && definition.id != ids::TOP_CHROME_OVERFLOW
+    definition.group != Some(ToolbarGroupId::Settings) && definition.id != ids::TOP_CHROME_OVERFLOW
 }
 
 /// Individual toolbar items affected by "Restore built-in visibility".
@@ -393,7 +375,8 @@ impl ToolbarItemDefinition {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ToolbarItemSurface {
     Top,
-    Side,
+    /// Historical `side.*` item ids that customize top popover sections.
+    Popover,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -407,21 +390,16 @@ pub enum ToolbarItemCategory {
     Board,
     Setting,
     Session,
-    ToolOption,
 }
 
+/// Logical groups for retained toolbar item definitions.
+///
+/// Panel-era draw groups (`colors`, `thickness`, `eraser-mode`, …) were retired
+/// with the side palette; only groups that still label live top/popover items
+/// remain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ToolbarGroupId {
-    Colors,
-    Thickness,
-    EraserMode,
-    PolygonSides,
-    ArrowLabels,
-    StepMarkers,
     StepUndo,
-    MarkerOpacity,
-    TextSize,
-    Font,
     Actions,
     Pages,
     Boards,
@@ -433,43 +411,13 @@ pub enum ToolbarGroupId {
 impl ToolbarGroupId {
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Colors => "colors",
-            Self::Thickness => "thickness",
-            Self::EraserMode => "eraser-mode",
-            Self::PolygonSides => "polygon-sides",
-            Self::ArrowLabels => "arrow-labels",
-            Self::StepMarkers => "step-markers",
             Self::StepUndo => "step-undo",
-            Self::MarkerOpacity => "marker-opacity",
-            Self::TextSize => "text-size",
-            Self::Font => "font",
             Self::Actions => "actions",
             Self::Pages => "pages",
             Self::Boards => "boards",
             Self::Presets => "presets",
             Self::Settings => "settings",
             Self::Session => "session",
-        }
-    }
-
-    pub const fn toolbar_item_id(self) -> ToolbarItemId {
-        match self {
-            Self::Colors => ids::SIDE_GROUP_COLORS,
-            Self::Thickness => ids::SIDE_GROUP_THICKNESS,
-            Self::EraserMode => ids::SIDE_GROUP_ERASER_MODE,
-            Self::PolygonSides => ids::SIDE_GROUP_POLYGON_SIDES,
-            Self::ArrowLabels => ids::SIDE_GROUP_ARROW_LABELS,
-            Self::StepMarkers => ids::SIDE_GROUP_STEP_MARKERS,
-            Self::StepUndo => ids::SIDE_GROUP_STEP_UNDO,
-            Self::MarkerOpacity => ids::SIDE_GROUP_MARKER_OPACITY,
-            Self::TextSize => ids::SIDE_GROUP_TEXT_SIZE,
-            Self::Font => ids::SIDE_GROUP_FONT,
-            Self::Actions => ids::SIDE_GROUP_ACTIONS,
-            Self::Pages => ids::SIDE_GROUP_PAGES,
-            Self::Boards => ids::SIDE_GROUP_BOARDS,
-            Self::Presets => ids::SIDE_GROUP_PRESETS,
-            Self::Settings => ids::SIDE_GROUP_SETTINGS,
-            Self::Session => ids::SIDE_GROUP_SESSION,
         }
     }
 }
@@ -485,16 +433,7 @@ impl FromStr for ToolbarGroupId {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim() {
-            "colors" => Ok(Self::Colors),
-            "thickness" => Ok(Self::Thickness),
-            "eraser-mode" => Ok(Self::EraserMode),
-            "polygon-sides" => Ok(Self::PolygonSides),
-            "arrow-labels" => Ok(Self::ArrowLabels),
-            "step-markers" => Ok(Self::StepMarkers),
             "step-undo" => Ok(Self::StepUndo),
-            "marker-opacity" => Ok(Self::MarkerOpacity),
-            "text-size" => Ok(Self::TextSize),
-            "font" => Ok(Self::Font),
             "actions" => Ok(Self::Actions),
             "pages" => Ok(Self::Pages),
             "boards" => Ok(Self::Boards),

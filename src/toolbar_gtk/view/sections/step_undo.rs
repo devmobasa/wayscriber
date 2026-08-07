@@ -8,30 +8,16 @@ use std::rc::Rc;
 use gtk4::prelude::*;
 
 use crate::toolbar_icons;
-use crate::ui::toolbar::{ToolbarEvent, ToolbarSideSection, ToolbarSnapshot, model};
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
 
 use super::super::super::icons::{IconPainter, IconWidget};
 use super::super::super::widgets::{SliderRow, icon_button, send_event, sized_button};
-use super::{SectionCtx, section_card};
+use super::SectionCtx;
 
-pub(in crate::toolbar_gtk) fn build(ctx: &mut SectionCtx) -> Option<gtk4::Widget> {
-    let snapshot = ctx.snapshot;
-    if snapshot.side_section_hidden(ToolbarSideSection::StepUndo) || !snapshot.show_step_section {
-        return None;
-    }
-    let card = section_card(
-        ctx,
-        ToolbarSideSection::StepUndo,
-        ToolbarSideSection::StepUndo.label(),
-    );
-    populate(ctx, &card.body);
-    Some(card.root.upcast())
-}
-
-/// The section's controls for the top strip's Canvas popover: the same
-/// toggles, step rows, and delay sliders without the collapsible-card
-/// chrome. Callers gate on `show_step_section`; liveness comes from the
-/// popover host's content-key rebuild, so the updaters go to a scratch list.
+/// The section's controls for the top strip's Canvas popover: the toggles,
+/// step rows, and delay sliders. Callers gate on `show_step_section`;
+/// liveness comes from the popover host's content-key rebuild, so the
+/// updaters go to a scratch list.
 pub(in crate::toolbar_gtk) fn build_popover_content(ctx: &mut SectionCtx) -> gtk4::Box {
     let body = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(6.0));
     populate(ctx, &body);

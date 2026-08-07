@@ -49,7 +49,7 @@ fn invalid_observation(label: &str) -> RuntimeStateSourceObservation {
     }
 }
 
-fn test_seeds(top_pinned: bool, side_pinned: bool) -> ValidatedInteractionSeeds {
+fn test_seeds(top_pinned: bool, top_minimized: bool) -> ValidatedInteractionSeeds {
     let mut seeds = ValidatedInteractionSeeds::new();
     seeds
         .insert(
@@ -59,8 +59,8 @@ fn test_seeds(top_pinned: bool, side_pinned: bool) -> ValidatedInteractionSeeds 
         .unwrap();
     seeds
         .insert(
-            InteractionSeedTarget::SidePinned,
-            InteractionSeedValue::Bool(side_pinned),
+            InteractionSeedTarget::TopMinimized,
+            InteractionSeedValue::Bool(top_minimized),
         )
         .unwrap();
     seeds
@@ -82,12 +82,6 @@ fn test_seeds(top_pinned: bool, side_pinned: bool) -> ValidatedInteractionSeeds 
         .insert(
             InteractionSeedTarget::TopPosition,
             InteractionSeedValue::Position(ToolbarPositionSeed::new(10.0, 20.0).unwrap()),
-        )
-        .unwrap();
-    seeds
-        .insert(
-            InteractionSeedTarget::SidePosition,
-            InteractionSeedValue::Position(ToolbarPositionSeed::new(30.0, 40.0).unwrap()),
         )
         .unwrap();
     seeds

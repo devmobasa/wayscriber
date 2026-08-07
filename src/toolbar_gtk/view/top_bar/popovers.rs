@@ -360,7 +360,7 @@ impl TopBar {
         scale: f64,
     ) -> gtk4::Widget {
         let mut scratch_updaters = Vec::new();
-        let mut ctx = super::super::sections::SectionCtx {
+        let ctx = super::super::sections::SectionCtx {
             snapshot,
             feedback: self.feedback.clone(),
             scale,
@@ -369,7 +369,7 @@ impl TopBar {
         };
         let content = match model::ToolbarSessionModel::for_popover(snapshot) {
             Some(session) => {
-                super::super::sections::session_pane::build_popover_content(&mut ctx, &session)
+                super::super::sections::session_pane::build_popover_content(&ctx, &session)
             }
             None => gtk4::Box::new(gtk4::Orientation::Vertical, 0),
         };

@@ -8,20 +8,10 @@ pub mod surfaces;
 pub mod view;
 
 pub use events::ToolbarCursorHint;
-pub use layout::{side_size, top_size};
+pub use layout::top_size;
 pub use main::*;
-pub use render::{render_side_palette, render_top_strip};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ToolbarFocusTarget {
-    Top,
-    Side,
-}
+pub use render::render_top_strip;
 
 pub fn format_binding_label(label: &str, binding: Option<&str>) -> String {
     crate::label_format::format_binding_label(label, binding)
-}
-
-pub fn format_quick_color_tooltip(label: &str, binding: Option<&str>) -> String {
-    crate::label_format::format_quick_color_tooltip(label, binding)
 }

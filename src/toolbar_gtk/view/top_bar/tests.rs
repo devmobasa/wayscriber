@@ -196,7 +196,7 @@ fn settings_popover_rebuilds_when_item_visibility_changes_outside_customization(
 }
 
 #[test]
-fn top_structure_ignores_side_only_section_visibility_changes() {
+fn top_structure_ignores_popover_only_section_visibility_changes() {
     let state = make_test_input_state();
     let base = ToolbarSnapshot::from_input_with_bindings(
         &state,
@@ -239,7 +239,7 @@ fn top_structure_ignores_side_only_section_visibility_changes() {
         let changed_key = StructureKey::of(&changed, &plan_top_strip(&changed));
         assert!(
             base_key == changed_key,
-            "side-only {flag:?} visibility must not rebuild the top bar"
+            "popover-only {flag:?} visibility must not rebuild the top bar"
         );
     }
 }
@@ -276,7 +276,14 @@ fn canvas_popover_content_key_rebuilds_on_section_and_value_changes() {
         ToolbarBindingHints::from_input_state(&state),
     );
 
-    // A section display toggle drives a content rebuild.
+    // Every section display toggle drives a content rebuild.
+    let mut actions_toggled = base.clone();
+    actions_toggled.show_actions_section = !base.show_actions_section;
+    assert!(
+        CanvasMenuContentKey::of(&base) != CanvasMenuContentKey::of(&actions_toggled),
+        "toggling Actions rebuilds the canvas popover content"
+    );
+
     let mut toggled = base.clone();
     toggled.show_boards_section = !base.show_boards_section;
     assert!(
@@ -2256,13 +2263,13 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             .recv_timeout(Duration::from_secs(1))
             .expect("GTK settings toggle event"),
         GtkToolbarFeedback::Event {
-            event: toggles[0].activation.compatibility_event(),
+            event: toggles[0].activation.clone(),
             rebind_requested: false,
         }
     );
 
     // Backend echoes update the existing checkbox and replace its next event;
-    // the top popover must not depend on the side palette's active pane.
+    // the top popover must depend only on unified-top snapshot state.
     let updated_context_aware = !toggles[0].checked;
     settings_snapshot.context_aware_ui = updated_context_aware;
     for updater in &settings_updaters {
@@ -2299,7 +2306,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             .recv_timeout(Duration::from_secs(1))
             .expect("GTK layout mode event"),
         GtkToolbarFeedback::Event {
-            event: segmented.segments()[0].activation.compatibility_event(),
+            event: segmented.segments()[0].activation.clone(),
             rebind_requested: false,
         }
     );
@@ -2329,6 +2336,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     assert!(menu_top.canvas_popover.is_some(), "canvas popover exists");
     let mut canvas_snapshot = regular.clone();
     canvas_snapshot.canvas_popover_open = true;
+    canvas_snapshot.show_actions_section = true;
     canvas_snapshot.show_boards_section = true;
     canvas_snapshot.show_pages_section = true;
     canvas_snapshot.show_zoom_actions = true;
@@ -2472,6 +2480,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
 
     let mut empty_canvas = regular.clone();
     empty_canvas.canvas_popover_open = true;
+    empty_canvas.show_actions_section = false;
     empty_canvas.show_boards_section = false;
     empty_canvas.show_pages_section = false;
     empty_canvas.show_zoom_actions = false;

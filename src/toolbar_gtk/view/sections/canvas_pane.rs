@@ -1,8 +1,7 @@
-//! Canvas pane popover content: the Boards / Pages / Advanced / Zoom command
-//! sections (each gated on its display toggle) and the Step Undo/Redo
-//! configuration — the side Canvas pane re-homed into the top strip's Canvas
-//! popover without the collapsible-card chrome. Most state (sections, step
-//! counts, enabled/glyph faces) rides the popover host's content-key rebuild,
+//! Canvas popover content: the Actions / Boards / Pages / Advanced / Zoom
+//! command sections (each gated on its display toggle) and the Step Undo/Redo
+//! configuration. Most state (sections, step counts, enabled/glyph faces)
+//! rides the popover host's content-key rebuild,
 //! but the Step Undo/Redo section registers persistent slider updaters: the
 //! host retains them (in `canvas_updaters`) and runs them every apply, so a
 //! continuous delay-slider drag reads its live value without rebuilding the
@@ -33,6 +32,9 @@ pub(in crate::toolbar_gtk) fn build_popover_content(ctx: &mut SectionCtx) -> gtk
     column.set_margin_start(pad_h);
     column.set_margin_end(pad_h);
 
+    if let Some(group) = model::toolbar_actions_model_for_popover(ctx.snapshot) {
+        command_section(ctx, &column, "Actions", "Action", &group, action_icon);
+    }
     if let Some(group) = model::toolbar_boards_model_for_popover(ctx.snapshot) {
         command_section(ctx, &column, "Boards", "Board", &group, board_icon);
     }
@@ -149,9 +151,12 @@ fn page_icon(_snapshot: &ToolbarSnapshot, event: &ToolbarEvent) -> IconPainter {
 }
 
 /// Zoom/Advanced glyphs, with the zoom-lock and freeze faces following the
-/// snapshot state (port of the side pane's `action_icon`).
+/// snapshot state.
 fn action_icon(snapshot: &ToolbarSnapshot, event: &ToolbarEvent) -> IconPainter {
     match event {
+        ToolbarEvent::Undo => toolbar_icons::draw_icon_undo,
+        ToolbarEvent::Redo => toolbar_icons::draw_icon_redo,
+        ToolbarEvent::ClearCanvas { .. } => toolbar_icons::draw_icon_clear,
         ToolbarEvent::ZoomIn => toolbar_icons::draw_icon_zoom_in,
         ToolbarEvent::ZoomOut => toolbar_icons::draw_icon_zoom_out,
         ToolbarEvent::ResetZoom => toolbar_icons::draw_icon_zoom_reset,

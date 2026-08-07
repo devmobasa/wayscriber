@@ -2,7 +2,6 @@ use crate::config::{
     ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting as ItemVisibilitySetting,
     TopDisplayMode,
 };
-use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 
 macro_rules! id_type {
     ($name:ident) => {
@@ -107,16 +106,11 @@ impl PersistedTopDisplayMode {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum InteractionSeedTarget {
     TopPinned,
-    SidePinned,
     TopMinimized,
-    SideMinimized,
-    SidePane,
-    CollapsedSection(ToolbarSideSection),
     ItemVisibility(ToolbarItemId),
     ItemOrder(ToolbarItemOrderGroup),
     BoardPin(String),
     TopPosition,
-    SidePosition,
     TopDisplayMode,
     /// Whether status-bar segments respond to clicks.
     StatusBarInteractive,
@@ -157,7 +151,6 @@ pub(crate) enum InteractionSeedTarget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum InteractionSeedValue {
     Bool(bool),
-    SidePane(SidePane),
     Visibility(ItemVisibilitySetting),
     ItemOrder(Vec<ToolbarItemId>),
     Position(ToolbarPositionSeed),
@@ -172,10 +165,7 @@ impl InteractionSeedValue {
             (target, self),
             (
                 Target::TopPinned
-                    | Target::SidePinned
                     | Target::TopMinimized
-                    | Target::SideMinimized
-                    | Target::CollapsedSection(_)
                     | Target::BoardPin(_)
                     | Target::StatusBarInteractive
                     | Target::StatusBarItem(_)
@@ -196,16 +186,11 @@ impl InteractionSeedValue {
                     | Target::FloatingBadge
                     | Target::ZoomChip,
                 Self::Bool(_),
-            ) | (Target::SidePane, Self::SidePane(_))
-                | (
-                    Target::ItemVisibility(_) | Target::SectionVisibility(_),
-                    Self::Visibility(_)
-                )
-                | (Target::ItemOrder(_), Self::ItemOrder(_))
-                | (
-                    Target::TopPosition | Target::SidePosition,
-                    Self::Position(_)
-                )
+            ) | (
+                Target::ItemVisibility(_) | Target::SectionVisibility(_),
+                Self::Visibility(_)
+            ) | (Target::ItemOrder(_), Self::ItemOrder(_))
+                | (Target::TopPosition, Self::Position(_))
                 | (Target::TopDisplayMode, Self::TopDisplayMode(_))
                 | (Target::ToolbarLayoutMode, Self::LayoutMode(_))
         )

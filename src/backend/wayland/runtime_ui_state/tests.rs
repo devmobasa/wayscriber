@@ -25,16 +25,9 @@ fn input_from_config(config: &Config) -> InputState {
     input.toolbar_items = config.ui.toolbar.items.clone();
     input.resolved_toolbar_items = input.toolbar_items.resolved();
     input.toolbar_top_pinned = config.ui.toolbar.top_pinned;
-    input.toolbar_side_pinned = config.ui.toolbar.side_pinned;
     input.toolbar_top_minimized = config.ui.toolbar.top_minimized;
-    input.toolbar_side_minimized = config.ui.toolbar.side_minimized;
     input.toolbar_top_visible = config.ui.toolbar.top_pinned;
-    input.toolbar_side_visible = config.ui.toolbar.side_pinned;
-    input.toolbar_visible = input.toolbar_top_visible || input.toolbar_side_visible;
-    input.init_toolbar_side_panes_from_config(
-        &config.ui.toolbar.side_active_pane,
-        &config.ui.toolbar.collapsed_sections,
-    );
+    input.toolbar_visible = input.toolbar_top_visible;
     input
 }
 
@@ -167,10 +160,6 @@ fn commit_board_pin_toggle(
 fn config_positions(config: &Config) -> ToolbarPositionSnapshot {
     ToolbarPositionSnapshot {
         top: (config.ui.toolbar.top_offset, config.ui.toolbar.top_offset_y),
-        side: (
-            config.ui.toolbar.side_offset_x,
-            config.ui.toolbar.side_offset,
-        ),
     }
 }
 
@@ -229,34 +218,22 @@ fn commit_display_mode(
 }
 
 /// The pre-toggle pins as the visibility toggle's write path batches them.
-fn pins_rollback_values(top: bool, side: bool) -> RuntimeUiMutationValues {
-    RuntimeUiMutationValues::batch([
-        (
-            InteractionSeedTarget::TopPinned,
-            InteractionSeedValue::Bool(top),
-        ),
-        (
-            InteractionSeedTarget::SidePinned,
-            InteractionSeedValue::Bool(side),
-        ),
-    ])
+fn pins_rollback_values(top: bool) -> RuntimeUiMutationValues {
+    RuntimeUiMutationValues::batch([(
+        InteractionSeedTarget::TopPinned,
+        InteractionSeedValue::Bool(top),
+    )])
     .expect("distinct pin targets batch")
 }
 
 /// The pre-toggle pins as the visibility toggle's rollback snapshot carries
 /// them (visibility itself is never persisted, so it is not in there).
-fn pins_rollback(top: bool, side: bool) -> PreviewRollbackSnapshot {
+fn pins_rollback(top: bool) -> PreviewRollbackSnapshot {
     PreviewRollbackSnapshot {
-        values: BTreeMap::from([
-            (
-                InteractionSeedTarget::TopPinned,
-                InteractionSeedValue::Bool(top),
-            ),
-            (
-                InteractionSeedTarget::SidePinned,
-                InteractionSeedValue::Bool(side),
-            ),
-        ]),
+        values: BTreeMap::from([(
+            InteractionSeedTarget::TopPinned,
+            InteractionSeedValue::Bool(top),
+        )]),
     }
 }
 

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::config::{ToolbarItemId, toolbar_item_ids as ids};
 
-use super::super::{SessionRecentSnapshot, ToolbarEvent, ToolbarSideSection, ToolbarSnapshot};
+use super::super::{SessionRecentSnapshot, ToolbarEvent, ToolbarSnapshot};
 
 const MAX_RECENT_SESSIONS: usize = 5;
 pub(crate) const SESSION_BUTTON_COLUMNS: usize = 3;
@@ -17,20 +17,8 @@ pub(crate) struct ToolbarSessionModel {
 }
 
 impl ToolbarSessionModel {
-    pub(crate) fn from_snapshot(snapshot: &ToolbarSnapshot) -> Option<Self> {
-        if snapshot.side_section_hidden(ToolbarSideSection::Session)
-            || snapshot.active_side_pane != crate::ui::toolbar::SidePane::Session
-        {
-            return None;
-        }
-        Self::build(snapshot)
-    }
-
-    /// The same model for the top strip's Session popover. The popover is
-    /// navigation like the Settings pane — it ignores the side palette's
-    /// pane selection and the hideable `side.group.session` section flag
-    /// (under `side_layout = "pill"` it is the only Session surface) while
-    /// keeping the per-button hidden overrides.
+    /// The model for the top strip's unconditionally reachable Session
+    /// popover. Historical per-button hidden overrides remain active.
     pub(crate) fn for_popover(snapshot: &ToolbarSnapshot) -> Option<Self> {
         Self::build(snapshot)
     }
@@ -83,16 +71,8 @@ impl ToolbarSessionModel {
         })
     }
 
-    pub(crate) fn has_recent_sessions(&self) -> bool {
-        !self.recents.is_empty()
-    }
-
     pub(crate) fn button_columns(&self) -> usize {
         self.buttons.len().clamp(1, SESSION_BUTTON_COLUMNS)
-    }
-
-    pub(crate) fn button_rows(&self) -> usize {
-        self.buttons.len().div_ceil(self.button_columns())
     }
 }
 
@@ -174,12 +154,24 @@ fn session_button_item_id(event: &ToolbarEvent) -> Option<ToolbarItemId> {
 mod tests {
     use super::*;
     use crate::input::state::test_support::make_test_input_state;
-    use crate::ui::toolbar::{SidePane, ToolbarBindingHints};
+    use crate::ui::toolbar::ToolbarBindingHints;
 
     fn app_snapshot() -> ToolbarSnapshot {
-        let mut state = make_test_input_state();
-        state.toolbar_side_pane = SidePane::Session;
+        let state = make_test_input_state();
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default())
+    }
+
+    #[test]
+    fn every_session_command_maps_to_its_retained_item_id() {
+        for (event, expected) in [
+            (ToolbarEvent::OpenSession, ids::SIDE_SESSION_OPEN),
+            (ToolbarEvent::SaveSessionAs, ids::SIDE_SESSION_SAVE_AS),
+            (ToolbarEvent::SessionInfo, ids::SIDE_SESSION_INFO),
+            (ToolbarEvent::ClearSession, ids::SIDE_SESSION_CLEAR),
+            (ToolbarEvent::OpenConfigurator, ids::SIDE_SESSION_MANAGER),
+        ] {
+            assert_eq!(session_button_item_id(&event), Some(expected), "{event:?}");
+        }
     }
 
     #[test]
@@ -194,13 +186,12 @@ mod tests {
             })
             .collect();
 
-        let model = ToolbarSessionModel::from_snapshot(&snapshot).expect("session model");
+        let model = ToolbarSessionModel::for_popover(&snapshot).expect("session model");
 
         assert_eq!(model.active_name, "lecture.wayscriber-session");
         assert!(model.active_path_label.contains("/tmp/lecture"));
         assert_eq!(model.buttons.len(), 5);
         assert_eq!(model.button_columns(), SESSION_BUTTON_COLUMNS);
-        assert_eq!(model.button_rows(), 2);
         assert!(model.buttons.iter().all(|button| button.enabled));
         assert_eq!(model.recents.len(), MAX_RECENT_SESSIONS);
         assert!(model.overwrite_confirmation.is_none());
@@ -214,7 +205,7 @@ mod tests {
             path: PathBuf::from("/tmp/recent.wayscriber-session"),
         }];
 
-        let model = ToolbarSessionModel::from_snapshot(&snapshot).expect("session model");
+        let model = ToolbarSessionModel::for_popover(&snapshot).expect("session model");
 
         assert!(!model.buttons[0].enabled);
         assert!(!model.buttons[1].enabled);
@@ -236,7 +227,7 @@ mod tests {
         snapshot.active_session_path = Some(PathBuf::from("/tmp/current.wayscriber-session"));
         snapshot.pending_save_as_overwrite_path = Some(target.clone());
 
-        let model = ToolbarSessionModel::from_snapshot(&snapshot).expect("session model");
+        let model = ToolbarSessionModel::for_popover(&snapshot).expect("session model");
         let confirmation = model
             .overwrite_confirmation
             .as_ref()
@@ -251,15 +242,5 @@ mod tests {
             confirmation.cancel_event(),
             ToolbarEvent::SaveSessionAsCancel
         ));
-    }
-
-    #[test]
-    fn session_model_is_hidden_outside_session_pane() {
-        let mut snapshot = app_snapshot();
-        snapshot.active_side_pane = SidePane::Canvas;
-        assert!(ToolbarSessionModel::from_snapshot(&snapshot).is_none());
-
-        snapshot.active_side_pane = SidePane::Draw;
-        assert!(ToolbarSessionModel::from_snapshot(&snapshot).is_none());
     }
 }

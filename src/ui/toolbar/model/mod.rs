@@ -11,14 +11,13 @@ mod top_spec;
 
 #[allow(unused_imports)]
 pub(crate) use actions::{
-    ToolbarActionsModel, ToolbarButtonModel, ToolbarCommandGroup, ToolbarCommandGroupKind,
-    toolbar_advanced_group_for_popover, toolbar_boards_model, toolbar_boards_model_for_popover,
-    toolbar_pages_model, toolbar_pages_model_for_popover, toolbar_zoom_group_for_popover,
+    ToolbarButtonModel, ToolbarCommandGroup, toolbar_actions_model_for_popover,
+    toolbar_advanced_group_for_popover, toolbar_boards_model_for_popover,
+    toolbar_pages_model_for_popover, toolbar_zoom_group_for_popover,
 };
 #[allow(unused_imports)]
 pub(crate) use activation::{
-    ToolbarActivation, ToolbarColorPicker, ToolbarControlId, ToolbarDragTarget, ToolbarSlider,
-    ToolbarSliderSpec, ToolbarSliderTarget, delay_secs_from_t, delay_t_from_ms,
+    ToolbarControlId, ToolbarSlider, ToolbarSliderSpec, ToolbarSliderTarget, delay_t_from_ms,
 };
 #[allow(unused_imports)]
 pub(crate) use control::{
@@ -29,12 +28,12 @@ pub(crate) use control::{
 #[allow(unused_imports)]
 pub(crate) use event_policy::{
     ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPopover,
-    ToolbarPreApplyEffect, ToolbarRuntimeUiPersistenceTarget, action_for_apply_preset,
-    action_for_clear_preset, action_for_event, action_for_save_preset, action_for_tool,
-    popovers_for_event, short_label_for_event, tooltip_label_for_event,
+    ToolbarRuntimeUiPersistenceTarget, action_for_apply_preset, action_for_clear_preset,
+    action_for_event, action_for_save_preset, action_for_tool, popovers_for_event,
+    short_label_for_event, tooltip_label_for_event,
 };
 #[allow(unused_imports)]
-pub(crate) use header::{SideHeaderModel, board_chip_label, layout_mode_control};
+pub(crate) use header::layout_mode_control;
 #[allow(unused_imports)]
 pub(crate) use session::{ToolbarSessionButton, ToolbarSessionModel, ToolbarSessionRecent};
 #[allow(unused_imports)]
@@ -50,14 +49,13 @@ pub(crate) use style_pill::{
 #[allow(unused_imports)]
 pub(crate) use tools::{
     SemanticToolIcon, TopToolGroup, TopUtilityButton, current_shape_tool, default_drag_hint,
-    default_polygon_tool, default_shape_tool, is_fill_tool, is_polygon_tool, ordered_pane_sections,
-    ordered_side_sections, pane_for_section, polygon_tools, semantic_icon_for_tool, shape_tools,
-    tool_visible, toolbar_item_id_for_tool, toolbar_item_visible, top_clear_canvas_visible,
-    top_fill_visible, top_highlight_ring_visible, top_highlight_visible, top_screenshot_visible,
-    top_shape_picker_visible, top_sticky_note_visible, top_text_visible, top_tool_buttons,
-    top_tool_group, visible_shape_picker_max_row_len, visible_shape_picker_row_count,
-    visible_shape_picker_rows, visible_tool_count, visible_top_tool_buttons,
-    visible_top_utility_buttons,
+    default_polygon_tool, default_shape_tool, is_fill_tool, is_polygon_tool, polygon_tools,
+    semantic_icon_for_tool, shape_tools, tool_visible, toolbar_item_id_for_tool,
+    toolbar_item_visible, top_clear_canvas_visible, top_fill_visible, top_highlight_ring_visible,
+    top_highlight_visible, top_screenshot_visible, top_shape_picker_visible,
+    top_sticky_note_visible, top_text_visible, top_tool_buttons, top_tool_group,
+    visible_shape_picker_max_row_len, visible_shape_picker_row_count, visible_shape_picker_rows,
+    visible_tool_count, visible_top_tool_buttons, visible_top_utility_buttons,
 };
 #[allow(unused_imports)]
 pub(crate) use top_spec::{
@@ -70,60 +68,24 @@ pub(crate) use top_spec::{
 mod tests {
     use super::*;
     use crate::config::{
-        ToolbarGroupId, ToolbarLayoutMode, toolbar_item_definitions, toolbar_item_ids as ids,
+        ToolbarGroupId, ToolbarItemOrderConfig, ToolbarItemsConfig, ToolbarLayoutMode,
+        toolbar_item_definitions, toolbar_item_ids as ids,
     };
+    use crate::input::Tool;
     use crate::input::state::test_support::make_test_input_state;
     use crate::ui::toolbar::{
-        RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot, SidePane, ToolbarBindingHints,
-        ToolbarEvent, ToolbarSnapshot,
+        RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot, ToolbarBindingHints, ToolbarEvent,
+        ToolbarSnapshot,
     };
 
     fn snapshot() -> ToolbarSnapshot {
         let mut state = make_test_input_state();
-        state.toolbar_side_pane = SidePane::Canvas;
         state.show_actions_section = true;
         state.show_actions_advanced = false;
         state.show_zoom_actions = true;
         state.show_pages_section = true;
         state.show_boards_section = true;
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default())
-    }
-
-    #[test]
-    fn actions_model_keeps_advanced_actions_in_canvas_pane() {
-        let mut snapshot = snapshot();
-        snapshot.show_actions_section = false;
-        snapshot.show_actions_advanced = true;
-        snapshot.delay_actions_enabled = true;
-
-        let model = ToolbarActionsModel::from_snapshot(&snapshot).expect("actions model");
-        assert_eq!(model.groups().len(), 2);
-        assert_eq!(model.groups()[0].kind, ToolbarCommandGroupKind::Zoom);
-        assert_eq!(
-            model.groups()[1].kind,
-            ToolbarCommandGroupKind::AdvancedActions
-        );
-        assert_eq!(model.groups()[1].buttons.len(), 5);
-
-        snapshot.active_side_pane = SidePane::Draw;
-        assert!(ToolbarActionsModel::from_snapshot(&snapshot).is_none());
-    }
-
-    #[test]
-    fn page_and_board_models_report_disabled_navigation() {
-        let mut snapshot = snapshot();
-        snapshot.page_count = 2;
-        snapshot.board_count = 1;
-        snapshot.is_transparent = true;
-
-        let pages = toolbar_pages_model(&snapshot).expect("pages model");
-        assert!(!pages.buttons[0].enabled);
-        assert!(pages.buttons[1].enabled);
-
-        let boards = toolbar_boards_model(&snapshot).expect("boards model");
-        assert!(!boards.buttons[0].enabled);
-        assert!(!boards.buttons[1].enabled);
-        assert!(!boards.buttons[3].enabled);
     }
 
     #[test]
@@ -143,11 +105,11 @@ mod tests {
     #[test]
     fn segmented_controls_validate_invariants() {
         let segment = ToolbarSegment {
-            id: ToolbarControlId::IconModeIcons,
-            label: "Ico".into(),
-            activation: ToolbarActivation::Click(ToolbarEvent::ToggleIconMode(true)),
+            id: ToolbarControlId::LayoutModeSimple,
+            label: "Simple".into(),
+            activation: ToolbarEvent::SetToolbarLayoutMode(ToolbarLayoutMode::Simple),
             action: None,
-            tooltip: ToolbarTooltip::text("Icons mode"),
+            tooltip: ToolbarTooltip::text("Simple layout"),
             enabled: true,
         };
 
@@ -158,50 +120,31 @@ mod tests {
         assert_eq!(
             ToolbarSegmentedControl::try_new(None, vec![segment.clone(), segment.clone()])
                 .unwrap_err(),
-            ToolbarModelError::DuplicateSegmentId(ToolbarControlId::IconModeIcons)
+            ToolbarModelError::DuplicateSegmentId(ToolbarControlId::LayoutModeSimple)
         );
         assert_eq!(
             ToolbarSegmentedControl::try_new(
-                Some(ToolbarControlId::IconModeText),
+                Some(ToolbarControlId::LayoutModeRegular),
                 vec![segment.clone()]
             )
             .unwrap_err(),
-            ToolbarModelError::MissingActiveSegment(ToolbarControlId::IconModeText)
+            ToolbarModelError::MissingActiveSegment(ToolbarControlId::LayoutModeRegular)
         );
         assert!(
-            ToolbarSegmentedControl::try_new(Some(ToolbarControlId::IconModeIcons), vec![segment])
-                .is_ok()
+            ToolbarSegmentedControl::try_new(
+                Some(ToolbarControlId::LayoutModeSimple),
+                vec![segment]
+            )
+            .is_ok()
         );
-    }
-
-    #[test]
-    fn side_header_model_contains_dynamic_board_chip() {
-        let mut snapshot = snapshot();
-        snapshot.board_index = 1;
-        snapshot.board_count = 3;
-        snapshot.board_name = "Sprint".to_string();
-        snapshot.page_count = 2;
-
-        let header = SideHeaderModel::from_snapshot(&snapshot);
-        let ToolbarPresentationPayload::BoardChip(chip) = &header.board_chip.presentation.payload
-        else {
-            panic!("board chip payload");
-        };
-
-        assert_eq!(chip.label, "Board 2/3 · Sprint · p.1/2");
-        assert_eq!(chip.board_index, 1);
-        assert_eq!(chip.board_count, 3);
-        assert_eq!(chip.page_count, 2);
     }
 
     #[test]
     fn settings_model_includes_context_ui_and_simple_mode_hides_advanced_toggles() {
         let mut snapshot = snapshot();
-        snapshot.active_side_pane = SidePane::Settings;
         snapshot.layout_mode = ToolbarLayoutMode::Simple;
-        snapshot.show_settings_section = true;
 
-        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
         assert_eq!(
             model.toggles()[0].id,
             ToolbarControlId::SettingsContextAwareUi
@@ -214,26 +157,21 @@ mod tests {
         );
 
         snapshot.layout_mode = ToolbarLayoutMode::Regular;
-        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
         assert!(
             model
                 .toggles()
                 .iter()
                 .any(|toggle| toggle.id == ToolbarControlId::SettingsAdvancedActions)
         );
-
-        snapshot.active_side_pane = SidePane::Draw;
-        assert!(ToolbarSettingsModel::from_snapshot(&snapshot).is_none());
     }
 
     #[test]
     fn long_settings_toggles_take_a_full_row() {
         let mut snapshot = snapshot();
-        snapshot.active_side_pane = SidePane::Settings;
         snapshot.layout_mode = ToolbarLayoutMode::Regular;
-        snapshot.show_settings_section = true;
 
-        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
         let rows = model.toggle_rows();
         assert_eq!(
             rows.iter().map(|row| row.len()).sum::<usize>(),
@@ -257,8 +195,6 @@ mod tests {
     #[test]
     fn settings_model_moves_hidden_item_overrides_into_customization_panel() {
         let mut snapshot = snapshot();
-        snapshot.active_side_pane = SidePane::Settings;
-        snapshot.show_settings_section = true;
         snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
             hidden: vec![ids::TOP_TOOL_PEN.as_str().to_string()],
             shown: Vec::new(),
@@ -266,7 +202,7 @@ mod tests {
         }
         .resolved();
 
-        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
         assert!(model.item_overrides().is_empty());
         assert!(model.buttons().iter().any(|button| {
             matches!(
@@ -282,7 +218,7 @@ mod tests {
         );
 
         snapshot.customize_items_open = true;
-        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
         assert!(model.item_overrides().is_empty());
         assert!(
             model
@@ -293,7 +229,7 @@ mod tests {
 
         snapshot.customize_items_group =
             Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools);
-        let model = ToolbarSettingsModel::from_snapshot(&snapshot).expect("settings");
+        let model = ToolbarSettingsModel::for_popover(&snapshot).expect("settings");
         assert!(model.groups().is_empty());
         assert!(
             model
@@ -323,8 +259,6 @@ mod tests {
 
     #[test]
     fn factory_visibility_reset_button_tracks_only_eligible_tri_state_differences() {
-        use crate::config::ToolbarItemsConfig;
-
         let mut snapshot = snapshot();
         snapshot.resolved_toolbar_items = ToolbarItemsConfig::default().resolved();
         assert!(snapshot.toolbar_item_hidden(ids::TOP_UTILITY_SCREENSHOT));
@@ -352,7 +286,7 @@ mod tests {
 
         let mut chrome_only = ToolbarItemsConfig::default();
         chrome_only.set_hidden(ids::TOP_CHROME_OVERFLOW, true);
-        chrome_only.set_hidden(ids::SIDE_GROUP_SETTINGS, true);
+        chrome_only.set_hidden(ids::SIDE_SETTINGS_ABOUT, true);
         snapshot.resolved_toolbar_items = chrome_only.resolved();
         assert!(!has_visibility_reset_button(&snapshot));
 
@@ -365,6 +299,37 @@ mod tests {
         mixed.set_hidden(ids::TOP_TOOL_PEN, true);
         snapshot.resolved_toolbar_items = mixed.resolved();
         assert!(has_visibility_reset_button(&snapshot));
+    }
+
+    #[test]
+    fn active_order_groups_control_shared_top_models() {
+        let mut snapshot = snapshot();
+        snapshot.resolved_toolbar_items = ToolbarItemsConfig {
+            hidden: Vec::new(),
+            shown: Vec::new(),
+            order: ToolbarItemOrderConfig {
+                top_tools: vec![
+                    ids::TOP_TOOL_MARKER.as_str().to_string(),
+                    ids::TOP_TOOL_PEN.as_str().to_string(),
+                ],
+                top_controls: vec![
+                    ids::TOP_UTILITY_CLEAR_CANVAS.as_str().to_string(),
+                    ids::TOP_UTILITY_TEXT.as_str().to_string(),
+                ],
+            },
+        }
+        .resolved();
+
+        assert_eq!(
+            visible_top_tool_buttons(false, &snapshot)
+                .take(2)
+                .collect::<Vec<_>>(),
+            vec![Tool::Marker, Tool::Pen]
+        );
+        assert_eq!(
+            &visible_top_utility_buttons(&snapshot, false, true)[..2],
+            &[TopUtilityButton::ClearCanvas, TopUtilityButton::Text]
+        );
     }
 
     #[test]
@@ -511,7 +476,7 @@ mod tests {
     }
 
     #[test]
-    fn event_policy_classifies_persistence_and_pre_apply_effects() {
+    fn event_policy_classifies_persistence() {
         // Chrome the user arranges from the overlay survives a restart as a
         // runtime override.
         assert_eq!(
@@ -528,36 +493,8 @@ mod tests {
             ToolbarPersistence::Ephemeral
         );
         assert_eq!(
-            ToolbarEventPolicy::for_event(&ToolbarEvent::SetSidePane(SidePane::Canvas)).persistence,
-            ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::SidePane)
-        );
-        assert_eq!(
             ToolbarEventPolicy::for_event(&ToolbarEvent::RetryRuntimeUiPersistence).persistence,
             ToolbarPersistence::Ephemeral
-        );
-        assert_eq!(
-            ToolbarEventPolicy::for_event(&ToolbarEvent::ToggleSideSectionCollapsed(
-                crate::ui::toolbar::ToolbarSideSection::Colors,
-                true,
-            ))
-            .persistence,
-            ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::CollapsedSection(
-                crate::ui::toolbar::ToolbarSideSection::Colors,
-            ))
-        );
-        assert_eq!(
-            ToolbarEventPolicy::for_event(&ToolbarEvent::ScrollSidePane(12.0)).persistence,
-            ToolbarPersistence::Ephemeral
-        );
-        assert_eq!(
-            ToolbarEventPolicy::for_event(&ToolbarEvent::SetSidePane(SidePane::Canvas))
-                .pre_apply_effects,
-            vec![ToolbarPreApplyEffect::RecordDrawerHintShown]
-        );
-        assert!(
-            ToolbarEventPolicy::for_event(&ToolbarEvent::SetSidePane(SidePane::Draw))
-                .pre_apply_effects
-                .is_empty()
         );
     }
 
@@ -576,17 +513,6 @@ mod tests {
         let picker = popover.buttons.first().expect("board picker button");
         assert_eq!(picker.short_label(&snapshot, "Board"), "Picker");
         assert_eq!(picker.tooltip_label(&snapshot, "Board"), "Board Picker");
-
-        // The side-palette boards group keeps its legacy header trigger and is
-        // not given the picker button.
-        let side = toolbar_boards_model(&snapshot).expect("side boards group");
-        assert!(
-            !side
-                .buttons
-                .iter()
-                .any(|button| button.event == ToolbarEvent::ToggleBoardPicker),
-            "the side palette boards row is unchanged"
-        );
 
         // Hiding side.boards.picker drops the button (config plumbing), while
         // the rest of the boards row survives.
@@ -611,6 +537,153 @@ mod tests {
                 .iter()
                 .any(|button| button.event == ToolbarEvent::BoardNew),
             "hiding the picker leaves the rest of the boards row intact"
+        );
+    }
+
+    #[test]
+    fn basic_actions_are_canvas_popover_controls_with_top_item_ids() {
+        let mut snapshot = snapshot();
+        snapshot.show_actions_section = true;
+        snapshot.undo_available = true;
+        snapshot.redo_available = true;
+
+        let events = toolbar_actions_model_for_popover(&snapshot)
+            .expect("actions")
+            .buttons
+            .into_iter()
+            .map(|button| button.event)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            events,
+            [
+                ToolbarEvent::Undo,
+                ToolbarEvent::Redo,
+                ToolbarEvent::ClearCanvas { instant: false },
+            ]
+        );
+
+        snapshot
+            .resolved_toolbar_items
+            .hidden
+            .insert(ids::TOP_UTILITY_UNDO);
+        let hidden = toolbar_actions_model_for_popover(&snapshot).expect("remaining actions");
+        assert!(
+            !hidden
+                .buttons
+                .iter()
+                .any(|button| button.event == ToolbarEvent::Undo)
+        );
+        assert!(
+            hidden
+                .buttons
+                .iter()
+                .any(|button| button.event == ToolbarEvent::Redo)
+        );
+
+        snapshot.show_actions_section = false;
+        assert!(toolbar_actions_model_for_popover(&snapshot).is_none());
+    }
+
+    #[test]
+    fn retained_side_ids_still_control_unified_top_models() {
+        fn hide(snapshot: &mut ToolbarSnapshot, id: crate::config::ToolbarItemId) {
+            snapshot.resolved_toolbar_items = crate::config::ToolbarItemsConfig {
+                hidden: vec![id.as_str().to_string()],
+                shown: Vec::new(),
+                order: crate::config::ToolbarItemOrderConfig::default(),
+            }
+            .resolved();
+        }
+
+        let mut snapshot = snapshot();
+        snapshot.show_actions_advanced = true;
+        snapshot.delay_actions_enabled = true;
+
+        assert!(
+            toolbar_zoom_group_for_popover(&snapshot)
+                .expect("zoom")
+                .buttons
+                .iter()
+                .any(|button| button.event == ToolbarEvent::ZoomIn)
+        );
+        hide(&mut snapshot, ids::SIDE_ACTIONS_ZOOM_IN);
+        assert!(
+            !toolbar_zoom_group_for_popover(&snapshot)
+                .expect("zoom")
+                .buttons
+                .iter()
+                .any(|button| button.event == ToolbarEvent::ZoomIn),
+            "hiding side.actions.zoom-in removes the Canvas zoom-in control"
+        );
+
+        snapshot = self::snapshot();
+        assert!(
+            toolbar_pages_model_for_popover(&snapshot)
+                .expect("pages")
+                .buttons
+                .iter()
+                .any(|button| button.event == ToolbarEvent::PageDelete)
+        );
+        hide(&mut snapshot, ids::SIDE_PAGES_DELETE);
+        assert!(
+            !toolbar_pages_model_for_popover(&snapshot)
+                .expect("pages")
+                .buttons
+                .iter()
+                .any(|button| button.event == ToolbarEvent::PageDelete),
+            "hiding side.pages.delete removes the Canvas page-delete control"
+        );
+
+        snapshot = self::snapshot();
+        snapshot.show_actions_advanced = true;
+        assert!(
+            toolbar_advanced_group_for_popover(&snapshot)
+                .expect("advanced")
+                .buttons
+                .iter()
+                .any(|button| button.event == ToolbarEvent::ToggleFreeze)
+        );
+        hide(&mut snapshot, ids::SIDE_ACTIONS_FREEZE);
+        assert!(
+            !toolbar_advanced_group_for_popover(&snapshot)
+                .expect("advanced")
+                .buttons
+                .iter()
+                .any(|button| button.event == ToolbarEvent::ToggleFreeze),
+            "hiding side.actions.freeze removes the Canvas freeze control"
+        );
+
+        snapshot = self::snapshot();
+        assert!(
+            ToolbarSessionModel::for_popover(&snapshot)
+                .expect("session")
+                .buttons
+                .iter()
+                .any(|button| button.event == ToolbarEvent::SessionInfo)
+        );
+        hide(&mut snapshot, ids::SIDE_SESSION_INFO);
+        assert!(
+            !ToolbarSessionModel::for_popover(&snapshot)
+                .expect("session")
+                .buttons
+                .iter()
+                .any(|button| button.event == ToolbarEvent::SessionInfo),
+            "hiding side.session.info removes the Session Info control"
+        );
+
+        snapshot = self::snapshot();
+        let about_visible = |snapshot: &ToolbarSnapshot| {
+            ToolbarSettingsModel::for_popover(snapshot)
+                .expect("settings")
+                .buttons()
+                .iter()
+                .any(|button| matches!(button.event, ToolbarEvent::OpenAbout))
+        };
+        assert!(about_visible(&snapshot));
+        hide(&mut snapshot, ids::SIDE_SETTINGS_ABOUT);
+        assert!(
+            !about_visible(&snapshot),
+            "hiding side.settings.about removes the Settings About control"
         );
     }
 }

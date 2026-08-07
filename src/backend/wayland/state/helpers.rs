@@ -3,7 +3,7 @@ use std::{sync::OnceLock, time::Duration};
 use wayland_client::{Proxy, protocol::wl_surface};
 
 use crate::env_vars::{
-    DEBUG_DAMAGE_ENV, DEBUG_TOOLBAR_COLOR_ENV, DEBUG_TOOLBAR_DRAG_ENV, FORCE_INLINE_TOOLBARS_ENV,
+    DEBUG_DAMAGE_ENV, DEBUG_TOOLBAR_DRAG_ENV, FORCE_INLINE_TOOLBARS_ENV,
     TOOLBAR_DRAG_HANDOFF_MS_ENV, TOOLBAR_DRAG_PREVIEW_ENV, TOOLBAR_DRAG_THROTTLE_MS_ENV,
     TOOLBAR_POINTER_LOCK_ENV,
 };
@@ -72,13 +72,6 @@ pub(in crate::backend::wayland) fn debug_toolbar_drag_logging_enabled() -> bool 
     })
 }
 
-pub(in crate::backend::wayland) fn debug_toolbar_color_logging_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        parse_boolish_env(&std::env::var(DEBUG_TOOLBAR_COLOR_ENV).unwrap_or_default())
-    })
-}
-
 pub(in crate::backend::wayland) fn toolbar_pointer_lock_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
@@ -129,13 +122,6 @@ pub(in crate::backend::wayland) fn toolbar_drag_handoff_delay() -> Duration {
 /// event, and an eager `format!` there allocates on every move.
 pub(in crate::backend::wayland) fn drag_log<M: AsRef<str>>(message: impl FnOnce() -> M) {
     if debug_toolbar_drag_logging_enabled() {
-        log::info!("{}", message().as_ref());
-    }
-}
-
-/// See [`drag_log`]; same lazy contract for color diagnostics.
-pub(in crate::backend::wayland) fn color_log<M: AsRef<str>>(message: impl FnOnce() -> M) {
-    if debug_toolbar_color_logging_enabled() {
         log::info!("{}", message().as_ref());
     }
 }

@@ -11,7 +11,6 @@ pub struct ToolbarModeOverrideDraft {
     pub show_boards_section: OverrideOption,
     pub show_step_section: OverrideOption,
     pub show_text_controls: OverrideOption,
-    pub show_settings_section: OverrideOption,
 }
 
 impl ToolbarModeOverrideDraft {
@@ -25,7 +24,6 @@ impl ToolbarModeOverrideDraft {
             show_boards_section: OverrideOption::from_option(override_cfg.show_boards_section),
             show_step_section: OverrideOption::from_option(override_cfg.show_step_section),
             show_text_controls: OverrideOption::from_option(override_cfg.show_text_controls),
-            show_settings_section: OverrideOption::from_option(override_cfg.show_settings_section),
         }
     }
 
@@ -39,7 +37,6 @@ impl ToolbarModeOverrideDraft {
             show_presets: self.show_presets.to_option(),
             show_step_section: self.show_step_section.to_option(),
             show_text_controls: self.show_text_controls.to_option(),
-            show_settings_section: self.show_settings_section.to_option(),
         }
     }
 

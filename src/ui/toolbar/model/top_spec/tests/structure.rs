@@ -271,10 +271,8 @@ fn narrow_spec_moves_dropped_controls_to_one_ordered_overflow() {
 
 #[test]
 fn overflow_hosts_canvas_session_and_settings_entries_in_every_layout() {
-    // Decision (M4-B3, extended in M8): the three popover entries are
-    // unconditional — they show under both `side_layout` values and are
-    // not hideable items, because under `pill` they are the only surface
-    // hosting Canvas/Session/Settings.
+    // The three popover entries are unconditional and not hideable items;
+    // they are the only surface hosting Canvas/Session/Settings.
     for layout_mode in [ToolbarLayoutMode::Regular, ToolbarLayoutMode::Simple] {
         let mut snapshot = snapshot();
         snapshot.layout_mode = layout_mode;

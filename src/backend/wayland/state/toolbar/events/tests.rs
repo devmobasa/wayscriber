@@ -33,7 +33,6 @@ use crate::draw::{Color, FontDescriptor};
 use crate::env_vars::XDG_DATA_HOME_ENV;
 use crate::input::state::test_support::make_test_input_state;
 use crate::input::{EraserMode, Tool};
-use crate::ui::toolbar::ToolbarSideSection;
 use anyhow::anyhow;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -87,16 +86,6 @@ fn pin_confirmations_distinguish_persistent_and_live_only_changes() {
             "Top toolbar will be hidden at startup",
         ),
         (
-            ToolbarPinChange::Side(true),
-            ToolbarPinDurability::StartupPersistent,
-            "Side toolbar will open at startup",
-        ),
-        (
-            ToolbarPinChange::Side(false),
-            ToolbarPinDurability::StartupPersistent,
-            "Side toolbar will be hidden at startup",
-        ),
-        (
             ToolbarPinChange::Top(true),
             ToolbarPinDurability::LiveOnly,
             "Top toolbar pinned for this run only",
@@ -105,16 +94,6 @@ fn pin_confirmations_distinguish_persistent_and_live_only_changes() {
             ToolbarPinChange::Top(false),
             ToolbarPinDurability::LiveOnly,
             "Top toolbar unpinned for this run only",
-        ),
-        (
-            ToolbarPinChange::Side(true),
-            ToolbarPinDurability::LiveOnly,
-            "Side toolbar pinned for this run only",
-        ),
-        (
-            ToolbarPinChange::Side(false),
-            ToolbarPinDurability::LiveOnly,
-            "Side toolbar unpinned for this run only",
         ),
     ];
 
@@ -171,7 +150,6 @@ fn runtime_toolbar_events_do_not_directly_save_config() {
         ToolbarEvent::SaveSessionAsCancel,
         ToolbarEvent::SessionInfo,
         ToolbarEvent::ClearSession,
-        ToolbarEvent::ScrollSidePane(24.0),
         // The overflow-anchored Session/Settings popovers are runtime-only
         // flyout state, like the overflow toggle itself.
         ToolbarEvent::ToggleSessionPopover(true),
@@ -197,19 +175,8 @@ fn toolbar_runtime_preferences_have_exact_runtime_state_targets() {
 
     let events = vec![
         (ToolbarEvent::PinTopToolbar(true), Runtime::TopPinned),
-        (ToolbarEvent::PinSideToolbar(true), Runtime::SidePinned),
-        (
-            ToolbarEvent::SetSidePane(crate::ui::toolbar::SidePane::Canvas),
-            Runtime::SidePane,
-        ),
-        (
-            ToolbarEvent::ToggleSideSectionCollapsed(ToolbarSideSection::Session, true),
-            Runtime::CollapsedSection(ToolbarSideSection::Session),
-        ),
         (ToolbarEvent::SetTopMinimized(true), Runtime::TopMinimized),
-        (ToolbarEvent::SetSideMinimized(true), Runtime::SideMinimized),
         (ToolbarEvent::CloseTopToolbar, Runtime::TopMinimized),
-        (ToolbarEvent::CloseSideToolbar, Runtime::SideMinimized),
         (
             ToolbarEvent::SetToolbarItemHidden(ids::TOP_TOOL_PEN, true),
             Runtime::ItemVisibility {
@@ -503,32 +470,6 @@ fn command_palette_and_shortcut_capture_block_shared_toolbar_events() {
     input_state.toggle_command_palette();
     assert!(input_state.begin_keybinding_capture(Action::Undo));
     assert!(toolbar_event_blocked_by_modal(&input_state));
-}
-
-#[test]
-fn drawer_hint_pre_apply_effect_is_conditionally_recorded_below_max() {
-    let mut state = OnboardingState {
-        drawer_hint_count: crate::onboarding::DRAWER_HINT_MAX - 1,
-        drawer_hint_shown: false,
-        ..OnboardingState::default()
-    };
-
-    assert!(record_drawer_hint_shown(&mut state));
-    assert_eq!(state.drawer_hint_count, crate::onboarding::DRAWER_HINT_MAX);
-    assert!(state.drawer_hint_shown);
-}
-
-#[test]
-fn drawer_hint_pre_apply_effect_is_ignored_at_max() {
-    let mut state = OnboardingState {
-        drawer_hint_count: crate::onboarding::DRAWER_HINT_MAX,
-        drawer_hint_shown: true,
-        ..OnboardingState::default()
-    };
-
-    assert!(!record_drawer_hint_shown(&mut state));
-    assert_eq!(state.drawer_hint_count, crate::onboarding::DRAWER_HINT_MAX);
-    assert!(state.drawer_hint_shown);
 }
 
 fn failing_session_file_chooser(

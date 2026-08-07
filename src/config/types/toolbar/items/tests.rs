@@ -65,7 +65,7 @@ fn resettable_visibility_ids_are_exactly_customizable_individual_items() {
     assert!(actual.contains(&ids::TOP_TOOL_PEN));
     assert!(actual.contains(&ids::TOP_UTILITY_SCREENSHOT));
     assert!(!actual.contains(&ids::TOP_CHROME_OVERFLOW));
-    assert!(!actual.contains(&ids::SIDE_GROUP_SETTINGS));
+    assert!(!actual.contains(&ids::SIDE_SETTINGS_ABOUT));
 }
 
 #[test]
@@ -130,12 +130,6 @@ fn default_order_matches_visual_toolbar_defaults() {
             .ordered_ids(ToolbarItemOrderGroup::TopControls),
         DEFAULT_TOP_CONTROLS_ORDER
     );
-    assert_eq!(
-        resolved
-            .order
-            .ordered_ids(ToolbarItemOrderGroup::SideSections),
-        DEFAULT_SIDE_SECTIONS_ORDER
-    );
 }
 
 #[test]
@@ -193,39 +187,52 @@ fn top_control_order_excludes_visibility_only_utilities() {
 }
 
 #[test]
-fn side_section_order_uses_runtime_representable_blocks() {
-    let config = ToolbarItemsConfig {
-        hidden: Vec::new(),
-        shown: Vec::new(),
-        order: ToolbarItemOrderConfig {
-            side_sections: vec![
-                ids::SIDE_GROUP_FONT.as_str().to_string(),
-                ids::SIDE_GROUP_THICKNESS.as_str().to_string(),
-                ids::SIDE_GROUP_POLYGON_SIDES.as_str().to_string(),
-            ],
-            ..ToolbarItemOrderConfig::default()
-        },
-    };
-
-    let resolved = config.resolved();
-    let ordered = resolved
-        .order
-        .ordered_ids(ToolbarItemOrderGroup::SideSections);
-    assert_eq!(ordered[0], ids::SIDE_GROUP_THICKNESS);
-    assert!(!ordered.contains(&ids::SIDE_GROUP_FONT));
-    assert!(!ordered.contains(&ids::SIDE_GROUP_POLYGON_SIDES));
-}
-
-#[test]
-fn toolbar_group_ids_include_step_markers_and_step_undo() {
-    assert_eq!(
-        "step-markers".parse::<ToolbarGroupId>(),
-        Ok(ToolbarGroupId::StepMarkers)
-    );
+fn toolbar_group_ids_cover_live_popover_groups_only() {
     assert_eq!(
         "step-undo".parse::<ToolbarGroupId>(),
         Ok(ToolbarGroupId::StepUndo)
     );
+    assert_eq!(
+        "actions".parse::<ToolbarGroupId>(),
+        Ok(ToolbarGroupId::Actions)
+    );
+    assert!("step-markers".parse::<ToolbarGroupId>().is_err());
+    assert!("colors".parse::<ToolbarGroupId>().is_err());
+}
+
+#[test]
+fn every_retired_panel_item_id_is_unknown_to_the_active_model() {
+    for id in [
+        "side.group.colors",
+        "side.group.thickness",
+        "side.group.eraser-mode",
+        "side.group.polygon-sides",
+        "side.group.arrow-labels",
+        "side.group.step-markers",
+        "side.group.marker-opacity",
+        "side.group.text-size",
+        "side.group.font",
+        "side.group.settings",
+        "side.group.session",
+        "side.actions.undo",
+        "side.actions.redo",
+        "side.actions.clear-canvas",
+        "side.boards.rename",
+        "side.tool-options.color",
+        "side.tool-options.thickness",
+        "side.tool-options.marker-opacity",
+        "side.tool-options.eraser-mode",
+        "side.tool-options.font-size",
+        "side.tool-options.font-family",
+        "side.tool-options.polygon-sides",
+        "side.tool-options.arrow-labels",
+        "side.tool-options.step-marker-reset",
+    ] {
+        assert!(
+            id.parse::<ToolbarItemId>().is_err(),
+            "retired panel id must not enter the active model: {id}"
+        );
+    }
 }
 
 #[test]

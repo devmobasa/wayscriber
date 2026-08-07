@@ -44,26 +44,11 @@ pub const TOP_UTILITY_ICON_MODE_ICONS: ToolbarItemId =
 pub const TOP_UTILITY_ICON_MODE_TEXT: ToolbarItemId =
     ToolbarItemId::from_known("top.utility.icon-mode-text");
 
-pub const SIDE_GROUP_COLORS: ToolbarItemId = ToolbarItemId::from_known("side.group.colors");
-pub const SIDE_GROUP_THICKNESS: ToolbarItemId = ToolbarItemId::from_known("side.group.thickness");
-pub const SIDE_GROUP_ERASER_MODE: ToolbarItemId =
-    ToolbarItemId::from_known("side.group.eraser-mode");
-pub const SIDE_GROUP_POLYGON_SIDES: ToolbarItemId =
-    ToolbarItemId::from_known("side.group.polygon-sides");
-pub const SIDE_GROUP_ARROW_LABELS: ToolbarItemId =
-    ToolbarItemId::from_known("side.group.arrow-labels");
-pub const SIDE_GROUP_STEP_MARKERS: ToolbarItemId =
-    ToolbarItemId::from_known("side.group.step-markers");
 pub const SIDE_GROUP_STEP_UNDO: ToolbarItemId = ToolbarItemId::from_known("side.group.step-undo");
-pub const SIDE_GROUP_MARKER_OPACITY: ToolbarItemId =
-    ToolbarItemId::from_known("side.group.marker-opacity");
-pub const SIDE_GROUP_TEXT_SIZE: ToolbarItemId = ToolbarItemId::from_known("side.group.text-size");
-pub const SIDE_GROUP_FONT: ToolbarItemId = ToolbarItemId::from_known("side.group.font");
 pub const SIDE_GROUP_ACTIONS: ToolbarItemId = ToolbarItemId::from_known("side.group.actions");
 pub const SIDE_GROUP_PAGES: ToolbarItemId = ToolbarItemId::from_known("side.group.pages");
 pub const SIDE_GROUP_BOARDS: ToolbarItemId = ToolbarItemId::from_known("side.group.boards");
 pub const SIDE_GROUP_PRESETS: ToolbarItemId = ToolbarItemId::from_known("side.group.presets");
-pub const SIDE_GROUP_SETTINGS: ToolbarItemId = ToolbarItemId::from_known("side.group.settings");
 pub const TOP_GROUP_QUICK_COLORS: ToolbarItemId =
     ToolbarItemId::from_known("top.group.quick-colors");
 pub const TOP_UTILITY_UNDO: ToolbarItemId = ToolbarItemId::from_known("top.utility.undo");
@@ -75,12 +60,7 @@ pub const SIDE_GROUP_ZOOM_ACTIONS: ToolbarItemId =
     ToolbarItemId::from_known("side.group.zoom-actions");
 pub const SIDE_GROUP_TEXT_CONTROLS: ToolbarItemId =
     ToolbarItemId::from_known("side.group.text-controls");
-pub const SIDE_GROUP_SESSION: ToolbarItemId = ToolbarItemId::from_known("side.group.session");
 
-pub const SIDE_ACTIONS_UNDO: ToolbarItemId = ToolbarItemId::from_known("side.actions.undo");
-pub const SIDE_ACTIONS_REDO: ToolbarItemId = ToolbarItemId::from_known("side.actions.redo");
-pub const SIDE_ACTIONS_CLEAR_CANVAS: ToolbarItemId =
-    ToolbarItemId::from_known("side.actions.clear-canvas");
 pub const SIDE_ACTIONS_ZOOM_IN: ToolbarItemId = ToolbarItemId::from_known("side.actions.zoom-in");
 pub const SIDE_ACTIONS_ZOOM_OUT: ToolbarItemId = ToolbarItemId::from_known("side.actions.zoom-out");
 pub const SIDE_ACTIONS_RESET_ZOOM: ToolbarItemId =
@@ -107,7 +87,6 @@ pub const SIDE_BOARDS_NEXT: ToolbarItemId = ToolbarItemId::from_known("side.boar
 pub const SIDE_BOARDS_NEW: ToolbarItemId = ToolbarItemId::from_known("side.boards.new");
 pub const SIDE_BOARDS_DUPLICATE: ToolbarItemId = ToolbarItemId::from_known("side.boards.duplicate");
 pub const SIDE_BOARDS_DELETE: ToolbarItemId = ToolbarItemId::from_known("side.boards.delete");
-pub const SIDE_BOARDS_RENAME: ToolbarItemId = ToolbarItemId::from_known("side.boards.rename");
 
 pub const SIDE_SETTINGS_CONTEXT_AWARE_UI: ToolbarItemId =
     ToolbarItemId::from_known("side.settings.context-aware-ui");
@@ -146,22 +125,3 @@ pub const SIDE_SESSION_SAVE_AS: ToolbarItemId = ToolbarItemId::from_known("side.
 pub const SIDE_SESSION_INFO: ToolbarItemId = ToolbarItemId::from_known("side.session.info");
 pub const SIDE_SESSION_CLEAR: ToolbarItemId = ToolbarItemId::from_known("side.session.clear");
 pub const SIDE_SESSION_MANAGER: ToolbarItemId = ToolbarItemId::from_known("side.session.manager");
-
-pub const SIDE_TOOL_OPTIONS_COLOR: ToolbarItemId =
-    ToolbarItemId::from_known("side.tool-options.color");
-pub const SIDE_TOOL_OPTIONS_THICKNESS: ToolbarItemId =
-    ToolbarItemId::from_known("side.tool-options.thickness");
-pub const SIDE_TOOL_OPTIONS_MARKER_OPACITY: ToolbarItemId =
-    ToolbarItemId::from_known("side.tool-options.marker-opacity");
-pub const SIDE_TOOL_OPTIONS_ERASER_MODE: ToolbarItemId =
-    ToolbarItemId::from_known("side.tool-options.eraser-mode");
-pub const SIDE_TOOL_OPTIONS_FONT_SIZE: ToolbarItemId =
-    ToolbarItemId::from_known("side.tool-options.font-size");
-pub const SIDE_TOOL_OPTIONS_FONT_FAMILY: ToolbarItemId =
-    ToolbarItemId::from_known("side.tool-options.font-family");
-pub const SIDE_TOOL_OPTIONS_POLYGON_SIDES: ToolbarItemId =
-    ToolbarItemId::from_known("side.tool-options.polygon-sides");
-pub const SIDE_TOOL_OPTIONS_ARROW_LABELS: ToolbarItemId =
-    ToolbarItemId::from_known("side.tool-options.arrow-labels");
-pub const SIDE_TOOL_OPTIONS_STEP_MARKER_RESET: ToolbarItemId =
-    ToolbarItemId::from_known("side.tool-options.step-marker-reset");

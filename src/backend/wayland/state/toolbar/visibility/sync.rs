@@ -2,17 +2,14 @@ use super::*;
 use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
 
 fn toolbar_visibility_for_frontend(
-    requested: (bool, bool),
+    requested: bool,
     gtk_active: bool,
     gtk_drag_preview: Option<crate::toolbar_gtk::GtkToolbarKind>,
-) -> (bool, bool) {
+) -> bool {
     if !gtk_active {
         return requested;
     }
-    (
-        requested.0 && gtk_drag_preview == Some(crate::toolbar_gtk::GtkToolbarKind::Top),
-        requested.1 && gtk_drag_preview == Some(crate::toolbar_gtk::GtkToolbarKind::Side),
-    )
+    requested && gtk_drag_preview == Some(crate::toolbar_gtk::GtkToolbarKind::Top)
 }
 
 impl WaylandState {
@@ -27,9 +24,7 @@ impl WaylandState {
         // that honor exclusivity (Hyprland) lock all input to the canvas
         // and the bars become click-through.
         let toolbar_visible = self.toolbar.is_visible()
-            || (self.gtk_toolbars_active()
-                && (self.input_state.toolbar_top_visible()
-                    || self.input_state.toolbar_side_visible()));
+            || (self.gtk_toolbars_active() && self.input_state.toolbar_top_visible());
         desired_keyboard_interactivity_for(
             self.layer_shell.is_some(),
             toolbar_visible,
@@ -82,11 +77,8 @@ impl WaylandState {
         // Sync individual toolbar visibility. While the GTK frontend owns
         // the toolbars, the built-in surfaces stay unmapped.
         let gtk_active = self.gtk_toolbars_active();
-        let (top_visible, side_visible) = toolbar_visibility_for_frontend(
-            (
-                self.input_state.toolbar_top_visible(),
-                self.input_state.toolbar_side_visible(),
-            ),
+        let top_visible = toolbar_visibility_for_frontend(
+            self.input_state.toolbar_top_visible(),
             gtk_active,
             self.data.gtk_drag_preview,
         );
@@ -99,12 +91,6 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
         }
 
-        if side_visible != self.toolbar.is_side_visible() {
-            self.toolbar.set_side_visible(side_visible);
-            self.input_state.needs_redraw = true;
-            drag_log(|| format!("toolbar visibility change: side -> {}", side_visible));
-        }
-
         let any_visible = self.toolbar.is_visible();
         if !any_visible {
             self.set_pointer_over_toolbar(false);
@@ -115,23 +101,19 @@ impl WaylandState {
 
         if any_visible {
             log::debug!(
-                "Toolbar visibility sync: top_visible={}, side_visible={}, layer_shell_available={}, inline_active={}, top_created={}, side_created={}, needs_recreate={}, scale={}",
+                "Toolbar visibility sync: top_visible={}, layer_shell_available={}, inline_active={}, top_created={}, needs_recreate={}, scale={}",
                 top_visible,
-                side_visible,
                 self.layer_shell.is_some(),
                 inline_active,
                 self.toolbar.top_created(),
-                self.toolbar.side_created(),
                 self.toolbar_needs_recreate(),
                 self.surface.scale()
             );
             drag_log(|| {
                 format!(
-                    "toolbar sync: top_offset=({}, {}), side_offset=({}, {}), inline_active={}, layer_shell={}, needs_recreate={}",
+                    "toolbar sync: top_offset=({}, {}), inline_active={}, layer_shell={}, needs_recreate={}",
                     self.data.toolbar_top_offset,
                     self.data.toolbar_top_offset_y,
-                    self.data.toolbar_side_offset,
-                    self.data.toolbar_side_offset_x,
                     inline_active,
                     self.layer_shell.is_some(),
                     self.toolbar_needs_recreate()
@@ -147,7 +129,7 @@ impl WaylandState {
         if any_visible && inline_active {
             // If we forced inline while layer surfaces already existed, tear them down to avoid
             // focus/input conflicts on compositors that support layer-shell.
-            if self.toolbar.top_created() || self.toolbar.side_created() {
+            if self.toolbar.top_created() {
                 self.toolbar.destroy_all();
                 self.set_toolbar_needs_recreate(true);
                 self.reset_toolbar_margin_cache();
@@ -158,22 +140,17 @@ impl WaylandState {
         if any_visible && self.layer_shell.is_some() && !inline_active && !drag_preview {
             // Detect compositors ignoring or failing to configure toolbar layer surfaces; if they
             // never configure after repeated attempts, fall back to inline toolbars automatically.
-            let (top_configured, side_configured) = self.toolbar.configured_states();
+            let top_configured = self.toolbar.top_configured();
             let expected_top = self.toolbar.is_top_visible();
-            let expected_side = self.toolbar.is_side_visible();
-            if (expected_top && !top_configured) || (expected_side && !side_configured) {
+            if expected_top && !top_configured {
                 self.data.toolbar_configure_miss_count =
                     self.data.toolbar_configure_miss_count.saturating_add(1);
                 if debug_toolbar_drag_logging_enabled()
                     && self.data.toolbar_configure_miss_count.is_multiple_of(60)
                 {
                     debug!(
-                        "Toolbar configure pending: count={}, expected_top={}, configured_top={}, expected_side={}, configured_side={}",
-                        self.data.toolbar_configure_miss_count,
-                        expected_top,
-                        top_configured,
-                        expected_side,
-                        side_configured
+                        "Toolbar configure pending: count={}, expected_top={}, configured_top={}",
+                        self.data.toolbar_configure_miss_count, expected_top, top_configured
                     );
                 }
             } else {
@@ -182,7 +159,7 @@ impl WaylandState {
 
             if self.data.toolbar_configure_miss_count > Self::TOOLBAR_CONFIGURE_FAIL_THRESHOLD {
                 warn!(
-                    "Toolbar layer surfaces did not configure after {} frames; falling back to inline toolbars",
+                    "Toolbar layer surface did not configure after {} frames; falling back to the inline toolbar",
                     self.data.toolbar_configure_miss_count
                 );
                 self.toolbar.destroy_all();
@@ -260,8 +237,6 @@ impl WaylandState {
     fn reset_toolbar_margin_cache(&mut self) {
         self.data.last_applied_top_margin = None;
         self.data.last_applied_top_margin_top = None;
-        self.data.last_applied_side_margin = None;
-        self.data.last_applied_side_margin_left = None;
     }
 }
 
@@ -272,25 +247,16 @@ mod tests {
 
     #[test]
     fn gtk_frontend_maps_only_the_inline_preview_target() {
-        assert_eq!(
-            toolbar_visibility_for_frontend((true, true), true, None),
-            (false, false)
-        );
-        assert_eq!(
-            toolbar_visibility_for_frontend((true, true), true, Some(GtkToolbarKind::Top)),
-            (true, false)
-        );
-        assert_eq!(
-            toolbar_visibility_for_frontend((true, true), true, Some(GtkToolbarKind::Side)),
-            (false, true)
-        );
+        assert!(!toolbar_visibility_for_frontend(true, true, None));
+        assert!(toolbar_visibility_for_frontend(
+            true,
+            true,
+            Some(GtkToolbarKind::Top)
+        ));
     }
 
     #[test]
     fn builtin_frontend_ignores_gtk_preview_state() {
-        assert_eq!(
-            toolbar_visibility_for_frontend((true, false), false, Some(GtkToolbarKind::Side)),
-            (true, false)
-        );
+        assert!(toolbar_visibility_for_frontend(true, false, None));
     }
 }

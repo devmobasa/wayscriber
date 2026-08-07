@@ -30,6 +30,7 @@ pub(super) fn config_document_status(document: &ConfigDocument, success: &str) -
 
     let mut message = success.to_string();
     let mut unknown = Vec::new();
+    let mut retired = Vec::new();
     let mut conflicts = Vec::new();
     let mut invalid = Vec::new();
     let mut skipped_defaults = Vec::new();
@@ -39,6 +40,7 @@ pub(super) fn config_document_status(document: &ConfigDocument, success: &str) -
     for diagnostic in diagnostics {
         match diagnostic.kind() {
             ConfigDiagnosticKind::UnknownSetting => unknown.push(diagnostic.path().to_string()),
+            ConfigDiagnosticKind::RetiredSetting => retired.push(diagnostic.path().to_string()),
             // Every keybinding kind is resolved in memory only, so the file
             // the editor is showing still contains them: carry the diagnostic's
             // own wording, which names the actions, instead of just the path.
@@ -54,6 +56,12 @@ pub(super) fn config_document_status(document: &ConfigDocument, success: &str) -
         message.push_str(&format!(
             "\nUnrecognized settings were preserved: {}.",
             list_with_overflow(&borrowed(&unknown), ", ")
+        ));
+    }
+    if !retired.is_empty() {
+        message.push_str(&format!(
+            "\nRetired toolbar settings were preserved but are no longer used and can be removed: {}.",
+            list_with_overflow(&borrowed(&retired), ", ")
         ));
     }
     if !invalid.is_empty() {

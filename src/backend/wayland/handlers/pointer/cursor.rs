@@ -132,7 +132,6 @@ impl WaylandState {
             return match hint {
                 ToolbarCursorHint::Pointer => CursorIcon::Pointer,
                 ToolbarCursorHint::Grab => CursorIcon::Grab,
-                ToolbarCursorHint::Crosshair => CursorIcon::Crosshair,
                 ToolbarCursorHint::Default => CursorIcon::Default,
             };
         }
@@ -143,7 +142,6 @@ impl WaylandState {
                 return match hint {
                     ToolbarCursorHint::Pointer => CursorIcon::Pointer,
                     ToolbarCursorHint::Grab => CursorIcon::Grab,
-                    ToolbarCursorHint::Crosshair => CursorIcon::Crosshair,
                     ToolbarCursorHint::Default => CursorIcon::Default,
                 };
             }

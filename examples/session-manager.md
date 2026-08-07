@@ -37,8 +37,8 @@ the parent directory is already gone.
 
 ## Overlay Workflow
 
-Open Wayscriber with any persisted session target, then use the side toolbar's
-Settings drawer:
+Open Wayscriber with any persisted session target, then use the top strip overflow
+**"Session..."** popover:
 
 - `Open` loads an existing named session and records it in the recent catalog.
 - `Save As` writes the current overlay to another named session and switches the

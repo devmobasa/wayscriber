@@ -8,12 +8,8 @@ fn toolbar_seed_registry_covers_every_runtime_routed_target() {
 
     for target in [
         InteractionSeedTarget::TopPinned,
-        InteractionSeedTarget::SidePinned,
         InteractionSeedTarget::TopMinimized,
-        InteractionSeedTarget::SideMinimized,
-        InteractionSeedTarget::SidePane,
         InteractionSeedTarget::TopPosition,
-        InteractionSeedTarget::SidePosition,
         InteractionSeedTarget::TopDisplayMode,
         InteractionSeedTarget::ToolbarLayoutMode,
         InteractionSeedTarget::ClickHighlight,
@@ -29,13 +25,6 @@ fn toolbar_seed_registry_covers_every_runtime_routed_target() {
                 .get(&InteractionSeedTarget::SectionVisibility(flag))
                 .is_some(),
             "missing section seed for {flag:?}"
-        );
-    }
-    for section in ToolbarSideSection::ALL {
-        assert!(
-            seeds
-                .get(&InteractionSeedTarget::CollapsedSection(section))
-                .is_some()
         );
     }
     for id in resettable_individual_toolbar_item_ids() {
@@ -81,7 +70,7 @@ fn toolbar_section_visibility_is_not_seeded_into_runtime_state() {
 }
 
 #[test]
-fn runtime_rebuild_reuses_minimize_and_pane_transition_cleanup() {
+fn runtime_rebuild_reuses_minimize_transition_cleanup() {
     let temp = crate::test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
@@ -98,30 +87,16 @@ fn runtime_rebuild_reuses_minimize_and_pane_transition_cleanup() {
     ));
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
 
-    let pane = runtime
-        .begin_toolbar_mutation(ToolbarRuntimeUiPersistenceTarget::SidePane, &source)
-        .expect("side-pane permit");
-    source.toolbar_side_pane = SidePane::Canvas;
-    assert!(matches!(
-        runtime.finish_toolbar_mutation(pane, true, &source),
-        ToolbarRuntimeFinish::KeepPreview
-    ));
-    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
-
     let mut rebuilt = input_from_config(&config);
     rebuilt.toolbar_shapes_expanded = true;
     rebuilt.toolbar_top_overflow_open = true;
     rebuilt.toolbar_session_popover_open = true;
     rebuilt.toolbar_settings_popover_open = true;
     rebuilt.toolbar_canvas_popover_open = true;
-    rebuilt.toolbar_side_pane = SidePane::Settings;
     rebuilt.toolbar_customize_items_open = true;
     rebuilt.toolbar_customize_items_group =
-        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::SideSections);
-    let mut positions = ToolbarPositionSnapshot {
-        top: (0.0, 0.0),
-        side: (0.0, 0.0),
-    };
+        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools);
+    let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
 
     runtime.apply_live_state(&mut rebuilt, &mut positions);
 
@@ -131,7 +106,6 @@ fn runtime_rebuild_reuses_minimize_and_pane_transition_cleanup() {
     assert!(!rebuilt.toolbar_session_popover_open);
     assert!(!rebuilt.toolbar_settings_popover_open);
     assert!(!rebuilt.toolbar_canvas_popover_open);
-    assert_eq!(rebuilt.toolbar_side_pane, SidePane::Canvas);
     assert!(!rebuilt.toolbar_customize_items_open);
     assert!(rebuilt.toolbar_customize_items_group.is_none());
     runtime.shutdown_blocking();
@@ -175,10 +149,7 @@ fn supported_runtime_reset_returns_live_state_to_configured_defaults() {
     );
     assert!(!runtime_path.exists());
 
-    let mut positions = ToolbarPositionSnapshot {
-        top: (0.0, 0.0),
-        side: (0.0, 0.0),
-    };
+    let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     runtime.apply_live_state(&mut input, &mut positions);
     assert_eq!(input.toolbar_top_pinned, config.ui.toolbar.top_pinned);
 }
@@ -376,10 +347,6 @@ fn cancelling_read_only_recovery_rebuilds_a_staged_seed_reload() {
             config_a.ui.toolbar.top_offset,
             config_a.ui.toolbar.top_offset_y,
         ),
-        side: (
-            config_a.ui.toolbar.side_offset_x,
-            config_a.ui.toolbar.side_offset,
-        ),
     };
     let mut runtime = test_runtime_allow_startup_incident(&config_a, &runtime_path);
 
@@ -410,7 +377,8 @@ fn cancelling_read_only_recovery_rebuilds_a_staged_seed_reload() {
 
 #[test]
 fn runtime_toolbar_routes_leave_authored_config_bytes_exactly_unchanged() {
-    const AUTHORED: &[u8] = b"# keep this formatting and comment\n[ui.toolbar]\ntop_pinned = true\nside_pinned = true\n";
+    const AUTHORED: &[u8] =
+        b"# keep this formatting and comment\n[ui.toolbar]\ntop_pinned = true\n";
     let temp = crate::test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     let runtime_path = temp.path().join("data/runtime-ui.toml");
@@ -421,11 +389,7 @@ fn runtime_toolbar_routes_leave_authored_config_bytes_exactly_unchanged() {
 
     let mutations = [
         ToolbarRuntimeUiPersistenceTarget::TopPinned,
-        ToolbarRuntimeUiPersistenceTarget::SidePinned,
         ToolbarRuntimeUiPersistenceTarget::TopMinimized,
-        ToolbarRuntimeUiPersistenceTarget::SideMinimized,
-        ToolbarRuntimeUiPersistenceTarget::SidePane,
-        ToolbarRuntimeUiPersistenceTarget::CollapsedSection(ToolbarSideSection::Colors),
         ToolbarRuntimeUiPersistenceTarget::TopDisplayMode,
         ToolbarRuntimeUiPersistenceTarget::ToolbarVisibility,
     ];
@@ -434,23 +398,12 @@ fn runtime_toolbar_routes_leave_authored_config_bytes_exactly_unchanged() {
             .begin_toolbar_mutation(target, &input)
             .expect("runtime mutation permit");
         match target {
-            ToolbarRuntimeUiPersistenceTarget::TopPinned => input.toolbar_top_pinned = false,
-            ToolbarRuntimeUiPersistenceTarget::SidePinned => input.toolbar_side_pinned = false,
-            ToolbarRuntimeUiPersistenceTarget::ToolbarVisibility => {
+            ToolbarRuntimeUiPersistenceTarget::TopPinned
+            | ToolbarRuntimeUiPersistenceTarget::ToolbarVisibility => {
                 input.toolbar_top_pinned = false;
-                input.toolbar_side_pinned = false;
             }
             ToolbarRuntimeUiPersistenceTarget::TopMinimized => {
                 input.toolbar_top_minimized = true;
-            }
-            ToolbarRuntimeUiPersistenceTarget::SideMinimized => {
-                input.toolbar_side_minimized = true;
-            }
-            ToolbarRuntimeUiPersistenceTarget::SidePane => {
-                input.toolbar_side_pane = SidePane::Settings;
-            }
-            ToolbarRuntimeUiPersistenceTarget::CollapsedSection(section) => {
-                input.toolbar_collapsed_side_sections.insert(section);
             }
             ToolbarRuntimeUiPersistenceTarget::TopDisplayMode => {
                 input.set_top_display_mode(crate::config::TopDisplayMode::Micro);

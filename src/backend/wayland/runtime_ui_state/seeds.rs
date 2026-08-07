@@ -16,16 +16,8 @@ pub(super) fn runtime_seeds_from_config(
         InteractionSeedValue::Bool(config.ui.toolbar.top_pinned),
     )?;
     insert(
-        InteractionSeedTarget::SidePinned,
-        InteractionSeedValue::Bool(config.ui.toolbar.side_pinned),
-    )?;
-    insert(
         InteractionSeedTarget::TopMinimized,
         InteractionSeedValue::Bool(config.ui.toolbar.top_minimized),
-    )?;
-    insert(
-        InteractionSeedTarget::SideMinimized,
-        InteractionSeedValue::Bool(config.ui.toolbar.side_minimized),
     )?;
     insert(
         InteractionSeedTarget::StatusBar,
@@ -85,25 +77,6 @@ pub(super) fn runtime_seeds_from_config(
             InteractionSeedValue::Bool(config.ui.status_bar_item_visible(item)),
         )?;
     }
-    insert(
-        InteractionSeedTarget::SidePane,
-        InteractionSeedValue::SidePane(
-            SidePane::from_config_id(&config.ui.toolbar.side_active_pane).unwrap_or_default(),
-        ),
-    )?;
-    let collapsed = config
-        .ui
-        .toolbar
-        .collapsed_sections
-        .iter()
-        .filter_map(|raw| ToolbarSideSection::from_config_id(raw))
-        .collect::<BTreeSet<_>>();
-    for section in ToolbarSideSection::ALL {
-        insert(
-            InteractionSeedTarget::CollapsedSection(section),
-            InteractionSeedValue::Bool(collapsed.contains(&section)),
-        )?;
-    }
     let resolved_items = resolved_toolbar_item_seeds(config);
     insert(
         InteractionSeedTarget::FloatingBadge,
@@ -151,16 +124,6 @@ pub(super) fn runtime_seeds_from_config(
         InteractionSeedValue::Position(
             ToolbarPositionSeed::new(config.ui.toolbar.top_offset, config.ui.toolbar.top_offset_y)
                 .context("top toolbar position seed is not finite")?,
-        ),
-    )?;
-    insert(
-        InteractionSeedTarget::SidePosition,
-        InteractionSeedValue::Position(
-            ToolbarPositionSeed::new(
-                config.ui.toolbar.side_offset_x,
-                config.ui.toolbar.side_offset,
-            )
-            .context("side toolbar position seed is not finite")?,
         ),
     )?;
     insert(
@@ -217,7 +180,6 @@ fn resolved_toolbar_item_seeds(config: &Config) -> crate::config::ResolvedToolba
         show_presets: toolbar.show_presets,
         show_step_section: toolbar.show_step_section,
         show_text_controls: toolbar.show_text_controls,
-        show_settings_section: toolbar.show_settings_section,
     };
     legacy.apply_mode_override(toolbar.mode_overrides.for_mode(toolbar.layout_mode));
     fold_legacy_section_flags(
@@ -239,21 +201,9 @@ pub(super) fn toolbar_values(
             InteractionSeedTarget::TopPinned,
             InteractionSeedValue::Bool(input.toolbar_top_pinned),
         ),
-        Target::SidePinned => RuntimeUiMutationValues::one(
-            InteractionSeedTarget::SidePinned,
-            InteractionSeedValue::Bool(input.toolbar_side_pinned),
-        ),
         Target::TopMinimized => RuntimeUiMutationValues::one(
             InteractionSeedTarget::TopMinimized,
             InteractionSeedValue::Bool(input.toolbar_top_minimized),
-        ),
-        Target::SideMinimized => RuntimeUiMutationValues::one(
-            InteractionSeedTarget::SideMinimized,
-            InteractionSeedValue::Bool(input.toolbar_side_minimized),
-        ),
-        Target::SidePane => RuntimeUiMutationValues::one(
-            InteractionSeedTarget::SidePane,
-            InteractionSeedValue::SidePane(input.toolbar_side_pane),
         ),
         Target::TopDisplayMode => top_display_mode_values(input.toolbar_top_display_mode, input),
         Target::StatusBar => RuntimeUiMutationValues::one(
@@ -335,10 +285,6 @@ pub(super) fn toolbar_values(
             InteractionSeedTarget::StatusBarItem(item),
             InteractionSeedValue::Bool(input.status_bar_item_visible(item)),
         ),
-        Target::CollapsedSection(section) => RuntimeUiMutationValues::one(
-            InteractionSeedTarget::CollapsedSection(section),
-            InteractionSeedValue::Bool(input.toolbar_collapsed_side_sections.contains(&section)),
-        ),
         Target::ItemVisibility { id, .. } => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ItemVisibility(id),
             InteractionSeedValue::Visibility(item_visibility_setting(
@@ -367,19 +313,12 @@ pub(super) fn toolbar_values(
                 )
             }))
         }
-        // The keyboard toggle drives both pins as one batched mutation: the
-        // same wire keys the pin buttons write, settled through one accepted
-        // revision so a restart cannot observe half a toggle.
-        Target::ToolbarVisibility => RuntimeUiMutationValues::batch([
-            (
-                InteractionSeedTarget::TopPinned,
-                InteractionSeedValue::Bool(input.toolbar_top_pinned),
-            ),
-            (
-                InteractionSeedTarget::SidePinned,
-                InteractionSeedValue::Bool(input.toolbar_side_pinned),
-            ),
-        ]),
+        // The keyboard toggle drives the pin through the same wire key the pin
+        // button writes, settled through one accepted revision.
+        Target::ToolbarVisibility => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::TopPinned,
+            InteractionSeedValue::Bool(input.toolbar_top_pinned),
+        ),
     }
 }
 

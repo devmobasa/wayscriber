@@ -12,18 +12,9 @@ use std::rc::Rc;
 
 use gtk4::prelude::*;
 
-use crate::input::Tool;
 use crate::toolbar_icons;
-use crate::ui::toolbar::model;
 
 pub(super) type IconPainter = toolbar_icons::ToolbarIconPainter;
-
-/// Painter for a tool's semantic icon; mirrors the built-in mapping.
-pub(super) fn tool_icon_painter(tool: Tool) -> IconPainter {
-    toolbar_icons::top_toolbar_icon_painter(model::TopToolbarIcon::Tool(
-        model::semantic_icon_for_tool(tool),
-    ))
-}
 
 /// Handle to an icon widget whose painter can be swapped when live toolbar
 /// state changes the represented action (for example pin/unpin).

@@ -43,12 +43,11 @@ Destinations are `ui/toolbar`, `ui/toolbar-visibility`, `ui/status-bar`, `ui/cli
 search box filled. `--help` prints the same list. An unknown destination falls back to the normal
 initial screen and says so in the status banner.
 
-Toolbar pins, placement offsets, the top strip's display form, item visibility/order, pane state,
-and board pin controls are labeled as configured defaults because the running overlay can store
-later customizations in the separate generated
-`$XDG_DATA_HOME/wayscriber/runtime-ui.toml` file. The configurator edits only `config.toml`; it does
-not overwrite or reset runtime preferences. Use the overlay Settings panel to inspect or reset that
-state.
+Toolbar pin, top placement offsets, the top strip's display form, item visibility/order, and board
+pin controls are labeled as configured defaults because the running overlay can store later
+customizations in the separate generated `$XDG_DATA_HOME/wayscriber/runtime-ui.toml` file. The
+configurator edits only `config.toml`; it does not overwrite or reset runtime preferences. Use the
+overlay Settings popover to inspect or reset that state.
 
 Config, daemon-setup, and saved-session filesystem/process operations run through a bounded Tokio
 blocking-job adapter. Two jobs may run concurrently; existing request ordering and busy-state gates

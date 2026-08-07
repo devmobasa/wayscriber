@@ -17,7 +17,7 @@ fn seeds() -> ValidatedInteractionSeeds {
         .unwrap();
     seeds
         .insert(
-            InteractionSeedTarget::SidePinned,
+            InteractionSeedTarget::TopMinimized,
             InteractionSeedValue::Bool(false),
         )
         .unwrap();
@@ -431,11 +431,11 @@ future_boards = true
         .controller;
     let permit = controller
         .begin_mutation(RuntimeUiMutationScope::one(
-            InteractionSeedTarget::SidePinned,
+            InteractionSeedTarget::TopMinimized,
         ))
         .unwrap();
     let values = RuntimeUiMutationValues::one(
-        InteractionSeedTarget::SidePinned,
+        InteractionSeedTarget::TopMinimized,
         InteractionSeedValue::Bool(true),
     )
     .unwrap();
@@ -959,7 +959,7 @@ future_entry = "must not return"
         .unwrap();
     changed_seeds
         .insert(
-            InteractionSeedTarget::SidePinned,
+            InteractionSeedTarget::TopMinimized,
             InteractionSeedValue::Bool(false),
         )
         .unwrap();

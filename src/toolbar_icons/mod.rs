@@ -153,7 +153,7 @@ mod painter_tests {
     /// Every public painter. `svg.rs` covers the newer family through its own
     /// `render_*` entry points; this covers the shipped surface callers use,
     /// including the older proportional-style painters that had no coverage.
-    const PAINTERS: [(&str, IconPainter); 64] = [
+    const PAINTERS: [(&str, IconPainter); 63] = [
         ("arrow", draw_icon_arrow),
         ("blur", draw_icon_blur),
         ("board", draw_icon_board),
@@ -205,7 +205,6 @@ mod painter_tests {
         ("session", draw_icon_session),
         ("settings", draw_icon_settings),
         ("shape_picker", draw_icon_shape_picker),
-        ("side_minimize", draw_icon_side_minimize),
         ("sliders", draw_icon_sliders),
         ("spotlight", draw_icon_spotlight),
         ("step_marker", draw_icon_step_marker),

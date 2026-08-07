@@ -236,12 +236,10 @@ pub(super) fn customize_groups() -> Vec<ToolbarSettingsCustomizeGroup> {
     [
         ToolbarItemCustomizeGroup::TopTools,
         ToolbarItemCustomizeGroup::TopControls,
-        ToolbarItemCustomizeGroup::SideSections,
         ToolbarItemCustomizeGroup::Actions,
         ToolbarItemCustomizeGroup::Pages,
         ToolbarItemCustomizeGroup::Boards,
         ToolbarItemCustomizeGroup::Presets,
-        ToolbarItemCustomizeGroup::ToolOptions,
         ToolbarItemCustomizeGroup::Sessions,
     ]
     .into_iter()
@@ -266,16 +264,10 @@ pub(super) fn customize_group_contains(
             definition.surface == ToolbarItemSurface::Top
                 && definition.category != ToolbarItemCategory::Tool
         }
-        ToolbarItemCustomizeGroup::SideSections => {
-            definition.category == ToolbarItemCategory::Group
-        }
         ToolbarItemCustomizeGroup::Actions => definition.category == ToolbarItemCategory::Action,
         ToolbarItemCustomizeGroup::Pages => definition.category == ToolbarItemCategory::Page,
         ToolbarItemCustomizeGroup::Boards => definition.category == ToolbarItemCategory::Board,
         ToolbarItemCustomizeGroup::Presets => definition.group == Some(ToolbarGroupId::Presets),
-        ToolbarItemCustomizeGroup::ToolOptions => {
-            definition.category == ToolbarItemCategory::ToolOption
-        }
         ToolbarItemCustomizeGroup::Sessions => definition.category == ToolbarItemCategory::Session,
     }
 }
@@ -305,7 +297,6 @@ fn customize_order_group(group: ToolbarItemCustomizeGroup) -> Option<ToolbarItem
     match group {
         ToolbarItemCustomizeGroup::TopTools => Some(ToolbarItemOrderGroup::TopTools),
         ToolbarItemCustomizeGroup::TopControls => Some(ToolbarItemOrderGroup::TopControls),
-        ToolbarItemCustomizeGroup::SideSections => Some(ToolbarItemOrderGroup::SideSections),
         _ => None,
     }
 }
@@ -356,4 +347,80 @@ fn control_item_id(id: ToolbarControlId) -> Option<ToolbarItemId> {
         ToolbarControlId::OpenConfigFile => ids::SIDE_SETTINGS_CONFIG_FILE,
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_settings_control_maps_to_its_retained_item_id() {
+        for (control, expected) in [
+            (
+                ToolbarControlId::SettingsContextAwareUi,
+                ids::SIDE_SETTINGS_CONTEXT_AWARE_UI,
+            ),
+            (
+                ToolbarControlId::SettingsTextControls,
+                ids::SIDE_SETTINGS_TEXT_CONTROLS,
+            ),
+            (
+                ToolbarControlId::SettingsStatusBar,
+                ids::SIDE_SETTINGS_STATUS_BAR,
+            ),
+            (
+                ToolbarControlId::SettingsStatusBoardBadge,
+                ids::SIDE_SETTINGS_STATUS_BOARD_BADGE,
+            ),
+            (
+                ToolbarControlId::SettingsStatusPageBadge,
+                ids::SIDE_SETTINGS_STATUS_PAGE_BADGE,
+            ),
+            (
+                ToolbarControlId::SettingsFloatingBadgeAlways,
+                ids::SIDE_SETTINGS_FLOATING_BADGE_ALWAYS,
+            ),
+            (
+                ToolbarControlId::SettingsPresetToasts,
+                ids::SIDE_SETTINGS_PRESET_TOASTS,
+            ),
+            (
+                ToolbarControlId::SettingsPresets,
+                ids::SIDE_SETTINGS_PRESETS,
+            ),
+            (
+                ToolbarControlId::SettingsActions,
+                ids::SIDE_SETTINGS_ACTIONS,
+            ),
+            (
+                ToolbarControlId::SettingsZoomActions,
+                ids::SIDE_SETTINGS_ZOOM_ACTIONS,
+            ),
+            (
+                ToolbarControlId::SettingsAdvancedActions,
+                ids::SIDE_SETTINGS_ADVANCED_ACTIONS,
+            ),
+            (ToolbarControlId::SettingsBoards, ids::SIDE_SETTINGS_BOARDS),
+            (ToolbarControlId::SettingsPages, ids::SIDE_SETTINGS_PAGES),
+            (
+                ToolbarControlId::SettingsStepControls,
+                ids::SIDE_SETTINGS_STEP_CONTROLS,
+            ),
+            (
+                ToolbarControlId::OpenCommandPalette,
+                ids::SIDE_SETTINGS_COMMAND_PALETTE,
+            ),
+            (
+                ToolbarControlId::OpenConfigurator,
+                ids::SIDE_SETTINGS_CONFIGURATOR,
+            ),
+            (
+                ToolbarControlId::OpenConfigFile,
+                ids::SIDE_SETTINGS_CONFIG_FILE,
+            ),
+            (ToolbarControlId::OpenAbout, ids::SIDE_SETTINGS_ABOUT),
+        ] {
+            assert_eq!(control_item_id(control), Some(expected), "{control:?}");
+        }
+    }
 }

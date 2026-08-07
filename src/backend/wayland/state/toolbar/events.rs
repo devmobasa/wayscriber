@@ -2,10 +2,9 @@ use super::*;
 use crate::{
     backend::wayland::runtime_ui_state::ToolbarRuntimeFinish,
     input::InputState,
-    onboarding::OnboardingState,
     ui::toolbar::model::{
         ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPopover,
-        ToolbarPreApplyEffect, ToolbarRuntimeUiPersistenceTarget, popovers_for_event,
+        ToolbarRuntimeUiPersistenceTarget, popovers_for_event,
     },
 };
 use wayland_client::{Connection, QueueHandle};
@@ -20,16 +19,6 @@ pub(in crate::backend::wayland::state) use session::SessionFileDialogController;
 
 use feedback::{ToolbarPinChange, pin_durability};
 use session::populate_session_snapshot;
-
-fn record_drawer_hint_shown(state: &mut OnboardingState) -> bool {
-    if state.drawer_hint_count >= crate::onboarding::DRAWER_HINT_MAX {
-        return false;
-    }
-
-    state.drawer_hint_count = state.drawer_hint_count.saturating_add(1);
-    state.drawer_hint_shown = state.drawer_hint_count >= crate::onboarding::DRAWER_HINT_MAX;
-    true
-}
 
 fn toolbar_event_blocked_by_modal(input_state: &InputState) -> bool {
     input_state.command_palette_is_engaged()
@@ -54,18 +43,13 @@ impl WaylandState {
     /// Returns a snapshot of the current input state for toolbar UI consumption.
     pub(in crate::backend::wayland) fn toolbar_snapshot(&self) -> ToolbarSnapshot {
         let hints = ToolbarBindingHints::from_input_state(&self.input_state);
-        let hint_max = crate::onboarding::DRAWER_HINT_MAX;
-        let show_drawer_hint = self.onboarding.state().drawer_hint_count < hint_max
-            && self.input_state.toolbar_side_pane == crate::ui::toolbar::SidePane::Draw;
-        let mut snapshot =
-            ToolbarSnapshot::from_input_with_options(&self.input_state, hints, show_drawer_hint);
+        let mut snapshot = ToolbarSnapshot::from_input_with_bindings(&self.input_state, hints);
         populate_session_snapshot(&mut snapshot, self.session.options());
         snapshot.runtime_ui_persistence = self
             .runtime_ui
             .as_ref()
             .map(|runtime| runtime.persistence_snapshot())
             .or_else(|| self.runtime_ui_unavailable.clone());
-        snapshot.side_viewport_max = self.side_pane_viewport_max(&snapshot);
         snapshot.top_viewport_max = self.top_strip_viewport_max(&snapshot);
         snapshot.top_available_height = self.top_popover_available_height(&snapshot);
         snapshot.top_fade = self.data.top_strip_fade.value();
@@ -83,7 +67,7 @@ impl WaylandState {
         } else {
             1.0
         };
-        let base_x = self.inline_top_base_x(snapshot);
+        let base_x = self.inline_top_base_x();
         super::geometry::remaining_top_width(screen_width, base_x, Self::TOP_MARGIN_RIGHT, scale)
     }
 
@@ -102,25 +86,6 @@ impl WaylandState {
         };
         let surface_y = self.inline_top_base_y() + self.data.toolbar_top_offset_y;
         super::geometry::remaining_top_height(screen_height, surface_y, scale)
-    }
-
-    /// Height available to the side palette in pre-scale spec units: the
-    /// screen space below the palette's top edge, floored so a pathological
-    /// drag offset cannot collapse the pane entirely.
-    fn side_pane_viewport_max(&self, snapshot: &ToolbarSnapshot) -> Option<f64> {
-        const MIN_SIDE_VIEWPORT: f64 = 180.0;
-        let screen_height = self.surface.height() as f64;
-        if screen_height <= 0.0 {
-            return None;
-        }
-        let scale = if snapshot.toolbar_scale.is_finite() {
-            snapshot.toolbar_scale.clamp(0.5, 3.0)
-        } else {
-            1.0
-        };
-        let side_top = Self::SIDE_BASE_MARGIN_TOP + self.data.toolbar_side_offset;
-        let available = screen_height - side_top - Self::SIDE_MARGIN_BOTTOM;
-        Some((available / scale).max(MIN_SIDE_VIEWPORT))
     }
 
     /// Applies an incoming toolbar event and schedules redraws as needed.
@@ -238,15 +203,6 @@ impl WaylandState {
         }
 
         let policy = ToolbarEventPolicy::for_event(&event);
-        for effect in &policy.pre_apply_effects {
-            match effect {
-                ToolbarPreApplyEffect::RecordDrawerHintShown => {
-                    if record_drawer_hint_shown(self.onboarding.state_mut()) {
-                        self.onboarding.save();
-                    }
-                }
-            }
-        }
 
         match (&policy.backend_route, &event) {
             (ToolbarBackendRoute::MoveTopToolbar, ToolbarEvent::MoveTopToolbar { x, y }) => {
@@ -268,28 +224,7 @@ impl WaylandState {
                 }
                 return;
             }
-            (ToolbarBackendRoute::MoveSideToolbar, ToolbarEvent::MoveSideToolbar { x, y }) => {
-                let inline_active = self.inline_toolbars_active();
-                let coord_is_screen = inline_active;
-                drag_log(|| {
-                    format!(
-                        "toolbar move event: kind=Side, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
-                        *x, *y, coord_is_screen, inline_active
-                    )
-                });
-                if !self.begin_toolbar_move_drag(MoveDragKind::Side, (*x, *y), coord_is_screen) {
-                    return;
-                }
-                if coord_is_screen {
-                    self.handle_toolbar_move_screen(MoveDragKind::Side, (*x, *y));
-                } else {
-                    self.handle_toolbar_move(MoveDragKind::Side, (*x, *y));
-                }
-                return;
-            }
-            (ToolbarBackendRoute::ApplyToInput, _)
-            | (ToolbarBackendRoute::MoveTopToolbar, _)
-            | (ToolbarBackendRoute::MoveSideToolbar, _) => {}
+            (ToolbarBackendRoute::ApplyToInput, _) | (ToolbarBackendRoute::MoveTopToolbar, _) => {}
         }
 
         #[cfg(feature = "tablet-input")]
@@ -297,7 +232,6 @@ impl WaylandState {
         #[cfg(feature = "tablet-input")]
         let thickness_event = policy.tablet_thickness_sensitive;
 
-        let pane_switch = matches!(event, ToolbarEvent::SetSidePane(_));
         let starts_item_drag = matches!(event, ToolbarEvent::StartToolbarItemDrag { .. });
         if matches!(event, ToolbarEvent::DragToolbarItemOver { .. })
             && !self.toolbar_item_drag_update_allowed()
@@ -349,9 +283,6 @@ impl WaylandState {
         if applied {
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
-            if pane_switch {
-                self.reset_side_toolbar_focus();
-            }
 
             #[cfg(feature = "tablet-input")]
             if thickness_event && self.sync_stylus_thickness_cache(prev_thickness) {

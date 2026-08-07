@@ -327,7 +327,7 @@ fn presets_island_hosts_the_saved_slots() {
     let filled = TopToolbarControl::Preset(0);
     let empty = TopToolbarControl::Preset(1);
     // The filled slot applies preset 1 and reads active (the applied
-    // slot); the empty slot reuses the side-palette save convention.
+    // slot); an empty slot saves the current setup.
     assert_eq!(filled.event(&snapshot), ToolbarEvent::ApplyPreset(1));
     assert!(filled.active(&snapshot));
     assert_eq!(

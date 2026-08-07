@@ -19,10 +19,10 @@ use super::widgets::constants::{
 };
 use super::widgets::{
     draw_button, draw_checkbox, draw_destructive_button, draw_disabled_button,
-    draw_divider_vertical, draw_drag_handle, draw_group_card, draw_label_center,
-    draw_label_center_color, draw_label_left, draw_label_left_wrapped, draw_mini_checkbox,
-    draw_minimize_button, draw_panel_background, draw_pin_button, draw_popover_panel,
-    draw_round_rect, draw_segmented_control, ellipsize_to_width, point_in_rect, set_icon_color,
+    draw_divider_vertical, draw_drag_handle, draw_label_center, draw_label_center_color,
+    draw_label_left, draw_label_left_wrapped, draw_mini_checkbox, draw_minimize_button,
+    draw_panel_background, draw_pin_button, draw_popover_panel, draw_round_rect,
+    draw_segmented_control, ellipsize_to_width, point_in_rect, set_icon_color,
 };
 
 /// Hover ring around an unselected swatch (dimmer sibling of the accent
@@ -80,9 +80,8 @@ fn paint_button_body(
 /// Draw a filled preset slot's color as a small rounded swatch tucked in the
 /// bottom-right corner. A luminance-driven hairline keeps the swatch defined
 /// against the slot body regardless of the preset color (a black swatch on
-/// the dark body, a white swatch on the accent body). Mirrors the built-in
-/// side-palette swatch treatment and the GTK preset slot so black and white
-/// presets both stay legible.
+/// the dark body, a white swatch on the accent body). It matches the GTK
+/// preset slot so black and white presets both stay legible.
 ///
 /// A translucent preset paints at its own alpha over the checkerboard, so the
 /// slot previews the color the preset will actually apply.
@@ -167,7 +166,6 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
     let is_hover = hovered(node, hover) && node.interact.is_some();
     match &node.kind {
         WidgetKind::Panel => draw_panel_background(ctx, x, y, w, h),
-        WidgetKind::Card => draw_group_card(ctx, x, y, w, h),
         WidgetKind::Divider { vertical } => {
             if *vertical {
                 draw_divider_vertical(ctx, x, y, h);
@@ -220,10 +218,6 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             } else {
                 draw_label_center(ctx, text_style, x, y, w, h, &display);
             }
-        }
-        WidgetKind::Icon { glyph } => {
-            set_color(ctx, COLOR_ICON_DEFAULT);
-            (glyph.0)(ctx, x, y, w.min(h));
         }
         WidgetKind::Label(label) => {
             let text_style = label_style(label.size, label.bold);
@@ -286,8 +280,8 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
         }
         WidgetKind::HitArea => {}
         WidgetKind::Slider { t } => {
-            // Track and knob share the side-palette slider treatment: a
-            // rounded track with the accent knob riding the inset travel.
+            // Track and knob: a rounded track with the accent knob riding the
+            // inset travel.
             let track_h = (h * 0.5).min(8.0);
             let track_y = y + (h - track_h) / 2.0;
             set_color(ctx, COLOR_TRACK_BACKGROUND);
@@ -339,7 +333,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
                 // Filled slot: the saved tool glyph in the neutral foreground
                 // so a dark preset color never renders it invisible against
                 // the slot body; the preset color rides along as a separate
-                // corner swatch instead (the side-palette convention).
+                // corner swatch instead.
                 Some(glyph) => {
                     let icon_size = (w.min(h) * PRESET_SLOT_ICON_RATIO).round();
                     set_color(ctx, COLOR_TEXT_SECONDARY);
@@ -398,12 +392,8 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             draw_popover_panel(ctx, x, y, w, h, *caret_x, *caret_up);
         }
         WidgetKind::VScrollbar { t, thumb } => {
-            // Same treatment as the side palette's scrollbar: a soft track
-            // with the theme's proportional slider thumb.
-            set_color(
-                ctx,
-                crate::backend::wayland::toolbar::render::side_palette::COLOR_SCROLLBAR_TRACK,
-            );
+            // A soft track with the theme's proportional slider thumb.
+            set_color(ctx, crate::ui::theme::toolbar::COLOR_SCROLLBAR_TRACK);
             draw_round_rect(ctx, x, y, w, h, w / 2.0);
             let _ = ctx.fill();
             let thumb_h = (h * thumb.clamp(0.0, 1.0)).max(w * 2.0).min(h);

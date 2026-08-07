@@ -1,8 +1,5 @@
 use crate::config::QuickColorPalette;
-use crate::config::{
-    ResolvedToolbarItems, ToolbarGroupId, ToolbarItemId, ToolbarLayoutMode, TopDisplayMode,
-    toolbar_item_ids as ids,
-};
+use crate::config::{ResolvedToolbarItems, ToolbarItemId, ToolbarLayoutMode, TopDisplayMode};
 use crate::draw::{Color, EraserKind, FontDescriptor};
 use crate::input::state::PresetFeedbackKind;
 use crate::input::tool::{ToolControlGroup, ToolProfile};
@@ -10,10 +7,8 @@ use crate::input::{EraserMode, Tool};
 use std::path::PathBuf;
 
 use super::super::bindings::ToolbarBindingHints;
-use super::super::events::ToolbarSideSection;
-use std::collections::BTreeSet;
 
-/// The kind of tool-specific options to display in the side panel.
+/// The kind of tool-specific options to display.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolOptionsKind {
     /// No tool-specific options (e.g., Select tool)
@@ -249,9 +244,6 @@ pub struct ToolbarSnapshot {
     pub active_tool: Tool,
     pub tool_override: Option<Tool>,
     pub color: Color,
-    /// Last HSV triple committed from the palette color picker, when it
-    /// still matches `color`; keeps hue/saturation stable across grays.
-    pub picker_hsv: Option<(f64, f64, f64)>,
     pub quick_colors: QuickColorPalette,
     pub thickness: f64,
     pub eraser_size: f64,
@@ -299,8 +291,6 @@ pub struct ToolbarSnapshot {
     pub custom_redo_steps: usize,
     /// Whether the top toolbar is pinned (opens at startup)
     pub top_pinned: bool,
-    /// Whether the side toolbar is pinned (opens at startup)
-    pub side_pinned: bool,
     /// Whether to use icons instead of text labels
     pub use_icons: bool,
     /// Scale factor for toolbar UI (icons + layout)
@@ -325,7 +315,7 @@ pub struct ToolbarSnapshot {
     pub show_marker_opacity_section: bool,
     /// Whether to show preset action toasts
     pub show_preset_toasts: bool,
-    /// Whether to show presets in the side toolbar
+    /// Whether to show the Presets section
     pub show_presets: bool,
     /// Whether to show the Step Undo/Redo section
     pub show_step_section: bool,
@@ -333,10 +323,6 @@ pub struct ToolbarSnapshot {
     pub show_text_controls: bool,
     /// Whether to enable context-aware UI that shows/hides controls based on active tool
     pub context_aware_ui: bool,
-    /// Whether to show the Settings section
-    pub show_settings_section: bool,
-    /// Side drawer sections whose body content is collapsed.
-    pub collapsed_side_sections: BTreeSet<ToolbarSideSection>,
     pub show_tool_preview: bool,
     pub show_status_bar: bool,
     pub status_bar_interactive: bool,
@@ -374,18 +360,9 @@ pub struct ToolbarSnapshot {
     /// `fade::TOP_STRIP_DIM_LEVEL` = dimmed, values between while a fade
     /// transition is in flight. Owned by the backend fade engine.
     pub top_fade: f64,
-    /// Whether the side palette is minimized to its edge restore tab
-    pub side_minimized: bool,
     /// Width available to the top strip in pre-scale spec units, when
     /// known; content past this degrades into the overflow menu.
     pub top_viewport_max: Option<f64>,
-    /// Active side-palette pane
-    pub active_side_pane: super::super::events::SidePane,
-    /// Scroll offset of the active pane (logical pixels, clamped at render)
-    pub side_scroll: f64,
-    /// Height available to the side palette in pre-scale spec units, when
-    /// known; the pane scrolls instead of growing the surface past this.
-    pub side_viewport_max: Option<f64>,
     /// Height available from the top toolbar surface origin to the output
     /// bottom, in pre-scale spec units, when known. The open
     /// Canvas/Session/Settings popover grows to fill the room actually below
@@ -410,7 +387,6 @@ pub struct ToolbarSnapshot {
     /// Binding hints for tooltips
     pub binding_hints: ToolbarBindingHints,
     /// Whether to show the drawer onboarding hint (first-time users)
-    pub show_drawer_hint: bool,
     /// Whether the current board is the transparent overlay
     pub is_transparent: bool,
     /// Changes whenever final-render color profile preview changes.
@@ -458,55 +434,5 @@ impl ToolbarSnapshot {
 
     pub fn toolbar_item_hidden(&self, item: ToolbarItemId) -> bool {
         self.resolved_toolbar_items.is_hidden(item)
-    }
-
-    pub fn toolbar_group_hidden(&self, group: ToolbarGroupId) -> bool {
-        self.toolbar_item_hidden(group.toolbar_item_id())
-    }
-
-    pub fn side_section_hidden(&self, section: ToolbarSideSection) -> bool {
-        let group = match section {
-            ToolbarSideSection::Colors => ToolbarGroupId::Colors,
-            ToolbarSideSection::Presets => ToolbarGroupId::Presets,
-            ToolbarSideSection::Thickness => ToolbarGroupId::Thickness,
-            ToolbarSideSection::EraserMode => ToolbarGroupId::EraserMode,
-            ToolbarSideSection::PolygonSides => ToolbarGroupId::PolygonSides,
-            ToolbarSideSection::ArrowLabels => ToolbarGroupId::ArrowLabels,
-            ToolbarSideSection::StepMarkers => ToolbarGroupId::StepMarkers,
-            ToolbarSideSection::MarkerOpacity => ToolbarGroupId::MarkerOpacity,
-            ToolbarSideSection::TextSize => ToolbarGroupId::TextSize,
-            ToolbarSideSection::Font => ToolbarGroupId::Font,
-            ToolbarSideSection::Actions => ToolbarGroupId::Actions,
-            ToolbarSideSection::Boards => ToolbarGroupId::Boards,
-            ToolbarSideSection::Pages => ToolbarGroupId::Pages,
-            ToolbarSideSection::StepUndo => ToolbarGroupId::StepUndo,
-            ToolbarSideSection::Session => ToolbarGroupId::Session,
-            ToolbarSideSection::Settings => ToolbarGroupId::Settings,
-        };
-        let legacy_item = match section {
-            ToolbarSideSection::Colors => Some(ids::SIDE_TOOL_OPTIONS_COLOR),
-            ToolbarSideSection::Thickness => Some(ids::SIDE_TOOL_OPTIONS_THICKNESS),
-            ToolbarSideSection::EraserMode => Some(ids::SIDE_TOOL_OPTIONS_ERASER_MODE),
-            ToolbarSideSection::PolygonSides => Some(ids::SIDE_TOOL_OPTIONS_POLYGON_SIDES),
-            ToolbarSideSection::ArrowLabels => Some(ids::SIDE_TOOL_OPTIONS_ARROW_LABELS),
-            ToolbarSideSection::StepMarkers => Some(ids::SIDE_TOOL_OPTIONS_STEP_MARKER_RESET),
-            ToolbarSideSection::MarkerOpacity => Some(ids::SIDE_TOOL_OPTIONS_MARKER_OPACITY),
-            ToolbarSideSection::TextSize => Some(ids::SIDE_TOOL_OPTIONS_FONT_SIZE),
-            ToolbarSideSection::Font => Some(ids::SIDE_TOOL_OPTIONS_FONT_FAMILY),
-            ToolbarSideSection::Presets
-            | ToolbarSideSection::Actions
-            | ToolbarSideSection::Boards
-            | ToolbarSideSection::Pages
-            | ToolbarSideSection::StepUndo
-            | ToolbarSideSection::Session
-            | ToolbarSideSection::Settings => None,
-        };
-
-        self.toolbar_group_hidden(group)
-            || legacy_item.is_some_and(|item| self.toolbar_item_hidden(item))
-    }
-
-    pub fn side_section_collapsed(&self, section: ToolbarSideSection) -> bool {
-        self.collapsed_side_sections.contains(&section)
     }
 }

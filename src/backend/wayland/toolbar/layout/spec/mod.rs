@@ -1,4 +1,3 @@
-mod side;
 mod top;
 
 use crate::ui::toolbar::ToolbarSnapshot;

@@ -12,13 +12,13 @@ fn save_with_backup_creates_timestamped_file() {
         let config_dir = config_root.join(PRIMARY_CONFIG_DIR);
         fs::create_dir_all(&config_dir).unwrap();
         let config_file = config_dir.join("config.toml");
-        let original = "# Keep this backup source comment.\n[ui.toolbar]\nside_pinned = true\n";
+        let original = "# Keep this backup source comment.\n[ui.toolbar]\ntop_pinned = true\n";
         fs::write(&config_file, original).unwrap();
 
         let mut config = Config::load()
             .expect("load config before backup save")
             .config;
-        config.ui.toolbar.side_pinned = false;
+        config.ui.toolbar.top_pinned = false;
         let backup_path =
             save_through_document_with_backup(config).expect("backup should be created");
 
@@ -35,7 +35,7 @@ fn save_with_backup_creates_timestamped_file() {
 
         let new_contents = fs::read_to_string(&config_file).unwrap();
         assert!(new_contents.contains("# Keep this backup source comment."));
-        assert!(new_contents.contains("side_pinned = false"));
+        assert!(new_contents.contains("top_pinned = false"));
         assert!(!new_contents.contains("[drawing]"));
     });
 }
@@ -51,7 +51,7 @@ fn a_toolbar_preference_save_preserves_comments_and_unrelated_toml_formatting() 
             r#"# Keep this user comment.
 
 [ui.toolbar]
-side_pinned = true
+top_pinned = true
 
 [boards]
 default_board = "transparent"
@@ -71,12 +71,12 @@ default_pen_color = { rgb = [0.0, 0.0, 0.0] }
         .unwrap();
 
         let mut config = Config::load().expect("load sparse config").config;
-        config.ui.toolbar.side_pinned = false;
+        config.ui.toolbar.top_pinned = false;
         save_through_document(config);
 
         let saved = fs::read_to_string(&config_file).unwrap();
         assert!(saved.contains("# Keep this user comment."));
-        assert!(saved.contains("side_pinned = false"));
+        assert!(saved.contains("top_pinned = false"));
         assert!(saved.contains("background = { rgb = [0.992, 0.992, 0.992] }"));
         assert!(saved.contains("default_pen_color = { rgb = [0.0, 0.0, 0.0] }"));
         assert!(!saved.contains("[drawing]"));
@@ -164,18 +164,18 @@ fn a_save_keeps_an_out_of_range_value_as_authored() {
         let config_file = config_dir.join("config.toml");
         fs::write(
             &config_file,
-            "[performance]\nbuffer_count = 99\n\n[ui.toolbar]\nside_pinned = true\n",
+            "[performance]\nbuffer_count = 99\n\n[ui.toolbar]\ntop_pinned = true\n",
         )
         .unwrap();
 
         let mut config = Config::load().expect("load clamped config").config;
         assert_eq!(config.performance.buffer_count, 4);
-        config.ui.toolbar.side_pinned = false;
+        config.ui.toolbar.top_pinned = false;
         save_through_document(config);
 
         let saved = fs::read_to_string(&config_file).unwrap();
         assert!(saved.contains("buffer_count = 99"));
-        assert!(saved.contains("side_pinned = false"));
+        assert!(saved.contains("top_pinned = false"));
     });
 }
 
@@ -484,13 +484,13 @@ fn save_with_backup_preserves_symlinked_config_target_and_backup_contents() {
 
         let target = managed_dir.join("config.toml");
         let config_link = config_dir.join("config.toml");
-        let original = "# Keep this symlinked comment.\n[ui.toolbar]\nside_pinned = true\n";
+        let original = "# Keep this symlinked comment.\n[ui.toolbar]\ntop_pinned = true\n";
         fs::write(&target, original).unwrap();
         fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
         symlink(&target, &config_link).unwrap();
 
         let mut config = Config::load().expect("load symlinked config").config;
-        config.ui.toolbar.side_pinned = false;
+        config.ui.toolbar.top_pinned = false;
         let backup_path = save_through_document_with_backup(config)
             .expect("backup should be created for symlinked config");
 
@@ -516,7 +516,7 @@ fn save_with_backup_preserves_symlinked_config_target_and_backup_contents() {
 
         let target_contents = fs::read_to_string(&target).unwrap();
         assert!(target_contents.contains("# Keep this symlinked comment."));
-        assert!(target_contents.contains("side_pinned = false"));
+        assert!(target_contents.contains("top_pinned = false"));
         assert!(!target_contents.contains("[drawing]"));
         assert_eq!(
             fs::metadata(&target).unwrap().permissions().mode() & 0o777,

@@ -14,22 +14,8 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
     for (target, value) in &rollback.values {
         match target {
             Target::TopPinned => set_bool(value, |v| input.toolbar_top_pinned = v),
-            Target::SidePinned => set_bool(value, |v| input.toolbar_side_pinned = v),
             Target::TopMinimized => set_bool(value, |v| {
                 input.apply_toolbar_set_top_minimized(v);
-            }),
-            Target::SideMinimized => set_bool(value, |v| input.toolbar_side_minimized = v),
-            Target::SidePane => {
-                if let InteractionSeedValue::SidePane(pane) = value {
-                    input.apply_toolbar_set_side_pane(*pane);
-                }
-            }
-            Target::CollapsedSection(section) => set_bool(value, |collapsed| {
-                if collapsed {
-                    input.toolbar_collapsed_side_sections.insert(*section);
-                } else {
-                    input.toolbar_collapsed_side_sections.remove(section);
-                }
             }),
             Target::ItemVisibility(id) => {
                 if let InteractionSeedValue::Visibility(setting) = value {
@@ -47,11 +33,6 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
             Target::TopPosition => {
                 if let InteractionSeedValue::Position(position) = value {
                     positions.top = (position.x.get(), position.y.get());
-                }
-            }
-            Target::SidePosition => {
-                if let InteractionSeedValue::Position(position) = value {
-                    positions.side = (position.x.get(), position.y.get());
                 }
             }
             Target::TopDisplayMode => {
@@ -99,22 +80,19 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
             }
         }
     }
-    // Today only the visibility toggle batches both pins into one snapshot;
-    // the pin buttons persist single-pin scopes and are deliberately
-    // decoupled from live visibility, so exactly the both-pins shape must
-    // re-derive the live visibility flags — otherwise a rolled-back toggle
-    // leaves the screen disagreeing with the restored pins (and with the
-    // next start). The toggle arm skips no-op pin writes, so every snapshot
-    // that lands here crossed a genuine pin transition and the derived
-    // flags are exactly the startup (pin-derived) form of the pre-toggle
-    // screen. The display mode is deliberately not restored: the persisted
-    // type has no `Hidden`, and none is needed — after a hide-rollback the
-    // still-`Hidden` live mode reproduces the pre-toggle screen, after a
-    // show-rollback the strip is hidden either way, and any future show
-    // unfolds `Hidden` to `Full` regardless.
-    if rollback.values.contains_key(&Target::TopPinned)
-        && rollback.values.contains_key(&Target::SidePinned)
-    {
+    // The visibility toggle persists the top pin; the pin button persists the
+    // same key but is deliberately decoupled from live visibility, so a
+    // rolled-back toggle must re-derive the live visibility flag — otherwise
+    // the screen disagrees with the restored pin (and with the next start).
+    // The toggle arm skips no-op pin writes, so every snapshot that lands here
+    // crossed a genuine pin transition and the derived flag is exactly the
+    // startup (pin-derived) form of the pre-toggle screen. The display mode is
+    // deliberately not restored: the persisted type has no `Hidden`, and none
+    // is needed — after a hide-rollback the still-`Hidden` live mode
+    // reproduces the pre-toggle screen, after a show-rollback the strip is
+    // hidden either way, and any future show unfolds `Hidden` to `Full`
+    // regardless.
+    if rollback.values.contains_key(&Target::TopPinned) {
         input.derive_toolbar_visibility_from_pins();
     }
     input.needs_redraw = true;

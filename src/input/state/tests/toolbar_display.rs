@@ -32,10 +32,9 @@ fn refresh_status_hud_layout(state: &mut InputState) {
 #[test]
 fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
     let mut state = create_test_input_state();
-    // The "cycle only affects the top strip" assertion below observes the
-    // side palette: opt into the deprecated Panel escape hatch (the struct
-    // default is Pill, which retires the side surface).
-    state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Panel);
+    // Keep the status bar up so the hidden rung shows its routine toast
+    // instead of the all-chrome-hidden recovery warning.
+    refresh_status_hud_layout(&mut state);
     assert_eq!(state.top_display_state(), TopDisplayMode::Full);
 
     state.handle_action(Action::CycleToolbarDisplay);
@@ -59,10 +58,6 @@ fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
     state.handle_action(Action::CycleToolbarDisplay);
     assert_eq!(state.top_display_state(), TopDisplayMode::Hidden);
     assert!(!state.toolbar_top_visible());
-    assert!(
-        state.toolbar_side_visible(),
-        "the cycle only affects the top strip"
-    );
     assert_eq!(
         state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
         Some("Toolbar: hidden")
@@ -97,35 +92,15 @@ fn entering_micro_unminimizes_and_closes_top_menus() {
 #[test]
 fn toggle_toolbar_show_restores_a_cycle_hidden_top_strip() {
     let mut state = create_test_input_state();
-    // Two-press semantics are Panel-specific (the still-visible side
-    // palette makes the first press a hide); the single-press Pill variant
-    // is covered below.
-    state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Panel);
-    state.handle_action(Action::CycleToolbarDisplay); // micro
-    state.handle_action(Action::CycleToolbarDisplay); // hidden
-    assert!(!state.toolbar_top_visible());
-
-    state.handle_action(Action::ToggleToolbar); // hides side too
-    state.handle_action(Action::ToggleToolbar); // shows everything
-    assert!(state.toolbar_top_visible());
-    assert_eq!(state.top_display_state(), TopDisplayMode::Full);
-}
-
-#[test]
-fn toggle_toolbar_restores_a_cycle_hidden_strip_under_pill_layout() {
-    let mut state = create_test_input_state();
-    // The shipping default: the side palette is retired by the pill layout,
-    // so a cycle-hidden top strip leaves NO visible toolbar surface while
-    // every raw visibility flag stays true. The raw-flag early return in
-    // set_toolbar_visible used to swallow the restore in exactly this
-    // state, leaving F9 (and everything else dispatching ToggleToolbar)
-    // dead.
-    state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Pill);
+    // A cycle-hidden top strip leaves no visible toolbar surface while every
+    // raw visibility flag stays true. The raw-flag early return in
+    // set_toolbar_visible used to swallow the restore in exactly this state,
+    // leaving F9 (and everything else dispatching ToggleToolbar) dead.
     state.handle_action(Action::CycleToolbarDisplay); // micro
     state.handle_action(Action::CycleToolbarDisplay); // hidden
     assert!(
         !state.toolbar_visible(),
-        "cycle-hidden under pill must leave no visible surface"
+        "a cycle-hidden strip must leave no visible surface"
     );
 
     // A single ToggleToolbar press must bring the strip back.
@@ -135,69 +110,62 @@ fn toggle_toolbar_restores_a_cycle_hidden_strip_under_pill_layout() {
 }
 
 #[test]
-fn toggle_toolbar_drives_both_pins_and_queues_their_persistence() {
+fn toggle_toolbar_drives_the_top_pin_and_queues_its_persistence() {
     let mut state = create_test_input_state();
     assert!(state.toolbar_visible());
-    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+    assert!(state.toolbar_top_pinned);
 
-    // F9 hide: the durable form of the toggle unpins both surfaces, and the
-    // pending action carries the pre-change pins for the preview's rollback.
+    // F9 hide: the durable form of the toggle unpins the strip, and the
+    // pending action carries the pre-change pin for the preview's rollback.
     state.handle_action(Action::ToggleToolbar);
     assert!(!state.toolbar_visible());
     assert!(!state.toolbar_top_pinned);
-    assert!(!state.toolbar_side_pinned);
     assert_eq!(
         state.take_pending_toolbar_persistence(),
         vec![PendingToolbarPersistence::Visibility {
             previous_top_pinned: true,
-            previous_side_pinned: true,
         }],
         "the keyboard toggle persists like the toolbar-event paths"
     );
 
-    // F9 show: both pins come back on, with the hidden state as rollback.
+    // F9 show: the pin comes back on, with the hidden state as rollback.
     state.handle_action(Action::ToggleToolbar);
     assert!(state.toolbar_visible());
     assert!(state.toolbar_top_pinned);
-    assert!(state.toolbar_side_pinned);
     assert_eq!(
         state.take_pending_toolbar_persistence(),
         vec![PendingToolbarPersistence::Visibility {
             previous_top_pinned: false,
-            previous_side_pinned: false,
         }]
     );
 }
 
-/// F9 is WYSIWYG, not a pin round-trip: an asymmetric pin start (top pinned,
-/// side not) ends symmetric after off + on, because the second press must
-/// restore exactly the all-visible state the user was looking at.
+/// F9 is WYSIWYG, not a pin round-trip: the second press must restore exactly
+/// the visible state the user was looking at.
 #[test]
-fn toggle_toolbar_resolves_asymmetric_pins_to_what_is_on_screen() {
+fn toggle_toolbar_resolves_pins_to_what_is_on_screen() {
     let mut state = create_test_input_state();
-    state.toolbar_side_pinned = false;
     assert!(state.toolbar_visible());
 
     state.handle_action(Action::ToggleToolbar); // off
-    assert!(!state.toolbar_top_pinned && !state.toolbar_side_pinned);
+    assert!(!state.toolbar_top_pinned);
     assert_eq!(
         state.take_pending_toolbar_persistence(),
         vec![PendingToolbarPersistence::Visibility {
             previous_top_pinned: true,
-            previous_side_pinned: false,
         }]
     );
 
     state.handle_action(Action::ToggleToolbar); // on
     assert!(state.toolbar_visible());
     assert!(
-        state.toolbar_top_pinned && state.toolbar_side_pinned,
-        "showing pins both surfaces so the next start matches the screen"
+        state.toolbar_top_pinned,
+        "showing pins the strip so the next start matches the screen"
     );
 }
 
-/// Under the shipping pill layout a cycle-hidden strip leaves no visible
-/// surface while both pins stay true, so F9 there is a SHOW whose pin values
+/// A cycle-hidden strip leaves no visible surface while the pin stays true,
+/// so F9 there is a SHOW whose pin value
 /// do not change. Nothing may be queued for persistence: the write would be
 /// byte-identical, and its rollback would re-derive pin-true visibility for
 /// a screen that was effectively hidden before the press. The unfold stays
@@ -205,17 +173,16 @@ fn toggle_toolbar_resolves_asymmetric_pins_to_what_is_on_screen() {
 #[test]
 fn cycle_hidden_show_with_unchanged_pins_queues_no_persistence() {
     let mut state = create_test_input_state();
-    state.init_toolbar_side_layout_from_config(crate::config::ToolbarSideLayout::Pill);
     state.handle_action(Action::CycleToolbarDisplay); // micro
     state.handle_action(Action::CycleToolbarDisplay); // hidden
     assert!(!state.toolbar_visible());
-    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+    assert!(state.toolbar_top_pinned);
     state.take_pending_toolbar_persistence(); // drain the cycle's display-mode write
 
     state.handle_action(Action::ToggleToolbar); // show: unfolds Hidden → Full
     assert!(state.toolbar_visible());
     assert_eq!(state.top_display_state(), TopDisplayMode::Full);
-    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+    assert!(state.toolbar_top_pinned);
     assert!(
         !state.has_pending_toolbar_persistence(),
         "a toggle that moves no pin queues nothing (the raw queue, not the \
@@ -223,20 +190,19 @@ fn cycle_hidden_show_with_unchanged_pins_queues_no_persistence() {
     );
 }
 
-/// The hide-side twin: both surfaces already unpinned via the pin buttons
-/// while still visible, then F9. The hide moves no pin — the false pins
-/// already persist the hidden restart state — so the toggle needs no
+/// The hide twin: the strip is already unpinned via the pin button while
+/// still visible, then F9. The hide moves no pin — the false pin already
+/// persists the hidden restart state — so the toggle needs no
 /// additional persistence and queues nothing.
 #[test]
-fn hide_with_already_unpinned_surfaces_queues_no_persistence() {
+fn hide_with_an_already_unpinned_strip_queues_no_persistence() {
     let mut state = create_test_input_state();
     state.toolbar_top_pinned = false;
-    state.toolbar_side_pinned = false;
     assert!(state.toolbar_visible());
 
     state.handle_action(Action::ToggleToolbar); // hide
     assert!(!state.toolbar_visible());
-    assert!(!state.toolbar_top_pinned && !state.toolbar_side_pinned);
+    assert!(!state.toolbar_top_pinned);
     assert!(
         !state.has_pending_toolbar_persistence(),
         "a toggle that moves no pin queues nothing (the raw queue, not the \
@@ -252,7 +218,7 @@ fn presenter_swallowed_toggle_leaves_pins_and_persistence_untouched() {
     assert!(!state.toolbar_visible());
 
     state.handle_action(Action::ToggleToolbar);
-    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+    assert!(state.toolbar_top_pinned);
     assert!(
         !state.has_pending_toolbar_persistence(),
         "a swallowed toggle must queue nothing (the raw queue, not the \
@@ -276,7 +242,7 @@ fn focus_and_presenter_transitions_never_queue_pin_persistence() {
     ] {
         state.handle_action(action);
         assert!(
-            state.toolbar_top_pinned && state.toolbar_side_pinned,
+            state.toolbar_top_pinned,
             "{action:?} must not touch the pin overrides"
         );
         assert!(
@@ -298,7 +264,7 @@ fn focus_and_presenter_transitions_never_queue_pin_persistence() {
 #[test]
 fn a_toggle_and_a_cycle_in_one_batch_both_keep_their_persistence() {
     let mut state = create_test_input_state();
-    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+    assert!(state.toolbar_top_pinned);
     state.handle_action(Action::CycleToolbarDisplay); // micro
     state.take_pending_toolbar_persistence(); // drain the setup cycle's write
 
@@ -310,7 +276,6 @@ fn a_toggle_and_a_cycle_in_one_batch_both_keep_their_persistence() {
         vec![
             PendingToolbarPersistence::Visibility {
                 previous_top_pinned: true,
-                previous_side_pinned: true,
             },
             PendingToolbarPersistence::DisplayMode {
                 previous: TopDisplayMode::Micro,
@@ -338,7 +303,6 @@ fn visibility_persistence_survives_a_capture_request() {
         state.take_pending_toolbar_persistence(),
         vec![PendingToolbarPersistence::Visibility {
             previous_top_pinned: true,
-            previous_side_pinned: true,
         }],
         "the toggle must survive the capture"
     );
@@ -355,7 +319,6 @@ fn visibility_persistence_survives_a_capture_request() {
         state.take_pending_toolbar_persistence(),
         vec![PendingToolbarPersistence::Visibility {
             previous_top_pinned: false,
-            previous_side_pinned: false,
         }],
         "the toggle must survive the capture"
     );
@@ -368,11 +331,11 @@ fn visibility_persistence_survives_a_capture_request() {
 #[test]
 fn a_toggle_burst_coalesces_to_the_original_rollback_baseline() {
     let mut state = create_test_input_state();
-    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+    assert!(state.toolbar_top_pinned);
 
     state.handle_action(Action::ToggleToolbar); // hide
     state.handle_action(Action::ToggleToolbar); // show: pins back where they started
-    assert!(state.toolbar_top_pinned && state.toolbar_side_pinned);
+    assert!(state.toolbar_top_pinned);
 
     assert!(
         state.has_pending_toolbar_persistence(),
@@ -399,7 +362,6 @@ fn an_exit_request_does_not_clear_queued_toolbar_persistence() {
         state.take_pending_toolbar_persistence(),
         vec![PendingToolbarPersistence::Visibility {
             previous_top_pinned: true,
-            previous_side_pinned: true,
         }],
         "the toggle must still be waiting for the teardown drain"
     );
@@ -428,9 +390,7 @@ fn hidden_cycle_toast_offers_a_show_action() {
     assert_eq!(toast.message, "Toolbar: hidden");
     let action = toast.action.as_ref().expect("show action chip");
     assert_eq!(action.label, "Show (F2)");
-    // Another cycle press from Hidden always lands on Full — unlike
-    // ToggleToolbar, which under the Panel escape hatch would hide a
-    // still-visible side palette instead.
+    // Another cycle press from Hidden always lands on Full.
     assert_eq!(action.action, Action::CycleToolbarDisplay);
 }
 
@@ -438,7 +398,7 @@ fn hidden_cycle_toast_offers_a_show_action() {
 fn hiding_the_last_chrome_surface_warns_with_recovery_bindings() {
     let mut state = create_test_input_state();
     refresh_status_hud_layout(&mut state);
-    // Pill default: F9 alone hides every toolbar surface. The status bar is
+    // F9 alone hides every toolbar surface. The status bar is
     // still up, so its hint chip covers recovery — no warning yet.
     state.handle_action(Action::ToggleToolbar);
     assert!(

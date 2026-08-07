@@ -3,7 +3,7 @@ use relm4::ComponentSender;
 use crate::messages::Message;
 use crate::models::{
     OverrideOption, TabId, TextField, ToggleField, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, ToolbarSideLayoutOption, ZoomChipDisplayOption,
+    ToolbarRebindModifierOption, ZoomChipDisplayOption,
 };
 
 use super::super::super::state::ConfiguratorApp;
@@ -13,8 +13,6 @@ use super::{note, options};
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let (layout_modes, layout_labels) =
         options(ToolbarLayoutModeOption::list(), |value| value.label());
-    let (side_layouts, side_layout_labels) =
-        options(ToolbarSideLayoutOption::list(), |value| value.label());
     let (zoom_chips, zoom_chip_labels) =
         options(ZoomChipDisplayOption::list(), |value| value.label());
     let (rebinds, rebind_labels) = options(ToolbarRebindModifierOption::ALL.to_vec(), |value| {
@@ -26,7 +24,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let mut page = PageBuilder::new(sender, TabId::Ui);
 
     page.group("Toolbar").custom(&note(
-        "These settings are configured defaults. Toolbar pins, position, display form, item visibility/order, pane state, and board pins changed in the overlay are saved separately as runtime preferences.",
+        "These settings are configured defaults. Toolbar pin, position, display form, item visibility/order, and board pins changed in the overlay are saved separately as runtime preferences.",
     ));
 
     page.group("Layout")
@@ -37,14 +35,6 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             layout_labels,
             |app| app.draft.ui_toolbar_layout_mode,
             Message::ToolbarLayoutModeChanged,
-        )
-        .combo_row(
-            "Side layout",
-            "Pill (the default) retires the side palette: drawing properties live in the top strip's style pill, canvas management in the status HUD and board picker, and Session/Settings in popovers on the top strip's overflow menu. Panel is the legacy escape hatch restoring the classic side palette; it is deprecated and planned for removal one release after the pill default.",
-            side_layouts,
-            side_layout_labels,
-            |app| app.draft.ui_toolbar_side_layout,
-            Message::ToolbarSideLayoutChanged,
         )
         .combo_row(
             "Zoom chip",
@@ -73,12 +63,6 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             "",
             |app| app.draft.ui_toolbar_top_pinned,
             |value| Message::ToggleChanged(ToggleField::UiToolbarTopPinned, value),
-        )
-        .switch_row(
-            "Configured default: pin side toolbar",
-            "",
-            |app| app.draft.ui_toolbar_side_pinned,
-            |value| Message::ToggleChanged(ToggleField::UiToolbarSidePinned, value),
         )
         .switch_row(
             "Use icon-only buttons",
@@ -212,16 +196,6 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             "Top offset Y (px)",
             |app| app.draft.ui_toolbar_top_offset_y.clone(),
             |value| Message::TextChanged(TextField::ToolbarTopOffsetY, value),
-        )
-        .entry_row(
-            "Side offset Y (px)",
-            |app| app.draft.ui_toolbar_side_offset.clone(),
-            |value| Message::TextChanged(TextField::ToolbarSideOffset, value),
-        )
-        .entry_row(
-            "Side offset X (px)",
-            |app| app.draft.ui_toolbar_side_offset_x.clone(),
-            |value| Message::TextChanged(TextField::ToolbarSideOffsetX, value),
         )
         .custom(&note(
             "Configured defaults. Dragging a toolbar in the overlay saves that position as a runtime preference; editing a value here takes over from the saved drag.",

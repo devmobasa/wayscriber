@@ -31,15 +31,13 @@ impl RelativePointerHandler for WaylandState {
 
         drag_log(|| {
             format!(
-                "relative drag: kind={:?}, delta=({:.3}, {:.3}), utime={}, offsets=({}, {})/({}, {})",
+                "relative drag: kind={:?}, delta=({:.3}, {:.3}), utime={}, offsets=({}, {})",
                 kind,
                 event.delta.0,
                 event.delta.1,
                 event.utime,
                 self.toolbar_top_offset(),
-                self.toolbar_top_offset_y(),
-                self.toolbar_side_offset_x(),
-                self.toolbar_side_offset()
+                self.toolbar_top_offset_y()
             )
         });
 

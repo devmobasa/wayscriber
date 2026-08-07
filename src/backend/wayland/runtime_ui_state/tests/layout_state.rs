@@ -23,11 +23,6 @@ fn committed_top_drag_writes_runtime_state_and_leaves_config_untouched() {
         stored_position(&runtime, InteractionSeedTarget::TopPosition),
         Some((42.5, -7.25))
     );
-    assert_eq!(
-        stored_position(&runtime, InteractionSeedTarget::SidePosition),
-        None,
-        "a top drag never claims the side position"
-    );
     assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
     let stored = fs::read_to_string(&runtime_path).unwrap();
     assert!(stored.contains("top_position"), "{stored}");
@@ -38,43 +33,7 @@ fn committed_top_drag_writes_runtime_state_and_leaves_config_untouched() {
     let mut restored = config_positions(&config);
     restarted.apply_startup_positions(&mut restored);
     assert_eq!(restored.top, (42.5, -7.25));
-    assert_eq!(restored.side, config_positions(&config).side);
     assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
-}
-
-#[test]
-fn committed_side_drag_stores_both_position_overrides_in_one_write() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let runtime_path = temp.path().join("runtime-ui.toml");
-    let config = Config::default();
-    let mut runtime = test_runtime(&config, &runtime_path);
-    let mut positions = config_positions(&config);
-    let accepted_before = runtime.controller.pipeline().latest_accepted();
-
-    assert!(runtime.begin_position_drag(MoveDragKind::Side, positions));
-    // A side drag reconciles the top strip's X base before it commits.
-    positions.top = (16.0, positions.top.1);
-    positions.side = (-30.0, 12.0);
-    assert!(matches!(
-        runtime.finish_position_drag(true, positions),
-        ToolbarRuntimeFinish::KeepPreview
-    ));
-    assert_eq!(
-        runtime.controller.pipeline().latest_accepted().get(),
-        accepted_before.get() + 1,
-        "both overrides settle through one accepted revision"
-    );
-    assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
-
-    assert_eq!(
-        stored_position(&runtime, InteractionSeedTarget::TopPosition),
-        Some((16.0, config.ui.toolbar.top_offset_y))
-    );
-    assert_eq!(
-        stored_position(&runtime, InteractionSeedTarget::SidePosition),
-        Some((-30.0, 12.0))
-    );
-    runtime.shutdown_blocking();
 }
 
 #[test]
@@ -149,15 +108,17 @@ fn a_drag_without_a_runtime_store_is_process_only_and_never_touches_config() {
     let seeded = config_positions(&config);
     let mut positions = seeded;
 
-    assert!(previews.begin_position_drag(MoveDragKind::Side, positions));
-    positions.top.0 = 42.0;
-    positions.side = (43.0, 44.0);
+    assert!(previews.begin_position_drag(MoveDragKind::Top, positions));
+    positions.top = (42.0, 43.0);
     let finish = previews.finish_position_drag(true);
     assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
     apply_finish(&mut input, &mut positions, finish);
 
-    assert_eq!(positions.top.0, 42.0, "the committed drag stays on screen");
-    assert_eq!(positions.side, (43.0, 44.0));
+    assert_eq!(
+        positions.top,
+        (42.0, 43.0),
+        "the committed drag stays on screen"
+    );
     assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
 }
 

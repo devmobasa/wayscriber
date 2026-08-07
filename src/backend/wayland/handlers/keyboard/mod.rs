@@ -31,8 +31,8 @@ impl KeyboardHandler for WaylandState {
         self.clear_xdg_close_guard();
         self.set_last_activation_serial(Some(serial));
         self.maybe_retry_activation(qh);
-        if let Some(target) = self.toolbar.focus_target_for_surface(surface) {
-            self.set_toolbar_focus_target(Some(target));
+        if self.toolbar.is_focusable_surface(surface) {
+            self.set_toolbar_focus_active(true);
         } else {
             self.clear_toolbar_focus();
         }

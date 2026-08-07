@@ -61,10 +61,7 @@ value = true
     input
         .boards
         .sync_pin_seeds_from_config(&config.resolved_boards());
-    let mut positions = ToolbarPositionSnapshot {
-        top: (0.0, 0.0),
-        side: (0.0, 0.0),
-    };
+    let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
 
     let refresh = runtime.refresh_config_seeds(&config, &mut input, &mut positions);
     assert!(refresh.applied);
@@ -94,10 +91,7 @@ value = true
     let config = Config::default();
     let mut input = input_from_config(&config);
     let mut runtime = test_runtime(&config, &runtime_path);
-    let mut positions = ToolbarPositionSnapshot {
-        top: (0.0, 0.0),
-        side: (0.0, 0.0),
-    };
+    let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
 
     let refresh = runtime.refresh_config_seeds(&config, &mut input, &mut positions);
     assert!(refresh.applied);
@@ -137,13 +131,7 @@ value = true
         runtime.restore_board_identity(&config, &mut input, board_id.clone(), pin_seed, pinned);
     assert!(finish.is_none());
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
-    runtime.apply_live_state(
-        &mut input,
-        &mut ToolbarPositionSnapshot {
-            top: (0.0, 0.0),
-            side: (0.0, 0.0),
-        },
-    );
+    runtime.apply_live_state(&mut input, &mut ToolbarPositionSnapshot { top: (0.0, 0.0) });
     assert!(!board_pinned(&input, &board_id));
     runtime.shutdown_blocking();
 
@@ -240,13 +228,7 @@ fn restored_board_pin_is_replayed_after_same_authority_recovery() {
         Some(PersistenceRecoveryResult::Recovered { .. })
     ));
     assert!(rebuild_live);
-    runtime.apply_live_state(
-        &mut input,
-        &mut ToolbarPositionSnapshot {
-            top: (0.0, 0.0),
-            side: (0.0, 0.0),
-        },
-    );
+    runtime.apply_live_state(&mut input, &mut ToolbarPositionSnapshot { top: (0.0, 0.0) });
     assert!(!board_pinned(&input, &board_id));
 
     let finishes = runtime.finish_deferred_board_pin_restores(&mut input);
@@ -292,13 +274,7 @@ fn deferred_board_pin_restore_is_discarded_when_reset_changes_authority() {
     assert!(drain.rebuild_live);
     assert!(runtime.controller.active_barrier().is_none());
     assert_ne!(runtime.controller.authority_epoch(), original_epoch);
-    runtime.apply_live_state(
-        &mut input,
-        &mut ToolbarPositionSnapshot {
-            top: (0.0, 0.0),
-            side: (0.0, 0.0),
-        },
-    );
+    runtime.apply_live_state(&mut input, &mut ToolbarPositionSnapshot { top: (0.0, 0.0) });
     assert!(!board_pinned(&input, &board_id));
 
     assert!(
@@ -329,10 +305,7 @@ fn delayed_delete_and_same_id_reuse_cannot_resurrect_old_board_pin() {
         runtime.restore_board_identity(&config, &mut input, "whiteboard".to_string(), false, false);
     assert!(finish.is_none());
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
-    let mut positions = ToolbarPositionSnapshot {
-        top: (0.0, 0.0),
-        side: (0.0, 0.0),
-    };
+    let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     runtime.apply_live_state(&mut input, &mut positions);
     assert!(!board_pinned(&input, "whiteboard"));
     runtime.shutdown_blocking();
@@ -367,10 +340,7 @@ fn stale_deferred_board_pin_is_rejected_after_authored_pin_reload() {
     input
         .boards
         .sync_pin_seeds_from_config(&config_b.resolved_boards());
-    let mut positions = ToolbarPositionSnapshot {
-        top: (0.0, 0.0),
-        side: (0.0, 0.0),
-    };
+    let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     let refresh = runtime.refresh_config_seeds(&config_b, &mut input, &mut positions);
     assert!(refresh.applied);
     assert!(board_pinned(&input, "whiteboard"));

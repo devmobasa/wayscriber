@@ -176,10 +176,7 @@ pub(super) const UI_GENERAL_TERMS: &[&str] = &[
 pub(super) const UI_TOOLBAR_TERMS: &[&str] = &[
     "toolbar",
     "layout mode",
-    "side layout",
-    "side palette",
     "style pill",
-    "panel",
     "zoom chip",
     "zoom chip display",
     "show zoom chip",
@@ -188,9 +185,7 @@ pub(super) const UI_TOOLBAR_TERMS: &[&str] = &[
     "shortcut edit click",
     "toolbar rebind modifier",
     "pin top toolbar",
-    "pin side toolbar",
     "configured default pin top toolbar",
-    "configured default pin side toolbar",
     "runtime preferences",
     "use icon-only buttons",
     "show extended colors",
@@ -212,8 +207,6 @@ pub(super) const UI_TOOLBAR_TERMS: &[&str] = &[
     "placement offsets",
     "top offset x",
     "top offset y",
-    "side offset x",
-    "side offset y",
 ];
 pub(super) const UI_TOOLBAR_VISIBILITY_TERMS: &[&str] = &[
     "toolbar visibility",
@@ -227,7 +220,7 @@ pub(super) const UI_TOOLBAR_VISIBILITY_TERMS: &[&str] = &[
     "show toolbar buttons",
     "visible toolbar buttons",
     "top toolbar",
-    "side toolbar",
+    "popover sections",
     "toolbar controls",
     "tools",
     "utilities",
@@ -238,7 +231,6 @@ pub(super) const UI_TOOLBAR_VISIBILITY_TERMS: &[&str] = &[
     "presets",
     "settings",
     "sessions",
-    "tool options",
 ];
 pub(super) const UI_STATUS_BAR_TERMS: &[&str] = &[
     "status bar",

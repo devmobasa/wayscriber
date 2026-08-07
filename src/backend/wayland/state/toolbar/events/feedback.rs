@@ -6,14 +6,12 @@ use crate::ui::toolbar::ToolbarEvent;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ToolbarPinChange {
     Top(bool),
-    Side(bool),
 }
 
 impl ToolbarPinChange {
     pub(super) fn from_event(event: &ToolbarEvent) -> Option<Self> {
         match event {
             ToolbarEvent::PinTopToolbar(pinned) => Some(Self::Top(*pinned)),
-            ToolbarEvent::PinSideToolbar(pinned) => Some(Self::Side(*pinned)),
             _ => None,
         }
     }
@@ -26,23 +24,11 @@ impl ToolbarPinChange {
             (Self::Top(false), ToolbarPinDurability::StartupPersistent) => {
                 "Top toolbar will be hidden at startup"
             }
-            (Self::Side(true), ToolbarPinDurability::StartupPersistent) => {
-                "Side toolbar will open at startup"
-            }
-            (Self::Side(false), ToolbarPinDurability::StartupPersistent) => {
-                "Side toolbar will be hidden at startup"
-            }
             (Self::Top(true), ToolbarPinDurability::LiveOnly) => {
                 "Top toolbar pinned for this run only"
             }
             (Self::Top(false), ToolbarPinDurability::LiveOnly) => {
                 "Top toolbar unpinned for this run only"
-            }
-            (Self::Side(true), ToolbarPinDurability::LiveOnly) => {
-                "Side toolbar pinned for this run only"
-            }
-            (Self::Side(false), ToolbarPinDurability::LiveOnly) => {
-                "Side toolbar unpinned for this run only"
             }
         }
     }

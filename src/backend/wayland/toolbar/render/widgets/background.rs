@@ -1,7 +1,4 @@
-use super::constants::{
-    COLOR_CARD_BACKGROUND, COLOR_PANEL_BACKGROUND, COLOR_PANEL_BORDER, RADIUS_CARD, RADIUS_PANEL,
-    set_color,
-};
+use super::constants::{COLOR_PANEL_BACKGROUND, COLOR_PANEL_BORDER, RADIUS_PANEL, set_color};
 use super::draw_round_rect;
 use crate::ui::theme::Rgba;
 /// Two-layer popover drop shadow approximating the GTK popover's
@@ -34,18 +31,6 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_panel_background(
         RADIUS_PANEL - 0.5,
     );
     let _ = ctx.stroke();
-}
-
-pub(in crate::backend::wayland::toolbar::render) fn draw_group_card(
-    ctx: &cairo::Context,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-) {
-    set_color(ctx, COLOR_CARD_BACKGROUND);
-    draw_round_rect(ctx, x, y, w, h, RADIUS_CARD);
-    let _ = ctx.fill();
 }
 
 /// Anchored popover panel: opaque background with a border and a caret

@@ -3,7 +3,6 @@ use std::time::Instant;
 use wayland_client::protocol::wl_surface;
 
 use super::structs::ToolbarSurfaceManager;
-use crate::backend::wayland::toolbar::ToolbarFocusTarget;
 use crate::backend::wayland::toolbar_intent::ToolbarIntent;
 use crate::ui::toolbar::ToolbarEvent;
 
@@ -15,9 +14,6 @@ impl ToolbarSurfaceManager {
     ) -> Option<(ToolbarIntent, bool)> {
         if self.top.is_surface(surface) {
             return self.top.hit_at(position.0, position.1);
-        }
-        if self.side.is_surface(surface) {
-            return self.side.hit_at(position.0, position.1);
         }
         None
     }
@@ -32,9 +28,6 @@ impl ToolbarSurfaceManager {
     ) -> Option<usize> {
         if self.top.is_surface(surface) {
             return self.top.quick_color_slot_at(position.0, position.1);
-        }
-        if self.side.is_surface(surface) {
-            return self.side.quick_color_slot_at(position.0, position.1);
         }
         None
     }
@@ -55,17 +48,6 @@ impl ToolbarSurfaceManager {
             }
             return self.top.drag_at(position.0, position.1);
         }
-        if self.side.is_surface(surface) {
-            if self.side_hover != Some(position) {
-                // Reset hover start time when position changes
-                if self.side_hover.is_none() {
-                    self.side_hover_start = Some(Instant::now());
-                }
-                self.side_hover = Some(position);
-                self.side.set_hover(Some(position));
-            }
-            return self.side.drag_at(position.0, position.1);
-        }
         None
     }
 
@@ -74,58 +56,28 @@ impl ToolbarSurfaceManager {
             self.top_hover = None;
             self.top_hover_start = None;
             self.top.set_hover(None);
-        } else if self.side.is_surface(surface) {
-            self.side_hover = None;
-            self.side_hover_start = None;
-            self.side.set_hover(None);
         }
     }
 
-    pub fn focus_target_for_surface(
-        &self,
-        surface: &wl_surface::WlSurface,
-    ) -> Option<ToolbarFocusTarget> {
-        if self.top.is_surface(surface) {
-            Some(ToolbarFocusTarget::Top)
-        } else if self.side.is_surface(surface) {
-            Some(ToolbarFocusTarget::Side)
-        } else {
-            None
-        }
+    /// Whether the surface is the top toolbar surface, i.e. whether keyboard
+    /// focus routing applies to it.
+    pub fn is_focusable_surface(&self, surface: &wl_surface::WlSurface) -> bool {
+        self.top.is_surface(surface)
     }
 
-    pub fn hovered_target(&self) -> Option<ToolbarFocusTarget> {
-        if self.top_hover.is_some() {
-            Some(ToolbarFocusTarget::Top)
-        } else if self.side_hover.is_some() {
-            Some(ToolbarFocusTarget::Side)
-        } else {
-            None
-        }
+    pub fn is_hovered(&self) -> bool {
+        self.top_hover.is_some()
     }
 
     pub fn clear_focus(&mut self) {
         self.top.clear_focus();
-        self.side.clear_focus();
     }
 
-    /// Drops side-toolbar focus only; used when a pane switch invalidates
-    /// the side hit list while top-toolbar focus stays meaningful.
-    pub fn clear_side_focus(&mut self) {
-        self.side.clear_focus();
+    pub fn focus_next(&mut self, reverse: bool) -> bool {
+        self.top.focus_next(reverse)
     }
 
-    pub fn focus_next(&mut self, target: ToolbarFocusTarget, reverse: bool) -> bool {
-        match target {
-            ToolbarFocusTarget::Top => self.top.focus_next(reverse),
-            ToolbarFocusTarget::Side => self.side.focus_next(reverse),
-        }
-    }
-
-    pub fn focused_event(&self, target: ToolbarFocusTarget) -> Option<ToolbarEvent> {
-        match target {
-            ToolbarFocusTarget::Top => self.top.focused_event(),
-            ToolbarFocusTarget::Side => self.side.focused_event(),
-        }
+    pub fn focused_event(&self) -> Option<ToolbarEvent> {
+        self.top.focused_event()
     }
 }

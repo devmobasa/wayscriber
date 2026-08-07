@@ -51,13 +51,10 @@ fn clamp_gtk_surface_offset(
 }
 
 impl WaylandState {
-    /// Base X the GTK top strip must use, matching the backend clamp and
-    /// overlap-push math (`inline_top_base_x` is toolbar-module private).
-    pub(in crate::backend::wayland) fn gtk_top_base_x(
-        &self,
-        snapshot: &crate::ui::toolbar::ToolbarSnapshot,
-    ) -> f64 {
-        self.inline_top_base_x(snapshot)
+    /// Base X the GTK top strip must use, matching the backend clamp math
+    /// (`inline_top_base_x` is toolbar-module private).
+    pub(in crate::backend::wayland) fn gtk_top_base_x(&self) -> f64 {
+        self.inline_top_base_x()
     }
 
     pub(in crate::backend::wayland) fn apply_gtk_top_offset(
@@ -98,47 +95,6 @@ impl WaylandState {
         }
     }
 
-    pub(in crate::backend::wayland) fn apply_gtk_side_offset(
-        &mut self,
-        x: f64,
-        y: f64,
-        surface_size: GtkToolbarSurfaceSize,
-        phase: GtkToolbarDragPhase,
-    ) {
-        if phase == GtkToolbarDragPhase::Start {
-            self.data.gtk_side_drag_rebase = None;
-            if !self.begin_toolbar_position_preview(MoveDragKind::Side) {
-                self.data.gtk_side_drag_blocked = true;
-                return;
-            }
-            self.begin_gtk_toolbar_drag_preview(GtkToolbarKind::Side);
-        } else if !self.toolbar_position_drag_update_allowed(MoveDragKind::Side) {
-            if phase.is_end() {
-                self.data.gtk_side_drag_rebase = None;
-                self.clamp_gtk_side_offset(surface_size);
-                self.finish_gtk_offset_change();
-            } else {
-                self.data.gtk_side_drag_rebase = Some(gtk_drag_rebase(
-                    (
-                        self.data.toolbar_side_offset_x,
-                        self.data.toolbar_side_offset,
-                    ),
-                    (x, y),
-                ));
-            }
-            return;
-        }
-        let (x, y) = apply_gtk_drag_rebase((x, y), self.data.gtk_side_drag_rebase);
-        self.data.toolbar_side_offset_x = x;
-        self.data.toolbar_side_offset = y;
-        self.mark_gtk_drag_preview_dirty();
-        if phase.is_end() {
-            self.data.gtk_side_drag_rebase = None;
-            self.clamp_gtk_side_offset(surface_size);
-            self.finish_gtk_offset_change();
-        }
-    }
-
     fn mark_gtk_drag_preview_dirty(&mut self) {
         if self.data.gtk_drag_preview.is_none() {
             return;
@@ -149,8 +105,7 @@ impl WaylandState {
     }
 
     fn clamp_gtk_top_offset(&mut self, surface_size: GtkToolbarSurfaceSize) {
-        let snapshot = self.toolbar_snapshot();
-        let base_x = self.inline_top_base_x(&snapshot);
+        let base_x = self.inline_top_base_x();
         let before = (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y);
         let Some((x, y)) = clamp_gtk_surface_offset(
             (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y),
@@ -159,6 +114,7 @@ impl WaylandState {
             (base_x, Self::TOP_BASE_MARGIN_TOP),
             (Self::TOP_MARGIN_RIGHT, Self::TOP_MARGIN_BOTTOM),
         ) else {
+            let snapshot = self.toolbar_snapshot();
             self.clamp_toolbar_offsets(&snapshot);
             return;
         };
@@ -176,44 +132,6 @@ impl WaylandState {
                 Self::TOP_BASE_MARGIN_TOP,
                 Self::TOP_MARGIN_RIGHT,
                 Self::TOP_MARGIN_BOTTOM,
-            )
-        });
-    }
-
-    fn clamp_gtk_side_offset(&mut self, surface_size: GtkToolbarSurfaceSize) {
-        let before = (
-            self.data.toolbar_side_offset_x,
-            self.data.toolbar_side_offset,
-        );
-        let Some((x, y)) = clamp_gtk_surface_offset(
-            (
-                self.data.toolbar_side_offset_x,
-                self.data.toolbar_side_offset,
-            ),
-            (self.surface.width(), self.surface.height()),
-            surface_size,
-            (Self::SIDE_BASE_MARGIN_LEFT, Self::SIDE_BASE_MARGIN_TOP),
-            (Self::SIDE_MARGIN_RIGHT, Self::SIDE_MARGIN_BOTTOM),
-        ) else {
-            let snapshot = self.toolbar_snapshot();
-            self.clamp_toolbar_offsets(&snapshot);
-            return;
-        };
-        self.data.toolbar_side_offset_x = x;
-        self.data.toolbar_side_offset = y;
-        drag_log(|| {
-            format!(
-                "gtk side final clamp before=({:.3},{:.3}) after=({x:.3},{y:.3}) viewport={}x{} surface={}x{} base=({:.3},{:.3}) end=({:.3},{:.3})",
-                before.0,
-                before.1,
-                self.surface.width(),
-                self.surface.height(),
-                surface_size.width,
-                surface_size.height,
-                Self::SIDE_BASE_MARGIN_LEFT,
-                Self::SIDE_BASE_MARGIN_TOP,
-                Self::SIDE_MARGIN_RIGHT,
-                Self::SIDE_MARGIN_BOTTOM,
             )
         });
     }

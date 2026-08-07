@@ -10,22 +10,20 @@ use crate::runtime_ui_state::{
     InteractionSeedTarget, InteractionSeedValue, ItemVisibilitySetting, PersistedTopDisplayMode,
     RuntimeOverride, RuntimeUiModel, RuntimeUiWireState, ToolbarPositionSeed, WirePassthrough,
 };
-use crate::ui::toolbar::{SidePane, ToolbarSideSection};
-
 /// Recognized `[toolbar]` overrides that carry a single scalar or table value.
 ///
-/// `top_position`, `side_position`, and `top_display_mode` were added after
-/// V1 shipped. They stay in V1 because an older build decodes them as unknown
-/// keys and preserves them verbatim through `WirePassthrough`, whereas a
-/// version bump would make that build treat the whole file as read-only.
-const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 26] = [
+/// `top_position` and `top_display_mode` were added after V1 shipped. They stay
+/// in V1 because an older build decodes them as unknown keys and preserves them
+/// verbatim through `WirePassthrough`, whereas a version bump would make that
+/// build treat the whole file as read-only.
+///
+/// The retired side fields (`side_pinned`, `side_minimized`, `side_pane`,
+/// `side_position`, and the `collapsed_sections` table) are deliberately absent:
+/// they now flow through `WirePassthrough::toolbar` as complete inert raw values.
+const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 22] = [
     ("top_pinned", InteractionSeedTarget::TopPinned),
-    ("side_pinned", InteractionSeedTarget::SidePinned),
     ("top_minimized", InteractionSeedTarget::TopMinimized),
-    ("side_minimized", InteractionSeedTarget::SideMinimized),
-    ("side_pane", InteractionSeedTarget::SidePane),
     ("top_position", InteractionSeedTarget::TopPosition),
-    ("side_position", InteractionSeedTarget::SidePosition),
     ("top_display_mode", InteractionSeedTarget::TopDisplayMode),
     ("layout_mode", InteractionSeedTarget::ToolbarLayoutMode),
     ("click_highlight", InteractionSeedTarget::ClickHighlight),
@@ -94,12 +92,6 @@ fn decode_toolbar(
             decode_override(value, target, &mut wire.model, &mut wire.passthrough)?;
         }
     }
-    decode_id_map(
-        toolbar.remove("collapsed_sections"),
-        |id| ToolbarSideSection::from_config_id(id).map(InteractionSeedTarget::CollapsedSection),
-        &mut wire.model,
-        &mut wire.passthrough,
-    )?;
     decode_id_map(
         toolbar.remove("item_visibility"),
         |id| {
@@ -212,10 +204,7 @@ fn decode_value(
     use InteractionSeedTarget as Target;
     match target {
         Target::TopPinned
-        | Target::SidePinned
         | Target::TopMinimized
-        | Target::SideMinimized
-        | Target::CollapsedSection(_)
         | Target::BoardPin(_)
         | Target::StatusBarInteractive
         | Target::StatusBarItem(_)
@@ -238,11 +227,6 @@ fn decode_value(
             .as_bool()
             .map(InteractionSeedValue::Bool)
             .ok_or_else(|| RuntimeUiWireError::new("boolean override has a non-boolean value")),
-        Target::SidePane => value
-            .as_str()
-            .and_then(SidePane::from_config_id)
-            .map(InteractionSeedValue::SidePane)
-            .ok_or_else(|| RuntimeUiWireError::new("side pane override has an unknown value")),
         Target::ItemVisibility(_) | Target::SectionVisibility(_) => match value.as_str() {
             Some("default") => Ok(InteractionSeedValue::Visibility(
                 ItemVisibilitySetting::Default,
@@ -258,7 +242,7 @@ fn decode_value(
             )),
         },
         Target::ItemOrder(group) => decode_order(*group, value),
-        Target::TopPosition | Target::SidePosition => decode_position(value),
+        Target::TopPosition => decode_position(value),
         Target::ToolbarLayoutMode => value
             .as_str()
             .and_then(layout_mode_from_wire_id)
@@ -339,7 +323,6 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
     root.insert("version".to_string(), Value::Integer(1));
 
     let mut toolbar = restore_table(&wire.passthrough.toolbar)?;
-    let mut collapsed = Table::new();
     let mut visibility = Table::new();
     let mut order = Table::new();
     let mut boards_pinned = Table::new();
@@ -356,18 +339,8 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
             InteractionSeedTarget::TopPinned => {
                 insert_recognized(&mut toolbar, "top_pinned", entry)
             }
-            InteractionSeedTarget::SidePinned => {
-                insert_recognized(&mut toolbar, "side_pinned", entry)
-            }
             InteractionSeedTarget::TopMinimized => {
                 insert_recognized(&mut toolbar, "top_minimized", entry)
-            }
-            InteractionSeedTarget::SideMinimized => {
-                insert_recognized(&mut toolbar, "side_minimized", entry)
-            }
-            InteractionSeedTarget::SidePane => insert_recognized(&mut toolbar, "side_pane", entry),
-            InteractionSeedTarget::CollapsedSection(section) => {
-                insert_recognized(&mut collapsed, section.config_id(), entry)
             }
             InteractionSeedTarget::ItemVisibility(item) => {
                 insert_recognized(&mut visibility, item.as_str(), entry)
@@ -378,9 +351,6 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
             InteractionSeedTarget::BoardPin(id) => insert_recognized(&mut boards_pinned, id, entry),
             InteractionSeedTarget::TopPosition => {
                 insert_recognized(&mut toolbar, "top_position", entry)
-            }
-            InteractionSeedTarget::SidePosition => {
-                insert_recognized(&mut toolbar, "side_position", entry)
             }
             InteractionSeedTarget::ToolbarLayoutMode => {
                 insert_recognized(&mut toolbar, "layout_mode", entry)
@@ -443,7 +413,6 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
             InteractionSeedTarget::ZoomChip => insert_recognized(&mut toolbar, "zoom_chip", entry),
         }
     }
-    insert_recognized(&mut toolbar, "collapsed_sections", Value::Table(collapsed));
     insert_recognized(&mut toolbar, "item_visibility", Value::Table(visibility));
     insert_recognized(&mut toolbar, "item_order", Value::Table(order));
     insert_recognized(
@@ -493,10 +462,7 @@ fn encode_value(
     match (target, value) {
         (
             InteractionSeedTarget::TopPinned
-            | InteractionSeedTarget::SidePinned
             | InteractionSeedTarget::TopMinimized
-            | InteractionSeedTarget::SideMinimized
-            | InteractionSeedTarget::CollapsedSection(_)
             | InteractionSeedTarget::BoardPin(_)
             | InteractionSeedTarget::StatusBarInteractive
             | InteractionSeedTarget::StatusBarItem(_)
@@ -518,9 +484,6 @@ fn encode_value(
             | InteractionSeedTarget::ZoomChip,
             InteractionSeedValue::Bool(value),
         ) => Ok(Value::Boolean(*value)),
-        (InteractionSeedTarget::SidePane, InteractionSeedValue::SidePane(value)) => {
-            Ok(Value::String(value.config_id().to_string()))
-        }
         (
             InteractionSeedTarget::ItemVisibility(_) | InteractionSeedTarget::SectionVisibility(_),
             InteractionSeedValue::Visibility(value),
@@ -548,10 +511,7 @@ fn encode_value(
                     .collect(),
             ))
         }
-        (
-            InteractionSeedTarget::TopPosition | InteractionSeedTarget::SidePosition,
-            InteractionSeedValue::Position(position),
-        ) => {
+        (InteractionSeedTarget::TopPosition, InteractionSeedValue::Position(position)) => {
             let mut table = Table::new();
             table.insert("x".to_string(), Value::Float(position.x.get()));
             table.insert("y".to_string(), Value::Float(position.y.get()));
@@ -618,13 +578,6 @@ fn order_group_wire_id(group: ToolbarItemOrderGroup) -> &'static str {
     match group {
         ToolbarItemOrderGroup::TopTools => "top_tools",
         ToolbarItemOrderGroup::TopControls => "top_controls",
-        ToolbarItemOrderGroup::SideSections => "side_sections",
-        ToolbarItemOrderGroup::Actions => "actions",
-        ToolbarItemOrderGroup::Pages => "pages",
-        ToolbarItemOrderGroup::Boards => "boards",
-        ToolbarItemOrderGroup::Presets => "presets",
-        ToolbarItemOrderGroup::ToolOptions => "tool_options",
-        ToolbarItemOrderGroup::Sessions => "sessions",
     }
 }
 
@@ -632,13 +585,9 @@ fn order_group_from_wire_id(value: &str) -> Option<ToolbarItemOrderGroup> {
     match value {
         "top_tools" => Some(ToolbarItemOrderGroup::TopTools),
         "top_controls" => Some(ToolbarItemOrderGroup::TopControls),
-        "side_sections" => Some(ToolbarItemOrderGroup::SideSections),
-        "actions" => Some(ToolbarItemOrderGroup::Actions),
-        "pages" => Some(ToolbarItemOrderGroup::Pages),
-        "boards" => Some(ToolbarItemOrderGroup::Boards),
-        "presets" => Some(ToolbarItemOrderGroup::Presets),
-        "tool_options" => Some(ToolbarItemOrderGroup::ToolOptions),
-        "sessions" => Some(ToolbarItemOrderGroup::Sessions),
+        // Retired panel-era order groups are unrecognized. The recognized-map
+        // decoder drops them on rewrite; authored config.toml values use the
+        // separate RetiredSetting document path instead.
         _ => None,
     }
 }

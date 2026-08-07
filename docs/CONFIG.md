@@ -14,14 +14,11 @@ All settings are optional. If the configuration file doesn't exist or settings a
 `config.toml` is the authored source for configured defaults. Some direct overlay customizations are
 saved separately so moving through the UI does not rewrite unrelated configuration:
 
-- top/side toolbar pin and minimized state (the toolbar show/hide keybinding updates both
-  remembered pins at once, so the next start matches what was on screen; implicit hides —
+- top toolbar pin and minimized state (the toolbar show/hide keybinding updates the
+  remembered pin, so the next start matches what was on screen; implicit hides —
   presenter mode, focus mode — remain run-only);
 - the top strip's display form reached with the cycle keybinding or the micro chip;
 - the top toolbar's dragged position;
-- the side toolbar's dragged position (a side drag also records the top strip's reconciled
-  horizontal offset, because moving the palette can change where the strip rests);
-- the active side pane and collapsed side sections;
 - individual toolbar item visibility and toolbar item order;
 - the toolbar layout preset and which named toolbar sections are shown;
 - the toolbar's own appearance and behaviour toggles — icons vs text labels, extra colours,
@@ -158,11 +155,10 @@ Both `config.toml` mechanisms leave a timestamped `.bak` beside the file.
 
 | You do this | It is saved to | By |
 | --- | --- | --- |
-| Drag the top or side toolbar | `runtime-ui.toml` | Runtime-UI writer |
+| Drag the top toolbar | `runtime-ui.toml` | Runtime-UI writer |
 | Cycle the top strip full ⇄ micro (<kbd>F2</kbd> or the micro chip) | `runtime-ui.toml` | Runtime-UI writer |
-| Show or hide the toolbars (<kbd>F9</kbd>) | `runtime-ui.toml` — both toolbar pins at once | Runtime-UI writer |
-| Pin, unpin, or minimize a toolbar | `runtime-ui.toml` | Runtime-UI writer |
-| Switch the side pane or collapse a side section | `runtime-ui.toml` | Runtime-UI writer |
+| Show or hide the toolbar (<kbd>F9</kbd>) | `runtime-ui.toml` — top pin | Runtime-UI writer |
+| Pin, unpin, or minimize the top toolbar | `runtime-ui.toml` | Runtime-UI writer |
 | Hide, show, or reorder an individual toolbar item | `runtime-ui.toml` | Runtime-UI writer |
 | Pin a board | `runtime-ui.toml` | Runtime-UI writer |
 | Switch layout mode (Simple/Regular/Advanced) in the overlay — the Settings segments or the strip's layout button | `runtime-ui.toml` | Runtime-UI writer |
@@ -373,7 +369,7 @@ drag_tool = "default"
 - **Eraser mode**: Use <kbd>Ctrl+Shift+E</kbd> to toggle brush vs stroke erasing
 - **Blur style**: Run **Cycle Blur Style** from the command palette to step through blur → pixelate → secure → black out (unbound by default; bind `cycle_blur_style`)
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
-- **Regular polygon sides**: Use the side toolbar Sides control (range: 3-12)
+- **Regular polygon sides**: Use the Shapes popover Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
 
 **Defaults:**
@@ -521,7 +517,7 @@ custom_redo_steps = 5
 
 **Notes:**
 - `undo_all_delay_ms` / `redo_all_delay_ms` drive the "Undo all (delay)" and "Redo all (delay)" toolbar actions.
-- `custom_section_enabled` reveals the Step buttons in the side toolbar; those buttons use the custom delays and step counts above.
+- `custom_section_enabled` reveals the Step buttons in the Canvas overflow popover; those buttons use the custom delays and step counts above.
 
 ### `[performance]` - Performance Tuning
 
@@ -956,8 +952,8 @@ restores the previous value on exit; while it is forced, the manual toggle is
 ignored (the same contract `enable_click_highlight` follows).
 
 **Toolbar mode options** (what `hide_toolbars` does to the top strip):
-- `"hidden"` (default): hide the top strip along with the side toolbars
-- `"micro"`: collapse the top strip to the 44px micro chip (active tool glyph in a ring of the current color); side toolbars still hide
+- `"hidden"` (default): hide the top strip
+- `"micro"`: collapse the top strip to the 44px micro chip (active tool glyph in a ring of the current color)
 
 **Tool behavior options:**
 - `"keep"`: Leave the active tool unchanged
@@ -983,7 +979,7 @@ Use `--light-draw-on` on key/button press and `--light-draw-off` on release for 
 
 ### `[ui.toolbar]` - Floating Toolbars
 
-Controls the top and side toolbars (<kbd>F9</kbd> toggles both; <kbd>F2</kbd> cycles the top strip full → micro → hidden).
+Controls the unified top toolbar (<kbd>F9</kbd> toggles visibility; <kbd>F2</kbd> cycles the top strip full → micro → hidden).
 
 ```toml
 [ui.toolbar]
@@ -1031,12 +1027,8 @@ layout_mode = "regular"
 # Show top toolbar on startup (pinned)
 top_pinned = true
 
-# Show side toolbar on startup (pinned)
-side_pinned = true
-
-# Start toolbars minimized to their edge restore tabs
+# Start the top toolbar minimized to its edge restore tab
 top_minimized = false
-side_minimized = false
 
 # Authored default display form of the top strip: "full" or "micro".
 # "hidden" is accepted but treated as "full" (startup visibility is
@@ -1044,20 +1036,12 @@ side_minimized = false
 # form to runtime-ui.toml instead of rewriting this value
 top_display_mode = "full"
 
-# Where the side-palette functions live: "pill" (default, supported) or
-# "panel" ("pill" retires the side palette — drawing props live in the style
-# pill, canvas management in the "Canvas…" overflow popover + bottom-right zoom
-# chip + status-bar board picker, presets in the top presets island, and
-# Session/Settings in top-strip overflow popovers; "panel" is the deprecated
-# legacy escape hatch, scheduled for removal one release after the pill default)
-side_layout = "pill"
-
-# Side-palette pane restored at startup: "draw", "canvas", "session", or "settings"
-# (legacy side_layout = "panel" only)
-side_active_pane = "draw"
-
-# Side-palette sections collapsed to their header row
-collapsed_sections = []
+# The unified top toolbar is the only layout. Older panel keys such as
+# side_layout, side_pinned, side_minimized, side_active_pane,
+# collapsed_sections, side_offset(_x), show_settings_section, and the
+# retired items.order lists (side_sections, actions, pages, boards,
+# presets, tool_options, sessions) remain readable and are preserved on
+# save, but they no longer affect the running overlay.
 
 # Use icons instead of text labels in toolbars
 use_icons = true
@@ -1068,7 +1052,7 @@ scale = 1.0
 # Show extended color palette in the top toolbar
 show_more_colors = false
 
-# Show basic actions (undo/redo/clear) in the side toolbar
+# Show basic actions (undo/redo/clear) in the Canvas overflow popover
 show_actions_section = true
 
 # Show advanced actions (undo all, delay, freeze, etc.)
@@ -1094,7 +1078,7 @@ show_pages_section = true
 # Show board controls section (prev/next/new/del)
 show_boards_section = true
 
-# Show presets section in the side toolbar
+# Show presets island in the top strip
 show_presets = true
 
 # Show Step Undo/Redo section
@@ -1103,14 +1087,10 @@ show_step_section = false
 # Keep text controls visible even when text is inactive
 show_text_controls = true
 
-# Deprecated compatibility mirror. Settings navigation is always reachable;
-# this value is preserved for older Wayscriber versions but is otherwise ignored.
-show_settings_section = true
-
-# Show delayed undo/redo sliders in the side toolbar
+# Show delayed undo/redo sliders in the Canvas popover's Step section
 show_delay_sliders = false
 
-# Show the marker opacity slider at the bottom of the side toolbar even when the marker tool isn't selected
+# Keep the marker opacity control available in the style pill even when the marker tool isn't selected
 show_marker_opacity_section = false
 
 # Enable context-aware UI that shows/hides controls based on the active tool
@@ -1122,12 +1102,10 @@ show_preset_toasts = true
 # Show cursor tool preview bubble
 show_tool_preview = false
 
-# Authored default toolbar offsets (layer-shell/inline). Dragging a toolbar
-# saves its position to runtime-ui.toml instead of rewriting these
+# Authored default top-toolbar offsets (layer-shell/inline). Dragging the
+# strip saves its position to runtime-ui.toml instead of rewriting these
 top_offset = 0.0
 top_offset_y = 0.0
-side_offset = 0.0
-side_offset_x = 0.0
 
 # Force inline toolbars even when layer-shell is available
 force_inline = false
@@ -1137,8 +1115,10 @@ force_inline = false
 rebind_modifier = "ctrl_shift"
 
 [ui.toolbar.items]
-# Hide individual toolbar items or whole side sections by stable ID.
+# Hide individual toolbar items or whole sections by stable ID.
 # Unknown IDs are warned about but preserved across toolbar saves.
+# Historically named side.* ids still customize top-toolbar controls
+# (Canvas/Session/Settings popovers and section visibility); do not rename them.
 # Section-level ids (side.group.*) are explicit overrides that beat the
 # layout-mode baseline and survive mode switches.
 hidden = [
@@ -1156,8 +1136,6 @@ shown = []
 [ui.toolbar.items.order]
 # Optional order overrides. Empty lists use the built-in order.
 # Known IDs omitted from a non-empty list append in the default order.
-# Side section ordering uses runtime block representatives; detailed sections
-# such as eraser-mode, polygon-sides, and font remain visibility-only IDs.
 top_tools = [
   "top.tool.select",
   "top.tool.pen",
@@ -1172,15 +1150,6 @@ top_controls = [
   "top.utility.clear-canvas",
   "top.utility.highlight",
 ]
-side_sections = [
-  "side.group.colors",
-  "side.group.presets",
-  "side.group.thickness",
-  "side.group.actions",
-  "side.group.pages",
-  "side.group.boards",
-  "side.group.settings",
-]
 ```
 
 **Behavior:**
@@ -1188,39 +1157,39 @@ side_sections = [
 - **Scale**: `scale` multiplies toolbar UI sizing (useful for HiDPI when output scale=1).
 - **Colors**: `show_more_colors` toggles the extended palette row.
 - **Layout**: `layout_mode` picks a preset complexity level; `mode_overrides` lets you customize each mode.
-- **Actions**: `show_actions_section` shows the basic actions row; `show_actions_advanced` reveals the extended actions.
-- **Zoom actions**: `show_zoom_actions` toggles the zoom controls in the Canvas drawer.
-- **Pages**: `show_pages_section` toggles the page navigation block.
-- **Boards**: `show_boards_section` toggles the board navigation block.
-- **Presets**: `show_presets` hides/shows the preset slots section.
+- **Actions**: `show_actions_section` controls the basic Undo/Redo/Clear group in the Canvas popover; `show_actions_advanced` controls the separate advanced action group.
+- **Zoom actions**: `show_zoom_actions` toggles the zoom controls in the Canvas popover.
+- **Pages**: `show_pages_section` toggles the page navigation block in the Canvas popover.
+- **Boards**: `show_boards_section` toggles the board navigation block in the Canvas popover.
+- **Presets**: `show_presets` hides/shows the top-strip preset slots.
 - **Text controls**: `show_text_controls` keeps font size/family visible even when text isn’t active.
-- **Multi-step undo/redo**: `show_step_section` hides/shows the Step Undo/Redo section.
-- **Settings**: the Settings pane is always reachable. The serialized `show_settings_section` key and matching per-mode override are deprecated compatibility fields and no longer hide navigation.
-- **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the side panel.
+- **Multi-step undo/redo**: `show_step_section` hides/shows the Step Undo/Redo block in the Canvas popover.
+- **Settings**: Settings is always reachable from the top-strip overflow popover.
+- **Delays**: `show_delay_sliders` shows the timed undo/redo-all sliders in the Canvas popover's Step section.
 - **Marker opacity**: the marker opacity slider appears when the marker tool is active; `show_marker_opacity_section` keeps it visible even when using other tools.
 - **Polygon tools**: Full mode shows Triangle, Parallelogram, Rhombus, Regular Polygon, and Freeform Polygon under the compact Polygons picker. Simple mode exposes them in the Shapes picker.
 - **Context-aware UI**: `context_aware_ui` shows/hides tool-specific controls (colors, thickness, arrow labels, etc.) based on the active tool; disable to always show all controls.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
-- **Offsets**: `top_offset`, `top_offset_y`, `side_offset`, `side_offset_x` are the authored default toolbar positions. Dragging a toolbar saves its position as a runtime preference in `runtime-ui.toml` and leaves these untouched; editing one here again takes over from the saved drag. A side drag also records the top strip's reconciled horizontal offset, because moving the palette can change where the strip rests.
+- **Offsets**: `top_offset` and `top_offset_y` are the authored default top-toolbar position. Dragging the strip saves its position as a runtime preference in `runtime-ui.toml` and leaves these untouched; editing one here again takes over from the saved drag.
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
 - **Shortcut editing**: hold `rebind_modifier` while clicking a bindable toolbar action to capture a replacement shortcut. The command palette also exposes edit, unbind, and reset controls for each configurable action (<kbd>Ctrl+E</kbd>, <kbd>Ctrl+Delete</kbd>, <kbd>Ctrl+R</kbd>). An accepted edit is written back to `config.toml` — only that action's `[keybindings]` entry, with the previous file copied to a timestamped `.bak` — so it survives a restart. The write runs on a background worker and the rebind takes effect as soon as it answers, so editing a shortcut never stalls drawing, and a chord the file has meanwhile given to another action is refused rather than applied and then taken back. Reset writes the shipped default out explicitly rather than removing the key, and when the action already resolves to that default — usually because the file omits it — there is nothing to write, so nothing is written and the toast says the action already uses the default shortcut. Conflicting shortcuts are rejected, naming the action that already owns the chord, and nothing is written; that includes a chord another action has been given in the file since this run started, which is refused rather than applied. If the file cannot be written the shortcut still changes for the run and the toast says the save failed. <kbd>Ctrl+Shift+E</kbd> on a palette row opens the same shortcut in the configurator's Keybindings screen.
-- **Backend**: `backend` (or `WAYSCRIBER_TOOLBAR_BACKEND`) picks the toolbar frontend. `auto` uses the GTK4 bars exactly where the built-in bars would own separate layer surfaces (layer-shell present, no forced inline, no overlay-layer canvas) and falls back to the built-in Cairo bars everywhere else, including at runtime if GTK fails to start. `gtk` warns when unsupported and then falls back; `builtin` always uses the Cairo bars.
-- **Pinned**: `top_pinned`/`side_pinned` are the authored defaults for whether each toolbar opens on startup. Pinning or unpinning in the overlay saves to `runtime-ui.toml` and leaves these values alone. The show/hide keybinding (`toggle_toolbar`, default <kbd>F9</kbd>) updates both remembered pins at once, so the next start matches what was on screen.
-- **Minimize**: the toolbar minimize button (the dash that replaced the X) collapses a bar to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized`/`side_minimized` are the authored defaults, and the state you leave a bar in survives restarts as a runtime preference in `runtime-ui.toml`. F9 still toggles full visibility.
-- **Micro mode**: `cycle_toolbar_display` (default <kbd>F2</kbd>) cycles the top strip full → micro → hidden. Micro collapses the strip to one 44px round chip showing the active tool inside a ring stroked in the current color (ring width follows stroke thickness); clicking the chip restores the full strip. The full/micro form persists as a runtime preference in `runtime-ui.toml`, seeded by the authored `top_display_mode`; the hidden step alone is runtime-only — the next start derives the strip's visibility from the remembered pins (which the F9 show/hide toggle updates durably), so a cycle-hidden strip comes back. Entering micro un-minimizes the strip; if a config sets both `top_minimized` and micro, the minimized restore tab wins.
+- **Backend**: `backend` (or `WAYSCRIBER_TOOLBAR_BACKEND`) picks the toolbar frontend. `auto` uses the GTK4 top bar exactly where the built-in bars would own a separate layer surface (layer-shell present, no forced inline, no overlay-layer canvas) and falls back to the built-in Cairo top bar everywhere else, including at runtime if GTK fails to start. `gtk` warns when unsupported and then falls back; `builtin` always uses the Cairo bars.
+- **Pinned**: `top_pinned` is the authored default for whether the top toolbar opens on startup. Pinning or unpinning in the overlay saves to `runtime-ui.toml` and leaves this value alone. The show/hide keybinding (`toggle_toolbar`, default <kbd>F9</kbd>) updates the remembered pin, so the next start matches what was on screen.
+- **Minimize**: the toolbar minimize button collapses the top strip to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized` is the authored default, and the state you leave the bar in survives restarts as a runtime preference in `runtime-ui.toml`. F9 still toggles full visibility.
+- **Micro mode**: `cycle_toolbar_display` (default <kbd>F2</kbd>) cycles the top strip full → micro → hidden. Micro collapses the strip to one 44px round chip showing the active tool inside a ring stroked in the current color (ring width follows stroke thickness); clicking the chip restores the full strip. The full/micro form persists as a runtime preference in `runtime-ui.toml`, seeded by the authored `top_display_mode`; the hidden step alone is runtime-only — the next start derives the strip's visibility from the remembered pin (which the F9 show/hide toggle updates durably), so a cycle-hidden strip comes back. Entering micro un-minimizes the strip; if a config sets both `top_minimized` and micro, the minimized restore tab wins.
 - **Idle fade**: the top-strip islands dim to 55% opacity after ~4 seconds without drawing activity and restore when the pointer approaches the toolbar (or on the next stroke). Open top-strip menus, the minimized tab, and the micro chip never fade. With `[ui] reduced_motion` the fade snaps instantly instead of animating; there is no separate config key.
-- **Side layout**: `side_layout` picks where the side-palette functions live, and the top-only re-homing is now complete. The default `"pill"` is the **supported layout**: the standalone side palette is fully retired — its surface is never created (layer-shell, inline fallback, or GTK) — and every pane has a concrete new home. Drawing properties (colors included) live in the top strip's contextual style pill; canvas management lives in the **"Canvas…" overflow popover** (opened from the top strip's `⋯` overflow — boards, pages, zoom, advanced, and step controls) plus the **bottom-right zoom chip** and the **status-bar board picker**; presets live in the **top-strip presets island**; and the Session/Settings panes live in popovers opened from the overflow menu (the "Session..." / "Settings..." entries; the popovers expose the same controls the panes did). `"panel"` is the **deprecated legacy escape hatch** restoring the classic four-pane side palette; it is deprecated and planned for removal one release after the pill default. Panel-mode users see a once-per-session notice pointing at these new homes. (The original plan document called this key `layout_mode = "panel"`, but `layout_mode` is an orthogonal complexity preset — Simple/Regular/Advanced — so the switch lives under its own `side_layout` key instead.)
-- **Side panes**: `side_active_pane` restores the last side-palette pane (`draw`, `canvas`, `session`, `settings`); `collapsed_sections` remembers which sections are collapsed to their header row (e.g. `["colors", "step-undo"]`). Both are authored seeds: as you use the overlay it records the current pane and collapsed set in `runtime-ui.toml` rather than rewriting these keys. Unknown ids are ignored at runtime but preserved across saves. Both keys (and `side_pinned`/`side_minimized`) only take effect under the deprecated legacy `side_layout = "panel"`; under the default pill layout they are inert.
-- **Session/Settings popovers**: under the default pill layout the top strip's overflow menu always carries "Session..." and "Settings..." entries (they also appear under the legacy panel layout — the popovers are transient quick surfaces, not a second pinned pane). Opening one closes the other and the overflow menu; Escape and clicking away dismiss it. Content taller than the popover cap scrolls internally.
+- **Top-only toolbar**: the unified top toolbar is the only supported layout. Drawing properties live in the contextual style pill; canvas management lives in the **"Canvas…" overflow popover**, the **bottom-right zoom chip**, and the **status-bar board picker**; presets live in the **top-strip presets island**; Session and Settings live in overflow popovers. Older panel keys (`side_layout`, `side_pinned`, `side_minimized`, `side_active_pane`, `collapsed_sections`, `side_offset`, `side_offset_x`, `show_settings_section`, and the retired `items.order.*` lists `side_sections`, `actions`, `pages`, `boards`, `presets`, `tool_options`, and `sessions`) remain readable, are preserved on unrelated saves, and surface as retired-setting diagnostics so they can be removed manually.
+- **Session/Settings popovers**: the top strip's overflow menu always carries "Session..." and "Settings..." entries. Opening one closes the other and the overflow menu; Escape and clicking away dismiss it. Content taller than the popover cap scrolls internally.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.
 - **Shown items**: `ui.toolbar.items.shown` pins sections visible against the layout-mode baseline. Together with `hidden` these are the single visibility store: the `show_*` booleans are written as read-only mirrors for older versions, and legacy configs fold into explicit overrides at load.
-- **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings pane, and the top strip's chrome-island layout button cycles Simple → Regular → Advanced one click at a time. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides. Switching modes from the overlay re-baselines the current run only; set the durable `layout_mode` in the configurator. Sections you pinned through `items.shown`/`items.hidden` keep their override under every mode.
-- **Item order**: `ui.toolbar.items.order.top_tools`, `top_controls`, and `side_sections` reorder supported toolbar items. `side_sections` orders runtime block representatives; `side.group.eraser-mode`, `side.group.polygon-sides`, and `side.group.font` can be hidden individually but are not independently orderable. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves.
-- **Live customization**: the overlay Customize tab supports show/hide, move up/down, and drag reorder for supported groups. The configurator supports the same saved order with up/down controls.
-- **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip) and `top.utility.undo`/`top.utility.redo` are hideable ids. `top.chrome.overflow` is a structural affordance that appears whenever its menu has content — which is always: the menu anchors Clear (`top.utility.clear-canvas`, unless that item is hidden), anything width pressure moves into it, and the non-hideable "Session..." / "Settings..." popover entries. The icon/text mode toggle lives in the Settings surface (the side palette's Settings pane under the legacy panel layout, the Settings popover under pill).
+- **Layout modes are non-destructive presets**: switching Simple/Regular/Advanced re-baselines section visibility without erasing your explicit toggles; Advanced is selectable from the overlay's Settings popover, and the top strip's chrome-island layout button cycles Simple → Regular → Advanced one click at a time. The section ids `side.group.actions-advanced`, `side.group.zoom-actions`, and `side.group.text-controls` carry the advanced/zoom/persistent-text overrides. Switching modes from the overlay re-baselines the current run only; set the durable `layout_mode` in the configurator. Sections you pinned through `items.shown`/`items.hidden` keep their override under every mode.
+- **Item order**: `ui.toolbar.items.order.top_tools` and `top_controls` reorder supported top-strip items. Unknown future IDs and wrong-group IDs are ignored at runtime but preserved across saves. Panel-era order lists (`actions`, `pages`, `boards`, `presets`, `tool_options`, `sessions`, `side_sections`) are retired: authored `config.toml` values stay as retired settings, while matching keys under `runtime-ui.toml`'s recognized `item_order` map are pruned on rewrite.
+- **Historical item IDs**: retained and removed `side.*` IDs are classified in the [toolbar item ID compatibility inventory](toolbar-item-id-compatibility.md). Retained spellings remain active configuration contracts even though the side palette is gone.
+- **Live customization**: the overlay Customize surface supports show/hide, move up/down, and drag reorder for supported top groups. The configurator supports the same saved order with up/down controls.
+- **Top strip items**: `top.group.quick-colors` (the swatch row + current-color chip) and `top.utility.undo`/`top.utility.redo` are hideable ids. `top.chrome.overflow` is a structural affordance that appears whenever its menu has content — which is always: the menu anchors Clear (`top.utility.clear-canvas`, unless that item is hidden), anything width pressure moves into it, and the non-hideable "Session..." / "Settings..." popover entries. The icon/text mode toggle lives in the Settings popover.
 - **Clear canvas**: Clear lives in the top strip's overflow (⋯) menu. A plain click clears and shows a short "Cleared — Undo?" toast; Shift+click clears instantly without the toast. The `clear_canvas` keyboard action is always instant and shows no toast.
-- **Recoloring a swatch**: right-clicking any quick-color swatch (style pill or side palette) opens the color picker bound to that palette slot, titled "Recolor &lt;slot&gt;". The swatch tracks the gradient live, OK applies the color to that slot and writes it back to `config.toml` — only that one `[[drawing.quick_colors]]` entry, with the previous file copied to a timestamped `.bak` — and Cancel/Escape restores it. Recoloring a slot the file only implies writes the palette out as far as that slot and no further, so the slots after it keep tracking the shipped defaults. If the file cannot be written the color still applies for the run and the toast says the save failed; picking the color the slot already paints writes nothing and says so. The slot keeps its label and shortcut, so R still selects the red slot after you point it at a different red. Recoloring the swatch you are currently drawing with moves the live color with it; recoloring any other slot leaves your current color alone. Left-clicking a swatch still just selects it, and the leftmost chip still opens the picker for the active tool's own color.
+- **Recoloring a swatch**: right-clicking any quick-color swatch in the style pill opens the color picker bound to that palette slot, titled "Recolor &lt;slot&gt;". The swatch tracks the gradient live, OK applies the color to that slot and writes it back to `config.toml` — only that one `[[drawing.quick_colors]]` entry, with the previous file copied to a timestamped `.bak` — and Cancel/Escape restores it. Recoloring a slot the file only implies writes the palette out as far as that slot and no further, so the slots after it keep tracking the shipped defaults. If the file cannot be written the color still applies for the run and the toast says the save failed; picking the color the slot already paints writes nothing and says so. The slot keeps its label and shortcut, so R still selects the red slot after you point it at a different red. Recoloring the swatch you are currently drawing with moves the live color with it; recoloring any other slot leaves your current color alone. Left-clicking a swatch still just selects it, and the leftmost chip still opens the picker for the active tool's own color.
 - **Restoring a swatch's shipped color**: while recoloring a slot, the picker adds a **Default** button next to OK/Cancel that loads the color wayscriber ships for that slot. It stages the color like any other pick — the swatch previews it, OK applies and saves it, Cancel backs out — so it is not a separate destructive action. The button only appears for the eleven built-in slots; extra slots you added past them have no shipped default, and the tool-color picker never shows it. Restoring sets the built-in value in your palette rather than deleting the entry, so the slot keeps its identity.
 - **Shapes popover options**: the Fill checkbox (`top.utility.fill`) remains available in the Shapes popover whenever that item is enabled, even while another tool is active, so it can configure the next fill-capable shape. The polygon side count appears only while Regular Polygon is active. These controls live in the popover instead of a permanently reserved mini-checkbox lane under the bar, keeping the bar 58px tall. The highlight-ring row still appears under the Highlight button, but only while the highlight tool is active.
 - **Screenshot toolbar button**: `top.utility.screenshot` is hidden by default; remove it from `ui.toolbar.items.hidden` or enable it in the configurator/overlay customization to show it.
@@ -1554,7 +1523,7 @@ Config values seed startup defaults. When `restore_tool_state = true`, the saved
 
 The configurator Session tab exposes the same distinction for recent named sessions: Clear Tool State preserves saved boards/history while removing only persisted tool settings; Clear Saved Data removes saved session files. Offline catalog actions are disabled while an overlay, manually started daemon, or background service is active. Use the command palette for the active overlay session.
 
-The overlay Session panel lives in the side toolbar's Settings drawer:
+The overlay Session panel lives in the top strip's overflow **"Session..."** popover:
 
 - `Open` loads an existing named session, saves dirty current data first when needed, and records the target in the recent catalog.
 - `Save As` writes the current overlay to another named session and switches the active target. It appends `.wayscriber-session` when no extension is supplied and asks before replacing existing session artifacts.

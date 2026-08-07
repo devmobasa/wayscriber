@@ -4,7 +4,7 @@
 //! toolbar target conversion, preview lifetimes, and the writer transport; UI
 //! models and `InputState` never see storage or controller details.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -17,7 +17,6 @@ use crate::config::{
 use crate::input::InputState;
 use crate::runtime_ui_state::*;
 use crate::ui::toolbar::model::ToolbarRuntimeUiPersistenceTarget;
-use crate::ui::toolbar::{SidePane, ToolbarSideSection};
 
 mod board;
 mod coordinator;
@@ -48,7 +47,6 @@ use lifecycle::RuntimeUiLifecycleState;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(in crate::backend::wayland) struct ToolbarPositionSnapshot {
     pub top: (f64, f64),
-    pub side: (f64, f64),
 }
 
 #[derive(Debug)]
