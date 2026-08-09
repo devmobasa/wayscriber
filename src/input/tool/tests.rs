@@ -163,6 +163,17 @@ fn descriptor_exposes_press_motion_and_drawing_behavior() {
 }
 
 #[test]
+fn only_freehand_pen_supports_pressure_thickness() {
+    for tool in Tool::ALL {
+        assert_eq!(
+            tool.supports_pressure_thickness(),
+            tool == Tool::Pen,
+            "unexpected pressure-thickness behavior for {tool:?}"
+        );
+    }
+}
+
+#[test]
 fn marker_opacity_helper_preserves_current_alpha_clamp() {
     assert_eq!(marker_color_with_opacity(color(1.0), 0.0).a, 0.05);
     assert_eq!(marker_color_with_opacity(color(1.0), 2.0).a, 0.9);

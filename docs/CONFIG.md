@@ -1463,6 +1463,7 @@ action = "toggle_radial_menu"
 **Notes:**
 - Requires the `tablet-input` feature at build time (enabled in default release builds).
 - Tablet input is enabled by default when the feature is compiled in; set `enabled = false` to opt out.
+- Pressure-to-thickness mapping applies only to pressure-sensitive freehand Pen strokes. Marker/Textmarker, Step Marker, and shape tools keep their selected sizes when used with a stylus.
 - `stylus_button` is the primary barrel button (`BTN_STYLUS` / 331); `stylus_button2` is the secondary barrel button (`BTN_STYLUS2` / 332).
 - Barrel button `action` values use normal action names, such as `toggle_radial_menu`, `undo`, and `redo`. Omit `action` to leave a button unbound.
 

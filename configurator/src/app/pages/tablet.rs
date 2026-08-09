@@ -39,7 +39,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         )
         .switch_row(
             "Enable pressure-to-thickness",
-            "",
+            "Freehand Pen strokes only",
             |app| app.draft.tablet_pressure_enabled,
             |value| Message::ToggleChanged(ToggleField::TabletPressureEnabled, value),
         )

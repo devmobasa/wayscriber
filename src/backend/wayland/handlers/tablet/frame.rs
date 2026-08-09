@@ -105,11 +105,13 @@ impl WaylandState {
         let first_pressure_sample =
             self.stylus_tip_down && self.stylus_pressure_thickness.is_none();
         let p01 = (pressure as f64) / 65535.0;
-        crate::input::tablet::apply_pressure_to_state(
+        if !crate::input::tablet::try_apply_pressure_to_state(
             p01,
             &mut self.input_state,
             self.tablet_settings,
-        );
+        ) {
+            return;
+        }
         if first_pressure_sample {
             self.input_state
                 .replace_active_drawing_pressure_samples(self.input_state.current_thickness);

@@ -1320,10 +1320,11 @@ custom_redo_steps = 5
 # Enable tablet/stylus input at runtime (set false to opt out)
 enabled = true
 
-# Map pressure to thickness
+# Map pressure to thickness for pressure-sensitive freehand Pen strokes.
+# Marker/Textmarker, Step Marker, and shape tools keep their selected sizes.
 pressure_enabled = true
 
-# Thickness range for pressure mapping
+# Freehand Pen thickness range for pressure mapping
 min_thickness = 1.0
 max_thickness = 8.0
 
