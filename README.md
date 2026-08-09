@@ -1103,7 +1103,9 @@ min_thickness = 1.0
 max_thickness = 8.0
 ```
 
-It works out of the box in default builds. Set `[tablet].enabled = false` in `config.toml` to opt out. To build without tablet support, drop only that feature (bare `--no-default-features` would also strip portal capture, tray, and the GTK toolbars): `cargo build --release --no-default-features --features portal,tray,toolbar-gtk`.
+Pressure controls the width of pressure-sensitive freehand Pen strokes. Marker/Textmarker, Step Marker, and shape tools keep their selected sizes when used with a stylus.
+
+Tablet input works out of the box in default builds. Set `[tablet].enabled = false` in `config.toml` to opt out. To build without tablet support, drop only that feature (bare `--no-default-features` would also strip portal capture, tray, and the GTK toolbars): `cargo build --release --no-default-features --features portal,tray,toolbar-gtk`.
 
 ---
 

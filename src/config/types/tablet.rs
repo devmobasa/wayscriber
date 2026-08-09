@@ -23,15 +23,15 @@ pub struct TabletInputConfig {
     #[serde(default = "default_tablet_enabled")]
     pub enabled: bool,
 
-    /// Enable pressure-to-thickness mapping.
+    /// Enable pressure-to-thickness mapping for pressure-sensitive freehand Pen strokes.
     #[serde(default = "default_tablet_pressure_enabled")]
     pub pressure_enabled: bool,
 
-    /// Minimum thickness when pressure is near 0.
+    /// Minimum freehand Pen thickness when pressure is near 0.
     #[serde(default = "default_tablet_min_thickness")]
     pub min_thickness: f64,
 
-    /// Maximum thickness when pressure is 1.0.
+    /// Maximum freehand Pen thickness when pressure is 1.0.
     #[serde(default = "default_tablet_max_thickness")]
     pub max_thickness: f64,
 

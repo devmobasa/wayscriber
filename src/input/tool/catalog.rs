@@ -497,4 +497,15 @@ impl Tool {
     pub(crate) fn uses_marker_opacity(self) -> bool {
         self.profile().show_marker_opacity()
     }
+
+    #[cfg_attr(not(feature = "tablet-input"), allow(dead_code))]
+    pub(crate) fn supports_pressure_thickness(self) -> bool {
+        matches!(
+            self.drawing_behavior(),
+            ToolDrawingBehavior::Path {
+                pressure: ToolPressureBehavior::OptionalPressureStroke,
+                ..
+            }
+        )
+    }
 }

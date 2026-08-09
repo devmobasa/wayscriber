@@ -29,10 +29,22 @@ impl Default for TabletSettings {
     }
 }
 
-/// Apply a normalized pressure value [0.0, 1.0] to the current thickness.
+/// Apply a normalized pressure value [0.0, 1.0] to a pressure-sensitive tool.
 pub fn apply_pressure_to_state(pressure01: f64, state: &mut InputState, settings: TabletSettings) {
-    if !settings.enabled || !settings.pressure_enabled {
-        return;
+    try_apply_pressure_to_state(pressure01, state, settings);
+}
+
+/// Apply pressure and report whether the active tool accepted the sample.
+pub(crate) fn try_apply_pressure_to_state(
+    pressure01: f64,
+    state: &mut InputState,
+    settings: TabletSettings,
+) -> bool {
+    if !settings.enabled
+        || !settings.pressure_enabled
+        || !state.active_tool().supports_pressure_thickness()
+    {
+        return false;
     }
 
     let p = pressure01.clamp(0.0, 1.0);
@@ -50,6 +62,7 @@ pub fn apply_pressure_to_state(pressure01: f64, state: &mut InputState, settings
     }
 
     state.set_pressure_thickness_for_active_tool(new_thickness);
+    true
 }
 
 #[cfg(test)]
@@ -105,7 +118,11 @@ mod tests {
         state.current_thickness = 3.0;
         state.needs_redraw = false;
 
-        apply_pressure_to_state(0.8, &mut state, TabletSettings::default());
+        assert!(!try_apply_pressure_to_state(
+            0.8,
+            &mut state,
+            TabletSettings::default()
+        ));
 
         assert_eq!(state.current_thickness, 3.0);
         assert!(!state.needs_redraw);
@@ -122,7 +139,7 @@ mod tests {
             max_thickness: 8.0,
         };
 
-        apply_pressure_to_state(0.8, &mut state, settings);
+        assert!(!try_apply_pressure_to_state(0.8, &mut state, settings));
 
         assert_eq!(state.current_thickness, 4.0);
         assert!(!state.needs_redraw);
@@ -139,13 +156,13 @@ mod tests {
             max_thickness: 6.0,
         };
 
-        apply_pressure_to_state(-1.0, &mut state, settings);
+        assert!(try_apply_pressure_to_state(-1.0, &mut state, settings));
         assert_eq!(state.current_thickness, 2.0);
         assert_eq!(state.thickness_for_tool(Tool::Pen), 2.0);
         assert!(state.needs_redraw);
 
         state.needs_redraw = false;
-        apply_pressure_to_state(2.0, &mut state, settings);
+        assert!(try_apply_pressure_to_state(2.0, &mut state, settings));
         assert_eq!(state.current_thickness, 6.0);
         assert_eq!(state.thickness_for_tool(Tool::Pen), 6.0);
         assert!(state.needs_redraw);
@@ -161,7 +178,7 @@ mod tests {
             max_thickness: MAX_STROKE_THICKNESS + 50.0,
         };
 
-        apply_pressure_to_state(1.0, &mut state, settings);
+        assert!(try_apply_pressure_to_state(1.0, &mut state, settings));
 
         assert_eq!(state.current_thickness, MAX_STROKE_THICKNESS);
         assert_eq!(state.thickness_for_tool(Tool::Pen), MAX_STROKE_THICKNESS);
@@ -180,9 +197,9 @@ mod tests {
 
         state.set_tool_override(Some(Tool::Pen));
         state.on_mouse_press(MouseButton::Left, 0, 0);
-        apply_pressure_to_state(0.0, &mut state, settings);
+        assert!(try_apply_pressure_to_state(0.0, &mut state, settings));
         state.on_mouse_motion(10, 0);
-        apply_pressure_to_state(1.0, &mut state, settings);
+        assert!(try_apply_pressure_to_state(1.0, &mut state, settings));
         state.on_mouse_motion(20, 0);
         state.on_mouse_release(MouseButton::Left, 20, 0);
 
@@ -192,6 +209,57 @@ mod tests {
         };
         let widths: Vec<f32> = points.iter().map(|(_, _, width)| *width).collect();
         assert_eq!(widths, vec![2.0, 2.0, 6.0]);
+    }
+
+    #[test]
+    fn marker_stylus_pressure_preserves_selected_thickness() {
+        let mut state = make_state();
+        let settings = TabletSettings {
+            enabled: true,
+            pressure_enabled: true,
+            min_thickness: 1.0,
+            max_thickness: 8.0,
+        };
+
+        state.set_tool_override(Some(Tool::Marker));
+        assert!(state.set_thickness(31.0));
+
+        assert!(!try_apply_pressure_to_state(0.05, &mut state, settings));
+        state.on_mouse_press(MouseButton::Left, 0, 0);
+        state.on_mouse_motion(10, 0);
+        state.on_mouse_release(MouseButton::Left, 20, 0);
+
+        assert_eq!(state.thickness_for_tool(Tool::Marker), 31.0);
+        let shape = &state.boards.active_frame().shapes[0].shape;
+        let Shape::MarkerStroke { thick, .. } = shape else {
+            panic!("expected marker stroke");
+        };
+        assert_eq!(*thick, 31.0);
+    }
+
+    #[test]
+    fn step_marker_stylus_pressure_preserves_selected_size() {
+        let mut state = make_state();
+        let settings = TabletSettings {
+            enabled: true,
+            pressure_enabled: true,
+            min_thickness: 1.0,
+            max_thickness: 8.0,
+        };
+
+        state.set_tool_override(Some(Tool::StepMarker));
+        assert!(state.set_thickness(30.0));
+
+        assert!(!try_apply_pressure_to_state(0.05, &mut state, settings));
+        state.on_mouse_press(MouseButton::Left, 20, 20);
+        state.on_mouse_release(MouseButton::Left, 20, 20);
+
+        assert_eq!(state.thickness_for_tool(Tool::StepMarker), 30.0);
+        let shape = &state.boards.active_frame().shapes[0].shape;
+        let Shape::StepMarker { label, .. } = shape else {
+            panic!("expected step marker");
+        };
+        assert_eq!(label.size, 30.0);
     }
 
     #[test]

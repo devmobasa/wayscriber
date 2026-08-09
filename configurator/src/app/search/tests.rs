@@ -243,6 +243,7 @@ fn exact_static_section_labels_match_their_sections() {
 fn exact_tablet_labels_match_tablet_section() {
     for query in [
         "enable pressure-to-thickness",
+        "freehand pen",
         "min thickness",
         "pressure thickness scale step",
     ] {
