@@ -1,0 +1,82 @@
+# The field `id`s below are a public API.
+#
+# https://wayscriber.com/report links here with query parameters that prefill
+# them (`?template=bug_report.yml&diagnostics=…`). Renaming or removing an id
+# silently drops the prefill for every already-shipped binary, so treat an id
+# change as a coupled change with `wayscriber-website/report/index.html`.
+name: Bug report
+description: Something broke or behaved wrong
+title: "[BUG] "
+labels: [bug]
+assignees: [devmobasa]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. You do not need to fill in every box —
+        what happened, and roughly how to see it happen, is already useful.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What were you doing, and what went wrong?
+      placeholder: I pressed my overlay hotkey and the screen stayed black.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+        3. …
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: >
+        In Wayscriber, open About → "Report a problem" (or "Copy diagnostics")
+        and paste here. It contains only your version, install source, desktop,
+        and enabled features.
+      render: text
+
+  - type: dropdown
+    id: compositor
+    attributes:
+      label: Compositor / desktop
+      options:
+        - Hyprland
+        - Sway
+        - GNOME
+        - KDE Plasma
+        - Niri
+        - River
+        - Wayfire
+        - COSMIC
+        - Other / not sure
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How did you install Wayscriber?
+      options:
+        - APT (deb)
+        - RPM
+        - AUR
+        - Nix
+        - Tarball
+        - Built from source
+        - Not sure
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: >
+        If you can, follow https://wayscriber.com/docs/troubleshooting/logs.html
+        and paste the output.
+      render: text

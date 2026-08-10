@@ -1,0 +1,49 @@
+# See the note at the top of `bug_report.yml`: field ids here are not prefilled
+# by the website today, but the same rule applies if that ever changes.
+name: Feature request
+description: Ask for something Wayscriber does not do yet
+title: "[FEATURE] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Requests are welcome when they are clear. If a request does not fit the
+        project or the timing, the answer may still be no — that is normal and
+        not personal. See
+        [How to Ask for Features](https://wayscriber.com/docs/ethos/asking.html).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: The problem, not the solution you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: The workflow you want
+      description: Walk through it step by step, as you would do it.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Why do the existing features not fit?
+      description: What did you try, and where did it fall short?
+
+  - type: input
+    id: environment
+    attributes:
+      label: Compositor and distro
+      placeholder: Hyprland 0.44 on Arch Linux
+
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Can you help?
+      options:
+        - label: I can test a build
+        - label: I can share screenshots or a short recording
+        - label: I could contribute a PR
