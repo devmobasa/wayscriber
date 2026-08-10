@@ -12,6 +12,7 @@ use super::{AboutWindowState, clipboard, icon, surface_size};
 /// How the footer acknowledges an action that has no visible result of its own.
 const COPIED_NOTICE: &str = "Copied to clipboard";
 const OPENED_NOTICE: &str = "Opened in your browser";
+const REPORTED_NOTICE: &str = "Diagnostics copied — paste them if the form asks";
 
 impl AboutWindowState {
     #[allow(clippy::too_many_arguments)]
@@ -130,6 +131,14 @@ impl AboutWindowState {
             AboutAction::CopyText(text) => {
                 clipboard::copy_text_to_clipboard(&text);
                 self.set_notice(COPIED_NOTICE);
+            }
+            // Copy as well as open: the URL carries the same diagnostics in its
+            // fragment, but a browser that never launches, or a form that drops
+            // the prefill, still leaves them one paste away.
+            AboutAction::ReportBug { url, diagnostics } => {
+                clipboard::copy_text_to_clipboard(&diagnostics);
+                clipboard::open_url(&url);
+                self.set_notice(REPORTED_NOTICE);
             }
             AboutAction::CheckForUpdates => self.begin_update_check(),
             AboutAction::Close => self.should_exit = true,

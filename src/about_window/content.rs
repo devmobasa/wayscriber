@@ -13,12 +13,23 @@ use crate::update_check::{
 /// need to send people to a code host to find them.
 const WEBSITE_URL: &str = "https://wayscriber.com";
 const DOCS_URL: &str = "https://wayscriber.com/docs/";
+/// The one URL the report path knows. The page behind it decides where reports
+/// actually go, so channels can be added or moved without another release —
+/// binaries already in the wild cannot be told about a new address.
+pub(super) const REPORT_URL: &str = "https://wayscriber.com/report";
 
 /// What activating a focusable element does.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum AboutAction {
     OpenUrl(String),
     CopyText(String),
+    /// Copy the diagnostics *and* open the report page, which also carries
+    /// them in its URL fragment: the clipboard is the fallback for whenever
+    /// the page or the form does not pick the fragment up.
+    ReportBug {
+        url: String,
+        diagnostics: String,
+    },
     CheckForUpdates,
     Close,
 }
@@ -35,7 +46,34 @@ pub(super) struct ButtonSpec {
 pub(super) struct LinkRow {
     pub(super) title: &'static str,
     pub(super) detail: String,
-    pub(super) url: String,
+    /// Rows carry their own action so adding one stays a single edit here;
+    /// `interaction.rs` only maps elements to it.
+    pub(super) action: AboutAction,
+}
+
+impl LinkRow {
+    fn opening(title: &'static str, detail: &str, url: String) -> Self {
+        Self {
+            title,
+            detail: detail.to_string(),
+            action: AboutAction::OpenUrl(url),
+        }
+    }
+
+    /// The report row, built from one snapshot of the diagnostics: the text
+    /// that reaches the clipboard and the text encoded into the URL fragment
+    /// are the same `String`, so they cannot drift apart if `report()` ever
+    /// stops being deterministic.
+    fn reporting(diagnostics: String) -> Self {
+        Self {
+            title: "Report a problem",
+            detail: "Opens wayscriber.com · your app details come along".to_string(),
+            action: AboutAction::ReportBug {
+                url: super::diagnostics::report_url(REPORT_URL, &diagnostics),
+                diagnostics,
+            },
+        }
+    }
 }
 
 /// Live state of the update row.
@@ -194,26 +232,23 @@ impl AboutContent {
             tagline: "Screen annotation for Wayland",
             version_line: format!("Version {version}"),
             links: vec![
-                LinkRow {
-                    title: "Website",
-                    detail: "wayscriber.com".to_string(),
-                    url: WEBSITE_URL.to_string(),
-                },
-                LinkRow {
-                    title: "Documentation",
-                    detail: "Setup, config, troubleshooting".to_string(),
-                    url: DOCS_URL.to_string(),
-                },
-                LinkRow {
-                    title: "Release notes",
-                    detail: "What changed in each version".to_string(),
-                    url: DEFAULT_NOTES_URL.to_string(),
-                },
-                LinkRow {
-                    title: "How to update",
-                    detail: "Steps for your install method".to_string(),
-                    url: update_instructions_url(),
-                },
+                LinkRow::opening("Website", "wayscriber.com", WEBSITE_URL.to_string()),
+                LinkRow::opening(
+                    "Documentation",
+                    "Setup, config, troubleshooting",
+                    DOCS_URL.to_string(),
+                ),
+                LinkRow::opening(
+                    "Release notes",
+                    "What changed in each version",
+                    DEFAULT_NOTES_URL.to_string(),
+                ),
+                LinkRow::opening(
+                    "How to update",
+                    "Steps for your install method",
+                    update_instructions_url(),
+                ),
+                LinkRow::reporting(super::diagnostics::report()),
             ],
             meta_lines,
             commit,
@@ -281,15 +316,54 @@ mod tests {
         AboutContent::from_parts("0.9.22", "51113dd1", Some("2026-07-20"), Some("apt"))
     }
 
+    /// The URL a row navigates to, whatever kind of action it carries.
+    fn target_url(link: &LinkRow) -> &str {
+        match &link.action {
+            AboutAction::OpenUrl(url) => url,
+            AboutAction::ReportBug { url, .. } => url,
+            other => panic!("link row {:?} does not navigate: {other:?}", link.title),
+        }
+    }
+
     #[test]
     fn links_stay_on_wayscriber_com() {
-        for link in content().links {
+        for link in &content().links {
+            let url = target_url(link);
             assert!(
-                link.url.starts_with("https://wayscriber.com"),
-                "unexpected link target: {}",
-                link.url
+                url.starts_with("https://wayscriber.com"),
+                "unexpected link target: {url}"
             );
         }
+    }
+
+    /// The report row is the whole point of the indirection: it must exist, it
+    /// must go to the stable `/report` page, and the text it copies must be
+    /// byte-for-byte the text the page decodes out of the fragment. Asserting
+    /// against the fragment rather than a second `report()` call keeps this
+    /// honest even if the diagnostics ever stop being deterministic.
+    #[test]
+    fn the_report_row_copies_exactly_what_it_sends() {
+        let link = content()
+            .links
+            .into_iter()
+            .find(|link| link.title == "Report a problem")
+            .expect("About offers a way to report a problem");
+
+        let AboutAction::ReportBug { url, diagnostics } = link.action else {
+            panic!("the report row must copy as well as open");
+        };
+
+        let fragment = url
+            .strip_prefix(&format!("{REPORT_URL}#d="))
+            .expect("the report row opens the stable page with a diagnostics fragment");
+        let decoded = crate::base64::decode_standard(fragment).expect("fragment is valid base64");
+
+        assert_eq!(
+            String::from_utf8(decoded).unwrap(),
+            diagnostics,
+            "the clipboard copy and the URL fragment must be one snapshot"
+        );
+        assert!(!diagnostics.is_empty(), "the row must carry diagnostics");
     }
 
     #[test]

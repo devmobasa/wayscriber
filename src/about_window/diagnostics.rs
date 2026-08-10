@@ -48,6 +48,24 @@ pub(super) fn report() -> String {
     format_report(&DiagnosticsEnv::capture(), compiled_features())
 }
 
+/// `<base>#d=<base64 of `diagnostics`>`, for handing the diagnostics to the
+/// report page without the user pasting anything.
+///
+/// The caller passes the text rather than this re-deriving it, so the copy that
+/// reaches the clipboard and the copy in the fragment are one snapshot.
+///
+/// A fragment, not a query string: browsers never send it to the server, so
+/// the diagnostics cannot land in wayscriber.com access logs. Base64 keeps the
+/// newlines intact; `+`, `/`, and `=` are all legal fragment characters and
+/// `atob()` on the page decodes the payload as-is.
+pub(super) fn report_url(base: &str, diagnostics: &str) -> String {
+    format!("{base}#d={}", encode_fragment(diagnostics))
+}
+
+fn encode_fragment(report: &str) -> String {
+    crate::base64::encode_standard(report.as_bytes())
+}
+
 /// Cargo features this binary was built with, which decide whether the tray,
 /// portal capture, GTK toolbars, and tablet input exist at all.
 fn compiled_features() -> Vec<&'static str> {
@@ -180,5 +198,23 @@ mod tests {
     #[test]
     fn captured_report_is_never_empty() {
         assert!(report().starts_with("Wayscriber "));
+    }
+
+    /// The website page decodes the fragment with `atob`, so it has to be
+    /// exactly the diagnostics text and nothing else — newlines and non-ASCII
+    /// included, which is what the page's `TextDecoder` step exists for.
+    #[test]
+    fn the_report_url_fragment_decodes_back_to_the_diagnostics() {
+        let diagnostics = "Wayscriber 1.0.0\nDesktop: Ünïcödé · Hyprland\nFeatures: none";
+
+        let url = report_url("https://wayscriber.com/report", diagnostics);
+
+        let (base, fragment) = url
+            .split_once("#d=")
+            .expect("report URL carries a #d= payload");
+        assert_eq!(base, "https://wayscriber.com/report");
+
+        let decoded = crate::base64::decode_standard(fragment).expect("fragment is valid base64");
+        assert_eq!(String::from_utf8(decoded).unwrap(), diagnostics);
     }
 }
