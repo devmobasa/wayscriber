@@ -47,10 +47,7 @@ pub(super) fn action_for(
 ) -> Option<AboutAction> {
     match element {
         Element::UpdateCard => update.action(),
-        Element::Link(index) => content
-            .links
-            .get(index)
-            .map(|link| AboutAction::OpenUrl(link.url.clone())),
+        Element::Link(index) => content.links.get(index).map(|link| link.action.clone()),
         Element::Button(index) => content
             .buttons()
             .get(index)
@@ -181,13 +178,31 @@ mod tests {
         );
         assert_eq!(
             action_for(Element::Link(0), &content, &update),
-            Some(AboutAction::OpenUrl(content.links[0].url.clone()))
+            Some(content.links[0].action.clone())
         );
         assert_eq!(
             action_for(Element::Close, &content, &update),
             Some(AboutAction::Close)
         );
         assert_eq!(action_for(Element::Link(99), &content, &update), None);
+    }
+
+    /// A row's action comes from the row itself, so a row that does more than
+    /// open a URL keeps working through the same one element list.
+    #[test]
+    fn a_row_can_carry_an_action_that_is_not_a_plain_link() {
+        let content = AboutContent::build();
+        let index = content
+            .links
+            .iter()
+            .position(|link| matches!(link.action, AboutAction::ReportBug { .. }))
+            .expect("one row reports a problem");
+
+        assert_eq!(
+            action_for(Element::Link(index), &content, &available()),
+            Some(content.links[index].action.clone())
+        );
+        assert!(focus_order(&content, &available()).contains(&Element::Link(index)));
     }
 
     #[test]

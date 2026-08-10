@@ -254,10 +254,9 @@ fn link_rows(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
             theme.accent_bright,
         );
 
-        let chevron_x = rect.0 + rect.2 - PADDING - CHEVRON_SIZE / 2.0;
         draw_chevron(
             ctx,
-            chevron_x,
+            chevron_x(*rect),
             rect.1 + rect.3 / 2.0,
             CHEVRON_SIZE,
             if state.is_highlighted() {
@@ -267,8 +266,7 @@ fn link_rows(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
             },
         );
 
-        let text_left = rect.0 + PADDING;
-        let max_width = (chevron_x - 8.0 - text_left).max(0.0);
+        let (text_left, max_width) = row_text_bounds(*rect);
         label(
             ctx,
             title_style,
@@ -288,6 +286,18 @@ fn link_rows(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
             &fit(ctx, &link.detail, detail_style, max_width),
         );
     }
+}
+
+fn chevron_x(rect: Rect) -> f64 {
+    rect.0 + rect.2 - PADDING - CHEVRON_SIZE / 2.0
+}
+
+/// Where a link row's text starts and how wide it may be before it runs into
+/// the chevron. Shared with the test that keeps row wording inside the dialog's
+/// fixed width.
+fn row_text_bounds(rect: Rect) -> (f64, f64) {
+    let text_left = rect.0 + PADDING;
+    (text_left, (chevron_x(rect) - 8.0 - text_left).max(0.0))
 }
 
 fn meta_lines(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
@@ -425,6 +435,34 @@ mod tests {
         )
         .unwrap();
         cairo::Context::new(&surface).unwrap()
+    }
+
+    /// The dialog is a fixed width, so row wording has to be chosen to fit it.
+    /// An ellipsis here means a row's text was written without checking.
+    #[test]
+    fn link_row_wording_fits_without_being_ellipsized() {
+        let content = AboutContent::build();
+        let plan = layout::plan(&content);
+        let ctx = context(&plan);
+
+        let title_style = style(ROW_TITLE_SIZE, cairo::FontWeight::Normal);
+        let detail_style = style(DETAIL_SIZE, cairo::FontWeight::Normal);
+
+        for (rect, link) in plan.link_rows.iter().zip(content.links.iter()) {
+            let (_, max_width) = row_text_bounds(*rect);
+
+            assert_eq!(
+                fit(&ctx, link.title, title_style, max_width),
+                link.title,
+                "row title does not fit"
+            );
+            assert_eq!(
+                fit(&ctx, &link.detail, detail_style, max_width),
+                link.detail,
+                "detail of the {:?} row does not fit",
+                link.title
+            );
+        }
     }
 
     #[test]

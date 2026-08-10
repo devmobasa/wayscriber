@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Not sure it's a bug? Ask first
+    url: https://github.com/devmobasa/wayscriber/discussions
+    about: Questions and "is this expected?" go here.
+  - name: Report without a GitHub account
+    url: https://wayscriber.com/report
+    about: The website lists every way to reach the project.

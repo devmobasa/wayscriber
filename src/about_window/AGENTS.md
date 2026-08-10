@@ -23,6 +23,10 @@
 - Chrome colors come from `crate::ui::theme`, never hardcoded literals.
 - Every outbound link points at wayscriber.com (no code-host links); the update
   card never installs anything.
+- Nothing leaves the machine without the user asking. "Report a problem" copies
+  the diagnostics and opens a page; it never submits anything.
+- Diagnostics ride in the URL *fragment* (`#d=<base64>`), never a query string,
+  so they cannot reach wayscriber.com access logs.
 - The window is sized from `layout::plan`, so adding a row must not need a
   constant edit elsewhere.
 - Blocking work (the update fetch) runs in the event loop, never in a handler.
@@ -31,6 +35,11 @@
 - About dialog changes may affect app metadata, clipboard behavior, docs, and Wayland handler dependencies.
 - Update-status wording is shared with `src/update_check/`; the dialog only
   reads its cache.
+- `REPORT_URL` is a contract with `wayscriber-website/report/index.html`, which
+  decodes the `#d=` fragment and forwards it into the GitHub issue form's
+  `diagnostics` field (`.github/ISSUE_TEMPLATE/bug_report.yml`). Released
+  binaries cannot be told about a new address, so the page moves the channel,
+  never the constant.
 
 ## Validation
 - Add focused tests if logic becomes testable (`content`, `layout`,
