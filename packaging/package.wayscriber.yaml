@@ -122,6 +122,10 @@ overrides:
       - wl-clipboard
       - grim
       - slurp
+    # Screen text recognition is opt-in (no default shortcut, hidden toolbar
+    # button), so the engine and its language data are not a hard dependency.
+    recommends:
+      - tesseract-ocr
   rpm:
     depends:
       # Keep the glibc floor aligned with MAX_GLIBC_VERSION in tools/package.sh.
@@ -135,5 +139,8 @@ overrides:
       - wl-clipboard
       - grim
       - slurp
+    recommends:
+      - tesseract
+      - tesseract-langpack-eng
     rpm:
       arch: x86_64

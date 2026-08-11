@@ -121,6 +121,7 @@ impl WindowHandler for WaylandState {
         self.zoom
             .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.cancel_eyedropper_if_source_missing();
+        self.cancel_ocr_if_source_missing();
 
         let output_transform = self
             .surface

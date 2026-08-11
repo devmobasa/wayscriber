@@ -43,6 +43,7 @@ impl WaylandState {
             self.finish_pending_eyedropper_capture(
                 crate::input::state::EyedropperCaptureSource::Frozen,
             );
+            self.finish_pending_ocr_capture(crate::input::state::OcrCaptureSource::Frozen);
         }
         if self.zoom.take_capture_done() {
             log::info!(
@@ -54,6 +55,7 @@ impl WaylandState {
             self.finish_pending_eyedropper_capture(
                 crate::input::state::EyedropperCaptureSource::Zoom,
             );
+            self.finish_pending_ocr_capture(crate::input::state::OcrCaptureSource::Zoom);
         }
     }
 

@@ -586,6 +586,10 @@ pub struct InputState {
         crate::input::state::core::EyedropperUiState,
     /// Pending eyedropper activation request for the Wayland backend.
     pub(in crate::input::state::core) pending_eyedropper_toggle: bool,
+    /// Screen text recognition (OCR) region-selector lifecycle.
+    pub(in crate::input::state::core) ocr_ui_state: crate::input::state::core::OcrUiState,
+    /// Pending `Copy text from screen` request for the Wayland backend.
+    pub(in crate::input::state::core) pending_ocr_request: bool,
     /// Whether zoom mode is currently active
     pub(in crate::input::state::core) zoom_active: bool,
     /// Whether zoom view is locked

@@ -292,6 +292,8 @@ impl InputState {
             pending_frozen_toggle: false,
             eyedropper_ui_state: crate::input::state::core::EyedropperUiState::Inactive,
             pending_eyedropper_toggle: false,
+            ocr_ui_state: crate::input::state::core::OcrUiState::Inactive,
+            pending_ocr_request: false,
             zoom_active: false,
             zoom_locked: false,
             zoom_scale: 1.0,

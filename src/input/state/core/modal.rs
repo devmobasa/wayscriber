@@ -135,18 +135,49 @@ impl InputState {
     pub fn modal_owns_text_input(&self) -> bool {
         self.engaged_modal().is_some()
             // The keybinding capture chord can be armed after the palette
-            // closes, and the eyedropper is not a popup surface; both still
-            // own the keyboard.
+            // closes, and the screen-region modals are not popup surfaces;
+            // all of them still own the keyboard.
             || self.command_palette_is_engaged()
-            || self.eyedropper_is_engaged()
+            || self.screen_modal_is_engaged()
     }
 
     /// Modal paths whose editing/repeat behavior must not be driven by the
     /// backend's canvas-oriented manual repeat timer.
     pub fn modal_blocks_canvas_key_repeat(&self) -> bool {
         self.command_palette_is_engaged()
+            // A screen-region modal can open from the toolbar, the command
+            // palette, or a mouse path while a canvas key is still held. It
+            // swallows every key press it receives, so leaving the repeat timer
+            // armed would keep feeding the canvas behind the selector.
+            || self.screen_modal_is_engaged()
             || ModalSurface::ALL
                 .into_iter()
                 .any(|surface| surface.blocks_canvas_key_repeat() && self.modal_is_open(surface))
+    }
+
+    /// Whether either screen-region modal — the eyedropper or the OCR region
+    /// selector — has been asked for, including while it still waits on a
+    /// capture.
+    ///
+    /// This is the *keyboard* boundary: the key that requested the modal is the
+    /// last one the canvas sees, and every press from then on is swallowed, so
+    /// key repeat, IME ownership, and stylus barrel actions all stop here.
+    ///
+    /// It is deliberately not the pen boundary — see
+    /// [`Self::screen_modal_is_active`].
+    pub(crate) fn screen_modal_is_engaged(&self) -> bool {
+        self.eyedropper_is_engaged() || self.ocr_is_engaged()
+    }
+
+    /// Whether a screen-region modal is on screen and owns pointer input.
+    ///
+    /// The *pen* boundary, and narrower than [`Self::screen_modal_is_engaged`]:
+    /// while a modal is still waiting on its capture there is nothing drawn
+    /// over the canvas, and every pointer, touch, and stylus path still routes
+    /// to drawing — so a stroke started during that wait is a real stroke and
+    /// keeps its pressure. Activation cancels it; a capture that fails or is
+    /// cancelled first leaves it intact.
+    pub(crate) fn screen_modal_is_active(&self) -> bool {
+        self.eyedropper_is_active() || self.ocr_is_active()
     }
 }

@@ -17,4 +17,4 @@ mod tests;
 
 pub(crate) use client::{BrokerChild, current, start_for_runtime};
 pub(crate) use server::run_internal_broker_if_requested;
-pub(crate) use wire::{BrokerOutput, HelperKind, HelperLifetime};
+pub(crate) use wire::{BrokerOutput, HelperKind, HelperLifetime, STDOUT_CAP_EXCEEDED};

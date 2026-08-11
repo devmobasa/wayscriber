@@ -16,6 +16,7 @@ pub(crate) enum TopToolbarUtility {
     Text,
     StickyNote,
     Screenshot,
+    Ocr,
     Highlight,
 }
 
@@ -25,6 +26,7 @@ impl TopToolbarUtility {
             TopUtilityButton::Text => Some(Self::Text),
             TopUtilityButton::StickyNote => Some(Self::StickyNote),
             TopUtilityButton::Screenshot => Some(Self::Screenshot),
+            TopUtilityButton::Ocr => Some(Self::Ocr),
             TopUtilityButton::Highlight => Some(Self::Highlight),
             TopUtilityButton::ClearCanvas | TopUtilityButton::IconMode => None,
         }
@@ -64,6 +66,8 @@ pub(crate) enum TopToolbarIcon {
     Text,
     StickyNote,
     Screenshot,
+    /// Screen text recognition: a scan frame around three text lines.
+    Ocr,
     Highlight,
     ClearCanvas,
     Undo,
@@ -109,6 +113,7 @@ pub(super) fn utility_event(
         TopToolbarUtility::Text => ToolbarEvent::EnterTextMode,
         TopToolbarUtility::StickyNote => ToolbarEvent::EnterStickyNoteMode,
         TopToolbarUtility::Screenshot => ToolbarEvent::CaptureScreenshot,
+        TopToolbarUtility::Ocr => ToolbarEvent::CopyTextFromScreen,
         TopToolbarUtility::Highlight => {
             ToolbarEvent::ToggleAllHighlight(!snapshot.any_highlight_active)
         }
@@ -120,6 +125,7 @@ pub(super) fn utility_action(utility: TopToolbarUtility) -> Action {
         TopToolbarUtility::Text => Action::EnterTextMode,
         TopToolbarUtility::StickyNote => Action::EnterStickyNoteMode,
         TopToolbarUtility::Screenshot => Action::CaptureSelection,
+        TopToolbarUtility::Ocr => Action::CopyTextFromScreen,
         TopToolbarUtility::Highlight => Action::ToggleHighlightTool,
     }
 }
@@ -127,6 +133,7 @@ pub(super) fn utility_action(utility: TopToolbarUtility) -> Action {
 pub(super) fn utility_short_label(utility: TopToolbarUtility) -> &'static str {
     match utility {
         TopToolbarUtility::Screenshot => "Shot",
+        TopToolbarUtility::Ocr => "Copy text",
         TopToolbarUtility::Highlight => "Highlight",
         _ => action_short_label(utility_action(utility)),
     }

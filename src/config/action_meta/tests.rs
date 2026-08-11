@@ -258,6 +258,7 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::ExportBoardPdfFile,
     Action::ExportAllBoardsPdfFile,
     Action::OpenCaptureFolder,
+    Action::CopyTextFromScreen,
     Action::ToggleFrozenMode,
     Action::ZoomIn,
     Action::ZoomOut,

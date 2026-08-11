@@ -10,7 +10,7 @@ use crate::backend::wayland::state::{
 };
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
-use crate::input::state::HelpOverlayPressSource;
+use crate::input::state::{HelpOverlayPressSource, OcrInputSource};
 use crate::ui::ZoomChipPress;
 
 impl TouchHandler for WaylandState {
@@ -114,6 +114,11 @@ impl WaylandState {
         }
 
         let target = self.active_touch.target();
+        // A cancelled sequence never produces a release, so a region drag it
+        // started has to end here — otherwise the selector, and any freeze it
+        // owns, would outlive the touch that opened it. A region another device
+        // is dragging is untouched.
+        self.cancel_ocr_selection_from(OcrInputSource::Touch);
         self.set_pending_toast_press(None);
         self.set_pending_status_hud_press(false);
         self.set_pending_zoom_chip_press(ZoomChipPress::None);
@@ -202,6 +207,26 @@ impl WaylandState {
             // a sequence whose release/cancel was not delivered.
             self.input_state
                 .clear_help_overlay_press_for(HelpOverlayPressSource::Touch);
+        }
+
+        if self.input_state.ocr_is_active() {
+            let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
+            let inline_hit = target == TouchTarget::Overlay
+                && inline_active
+                && self.inline_toolbar_motion(screen_position);
+            if target == TouchTarget::Toolbar || inline_hit {
+                self.cancel_ocr();
+            } else if target == TouchTarget::Overlay {
+                self.begin_ocr_selection(
+                    OcrInputSource::Touch,
+                    screen_position.0,
+                    screen_position.1,
+                );
+                // Unlike the one-shot eyedropper sample, an OCR region is a
+                // drag: report the real target so motion and release still
+                // resolve to screen coordinates and reach the selector.
+                return TouchTarget::Overlay;
+            }
         }
 
         if self.input_state.eyedropper_is_active() {
@@ -333,6 +358,17 @@ impl WaylandState {
         let screen_y = screen_position.1.round() as i32;
         self.set_current_mouse(screen_x, screen_y);
 
+        if self.input_state.ocr_is_active() {
+            if target == TouchTarget::Overlay {
+                self.update_ocr_selection(
+                    OcrInputSource::Touch,
+                    screen_position.0,
+                    screen_position.1,
+                );
+            }
+            return;
+        }
+
         if self.input_state.eyedropper_is_active() {
             if target == TouchTarget::Overlay {
                 self.update_eyedropper_hover(screen_position.0, screen_position.1);
@@ -412,6 +448,15 @@ impl WaylandState {
         position: (f64, f64),
         target: TouchTarget,
     ) {
+        if self.input_state.ocr_is_active() {
+            if let Some((x, y)) = self.touch_screen_position(surface, position, target) {
+                self.finish_ocr_selection(OcrInputSource::Touch, x, y);
+            } else {
+                self.cancel_ocr_selection_from(OcrInputSource::Touch);
+            }
+            return;
+        }
+
         if self.take_suppress_next_release() {
             self.set_pending_toast_press(None);
             self.set_pending_status_hud_press(false);

@@ -57,6 +57,12 @@ impl InputState {
         true
     }
 
+    pub(super) fn apply_toolbar_copy_text_from_screen(&mut self) -> bool {
+        self.handle_action(Action::CopyTextFromScreen);
+        self.close_top_toolbar_menus();
+        true
+    }
+
     pub(super) fn apply_toolbar_open_command_palette(&mut self) -> bool {
         self.handle_action(Action::ToggleCommandPalette);
         self.close_top_toolbar_menus();

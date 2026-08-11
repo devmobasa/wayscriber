@@ -49,6 +49,10 @@ impl KeybindingsConfig {
             Action::ExportAllBoardsPdfFile,
         )?;
         inserter.insert_all(&self.capture.open_capture_folder, Action::OpenCaptureFolder)?;
+        inserter.insert_all(
+            &self.capture.copy_text_from_screen,
+            Action::CopyTextFromScreen,
+        )?;
         Ok(())
     }
 }

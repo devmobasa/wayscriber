@@ -29,6 +29,49 @@ fn default_hidden_items_hide_screenshot_tool() {
 }
 
 #[test]
+fn the_ocr_utility_is_defined_once_ordered_and_hidden_by_default() {
+    let definitions: Vec<_> = toolbar_item_definitions()
+        .iter()
+        .filter(|definition| definition.id == ids::TOP_UTILITY_OCR)
+        .collect();
+    assert_eq!(definitions.len(), 1);
+    assert_eq!(definitions[0].label, "Copy text");
+
+    let order = ToolbarItemOrderConfig::default().resolved();
+    let top_controls = order.ordered_ids(ToolbarItemOrderGroup::TopControls);
+    assert_eq!(
+        top_controls
+            .iter()
+            .filter(|id| **id == ids::TOP_UTILITY_OCR)
+            .count(),
+        1
+    );
+
+    let resolved = ToolbarItemsConfig::default().resolved();
+    assert!(resolved.is_hidden(ids::TOP_UTILITY_OCR));
+    assert_eq!(
+        item_visibility_setting(&resolved, ids::TOP_UTILITY_OCR),
+        ToolbarItemVisibilitySetting::Hidden
+    );
+}
+
+#[test]
+fn showing_the_ocr_utility_is_an_explicit_customization_that_survives_reads() {
+    let mut config = ToolbarItemsConfig::default();
+
+    assert!(
+        config.set_visibility_setting(ids::TOP_UTILITY_OCR, ToolbarItemVisibilitySetting::Shown)
+    );
+    assert!(!config.resolved().is_hidden(ids::TOP_UTILITY_OCR));
+    // Re-applying the same setting is not a change; only a different one is.
+    assert!(
+        !config.set_visibility_setting(ids::TOP_UTILITY_OCR, ToolbarItemVisibilitySetting::Shown)
+    );
+    assert!(config.reset_known_hidden_to_defaults());
+    assert!(config.resolved().is_hidden(ids::TOP_UTILITY_OCR));
+}
+
+#[test]
 fn visibility_setting_is_hidden_first_and_known_mutation_canonicalizes_conflicts() {
     let mut config = ToolbarItemsConfig {
         hidden: vec![ids::TOP_TOOL_PEN.as_str().to_string()],
@@ -110,6 +153,7 @@ fn reset_known_hidden_restores_defaults_and_preserves_unknown_ids() {
         config.hidden,
         vec![
             ids::TOP_UTILITY_SCREENSHOT.as_str().to_string(),
+            ids::TOP_UTILITY_OCR.as_str().to_string(),
             "future.toolbar.item".to_string()
         ]
     );

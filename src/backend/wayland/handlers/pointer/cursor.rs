@@ -38,7 +38,7 @@ impl WaylandState {
 
     /// Computes the appropriate cursor icon based on current context.
     fn compute_cursor_icon(&mut self, toolbar_hover: bool) -> CursorIcon {
-        if self.input_state.eyedropper_is_active() && !toolbar_hover {
+        if self.input_state.screen_modal_is_active() && !toolbar_hover {
             return CursorIcon::Crosshair;
         }
 

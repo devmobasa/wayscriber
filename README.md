@@ -140,6 +140,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 - Full-screen saves, active-window grabs, region capture
 - Copy to clipboard or save to file
 - Uses `grim`, `slurp`, `wl-clipboard` (installed automatically by deb/rpm/AUR packages; fallback: xdg-desktop-portal)
+- Copy text from screen (OCR): drag a region of the shown desktop and get its text on the clipboard (needs `tesseract`; no default shortcut)
 
 ### Sessions and persistence
 - Session persistence is enabled by default for boards, undo/redo history, and tool state
@@ -329,6 +330,9 @@ If you are on a stable NixOS channel and want the newest release, use [the proje
     grim
     slurp
     wl-clipboard
+
+    # Optional: copy text from screen (OCR)
+    (tesseract.override { enableLanguages = [ "eng" ]; })
   ];
 }
 ```
@@ -536,6 +540,19 @@ install them manually:
 ```bash
 sudo apt-get install wl-clipboard grim slurp   # Debian/Ubuntu
 sudo dnf install wl-clipboard grim slurp       # Fedora
+```
+
+### Copy text from screen (OCR)
+
+`Copy text from screen` recognizes the text in a dragged screen region and copies
+it to the clipboard. It is optional: the action has no default shortcut and its
+toolbar button is hidden until you turn it on. Install Tesseract and the language
+data you configure in `[capture].ocr_languages` (default `eng`):
+
+```bash
+sudo pacman -S tesseract tesseract-data-eng       # Arch/Omarchy
+sudo apt-get install tesseract-ocr                # Debian/Ubuntu
+sudo dnf install tesseract tesseract-langpack-eng # Fedora
 ```
 
 ---

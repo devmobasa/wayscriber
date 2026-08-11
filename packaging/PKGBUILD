@@ -20,6 +20,10 @@ depends=(
     'grim'
     'slurp'
 )
+optdepends=(
+    'tesseract: copy text from screen (OCR)'
+    'tesseract-data-eng: English language data for OCR'
+)
 makedepends=(
     'cargo'
 )

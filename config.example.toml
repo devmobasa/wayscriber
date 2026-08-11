@@ -275,6 +275,10 @@ export_all_boards_pdf_file = []
 # Open the most recent capture folder
 open_capture_folder = ["Ctrl+Alt+O"]
 
+# Select a screen region and copy the text recognized in it (needs Tesseract).
+# Unbound by default: "O" is already the orange quick color.
+copy_text_from_screen = []
+
 # Toggle frozen mode
 toggle_frozen_mode = ["Ctrl+Shift+F"]
 
@@ -627,11 +631,12 @@ rebind_modifier = "ctrl_shift"
 
 [ui.toolbar.items]
 # Checked in the configurator means shown; IDs listed here are hidden.
-# The screenshot toolbar button is hidden by default.
+# The screenshot and copy-text (OCR) toolbar buttons are hidden by default.
 # Section-level ids (side.group.*) act as explicit overrides that beat the
 # layout-mode baseline and survive mode switches.
 hidden = [
   "top.utility.screenshot",
+  "top.utility.ocr",
 ]
 
 # IDs explicitly shown, overriding the layout-mode baseline (for example
@@ -660,6 +665,7 @@ top_controls = [
   "top.utility.text",
   "top.utility.sticky-note",
   "top.utility.screenshot",
+  "top.utility.ocr",
   "top.utility.clear-canvas",
   "top.utility.highlight",
 ]
@@ -1383,6 +1389,11 @@ copy_to_clipboard = true
 # When false, clipboard-only captures still auto-exit by default.
 # Use --no-exit-after-capture to keep the overlay open for a run.
 exit_after_capture = false
+
+# Languages used by "Copy text from screen" (OCR), in Tesseract's
+# plus-separated form, for example "eng" or "eng+deu". The matching Tesseract
+# language packages must be installed. OCR also needs `enabled = true` above.
+ocr_languages = "eng"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # EXPORT SETTINGS

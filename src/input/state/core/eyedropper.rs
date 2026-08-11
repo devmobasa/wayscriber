@@ -86,7 +86,10 @@ impl InputState {
             .flatten()
     }
 
-    pub(crate) fn prepare_for_eyedropper(&mut self) {
+    /// Close everything a screen-region modal must not compete with, and
+    /// cancel any unfinished gesture. Shared by the eyedropper and OCR: both
+    /// take over pointer input entirely while they are up.
+    pub(crate) fn prepare_for_screen_modal(&mut self) {
         self.cancel_active_interaction();
         if self.show_help {
             self.toggle_help_overlay();
@@ -117,7 +120,7 @@ impl InputState {
         // A capture can take long enough for another interaction to begin while
         // the eyedropper is pending. Entering the modal state must cancel it so
         // the eyedropper cannot swallow the matching release event.
-        self.prepare_for_eyedropper();
+        self.prepare_for_screen_modal();
         self.eyedropper_ui_state = EyedropperUiState::Active {
             hover: None,
             auto_froze,
@@ -224,6 +227,23 @@ mod tests {
         assert!(matches!(state.state, DrawingState::Idle));
         assert!(state.active_drag_button.is_none());
         assert!(state.eyedropper_is_active());
+    }
+
+    /// The eyedropper swallows every key press it receives, so a key held from
+    /// before it opened must not keep repeating into the canvas behind it.
+    #[test]
+    fn an_engaged_eyedropper_stops_canvas_key_repeat() {
+        let mut state = make_test_input_state();
+        assert!(!state.modal_blocks_canvas_key_repeat());
+
+        state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
+        assert!(state.modal_blocks_canvas_key_repeat());
+
+        state.activate_eyedropper(true);
+        assert!(state.modal_blocks_canvas_key_repeat());
+
+        state.cancel_eyedropper();
+        assert!(!state.modal_blocks_canvas_key_repeat());
     }
 
     #[test]

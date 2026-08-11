@@ -180,6 +180,7 @@ pub struct ConfigDraft {
     pub capture_format: String,
     pub capture_copy_to_clipboard: bool,
     pub capture_exit_after: bool,
+    pub capture_ocr_languages: String,
     pub export_pdf_filename_template: String,
     pub export_pdf_all_boards_filename_template: String,
     pub export_pdf_page_size: PdfPageSizeOption,

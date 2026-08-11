@@ -9,7 +9,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow};
 
 use super::transport::shutdown_requested;
-use super::wire::{HelperKind, MAX_STDERR_BYTES, OutputMode};
+use super::wire::{HelperKind, MAX_STDERR_BYTES, OutputMode, STDOUT_CAP_EXCEEDED};
 
 pub(super) struct BoundedOutput {
     pub(super) status: ExitStatus,
@@ -361,7 +361,7 @@ pub(super) fn run_bounded(
     }
     let stdout_limit_reached = stdout_limit_reached.load(Ordering::Acquire);
     if output_mode == OutputMode::Complete && stdout_limit_reached {
-        return Err(anyhow!("broker helper stdout exceeded output cap"));
+        return Err(anyhow!(STDOUT_CAP_EXCEEDED));
     }
     if stderr_overflow.load(Ordering::Acquire) {
         return Err(anyhow!("broker helper stderr exceeded output cap"));

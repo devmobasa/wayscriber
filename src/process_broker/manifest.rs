@@ -57,6 +57,7 @@ pub(super) fn validate(
         HelperKind::Grim => basename == "grim",
         HelperKind::Hyprctl => basename == "hyprctl",
         HelperKind::Slurp => basename == "slurp",
+        HelperKind::Tesseract => basename == "tesseract",
         HelperKind::WlPaste => basename == "wl-paste",
         HelperKind::WlCopy => basename == "wl-copy",
         HelperKind::SessionZenity => basename == "zenity",

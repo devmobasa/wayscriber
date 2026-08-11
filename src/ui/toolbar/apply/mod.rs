@@ -94,6 +94,7 @@ impl InputState {
             ToolbarEvent::CustomRedo => self.apply_toolbar_custom_redo(),
             ToolbarEvent::ClearCanvas { instant } => self.apply_toolbar_clear_canvas(instant),
             ToolbarEvent::CaptureScreenshot => self.apply_toolbar_capture_screenshot(),
+            ToolbarEvent::CopyTextFromScreen => self.apply_toolbar_copy_text_from_screen(),
             ToolbarEvent::PagePrev => self.apply_toolbar_page_prev(),
             ToolbarEvent::PageNext => self.apply_toolbar_page_next(),
             ToolbarEvent::PageNew => self.apply_toolbar_page_new(),

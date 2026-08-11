@@ -136,6 +136,7 @@ pub enum TextField {
     CaptureSaveDirectory,
     CaptureFilename,
     CaptureFormat,
+    CaptureOcrLanguages,
     ExportPdfFilenameTemplate,
     ExportPdfAllBoardsFilenameTemplate,
     ExportPdfCustomWidth,

@@ -28,7 +28,7 @@ mod updates;
 pub use arrow::ArrowConfig;
 pub use board::BoardConfig;
 pub use boards::{BoardBackgroundConfig, BoardColorConfig, BoardItemConfig, BoardsConfig};
-pub use capture::CaptureConfig;
+pub use capture::{CaptureConfig, DEFAULT_OCR_LANGUAGES, validate_ocr_languages};
 pub use click_highlight::ClickHighlightConfig;
 pub use context_menu::ContextMenuUiConfig;
 pub use drawing::{

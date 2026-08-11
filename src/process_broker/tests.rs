@@ -84,6 +84,35 @@ fn update_fetcher_manifest_allows_only_curl_and_wget() {
 }
 
 #[test]
+fn tesseract_manifest_allows_only_the_tesseract_basename() {
+    for program in ["/usr/bin/tesseract", "/usr/local/bin/tesseract"] {
+        let program = super::wire::OsWire::from_os(OsStr::new(program)).unwrap();
+        super::manifest::validate(HelperKind::Tesseract, &program, &[], &[], &[]).unwrap();
+    }
+
+    for program in ["/usr/bin/sh", "/usr/bin/tesseract-wrapper", "/usr/bin/grim"] {
+        let program = super::wire::OsWire::from_os(OsStr::new(program)).unwrap();
+        assert!(
+            super::manifest::validate(HelperKind::Tesseract, &program, &[], &[], &[]).is_err(),
+            "{program:?} must not be allowed for OCR"
+        );
+    }
+}
+
+#[test]
+fn tesseract_reads_the_complete_recognized_output_rather_than_a_prefix() {
+    // Prefix mode stops the helper once the cap fills; OCR must instead see the
+    // cap as a distinct "too much text" failure, which needs Complete mode.
+    assert!(!super::manifest::supports_prefix_output(
+        HelperKind::Tesseract
+    ));
+    assert_eq!(
+        super::manifest::input_cap(HelperKind::Tesseract),
+        super::wire::MAX_INPUT_BYTES
+    );
+}
+
+#[test]
 fn prelock_broker_runs_bounded_helpers_and_owns_reaping() {
     let guard = start_for_runtime().unwrap();
     let output = guard

@@ -92,9 +92,11 @@ pub(super) fn handle_pending_actions(
     state.poll_hex_copy_completion();
     state.poll_text_copy_completion();
     state.poll_text_paste_completion();
+    state.poll_ocr_completion();
     state.poll_session_file_dialog_completion(qh);
     state.drain_clipboard_requests();
     state.handle_pending_eyedropper_toggle();
+    state.handle_pending_ocr_request();
     // Copy/paste-hex requests from the color picker popup's pointer release are
     // drained here: unlike the toolbar/key paths, that release has no other
     // drain site. An accepted quick-color recolor is queued from the same

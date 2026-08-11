@@ -227,6 +227,7 @@ impl WaylandState {
             }
 
             self.render_eyedropper_loupe(ctx, width, height);
+            self.render_ocr_selection(ctx, width, height);
 
             if self.input_state.is_radial_menu_open() {
                 // Layout (and with it hit-testing) is live from the moment

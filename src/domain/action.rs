@@ -181,6 +181,8 @@ pub enum Action {
     ExportBoardPdfFile,
     ExportAllBoardsPdfFile,
     OpenCaptureFolder,
+    /// Select a screen region and copy the text recognized in it.
+    CopyTextFromScreen,
     ToggleFrozenMode,
     ZoomIn,
     ZoomOut,

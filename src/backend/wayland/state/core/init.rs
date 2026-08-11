@@ -120,6 +120,7 @@ impl WaylandState {
         );
         let clipboard_text_paste =
             ClipboardOperationController::new(clipboard_operation_ids, runtime_wake.clone());
+        let ocr = crate::ocr::OcrController::new(runtime_wake.clone());
 
         Self {
             registry_state,
@@ -152,6 +153,7 @@ impl WaylandState {
             pending_text_copy: Default::default(),
             clipboard_text_paste,
             pending_text_paste: Default::default(),
+            ocr,
             gtk_toolbar: None,
             onboarding,
             config_edits: super::super::super::config_edits::ConfigEditWorker::new(
@@ -226,6 +228,8 @@ impl WaylandState {
             stylus_peak_thickness: None,
             #[cfg(feature = "tablet-input")]
             pending_stylus_frame: crate::backend::wayland::state::PendingStylusFrame::default(),
+            #[cfg(feature = "tablet-input")]
+            stylus_contact_retired: false,
             #[cfg(feature = "tablet-input")]
             stylus_tool_types: std::collections::HashMap::new(),
             #[cfg(feature = "tablet-input")]

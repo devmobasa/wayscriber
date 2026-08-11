@@ -1380,12 +1380,47 @@ copy_to_clipboard = true
 # When false, clipboard-only captures still auto-exit by default.
 # Use --no-exit-after-capture to keep the overlay open for a run.
 exit_after_capture = false
+
+# Languages for "Copy text from screen" (OCR), in Tesseract's plus-separated
+# form. The matching Tesseract language packages must be installed.
+ocr_languages = "eng"
 ```
 
 **Tips:**
 - Set `copy_to_clipboard = false` if you prefer file-only captures.
 - Clipboard-only shortcuts ignore the save directory automatically.
 - `wl-clipboard`, `grim`, and `slurp` are installed automatically by deb/rpm/AUR packages. For source/tarball installs, add them manually; otherwise wayscriber falls back to `xdg-desktop-portal`.
+
+#### Copy text from screen (OCR)
+
+`Copy text from screen` selects a region of the desktop image wayscriber is
+already showing, recognizes the text in it with a local Tesseract, and copies
+the result to the clipboard. It reads the underlying screen capture only —
+never your annotations, the toolbars, or any other wayscriber chrome — and it
+does not change the active tool, the drawing history, or the board.
+
+- The action is `copy_text_from_screen`. It has **no default shortcut**, because
+  `O` is already the orange quick color; bind one in the configurator or in
+  `[keybindings.capture]`.
+- It is also in the command palette (search for "OCR"), and as an optional top
+  toolbar button (`top.utility.ocr`), hidden by default like Screenshot.
+- `ocr_languages` accepts one language or several joined with `+`
+  (`eng`, `eng+deu`). Only letters, digits, `_` and `-` are accepted; anything
+  else falls back to `eng`.
+- OCR obeys `enabled` above: with capture disabled, the action reports that and
+  does nothing.
+- On a solid whiteboard or blackboard with no visible screen capture, OCR
+  refuses rather than reading the board.
+
+**Requirements:** the `tesseract` command plus the language data for every code
+in `ocr_languages`, and `wl-copy` (from `wl-clipboard`) for the clipboard write.
+
+| Distribution | Packages |
+| --- | --- |
+| Arch / Omarchy | `tesseract`, `tesseract-data-eng` |
+| Debian / Ubuntu | `tesseract-ocr` (depends on the English data) |
+| Fedora | `tesseract`, `tesseract-langpack-eng` |
+| Nix | the `tesseract` package/wrapper with `eng` enabled |
 - Use `--exit-after-capture` / `--no-exit-after-capture` to override exit behavior per run.
 
 ### `[export.pdf]` - PDF Export
@@ -1838,6 +1873,10 @@ export_all_boards_pdf_file = []
 
 # Open the most recent capture folder
 open_capture_folder = ["Ctrl+Alt+O"]
+
+# Select a screen region and copy the text recognized in it (needs Tesseract).
+# Unbound by default: "O" is already the orange quick color.
+copy_text_from_screen = []
 
 # Toggle frozen mode
 toggle_frozen_mode = ["Ctrl+Shift+F"]

@@ -46,6 +46,14 @@ impl InputState {
                 self.reset_modifiers();
                 true
             }
+            Action::CopyTextFromScreen => {
+                // The backend owns capture ownership and the region selector,
+                // so this only records the intent. It selects no tool and
+                // touches no drawing state.
+                log::debug!("Copy text from screen requested");
+                self.request_copy_text_from_screen();
+                true
+            }
             Action::ToggleFrozenMode => {
                 log::info!("Toggle frozen mode requested");
                 self.request_frozen_toggle();

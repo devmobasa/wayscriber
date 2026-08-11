@@ -247,6 +247,7 @@ impl ConfigDraft {
             capture_format: config.capture.format.clone(),
             capture_copy_to_clipboard: config.capture.copy_to_clipboard,
             capture_exit_after: config.capture.exit_after_capture,
+            capture_ocr_languages: config.capture.ocr_languages.clone(),
             export_pdf_filename_template: config
                 .export
                 .pdf

@@ -470,6 +470,7 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
 | `src/config/` | Config parsing, defaults, keybinding map. |
 | `src/runtime_ui_state/` | Generated UI preference wire format, seed registry, guarded persistence, reset, and recovery state machines. |
 | `src/session/` | Configured and named session persistence, snapshots, sidecars, locks, and catalog metadata. |
+| `src/ocr/` | Screen text recognition: capacity-one controller, Tesseract adapter, typed outcomes. |
 | `src/notification.rs` | Desktop notifications for capture results and the update notice. |
 | `src/update_check/` | Opt-outable "a newer release exists" check: version ordering, manifest trust rules, `curl`/`wget` transport, cache. Installs nothing. |
 | `src/about_window/` | Standalone About dialog: content/layout/interaction split, update card, diagnostics copy. |

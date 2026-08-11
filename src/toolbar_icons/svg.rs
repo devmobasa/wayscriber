@@ -273,6 +273,34 @@ fn draw_screenshot(ctx: &Context) {
     stroke(ctx);
 }
 
+/// Screen text recognition: a scan frame around three text lines.
+///
+/// Deliberately not a port of any other project's geometry — this is the same
+/// normalized 24x24 Cairo style as its neighbours, with shorter corner arms
+/// than `draw_screenshot` so the text block inside stays readable at 18px.
+fn draw_ocr(ctx: &Context) {
+    for (x1, y1, x2, y2, x3, y3) in [
+        (3.25, 7.0, 3.25, 3.25, 7.0, 3.25),
+        (17.0, 3.25, 20.75, 3.25, 20.75, 7.0),
+        (20.75, 17.0, 20.75, 20.75, 17.0, 20.75),
+        (7.0, 20.75, 3.25, 20.75, 3.25, 17.0),
+    ] {
+        ctx.move_to(x1, y1);
+        ctx.line_to(x2, y2);
+        ctx.line_to(x3, y3);
+        stroke(ctx);
+    }
+
+    // A ragged right edge is what reads as text rather than as a stack of bars.
+    ctx.set_line_width(1.6);
+    for (y, end) in [(8.75, 16.75), (12.0, 16.75), (15.25, 13.5)] {
+        ctx.move_to(7.25, y);
+        ctx.line_to(end, y);
+        stroke(ctx);
+    }
+    ctx.set_line_width(2.0);
+}
+
 fn draw_highlight(ctx: &Context) {
     circle(ctx, 12.0, 12.0, 3.25);
     stroke(ctx);
@@ -565,6 +593,7 @@ renderers!(
     (render_text, draw_text),
     (render_note, draw_sticky_note),
     (render_screenshot, draw_screenshot),
+    (render_ocr, draw_ocr),
     (render_highlight, draw_highlight),
     (render_undo, draw_undo),
     (render_redo, draw_redo),
@@ -596,7 +625,7 @@ mod tests {
     type IconRender = fn(&Context, f64, f64, f64);
 
     const SIZES: [i32; 5] = [18, 20, 22, 24, 28];
-    const ICONS: [(&str, IconRender); 33] = [
+    const ICONS: [(&str, IconRender); 34] = [
         ("drag", render_drag),
         ("select", render_select),
         ("pen", render_pen),
@@ -609,6 +638,7 @@ mod tests {
         ("text", render_text),
         ("sticky_note", render_note),
         ("screenshot", render_screenshot),
+        ("ocr", render_ocr),
         ("highlight", render_highlight),
         ("undo", render_undo),
         ("redo", render_redo),

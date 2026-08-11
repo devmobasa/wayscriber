@@ -16,6 +16,20 @@ impl WaylandState {
         on_toolbar: bool,
         inline_active: bool,
     ) {
+        if self.input_state.ocr_is_active() {
+            let screen_position = if on_toolbar {
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
+            } else {
+                Some(event.position)
+            };
+            if let Some((x, y)) = screen_position {
+                self.set_current_mouse(x.round() as i32, y.round() as i32);
+                self.update_ocr_selection(OcrInputSource::Pointer, x, y);
+            }
+            self.update_pointer_cursor(on_toolbar || self.pointer_over_toolbar(), conn);
+            return;
+        }
+
         if self.input_state.eyedropper_is_active() {
             let inline_hover = !on_toolbar
                 && self.inline_toolbars_active()

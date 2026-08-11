@@ -52,7 +52,7 @@ pub(crate) use tools::{
     default_polygon_tool, default_shape_tool, is_fill_tool, is_polygon_tool, polygon_tools,
     semantic_icon_for_tool, shape_tools, tool_visible, toolbar_item_id_for_tool,
     toolbar_item_visible, top_clear_canvas_visible, top_fill_visible, top_highlight_ring_visible,
-    top_highlight_visible, top_screenshot_visible, top_shape_picker_visible,
+    top_highlight_visible, top_ocr_visible, top_screenshot_visible, top_shape_picker_visible,
     top_sticky_note_visible, top_text_visible, top_tool_buttons, top_tool_group,
     visible_shape_picker_max_row_len, visible_shape_picker_row_count, visible_shape_picker_rows,
     visible_tool_count, visible_top_tool_buttons, visible_top_utility_buttons,

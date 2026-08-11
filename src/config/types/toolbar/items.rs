@@ -52,7 +52,8 @@ fn drain_without(raw_ids: Vec<String>, id: ToolbarItemId) -> Vec<String> {
     next
 }
 
-const DEFAULT_HIDDEN_TOOLBAR_ITEM_IDS: &[ToolbarItemId] = &[ids::TOP_UTILITY_SCREENSHOT];
+const DEFAULT_HIDDEN_TOOLBAR_ITEM_IDS: &[ToolbarItemId] =
+    &[ids::TOP_UTILITY_SCREENSHOT, ids::TOP_UTILITY_OCR];
 
 const DEFAULT_TOP_TOOLS_ORDER: &[ToolbarItemId] = &[
     ids::TOP_TOOL_SELECT,
@@ -77,6 +78,7 @@ const DEFAULT_TOP_CONTROLS_ORDER: &[ToolbarItemId] = &[
     ids::TOP_UTILITY_TEXT,
     ids::TOP_UTILITY_STICKY_NOTE,
     ids::TOP_UTILITY_SCREENSHOT,
+    ids::TOP_UTILITY_OCR,
     ids::TOP_UTILITY_CLEAR_CANVAS,
     ids::TOP_UTILITY_HIGHLIGHT,
 ];
@@ -147,6 +149,13 @@ impl ToolbarItemsConfig {
         id: ToolbarItemId,
         setting: ToolbarItemVisibilitySetting,
     ) -> bool {
+        // Re-applying the setting an item already has must be a no-op. The
+        // rewrite below moves the id to the end of its list, so without this
+        // guard a second identical call would report a change forever — which
+        // is what a batch reset over several items does.
+        if item_visibility_setting(&self.resolved(), id) == setting {
+            return false;
+        }
         let before_hidden = self.hidden.clone();
         let before_shown = self.shown.clone();
         self.hidden = drain_without(std::mem::take(&mut self.hidden), id);
