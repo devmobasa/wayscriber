@@ -202,6 +202,39 @@ fn layout_cycle_control_maps_each_mode_to_its_next_event_and_current_icon() {
     assert_eq!(control.accessible_label(&snapshot), "Cycle toolbar layout");
 }
 
+#[test]
+fn required_chrome_and_tool_controls_have_a_glyph() {
+    let snapshot = snapshot();
+    for control in [
+        TopToolbarControl::Restore,
+        TopToolbarControl::DragHandle,
+        TopToolbarControl::Pin,
+        TopToolbarControl::Overflow,
+        TopToolbarControl::About,
+        TopToolbarControl::Minimize,
+        TopToolbarControl::LayoutMode,
+        TopToolbarControl::Undo,
+        TopToolbarControl::Redo,
+        TopToolbarControl::ShapePicker,
+    ] {
+        assert_eq!(
+            Some(control.glyph(&snapshot)),
+            control.icon(&snapshot),
+            "{control:?} glyph matches the optional icon"
+        );
+    }
+    let mut unpinned = snapshot.clone();
+    unpinned.top_pinned = false;
+    assert_eq!(
+        TopToolbarControl::Pin.glyph(&unpinned),
+        TopToolbarIcon::Unpin
+    );
+    let mut pinned = snapshot.clone();
+    pinned.top_pinned = true;
+    assert_eq!(TopToolbarControl::Pin.glyph(&pinned), TopToolbarIcon::Pin);
+    assert_eq!(TopToolbarControl::HighlightRing.icon(&snapshot), None);
+}
+
 /// The tooltip names the current mode and where the click lands, for all
 /// three presets.
 #[test]

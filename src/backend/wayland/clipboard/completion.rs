@@ -213,29 +213,25 @@ where
     }
 
     pub(in crate::backend::wayland) fn poll(&mut self) -> ClipboardPoll<C, T> {
-        let Some(active) = self.active.as_ref() else {
+        let Some(active) = self.active.take() else {
             return ClipboardPoll::Idle;
         };
         let active_id = active.id;
         match active.receiver.try_recv() {
-            Err(TryRecvError::Empty) => ClipboardPoll::Pending { id: active_id },
-            Err(TryRecvError::Disconnected) => {
-                let active = self.active.take().expect("active receiver checked above");
-                ClipboardPoll::Disconnected {
-                    id: active.id,
-                    context: active.context,
-                }
+            Err(TryRecvError::Empty) => {
+                self.active = Some(active);
+                ClipboardPoll::Pending { id: active_id }
             }
-            Ok(ProducerMessage::Ready { id, outcome }) if id == active_id => {
-                let active = self.active.take().expect("active receiver checked above");
-                ClipboardPoll::Ready {
-                    id,
-                    context: active.context,
-                    outcome,
-                }
-            }
+            Err(TryRecvError::Disconnected) => ClipboardPoll::Disconnected {
+                id: active.id,
+                context: active.context,
+            },
+            Ok(ProducerMessage::Ready { id, outcome }) if id == active_id => ClipboardPoll::Ready {
+                id,
+                context: active.context,
+                outcome,
+            },
             Ok(ProducerMessage::Failed { id, reason }) if id == active_id => {
-                let active = self.active.take().expect("active receiver checked above");
                 ClipboardPoll::ProducerFailed {
                     id,
                     context: active.context,
@@ -244,7 +240,6 @@ where
             }
             Ok(ProducerMessage::Ready { id, .. } | ProducerMessage::Failed { id, .. }) => {
                 self.healthy = false;
-                let active = self.active.take().expect("active receiver checked above");
                 ClipboardPoll::ProducerFailed {
                     id: active.id,
                     context: active.context,
@@ -290,12 +285,11 @@ impl<T> ClipboardProducerExitGuard<T> {
     }
 
     fn publish(mut self, message: ProducerMessage<T>) {
-        let result = self
+        let sender = self
             .sender
-            .as_ref()
-            .expect("producer sender retained until publication")
-            .try_send(message);
-        self.sender.take();
+            .take()
+            .expect("clipboard producer still holds its sender until publish");
+        let result = sender.try_send(message);
         self.terminal_published = true;
         match result {
             Ok(()) | Err(TrySendError::Disconnected(_)) => {}

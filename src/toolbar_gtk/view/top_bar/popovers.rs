@@ -21,6 +21,19 @@ pub(super) fn set_popover_capture_transparent(
     set_popover_input_enabled(popover, input_enabled);
 }
 
+fn paired_popover_surface<'a>(
+    popover: Option<&'a gtk4::Popover>,
+    surface: Option<&'a CaptureSurfaceContent>,
+) -> Option<(&'a gtk4::Popover, &'a CaptureSurfaceContent)> {
+    if popover.is_none() && surface.is_none() {
+        return None;
+    }
+    Some((
+        popover.expect("popover capture surface is paired at construction"),
+        surface.expect("capture surface is paired with its popover"),
+    ))
+}
+
 fn set_popover_input_enabled(popover: &gtk4::Popover, enabled: bool) {
     popover.set_can_target(enabled);
     if let Some(surface) = popover.surface() {
@@ -84,7 +97,8 @@ impl TopBar {
                 self.settings_capture_surface.as_ref(),
             ),
         ] {
-            let (Some(popover), Some(capture_surface)) = (popover, capture_surface) else {
+            let Some((popover, capture_surface)) = paired_popover_surface(popover, capture_surface)
+            else {
                 continue;
             };
             if transparent && !popover.is_visible() {
@@ -138,8 +152,7 @@ impl TopBar {
         ]
         .into_iter()
         .filter_map(|(name, popover, capture_surface)| {
-            let popover = popover?;
-            let capture_surface = capture_surface?;
+            let (popover, capture_surface) = paired_popover_surface(popover, capture_surface)?;
             (popover.is_visible() && popover.is_mapped())
                 .then(|| CaptureProofTarget::new_withdrawable(name, popover, capture_surface))
         })
@@ -176,7 +189,7 @@ impl TopBar {
                 if self.shapes_content_key.get() != Some(content_key) {
                     self.shapes_capture_surface
                         .as_ref()
-                        .expect("shapes popover capture surface")
+                        .expect("shapes popover capture surface is paired")
                         .set_content(&self.build_shapes_popover_content(
                             snapshot,
                             button_size,
@@ -213,7 +226,7 @@ impl TopBar {
                     let spec = model::TopToolbarSpec::build(snapshot, plan);
                     self.overflow_capture_surface
                         .as_ref()
-                        .expect("overflow popover capture surface")
+                        .expect("overflow popover capture surface is paired")
                         .set_content(&self.build_overflow_popover_content(
                             snapshot,
                             &spec,
@@ -250,7 +263,7 @@ impl TopBar {
                     let (content, updaters) = self.build_canvas_popover_content(snapshot, scale);
                     self.canvas_capture_surface
                         .as_ref()
-                        .expect("canvas popover capture surface")
+                        .expect("canvas popover capture surface is paired")
                         .set_content(&content);
                     // Delay-slider values ride these persistent updaters (the
                     // content key omits them), so a delay drag never rebuilds
@@ -277,7 +290,7 @@ impl TopBar {
                 if self.session_content_key.borrow().as_ref() != Some(&content_key) {
                     self.session_capture_surface
                         .as_ref()
-                        .expect("session popover capture surface")
+                        .expect("session popover capture surface is paired")
                         .set_content(&self.build_session_popover_content(snapshot, scale));
                     *self.session_content_key.borrow_mut() = Some(content_key);
                 }
@@ -300,7 +313,7 @@ impl TopBar {
                     let (content, updaters) = self.build_settings_popover_content(snapshot, scale);
                     self.settings_capture_surface
                         .as_ref()
-                        .expect("settings popover capture surface")
+                        .expect("settings popover capture surface is paired")
                         .set_content(&content);
                     self.settings_updaters = updaters;
                     *self.settings_content_key.borrow_mut() = Some(content_key);
@@ -440,17 +453,15 @@ impl TopBar {
                 let control = model::TopToolbarControl::Tool(tool);
                 let tooltip = control.tooltip(snapshot);
                 let label = control.label(snapshot);
-                let button = if use_icons {
-                    icon_button(
-                        top_toolbar_icon_painter(control.icon(snapshot).expect("tool icon")),
-                        button_size,
-                        icon_size,
-                        &tooltip,
-                    )
-                    .button
-                } else {
-                    text_button(&label, button_size, &tooltip)
-                };
+                let button = control_face_button(
+                    control,
+                    snapshot,
+                    button_size,
+                    icon_size,
+                    use_icons,
+                    &tooltip,
+                    &label,
+                );
                 set_prefixed_control_widget_id(&button, "top.picker.", control);
                 let accessible_label = control.accessible_label(snapshot);
                 button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
@@ -542,17 +553,15 @@ impl TopBar {
         for control in spec.overflow().iter().copied() {
             let tooltip = control.overflow_tooltip(snapshot);
             let label = control.label(snapshot);
-            let button = if use_icons {
-                icon_button(
-                    top_toolbar_icon_painter(control.icon(snapshot).expect("overflow icon")),
-                    button_size,
-                    icon_size,
-                    &tooltip,
-                )
-                .button
-            } else {
-                text_button(&label, button_size, &tooltip)
-            };
+            let button = control_face_button(
+                control,
+                snapshot,
+                button_size,
+                icon_size,
+                use_icons,
+                &tooltip,
+                &label,
+            );
             set_prefixed_control_widget_id(&button, "top.overflow.", control);
             let accessible_label = control.accessible_label(snapshot);
             button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);

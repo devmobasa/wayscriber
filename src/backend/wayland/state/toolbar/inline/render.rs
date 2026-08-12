@@ -58,16 +58,17 @@ impl WaylandState {
             hit.rect.2 *= ui_scale;
             hit.rect.3 *= ui_scale;
         }
-        self.data.inline_top_rect = Some((
+        let top_rect = (
             top_offset.0,
             top_offset.1,
             top_size.0 as f64,
             top_size.1 as f64,
-        ));
+        );
+        self.data.inline_top_rect = Some(top_rect);
         crate::backend::wayland::toolbar::hit::clip_hit_regions_to_bounds(
             &mut self.data.inline_top_hits,
             0,
-            self.data.inline_top_rect.expect("top rect was just set"),
+            top_rect,
         );
     }
 }

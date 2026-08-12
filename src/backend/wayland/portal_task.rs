@@ -150,12 +150,11 @@ impl<T> PortalTaskExitGuard<T> {
     }
 
     fn publish(mut self, message: PortalMessage<T>) {
-        let result = self
+        let sender = self
             .sender
-            .as_ref()
-            .expect("portal sender retained until terminal publication")
-            .try_send(message);
-        self.sender.take();
+            .take()
+            .expect("portal task still holds its sender until publish");
+        let result = sender.try_send(message);
         self.terminal_published = true;
         match result {
             Ok(()) | Err(TrySendError::Disconnected(_)) => {}

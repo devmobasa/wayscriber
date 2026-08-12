@@ -66,17 +66,15 @@ impl TopBar {
         assert_eq!(control, model::TopToolbarControl::ShapePicker);
         let tooltip = control.tooltip(snapshot);
         let label = control.label(snapshot);
-        let button = if use_icons {
-            icon_button(
-                top_toolbar_icon_painter(control.icon(snapshot).expect("shape-picker icon")),
-                button_size,
-                icon_size,
-                &tooltip,
-            )
-            .button
-        } else {
-            text_button(&label, button_size, &tooltip)
-        };
+        let button = control_face_button(
+            control,
+            snapshot,
+            button_size,
+            icon_size,
+            use_icons,
+            &tooltip,
+            &label,
+        );
         set_control_widget_id(&button, control);
         let accessible_label = control.accessible_label(snapshot);
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
@@ -173,17 +171,15 @@ impl TopBar {
     ) -> gtk4::Button {
         let tooltip = control.tooltip(snapshot);
         let label = control.label(snapshot);
-        let button = if use_icons {
-            icon_button(
-                top_toolbar_icon_painter(control.icon(snapshot).expect("action icon")),
-                button_size,
-                icon_size,
-                &tooltip,
-            )
-            .button
-        } else {
-            text_button(&label, button_size, &tooltip)
-        };
+        let button = control_face_button(
+            control,
+            snapshot,
+            button_size,
+            icon_size,
+            use_icons,
+            &tooltip,
+            &label,
+        );
         set_control_widget_id(&button, control);
         let accessible_label = control.accessible_label(snapshot);
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
@@ -331,10 +327,12 @@ impl TopBar {
         button.add_css_class("chrome");
         let accessible_label = control.accessible_label(snapshot);
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
-        let icon = IconWidget::new(
-            top_toolbar_icon_painter(control.icon(snapshot).expect("pin icon")),
-            size * 0.62,
-        );
+        let glyph = if snapshot.top_pinned {
+            model::TopToolbarIcon::Pin
+        } else {
+            model::TopToolbarIcon::Unpin
+        };
+        let icon = IconWidget::new(top_toolbar_icon_painter(glyph), size * 0.62);
         button.set_child(Some(&icon.area));
         let sender = self.feedback.clone();
         let pinned = Rc::new(Cell::new(snapshot.top_pinned));
@@ -348,9 +346,12 @@ impl TopBar {
         let handle = button.clone();
         self.updaters.borrow_mut().push(Box::new(move |snapshot| {
             pinned.set(snapshot.top_pinned);
-            icon.set_painter(top_toolbar_icon_painter(
-                control.icon(snapshot).expect("pin icon"),
-            ));
+            let glyph = if snapshot.top_pinned {
+                model::TopToolbarIcon::Pin
+            } else {
+                model::TopToolbarIcon::Unpin
+            };
+            icon.set_painter(top_toolbar_icon_painter(glyph));
             if snapshot.top_pinned {
                 handle.add_css_class("pinned");
             } else {
@@ -379,7 +380,7 @@ impl TopBar {
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
-            top_toolbar_icon_painter(control.icon(snapshot).expect("overflow icon")),
+            top_toolbar_icon_painter(model::TopToolbarIcon::Overflow),
             icon_size,
         );
         button.set_child(Some(&icon.area));
@@ -484,7 +485,7 @@ impl TopBar {
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
-            top_toolbar_icon_painter(control.icon(snapshot).expect("about icon")),
+            top_toolbar_icon_painter(model::TopToolbarIcon::About),
             size * 0.6,
         );
         button.set_child(Some(&icon.area));
@@ -542,7 +543,7 @@ impl TopBar {
         button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         button.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
-            top_toolbar_icon_painter(control.icon(snapshot).expect("minimize icon")),
+            top_toolbar_icon_painter(model::TopToolbarIcon::Minimize),
             size * 0.6,
         );
         button.set_child(Some(&icon.area));

@@ -83,61 +83,71 @@ pub struct PerformanceFieldMetadata {
     pub constraint: ScalarConstraint,
 }
 
+const PERFORMANCE_BUFFER_COUNT: PerformanceFieldMetadata = PerformanceFieldMetadata {
+    id: PerformanceFieldId::BufferCount,
+    path: "performance.buffer_count",
+    group: PerformanceFieldGroup::Rendering,
+    label: "Buffer count (2-4)",
+    help: "2 uses less memory; 3 is recommended; 4 adds another queued buffer.",
+    search_terms: &["rendering", "buffer", "double triple quad buffering"],
+    constraint: ScalarConstraint::UnsignedChoice(PERFORMANCE_BUFFER_COUNTS),
+};
+
+const PERFORMANCE_ENABLE_VSYNC: PerformanceFieldMetadata = PerformanceFieldMetadata {
+    id: PerformanceFieldId::EnableVsync,
+    path: "performance.enable_vsync",
+    group: PerformanceFieldGroup::Rendering,
+    label: "Enable VSync",
+    help: "Synchronizes rendering with display refresh to prevent tearing, with some input latency.",
+    search_terms: &["rendering", "vsync", "tearing", "display refresh"],
+    constraint: ScalarConstraint::Boolean,
+};
+
+const PERFORMANCE_MAX_FPS_NO_VSYNC: PerformanceFieldMetadata = PerformanceFieldMetadata {
+    id: PerformanceFieldId::MaxFpsNoVsync,
+    path: "performance.max_fps_no_vsync",
+    group: PerformanceFieldGroup::Rendering,
+    label: "Max FPS (VSync off)",
+    help: "Caps frame rate when VSync is off. Default 120; try 144 or 240 on high-refresh displays; 0 means unlimited.",
+    search_terms: &["rendering", "fps", "frame rate", "vsync off", "unlimited"],
+    constraint: ScalarConstraint::Unsigned {
+        min: 0,
+        max: u32::MAX,
+    },
+};
+
+const PERFORMANCE_UI_ANIMATION_FPS: PerformanceFieldMetadata = PerformanceFieldMetadata {
+    id: PerformanceFieldId::UiAnimationFps,
+    path: "performance.ui_animation_fps",
+    group: PerformanceFieldGroup::Animations,
+    label: "UI Animation FPS",
+    help: "Controls UI effect ticks without changing input responsiveness; 30-60 is recommended, 0 means unlimited.",
+    search_terms: &[
+        "animation",
+        "ui",
+        "fps",
+        "effects",
+        "toasts",
+        "click highlights",
+    ],
+    constraint: ScalarConstraint::Unsigned {
+        min: 0,
+        max: PERFORMANCE_UI_ANIMATION_FPS_MAX,
+    },
+};
+
 pub const PERFORMANCE_FIELD_METADATA: &[PerformanceFieldMetadata] = &[
-    PerformanceFieldMetadata {
-        id: PerformanceFieldId::BufferCount,
-        path: "performance.buffer_count",
-        group: PerformanceFieldGroup::Rendering,
-        label: "Buffer count (2-4)",
-        help: "2 uses less memory; 3 is recommended; 4 adds another queued buffer.",
-        search_terms: &["rendering", "buffer", "double triple quad buffering"],
-        constraint: ScalarConstraint::UnsignedChoice(PERFORMANCE_BUFFER_COUNTS),
-    },
-    PerformanceFieldMetadata {
-        id: PerformanceFieldId::EnableVsync,
-        path: "performance.enable_vsync",
-        group: PerformanceFieldGroup::Rendering,
-        label: "Enable VSync",
-        help: "Synchronizes rendering with display refresh to prevent tearing, with some input latency.",
-        search_terms: &["rendering", "vsync", "tearing", "display refresh"],
-        constraint: ScalarConstraint::Boolean,
-    },
-    PerformanceFieldMetadata {
-        id: PerformanceFieldId::MaxFpsNoVsync,
-        path: "performance.max_fps_no_vsync",
-        group: PerformanceFieldGroup::Rendering,
-        label: "Max FPS (VSync off)",
-        help: "Caps frame rate when VSync is off. Default 120; try 144 or 240 on high-refresh displays; 0 means unlimited.",
-        search_terms: &["rendering", "fps", "frame rate", "vsync off", "unlimited"],
-        constraint: ScalarConstraint::Unsigned {
-            min: 0,
-            max: u32::MAX,
-        },
-    },
-    PerformanceFieldMetadata {
-        id: PerformanceFieldId::UiAnimationFps,
-        path: "performance.ui_animation_fps",
-        group: PerformanceFieldGroup::Animations,
-        label: "UI Animation FPS",
-        help: "Controls UI effect ticks without changing input responsiveness; 30-60 is recommended, 0 means unlimited.",
-        search_terms: &[
-            "animation",
-            "ui",
-            "fps",
-            "effects",
-            "toasts",
-            "click highlights",
-        ],
-        constraint: ScalarConstraint::Unsigned {
-            min: 0,
-            max: PERFORMANCE_UI_ANIMATION_FPS_MAX,
-        },
-    },
+    PERFORMANCE_BUFFER_COUNT,
+    PERFORMANCE_ENABLE_VSYNC,
+    PERFORMANCE_MAX_FPS_NO_VSYNC,
+    PERFORMANCE_UI_ANIMATION_FPS,
 ];
 
 pub fn performance_field_metadata(id: PerformanceFieldId) -> &'static PerformanceFieldMetadata {
-    PERFORMANCE_FIELD_METADATA
-        .iter()
-        .find(|metadata| metadata.id == id)
-        .expect("every PerformanceFieldId must have metadata")
+    match id {
+        PerformanceFieldId::BufferCount => &PERFORMANCE_BUFFER_COUNT,
+        PerformanceFieldId::EnableVsync => &PERFORMANCE_ENABLE_VSYNC,
+        PerformanceFieldId::MaxFpsNoVsync => &PERFORMANCE_MAX_FPS_NO_VSYNC,
+        PerformanceFieldId::UiAnimationFps => &PERFORMANCE_UI_ANIMATION_FPS,
+    }
 }

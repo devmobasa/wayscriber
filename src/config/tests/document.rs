@@ -1872,6 +1872,13 @@ fn performance_metadata_is_unique_and_matches_example_and_docs() {
         );
     }
     assert_eq!(ids.len(), PerformanceFieldId::ALL.len());
+    for id in PerformanceFieldId::ALL {
+        assert_eq!(
+            performance_field_metadata(id).id,
+            id,
+            "lookup is by id, not table index"
+        );
+    }
 }
 
 #[test]

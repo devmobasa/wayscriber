@@ -86,6 +86,18 @@ fn drawing_polygon_sides_validation_keeps_supported_bounds() {
 }
 
 #[test]
+fn default_overlay_item_is_the_transparent_board() {
+    let overlay = BoardsConfig::default_overlay_item();
+    assert_eq!(overlay.id, "transparent");
+    assert_eq!(overlay.name, "Overlay");
+    assert!(overlay.background.is_transparent());
+    let first = &BoardsConfig::default_items()[0];
+    assert_eq!(first.id, overlay.id);
+    assert_eq!(first.name, overlay.name);
+    assert!(first.background.is_transparent());
+}
+
+#[test]
 fn validate_boards_uses_boundary_id_normalization() {
     let mut config = Config {
         boards: Some(BoardsConfig {

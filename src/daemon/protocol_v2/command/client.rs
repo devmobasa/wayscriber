@@ -230,8 +230,9 @@ fn cancel_open(control: &mut CommandControl) -> Result<bool> {
     }
     bump_revision(control)?;
     control.decision = CommandDecision::Canceled;
-    control.response = Some(CommandResponse::Canceled);
-    let digest = response_digest(control.response.as_ref().unwrap())?;
+    let response = CommandResponse::Canceled;
+    let digest = response_digest(&response)?;
+    control.response = Some(response);
     control.caller_disposition = CallerDisposition::Acknowledged {
         response_digest: digest,
     };

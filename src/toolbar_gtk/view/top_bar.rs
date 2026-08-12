@@ -93,6 +93,28 @@ const END_MARGIN: (f64, f64) = (12.0, 0.0);
 
 use super::{CaptureProofTarget, CaptureSurfaceContent, Updater};
 
+fn control_face_button(
+    control: model::TopToolbarControl,
+    snapshot: &ToolbarSnapshot,
+    button_size: (f64, f64),
+    icon_size: f64,
+    use_icons: bool,
+    tooltip: &str,
+    label: &str,
+) -> gtk4::Button {
+    if use_icons {
+        icon_button(
+            top_toolbar_icon_painter(control.glyph(snapshot)),
+            button_size,
+            icon_size,
+            tooltip,
+        )
+        .button
+    } else {
+        text_button(label, button_size, tooltip)
+    }
+}
+
 /// Snapshot inputs the shapes-popover grid renders from: active tool,
 /// override, fill flag, polygon sides.
 type ShapesContentKey = (Tool, Option<Tool>, bool, u8);

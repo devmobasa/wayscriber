@@ -414,10 +414,19 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         }
         // A section row in the customization list is that section's
         // visibility, not an individual item override.
-        ToolbarEvent::SetToolbarItemHidden(id, _) if section_flag_for_item(*id).is_some() => {
-            ToolbarPersistence::RuntimeUi(Runtime::NamedSection(
-                section_flag_for_item(*id).expect("guarded above"),
-            ))
+        ToolbarEvent::SetToolbarItemHidden(id, hidden) => {
+            if let Some(flag) = section_flag_for_item(*id) {
+                ToolbarPersistence::RuntimeUi(Runtime::NamedSection(flag))
+            } else {
+                ToolbarPersistence::RuntimeUi(Runtime::ItemVisibility {
+                    id: *id,
+                    setting: if *hidden {
+                        ToolbarItemVisibilitySetting::Hidden
+                    } else {
+                        ToolbarItemVisibilitySetting::Default
+                    },
+                })
+            }
         }
         ToolbarEvent::ToggleStatusBar(_) => ToolbarPersistence::RuntimeUi(Runtime::StatusBar),
         ToolbarEvent::ToggleStatusBoardBadge(_) => {
@@ -454,18 +463,6 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         }
         ToolbarEvent::SetStatusBarItemVisible(item, _) => {
             ToolbarPersistence::RuntimeUi(Runtime::StatusBarItem(*item))
-        }
-        // Section rows were routed to `NamedSection` above; every other item
-        // keeps its own visibility override.
-        ToolbarEvent::SetToolbarItemHidden(id, hidden) => {
-            ToolbarPersistence::RuntimeUi(Runtime::ItemVisibility {
-                id: *id,
-                setting: if *hidden {
-                    ToolbarItemVisibilitySetting::Hidden
-                } else {
-                    ToolbarItemVisibilitySetting::Default
-                },
-            })
         }
         ToolbarEvent::MoveToolbarItem { group, .. }
         | ToolbarEvent::StartToolbarItemDrag { group, .. }
@@ -628,6 +625,42 @@ mod tests {
                 index: 9,
             }),
             None
+        );
+    }
+
+    #[test]
+    fn hiding_a_section_row_persists_as_section_visibility() {
+        let id = ToolbarSectionFlag::Actions.item_id();
+        assert_eq!(
+            persistence_for_event(&ToolbarEvent::SetToolbarItemHidden(id, true)),
+            ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::NamedSection(
+                ToolbarSectionFlag::Actions
+            )),
+        );
+        assert_eq!(
+            persistence_for_event(&ToolbarEvent::SetToolbarItemHidden(id, false)),
+            ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::NamedSection(
+                ToolbarSectionFlag::Actions
+            )),
+        );
+    }
+
+    #[test]
+    fn hiding_a_tool_item_persists_as_item_visibility() {
+        let id = "top.tool.pen".parse::<ToolbarItemId>().expect("item id");
+        assert_eq!(
+            persistence_for_event(&ToolbarEvent::SetToolbarItemHidden(id, true)),
+            ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::ItemVisibility {
+                id,
+                setting: ToolbarItemVisibilitySetting::Hidden,
+            }),
+        );
+        assert_eq!(
+            persistence_for_event(&ToolbarEvent::SetToolbarItemHidden(id, false)),
+            ToolbarPersistence::RuntimeUi(ToolbarRuntimeUiPersistenceTarget::ItemVisibility {
+                id,
+                setting: ToolbarItemVisibilitySetting::Default,
+            }),
         );
     }
 }

@@ -242,12 +242,11 @@ impl WorkerExitGuard {
     }
 
     fn publish(mut self, message: WorkerMessage) {
-        let result = self
+        let sender = self
             .sender
-            .as_ref()
-            .expect("OCR worker sender retained until publication")
-            .try_send(message);
-        self.sender.take();
+            .take()
+            .expect("OCR worker still holds its sender until publish");
+        let result = sender.try_send(message);
         self.terminal_published = true;
         match result {
             Ok(()) | Err(TrySendError::Disconnected(_)) => {}

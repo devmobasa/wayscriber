@@ -84,6 +84,13 @@ impl StylePillControl {
         })
     }
 
+    /// Primary click for controls whose event lives on the control itself.
+    /// Segmented controls and steppers keep events on their halves.
+    pub(crate) fn click_event(self, snapshot: &ToolbarSnapshot) -> ToolbarEvent {
+        self.event(snapshot)
+            .expect("this style-pill control has a primary click event")
+    }
+
     pub(crate) fn enabled(self, snapshot: &ToolbarSnapshot) -> bool {
         match self {
             // Locked/mixed-locked entries surface as disabled controls,
@@ -119,6 +126,13 @@ impl StylePillControl {
         }
     }
 
+    /// Slider range plus current value. Callers that already matched a slider
+    /// variant use this instead of skipping the control.
+    pub(crate) fn slider_value(self, snapshot: &ToolbarSnapshot) -> (ToolbarSliderSpec, f64) {
+        self.slider(snapshot)
+            .expect("this style-pill control is a slider")
+    }
+
     /// Live readout for sliders and their numeral buttons. The unit follows
     /// the tool context: px for thickness/size targets (the snapshot
     /// already routes eraser/marker sizes through `thickness`), pt for
@@ -139,6 +153,13 @@ impl StylePillControl {
         }
     }
 
+    /// Live readout for a value-bearing control already matched by the
+    /// renderer. Selection entries in the spec always have a snapshot row.
+    pub(crate) fn required_value_text(self, snapshot: &ToolbarSnapshot) -> String {
+        self.value_text(snapshot)
+            .expect("this style-pill control has a live value")
+    }
+
     pub(crate) fn label(self, snapshot: &ToolbarSnapshot) -> Cow<'static, str> {
         match self {
             Self::ColorChip => Cow::Borrowed("Color picker"),
@@ -152,10 +173,8 @@ impl StylePillControl {
             }
             Self::OpacitySlider => Cow::Borrowed("Marker opacity"),
             Self::FontSizeSlider => Cow::Borrowed("Text size"),
-            Self::ThicknessValue | Self::FontSizeValue => Cow::Owned(
-                self.value_text(snapshot)
-                    .expect("numeral controls have a value text"),
-            ),
+            Self::ThicknessValue => Cow::Owned(format!("{:.0}px", snapshot.thickness)),
+            Self::FontSizeValue => Cow::Owned(format!("{:.0}pt", snapshot.font_size)),
             Self::FillToggle => Cow::Borrowed(action_short_label(Action::ToggleFill)),
             Self::AutoNumberToggle => Cow::Borrowed("Auto-number"),
             Self::CounterReset(_) => Cow::Borrowed("Reset"),
@@ -304,5 +323,17 @@ impl StylePillControl {
                 tooltip: format!("Increase {}", entry.label.to_lowercase()),
             },
         ])
+    }
+
+    /// Segment halves for a control already matched as segmented.
+    pub(crate) fn required_segments(self, snapshot: &ToolbarSnapshot) -> [StylePillSegment; 2] {
+        self.segments(snapshot)
+            .expect("this style-pill control is segmented")
+    }
+
+    /// −/+ halves for a selection stepper already present in the spec.
+    pub(crate) fn required_steps(self, snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
+        self.steps(snapshot)
+            .expect("this style-pill stepper has minus/plus halves")
     }
 }

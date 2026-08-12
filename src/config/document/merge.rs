@@ -425,10 +425,7 @@ fn merge_value(raw: &mut Value, previous: Option<&Value>, updated: &Value, path:
             while raw.len() > updated.len() {
                 raw.remove(raw.len() - 1);
             }
-            for index in 0..updated.len() {
-                let updated_value = updated
-                    .get(index)
-                    .expect("array index is bounded by updated length");
+            for (index, updated_value) in updated.iter().enumerate() {
                 if let Some(raw_value) = raw.get_mut(index) {
                     merge_value(
                         raw_value,

@@ -80,7 +80,7 @@ impl TopBar {
                     chip.button
                         .update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
                     let sender = self.feedback.clone();
-                    let event = control.event(snapshot).expect("color chip event");
+                    let event = control.click_event(snapshot);
                     chip.button.connect_clicked(move |_| {
                         send_event(&sender, event.clone());
                     });
@@ -104,7 +104,7 @@ impl TopBar {
                         .button
                         .update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
                     let sender = self.feedback.clone();
-                    let event = control.event(snapshot).expect("swatch event");
+                    let event = control.click_event(snapshot);
                     swatch.button.connect_clicked(move |_| {
                         send_event(&sender, event.clone());
                     });
@@ -123,7 +123,7 @@ impl TopBar {
                 model::StylePillControl::ThicknessSlider
                 | model::StylePillControl::OpacitySlider
                 | model::StylePillControl::FontSizeSlider => {
-                    let (slider_spec, value) = control.slider(snapshot).expect("slider control");
+                    let (slider_spec, value) = control.slider_value(snapshot);
                     let format = match control {
                         model::StylePillControl::ThicknessSlider => format_px as fn(f64) -> String,
                         model::StylePillControl::OpacitySlider => format_percent,
@@ -174,12 +174,12 @@ impl TopBar {
                     // precise-entry popup (the shared event path, like the
                     // color chip's overlay picker popup).
                     let button = pill_button(
-                        &control.value_text(snapshot).expect("numeral text"),
+                        &control.required_value_text(snapshot),
                         sz(STYLE_VALUE_W),
                         sz(STYLE_ROW_H),
                     );
                     let sender = self.feedback.clone();
-                    let event = control.event(snapshot).expect("numeral event");
+                    let event = control.click_event(snapshot);
                     button.connect_clicked(move |_| {
                         send_event(&sender, event.clone());
                     });
@@ -191,7 +191,7 @@ impl TopBar {
                     button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
                     append_gap(&pill, button.upcast_ref(), gap);
                     self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                        button.set_label(&control.value_text(snapshot).expect("numeral text"));
+                        button.set_label(&control.required_value_text(snapshot));
                     }));
                 }
                 model::StylePillControl::FillToggle | model::StylePillControl::AutoNumberToggle => {
@@ -238,7 +238,7 @@ impl TopBar {
                         button.set_tooltip_text(Some(&tooltip));
                     }
                     let sender = self.feedback.clone();
-                    let event = control.event(snapshot).expect("reset event");
+                    let event = control.click_event(snapshot);
                     button.connect_clicked(move |_| {
                         send_event(&sender, event.clone());
                     });
@@ -253,7 +253,7 @@ impl TopBar {
                 }
                 model::StylePillControl::SelectionCycle(_) => {
                     let button = pill_button(
-                        &control.value_text(snapshot).unwrap_or_default(),
+                        &control.required_value_text(snapshot),
                         sz(STYLE_SEL_VALUE_W),
                         sz(STYLE_ROW_H),
                     );
@@ -265,13 +265,13 @@ impl TopBar {
                     let accessible_label = control.label(snapshot);
                     button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
                     let sender = self.feedback.clone();
-                    let event = control.event(snapshot).expect("selection cycle event");
+                    let event = control.click_event(snapshot);
                     button.connect_clicked(move |_| {
                         send_event(&sender, event.clone());
                     });
                     append_gap(&pill, button.upcast_ref(), gap);
                     self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                        button.set_label(&control.value_text(snapshot).unwrap_or_default());
+                        button.set_label(&control.required_value_text(snapshot));
                         button.set_sensitive(control.enabled(snapshot));
                         button.set_tooltip_text(control.tooltip(snapshot).as_deref());
                     }));
@@ -280,15 +280,14 @@ impl TopBar {
                     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, px(2.0));
                     set_semantic_widget_id(&row, control.id().as_ref());
                     row.set_valign(gtk4::Align::Center);
-                    let steps = control.steps(snapshot).expect("stepper halves");
+                    let steps = control.required_steps(snapshot);
                     let mut handles: Vec<gtk4::Button> = Vec::new();
                     let minus = pill_button(steps[0].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));
                     set_semantic_widget_id(&minus, steps[0].id);
                     minus.set_tooltip_text(Some(&steps[0].tooltip));
                     row.append(&minus);
                     handles.push(minus.clone());
-                    let value =
-                        gtk4::Label::new(Some(&control.value_text(snapshot).unwrap_or_default()));
+                    let value = gtk4::Label::new(Some(&control.required_value_text(snapshot)));
                     set_semantic_widget_id(&value, &format!("{}.value", control.id()));
                     value.set_width_request(px(STYLE_SEL_VALUE_W));
                     row.append(&value);
@@ -307,7 +306,7 @@ impl TopBar {
                     }
                     append_gap(&pill, row.upcast_ref(), gap);
                     self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                        value.set_label(&control.value_text(snapshot).unwrap_or_default());
+                        value.set_label(&control.required_value_text(snapshot));
                         let enabled = control.enabled(snapshot);
                         for button in &handles {
                             button.set_sensitive(enabled);
@@ -322,7 +321,7 @@ impl TopBar {
                     // A clear gap before the segment so Sans│Mono never crowd
                     // the preceding numeral ("72pt") to its left (M7-C3).
                     row.set_margin_start(px(STYLE_SEGMENT_LEAD));
-                    let segments = control.segments(snapshot).expect("segment halves");
+                    let segments = control.required_segments(snapshot);
                     let mut handles: Vec<(gtk4::Button, &'static str)> = Vec::new();
                     for segment in &segments {
                         let button = pill_button(segment.label, -1.0, sz(STYLE_TAB_H));
@@ -342,9 +341,7 @@ impl TopBar {
                     }
                     append_gap(&pill, row.upcast_ref(), gap);
                     self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                        let Some(segments) = control.segments(snapshot) else {
-                            return;
-                        };
+                        let segments = control.required_segments(snapshot);
                         for (button, id) in &handles {
                             let active = segments
                                 .iter()
