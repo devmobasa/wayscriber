@@ -8,12 +8,24 @@ use anyhow::{Context, Result};
 use log::info;
 use smithay_client_toolkit::{
     shell::{WaylandSurface, wlr_layer::LayerSurface, xdg::window::Window},
-    shm::{Shm, slot::SlotPool},
+    shm::{
+        Shm,
+        slot::{Buffer, Slot, SlotPool},
+    },
 };
 use wayland_client::{
     Proxy,
-    protocol::{wl_output, wl_surface},
+    protocol::{wl_output, wl_shm, wl_surface},
 };
+
+/// A buffer handed out for one frame, plus the pool identity the damage
+/// tracker needs to tell slot reuse from pool reallocation.
+pub struct AcquiredBuffer {
+    pub buffer: Buffer,
+    pub canvas_ptr: usize,
+    pub pool_generation: u64,
+    pub pool_size: usize,
+}
 
 /// The active shell role for the surface.
 pub enum SurfaceKind {
@@ -66,6 +78,10 @@ pub struct SurfaceState {
     kind: Option<SurfaceKind>,
     wl_surface: Option<wl_surface::WlSurface>,
     pool: Option<SlotPool>,
+    /// The `buffer_count` slots backing the swapchain, held for the pool's
+    /// lifetime so it stays bounded: a slot's memory only returns to the
+    /// pool's free list when the pool itself is dropped, never mid-frame.
+    slots: Vec<Slot>,
     /// Generation counter incremented when pool is recreated.
     /// Used by damage tracker to detect pool reallocation.
     pool_generation: u64,
@@ -86,6 +102,7 @@ impl SurfaceState {
             kind: None,
             wl_surface: None,
             pool: None,
+            slots: Vec::new(),
             pool_generation: 0,
             pool_size: 0,
             current_output: None,
@@ -102,8 +119,7 @@ impl SurfaceState {
         self.wl_surface = Some(surface.wl_surface().clone());
         self.kind = Some(SurfaceKind::Layer(surface));
         // A new shell surface invalidates current buffer resources/state.
-        self.pool = None;
-        self.pool_size = 0;
+        self.drop_pool();
         self.current_output = None;
         self.configured = false;
         self.frame_callbacks.clear();
@@ -114,8 +130,7 @@ impl SurfaceState {
         self.wl_surface = Some(window.wl_surface().clone());
         self.kind = Some(SurfaceKind::Xdg { window });
         // A new shell surface invalidates current buffer resources/state.
-        self.pool = None;
-        self.pool_size = 0;
+        self.drop_pool();
         self.current_output = None;
         self.configured = false;
         self.frame_callbacks.clear();
@@ -180,8 +195,7 @@ impl SurfaceState {
         self.width = width;
         self.height = height;
         if changed {
-            self.pool = None;
-            self.pool_size = 0;
+            self.drop_pool();
         }
         changed
     }
@@ -191,8 +205,7 @@ impl SurfaceState {
         let scale = scale.max(1);
         if self.scale != scale {
             self.scale = scale;
-            self.pool = None;
-            self.pool_size = 0;
+            self.drop_pool();
             if let Some(layer_surface) = self.layer_surface_mut() {
                 let _ = layer_surface.set_buffer_scale(scale as u32);
             } else if let Some(wl_surface) = self.wl_surface() {
@@ -277,37 +290,101 @@ impl SurfaceState {
         grew
     }
 
+    /// Releases the pool and every slot held for it.
+    ///
+    /// Dropping the slots is what returns their memory to the pool's free
+    /// list, so this must run whenever the pool itself is replaced.
+    fn drop_pool(&mut self) {
+        self.pool = None;
+        self.pool_size = 0;
+        self.slots.clear();
+    }
+
     /// Ensures a shared memory pool of the appropriate size exists.
     ///
-    /// Returns the pool and the current generation counter. The generation is
-    /// incremented when a new pool is created, which can be used to detect when
-    /// damage tracking should be reset (all previous canvas pointers become invalid).
-    pub fn ensure_pool(&mut self, shm: &Shm, buffer_count: usize) -> Result<(&mut SlotPool, u64)> {
-        if self.pool.is_none() {
-            let (phys_w, phys_h) = self.physical_dimensions();
-            let buffer_size = (phys_w * phys_h * 4) as usize;
-            let initial_pool_size = buffer_size * buffer_count;
-            info!(
-                "Creating new SlotPool ({}x{} @ scale {}, {} bytes, {} buffers, gen {})",
-                phys_w,
-                phys_h,
-                self.scale,
-                initial_pool_size,
-                buffer_count,
-                self.pool_generation + 1
-            );
-            let pool =
-                SlotPool::new(initial_pool_size, shm).context("Failed to create slot pool")?;
-            self.pool_size = pool.len();
-            self.pool = Some(pool);
-            self.pool_generation += 1;
+    /// The generation counter is incremented when a new pool is created, which
+    /// lets the damage tracker detect pool reallocation (all previous canvas
+    /// pointers become invalid).
+    fn ensure_pool(&mut self, shm: &Shm, buffer_count: usize, slot_len: usize) -> Result<()> {
+        if self.pool.is_some() {
+            return Ok(());
+        }
+        let (phys_w, phys_h) = self.physical_dimensions();
+        let initial_pool_size = slot_len * buffer_count;
+        info!(
+            "Creating new SlotPool ({}x{} @ scale {}, {} bytes, {} buffers, gen {})",
+            phys_w,
+            phys_h,
+            self.scale,
+            initial_pool_size,
+            buffer_count,
+            self.pool_generation + 1
+        );
+        let pool = SlotPool::new(initial_pool_size, shm).context("Failed to create slot pool")?;
+        self.pool_size = pool.len();
+        self.pool = Some(pool);
+        self.pool_generation += 1;
+        self.slots.clear();
+        Ok(())
+    }
+
+    /// Hands out a buffer for this frame, or `None` while the compositor still
+    /// owns every slot.
+    ///
+    /// The pool holds exactly `buffer_count` slots for its whole lifetime, and
+    /// a slot is only drawn into while it has no active buffers - that is,
+    /// after the compositor sent `wl_buffer.release` for the frame that used
+    /// it last. Allocating a fresh slot per frame instead would let sctk grow
+    /// the pool without bound whenever rendering outruns the compositor, which
+    /// no-vsync rendering (especially `max_fps_no_vsync = 0`) does easily.
+    pub fn acquire_buffer(
+        &mut self,
+        shm: &Shm,
+        buffer_count: usize,
+        width: i32,
+        height: i32,
+        stride: i32,
+    ) -> Result<Option<AcquiredBuffer>> {
+        let buffer_count = buffer_count.max(1);
+        // sctk rounds slot lengths up to 64 bytes; size the pool the same way
+        // so the last slot does not trigger a growth on the first frame.
+        let slot_len = ((height as usize) * (stride as usize)).next_multiple_of(64);
+        // Slots are never dropped individually: an in-flight buffer still
+        // references its slot, so clearing them piecemeal would strand that
+        // memory and let the next allocation grow the pool. Outgrowing the
+        // slots rebuilds the pool wholesale instead, which resets the damage
+        // tracker through the generation counter.
+        if self.slots.iter().any(|slot| slot.len() < slot_len) {
+            self.drop_pool();
+        }
+        self.ensure_pool(shm, buffer_count, slot_len)?;
+
+        let pool_generation = self.pool_generation;
+        let Self { pool, slots, .. } = self;
+        let pool = pool
+            .as_mut()
+            .context("Buffer pool not initialized despite previous check")?;
+
+        for _ in slots.len()..buffer_count {
+            slots.push(pool.new_slot(slot_len).context("Failed to allocate slot")?);
         }
 
-        let generation = self.pool_generation;
-        self.pool
-            .as_mut()
-            .map(|p| (p, generation))
-            .context("Buffer pool not initialized despite previous check")
+        let Some(slot) = slots.iter().find(|slot| !slot.has_active_buffers()) else {
+            return Ok(None);
+        };
+
+        let buffer = pool
+            .create_buffer_in(slot, width, height, stride, wl_shm::Format::Argb8888)
+            .context("Failed to create buffer")?;
+        let canvas_ptr = pool.raw_data_mut(slot).as_mut_ptr() as usize;
+        let pool_size = pool.len();
+
+        Ok(Some(AcquiredBuffer {
+            buffer,
+            canvas_ptr,
+            pool_generation,
+            pool_size,
+        }))
     }
 }
 

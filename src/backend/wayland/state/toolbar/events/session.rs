@@ -193,7 +193,23 @@ impl WaylandState {
                 "another overlay operation is already active; try again after it finishes"
             ));
         }
-        if let Err(err) = self.flush_overlay_dialog_frame(conn, qh) {
+        let hidden = self
+            .flush_overlay_dialog_frame(conn, qh)
+            .and_then(|outcome| {
+                if dialog_frame_accepted(DialogFramePhase::Entry, outcome) {
+                    Ok(())
+                } else {
+                    // The transparent frame was deferred, so the overlay's old
+                    // pixels are still on screen. Starting the chooser now would
+                    // let them sit over it - on Niri the overlay layer can cover
+                    // the chooser outright. Roll back and make the user retry
+                    // instead: nothing has been chosen yet, so nothing is lost.
+                    Err(anyhow!(
+                        "overlay buffers were still in flight; try again in a moment"
+                    ))
+                }
+            });
+        if let Err(err) = hidden {
             self.exit_overlay_suppression(OverlaySuppression::ExternalDialog);
             let _ = self.flush_overlay_dialog_frame(conn, qh);
             return Err(err).context("failed to hide overlay before opening session dialog");
@@ -207,25 +223,56 @@ impl WaylandState {
         qh: Option<&QueueHandle<Self>>,
     ) -> Result<()> {
         self.exit_overlay_suppression(OverlaySuppression::ExternalDialog);
+        // Restoration takes the opposite policy to entry: a deferred frame is
+        // fine here. The redraw stays pending and the event loop paints it,
+        // whereas failing would discard the file the user just chose.
         self.flush_overlay_dialog_frame(conn, qh)
+            .and_then(|outcome| {
+                if dialog_frame_accepted(DialogFramePhase::Restoration, outcome) {
+                    Ok(())
+                } else {
+                    Err(anyhow!(
+                        "overlay restoration frame was rejected by dialog policy"
+                    ))
+                }
+            })
             .context("failed to restore overlay after session dialog")
     }
 
+    /// Renders and flushes the overlay's dialog-suppression frame.
+    ///
+    /// Returns what the render actually did so each caller can apply its own
+    /// policy; with no surface or queue there is nothing to commit, which
+    /// counts as committed.
     fn flush_overlay_dialog_frame(
         &mut self,
         conn: Option<&Connection>,
         qh: Option<&QueueHandle<Self>>,
-    ) -> Result<()> {
+    ) -> Result<RenderOutcome> {
+        let mut outcome = RenderOutcome::Committed {
+            keep_rendering: false,
+        };
         if self.surface.is_configured()
             && let Some(qh) = qh
         {
-            self.render(qh)?;
+            // This frame makes the overlay's pixels transparent before a file
+            // dialog opens, and opaque again afterwards.
+            //
+            // Never block waiting for a slot here: a `Connection::roundtrip`
+            // only confirms the server processed our requests - it says
+            // nothing about `wl_buffer.release`, which arrives when the
+            // compositor stops using the buffer - and it has no timeout.
+            // Report the outcome instead and let the caller decide.
+            outcome = self.render(qh)?;
+            if let RenderOutcome::BuffersInFlight = outcome {
+                debug!("Overlay dialog frame deferred - all buffers still in flight");
+            }
         }
         if let Some(conn) = conn {
             conn.flush()
                 .map_err(|err| anyhow!("Wayland flush failed: {err}"))?;
         }
-        Ok(())
+        Ok(outcome)
     }
 
     fn handle_toolbar_open_session(
@@ -469,4 +516,74 @@ fn missing_session_error_matches_path(path: &Path, err: &AnyhowError) -> bool {
         || err
             .downcast_ref::<crate::session::MissingNamedSessionParent>()
             .is_some_and(|missing| catalog::session_paths_match(missing.path(), path))
+}
+
+#[derive(Clone, Copy)]
+enum DialogFramePhase {
+    Entry,
+    Restoration,
+}
+
+/// Whether a dialog-suppression frame is acceptable at the given phase.
+///
+/// Entry and restoration take deliberately opposite policies. Entry needs the
+/// transparent frame on screen first: starting the chooser while the overlay's
+/// old pixels are still up leaves them sitting over it, and on compositors
+/// where the overlay maps to the overlay layer (Niri, Sway) they can cover the
+/// chooser outright. Nothing is lost by refusing - the user has not chosen a
+/// file yet. Restoration is the reverse: the file has been chosen, so a
+/// deferred frame is accepted and the event loop repaints.
+fn dialog_frame_accepted(phase: DialogFramePhase, outcome: RenderOutcome) -> bool {
+    match (phase, outcome) {
+        (DialogFramePhase::Entry, RenderOutcome::Committed { .. })
+        | (DialogFramePhase::Restoration, RenderOutcome::Committed { .. })
+        | (DialogFramePhase::Restoration, RenderOutcome::BuffersInFlight) => true,
+        (DialogFramePhase::Entry, RenderOutcome::BuffersInFlight) => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DialogFramePhase, dialog_frame_accepted};
+    use crate::backend::wayland::state::RenderOutcome;
+
+    #[test]
+    fn dialog_entry_requires_a_committed_frame() {
+        assert!(dialog_frame_accepted(
+            DialogFramePhase::Entry,
+            RenderOutcome::Committed {
+                keep_rendering: false
+            }
+        ));
+        assert!(dialog_frame_accepted(
+            DialogFramePhase::Entry,
+            RenderOutcome::Committed {
+                keep_rendering: true
+            }
+        ));
+        assert!(!dialog_frame_accepted(
+            DialogFramePhase::Entry,
+            RenderOutcome::BuffersInFlight
+        ));
+    }
+
+    #[test]
+    fn dialog_restoration_accepts_a_deferred_frame() {
+        assert!(dialog_frame_accepted(
+            DialogFramePhase::Restoration,
+            RenderOutcome::Committed {
+                keep_rendering: false
+            }
+        ));
+        assert!(dialog_frame_accepted(
+            DialogFramePhase::Restoration,
+            RenderOutcome::Committed {
+                keep_rendering: true
+            }
+        ));
+        assert!(dialog_frame_accepted(
+            DialogFramePhase::Restoration,
+            RenderOutcome::BuffersInFlight
+        ));
+    }
 }

@@ -5,8 +5,24 @@ mod tool_preview;
 mod ui;
 mod ui_effect_damage;
 
+/// What a render pass actually did.
+///
+/// `BuffersInFlight` is not a frame: nothing was painted or committed, so the
+/// caller must keep the redraw pending and leave the frame counters alone.
+/// Discarding this silently would let a caller treat an uncommitted frame as
+/// on-screen, so it is `#[must_use]`.
+#[must_use]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::backend::wayland) enum RenderOutcome {
+    Committed { keep_rendering: bool },
+    BuffersInFlight,
+}
+
 impl WaylandState {
-    pub(in crate::backend::wayland) fn render(&mut self, qh: &QueueHandle<Self>) -> Result<bool> {
+    pub(in crate::backend::wayland) fn render(
+        &mut self,
+        qh: &QueueHandle<Self>,
+    ) -> Result<RenderOutcome> {
         debug!("=== RENDER START ===");
         let board_is_transparent = self.input_state.board_is_transparent();
         let suppression = self
@@ -44,6 +60,40 @@ impl WaylandState {
             }};
         }
 
+        // Acquire the buffer before anything mutates render state. Animation
+        // ticks and `collect_ui_effect_damage` both advance clocks and record
+        // previous bounds exactly once per rendered frame, so running them for
+        // a frame that is then deferred would let the next real commit miss an
+        // effect's on-screen footprint.
+        let acquired = record_stage!(buffer_acquire, {
+            self.surface.acquire_buffer(
+                &self.shm,
+                buffer_count,
+                phys_width as i32,
+                phys_height as i32,
+                (phys_width * 4) as i32,
+            )?
+        });
+        let Some(acquired) = acquired else {
+            // Every slot is still owned by the compositor. Keep the redraw
+            // pending and retry on the next pass rather than painting over a
+            // buffer that is still on screen.
+            debug!("All {buffer_count} buffers in flight - deferring this frame");
+            self.record_perf_render_skip(PerfRenderSkipReason::BuffersInFlight);
+            return Ok(RenderOutcome::BuffersInFlight);
+        };
+        // The canvas pointer doubles as the slot identifier for damage
+        // tracking: a slot keeps its memory for the pool's lifetime, so the
+        // same pointer means the same slot.
+        let super::super::surface::AcquiredBuffer {
+            buffer,
+            canvas_ptr,
+            pool_generation: pool_gen,
+            pool_size,
+        } = acquired;
+        debug!("Buffer acquired from pool (slot ptr: 0x{:x})", canvas_ptr);
+        self.surface.update_pool_size(pool_size);
+
         let now = Instant::now();
         let (
             highlight_active,
@@ -71,9 +121,10 @@ impl WaylandState {
         self.update_ui_animation_tick(now, ui_animation_active);
         let keep_rendering = ui_animation_active && self.ui_animation_interval.is_none();
 
-        // Add new dirty regions from input state to the per-buffer damage tracker.
-        // We do this BEFORE acquiring the buffer/damage so the current frame's changes
-        // are included in the damage for the current buffer.
+        // Add new dirty regions from input state to the per-buffer damage
+        // tracker. This runs after the buffer is acquired but before its damage
+        // is drained below, so the current frame's changes are included in the
+        // damage reported for this slot.
         let logical_width = width.min(i32::MAX as u32) as i32;
         let logical_height = height.min(i32::MAX as u32) as i32;
         let mut damage_diagnostics = PerfDamageDiagnostics::default();
@@ -120,36 +171,6 @@ impl WaylandState {
                 self.buffer_damage.add_regions(ui_effect_damage);
             }
         });
-
-        // Get a buffer from the pool for rendering
-        let (buffer, canvas_ptr, pool_gen, pool_size) = record_stage!(buffer_acquire, {
-            let (pool, generation) = self.surface.ensure_pool(&self.shm, buffer_count)?;
-            debug!(
-                "Requesting buffer from pool (gen {}, size {})",
-                generation,
-                pool.len()
-            );
-            let (buf, cvs) = pool
-                .create_buffer(
-                    phys_width as i32,
-                    phys_height as i32,
-                    (phys_width * 4) as i32,
-                    wl_shm::Format::Argb8888,
-                )
-                .context("Failed to create buffer")?;
-            // Capture canvas pointer as stable slot identifier for damage tracking.
-            // SlotPool reuses the same memory regions, so this pointer identifies the slot.
-            let ptr = cvs.as_mut_ptr();
-            let key = ptr as usize;
-            // Drop the slice borrow so we can query pool metadata; keep raw pointer for Cairo.
-            let _ = cvs;
-            let pool_size = pool.len();
-            debug!("Buffer acquired from pool (slot ptr: 0x{:x})", key);
-            (buf, key, generation, pool_size)
-        });
-
-        // Record pool size after create_buffer to detect growth.
-        self.surface.update_pool_size(pool_size);
 
         // Take damage for this buffer slot (identified by canvas memory address).
         // Pool identity (generation + size) is passed to detect pool recreation/growth.
@@ -436,7 +457,7 @@ impl WaylandState {
         if self.capture_suppressed() {
             self.capture.mark_preflight_rendered();
         }
-        Ok(keep_rendering)
+        Ok(RenderOutcome::Committed { keep_rendering })
     }
 
     fn render_force_full_damage_reason(&self) -> Option<FullDamageReason> {
