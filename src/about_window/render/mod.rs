@@ -74,7 +74,11 @@ impl AboutWindowState {
 
         let wl_surface = self.window.wl_surface();
         wl_surface.set_buffer_scale(self.scale);
-        wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
+        // Hold the slot until the compositor releases it; a raw attach frees it
+        // immediately and the next frame repaints the buffer still on screen.
+        buffer
+            .attach_to(wl_surface)
+            .map_err(|err| anyhow::anyhow!("failed to attach the about-window buffer: {err}"))?;
         wl_surface.damage_buffer(0, 0, phys_w as i32, phys_h as i32);
         wl_surface.commit();
 

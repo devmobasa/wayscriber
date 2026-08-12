@@ -362,7 +362,15 @@ impl WaylandState {
                 .cloned()
                 .context("Surface not created")?;
             wl_surface.set_buffer_scale(scale);
-            wl_surface.attach(Some(buffer.wl_buffer()), 0, 0);
+            // `attach_to` marks the slot active until the compositor releases the
+            // buffer. Attaching the raw `wl_buffer()` instead leaves the slot free,
+            // so the pool hands the same memory back on the next frame and the next
+            // paint lands in the buffer the compositor is still reading - the whole
+            // swapchain collapses to one slot and partial damage resurfaces stale or
+            // half-drawn pixels.
+            buffer
+                .attach_to(&wl_surface)
+                .map_err(|err| anyhow::anyhow!("failed to attach the overlay buffer: {err}"))?;
 
             // Damage logic moved to top of function (add_regions and take_buffer_damage).
             // We now use the computed screen-space damage for clipping and compositor hints.
