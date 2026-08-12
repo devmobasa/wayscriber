@@ -150,10 +150,14 @@ impl WaylandState {
             // annotation pixels during rapid pointer motion.
             self.mark_inline_toolbar_full_damage();
         } else if was_top_hover != self.data.inline_top_hover {
-            // Preserve motion-driven tooltip timing without paying for a full
-            // swapchain refresh while the pointer stays on the same control.
-            self.toolbar.mark_dirty();
-            self.input_state.needs_redraw = true;
+            // Same hit region, new pointer position - which still changes what
+            // is painted: hit regions are inflated to MIN_HIT_TARGET, so
+            // moving from that inflated margin onto the control itself keeps
+            // the same target while flipping the hover highlight, which paints
+            // against the visual rect. Keep the repaint scoped to the strip:
+            // setting needs_redraw with no damage rect would repaint the whole
+            // surface through the empty-damage fallback on every motion event.
+            self.mark_inline_toolbar_rect_damage();
         }
 
         if over_toolbar {

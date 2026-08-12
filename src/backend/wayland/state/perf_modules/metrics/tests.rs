@@ -249,6 +249,7 @@ fn frame_pacing_summary_reports_render_percentiles_and_skips() {
     metrics.record_render_skip(PerfRenderSkipReason::FpsCap);
     metrics.record_render_skip(PerfRenderSkipReason::SurfaceUnconfigured);
     metrics.record_render_skip(PerfRenderSkipReason::NoRedraw);
+    metrics.record_render_skip(PerfRenderSkipReason::BuffersInFlight);
 
     for frame in 0..SUMMARY_FRAME_INTERVAL {
         let started_at = base + Duration::from_millis(frame * 2);
@@ -282,6 +283,7 @@ fn frame_pacing_summary_reports_render_percentiles_and_skips() {
             assert_eq!(summary.skipped_fps_cap, 1);
             assert_eq!(summary.skipped_surface_unconfigured, 1);
             assert_eq!(summary.skipped_no_redraw, 1);
+            assert_eq!(summary.skipped_buffers_in_flight, 1);
             assert_eq!(summary.render_over_50ms, 70);
             assert_eq!(summary.full_damage_count, 3);
             assert_eq!(summary.full_damage_pct, "2.50");
@@ -425,4 +427,33 @@ fn damage_percentage_clamps_to_surface_bounds() {
         100,
         100
     ));
+}
+
+/// Skip counters are per-window: a deferral counted in one summary must not
+/// be carried into the next, or a running total hides whether the swapchain
+/// bound is still engaging.
+#[test]
+fn frame_pacing_summary_resets_skip_counters_between_windows() {
+    let base = Instant::now();
+    let mut metrics = PerfMetrics::new(true);
+    metrics.record_render_skip(PerfRenderSkipReason::BuffersInFlight);
+
+    let mut summaries = Vec::new();
+    for frame in 0..(SUMMARY_FRAME_INTERVAL * 2) {
+        let started_at = base + Duration::from_millis(frame * 2);
+        let report = metrics.record_render_complete(
+            started_at,
+            started_at + Duration::from_millis(1),
+            true,
+            120,
+            false,
+        );
+        if let Some(summary) = report.and_then(|report| report.summary) {
+            summaries.push(summary);
+        }
+    }
+
+    assert_eq!(summaries.len(), 2);
+    assert_eq!(summaries[0].skipped_buffers_in_flight, 1);
+    assert_eq!(summaries[1].skipped_buffers_in_flight, 0);
 }

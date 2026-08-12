@@ -27,7 +27,7 @@ use std::{
 };
 use wayland_client::{
     Proxy, QueueHandle,
-    protocol::{wl_output, wl_pointer, wl_seat, wl_shm, wl_surface, wl_touch},
+    protocol::{wl_output, wl_pointer, wl_seat, wl_surface, wl_touch},
 };
 #[cfg(feature = "tablet-input")]
 use wayland_protocols::wp::tablet::zv2::client::{
@@ -131,6 +131,7 @@ pub(in crate::backend::wayland) use self::perf::{
     PerfDamageDiagnostics, PerfFrameDamageContext, PerfInputSource, PerfRenderBreakdown,
     PerfRenderProfileKind, PerfRenderSkipReason, damage_covers_logical_surface,
 };
+pub(in crate::backend::wayland) use self::render::RenderOutcome;
 pub(super) use helpers::{
     damage_summary, debug_damage_logging_enabled, debug_toolbar_drag_logging_enabled, drag_log,
     force_inline_toolbars_requested, scale_damage_regions, surface_id,

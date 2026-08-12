@@ -71,6 +71,7 @@ pub(in crate::backend::wayland) enum PerfRenderSkipReason {
     FpsCap,
     SurfaceUnconfigured,
     NoRedraw,
+    BuffersInFlight,
 }
 
 impl fmt::Display for PerfRenderSkipReason {
@@ -80,6 +81,7 @@ impl fmt::Display for PerfRenderSkipReason {
             Self::FpsCap => f.write_str("fps_cap"),
             Self::SurfaceUnconfigured => f.write_str("surface_unconfigured"),
             Self::NoRedraw => f.write_str("no_redraw"),
+            Self::BuffersInFlight => f.write_str("buffers_in_flight"),
         }
     }
 }
@@ -218,6 +220,7 @@ struct PerfFramePacingSummary {
     skipped_fps_cap: u64,
     skipped_surface_unconfigured: u64,
     skipped_no_redraw: u64,
+    skipped_buffers_in_flight: u64,
 }
 
 #[derive(Debug)]
@@ -244,6 +247,7 @@ pub(super) struct PerfMetrics {
     skipped_fps_cap: u64,
     skipped_surface_unconfigured: u64,
     skipped_no_redraw: u64,
+    skipped_buffers_in_flight: u64,
     dropped_input_samples: u64,
     last_summary_at: Option<Instant>,
     last_frame_pacing_summary_at: Option<Instant>,
@@ -386,7 +390,7 @@ fn log_input_summary(summary: &PerfSummary, final_summary: bool) {
 
 fn log_frame_pacing_summary(summary: &PerfFramePacingSummary, final_summary: bool) {
     info!(
-        "perf.frame_pacing frames={} window_frames={} render_p50_ms={} render_p95_ms={} render_p99_ms={} render_max_ms={} render_over_8ms={} render_over_16ms={} render_over_33ms={} render_over_50ms={} full_damage_count={} full_damage_pct={} force_full_reason={} force_full_reasons={} skipped_frame_callback_pending={} skipped_fps_cap={} skipped_surface_unconfigured={} skipped_no_redraw={} final={}",
+        "perf.frame_pacing frames={} window_frames={} render_p50_ms={} render_p95_ms={} render_p99_ms={} render_max_ms={} render_over_8ms={} render_over_16ms={} render_over_33ms={} render_over_50ms={} full_damage_count={} full_damage_pct={} force_full_reason={} force_full_reasons={} skipped_frame_callback_pending={} skipped_fps_cap={} skipped_surface_unconfigured={} skipped_no_redraw={} skipped_buffers_in_flight={} final={}",
         summary.frames,
         summary.window_frames,
         summary.render_p50_ms,
@@ -405,6 +409,7 @@ fn log_frame_pacing_summary(summary: &PerfFramePacingSummary, final_summary: boo
         summary.skipped_fps_cap,
         summary.skipped_surface_unconfigured,
         summary.skipped_no_redraw,
+        summary.skipped_buffers_in_flight,
         final_summary
     );
 }

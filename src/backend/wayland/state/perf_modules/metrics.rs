@@ -33,6 +33,7 @@ impl PerfMetrics {
             skipped_fps_cap: 0,
             skipped_surface_unconfigured: 0,
             skipped_no_redraw: 0,
+            skipped_buffers_in_flight: 0,
             dropped_input_samples: 0,
             last_summary_at: None,
             last_frame_pacing_summary_at: None,
@@ -74,6 +75,9 @@ impl PerfMetrics {
             }
             PerfRenderSkipReason::NoRedraw => {
                 self.skipped_no_redraw += 1;
+            }
+            PerfRenderSkipReason::BuffersInFlight => {
+                self.skipped_buffers_in_flight += 1;
             }
         }
     }
@@ -424,6 +428,7 @@ impl PerfMetrics {
             skipped_fps_cap: self.skipped_fps_cap,
             skipped_surface_unconfigured: self.skipped_surface_unconfigured,
             skipped_no_redraw: self.skipped_no_redraw,
+            skipped_buffers_in_flight: self.skipped_buffers_in_flight,
         }
     }
 
@@ -445,6 +450,7 @@ impl PerfMetrics {
         self.skipped_fps_cap = 0;
         self.skipped_surface_unconfigured = 0;
         self.skipped_no_redraw = 0;
+        self.skipped_buffers_in_flight = 0;
         self.last_frame_pacing_summary_at = Some(now);
     }
 

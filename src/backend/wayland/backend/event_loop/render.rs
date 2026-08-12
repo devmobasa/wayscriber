@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use log::{debug, warn};
 
-use super::super::super::state::{PerfRenderSkipReason, WaylandState};
+use super::super::super::state::{PerfRenderSkipReason, RenderOutcome, WaylandState};
 
 const MAX_RENDER_FAILURES: u32 = 10;
 
@@ -92,7 +92,17 @@ pub(super) fn maybe_render(
             state.input_state.zoom_chip_hover,
         );
         match state.render(qh) {
-            Ok(keep_rendering) => {
+            Ok(RenderOutcome::BuffersInFlight) => {
+                // Nothing was painted or committed: the compositor still owns
+                // every slot. Leave `needs_redraw` set so the next pass retries,
+                // and pace that retry off `last_render_time` like any other
+                // attempt so the FPS cap throttles the wait instead of spinning.
+                // The frame counters stay untouched - this was not a frame.
+                *consecutive_render_failures = 0;
+                *last_render_time = Some(Instant::now());
+                debug!("Main loop: render deferred - all buffers still held by the compositor");
+            }
+            Ok(RenderOutcome::Committed { keep_rendering }) => {
                 let render_end = Instant::now();
                 let render_duration = render_end.saturating_duration_since(render_start);
                 if render_duration > Duration::from_millis(5) {
