@@ -168,4 +168,15 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         false
     ),
+    meta!(
+        CopyTextFromScreen,
+        "Copy Text From Screen",
+        Some("Copy Text"),
+        "Select a screen region and copy recognized text",
+        Capture,
+        true,
+        true,
+        true,
+        &["ocr", "recognize text", "screen text", "copy text"]
+    ),
 ];

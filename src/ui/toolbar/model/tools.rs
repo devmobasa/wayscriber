@@ -145,6 +145,10 @@ pub(crate) fn top_screenshot_visible(snapshot: &ToolbarSnapshot) -> bool {
     toolbar_item_visible(snapshot, ids::TOP_UTILITY_SCREENSHOT)
 }
 
+pub(crate) fn top_ocr_visible(snapshot: &ToolbarSnapshot) -> bool {
+    toolbar_item_visible(snapshot, ids::TOP_UTILITY_OCR)
+}
+
 pub(crate) fn top_highlight_visible(snapshot: &ToolbarSnapshot) -> bool {
     toolbar_item_visible(snapshot, ids::TOP_UTILITY_HIGHLIGHT)
 }
@@ -213,15 +217,17 @@ pub(crate) enum TopUtilityButton {
     Text,
     StickyNote,
     Screenshot,
+    Ocr,
     ClearCanvas,
     Highlight,
     IconMode,
 }
 
-const DEFAULT_TOP_UTILITY_BUTTONS: [TopUtilityButton; 5] = [
+const DEFAULT_TOP_UTILITY_BUTTONS: [TopUtilityButton; 6] = [
     TopUtilityButton::Text,
     TopUtilityButton::StickyNote,
     TopUtilityButton::Screenshot,
+    TopUtilityButton::Ocr,
     TopUtilityButton::Highlight,
     TopUtilityButton::ClearCanvas,
 ];
@@ -232,6 +238,7 @@ impl TopUtilityButton {
             Self::Text => ids::TOP_UTILITY_TEXT,
             Self::StickyNote => ids::TOP_UTILITY_STICKY_NOTE,
             Self::Screenshot => ids::TOP_UTILITY_SCREENSHOT,
+            Self::Ocr => ids::TOP_UTILITY_OCR,
             Self::ClearCanvas => ids::TOP_UTILITY_CLEAR_CANVAS,
             Self::Highlight => ids::TOP_UTILITY_HIGHLIGHT,
             Self::IconMode if snapshot.use_icons => ids::TOP_UTILITY_ICON_MODE_TEXT,
@@ -278,6 +285,8 @@ fn top_utility_button_for_id(
         Some(TopUtilityButton::StickyNote)
     } else if id == ids::TOP_UTILITY_SCREENSHOT {
         Some(TopUtilityButton::Screenshot)
+    } else if id == ids::TOP_UTILITY_OCR {
+        Some(TopUtilityButton::Ocr)
     } else if id == ids::TOP_UTILITY_CLEAR_CANVAS {
         Some(TopUtilityButton::ClearCanvas)
     } else if id == ids::TOP_UTILITY_HIGHLIGHT {
@@ -302,6 +311,7 @@ fn top_utility_button_visible(
         TopUtilityButton::Text => top_text_visible(snapshot),
         TopUtilityButton::StickyNote => top_sticky_note_visible(snapshot),
         TopUtilityButton::Screenshot => top_screenshot_visible(snapshot),
+        TopUtilityButton::Ocr => top_ocr_visible(snapshot),
         TopUtilityButton::ClearCanvas => !simple && top_clear_canvas_visible(snapshot),
         TopUtilityButton::Highlight => !simple && use_icons && top_highlight_visible(snapshot),
         TopUtilityButton::IconMode => false,

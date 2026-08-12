@@ -148,6 +148,7 @@ pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
         ToolbarEvent::RedoAllDelayed => Some(Action::RedoAllDelayed),
         ToolbarEvent::ClearCanvas { .. } => Some(Action::ClearCanvas),
         ToolbarEvent::CaptureScreenshot => Some(Action::CaptureSelection),
+        ToolbarEvent::CopyTextFromScreen => Some(Action::CopyTextFromScreen),
         ToolbarEvent::PagePrev => Some(Action::PagePrev),
         ToolbarEvent::PageNext => Some(Action::PageNext),
         ToolbarEvent::PageNew => Some(Action::PageNew),
@@ -516,6 +517,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::Redo
         | ToolbarEvent::ClearCanvas { .. }
         | ToolbarEvent::CaptureScreenshot
+        | ToolbarEvent::CopyTextFromScreen
         | ToolbarEvent::PagePrev
         | ToolbarEvent::PageNext
         | ToolbarEvent::PageNew

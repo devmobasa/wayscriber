@@ -20,6 +20,13 @@ pub(super) const MAX_PACKET_DESCRIPTORS: usize = 2;
 pub(super) const REQUIRED_MEMFD_SEALS: i32 =
     libc::F_SEAL_WRITE | libc::F_SEAL_GROW | libc::F_SEAL_SHRINK | libc::F_SEAL_SEAL;
 
+/// Failure text used when a `Complete`-mode helper writes past its stdout cap.
+///
+/// The broker rejects that run rather than returning a truncated result, so the
+/// only signal a caller gets is this message. Callers that distinguish
+/// "produced too much output" from other transport failures match on it.
+pub(crate) const STDOUT_CAP_EXCEEDED: &str = "broker helper stdout exceeded output cap";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum HelperKind {
@@ -29,6 +36,7 @@ pub(crate) enum HelperKind {
     Grim,
     Hyprctl,
     Slurp,
+    Tesseract,
     WlPaste,
     WlCopy,
     SessionZenity,

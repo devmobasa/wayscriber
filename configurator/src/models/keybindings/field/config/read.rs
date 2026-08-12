@@ -133,6 +133,7 @@ impl KeybindingField {
             Self::ExportBoardPdfFile => &config.capture.export_board_pdf_file,
             Self::ExportAllBoardsPdfFile => &config.capture.export_all_boards_pdf_file,
             Self::OpenCaptureFolder => &config.capture.open_capture_folder,
+            Self::CopyTextFromScreen => &config.capture.copy_text_from_screen,
             Self::ToggleFrozenMode => &config.zoom.toggle_frozen_mode,
             Self::ZoomIn => &config.zoom.zoom_in,
             Self::ZoomOut => &config.zoom.zoom_out,

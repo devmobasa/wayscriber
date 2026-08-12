@@ -200,6 +200,7 @@ pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSecti
         | Action::ExportBoardPdfFile
         | Action::ExportAllBoardsPdfFile
         | Action::OpenCaptureFolder
+        | Action::CopyTextFromScreen
         | Action::ToggleFrozenMode
         | Action::ZoomIn
         | Action::ZoomOut

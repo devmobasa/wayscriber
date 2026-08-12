@@ -29,6 +29,94 @@ fn default_hidden_items_hide_screenshot_tool() {
 }
 
 #[test]
+fn the_ocr_utility_is_defined_once_ordered_and_hidden_by_default() {
+    let definitions: Vec<_> = toolbar_item_definitions()
+        .iter()
+        .filter(|definition| definition.id == ids::TOP_UTILITY_OCR)
+        .collect();
+    assert_eq!(definitions.len(), 1);
+    assert_eq!(definitions[0].label, "Copy text");
+
+    let order = ToolbarItemOrderConfig::default().resolved();
+    let top_controls = order.ordered_ids(ToolbarItemOrderGroup::TopControls);
+    assert_eq!(
+        top_controls
+            .iter()
+            .filter(|id| **id == ids::TOP_UTILITY_OCR)
+            .count(),
+        1
+    );
+
+    // Hidden by the code-level baseline, which reads as no explicit setting:
+    // nothing is written to `hidden`, so a config that predates the item still
+    // resolves as hiding it.
+    let resolved = ToolbarItemsConfig::default().resolved();
+    assert!(resolved.is_hidden(ids::TOP_UTILITY_OCR));
+    assert_eq!(
+        item_visibility_setting(&resolved, ids::TOP_UTILITY_OCR),
+        ToolbarItemVisibilitySetting::Default
+    );
+    assert!(
+        !ToolbarItemsConfig::default()
+            .hidden
+            .iter()
+            .any(|raw| raw == ids::TOP_UTILITY_OCR.as_str())
+    );
+}
+
+/// The regression the baseline exists for: an install predating OCR carries its
+/// own `hidden` list, and serde applies the struct default only to a *missing*
+/// field — so a shipped default-hidden entry would never reach it.
+#[test]
+fn a_config_written_before_ocr_existed_still_hides_it() {
+    let upgraded: ToolbarItemsConfig =
+        toml::from_str("hidden = [\"top.utility.screenshot\"]\nshown = []\n")
+            .expect("previous-release toolbar items parse");
+
+    let resolved = upgraded.resolved();
+    assert!(resolved.is_hidden(ids::TOP_UTILITY_SCREENSHOT));
+    assert!(
+        resolved.is_hidden(ids::TOP_UTILITY_OCR),
+        "upgrading exposed the opt-in OCR button"
+    );
+}
+
+/// Turning it on has to stick, which needs an explicit `shown` entry: merely
+/// dropping it from `hidden` would leave the baseline hiding it again.
+#[test]
+fn showing_the_ocr_utility_records_it_as_explicitly_shown() {
+    let mut config = ToolbarItemsConfig::default();
+    config.set_hidden(ids::TOP_UTILITY_OCR, false);
+
+    assert!(
+        config
+            .shown
+            .iter()
+            .any(|raw| raw == ids::TOP_UTILITY_OCR.as_str())
+    );
+    assert!(!config.resolved().is_hidden(ids::TOP_UTILITY_OCR));
+
+    config.set_hidden(ids::TOP_UTILITY_OCR, true);
+    assert!(config.resolved().is_hidden(ids::TOP_UTILITY_OCR));
+}
+
+#[test]
+fn showing_the_ocr_utility_is_an_explicit_customization_that_survives_reads() {
+    let mut config = ToolbarItemsConfig::default();
+
+    assert!(
+        config.set_visibility_setting(ids::TOP_UTILITY_OCR, ToolbarItemVisibilitySetting::Shown)
+    );
+    assert!(!config.resolved().is_hidden(ids::TOP_UTILITY_OCR));
+    // Re-applying the same setting is not a change; only a different one is.
+    assert!(
+        !config.set_visibility_setting(ids::TOP_UTILITY_OCR, ToolbarItemVisibilitySetting::Shown)
+    );
+    assert!(config.reset_known_hidden_to_defaults());
+    assert!(config.resolved().is_hidden(ids::TOP_UTILITY_OCR));
+}
+
+#[test]
 fn visibility_setting_is_hidden_first_and_known_mutation_canonicalizes_conflicts() {
     let mut config = ToolbarItemsConfig {
         hidden: vec![ids::TOP_TOOL_PEN.as_str().to_string()],

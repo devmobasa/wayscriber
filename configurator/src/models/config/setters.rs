@@ -366,6 +366,7 @@ impl ConfigDraft {
             TextField::CaptureSaveDirectory => self.capture_save_directory = value,
             TextField::CaptureFilename => self.capture_filename_template = value,
             TextField::CaptureFormat => self.capture_format = value,
+            TextField::CaptureOcrLanguages => self.capture_ocr_languages = value,
             TextField::ExportPdfFilenameTemplate => self.export_pdf_filename_template = value,
             TextField::ExportPdfAllBoardsFilenameTemplate => {
                 self.export_pdf_all_boards_filename_template = value

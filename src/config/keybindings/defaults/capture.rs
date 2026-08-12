@@ -57,3 +57,9 @@ pub(crate) fn default_export_all_boards_pdf_file() -> Vec<String> {
 pub(crate) fn default_open_capture_folder() -> Vec<String> {
     vec!["Ctrl+Alt+O".to_string()]
 }
+
+/// Deliberately empty: `O` is the orange quick color and no other
+/// conflict-free chord is obviously right, so the user picks one.
+pub(crate) fn default_copy_text_from_screen() -> Vec<String> {
+    Vec::new()
+}

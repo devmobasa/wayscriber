@@ -12,6 +12,7 @@ mod index;
 mod input_hud_controls;
 mod menus;
 pub(crate) mod modal;
+mod ocr;
 mod properties;
 pub(crate) mod radial_menu;
 mod selection;
@@ -71,6 +72,7 @@ pub use ime::{ImeCompositionState, ImePreedit};
 pub use menus::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,
 };
+pub use ocr::{OcrCaptureSource, OcrInputSource, OcrSelection, OcrUiState};
 pub use properties::{SelectionPropertyEntry, SelectionPropertyKind};
 pub use radial_menu::{
     COMPASS_SLICES as RADIAL_COMPASS_SLICES, CompassDir, RADIAL_PAINT_DELAY, RadialMenuLayout,

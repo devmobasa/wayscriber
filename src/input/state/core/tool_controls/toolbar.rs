@@ -574,6 +574,7 @@ mod tests {
         state
             .toolbar_items
             .set_hidden(ids::TOP_UTILITY_SCREENSHOT, false);
+        state.toolbar_items.set_hidden(ids::TOP_UTILITY_OCR, false);
         state.toolbar_items.set_hidden(ids::TOP_TOOL_PEN, true);
         state.toolbar_items.set_hidden(section, true);
         state
@@ -589,6 +590,9 @@ mod tests {
 
         let resolved = state.toolbar_items.resolved();
         assert!(resolved.hidden.contains(&ids::TOP_UTILITY_SCREENSHOT));
+        // Restored to its baseline rather than to an explicit entry.
+        assert!(resolved.is_hidden(ids::TOP_UTILITY_OCR));
+        assert!(!resolved.hidden.contains(&ids::TOP_UTILITY_OCR));
         assert!(!resolved.hidden.contains(&ids::TOP_TOOL_PEN));
         assert!(resolved.hidden.contains(&section));
         assert!(resolved.hidden.contains(&ids::TOP_CHROME_OVERFLOW));

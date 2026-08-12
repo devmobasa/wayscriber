@@ -10,7 +10,13 @@ const BTN_STYLUS: u32 = 331;
 const BTN_STYLUS2: u32 = 332;
 
 fn modal_blocks_stylus_barrel_actions(input_state: &crate::input::InputState) -> bool {
-    input_state.show_help || input_state.tour_active
+    input_state.show_help
+        || input_state.tour_active
+        // A screen-region modal owns pointer and keyboard input while it is up.
+        // A barrel button is bound to an ordinary action — undo, clear canvas,
+        // the radial menu — so letting one through would run it on the canvas
+        // behind the selector.
+        || input_state.screen_modal_is_engaged()
 }
 
 impl WaylandState {
@@ -157,6 +163,12 @@ impl WaylandState {
             // by a sequence whose tip-up was not delivered.
             self.input_state
                 .clear_help_overlay_press_for(HelpOverlayPressSource::Stylus);
+        }
+
+        if self.input_state.ocr_is_active() {
+            let (x, y) = self.current_stylus_position();
+            self.begin_ocr_selection(crate::input::state::OcrInputSource::Stylus, x, y);
+            return;
         }
 
         if self.input_state.eyedropper_is_active() {
@@ -312,5 +324,30 @@ mod tests {
         state.show_help = false;
         state.tour_active = true;
         assert!(modal_blocks_stylus_barrel_actions(&state));
+    }
+
+    /// Both screen-region modals swallow pointer and keyboard input, so a
+    /// barrel button must not run its bound action on the canvas behind them —
+    /// including while they are still waiting on a capture.
+    #[test]
+    fn screen_region_modals_block_stylus_barrel_actions() {
+        use crate::input::state::{EyedropperCaptureSource, OcrCaptureSource};
+
+        let mut state = make_test_input_state();
+        assert!(!modal_blocks_stylus_barrel_actions(&state));
+
+        state.set_ocr_pending_capture(OcrCaptureSource::Frozen);
+        assert!(modal_blocks_stylus_barrel_actions(&state));
+        state.activate_ocr(true);
+        assert!(modal_blocks_stylus_barrel_actions(&state));
+        state.cancel_ocr();
+        assert!(!modal_blocks_stylus_barrel_actions(&state));
+
+        state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
+        assert!(modal_blocks_stylus_barrel_actions(&state));
+        state.activate_eyedropper(true);
+        assert!(modal_blocks_stylus_barrel_actions(&state));
+        state.cancel_eyedropper();
+        assert!(!modal_blocks_stylus_barrel_actions(&state));
     }
 }

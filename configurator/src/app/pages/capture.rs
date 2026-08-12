@@ -15,6 +15,8 @@ use crate::models::{
     PdfTransparentBackgroundOption, TabId, TextField, ToggleField,
 };
 
+use wayscriber::config::validate_ocr_languages;
+
 use super::super::search::SearchArea;
 use super::super::state::ConfiguratorApp;
 use super::color_rows::{ResolvedColor, color_row};
@@ -56,6 +58,18 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             "",
             |app| app.draft.capture_exit_after,
             |value| Message::ToggleChanged(ToggleField::CaptureExitAfter, value),
+        )
+        .entry_row_validated(
+            "OCR languages (e.g. eng, eng+deu \u{2014} needs the matching Tesseract packages)",
+            |app| app.draft.capture_ocr_languages.clone(),
+            |value| Message::TextChanged(TextField::CaptureOcrLanguages, value),
+            |app| {
+                validate_ocr_languages(&app.draft.capture_ocr_languages)
+                    .err()
+                    .map(|reason| {
+                        format!("{reason}. Use Tesseract codes joined by '+', such as eng+deu.")
+                    })
+            },
         );
 
     page.group_in_area("PDF export", SearchArea::CapturePdf)

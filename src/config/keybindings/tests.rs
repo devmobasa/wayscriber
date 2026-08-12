@@ -361,6 +361,30 @@ fn screen_eyedropper_defaults_to_i_and_maps_when_reconfigured() {
 }
 
 #[test]
+fn screen_text_recognition_is_unbound_by_default_and_leaves_o_to_orange() {
+    let mut config = KeybindingsConfig::default();
+    assert!(config.capture.copy_text_from_screen.is_empty());
+
+    let default_map = config.build_action_map().unwrap();
+    assert_eq!(
+        default_map.get(&KeyBinding::parse("O").unwrap()),
+        Some(&Action::SetColorOrange)
+    );
+    assert!(
+        !default_map
+            .values()
+            .any(|action| *action == Action::CopyTextFromScreen)
+    );
+
+    config.capture.copy_text_from_screen = vec!["Ctrl+Alt+T".to_string()];
+    let map = config.build_action_map().unwrap();
+    assert_eq!(
+        map.get(&KeyBinding::parse("Ctrl+Alt+T").unwrap()),
+        Some(&Action::CopyTextFromScreen)
+    );
+}
+
+#[test]
 fn canvas_export_actions_deserialize_from_config_names() {
     #[derive(serde::Deserialize)]
     struct ActionFixture {
@@ -637,6 +661,9 @@ const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
     ("export_board_pdf_file", &[]),
     ("export_all_boards_pdf_file", &[]),
     ("open_capture_folder", &["Ctrl+Alt+O"]),
+    // Intentionally unbound: `O` is the orange quick color, and no other
+    // conflict-free chord is obviously right, so the user picks one.
+    ("copy_text_from_screen", &[]),
     ("toggle_frozen_mode", &["Ctrl+Shift+F"]),
     ("zoom_in", &["Ctrl+Alt++", "Ctrl+Alt+="]),
     ("zoom_out", &["Ctrl+Alt+-", "Ctrl+Alt+_"]),

@@ -38,6 +38,30 @@ impl WaylandState {
                 .clear_help_overlay_press_for(help_press_source);
         }
 
+        if self.input_state.ocr_is_active() {
+            if on_toolbar || self.pointer_over_toolbar() {
+                // A toolbar interaction ends the region first, then runs
+                // normally; the click never lands on the selector.
+                self.cancel_ocr_for_toolbar_interaction();
+            } else {
+                match button {
+                    BTN_LEFT => {
+                        self.begin_ocr_selection(
+                            OcrInputSource::Pointer,
+                            event.position.0,
+                            event.position.1,
+                        );
+                    }
+                    BTN_RIGHT => {
+                        self.cancel_ocr();
+                        self.set_suppress_next_release(true);
+                    }
+                    _ => {}
+                }
+                return;
+            }
+        }
+
         if self.input_state.eyedropper_is_active() {
             if on_toolbar || self.pointer_over_toolbar() {
                 self.cancel_eyedropper();

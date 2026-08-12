@@ -16,6 +16,20 @@ impl WaylandState {
         inline_active: bool,
         button: u32,
     ) {
+        if self.input_state.ocr_is_active() {
+            if button == BTN_LEFT {
+                let screen_position = if on_toolbar {
+                    self.toolbar_surface_screen_coords(&event.surface, event.position)
+                } else {
+                    Some(event.position)
+                };
+                if let Some((x, y)) = screen_position {
+                    self.finish_ocr_selection(OcrInputSource::Pointer, x, y);
+                }
+            }
+            return;
+        }
+
         if self.input_state.eyedropper_is_active() {
             return;
         }

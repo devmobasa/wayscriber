@@ -8,7 +8,7 @@
 - `src/main.rs` is a thin wrapper that returns `wayscriber::run_from_env()`.
 - `src/lib.rs` owns logging/error wiring and the canonical module graph; its public entry facade routes CLI outcomes through `src/app/` into `src/daemon/` or the active Wayland backend.
 - Reusable modules remain public for integration tests and the configurator, while runtime modules are private library implementation details.
-- Major domains are `domain`, `backend`, `input`, `draw`, `ui`, `capture`, `config`, `session`, `daemon`, `canvas_export`, `paths`, `toolbar_icons`, `render_profiles`, and `runtime_capabilities`.
+- Major domains are `domain`, `backend`, `input`, `draw`, `ui`, `capture`, `ocr`, `config`, `session`, `daemon`, `canvas_export`, `paths`, `toolbar_icons`, `render_profiles`, and `runtime_capabilities`.
 
 ## Invariants
 - Keep Wayland/runtime side effects in backend/about-window code; keep reusable data, validation, rendering helpers, and path logic in library modules.

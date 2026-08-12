@@ -8,11 +8,11 @@
 //! handlers, drained each input cycle, fulfill it against the compositor
 //! clipboard (reusing the generic clipboard worker pipeline).
 
-use super::color_picker::{
-    ClipboardTextError, copy_text_via_command, read_clipboard_text_via_command,
-};
 use super::{ClipboardOperationController, WaylandState};
 use crate::backend::wayland::clipboard::ClipboardPoll;
+use crate::clipboard_text::{
+    ClipboardTextError, copy_text_via_command, read_clipboard_text_via_command,
+};
 use crate::input::state::{
     TextClipboardRequest, TextPasteEdit, TextPasteTarget, Toast, ToastPriority,
 };

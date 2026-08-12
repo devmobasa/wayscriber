@@ -1,5 +1,5 @@
 use super::super::super::*;
-use crate::backend::wayland::state::eyedropper::{BackgroundImageKind, background_image_source};
+use crate::backend::wayland::state::screen_image::{ScreenImageKind, displayed_screen_image};
 use crate::draw::Color;
 
 pub(super) struct CanvasEraserContext {
@@ -39,15 +39,15 @@ impl WaylandState {
         let mut logical_to_image_scale_x = 1.0;
         let mut logical_to_image_scale_y = 1.0;
 
-        let background_image = background_image_source(
+        let background_image = displayed_screen_image(
             &self.zoom,
             &self.frozen,
             self.input_state.board_is_transparent(),
         )
         .map(|source| {
             let cache_key = match source.kind {
-                BackgroundImageKind::Zoom => (self.zoom.image_generation() << 1) | 1,
-                BackgroundImageKind::Frozen => self.frozen.image_generation() << 1,
+                ScreenImageKind::Zoom => (self.zoom.image_generation() << 1) | 1,
+                ScreenImageKind::Frozen => self.frozen.image_generation() << 1,
             };
             (source.image, cache_key, source.zoom_transformed)
         });

@@ -36,6 +36,7 @@ pub const TOP_UTILITY_CLEAR_CANVAS: ToolbarItemId =
     ToolbarItemId::from_known("top.utility.clear-canvas");
 pub const TOP_UTILITY_SCREENSHOT: ToolbarItemId =
     ToolbarItemId::from_known("top.utility.screenshot");
+pub const TOP_UTILITY_OCR: ToolbarItemId = ToolbarItemId::from_known("top.utility.ocr");
 pub const TOP_UTILITY_HIGHLIGHT: ToolbarItemId = ToolbarItemId::from_known("top.utility.highlight");
 pub const TOP_UTILITY_HIGHLIGHT_RING: ToolbarItemId =
     ToolbarItemId::from_known("top.utility.highlight-ring");

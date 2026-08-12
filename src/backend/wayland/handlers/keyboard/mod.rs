@@ -117,6 +117,16 @@ impl KeyboardHandler for WaylandState {
         // Any fresh key press ends the previous auto-repeat; a repeatable one
         // re-arms it at the end of this handler.
         self.clear_key_repeat();
+        if self.input_state.ocr_is_engaged() {
+            // Every other shortcut is swallowed while the selector is up so a
+            // key cannot change the active tool mid-drag.
+            if matches!(key, Key::Escape)
+                || self.input_state.action_for_key(key) == Some(Action::CopyTextFromScreen)
+            {
+                self.cancel_ocr();
+            }
+            return;
+        }
         if self.input_state.eyedropper_is_engaged() {
             if matches!(key, Key::Escape)
                 || self.input_state.action_for_key(key) == Some(Action::PickScreenColor)

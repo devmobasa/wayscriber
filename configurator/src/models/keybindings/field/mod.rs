@@ -113,6 +113,7 @@ pub enum KeybindingField {
     ExportBoardPdfFile,
     ExportAllBoardsPdfFile,
     OpenCaptureFolder,
+    CopyTextFromScreen,
     ToggleFrozenMode,
     ZoomIn,
     ZoomOut,

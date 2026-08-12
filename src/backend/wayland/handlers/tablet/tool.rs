@@ -9,9 +9,34 @@ use crate::{
 };
 
 use crate::backend::wayland::state::WaylandState;
+use crate::input::state::OcrInputSource;
 
 const STYLUS_CURSOR_DAMAGE_RADIUS: i32 = 64;
 
+/// Whether a pressure sample must be dropped rather than queued for the next
+/// tablet frame.
+///
+/// A committed pressure sample runs `set_pressure_thickness_for_active_tool`,
+/// so a sample that should not have reached the canvas resizes the drawing tool
+/// — the one thing OCR promises not to touch. Three independent reasons to drop
+/// one, none of which subsumes the others:
+///
+/// * the pen is not over the overlay, so the sample is not ours to apply;
+/// * the contact was disowned when a screen modal took over, and is only still
+///   arriving because clearing our flags does not lift the pen;
+/// * a screen modal is on screen and owns the pen outright.
+///
+/// The modal term follows the *active* boundary, which keeps this an exact twin
+/// of the tip and motion guards: a stroke begun while a capture is still pending
+/// is a real stroke and keeps its pressure. The retired term is what stops that
+/// allowance from also readmitting the contact the modal already took over.
+fn drop_stylus_pressure(
+    on_overlay: bool,
+    contact_retired: bool,
+    input_state: &crate::input::InputState,
+) -> bool {
+    !on_overlay || contact_retired || input_state.screen_modal_is_active()
+}
 impl WaylandState {
     fn stylus_hover_cursor_pos(&self) -> Option<(f64, f64)> {
         self.stylus_hover_cursor_position()
@@ -44,7 +69,7 @@ impl WaylandState {
             || (self.inline_toolbars_active() && self.toolbar.is_visible())
     }
 
-    pub(super) fn mark_stylus_hover_cursor_dirty(
+    pub(in crate::backend::wayland) fn mark_stylus_hover_cursor_dirty(
         &mut self,
         previous: Option<(f64, f64)>,
         next: Option<(f64, f64)>,
@@ -163,6 +188,15 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     tool_id, tool_type
                 );
                 state.commit_pending_stylus_frame();
+                // The tip is gone and no Up is coming, so a region drag *this
+                // pen* started must end here rather than keeping the selector —
+                // and any OCR-owned freeze — alive until the user cancels by
+                // hand. A region the mouse or a finger is dragging is not ours
+                // to withdraw.
+                state.cancel_ocr_selection_from(OcrInputSource::Stylus);
+                // The pen is gone, so the tip-up the latch was waiting for is
+                // never coming; leaving it armed would swallow a later contact.
+                state.take_retired_stylus_contact();
                 let hover_cursor_pos = state.stylus_hover_cursor_pos();
                 state.stylus_tip_down = false;
                 state.stylus_on_overlay = false;
@@ -196,6 +230,28 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 // Note: We keep the tool type in the map - tools persist across proximity events
             }
             Event::Down { .. } => {
+                // A contact a screen modal disowned is not the user pressing —
+                // it is the pen that was already down, still reported until it
+                // lifts. Swallow it whole rather than declining one branch:
+                // falling through queues the tip-down, and the frame commit
+                // would start a region (or a stroke) from it one hop later.
+                //
+                // Protocol-unreachable today, since the latch only clears on a
+                // tip-up or proximity-out and a press must follow one of those.
+                // It is enforced rather than argued because the surrounding
+                // pressure, motion, and release guards all rely on it.
+                if state.stylus_contact_retired {
+                    return;
+                }
+                if state.input_state.ocr_is_active() {
+                    if state.stylus_on_toolbar {
+                        state.cancel_ocr_for_toolbar_interaction();
+                    } else if state.stylus_on_overlay {
+                        let (x, y) = state.current_or_pending_stylus_position();
+                        state.begin_ocr_selection(OcrInputSource::Stylus, x, y);
+                        return;
+                    }
+                }
                 if state.input_state.eyedropper_is_active() {
                     if state.stylus_on_toolbar {
                         state.cancel_eyedropper();
@@ -235,6 +291,24 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.queue_stylus_down();
             }
             Event::Up => {
+                // Read before the modal branches so the latch is consumed by
+                // the tip-up that actually ends the disowned contact, whatever
+                // else this Up does.
+                let retired_contact = state.take_retired_stylus_contact();
+                if state.input_state.ocr_is_active() {
+                    if state.stylus_on_overlay {
+                        let (x, y) = state.current_or_pending_stylus_position();
+                        // A no-op unless this pen owns the region, so a retired
+                        // contact lifting cannot submit one the mouse or a
+                        // finger is still drawing.
+                        state.finish_ocr_selection(OcrInputSource::Stylus, x, y);
+                    } else {
+                        // The tip left the overlay before lifting; there is no
+                        // region of ours to submit, so withdraw only our own.
+                        state.cancel_ocr_selection_from(OcrInputSource::Stylus);
+                    }
+                    return;
+                }
                 let inline_active = state.inline_toolbars_active() && state.toolbar.is_visible();
                 if inline_active && state.stylus_on_toolbar {
                     let (mx, my) = state.current_mouse();
@@ -250,12 +324,21 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                     state.end_toolbar_move_drag();
                     return;
                 }
-                if !state.stylus_on_overlay {
+                if !state.stylus_on_overlay || retired_contact {
                     return;
                 }
                 state.queue_stylus_up();
             }
             Event::Motion { x, y } => {
+                if state.input_state.ocr_is_active() && state.stylus_on_overlay {
+                    state.stylus_last_pos = Some((x, y));
+                    state.set_current_mouse(x.round() as i32, y.round() as i32);
+                    // Dropped unless this pen owns the region: a pen hovering
+                    // over the overlay, or one whose contact was retired, must
+                    // not drag somebody else's selection around.
+                    state.update_ocr_selection(OcrInputSource::Stylus, x, y);
+                    return;
+                }
                 if state.input_state.eyedropper_is_active() && state.stylus_on_overlay {
                     state.stylus_last_pos = Some((x, y));
                     state.set_current_mouse(x.round() as i32, y.round() as i32);
@@ -325,7 +408,11 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.queue_stylus_motion(x, y);
             }
             Event::Pressure { pressure } => {
-                if !state.stylus_on_overlay {
+                if drop_stylus_pressure(
+                    state.stylus_on_overlay,
+                    state.stylus_contact_retired,
+                    &state.input_state,
+                ) {
                     return;
                 }
                 state.queue_stylus_pressure(pressure);
@@ -370,6 +457,65 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The modal term stops exactly where the tip and motion guards stop: once
+    /// the selector is on screen. While a capture is still pending the canvas
+    /// keeps the pen, so a stroke drawn then must keep its pressure — otherwise
+    /// a capture that fails would leave a silently flat stroke behind.
+    #[test]
+    fn stylus_pressure_stops_at_the_selector_not_at_the_request() {
+        use crate::input::state::test_support::make_test_input_state;
+        use crate::input::state::{EyedropperCaptureSource, OcrCaptureSource};
+
+        let fresh_contact = |state: &_| drop_stylus_pressure(true, false, state);
+
+        let mut state = make_test_input_state();
+        assert!(!fresh_contact(&state));
+
+        state.set_ocr_pending_capture(OcrCaptureSource::Frozen);
+        assert!(
+            !fresh_contact(&state),
+            "a stroke drawn while the capture is pending is still a real stroke"
+        );
+        state.activate_ocr(true);
+        assert!(fresh_contact(&state));
+        state.start_ocr_selection(OcrInputSource::Stylus, (10.0, 10.0));
+        assert!(fresh_contact(&state));
+        state.cancel_ocr();
+        assert!(!fresh_contact(&state));
+
+        state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
+        assert!(!fresh_contact(&state));
+        state.activate_eyedropper(true);
+        assert!(fresh_contact(&state));
+        state.cancel_eyedropper();
+        assert!(!fresh_contact(&state));
+    }
+
+    /// A contact disowned by a modal keeps arriving until the pen lifts, and the
+    /// pending-capture allowance above must not readmit it: the canvas holds the
+    /// pen again during the wait, but this contact is not the user drawing.
+    #[test]
+    fn a_retired_contact_never_reaches_the_tool_whatever_the_modal_is_doing() {
+        use crate::input::state::OcrCaptureSource;
+        use crate::input::state::test_support::make_test_input_state;
+
+        let mut state = make_test_input_state();
+
+        // The window the previous test allows, and the one that matters here.
+        state.set_ocr_pending_capture(OcrCaptureSource::Frozen);
+        assert!(!drop_stylus_pressure(true, false, &state));
+        assert!(drop_stylus_pressure(true, true, &state));
+
+        // And it outlives the modal: cancelling before activation leaves the pen
+        // physically down with no modal to blame.
+        state.cancel_ocr();
+        assert!(!drop_stylus_pressure(true, false, &state));
+        assert!(drop_stylus_pressure(true, true, &state));
+
+        // Off the overlay nothing is ours either way.
+        assert!(drop_stylus_pressure(false, false, &state));
+    }
 
     #[test]
     fn stylus_cursor_damage_rect_covers_cursor_area() {

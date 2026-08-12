@@ -111,6 +111,8 @@ pub enum ToolbarEvent {
         instant: bool,
     },
     CaptureScreenshot,
+    /// Select a screen region and copy the text recognized in it.
+    CopyTextFromScreen,
     PagePrev,
     PageNext,
     PageNew,

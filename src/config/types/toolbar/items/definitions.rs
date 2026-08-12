@@ -80,6 +80,7 @@ const TOOLBAR_ITEM_DEFINITIONS: &[ToolbarItemDefinition] = &[
         Utility,
         None,
     ),
+    item(ids::TOP_UTILITY_OCR, "Copy text", Top, Utility, None),
     item(ids::TOP_UTILITY_HIGHLIGHT, "Highlight", Top, Utility, None),
     item(
         ids::TOP_UTILITY_HIGHLIGHT_RING,

@@ -189,6 +189,7 @@ define_action_binding_accessors! {
     ExportBoardPdfFile => capture.export_board_pdf_file,
     ExportAllBoardsPdfFile => capture.export_all_boards_pdf_file,
     OpenCaptureFolder => capture.open_capture_folder,
+    CopyTextFromScreen => capture.copy_text_from_screen,
     ToggleFrozenMode => zoom.toggle_frozen_mode,
     ZoomIn => zoom.zoom_in,
     ZoomOut => zoom.zoom_out,

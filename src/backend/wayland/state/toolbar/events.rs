@@ -134,6 +134,7 @@ impl WaylandState {
         // A toolbar interaction replaces the modal sampler. Do this before
         // shortcut capture so the capture modal owns subsequent keys.
         self.cancel_eyedropper();
+        self.cancel_ocr_for_toolbar_interaction();
         if rebind_requested
             && let Some(action) = crate::ui::toolbar::model::action_for_event(&event)
         {

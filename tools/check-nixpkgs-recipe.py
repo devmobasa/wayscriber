@@ -60,6 +60,8 @@ SYSTEM_LIBRARIES: dict[str, tuple[str, ...]] = {
     "serde_ignored": (),
     "serde_json": (),
     "smithay-client-toolkit": ("libxkbcommon",),
+    # Pure Rust: temporary files for the OCR engine handoff.
+    "tempfile": (),
     "tokio": (),
     "toml": (),
     "toml_edit": (),

@@ -129,6 +129,7 @@ impl KeybindingField {
             | Self::ExportBoardPdfFile
             | Self::ExportAllBoardsPdfFile
             | Self::OpenCaptureFolder
+            | Self::CopyTextFromScreen
             | Self::ToggleFrozenMode
             | Self::ZoomIn
             | Self::ZoomOut

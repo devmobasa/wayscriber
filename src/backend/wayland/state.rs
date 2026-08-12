@@ -108,10 +108,12 @@ mod input_actions;
 mod input_hud;
 mod keybindings;
 pub(in crate::backend::wayland) use keybindings::queue_keybinding_edit;
+mod ocr;
 mod onboarding;
 mod pdf_export;
 mod perf;
 mod render;
+mod screen_image;
 mod text_clipboard;
 mod toolbar;
 #[cfg(feature = "toolbar-gtk")]
@@ -263,6 +265,9 @@ pub(super) struct WaylandState {
     /// the current edit generation remain distinct; a new generation replaces
     /// stale queued requests from the old edit session.
     pub(super) pending_text_paste: VecDeque<TextPasteTarget>,
+    /// Capacity-one screen text recognition. A busy controller reports
+    /// busy rather than queuing a region the user has moved on from.
+    pub(super) ocr: crate::ocr::OcrController,
     /// GTK toolbar frontend; `None` means the built-in bars are in charge.
     pub(super) gtk_toolbar: Option<crate::toolbar_gtk::GtkToolbarBridge>,
     pub(super) onboarding: crate::onboarding::OnboardingStore,
@@ -361,6 +366,13 @@ pub(super) struct WaylandState {
     pub(super) stylus_peak_thickness: Option<f64>,
     #[cfg(feature = "tablet-input")]
     pub(super) pending_stylus_frame: PendingStylusFrame,
+    /// The pen is still physically down, but the contact was disowned when a
+    /// screen-region modal took over. Wayscriber's own flags were cleared, yet
+    /// the compositor keeps reporting this contact until the tip lifts — so it
+    /// is tracked separately and ignored until then, rather than being mistaken
+    /// for a fresh press made during the wait.
+    #[cfg(feature = "tablet-input")]
+    pub(super) stylus_contact_retired: bool,
     /// Map of tool object IDs to their physical types (pen, eraser, etc.)
     #[cfg(feature = "tablet-input")]
     pub(super) stylus_tool_types: std::collections::HashMap<

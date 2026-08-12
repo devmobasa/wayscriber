@@ -84,6 +84,100 @@ fn update_fetcher_manifest_allows_only_curl_and_wget() {
 }
 
 #[test]
+fn tesseract_manifest_allows_only_the_tesseract_basename() {
+    for program in ["/usr/bin/tesseract", "/usr/local/bin/tesseract"] {
+        let program = super::wire::OsWire::from_os(OsStr::new(program)).unwrap();
+        super::manifest::validate(HelperKind::Tesseract, &program, &[], &[], &[]).unwrap();
+    }
+
+    for program in ["/usr/bin/sh", "/usr/bin/tesseract-wrapper", "/usr/bin/grim"] {
+        let program = super::wire::OsWire::from_os(OsStr::new(program)).unwrap();
+        assert!(
+            super::manifest::validate(HelperKind::Tesseract, &program, &[], &[], &[]).is_err(),
+            "{program:?} must not be allowed for OCR"
+        );
+    }
+}
+
+#[test]
+fn tesseract_reads_the_complete_recognized_output_rather_than_a_prefix() {
+    // Prefix mode stops the helper once the cap fills; OCR must instead see the
+    // cap as a distinct "too much text" failure, which needs Complete mode.
+    assert!(!super::manifest::supports_prefix_output(
+        HelperKind::Tesseract
+    ));
+    assert_eq!(
+        super::manifest::input_cap(HelperKind::Tesseract),
+        super::wire::MAX_INPUT_BYTES
+    );
+}
+
+/// A launcher click must not stall behind a long helper, and nothing else may
+/// be made to fail by that policy.
+///
+/// `try_spawn` is issued from the Wayland callback thread while OCR keeps the
+/// overlay interactive, so queueing behind a thirty-second recognition would
+/// hold input and redraw dispatch for its whole run. Plain `spawn` — the
+/// daemon's overlay start, the tray, startup detach — must keep queueing, or an
+/// unrelated background helper would turn a short wait into a spurious failure
+/// and a retry backoff.
+#[test]
+fn only_the_callback_thread_spawn_declines_to_wait_for_the_transport() {
+    let guard = start_for_runtime().unwrap();
+    let broker = guard.broker().clone();
+    let (running_tx, running_rx) = std::sync::mpsc::channel();
+
+    let long_helper = std::thread::spawn(move || {
+        running_tx.send(()).unwrap();
+        broker.run(
+            HelperKind::TestSleep,
+            OsStr::new("sleep"),
+            [OsStr::new("1")],
+            Vec::new(),
+            Duration::from_secs(10),
+            1024,
+        )
+    });
+    running_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    // The helper thread has to hold the exchange before the policy is testable.
+    std::thread::sleep(Duration::from_millis(200));
+
+    let started = Instant::now();
+    let declined = guard.broker().try_spawn(
+        HelperKind::TestSleep,
+        HelperLifetime::OperationBound,
+        OsStr::new("sleep"),
+        [OsStr::new("0")],
+        Vec::new(),
+    );
+    let waited = started.elapsed();
+
+    let error = declined.expect_err("try_spawn must not queue behind the long helper");
+    assert!(
+        format!("{error:#}").contains(crate::process_broker::BROKER_BUSY),
+        "unexpected try_spawn failure: {error:#}"
+    );
+    assert!(
+        waited < Duration::from_millis(250),
+        "try_spawn slept for {waited:?} instead of declining"
+    );
+
+    // The queueing path waits it out and still succeeds.
+    guard
+        .broker()
+        .spawn(
+            HelperKind::TestSleep,
+            HelperLifetime::OperationBound,
+            OsStr::new("sleep"),
+            [OsStr::new("0")],
+            Vec::new(),
+        )
+        .expect("spawn must queue behind the long helper rather than fail");
+
+    let _ = long_helper.join();
+}
+
+#[test]
 fn prelock_broker_runs_bounded_helpers_and_owns_reaping() {
     let guard = start_for_runtime().unwrap();
     let output = guard

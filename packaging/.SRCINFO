@@ -19,6 +19,8 @@ pkgbase = wayscriber
 	depends = wl-clipboard
 	depends = grim
 	depends = slurp
+	optdepends = tesseract: copy text from screen (OCR)
+	optdepends = tesseract-data-eng: English language data for OCR
 	source = wayscriber-0.9.23.tar.gz::https://github.com/devmobasa/wayscriber/archive/refs/tags/v0.9.23.tar.gz
 	sha256sums = SKIP
 

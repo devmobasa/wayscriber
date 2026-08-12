@@ -104,6 +104,7 @@ pub(crate) fn top_toolbar_icon_painter(
         I::Text => draw_icon_text,
         I::StickyNote => draw_icon_note,
         I::Screenshot => draw_icon_screenshot,
+        I::Ocr => draw_icon_ocr,
         I::Highlight => draw_icon_highlight,
         I::ClearCanvas => draw_icon_clear,
         I::Undo => draw_icon_undo,
@@ -153,7 +154,7 @@ mod painter_tests {
     /// Every public painter. `svg.rs` covers the newer family through its own
     /// `render_*` entry points; this covers the shipped surface callers use,
     /// including the older proportional-style painters that had no coverage.
-    const PAINTERS: [(&str, IconPainter); 63] = [
+    const PAINTERS: [(&str, IconPainter); 64] = [
         ("arrow", draw_icon_arrow),
         ("blur", draw_icon_blur),
         ("board", draw_icon_board),
@@ -187,6 +188,7 @@ mod painter_tests {
         ("minus", draw_icon_minus),
         ("more", draw_icon_more),
         ("note", draw_icon_note),
+        ("ocr", draw_icon_ocr),
         ("parallelogram", draw_icon_parallelogram),
         ("paste", draw_icon_paste),
         ("pen", draw_icon_pen),

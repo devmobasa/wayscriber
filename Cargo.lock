@@ -1863,6 +1863,7 @@ dependencies = [
  "serde_ignored",
  "serde_json",
  "smithay-client-toolkit",
+ "tempfile",
  "tokio",
  "toml",
  "toml_edit",

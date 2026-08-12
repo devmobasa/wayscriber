@@ -168,6 +168,14 @@ mod tests {
     }
 
     #[test]
+    fn action_for_event_maps_screen_text_recognition() {
+        assert_eq!(
+            action_for_event(&ToolbarEvent::CopyTextFromScreen),
+            Some(Action::CopyTextFromScreen)
+        );
+    }
+
+    #[test]
     fn action_for_event_returns_none_for_layout_only_events() {
         assert_eq!(action_for_event(&ToolbarEvent::OpenConfigFile), None);
         assert_eq!(

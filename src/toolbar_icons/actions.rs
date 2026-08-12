@@ -383,6 +383,11 @@ pub fn draw_icon_screenshot(ctx: &Context, x: f64, y: f64, size: f64) {
     super::svg::render_screenshot(ctx, x, y, size);
 }
 
+/// Draw a screen text recognition (OCR) icon.
+pub fn draw_icon_ocr(ctx: &Context, x: f64, y: f64, size: f64) {
+    super::svg::render_ocr(ctx, x, y, size);
+}
+
 /// Draw a visibility/eye icon.
 pub fn draw_icon_visibility(ctx: &Context, x: f64, y: f64, size: f64) {
     let s = size;

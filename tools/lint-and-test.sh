@@ -16,5 +16,9 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo build --workspace --all-features --bins
 cargo test --workspace --all-features
+# Linted as strictly as the all-features build: code reachable only behind an
+# optional feature leaves its callers dead without it, and building alone does
+# not promote that to an error.
+cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 cargo build --workspace --no-default-features --bins
 cargo test --workspace --no-default-features

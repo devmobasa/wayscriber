@@ -25,8 +25,8 @@ pub use state::{
     BoardPickerCursorHint, ClickHighlightSettings, ColorPickerCursorHint, CommandPaletteCursorHint,
     ContextMenuCursorHint, DrawingState, EyedropperUiState, HelpOverlayClick,
     HelpOverlayCursorHint, HelpOverlayReleaseOutcome, InputHudActiveSource, InputHudEntry,
-    InputHudEntryKind, InputHudSettings, InputState, OutputFocusAction, SelectionHandle,
-    SelectionPropertyEntry, SelectionPropertyKind, TextInputMode, ZoomAction,
+    InputHudEntryKind, InputHudSettings, InputState, OcrInputSource, OcrUiState, OutputFocusAction,
+    SelectionHandle, SelectionPropertyEntry, SelectionPropertyKind, TextInputMode, ZoomAction,
 };
 #[cfg(feature = "tablet-input")]
 #[allow(unused_imports)]

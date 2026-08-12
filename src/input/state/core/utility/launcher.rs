@@ -5,18 +5,41 @@ use crate::env_vars::CONFIGURATOR_ENV;
 use crate::input::state::{Toast, ToastPriority};
 use std::ffi::{OsStr, OsString};
 
+/// Launch a helper from the Wayland callback thread.
+///
+/// Deliberately the non-blocking spawn: every launcher here runs inside event
+/// dispatch, so waiting for the broker transport would stall input and redraw
+/// for the length of an unrelated helper. A contended launch is reported and
+/// the user retries.
 fn spawn_detached(
     kind: crate::process_broker::HelperKind,
     program: &OsStr,
     arguments: &[OsString],
 ) -> anyhow::Result<crate::process_broker::BrokerChild> {
-    crate::process_broker::current()?.spawn(
+    crate::process_broker::current()?.try_spawn(
         kind,
         crate::process_broker::HelperLifetime::DetachedAfterExec,
         program,
         arguments,
         Vec::new(),
     )
+}
+
+/// Whether a launch failed only because the broker transport was busy.
+///
+/// Spawn requests give up rather than stall the event thread behind a long
+/// helper, so this is a "try again in a moment", not a broken install.
+fn launch_deferred_by_busy_broker(error: &anyhow::Error) -> bool {
+    format!("{error:#}").contains(crate::process_broker::BROKER_BUSY)
+}
+
+/// Message for a failed launch: retryable when the transport was merely busy.
+fn launch_failure_message(error: &anyhow::Error, failed: &'static str) -> &'static str {
+    if launch_deferred_by_busy_broker(error) {
+        "Busy with another task — try again in a moment."
+    } else {
+        failed
+    }
 }
 
 fn opener_arguments(path: &std::path::Path) -> (OsString, Vec<OsString>) {
@@ -72,7 +95,10 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Critical,
                     "launcher",
-                    Toast::error("Failed to open About (see logs)."),
+                    Toast::error(launch_failure_message(
+                        &err,
+                        "Failed to open About (see logs).",
+                    )),
                 );
             }
         }
@@ -102,8 +128,12 @@ impl InputState {
                 log::error!("Set {CONFIGURATOR_ENV} to override the executable path if needed.");
                 // The fallback hands the file to the desktop's default editor,
                 // which has no concept of a configurator screen: the user still
-                // reaches the settings, just not the destination.
-                if self.open_config_file_default() {
+                // reaches the settings, just not the destination. A busy
+                // transport is not the configurator being unavailable, though —
+                // falling back there would open a text editor for what is really
+                // "try again", and would take a second run at the same busy
+                // transport to do it.
+                if !launch_deferred_by_busy_broker(&err) && self.open_config_file_default() {
                     log::info!(
                         "Opened config file with default application because wayscriber-configurator was unavailable"
                     );
@@ -111,7 +141,10 @@ impl InputState {
                     self.push_toast(
                         ToastPriority::Critical,
                         "launcher",
-                        Toast::error("Failed to launch configurator (see logs)."),
+                        Toast::error(launch_failure_message(
+                            &err,
+                            "Failed to launch configurator (see logs).",
+                        )),
                     );
                 }
             }
@@ -165,7 +198,10 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Critical,
                     "launcher",
-                    Toast::error("Failed to open capture folder."),
+                    Toast::error(launch_failure_message(
+                        &err,
+                        "Failed to open capture folder.",
+                    )),
                 );
             }
         }
@@ -206,7 +242,7 @@ impl InputState {
                 self.push_toast(
                     ToastPriority::Critical,
                     "launcher",
-                    Toast::error("Failed to open config file."),
+                    Toast::error(launch_failure_message(&err, "Failed to open config file.")),
                 );
                 false
             }
