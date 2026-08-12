@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::ffi::{OsStr, OsString};
 use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, Weak};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, TryLockError, Weak};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -51,6 +51,38 @@ struct RunOptions {
     timeout: Duration,
     output_cap: usize,
     output_mode: OutputMode,
+}
+
+/// Failure text used when a caller declines to wait for the transport.
+/// Callers match on it to offer "try again" rather than a generic failure.
+pub(crate) const BROKER_BUSY: &str = "process broker is busy running another helper";
+
+/// How a caller wants the single-socket transport acquired.
+///
+/// One socket serializes every exchange, and a `Run` can hold it for as long as
+/// its helper lives — thirty seconds for screen text recognition, two minutes
+/// for an interactive selector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExchangeWait {
+    /// Queue until the transport is free. Everything on a worker thread, the
+    /// daemon, and startup: those requests have to happen, and waiting for them
+    /// costs nothing the user can feel.
+    Queue,
+    /// Take the transport only if it is free right now.
+    ///
+    /// For requests issued from the Wayland callback thread, where any wait at
+    /// all stalls input and redraw dispatch. A contended launch is reported so
+    /// the user can retry, which is strictly better than the UI locking up for
+    /// the length of somebody else's helper.
+    Immediate,
+}
+
+/// The transport policy and watchdog a spawn request carries, kept together so
+/// the private spawn path stays inside the argument-count lint.
+#[derive(Debug, Clone, Copy)]
+struct SpawnOptions {
+    watchdog: Option<RawFd>,
+    wait: ExchangeWait,
 }
 
 static ACTIVE_BROKER: OnceLock<Mutex<Weak<BrokerInner>>> = OnceLock::new();
@@ -150,8 +182,26 @@ impl ProcessBrokerGuard {
 }
 
 impl ProcessBroker {
+    fn lock_exchange(&self, wait: ExchangeWait) -> Result<MutexGuard<'_, ()>> {
+        match wait {
+            ExchangeWait::Queue => Ok(self
+                .inner
+                .exchange_lock
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())),
+            // One attempt, never a timed retry: sleeping here would be the very
+            // stall this policy exists to avoid.
+            ExchangeWait::Immediate => match self.inner.exchange_lock.try_lock() {
+                Ok(guard) => Ok(guard),
+                Err(TryLockError::Poisoned(poisoned)) => Ok(poisoned.into_inner()),
+                Err(TryLockError::WouldBlock) => bail!(BROKER_BUSY),
+            },
+        }
+    }
+
     pub(super) fn request(&self, operation: BrokerOperation) -> Result<BrokerOutcome> {
-        let (outcome, descriptors) = self.request_with_descriptors(operation, &[])?;
+        let (outcome, descriptors) =
+            self.request_with_descriptors(operation, &[], ExchangeWait::Queue)?;
         if !descriptors.is_empty() {
             bail!("broker returned unexpected descriptors");
         }
@@ -162,6 +212,7 @@ impl ProcessBroker {
         &self,
         operation: BrokerOperation,
         descriptors: &[RawFd],
+        wait: ExchangeWait,
     ) -> Result<(BrokerOutcome, Vec<OwnedFd>)> {
         let request_id = crate::daemon::protocol_v2::ProtocolId::generate()?.to_string();
         let exchange_timeout = broker_exchange_timeout(&operation);
@@ -173,11 +224,7 @@ impl ProcessBroker {
         if packet.len() > MAX_PACKET_BYTES {
             bail!("broker request exceeds packet cap");
         }
-        let _guard = self
-            .inner
-            .exchange_lock
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = self.lock_exchange(wait)?;
         if !self.inner.healthy.load(Ordering::Acquire) {
             bail!("process broker transport is no longer usable");
         }
@@ -290,6 +337,7 @@ impl ProcessBroker {
                 output_mode: options.output_mode,
             },
             &request_descriptors,
+            ExchangeWait::Queue,
         )?;
         match outcome {
             BrokerOutcome::Output {
@@ -350,6 +398,7 @@ impl ProcessBroker {
                 timeout_ms: u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX),
             },
             &request_descriptors,
+            ExchangeWait::Queue,
         )?;
         if !descriptors.is_empty() {
             bail!("broker returned unexpected publication descriptors");
@@ -384,7 +433,49 @@ impl ProcessBroker {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        self.spawn_inner(kind, lifetime, program, arguments, environment, None)
+        self.spawn_inner(
+            kind,
+            lifetime,
+            program,
+            arguments,
+            environment,
+            SpawnOptions {
+                watchdog: None,
+                wait: ExchangeWait::Queue,
+            },
+        )
+    }
+
+    /// Spawn without waiting for the transport, failing with [`BROKER_BUSY`]
+    /// when another exchange holds it.
+    ///
+    /// For the Wayland callback thread only. Everything else — the daemon's
+    /// overlay spawn, the tray, startup detach — must keep queueing: those
+    /// requests have to happen, and failing them behind an unrelated helper
+    /// would turn a wait into a spurious error and a retry backoff.
+    pub(crate) fn try_spawn<I, S>(
+        &self,
+        kind: HelperKind,
+        lifetime: HelperLifetime,
+        program: &OsStr,
+        arguments: I,
+        environment: Vec<(OsString, Option<OsString>)>,
+    ) -> Result<BrokerChild>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        self.spawn_inner(
+            kind,
+            lifetime,
+            program,
+            arguments,
+            environment,
+            SpawnOptions {
+                watchdog: None,
+                wait: ExchangeWait::Immediate,
+            },
+        )
     }
 
     pub(crate) fn spawn_with_watchdog<I, S>(
@@ -406,7 +497,10 @@ impl ProcessBroker {
             program,
             arguments,
             environment,
-            Some(watchdog),
+            SpawnOptions {
+                watchdog: Some(watchdog),
+                wait: ExchangeWait::Queue,
+            },
         )
     }
 
@@ -417,7 +511,7 @@ impl ProcessBroker {
         program: &OsStr,
         arguments: I,
         environment: Vec<(OsString, Option<OsString>)>,
-        watchdog: Option<RawFd>,
+        options: SpawnOptions,
     ) -> Result<BrokerChild>
     where
         I: IntoIterator<Item = S>,
@@ -426,7 +520,7 @@ impl ProcessBroker {
         let operation = BrokerOperation::Spawn {
             kind,
             lifetime,
-            watchdog: watchdog.is_some(),
+            watchdog: options.watchdog.is_some(),
             program: OsWire::from_os(program)?,
             arguments: arguments
                 .into_iter()
@@ -443,7 +537,7 @@ impl ProcessBroker {
                 .collect::<Result<Vec<_>>>()?,
         };
         let (outcome, descriptors) =
-            self.request_with_descriptors(operation, watchdog.as_slice())?;
+            self.request_with_descriptors(operation, options.watchdog.as_slice(), options.wait)?;
         if !descriptors.is_empty() {
             bail!("broker returned unexpected spawn descriptors");
         }

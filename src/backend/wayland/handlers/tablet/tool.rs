@@ -245,7 +245,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 }
                 if state.input_state.ocr_is_active() {
                     if state.stylus_on_toolbar {
-                        state.cancel_ocr();
+                        state.cancel_ocr_for_toolbar_interaction();
                     } else if state.stylus_on_overlay {
                         let (x, y) = state.current_or_pending_stylus_position();
                         state.begin_ocr_selection(OcrInputSource::Stylus, x, y);

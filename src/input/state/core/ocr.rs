@@ -123,6 +123,15 @@ impl InputState {
         std::mem::take(&mut self.pending_ocr_request)
     }
 
+    /// Record that a toolbar interaction dismissed the selector.
+    pub(crate) fn note_ocr_cancelled_by_toolbar(&mut self) {
+        self.ocr_cancelled_by_toolbar = true;
+    }
+
+    pub(crate) fn take_ocr_cancelled_by_toolbar(&mut self) -> bool {
+        std::mem::take(&mut self.ocr_cancelled_by_toolbar)
+    }
+
     pub fn ocr_state(&self) -> OcrUiState {
         self.ocr_ui_state
     }
@@ -310,6 +319,30 @@ mod tests {
         assert_eq!(state.ocr_state().selection(), None);
         // The state is gone, so a second cancel cannot release the freeze twice.
         assert!(!state.cancel_ocr());
+    }
+
+    /// Clicking the OCR toolbar button while the selector is up toggles it off.
+    ///
+    /// The toolbar paths dismiss the selector on the way in — that is what makes
+    /// every *other* button dismiss it — so by the time the button's own action
+    /// is drained the state reads `Inactive`. The latch is what tells those two
+    /// halves apart, and it must not survive the batch that set it.
+    #[test]
+    fn the_toolbar_cancel_latch_marks_one_batch_and_then_clears() {
+        let mut state = make_test_input_state();
+        assert!(!state.take_ocr_cancelled_by_toolbar());
+
+        state.activate_ocr(true);
+        state.cancel_ocr();
+        state.note_ocr_cancelled_by_toolbar();
+        state.request_copy_text_from_screen();
+
+        assert!(state.take_ocr_cancelled_by_toolbar());
+        assert!(state.take_pending_ocr_request());
+        assert!(
+            !state.take_ocr_cancelled_by_toolbar(),
+            "the latch outlived the interaction that set it"
+        );
     }
 
     /// The seat is not modal even though Wayscriber is: a pen can hover, and a

@@ -215,7 +215,7 @@ impl WaylandState {
                 && inline_active
                 && self.inline_toolbar_motion(screen_position);
             if target == TouchTarget::Toolbar || inline_hit {
-                self.cancel_ocr();
+                self.cancel_ocr_for_toolbar_interaction();
             } else if target == TouchTarget::Overlay {
                 self.begin_ocr_selection(
                     OcrInputSource::Touch,

@@ -631,12 +631,14 @@ rebind_modifier = "ctrl_shift"
 
 [ui.toolbar.items]
 # Checked in the configurator means shown; IDs listed here are hidden.
-# The screenshot and copy-text (OCR) toolbar buttons are hidden by default.
+# The screenshot toolbar button is hidden by default.
+# Copy text (OCR) is hidden by a built-in baseline instead of by this list,
+# so upgrading a config written before it existed cannot reveal it; enable it
+# through toolbar customization, which records an entry in `shown` below.
 # Section-level ids (side.group.*) act as explicit overrides that beat the
 # layout-mode baseline and survive mode switches.
 hidden = [
   "top.utility.screenshot",
-  "top.utility.ocr",
 ]
 
 # IDs explicitly shown, overriding the layout-mode baseline (for example

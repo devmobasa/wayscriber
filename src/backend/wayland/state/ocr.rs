@@ -23,6 +23,8 @@ const TOAST_SOURCE: &str = "ocr";
 impl WaylandState {
     /// Drain a `Copy text from screen` request into the region selector.
     pub(in crate::backend::wayland) fn handle_pending_ocr_request(&mut self) {
+        // Read unconditionally so the latch never outlives the batch that set it.
+        let dismissed_by_toolbar = self.input_state.take_ocr_cancelled_by_toolbar();
         if !self.input_state.take_pending_ocr_request() {
             return;
         }
@@ -30,6 +32,11 @@ impl WaylandState {
             // A second invocation while the selector is up cancels it, matching
             // the eyedropper's toggle behavior.
             self.cancel_ocr();
+            return;
+        }
+        if dismissed_by_toolbar {
+            // The toolbar path already cancelled the selector on the way in, so
+            // this request is the same click toggling it off.
             return;
         }
         if !self.config.capture.enabled {
@@ -172,6 +179,20 @@ impl WaylandState {
         } else {
             self.frozen.unfreeze(&mut self.input_state);
         }
+    }
+
+    /// Dismiss the selector because a toolbar interaction took over.
+    ///
+    /// Recorded rather than just cancelled: when the interaction is a click on
+    /// the OCR button itself, the request that follows is the button toggling
+    /// off, and without this the pending handler would see `Inactive` and open a
+    /// fresh selector instead.
+    pub(in crate::backend::wayland) fn cancel_ocr_for_toolbar_interaction(&mut self) -> bool {
+        if !self.cancel_ocr() {
+            return false;
+        }
+        self.input_state.note_ocr_cancelled_by_toolbar();
+        true
     }
 
     /// A display or source change invalidates the pixels the user is selecting.

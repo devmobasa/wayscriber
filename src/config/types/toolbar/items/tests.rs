@@ -47,12 +47,57 @@ fn the_ocr_utility_is_defined_once_ordered_and_hidden_by_default() {
         1
     );
 
+    // Hidden by the code-level baseline, which reads as no explicit setting:
+    // nothing is written to `hidden`, so a config that predates the item still
+    // resolves as hiding it.
     let resolved = ToolbarItemsConfig::default().resolved();
     assert!(resolved.is_hidden(ids::TOP_UTILITY_OCR));
     assert_eq!(
         item_visibility_setting(&resolved, ids::TOP_UTILITY_OCR),
-        ToolbarItemVisibilitySetting::Hidden
+        ToolbarItemVisibilitySetting::Default
     );
+    assert!(
+        !ToolbarItemsConfig::default()
+            .hidden
+            .iter()
+            .any(|raw| raw == ids::TOP_UTILITY_OCR.as_str())
+    );
+}
+
+/// The regression the baseline exists for: an install predating OCR carries its
+/// own `hidden` list, and serde applies the struct default only to a *missing*
+/// field — so a shipped default-hidden entry would never reach it.
+#[test]
+fn a_config_written_before_ocr_existed_still_hides_it() {
+    let upgraded: ToolbarItemsConfig =
+        toml::from_str("hidden = [\"top.utility.screenshot\"]\nshown = []\n")
+            .expect("previous-release toolbar items parse");
+
+    let resolved = upgraded.resolved();
+    assert!(resolved.is_hidden(ids::TOP_UTILITY_SCREENSHOT));
+    assert!(
+        resolved.is_hidden(ids::TOP_UTILITY_OCR),
+        "upgrading exposed the opt-in OCR button"
+    );
+}
+
+/// Turning it on has to stick, which needs an explicit `shown` entry: merely
+/// dropping it from `hidden` would leave the baseline hiding it again.
+#[test]
+fn showing_the_ocr_utility_records_it_as_explicitly_shown() {
+    let mut config = ToolbarItemsConfig::default();
+    config.set_hidden(ids::TOP_UTILITY_OCR, false);
+
+    assert!(
+        config
+            .shown
+            .iter()
+            .any(|raw| raw == ids::TOP_UTILITY_OCR.as_str())
+    );
+    assert!(!config.resolved().is_hidden(ids::TOP_UTILITY_OCR));
+
+    config.set_hidden(ids::TOP_UTILITY_OCR, true);
+    assert!(config.resolved().is_hidden(ids::TOP_UTILITY_OCR));
 }
 
 #[test]
@@ -153,7 +198,6 @@ fn reset_known_hidden_restores_defaults_and_preserves_unknown_ids() {
         config.hidden,
         vec![
             ids::TOP_UTILITY_SCREENSHOT.as_str().to_string(),
-            ids::TOP_UTILITY_OCR.as_str().to_string(),
             "future.toolbar.item".to_string()
         ]
     );

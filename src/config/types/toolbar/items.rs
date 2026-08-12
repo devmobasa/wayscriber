@@ -52,8 +52,22 @@ fn drain_without(raw_ids: Vec<String>, id: ToolbarItemId) -> Vec<String> {
     next
 }
 
-const DEFAULT_HIDDEN_TOOLBAR_ITEM_IDS: &[ToolbarItemId] =
-    &[ids::TOP_UTILITY_SCREENSHOT, ids::TOP_UTILITY_OCR];
+const DEFAULT_HIDDEN_TOOLBAR_ITEM_IDS: &[ToolbarItemId] = &[ids::TOP_UTILITY_SCREENSHOT];
+
+/// Items hidden by a code-level baseline rather than by the shipped `hidden`
+/// list, overridable with an explicit `shown` entry.
+///
+/// A `hidden` list authored before an item existed cannot name it, and serde
+/// applies the struct default only to a *missing* field — so shipping a new
+/// default-hidden id reaches new configs and silently exposes the item on every
+/// installed one. Screenshot stays list-driven because every existing config
+/// already names it; anything added afterwards belongs here instead.
+const BASELINE_HIDDEN_TOOLBAR_ITEM_IDS: &[ToolbarItemId] = &[ids::TOP_UTILITY_OCR];
+
+/// Whether `id` is hidden unless the user explicitly shows it.
+pub(crate) fn toolbar_item_hidden_by_baseline(id: ToolbarItemId) -> bool {
+    BASELINE_HIDDEN_TOOLBAR_ITEM_IDS.contains(&id)
+}
 
 const DEFAULT_TOP_TOOLS_ORDER: &[ToolbarItemId] = &[
     ids::TOP_TOOL_SELECT,
@@ -135,9 +149,12 @@ impl ToolbarItemsConfig {
         self.shown = drain_without(std::mem::take(&mut self.shown), id);
         if hidden {
             self.hidden.push(id.as_str().to_string());
-        } else if super::visibility::section_flag_for_item(id).is_some() {
-            // Section-level ids have a layout-mode baseline that may hide
-            // them again; an explicit "shown" entry pins them visible.
+        } else if super::visibility::section_flag_for_item(id).is_some()
+            || toolbar_item_hidden_by_baseline(id)
+        {
+            // These have a baseline that would hide them again — a layout mode
+            // for section ids, a code-level default for the rest — so an
+            // explicit "shown" entry is what pins them visible.
             self.shown.push(id.as_str().to_string());
         }
     }
@@ -259,7 +276,12 @@ pub struct ResolvedToolbarItems {
 
 impl ResolvedToolbarItems {
     pub fn is_hidden(&self, id: ToolbarItemId) -> bool {
-        self.hidden.contains(&id)
+        if self.hidden.contains(&id) {
+            return true;
+        }
+        // A baseline-hidden item needs an explicit `shown` entry, so upgrading
+        // a config written before the item existed cannot reveal it.
+        toolbar_item_hidden_by_baseline(id) && !self.shown.contains(&id)
     }
 }
 
