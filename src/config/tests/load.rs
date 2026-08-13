@@ -55,6 +55,20 @@ fn ui_theme_defaults_to_auto_and_parses_explicit_values() {
 }
 
 #[test]
+fn automatic_onboarding_hints_default_on_and_can_be_disabled() {
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert!(default_config.ui.show_onboarding_hints);
+
+    let disabled: Config = toml::from_str("[ui]\nshow_onboarding_hints = false\n")
+        .expect("onboarding preference should parse");
+    assert!(!disabled.ui.show_onboarding_hints);
+
+    let serialized = toml::to_string(&disabled).expect("config should serialize");
+    let reloaded: Config = toml::from_str(&serialized).expect("round trip should parse");
+    assert!(!reloaded.ui.show_onboarding_hints);
+}
+
+#[test]
 fn presenter_toolbar_mode_defaults_to_hidden_and_round_trips() {
     let default_config: Config = toml::from_str("").expect("empty config should use defaults");
     assert_eq!(
@@ -338,6 +352,35 @@ fn custom_f2_toggle_toolbar_binding_keeps_f2_and_unbinds_cycle() {
             "the new cycle action must not steal the user's F2"
         );
         assert!(loaded.keybindings.build_action_map().is_ok());
+    });
+}
+
+#[test]
+fn explicit_empty_cycle_records_legacy_f2_intent_without_a_startup_notice() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        fs::write(
+            primary_dir.join("config.toml"),
+            format!(
+                "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = ['F2', 'F9']\ncycle_toolbar_display = []\n",
+                CURRENT_CONFIG_REVISION
+            ),
+        )
+        .unwrap();
+
+        let loaded = Config::load().expect("load succeeds");
+
+        assert_eq!(loaded.config.keybindings.ui.toggle_toolbar, ["F2", "F9"]);
+        assert!(
+            loaded
+                .config
+                .keybindings
+                .ui
+                .cycle_toolbar_display
+                .is_empty()
+        );
+        assert!(loaded.validation.skipped_default_shortcuts.is_empty());
     });
 }
 

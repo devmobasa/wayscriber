@@ -187,7 +187,7 @@ toggle_zoom_chip = []
 # (unbound; also in the command palette)
 toggle_focus_mode = []
 
-# Toggle toolbars (show/hide top and side together)
+# Toggle the unified top toolbar
 toggle_toolbar = ["F9"]
 
 # Cycle the top toolbar's display: full strip -> micro chip -> hidden
@@ -444,6 +444,10 @@ help_overlay_context_filter = true
 # Show compositor capabilities warning toast each time the overlay starts
 show_capabilities_warning = true
 
+# Show automatic first-run guidance, discovery tips, and shortcut coaching.
+# The guided tour remains available manually when this is false.
+show_onboarding_hints = true
+
 # Command palette action toast duration (ms)
 command_palette_toast_duration_ms = 1500
 
@@ -466,7 +470,7 @@ multi_monitor_enabled = true
 radial_menu_mouse_binding = "middle"
 
 # ───────────────────────────────────────────────────────────────────────────────
-# Floating Toolbars (F9 toggles; F2 cycles full -> micro -> hidden)
+# Floating Toolbar (F9 toggles; F2 cycles full -> micro -> hidden)
 # ───────────────────────────────────────────────────────────────────────────────
 
 [ui.toolbar]

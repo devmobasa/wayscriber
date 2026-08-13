@@ -171,6 +171,14 @@ pub(super) const UI_GENERAL_TERMS: &[&str] = &[
     "enable context menu",
     "show capabilities warning toast",
     "capabilities warning",
+    "show automatic guidance and tips",
+    "onboarding",
+    "hints",
+    "onboarding hints",
+    "show_onboarding_hints",
+    "tutorial",
+    "guidance",
+    "tips",
     "command palette toast",
 ];
 pub(super) const UI_TOOLBAR_TERMS: &[&str] = &[

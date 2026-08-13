@@ -173,6 +173,7 @@ impl ConfigDraft {
             ToggleField::UiShowStatusAbout => self.ui_show_status_about = value,
             ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
             ToggleField::UiShowCapabilitiesWarning => self.ui_show_capabilities_warning = value,
+            ToggleField::UiShowOnboardingHints => self.ui_show_onboarding_hints = value,
             ToggleField::UiShowStatusBoardBadge => self.ui_show_status_board_badge = value,
             ToggleField::UiShowStatusPageBadge => self.ui_show_status_page_badge = value,
             ToggleField::UiShowToolbarHint => self.ui_show_toolbar_hint = value,

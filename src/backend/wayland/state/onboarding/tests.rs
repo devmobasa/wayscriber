@@ -4,8 +4,8 @@ use super::first_run::{
     first_run_step_eyebrow, quick_access_completed, radial_flick_completed, shortcut_rebind_footer,
 };
 use super::{
-    canvas_popover_hint_relevant, capability_toast_message, shortcut_coach_should_fire,
-    status_bar_board_picker_entry,
+    automatic_onboarding_allowed, canvas_popover_hint_relevant, capability_toast_message,
+    shortcut_coach_should_fire, status_bar_board_picker_entry,
 };
 use crate::config::{RadialMenuMouseBinding, ToolbarRebindModifier};
 use crate::input::state::CompositorCapabilities;
@@ -48,6 +48,14 @@ fn first_run_card_remains_visible_without_modal_states() {
     assert!(!first_run_card_hidden_by_ui_state(
         false, false, false, false, false, false, false
     ));
+}
+
+#[test]
+fn automatic_onboarding_requires_the_preference_and_durable_progress() {
+    assert!(automatic_onboarding_allowed(true, true));
+    assert!(!automatic_onboarding_allowed(false, true));
+    assert!(!automatic_onboarding_allowed(true, false));
+    assert!(!automatic_onboarding_allowed(false, false));
 }
 
 #[test]

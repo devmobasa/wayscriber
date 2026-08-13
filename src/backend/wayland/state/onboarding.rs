@@ -109,7 +109,12 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn apply_onboarding_hints(&mut self) {
         // Show capability warning toast first if applicable.
         self.apply_capability_toast();
-        // Honest legacy notice: nudge panel-mode users toward the new homes.
+        if !automatic_onboarding_allowed(
+            self.config.ui.show_onboarding_hints,
+            self.onboarding.persistence_available(),
+        ) {
+            return;
+        }
         // Capture the coach's slow-path signal before apply_first_run_progress
         // drains pending_onboarding_usage.
         let coach_slow_path = self
@@ -195,7 +200,7 @@ impl WaylandState {
         let outcome = self.input_state.push_toast(
             ToastPriority::Hint,
             "onboarding.coach",
-            Toast::info(message),
+            Toast::info(message).action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
         );
         if outcome.accepted() {
             let session = &mut self.data.shortcut_coach;
@@ -208,7 +213,7 @@ impl WaylandState {
             if state.coach_hint_count >= DEFERRED_HINT_REPEAT_MAX {
                 state.coach_hint_shown = true;
             }
-            self.onboarding.save();
+            self.save_onboarding_state();
         }
     }
 
@@ -318,8 +323,8 @@ impl WaylandState {
             }
         }
 
-        if changed {
-            self.onboarding.save();
+        if changed && !self.save_onboarding_state() {
+            hint_kind = None;
         }
         if let Some(kind) = hint_kind {
             let message = match kind {
@@ -365,7 +370,8 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Hint,
                 "onboarding.hint",
-                Toast::info(message),
+                Toast::info(message)
+                    .action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
             );
         }
     }
@@ -396,13 +402,30 @@ impl WaylandState {
         );
         if outcome.accepted() {
             self.onboarding.state_mut().toolbar_hint_shown = true;
-            self.onboarding.save();
+            self.save_onboarding_state();
         }
     }
 
     fn shortcut_label(&self, action: Action, fallback: &str) -> String {
         self.shortcut_label_opt(action)
             .unwrap_or_else(|| fallback.to_string())
+    }
+
+    fn save_onboarding_state(&mut self) -> bool {
+        match self.onboarding.save() {
+            Ok(()) => true,
+            Err(error) => {
+                self.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "onboarding.persistence",
+                    Toast::warning(format!(
+                        "Automatic guidance is off because onboarding progress could not be saved: {error}"
+                    ))
+                    .once_per_content(),
+                );
+                false
+            }
+        }
     }
 
     fn shortcut_label_opt(&self, action: Action) -> Option<String> {
@@ -432,6 +455,13 @@ impl WaylandState {
             );
         }
     }
+}
+
+pub(super) fn automatic_onboarding_allowed(
+    preference_enabled: bool,
+    persistence_available: bool,
+) -> bool {
+    preference_enabled && persistence_available
 }
 
 /// The capability warning to raise, if any: only when this exact capability

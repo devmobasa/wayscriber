@@ -116,6 +116,19 @@ fn revision_one_proposes_the_toolbar_f2_split() {
     assert_eq!(preview.changes()[0].after(), ["F9"]);
 }
 
+#[test]
+fn revision_one_preserves_custom_f2_and_proposes_an_unbound_cycle_action() {
+    let mut config = config_at_revision(1);
+    config.keybindings.ui.toggle_toolbar = vec!["F2".to_string()];
+
+    let preview = MigrationPreview::for_authored_config(&config)
+        .expect("custom F2 needs an explicit opt-out");
+
+    assert_eq!(proposed_keys(&preview), ["cycle_toolbar_display"]);
+    assert_eq!(preview.changes()[0].before(), ["F2"]);
+    assert!(preview.changes()[0].after().is_empty());
+}
+
 /// A revision-2 file settled the earlier steps already, so the only recipe
 /// left is the one revision 3 introduced.
 #[test]

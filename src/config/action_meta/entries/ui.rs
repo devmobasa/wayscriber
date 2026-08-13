@@ -279,6 +279,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         &["edit quick colors", "palette", "swatches", "color library"]
     ),
     meta!(
+        OpenConfiguratorOnboardingHints,
+        "Tip Settings…",
+        Some("Tip Settings"),
+        "Open General UI at the automatic-guidance preference",
+        UI,
+        true,
+        false,
+        false
+    ),
+    meta!(
         OpenAbout,
         "About Wayscriber",
         Some("About"),

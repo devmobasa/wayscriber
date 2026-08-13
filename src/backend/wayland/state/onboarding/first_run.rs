@@ -26,7 +26,7 @@ impl WaylandState {
             match crate::daemon::setup::setup_background_mode() {
                 Ok(summary) => {
                     mark_background_mode_prompt(self.onboarding.state_mut(), true);
-                    self.onboarding.save();
+                    self.save_onboarding_state();
                     self.input_state.push_toast(
                         ToastPriority::Info,
                         "onboarding.first_run",
@@ -38,7 +38,7 @@ impl WaylandState {
                 }
                 Err(err) => {
                     mark_background_mode_prompt(self.onboarding.state_mut(), false);
-                    self.onboarding.save();
+                    self.save_onboarding_state();
                     self.input_state.push_toast(ToastPriority::Critical, "onboarding.first_run", Toast::error(format!(
                             "Background mode setup failed: {err}. You can set this up later in Background Mode settings."
                         )));
@@ -46,7 +46,7 @@ impl WaylandState {
             }
         } else {
             mark_background_mode_prompt(self.onboarding.state_mut(), false);
-            self.onboarding.save();
+            self.save_onboarding_state();
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "onboarding.first_run",
@@ -73,7 +73,7 @@ impl WaylandState {
         state.first_run_completed = true;
         state.active_step = None;
         state.quick_access_requires_toolbar = false;
-        self.onboarding.save();
+        self.save_onboarding_state();
         self.input_state.push_toast(
             ToastPriority::Info,
             "onboarding.first_run",
@@ -223,7 +223,12 @@ impl WaylandState {
     }
 
     fn first_run_onboarding_card_visible(&self) -> bool {
-        if !self.surface.is_configured() || self.overlay_suppressed() {
+        if !super::automatic_onboarding_allowed(
+            self.config.ui.show_onboarding_hints,
+            self.onboarding.persistence_available(),
+        ) || !self.surface.is_configured()
+            || self.overlay_suppressed()
+        {
             return false;
         }
         !first_run_card_hidden_by_ui_state(
@@ -381,7 +386,7 @@ impl WaylandState {
         }
 
         if changed {
-            self.onboarding.save();
+            self.save_onboarding_state();
         }
         if first_run_ui_changed {
             self.input_state
@@ -465,7 +470,7 @@ impl WaylandState {
         if state.quick_access_requires_toolbar {
             items.push(OnboardingChecklistItem {
                 label: format!(
-                    "Show toolbars ({})",
+                    "Show toolbar ({})",
                     self.shortcut_label(Action::ToggleToolbar, "Toggle toolbar")
                 ),
                 done: self.input_state.toolbar_visible() || state.used_toolbar_toggle,

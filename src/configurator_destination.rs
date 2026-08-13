@@ -36,9 +36,20 @@ const SEARCH_KEY: &str = "search=";
 /// tab's color search terms.
 const QUICK_COLORS_SEARCH: &str = "Quick Colors";
 
+/// The visible General UI label for automatic onboarding and discovery hints.
+///
+/// Keeping the launcher term identical to the control label makes the
+/// Configurator reveal the owning section without a separate scroll protocol.
+const ONBOARDING_HINTS_SEARCH: &str = "Show automatic guidance and tips";
+
 /// The Drawing screen, focused on the quick-color palette.
 pub fn quick_colors_destination() -> ConfiguratorDestination {
     ConfiguratorDestination::with_search(ConfiguratorScreen::Drawing, QUICK_COLORS_SEARCH)
+}
+
+/// The General UI section, filtered to the automatic-guidance preference.
+pub fn onboarding_hints_destination() -> ConfiguratorDestination {
+    ConfiguratorDestination::with_search(ConfiguratorScreen::UiToolbar, ONBOARDING_HINTS_SEARCH)
 }
 
 /// A keybinding subtab, mirroring the configurator's own Keybindings sections.
@@ -233,7 +244,8 @@ pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSecti
         | Action::OpenConfiguratorKeybindings
         | Action::OpenConfiguratorPresets
         | Action::OpenConfiguratorBoards
-        | Action::OpenConfiguratorQuickColors => return None,
+        | Action::OpenConfiguratorQuickColors
+        | Action::OpenConfiguratorOnboardingHints => return None,
     };
     Some(section)
 }
@@ -615,6 +627,7 @@ mod tests {
             Action::OpenConfiguratorPresets,
             Action::OpenConfiguratorBoards,
             Action::OpenConfiguratorQuickColors,
+            Action::OpenConfiguratorOnboardingHints,
         ] {
             assert_eq!(
                 keybindings_section_for_action(action),
@@ -670,6 +683,14 @@ mod tests {
         assert_eq!(
             quick_colors_destination().as_arg(),
             "drawing?search=Quick Colors"
+        );
+    }
+
+    #[test]
+    fn the_onboarding_hint_route_searches_the_general_ui_setting() {
+        assert_eq!(
+            onboarding_hints_destination().as_arg(),
+            "ui/toolbar?search=Show automatic guidance and tips"
         );
     }
 

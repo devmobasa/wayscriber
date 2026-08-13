@@ -24,6 +24,7 @@ impl ConfigDraft {
         config.ui.show_floating_badge_always = self.ui_show_page_badge_with_status_bar;
         config.ui.show_frozen_badge = self.ui_show_frozen_badge;
         config.ui.show_capabilities_warning = self.ui_show_capabilities_warning;
+        config.ui.show_onboarding_hints = self.ui_show_onboarding_hints;
         config.ui.context_menu.enabled = self.ui_context_menu_enabled;
         let preferred_output = self.ui_preferred_output.trim();
         config.ui.preferred_output = if preferred_output.is_empty() {

@@ -116,6 +116,11 @@ pub struct UiConfig {
     #[serde(default = "default_show_capabilities_warning")]
     pub show_capabilities_warning: bool,
 
+    /// Show automatic first-run guidance, discovery tips, and shortcut coaching.
+    /// The guided tour remains available manually when this is disabled.
+    #[serde(default = "default_show_onboarding_hints")]
+    pub show_onboarding_hints: bool,
+
     /// Preferred output name for the xdg-shell fallback overlay (GNOME).
     /// Falls back to last entered output or first available.
     #[serde(default)]
@@ -193,6 +198,7 @@ impl Default for UiConfig {
             help_overlay_style: HelpOverlayStyle::default(),
             help_overlay_context_filter: default_help_overlay_context_filter(),
             show_capabilities_warning: default_show_capabilities_warning(),
+            show_onboarding_hints: default_show_onboarding_hints(),
             preferred_output: None,
             multi_monitor_enabled: default_multi_monitor_enabled(),
             active_output_badge: default_active_output_badge(),
@@ -308,6 +314,10 @@ fn default_help_overlay_context_filter() -> bool {
 }
 
 fn default_show_capabilities_warning() -> bool {
+    true
+}
+
+fn default_show_onboarding_hints() -> bool {
     true
 }
 

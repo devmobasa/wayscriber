@@ -15,7 +15,7 @@ use crate::{
     config::Config,
     input::InputState,
     input::state::{CompositorCapabilities, DesktopEnvironment, ShellMode},
-    onboarding::{DEFERRED_HINT_REPEAT_MAX, OnboardingStore},
+    onboarding::OnboardingStore,
 };
 
 mod config;
@@ -74,11 +74,6 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         backend.tokio_runtime.handle(),
         &keybindings.keybinding_conflicts,
     );
-    config::notify_skipped_default_shortcuts(
-        &mut input_state,
-        backend.tokio_runtime.handle(),
-        &keybindings.skipped_default_shortcuts,
-    );
     let runtime_ui_path = crate::paths::runtime_ui_state_file();
     let (runtime_ui, runtime_ui_unavailable) =
         match crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState::start(
@@ -132,48 +127,24 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     };
 
     let mut onboarding = OnboardingStore::load();
+    let onboarding_save = onboarding.begin_session(config.ui.show_onboarding_hints);
+    if let Err(error) = &onboarding_save
+        && config.ui.show_onboarding_hints
     {
-        let state = onboarding.state_mut();
-        state.sessions_seen = state.sessions_seen.saturating_add(1);
-        // Re-arm deferred hints per session until each feature is actually used.
-        if !state.used_help_overlay && state.hint_help_count < DEFERRED_HINT_REPEAT_MAX {
-            state.hint_help_shown = false;
-        }
-        if !state.used_command_palette && state.hint_palette_count < DEFERRED_HINT_REPEAT_MAX {
-            state.hint_palette_shown = false;
-        }
-        if !state.used_radial_menu
-            && !state.used_context_menu_right_click
-            && !state.used_context_menu_keyboard
-            && state.hint_quick_access_count < DEFERRED_HINT_REPEAT_MAX
-        {
-            state.hint_quick_access_shown = false;
-        }
-        // M9 surface hints have no per-feature "used" signal, so they re-arm
-        // purely on the across-session count cap (up to DEFERRED_HINT_REPEAT_MAX
-        // gentle reminders each).
-        if state.hint_status_bar_count < DEFERRED_HINT_REPEAT_MAX {
-            state.hint_status_bar_shown = false;
-        }
-        if state.hint_zoom_chip_count < DEFERRED_HINT_REPEAT_MAX {
-            state.hint_zoom_chip_shown = false;
-        }
-        if state.hint_canvas_popover_count < DEFERRED_HINT_REPEAT_MAX {
-            state.hint_canvas_popover_shown = false;
-        }
-        if !state.first_run_completed && !state.first_run_skipped {
-            state
-                .active_step
-                .get_or_insert(crate::onboarding::FirstRunStep::BackgroundModeSetup);
-        } else {
-            state.active_step = None;
-            state.quick_access_requires_toolbar = false;
-        }
-        // Keep legacy flags marked so older checks never re-trigger.
-        state.welcome_shown = true;
-        state.tour_shown = true;
+        input_state.push_toast(
+            crate::input::state::ToastPriority::Critical,
+            "onboarding.persistence",
+            crate::input::state::Toast::warning(format!(
+                "Automatic guidance is off because onboarding progress could not be saved: {error}"
+            )),
+        );
     }
-    onboarding.save();
+    config::notify_skipped_default_shortcuts(
+        &mut input_state,
+        backend.tokio_runtime.handle(),
+        &mut onboarding,
+        &keybindings.skipped_default_shortcuts,
+    );
 
     // Seed the palette's recent-commands history from its persisted store.
     let palette_recents_store = crate::palette_recents::PaletteRecentsStore::load();
