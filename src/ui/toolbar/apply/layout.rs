@@ -311,6 +311,7 @@ impl InputState {
             changed = true;
         }
         if open {
+            self.pending_onboarding_usage.used_canvas_popover = true;
             if self.toolbar_session_popover_open {
                 self.toolbar_session_popover_open = false;
                 changed = true;
@@ -674,6 +675,7 @@ mod tests {
         state.toolbar_top_popover_scroll = 40.0;
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleCanvasPopover(true)));
         assert!(state.toolbar_canvas_popover_open);
+        assert!(state.pending_onboarding_usage.used_canvas_popover);
         assert!(!state.toolbar_session_popover_open);
         assert!(!state.toolbar_settings_popover_open);
         assert!(!state.toolbar_top_overflow_open);

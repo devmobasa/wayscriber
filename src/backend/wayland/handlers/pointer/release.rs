@@ -93,8 +93,8 @@ impl WaylandState {
                     screen_x.round() as i32,
                     screen_y.round() as i32,
                 );
-                if hit && let Some(action) = action {
-                    self.dispatch_input_action(action);
+                if hit && let Some(command) = action {
+                    self.handle_toast_command(command);
                 }
             }
             return;

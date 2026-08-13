@@ -520,8 +520,8 @@ impl WaylandState {
             let (hit, action) = self
                 .input_state
                 .resolve_toast_release(pressed, screen_x, screen_y);
-            if hit && let Some(action) = action {
-                self.dispatch_input_action(action);
+            if hit && let Some(command) = action {
+                self.handle_toast_command(command);
             }
             return;
         }

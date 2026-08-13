@@ -583,6 +583,18 @@ pub(super) fn apply_persisted_usage_signals(
         state.used_command_palette = true;
         changed = true;
     }
+    if usage.used_board_picker && !state.used_board_picker {
+        state.used_board_picker = true;
+        changed = true;
+    }
+    if usage.used_zoom_control && !state.used_zoom_control {
+        state.used_zoom_control = true;
+        changed = true;
+    }
+    if usage.used_canvas_popover && !state.used_canvas_popover {
+        state.used_canvas_popover = true;
+        changed = true;
+    }
 
     changed
 }

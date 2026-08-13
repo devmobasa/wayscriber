@@ -244,6 +244,7 @@ fn zoom_chip_activation_records_coach_slow_path() {
 
     let (hit, action) = input.check_zoom_chip_click(ZoomChipButtonKind::In, x, y);
     assert!(hit);
+    assert!(input.pending_onboarding_usage.used_zoom_control);
     assert_eq!(action, Some(Action::ZoomIn));
     assert_eq!(
         input.pending_onboarding_usage.shortcut_slow_path_action,

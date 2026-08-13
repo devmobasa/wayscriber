@@ -1473,6 +1473,7 @@ fn open_board_picker_closes_help_and_clears_transient_picker_state() {
     });
 
     input.open_board_picker();
+    assert!(input.pending_onboarding_usage.used_board_picker);
 
     assert!(input.is_board_picker_open());
     assert_eq!(input.board_picker_mode(), BoardPickerMode::Full);

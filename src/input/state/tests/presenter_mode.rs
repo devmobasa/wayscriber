@@ -194,7 +194,10 @@ fn presenter_mode_emits_entry_and_exit_toasts() {
     let entry_toast = state.ui_toast.as_ref().expect("entry toast");
     assert_eq!(entry_toast.message, "Presenter Mode active");
     assert_eq!(
-        entry_toast.action.as_ref().map(|action| action.action),
+        entry_toast
+            .action
+            .as_ref()
+            .and_then(|action| action.dispatch_action()),
         Some(crate::config::Action::TogglePresenterMode)
     );
 

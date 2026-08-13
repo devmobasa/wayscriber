@@ -15,7 +15,7 @@ pub const STATUS_CHANGE_HIGHLIGHT_MS: u64 = 300;
 
 use crate::capture::{ImageOperationKind, file::FileSaveConfig};
 use crate::config::ToolPresetConfig;
-use crate::domain::Action;
+use crate::domain::{Action, OnboardingTip};
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Color, Shape, ShapeId};
 use crate::input::tool::Tool;
@@ -278,11 +278,30 @@ pub enum UiToastKind {
     Error,
 }
 
-/// Action that can be triggered by clicking a toast.
+/// Command that can be triggered by an explicit toast action chip.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToastCommand {
+    Dispatch(Action),
+    AcknowledgeTip {
+        tip: OnboardingTip,
+        then: Option<Action>,
+    },
+}
+
+/// Labeled command rendered as a toast action chip.
 #[derive(Debug, Clone)]
 pub struct ToastAction {
     pub label: String,
-    pub action: Action,
+    pub(crate) command: ToastCommand,
+}
+
+impl ToastAction {
+    pub(crate) fn dispatch_action(&self) -> Option<Action> {
+        match self.command {
+            ToastCommand::Dispatch(action) => Some(action),
+            ToastCommand::AcknowledgeTip { .. } => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -681,6 +700,9 @@ pub(crate) struct PendingOnboardingUsage {
     pub used_context_menu_keyboard: bool,
     pub used_help_overlay: bool,
     pub used_command_palette: bool,
+    pub used_board_picker: bool,
+    pub used_zoom_control: bool,
+    pub used_canvas_popover: bool,
     /// A drawing color was applied (any path). Drives the colors/thickness
     /// first-run teaching step.
     pub used_color_change: bool,

@@ -21,6 +21,6 @@ pub(crate) use types::{
     PendingSelectionClipboardPublish, PendingToolbarPersistence, PolygonClickState,
     PresetFeedbackState, SelectionPublishState, TextBlockDrag, TextClickState,
     TextClipboardRequest, TextCutTarget, TextEditEntryFeedback, TextPasteEdit, TextPasteTarget,
-    ToastPress, WayscriberClipboardSelection,
+    ToastCommand, ToastPress, WayscriberClipboardSelection,
 };
 pub(crate) use types::{KeybindingEditOperation, KeybindingEditRequest};

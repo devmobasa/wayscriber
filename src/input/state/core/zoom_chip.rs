@@ -209,6 +209,7 @@ impl InputState {
             ZoomChipButtonKind::Fit => Action::ResetZoom,
             ZoomChipButtonKind::Lock => Action::ToggleZoomLock,
         };
+        self.pending_onboarding_usage.used_zoom_control = true;
         // Shortcut-coach slow-path signal: activating a zoom action from the
         // chip is the same "you could have pressed the key" case the toolbar
         // (`apply_toolbar_event`) and command palette record. The chip resolves

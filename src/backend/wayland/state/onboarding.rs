@@ -1,5 +1,6 @@
 use crate::config::keybindings::Action;
-use crate::input::state::{Toast, ToastPriority};
+use crate::domain::OnboardingTip;
+use crate::input::state::{Toast, ToastCommand, ToastPriority};
 use crate::onboarding::DEFERRED_HINT_REPEAT_MAX;
 use std::time::{Duration, Instant};
 
@@ -38,6 +39,18 @@ fn canvas_popover_hint_relevant(input: &crate::input::InputState) -> bool {
     input.toolbar_top_visible()
         && !input.toolbar_top_minimized
         && input.toolbar_top_display_mode == crate::config::TopDisplayMode::Full
+}
+
+fn automatic_tip_toast(message: impl Into<String>, tip: OnboardingTip) -> Toast {
+    Toast::info(message)
+        .command("Got it", ToastCommand::AcknowledgeTip { tip, then: None })
+        .secondary_command(
+            "Tip settings…",
+            ToastCommand::AcknowledgeTip {
+                tip,
+                then: Some(Action::OpenConfiguratorOnboardingHints),
+            },
+        )
 }
 
 /// Per-session shortcut-coach accumulator. Session-only (never persisted): the
@@ -106,6 +119,22 @@ pub(super) fn shortcut_coach_should_fire(
 }
 
 impl WaylandState {
+    pub(in crate::backend::wayland) fn handle_toast_command(&mut self, command: ToastCommand) {
+        match command {
+            ToastCommand::Dispatch(action) => self.dispatch_input_action(action),
+            ToastCommand::AcknowledgeTip { tip, then } => {
+                match self.onboarding.acknowledge_tip(tip) {
+                    Ok(()) => {
+                        if let Some(action) = then {
+                            self.dispatch_input_action(action);
+                        }
+                    }
+                    Err(error) => self.show_onboarding_persistence_warning(&error),
+                }
+            }
+        }
+    }
+
     pub(in crate::backend::wayland) fn apply_onboarding_hints(&mut self) {
         // Show capability warning toast first if applicable.
         self.apply_capability_toast();
@@ -200,7 +229,7 @@ impl WaylandState {
         let outcome = self.input_state.push_toast(
             ToastPriority::Hint,
             "onboarding.coach",
-            Toast::info(message).action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
+            automatic_tip_toast(message, OnboardingTip::ShortcutCoach),
         );
         if outcome.accepted() {
             let session = &mut self.data.shortcut_coach;
@@ -294,6 +323,7 @@ impl WaylandState {
             // the earliest threshold among the new surfaces.
             } else if let Some(entry) = status_bar_entry
                 && state.sessions_seen >= 3
+                && !state.used_board_picker
                 && !state.hint_status_bar_shown
                 && state.hint_status_bar_count < DEFERRED_HINT_REPEAT_MAX
             {
@@ -304,6 +334,7 @@ impl WaylandState {
                 status_bar_hint_entry = Some(entry);
             } else if canvas_hint_relevant
                 && state.sessions_seen >= 5
+                && !state.used_canvas_popover
                 && !state.hint_canvas_popover_shown
                 && state.hint_canvas_popover_count < DEFERRED_HINT_REPEAT_MAX
             {
@@ -313,6 +344,7 @@ impl WaylandState {
                 hint_kind = Some("canvas_popover");
             } else if zoom_chip_present
                 && state.sessions_seen >= 7
+                && !state.used_zoom_control
                 && !state.hint_zoom_chip_shown
                 && state.hint_zoom_chip_count < DEFERRED_HINT_REPEAT_MAX
             {
@@ -327,6 +359,14 @@ impl WaylandState {
             hint_kind = None;
         }
         if let Some(kind) = hint_kind {
+            let tip = match kind {
+                "help" => OnboardingTip::Help,
+                "palette" => OnboardingTip::CommandPalette,
+                "status_bar" => OnboardingTip::StatusBar,
+                "canvas_popover" => OnboardingTip::CanvasPopover,
+                "zoom_chip" => OnboardingTip::ZoomChip,
+                _ => OnboardingTip::QuickAccess,
+            };
             let message = match kind {
                 "help" => format!(
                     "Press {} for all shortcuts.",
@@ -370,8 +410,7 @@ impl WaylandState {
             self.input_state.push_toast(
                 ToastPriority::Hint,
                 "onboarding.hint",
-                Toast::info(message)
-                    .action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
+                automatic_tip_toast(message, tip),
             );
         }
     }
@@ -398,7 +437,14 @@ impl WaylandState {
             ToastPriority::Hint,
             "onboarding.toolbar",
             Toast::info("Toolbars hidden")
-                .action(format!("Show ({toolbar_binding})"), Action::ToggleToolbar),
+                .action(format!("Show ({toolbar_binding})"), Action::ToggleToolbar)
+                .secondary_command(
+                    "Tip settings…",
+                    ToastCommand::AcknowledgeTip {
+                        tip: OnboardingTip::ToolbarHidden,
+                        then: Some(Action::OpenConfiguratorOnboardingHints),
+                    },
+                ),
         );
         if outcome.accepted() {
             self.onboarding.state_mut().toolbar_hint_shown = true;
@@ -415,17 +461,24 @@ impl WaylandState {
         match self.onboarding.save() {
             Ok(()) => true,
             Err(error) => {
-                self.input_state.push_toast(
-                    ToastPriority::Critical,
-                    "onboarding.persistence",
-                    Toast::warning(format!(
-                        "Automatic guidance is off because onboarding progress could not be saved: {error}"
-                    ))
-                    .once_per_content(),
-                );
+                self.show_onboarding_persistence_warning(&error);
                 false
             }
         }
+    }
+
+    fn show_onboarding_persistence_warning(
+        &mut self,
+        error: &crate::onboarding::OnboardingSaveError,
+    ) {
+        self.input_state.push_toast(
+            ToastPriority::Critical,
+            "onboarding.persistence",
+            Toast::warning(format!(
+                "Automatic guidance is off because onboarding progress could not be saved: {error}"
+            ))
+            .once_per_content(),
+        );
     }
 
     fn shortcut_label_opt(&self, action: Action) -> Option<String> {

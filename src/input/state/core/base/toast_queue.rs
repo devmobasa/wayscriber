@@ -21,7 +21,7 @@
 //! slot (the field the renderer, damage tracker, and click handling already
 //! consume), so it is unit-testable without an `InputState`.
 
-use super::types::{ToastAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState};
+use super::types::{ToastAction, ToastCommand, UI_TOAST_DURATION_MS, UiToastKind, UiToastState};
 use crate::domain::Action;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -84,7 +84,15 @@ impl Toast {
     pub fn action(mut self, label: impl Into<String>, action: Action) -> Self {
         self.action = Some(ToastAction {
             label: label.into(),
-            action,
+            command: ToastCommand::Dispatch(action),
+        });
+        self
+    }
+
+    pub(crate) fn command(mut self, label: impl Into<String>, command: ToastCommand) -> Self {
+        self.action = Some(ToastAction {
+            label: label.into(),
+            command,
         });
         self
     }
@@ -94,7 +102,19 @@ impl Toast {
     pub fn secondary_action(mut self, label: impl Into<String>, action: Action) -> Self {
         self.secondary_action = Some(ToastAction {
             label: label.into(),
-            action,
+            command: ToastCommand::Dispatch(action),
+        });
+        self
+    }
+
+    pub(crate) fn secondary_command(
+        mut self,
+        label: impl Into<String>,
+        command: ToastCommand,
+    ) -> Self {
+        self.secondary_action = Some(ToastAction {
+            label: label.into(),
+            command,
         });
         self
     }
@@ -293,13 +313,36 @@ impl ToastQueue {
         mut should_remove: impl FnMut(&'static str, Option<Action>) -> bool,
     ) -> bool {
         let active_removed = active.as_ref().is_some_and(|toast| {
-            should_remove(toast.key, toast.action.as_ref().map(|entry| entry.action))
+            should_remove(
+                toast.key,
+                toast.action.as_ref().and_then(ToastAction::dispatch_action),
+            ) || should_remove(
+                toast.key,
+                toast
+                    .secondary_action
+                    .as_ref()
+                    .and_then(ToastAction::dispatch_action),
+            )
         });
         if active_removed {
             *active = None;
         }
         self.pending.retain(|entry| {
-            !should_remove(entry.key, entry.toast.action.as_ref().map(|a| a.action))
+            !should_remove(
+                entry.key,
+                entry
+                    .toast
+                    .action
+                    .as_ref()
+                    .and_then(ToastAction::dispatch_action),
+            ) && !should_remove(
+                entry.key,
+                entry
+                    .toast
+                    .secondary_action
+                    .as_ref()
+                    .and_then(ToastAction::dispatch_action),
+            )
         });
         active_removed
     }

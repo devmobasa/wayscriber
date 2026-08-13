@@ -1,6 +1,6 @@
 use super::super::base::{
     BLOCKED_ACTION_DURATION_MS, BlockedActionFeedback, InputState, PendingClipboardFallback,
-    TEXT_EDIT_ENTRY_DURATION_MS, Toast, ToastPress, ToastPriority, ToastPushOutcome,
+    TEXT_EDIT_ENTRY_DURATION_MS, Toast, ToastCommand, ToastPress, ToastPriority, ToastPushOutcome,
 };
 use crate::capture::{
     ImageOperationKind,
@@ -107,7 +107,7 @@ impl InputState {
         pressed: ToastPress,
         x: i32,
         y: i32,
-    ) -> (bool, Option<Action>) {
+    ) -> (bool, Option<ToastCommand>) {
         let Some(toast) = self.ui_toast.as_ref() else {
             return (false, None);
         };
@@ -122,12 +122,12 @@ impl InputState {
         if pressed.matches(toast) && release_inside && pressed.matches_target(release_target) {
             let action = if toast.secondary_action.is_some() {
                 match pressed.action_index() {
-                    Some(0) => toast.action.as_ref().map(|action| action.action),
-                    Some(1) => toast.secondary_action.as_ref().map(|action| action.action),
+                    Some(0) => toast.action.as_ref().map(|action| action.command),
+                    Some(1) => toast.secondary_action.as_ref().map(|action| action.command),
                     _ => None,
                 }
             } else {
-                toast.action.as_ref().map(|action| action.action)
+                toast.action.as_ref().map(|action| action.command)
             };
             // Dismiss the toast and promote the next queued one, if any.
             self.toast_queue
@@ -301,6 +301,7 @@ impl InputState {
 mod tests {
     use super::*;
     use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
+    use crate::domain::OnboardingTip;
     use crate::draw::{Color, FontDescriptor, Shape};
     use crate::input::state::core::base::{TextEditEntryFeedback, UiToastKind};
     use crate::input::{ClickHighlightSettings, EraserMode};
@@ -393,7 +394,10 @@ mod tests {
         let (hit, action) = state.resolve_toast_release(pressed, 50, 40);
 
         assert!(hit);
-        assert_eq!(action, Some(Action::OpenCaptureFolder));
+        assert_eq!(
+            action,
+            Some(ToastCommand::Dispatch(Action::OpenCaptureFolder))
+        );
         assert!(state.ui_toast.is_none());
         assert!(state.ui_toast_bounds.is_none());
     }
@@ -405,8 +409,20 @@ mod tests {
             ToastPriority::Hint,
             "tip",
             Toast::info("Try the board picker")
-                .action("Got it", Action::ToggleHelp)
-                .secondary_action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
+                .command(
+                    "Got it",
+                    ToastCommand::AcknowledgeTip {
+                        tip: OnboardingTip::StatusBar,
+                        then: None,
+                    },
+                )
+                .secondary_command(
+                    "Tip settings…",
+                    ToastCommand::AcknowledgeTip {
+                        tip: OnboardingTip::StatusBar,
+                        then: Some(Action::OpenConfiguratorOnboardingHints),
+                    },
+                ),
         );
         state.ui_toast_bounds = Some((10.0, 20.0, 220.0, 40.0));
         state.ui_toast_action_bounds = [
@@ -418,7 +434,13 @@ mod tests {
         let (hit, action) = state.resolve_toast_release(pressed, 190, 38);
 
         assert!(hit);
-        assert_eq!(action, Some(Action::OpenConfiguratorOnboardingHints));
+        assert_eq!(
+            action,
+            Some(ToastCommand::AcknowledgeTip {
+                tip: OnboardingTip::StatusBar,
+                then: Some(Action::OpenConfiguratorOnboardingHints),
+            })
+        );
         assert!(state.ui_toast.is_none());
     }
 
@@ -429,8 +451,20 @@ mod tests {
             ToastPriority::Hint,
             "tip",
             Toast::info("Try the board picker")
-                .action("Got it", Action::ToggleHelp)
-                .secondary_action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
+                .command(
+                    "Got it",
+                    ToastCommand::AcknowledgeTip {
+                        tip: OnboardingTip::StatusBar,
+                        then: None,
+                    },
+                )
+                .secondary_command(
+                    "Tip settings…",
+                    ToastCommand::AcknowledgeTip {
+                        tip: OnboardingTip::StatusBar,
+                        then: Some(Action::OpenConfiguratorOnboardingHints),
+                    },
+                ),
         );
         state.ui_toast_bounds = Some((10.0, 20.0, 220.0, 40.0));
         state.ui_toast_action_bounds = [
@@ -453,8 +487,20 @@ mod tests {
             ToastPriority::Hint,
             "tip",
             Toast::info("Try the board picker")
-                .action("Got it", Action::ToggleHelp)
-                .secondary_action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
+                .command(
+                    "Got it",
+                    ToastCommand::AcknowledgeTip {
+                        tip: OnboardingTip::StatusBar,
+                        then: None,
+                    },
+                )
+                .secondary_command(
+                    "Tip settings…",
+                    ToastCommand::AcknowledgeTip {
+                        tip: OnboardingTip::StatusBar,
+                        then: Some(Action::OpenConfiguratorOnboardingHints),
+                    },
+                ),
         );
         state.ui_toast_bounds = Some((10.0, 20.0, 220.0, 40.0));
         state.ui_toast_action_bounds = [
@@ -488,7 +534,7 @@ mod tests {
         let (hit, action) = state.resolve_toast_release(pressed, 50, 40);
 
         assert!(hit);
-        assert_eq!(action, Some(Action::PageDelete));
+        assert_eq!(action, Some(ToastCommand::Dispatch(Action::PageDelete)));
         let promoted = state.ui_toast.as_ref().expect("queued toast promoted");
         assert_eq!(promoted.message, "Later");
         assert!(state.ui_toast_bounds.is_none());
@@ -529,14 +575,14 @@ mod tests {
         assert_eq!(toast.duration_ms, 2000, "short-lived action toast");
         let action = toast.action.as_ref().expect("undo action chip");
         assert_eq!(action.label, "Undo?");
-        assert_eq!(action.action, Action::Undo);
+        assert_eq!(action.dispatch_action(), Some(Action::Undo));
 
         // Clicking inside the toast returns the attached Undo action.
         state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
         let pressed = state.toast_press_at(50, 40).expect("toast press");
         assert_eq!(
             state.resolve_toast_release(pressed, 50, 40),
-            (true, Some(Action::Undo))
+            (true, Some(ToastCommand::Dispatch(Action::Undo)))
         );
     }
 

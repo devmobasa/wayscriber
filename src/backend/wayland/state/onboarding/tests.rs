@@ -4,11 +4,12 @@ use super::first_run::{
     first_run_step_eyebrow, quick_access_completed, radial_flick_completed, shortcut_rebind_footer,
 };
 use super::{
-    automatic_onboarding_allowed, canvas_popover_hint_relevant, capability_toast_message,
-    shortcut_coach_should_fire, status_bar_board_picker_entry,
+    automatic_onboarding_allowed, automatic_tip_toast, canvas_popover_hint_relevant,
+    capability_toast_message, shortcut_coach_should_fire, status_bar_board_picker_entry,
 };
 use crate::config::{RadialMenuMouseBinding, ToolbarRebindModifier};
-use crate::input::state::CompositorCapabilities;
+use crate::domain::{Action, OnboardingTip};
+use crate::input::state::{CompositorCapabilities, ToastCommand};
 use crate::input::{Key, state::PendingOnboardingUsage};
 use crate::onboarding::{DEFERRED_HINT_REPEAT_MAX, FirstRunStep, OnboardingState};
 use std::time::{Duration, Instant};
@@ -56,6 +57,30 @@ fn automatic_onboarding_requires_the_preference_and_durable_progress() {
     assert!(!automatic_onboarding_allowed(false, true));
     assert!(!automatic_onboarding_allowed(true, false));
     assert!(!automatic_onboarding_allowed(false, false));
+}
+
+#[test]
+fn automatic_tip_controls_acknowledge_the_exact_tip_before_optional_settings() {
+    let toast = automatic_tip_toast("Try the board picker", OnboardingTip::StatusBar);
+    let primary = toast.action.as_ref().expect("Got it action");
+    let secondary = toast.secondary_action.as_ref().expect("settings action");
+
+    assert_eq!(primary.label, "Got it");
+    assert_eq!(
+        primary.command,
+        ToastCommand::AcknowledgeTip {
+            tip: OnboardingTip::StatusBar,
+            then: None,
+        }
+    );
+    assert_eq!(secondary.label, "Tip settings…");
+    assert_eq!(
+        secondary.command,
+        ToastCommand::AcknowledgeTip {
+            tip: OnboardingTip::StatusBar,
+            then: Some(Action::OpenConfiguratorOnboardingHints),
+        }
+    );
 }
 
 #[test]
@@ -396,6 +421,9 @@ fn persisted_usage_signals_apply_after_first_run_completion() {
         used_context_menu_keyboard: true,
         used_help_overlay: true,
         used_command_palette: true,
+        used_board_picker: true,
+        used_zoom_control: true,
+        used_canvas_popover: true,
         ..PendingOnboardingUsage::default()
     };
 
@@ -409,4 +437,7 @@ fn persisted_usage_signals_apply_after_first_run_completion() {
     assert!(state.used_context_menu_keyboard);
     assert!(state.used_help_overlay);
     assert!(state.used_command_palette);
+    assert!(state.used_board_picker);
+    assert!(state.used_zoom_control);
+    assert!(state.used_canvas_popover);
 }
