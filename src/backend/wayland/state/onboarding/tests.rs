@@ -1,7 +1,8 @@
 use super::first_run::{
     apply_persisted_usage_signals, background_mode_prompt_active, background_mode_prompt_choice,
     color_thickness_completed, first_run_card_hidden_by_ui_state, first_run_skip_allowed,
-    first_run_step_eyebrow, quick_access_completed, radial_flick_completed, shortcut_rebind_footer,
+    first_run_step_after_quick_access, first_run_step_eyebrow, quick_access_completed,
+    shortcut_rebind_footer,
 };
 use super::{
     automatic_onboarding_allowed, automatic_tip_toast, canvas_popover_hint_relevant,
@@ -87,26 +88,27 @@ fn automatic_tip_controls_acknowledge_the_exact_tip_before_optional_settings() {
 fn first_run_eyebrow_shows_progress() {
     assert_eq!(
         first_run_step_eyebrow(FirstRunStep::BackgroundModeSetup),
-        "Step 1 / 7"
+        "Step 1 / 6"
     );
-    assert_eq!(first_run_step_eyebrow(FirstRunStep::WaitDraw), "Step 2 / 7");
-    assert_eq!(first_run_step_eyebrow(FirstRunStep::DrawUndo), "Step 3 / 7");
+    assert_eq!(first_run_step_eyebrow(FirstRunStep::WaitDraw), "Step 2 / 6");
+    assert_eq!(first_run_step_eyebrow(FirstRunStep::DrawUndo), "Step 3 / 6");
     assert_eq!(
         first_run_step_eyebrow(FirstRunStep::ColorThickness),
-        "Step 4 / 7"
+        "Step 4 / 6"
     );
     assert_eq!(
         first_run_step_eyebrow(FirstRunStep::QuickAccess),
-        "Step 5 / 7"
-    );
-    assert_eq!(
-        first_run_step_eyebrow(FirstRunStep::RadialFlick),
-        "Step 6 / 7"
+        "Step 5 / 6"
     );
     assert_eq!(
         first_run_step_eyebrow(FirstRunStep::Reference),
-        "Step 7 / 7"
+        "Step 6 / 6"
     );
+}
+
+#[test]
+fn quick_access_advances_directly_to_reference() {
+    assert_eq!(first_run_step_after_quick_access(), FirstRunStep::Reference);
 }
 
 #[test]
@@ -125,22 +127,6 @@ fn color_thickness_step_requires_both_color_and_thickness() {
 }
 
 #[test]
-fn radial_flick_step_completes_on_flick_or_is_waived_when_unavailable() {
-    let mut state = OnboardingState::default();
-
-    // Radial available but no flick yet: still blocked.
-    assert!(!radial_flick_completed(&state, true));
-
-    // A flick commit completes it.
-    state.radial_flick_done = true;
-    assert!(radial_flick_completed(&state, true));
-
-    // Without a flick, an unavailable radial menu waives the step.
-    state.radial_flick_done = false;
-    assert!(radial_flick_completed(&state, false));
-}
-
-#[test]
 fn v3_onboarding_toml_loads_with_new_fields_defaulted() {
     // A pre-v4 file has none of the new first-run/coach fields. Serde defaults
     // must fill them in so the file still loads (backward compatible).
@@ -156,7 +142,7 @@ used_help_overlay = true
     assert!(state.welcome_shown);
     assert!(state.first_run_completed);
     assert!(state.used_help_overlay);
-    // New F4 first-run teaching fields default off.
+    // First-run teaching fields absent from the old file default off.
     assert!(!state.first_color_done);
     assert!(!state.first_thickness_done);
     assert!(!state.radial_flick_done);

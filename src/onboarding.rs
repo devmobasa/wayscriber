@@ -89,7 +89,7 @@ pub struct OnboardingState {
     /// Whether stroke thickness was adjusted during first-run (teaching step)
     #[serde(default)]
     pub first_thickness_done: bool,
-    /// Whether a radial-menu flick committed a tool/color (teaching step)
+    /// Legacy progress from the retired radial-flick teaching step.
     #[serde(default)]
     pub radial_flick_done: bool,
     /// Whether toolbar visibility was toggled via an action
@@ -549,6 +549,10 @@ fn migrate_onboarding_state(state: &mut OnboardingState) -> bool {
     }
     if state.first_run_completed && state.active_step.is_some() {
         state.active_step = None;
+        needs_save = true;
+    }
+    if state.active_step == Some(FirstRunStep::RadialFlick) {
+        state.active_step = Some(FirstRunStep::Reference);
         needs_save = true;
     }
     if state.first_run_background_mode_enabled && !state.first_run_background_mode_prompted {

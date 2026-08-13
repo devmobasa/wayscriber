@@ -315,13 +315,11 @@ impl InputState {
                 y,
             ) {
                 Some(RadialSegmentId::SubTool(parent, child)) => {
-                    self.pending_onboarding_usage.used_radial_flick = true;
                     self.dispatch_sub_tool_segment(parent, child);
                     self.close_radial_menu();
                     return true;
                 }
                 Some(RadialSegmentId::Color(idx)) => {
-                    self.pending_onboarding_usage.used_radial_flick = true;
                     self.dispatch_color_segment(idx);
                     self.close_radial_menu();
                     return true;
@@ -339,7 +337,6 @@ impl InputState {
             self.radial_menu_expand_sub_ring(idx);
             return true;
         }
-        self.pending_onboarding_usage.used_radial_flick = true;
         self.dispatch_tool_segment(idx);
         self.close_radial_menu();
         true

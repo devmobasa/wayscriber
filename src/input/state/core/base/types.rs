@@ -709,9 +709,6 @@ pub(crate) struct PendingOnboardingUsage {
     /// Stroke thickness / eraser size was adjusted (any path). Drives the
     /// colors/thickness first-run teaching step.
     pub used_thickness_change: bool,
-    /// A radial-menu flick committed a tool/color (press-flick-release).
-    /// Drives the radial-flick first-run teaching step.
-    pub used_radial_flick: bool,
     /// The last shortcut-bound action invoked via a "slow path" this tick —
     /// the command palette or the toolbar — that the shortcut coach nudges
     /// away from. Source-agnostic: the coach resolves and names this action's

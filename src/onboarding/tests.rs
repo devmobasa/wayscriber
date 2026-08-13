@@ -270,6 +270,26 @@ fn onboarding_version_bump_saves() {
 }
 
 #[test]
+fn retired_radial_flick_step_resumes_at_reference() {
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("create onboarding dir");
+    }
+    let seed = format!(
+        "version = {ONBOARDING_VERSION}\nfirst_run_background_mode_prompted = true\nactive_step = \"radial_flick\"\n"
+    );
+    fs::write(&path, seed).expect("write active radial-flick seed");
+
+    let store = OnboardingStore::load_from_path(path.clone());
+    assert_eq!(store.state().active_step, Some(FirstRunStep::Reference));
+
+    let persisted = fs::read_to_string(path).expect("read normalized onboarding state");
+    assert!(persisted.contains("active_step = \"reference\""));
+    assert!(!persisted.contains("active_step = \"radial_flick\""));
+}
+
+#[test]
 fn v3_file_migrates_to_current_version_preserving_completion() {
     let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
