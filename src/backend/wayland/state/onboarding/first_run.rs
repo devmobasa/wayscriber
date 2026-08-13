@@ -329,7 +329,7 @@ impl WaylandState {
                         ) {
                             break;
                         }
-                        state.active_step = Some(first_run_step_after_quick_access());
+                        state.active_step = Some(FirstRunStep::Reference);
                         state.quick_access_requires_toolbar = false;
                         changed = true;
                         first_run_ui_changed = true;
@@ -493,10 +493,6 @@ fn quick_access_context_done(
 /// a color and adjusted stroke thickness.
 pub(super) fn color_thickness_completed(state: &OnboardingState) -> bool {
     state.first_color_done && state.first_thickness_done
-}
-
-pub(super) fn first_run_step_after_quick_access() -> FirstRunStep {
-    FirstRunStep::Reference
 }
 
 pub(super) fn quick_access_completed(

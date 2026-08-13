@@ -374,10 +374,12 @@ fn zoom_menu_disables_out_and_reset_when_zoom_is_inactive() {
 fn zoom_in_command_queues_zoom_action_and_closes_menu() {
     let mut state = create_test_input_state();
     state.open_context_menu((12, 34), Vec::new(), ContextMenuKind::Zoom, None);
+    assert!(!state.pending_onboarding_usage.used_zoom_control);
 
     state.execute_menu_command(MenuCommand::ZoomIn);
 
     assert_eq!(state.take_pending_zoom_action(), Some(ZoomAction::In));
+    assert!(state.pending_onboarding_usage.used_zoom_control);
     assert!(!state.is_context_menu_open());
 }
 

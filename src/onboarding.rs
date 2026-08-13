@@ -113,7 +113,7 @@ pub struct OnboardingState {
     /// Whether the board picker has been opened by any UI or action path.
     #[serde(default)]
     pub used_board_picker: bool,
-    /// Whether a bottom-right zoom-chip control has been activated.
+    /// Whether any user-facing zoom control has been activated.
     #[serde(default)]
     pub used_zoom_control: bool,
     /// Whether the unified toolbar's Canvas popover has been opened.

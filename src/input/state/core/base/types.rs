@@ -701,6 +701,7 @@ pub(crate) struct PendingOnboardingUsage {
     pub used_help_overlay: bool,
     pub used_command_palette: bool,
     pub used_board_picker: bool,
+    /// A user-facing zoom control was activated.
     pub used_zoom_control: bool,
     pub used_canvas_popover: bool,
     /// A drawing color was applied (any path). Drives the colors/thickness

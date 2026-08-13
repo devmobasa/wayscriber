@@ -101,8 +101,10 @@ impl InputState {
         self.pending_output_focus_action.take()
     }
 
-    /// Stores a zoom action for retrieval by the backend.
+    /// Stores a user-requested zoom action for retrieval by the backend and
+    /// records that the zoom controls have been used for onboarding guidance.
     pub(crate) fn request_zoom_action(&mut self, action: ZoomAction) {
+        self.pending_onboarding_usage.used_zoom_control = true;
         self.pending_zoom_action = Some(action);
     }
 

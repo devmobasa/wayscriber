@@ -1,12 +1,12 @@
 use super::first_run::{
     apply_persisted_usage_signals, background_mode_prompt_active, background_mode_prompt_choice,
     color_thickness_completed, first_run_card_hidden_by_ui_state, first_run_skip_allowed,
-    first_run_step_after_quick_access, first_run_step_eyebrow, quick_access_completed,
-    shortcut_rebind_footer,
+    first_run_step_eyebrow, quick_access_completed, shortcut_rebind_footer,
 };
 use super::{
-    automatic_onboarding_allowed, automatic_tip_toast, canvas_popover_hint_relevant,
-    capability_toast_message, shortcut_coach_should_fire, status_bar_board_picker_entry,
+    acknowledge_tip_command, automatic_onboarding_allowed, automatic_tip_toast,
+    canvas_popover_hint_relevant, capability_toast_message, shortcut_coach_should_fire,
+    status_bar_board_picker_entry,
 };
 use crate::config::{RadialMenuMouseBinding, ToolbarRebindModifier};
 use crate::domain::{Action, OnboardingTip};
@@ -85,6 +85,21 @@ fn automatic_tip_controls_acknowledge_the_exact_tip_before_optional_settings() {
 }
 
 #[test]
+fn tip_settings_navigation_survives_an_acknowledgement_write_failure() {
+    let outcome = acknowledge_tip_command(
+        Err(crate::onboarding::OnboardingSaveError::Unavailable),
+        Some(Action::OpenConfiguratorOnboardingHints),
+    );
+
+    assert!(outcome.persistence_error.is_some());
+    assert_eq!(
+        outcome.follow_up,
+        Some(Action::OpenConfiguratorOnboardingHints),
+        "settings navigation must not depend on acknowledgement persistence"
+    );
+}
+
+#[test]
 fn first_run_eyebrow_shows_progress() {
     assert_eq!(
         first_run_step_eyebrow(FirstRunStep::BackgroundModeSetup),
@@ -104,11 +119,6 @@ fn first_run_eyebrow_shows_progress() {
         first_run_step_eyebrow(FirstRunStep::Reference),
         "Step 6 / 6"
     );
-}
-
-#[test]
-fn quick_access_advances_directly_to_reference() {
-    assert_eq!(first_run_step_after_quick_access(), FirstRunStep::Reference);
 }
 
 #[test]

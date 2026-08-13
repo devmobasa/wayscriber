@@ -327,9 +327,11 @@ mod coach_tests {
             Some(Action::ZoomIn),
             "the canvas-popover Zoom In maps to the ZoomIn action"
         );
+        assert!(!state.pending_onboarding_usage.used_zoom_control);
 
         assert!(state.apply_toolbar_event(ToolbarEvent::ZoomIn));
 
+        assert!(state.pending_onboarding_usage.used_zoom_control);
         assert_eq!(
             state.pending_onboarding_usage.shortcut_slow_path_action,
             Some(Action::ZoomIn),
