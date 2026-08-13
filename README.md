@@ -148,8 +148,8 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 - Overlay Session panel, configurator Session tab, tray toggle, and CLI overrides
 - See [Session manager and persistence](#session-manager-and-persistence) for the full workflow
 
-### Toolbars and UI
-- Floating toolbars (<kbd>F9</kbd> toggles visibility; <kbd>F2</kbd> cycles the top strip full → micro chip → hidden)
+### Toolbar and UI
+- Unified floating toolbar (<kbd>F9</kbd> toggles visibility; <kbd>F2</kbd> cycles the top strip full → micro chip → hidden)
 - Two toolbar frontends: GTK4-rendered bars on layer-shell compositors (Hyprland, KWin, Wayfire, River, ...), with automatic fallback to the built-in Cairo bars everywhere else (GNOME xdg fallback, forced-inline mode, builds without the `toolbar-gtk` feature)
 - Pick a frontend explicitly with `ui.toolbar.backend = "auto" | "gtk" | "builtin"` or `WAYSCRIBER_TOOLBAR_BACKEND`
 - Preset slots, icon or text modes
@@ -922,7 +922,7 @@ pick_screen_color = ["I"]
 | Cancel action | <kbd>Right-click</kbd> (while drawing) / <kbd>Escape</kbd> |
 | Context menu | <kbd>Right-click</kbd> (idle) / <kbd>Shift+F10</kbd> / <kbd>Menu</kbd>, <kbd>Arrow keys</kbd> + <kbd>Enter</kbd>/<kbd>Space</kbd> |
 | Edit selected text/note | <kbd>Enter</kbd> (single selection) |
-| Toggle toolbars | <kbd>F9</kbd> |
+| Toggle toolbar | <kbd>F9</kbd> |
 | Cycle top strip (full → micro → hidden) | <kbd>F2</kbd> |
 | Help overlay | <kbd>F1</kbd> / <kbd>F10</kbd> |
 | Quick reference | <kbd>Shift+F1</kbd> |

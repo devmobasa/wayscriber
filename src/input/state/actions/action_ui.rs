@@ -1,5 +1,6 @@
 use crate::configurator_destination::{
-    ConfiguratorDestination, ConfiguratorScreen, quick_colors_destination,
+    ConfiguratorDestination, ConfiguratorScreen, onboarding_hints_destination,
+    quick_colors_destination,
 };
 use crate::domain::Action;
 use crate::input::state::{Toast, ToastPriority};
@@ -319,6 +320,10 @@ impl InputState {
             }
             Action::OpenConfiguratorQuickColors => {
                 self.launch_configurator(Some(quick_colors_destination()));
+                true
+            }
+            Action::OpenConfiguratorOnboardingHints => {
+                self.launch_configurator(Some(onboarding_hints_destination()));
                 true
             }
             Action::OpenAbout => {

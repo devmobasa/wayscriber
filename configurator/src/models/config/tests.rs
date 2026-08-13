@@ -39,6 +39,22 @@ fn config_draft_round_trips_status_bar_interactive() {
         .expect("status bar interactive round trip");
     assert!(!round_trip.ui.status_bar_interactive);
 }
+
+#[test]
+fn config_draft_round_trips_automatic_onboarding_preference() {
+    let config = Config::default();
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(
+        draft.ui_show_onboarding_hints,
+        "automatic guidance defaults on"
+    );
+
+    draft.set_toggle(ToggleField::UiShowOnboardingHints, false);
+    let round_trip = draft
+        .to_config(&config)
+        .expect("onboarding preference should round trip");
+    assert!(!round_trip.ui.show_onboarding_hints);
+}
 use super::super::{ColorMode, NamedColorOption};
 use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{

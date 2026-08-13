@@ -59,6 +59,12 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             |app| app.draft.ui_show_capabilities_warning,
             |value| Message::ToggleChanged(ToggleField::UiShowCapabilitiesWarning, value),
         )
+        .switch_row(
+            "Show automatic guidance and tips",
+            "Controls first-run guidance, discovery tips, and shortcut coaching. The guided tour remains available manually.",
+            |app| app.draft.ui_show_onboarding_hints,
+            |value| Message::ToggleChanged(ToggleField::UiShowOnboardingHints, value),
+        )
         .entry_row(
             "Command palette toast (ms)",
             |app| app.draft.ui_command_palette_toast_duration_ms.clone(),

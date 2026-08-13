@@ -7,7 +7,8 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const ONBOARDING_VERSION: u32 = 5;
+const ONBOARDING_VERSION: u32 = 6;
+const STARTUP_NOTICE_ACKNOWLEDGEMENT_MAX: usize = 32;
 pub(crate) const DRAWER_HINT_MAX: u32 = 2;
 pub(crate) const DEFERRED_HINT_REPEAT_MAX: u32 = 3;
 const ONBOARDING_FILE: &str = "onboarding.toml";
@@ -154,6 +155,11 @@ pub struct OnboardingState {
     /// Number of deferred Canvas-popover hints shown across sessions (M9).
     #[serde(default)]
     pub hint_canvas_popover_count: u32,
+    /// Stable content identifiers for informational startup notices the user
+    /// has already seen. Errors and authored conflicts are deliberately not
+    /// stored here because they must remain visible until resolved.
+    #[serde(default)]
+    pub acknowledged_startup_notices: Vec<String>,
 }
 
 impl Default for OnboardingState {
@@ -201,6 +207,7 @@ impl Default for OnboardingState {
             hint_zoom_chip_count: 0,
             hint_canvas_popover_shown: false,
             hint_canvas_popover_count: 0,
+            acknowledged_startup_notices: Vec::new(),
         }
     }
 }
@@ -214,7 +221,45 @@ impl OnboardingState {
 pub struct OnboardingStore {
     state: OnboardingState,
     path: Option<PathBuf>,
+    persistence_available: bool,
 }
+
+#[derive(Debug)]
+pub(crate) enum OnboardingSaveError {
+    Unavailable,
+    CreateDirectory {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    Serialize(toml::ser::Error),
+    Write {
+        path: PathBuf,
+        source: crate::durable_io::DurableIoError,
+    },
+}
+
+impl std::fmt::Display for OnboardingSaveError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unavailable => formatter.write_str("no user data directory is available"),
+            Self::CreateDirectory { path, source } => write!(
+                formatter,
+                "failed to create onboarding state directory {}: {source}",
+                path.display()
+            ),
+            Self::Serialize(source) => {
+                write!(formatter, "failed to serialize onboarding state: {source}")
+            }
+            Self::Write { path, source } => write!(
+                formatter,
+                "failed to write onboarding state {}: {source}",
+                path.display()
+            ),
+        }
+    }
+}
+
+impl std::error::Error for OnboardingSaveError {}
 
 impl OnboardingStore {
     pub fn load() -> Self {
@@ -222,6 +267,7 @@ impl OnboardingStore {
             return Self {
                 state: OnboardingState::default(),
                 path: None,
+                persistence_available: false,
             };
         };
 
@@ -233,12 +279,13 @@ impl OnboardingStore {
             Ok(raw) => match toml::from_str::<OnboardingState>(&raw) {
                 Ok(mut state) => {
                     let needs_save = migrate_onboarding_state(&mut state);
-                    let store = Self {
+                    let mut store = Self {
                         state,
                         path: Some(path),
+                        persistence_available: true,
                     };
                     if needs_save {
-                        store.save();
+                        let _ = store.save();
                     }
                     return store;
                 }
@@ -248,11 +295,7 @@ impl OnboardingStore {
                         path.display(),
                         err
                     );
-                    let state = recover_onboarding_file(&path, Some(&raw));
-                    return Self {
-                        state,
-                        path: Some(path),
-                    };
+                    return recover_onboarding_file(path, Some(&raw));
                 }
             },
             Err(err) if err.kind() == ErrorKind::NotFound => {}
@@ -262,17 +305,14 @@ impl OnboardingStore {
                     path.display(),
                     err
                 );
-                let state = recover_onboarding_file(&path, None);
-                return Self {
-                    state,
-                    path: Some(path),
-                };
+                return recover_onboarding_file(path, None);
             }
         }
 
         Self {
             state: OnboardingState::default(),
             path: Some(path),
+            persistence_available: true,
         }
     }
 
@@ -284,44 +324,129 @@ impl OnboardingStore {
         &mut self.state
     }
 
-    pub fn save(&self) {
+    pub fn persistence_available(&self) -> bool {
+        self.persistence_available
+    }
+
+    pub fn startup_notice_acknowledged(&self, notice_id: &str) -> bool {
+        self.state
+            .acknowledged_startup_notices
+            .iter()
+            .any(|saved| saved == notice_id)
+    }
+
+    pub fn acknowledge_startup_notice(
+        &mut self,
+        notice_id: &str,
+    ) -> Result<(), OnboardingSaveError> {
+        if !self.startup_notice_acknowledged(notice_id) {
+            self.state
+                .acknowledged_startup_notices
+                .push(notice_id.to_string());
+            let excess = self
+                .state
+                .acknowledged_startup_notices
+                .len()
+                .saturating_sub(STARTUP_NOTICE_ACKNOWLEDGEMENT_MAX);
+            if excess > 0 {
+                self.state.acknowledged_startup_notices.drain(..excess);
+            }
+        }
+        self.save()
+    }
+
+    pub fn begin_session(
+        &mut self,
+        automatic_guidance_enabled: bool,
+    ) -> Result<(), OnboardingSaveError> {
+        let state = &mut self.state;
+        state.sessions_seen = state.sessions_seen.saturating_add(1);
+
+        if automatic_guidance_enabled {
+            if !state.used_help_overlay && state.hint_help_count < DEFERRED_HINT_REPEAT_MAX {
+                state.hint_help_shown = false;
+            }
+            if !state.used_command_palette && state.hint_palette_count < DEFERRED_HINT_REPEAT_MAX {
+                state.hint_palette_shown = false;
+            }
+            if !state.used_radial_menu
+                && !state.used_context_menu_right_click
+                && !state.used_context_menu_keyboard
+                && state.hint_quick_access_count < DEFERRED_HINT_REPEAT_MAX
+            {
+                state.hint_quick_access_shown = false;
+            }
+            if state.hint_status_bar_count < DEFERRED_HINT_REPEAT_MAX {
+                state.hint_status_bar_shown = false;
+            }
+            if state.hint_zoom_chip_count < DEFERRED_HINT_REPEAT_MAX {
+                state.hint_zoom_chip_shown = false;
+            }
+            if state.hint_canvas_popover_count < DEFERRED_HINT_REPEAT_MAX {
+                state.hint_canvas_popover_shown = false;
+            }
+        }
+
+        if automatic_guidance_enabled && !state.first_run_completed && !state.first_run_skipped {
+            state
+                .active_step
+                .get_or_insert(FirstRunStep::BackgroundModeSetup);
+        } else {
+            state.active_step = None;
+            state.quick_access_requires_toolbar = false;
+        }
+        // Keep legacy flags marked so older checks never re-trigger.
+        state.welcome_shown = true;
+        state.tour_shown = true;
+        self.save()
+    }
+
+    pub fn save(&mut self) -> Result<(), OnboardingSaveError> {
         let Some(path) = &self.path else {
-            return;
+            self.persistence_available = false;
+            return Err(OnboardingSaveError::Unavailable);
         };
         if let Some(parent) = path.parent()
-            && let Err(err) = fs::create_dir_all(parent)
+            && let Err(source) = fs::create_dir_all(parent)
         {
-            warn!(
-                "Failed to create onboarding state dir {}: {}",
-                parent.display(),
-                err
-            );
-            return;
+            let error = OnboardingSaveError::CreateDirectory {
+                path: parent.to_path_buf(),
+                source,
+            };
+            warn!("{error}");
+            self.persistence_available = false;
+            return Err(error);
         }
-        match toml::to_string_pretty(&self.state) {
-            Ok(contents) => {
-                if let Err(err) = crate::durable_io::write_text_atomic(
-                    path,
-                    &contents,
-                    AtomicWriteOptions {
-                        overwrite: OverwriteMode::Replace,
-                        permissions: PermissionPolicy::PreserveExistingOrMode(0o644),
-                        symlink: SymlinkPolicy::Reject,
-                        sync_file: true,
-                        sync_parent: true,
-                    },
-                ) {
-                    warn!(
-                        "Failed to write onboarding state {}: {}",
-                        path.display(),
-                        err
-                    );
-                }
+        let contents = match toml::to_string_pretty(&self.state) {
+            Ok(contents) => contents,
+            Err(source) => {
+                let error = OnboardingSaveError::Serialize(source);
+                warn!("{error}");
+                self.persistence_available = false;
+                return Err(error);
             }
-            Err(err) => {
-                warn!("Failed to serialize onboarding state: {}", err);
-            }
+        };
+        if let Err(source) = crate::durable_io::write_text_atomic(
+            path,
+            &contents,
+            AtomicWriteOptions {
+                overwrite: OverwriteMode::Replace,
+                permissions: PermissionPolicy::PreserveExistingOrMode(0o644),
+                symlink: SymlinkPolicy::Reject,
+                sync_file: true,
+                sync_parent: true,
+            },
+        ) {
+            let error = OnboardingSaveError::Write {
+                path: path.clone(),
+                source,
+            };
+            warn!("{error}");
+            self.persistence_available = false;
+            return Err(error);
         }
+        self.persistence_available = true;
+        Ok(())
     }
 }
 
@@ -374,6 +499,20 @@ fn migrate_onboarding_state(state: &mut OnboardingState) -> bool {
         state.first_run_background_mode_prompted = true;
         needs_save = true;
     }
+    if old_version < 6 && state.first_run_completed {
+        // These surface-discovery hints were added after many profiles had
+        // already completed onboarding. A version bump must not silently
+        // enroll those users in several new rounds of automatic tips.
+        state.hint_status_bar_shown = true;
+        state.hint_status_bar_count = state.hint_status_bar_count.max(DEFERRED_HINT_REPEAT_MAX);
+        state.hint_zoom_chip_shown = true;
+        state.hint_zoom_chip_count = state.hint_zoom_chip_count.max(DEFERRED_HINT_REPEAT_MAX);
+        state.hint_canvas_popover_shown = true;
+        state.hint_canvas_popover_count = state
+            .hint_canvas_popover_count
+            .max(DEFERRED_HINT_REPEAT_MAX);
+        needs_save = true;
+    }
     if state.quick_access_requires_toolbar && state.active_step != Some(FirstRunStep::QuickAccess) {
         state.quick_access_requires_toolbar = false;
         needs_save = true;
@@ -420,10 +559,10 @@ fn migrate_onboarding_state(state: &mut OnboardingState) -> bool {
     needs_save
 }
 
-fn recover_onboarding_file(path: &Path, _raw: Option<&str>) -> OnboardingState {
+fn recover_onboarding_file(path: PathBuf, _raw: Option<&str>) -> OnboardingStore {
     if path.exists() {
-        let backup = backup_path(path);
-        if let Err(err) = fs::rename(path, &backup) {
+        let backup = backup_path(&path);
+        if let Err(err) = fs::rename(&path, &backup) {
             warn!(
                 "Failed to back up onboarding state {}: {}",
                 path.display(),
@@ -478,13 +617,15 @@ fn recover_onboarding_file(path: &Path, _raw: Option<&str>) -> OnboardingState {
         hint_zoom_chip_count: DEFERRED_HINT_REPEAT_MAX,
         hint_canvas_popover_shown: true,
         hint_canvas_popover_count: DEFERRED_HINT_REPEAT_MAX,
+        acknowledged_startup_notices: Vec::new(),
     };
-    let store = OnboardingStore {
-        state: state.clone(),
-        path: Some(path.to_path_buf()),
+    let mut store = OnboardingStore {
+        state,
+        path: Some(path),
+        persistence_available: true,
     };
-    store.save();
-    state
+    let _ = store.save();
+    store
 }
 
 fn backup_path(path: &Path) -> PathBuf {

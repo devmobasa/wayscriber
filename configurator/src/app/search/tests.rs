@@ -582,13 +582,30 @@ fn exact_pdf_background_field_label_matches_pdf_section() {
 
 #[test]
 fn exact_general_ui_field_labels_match_general_ui_section() {
-    let (mut app, _effects) = ConfiguratorApp::new_app();
-    app.search_query = SearchQuery::new("focus loss");
+    for query in [
+        "focus loss",
+        "show automatic guidance and tips",
+        "onboarding",
+        "tutorial",
+        "guidance",
+        "tips",
+        "hints",
+        "onboarding hints",
+        "show_onboarding_hints",
+    ] {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.search_query = SearchQuery::new(query);
 
-    let summary = app.search_summary();
-    let ui = summary.tab(TabId::Ui).expect("ui match");
+        let summary = app.search_summary();
+        let ui = summary
+            .tab(TabId::Ui)
+            .unwrap_or_else(|| panic!("UI should match visible General UI wording: {query}"));
 
-    assert!(ui.area_matches(SearchArea::UiGeneral));
+        assert!(
+            ui.area_matches(SearchArea::UiGeneral),
+            "query should reveal General UI: {query}"
+        );
+    }
 }
 
 #[test]

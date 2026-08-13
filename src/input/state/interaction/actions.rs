@@ -111,6 +111,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::OpenConfiguratorPresets
         | Action::OpenConfiguratorBoards
         | Action::OpenConfiguratorQuickColors
+        | Action::OpenConfiguratorOnboardingHints
         | Action::OpenAbout
         | Action::ClearSavedToolState
         | Action::OpenCaptureFolder

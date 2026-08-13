@@ -5,13 +5,13 @@ use std::fs;
 fn onboarding_defaults_when_missing() {
     let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
-    let store = OnboardingStore::load_from_path(path.clone());
+    let mut store = OnboardingStore::load_from_path(path.clone());
     assert!(!store.state().welcome_shown);
     assert!(!store.state().toolbar_hint_shown);
     assert!(!store.state().first_run_completed);
     assert!(store.state().active_step.is_none());
 
-    store.save();
+    store.save().expect("default state should persist");
     assert!(path.exists());
 }
 
@@ -23,12 +23,120 @@ fn onboarding_persists_flags() {
     store.state_mut().welcome_shown = true;
     store.state_mut().toolbar_hint_shown = true;
     store.state_mut().used_help_overlay = true;
-    store.save();
+    store.save().expect("updated state should persist");
 
     let reloaded = OnboardingStore::load_from_path(path.clone());
     assert!(reloaded.state().welcome_shown);
     assert!(reloaded.state().toolbar_hint_shown);
     assert!(reloaded.state().used_help_overlay);
+}
+
+#[cfg(unix)]
+#[test]
+fn rejected_persistence_disables_automatic_onboarding_for_the_session() {
+    use std::os::unix::fs::symlink;
+
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let target = tmp.path().join("real-onboarding.toml");
+    fs::write(&target, "version = 5\n").expect("seed should be writable");
+    let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
+    fs::create_dir_all(path.parent().expect("onboarding path has a parent"))
+        .expect("state directory should be writable");
+    symlink(&target, &path).expect("test symlink should be created");
+
+    let mut store = OnboardingStore::load_from_path(path);
+    store.state_mut().first_run_completed = true;
+
+    assert!(
+        store.save().is_err(),
+        "symlink rejection must reach the caller"
+    );
+    assert!(
+        !store.persistence_available(),
+        "a process that cannot remember an acknowledgement must not show automatic onboarding"
+    );
+}
+
+#[test]
+fn unwritable_state_location_disables_automatic_onboarding_for_the_session() {
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let blocker = tmp.path().join("not-a-directory");
+    fs::write(&blocker, "occupied").expect("blocker file should be created");
+    let path = blocker.join(ONBOARDING_FILE);
+    let mut store = OnboardingStore::load_from_path(path);
+
+    assert!(
+        store.begin_session(true).is_err(),
+        "a state path below a regular file cannot be persisted"
+    );
+    assert!(!store.persistence_available());
+    assert!(
+        !store.state().first_run_active(),
+        "an unreadable state location must recover suppressively as well as disabling hints"
+    );
+}
+
+#[test]
+fn startup_notice_acknowledgement_survives_reload_and_is_content_specific() {
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
+    let mut store = OnboardingStore::load_from_path(path.clone());
+
+    assert!(!store.startup_notice_acknowledged("skipped-default:f2-cycle"));
+    store
+        .acknowledge_startup_notice("skipped-default:f2-cycle")
+        .expect("acknowledgement should persist");
+
+    let reloaded = OnboardingStore::load_from_path(path);
+    assert!(reloaded.startup_notice_acknowledged("skipped-default:f2-cycle"));
+    assert!(
+        !reloaded.startup_notice_acknowledged("skipped-default:new-binding"),
+        "a changed diagnostic must be eligible for one new notice"
+    );
+}
+
+#[test]
+fn deferred_hint_cap_survives_repeated_process_launches() {
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
+
+    for expected_count in 0..DEFERRED_HINT_REPEAT_MAX {
+        let mut store = OnboardingStore::load_from_path(path.clone());
+        store.state_mut().first_run_completed = true;
+        store
+            .begin_session(true)
+            .expect("session state should persist");
+        assert!(!store.state().hint_zoom_chip_shown);
+        assert_eq!(store.state().hint_zoom_chip_count, expected_count);
+
+        store.state_mut().hint_zoom_chip_shown = true;
+        store.state_mut().hint_zoom_chip_count += 1;
+        store.save().expect("shown hint should persist");
+    }
+
+    let mut capped = OnboardingStore::load_from_path(path);
+    capped
+        .begin_session(true)
+        .expect("capped state should remain writable");
+    assert!(capped.state().hint_zoom_chip_shown);
+    assert_eq!(
+        capped.state().hint_zoom_chip_count,
+        DEFERRED_HINT_REPEAT_MAX
+    );
+}
+
+#[test]
+fn disabled_automatic_guidance_does_not_activate_first_run() {
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
+    let mut store = OnboardingStore::load_from_path(path);
+
+    store
+        .begin_session(false)
+        .expect("disabled preference should still persist session state");
+
+    assert!(store.state().active_step.is_none());
+    assert!(!store.state().first_run_completed);
 }
 
 #[test]
@@ -124,17 +232,17 @@ used_command_palette = true
 }
 
 #[test]
-fn v4_file_migrates_to_v5_with_m9_fields_defaulted() {
+fn completed_pre_v6_profile_does_not_receive_new_surface_tips() {
     let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).expect("create onboarding dir");
     }
-    // A v4 file that finished onboarding and has the coach fields but none of
-    // the M9 surface-hint / deprecation fields. Migration must bump the version
-    // to 5 and default the new fields (serde defaults) without re-running setup.
+    // A v5 file is the state written by the release that introduced the M9
+    // surface hints. Upgrading must preserve the user's completed-onboarding
+    // expectation even when those fields were never durably advanced.
     let seed = "\
-version = 4
+version = 5
 welcome_shown = true
 toolbar_hint_shown = true
 first_run_completed = true
@@ -143,26 +251,34 @@ used_help_overlay = true
 used_command_palette = true
 coach_hint_count = 1
 ";
-    fs::write(&path, seed).expect("write v4 seed");
+    fs::write(&path, seed).expect("write v5 seed");
 
     let store = OnboardingStore::load_from_path(path.clone());
     assert_eq!(store.state().version, ONBOARDING_VERSION);
-    assert_eq!(ONBOARDING_VERSION, 5);
+    assert_eq!(ONBOARDING_VERSION, 6);
     assert!(store.state().first_run_completed);
-    // New M9 fields default off/zero — the migration fabricates no progress.
-    assert!(!store.state().hint_status_bar_shown);
-    assert_eq!(store.state().hint_status_bar_count, 0);
-    assert!(!store.state().hint_zoom_chip_shown);
-    assert_eq!(store.state().hint_zoom_chip_count, 0);
-    assert!(!store.state().hint_canvas_popover_shown);
-    assert_eq!(store.state().hint_canvas_popover_count, 0);
+    assert!(store.state().hint_status_bar_shown);
+    assert_eq!(
+        store.state().hint_status_bar_count,
+        DEFERRED_HINT_REPEAT_MAX
+    );
+    assert!(store.state().hint_zoom_chip_shown);
+    assert_eq!(store.state().hint_zoom_chip_count, DEFERRED_HINT_REPEAT_MAX);
+    assert!(store.state().hint_canvas_popover_shown);
+    assert_eq!(
+        store.state().hint_canvas_popover_count,
+        DEFERRED_HINT_REPEAT_MAX
+    );
     // Prior coach bookkeeping is preserved across the bump.
     assert_eq!(store.state().coach_hint_count, 1);
 
     // The bumped file round-trips through a reload unchanged.
     let reloaded = OnboardingStore::load_from_path(path);
     assert_eq!(reloaded.state().version, ONBOARDING_VERSION);
-    assert_eq!(reloaded.state().hint_status_bar_count, 0);
+    assert_eq!(
+        reloaded.state().hint_status_bar_count,
+        DEFERRED_HINT_REPEAT_MAX
+    );
 }
 
 #[test]
@@ -173,7 +289,7 @@ fn m9_surface_hint_fields_persist_and_reconcile() {
     store.state_mut().hint_status_bar_count = 2;
     store.state_mut().hint_zoom_chip_count = 1;
     store.state_mut().hint_canvas_popover_count = 3;
-    store.save();
+    store.save().expect("surface hint counters should persist");
 
     let reloaded = OnboardingStore::load_from_path(path.clone());
     assert_eq!(reloaded.state().hint_status_bar_count, 2);

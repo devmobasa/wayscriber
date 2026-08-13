@@ -8,6 +8,7 @@ use crate::config::{
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};
 use crate::notification;
+use crate::onboarding::OnboardingStore;
 
 /// How long the keybinding warnings stay up. All of them are on the long side:
 /// they describe a config problem the user has to leave the overlay to fix.
@@ -255,19 +256,28 @@ pub(super) fn notify_invalid_keybindings(
 pub(super) fn notify_skipped_default_shortcuts(
     input_state: &mut InputState,
     tokio_handle: &tokio::runtime::Handle,
+    onboarding: &mut OnboardingStore,
     skipped: &[DefaultShortcutSkipped],
 ) {
-    if skipped.is_empty() {
+    if skipped.is_empty() || !onboarding.persistence_available() {
         return;
     }
 
-    input_state.push_toast(
+    let notice_id = skipped_default_notice_id(skipped);
+    if onboarding.startup_notice_acknowledged(&notice_id) {
+        return;
+    }
+
+    let outcome = input_state.push_toast(
         ToastPriority::Action,
         "keybindings.skipped-default",
         Toast::info(skipped_default_toast(skipped))
             .action("Shortcuts", Action::OpenConfiguratorKeybindings)
             .duration_ms(KEYBINDING_CONFLICT_TOAST_MS),
     );
+    if !outcome.accepted() || onboarding.acknowledge_startup_notice(&notice_id).is_err() {
+        return;
+    }
     notification::send_notification_with_timeout_async(
         tokio_handle,
         "New Default Shortcuts".to_string(),
@@ -275,6 +285,21 @@ pub(super) fn notify_skipped_default_shortcuts(
         Some("dialog-information".to_string()),
         KEYBINDING_CONFLICT_NOTIFICATION_TIMEOUT_MS,
     );
+}
+
+fn skipped_default_notice_id(skipped: &[DefaultShortcutSkipped]) -> String {
+    let mut entries = skipped
+        .iter()
+        .map(|entry| {
+            let skipped_action = entry.config_key().unwrap_or("runtime_action");
+            let claimed_by =
+                crate::config::KeybindingsConfig::config_key_for_action(entry.claimed_by())
+                    .unwrap_or("runtime_action");
+            format!("{}:{skipped_action}:{claimed_by}", entry.binding())
+        })
+        .collect::<Vec<_>>();
+    entries.sort_unstable();
+    format!("skipped-default:{}", entries.join(","))
 }
 
 fn keybinding_conflict_toast(conflicts: &[KeybindingConflictResolution]) -> String {
@@ -494,6 +519,10 @@ mod tests {
             assert_eq!(
                 loaded.keybindings.skipped_default_shortcuts[0].binding(),
                 "F2"
+            );
+            assert_eq!(
+                skipped_default_notice_id(&loaded.keybindings.skipped_default_shortcuts),
+                "skipped-default:F2:cycle_toolbar_display:toggle_toolbar"
             );
 
             let toast = skipped_default_toast(&loaded.keybindings.skipped_default_shortcuts);

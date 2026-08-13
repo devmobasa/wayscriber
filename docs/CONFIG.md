@@ -704,6 +704,13 @@ show_frozen_badge = false
 # Filter help overlay sections based on enabled features
 help_overlay_context_filter = true
 
+# Show compositor capability warnings when the overlay starts
+show_capabilities_warning = true
+
+# Show automatic first-run guidance, discovery tips, and shortcut coaching.
+# The guided tour remains available manually when this is false.
+show_onboarding_hints = true
+
 # Command palette action toast duration (ms)
 command_palette_toast_duration_ms = 1500
 
@@ -977,7 +984,7 @@ wayscriber --light-draw-off
 
 Use `--light-draw-on` on key/button press and `--light-draw-off` on release for a non-sticky draw-while-held shortcut. The raw `--daemon-action` form remains available for scripts.
 
-### `[ui.toolbar]` - Floating Toolbars
+### `[ui.toolbar]` - Floating Toolbar
 
 Controls the unified top toolbar (<kbd>F9</kbd> toggles visibility; <kbd>F2</kbd> cycles the top strip full → micro → hidden).
 
@@ -1170,6 +1177,8 @@ top_controls = [
 - **Polygon tools**: Full mode shows Triangle, Parallelogram, Rhombus, Regular Polygon, and Freeform Polygon under the compact Polygons picker. Simple mode exposes them in the Shapes picker.
 - **Context-aware UI**: `context_aware_ui` shows/hides tool-specific controls (colors, thickness, arrow labels, etc.) based on the active tool; disable to always show all controls.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.
+- **Automatic guidance**: `show_onboarding_hints` controls first-run cards, discovery tips, and shortcut coaching. Set it to `false` to disable all automatic tutorials; the guided tour remains available manually. Completed profiles migrated from onboarding versions before v6 are not enrolled in the later status-bar, Canvas, and zoom tip series.
+- **Capability warnings**: `show_capabilities_warning` independently controls compositor limitation warnings; disabling tutorials does not hide safety, configuration, or capability diagnostics.
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
 - **Offsets**: `top_offset` and `top_offset_y` are the authored default top-toolbar position. Dragging the strip saves its position as a runtime preference in `runtime-ui.toml` and leaves these untouched; editing one here again takes over from the saved drag.
 - **Force inline**: `force_inline` (or `WAYSCRIBER_FORCE_INLINE_TOOLBARS`) skips layer-shell toolbars.
@@ -1631,6 +1640,13 @@ one is a tidy-up that records your decision in the file.
 `CURRENT_CONFIG_REVISION` bump. A default is only ever offered to an action a configuration omits,
 and only where the key is free, so a new or moved default cannot land on a shortcut a user bound to
 something else (#293, #315); the skipped-default diagnostic reports the stand-down instead.
+That informational notice is acknowledged in the profile's
+`$XDG_DATA_HOME/wayscriber/onboarding.toml` state and appears once for each exact set of skipped
+bindings; a later, different skipped default can notify once again. Actual
+parse errors, invalid bindings, and conflicts continue to report on every start until they are fixed.
+For the historical toolbar pair, either accept the revision-2 proposal (`F9` toggles the unified top
+toolbar and `F2` cycles full → micro → hidden) or explicitly write
+`cycle_toolbar_display = []` to keep `F2`/`F9` on `toggle_toolbar` without another notice.
 What is still required: the new default must not collide with another shipped default
 (`default_keybindings_have_no_conflicts` guards that), and
 `default_bindings_match_the_checked_in_snapshot` holds a snapshot of every shipped default and fails
@@ -1787,7 +1803,7 @@ toggle_zoom_chip = []
 # (unbound; also in the command palette)
 toggle_focus_mode = []
 
-# Toggle toolbars (show/hide top and side together).
+# Toggle the unified top toolbar.
 # Note: F2 moved to cycle_toolbar_display; hiding is still reachable via
 # the cycle, and explicit user configs keep whatever they bound.
 toggle_toolbar = ["F9"]

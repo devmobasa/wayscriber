@@ -222,6 +222,7 @@ define_action_binding_accessors! {
         OpenConfiguratorPresets,
         OpenConfiguratorBoards,
         OpenConfiguratorQuickColors,
+        OpenConfiguratorOnboardingHints,
     ]
 }
 

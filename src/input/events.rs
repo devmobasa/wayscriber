@@ -47,7 +47,7 @@ pub enum Key {
     Menu,
     /// F1 function key (help)
     F1,
-    /// F2 function key (toolbar toggle)
+    /// F2 function key (toolbar display cycle)
     F2,
     /// F3 function key
     F3,

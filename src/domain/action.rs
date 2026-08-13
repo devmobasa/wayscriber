@@ -150,6 +150,8 @@ pub enum Action {
     OpenConfiguratorBoards,
     /// Open the configurator's Drawing screen at the quick-color palette.
     OpenConfiguratorQuickColors,
+    /// Open General UI at the automatic-guidance preference.
+    OpenConfiguratorOnboardingHints,
     ClearSavedToolState,
     OpenAbout,
 

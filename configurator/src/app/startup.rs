@@ -221,6 +221,21 @@ mod tests {
         assert!(!app.startup_search_focus_pending);
     }
 
+    #[test]
+    fn the_onboarding_hint_destination_lands_on_the_general_ui_setting() {
+        let launched =
+            wayscriber::configurator_destination::onboarding_hints_destination().as_arg();
+        let (app, _dir, _path) = app_launched_with(&["--open", &launched]);
+
+        assert_eq!(app.active_tab, TabId::Ui);
+        assert_eq!(app.search_query.raw(), "Show automatic guidance and tips");
+        let summary = app.search_summary();
+        let ui = summary
+            .tab(TabId::Ui)
+            .expect("General UI destination match");
+        assert!(ui.area_matches(crate::app::search::SearchArea::UiGeneral));
+    }
+
     /// The shortcut-action row: subtab plus action search.
     #[test]
     fn a_keybinding_action_destination_lands_on_its_subtab_with_the_term_searched() {

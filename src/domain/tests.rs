@@ -172,6 +172,10 @@ fn action_serialization_matches_established_contract() {
             Action::OpenConfiguratorQuickColors,
             "open_configurator_quick_colors",
         ),
+        (
+            Action::OpenConfiguratorOnboardingHints,
+            "open_configurator_onboarding_hints",
+        ),
         (Action::OpenAbout, "open_about"),
         (Action::ClearSavedToolState, "clear_saved_tool_state"),
         (Action::SetColorRed, "set_color_red"),
