@@ -255,6 +255,7 @@ impl InputState {
             ui_toast: None,
             toast_queue: super::super::toast_queue::ToastQueue::default(),
             ui_toast_bounds: None,
+            ui_toast_action_bounds: [None, None],
             selection_clipboard: None,
             selection_clipboard_generation: 0,
             selection_publish_state: super::super::types::SelectionPublishState::NotAttempted,

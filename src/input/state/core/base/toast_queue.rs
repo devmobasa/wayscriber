@@ -48,6 +48,7 @@ pub struct Toast {
     pub message: String,
     pub duration_ms: u64,
     pub(crate) action: Option<ToastAction>,
+    pub(crate) secondary_action: Option<ToastAction>,
     once_per_content: bool,
 }
 
@@ -58,6 +59,7 @@ impl Toast {
             message: message.into(),
             duration_ms: UI_TOAST_DURATION_MS,
             action: None,
+            secondary_action: None,
             once_per_content: false,
         }
     }
@@ -81,6 +83,16 @@ impl Toast {
 
     pub fn action(mut self, label: impl Into<String>, action: Action) -> Self {
         self.action = Some(ToastAction {
+            label: label.into(),
+            action,
+        });
+        self
+    }
+
+    /// Add a second explicit action chip. Two-action toasts dispatch only from
+    /// their chips; the remaining toast body becomes dismiss-only.
+    pub fn secondary_action(mut self, label: impl Into<String>, action: Action) -> Self {
+        self.secondary_action = Some(ToastAction {
             label: label.into(),
             action,
         });
@@ -306,6 +318,7 @@ impl ToastQueue {
             started: now,
             duration_ms: toast.duration_ms,
             action: toast.action,
+            secondary_action: toast.secondary_action,
             priority,
             key,
             activation_id: self.activation_seq,
@@ -379,6 +392,7 @@ impl ToastQueue {
                     message: current.message,
                     duration_ms: remaining,
                     action: current.action,
+                    secondary_action: current.secondary_action,
                     once_per_content: false,
                 },
                 seq,
@@ -538,6 +552,47 @@ mod tests {
             resumed.duration_ms,
             T0_DURATION - 2000,
             "resumes with the remaining display time, not a fresh timer"
+        );
+    }
+
+    #[test]
+    fn preempted_toast_keeps_both_action_chips() {
+        let mut queue = ToastQueue::default();
+        let mut active = None;
+        let now = Instant::now();
+
+        queue.push(
+            &mut active,
+            ToastPriority::Action,
+            "actions",
+            Toast::info("Choose")
+                .action("First", Action::ToggleHelp)
+                .secondary_action("Second", Action::OpenConfiguratorOnboardingHints),
+            now,
+        );
+        queue.push(
+            &mut active,
+            ToastPriority::Critical,
+            "critical",
+            Toast::error("Stop"),
+            now,
+        );
+
+        queue.advance(
+            &mut active,
+            now + Duration::from_millis(UI_TOAST_DURATION_MS),
+        );
+        let resumed = active.as_ref().expect("two-action toast resumed");
+        assert_eq!(
+            resumed.action.as_ref().map(|action| action.label.as_str()),
+            Some("First")
+        );
+        assert_eq!(
+            resumed
+                .secondary_action
+                .as_ref()
+                .map(|action| action.label.as_str()),
+            Some("Second")
         );
     }
 

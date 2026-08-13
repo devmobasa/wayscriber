@@ -299,6 +299,9 @@ pub(crate) struct UiToastState {
     pub duration_ms: u64,
     /// Optional action that triggers when the toast is clicked.
     pub action: Option<ToastAction>,
+    /// Optional second action. When present, only the individual action chips
+    /// dispatch; clicking the rest of the toast dismisses it without acting.
+    pub secondary_action: Option<ToastAction>,
     /// Queue priority this toast was pushed with (drives preemption).
     pub priority: super::toast_queue::ToastPriority,
     /// Dedup/rate-limit key this toast was pushed with.
@@ -314,15 +317,45 @@ pub(crate) struct UiToastState {
 /// The field stays opaque outside input state: callers can only return the
 /// token on release, where it is matched against the still-active toast.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ToastPress(u64);
+pub(crate) struct ToastPress {
+    activation_id: u64,
+    target: ToastTarget,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ToastTarget {
+    Body,
+    Action(usize),
+}
 
 impl ToastPress {
-    pub(crate) fn new(activation_id: u64) -> Self {
-        Self(activation_id)
+    pub(crate) fn new(activation_id: u64, target: usize) -> Self {
+        Self {
+            activation_id,
+            target: ToastTarget::Action(target),
+        }
+    }
+
+    pub(crate) fn body(activation_id: u64) -> Self {
+        Self {
+            activation_id,
+            target: ToastTarget::Body,
+        }
     }
 
     pub(crate) fn matches(self, toast: &UiToastState) -> bool {
-        self.0 == toast.activation_id
+        self.activation_id == toast.activation_id
+    }
+
+    pub(crate) fn matches_target(self, target: Option<usize>) -> bool {
+        self.target == target.map(ToastTarget::Action).unwrap_or(ToastTarget::Body)
+    }
+
+    pub(crate) fn action_index(self) -> Option<usize> {
+        match self.target {
+            ToastTarget::Body => None,
+            ToastTarget::Action(index) => Some(index),
+        }
     }
 }
 

@@ -26,6 +26,7 @@ impl InputState {
                 .push(&mut self.ui_toast, priority, key, toast, Instant::now());
         if outcome.changed_active() {
             self.ui_toast_bounds = None;
+            self.ui_toast_action_bounds = [None, None];
             self.needs_redraw = true;
         }
         outcome
@@ -78,6 +79,7 @@ impl InputState {
         if activated || (had_toast && !still_showing) {
             // The visible toast changed (expired or a queued one replaced it).
             self.ui_toast_bounds = None;
+            self.ui_toast_action_bounds = [None, None];
             self.needs_redraw = true;
         }
         still_showing
@@ -86,8 +88,16 @@ impl InputState {
     /// Capture the identity of the toast under a press without dismissing it.
     pub(crate) fn toast_press_at(&self, x: i32, y: i32) -> Option<ToastPress> {
         let toast = self.ui_toast.as_ref()?;
-        self.toast_contains(x, y)
-            .then(|| ToastPress::new(toast.activation_id))
+        if !self.toast_contains(x, y) {
+            return None;
+        }
+        if toast.secondary_action.is_none() {
+            return Some(ToastPress::body(toast.activation_id));
+        }
+        Some(match self.toast_action_at(x, y) {
+            Some(index) => ToastPress::new(toast.activation_id, index),
+            None => ToastPress::body(toast.activation_id),
+        })
     }
 
     /// Resolve a toast release only when the exact toast activation captured
@@ -102,13 +112,28 @@ impl InputState {
             return (false, None);
         };
 
-        if pressed.matches(toast) && self.toast_contains(x, y) {
-            // Click is within toast
-            let action = toast.action.as_ref().map(|action| action.action);
+        let release_target = toast
+            .secondary_action
+            .is_some()
+            .then(|| self.toast_action_at(x, y))
+            .flatten();
+        let release_inside = self.toast_contains(x, y);
+
+        if pressed.matches(toast) && release_inside && pressed.matches_target(release_target) {
+            let action = if toast.secondary_action.is_some() {
+                match pressed.action_index() {
+                    Some(0) => toast.action.as_ref().map(|action| action.action),
+                    Some(1) => toast.secondary_action.as_ref().map(|action| action.action),
+                    _ => None,
+                }
+            } else {
+                toast.action.as_ref().map(|action| action.action)
+            };
             // Dismiss the toast and promote the next queued one, if any.
             self.toast_queue
                 .on_dismissed(&mut self.ui_toast, Instant::now());
             self.ui_toast_bounds = None;
+            self.ui_toast_action_bounds = [None, None];
             self.needs_redraw = true;
             return (true, action);
         }
@@ -122,6 +147,16 @@ impl InputState {
                 let yf = y as f64;
                 xf >= bx && xf <= bx + bw && yf >= by && yf <= by + bh
             })
+    }
+
+    fn toast_action_at(&self, x: i32, y: i32) -> Option<usize> {
+        let xf = x as f64;
+        let yf = y as f64;
+        self.ui_toast_action_bounds.iter().position(|bounds| {
+            bounds.is_some_and(|(bx, by, bw, bh)| {
+                xf >= bx && xf <= bx + bw && yf >= by && yf <= by + bh
+            })
+        })
     }
 
     /// Trigger the blocked action visual feedback (red flash on screen edges).
@@ -364,6 +399,81 @@ mod tests {
     }
 
     #[test]
+    fn two_action_toast_dispatches_only_the_chip_pressed_and_released() {
+        let mut state = make_state();
+        state.push_toast(
+            ToastPriority::Hint,
+            "tip",
+            Toast::info("Try the board picker")
+                .action("Got it", Action::ToggleHelp)
+                .secondary_action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
+        );
+        state.ui_toast_bounds = Some((10.0, 20.0, 220.0, 40.0));
+        state.ui_toast_action_bounds = [
+            Some((120.0, 24.0, 44.0, 28.0)),
+            Some((170.0, 24.0, 56.0, 28.0)),
+        ];
+
+        let pressed = state.toast_press_at(190, 38).expect("secondary chip press");
+        let (hit, action) = state.resolve_toast_release(pressed, 190, 38);
+
+        assert!(hit);
+        assert_eq!(action, Some(Action::OpenConfiguratorOnboardingHints));
+        assert!(state.ui_toast.is_none());
+    }
+
+    #[test]
+    fn two_action_toast_body_dismisses_without_dispatching_a_chip() {
+        let mut state = make_state();
+        state.push_toast(
+            ToastPriority::Hint,
+            "tip",
+            Toast::info("Try the board picker")
+                .action("Got it", Action::ToggleHelp)
+                .secondary_action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
+        );
+        state.ui_toast_bounds = Some((10.0, 20.0, 220.0, 40.0));
+        state.ui_toast_action_bounds = [
+            Some((120.0, 24.0, 44.0, 28.0)),
+            Some((170.0, 24.0, 56.0, 28.0)),
+        ];
+
+        let pressed = state.toast_press_at(50, 38).expect("toast body press");
+        let (hit, action) = state.resolve_toast_release(pressed, 50, 38);
+
+        assert!(hit);
+        assert_eq!(action, None);
+        assert!(state.ui_toast.is_none());
+    }
+
+    #[test]
+    fn two_action_toast_does_not_retarget_between_chips_on_release() {
+        let mut state = make_state();
+        state.push_toast(
+            ToastPriority::Hint,
+            "tip",
+            Toast::info("Try the board picker")
+                .action("Got it", Action::ToggleHelp)
+                .secondary_action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
+        );
+        state.ui_toast_bounds = Some((10.0, 20.0, 220.0, 40.0));
+        state.ui_toast_action_bounds = [
+            Some((120.0, 24.0, 44.0, 28.0)),
+            Some((170.0, 24.0, 56.0, 28.0)),
+        ];
+
+        let pressed = state.toast_press_at(140, 38).expect("primary chip press");
+        let (hit, action) = state.resolve_toast_release(pressed, 190, 38);
+
+        assert!(!hit);
+        assert_eq!(action, None);
+        assert!(
+            state.ui_toast.is_some(),
+            "mismatched release keeps the toast"
+        );
+    }
+
+    #[test]
     fn toast_release_promotes_next_queued_toast() {
         let mut state = make_state();
         state.push_toast(
@@ -482,7 +592,7 @@ mod tests {
         assert_eq!(toast.message, "Delete page?");
         assert!(state.ui_toast_bounds.is_none());
         assert!(!state.toast_contains(50, 40));
-        let stale_press = ToastPress::new(0);
+        let stale_press = ToastPress::body(0);
         assert_eq!(
             state.resolve_toast_release(stale_press, 50, 40),
             (false, None)

@@ -495,6 +495,8 @@ pub struct InputState {
     pub(crate) toast_queue: ToastQueue,
     /// Cached bounds of the rendered toast for click detection (x, y, w, h)
     pub(crate) ui_toast_bounds: Option<(f64, f64, f64, f64)>,
+    /// Cached bounds of up to two rendered toast action chips.
+    pub(crate) ui_toast_action_bounds: [Option<(f64, f64, f64, f64)>; 2],
     /// Copied selection shapes for paste operations
     pub(in crate::input::state::core) selection_clipboard: Option<Vec<Shape>>,
     /// Local clipboard generation for the copied shape selection.
