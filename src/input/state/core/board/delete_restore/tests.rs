@@ -198,7 +198,7 @@ fn session_replacement_drops_queued_delete_undo_toast() {
             .ui_toast
             .as_ref()
             .and_then(|toast| toast.action.as_ref())
-            .map(|action| action.action),
+            .and_then(|action| action.dispatch_action()),
         Some(Action::BoardRestoreDeleted),
         "active toast carries the restore action"
     );

@@ -477,7 +477,7 @@ fn apply_snapshot_clears_pending_board_delete_confirmation() {
             .ui_toast
             .as_ref()
             .and_then(|toast| toast.action.as_ref())
-            .is_some_and(|action| action.action == Action::BoardDelete)
+            .is_some_and(|action| action.dispatch_action() == Some(Action::BoardDelete))
     );
     input.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
 
@@ -517,7 +517,7 @@ fn apply_snapshot_clears_pending_page_delete_confirmation() {
             .ui_toast
             .as_ref()
             .and_then(|toast| toast.action.as_ref())
-            .is_some_and(|action| action.action == Action::PageDelete)
+            .is_some_and(|action| action.dispatch_action() == Some(Action::PageDelete))
     );
     input.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
 

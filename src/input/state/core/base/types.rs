@@ -15,7 +15,7 @@ pub const STATUS_CHANGE_HIGHLIGHT_MS: u64 = 300;
 
 use crate::capture::{ImageOperationKind, file::FileSaveConfig};
 use crate::config::ToolPresetConfig;
-use crate::domain::Action;
+use crate::domain::{Action, OnboardingTip};
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Color, Shape, ShapeId};
 use crate::input::tool::Tool;
@@ -278,11 +278,30 @@ pub enum UiToastKind {
     Error,
 }
 
-/// Action that can be triggered by clicking a toast.
+/// Command that can be triggered by an explicit toast action chip.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToastCommand {
+    Dispatch(Action),
+    AcknowledgeTip {
+        tip: OnboardingTip,
+        then: Option<Action>,
+    },
+}
+
+/// Labeled command rendered as a toast action chip.
 #[derive(Debug, Clone)]
 pub struct ToastAction {
     pub label: String,
-    pub action: Action,
+    pub(crate) command: ToastCommand,
+}
+
+impl ToastAction {
+    pub(crate) fn dispatch_action(&self) -> Option<Action> {
+        match self.command {
+            ToastCommand::Dispatch(action) => Some(action),
+            ToastCommand::AcknowledgeTip { .. } => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -299,6 +318,9 @@ pub(crate) struct UiToastState {
     pub duration_ms: u64,
     /// Optional action that triggers when the toast is clicked.
     pub action: Option<ToastAction>,
+    /// Optional second action. When present, only the individual action chips
+    /// dispatch; clicking the rest of the toast dismisses it without acting.
+    pub secondary_action: Option<ToastAction>,
     /// Queue priority this toast was pushed with (drives preemption).
     pub priority: super::toast_queue::ToastPriority,
     /// Dedup/rate-limit key this toast was pushed with.
@@ -314,15 +336,45 @@ pub(crate) struct UiToastState {
 /// The field stays opaque outside input state: callers can only return the
 /// token on release, where it is matched against the still-active toast.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ToastPress(u64);
+pub(crate) struct ToastPress {
+    activation_id: u64,
+    target: ToastTarget,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ToastTarget {
+    Body,
+    Action(usize),
+}
 
 impl ToastPress {
-    pub(crate) fn new(activation_id: u64) -> Self {
-        Self(activation_id)
+    pub(crate) fn new(activation_id: u64, target: usize) -> Self {
+        Self {
+            activation_id,
+            target: ToastTarget::Action(target),
+        }
+    }
+
+    pub(crate) fn body(activation_id: u64) -> Self {
+        Self {
+            activation_id,
+            target: ToastTarget::Body,
+        }
     }
 
     pub(crate) fn matches(self, toast: &UiToastState) -> bool {
-        self.0 == toast.activation_id
+        self.activation_id == toast.activation_id
+    }
+
+    pub(crate) fn matches_target(self, target: Option<usize>) -> bool {
+        self.target == target.map(ToastTarget::Action).unwrap_or(ToastTarget::Body)
+    }
+
+    pub(crate) fn action_index(self) -> Option<usize> {
+        match self.target {
+            ToastTarget::Body => None,
+            ToastTarget::Action(index) => Some(index),
+        }
     }
 }
 
@@ -648,15 +700,16 @@ pub(crate) struct PendingOnboardingUsage {
     pub used_context_menu_keyboard: bool,
     pub used_help_overlay: bool,
     pub used_command_palette: bool,
+    pub used_board_picker: bool,
+    /// A user-facing zoom control was activated.
+    pub used_zoom_control: bool,
+    pub used_canvas_popover: bool,
     /// A drawing color was applied (any path). Drives the colors/thickness
     /// first-run teaching step.
     pub used_color_change: bool,
     /// Stroke thickness / eraser size was adjusted (any path). Drives the
     /// colors/thickness first-run teaching step.
     pub used_thickness_change: bool,
-    /// A radial-menu flick committed a tool/color (press-flick-release).
-    /// Drives the radial-flick first-run teaching step.
-    pub used_radial_flick: bool,
     /// The last shortcut-bound action invoked via a "slow path" this tick —
     /// the command palette or the toolbar — that the shortcut coach nudges
     /// away from. Source-agnostic: the coach resolves and names this action's

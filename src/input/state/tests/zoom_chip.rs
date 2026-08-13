@@ -227,13 +227,14 @@ fn zoom_chip_click_lock_returns_toggle_lock_when_zoomed() {
 }
 
 #[test]
-fn zoom_chip_activation_records_coach_slow_path() {
+fn zoom_chip_activation_records_usage_and_coach_slow_path() {
     // Activating a shortcut-bound zoom action from the chip feeds the shortcut
     // coach the same "you could have pressed the key" slow-path signal the
     // toolbar and command palette record. The chip dispatches through the
     // shared action path (handle_action) — the fast/keyboard path — so without
-    // this seam the coach would never learn from chip use. Recorded at the
-    // InputState level in check_zoom_chip_click.
+    // this seam the coach would never learn from chip use. The returned action
+    // then follows the same dispatch path as a keybinding and records feature
+    // usage at the shared zoom-request boundary.
     let mut input = create_test_input_state();
     assert!(
         input.shortcut_for_action(Action::ZoomIn).is_some(),
@@ -251,6 +252,10 @@ fn zoom_chip_activation_records_coach_slow_path() {
         "zoom-chip activation must feed the coach slow path"
     );
     assert_eq!(input.pending_onboarding_usage.shortcut_slow_path_repeats, 1);
+
+    input.handle_action(action.expect("zoom-chip action"));
+    assert_eq!(input.take_pending_zoom_action(), Some(ZoomAction::In));
+    assert!(input.pending_onboarding_usage.used_zoom_control);
 }
 
 #[test]

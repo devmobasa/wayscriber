@@ -174,28 +174,7 @@ impl WaylandState {
                     footer,
                 }
             }
-            FirstRunStep::RadialFlick => {
-                let radial_label = self.shortcut_label_opt(Action::ToggleRadialMenu);
-                let radial_available = radial_label.is_some();
-                let item_label = match radial_label {
-                    Some(label) => format!("Flick-commit from the radial menu ({label})"),
-                    None => "Radial menu disabled in config".to_string(),
-                };
-                OnboardingCard {
-                    eyebrow: eyebrow.to_string(),
-                    title: "Flick to commit".to_string(),
-                    body: "Open the radial menu, then press-flick-release toward a slice: a \
-                           quick flick commits the tool before the menu even paints (about \
-                           220 ms)."
-                        .to_string(),
-                    items: vec![OnboardingChecklistItem {
-                        label: item_label,
-                        done: state.radial_flick_done || !radial_available,
-                    }],
-                    footer,
-                }
-            }
-            FirstRunStep::Reference => OnboardingCard {
+            FirstRunStep::RadialFlick | FirstRunStep::Reference => OnboardingCard {
                 eyebrow: eyebrow.to_string(),
                 title: "Find and customize anything".to_string(),
                 body: "Palette controls can edit, unbind, or reset shortcuts.".to_string(),
@@ -289,11 +268,6 @@ impl WaylandState {
                     changed = true;
                     first_run_ui_changed = true;
                 }
-                if usage.used_radial_flick && !state.radial_flick_done {
-                    state.radial_flick_done = true;
-                    changed = true;
-                    first_run_ui_changed = true;
-                }
             }
 
             if !first_run_active {
@@ -355,15 +329,12 @@ impl WaylandState {
                         ) {
                             break;
                         }
-                        state.active_step = Some(FirstRunStep::RadialFlick);
+                        state.active_step = Some(FirstRunStep::Reference);
                         state.quick_access_requires_toolbar = false;
                         changed = true;
                         first_run_ui_changed = true;
                     }
                     FirstRunStep::RadialFlick => {
-                        if !radial_flick_completed(state, radial_available) {
-                            break;
-                        }
                         state.active_step = Some(FirstRunStep::Reference);
                         changed = true;
                         first_run_ui_changed = true;
@@ -524,12 +495,6 @@ pub(super) fn color_thickness_completed(state: &OnboardingState) -> bool {
     state.first_color_done && state.first_thickness_done
 }
 
-/// The radial-flick teaching step completes on a flick commit, or is waived
-/// when the radial menu is unbound so users without it are never stuck.
-pub(super) fn radial_flick_completed(state: &OnboardingState, radial_available: bool) -> bool {
-    state.radial_flick_done || !radial_available
-}
-
 pub(super) fn quick_access_completed(
     state: &OnboardingState,
     context_enabled: bool,
@@ -583,6 +548,18 @@ pub(super) fn apply_persisted_usage_signals(
         state.used_command_palette = true;
         changed = true;
     }
+    if usage.used_board_picker && !state.used_board_picker {
+        state.used_board_picker = true;
+        changed = true;
+    }
+    if usage.used_zoom_control && !state.used_zoom_control {
+        state.used_zoom_control = true;
+        changed = true;
+    }
+    if usage.used_canvas_popover && !state.used_canvas_popover {
+        state.used_canvas_popover = true;
+        changed = true;
+    }
 
     changed
 }
@@ -612,13 +589,12 @@ fn mark_background_mode_prompt(state: &mut OnboardingState, enabled: bool) {
 
 pub(super) fn first_run_step_eyebrow(step: FirstRunStep) -> &'static str {
     match step {
-        FirstRunStep::BackgroundModeSetup => "Step 1 / 7",
-        FirstRunStep::WaitDraw => "Step 2 / 7",
-        FirstRunStep::DrawUndo => "Step 3 / 7",
-        FirstRunStep::ColorThickness => "Step 4 / 7",
-        FirstRunStep::QuickAccess => "Step 5 / 7",
-        FirstRunStep::RadialFlick => "Step 6 / 7",
-        FirstRunStep::Reference => "Step 7 / 7",
+        FirstRunStep::BackgroundModeSetup => "Step 1 / 6",
+        FirstRunStep::WaitDraw => "Step 2 / 6",
+        FirstRunStep::DrawUndo => "Step 3 / 6",
+        FirstRunStep::ColorThickness => "Step 4 / 6",
+        FirstRunStep::QuickAccess => "Step 5 / 6",
+        FirstRunStep::RadialFlick | FirstRunStep::Reference => "Step 6 / 6",
     }
 }
 

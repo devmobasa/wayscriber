@@ -391,7 +391,7 @@ fn hidden_cycle_toast_offers_a_show_action() {
     let action = toast.action.as_ref().expect("show action chip");
     assert_eq!(action.label, "Show (F2)");
     // Another cycle press from Hidden always lands on Full.
-    assert_eq!(action.action, Action::CycleToolbarDisplay);
+    assert_eq!(action.dispatch_action(), Some(Action::CycleToolbarDisplay));
 }
 
 #[test]
@@ -420,7 +420,7 @@ fn hiding_the_last_chrome_surface_warns_with_recovery_bindings() {
         "names the status bar binding"
     );
     let action = toast.action.as_ref().expect("recovery action chip");
-    assert_eq!(action.action, Action::ToggleToolbar);
+    assert_eq!(action.dispatch_action(), Some(Action::ToggleToolbar));
 }
 
 #[test]
@@ -457,7 +457,10 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
     let toast = state.ui_toast.as_ref().expect("all-chrome warning");
     assert!(toast.message.starts_with("All UI hidden"));
     assert_eq!(
-        toast.action.as_ref().map(|action| action.action),
+        toast
+            .action
+            .as_ref()
+            .and_then(|action| action.dispatch_action()),
         Some(Action::ToggleToolbar)
     );
 }
@@ -562,7 +565,7 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
             .ui_toast
             .as_ref()
             .and_then(|toast| toast.action.as_ref())
-            .map(|action| action.action),
+            .and_then(|action| action.dispatch_action()),
         Some(Action::ToggleToolbar)
     );
 
@@ -579,7 +582,7 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
             .ui_toast
             .as_ref()
             .and_then(|toast| toast.action.as_ref())
-            .map(|action| action.action),
+            .and_then(|action| action.dispatch_action()),
         Some(Action::ToggleToolbar)
     );
 
@@ -630,7 +633,10 @@ fn all_chrome_warning_fires_when_presenter_mode_did_not_hide_any_chrome() {
         "presenter mode must not suppress recovery for user-hidden chrome"
     );
     assert_eq!(
-        toast.action.as_ref().map(|action| action.action),
+        toast
+            .action
+            .as_ref()
+            .and_then(|action| action.dispatch_action()),
         Some(Action::ToggleToolbar)
     );
 }
@@ -651,7 +657,7 @@ fn presenter_owned_hidden_toolbar_falls_back_to_status_bar_recovery() {
     assert!(toast.message.starts_with("All UI hidden"));
     let action = toast.action.as_ref().expect("recovery action");
     assert_eq!(action.label, "Show status bar");
-    assert_eq!(action.action, Action::ToggleStatusBar);
+    assert_eq!(action.dispatch_action(), Some(Action::ToggleStatusBar));
 }
 
 #[test]

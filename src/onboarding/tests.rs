@@ -126,6 +126,83 @@ fn deferred_hint_cap_survives_repeated_process_launches() {
 }
 
 #[test]
+fn using_surface_features_stops_their_tips_from_rearming() {
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
+    let mut store = OnboardingStore::load_from_path(path);
+    let state = store.state_mut();
+    state.first_run_completed = true;
+    state.hint_status_bar_shown = true;
+    state.hint_zoom_chip_shown = true;
+    state.hint_canvas_popover_shown = true;
+    state.used_board_picker = true;
+    state.used_zoom_control = true;
+    state.used_canvas_popover = true;
+
+    store
+        .begin_session(true)
+        .expect("surface usage should persist");
+
+    assert!(store.state().hint_status_bar_shown);
+    assert!(store.state().hint_zoom_chip_shown);
+    assert!(store.state().hint_canvas_popover_shown);
+}
+
+#[test]
+fn acknowledging_one_tip_survives_reload_without_suppressing_other_tips() {
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
+    let mut store = OnboardingStore::load_from_path(path.clone());
+
+    store
+        .acknowledge_tip(crate::domain::OnboardingTip::StatusBar)
+        .expect("tip acknowledgement should persist");
+
+    let reloaded = OnboardingStore::load_from_path(path);
+    assert!(reloaded.state().hint_status_bar_shown);
+    assert_eq!(
+        reloaded.state().hint_status_bar_count,
+        DEFERRED_HINT_REPEAT_MAX
+    );
+    assert_eq!(reloaded.state().hint_zoom_chip_count, 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn failed_tip_acknowledgement_suppresses_this_session_without_claiming_persistence() {
+    use std::os::unix::fs::symlink;
+
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let target = tmp.path().join("real-onboarding.toml");
+    fs::write(
+        &target,
+        format!("version = {ONBOARDING_VERSION}\nfirst_run_completed = true\n"),
+    )
+    .expect("seed should be writable");
+    let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
+    fs::create_dir_all(path.parent().expect("onboarding path has a parent"))
+        .expect("state directory should be writable");
+    symlink(&target, &path).expect("test symlink should be created");
+    let mut store = OnboardingStore::load_from_path(path.clone());
+
+    assert!(
+        store
+            .acknowledge_tip(crate::domain::OnboardingTip::ZoomChip)
+            .is_err()
+    );
+    assert!(store.state().hint_zoom_chip_shown);
+    assert_eq!(store.state().hint_zoom_chip_count, DEFERRED_HINT_REPEAT_MAX);
+    assert!(!store.persistence_available());
+
+    let reloaded = OnboardingStore::load_from_path(path);
+    assert_eq!(
+        reloaded.state().hint_zoom_chip_count,
+        0,
+        "the rejected write must not alter the target file"
+    );
+}
+
+#[test]
 fn disabled_automatic_guidance_does_not_activate_first_run() {
     let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
     let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
@@ -190,6 +267,26 @@ fn onboarding_version_bump_saves() {
     assert_eq!(state.version, ONBOARDING_VERSION);
     assert!(state.welcome_shown);
     assert!(state.first_run_completed);
+}
+
+#[test]
+fn retired_radial_flick_step_resumes_at_reference() {
+    let tmp = crate::test_temp::tempdir().expect("tempdir should succeed");
+    let path = tmp.path().join(ONBOARDING_DIR).join(ONBOARDING_FILE);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("create onboarding dir");
+    }
+    let seed = format!(
+        "version = {ONBOARDING_VERSION}\nfirst_run_background_mode_prompted = true\nactive_step = \"radial_flick\"\n"
+    );
+    fs::write(&path, seed).expect("write active radial-flick seed");
+
+    let store = OnboardingStore::load_from_path(path.clone());
+    assert_eq!(store.state().active_step, Some(FirstRunStep::Reference));
+
+    let persisted = fs::read_to_string(path).expect("read normalized onboarding state");
+    assert!(persisted.contains("active_step = \"reference\""));
+    assert!(!persisted.contains("active_step = \"radial_flick\""));
 }
 
 #[test]

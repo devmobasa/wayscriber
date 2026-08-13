@@ -244,8 +244,11 @@ impl WaylandState {
                 self.input_state.clear_radial_menu_layout();
             }
 
-            self.input_state.ui_toast_bounds =
-                crate::ui::render_ui_toast(ctx, &self.input_state, width, height);
+            let toast_geometry = crate::ui::render_ui_toast(ctx, &self.input_state, width, height);
+            self.input_state.ui_toast_bounds = toast_geometry.map(|geometry| geometry.0);
+            self.input_state.ui_toast_action_bounds = toast_geometry
+                .map(|geometry| geometry.1)
+                .unwrap_or([None, None]);
             crate::ui::render_preset_toast(ctx, &self.input_state, width, height);
             crate::ui::render_blocked_feedback(ctx, &self.input_state, width, height);
 

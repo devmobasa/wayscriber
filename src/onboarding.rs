@@ -1,3 +1,4 @@
+use crate::domain::OnboardingTip;
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
 use crate::paths::data_dir;
 use log::warn;
@@ -88,7 +89,7 @@ pub struct OnboardingState {
     /// Whether stroke thickness was adjusted during first-run (teaching step)
     #[serde(default)]
     pub first_thickness_done: bool,
-    /// Whether a radial-menu flick committed a tool/color (teaching step)
+    /// Legacy progress from the retired radial-flick teaching step.
     #[serde(default)]
     pub radial_flick_done: bool,
     /// Whether toolbar visibility was toggled via an action
@@ -109,6 +110,15 @@ pub struct OnboardingState {
     /// Whether command palette was opened
     #[serde(default)]
     pub used_command_palette: bool,
+    /// Whether the board picker has been opened by any UI or action path.
+    #[serde(default)]
+    pub used_board_picker: bool,
+    /// Whether any user-facing zoom control has been activated.
+    #[serde(default)]
+    pub used_zoom_control: bool,
+    /// Whether the unified toolbar's Canvas popover has been opened.
+    #[serde(default)]
+    pub used_canvas_popover: bool,
     /// Whether deferred help hint has already been shown
     #[serde(default)]
     pub hint_help_shown: bool,
@@ -193,6 +203,9 @@ impl Default for OnboardingState {
             used_context_menu_keyboard: false,
             used_help_overlay: false,
             used_command_palette: false,
+            used_board_picker: false,
+            used_zoom_control: false,
+            used_canvas_popover: false,
             hint_help_shown: false,
             hint_help_count: 0,
             hint_palette_shown: false,
@@ -355,6 +368,51 @@ impl OnboardingStore {
         self.save()
     }
 
+    /// Permanently suppress one automatic tip using the same capped-count
+    /// encoding as natural expiry. Mutating before `save` intentionally keeps
+    /// the tip suppressed for this session when persistence fails; `save`
+    /// then disables all remaining automatic guidance for the process.
+    pub(crate) fn acknowledge_tip(
+        &mut self,
+        tip: OnboardingTip,
+    ) -> Result<(), OnboardingSaveError> {
+        let state = &mut self.state;
+        match tip {
+            OnboardingTip::Help => {
+                state.hint_help_shown = true;
+                state.hint_help_count = DEFERRED_HINT_REPEAT_MAX;
+            }
+            OnboardingTip::CommandPalette => {
+                state.hint_palette_shown = true;
+                state.hint_palette_count = DEFERRED_HINT_REPEAT_MAX;
+            }
+            OnboardingTip::QuickAccess => {
+                state.hint_quick_access_shown = true;
+                state.hint_quick_access_count = DEFERRED_HINT_REPEAT_MAX;
+            }
+            OnboardingTip::StatusBar => {
+                state.hint_status_bar_shown = true;
+                state.hint_status_bar_count = DEFERRED_HINT_REPEAT_MAX;
+            }
+            OnboardingTip::CanvasPopover => {
+                state.hint_canvas_popover_shown = true;
+                state.hint_canvas_popover_count = DEFERRED_HINT_REPEAT_MAX;
+            }
+            OnboardingTip::ZoomChip => {
+                state.hint_zoom_chip_shown = true;
+                state.hint_zoom_chip_count = DEFERRED_HINT_REPEAT_MAX;
+            }
+            OnboardingTip::ShortcutCoach => {
+                state.coach_hint_shown = true;
+                state.coach_hint_count = DEFERRED_HINT_REPEAT_MAX;
+            }
+            OnboardingTip::ToolbarHidden => {
+                state.toolbar_hint_shown = true;
+            }
+        }
+        self.save()
+    }
+
     pub fn begin_session(
         &mut self,
         automatic_guidance_enabled: bool,
@@ -376,13 +434,15 @@ impl OnboardingStore {
             {
                 state.hint_quick_access_shown = false;
             }
-            if state.hint_status_bar_count < DEFERRED_HINT_REPEAT_MAX {
+            if !state.used_board_picker && state.hint_status_bar_count < DEFERRED_HINT_REPEAT_MAX {
                 state.hint_status_bar_shown = false;
             }
-            if state.hint_zoom_chip_count < DEFERRED_HINT_REPEAT_MAX {
+            if !state.used_zoom_control && state.hint_zoom_chip_count < DEFERRED_HINT_REPEAT_MAX {
                 state.hint_zoom_chip_shown = false;
             }
-            if state.hint_canvas_popover_count < DEFERRED_HINT_REPEAT_MAX {
+            if !state.used_canvas_popover
+                && state.hint_canvas_popover_count < DEFERRED_HINT_REPEAT_MAX
+            {
                 state.hint_canvas_popover_shown = false;
             }
         }
@@ -489,6 +549,10 @@ fn migrate_onboarding_state(state: &mut OnboardingState) -> bool {
     }
     if state.first_run_completed && state.active_step.is_some() {
         state.active_step = None;
+        needs_save = true;
+    }
+    if state.active_step == Some(FirstRunStep::RadialFlick) {
+        state.active_step = Some(FirstRunStep::Reference);
         needs_save = true;
     }
     if state.first_run_background_mode_enabled && !state.first_run_background_mode_prompted {
@@ -603,6 +667,9 @@ fn recover_onboarding_file(path: PathBuf, _raw: Option<&str>) -> OnboardingStore
         used_context_menu_keyboard: false,
         used_help_overlay: false,
         used_command_palette: false,
+        used_board_picker: false,
+        used_zoom_control: false,
+        used_canvas_popover: false,
         hint_help_shown: true,
         hint_help_count: DEFERRED_HINT_REPEAT_MAX,
         hint_palette_shown: true,

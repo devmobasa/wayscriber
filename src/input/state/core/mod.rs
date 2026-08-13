@@ -36,7 +36,7 @@ pub use base::{
 };
 pub(crate) use base::{
     BoardPickerClickState, PolygonClickState, TextBlockDrag, TextClickState, TextClipboardRequest,
-    TextCutTarget, TextPasteEdit, TextPasteTarget, ToastPress,
+    TextCutTarget, TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress,
 };
 pub(crate) use base::{
     ClipboardFingerprint, ClipboardPasteRequest, PasteAnchor, PendingBackendAction,

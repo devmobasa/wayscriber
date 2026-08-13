@@ -1,5 +1,6 @@
 use crate::config::keybindings::Action;
-use crate::input::state::{Toast, ToastPriority};
+use crate::domain::OnboardingTip;
+use crate::input::state::{Toast, ToastCommand, ToastPriority};
 use crate::onboarding::DEFERRED_HINT_REPEAT_MAX;
 use std::time::{Duration, Instant};
 
@@ -14,6 +15,30 @@ const SHORTCUT_COACH_THRESHOLD: u32 = 3;
 const SHORTCUT_COACH_COOLDOWN: Duration = Duration::from_secs(90);
 /// Maximum coach hints shown per session.
 const SHORTCUT_COACH_SESSION_CAP: u32 = 2;
+
+enum ContextualHint {
+    Help,
+    CommandPalette,
+    QuickAccess,
+    StatusBar(&'static str),
+    CanvasPopover,
+    ZoomChip,
+}
+
+struct TipAcknowledgementOutcome {
+    follow_up: Option<Action>,
+    persistence_error: Option<crate::onboarding::OnboardingSaveError>,
+}
+
+fn acknowledge_tip_command(
+    result: Result<(), crate::onboarding::OnboardingSaveError>,
+    follow_up: Option<Action>,
+) -> TipAcknowledgementOutcome {
+    TipAcknowledgementOutcome {
+        follow_up,
+        persistence_error: result.err(),
+    }
+}
 
 /// The visible status-HUD entry that can open the board picker. The hint must
 /// not advertise the pill when both configurable Board/Page segments are
@@ -38,6 +63,18 @@ fn canvas_popover_hint_relevant(input: &crate::input::InputState) -> bool {
     input.toolbar_top_visible()
         && !input.toolbar_top_minimized
         && input.toolbar_top_display_mode == crate::config::TopDisplayMode::Full
+}
+
+fn automatic_tip_toast(message: impl Into<String>, tip: OnboardingTip) -> Toast {
+    Toast::info(message)
+        .command("Got it", ToastCommand::AcknowledgeTip { tip, then: None })
+        .secondary_command(
+            "Tip settings…",
+            ToastCommand::AcknowledgeTip {
+                tip,
+                then: Some(Action::OpenConfiguratorOnboardingHints),
+            },
+        )
 }
 
 /// Per-session shortcut-coach accumulator. Session-only (never persisted): the
@@ -106,6 +143,21 @@ pub(super) fn shortcut_coach_should_fire(
 }
 
 impl WaylandState {
+    pub(in crate::backend::wayland) fn handle_toast_command(&mut self, command: ToastCommand) {
+        match command {
+            ToastCommand::Dispatch(action) => self.dispatch_input_action(action),
+            ToastCommand::AcknowledgeTip { tip, then } => {
+                let outcome = acknowledge_tip_command(self.onboarding.acknowledge_tip(tip), then);
+                if let Some(action) = outcome.follow_up {
+                    self.dispatch_input_action(action);
+                }
+                if let Some(error) = outcome.persistence_error {
+                    self.show_onboarding_persistence_warning(&error);
+                }
+            }
+        }
+    }
+
     pub(in crate::backend::wayland) fn apply_onboarding_hints(&mut self) {
         // Show capability warning toast first if applicable.
         self.apply_capability_toast();
@@ -200,7 +252,7 @@ impl WaylandState {
         let outcome = self.input_state.push_toast(
             ToastPriority::Hint,
             "onboarding.coach",
-            Toast::info(message).action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
+            automatic_tip_toast(message, OnboardingTip::ShortcutCoach),
         );
         if outcome.accepted() {
             let session = &mut self.data.shortcut_coach;
@@ -250,8 +302,7 @@ impl WaylandState {
         let canvas_hint_relevant = canvas_popover_hint_relevant(&self.input_state);
 
         let mut changed = false;
-        let mut hint_kind: Option<&'static str> = None;
-        let mut status_bar_hint_entry: Option<&str> = None;
+        let mut hint = None;
         {
             let state = self.onboarding.state_mut();
             if !state.first_run_completed {
@@ -265,7 +316,7 @@ impl WaylandState {
                 state.hint_help_shown = true;
                 state.hint_help_count = state.hint_help_count.saturating_add(1);
                 changed = true;
-                hint_kind = Some("help");
+                hint = Some(ContextualHint::Help);
             } else if state.sessions_seen >= 3
                 && !state.used_command_palette
                 && !state.hint_palette_shown
@@ -274,7 +325,7 @@ impl WaylandState {
                 state.hint_palette_shown = true;
                 state.hint_palette_count = state.hint_palette_count.saturating_add(1);
                 changed = true;
-                hint_kind = Some("palette");
+                hint = Some(ContextualHint::CommandPalette);
             } else if state.sessions_seen >= 2
                 && !state.used_radial_menu
                 && !state.used_context_menu_right_click
@@ -285,7 +336,7 @@ impl WaylandState {
                 state.hint_quick_access_shown = true;
                 state.hint_quick_access_count = state.hint_quick_access_count.saturating_add(1);
                 changed = true;
-                hint_kind = Some("quick_access");
+                hint = Some(ContextualHint::QuickAccess);
             // M9 surface hints, staggered across sessions so they never all
             // fire at once (the else-if chain already limits it to one per tick,
             // and the no-active-toast gate keeps them from clobbering). The
@@ -294,84 +345,97 @@ impl WaylandState {
             // the earliest threshold among the new surfaces.
             } else if let Some(entry) = status_bar_entry
                 && state.sessions_seen >= 3
+                && !state.used_board_picker
                 && !state.hint_status_bar_shown
                 && state.hint_status_bar_count < DEFERRED_HINT_REPEAT_MAX
             {
                 state.hint_status_bar_shown = true;
                 state.hint_status_bar_count = state.hint_status_bar_count.saturating_add(1);
                 changed = true;
-                hint_kind = Some("status_bar");
-                status_bar_hint_entry = Some(entry);
+                hint = Some(ContextualHint::StatusBar(entry));
             } else if canvas_hint_relevant
                 && state.sessions_seen >= 5
+                && !state.used_canvas_popover
                 && !state.hint_canvas_popover_shown
                 && state.hint_canvas_popover_count < DEFERRED_HINT_REPEAT_MAX
             {
                 state.hint_canvas_popover_shown = true;
                 state.hint_canvas_popover_count = state.hint_canvas_popover_count.saturating_add(1);
                 changed = true;
-                hint_kind = Some("canvas_popover");
+                hint = Some(ContextualHint::CanvasPopover);
             } else if zoom_chip_present
                 && state.sessions_seen >= 7
+                && !state.used_zoom_control
                 && !state.hint_zoom_chip_shown
                 && state.hint_zoom_chip_count < DEFERRED_HINT_REPEAT_MAX
             {
                 state.hint_zoom_chip_shown = true;
                 state.hint_zoom_chip_count = state.hint_zoom_chip_count.saturating_add(1);
                 changed = true;
-                hint_kind = Some("zoom_chip");
+                hint = Some(ContextualHint::ZoomChip);
             }
         }
 
         if changed && !self.save_onboarding_state() {
-            hint_kind = None;
+            hint = None;
         }
-        if let Some(kind) = hint_kind {
-            let message = match kind {
-                "help" => format!(
-                    "Press {} for all shortcuts.",
-                    self.shortcut_label(Action::ToggleHelp, "Help")
+        if let Some(hint) = hint {
+            let (tip, message) = match hint {
+                ContextualHint::Help => (
+                    OnboardingTip::Help,
+                    format!(
+                        "Press {} for all shortcuts.",
+                        self.shortcut_label(Action::ToggleHelp, "Help")
+                    ),
                 ),
-                "palette" => format!(
-                    "Press {} to search actions.",
-                    self.shortcut_label(Action::ToggleCommandPalette, "Command Palette")
+                ContextualHint::CommandPalette => (
+                    OnboardingTip::CommandPalette,
+                    format!(
+                        "Press {} to search actions.",
+                        self.shortcut_label(Action::ToggleCommandPalette, "Command Palette")
+                    ),
                 ),
-                "status_bar" => {
-                    let entry = status_bar_hint_entry
-                        .expect("status_bar hint is only queued when the picker is on screen");
+                ContextualHint::StatusBar(entry) => (
+                    OnboardingTip::StatusBar,
                     format!(
                         "Click the {entry} segment in the status bar to switch boards and pages."
-                    )
-                }
-                "canvas_popover" => {
+                    ),
+                ),
+                ContextualHint::CanvasPopover => (
+                    OnboardingTip::CanvasPopover,
                     "Open \u{201c}Canvas\u{2026}\u{201d} from the \u{2026} overflow for boards, \
                      pages, zoom, and advanced controls."
-                        .to_string()
-                }
-                "zoom_chip" => match self.shortcut_label_opt(Action::ZoomIn) {
-                    Some(key) => {
-                        format!("Zoom from the chip in the bottom-right corner, or press {key}.")
-                    }
-                    None => "Zoom from the chip in the bottom-right corner.".to_string(),
-                },
-                _ => {
+                        .to_string(),
+                ),
+                ContextualHint::ZoomChip => (
+                    OnboardingTip::ZoomChip,
+                    match self.shortcut_label_opt(Action::ZoomIn) {
+                        Some(key) => {
+                            format!(
+                                "Zoom from the chip in the bottom-right corner, or press {key}."
+                            )
+                        }
+                        None => "Zoom from the chip in the bottom-right corner.".to_string(),
+                    },
+                ),
+                ContextualHint::QuickAccess => {
                     let context = self.shortcut_label_opt(Action::OpenContextMenu);
                     let radial = self.shortcut_label_opt(Action::ToggleRadialMenu);
-                    match (context, radial) {
+                    let message = match (context, radial) {
                         (Some(c), Some(r)) => format!("Try quick access: {c} or {r}."),
                         (Some(c), None) => format!("Try quick access: {c}."),
                         (None, Some(r)) => format!("Try quick access: {r}."),
                         (None, None) => {
                             "Quick-access menus are available from toolbar actions.".to_string()
                         }
-                    }
+                    };
+                    (OnboardingTip::QuickAccess, message)
                 }
             };
             self.input_state.push_toast(
                 ToastPriority::Hint,
                 "onboarding.hint",
-                Toast::info(message)
-                    .action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
+                automatic_tip_toast(message, tip),
             );
         }
     }
@@ -398,7 +462,14 @@ impl WaylandState {
             ToastPriority::Hint,
             "onboarding.toolbar",
             Toast::info("Toolbars hidden")
-                .action(format!("Show ({toolbar_binding})"), Action::ToggleToolbar),
+                .action(format!("Show ({toolbar_binding})"), Action::ToggleToolbar)
+                .secondary_command(
+                    "Tip settings…",
+                    ToastCommand::AcknowledgeTip {
+                        tip: OnboardingTip::ToolbarHidden,
+                        then: Some(Action::OpenConfiguratorOnboardingHints),
+                    },
+                ),
         );
         if outcome.accepted() {
             self.onboarding.state_mut().toolbar_hint_shown = true;
@@ -415,17 +486,24 @@ impl WaylandState {
         match self.onboarding.save() {
             Ok(()) => true,
             Err(error) => {
-                self.input_state.push_toast(
-                    ToastPriority::Critical,
-                    "onboarding.persistence",
-                    Toast::warning(format!(
-                        "Automatic guidance is off because onboarding progress could not be saved: {error}"
-                    ))
-                    .once_per_content(),
-                );
+                self.show_onboarding_persistence_warning(&error);
                 false
             }
         }
+    }
+
+    fn show_onboarding_persistence_warning(
+        &mut self,
+        error: &crate::onboarding::OnboardingSaveError,
+    ) {
+        self.input_state.push_toast(
+            ToastPriority::Critical,
+            "onboarding.persistence",
+            Toast::warning(format!(
+                "Automatic guidance is off because onboarding progress could not be saved: {error}"
+            ))
+            .once_per_content(),
+        );
     }
 
     fn shortcut_label_opt(&self, action: Action) -> Option<String> {

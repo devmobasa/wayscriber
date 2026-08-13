@@ -708,7 +708,8 @@ help_overlay_context_filter = true
 show_capabilities_warning = true
 
 # Show automatic first-run guidance, discovery tips, and shortcut coaching.
-# The guided tour remains available manually when this is false.
+# Automatic tips can also be acknowledged individually, and stop after three
+# appearances. The guided tour remains available manually when this is false.
 show_onboarding_hints = true
 
 # Command palette action toast duration (ms)
@@ -1177,7 +1178,7 @@ top_controls = [
 - **Polygon tools**: Full mode shows Triangle, Parallelogram, Rhombus, Regular Polygon, and Freeform Polygon under the compact Polygons picker. Simple mode exposes them in the Shapes picker.
 - **Context-aware UI**: `context_aware_ui` shows/hides tool-specific controls (colors, thickness, arrow labels, etc.) based on the active tool; disable to always show all controls.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.
-- **Automatic guidance**: `show_onboarding_hints` controls first-run cards, discovery tips, and shortcut coaching. Set it to `false` to disable all automatic tutorials; the guided tour remains available manually. Completed profiles migrated from onboarding versions before v6 are not enrolled in the later status-bar, Canvas, and zoom tip series.
+- **Automatic guidance**: `show_onboarding_hints` controls first-run cards, discovery tips, and shortcut coaching. Discovery and coaching tips offer **Got it** (permanently acknowledge that tip) and **Tip settings…** (acknowledge it, then open the Configurator at this setting); the toolbar-hidden recovery tip keeps **Show** as its primary control and offers the same settings route. Using the board picker, bottom-right zoom controls, or Canvas popover also acknowledges the matching tip. Clicking the message body dismisses a tip only for the current run; an unattended tip stops after three appearances. Set this option to `false` to disable all automatic tutorials on later overlay launches; the running overlay does not live-reload this Configurator change. The guided tour remains available manually, and capability, safety, and configuration warnings are unaffected. Completed profiles migrated from onboarding versions before v6 are not enrolled in the later status-bar, Canvas, and zoom tip series. If onboarding progress cannot be saved, automatic guidance is disabled for that run and an actionable persistence warning is shown.
 - **Capability warnings**: `show_capabilities_warning` independently controls compositor limitation warnings; disabling tutorials does not hide safety, configuration, or capability diagnostics.
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
 - **Offsets**: `top_offset` and `top_offset_y` are the authored default top-toolbar position. Dragging the strip saves its position as a runtime preference in `runtime-ui.toml` and leaves these untouched; editing one here again takes over from the saved drag.

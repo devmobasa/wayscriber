@@ -34,7 +34,7 @@ fn focus_mode_hides_all_chrome_and_restores_exactly() {
             .ui_toast
             .as_ref()
             .and_then(|toast| toast.action.as_ref())
-            .is_none_or(|action| action.action != Action::ToggleFocusMode),
+            .is_none_or(|action| action.dispatch_action() != Some(Action::ToggleFocusMode)),
         "restoring Focus Mode must retract its Restore action"
     );
     assert_eq!(
@@ -60,7 +60,7 @@ fn focus_mode_toast_offers_restore_action() {
         toast.message
     );
     let action = toast.action.as_ref().expect("restore action chip");
-    assert_eq!(action.action, Action::ToggleFocusMode);
+    assert_eq!(action.dispatch_action(), Some(Action::ToggleFocusMode));
 }
 
 #[test]
@@ -77,10 +77,12 @@ fn focus_mode_suppresses_fallback_mode_badges_but_keeps_restore_toast() {
         "Focus Mode must suppress zoom, frozen, pan, and editing fallback badges"
     );
     assert_eq!(
-        state
-            .ui_toast
-            .as_ref()
-            .map(|toast| toast.action.as_ref().map(|action| action.action)),
+        state.ui_toast.as_ref().map(|toast| {
+            toast
+                .action
+                .as_ref()
+                .and_then(|action| action.dispatch_action())
+        }),
         Some(Some(Action::ToggleFocusMode)),
         "the intentional Restore toast remains available"
     );
@@ -104,7 +106,7 @@ fn manual_chrome_toggle_breaks_focus_mode() {
             .ui_toast
             .as_ref()
             .and_then(|toast| toast.action.as_ref())
-            .is_none_or(|action| action.action != Action::ToggleFocusMode),
+            .is_none_or(|action| action.dispatch_action() != Some(Action::ToggleFocusMode)),
         "breaking Focus Mode must retract its stale Restore action"
     );
 
@@ -200,7 +202,7 @@ fn focus_mode_rescues_a_fully_hidden_ui() {
             .ui_toast
             .as_ref()
             .and_then(|toast| toast.action.as_ref())
-            .map(|action| action.action),
+            .and_then(|action| action.dispatch_action()),
         Some(Action::ToggleToolbar),
         "the fully hidden state should expose the one-click recovery action"
     );
@@ -218,7 +220,7 @@ fn focus_mode_rescues_a_fully_hidden_ui() {
             .ui_toast
             .as_ref()
             .and_then(|toast| toast.action.as_ref())
-            .is_none_or(|action| action.action != Action::ToggleToolbar),
+            .is_none_or(|action| action.dispatch_action() != Some(Action::ToggleToolbar)),
         "Focus rescue must retract the stale Show toolbar action"
     );
 }

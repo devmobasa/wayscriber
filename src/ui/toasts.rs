@@ -26,7 +26,23 @@ const UI_TOAST_FONT_SIZE: f64 = 15.0;
 const PRESET_TOAST_FONT_SIZE: f64 = 16.0;
 const TOAST_PADDING_X: f64 = SPACING_LG;
 const TOAST_PADDING_Y: f64 = 9.0;
+const TOAST_SCREEN_MARGIN: f64 = SPACING_LG;
+const TOAST_ACTION_GAP: f64 = 8.0;
+const TOAST_ACTION_PADDING_X: f64 = 8.0;
+const TOAST_ACTION_PADDING_Y: f64 = 4.0;
 const TOAST_WARNING_TEXT: (f64, f64, f64) = (0.07, 0.09, 0.15);
+
+type ToastBounds = (f64, f64, f64, f64);
+
+#[derive(Debug)]
+struct UiToastLayout {
+    bounds: ToastBounds,
+    action_bounds: [Option<ToastBounds>; 2],
+    message: String,
+}
+
+/// Overall toast bounds plus the bounds of up to two action chips.
+pub type UiToastRenderGeometry = (ToastBounds, [Option<ToastBounds>; 2]);
 
 fn toast_text_style(size: f64) -> UiTextStyle<'static> {
     UiTextStyle {
@@ -98,14 +114,91 @@ fn preset_feedback_label(slot: usize, kind: PresetFeedbackKind) -> String {
     }
 }
 
-fn ui_toast_full_label(input_state: &InputState) -> Option<String> {
+fn measured_width(text: &str) -> Option<f64> {
+    Some(measure_text(toast_text_style(UI_TOAST_FONT_SIZE), text, None)?.width())
+}
+
+fn ellipsize_to_width(text: &str, max_width: f64) -> Option<String> {
+    if measured_width(text)? <= max_width {
+        return Some(text.to_string());
+    }
+    const ELLIPSIS: &str = "…";
+    if measured_width(ELLIPSIS)? > max_width {
+        return Some(String::new());
+    }
+    for (end, _) in text.char_indices().rev() {
+        let candidate = format!("{}{}", text[..end].trim_end(), ELLIPSIS);
+        if measured_width(&candidate)? <= max_width {
+            return Some(candidate);
+        }
+    }
+    Some(ELLIPSIS.to_string())
+}
+
+fn ui_toast_layout(
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) -> Option<UiToastLayout> {
     let toast = input_state.ui_toast.as_ref()?;
-    let action_suffix = toast
-        .action
-        .as_ref()
-        .map(|a| format!(" [{}]", a.label))
-        .unwrap_or_default();
-    Some(format!("{}{}", toast.message, action_suffix))
+    let actions = [toast.action.as_ref(), toast.secondary_action.as_ref()];
+    let action_sizes = actions.map(|action| {
+        action.and_then(|action| {
+            let extents = measure_text(toast_text_style(UI_TOAST_FONT_SIZE), &action.label, None)?;
+            Some((
+                extents.width() + TOAST_ACTION_PADDING_X * 2.0,
+                extents.height() + TOAST_ACTION_PADDING_Y * 2.0,
+            ))
+        })
+    });
+    let action_count = action_sizes.iter().flatten().count();
+    let action_width = action_sizes
+        .iter()
+        .flatten()
+        .map(|size| size.0)
+        .sum::<f64>()
+        + TOAST_ACTION_GAP * action_count.saturating_sub(1) as f64;
+    let message_action_gap = if action_count > 0 {
+        TOAST_ACTION_GAP
+    } else {
+        0.0
+    };
+    let max_box_width = (screen_width as f64 - TOAST_SCREEN_MARGIN * 2.0).max(1.0);
+    let max_message_width =
+        (max_box_width - TOAST_PADDING_X * 2.0 - action_width - message_action_gap).max(0.0);
+    let message = ellipsize_to_width(&toast.message, max_message_width)?;
+    let message_extents = measure_text(toast_text_style(UI_TOAST_FONT_SIZE), &message, None)?;
+    let content_width = message_extents.width() + message_action_gap + action_width;
+    let content_height = action_sizes
+        .iter()
+        .flatten()
+        .map(|size| size.1)
+        .fold(message_extents.height(), f64::max);
+    let width = (content_width + TOAST_PADDING_X * 2.0).min(max_box_width);
+    let height = content_height + TOAST_PADDING_Y * 2.0;
+    let x = (screen_width as f64 - width) / 2.0;
+    let y = screen_height as f64 * UI_TOAST_Y_RATIO - height / 2.0;
+
+    let mut action_x = x + TOAST_PADDING_X + message_extents.width() + message_action_gap;
+    let mut action_bounds = [None, None];
+    for (index, size) in action_sizes.into_iter().enumerate() {
+        let Some((action_width, action_height)) = size else {
+            continue;
+        };
+        action_bounds[index] = Some((
+            action_x,
+            y + (height - action_height) / 2.0,
+            action_width,
+            action_height,
+        ));
+        action_x += action_width + TOAST_ACTION_GAP;
+    }
+
+    Some(UiToastLayout {
+        bounds: (x, y, width, height),
+        action_bounds,
+        message,
+    })
 }
 
 /// On-screen bounds (x, y, width, height) the active UI toast occupies, without
@@ -116,14 +209,7 @@ pub fn ui_toast_geometry(
     screen_width: u32,
     screen_height: u32,
 ) -> Option<(f64, f64, f64, f64)> {
-    let full_label = ui_toast_full_label(input_state)?;
-    toast_box_geometry(
-        &full_label,
-        UI_TOAST_FONT_SIZE,
-        screen_width,
-        screen_height,
-        UI_TOAST_Y_RATIO,
-    )
+    Some(ui_toast_layout(input_state, screen_width, screen_height)?.bounds)
 }
 
 /// On-screen bounds (x, y, width, height) of the active preset toast, without
@@ -215,7 +301,7 @@ pub fn render_ui_toast(
     input_state: &InputState,
     screen_width: u32,
     screen_height: u32,
-) -> Option<(f64, f64, f64, f64)> {
+) -> Option<UiToastRenderGeometry> {
     let toast = input_state.ui_toast.as_ref()?;
 
     let now = Instant::now();
@@ -226,28 +312,11 @@ pub fn render_ui_toast(
         return None;
     }
 
-    let label = toast.message.as_str();
     let padding_x = TOAST_PADDING_X;
     let radius = RADIUS_LG;
-
-    // Calculate label with optional action suffix
-    let action_suffix = toast
-        .action
-        .as_ref()
-        .map(|a| format!(" [{}]", a.label))
-        .unwrap_or_default();
-    let full_label = format!("{}{}", label, action_suffix);
-
+    let layout = ui_toast_layout(input_state, screen_width, screen_height)?;
+    let (x, y, width, height) = layout.bounds;
     let text_style = toast_text_style(UI_TOAST_FONT_SIZE);
-    let full_layout = text_layout(ctx, text_style, &full_label, None);
-    let full_extents = full_layout.ink_extents();
-    let (x, y, width, height) = toast_box_geometry(
-        &full_label,
-        UI_TOAST_FONT_SIZE,
-        screen_width,
-        screen_height,
-        UI_TOAST_Y_RATIO,
-    )?;
 
     let fade = ui_toast_fade(elapsed.as_secs_f64(), duration_secs as f64);
     let (r, g, b) = match toast.kind {
@@ -327,11 +396,12 @@ pub fn render_ui_toast(
         }
     }
 
-    // Draw main label
-    let label_layout = text_layout(ctx, text_style, label, None);
+    // Draw the message. Action labels are measured independently so the
+    // message can ellipsize while every chip remains whole and clickable.
+    let label_layout = text_layout(ctx, text_style, &layout.message, None);
     let label_extents = label_layout.ink_extents();
-    let text_x = x + (width - full_extents.width()) / 2.0 - full_extents.x_bearing();
-    let text_y = y + (height - full_extents.height()) / 2.0 - full_extents.y_bearing();
+    let text_x = x + TOAST_PADDING_X - label_extents.x_bearing();
+    let text_y = y + (height - label_extents.height()) / 2.0 - label_extents.y_bearing();
 
     let text_color = if toast.kind == UiToastKind::Warning {
         TOAST_WARNING_TEXT
@@ -341,29 +411,26 @@ pub fn render_ui_toast(
     ctx.set_source_rgba(text_color.0, text_color.1, text_color.2, fade);
     label_layout.show_at_baseline(ctx, text_x, text_y);
 
-    // Draw action suffix with button-style background for better visibility
-    if toast.action.is_some() {
-        let suffix_layout = text_layout(ctx, text_style, &action_suffix, None);
-        let suffix_extents = suffix_layout.ink_extents();
-        let suffix_x = text_x + label_extents.width() + label_extents.x_bearing();
-
-        // Button-style background for action
-        let btn_padding = 4.0;
-        let btn_x = suffix_x - btn_padding + suffix_extents.x_bearing();
-        let btn_y = text_y - suffix_extents.height() - btn_padding + suffix_extents.y_bearing();
-        let btn_w = suffix_extents.width() + btn_padding * 2.0;
-        let btn_h = suffix_extents.height() + btn_padding * 2.0;
-
+    for (action, bounds) in [toast.action.as_ref(), toast.secondary_action.as_ref()]
+        .into_iter()
+        .zip(layout.action_bounds)
+    {
+        let (Some(action), Some((btn_x, btn_y, btn_w, btn_h))) = (action, bounds) else {
+            continue;
+        };
         ctx.set_source_rgba(text_color.0, text_color.1, text_color.2, 0.16 * fade);
         draw_rounded_rect(ctx, btn_x, btn_y, btn_w, btn_h, RADIUS_SM);
         let _ = ctx.fill();
 
-        // Action text
+        let action_layout = text_layout(ctx, text_style, &action.label, None);
+        let action_extents = action_layout.ink_extents();
+        let action_x = btn_x + (btn_w - action_extents.width()) / 2.0 - action_extents.x_bearing();
+        let action_y = btn_y + (btn_h - action_extents.height()) / 2.0 - action_extents.y_bearing();
         ctx.set_source_rgba(text_color.0, text_color.1, text_color.2, 0.95 * fade);
-        suffix_layout.show_at_baseline(ctx, suffix_x, text_y);
+        action_layout.show_at_baseline(ctx, action_x, action_y);
     }
 
-    Some((x, y, width, height))
+    Some((layout.bounds, layout.action_bounds))
 }
 
 /// Render blocked action feedback - a brief red flash on screen edges.
@@ -391,6 +458,8 @@ pub fn render_blocked_feedback(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::Action;
+    use crate::input::state::{Toast, ToastPriority};
 
     #[test]
     fn ui_toast_uses_a_short_fixed_end_fade() {
@@ -410,5 +479,28 @@ mod tests {
         assert_eq!(preset_toast_fade(PRESET_TOAST_HOLD_RATIO), 1.0);
         assert_eq!(preset_toast_fade(0.875), 0.5);
         assert_eq!(preset_toast_fade(1.0), 0.0);
+    }
+
+    #[test]
+    fn two_action_layout_keeps_chips_whole_and_ellipsizes_the_message() {
+        let mut state = crate::input::state::test_support::make_test_input_state();
+        state.push_toast(
+            ToastPriority::Hint,
+            "tip",
+            Toast::info(
+                "Click the Board or Page segment in the status bar to switch boards and pages.",
+            )
+            .action("Got it", Action::ToggleHelp)
+            .secondary_action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
+        );
+
+        let layout = ui_toast_layout(&state, 360, 720).expect("toast layout");
+        assert!(layout.message.ends_with('…'));
+        let first = layout.action_bounds[0].expect("first chip");
+        let second = layout.action_bounds[1].expect("second chip");
+        assert!(first.0 + first.2 + TOAST_ACTION_GAP <= second.0);
+        assert!(second.0 + second.2 <= layout.bounds.0 + layout.bounds.2);
+        assert!(layout.bounds.0 >= TOAST_SCREEN_MARGIN);
+        assert!(layout.bounds.0 + layout.bounds.2 <= 360.0 - TOAST_SCREEN_MARGIN);
     }
 }

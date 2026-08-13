@@ -27,6 +27,7 @@ impl InputState {
     }
 
     fn open_board_picker_with(&mut self, mode: BoardPickerMode) {
+        self.pending_onboarding_usage.used_board_picker = true;
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::BoardPicker);
         self.cancel_active_interaction();
         self.board_picker_clear_search();

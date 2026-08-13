@@ -1,14 +1,16 @@
 use super::first_run::{
     apply_persisted_usage_signals, background_mode_prompt_active, background_mode_prompt_choice,
     color_thickness_completed, first_run_card_hidden_by_ui_state, first_run_skip_allowed,
-    first_run_step_eyebrow, quick_access_completed, radial_flick_completed, shortcut_rebind_footer,
+    first_run_step_eyebrow, quick_access_completed, shortcut_rebind_footer,
 };
 use super::{
-    automatic_onboarding_allowed, canvas_popover_hint_relevant, capability_toast_message,
-    shortcut_coach_should_fire, status_bar_board_picker_entry,
+    acknowledge_tip_command, automatic_onboarding_allowed, automatic_tip_toast,
+    canvas_popover_hint_relevant, capability_toast_message, shortcut_coach_should_fire,
+    status_bar_board_picker_entry,
 };
 use crate::config::{RadialMenuMouseBinding, ToolbarRebindModifier};
-use crate::input::state::CompositorCapabilities;
+use crate::domain::{Action, OnboardingTip};
+use crate::input::state::{CompositorCapabilities, ToastCommand};
 use crate::input::{Key, state::PendingOnboardingUsage};
 use crate::onboarding::{DEFERRED_HINT_REPEAT_MAX, FirstRunStep, OnboardingState};
 use std::time::{Duration, Instant};
@@ -59,28 +61,63 @@ fn automatic_onboarding_requires_the_preference_and_durable_progress() {
 }
 
 #[test]
+fn automatic_tip_controls_acknowledge_the_exact_tip_before_optional_settings() {
+    let toast = automatic_tip_toast("Try the board picker", OnboardingTip::StatusBar);
+    let primary = toast.action.as_ref().expect("Got it action");
+    let secondary = toast.secondary_action.as_ref().expect("settings action");
+
+    assert_eq!(primary.label, "Got it");
+    assert_eq!(
+        primary.command,
+        ToastCommand::AcknowledgeTip {
+            tip: OnboardingTip::StatusBar,
+            then: None,
+        }
+    );
+    assert_eq!(secondary.label, "Tip settings…");
+    assert_eq!(
+        secondary.command,
+        ToastCommand::AcknowledgeTip {
+            tip: OnboardingTip::StatusBar,
+            then: Some(Action::OpenConfiguratorOnboardingHints),
+        }
+    );
+}
+
+#[test]
+fn tip_settings_navigation_survives_an_acknowledgement_write_failure() {
+    let outcome = acknowledge_tip_command(
+        Err(crate::onboarding::OnboardingSaveError::Unavailable),
+        Some(Action::OpenConfiguratorOnboardingHints),
+    );
+
+    assert!(outcome.persistence_error.is_some());
+    assert_eq!(
+        outcome.follow_up,
+        Some(Action::OpenConfiguratorOnboardingHints),
+        "settings navigation must not depend on acknowledgement persistence"
+    );
+}
+
+#[test]
 fn first_run_eyebrow_shows_progress() {
     assert_eq!(
         first_run_step_eyebrow(FirstRunStep::BackgroundModeSetup),
-        "Step 1 / 7"
+        "Step 1 / 6"
     );
-    assert_eq!(first_run_step_eyebrow(FirstRunStep::WaitDraw), "Step 2 / 7");
-    assert_eq!(first_run_step_eyebrow(FirstRunStep::DrawUndo), "Step 3 / 7");
+    assert_eq!(first_run_step_eyebrow(FirstRunStep::WaitDraw), "Step 2 / 6");
+    assert_eq!(first_run_step_eyebrow(FirstRunStep::DrawUndo), "Step 3 / 6");
     assert_eq!(
         first_run_step_eyebrow(FirstRunStep::ColorThickness),
-        "Step 4 / 7"
+        "Step 4 / 6"
     );
     assert_eq!(
         first_run_step_eyebrow(FirstRunStep::QuickAccess),
-        "Step 5 / 7"
-    );
-    assert_eq!(
-        first_run_step_eyebrow(FirstRunStep::RadialFlick),
-        "Step 6 / 7"
+        "Step 5 / 6"
     );
     assert_eq!(
         first_run_step_eyebrow(FirstRunStep::Reference),
-        "Step 7 / 7"
+        "Step 6 / 6"
     );
 }
 
@@ -100,22 +137,6 @@ fn color_thickness_step_requires_both_color_and_thickness() {
 }
 
 #[test]
-fn radial_flick_step_completes_on_flick_or_is_waived_when_unavailable() {
-    let mut state = OnboardingState::default();
-
-    // Radial available but no flick yet: still blocked.
-    assert!(!radial_flick_completed(&state, true));
-
-    // A flick commit completes it.
-    state.radial_flick_done = true;
-    assert!(radial_flick_completed(&state, true));
-
-    // Without a flick, an unavailable radial menu waives the step.
-    state.radial_flick_done = false;
-    assert!(radial_flick_completed(&state, false));
-}
-
-#[test]
 fn v3_onboarding_toml_loads_with_new_fields_defaulted() {
     // A pre-v4 file has none of the new first-run/coach fields. Serde defaults
     // must fill them in so the file still loads (backward compatible).
@@ -131,7 +152,7 @@ used_help_overlay = true
     assert!(state.welcome_shown);
     assert!(state.first_run_completed);
     assert!(state.used_help_overlay);
-    // New F4 first-run teaching fields default off.
+    // First-run teaching fields absent from the old file default off.
     assert!(!state.first_color_done);
     assert!(!state.first_thickness_done);
     assert!(!state.radial_flick_done);
@@ -396,6 +417,9 @@ fn persisted_usage_signals_apply_after_first_run_completion() {
         used_context_menu_keyboard: true,
         used_help_overlay: true,
         used_command_palette: true,
+        used_board_picker: true,
+        used_zoom_control: true,
+        used_canvas_popover: true,
         ..PendingOnboardingUsage::default()
     };
 
@@ -409,4 +433,7 @@ fn persisted_usage_signals_apply_after_first_run_completion() {
     assert!(state.used_context_menu_keyboard);
     assert!(state.used_help_overlay);
     assert!(state.used_command_palette);
+    assert!(state.used_board_picker);
+    assert!(state.used_zoom_control);
+    assert!(state.used_canvas_popover);
 }

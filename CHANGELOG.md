@@ -5,6 +5,7 @@
 ### Added
 
 - About dialog: a "Report a problem" row. It copies your diagnostics to the clipboard and opens `https://wayscriber.com/report`, which hands them straight into a prefilled bug form. Nothing is sent automatically, and the diagnostics travel in the URL fragment, so they never reach a server log.
+- Automatic guidance toasts now provide explicit "Got it" and "Tip settings…" controls. The General UI setting can disable automatic tips without disabling manual tours or real warnings.
 
 ### Breaking (Rust source)
 
@@ -14,3 +15,5 @@
 ### Fixed
 
 - Stylus pressure no longer overrides the selected Marker/Textmarker or Step Marker size. Pressure-to-thickness mapping remains limited to pressure-sensitive freehand Pen strokes.
+- Automatic tips and skipped-default shortcut notices now remember acknowledgement and taught-feature use instead of returning every active launch. Persistence failures are surfaced instead of causing repeat loops.
+- First-run onboarding no longer requires the radial-menu flick-to-commit exercise. Saved sessions paused on that retired step continue at the reference step.

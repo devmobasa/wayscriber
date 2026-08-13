@@ -90,6 +90,7 @@ impl InputState {
             });
         if changed {
             self.ui_toast_bounds = None;
+            self.ui_toast_action_bounds = [None, None];
             self.needs_redraw = true;
         }
     }

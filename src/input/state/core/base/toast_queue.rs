@@ -21,7 +21,7 @@
 //! slot (the field the renderer, damage tracker, and click handling already
 //! consume), so it is unit-testable without an `InputState`.
 
-use super::types::{ToastAction, UI_TOAST_DURATION_MS, UiToastKind, UiToastState};
+use super::types::{ToastAction, ToastCommand, UI_TOAST_DURATION_MS, UiToastKind, UiToastState};
 use crate::domain::Action;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -48,6 +48,7 @@ pub struct Toast {
     pub message: String,
     pub duration_ms: u64,
     pub(crate) action: Option<ToastAction>,
+    pub(crate) secondary_action: Option<ToastAction>,
     once_per_content: bool,
 }
 
@@ -58,6 +59,7 @@ impl Toast {
             message: message.into(),
             duration_ms: UI_TOAST_DURATION_MS,
             action: None,
+            secondary_action: None,
             once_per_content: false,
         }
     }
@@ -82,7 +84,37 @@ impl Toast {
     pub fn action(mut self, label: impl Into<String>, action: Action) -> Self {
         self.action = Some(ToastAction {
             label: label.into(),
-            action,
+            command: ToastCommand::Dispatch(action),
+        });
+        self
+    }
+
+    pub(crate) fn command(mut self, label: impl Into<String>, command: ToastCommand) -> Self {
+        self.action = Some(ToastAction {
+            label: label.into(),
+            command,
+        });
+        self
+    }
+
+    /// Add a second explicit action chip. Two-action toasts dispatch only from
+    /// their chips; the remaining toast body becomes dismiss-only.
+    pub fn secondary_action(mut self, label: impl Into<String>, action: Action) -> Self {
+        self.secondary_action = Some(ToastAction {
+            label: label.into(),
+            command: ToastCommand::Dispatch(action),
+        });
+        self
+    }
+
+    pub(crate) fn secondary_command(
+        mut self,
+        label: impl Into<String>,
+        command: ToastCommand,
+    ) -> Self {
+        self.secondary_action = Some(ToastAction {
+            label: label.into(),
+            command,
         });
         self
     }
@@ -281,13 +313,36 @@ impl ToastQueue {
         mut should_remove: impl FnMut(&'static str, Option<Action>) -> bool,
     ) -> bool {
         let active_removed = active.as_ref().is_some_and(|toast| {
-            should_remove(toast.key, toast.action.as_ref().map(|entry| entry.action))
+            should_remove(
+                toast.key,
+                toast.action.as_ref().and_then(ToastAction::dispatch_action),
+            ) || should_remove(
+                toast.key,
+                toast
+                    .secondary_action
+                    .as_ref()
+                    .and_then(ToastAction::dispatch_action),
+            )
         });
         if active_removed {
             *active = None;
         }
         self.pending.retain(|entry| {
-            !should_remove(entry.key, entry.toast.action.as_ref().map(|a| a.action))
+            !should_remove(
+                entry.key,
+                entry
+                    .toast
+                    .action
+                    .as_ref()
+                    .and_then(ToastAction::dispatch_action),
+            ) && !should_remove(
+                entry.key,
+                entry
+                    .toast
+                    .secondary_action
+                    .as_ref()
+                    .and_then(ToastAction::dispatch_action),
+            )
         });
         active_removed
     }
@@ -306,6 +361,7 @@ impl ToastQueue {
             started: now,
             duration_ms: toast.duration_ms,
             action: toast.action,
+            secondary_action: toast.secondary_action,
             priority,
             key,
             activation_id: self.activation_seq,
@@ -379,6 +435,7 @@ impl ToastQueue {
                     message: current.message,
                     duration_ms: remaining,
                     action: current.action,
+                    secondary_action: current.secondary_action,
                     once_per_content: false,
                 },
                 seq,
@@ -538,6 +595,47 @@ mod tests {
             resumed.duration_ms,
             T0_DURATION - 2000,
             "resumes with the remaining display time, not a fresh timer"
+        );
+    }
+
+    #[test]
+    fn preempted_toast_keeps_both_action_chips() {
+        let mut queue = ToastQueue::default();
+        let mut active = None;
+        let now = Instant::now();
+
+        queue.push(
+            &mut active,
+            ToastPriority::Action,
+            "actions",
+            Toast::info("Choose")
+                .action("First", Action::ToggleHelp)
+                .secondary_action("Second", Action::OpenConfiguratorOnboardingHints),
+            now,
+        );
+        queue.push(
+            &mut active,
+            ToastPriority::Critical,
+            "critical",
+            Toast::error("Stop"),
+            now,
+        );
+
+        queue.advance(
+            &mut active,
+            now + Duration::from_millis(UI_TOAST_DURATION_MS),
+        );
+        let resumed = active.as_ref().expect("two-action toast resumed");
+        assert_eq!(
+            resumed.action.as_ref().map(|action| action.label.as_str()),
+            Some("First")
+        );
+        assert_eq!(
+            resumed
+                .secondary_action
+                .as_ref()
+                .map(|action| action.label.as_str()),
+            Some("Second")
         );
     }
 
