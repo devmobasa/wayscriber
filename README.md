@@ -576,6 +576,17 @@ Once the overlay is up:
 - <kbd>F11</kbd> — [configurator](#configurator-gui)
 - <kbd>Escape</kbd> — hide or exit
 
+Discovery and shortcut-coaching tips have **Got it** and **Tip settings…**
+controls. **Got it**
+permanently acknowledges only that tip; **Tip settings…** does the same and
+opens the Configurator at the global automatic-guidance switch. Using the
+feature a tip teaches also stops that tip from returning. Clicking the message
+body dismisses it for the current run, and unattended tips stop after three
+appearances. The toolbar-hidden recovery tip keeps **Show** as its primary
+control and offers the same settings route. Turning automatic guidance off
+applies to later overlay launches; manual tour replay and real capability or
+configuration warnings remain available.
+
 For daily use, set up [daemon mode](#daemon-mode-recommended): toggles are faster and session state survives between activations.
 
 ---
