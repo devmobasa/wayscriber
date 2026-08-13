@@ -1,6 +1,6 @@
 pkgbase = wayscriber
 	pkgdesc = Screen annotation tool for Wayland compositors
-	pkgver = 0.9.23
+	pkgver = 0.9.24
 	pkgrel = 1
 	url = https://wayscriber.com
 	arch = x86_64
@@ -21,7 +21,7 @@ pkgbase = wayscriber
 	depends = slurp
 	optdepends = tesseract: copy text from screen (OCR)
 	optdepends = tesseract-data-eng: English language data for OCR
-	source = wayscriber-0.9.23.tar.gz::https://github.com/devmobasa/wayscriber/archive/refs/tags/v0.9.23.tar.gz
+	source = wayscriber-0.9.24.tar.gz::https://github.com/devmobasa/wayscriber/archive/refs/tags/v0.9.24.tar.gz
 	sha256sums = SKIP
 
 pkgname = wayscriber
