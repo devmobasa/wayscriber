@@ -424,7 +424,7 @@ fn build_top_minimized_tab(
         (0.0, 0.0, width, height),
         WidgetKind::IconButton {
             glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(
-                control.icon(snapshot).expect("restore icon"),
+                model::TopToolbarIcon::Restore,
             )),
             icon_size: (height * 0.75).min(18.0),
             style: ButtonStyle::plain(),
@@ -456,7 +456,7 @@ fn build_top_micro_chip(
         (0.0, 0.0, width, height),
         WidgetKind::MicroChip {
             glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(
-                control.icon(snapshot).expect("micro chip tool icon"),
+                model::TopToolbarIcon::Tool(model::semantic_icon_for_tool(snapshot.active_tool)),
             )),
             ring_color: (
                 snapshot.color.r,
@@ -633,9 +633,10 @@ fn push_style_pill(
                         ),
                         selected: control.active(snapshot),
                     },
-                    control
-                        .event(snapshot)
-                        .map(|event| Interaction::click(event, control.tooltip(snapshot))),
+                    Some(Interaction::click(
+                        control.click_event(snapshot),
+                        control.tooltip(snapshot),
+                    )),
                 ));
                 x += TOP_CHIP_SIZE + gap;
             }
@@ -648,9 +649,10 @@ fn push_style_pill(
                         color: (entry.color.r, entry.color.g, entry.color.b, entry.color.a),
                         selected: control.active(snapshot),
                     },
-                    control
-                        .event(snapshot)
-                        .map(|event| Interaction::click(event, control.tooltip(snapshot))),
+                    Some(Interaction::click(
+                        control.click_event(snapshot),
+                        control.tooltip(snapshot),
+                    )),
                 ));
                 let is_last = index + 1 == swatch_count;
                 x += TOP_SWATCH_SIZE + if is_last { gap } else { TOP_SWATCH_GAP };
@@ -658,7 +660,8 @@ fn push_style_pill(
             model::StylePillControl::ThicknessSlider
             | model::StylePillControl::OpacitySlider
             | model::StylePillControl::FontSizeSlider => {
-                let (slider_spec, value) = control.slider(snapshot).expect("slider control");
+                let (slider_spec, value) = control.slider_value(snapshot);
+                let event = control.click_event(snapshot);
                 let kind = match control {
                     model::StylePillControl::ThicknessSlider => HitKind::DragSetThickness {
                         min: slider_spec.min,
@@ -683,7 +686,7 @@ fn push_style_pill(
                         t: slider_spec.t_from_value(value),
                     },
                     Some(Interaction {
-                        event: control.event(snapshot).expect("slider event"),
+                        event,
                         kind,
                         tooltip: None,
                     }),
@@ -701,7 +704,7 @@ fn push_style_pill(
                             row_h,
                         ),
                         WidgetKind::Label(LabelSpec::new(
-                            control.value_text(snapshot).expect("opacity readout"),
+                            control.required_value_text(snapshot),
                             TOP_LABEL_FONT_SIZE,
                             true,
                         )),
@@ -722,15 +725,16 @@ fn push_style_pill(
                     ),
                     WidgetKind::TextButton {
                         label: LabelSpec::new(
-                            control.value_text(snapshot).expect("numeral text"),
+                            control.required_value_text(snapshot),
                             TOP_LABEL_FONT_SIZE,
                             true,
                         ),
                         style: ButtonStyle::plain(),
                     },
-                    control
-                        .event(snapshot)
-                        .map(|event| Interaction::click(event, control.tooltip(snapshot))),
+                    Some(Interaction::click(
+                        control.click_event(snapshot),
+                        control.tooltip(snapshot),
+                    )),
                 ));
                 x += ToolbarLayoutSpec::TOP_STYLE_VALUE_W + gap;
             }
@@ -748,9 +752,10 @@ fn push_style_pill(
                         checked: control.active(snapshot),
                         label: LabelSpec::new(control.label(snapshot), MINI_LABEL_FONT_SIZE, false),
                     },
-                    control
-                        .event(snapshot)
-                        .map(|event| Interaction::click(event, control.tooltip(snapshot))),
+                    Some(Interaction::click(
+                        control.click_event(snapshot),
+                        control.tooltip(snapshot),
+                    )),
                 ));
                 x += w + gap;
             }
@@ -767,9 +772,10 @@ fn push_style_pill(
                         label: LabelSpec::new(control.label(snapshot), TOP_LABEL_FONT_SIZE, true),
                         style: ButtonStyle::plain(),
                     },
-                    control
-                        .event(snapshot)
-                        .map(|event| Interaction::click(event, control.tooltip(snapshot))),
+                    Some(Interaction::click(
+                        control.click_event(snapshot),
+                        control.tooltip(snapshot),
+                    )),
                 ));
                 x += ToolbarLayoutSpec::TOP_STYLE_RESET_W + gap;
             }
@@ -785,7 +791,7 @@ fn push_style_pill(
                     ),
                     WidgetKind::TextButton {
                         label: LabelSpec::new(
-                            control.value_text(snapshot).unwrap_or_default(),
+                            control.required_value_text(snapshot),
                             TOP_LABEL_FONT_SIZE,
                             true,
                         ),
@@ -795,16 +801,15 @@ fn push_style_pill(
                             ButtonStyle::disabled()
                         },
                     },
-                    (enabled)
-                        .then(|| control.event(snapshot))
-                        .flatten()
-                        .map(|event| Interaction::click(event, control.tooltip(snapshot))),
+                    (enabled).then(|| {
+                        Interaction::click(control.click_event(snapshot), control.tooltip(snapshot))
+                    }),
                 ));
                 x += ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W + gap;
             }
             model::StylePillControl::SelectionStepper(_) => {
                 let enabled = control.enabled(snapshot);
-                let steps = control.steps(snapshot).expect("stepper halves");
+                let steps = control.required_steps(snapshot);
                 let step_w = ToolbarLayoutSpec::TOP_STYLE_STEP_W;
                 let value_w = ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W;
                 let step_style = if enabled {
@@ -827,7 +832,7 @@ fn push_style_pill(
                     format!("{id}.value"),
                     (x + step_w, center(row_h), value_w, row_h),
                     WidgetKind::Label(LabelSpec::new(
-                        control.value_text(snapshot).unwrap_or_default(),
+                        control.required_value_text(snapshot),
                         TOP_LABEL_FONT_SIZE,
                         true,
                     )),
@@ -847,7 +852,7 @@ fn push_style_pill(
             }
             model::StylePillControl::FontFamilySegment
             | model::StylePillControl::EraserModeSegment => {
-                let segments = control.segments(snapshot).expect("segment halves");
+                let segments = control.required_segments(snapshot);
                 // A clear gap before the segment so Sans│Mono never crowd the
                 // preceding numeral ("72pt") to its left (M7-C3).
                 x += ToolbarLayoutSpec::TOP_STYLE_SEGMENT_LEAD;
@@ -1075,7 +1080,7 @@ fn control_button_node_with_tooltip(
         };
         WidgetKind::IconButton {
             glyph: IconFn(toolbar_icons::top_toolbar_icon_painter(
-                control.icon(snapshot).expect("button icon"),
+                control.glyph(snapshot),
             )),
             icon_size,
             style,

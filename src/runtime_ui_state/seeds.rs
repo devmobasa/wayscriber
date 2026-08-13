@@ -211,15 +211,15 @@ impl InteractionSeedRegistry {
     ) -> Result<SeedGuard, SeedRegistryError> {
         let state = self
             .state(target)
-            .filter(|state| state.normalized_value.is_some())
+            .ok_or_else(|| SeedRegistryError::MissingTarget(target.clone()))?;
+        let normalized_seed = state
+            .normalized_value
+            .clone()
             .ok_or_else(|| SeedRegistryError::MissingTarget(target.clone()))?;
         Ok(SeedGuard {
             target: target.clone(),
             generation: state.generation,
-            normalized_seed: state
-                .normalized_value
-                .clone()
-                .expect("current seed checked above"),
+            normalized_seed,
         })
     }
 

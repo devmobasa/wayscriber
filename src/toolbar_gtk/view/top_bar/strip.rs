@@ -41,7 +41,7 @@ impl TopBar {
         restore.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
         restore.set_tooltip_text(Some(&control.tooltip(snapshot)));
         let icon = IconWidget::new(
-            top_toolbar_icon_painter(control.icon(snapshot).expect("restore icon")),
+            top_toolbar_icon_painter(model::TopToolbarIcon::Restore),
             (MINIMIZED_SIZE.1 * 0.75 * scale).min(18.0 * scale),
         );
         restore.set_child(Some(&icon.area));
@@ -80,7 +80,7 @@ impl TopBar {
         chip.set_tooltip_text(Some(&control.tooltip(snapshot)));
 
         let painter = Rc::new(Cell::new(crate::toolbar_icons::top_toolbar_icon_painter(
-            control.icon(snapshot).expect("micro chip tool icon"),
+            model::TopToolbarIcon::Tool(model::semantic_icon_for_tool(snapshot.active_tool)),
         )));
         let ring: Rc<Cell<MicroRing>> = Rc::new(Cell::new((
             (
@@ -283,7 +283,7 @@ impl TopBar {
                 model::TopToolbarNode::Control(control) => match control {
                     model::TopToolbarControl::DragHandle => {
                         let grip = IconWidget::new(
-                            top_toolbar_icon_painter(control.icon(snapshot).expect("drag icon")),
+                            top_toolbar_icon_painter(model::TopToolbarIcon::Drag),
                             sz(HANDLE_SIZE),
                         );
                         set_control_widget_id(&grip.area, control);

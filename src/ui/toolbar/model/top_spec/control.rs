@@ -294,6 +294,14 @@ impl TopToolbarControl {
         })
     }
 
+    /// Glyph for controls that always have one. Empty presets and the
+    /// highlight ring stay on [`Self::icon`].
+    pub(crate) fn glyph(self, snapshot: &ToolbarSnapshot) -> TopToolbarIcon {
+        self.icon(snapshot).expect(
+            "this toolbar control always has a glyph; empty presets and the highlight ring use icon()",
+        )
+    }
+
     pub(crate) fn label(self, snapshot: &ToolbarSnapshot) -> Cow<'static, str> {
         match self {
             Self::Restore => Cow::Borrowed("Show toolbar"),

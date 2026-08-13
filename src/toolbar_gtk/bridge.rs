@@ -430,7 +430,10 @@ fn finish_thread_within(
         thread.take();
         return ThreadShutdownOutcome::TimedOut;
     }
-    match thread.take().expect("thread checked above").join() {
+    let handle = thread
+        .take()
+        .expect("finished GTK thread handle is still owned here");
+    match handle.join() {
         Ok(()) => ThreadShutdownOutcome::Joined,
         Err(_) => ThreadShutdownOutcome::Panicked,
     }

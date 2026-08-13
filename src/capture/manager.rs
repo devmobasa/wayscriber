@@ -471,11 +471,10 @@ impl CaptureWorkerExitGuard {
     }
 
     fn publish(&self, completion: CaptureCompletion) -> bool {
-        let result = self
-            .completion_tx
-            .as_ref()
-            .expect("capture completion sender retained by worker")
-            .try_send(completion);
+        let Some(tx) = self.completion_tx.as_ref() else {
+            return false;
+        };
+        let result = tx.try_send(completion);
         match result {
             Ok(()) => {
                 (self.notifier)();

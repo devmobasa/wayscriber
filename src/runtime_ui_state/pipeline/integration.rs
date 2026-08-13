@@ -131,14 +131,8 @@ impl PersistencePipeline {
         &mut self,
         revision: AcceptedStateRevision,
     ) -> Option<DurabilityOutcome> {
-        if !self.receipts.get(&revision).is_some_and(Option::is_some) {
-            return None;
-        }
-        let outcome = self
-            .receipts
-            .remove(&revision)
-            .and_then(|outcome| outcome)
-            .expect("terminal receipt was checked above");
+        let outcome = self.receipts.get_mut(&revision).and_then(Option::take)?;
+        self.receipts.remove(&revision);
         if revision > self.settled_through {
             self.consumed_terminal_receipts.insert(revision);
         }

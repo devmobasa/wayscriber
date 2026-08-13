@@ -69,13 +69,7 @@ impl Config {
                 boards.items.insert(0, item);
             } else {
                 warn!("No transparent board defined; adding default overlay board");
-                boards.items.insert(
-                    0,
-                    BoardsConfig::default_items()
-                        .into_iter()
-                        .find(|item| item.background.is_transparent())
-                        .expect("default items include transparent board"),
-                );
+                boards.items.insert(0, BoardsConfig::default_overlay_item());
             }
         }
 

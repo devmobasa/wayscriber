@@ -260,15 +260,16 @@ fn frame_content_bounds(frame: &Frame) -> Option<CanvasExportRect> {
         found = true;
     }
 
-    found.then(|| {
-        CanvasExportRect::new(
-            min_x as f64,
-            min_y as f64,
-            (max_x - min_x).max(1) as f64,
-            (max_y - min_y).max(1) as f64,
-        )
-        .expect("positive bounds")
-    })
+    found
+        .then(|| {
+            CanvasExportRect::new(
+                min_x as f64,
+                min_y as f64,
+                (max_x - min_x).max(1) as f64,
+                (max_y - min_y).max(1) as f64,
+            )
+        })
+        .flatten()
 }
 
 #[cfg(test)]

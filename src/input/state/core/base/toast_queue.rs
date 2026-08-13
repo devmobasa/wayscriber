@@ -194,11 +194,8 @@ impl ToastQueue {
             // a critical failure. Re-run the normal preemption rule after the
             // in-place update instead of leaving that critical update hidden
             // behind a lower-priority active toast.
-            if active
-                .as_ref()
-                .is_some_and(|current| priority > current.priority)
-            {
-                self.requeue_preempted(active.take().expect("checked above"), now);
+            if let Some(current) = active.take_if(|current| priority > current.priority) {
+                self.requeue_preempted(current, now);
                 self.activate_next(active, now);
                 debug_assert!(active.as_ref().is_some_and(|current| current.key == key));
                 return ToastPushOutcome::Displayed;
@@ -211,30 +208,28 @@ impl ToastQueue {
             return ToastPushOutcome::HintYielded;
         }
 
-        match active {
-            None => {
-                self.enqueue_fifo(priority, key, toast);
-                self.activate_next(active, now);
-                if active.as_ref().is_some_and(|current| current.key == key) {
-                    ToastPushOutcome::Displayed
-                } else {
-                    ToastPushOutcome::Queued
-                }
-            }
-            Some(current) if priority > current.priority => {
-                // Preempt: the active toast yields and is re-queued while
-                // fresh (hints are dropped outright).
-                self.requeue_preempted(active.take().expect("checked above"), now);
-                self.enqueue_fifo(priority, key, toast);
-                self.activate_next(active, now);
-                debug_assert!(active.as_ref().is_some_and(|current| current.key == key));
+        if active.is_none() {
+            self.enqueue_fifo(priority, key, toast);
+            self.activate_next(active, now);
+            return if active.as_ref().is_some_and(|current| current.key == key) {
                 ToastPushOutcome::Displayed
-            }
-            Some(_) => {
-                self.enqueue_fifo(priority, key, toast);
+            } else {
                 ToastPushOutcome::Queued
-            }
+            };
         }
+
+        if let Some(current) = active.take_if(|current| priority > current.priority) {
+            // Preempt: the active toast yields and is re-queued while
+            // fresh (hints are dropped outright).
+            self.requeue_preempted(current, now);
+            self.enqueue_fifo(priority, key, toast);
+            self.activate_next(active, now);
+            debug_assert!(active.as_ref().is_some_and(|current| current.key == key));
+            return ToastPushOutcome::Displayed;
+        }
+
+        self.enqueue_fifo(priority, key, toast);
+        ToastPushOutcome::Queued
     }
 
     /// Advance timers: expire the active toast and promote the next pending

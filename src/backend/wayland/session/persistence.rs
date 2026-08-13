@@ -395,7 +395,10 @@ impl PersistenceController {
             shutdown_error = Some(err);
         }
         self.request_tx.take();
-        let join = self.worker.take().expect("worker presence checked").join();
+        let Some(worker) = self.worker.take() else {
+            return shutdown_error.map_or(Ok(()), Err);
+        };
+        let join = worker.join();
         self.active_id = None;
         if join.is_err() {
             self.healthy = false;

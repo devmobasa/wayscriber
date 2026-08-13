@@ -425,9 +425,11 @@ async fn wait_for_surface_presentation(
         gtk4::glib::timeout_future(CAPTURE_PAINT_POLL_INTERVAL).await;
     }
 
-    let frame_counter = rendered_counter
-        .get()
-        .expect("dedicated transparent render counter recorded");
+    let Some(frame_counter) = rendered_counter.get() else {
+        return Err(format!(
+            "GTK capture suppression generation {generation} lost the dedicated transparent render from {name}"
+        ));
+    };
     log::info!(
         "capture.preflight id={generation} component=gtk surface={name} phase=rendered frame_counter={frame_counter} sequence={ordinal}/{target_count} elapsed_ms={}",
         started.elapsed().as_millis()

@@ -246,6 +246,7 @@ impl WaylandState {
 
         let mut changed = false;
         let mut hint_kind: Option<&'static str> = None;
+        let mut status_bar_hint_entry: Option<&str> = None;
         {
             let state = self.onboarding.state_mut();
             if !state.first_run_completed {
@@ -286,7 +287,7 @@ impl WaylandState {
             // status bar is the most important of the three — the board picker's
             // on-screen entry point is easy to miss — so it comes first and at
             // the earliest threshold among the new surfaces.
-            } else if status_bar_entry.is_some()
+            } else if let Some(entry) = status_bar_entry
                 && state.sessions_seen >= 3
                 && !state.hint_status_bar_shown
                 && state.hint_status_bar_count < DEFERRED_HINT_REPEAT_MAX
@@ -295,6 +296,7 @@ impl WaylandState {
                 state.hint_status_bar_count = state.hint_status_bar_count.saturating_add(1);
                 changed = true;
                 hint_kind = Some("status_bar");
+                status_bar_hint_entry = Some(entry);
             } else if canvas_hint_relevant
                 && state.sessions_seen >= 5
                 && !state.hint_canvas_popover_shown
@@ -329,10 +331,13 @@ impl WaylandState {
                     "Press {} to search actions.",
                     self.shortcut_label(Action::ToggleCommandPalette, "Command Palette")
                 ),
-                "status_bar" => format!(
-                    "Click the {} segment in the status bar to switch boards and pages.",
-                    status_bar_entry.expect("status-bar hint requires a visible picker entry")
-                ),
+                "status_bar" => {
+                    let entry = status_bar_hint_entry
+                        .expect("status_bar hint is only queued when the picker is on screen");
+                    format!(
+                        "Click the {entry} segment in the status bar to switch boards and pages."
+                    )
+                }
                 "canvas_popover" => {
                     "Open \u{201c}Canvas\u{2026}\u{201d} from the \u{2026} overflow for boards, \
                      pages, zoom, and advanced controls."

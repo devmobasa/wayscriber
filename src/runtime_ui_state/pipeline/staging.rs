@@ -100,12 +100,14 @@ impl PersistencePipeline {
 
     pub(crate) fn hold_trailing_replacements(&mut self) -> Vec<HeldReplacementStage> {
         let mut held = Vec::new();
-        while matches!(self.pending.back(), Some(PendingStage::Replace(_))) {
-            let PendingStage::Replace(stage) = self.pending.pop_back().expect("tail checked")
-            else {
-                unreachable!();
-            };
-            held.push(stage.into());
+        while let Some(stage) = self.pending.pop_back() {
+            match stage {
+                PendingStage::Replace(stage) => held.push(stage.into()),
+                other => {
+                    self.pending.push_back(other);
+                    break;
+                }
+            }
         }
         held.reverse();
         held

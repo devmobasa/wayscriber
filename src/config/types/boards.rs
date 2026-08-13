@@ -61,8 +61,8 @@ impl BoardsConfig {
         default_board_items()
     }
 
-    pub fn from_legacy(legacy: &BoardConfig) -> Self {
-        let mut items = vec![BoardItemConfig {
+    pub fn default_overlay_item() -> BoardItemConfig {
+        BoardItemConfig {
             id: "transparent".to_string(),
             name: "Overlay".to_string(),
             background: BoardBackgroundConfig::Transparent("transparent".to_string()),
@@ -70,7 +70,11 @@ impl BoardsConfig {
             auto_adjust_pen: false,
             persist: true,
             pinned: false,
-        }];
+        }
+    }
+
+    pub fn from_legacy(legacy: &BoardConfig) -> Self {
+        let mut items = vec![BoardsConfig::default_overlay_item()];
 
         if legacy.enabled {
             items.push(BoardItemConfig {
@@ -220,15 +224,7 @@ fn default_board_pinned() -> bool {
 
 fn default_board_items() -> Vec<BoardItemConfig> {
     vec![
-        BoardItemConfig {
-            id: "transparent".to_string(),
-            name: "Overlay".to_string(),
-            background: BoardBackgroundConfig::Transparent("transparent".to_string()),
-            default_pen_color: None,
-            auto_adjust_pen: false,
-            persist: true,
-            pinned: false,
-        },
+        BoardsConfig::default_overlay_item(),
         BoardItemConfig {
             id: "whiteboard".to_string(),
             name: "Whiteboard".to_string(),
