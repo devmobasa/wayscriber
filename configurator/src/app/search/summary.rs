@@ -376,11 +376,7 @@ fn keybinding_matches(app: &ConfiguratorApp, query: &SearchQuery, summary: &mut 
             entry.field.field_key(),
             entry.value,
         );
-        if let Some(meta) = entry
-            .field
-            .action()
-            .and_then(wayscriber::config::action_meta)
-        {
+        if let Some(meta) = entry.field.action().and_then(action_meta) {
             text.push(' ');
             text.push_str(meta.description);
             text.push(' ');

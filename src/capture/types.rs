@@ -392,7 +392,6 @@ pub enum CaptureType {
     /// Capture the currently focused window.
     ActiveWindow,
     /// Capture a user-selected rectangular region.
-    #[allow(dead_code)] // Will be used in Phase 2 for region selection
     Selection {
         x: i32,
         y: i32,
@@ -405,14 +404,12 @@ pub enum CaptureType {
 #[derive(Debug, Clone)]
 pub struct CaptureResult {
     /// Raw image data (PNG format).
-    #[allow(dead_code)] // Will be used in Phase 2 for annotation compositing
     pub image_data: Vec<u8>,
     pub operation: ImageOperationKind,
     pub fallback_format_override: Option<ImageFormatMetadata>,
     /// Path where the image was saved (if saved).
     pub saved_path: Option<PathBuf>,
     /// Whether the image was copied to clipboard.
-    #[allow(dead_code)] // Will be used in Phase 2 for status notifications
     pub copied_to_clipboard: bool,
     /// Why a requested file save produced no file, when the operation still
     /// succeeded through another destination. A successful clipboard copy must
@@ -439,7 +436,6 @@ pub enum CaptureOutcome {
 /// Where the captured image should be delivered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CaptureDestination {
-    #[allow(dead_code)] // Will be used by upcoming clipboard-only actions
     ClipboardOnly,
     FileOnly,
     ClipboardAndFile,
@@ -448,7 +444,6 @@ pub enum CaptureDestination {
 /// Errors that can occur during screenshot capture.
 #[derive(Debug)]
 pub enum CaptureError {
-    #[allow(dead_code)] // Will be used in Phase 2 for capability checks
     PortalUnavailable,
 
     #[cfg_attr(not(feature = "portal"), allow(dead_code))]

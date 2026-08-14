@@ -297,8 +297,8 @@ impl OnboardingStore {
                         path: Some(path),
                         persistence_available: true,
                     };
-                    if needs_save {
-                        let _ = store.save();
+                    if needs_save && let Err(err) = store.save() {
+                        warn!("Failed to persist migrated onboarding state: {err}");
                     }
                     return store;
                 }
@@ -691,7 +691,9 @@ fn recover_onboarding_file(path: PathBuf, _raw: Option<&str>) -> OnboardingStore
         path: Some(path),
         persistence_available: true,
     };
-    let _ = store.save();
+    if let Err(err) = store.save() {
+        warn!("Failed to persist recovered onboarding state: {err}");
+    }
     store
 }
 

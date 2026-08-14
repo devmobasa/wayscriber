@@ -3,7 +3,9 @@ use wayland_client::protocol::wl_output;
 /// Geometry and scale details for the active output, used for cropping fallback captures.
 #[derive(Clone, Debug)]
 pub struct OutputGeometry {
+    #[allow(dead_code)] // part of the output snapshot; tests read origin via physical_origin
     pub logical_x: i32,
+    #[allow(dead_code)] // part of the output snapshot; tests read origin via physical_origin
     pub logical_y: i32,
     pub logical_width: u32,
     pub logical_height: u32,
@@ -120,6 +122,7 @@ impl OutputGeometry {
     ///
     /// Portal desktop screenshots must use [`Self::portal_crop_origin`] instead:
     /// mixed-scale layouts are not `logical * this output's scale`.
+    #[allow(dead_code)] // used by geometry tests; portal crop uses screenshot_origin
     pub fn physical_origin(&self) -> (i32, i32) {
         (
             self.logical_x.saturating_mul(self.scale),

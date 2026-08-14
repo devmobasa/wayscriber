@@ -75,6 +75,9 @@ impl ToolbarSurface {
             )
             .map_err(|err| anyhow!("failed to create a {phys_w}x{phys_h} buffer: {err}"))?;
 
+        // SAFETY: `canvas` is the SlotPool buffer for this toolbar surface.
+        // Cairo wraps those bytes as ARgb32 with stride `phys_w * 4`. The
+        // surface is flushed and dropped before the buffer is committed.
         let surface = unsafe {
             cairo::ImageSurface::create_for_data_unsafe(
                 canvas.as_mut_ptr(),

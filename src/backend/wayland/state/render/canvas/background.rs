@@ -53,8 +53,11 @@ impl WaylandState {
         });
 
         if let Some((image, cache_key, zoom_render_active)) = background_image {
-            // SAFETY: we create a Cairo surface borrowing our owned buffer; it is dropped
-            // before commit, and we hold the buffer alive via `image.data`.
+            // SAFETY: Cairo borrows `image.data` for this surface. The buffer
+            // is owned by `image` and stays alive until the surface is dropped
+            // (before Wayland commit). The API wants `*mut u8` even though this
+            // path only reads pixels; we never write through the pointer, and
+            // no other alias mutates the buffer while Cairo holds it.
             let surface = unsafe {
                 cairo::ImageSurface::create_for_data_unsafe(
                     image.data.as_ptr() as *mut u8,
