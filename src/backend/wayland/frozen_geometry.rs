@@ -1,14 +1,19 @@
 use wayland_client::protocol::wl_output;
 
 /// Geometry and scale details for the active output, used for cropping fallback captures.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OutputGeometry {
+    #[allow(dead_code)] // part of the output snapshot; tests read origin via physical_origin
     pub logical_x: i32,
+    #[allow(dead_code)] // part of the output snapshot; tests read origin via physical_origin
     pub logical_y: i32,
     pub logical_width: u32,
     pub logical_height: u32,
     pub scale: i32,
     pub transform: wl_output::Transform,
+    /// Origin of this output inside a full-desktop screenshot, walking every
+    /// known output so mixed-DPI layouts are not `logical * this_output.scale`.
+    pub screenshot_origin: Option<(u32, u32)>,
 }
 
 impl OutputGeometry {
@@ -31,6 +36,7 @@ impl OutputGeometry {
             logical_height: lh as u32,
             scale,
             transform,
+            screenshot_origin: None,
         })
     }
 }
@@ -57,6 +63,13 @@ mod tests {
         assert_eq!(geo.transform, wl_output::Transform::_270);
         assert_eq!(geo.physical_size(), (3840, 2160));
         assert_eq!(geo.physical_origin(), (20, 40));
+        assert_eq!(geo.portal_crop_origin(3840, 2160), Some((0, 0)));
+        assert_eq!(geo.portal_crop_origin(8000, 2160), None);
+        assert_eq!(
+            geo.with_screenshot_origin(Some((6, 0)))
+                .portal_crop_origin(8000, 2160),
+            Some((6, 0))
+        );
     }
 
     #[test]
@@ -106,11 +119,36 @@ impl OutputGeometry {
         )
     }
 
-    /// Returns physical pixel origin.
+    /// Returns physical pixel origin of the logical position on this output.
+    ///
+    /// Portal desktop screenshots must use [`Self::portal_crop_origin`] instead:
+    /// mixed-scale layouts are not `logical * this output's scale`, and an
+    /// unknown origin must not be treated as `(0, 0)` unless the capture is
+    /// already this output's physical size.
+    #[allow(dead_code)] // used by geometry tests; portal crop uses screenshot_origin
     pub fn physical_origin(&self) -> (i32, i32) {
         (
             self.logical_x.saturating_mul(self.scale),
             self.logical_y.saturating_mul(self.scale),
         )
+    }
+
+    pub fn with_screenshot_origin(mut self, origin: Option<(u32, u32)>) -> Self {
+        self.screenshot_origin = origin;
+        self
+    }
+
+    /// Crop origin inside a portal/desktop screenshot of `image_width` ×
+    /// `image_height`.
+    ///
+    /// Unknown origin is `(0, 0)` only when those dimensions are this output's
+    /// physical size (a single-output capture). Otherwise the origin stays
+    /// unknown so a multi-output shot is not cropped from the first monitor.
+    pub fn portal_crop_origin(&self, image_width: u32, image_height: u32) -> Option<(u32, u32)> {
+        if let Some(origin) = self.screenshot_origin {
+            return Some(origin);
+        }
+        let (phys_width, phys_height) = self.physical_size();
+        (image_width == phys_width && image_height == phys_height).then_some((0, 0))
     }
 }

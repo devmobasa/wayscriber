@@ -1,3 +1,4 @@
+use wayscriber::config::action_label;
 use wayscriber::config::action_meta_iter;
 use wayscriber::config::keybindings::KeybindingsConfig;
 
@@ -10,6 +11,31 @@ use crate::models::KeybindingsTabId;
 fn parse_keybinding_list_trims_and_ignores_empty() {
     let parsed = parse_keybinding_list(" Ctrl+Z, , Alt+K ").expect("parse succeeds");
     assert_eq!(parsed, vec!["Ctrl+Z".to_string(), "Alt+K".to_string()]);
+}
+
+#[test]
+fn parse_keybinding_list_rejects_unparseable_shortcuts() {
+    let error = parse_keybinding_list("Ctrl+Shift, Escape").expect_err("modifiers-only is invalid");
+    assert!(
+        error.contains("No key specified"),
+        "parser error should name the problem: {error}"
+    );
+}
+
+#[test]
+fn keybindings_draft_to_config_rejects_unparseable_shortcuts() {
+    let mut draft = KeybindingsDraft::from_config(&KeybindingsConfig::default());
+    draft.set(KeybindingField::Exit, "Ctrl+Shift".to_string());
+
+    let errors = draft
+        .to_config()
+        .expect_err("unparseable shortcuts must not save");
+    assert!(
+        errors
+            .iter()
+            .any(|err| err.field == "keybindings.exit" && err.message.contains("No key specified")),
+        "expected a field error for exit, got {errors:?}"
+    );
 }
 
 #[test]
@@ -199,6 +225,29 @@ fn every_configurable_config_key_resolves_to_a_field() {
         unmapped.is_empty(),
         "these `[keybindings]` keys have no KeybindingField, so an applied \
          migration would silently skip them: {unmapped:?}"
+    );
+}
+
+#[test]
+fn every_keybinding_field_label_matches_action_meta() {
+    let mut unlabeled = Vec::new();
+    let mut mismatched = Vec::new();
+    for field in KeybindingField::all() {
+        let Some(action) = field.action() else {
+            unlabeled.push(field.field_key());
+            continue;
+        };
+        if field.label() != action_label(action) {
+            mismatched.push(field.field_key());
+        }
+    }
+    assert!(
+        unlabeled.is_empty(),
+        "these fields have no Action, so their labels cannot follow action_meta: {unlabeled:?}"
+    );
+    assert!(
+        mismatched.is_empty(),
+        "these fields still use a private label instead of action_meta: {mismatched:?}"
     );
 }
 

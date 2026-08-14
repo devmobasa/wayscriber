@@ -38,6 +38,9 @@ impl AboutWindowState {
             )
             .context("Failed to create about window buffer")?;
 
+        // SAFETY: `canvas` is the SlotPool buffer for this frame. Cairo wraps
+        // those bytes as ARgb32 with stride `phys_w * 4`. The surface and
+        // context are dropped before the buffer is attached to Wayland.
         let surface = unsafe {
             cairo::ImageSurface::create_for_data_unsafe(
                 canvas.as_mut_ptr(),

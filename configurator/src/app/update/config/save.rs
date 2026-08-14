@@ -80,7 +80,15 @@ impl ConfiguratorApp {
         document: &ConfigDocument,
     ) -> Result<Config, Vec<FormError>> {
         let mut config = self.draft.to_config(document.config())?;
+        let before_clamp = config.clone();
         self.pending_save_validation = config.validate_and_clamp();
+        if save_clamped_non_keybinding_fields(&before_clamp, &config) {
+            self.pending_save_validation = Default::default();
+            return Err(vec![FormError::new(
+                "config",
+                "Some values are outside their allowed ranges and would be changed on save. Fix them before saving.",
+            )]);
+        }
         Ok(config)
     }
 
@@ -137,4 +145,10 @@ impl ConfiguratorApp {
 
         Vec::new()
     }
+}
+
+fn save_clamped_non_keybinding_fields(before: &Config, after: &Config) -> bool {
+    let mut before = before.clone();
+    before.keybindings = after.keybindings.clone();
+    format!("{before:?}") != format!("{after:?}")
 }

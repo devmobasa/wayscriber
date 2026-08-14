@@ -37,11 +37,13 @@ wayscriber-configurator --open 'drawing?search=Quick Colors'
 ```
 
 Destinations are `ui/toolbar`, `ui/toolbar-visibility`, `ui/status-bar`, `ui/click-highlight`,
-`ui/input-hud`, `drawing`, `presets`, `boards`, `history`, `session`, `keybindings`, and
-`keybindings/<section>` for `general`, `drawing`, `tools`, `selection`, `history`, `boards`,
-`ui-modes`, `capture-view`, and `presets`. Append `?search=<TERM>` to any of them to open with the
-search box filled. `--help` prints the same list. An unknown destination falls back to the normal
-initial screen and says so in the status banner.
+`ui/input-hud`, `ui/help-overlay`, `ui/presenter-mode`, `drawing`, `presets`, `boards`, `history`,
+`session`, `capture`, `performance`, `daemon`, `arrow`, `render-profiles`, `keybindings`,
+and `keybindings/<section>` for `general`, `drawing`, `tools`, `selection`, `history`, `boards`,
+`ui-modes`, `capture-view`, and `presets`. Builds with tablet input also accept `tablet`.
+Append `?search=<TERM>` to any of them to open with the search box filled. `--help` prints the
+same list. An unknown destination falls back to the normal initial screen and says so in the
+status banner.
 
 Toolbar pin, top placement offsets, the top strip's display form, item visibility/order, and board
 pin controls are labeled as configured defaults because the running overlay can store later

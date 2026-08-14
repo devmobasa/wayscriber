@@ -90,6 +90,40 @@ fn config_draft_to_config_reports_errors() {
 }
 
 #[test]
+fn config_draft_to_config_rejects_out_of_range_numbers() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    draft.drawing_default_thickness = "99".to_string();
+    draft.arrow_angle = "90".to_string();
+    draft.history_undo_all_delay_ms = "1".to_string();
+
+    let errors = draft
+        .to_config(&Config::default())
+        .expect_err("out-of-range numbers must not convert");
+    let fields: Vec<&str> = errors.iter().map(|err| err.field.as_str()).collect();
+
+    assert!(fields.contains(&"drawing.default_thickness"));
+    assert!(fields.contains(&"arrow.angle_degrees"));
+    assert!(fields.contains(&"history.undo_all_delay_ms"));
+}
+
+#[test]
+fn config_draft_rejects_path_escaping_save_names() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    draft.capture_filename_template = "../evil_%Y".to_string();
+    draft.capture_format = "png/../../x".to_string();
+    draft.export_pdf_filename_template = "foo/bar".to_string();
+
+    let errors = draft
+        .to_config(&Config::default())
+        .expect_err("path-escaping save names must not save");
+    let fields: Vec<&str> = errors.iter().map(|err| err.field.as_str()).collect();
+
+    assert!(fields.contains(&"capture.filename_template"));
+    assert!(fields.contains(&"capture.format"));
+    assert!(fields.contains(&"export.pdf.filename_template"));
+}
+
+#[test]
 fn sparse_configurator_no_op_save_remains_byte_for_byte_sparse() {
     let temp = crate::test_temp::tempdir().expect("create temp directory");
     let path = temp.path().join("config.toml");
@@ -648,6 +682,27 @@ fn config_draft_round_trips_render_profiles() {
         round_trip.render_profiles.profiles[0].mappings[0].from,
         "#000000"
     );
+}
+
+#[test]
+fn config_draft_round_trips_board_pan_settings() {
+    let mut config = Config::default();
+    config.boards = Some(wayscriber::config::BoardsConfig {
+        pan_enabled: false,
+        show_pan_badge: false,
+        ..Default::default()
+    });
+
+    let draft = ConfigDraft::from_config(&config);
+    assert!(!draft.boards.pan_enabled);
+    assert!(!draft.boards.show_pan_badge);
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("board pan settings should round trip");
+    let boards = round_trip.boards.expect("boards section should be saved");
+    assert!(!boards.pan_enabled);
+    assert!(!boards.show_pan_badge);
 }
 
 #[test]

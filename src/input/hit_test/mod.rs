@@ -30,24 +30,7 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
             shapes::freehand_hit(points, point, *thick, tolerance)
         }
         Shape::FreehandPressure { points, .. } => {
-            // Check hit against variable width segments
-            if points.is_empty() {
-                return false;
-            }
-            // Simplified hit test: check each segment against max thickness or per-segment thickness
-            // For precise hit testing, we'd check each segment with its specific width.
-            // Using max thickness is a safe over-approximation for now, or we can iterate.
-
-            // Let's iterate segments for better precision
-            for i in 0..points.len() - 1 {
-                let (x1, y1, t1) = points[i];
-                let (x2, y2, t2) = points[i + 1];
-                let max_segment_thick = t1.max(t2) as f64;
-                if shapes::segment_hit(x1, y1, x2, y2, max_segment_thick, point, tolerance) {
-                    return true;
-                }
-            }
-            false
+            shapes::freehand_pressure_hit(points, point, tolerance)
         }
         Shape::Line {
             x1,

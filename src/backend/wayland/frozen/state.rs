@@ -115,6 +115,9 @@ pub struct FrozenState {
     pub(super) active_output: Option<wl_output::WlOutput>,
     pub(super) active_output_id: Option<u32>,
     pub(super) active_geometry: Option<OutputGeometry>,
+    /// Bumped when freeze/zoom crop geometry actually changes so in-flight
+    /// portal captures can be rejected after a layout change.
+    pub(super) output_layout_generation: u64,
     pub(super) direct_capture: Option<DirectCaptureAttempt>,
     pub(super) image: Option<FrozenImage>,
     image_target_dimensions: Option<(u32, u32)>,
@@ -165,6 +168,7 @@ impl FrozenState {
             active_output: None,
             active_output_id: None,
             active_geometry: None,
+            output_layout_generation: 0,
             direct_capture: None,
             image: None,
             image_target_dimensions: None,
@@ -201,7 +205,14 @@ impl FrozenState {
     }
 
     pub fn set_active_geometry(&mut self, geometry: Option<OutputGeometry>) {
+        if self.active_geometry != geometry {
+            self.output_layout_generation = self.output_layout_generation.wrapping_add(1);
+        }
         self.active_geometry = geometry;
+    }
+
+    pub fn active_geometry(&self) -> Option<&OutputGeometry> {
+        self.active_geometry.as_ref()
     }
 
     pub fn active_output_matches(&self, info_id: u32) -> bool {
@@ -392,16 +403,14 @@ impl FrozenState {
         if target_width == 0 || target_height == 0 {
             return None;
         }
-        let (origin_x, origin_y) = source_geometry
-            .or(self.active_geometry.as_ref())
-            .map(|geo| geo.physical_origin())
-            .unwrap_or((0, 0));
+        let geometry = source_geometry.or(self.active_geometry.as_ref())?;
+        let (origin_x, origin_y) = geometry.portal_crop_origin(image.width, image.height)?;
         let (width, height, data) = crop_argb(
             &image.data,
             image.width,
             image.height,
-            origin_x.max(0) as u32,
-            origin_y.max(0) as u32,
+            origin_x,
+            origin_y,
             target_width,
             target_height,
         )?;
@@ -633,6 +642,124 @@ mod tests {
         assert!(
             state
                 .activate_pending_image(6, 4, &mut input_state)
+                .is_err()
+        );
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
+    }
+
+    fn desktop_geometry(
+        logical_x: i32,
+        logical_y: i32,
+        logical_width: u32,
+        logical_height: u32,
+        scale: i32,
+        screenshot_origin: Option<(u32, u32)>,
+    ) -> OutputGeometry {
+        OutputGeometry {
+            logical_x,
+            logical_y,
+            logical_width,
+            logical_height,
+            scale,
+            transform: wl_output::Transform::Normal,
+            screenshot_origin,
+        }
+    }
+
+    #[test]
+    fn output_layout_generation_bumps_only_when_geometry_changes() {
+        let mut state = FrozenState::new(None);
+        assert_eq!(state.output_layout_generation, 0);
+        let first = desktop_geometry(0, 0, 4, 1, 1, Some((0, 0)));
+        state.set_active_geometry(Some(first.clone()));
+        assert_eq!(state.output_layout_generation, 1);
+        state.set_active_geometry(Some(first));
+        assert_eq!(state.output_layout_generation, 1);
+        state.set_active_geometry(Some(desktop_geometry(0, 0, 4, 1, 1, Some((6, 0)))));
+        assert_eq!(state.output_layout_generation, 2);
+    }
+
+    #[test]
+    fn desktop_capture_crops_from_screenshot_origin_not_logical_times_scale() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        let mut data = Vec::new();
+        for pixel in 0u8..10 {
+            data.extend_from_slice(&[pixel, pixel, pixel, 255]);
+        }
+        let geometry = desktop_geometry(0, 0, 4, 1, 1, Some((6, 0)));
+        assert_eq!(geometry.physical_origin(), (0, 0));
+
+        state.set_pending_desktop_image(
+            FrozenImage {
+                width: 10,
+                height: 1,
+                stride: 40,
+                data,
+            },
+            None,
+            Some(geometry),
+        );
+
+        state
+            .activate_pending_image(4, 1, &mut input_state)
+            .expect("mixed-scale screenshot origin should crop the active output");
+
+        let image = state.image().expect("the frozen image should be active");
+        assert_eq!(
+            image.data,
+            vec![6, 6, 6, 255, 7, 7, 7, 255, 8, 8, 8, 255, 9, 9, 9, 255]
+        );
+    }
+
+    #[test]
+    fn desktop_capture_crops_at_buffer_origin_when_screenshot_origin_is_unknown() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        let geometry = desktop_geometry(10, 20, 2, 1, 2, None);
+        assert_eq!(geometry.physical_origin(), (20, 40));
+        assert_eq!(geometry.portal_crop_origin(4, 2), Some((0, 0)));
+        assert_eq!(geometry.portal_crop_origin(10, 2), None);
+
+        state.set_pending_desktop_image(
+            FrozenImage {
+                width: 4,
+                height: 2,
+                stride: 16,
+                data: vec![7; 4 * 2 * 4],
+            },
+            None,
+            Some(geometry),
+        );
+
+        state
+            .activate_pending_image(4, 2, &mut input_state)
+            .expect("a single-output desktop shot should crop from the buffer origin");
+        assert!(state.image().is_some());
+        assert!(input_state.frozen_active());
+    }
+
+    #[test]
+    fn desktop_capture_fails_when_screenshot_origin_is_unknown_and_image_is_larger() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        let geometry = desktop_geometry(10, 20, 2, 1, 2, None);
+
+        state.set_pending_desktop_image(
+            FrozenImage {
+                width: 10,
+                height: 2,
+                stride: 40,
+                data: vec![7; 10 * 2 * 4],
+            },
+            None,
+            Some(geometry),
+        );
+
+        assert!(
+            state
+                .activate_pending_image(4, 2, &mut input_state)
                 .is_err()
         );
         assert!(state.image().is_none());

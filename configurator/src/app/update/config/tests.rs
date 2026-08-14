@@ -368,6 +368,27 @@ fn a_draft_the_converter_rejects_keeps_the_document() {
     ));
 }
 
+/// Out-of-range numbers used to parse, then `validate_and_clamp` wrote the
+/// clamped value. The converter must refuse them so Save cannot change them.
+#[test]
+fn a_draft_with_out_of_range_numbers_keeps_the_document() {
+    let (mut app, _dir, _path) = app_with_config_file("");
+    app.draft.drawing_default_thickness = "99".to_string();
+
+    let effects = app.handle_save_requested();
+
+    assert!(effects.is_empty());
+    assert!(!app.is_saving);
+    assert!(
+        app.base_document.is_some(),
+        "a refused save must not take the document with it"
+    );
+    assert!(status_contains(
+        &app.status,
+        "drawing.default_thickness: Expected 1-50"
+    ));
+}
+
 /// Hex text the parser rejects was never applied to the draft, so a save
 /// would write the last value that did parse and the reload would replace
 /// the text with it. The Save is refused instead.
@@ -747,8 +768,7 @@ fn a_save_without_shortcut_trouble_stays_a_plain_success() {
 }
 
 /// A shortcut the editor accepts as text but the parser rejects never
-/// reaches the file either, so the save status is the only place it can be
-/// reported.
+/// reaches a write. Save reports the field error instead of asking for one.
 #[test]
 fn a_typed_shortcut_the_parser_rejects_is_reported_by_the_save() {
     let (mut app, _dir, _path) = app_with_config_file(&format!(
@@ -758,16 +778,20 @@ fn a_typed_shortcut_the_parser_rejects_is_reported_by_the_save() {
         .keybindings
         .set(KeybindingField::ClearCanvas, "Ctrl+Shift".to_string());
 
-    let _ = save_draft(&mut app);
+    let effects = app.handle_save_requested();
 
+    assert!(effects.is_empty());
+    assert!(!app.is_saving);
     assert!(
-        matches!(app.status, StatusMessage::Warning(_)),
-        "unexpected status: {:?}",
-        app.status
+        app.base_document.is_some(),
+        "a refused save must not take the document with it"
     );
-    assert!(status_contains(&app.status, "Ctrl+Shift"));
-    assert!(status_contains(&app.status, "Clear Canvas"));
-    assert!(status_contains(&app.status, "could not be parsed"));
+    assert!(status_contains(
+        &app.status,
+        "Cannot save due to validation"
+    ));
+    assert!(status_contains(&app.status, "keybindings.clear_canvas"));
+    assert!(status_contains(&app.status, "No key specified"));
 }
 
 /// A reload replaces the draft and base document when it lands, so a save

@@ -1,13 +1,11 @@
 use super::super::super::core::Frame;
-use super::super::super::types::{ShapeId, UndoAction};
+use super::super::super::types::{DrawnShape, ShapeId, UndoAction};
 
 impl Frame {
     pub(super) fn apply_action(&mut self, action: &UndoAction) {
         match action {
             UndoAction::Create { shapes } => {
-                for (offset, (index, shape)) in shapes.iter().enumerate() {
-                    self.insert_existing(index + offset, shape.clone());
-                }
+                self.restore_shapes_at_recorded_indices(shapes);
             }
             UndoAction::Delete { shapes } => {
                 for (_, shape) in shapes {
@@ -50,10 +48,7 @@ impl Frame {
                 }
             }
             UndoAction::Delete { shapes } => {
-                for (offset, (index, shape)) in shapes.iter().enumerate() {
-                    let insert_at = (index + offset).min(self.shapes.len());
-                    self.insert_existing(insert_at, shape.clone());
-                }
+                self.restore_shapes_at_recorded_indices(shapes);
             }
             UndoAction::Modify {
                 shape_id, before, ..
@@ -76,6 +71,14 @@ impl Frame {
                     self.apply_inverse(action);
                 }
             }
+        }
+    }
+
+    fn restore_shapes_at_recorded_indices(&mut self, shapes: &[(usize, DrawnShape)]) {
+        let mut items: Vec<_> = shapes.iter().collect();
+        items.sort_by_key(|(index, _)| *index);
+        for (index, shape) in items {
+            self.insert_existing((*index).min(self.shapes.len()), shape.clone());
         }
     }
 

@@ -78,7 +78,7 @@ fn persist_final_session_direct(state: &mut WaylandState) -> Result<(), anyhow::
     if should_skip_protected_session_save(state, &options) {
         return Ok(());
     }
-    let snapshot = session::snapshot_from_input(&state.input_state, &options);
+    let snapshot = state.input_state.snapshot_for_persistence(&options);
     let has_board_data = snapshot
         .as_ref()
         .is_some_and(session::SessionSnapshot::has_board_data);
@@ -138,7 +138,7 @@ fn persist_final_session(state: &mut WaylandState) -> Result<(), anyhow::Error> 
         options.session_file_path().display()
     );
     let snapshot_started = Instant::now();
-    let snapshot = session::snapshot_from_input(&state.input_state, &options);
+    let snapshot = state.input_state.snapshot_for_persistence(&options);
     log_snapshot_capture(
         SessionSaveReason::Shutdown,
         &options,
@@ -239,7 +239,7 @@ pub(super) fn autosave_if_due(state: &mut WaylandState, now: Instant) -> Result<
 
     let started = Instant::now();
     let snapshot_started = Instant::now();
-    let snapshot = session::snapshot_from_input(&state.input_state, &options);
+    let snapshot = state.input_state.snapshot_for_persistence(&options);
     log_snapshot_capture(
         SessionSaveReason::Autosave,
         &options,
@@ -537,6 +537,10 @@ pub(in crate::backend::wayland) fn should_defer_for_interaction(state: &WaylandS
         state.board_panning_active(),
         state.zoom_panning_active(),
         stylus_tip_down(state),
+        matches!(
+            state.input_state.state,
+            crate::input::DrawingState::TextInput { .. }
+        ),
     )
 }
 
@@ -547,8 +551,9 @@ fn persistence_interaction_active(
     board_pan: bool,
     zoom_pan: bool,
     stylus_tip: bool,
+    text_editing: bool,
 ) -> bool {
-    pointer || toolbar_drag || move_drag || board_pan || zoom_pan || stylus_tip
+    pointer || toolbar_drag || move_drag || board_pan || zoom_pan || stylus_tip || text_editing
 }
 
 pub(in crate::backend::wayland) fn interaction_defer_interval() -> Duration {

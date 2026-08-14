@@ -282,11 +282,7 @@ fn normalize_shortcut_for_portal(input: &str) -> Result<String, String> {
 fn normalize_shortcut(input: &str, gnome_style: bool) -> Result<String, String> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
-        return Ok(if gnome_style {
-            "<Super>g".to_string()
-        } else {
-            "<Ctrl><Shift>g".to_string()
-        });
+        return Err("Shortcut cannot be empty.".to_string());
     }
     if trimmed.contains('<') && trimmed.contains('>') {
         return Ok(trimmed.to_string());
@@ -459,6 +455,18 @@ mod tests {
         let error =
             normalize_shortcut_for_portal("Hyper+G").expect_err("expected invalid shortcut");
         assert!(error.contains("Unsupported modifier"));
+    }
+
+    #[test]
+    fn normalize_shortcut_rejects_empty_input() {
+        assert_eq!(
+            normalize_shortcut_for_gnome("").expect_err("empty gnome shortcut"),
+            "Shortcut cannot be empty."
+        );
+        assert_eq!(
+            normalize_shortcut_for_portal("   ").expect_err("blank portal shortcut"),
+            "Shortcut cannot be empty."
+        );
     }
 
     #[test]

@@ -427,7 +427,10 @@ fn finish_thread_within(
         std::thread::yield_now();
     }
     if !handle.is_finished() {
-        thread.take();
+        // Bounded shutdown: drop the JoinHandle to detach. GTK may keep
+        // running until process exit; detach lets the OS reap the thread if
+        // it later finishes.
+        let _ = thread.take();
         return ThreadShutdownOutcome::TimedOut;
     }
     let handle = thread
@@ -515,7 +518,7 @@ impl Drop for GtkToolbarBridge {
             }
             ThreadShutdownOutcome::TimedOut => {
                 log::warn!(
-                    "GTK toolbar thread did not stop within {:?}; detaching it safely",
+                    "GTK toolbar thread did not stop within {:?}; detaching it and leaving it running until process exit",
                     GTK_THREAD_SHUTDOWN_TIMEOUT
                 );
             }

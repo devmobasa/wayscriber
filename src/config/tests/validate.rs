@@ -417,6 +417,25 @@ fn validate_export_pdf_sanitizes_numbers_colors_and_bad_templates() {
 }
 
 #[test]
+fn validate_and_clamp_rejects_path_escaping_save_names() {
+    let mut config = Config::default();
+    config.capture.filename_template = "../evil_%Y".to_string();
+    config.capture.format = "png/../../x".to_string();
+    config.export.pdf.filename_template = Some("foo/bar".to_string());
+    config.export.pdf.all_boards_filename_template = Some("/tmp/x".to_string());
+
+    config.validate_and_clamp();
+
+    assert_eq!(
+        config.capture.filename_template,
+        Config::default().capture.filename_template
+    );
+    assert_eq!(config.capture.format, "png");
+    assert_eq!(config.export.pdf.filename_template, None);
+    assert_eq!(config.export.pdf.all_boards_filename_template, None);
+}
+
+#[test]
 fn validate_export_pdf_ignores_template_when_label_content_is_not_custom() {
     let mut config = Config::default();
     config.export.pdf.labels.content = PdfLabelContentMode::DocumentPage;

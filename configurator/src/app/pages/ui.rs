@@ -105,13 +105,14 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             let ui_summary = summary.tab(TabId::Ui);
             let searching = summary.is_active();
             let mut any_visible = false;
+            // Reveal before switching and hide after: the stack drops a
+            // visible child that goes invisible, and picking the section the
+            // model asks for first keeps that fallback out of the way.
             for (tab, stack_page) in &stack_pages {
-                // A hidden `GtkStackPage` also drops its switcher button,
-                // which is how the Iced view narrowed the sub-tab row.
                 let visible =
                     !searching || ui_summary.is_some_and(|summary| summary.ui_tab_visible(*tab));
-                if stack_page.is_visible() != visible {
-                    stack_page.set_visible(visible);
+                if visible && !stack_page.is_visible() {
+                    stack_page.set_visible(true);
                 }
                 any_visible |= visible;
             }
@@ -125,6 +126,13 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             let name = app.active_ui_tab.title();
             if stack.visible_child_name().as_deref() != Some(name) {
                 stack.set_visible_child_name(name);
+            }
+            for (tab, stack_page) in &stack_pages {
+                let visible =
+                    !searching || ui_summary.is_some_and(|summary| summary.ui_tab_visible(*tab));
+                if !visible && stack_page.is_visible() {
+                    stack_page.set_visible(false);
+                }
             }
         }));
     }

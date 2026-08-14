@@ -3,6 +3,7 @@ use super::Config;
 mod arrow;
 mod board;
 mod boards;
+mod capture;
 mod drawing;
 mod export;
 mod fonts;
@@ -81,6 +82,7 @@ impl Config {
         self.validate_ui();
         self.validate_render_profiles();
         self.validate_export();
+        self.validate_capture();
         let keybindings = self.validate_keybindings();
         self.validate_session();
         self.validate_updates();

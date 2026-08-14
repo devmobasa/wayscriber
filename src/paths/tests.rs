@@ -301,3 +301,17 @@ fn expand_tilde_replaces_home() {
         None => unsafe { env::remove_var(HOME_ENV) },
     }
 }
+
+#[test]
+fn is_single_path_component_rejects_path_escapes() {
+    assert!(is_single_path_component("screenshot_%Y-%m-%d_%H%M%S"));
+    assert!(is_single_path_component("shot.png"));
+    assert!(!is_single_path_component(""));
+    assert!(!is_single_path_component("."));
+    assert!(!is_single_path_component(".."));
+    assert!(!is_single_path_component("../evil"));
+    assert!(!is_single_path_component("foo/bar"));
+    assert!(!is_single_path_component("/abs"));
+    assert!(!is_single_path_component("foo\\bar"));
+    assert!(!is_single_path_component("foo\0bar"));
+}

@@ -1,5 +1,4 @@
 use super::super::*;
-use super::backdrop::desktop_backdrop_output_geometry_from_info;
 use crate::input::state::{Toast, ToastPriority};
 
 impl WaylandState {
@@ -202,18 +201,5 @@ impl WaylandState {
             geometry: self.desktop_backdrop_geometry(),
             operation,
         }
-    }
-
-    fn desktop_backdrop_geometry(&self) -> Option<DesktopBackdropGeometry> {
-        let output = self.surface.current_output()?;
-        let active_info = self.output_state.info(&output)?;
-        let active = desktop_backdrop_output_geometry_from_info(&active_info)?;
-        let mut outputs = Vec::new();
-        for output in self.output_state.outputs() {
-            let info = self.output_state.info(&output)?;
-            outputs.push(desktop_backdrop_output_geometry_from_info(&info)?);
-        }
-
-        DesktopBackdropGeometry::from_outputs(active, &outputs, active_info.scale_factor.max(1))
     }
 }

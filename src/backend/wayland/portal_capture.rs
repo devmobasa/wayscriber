@@ -40,8 +40,7 @@ pub(crate) const fn portal_output_matches(target: Option<u32>, current: Option<u
     match (target, current) {
         (Some(target_output), Some(current_output)) => target_output == current_output,
         (None, None) => true,
-        (None, Some(_)) => true,
-        (Some(_), None) => false,
+        (None, Some(_)) | (Some(_), None) => false,
     }
 }
 
@@ -65,14 +64,18 @@ pub(crate) fn crop_argb(
         return None;
     }
 
-    let mut out = vec![0u8; (cw * ch * 4) as usize];
-    let src_stride = (width * 4) as usize;
-    let dst_stride = (cw * 4) as usize;
-    for row in 0..ch as usize {
-        let src_offset = ((y as usize + row) * src_stride) + (x as usize * 4);
-        let dst_offset = row * dst_stride;
-        let end = src_offset + dst_stride;
-        if end > data.len() || dst_offset + dst_stride > out.len() {
+    let pixel_count = cw.checked_mul(ch)?;
+    let byte_count = pixel_count.checked_mul(4)?;
+    let mut out = vec![0u8; usize::try_from(byte_count).ok()?];
+    let src_stride = usize::try_from(width.checked_mul(4)?).ok()?;
+    let dst_stride = usize::try_from(cw.checked_mul(4)?).ok()?;
+    for row in 0..usize::try_from(ch).ok()? {
+        let src_offset = (usize::try_from(y).ok()? + row)
+            .checked_mul(src_stride)?
+            .checked_add(usize::try_from(x).ok()?.checked_mul(4)?)?;
+        let dst_offset = row.checked_mul(dst_stride)?;
+        let end = src_offset.checked_add(dst_stride)?;
+        if end > data.len() || dst_offset.checked_add(dst_stride)? > out.len() {
             return None;
         }
         out[dst_offset..dst_offset + dst_stride]
@@ -83,7 +86,7 @@ pub(crate) fn crop_argb(
 
 #[cfg(test)]
 mod tests {
-    use super::crop_argb;
+    use super::{crop_argb, portal_output_matches};
 
     #[test]
     fn crop_argb_respects_bounds() {
@@ -103,5 +106,19 @@ mod tests {
         assert!(crop_argb(&[0u8; 4], 1, 1, 2, 0, 1, 1).is_none());
         // y beyond height.
         assert!(crop_argb(&[0u8; 4], 1, 1, 0, 2, 1, 1).is_none());
+    }
+
+    #[test]
+    fn crop_argb_rejects_dimensions_that_would_overflow() {
+        assert!(crop_argb(&[0u8; 4], u32::MAX, 1, 0, 0, u32::MAX, 1).is_none());
+    }
+
+    #[test]
+    fn portal_output_matches_requires_both_sides_or_neither() {
+        assert!(portal_output_matches(Some(1), Some(1)));
+        assert!(!portal_output_matches(Some(1), Some(2)));
+        assert!(portal_output_matches(None, None));
+        assert!(!portal_output_matches(None, Some(1)));
+        assert!(!portal_output_matches(Some(1), None));
     }
 }

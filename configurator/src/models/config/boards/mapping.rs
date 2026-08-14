@@ -116,6 +116,8 @@ impl BoardsDraft {
             max_count: boards.max_count.to_string(),
             auto_create: boards.auto_create,
             show_board_badge: boards.show_board_badge,
+            pan_enabled: boards.pan_enabled,
+            show_pan_badge: boards.show_pan_badge,
             persist_customizations: boards.persist_customizations,
             default_board: boards.default_board.clone(),
             items: boards
@@ -133,6 +135,8 @@ impl BoardsDraft {
         });
         config.auto_create = self.auto_create;
         config.show_board_badge = self.show_board_badge;
+        config.pan_enabled = self.pan_enabled;
+        config.show_pan_badge = self.show_pan_badge;
         config.persist_customizations = self.persist_customizations;
 
         let default_board = self.default_board.trim();

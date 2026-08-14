@@ -11,6 +11,7 @@ use relm4::{adw, gtk};
 use adw::prelude::*;
 
 use crate::messages::Message;
+use crate::models::keybindings::parse_keybinding_list;
 use crate::models::{KeybindingField, KeybindingsTabId, TabId};
 
 use super::super::search::AppSearchSummary;
@@ -135,6 +136,27 @@ fn binding_row(
         // Blocked: the draft owns this list, and a load reporting its own
         // value back as a user edit clears that load's diagnostics.
         set_text_blocked(&row, &handler, value);
+
+        let parse_error = parse_keybinding_list(value).err();
+        let has_error_class = row.has_css_class("error");
+        match parse_error {
+            Some(message) => {
+                if !has_error_class {
+                    row.add_css_class("error");
+                }
+                if row.tooltip_text().as_deref() != Some(message.as_str()) {
+                    row.set_tooltip_text(Some(&message));
+                }
+            }
+            None => {
+                if has_error_class {
+                    row.remove_css_class("error");
+                }
+                if row.tooltip_text().is_some() {
+                    row.set_tooltip_text(None);
+                }
+            }
+        }
 
         let default = app
             .defaults

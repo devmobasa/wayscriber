@@ -1,6 +1,6 @@
 use super::super::{
     Config, PDF_LABEL_DEFAULT_TEMPLATE, PdfLabelConfig, PdfLabelContentMode,
-    validate_pdf_label_template,
+    validate_filename_template, validate_pdf_label_template,
 };
 
 const PDF_DIMENSION_MIN: f64 = 1.0;
@@ -35,6 +35,29 @@ impl Config {
             "export.pdf.content_source_padding",
         );
         validate_pdf_labels(&mut self.export.pdf.labels);
+        sanitize_optional_filename_template(
+            &mut self.export.pdf.filename_template,
+            "export.pdf.filename_template",
+        );
+        sanitize_optional_filename_template(
+            &mut self.export.pdf.all_boards_filename_template,
+            "export.pdf.all_boards_filename_template",
+        );
+    }
+}
+
+fn sanitize_optional_filename_template(template: &mut Option<String>, path: &str) {
+    let Some(value) = template.as_deref() else {
+        return;
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        *template = None;
+        return;
+    }
+    if let Err(reason) = validate_filename_template(trimmed) {
+        log::warn!("Invalid {path} ({reason}); ignoring so capture.filename_template is used");
+        *template = None;
     }
 }
 

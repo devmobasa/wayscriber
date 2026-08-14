@@ -1,7 +1,11 @@
 use super::super::draft::ConfigDraft;
-use super::super::parse::{parse_field, parse_u8_field, parse_usize_field};
+use super::super::parse::{
+    parse_field_in_range, parse_u8_in_range, parse_usize_at_least, parse_usize_in_range,
+};
 use crate::models::error::FormError;
 use wayscriber::config::Config;
+use wayscriber::draw::{REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
+use wayscriber::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use wayscriber::input::{DragBindableTool, DragTool};
 
 impl ConfigDraft {
@@ -14,34 +18,44 @@ impl ConfigDraft {
         }
         self.drawing_quick_colors
             .apply_to_config(&mut config.drawing.quick_colors, errors);
-        parse_field(
+        parse_field_in_range(
             &self.drawing_default_thickness,
             "drawing.default_thickness",
+            MIN_STROKE_THICKNESS,
+            MAX_STROKE_THICKNESS,
             errors,
             |value| config.drawing.default_thickness = value,
         );
-        parse_field(
+        parse_field_in_range(
             &self.drawing_default_eraser_size,
             "drawing.default_eraser_size",
+            MIN_STROKE_THICKNESS,
+            MAX_STROKE_THICKNESS,
             errors,
             |value| config.drawing.default_eraser_size = value,
         );
         config.drawing.default_eraser_mode = self.drawing_default_eraser_mode.to_mode();
-        parse_field(
+        parse_field_in_range(
             &self.drawing_default_font_size,
             "drawing.default_font_size",
+            8.0,
+            72.0,
             errors,
             |value| config.drawing.default_font_size = value,
         );
-        parse_u8_field(
+        parse_u8_in_range(
             &self.drawing_polygon_sides,
             "drawing.polygon_sides",
+            REGULAR_POLYGON_MIN_SIDES,
+            REGULAR_POLYGON_MAX_SIDES,
             errors,
             |value| config.drawing.polygon_sides = value,
         );
-        parse_field(
+        parse_field_in_range(
             &self.drawing_marker_opacity,
             "drawing.marker_opacity",
+            0.05,
+            0.9,
             errors,
             |value| config.drawing.marker_opacity = value,
         );
@@ -71,31 +85,46 @@ impl ConfigDraft {
             DragBindableTool::Ellipse,
         );
         config.drawing.drag_tools = materialize_drag_tools.then(|| self.drawing_drag_tools.clone());
-        parse_field(
+        parse_field_in_range(
             &self.drawing_hit_test_tolerance,
             "drawing.hit_test_tolerance",
+            1.0,
+            20.0,
             errors,
             |value| config.drawing.hit_test_tolerance = value,
         );
-        parse_usize_field(
+        parse_usize_at_least(
             &self.drawing_hit_test_linear_threshold,
             "drawing.hit_test_linear_threshold",
+            1,
             errors,
             |value| config.drawing.hit_test_linear_threshold = value,
         );
-        parse_usize_field(
+        parse_usize_in_range(
             &self.drawing_undo_stack_limit,
             "drawing.undo_stack_limit",
+            10,
+            1000,
             errors,
             |value| config.drawing.undo_stack_limit = value,
         );
 
-        parse_field(&self.arrow_length, "arrow.length", errors, |value| {
-            config.arrow.length = value
-        });
-        parse_field(&self.arrow_angle, "arrow.angle_degrees", errors, |value| {
-            config.arrow.angle_degrees = value
-        });
+        parse_field_in_range(
+            &self.arrow_length,
+            "arrow.length",
+            5.0,
+            50.0,
+            errors,
+            |value| config.arrow.length = value,
+        );
+        parse_field_in_range(
+            &self.arrow_angle,
+            "arrow.angle_degrees",
+            15.0,
+            60.0,
+            errors,
+            |value| config.arrow.angle_degrees = value,
+        );
         config.arrow.head_at_end = self.arrow_head_at_end;
     }
 }

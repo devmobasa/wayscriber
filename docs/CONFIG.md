@@ -1377,10 +1377,11 @@ enabled = true
 # Directory for saved screenshots (supports ~ expansion)
 save_directory = "~/Pictures/Wayscriber"
 
-# Filename template (strftime-like subset: %Y, %m, %d, %H, %M, %S)
+# Filename template (strftime-like subset: %Y, %m, %d, %H, %M, %S).
+# Must be a single file name, not a path.
 filename_template = "screenshot_%Y-%m-%d_%H%M%S"
 
-# Image format (currently "png")
+# Image format: png, jpg, or jpeg
 format = "png"
 
 # Copy captures to clipboard in addition to saving files
@@ -1399,6 +1400,7 @@ ocr_languages = "eng"
 **Tips:**
 - Set `copy_to_clipboard = false` if you prefer file-only captures.
 - Clipboard-only shortcuts ignore the save directory automatically.
+- `filename_template` must be a single file name (no `/` or `..`). `format` is `png`, `jpg`, or `jpeg`.
 - `wl-clipboard`, `grim`, and `slurp` are installed automatically by deb/rpm/AUR packages. For source/tarball installs, add them manually; otherwise wayscriber falls back to `xdg-desktop-portal`.
 
 #### Copy text from screen (OCR)

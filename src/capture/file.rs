@@ -45,25 +45,71 @@ pub fn generate_filename(template: &str, format: &str) -> String {
     format!("{}.{}", filename, format)
 }
 
+fn sanitize_save_extension(format: &str) -> Option<String> {
+    let normalized = format.trim().to_ascii_lowercase();
+    matches!(normalized.as_str(), "png" | "jpg" | "jpeg" | "pdf").then_some(normalized)
+}
+
+fn save_file_name(template: &str, format: &str) -> Result<String, CaptureError> {
+    let stem = format_with_template(now_local(), template);
+    let extension = sanitize_save_extension(format).ok_or_else(|| {
+        CaptureError::SaveError(std::io::Error::other("unsupported screenshot file format"))
+    })?;
+    if !crate::paths::is_single_path_component(&stem) {
+        return Err(CaptureError::SaveError(std::io::Error::other(
+            "filename template must expand to a single file name",
+        )));
+    }
+    let filename = format!("{stem}.{extension}");
+    if !crate::paths::is_single_path_component(&filename) {
+        return Err(CaptureError::SaveError(std::io::Error::other(
+            "filename template must expand to a single file name",
+        )));
+    }
+    Ok(filename)
+}
+
 const UNIQUE_NAME_ATTEMPTS: u32 = 100;
 
-fn generate_file_path(directory: &Path, template: &str, format: &str) -> PathBuf {
-    let filename = generate_filename(template, format);
+fn generate_file_path(
+    directory: &Path,
+    template: &str,
+    format: &str,
+) -> Result<PathBuf, CaptureError> {
+    let filename = save_file_name(template, format)?;
     let base = Path::new(&filename)
         .file_stem()
         .and_then(|stem| stem.to_str())
-        .unwrap_or("screenshot");
+        .ok_or_else(|| {
+            CaptureError::SaveError(std::io::Error::other(
+                "filename template must expand to a single file name",
+            ))
+        })?;
+    let extension = Path::new(&filename)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .ok_or_else(|| {
+            CaptureError::SaveError(std::io::Error::other("unsupported screenshot file format"))
+        })?;
     let mut path = directory.join(&filename);
+    if path.parent() != Some(directory) {
+        return Err(CaptureError::SaveError(std::io::Error::other(
+            "filename template must expand to a single file name",
+        )));
+    }
     if path.exists() {
         for suffix in 1..=UNIQUE_NAME_ATTEMPTS {
-            let candidate = directory.join(format!("{}-{}.{}", base, suffix, format));
+            let candidate = directory.join(format!("{base}-{suffix}.{extension}"));
+            if candidate.parent() != Some(directory) {
+                continue;
+            }
             if !candidate.exists() {
                 log::info!(
                     "Screenshot filename exists; using {} instead",
                     candidate.display()
                 );
                 path = candidate;
-                return path;
+                return Ok(path);
             }
         }
         log::warn!(
@@ -71,7 +117,7 @@ fn generate_file_path(directory: &Path, template: &str, format: &str) -> PathBuf
             path.display()
         );
     }
-    path
+    Ok(path)
 }
 
 /// Ensure the save directory exists, creating it if necessary.
@@ -111,7 +157,7 @@ pub fn save_screenshot(
     let directory = ensure_directory_exists(&config.save_directory)?;
 
     // Generate filename
-    let file_path = generate_file_path(&directory, &config.filename_template, &config.format);
+    let file_path = generate_file_path(&directory, &config.filename_template, &config.format)?;
 
     log::info!(
         "Saving screenshot to: {} ({} bytes)",
@@ -189,5 +235,32 @@ mod tests {
         let resolved = ensure_directory_exists(&target).expect("ensure_directory_exists");
         assert!(target.exists());
         assert_eq!(resolved, target.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn save_file_name_rejects_path_escapes_and_unknown_formats() {
+        for template in ["../evil", "foo/bar", "/tmp/x", "..", ".", ""] {
+            assert!(
+                save_file_name(template, "png").is_err(),
+                "{template:?} must stay inside the save directory"
+            );
+        }
+        assert!(save_file_name("shot", "png/../../x").is_err());
+        assert!(save_file_name("shot", "exe").is_err());
+        assert_eq!(save_file_name("shot", "png").unwrap(), "shot.png");
+        assert_eq!(save_file_name("shot", "JPEG").unwrap(), "shot.jpeg");
+    }
+
+    #[test]
+    fn generate_file_path_stays_inside_the_save_directory() {
+        let temp = crate::test_temp::tempdir().unwrap();
+        let directory = temp.path();
+        let path = generate_file_path(directory, "shot", "png").expect("safe name");
+        assert_eq!(path.parent(), Some(directory));
+        assert_eq!(
+            path.file_name().and_then(|name| name.to_str()),
+            Some("shot.png")
+        );
+        assert!(generate_file_path(directory, "../evil", "png").is_err());
     }
 }

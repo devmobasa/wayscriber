@@ -41,6 +41,17 @@ fn diagnostic_paths(document: &ConfigDocument) -> Vec<&str> {
         .collect()
 }
 
+#[test]
+fn load_from_path_rejects_oversized_config_file() {
+    let temp = TempConfig::new("oversized");
+    let oversized = vec![b'x'; (crate::config::io::MAX_CONFIG_FILE_BYTES as usize) + 1];
+    fs::write(&temp.path, oversized).expect("write oversized config");
+
+    let err = ConfigDocument::load_from_path(&temp.path).expect_err("oversized config");
+    let message = format!("{err:#}");
+    assert!(message.contains("maximum"), "unexpected error: {message}");
+}
+
 fn diagnostic_kinds(document: &ConfigDocument) -> Vec<(ConfigDiagnosticKind, &str)> {
     document
         .diagnostics()

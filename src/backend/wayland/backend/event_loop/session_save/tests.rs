@@ -22,13 +22,16 @@ fn final_save_does_not_retry_through_an_unhealthy_worker() {
 #[test]
 fn pointer_and_stylus_both_gate_persistence_transitions() {
     assert!(persistence_interaction_active(
-        true, false, false, false, false, false
+        true, false, false, false, false, false, false
     ));
     assert!(persistence_interaction_active(
-        false, false, false, false, false, true
+        false, false, false, false, false, true, false
+    ));
+    assert!(persistence_interaction_active(
+        false, false, false, false, false, false, true
     ));
     assert!(!persistence_interaction_active(
-        false, false, false, false, false, false
+        false, false, false, false, false, false, false
     ));
 }
 

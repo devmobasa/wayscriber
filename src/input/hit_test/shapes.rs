@@ -28,6 +28,33 @@ pub(super) fn freehand_hit(
     false
 }
 
+pub(super) fn freehand_pressure_hit(
+    points: &[(i32, i32, f32)],
+    point: (i32, i32),
+    tolerance: f64,
+) -> bool {
+    if points.is_empty() {
+        return false;
+    }
+
+    for &(x, y, thick) in points {
+        let padded = tolerance.max(thick as f64 / 2.0);
+        if distance_point_to_point((x, y), point) <= padded {
+            return true;
+        }
+    }
+
+    for window in points.windows(2) {
+        let (x1, y1, t1) = window[0];
+        let (x2, y2, t2) = window[1];
+        if segment_hit(x1, y1, x2, y2, t1.max(t2) as f64, point, tolerance) {
+            return true;
+        }
+    }
+
+    false
+}
+
 pub(super) fn segment_hit(
     x1: i32,
     y1: i32,

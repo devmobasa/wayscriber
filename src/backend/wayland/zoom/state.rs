@@ -16,6 +16,9 @@ pub struct ZoomState {
     pub(super) active_output: Option<wl_output::WlOutput>,
     pub(super) active_output_id: Option<u32>,
     pub(super) active_geometry: Option<OutputGeometry>,
+    /// Bumped when freeze/zoom crop geometry actually changes so in-flight
+    /// portal captures can be rejected after a layout change.
+    pub(super) output_layout_generation: u64,
     pub(super) capture: Option<CaptureSession>,
     pub(super) image: Option<FrozenImage>,
     image_generation: u64,
@@ -57,6 +60,7 @@ impl ZoomState {
             active_output: None,
             active_output_id: None,
             active_geometry: None,
+            output_layout_generation: 0,
             capture: None,
             image: None,
             image_generation: 0,
@@ -87,7 +91,14 @@ impl ZoomState {
     }
 
     pub fn set_active_geometry(&mut self, geometry: Option<OutputGeometry>) {
+        if self.active_geometry != geometry {
+            self.output_layout_generation = self.output_layout_generation.wrapping_add(1);
+        }
         self.active_geometry = geometry;
+    }
+
+    pub fn active_geometry(&self) -> Option<&OutputGeometry> {
+        self.active_geometry.as_ref()
     }
 
     pub fn active_output_matches(&self, info_id: u32) -> bool {
