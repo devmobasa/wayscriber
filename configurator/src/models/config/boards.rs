@@ -64,6 +64,8 @@ pub struct BoardsDraft {
     pub max_count: String,
     pub auto_create: bool,
     pub show_board_badge: bool,
+    pub pan_enabled: bool,
+    pub show_pan_badge: bool,
     pub persist_customizations: bool,
     pub default_board: String,
     pub items: Vec<BoardItemDraft>,

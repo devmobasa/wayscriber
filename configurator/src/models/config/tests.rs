@@ -668,6 +668,26 @@ fn config_draft_round_trips_render_profiles() {
 }
 
 #[test]
+fn config_draft_round_trips_board_pan_settings() {
+    let mut config = Config::default();
+    let mut boards = wayscriber::config::BoardsConfig::default();
+    boards.pan_enabled = false;
+    boards.show_pan_badge = false;
+    config.boards = Some(boards);
+
+    let draft = ConfigDraft::from_config(&config);
+    assert!(!draft.boards.pan_enabled);
+    assert!(!draft.boards.show_pan_badge);
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("board pan settings should round trip");
+    let boards = round_trip.boards.expect("boards section should be saved");
+    assert!(!boards.pan_enabled);
+    assert!(!boards.show_pan_badge);
+}
+
+#[test]
 fn config_draft_round_trips_pdf_export() {
     let mut config = Config::default();
     config.export.pdf.filename_template = Some("board_%Y".to_string());
