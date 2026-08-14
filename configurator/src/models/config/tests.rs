@@ -90,6 +90,23 @@ fn config_draft_to_config_reports_errors() {
 }
 
 #[test]
+fn config_draft_to_config_rejects_out_of_range_numbers() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    draft.drawing_default_thickness = "99".to_string();
+    draft.arrow_angle = "90".to_string();
+    draft.history_undo_all_delay_ms = "1".to_string();
+
+    let errors = draft
+        .to_config(&Config::default())
+        .expect_err("out-of-range numbers must not convert");
+    let fields: Vec<&str> = errors.iter().map(|err| err.field.as_str()).collect();
+
+    assert!(fields.contains(&"drawing.default_thickness"));
+    assert!(fields.contains(&"arrow.angle_degrees"));
+    assert!(fields.contains(&"history.undo_all_delay_ms"));
+}
+
+#[test]
 fn config_draft_rejects_path_escaping_save_names() {
     let mut draft = ConfigDraft::from_config(&Config::default());
     draft.capture_filename_template = "../evil_%Y".to_string();

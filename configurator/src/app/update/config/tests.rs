@@ -368,6 +368,27 @@ fn a_draft_the_converter_rejects_keeps_the_document() {
     ));
 }
 
+/// Out-of-range numbers used to parse, then `validate_and_clamp` wrote the
+/// clamped value. The converter must refuse them so Save cannot change them.
+#[test]
+fn a_draft_with_out_of_range_numbers_keeps_the_document() {
+    let (mut app, _dir, _path) = app_with_config_file("");
+    app.draft.drawing_default_thickness = "99".to_string();
+
+    let effects = app.handle_save_requested();
+
+    assert!(effects.is_empty());
+    assert!(!app.is_saving);
+    assert!(
+        app.base_document.is_some(),
+        "a refused save must not take the document with it"
+    );
+    assert!(status_contains(
+        &app.status,
+        "drawing.default_thickness: Expected 1-50"
+    ));
+}
+
 /// Hex text the parser rejects was never applied to the draft, so a save
 /// would write the last value that did parse and the reload would replace
 /// the text with it. The Save is refused instead.
