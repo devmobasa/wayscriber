@@ -122,7 +122,7 @@ fn map_clipboard_file_read_error(path: &Path, err: ClipboardReadError) -> Clipbo
 }
 
 fn ensure_regular_clipboard_path(path: &Path) -> Result<(), ClipboardReadError> {
-    let metadata = fs::metadata(path).map_err(|err| {
+    let metadata = fs::symlink_metadata(path).map_err(|err| {
         ClipboardReadError::Other(format!(
             "Failed to inspect clipboard file {}: {}",
             path.display(),
@@ -154,7 +154,7 @@ fn validate_clipboard_file_metadata(
 fn open_regular_clipboard_file(path: &Path) -> Result<File, ClipboardReadError> {
     let file = OpenOptions::new()
         .read(true)
-        .custom_flags(libc::O_NONBLOCK)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(path)
         .map_err(|err| {
             ClipboardReadError::Other(format!(
@@ -278,6 +278,31 @@ mod tests {
             }
             other => panic!("expected decode failure, got {other:?}"),
         }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn uri_list_paste_rejects_symlink_without_following_it() {
+        let temp = TempDir::new().unwrap();
+        let image_path = temp.path().join("cat.png");
+        fs::write(&image_path, tiny_png()).unwrap();
+        let link_path = temp.path().join("link.png");
+        std::os::unix::fs::symlink(&image_path, &link_path).unwrap();
+        let uri = file_uri_for_path(&link_path);
+        let offered = vec![TEXT_URI_LIST_MIME.to_string()];
+
+        let result = decode_clipboard_uri_list(TEXT_URI_LIST_MIME, uri.into_bytes(), offered);
+
+        match result {
+            ClipboardPasteResult::DecodeFailed(err) => {
+                assert!(
+                    err.contains("not a regular file") || err.contains("could not be read"),
+                    "{err}"
+                );
+            }
+            other => panic!("expected decode failure, got {other:?}"),
+        }
+        assert!(image_path.exists());
     }
 
     #[test]
