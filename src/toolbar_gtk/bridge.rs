@@ -427,12 +427,10 @@ fn finish_thread_within(
         std::thread::yield_now();
     }
     if !handle.is_finished() {
-        // Dropping a JoinHandle detaches the thread. GTK's main loop is not
-        // safe to abandon that way, so leak the handle and let process exit
-        // collect the thread if it never finishes.
-        if let Some(handle) = thread.take() {
-            std::mem::forget(handle);
-        }
+        // Bounded shutdown: drop the JoinHandle to detach. GTK may keep
+        // running until process exit; detach lets the OS reap the thread if
+        // it later finishes.
+        let _ = thread.take();
         return ThreadShutdownOutcome::TimedOut;
     }
     let handle = thread
@@ -520,7 +518,7 @@ impl Drop for GtkToolbarBridge {
             }
             ThreadShutdownOutcome::TimedOut => {
                 log::warn!(
-                    "GTK toolbar thread did not stop within {:?}; leaving it running until process exit",
+                    "GTK toolbar thread did not stop within {:?}; detaching it and leaving it running until process exit",
                     GTK_THREAD_SHUTDOWN_TIMEOUT
                 );
             }
@@ -888,7 +886,7 @@ mod tests {
     }
 
     #[test]
-    fn stuck_thread_is_leaked_not_detached_at_the_bounded_deadline() {
+    fn stuck_thread_is_detached_at_the_bounded_deadline() {
         let (completion_tx, completion_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
         let mut thread = Some(std::thread::spawn(move || {
