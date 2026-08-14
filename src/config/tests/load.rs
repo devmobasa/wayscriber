@@ -1319,3 +1319,18 @@ fn tablet_stylus_button_bindings_parse_custom_actions() {
     assert_eq!(config.tablet.stylus_button.action, Some(Action::Undo));
     assert_eq!(config.tablet.stylus_button2.action, Some(Action::Redo));
 }
+
+#[test]
+fn load_rejects_oversized_config_file() {
+    with_temp_config_home(|config_root| {
+        let primary_dir = config_root.join(PRIMARY_CONFIG_DIR);
+        fs::create_dir_all(&primary_dir).unwrap();
+        let config_path = primary_dir.join("config.toml");
+        let oversized = vec![b'x'; (crate::config::io::MAX_CONFIG_FILE_BYTES as usize) + 1];
+        fs::write(&config_path, oversized).unwrap();
+
+        let err = Config::load().expect_err("oversized config must not load");
+        let message = format!("{err:#}");
+        assert!(message.contains("maximum"), "unexpected error: {message}");
+    });
+}

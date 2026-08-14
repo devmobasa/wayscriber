@@ -17,6 +17,20 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+/// Config files larger than this are refused so a truncated or hostile
+/// `config.toml` cannot be pulled entirely into memory.
+pub(crate) const MAX_CONFIG_FILE_BYTES: u64 = 2 * 1024 * 1024;
+
+pub(crate) fn ensure_config_file_size(len: u64, path: &Path) -> Result<()> {
+    if len > MAX_CONFIG_FILE_BYTES {
+        bail!(
+            "Config file {} is {len} bytes; the maximum is {MAX_CONFIG_FILE_BYTES}",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
 /// Represents the source used to load configuration data.
 #[derive(Debug, Clone)]
 pub enum ConfigSource {
@@ -151,8 +165,12 @@ impl Config {
     /// The presence set is taken from the same text serde sees, so resolution
     /// can tell an authored shortcut from an offer (#293).
     fn read_unvalidated_from(config_path: &Path) -> Result<(Self, Vec<ConfigSectionError>)> {
+        let metadata = fs::metadata(config_path)
+            .with_context(|| format!("Failed to read config from {}", config_path.display()))?;
+        ensure_config_file_size(metadata.len(), config_path)?;
         let config_str = fs::read_to_string(config_path)
             .with_context(|| format!("Failed to read config from {}", config_path.display()))?;
+        ensure_config_file_size(config_str.len() as u64, config_path)?;
 
         let (mut config, section_errors) = match toml::from_str::<Self>(&config_str) {
             Ok(config) => (config, Vec::new()),

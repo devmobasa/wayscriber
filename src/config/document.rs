@@ -5,7 +5,9 @@ mod merge;
 
 pub use lock::ConfigWriteLockTimeout;
 
-use super::io::{create_config_backup, prepare_config_parent, write_config_text_atomic};
+use super::io::{
+    create_config_backup, ensure_config_file_size, prepare_config_parent, write_config_text_atomic,
+};
 use super::keybindings::KeybindingAuthorship;
 use super::{Config, ConfigSource};
 use crate::durable_io::{
@@ -171,8 +173,10 @@ impl SourceRevision {
                 destination.display()
             );
         }
+        ensure_config_file_size(metadata.len(), &destination)?;
         let bytes = fs::read(&destination)
             .with_context(|| format!("Failed to read config from {}", destination.display()))?;
+        ensure_config_file_size(bytes.len() as u64, &destination)?;
         Ok(Self::Present {
             bytes,
             identity: FileIdentity::of(&metadata),
