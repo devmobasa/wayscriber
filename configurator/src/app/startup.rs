@@ -72,12 +72,8 @@ impl ConfiguratorApp {
             ConfiguratorScreen::Daemon => self.active_tab = TabId::Daemon,
             ConfiguratorScreen::Arrow => self.active_tab = TabId::Arrow,
             ConfiguratorScreen::RenderProfiles => self.active_tab = TabId::RenderProfiles,
-            ConfiguratorScreen::Tablet => {
-                #[cfg(feature = "tablet-input")]
-                {
-                    self.active_tab = TabId::Tablet;
-                }
-            }
+            #[cfg(feature = "tablet-input")]
+            ConfiguratorScreen::Tablet => self.active_tab = TabId::Tablet,
             ConfiguratorScreen::Keybindings(section) => {
                 self.active_tab = TabId::Keybindings;
                 // No section means the tab, on whichever subtab it already
@@ -199,6 +195,7 @@ mod tests {
             ("daemon", TabId::Daemon),
             ("arrow", TabId::Arrow),
             ("render-profiles", TabId::RenderProfiles),
+            #[cfg(feature = "tablet-input")]
             ("tablet", TabId::Tablet),
             ("keybindings", TabId::Keybindings),
         ] {
@@ -312,6 +309,16 @@ mod tests {
         // Falling back means the ordinary first screen, focus included.
         assert_eq!(app.search_focus_serial, 1);
         assert!(!app.startup_search_focus_pending);
+    }
+
+    #[test]
+    #[cfg(not(feature = "tablet-input"))]
+    fn tablet_is_an_unknown_destination_without_tablet_input() {
+        let (app, _dir, _path) = app_launched_with(&["--open", "tablet"]);
+
+        assert_eq!(app.active_tab, TabId::Daemon);
+        let text = status_text(&app.status);
+        assert!(text.contains("Unknown destination: tablet"), "{text}");
     }
 
     #[test]

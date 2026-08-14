@@ -288,6 +288,7 @@ pub enum ConfiguratorScreen {
     Daemon,
     Arrow,
     RenderProfiles,
+    #[cfg(feature = "tablet-input")]
     Tablet,
     /// The Keybindings tab, optionally on a named section.
     Keybindings(Option<KeybindingsSection>),
@@ -295,7 +296,7 @@ pub enum ConfiguratorScreen {
 
 impl ConfiguratorScreen {
     /// Every nameable screen, in the order help text lists them.
-    pub const ALL: [Self; 28] = [
+    pub const ALL: &'static [Self] = &[
         Self::UiToolbar,
         Self::UiToolbarVisibility,
         Self::UiStatusBar,
@@ -313,6 +314,7 @@ impl ConfiguratorScreen {
         Self::Daemon,
         Self::Arrow,
         Self::RenderProfiles,
+        #[cfg(feature = "tablet-input")]
         Self::Tablet,
         Self::Keybindings(None),
         Self::Keybindings(Some(KeybindingsSection::General)),
@@ -346,6 +348,7 @@ impl ConfiguratorScreen {
             Self::Daemon => "daemon",
             Self::Arrow => "arrow",
             Self::RenderProfiles => "render-profiles",
+            #[cfg(feature = "tablet-input")]
             Self::Tablet => "tablet",
             Self::Keybindings(None) => "keybindings",
             Self::Keybindings(Some(KeybindingsSection::General)) => "keybindings/general",
@@ -380,6 +383,7 @@ impl ConfiguratorScreen {
             "daemon" => Some(Self::Daemon),
             "arrow" => Some(Self::Arrow),
             "render-profiles" => Some(Self::RenderProfiles),
+            #[cfg(feature = "tablet-input")]
             "tablet" => Some(Self::Tablet),
             "keybindings" => Some(Self::Keybindings(None)),
             "keybindings/general" => Some(Self::Keybindings(Some(KeybindingsSection::General))),
@@ -498,7 +502,7 @@ mod tests {
 
     #[test]
     fn every_screen_round_trips_without_a_search_term() {
-        for screen in ConfiguratorScreen::ALL {
+        for &screen in ConfiguratorScreen::ALL {
             let destination = ConfiguratorDestination::new(screen);
             assert_eq!(
                 ConfiguratorDestination::parse(&destination.as_arg()),
@@ -511,7 +515,7 @@ mod tests {
 
     #[test]
     fn every_screen_round_trips_with_a_search_term() {
-        for screen in ConfiguratorScreen::ALL {
+        for &screen in ConfiguratorScreen::ALL {
             for term in SAMPLE_TERMS {
                 let destination = ConfiguratorDestination::with_search(screen, term);
                 assert_eq!(destination.search(), Some(term));
@@ -591,6 +595,7 @@ mod tests {
             ConfiguratorDestination::new(ConfiguratorScreen::RenderProfiles).as_arg(),
             "render-profiles"
         );
+        #[cfg(feature = "tablet-input")]
         assert_eq!(
             ConfiguratorDestination::new(ConfiguratorScreen::Tablet).as_arg(),
             "tablet"
@@ -638,6 +643,18 @@ mod tests {
         );
         assert_eq!(ConfiguratorDestination::parse("drawing?focus=colors"), None);
         assert_eq!(ConfiguratorDestination::parse("drawing?"), None);
+        #[cfg(not(feature = "tablet-input"))]
+        assert_eq!(ConfiguratorDestination::parse("tablet"), None);
+    }
+
+    #[test]
+    #[cfg(feature = "tablet-input")]
+    fn tablet_is_a_destination_when_the_feature_is_on() {
+        assert_eq!(
+            ConfiguratorScreen::parse("tablet"),
+            Some(ConfiguratorScreen::Tablet)
+        );
+        assert!(ConfiguratorScreen::ALL.contains(&ConfiguratorScreen::Tablet));
     }
 
     #[test]
