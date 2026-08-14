@@ -12,6 +12,7 @@ pub use state::FrozenState;
 type PortalCaptureResult = Result<
     (
         Option<u32>,
+        u64,
         Option<crate::backend::wayland::frozen_geometry::OutputGeometry>,
         self::image::FrozenImage,
     ),

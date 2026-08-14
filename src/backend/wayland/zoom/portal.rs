@@ -32,6 +32,7 @@ impl ZoomState {
 
         let geo = self.active_geometry.clone();
         let target_output_id = self.active_output_id;
+        let layout_generation = self.output_layout_generation;
         crate::notification::send_notification_async(
             tokio_handle,
             "Zoom capture".to_string(),
@@ -47,7 +48,11 @@ impl ZoomState {
 
                 if let Some(geo) = geo {
                     let (phys_w, phys_h) = geo.physical_size();
-                    let (origin_x, origin_y) = geo.portal_crop_origin();
+                    let Some((origin_x, origin_y)) = geo.portal_crop_origin(width, height) else {
+                        return Err(CaptureError::ImageError(
+                            "Zoom capture does not contain the active output".to_string(),
+                        ));
+                    };
                     let Some((cropped_w, cropped_h, cropped)) =
                         crop_argb(&data, width, height, origin_x, origin_y, phys_w, phys_h)
                     else {
@@ -67,6 +72,7 @@ impl ZoomState {
 
                 Ok((
                     target_output_id,
+                    layout_generation,
                     FrozenImage {
                         width,
                         height,
@@ -109,13 +115,18 @@ impl ZoomState {
             .map(PortalTask::poll)
             .unwrap_or(PortalPoll::Disconnected);
         match poll {
-            PortalPoll::Ready(Ok((target_output, image))) => {
+            PortalPoll::Ready(Ok((target_output, layout_generation, image))) => {
                 let output_matches = portal_output_matches(target_output, self.active_output_id);
+                let layout_matches = layout_generation == self.output_layout_generation;
 
-                if output_matches {
+                if output_matches && layout_matches {
                     self.set_image(image);
                 } else {
-                    warn!("Portal zoom capture for inactive output discarded");
+                    if !layout_matches {
+                        warn!("Portal zoom capture discarded after the output layout changed");
+                    } else {
+                        warn!("Portal zoom capture for inactive output discarded");
+                    }
                     self.finish_failed_portal_task(input_state);
                     return;
                 }
@@ -191,6 +202,20 @@ mod tests {
         }
     }
 
+    fn crop_geometry(
+        origin: (u32, u32),
+    ) -> crate::backend::wayland::frozen_geometry::OutputGeometry {
+        crate::backend::wayland::frozen_geometry::OutputGeometry {
+            logical_x: 0,
+            logical_y: 0,
+            logical_width: 2,
+            logical_height: 1,
+            scale: 1,
+            transform: wayland_client::protocol::wl_output::Transform::Normal,
+            screenshot_origin: Some(origin),
+        }
+    }
+
     async fn poll_until_finished(zoom: &mut ZoomState, input: &mut InputState) {
         for _ in 0..100 {
             zoom.poll_portal_capture(input, Instant::now());
@@ -211,7 +236,7 @@ mod tests {
         zoom.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async { Ok((None, image(3))) },
+            async { Ok((None, 0, image(3))) },
         ));
         zoom.portal_in_progress = true;
 
@@ -293,7 +318,7 @@ mod tests {
         zoom.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async { Ok((Some(1), image(9))) },
+            async { Ok((Some(1), 0, image(9))) },
         ));
         zoom.portal_in_progress = true;
 
@@ -303,6 +328,58 @@ mod tests {
         assert!(!zoom.pending_activation);
         assert_eq!(zoom.image_generation(), generation);
         assert_eq!(zoom.image().unwrap().data, vec![4; 8]);
+        assert!(zoom.take_capture_done());
+    }
+
+    #[tokio::test]
+    async fn stale_layout_preserves_the_current_zoom_image_and_activation() {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
+        let mut input = make_test_input_state();
+        zoom.set_image(image(4));
+        let generation = zoom.image_generation();
+        zoom.set_active_geometry(Some(crop_geometry((0, 0))));
+        let layout_generation = zoom.output_layout_generation;
+        zoom.request_activation();
+        zoom.portal_task = Some(PortalTask::spawn(
+            &tokio::runtime::Handle::current(),
+            wake.handle(),
+            async move { Ok((None, layout_generation, image(9))) },
+        ));
+        zoom.portal_in_progress = true;
+        zoom.set_active_geometry(Some(crop_geometry((6, 0))));
+
+        poll_until_finished(&mut zoom, &mut input).await;
+
+        assert!(!zoom.active);
+        assert!(!zoom.pending_activation);
+        assert_eq!(zoom.image_generation(), generation);
+        assert_eq!(zoom.image().unwrap().data, vec![4; 8]);
+        assert!(zoom.take_capture_done());
+    }
+
+    #[tokio::test]
+    async fn matching_layout_still_applies_after_an_identical_geometry_refresh() {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
+        let mut input = make_test_input_state();
+        let geometry = crop_geometry((0, 0));
+        zoom.set_active_geometry(Some(geometry.clone()));
+        let layout_generation = zoom.output_layout_generation;
+        zoom.request_activation();
+        zoom.portal_task = Some(PortalTask::spawn(
+            &tokio::runtime::Handle::current(),
+            wake.handle(),
+            async move { Ok((None, layout_generation, image(3))) },
+        ));
+        zoom.portal_in_progress = true;
+        zoom.set_active_geometry(Some(geometry));
+
+        poll_until_finished(&mut zoom, &mut input).await;
+
+        assert!(zoom.active);
+        assert!(!zoom.pending_activation);
+        assert_eq!(zoom.image().unwrap().data, vec![3; 8]);
         assert!(zoom.take_capture_done());
     }
 
