@@ -368,3 +368,23 @@ fn rect_outline_hit_treats_a_zero_rect_as_a_point() {
     assert!(shapes::rect_outline_hit(10, 20, 0, 0, 2.0, (11, 21), 3.0));
     assert!(!shapes::rect_outline_hit(10, 20, 0, 0, 2.0, (30, 40), 3.0));
 }
+
+#[test]
+fn pressure_stroke_hit_includes_one_point_stylus_dots() {
+    let dot = DrawnShape::with_metadata(
+        1,
+        Shape::FreehandPressure {
+            points: vec![(50, 50, 20.0)],
+            color: BLACK,
+        },
+        0,
+        false,
+    );
+
+    assert!(
+        hit_test(&dot, (50, 50), 1.0),
+        "a one-point pressure stroke paints a cap circle and must be selectable"
+    );
+    assert!(hit_test(&dot, (55, 50), 1.0));
+    assert!(!hit_test(&dot, (80, 80), 1.0));
+}
