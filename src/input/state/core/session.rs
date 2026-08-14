@@ -206,6 +206,16 @@ impl InputState {
         rollback.restore(self);
         value
     }
+
+    /// Snapshot boards for persistence without writing in-progress edits as empty text.
+    pub(crate) fn snapshot_for_persistence(
+        &mut self,
+        options: &crate::session::SessionOptions,
+    ) -> Option<crate::session::SessionSnapshot> {
+        self.with_active_interaction_canceled_for_capture(|input| {
+            crate::session::snapshot_from_input(input, options)
+        })
+    }
 }
 
 #[cfg(test)]
@@ -354,6 +364,69 @@ mod tests {
         state.on_mouse_release(MouseButton::Left, 120, 130);
         assert!(!state.text_block_drag_active());
         assert!(!state.has_active_pointer_interaction());
+    }
+
+    #[test]
+    fn persistence_snapshot_keeps_original_text_during_in_place_edit() {
+        use crate::session::SessionOptions;
+        use std::path::PathBuf;
+
+        let mut options = SessionOptions::new(PathBuf::from("/tmp"), "text-edit-snapshot");
+        options.persist_transparent = true;
+
+        let mut state = make_test_input_state();
+        let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
+            x: 40,
+            y: 80,
+            text: "Original".to_string(),
+            color: state.current_color,
+            size: state.current_font_size,
+            font_descriptor: state.font_descriptor.clone(),
+            background_enabled: state.text_background_enabled,
+            wrap_width: Some(180),
+        });
+        state.set_selection(vec![shape_id]);
+        assert!(state.edit_selected_text());
+        let DrawingState::TextInput { buffer, .. } = &mut state.state else {
+            panic!("expected text input");
+        };
+        buffer.push_str(" unsaved edit");
+
+        let live = crate::session::snapshot_from_input(&state, &options).expect("live snapshot");
+        assert_eq!(first_snapshot_text(&live), "");
+
+        let persisted = state
+            .snapshot_for_persistence(&options)
+            .expect("persistence snapshot");
+        assert_eq!(first_snapshot_text(&persisted), "Original");
+
+        let DrawingState::TextInput { buffer, .. } = &state.state else {
+            panic!("edit should still be active after persistence snapshot");
+        };
+        assert_eq!(buffer, "Original unsaved edit");
+        let Shape::Text { text, .. } = &state
+            .boards
+            .active_frame()
+            .shape(shape_id)
+            .expect("text shape")
+            .shape
+        else {
+            panic!("expected text shape");
+        };
+        assert!(text.is_empty());
+    }
+
+    fn first_snapshot_text(snapshot: &crate::session::SessionSnapshot) -> &str {
+        for board in &snapshot.boards {
+            for page in &board.pages.pages {
+                for drawn in &page.shapes {
+                    if let Shape::Text { text, .. } = &drawn.shape {
+                        return text;
+                    }
+                }
+            }
+        }
+        panic!("expected a text shape in the snapshot");
     }
 
     fn test_shape_snapshot() -> ShapeSnapshot {
