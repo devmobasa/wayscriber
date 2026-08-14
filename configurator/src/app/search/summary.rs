@@ -1,7 +1,7 @@
 use crate::app::state::ConfiguratorApp;
 use crate::models::{KeybindingsTabId, SearchQuery, TabId, UiTabId};
 use wayscriber::config::{
-    PERFORMANCE_FIELD_METADATA, PerformanceFieldGroup, toolbar_item_definitions,
+    PERFORMANCE_FIELD_METADATA, PerformanceFieldGroup, action_meta, toolbar_item_definitions,
 };
 
 use super::terms::*;
@@ -369,13 +369,27 @@ fn keybinding_matches(app: &ConfiguratorApp, query: &SearchQuery, summary: &mut 
             .keybindings
             .value_for(entry.field)
             .unwrap_or("");
-        let text = format!(
+        let mut text = format!(
             "keybindings keybinding shortcut hotkey keyboard shortcut list {} {} {} {}",
             entry.field.tab().title(),
             entry.field.label(),
             entry.field.field_key(),
             entry.value,
         );
+        if let Some(meta) = entry
+            .field
+            .action()
+            .and_then(wayscriber::config::action_meta)
+        {
+            text.push(' ');
+            text.push_str(meta.description);
+            text.push(' ');
+            text.push_str(meta.short_label());
+            for alias in meta.search_aliases {
+                text.push(' ');
+                text.push_str(alias);
+            }
+        }
         if query.matches_text(&text) || query.matches_text(default_value) {
             summary.add_keybinding_field(entry.field);
         }

@@ -1,3 +1,4 @@
+use wayscriber::config::action_label;
 use wayscriber::config::action_meta_iter;
 use wayscriber::config::keybindings::KeybindingsConfig;
 
@@ -224,6 +225,29 @@ fn every_configurable_config_key_resolves_to_a_field() {
         unmapped.is_empty(),
         "these `[keybindings]` keys have no KeybindingField, so an applied \
          migration would silently skip them: {unmapped:?}"
+    );
+}
+
+#[test]
+fn every_keybinding_field_label_matches_action_meta() {
+    let mut unlabeled = Vec::new();
+    let mut mismatched = Vec::new();
+    for field in KeybindingField::all() {
+        let Some(action) = field.action() else {
+            unlabeled.push(field.field_key());
+            continue;
+        };
+        if field.label() != action_label(action) {
+            mismatched.push(field.field_key());
+        }
+    }
+    assert!(
+        unlabeled.is_empty(),
+        "these fields have no Action, so their labels cannot follow action_meta: {unlabeled:?}"
+    );
+    assert!(
+        mismatched.is_empty(),
+        "these fields still use a private label instead of action_meta: {mismatched:?}"
     );
 }
 
