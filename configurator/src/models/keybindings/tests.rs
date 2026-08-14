@@ -13,6 +13,31 @@ fn parse_keybinding_list_trims_and_ignores_empty() {
 }
 
 #[test]
+fn parse_keybinding_list_rejects_unparseable_shortcuts() {
+    let error = parse_keybinding_list("Ctrl+Shift, Escape").expect_err("modifiers-only is invalid");
+    assert!(
+        error.contains("No key specified"),
+        "parser error should name the problem: {error}"
+    );
+}
+
+#[test]
+fn keybindings_draft_to_config_rejects_unparseable_shortcuts() {
+    let mut draft = KeybindingsDraft::from_config(&KeybindingsConfig::default());
+    draft.set(KeybindingField::Exit, "Ctrl+Shift".to_string());
+
+    let errors = draft
+        .to_config()
+        .expect_err("unparseable shortcuts must not save");
+    assert!(
+        errors
+            .iter()
+            .any(|err| err.field == "keybindings.exit" && err.message.contains("No key specified")),
+        "expected a field error for exit, got {errors:?}"
+    );
+}
+
+#[test]
 fn keybindings_draft_to_config_updates_fields() {
     let mut draft = KeybindingsDraft::from_config(&KeybindingsConfig::default());
     draft.set(KeybindingField::Exit, "Ctrl+Q, Escape".to_string());
