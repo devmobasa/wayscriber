@@ -136,6 +136,18 @@ fn desktop_backdrop_single_output_at_nonzero_logical_origin_crops_at_zero() {
 }
 
 #[test]
+fn desktop_backdrop_origin_shifts_when_a_left_output_is_removed() {
+    let left = output(-4, 0, 4, 1, 6, 1);
+    let right = output(0, 0, 4, 1, 4, 1);
+    let with_left =
+        DesktopBackdropGeometry::from_outputs(right, &[left, right], 1).expect("with left");
+    let without_left = DesktopBackdropGeometry::from_outputs(right, &[right], 1).expect("removed");
+
+    assert_eq!(with_left.physical_origin(), Some((6, 0)));
+    assert_eq!(without_left.physical_origin(), Some((0, 0)));
+}
+
+#[test]
 fn desktop_backdrop_normalizes_negative_output_origins() {
     let outputs = [output(-2, 0, 2, 2, 2, 2), output(0, 0, 3, 2, 3, 2)];
     let geometry =
