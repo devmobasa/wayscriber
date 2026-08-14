@@ -687,10 +687,11 @@ fn config_draft_round_trips_render_profiles() {
 #[test]
 fn config_draft_round_trips_board_pan_settings() {
     let mut config = Config::default();
-    let mut boards = wayscriber::config::BoardsConfig::default();
-    boards.pan_enabled = false;
-    boards.show_pan_badge = false;
-    config.boards = Some(boards);
+    config.boards = Some(wayscriber::config::BoardsConfig {
+        pan_enabled: false,
+        show_pan_badge: false,
+        ..Default::default()
+    });
 
     let draft = ConfigDraft::from_config(&config);
     assert!(!draft.boards.pan_enabled);

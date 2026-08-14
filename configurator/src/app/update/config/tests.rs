@@ -768,8 +768,7 @@ fn a_save_without_shortcut_trouble_stays_a_plain_success() {
 }
 
 /// A shortcut the editor accepts as text but the parser rejects never
-/// reaches the file either, so the save status is the only place it can be
-/// reported.
+/// reaches a write. Save reports the field error instead of asking for one.
 #[test]
 fn a_typed_shortcut_the_parser_rejects_is_reported_by_the_save() {
     let (mut app, _dir, _path) = app_with_config_file(&format!(
@@ -779,16 +778,20 @@ fn a_typed_shortcut_the_parser_rejects_is_reported_by_the_save() {
         .keybindings
         .set(KeybindingField::ClearCanvas, "Ctrl+Shift".to_string());
 
-    let _ = save_draft(&mut app);
+    let effects = app.handle_save_requested();
 
+    assert!(effects.is_empty());
+    assert!(!app.is_saving);
     assert!(
-        matches!(app.status, StatusMessage::Warning(_)),
-        "unexpected status: {:?}",
-        app.status
+        app.base_document.is_some(),
+        "a refused save must not take the document with it"
     );
-    assert!(status_contains(&app.status, "Ctrl+Shift"));
-    assert!(status_contains(&app.status, "Clear Canvas"));
-    assert!(status_contains(&app.status, "could not be parsed"));
+    assert!(status_contains(
+        &app.status,
+        "Cannot save due to validation"
+    ));
+    assert!(status_contains(&app.status, "keybindings.clear_canvas"));
+    assert!(status_contains(&app.status, "No key specified"));
 }
 
 /// A reload replaces the draft and base document when it lands, so a save
