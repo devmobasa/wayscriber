@@ -14,22 +14,18 @@ const ATTEMPT_DELAY_MS: u64 = 50;
 
 /// Read image data from a portal `file://` URI.
 ///
-/// The path must live under `$XDG_RUNTIME_DIR` or the xdg-desktop-portal cache
-/// directory. The file is opened without following symlinks, must be a regular
-/// file, and is deleted only after those checks pass.
+/// The Screenshot portal only promises a URI, not a particular directory, so
+/// this reads any regular file without following symlinks and caps the size.
+/// Files under `$XDG_RUNTIME_DIR` or the xdg-desktop-portal cache are deleted
+/// after a successful read; other locations (Pictures, `/tmp`) are left in place.
 pub fn read_image_from_uri(uri: &str) -> Result<Vec<u8>, CaptureError> {
     read_image_from_uri_with_limit(uri, MAX_PORTAL_IMAGE_BYTES)
 }
 
 fn read_image_from_uri_with_limit(uri: &str, max_bytes: u64) -> Result<Vec<u8>, CaptureError> {
     let path = decode_file_uri(uri)?;
-    if !is_allowed_portal_path(&path) {
-        return Err(CaptureError::InvalidResponse(
-            "Portal screenshot path is not in a trusted directory".to_string(),
-        ));
-    }
 
-    log::debug!("Reading screenshot from the portal temporary file");
+    log::debug!("Reading screenshot from the portal file");
 
     let mut opened = None;
     for attempt in 0..MAX_ATTEMPTS {
@@ -40,7 +36,7 @@ fn read_image_from_uri_with_limit(uri: &str, max_bytes: u64) -> Result<Vec<u8>, 
             }
             Err(PortalOpenError::Rejected { message, delete }) => {
                 if delete {
-                    remove_allowed_portal_file(&path);
+                    remove_portal_temp_file(&path);
                 }
                 return Err(CaptureError::ImageError(message));
             }
@@ -74,7 +70,7 @@ fn read_image_from_uri_with_limit(uri: &str, max_bytes: u64) -> Result<Vec<u8>, 
         ));
     }
     if data.len() as u64 > max_bytes {
-        remove_allowed_portal_file(&path);
+        remove_portal_temp_file(&path);
         return Err(CaptureError::ImageError(
             "Portal screenshot file exceeds the size limit".to_string(),
         ));
@@ -84,11 +80,15 @@ fn read_image_from_uri_with_limit(uri: &str, max_bytes: u64) -> Result<Vec<u8>, 
         "Successfully read {} bytes from portal screenshot",
         data.len()
     );
-    remove_allowed_portal_file(&path);
+    remove_portal_temp_file(&path);
     Ok(data)
 }
 
-fn remove_allowed_portal_file(path: &Path) {
+fn remove_portal_temp_file(path: &Path) {
+    if !is_deletable_portal_temp_path(path) {
+        log::debug!("Leaving portal screenshot in place; path is not a portal temp file");
+        return;
+    }
     if let Err(err) = fs::remove_file(path) {
         log::warn!("Failed to remove portal screenshot temporary file: {err}");
     } else {
@@ -96,26 +96,20 @@ fn remove_allowed_portal_file(path: &Path) {
     }
 }
 
-fn is_allowed_portal_path(path: &Path) -> bool {
-    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-        return false;
-    };
-    if !crate::paths::is_single_path_component(name) {
-        return false;
-    }
+fn is_deletable_portal_temp_path(path: &Path) -> bool {
     let Some(parent) = path.parent() else {
         return false;
     };
     let Ok(parent) = parent.canonicalize() else {
         return false;
     };
-    allowed_portal_roots().into_iter().any(|root| {
+    allowed_portal_temp_roots().into_iter().any(|root| {
         root.canonicalize()
             .is_ok_and(|root| parent.starts_with(root))
     })
 }
 
-fn allowed_portal_roots() -> Vec<PathBuf> {
+fn allowed_portal_temp_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Some(runtime) = std::env::var_os(XDG_RUNTIME_DIR_ENV)
         && !runtime.is_empty()
@@ -224,24 +218,21 @@ mod tests {
     }
 
     #[test]
-    fn rejects_paths_outside_trusted_directories() {
+    fn reads_and_leaves_files_outside_portal_temp_roots() {
         let temp = TempDir::new().unwrap();
-        let outside = temp.path().join("outside.png");
-        std::fs::write(&outside, b"secret").unwrap();
+        let outside = temp.path().join("Pictures");
+        std::fs::create_dir(&outside).unwrap();
+        let file_path = outside.join("shot.png");
+        std::fs::write(&file_path, b"portal-bytes").unwrap();
         let trusted = temp.path().join("runtime");
         std::fs::create_dir(&trusted).unwrap();
 
         with_runtime_dir(&trusted, || {
-            let err = read_image_from_uri(&file_uri_for(&outside)).expect_err("outside path");
-            match err {
-                CaptureError::InvalidResponse(msg) => {
-                    assert!(msg.contains("trusted directory"), "{msg}");
-                }
-                other => panic!("unexpected error variant: {other:?}"),
-            }
+            let data = read_image_from_uri(&file_uri_for(&file_path)).expect("read succeeds");
+            assert_eq!(data, b"portal-bytes");
             assert!(
-                outside.exists(),
-                "rejected portal URIs must not delete the target file"
+                file_path.exists(),
+                "portal screenshots outside temp roots must not be deleted"
             );
         });
     }
@@ -263,6 +254,32 @@ mod tests {
             assert!(
                 !file_path.exists(),
                 "an oversized portal temp file should still be removed"
+            );
+        });
+    }
+
+    #[test]
+    fn oversized_files_outside_temp_roots_are_not_deleted() {
+        let temp = TempDir::new().unwrap();
+        let outside = temp.path().join("Pictures");
+        std::fs::create_dir(&outside).unwrap();
+        let file_path = outside.join("huge.png");
+        std::fs::write(&file_path, b"12345").unwrap();
+        let trusted = temp.path().join("runtime");
+        std::fs::create_dir(&trusted).unwrap();
+
+        with_runtime_dir(&trusted, || {
+            let err = read_image_from_uri_with_limit(&file_uri_for(&file_path), 4)
+                .expect_err("oversize file");
+            match err {
+                CaptureError::ImageError(msg) => {
+                    assert!(msg.contains("size limit"), "{msg}");
+                }
+                other => panic!("unexpected error variant: {other:?}"),
+            }
+            assert!(
+                file_path.exists(),
+                "an oversized portal file outside temp roots must not be deleted"
             );
         });
     }
@@ -296,15 +313,15 @@ mod tests {
     }
 
     #[test]
-    fn allowed_portal_path_requires_runtime_or_cache_root() {
+    fn deletable_portal_path_requires_runtime_or_cache_root() {
         let temp = TempDir::new().unwrap();
         let file_path = temp.path().join("shot.png");
         std::fs::write(&file_path, b"x").unwrap();
         with_runtime_dir(temp.path(), || {
-            assert!(is_allowed_portal_path(&file_path));
+            assert!(is_deletable_portal_temp_path(&file_path));
         });
         crate::test_env::with_env_var(XDG_RUNTIME_DIR_ENV, None, || {
-            assert!(!is_allowed_portal_path(&file_path));
+            assert!(!is_deletable_portal_temp_path(&file_path));
         });
     }
 }
