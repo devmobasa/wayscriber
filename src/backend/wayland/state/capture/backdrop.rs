@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::backend::wayland::frozen_geometry::OutputGeometry;
 
 pub(super) fn desktop_backdrop_output_geometry_from_info(
     info: &smithay_client_toolkit::output::OutputInfo,
@@ -58,6 +59,35 @@ fn transformed_output_size(width: u32, height: u32, transform: wl_output::Transf
         (height, width)
     } else {
         (width, height)
+    }
+}
+
+impl WaylandState {
+    pub(in crate::backend::wayland) fn desktop_backdrop_geometry(
+        &self,
+    ) -> Option<DesktopBackdropGeometry> {
+        let output = self.surface.current_output()?;
+        let active_info = self.output_state.info(&output)?;
+        let active = desktop_backdrop_output_geometry_from_info(&active_info)?;
+        let mut outputs = Vec::new();
+        for output in self.output_state.outputs() {
+            let info = self.output_state.info(&output)?;
+            outputs.push(desktop_backdrop_output_geometry_from_info(&info)?);
+        }
+
+        DesktopBackdropGeometry::from_outputs(active, &outputs, active_info.scale_factor.max(1))
+    }
+
+    pub(in crate::backend::wayland) fn set_freeze_zoom_geometry(
+        &mut self,
+        geometry: Option<OutputGeometry>,
+    ) {
+        let screenshot_origin = self
+            .desktop_backdrop_geometry()
+            .and_then(DesktopBackdropGeometry::physical_origin);
+        let geometry = geometry.map(|geo| geo.with_screenshot_origin(screenshot_origin));
+        self.frozen.set_active_geometry(geometry.clone());
+        self.zoom.set_active_geometry(geometry);
     }
 }
 

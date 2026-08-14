@@ -136,7 +136,7 @@ impl CompositorHandler for WaylandState {
                 .logical_size
                 .unwrap_or((self.surface.width() as i32, self.surface.height() as i32));
             let (logical_x, logical_y) = info.logical_position.unwrap_or((0, 0));
-            self.frozen.set_active_geometry(Some(
+            self.set_freeze_zoom_geometry(Some(
                 crate::backend::wayland::frozen_geometry::OutputGeometry {
                     logical_x,
                     logical_y,
@@ -144,20 +144,11 @@ impl CompositorHandler for WaylandState {
                     logical_height: logical_h.max(0) as u32,
                     scale,
                     transform: info.transform,
+                    screenshot_origin: None,
                 },
             ));
             self.frozen
                 .set_active_output(Some(output.clone()), Some(info.id));
-            self.zoom.set_active_geometry(Some(
-                crate::backend::wayland::frozen_geometry::OutputGeometry {
-                    logical_x,
-                    logical_y,
-                    logical_width: logical_w.max(0) as u32,
-                    logical_height: logical_h.max(0) as u32,
-                    scale,
-                    transform: info.transform,
-                },
-            ));
             self.zoom
                 .set_active_output(Some(output.clone()), Some(info.id));
         }
@@ -203,10 +194,9 @@ impl CompositorHandler for WaylandState {
         }
         self.refresh_active_output_label();
         self.frozen.set_active_output(None, None);
-        self.frozen.set_active_geometry(None);
-        self.frozen.unfreeze(&mut self.input_state);
         self.zoom.set_active_output(None, None);
-        self.zoom.set_active_geometry(None);
+        self.set_freeze_zoom_geometry(None);
+        self.frozen.unfreeze(&mut self.input_state);
         self.zoom.deactivate(&mut self.input_state);
     }
 }

@@ -9,6 +9,9 @@ pub struct OutputGeometry {
     pub logical_height: u32,
     pub scale: i32,
     pub transform: wl_output::Transform,
+    /// Origin of this output inside a full-desktop screenshot, walking every
+    /// known output so mixed-DPI layouts are not `logical * this_output.scale`.
+    pub screenshot_origin: Option<(u32, u32)>,
 }
 
 impl OutputGeometry {
@@ -31,6 +34,7 @@ impl OutputGeometry {
             logical_height: lh as u32,
             scale,
             transform,
+            screenshot_origin: None,
         })
     }
 }
@@ -57,6 +61,12 @@ mod tests {
         assert_eq!(geo.transform, wl_output::Transform::_270);
         assert_eq!(geo.physical_size(), (3840, 2160));
         assert_eq!(geo.physical_origin(), (20, 40));
+        assert_eq!(geo.portal_crop_origin(), (0, 0));
+        assert_eq!(
+            geo.with_screenshot_origin(Some((6, 0)))
+                .portal_crop_origin(),
+            (6, 0)
+        );
     }
 
     #[test]
@@ -106,11 +116,28 @@ impl OutputGeometry {
         )
     }
 
-    /// Returns physical pixel origin.
+    /// Returns physical pixel origin of the logical position on this output.
+    ///
+    /// Portal desktop screenshots must use [`Self::portal_crop_origin`] instead:
+    /// mixed-scale layouts are not `logical * this output's scale`.
     pub fn physical_origin(&self) -> (i32, i32) {
         (
             self.logical_x.saturating_mul(self.scale),
             self.logical_y.saturating_mul(self.scale),
         )
+    }
+
+    pub fn with_screenshot_origin(mut self, origin: Option<(u32, u32)>) -> Self {
+        self.screenshot_origin = origin;
+        self
+    }
+
+    /// Crop origin inside a portal/desktop screenshot.
+    ///
+    /// Unknown origin falls back to the buffer origin. A full-desktop shot of a
+    /// single output starts at `(0, 0)` even when that output's logical position
+    /// is not the layout origin.
+    pub fn portal_crop_origin(&self) -> (u32, u32) {
+        self.screenshot_origin.unwrap_or((0, 0))
     }
 }

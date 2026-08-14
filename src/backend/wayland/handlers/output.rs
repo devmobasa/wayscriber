@@ -45,10 +45,9 @@ impl OutputHandler for WaylandState {
                 info.scale_factor.max(1),
                 info.transform,
             ) {
-                self.frozen.set_active_geometry(Some(geo.clone()));
+                self.set_freeze_zoom_geometry(Some(geo));
                 self.frozen
                     .set_active_output(Some(output.clone()), Some(info.id));
-                self.zoom.set_active_geometry(Some(geo));
                 self.zoom
                     .set_active_output(Some(output.clone()), Some(info.id));
             }

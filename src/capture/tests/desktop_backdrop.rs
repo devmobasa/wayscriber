@@ -127,6 +127,15 @@ fn desktop_backdrop_crops_mixed_scale_output_using_screenshot_origin() {
 }
 
 #[test]
+fn desktop_backdrop_single_output_at_nonzero_logical_origin_crops_at_zero() {
+    let outputs = [output(10, 20, 4, 2, 8, 4)];
+    let geometry =
+        DesktopBackdropGeometry::from_outputs(outputs[0], &outputs, 2).expect("single output");
+
+    assert_eq!(geometry.physical_origin(), Some((0, 0)));
+}
+
+#[test]
 fn desktop_backdrop_normalizes_negative_output_origins() {
     let outputs = [output(-2, 0, 2, 2, 2, 2), output(0, 0, 3, 2, 3, 2)];
     let geometry =

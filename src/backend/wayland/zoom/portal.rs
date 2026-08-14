@@ -47,25 +47,22 @@ impl ZoomState {
 
                 if let Some(geo) = geo {
                     let (phys_w, phys_h) = geo.physical_size();
-                    let (origin_x, origin_y) = geo.physical_origin();
-                    if origin_x >= 0
-                        && origin_y >= 0
-                        && phys_w > 0
-                        && phys_h > 0
-                        && let Some((cropped_w, cropped_h, cropped)) = crop_argb(
-                            &data,
-                            width,
-                            height,
-                            origin_x as u32,
-                            origin_y as u32,
-                            phys_w,
-                            phys_h,
-                        )
-                    {
-                        data = cropped;
-                        width = cropped_w;
-                        height = cropped_h;
+                    let (origin_x, origin_y) = geo.portal_crop_origin();
+                    let Some((cropped_w, cropped_h, cropped)) =
+                        crop_argb(&data, width, height, origin_x, origin_y, phys_w, phys_h)
+                    else {
+                        return Err(CaptureError::ImageError(
+                            "Zoom capture does not contain the active output".to_string(),
+                        ));
+                    };
+                    if cropped_w != phys_w || cropped_h != phys_h {
+                        return Err(CaptureError::ImageError(
+                            "Zoom capture does not contain the active output".to_string(),
+                        ));
                     }
+                    data = cropped;
+                    width = cropped_w;
+                    height = cropped_h;
                 }
 
                 Ok((

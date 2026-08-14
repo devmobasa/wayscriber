@@ -130,15 +130,20 @@ impl WindowHandler for WaylandState {
             .and_then(|output| self.output_state.info(output))
             .map(|info| info.transform)
             .unwrap_or(wayland_client::protocol::wl_output::Transform::Normal);
+        let logical_position = self
+            .surface
+            .current_output()
+            .as_ref()
+            .and_then(|output| self.output_state.info(output))
+            .and_then(|info| info.logical_position);
         if let Some(geo) = crate::backend::wayland::frozen_geometry::OutputGeometry::update_from(
-            None, // logical position is not available here
+            logical_position,
             Some((self.surface.width() as i32, self.surface.height() as i32)),
             (self.surface.width(), self.surface.height()),
             self.surface.scale(),
             output_transform,
         ) {
-            self.frozen.set_active_geometry(Some(geo.clone()));
-            self.zoom.set_active_geometry(Some(geo));
+            self.set_freeze_zoom_geometry(Some(geo));
         }
         if self.xdg_frozen_fullscreen_requested() && self.frozen.has_pending_image() {
             if self.xdg_frozen_fullscreen_pending_configure() && !configure.is_fullscreen() {
