@@ -1,13 +1,22 @@
 use super::super::draft::ConfigDraft;
 use crate::models::error::FormError;
 use crate::models::util::parse_f64;
-use wayscriber::config::{Config, PdfLabelContentMode, validate_pdf_label_template};
+use wayscriber::config::{
+    Config, PdfLabelContentMode, validate_filename_template, validate_pdf_label_template,
+};
 
 impl ConfigDraft {
     pub(super) fn apply_export(&self, config: &mut Config, errors: &mut Vec<FormError>) {
-        config.export.pdf.filename_template = non_empty(self.export_pdf_filename_template.clone());
-        config.export.pdf.all_boards_filename_template =
-            non_empty(self.export_pdf_all_boards_filename_template.clone());
+        config.export.pdf.filename_template = optional_filename_template(
+            &self.export_pdf_filename_template,
+            "export.pdf.filename_template",
+            errors,
+        );
+        config.export.pdf.all_boards_filename_template = optional_filename_template(
+            &self.export_pdf_all_boards_filename_template,
+            "export.pdf.all_boards_filename_template",
+            errors,
+        );
         config.export.pdf.page_size = self.export_pdf_page_size.to_config();
         config.export.pdf.orientation = self.export_pdf_orientation.to_config();
         config.export.pdf.fit = self.export_pdf_fit.to_config();
@@ -105,9 +114,25 @@ impl ConfigDraft {
     }
 }
 
-fn non_empty(value: String) -> Option<String> {
+fn optional_filename_template(
+    value: &str,
+    field: &'static str,
+    errors: &mut Vec<FormError>,
+) -> Option<String> {
     let trimmed = value.trim();
-    (!trimmed.is_empty()).then(|| trimmed.to_string())
+    if trimmed.is_empty() {
+        return None;
+    }
+    match validate_filename_template(trimmed) {
+        Ok(()) => Some(trimmed.to_string()),
+        Err(reason) => {
+            errors.push(FormError::new(
+                field,
+                format!("Filename template: {reason}."),
+            ));
+            None
+        }
+    }
 }
 
 fn validate_pdf_label_template_for_content(

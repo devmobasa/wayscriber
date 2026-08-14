@@ -82,6 +82,30 @@ pub fn expand_tilde(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
+/// True when `name` is a single relative file name, not a path.
+///
+/// Rejects empty names, `.`, `..`, NULs, slashes, and anything `Path::join`
+/// would treat as leaving or replacing the parent directory.
+pub fn is_single_path_component(name: &str) -> bool {
+    if name.is_empty() || name.contains('\0') || name.contains('/') || name.contains('\\') {
+        return false;
+    }
+    let path = std::path::Path::new(name);
+    if path.is_absolute() {
+        return false;
+    }
+    let mut components = path.components();
+    match components.next() {
+        Some(std::path::Component::Normal(os_name)) => {
+            components.next().is_none()
+                && os_name.to_str().is_some_and(|component| {
+                    component == name && component != "." && component != ".."
+                })
+        }
+        _ => false,
+    }
+}
+
 fn fallback_runtime_root() -> PathBuf {
     std::env::temp_dir().join("wayscriber")
 }

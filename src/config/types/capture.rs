@@ -105,6 +105,27 @@ pub fn validate_ocr_languages(raw: &str) -> Result<String, String> {
     Ok(tokens.join("+"))
 }
 
+/// Filename templates must expand to a file name inside the save directory.
+pub fn validate_filename_template(template: &str) -> Result<(), String> {
+    let trimmed = template.trim();
+    if trimmed.is_empty() {
+        return Err("value is empty".to_string());
+    }
+    if !crate::paths::is_single_path_component(trimmed) {
+        return Err("must be a single file name, not a path".to_string());
+    }
+    Ok(())
+}
+
+/// Screenshot save format. PDF exports use a separate extension at save time.
+pub fn validate_capture_format(format: &str) -> Result<String, String> {
+    let normalized = format.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "png" | "jpg" | "jpeg" => Ok(normalized),
+        _ => Err("must be png, jpg, or jpeg".to_string()),
+    }
+}
+
 fn default_capture_ocr_languages() -> String {
     DEFAULT_OCR_LANGUAGES.to_string()
 }
@@ -180,5 +201,25 @@ mod tests {
         };
 
         assert_eq!(config.resolved_ocr_languages(), DEFAULT_OCR_LANGUAGES);
+    }
+
+    #[test]
+    fn filename_template_must_be_a_single_component() {
+        validate_filename_template("screenshot_%Y-%m-%d_%H%M%S").unwrap();
+        for template in ["", "  ", "../evil", "foo/bar", "/tmp/x"] {
+            assert!(
+                validate_filename_template(template).is_err(),
+                "{template:?} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn capture_format_is_allowlisted() {
+        assert_eq!(validate_capture_format(" PNG ").unwrap(), "png");
+        assert_eq!(validate_capture_format("jpeg").unwrap(), "jpeg");
+        assert!(validate_capture_format("pdf").is_err());
+        assert!(validate_capture_format("png/../../x").is_err());
+        assert!(validate_capture_format("exe").is_err());
     }
 }

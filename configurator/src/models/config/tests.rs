@@ -90,6 +90,23 @@ fn config_draft_to_config_reports_errors() {
 }
 
 #[test]
+fn config_draft_rejects_path_escaping_save_names() {
+    let mut draft = ConfigDraft::from_config(&Config::default());
+    draft.capture_filename_template = "../evil_%Y".to_string();
+    draft.capture_format = "png/../../x".to_string();
+    draft.export_pdf_filename_template = "foo/bar".to_string();
+
+    let errors = draft
+        .to_config(&Config::default())
+        .expect_err("path-escaping save names must not save");
+    let fields: Vec<&str> = errors.iter().map(|err| err.field.as_str()).collect();
+
+    assert!(fields.contains(&"capture.filename_template"));
+    assert!(fields.contains(&"capture.format"));
+    assert!(fields.contains(&"export.pdf.filename_template"));
+}
+
+#[test]
 fn sparse_configurator_no_op_save_remains_byte_for_byte_sparse() {
     let temp = crate::test_temp::tempdir().expect("create temp directory");
     let path = temp.path().join("config.toml");
