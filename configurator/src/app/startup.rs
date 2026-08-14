@@ -60,11 +60,24 @@ impl ConfiguratorApp {
             ConfiguratorScreen::UiStatusBar => self.show_ui_tab(UiTabId::StatusBar),
             ConfiguratorScreen::UiClickHighlight => self.show_ui_tab(UiTabId::ClickHighlight),
             ConfiguratorScreen::UiInputHud => self.show_ui_tab(UiTabId::InputHud),
+            ConfiguratorScreen::UiHelpOverlay => self.show_ui_tab(UiTabId::HelpOverlay),
+            ConfiguratorScreen::UiPresenterMode => self.show_ui_tab(UiTabId::PresenterMode),
             ConfiguratorScreen::Drawing => self.active_tab = TabId::Drawing,
             ConfiguratorScreen::Presets => self.active_tab = TabId::Presets,
             ConfiguratorScreen::Boards => self.active_tab = TabId::Boards,
             ConfiguratorScreen::History => self.active_tab = TabId::History,
             ConfiguratorScreen::Session => self.active_tab = TabId::Session,
+            ConfiguratorScreen::Capture => self.active_tab = TabId::Capture,
+            ConfiguratorScreen::Performance => self.active_tab = TabId::Performance,
+            ConfiguratorScreen::Daemon => self.active_tab = TabId::Daemon,
+            ConfiguratorScreen::Arrow => self.active_tab = TabId::Arrow,
+            ConfiguratorScreen::RenderProfiles => self.active_tab = TabId::RenderProfiles,
+            ConfiguratorScreen::Tablet => {
+                #[cfg(feature = "tablet-input")]
+                {
+                    self.active_tab = TabId::Tablet;
+                }
+            }
             ConfiguratorScreen::Keybindings(section) => {
                 self.active_tab = TabId::Keybindings;
                 // No section means the tab, on whichever subtab it already
@@ -163,6 +176,8 @@ mod tests {
             ("ui/status-bar", UiTabId::StatusBar),
             ("ui/click-highlight", UiTabId::ClickHighlight),
             ("ui/input-hud", UiTabId::InputHud),
+            ("ui/help-overlay", UiTabId::HelpOverlay),
+            ("ui/presenter-mode", UiTabId::PresenterMode),
         ] {
             let (app, _dir, _path) = app_launched_with(&["--open", argument]);
 
@@ -179,6 +194,12 @@ mod tests {
             ("presets", TabId::Presets),
             ("drawing", TabId::Drawing),
             ("session", TabId::Session),
+            ("capture", TabId::Capture),
+            ("performance", TabId::Performance),
+            ("daemon", TabId::Daemon),
+            ("arrow", TabId::Arrow),
+            ("render-profiles", TabId::RenderProfiles),
+            ("tablet", TabId::Tablet),
             ("keybindings", TabId::Keybindings),
         ] {
             let (app, _dir, _path) = app_launched_with(&["--open", argument]);

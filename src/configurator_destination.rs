@@ -276,28 +276,44 @@ pub enum ConfiguratorScreen {
     UiStatusBar,
     UiClickHighlight,
     UiInputHud,
+    UiHelpOverlay,
+    UiPresenterMode,
     Drawing,
     Presets,
     Boards,
     History,
     Session,
+    Capture,
+    Performance,
+    Daemon,
+    Arrow,
+    RenderProfiles,
+    Tablet,
     /// The Keybindings tab, optionally on a named section.
     Keybindings(Option<KeybindingsSection>),
 }
 
 impl ConfiguratorScreen {
     /// Every nameable screen, in the order help text lists them.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 28] = [
         Self::UiToolbar,
         Self::UiToolbarVisibility,
         Self::UiStatusBar,
         Self::UiClickHighlight,
         Self::UiInputHud,
+        Self::UiHelpOverlay,
+        Self::UiPresenterMode,
         Self::Drawing,
         Self::Presets,
         Self::Boards,
         Self::History,
         Self::Session,
+        Self::Capture,
+        Self::Performance,
+        Self::Daemon,
+        Self::Arrow,
+        Self::RenderProfiles,
+        Self::Tablet,
         Self::Keybindings(None),
         Self::Keybindings(Some(KeybindingsSection::General)),
         Self::Keybindings(Some(KeybindingsSection::Drawing)),
@@ -318,11 +334,19 @@ impl ConfiguratorScreen {
             Self::UiStatusBar => "ui/status-bar",
             Self::UiClickHighlight => "ui/click-highlight",
             Self::UiInputHud => "ui/input-hud",
+            Self::UiHelpOverlay => "ui/help-overlay",
+            Self::UiPresenterMode => "ui/presenter-mode",
             Self::Drawing => "drawing",
             Self::Presets => "presets",
             Self::Boards => "boards",
             Self::History => "history",
             Self::Session => "session",
+            Self::Capture => "capture",
+            Self::Performance => "performance",
+            Self::Daemon => "daemon",
+            Self::Arrow => "arrow",
+            Self::RenderProfiles => "render-profiles",
+            Self::Tablet => "tablet",
             Self::Keybindings(None) => "keybindings",
             Self::Keybindings(Some(KeybindingsSection::General)) => "keybindings/general",
             Self::Keybindings(Some(KeybindingsSection::Drawing)) => "keybindings/drawing",
@@ -344,11 +368,19 @@ impl ConfiguratorScreen {
             "ui/status-bar" => Some(Self::UiStatusBar),
             "ui/click-highlight" => Some(Self::UiClickHighlight),
             "ui/input-hud" => Some(Self::UiInputHud),
+            "ui/help-overlay" => Some(Self::UiHelpOverlay),
+            "ui/presenter-mode" => Some(Self::UiPresenterMode),
             "drawing" => Some(Self::Drawing),
             "presets" => Some(Self::Presets),
             "boards" => Some(Self::Boards),
             "history" => Some(Self::History),
             "session" => Some(Self::Session),
+            "capture" => Some(Self::Capture),
+            "performance" => Some(Self::Performance),
+            "daemon" => Some(Self::Daemon),
+            "arrow" => Some(Self::Arrow),
+            "render-profiles" => Some(Self::RenderProfiles),
+            "tablet" => Some(Self::Tablet),
             "keybindings" => Some(Self::Keybindings(None)),
             "keybindings/general" => Some(Self::Keybindings(Some(KeybindingsSection::General))),
             "keybindings/drawing" => Some(Self::Keybindings(Some(KeybindingsSection::Drawing))),
@@ -530,6 +562,38 @@ mod tests {
         assert_eq!(
             ConfiguratorDestination::new(ConfiguratorScreen::UiInputHud).as_arg(),
             "ui/input-hud"
+        );
+        assert_eq!(
+            ConfiguratorDestination::new(ConfiguratorScreen::UiHelpOverlay).as_arg(),
+            "ui/help-overlay"
+        );
+        assert_eq!(
+            ConfiguratorDestination::new(ConfiguratorScreen::UiPresenterMode).as_arg(),
+            "ui/presenter-mode"
+        );
+        assert_eq!(
+            ConfiguratorDestination::new(ConfiguratorScreen::Capture).as_arg(),
+            "capture"
+        );
+        assert_eq!(
+            ConfiguratorDestination::new(ConfiguratorScreen::Performance).as_arg(),
+            "performance"
+        );
+        assert_eq!(
+            ConfiguratorDestination::new(ConfiguratorScreen::Daemon).as_arg(),
+            "daemon"
+        );
+        assert_eq!(
+            ConfiguratorDestination::new(ConfiguratorScreen::Arrow).as_arg(),
+            "arrow"
+        );
+        assert_eq!(
+            ConfiguratorDestination::new(ConfiguratorScreen::RenderProfiles).as_arg(),
+            "render-profiles"
+        );
+        assert_eq!(
+            ConfiguratorDestination::new(ConfiguratorScreen::Tablet).as_arg(),
+            "tablet"
         );
         assert_eq!(
             ConfiguratorDestination::new(ConfiguratorScreen::History).as_arg(),
