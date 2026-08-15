@@ -459,6 +459,55 @@ fn session_clear_command_succeeds_without_files() {
 }
 
 #[test]
+fn rename_session_ignores_invalid_configuration() {
+    let temp = TempDir::new().unwrap();
+    let config_dir = temp.path().join("config");
+    let data_dir = temp.path().join("data");
+    let session = temp.path().join("lecture.wayscriber-session");
+    let catalog_dir = data_dir.join("wayscriber");
+    fs::create_dir_all(config_dir.join("wayscriber")).unwrap();
+    fs::create_dir_all(&catalog_dir).unwrap();
+    fs::write(
+        config_dir.join("wayscriber/config.toml"),
+        b"not valid toml = [",
+    )
+    .unwrap();
+    fs::write(&session, b"{}").unwrap();
+
+    let catalog_path = catalog_dir.join("sessions.json");
+    let catalog = serde_json::json!({
+        "version": 1,
+        "sessions": [{
+            "id": "s-test",
+            "display_name": "Before",
+            "path": session.to_str().unwrap(),
+            "canonical_path": session.canonicalize().unwrap().to_str().unwrap(),
+            "created_at_millis": 1,
+            "last_opened_at_millis": 1,
+            "last_saved_at_millis": null
+        }]
+    });
+    fs::write(&catalog_path, serde_json::to_vec(&catalog).unwrap()).unwrap();
+
+    run_command(
+        wayscriber_cmd()
+            .env(XDG_CONFIG_HOME_ENV, &config_dir)
+            .env(XDG_DATA_HOME_ENV, &data_dir)
+            .env_remove(WAYLAND_DISPLAY_ENV)
+            .arg("--rename-session")
+            .arg("Lecture 04")
+            .arg("--session-file")
+            .arg(&session),
+    )
+    .success()
+    .stdout_contains("Renamed session to Lecture 04.");
+
+    let updated: serde_json::Value =
+        serde_json::from_slice(&fs::read(catalog_path).unwrap()).unwrap();
+    assert_eq!(updated["sessions"][0]["display_name"], "Lecture 04");
+}
+
+#[test]
 fn named_session_info_missing_parent_reports_not_found() {
     let temp = TempDir::new().unwrap();
     let named_path = temp

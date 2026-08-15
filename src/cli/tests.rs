@@ -165,7 +165,7 @@ fn session_file_requires_supported_command() {
     ]);
     assert_eq!(
         result.unwrap_err(),
-        "--session-file requires --active, --freeze, --daemon, --daemon-toggle, --session-info, --clear-session, or --clear-tool-state"
+        "--session-file requires --active, --freeze, --daemon, --daemon-toggle, --session-info, --clear-session, --clear-tool-state, or --rename-session"
     );
 }
 
@@ -239,22 +239,98 @@ fn offline_session_commands_reject_resume_overrides() {
     let info_result = Cli::try_parse_from(["wayscriber", "--session-info", "--resume-session"]);
     assert_eq!(
         info_result.unwrap_err(),
-        "--resume-session conflicts with --clear-session/--session-info/--clear-tool-state"
+        "--resume-session conflicts with --clear-session/--session-info/--clear-tool-state/--rename-session"
     );
 
     let clear_result =
         Cli::try_parse_from(["wayscriber", "--clear-session", "--no-resume-session"]);
     assert_eq!(
         clear_result.unwrap_err(),
-        "--no-resume-session conflicts with --clear-session/--session-info/--clear-tool-state"
+        "--no-resume-session conflicts with --clear-session/--session-info/--clear-tool-state/--rename-session"
     );
 
     let tool_state_result =
         Cli::try_parse_from(["wayscriber", "--clear-tool-state", "--resume-session"]);
     assert_eq!(
         tool_state_result.unwrap_err(),
-        "--resume-session conflicts with --clear-session/--session-info/--clear-tool-state"
+        "--resume-session conflicts with --clear-session/--session-info/--clear-tool-state/--rename-session"
     );
+}
+
+#[test]
+fn rename_session_requires_session_file_and_accepts_equals_form() {
+    let missing = Cli::try_parse_from(["wayscriber", "--rename-session", "Lecture"]);
+    assert_eq!(
+        missing.unwrap_err(),
+        "--rename-session requires --session-file"
+    );
+
+    let cli = parse_cli([
+        "wayscriber",
+        "--rename-session=Lecture 04",
+        "--session-file",
+        "/tmp/lecture.wayscriber-session",
+    ]);
+    assert_eq!(cli.rename_session.as_deref(), Some("Lecture 04"));
+    assert_eq!(
+        cli.session_file,
+        Some(PathBuf::from("/tmp/lecture.wayscriber-session"))
+    );
+}
+
+#[test]
+fn rename_session_conflicts_with_other_session_commands() {
+    let result = Cli::try_parse_from([
+        "wayscriber",
+        "--rename-session",
+        "Lecture",
+        "--session-file",
+        "/tmp/lecture.wayscriber-session",
+        "--session-info",
+    ]);
+    assert_eq!(
+        result.unwrap_err(),
+        "--rename-session conflicts with --session-info"
+    );
+}
+
+#[test]
+fn rename_session_rejects_every_overlay_option() {
+    let overlay_options = [
+        vec!["--daemon"],
+        vec!["--daemon-toggle"],
+        vec!["--daemon-action", "toggle_help"],
+        vec!["--light-toggle"],
+        vec!["--light-draw-toggle"],
+        vec!["--light-draw-on"],
+        vec!["--light-draw-off"],
+        vec!["--active"],
+        vec!["--mode", "whiteboard"],
+        vec!["--no-tray"],
+        vec!["--freeze-on-show"],
+        vec!["--freeze"],
+        vec!["--exit-after-capture"],
+        vec!["--no-exit-after-capture"],
+        vec!["--resume-session"],
+        vec!["--no-resume-session"],
+    ];
+
+    for option in overlay_options {
+        let mut args = vec![
+            "wayscriber",
+            "--rename-session",
+            "Lecture",
+            "--session-file",
+            "/tmp/lecture.wayscriber-session",
+        ];
+        args.extend(option.iter().copied());
+
+        assert_eq!(
+            Cli::try_parse_from(args).unwrap_err(),
+            "--rename-session conflicts with overlay/daemon options",
+            "expected rename with {option:?} to be rejected"
+        );
+    }
 }
 
 #[test]

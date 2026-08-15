@@ -223,7 +223,8 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    if cli.clear_session || cli.clear_tool_state || cli.session_info {
+    if cli.clear_session || cli.clear_tool_state || cli.session_info || cli.rename_session.is_some()
+    {
         run_session_cli_commands(&cli)?;
         return Ok(());
     }

@@ -150,6 +150,30 @@ pub fn rename_session_display_name_by_id(
     })
 }
 
+/// Rename a catalog entry's display name by session path. Session files are untouched.
+#[allow(dead_code)]
+pub fn rename_session_display_name_by_path(
+    path: &Path,
+    display_name: &str,
+) -> Result<Option<CatalogEntry>> {
+    let display_name = display_name.trim();
+    if display_name.is_empty() {
+        return Err(anyhow!("session display name cannot be empty"));
+    }
+    let identity = session_path_identity(path);
+    with_catalog_write(|catalog| {
+        let Some(entry) = catalog
+            .sessions
+            .iter_mut()
+            .find(|entry| entry_matches_identity(entry, &identity))
+        else {
+            return Ok(None);
+        };
+        entry.display_name = display_name.to_string();
+        Ok(Some(entry.clone()))
+    })
+}
+
 /// Update a catalog entry's session path after a committed disk move.
 #[allow(dead_code)]
 pub fn move_session_path_by_id(id: &str, target_path: &Path) -> Result<Option<CatalogEntry>> {
