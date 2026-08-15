@@ -5,7 +5,7 @@
 
 ## Architecture
 - Update modules handle `Message` variants and return `Vec<Effect>` for async work; the component runs each effect exactly once.
-- Modules are split by config sections and workflows such as boards, daemon, fields, presets, render profiles, session catalog, and tabs.
+- Modules are split by config sections and workflows such as boards, daemon, fields, presets, render profiles, session catalog, shortcuts, and tabs.
 
 ## Invariants
 - Keep update routing centralized and explicit.

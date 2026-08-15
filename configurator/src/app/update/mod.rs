@@ -6,6 +6,7 @@ mod fields;
 mod presets;
 mod render_profiles;
 mod session_catalog;
+mod shortcuts;
 mod tabs;
 
 use crate::messages::{CommandMessage, Message};
@@ -46,7 +47,7 @@ impl ConfiguratorApp {
             Message::ResetToDefaultsRequested => self.handle_reset_to_defaults_requested(),
             Message::ResetToDefaultsConfirmed => self.handle_reset_to_defaults_confirmed(),
             Message::ResetToDefaultsCanceled => self.handle_reset_to_defaults_canceled(),
-            Message::ActiveConfirmationCanceled => self.handle_active_confirmation_canceled(),
+            Message::WindowEscapePressed => self.handle_window_escape_pressed(),
             Message::SaveRequested => self.handle_save_requested(),
             Message::MigrationApplyRequested => self.handle_migration_apply_requested(),
             Message::MigrationDismissed => self.handle_migration_dismissed(),
@@ -241,9 +242,33 @@ impl ConfiguratorApp {
                 self.handle_export_pdf_label_content_changed(option)
             }
             Message::BufferCountChanged(count) => self.handle_buffer_count_changed(count),
-            Message::KeybindingChanged(field, value) => {
-                self.handle_keybinding_changed(field, value)
+            Message::ShortcutRecordingStarted(field) => {
+                self.handle_shortcut_recording_started(field)
             }
+            Message::ShortcutRecordingCanceled(field) => {
+                self.handle_shortcut_recording_canceled(field)
+            }
+            Message::ShortcutRecorderKey(keyval, modifiers) => {
+                self.handle_shortcut_recorder_key(keyval, modifiers)
+            }
+            Message::ShortcutRemoved(field, binding) => {
+                self.handle_shortcut_removed(field, binding)
+            }
+            Message::ShortcutResetRequested(field) => self.handle_shortcut_reset_requested(field),
+            Message::ShortcutTextEditStarted(field) => {
+                self.handle_shortcut_text_edit_started(field)
+            }
+            Message::ShortcutTextEditChanged(value) => {
+                self.handle_shortcut_text_edit_changed(value)
+            }
+            Message::ShortcutTextEditApplied => self.handle_shortcut_text_edit_applied(),
+            Message::ShortcutTextEditCanceled(field) => {
+                self.handle_shortcut_text_edit_canceled(field)
+            }
+            Message::ShortcutConflictReplaceConfirmed => {
+                self.handle_shortcut_conflict_replace_confirmed()
+            }
+            Message::ShortcutConflictCanceled => self.handle_shortcut_conflict_canceled(),
             Message::FontStyleOptionSelected(option) => {
                 self.handle_font_style_option_selected(option)
             }

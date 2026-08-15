@@ -7,8 +7,9 @@ use wayscriber::config::{
 
 use crate::models::{
     ColorPickerId, ConfigDraft, DaemonRuntimeStatus, DesktopEnvironment, DragMouseButton,
-    KeybindingsTabId, SearchQuery, SessionCatalogState, StartupRequest, TabId,
-    ToolbarLayoutModeOption, UiTabId,
+    KeybindingsTabId, PendingShortcutConflict, SearchQuery, SessionCatalogState,
+    ShortcutRecorderState, ShortcutTextEditor, StartupRequest, TabId, ToolbarLayoutModeOption,
+    UiTabId,
 };
 
 use super::effects::Effect;
@@ -74,6 +75,9 @@ pub(crate) struct ConfiguratorApp {
     /// What the launching process asked to open, taken by the first config
     /// load and empty from then on.
     pub(crate) startup_request: StartupRequest,
+    pub(crate) active_shortcut_recorder: Option<ShortcutRecorderState>,
+    pub(crate) shortcut_text_editor: Option<ShortcutTextEditor>,
+    pub(crate) pending_shortcut_conflict: Option<PendingShortcutConflict>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -231,6 +235,9 @@ impl ConfiguratorApp {
             search_focus_serial: 0,
             startup_search_focus_pending: true,
             startup_request: startup,
+            active_shortcut_recorder: None,
+            shortcut_text_editor: None,
+            pending_shortcut_conflict: None,
         };
         app.sync_all_color_picker_hex();
 
@@ -295,6 +302,16 @@ impl ConfiguratorApp {
             return None;
         }
         self.migration_preview.as_ref()
+    }
+
+    pub(crate) fn shortcut_recorder_active(&self) -> bool {
+        self.active_shortcut_recorder.is_some()
+    }
+
+    pub(super) fn clear_shortcut_editing(&mut self) {
+        self.active_shortcut_recorder = None;
+        self.shortcut_text_editor = None;
+        self.pending_shortcut_conflict = None;
     }
 }
 

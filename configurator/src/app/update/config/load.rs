@@ -23,6 +23,7 @@ impl ConfiguratorApp {
                 self.sync_all_color_picker_hex();
                 self.is_dirty = false;
                 self.clear_defaults_confirmation();
+                self.clear_shortcut_editing();
                 self.refresh_migration_preview(&document);
                 self.status = repair_warning.map_or_else(
                     || config_document_status(&document, "Configuration loaded from disk."),

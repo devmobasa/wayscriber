@@ -4,7 +4,7 @@
 - Applies to configurator keybinding models under `configurator/src/models/keybindings/`.
 
 ## Architecture
-- Owns draft keybinding state, parsing, field-level labels/config read/write, grouping, and tests.
+- Owns draft keybinding state, parsing, field-level labels/config read/write, grouping, recorder normalization, conflict lookup, and tests.
 
 ## Invariants
 - Keep action labels, categories, defaults, parsing, and display aligned with `src/config/keybindings/` and `src/config/action_meta/`.

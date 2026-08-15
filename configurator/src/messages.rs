@@ -1,14 +1,14 @@
 use std::path::PathBuf;
 
-use wayscriber::config::{ConfigDocument, ToolbarItemId, ToolbarItemOrderGroup};
+use wayscriber::config::{ConfigDocument, KeyBinding, ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::models::{
     BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, ColorPickerId,
     DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DragColorOption, DragMouseButton,
     DragToolField, DragToolOption, EraserModeOption, FontStyleOption, FontWeightOption,
     InputHudModeOption, InputHudPositionOption, KeybindingField, KeybindingsTabId,
-    NamedColorOption, OverrideOption, PdfFitModeOption, PdfLabelContentModeOption,
-    PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
+    KeyboardModifiers, NamedColorOption, OverrideOption, PdfFitModeOption,
+    PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
     PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField,
     ReducedMotionOption, RenderProfileExportOption, RenderProfileMappingSide,
@@ -62,9 +62,6 @@ pub enum Message {
     ResetToDefaultsConfirmed,
     /// Answers an armed confirmation with no.
     ResetToDefaultsCanceled,
-    /// Cancels whichever destructive confirmation currently owns the answer
-    /// controls. Used by the window-level Escape key binding.
-    ActiveConfirmationCanceled,
     SaveRequested,
     MigrationApplyRequested,
     MigrationDismissed,
@@ -155,7 +152,19 @@ pub enum Message {
     ExportPdfLabelPositionChanged(PdfLabelPositionOption),
     ExportPdfLabelContentChanged(PdfLabelContentModeOption),
     BufferCountChanged(u32),
-    KeybindingChanged(KeybindingField, String),
+    ShortcutRecordingStarted(KeybindingField),
+    ShortcutRecordingCanceled(KeybindingField),
+    ShortcutRecorderKey(u32, KeyboardModifiers),
+    ShortcutRemoved(KeybindingField, KeyBinding),
+    ShortcutResetRequested(KeybindingField),
+    ShortcutTextEditStarted(KeybindingField),
+    ShortcutTextEditChanged(String),
+    ShortcutTextEditApplied,
+    ShortcutTextEditCanceled(KeybindingField),
+    ShortcutConflictReplaceConfirmed,
+    ShortcutConflictCanceled,
+    /// Window-level Escape: cancel a confirmation unless a recorder owns the key.
+    WindowEscapePressed,
     FontStyleOptionSelected(FontStyleOption),
     FontWeightOptionSelected(FontWeightOption),
     #[cfg(feature = "tablet-input")]

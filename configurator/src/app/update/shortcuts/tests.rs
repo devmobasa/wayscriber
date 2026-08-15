@@ -1,0 +1,280 @@
+use wayscriber::config::{CURRENT_CONFIG_REVISION, ConfigDocument, KeyBinding};
+
+use crate::app::effects::Effect;
+use crate::app::state::{ConfiguratorApp, PendingConfirmation, StatusMessage};
+use crate::models::keybindings::keyval;
+use crate::models::{KeybindingField, KeyboardModifiers, SearchQuery};
+use crate::test_temp::TempDir;
+
+fn status_contains(status: &StatusMessage, needle: &str) -> bool {
+    status.text().is_some_and(|text| text.contains(needle))
+}
+
+fn load_config(app: &mut ConfiguratorApp, contents: &str) -> (TempDir, std::path::PathBuf) {
+    let dir = crate::test_temp::tempdir().expect("temporary test directory");
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, contents).expect("write test config");
+    let document = ConfigDocument::load_from_path(&path).expect("load test config document");
+    let _ = app.handle_config_loaded(Ok((Box::new(document), None)));
+    (dir, path)
+}
+
+fn save_draft(app: &mut ConfiguratorApp) {
+    let mut effects = app.handle_save_requested();
+    assert_eq!(effects.len(), 1, "a Save asks for exactly one write");
+    match effects.remove(0) {
+        Effect::SaveConfig { document, config } => {
+            let (saved, backup) = document
+                .save_with_backup(*config)
+                .expect("the document saves")
+                .into_parts();
+            let _ = app.handle_config_saved(Ok((backup, Box::new(saved))));
+        }
+        other => panic!("a Save must ask for a write, not {other:?}"),
+    }
+}
+
+fn config_setting(contents: &str, key: &str) -> Option<String> {
+    let mut lines = contents.lines().map(str::trim).skip_while(|line| {
+        !(line.starts_with(key) && line[key.len()..].trim_start().starts_with('='))
+    });
+    let mut setting = lines.next()?.to_string();
+    while setting.matches('[').count() > setting.matches(']').count() {
+        let Some(continuation) = lines.next() else {
+            break;
+        };
+        setting.push(' ');
+        setting.push_str(continuation);
+    }
+    Some(setting.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+#[test]
+fn starting_one_recorder_closes_any_older_recorder() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _ = app.handle_shortcut_recording_started(KeybindingField::ClearCanvas);
+    let _ = app.handle_shortcut_recording_started(KeybindingField::Undo);
+    assert_eq!(
+        app.active_shortcut_recorder
+            .as_ref()
+            .map(|recorder| recorder.field),
+        Some(KeybindingField::Undo)
+    );
+}
+
+#[test]
+fn confirmation_and_shortcut_conflict_do_not_consume_each_other() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.pending_confirmation = Some(PendingConfirmation::DefaultsReset);
+    let _ = app.handle_shortcut_recording_started(KeybindingField::ToggleFloatingBadge);
+    let _ = app.handle_shortcut_recorder_key(
+        u32::from(b'e'),
+        KeyboardModifiers {
+            ctrl: false,
+            shift: false,
+            alt: false,
+            super_held: false,
+        },
+    );
+    assert!(
+        app.pending_confirmation.is_some(),
+        "recording a conflict must not disarm Defaults"
+    );
+    assert!(app.pending_shortcut_conflict.is_some());
+    let _ = app.handle_window_escape_pressed();
+    assert!(
+        app.pending_confirmation.is_none(),
+        "Escape still cancels Defaults when the recorder is closed"
+    );
+    assert!(
+        app.pending_shortcut_conflict.is_some(),
+        "Escape must not take the shortcut conflict with it"
+    );
+}
+
+#[test]
+fn search_changes_do_not_dirty_the_config() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.is_dirty = false;
+    let _ = app.handle_search_changed("undo".to_string());
+    assert!(!app.is_dirty);
+    assert_eq!(app.search_query, SearchQuery::new("undo"));
+}
+
+#[test]
+fn recording_reset_and_removal_dirty_without_saving() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _ = app.handle_shortcut_recording_started(KeybindingField::ToggleFloatingBadge);
+    let effects = app.handle_shortcut_recorder_key(keyval::F5, KeyboardModifiers::default());
+    assert!(effects.is_empty());
+    assert!(app.is_dirty);
+    assert_eq!(
+        app.draft
+            .keybindings
+            .value_for(KeybindingField::ToggleFloatingBadge),
+        Some("F5")
+    );
+
+    let _ = app.handle_shortcut_reset_requested(KeybindingField::ClearCanvas);
+    assert_eq!(
+        app.draft
+            .keybindings
+            .value_for(KeybindingField::ClearCanvas),
+        Some("E")
+    );
+    let effects = app.handle_shortcut_removed(
+        KeybindingField::ToggleFloatingBadge,
+        KeyBinding::parse("F5").expect("parses"),
+    );
+    assert!(effects.is_empty());
+    assert_eq!(
+        app.draft
+            .keybindings
+            .value_for(KeybindingField::ToggleFloatingBadge),
+        Some("")
+    );
+}
+
+#[test]
+fn recorder_escape_does_not_cancel_defaults_confirmation() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.pending_confirmation = Some(PendingConfirmation::DefaultsReset);
+    let _ = app.handle_shortcut_recording_started(KeybindingField::ToggleFloatingBadge);
+    let _ = app.handle_window_escape_pressed();
+    assert!(app.pending_confirmation.is_some());
+    assert!(app.active_shortcut_recorder.is_some());
+}
+
+#[test]
+fn conflict_cancel_leaves_the_draft_byte_for_byte() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let before = app.draft.clone();
+    let _ = app.handle_shortcut_recording_started(KeybindingField::ToggleFloatingBadge);
+    let _ = app.handle_shortcut_recorder_key(u32::from(b'e'), KeyboardModifiers::default());
+    assert!(app.pending_shortcut_conflict.is_some());
+    let _ = app.handle_shortcut_conflict_canceled();
+    assert!(app.pending_shortcut_conflict.is_none());
+    assert_eq!(app.draft, before);
+}
+
+#[test]
+fn invalid_raw_text_blocks_save_and_stays_visible() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _dir = load_config(
+        &mut app,
+        &format!("config_revision = {CURRENT_CONFIG_REVISION}\n"),
+    );
+    app.draft
+        .keybindings
+        .set(KeybindingField::Exit, "Ctrl+Shift".to_string());
+    let effects = app.handle_save_requested();
+    assert!(effects.is_empty());
+    assert!(app.base_document.is_some());
+    assert_eq!(
+        app.draft.keybindings.value_for(KeybindingField::Exit),
+        Some("Ctrl+Shift")
+    );
+    assert!(status_contains(&app.status, "keybindings.exit"));
+}
+
+#[test]
+fn save_after_confirmed_replacement_writes_only_the_intended_fields() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let (_dir, path) = load_config(
+        &mut app,
+        &format!(
+            "config_revision = {CURRENT_CONFIG_REVISION}\n\n# keep me\n[keybindings]\nundo = [\"Ctrl+Alt+U\"]\n# trailing\nunknown_future = true\n"
+        ),
+    );
+    let _ = app.handle_shortcut_recording_started(KeybindingField::ClearCanvas);
+    let _ = app.handle_shortcut_recorder_key(
+        u32::from(b'u'),
+        KeyboardModifiers {
+            ctrl: true,
+            shift: false,
+            alt: true,
+            super_held: false,
+        },
+    );
+    assert!(app.pending_shortcut_conflict.is_some());
+    let _ = app.handle_shortcut_conflict_replace_confirmed();
+    save_draft(&mut app);
+
+    let contents = std::fs::read_to_string(&path).expect("read saved config");
+    assert!(contents.contains("# keep me"), "{contents}");
+    assert!(contents.contains("unknown_future = true"), "{contents}");
+    let revision = format!("config_revision = {CURRENT_CONFIG_REVISION}");
+    assert_eq!(
+        config_setting(&contents, "config_revision").as_deref(),
+        Some(revision.as_str())
+    );
+    assert_eq!(
+        config_setting(&contents, "clear_canvas").as_deref(),
+        Some("clear_canvas = [ \"E\", \"Ctrl+Alt+U\", ]")
+    );
+    assert_eq!(
+        config_setting(&contents, "undo").as_deref(),
+        Some("undo = []")
+    );
+}
+
+#[test]
+fn pending_conflict_blocks_save_without_taking_the_document() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _dir = load_config(
+        &mut app,
+        &format!("config_revision = {CURRENT_CONFIG_REVISION}\n"),
+    );
+    let _ = app.handle_shortcut_recording_started(KeybindingField::ToggleFloatingBadge);
+    let _ = app.handle_shortcut_recorder_key(u32::from(b'e'), KeyboardModifiers::default());
+    let effects = app.handle_save_requested();
+    assert!(effects.is_empty());
+    assert!(app.base_document.is_some());
+    assert!(status_contains(&app.status, "shortcut conflict"));
+}
+
+#[test]
+fn text_editor_keeps_invalid_text_until_canceled() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let before = app.draft.clone();
+    let _ = app.handle_shortcut_text_edit_started(KeybindingField::Undo);
+    let _ = app.handle_shortcut_text_edit_changed("Ctrl+Shift".to_string());
+    let _ = app.handle_shortcut_text_edit_applied();
+    assert_eq!(app.draft, before);
+    assert!(app.shortcut_text_editor.is_some());
+    let _ = app.handle_shortcut_text_edit_canceled(KeybindingField::Undo);
+    assert!(app.shortcut_text_editor.is_none());
+    assert_eq!(app.draft, before);
+}
+
+#[test]
+fn recording_does_not_emit_save_config() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let effects = app.handle_shortcut_recording_started(KeybindingField::Undo);
+    assert!(effects.is_empty());
+    let effects = app.handle_shortcut_reset_requested(KeybindingField::Undo);
+    assert!(effects.is_empty());
+}
+
+#[test]
+fn keybinding_changed_still_updates_the_authored_string() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let effects = app.handle_keybinding_changed(KeybindingField::Undo, "F8".to_string());
+    assert!(effects.is_empty());
+    assert_eq!(
+        app.draft.keybindings.value_for(KeybindingField::Undo),
+        Some("F8")
+    );
+}
+
+#[test]
+fn active_confirmation_canceled_clears_defaults_without_touching_conflicts() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.pending_confirmation = Some(PendingConfirmation::DefaultsReset);
+    let _ = app.handle_shortcut_recording_started(KeybindingField::ToggleFloatingBadge);
+    let _ = app.handle_shortcut_recorder_key(u32::from(b'e'), KeyboardModifiers::default());
+    let effects = app.handle_active_confirmation_canceled();
+    assert!(effects.is_empty());
+    assert!(app.pending_confirmation.is_none());
+    assert!(app.pending_shortcut_conflict.is_some());
+}
