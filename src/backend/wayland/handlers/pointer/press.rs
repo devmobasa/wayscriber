@@ -299,13 +299,50 @@ impl WaylandState {
         let Some(pointer) = crate::config::keybindings::linux::pointer_button(button) else {
             return false;
         };
-        let trigger = self.input_state.pointer_trigger(pointer);
-        let Some(action) = self.input_state.find_trigger_action(&trigger) else {
+        if self.dispatch_pointer_shortcut(pointer) {
+            self.input_state.consume_pointer_shortcut_button(button);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(in crate::backend::wayland) fn try_dispatch_gdk_pointer_shortcut(
+        &mut self,
+        button: u32,
+        ctrl: bool,
+        shift: bool,
+        alt: bool,
+        logo: bool,
+    ) -> bool {
+        let Some(pointer) = crate::config::keybindings::gdk::pointer_button(button) else {
+            return false;
+        };
+        self.dispatch_pointer_trigger(crate::config::PointerTrigger {
+            button: pointer,
+            ctrl,
+            shift,
+            alt,
+            logo,
+        })
+    }
+
+    fn dispatch_pointer_shortcut(&mut self, pointer: crate::config::PointerButton) -> bool {
+        match self.input_state.pointer_trigger(pointer) {
+            crate::config::ShortcutTrigger::Pointer(trigger) => {
+                self.dispatch_pointer_trigger(trigger)
+            }
+            _ => false,
+        }
+    }
+
+    fn dispatch_pointer_trigger(&mut self, trigger: crate::config::PointerTrigger) -> bool {
+        let shortcut = crate::config::ShortcutTrigger::Pointer(trigger);
+        let Some(action) = self.input_state.find_trigger_action(&shortcut) else {
             return false;
         };
         self.input_state.clear_pending_sequence();
-        self.input_state.consume_pointer_shortcut_button(button);
-        debug!("Pointer shortcut {trigger}: dispatching {action:?}");
+        debug!("Pointer shortcut {shortcut}: dispatching {action:?}");
         self.dispatch_input_action(action);
         true
     }

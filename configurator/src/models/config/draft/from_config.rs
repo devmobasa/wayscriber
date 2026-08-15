@@ -357,6 +357,15 @@ impl ConfigDraft {
 
             keybindings: {
                 let mut keybindings = KeybindingsDraft::from_config(&config.keybindings);
+                keybindings.set_authorship(match config.keybinding_authorship() {
+                    // Built-in and in-memory configs are AllExplicit for
+                    // validation. The UI treats them as omitted defaults so
+                    // Reset All / Defaults does not badge every row Authored.
+                    wayscriber::config::KeybindingAuthorship::AllExplicit => {
+                        wayscriber::config::KeybindingAuthorship::FromFile(Default::default())
+                    }
+                    from_file => from_file.clone(),
+                });
                 keybindings.set_legacy_from_config(config);
                 keybindings
             },

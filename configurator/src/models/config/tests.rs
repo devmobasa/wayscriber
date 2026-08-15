@@ -1375,3 +1375,14 @@ fn config_draft_preserves_tray_icon_style() {
         wayscriber::config::TrayIconStyle::Colored
     );
 }
+
+#[test]
+fn compiled_defaults_are_not_shown_as_authored_keybindings() {
+    let draft = ConfigDraft::from_config(&Config::default());
+    assert!(
+        !draft
+            .keybindings
+            .is_authored(crate::models::KeybindingField::Undo),
+        "Config::default() is AllExplicit for validation, not for UI source badges"
+    );
+}

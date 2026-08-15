@@ -270,7 +270,7 @@ fn row_for(
         ShortcutRowStatus::Default
     };
     let mut sources = Vec::new();
-    if changed {
+    if draft.is_authored(field) {
         sources.push(ShortcutSourceBadge::Authored);
     } else {
         sources.push(ShortcutSourceBadge::Default);
@@ -452,13 +452,36 @@ mod tests {
         let row = summary.row(KeybindingField::Redo).expect("redo row");
         assert!(!row.changed);
         assert_eq!(row.status, ShortcutRowStatus::Default);
-        assert!(row.sources.contains(&ShortcutSourceBadge::Default));
+        assert!(row.sources.contains(&ShortcutSourceBadge::Authored));
+        assert!(!row.sources.contains(&ShortcutSourceBadge::Default));
 
         draft.set(KeybindingField::Redo, "F4".to_string());
         let summary = ShortcutManagerSummary::from_drafts(&draft, &defaults);
         let row = summary.row(KeybindingField::Redo).expect("redo row");
         assert!(row.changed);
         assert!(row.sources.contains(&ShortcutSourceBadge::Authored));
+    }
+
+    #[test]
+    fn explicit_default_list_is_authored_not_default() {
+        use wayscriber::config::KeybindingAuthorship;
+
+        let mut draft = KeybindingsDraft::from_config(&KeybindingsConfig::default());
+        draft.set_authorship(KeybindingAuthorship::from_toml_source(
+            "[keybindings]\nundo = [\"Ctrl+Z\"]\n",
+        ));
+        let defaults = KeybindingsDraft::from_config(&KeybindingsConfig::default());
+        let summary = ShortcutManagerSummary::from_drafts(&draft, &defaults);
+        let undo = summary.row(KeybindingField::Undo).expect("undo row");
+        assert!(!undo.changed);
+        assert_eq!(undo.status, ShortcutRowStatus::Default);
+        assert!(undo.sources.contains(&ShortcutSourceBadge::Authored));
+        assert!(!undo.sources.contains(&ShortcutSourceBadge::Default));
+
+        let redo = summary.row(KeybindingField::Redo).expect("redo row");
+        assert!(!redo.changed);
+        assert!(redo.sources.contains(&ShortcutSourceBadge::Default));
+        assert!(!redo.sources.contains(&ShortcutSourceBadge::Authored));
     }
 
     #[test]

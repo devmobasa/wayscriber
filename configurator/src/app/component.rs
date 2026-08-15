@@ -21,6 +21,22 @@ use crate::models::{StartupRequest, TabId};
 use super::pages::Binding;
 use super::state::ConfiguratorApp;
 
+fn load_app_stylesheet() {
+    let provider = gtk::CssProvider::new();
+    // `load_from_string` is 4.12+. The configurator floor is Ubuntu 24.04
+    // (gtk4 `v4_10`). Workspace `--all-features` unifies gtk4 with the
+    // overlay crate's `v4_12` and then deprecates this method.
+    #[allow(deprecated)]
+    provider.load_from_data(include_str!("style.css"));
+    if let Some(display) = gtk::gdk::Display::default() {
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+    }
+}
+
 /// GApplication id. A valid dotted id is required by GLib; the window still
 /// advertises this as its Wayland app-id, so compositor rules and the
 /// `.desktop` `StartupWMClass` must match it.
@@ -78,6 +94,7 @@ impl Component for ConfiguratorApp {
     type Widgets = AppWidgets;
 
     fn init_root() -> Self::Root {
+        load_app_stylesheet();
         adw::ApplicationWindow::builder()
             .default_width(1000)
             .default_height(680)

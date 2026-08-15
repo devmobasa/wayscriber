@@ -94,7 +94,7 @@ pub fn reset_field(
     field: KeybindingField,
 ) {
     let value = defaults.value_for(field).unwrap_or_default().to_string();
-    draft.set(field, value);
+    draft.restore_default(field, value);
 }
 
 pub fn reset_fields(
@@ -156,6 +156,7 @@ pub fn serialize_bindings(bindings: &[Shortcut]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use wayscriber::config::KeybindingAuthorship;
     use wayscriber::config::keybindings::KeybindingsConfig;
 
     use super::*;
@@ -201,6 +202,9 @@ mod tests {
     #[test]
     fn reset_handles_one_default_multiple_defaults_and_unbound() {
         let (mut draft, defaults) = draft();
+        draft.set_authorship(KeybindingAuthorship::from_toml_source(
+            "[keybindings]\nclear_canvas = []\nredo = []\ntoggle_floating_badge = []\n",
+        ));
         draft.set(KeybindingField::ClearCanvas, "X".to_string());
         draft.set(KeybindingField::Redo, "".to_string());
         draft.set(KeybindingField::ToggleFloatingBadge, "F8".to_string());
@@ -209,6 +213,10 @@ mod tests {
         reset_field(&mut draft, &defaults, KeybindingField::Redo);
         reset_field(&mut draft, &defaults, KeybindingField::ToggleFloatingBadge);
 
+        assert!(
+            draft.is_authored(KeybindingField::ClearCanvas),
+            "reset keeps authorship because save rewrites the key instead of removing it"
+        );
         assert_eq!(draft.value_for(KeybindingField::ClearCanvas), Some("E"));
         assert_eq!(
             draft.value_for(KeybindingField::Redo),
@@ -230,6 +238,39 @@ mod tests {
             reset_tooltip(&defaults, KeybindingField::ToggleFloatingBadge),
             "Reset to default: Unbound"
         );
+    }
+
+    #[test]
+    fn reset_does_not_author_an_omitted_field() {
+        let (mut draft, defaults) = draft();
+        assert!(!draft.is_authored(KeybindingField::Undo));
+        reset_field(&mut draft, &defaults, KeybindingField::Undo);
+        assert!(!draft.is_authored(KeybindingField::Undo));
+    }
+
+    #[test]
+    fn reset_restores_omitted_authorship_after_an_edit() {
+        let (mut draft, defaults) = draft();
+        let baseline = draft.clone();
+
+        draft.set(KeybindingField::Undo, "F9".to_string());
+        assert!(draft.is_authored(KeybindingField::Undo));
+        reset_field(&mut draft, &defaults, KeybindingField::Undo);
+
+        assert!(!draft.is_authored(KeybindingField::Undo));
+        assert_eq!(draft, baseline, "the reverted draft must become clean");
+    }
+
+    #[test]
+    fn typing_the_loaded_value_restores_omitted_authorship_after_an_edit() {
+        let (mut draft, _defaults) = draft();
+        let baseline = draft.clone();
+
+        draft.set(KeybindingField::Undo, "F9".to_string());
+        draft.set(KeybindingField::Undo, "Ctrl+Z".to_string());
+
+        assert!(!draft.is_authored(KeybindingField::Undo));
+        assert_eq!(draft, baseline, "an exact text revert must become clean");
     }
 
     #[test]

@@ -268,6 +268,75 @@ fn keybinding_changed_still_updates_the_authored_string() {
 }
 
 #[test]
+fn resetting_an_edited_omitted_binding_restores_clean_default_source() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _dir = load_config(
+        &mut app,
+        &format!("config_revision = {CURRENT_CONFIG_REVISION}\n"),
+    );
+    assert!(!app.draft.keybindings.is_authored(KeybindingField::Undo));
+
+    let _ = app.handle_keybinding_changed(KeybindingField::Undo, "F8".to_string());
+    assert!(app.is_dirty);
+    assert!(app.draft.keybindings.is_authored(KeybindingField::Undo));
+
+    let _ = app.handle_shortcut_reset_requested(KeybindingField::Undo);
+    assert!(!app.is_dirty, "returning to the sparse baseline is clean");
+    assert!(!app.draft.keybindings.is_authored(KeybindingField::Undo));
+    assert_eq!(
+        app.shortcut_manager_summary()
+            .row(KeybindingField::Undo)
+            .expect("undo summary")
+            .badge_titles(),
+        vec!["Default"]
+    );
+}
+
+#[test]
+fn resetting_an_explicit_binding_stays_authored_through_save_reload() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let (_dir, path) = load_config(
+        &mut app,
+        &format!("config_revision = {CURRENT_CONFIG_REVISION}\n\n[keybindings]\nundo = [\"F8\"]\n"),
+    );
+    assert!(app.draft.keybindings.is_authored(KeybindingField::Undo));
+
+    let _ = app.handle_shortcut_reset_requested(KeybindingField::Undo);
+    assert!(app.is_dirty);
+    assert!(app.draft.keybindings.is_authored(KeybindingField::Undo));
+    save_draft(&mut app);
+
+    let contents = std::fs::read_to_string(path).expect("read saved config");
+    assert_eq!(
+        config_setting(&contents, "undo").as_deref(),
+        Some("undo = [\"Ctrl+Z\"]")
+    );
+    assert!(app.draft.keybindings.is_authored(KeybindingField::Undo));
+    assert_eq!(
+        app.shortcut_manager_summary()
+            .row(KeybindingField::Undo)
+            .expect("undo summary")
+            .badge_titles(),
+        vec!["Authored"]
+    );
+}
+
+#[test]
+fn typing_an_edited_omitted_binding_back_to_baseline_restores_clean_source() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _dir = load_config(
+        &mut app,
+        &format!("config_revision = {CURRENT_CONFIG_REVISION}\n"),
+    );
+
+    let _ = app.handle_keybinding_changed(KeybindingField::Undo, "F8".to_string());
+    let _ = app.handle_keybinding_changed(KeybindingField::Undo, "Ctrl+Z".to_string());
+
+    assert!(!app.is_dirty, "an exact revert matches the sparse baseline");
+    assert!(!app.draft.keybindings.is_authored(KeybindingField::Undo));
+}
+
+#[test]
 fn active_confirmation_canceled_clears_defaults_without_touching_conflicts() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.pending_confirmation = Some(PendingConfirmation::DefaultsReset);

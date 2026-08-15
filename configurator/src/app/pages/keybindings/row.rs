@@ -327,11 +327,25 @@ fn shortcut_chip(
     sender: &ComponentSender<ConfiguratorApp>,
 ) -> gtk::Box {
     let label_text = binding.display_label();
-    let chip = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-    chip.add_css_class("osd");
+    // Application CSS (`.shortcut-chip-key`) draws the raised key. GTK's
+    // `.keycap` class only applies under ShortcutLabel, so `+ x` would
+    // otherwise stay plain text beside the clear button.
+    let chip = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     chip.set_valign(gtk::Align::Center);
-    let label = gtk::Label::builder().label(&label_text).build();
-    let remove = icon_button("window-close-symbolic", &format!("Remove {label_text}"));
+    let label = gtk::Label::builder()
+        .label(&label_text)
+        .css_classes(["shortcut-chip-key"])
+        .valign(gtk::Align::Center)
+        .build();
+    let remove_label = format!("Remove {label_text}");
+    let remove = gtk::Button::builder()
+        .icon_name("edit-clear-symbolic")
+        .tooltip_text(&remove_label)
+        .valign(gtk::Align::Center)
+        .has_frame(false)
+        .css_classes(["flat", "circular", "dim-label"])
+        .build();
+    set_accessible_label(&remove, &remove_label);
     let binding = binding.clone();
     let sender = sender.clone();
     remove.connect_clicked(move |_| {

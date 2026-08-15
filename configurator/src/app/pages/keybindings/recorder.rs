@@ -1,3 +1,7 @@
+use std::cell::RefCell;
+use std::collections::HashSet;
+use std::rc::Rc;
+
 use relm4::{ComponentSender, gtk};
 
 use gtk::glib::object::IsA;
@@ -141,20 +145,39 @@ impl RecorderPopover {
 
 fn attach_key_controller(popover: &gtk::Popover, sender: &ComponentSender<ConfiguratorApp>) {
     let sender = sender.clone();
+    let pressed = Rc::new(RefCell::new(HashSet::new()));
     let controller = gtk::EventControllerKey::new();
     controller.set_propagation_phase(gtk::PropagationPhase::Capture);
-    controller.connect_key_pressed(move |_, key, _, modifiers| {
-        let keyval = gdk_keyval(key);
-        let recorded = KeyboardModifiers {
-            ctrl: modifiers.contains(gtk::gdk::ModifierType::CONTROL_MASK),
-            shift: modifiers.contains(gtk::gdk::ModifierType::SHIFT_MASK),
-            alt: modifiers.contains(gtk::gdk::ModifierType::ALT_MASK),
-            super_held: modifiers.contains(gtk::gdk::ModifierType::SUPER_MASK)
-                || modifiers.contains(gtk::gdk::ModifierType::META_MASK)
-                || modifiers.contains(gtk::gdk::ModifierType::HYPER_MASK),
-        };
-        sender.input(Message::ShortcutRecorderKey(keyval, recorded));
-        gtk::glib::Propagation::Stop
+    {
+        let sender = sender.clone();
+        let pressed = pressed.clone();
+        controller.connect_key_pressed(move |_, key, keycode, modifiers| {
+            // GTK repeats key-pressed for auto-repeat. Sequence recording
+            // would otherwise append Ctrl+K > Ctrl+K > Ctrl+K from a hold.
+            if !pressed.borrow_mut().insert(keycode) {
+                return gtk::glib::Propagation::Stop;
+            }
+            let keyval = gdk_keyval(key);
+            let recorded = KeyboardModifiers {
+                ctrl: modifiers.contains(gtk::gdk::ModifierType::CONTROL_MASK),
+                shift: modifiers.contains(gtk::gdk::ModifierType::SHIFT_MASK),
+                alt: modifiers.contains(gtk::gdk::ModifierType::ALT_MASK),
+                super_held: modifiers.contains(gtk::gdk::ModifierType::SUPER_MASK)
+                    || modifiers.contains(gtk::gdk::ModifierType::META_MASK)
+                    || modifiers.contains(gtk::gdk::ModifierType::HYPER_MASK),
+            };
+            sender.input(Message::ShortcutRecorderKey(keyval, recorded));
+            gtk::glib::Propagation::Stop
+        });
+    }
+    {
+        let pressed = pressed.clone();
+        controller.connect_key_released(move |_, _, keycode, _| {
+            pressed.borrow_mut().remove(&keycode);
+        });
+    }
+    popover.connect_hide(move |_| {
+        pressed.borrow_mut().clear();
     });
     popover.add_controller(controller);
 }

@@ -24,8 +24,12 @@ pub(super) fn set_accessible_label(widget: &impl gtk::prelude::AccessibleExt, la
     widget.update_property(&[gtk::accessible::Property::Label(label)]);
 }
 
+/// Writes the widget's own visibility flag, never `is_visible`: a widget
+/// inside a hidden parent reports invisible while its own flag still says
+/// otherwise, and skipping the write there would leak the stale state the
+/// moment the parent comes back.
 pub(super) fn set_visible(widget: &impl IsA<gtk::Widget>, visible: bool) {
-    if widget.is_visible() != visible {
+    if widget.get_visible() != visible {
         widget.set_visible(visible);
     }
 }

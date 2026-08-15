@@ -97,7 +97,10 @@ impl SequenceTrie {
             if pending.is_some() {
                 return SequenceMatch::Pending;
             }
-            return self.dispatch_or_pending(std::slice::from_ref(chord), pending, now);
+            // Repeats must not create or rearm a prefix. Holding Ctrl+K past
+            // the timeout would otherwise start the same sequence again and
+            // let a later chord complete it. A complete single may still fire.
+            return self.complete_single_match(chord);
         }
 
         if let Some(current) = pending.take() {
@@ -142,6 +145,15 @@ impl SequenceTrie {
         now: Instant,
     ) -> SequenceMatch {
         self.lookup_steps(steps, pending, now)
+    }
+
+    fn complete_single_match(&self, chord: &KeyBinding) -> SequenceMatch {
+        let Some(node) = self.node_for(std::slice::from_ref(chord)) else {
+            return SequenceMatch::None;
+        };
+        node.action
+            .map(SequenceMatch::Dispatched)
+            .unwrap_or(SequenceMatch::None)
     }
 }
 
@@ -230,6 +242,39 @@ mod tests {
         assert_eq!(
             trie.match_chord(&mut pending, &chord("Ctrl+C"), later, false),
             SequenceMatch::None
+        );
+        assert!(pending.is_none());
+    }
+
+    #[test]
+    fn key_repeat_does_not_rearm_an_expired_prefix() {
+        let trie = trie(&[("Ctrl+K > Ctrl+C", Action::CopySelection)]);
+        let mut pending = None;
+        let now = start();
+        assert_eq!(
+            trie.match_chord(&mut pending, &chord("Ctrl+K"), now, false),
+            SequenceMatch::Pending
+        );
+        let later = now + SEQUENCE_STEP_TIMEOUT;
+        assert_eq!(
+            trie.match_chord(&mut pending, &chord("Ctrl+K"), later, true),
+            SequenceMatch::None
+        );
+        assert!(pending.is_none());
+        assert_eq!(
+            trie.match_chord(&mut pending, &chord("Ctrl+K"), later, false),
+            SequenceMatch::Pending
+        );
+    }
+
+    #[test]
+    fn key_repeat_still_dispatches_a_complete_single() {
+        let trie = trie(&[("F5", Action::SelectPenTool)]);
+        let mut pending = None;
+        let now = start();
+        assert_eq!(
+            trie.match_chord(&mut pending, &chord("F5"), now, true),
+            SequenceMatch::Dispatched(Action::SelectPenTool)
         );
         assert!(pending.is_none());
     }

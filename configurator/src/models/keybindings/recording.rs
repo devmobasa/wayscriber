@@ -395,13 +395,12 @@ fn named_key(keyval: u32) -> Option<&'static str> {
 }
 
 fn keyval_to_unicode(keyval: u32) -> Option<char> {
-    if (0x20..0x7f).contains(&keyval) {
-        return char::from_u32(keyval);
-    }
-    if (0x0100_0000..0x0111_0000).contains(&keyval) {
-        return char::from_u32(keyval - 0x0100_0000);
-    }
-    None
+    use gtk4::glib::translate::FromGlib;
+    // SAFETY: `Key` is a GDK keyval newtype. `from_glib` does not validate,
+    // and `to_unicode` is defined for any u32 keyval (it returns None when
+    // GDK has no mapping).
+    let key = unsafe { gtk4::gdk::Key::from_glib(keyval) };
+    key.to_unicode()
 }
 
 /// Inverse of the runtime shifted-symbol fallback: Shift+1 records as `1`
@@ -642,6 +641,32 @@ mod tests {
             chord(keyval::RETURN, KeyboardModifiers::default()).to_string(),
             "Return"
         );
+    }
+
+    #[test]
+    fn keypad_home_records_the_same_name_as_home() {
+        assert_eq!(
+            chord(keyval::KP_HOME, KeyboardModifiers::default()).to_string(),
+            "Home"
+        );
+        assert_eq!(
+            chord(keyval::KP_LEFT, KeyboardModifiers::default()).to_string(),
+            "ArrowLeft"
+        );
+        assert_eq!(
+            chord(keyval::KP_DELETE, KeyboardModifiers::default()).to_string(),
+            "Delete"
+        );
+    }
+
+    #[test]
+    fn latin1_and_legacy_letter_keysyms_record_as_characters() {
+        let eacute = chord(0x00e9, KeyboardModifiers::default());
+        assert_eq!(eacute.key, "é");
+        let greek_alpha = chord(0x07e1, KeyboardModifiers::default());
+        assert_eq!(greek_alpha.key, "α");
+        let cyrillic_a = chord(0x06c1, KeyboardModifiers::default());
+        assert_eq!(cyrillic_a.key, "а");
     }
 
     #[test]
