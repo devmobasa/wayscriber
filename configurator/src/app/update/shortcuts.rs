@@ -3,13 +3,14 @@
 #[cfg(test)]
 mod tests;
 
-use wayscriber::config::KeyBinding;
+use wayscriber::config::ShortcutTrigger;
 
 use crate::models::KeybindingField;
 use crate::models::keybindings::{
-    AppendOutcome, KeyboardModifiers, RecordedKeyboard, ShortcutRecorderState, ShortcutTextEditor,
-    append_binding, apply_recorded_replace, apply_text_replace, normalize_key_event,
-    other_claimants, parse_keybindings, remove_binding, reset_field, text_conflicts_for,
+    AppendOutcome, KeyboardModifiers, RecordedDevice, RecordedKeyboard, RecorderDeviceKind,
+    ShortcutRecorderState, ShortcutTextEditor, append_binding, apply_recorded_replace,
+    apply_text_replace, normalize_button_event, normalize_key_event, other_claimants,
+    parse_keybindings, remove_binding, reset_field, text_conflicts_for,
 };
 
 use super::super::effects::Effect;
@@ -62,7 +63,29 @@ impl ConfiguratorApp {
             }
             RecordedKeyboard::Chord(binding) => {
                 self.active_shortcut_recorder = None;
-                self.commit_recorded_binding(field, binding)
+                self.commit_recorded_binding(field, binding.into())
+            }
+        }
+    }
+
+    pub(super) fn handle_shortcut_recorder_button(
+        &mut self,
+        button: u32,
+        kind: RecorderDeviceKind,
+        modifiers: KeyboardModifiers,
+    ) -> Vec<Effect> {
+        let Some(recorder) = self.active_shortcut_recorder.as_mut() else {
+            return Vec::new();
+        };
+        let field = recorder.field;
+        match normalize_button_event(button, kind, modifiers) {
+            RecordedDevice::Unsupported { message } => {
+                recorder.prompt = message;
+                Vec::new()
+            }
+            RecordedDevice::Trigger(trigger) => {
+                self.active_shortcut_recorder = None;
+                self.commit_recorded_binding(field, trigger)
             }
         }
     }
@@ -70,7 +93,7 @@ impl ConfiguratorApp {
     pub(super) fn handle_shortcut_removed(
         &mut self,
         field: KeybindingField,
-        binding: KeyBinding,
+        binding: ShortcutTrigger,
     ) -> Vec<Effect> {
         if self.pending_shortcut_conflict.is_some() {
             return Vec::new();
@@ -213,7 +236,7 @@ impl ConfiguratorApp {
     fn commit_recorded_binding(
         &mut self,
         field: KeybindingField,
-        binding: KeyBinding,
+        binding: ShortcutTrigger,
     ) -> Vec<Effect> {
         let claimants = other_claimants(&self.draft.keybindings, field, &binding);
         if !claimants.is_empty() {

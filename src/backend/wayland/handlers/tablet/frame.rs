@@ -1,13 +1,9 @@
 use log::{debug, info};
 
 use crate::backend::wayland::state::{PerfInputSource, WaylandState};
+use crate::config::keybindings::{StylusButton, linux};
 use crate::input::MouseButton;
 use crate::input::state::HelpOverlayPressSource;
-
-/// Linux input event code for the primary stylus barrel button.
-const BTN_STYLUS: u32 = 331;
-/// Linux input event code for the secondary stylus barrel button.
-const BTN_STYLUS2: u32 = 332;
 
 fn modal_blocks_stylus_barrel_actions(input_state: &crate::input::InputState) -> bool {
     input_state.show_help
@@ -17,6 +13,22 @@ fn modal_blocks_stylus_barrel_actions(input_state: &crate::input::InputState) ->
         // the radial menu — so letting one through would run it on the canvas
         // behind the selector.
         || input_state.screen_modal_is_engaged()
+}
+
+fn stylus_barrel_action(
+    input_state: &crate::input::InputState,
+    button: u32,
+    tablet: &crate::config::TabletInputConfig,
+) -> Option<crate::config::Action> {
+    let stylus = linux::stylus_button(button)?;
+    let trigger = input_state.stylus_trigger(stylus);
+    if let Some(action) = input_state.find_trigger_action(&trigger) {
+        return Some(action);
+    }
+    match stylus {
+        StylusButton::Primary => tablet.stylus_button.action,
+        StylusButton::Secondary => tablet.stylus_button2.action,
+    }
 }
 
 impl WaylandState {
@@ -280,18 +292,11 @@ impl WaylandState {
 
     /// Dispatch the configured action for a stylus barrel button press.
     fn dispatch_stylus_button_press(&mut self, button: u32) {
-        let binding = match button {
-            BTN_STYLUS => self.config.tablet.stylus_button,
-            BTN_STYLUS2 => self.config.tablet.stylus_button2,
-            _ => {
-                debug!("Ignoring unknown stylus button {}", button);
-                return;
-            }
-        };
-
-        if let Some(action) = binding.action {
+        if let Some(action) = stylus_barrel_action(&self.input_state, button, &self.config.tablet) {
             debug!("Stylus button {}: dispatching {:?}", button, action);
             self.dispatch_input_action(action);
+        } else if linux::stylus_button(button).is_none() {
+            debug!("Ignoring unknown stylus button {}", button);
         }
     }
 
@@ -310,7 +315,7 @@ impl WaylandState {
 
 #[cfg(test)]
 mod tests {
-    use super::modal_blocks_stylus_barrel_actions;
+    use super::{modal_blocks_stylus_barrel_actions, stylus_barrel_action};
     use crate::input::state::test_support::make_test_input_state;
 
     #[test]
@@ -349,5 +354,52 @@ mod tests {
         assert!(modal_blocks_stylus_barrel_actions(&state));
         state.cancel_eyedropper();
         assert!(!modal_blocks_stylus_barrel_actions(&state));
+    }
+
+    #[test]
+    fn canonical_stylus_shortcut_wins_over_legacy_tablet_binding() {
+        use crate::config::keybindings::linux;
+        use crate::config::{Action, KeybindingsConfig};
+
+        let mut keybindings = KeybindingsConfig::default();
+        keybindings.core.undo = vec!["StylusPrimary".to_string()];
+        let action_map = keybindings.build_action_map().expect("map");
+        let action_bindings = keybindings.build_action_bindings().expect("bindings");
+        let mut state = crate::input::state::test_support::make_test_input_state();
+        state.set_keybinding_maps(action_map, action_bindings);
+
+        let mut tablet = crate::config::TabletInputConfig::default();
+        tablet.stylus_button.action = Some(Action::ToggleRadialMenu);
+
+        assert_eq!(
+            stylus_barrel_action(&state, linux::BTN_STYLUS, &tablet),
+            Some(Action::Undo)
+        );
+        tablet.stylus_button2.action = Some(Action::Redo);
+        assert_eq!(
+            stylus_barrel_action(&state, linux::BTN_STYLUS2, &tablet),
+            Some(Action::Redo)
+        );
+    }
+
+    #[test]
+    fn unbound_stylus_falls_back_to_legacy_tablet_action() {
+        use crate::config::Action;
+        use crate::config::keybindings::linux;
+
+        let state = crate::input::state::test_support::make_test_input_state();
+        let mut tablet = crate::config::TabletInputConfig::default();
+        tablet.stylus_button.action = Some(Action::ToggleRadialMenu);
+        tablet.stylus_button2.action = None;
+
+        assert_eq!(
+            stylus_barrel_action(&state, linux::BTN_STYLUS, &tablet),
+            Some(Action::ToggleRadialMenu)
+        );
+        assert_eq!(
+            stylus_barrel_action(&state, linux::BTN_STYLUS2, &tablet),
+            None
+        );
+        assert_eq!(stylus_barrel_action(&state, 0, &tablet), None);
     }
 }

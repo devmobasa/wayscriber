@@ -1,12 +1,20 @@
 use wayscriber::config::keybindings::KeybindingsConfig;
+use wayscriber::config::{Action, Config};
 
 use super::super::error::FormError;
 use super::field::KeybindingField;
 use super::parse::parse_keybinding_list;
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct LegacyTabletShortcuts {
+    pub stylus_primary: Option<Action>,
+    pub stylus_secondary: Option<Action>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct KeybindingsDraft {
     pub entries: Vec<KeybindingEntry>,
+    pub legacy_tablet: LegacyTabletShortcuts,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -24,7 +32,24 @@ impl KeybindingsDraft {
                 field,
             })
             .collect();
-        Self { entries }
+        Self {
+            entries,
+            legacy_tablet: LegacyTabletShortcuts::default(),
+        }
+    }
+
+    pub fn set_legacy_from_config(&mut self, config: &Config) {
+        #[cfg(feature = "tablet-input")]
+        {
+            self.legacy_tablet = LegacyTabletShortcuts {
+                stylus_primary: config.tablet.stylus_button.action,
+                stylus_secondary: config.tablet.stylus_button2.action,
+            };
+        }
+        #[cfg(not(feature = "tablet-input"))]
+        {
+            let _ = config;
+        }
     }
 
     pub fn set(&mut self, field: KeybindingField, value: String) {

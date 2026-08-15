@@ -1187,11 +1187,11 @@ toggle_toolbar = ["F2", "F9"]
         .build_action_map()
         .expect("the resolved keymap has no duplicates left");
     assert_eq!(
-        map.get(&KeyBinding::parse("F2").expect("F2 parses")),
+        map.get(&ShortcutTrigger::parse("F2").expect("F2 parses")),
         Some(&Action::ToggleToolbar)
     );
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Shift+P").expect("Ctrl+Shift+P parses")),
+        map.get(&ShortcutTrigger::parse("Ctrl+Shift+P").expect("Ctrl+Shift+P parses")),
         Some(&Action::CaptureFullScreen)
     );
 
@@ -1387,7 +1387,7 @@ capture_clipboard_full = ["Ctrl+Shift+K"]
         .build_action_map()
         .expect("the resolved keymap has no duplicates");
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Shift+K").expect("Ctrl+Shift+K parses")),
+        map.get(&ShortcutTrigger::parse("Ctrl+Shift+K").expect("Ctrl+Shift+K parses")),
         Some(&Action::CaptureClipboardFull)
     );
     assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);
@@ -1858,6 +1858,51 @@ fn enabled_tablet_section_reports_and_preserves_nested_unknown_setting() {
         .expect("save enabled tablet section");
     let saved = fs::read_to_string(&temp.path).expect("read enabled tablet section");
     assert!(saved.contains("future_tablet_setting = 12"));
+}
+
+#[cfg(feature = "tablet-input")]
+#[test]
+fn unrelated_save_preserves_legacy_stylus_button_nodes() {
+    let temp = TempConfig::new("preserve-stylus-button");
+    temp.write(
+        "[tablet.stylus_button]\naction = \"undo\"\n\n[tablet.stylus_button2]\naction = \"redo\"\n\n[performance]\nmax_fps_no_vsync = 90\n",
+    );
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load stylus buttons");
+    let mut config = document.config().clone();
+    config.performance.max_fps_no_vsync = 144;
+    document
+        .save_with_backup(config)
+        .expect("save unrelated performance edit");
+    let saved = fs::read_to_string(&temp.path).expect("read preserved stylus buttons");
+    assert!(saved.contains("action = \"undo\""), "{saved}");
+    assert!(saved.contains("action = \"redo\""), "{saved}");
+    assert!(saved.contains("max_fps_no_vsync = 144"), "{saved}");
+}
+
+#[cfg(feature = "tablet-input")]
+#[test]
+fn explicit_legacy_stylus_unbind_rewrites_only_that_action_node() {
+    let temp = TempConfig::new("migrate-stylus-button");
+    temp.write(
+        "[tablet.stylus_button]\naction = \"undo\"\n\n[keybindings]\nclear_canvas = [\"E\"]\n\n[performance]\nmax_fps_no_vsync = 90\n",
+    );
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load stylus button");
+    let mut config = document.config().clone();
+    config.tablet.stylus_button.action = None;
+    config.keybindings.core.clear_canvas = vec!["E".to_string(), "StylusPrimary".to_string()];
+    document
+        .save_with_backup(config)
+        .expect("save explicit stylus migration");
+    let saved = fs::read_to_string(&temp.path).expect("read migrated stylus button");
+    assert!(
+        !saved.contains("action = \"undo\""),
+        "legacy action must move off the tablet node:\n{saved}"
+    );
+    assert!(
+        saved.contains("StylusPrimary"),
+        "canonical trigger must land on the action:\n{saved}"
+    );
+    assert!(saved.contains("max_fps_no_vsync = 90"), "{saved}");
 }
 
 #[test]

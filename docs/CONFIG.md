@@ -1513,6 +1513,7 @@ action = "toggle_radial_menu"
 - Pressure-to-thickness mapping applies only to pressure-sensitive freehand Pen strokes. Marker/Textmarker, Step Marker, and shape tools keep their selected sizes when used with a stylus.
 - `stylus_button` is the primary barrel button (`BTN_STYLUS` / 331); `stylus_button2` is the secondary barrel button (`BTN_STYLUS2` / 332).
 - Barrel button `action` values use normal action names, such as `toggle_radial_menu`, `undo`, and `redo`. Omit `action` to leave a button unbound.
+- These nodes are a compatibility source. Prefer `StylusPrimary` / `StylusSecondary` in `[keybindings]`. The configurator can move a legacy assignment into the keybinding list; loading alone never deletes the tablet nodes.
 
 ### `[session]` - Session Persistence
 
@@ -1598,12 +1599,20 @@ For end-to-end CLI, overlay, and configurator flows, see [`examples/session-mana
 Customize keyboard shortcuts for all actions. Each action can have multiple keybindings.
 For multi-monitor, customize `focus_prev_output` and `focus_next_output` in this section.
 
-A shortcut is a key name with optional modifiers joined by `+`. The modifiers are `Ctrl`
-(`Control`), `Shift`, `Alt`, and `Super` (`Meta`, `Logo`, `Win`, `Windows`). Matching,
-conflicts, and display use the canonical spelling `Super`. Examples: `Escape`, `Ctrl+Z`,
-`Super+X`, `Ctrl+Shift+T`, `F10`. Super chords work when the compositor delivers them;
-if the desktop consumes Super before Wayscriber or the configurator sees it, type the
-shortcut with Edit as Text.
+A shortcut is a key name, auxiliary mouse button, or stylus barrel button with optional
+modifiers joined by `+`. The modifiers are `Ctrl` (`Control`), `Shift`, `Alt`, and `Super`
+(`Meta`, `Logo`, `Win`, `Windows`). Matching, conflicts, and display use the canonical
+spelling `Super`. Examples: `Escape`, `Ctrl+Z`, `Super+X`, `Ctrl+Shift+T`, `F10`,
+`MouseBack`, `Ctrl+MouseForward`, `StylusPrimary`. Super chords work when the compositor
+delivers them; if the desktop consumes Super before Wayscriber or the configurator sees it,
+type the shortcut with Edit as Text.
+
+Auxiliary mouse buttons `MouseBack`, `MouseForward`, and `MouseExtra1` through `MouseExtra4`
+can be bound to actions. Left, middle, and right cannot: they already own drawing and
+toolbar input. Stylus barrel buttons use `StylusPrimary` and `StylusSecondary`. Those names
+can be recorded in the configurator when the device is identifiable; otherwise type them
+with Edit as Text. Existing `[tablet.stylus_button]` / `[tablet.stylus_button2]` assignments
+keep working until you move them into the keybinding list with **Move Legacy Binding**.
 
 #### How a shortcut you did not write is decided
 
@@ -1936,15 +1945,20 @@ clear_preset_5 = ["Ctrl+5"]
 
 **Keybinding Format:**
 
-Keybindings are specified as strings with modifiers and keys separated by `+`:
+Keybindings are specified as strings with modifiers and a key or device button separated by `+`:
 - Simple keys: `"E"`, `"T"`, `"Escape"`, `"F10"`
-- With modifiers: `"Ctrl+Z"`, `"Shift+T"`, `"Ctrl+Shift+W"`
+- With modifiers: `"Ctrl+Z"`, `"Shift+T"`, `"Ctrl+Shift+W"`, `"Super+X"`
+- Auxiliary mouse buttons: `"MouseBack"`, `"MouseForward"`, `"MouseExtra1"` through `"MouseExtra4"`
+- Stylus barrel buttons: `"StylusPrimary"`, `"StylusSecondary"`
 - Special keys: `"Escape"`, `"Return"`, `"Backspace"`, `"Space"`, `"F10"`, `"F11"`, `"Home"`, `"End"`, `"PageUp"`, `"PageDown"`, `"ArrowUp"`, `"ArrowDown"`, `"ArrowLeft"`, `"ArrowRight"`, `"+"`, `"-"`, `"="`, `"_"`
+
+Left, middle, and right mouse buttons cannot be bound as generic actions.
 
 **Supported Modifiers:**
 - `Ctrl` (or `Control`)
 - `Shift`
 - `Alt`
+- `Super` (or `Meta`, `Logo`, `Win`, `Windows`)
 
 **Modifier Order:**
 Modifiers can appear in any order - `"Ctrl+Shift+W"`, `"Shift+Ctrl+W"`, and `"Shift+W+Ctrl"` are all equivalent.

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use wayscriber::config::{ConfigDocument, KeyBinding, ToolbarItemId, ToolbarItemOrderGroup};
+use wayscriber::config::{ConfigDocument, ShortcutTrigger, ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::models::{
     BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, ColorPickerId,
@@ -11,7 +11,7 @@ use crate::models::{
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
     PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField,
-    ReducedMotionOption, RenderProfileExportOption, RenderProfileMappingSide,
+    RecorderDeviceKind, ReducedMotionOption, RenderProfileExportOption, RenderProfileMappingSide,
     RenderProfileTextField, SessionCatalogActionResult, SessionCatalogItem,
     SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
     ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
@@ -155,7 +155,8 @@ pub enum Message {
     ShortcutRecordingStarted(KeybindingField),
     ShortcutRecordingCanceled(KeybindingField),
     ShortcutRecorderKey(u32, KeyboardModifiers),
-    ShortcutRemoved(KeybindingField, KeyBinding),
+    ShortcutRecorderButton(u32, RecorderDeviceKind, KeyboardModifiers),
+    ShortcutRemoved(KeybindingField, ShortcutTrigger),
     ShortcutResetRequested(KeybindingField),
     ShortcutTextEditStarted(KeybindingField),
     ShortcutTextEditChanged(String),

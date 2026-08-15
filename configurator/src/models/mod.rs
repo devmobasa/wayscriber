@@ -36,8 +36,8 @@ pub use fields::{
 #[cfg(feature = "tablet-input")]
 pub use fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 pub use keybindings::{
-    KeybindingField, KeyboardModifiers, PendingShortcutConflict, ShortcutRecorderState,
-    ShortcutTextEditor,
+    KeybindingField, KeyboardModifiers, PendingShortcutConflict, RecorderDeviceKind,
+    ShortcutRecorderState, ShortcutTextEditor,
 };
 pub(crate) use search::SearchQuery;
 pub(crate) use session::SessionCatalogOperation;

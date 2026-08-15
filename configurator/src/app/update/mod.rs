@@ -251,6 +251,9 @@ impl ConfiguratorApp {
             Message::ShortcutRecorderKey(keyval, modifiers) => {
                 self.handle_shortcut_recorder_key(keyval, modifiers)
             }
+            Message::ShortcutRecorderButton(button, kind, modifiers) => {
+                self.handle_shortcut_recorder_button(button, kind, modifiers)
+            }
             Message::ShortcutRemoved(field, binding) => {
                 self.handle_shortcut_removed(field, binding)
             }

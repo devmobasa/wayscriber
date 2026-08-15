@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::super::{Action, KeyBinding};
+use super::super::{Action, ShortcutTrigger};
 use super::types::KeybindingsConfig;
 
 mod board;
@@ -22,13 +22,13 @@ mod zoom;
 /// action lists more than once yields a one-element `actions`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeybindingConflict {
-    binding: KeyBinding,
+    binding: ShortcutTrigger,
     actions: Vec<Action>,
 }
 
 impl KeybindingConflict {
     /// The parsed shortcut every listed action claims.
-    pub fn binding(&self) -> &KeyBinding {
+    pub fn binding(&self) -> &ShortcutTrigger {
         &self.binding
     }
 
@@ -41,11 +41,11 @@ impl KeybindingConflict {
 #[derive(Default)]
 struct ConflictLog {
     entries: Vec<KeybindingConflict>,
-    positions: HashMap<KeyBinding, usize>,
+    positions: HashMap<ShortcutTrigger, usize>,
 }
 
 impl ConflictLog {
-    fn record(&mut self, binding: &KeyBinding, first: Action, next: Action) {
+    fn record(&mut self, binding: &ShortcutTrigger, first: Action, next: Action) {
         match self.positions.get(binding) {
             Some(&position) => {
                 let actions = &mut self.entries[position].actions;
@@ -69,8 +69,8 @@ impl ConflictLog {
 }
 
 struct BindingInserter<'a> {
-    map: &'a mut HashMap<KeyBinding, Action>,
-    ordered: Option<&'a mut HashMap<Action, Vec<KeyBinding>>>,
+    map: &'a mut HashMap<ShortcutTrigger, Action>,
+    ordered: Option<&'a mut HashMap<Action, Vec<ShortcutTrigger>>>,
     conflicts: Option<&'a mut ConflictLog>,
     /// Whether a bad binding string or a duplicate key is data rather than a
     /// failure. Set only for the views that answer "which keys are taken",
@@ -79,7 +79,7 @@ struct BindingInserter<'a> {
 }
 
 impl<'a> BindingInserter<'a> {
-    fn new(map: &'a mut HashMap<KeyBinding, Action>) -> Self {
+    fn new(map: &'a mut HashMap<ShortcutTrigger, Action>) -> Self {
         Self {
             map,
             ordered: None,
@@ -89,8 +89,8 @@ impl<'a> BindingInserter<'a> {
     }
 
     fn new_with_order(
-        map: &'a mut HashMap<KeyBinding, Action>,
-        ordered: &'a mut HashMap<Action, Vec<KeyBinding>>,
+        map: &'a mut HashMap<ShortcutTrigger, Action>,
+        ordered: &'a mut HashMap<Action, Vec<ShortcutTrigger>>,
     ) -> Self {
         Self {
             map,
@@ -101,7 +101,7 @@ impl<'a> BindingInserter<'a> {
     }
 
     fn new_collecting(
-        map: &'a mut HashMap<KeyBinding, Action>,
+        map: &'a mut HashMap<ShortcutTrigger, Action>,
         conflicts: &'a mut ConflictLog,
     ) -> Self {
         Self {
@@ -112,7 +112,7 @@ impl<'a> BindingInserter<'a> {
         }
     }
 
-    fn new_tolerant(map: &'a mut HashMap<KeyBinding, Action>) -> Self {
+    fn new_tolerant(map: &'a mut HashMap<ShortcutTrigger, Action>) -> Self {
         Self {
             map,
             ordered: None,
@@ -122,7 +122,7 @@ impl<'a> BindingInserter<'a> {
     }
 
     fn insert(&mut self, binding_str: &str, action: Action) -> Result<(), String> {
-        let binding = match KeyBinding::parse(binding_str) {
+        let binding = match ShortcutTrigger::parse(binding_str) {
             Ok(binding) => binding,
             // A string the parser rejects binds nothing at runtime, so a view
             // of the keys in effect has nothing to record and nothing to say.
@@ -179,7 +179,7 @@ impl KeybindingsConfig {
 
     /// Build a lookup map from keybindings to actions for efficient matching.
     /// Returns an error if any keybinding string is invalid or if duplicates are detected.
-    pub fn build_action_map(&self) -> Result<HashMap<KeyBinding, Action>, String> {
+    pub fn build_action_map(&self) -> Result<HashMap<ShortcutTrigger, Action>, String> {
         let mut map = HashMap::new();
         let mut inserter = BindingInserter::new(&mut map);
         self.insert_every_binding(&mut inserter)?;
@@ -188,7 +188,7 @@ impl KeybindingsConfig {
 
     /// Build an ordered list of keybindings per action.
     /// Returns an error if any keybinding string is invalid or if duplicates are detected.
-    pub fn build_action_bindings(&self) -> Result<HashMap<Action, Vec<KeyBinding>>, String> {
+    pub fn build_action_bindings(&self) -> Result<HashMap<Action, Vec<ShortcutTrigger>>, String> {
         let mut map = HashMap::new();
         let mut ordered = HashMap::new();
         let mut inserter = BindingInserter::new_with_order(&mut map, &mut ordered);
@@ -222,7 +222,7 @@ impl KeybindingsConfig {
     /// claims nothing at runtime either. That keeps an editor able to accept an
     /// edit to an unrelated action while a tolerated problem sits elsewhere in
     /// the file (#293).
-    pub fn claimed_keys(&self) -> HashMap<KeyBinding, Action> {
+    pub fn claimed_keys(&self) -> HashMap<ShortcutTrigger, Action> {
         let mut map = HashMap::new();
         let mut inserter = BindingInserter::new_tolerant(&mut map);
         // The tolerant inserter reports nothing, so there is no error to

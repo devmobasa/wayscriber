@@ -33,8 +33,12 @@ config_revision = 3
 [keybindings]
 # Customize keyboard shortcuts for all actions
 # Format: key names with modifiers separated by +
-# Examples: "Escape", "Ctrl+Z", "Super+X", "Ctrl+Shift+T", "F10"
+# Examples: "Escape", "Ctrl+Z", "Super+X", "Ctrl+Shift+T", "F10",
+# "MouseBack", "Ctrl+MouseForward", "StylusPrimary"
 # Super also accepts Meta, Logo, Win, and Windows.
+# Auxiliary mouse buttons: MouseBack, MouseForward, MouseExtra1–MouseExtra4.
+# Stylus barrel buttons: StylusPrimary, StylusSecondary.
+# Left, middle, and right cannot be bound as actions.
 # Each action can have multiple keybindings (e.g., ["+", "="])
 
 # Exit overlay (or cancel current action)
@@ -1360,6 +1364,8 @@ pressure_thickness_scale_step = 0.1
 #
 # Each button can trigger a keybinding action on press (e.g. "toggle_radial_menu").
 # Omit action to ignore the button.
+# Prefer StylusPrimary / StylusSecondary under [keybindings]; these tablet
+# nodes keep working until you move them in the configurator.
 # Eraser switching is handled automatically via the physical tool type
 # (controlled by auto_eraser_switch above), not via barrel buttons.
 

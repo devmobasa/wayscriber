@@ -5,7 +5,11 @@ use gtk::prelude::*;
 
 use crate::messages::Message;
 use crate::models::KeybindingField;
-use crate::models::keybindings::{KeyboardModifiers, super_consumed_hint, waiting_prompt};
+#[cfg(not(feature = "tablet-input"))]
+use crate::models::keybindings::tablet_unavailable_hint;
+use crate::models::keybindings::{
+    KeyboardModifiers, RecorderDeviceKind, super_consumed_hint, waiting_prompt,
+};
 
 use super::super::super::state::ConfiguratorApp;
 use super::widgets::{field_canceled, ignore_activating_click, set_accessible_label, set_label};
@@ -55,6 +59,7 @@ impl RecorderPopover {
         content.set_margin_end(12);
         content.append(&prompt);
         content.append(&hint);
+        content.append(&device_hint_label());
         content.append(&cancel);
 
         let popover = gtk::Popover::builder()
@@ -65,6 +70,7 @@ impl RecorderPopover {
         ignore_activating_click(&popover);
         field_canceled(&popover, field, sender, Message::ShortcutRecordingCanceled);
         attach_key_controller(&popover, sender);
+        attach_button_controller(&popover, sender);
 
         Self { popover, prompt }
     }
@@ -97,6 +103,81 @@ fn attach_key_controller(popover: &gtk::Popover, sender: &ComponentSender<Config
                 || modifiers.contains(gtk::gdk::ModifierType::HYPER_MASK),
         };
         sender.input(Message::ShortcutRecorderKey(keyval, recorded));
+        gtk::glib::Propagation::Stop
+    });
+    popover.add_controller(controller);
+}
+
+fn device_hint_label() -> gtk::Label {
+    let text = device_hint_text();
+    let hint = gtk::Label::builder()
+        .label(text)
+        .wrap(true)
+        .xalign(0.0)
+        .max_width_chars(36)
+        .css_classes(["dim-label"])
+        .build();
+    set_accessible_label(&hint, text);
+    hint
+}
+
+fn device_hint_text() -> &'static str {
+    #[cfg(feature = "tablet-input")]
+    {
+        "Auxiliary mouse and stylus barrel buttons can be recorded. Left, middle, right, and the stylus tip cannot."
+    }
+    #[cfg(not(feature = "tablet-input"))]
+    {
+        tablet_unavailable_hint()
+    }
+}
+
+fn attach_button_controller(popover: &gtk::Popover, sender: &ComponentSender<ConfiguratorApp>) {
+    let ignore = std::rc::Rc::new(std::cell::Cell::new(false));
+    {
+        let ignore = ignore.clone();
+        popover.connect_show(move |_| {
+            ignore.set(true);
+        });
+    }
+    let sender = sender.clone();
+    let controller = gtk::EventControllerLegacy::new();
+    controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+    controller.connect_event(move |_, event| {
+        if event.event_type() != gtk::gdk::EventType::ButtonPress {
+            return gtk::glib::Propagation::Proceed;
+        }
+        if ignore.get() {
+            ignore.set(false);
+            return gtk::glib::Propagation::Stop;
+        }
+        let Some(button_event) = event.downcast_ref::<gtk::gdk::ButtonEvent>() else {
+            return gtk::glib::Propagation::Stop;
+        };
+        let kind = event
+            .device()
+            .map(|device| match device.source() {
+                gtk::gdk::InputSource::Mouse
+                | gtk::gdk::InputSource::Touchpad
+                | gtk::gdk::InputSource::Trackpoint => RecorderDeviceKind::Mouse,
+                gtk::gdk::InputSource::Pen => RecorderDeviceKind::Pen,
+                _ => RecorderDeviceKind::Other,
+            })
+            .unwrap_or(RecorderDeviceKind::Other);
+        let modifiers = event.modifier_state();
+        let recorded = KeyboardModifiers {
+            ctrl: modifiers.contains(gtk::gdk::ModifierType::CONTROL_MASK),
+            shift: modifiers.contains(gtk::gdk::ModifierType::SHIFT_MASK),
+            alt: modifiers.contains(gtk::gdk::ModifierType::ALT_MASK),
+            super_held: modifiers.contains(gtk::gdk::ModifierType::SUPER_MASK)
+                || modifiers.contains(gtk::gdk::ModifierType::META_MASK)
+                || modifiers.contains(gtk::gdk::ModifierType::HYPER_MASK),
+        };
+        sender.input(Message::ShortcutRecorderButton(
+            button_event.button(),
+            kind,
+            recorded,
+        ));
         gtk::glib::Propagation::Stop
     });
     popover.add_controller(controller);

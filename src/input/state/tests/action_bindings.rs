@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::KeyBinding;
+use crate::config::{PointerButton, ShortcutTrigger};
 use std::collections::HashMap;
 
 #[test]
@@ -9,9 +9,9 @@ fn explicit_action_binding_labels_dedup_and_preserve_order() {
     bindings.insert(
         Action::ToggleHelp,
         vec![
-            KeyBinding::parse("Shift+F1").unwrap(),
-            KeyBinding::parse("Shift+F1").unwrap(),
-            KeyBinding::parse("F10").unwrap(),
+            ShortcutTrigger::parse("Shift+F1").unwrap(),
+            ShortcutTrigger::parse("Shift+F1").unwrap(),
+            ShortcutTrigger::parse("F10").unwrap(),
         ],
     );
     state.set_action_bindings(bindings);
@@ -26,7 +26,10 @@ fn explicit_action_binding_labels_dedup_and_preserve_order() {
 fn custom_action_bindings_override_fallback_action_map_labels() {
     let mut state = create_test_input_state();
     let mut bindings = HashMap::new();
-    bindings.insert(Action::ToggleHelp, vec![KeyBinding::parse("Menu").unwrap()]);
+    bindings.insert(
+        Action::ToggleHelp,
+        vec![ShortcutTrigger::parse("Menu").unwrap()],
+    );
     state.set_action_bindings(bindings);
 
     assert_eq!(
@@ -53,8 +56,8 @@ fn action_binding_primary_label_prefers_first_explicit_binding() {
     bindings.insert(
         Action::ToggleStatusBar,
         vec![
-            KeyBinding::parse("F4").unwrap(),
-            KeyBinding::parse("F12").unwrap(),
+            ShortcutTrigger::parse("F4").unwrap(),
+            ShortcutTrigger::parse("F12").unwrap(),
         ],
     );
     state.set_action_bindings(bindings);
@@ -99,4 +102,42 @@ fn find_action_treats_super_as_a_distinct_modifier() {
     state.reset_modifiers();
     assert!(!state.modifiers.logo);
     assert!(!state.modifiers.ctrl);
+}
+
+#[test]
+fn pointer_shortcuts_match_current_modifiers_and_ignore_unbound_buttons() {
+    let mut keybindings = crate::config::KeybindingsConfig::default();
+    keybindings.core.undo = vec!["Ctrl+MouseBack".to_string()];
+    keybindings.core.redo = vec!["MouseForward".to_string()];
+    let mut state = create_test_input_state_with_keybindings(keybindings);
+
+    state.modifiers.ctrl = true;
+    assert_eq!(
+        state.find_trigger_action(&state.pointer_trigger(PointerButton::Back)),
+        Some(Action::Undo)
+    );
+    state.modifiers.ctrl = false;
+    assert_eq!(
+        state.find_trigger_action(&state.pointer_trigger(PointerButton::Back)),
+        None
+    );
+    assert_eq!(
+        state.find_trigger_action(&state.pointer_trigger(PointerButton::Forward)),
+        Some(Action::Redo)
+    );
+    assert_eq!(
+        state.find_trigger_action(&state.pointer_trigger(PointerButton::Extra(1))),
+        None
+    );
+}
+
+#[test]
+fn consumed_pointer_shortcut_buttons_clear_on_focus_loss() {
+    let mut state = create_test_input_state();
+    state.consume_pointer_shortcut_button(0x113);
+    assert!(state.take_consumed_pointer_shortcut_button(0x113));
+    assert!(!state.take_consumed_pointer_shortcut_button(0x113));
+    state.consume_pointer_shortcut_button(0x113);
+    state.reset_modifiers();
+    assert!(!state.take_consumed_pointer_shortcut_button(0x113));
 }

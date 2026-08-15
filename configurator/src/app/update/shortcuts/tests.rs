@@ -1,9 +1,9 @@
-use wayscriber::config::{CURRENT_CONFIG_REVISION, ConfigDocument, KeyBinding};
+use wayscriber::config::{CURRENT_CONFIG_REVISION, ConfigDocument, ShortcutTrigger};
 
 use crate::app::effects::Effect;
 use crate::app::state::{ConfiguratorApp, PendingConfirmation, StatusMessage};
 use crate::models::keybindings::keyval;
-use crate::models::{KeybindingField, KeyboardModifiers, SearchQuery};
+use crate::models::{KeybindingField, KeyboardModifiers, RecorderDeviceKind, SearchQuery};
 use crate::test_temp::TempDir;
 
 fn status_contains(status: &StatusMessage, needle: &str) -> bool {
@@ -124,7 +124,7 @@ fn recording_reset_and_removal_dirty_without_saving() {
     );
     let effects = app.handle_shortcut_removed(
         KeybindingField::ToggleFloatingBadge,
-        KeyBinding::parse("F5").expect("parses"),
+        ShortcutTrigger::parse("F5").expect("parses"),
     );
     assert!(effects.is_empty());
     assert_eq!(
@@ -277,4 +277,53 @@ fn active_confirmation_canceled_clears_defaults_without_touching_conflicts() {
     assert!(effects.is_empty());
     assert!(app.pending_confirmation.is_none());
     assert!(app.pending_shortcut_conflict.is_some());
+}
+
+#[test]
+fn auxiliary_mouse_button_records_into_the_draft() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _ = app.handle_shortcut_recording_started(KeybindingField::ToggleFloatingBadge);
+    let effects = app.handle_shortcut_recorder_button(
+        8,
+        RecorderDeviceKind::Mouse,
+        KeyboardModifiers::default(),
+    );
+    assert!(effects.is_empty());
+    assert!(app.active_shortcut_recorder.is_none());
+    assert_eq!(
+        app.draft
+            .keybindings
+            .value_for(KeybindingField::ToggleFloatingBadge),
+        Some("MouseBack")
+    );
+}
+
+#[cfg(feature = "tablet-input")]
+#[test]
+fn recording_stylus_primary_prompts_to_move_the_default_legacy_barrel() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    assert_eq!(
+        app.draft.keybindings.legacy_tablet.stylus_primary,
+        Some(wayscriber::config::Action::ToggleRadialMenu)
+    );
+    let _ = app.handle_shortcut_recording_started(KeybindingField::Undo);
+    let _ = app.handle_shortcut_recorder_button(
+        2,
+        RecorderDeviceKind::Pen,
+        KeyboardModifiers::default(),
+    );
+    let pending = app
+        .pending_shortcut_conflict
+        .as_ref()
+        .expect("legacy barrel is already assigned");
+    assert_eq!(pending.replace_label(), "Move Legacy Binding");
+    let effects = app.handle_shortcut_conflict_replace_confirmed();
+    assert!(effects.is_empty());
+    assert_eq!(app.draft.keybindings.legacy_tablet.stylus_primary, None);
+    assert!(
+        app.draft
+            .keybindings
+            .value_for(KeybindingField::Undo)
+            .is_some_and(|value| value.contains("StylusPrimary"))
+    );
 }

@@ -14,6 +14,7 @@ impl InputState {
         self.modifiers.alt = false;
         self.modifiers.logo = false;
         self.modifiers.tab = false;
+        self.consumed_pointer_buttons.clear();
         if matches!(self.state, DrawingState::Idle) {
             self.sync_current_settings_from_active_tool();
         }

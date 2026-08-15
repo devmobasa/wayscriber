@@ -185,8 +185,8 @@ fn a_second_edits_completion_keeps_the_first_edits_chord() {
             .bindings_for_action(Action::SelectMarkerTool),
         Some(&["Ctrl+Alt+Shift+M".to_string()][..])
     );
-    let pen_chord = KeyBinding::parse("Ctrl+Alt+Shift+P").expect("a parseable chord");
-    let marker_chord = KeyBinding::parse("Ctrl+Alt+Shift+M").expect("a parseable chord");
+    let pen_chord = ShortcutTrigger::parse("Ctrl+Alt+Shift+P").expect("a parseable chord");
+    let marker_chord = ShortcutTrigger::parse("Ctrl+Alt+Shift+M").expect("a parseable chord");
     assert_eq!(
         after_both.action_map.get(&pen_chord),
         Some(&Action::SelectPenTool)

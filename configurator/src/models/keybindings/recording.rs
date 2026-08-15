@@ -1,10 +1,13 @@
 //! GDK key-event normalization for the configurator shortcut recorder.
 //!
-//! The runtime still matches [`wayscriber::config::KeyBinding`]. This module
-//! only translates a keyval plus modifier flags into that type, so the
-//! recorder can be tested without a GTK display.
+//! The runtime still matches [`wayscriber::config::ShortcutTrigger`]. This
+//! module only translates a keyval or button event plus modifier flags into
+//! that type, so the recorder can be tested without a GTK display.
 
-use wayscriber::config::KeyBinding;
+#[cfg(feature = "tablet-input")]
+use wayscriber::config::StylusTrigger;
+use wayscriber::config::keybindings::{MAX_POINTER_EXTRA, gdk};
+use wayscriber::config::{KeyBinding, PointerTrigger, ShortcutTrigger};
 
 use super::field::KeybindingField;
 
@@ -52,6 +55,21 @@ pub enum RecordedKeyboard {
     /// A complete chord ready to add.
     Chord(KeyBinding),
     /// The key cannot be stored; the recorder stays open.
+    Unsupported { message: String },
+}
+
+/// GTK/GDK input source as the recorder needs it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecorderDeviceKind {
+    Mouse,
+    Pen,
+    Other,
+}
+
+/// Result of one recorder pointer/tablet button event.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RecordedDevice {
+    Trigger(ShortcutTrigger),
     Unsupported { message: String },
 }
 
@@ -110,6 +128,78 @@ pub fn pending_preview(modifiers: KeyboardModifiers) -> String {
 
 pub fn super_consumed_hint() -> &'static str {
     "If Super never appears, the desktop captured it. Use Edit as Text."
+}
+
+#[cfg(not(feature = "tablet-input"))]
+pub fn tablet_unavailable_hint() -> &'static str {
+    "Tablet recording is unavailable in this build. Stylus names can still be typed with Edit as Text."
+}
+
+pub fn device_unidentified_message() -> String {
+    format!(
+        "This device cannot be identified. Use Edit as Text, or a supported trigger: MouseBack, MouseForward, MouseExtra1–{MAX_POINTER_EXTRA}, StylusPrimary, StylusSecondary."
+    )
+}
+
+/// Map a GDK button number, device kind, and modifiers onto a device trigger.
+pub fn normalize_button_event(
+    button: u32,
+    kind: RecorderDeviceKind,
+    modifiers: KeyboardModifiers,
+) -> RecordedDevice {
+    match kind {
+        RecorderDeviceKind::Mouse => normalize_mouse_button(button, modifiers),
+        RecorderDeviceKind::Pen => normalize_stylus_button(button, modifiers),
+        RecorderDeviceKind::Other => RecordedDevice::Unsupported {
+            message: device_unidentified_message(),
+        },
+    }
+}
+
+fn normalize_mouse_button(button: u32, modifiers: KeyboardModifiers) -> RecordedDevice {
+    match gdk::pointer_button(button) {
+        Some(pointer) => RecordedDevice::Trigger(ShortcutTrigger::Pointer(PointerTrigger {
+            button: pointer,
+            ctrl: modifiers.ctrl,
+            shift: modifiers.shift,
+            alt: modifiers.alt,
+            logo: modifiers.super_held,
+        })),
+        None if (1..=3).contains(&button) => RecordedDevice::Unsupported {
+            message: "Left, middle, and right already own drawing and toolbar input.".to_string(),
+        },
+        None => RecordedDevice::Unsupported {
+            message: format!(
+                "Unknown mouse button. Use MouseBack, MouseForward, or MouseExtra1 through MouseExtra{MAX_POINTER_EXTRA}."
+            ),
+        },
+    }
+}
+
+#[cfg(not(feature = "tablet-input"))]
+fn normalize_stylus_button(_button: u32, _modifiers: KeyboardModifiers) -> RecordedDevice {
+    RecordedDevice::Unsupported {
+        message: tablet_unavailable_hint().to_string(),
+    }
+}
+
+#[cfg(feature = "tablet-input")]
+fn normalize_stylus_button(button: u32, modifiers: KeyboardModifiers) -> RecordedDevice {
+    match gdk::stylus_button(button) {
+        Some(stylus) => RecordedDevice::Trigger(ShortcutTrigger::Stylus(StylusTrigger {
+            button: stylus,
+            ctrl: modifiers.ctrl,
+            shift: modifiers.shift,
+            alt: modifiers.alt,
+            logo: modifiers.super_held,
+        })),
+        None if button == 1 => RecordedDevice::Unsupported {
+            message: "The stylus tip cannot be bound as an action.".to_string(),
+        },
+        None => RecordedDevice::Unsupported {
+            message: "Unknown stylus button. Use StylusPrimary or StylusSecondary.".to_string(),
+        },
+    }
 }
 
 pub fn unsupported_key_message() -> &'static str {
@@ -460,5 +550,66 @@ mod tests {
             chord(keyval::RETURN, KeyboardModifiers::default()).to_string(),
             "Return"
         );
+    }
+
+    #[test]
+    fn mouse_back_and_forward_record_semantic_names() {
+        match normalize_button_event(8, RecorderDeviceKind::Mouse, KeyboardModifiers::default()) {
+            RecordedDevice::Trigger(trigger) => assert_eq!(trigger.to_string(), "MouseBack"),
+            other => panic!("expected MouseBack, got {other:?}"),
+        }
+        match normalize_button_event(
+            9,
+            RecorderDeviceKind::Mouse,
+            mods(true, false, false, false),
+        ) {
+            RecordedDevice::Trigger(trigger) => {
+                assert_eq!(trigger.to_string(), "Ctrl+MouseForward");
+            }
+            other => panic!("expected Ctrl+MouseForward, got {other:?}"),
+        }
+        match normalize_button_event(1, RecorderDeviceKind::Mouse, KeyboardModifiers::default()) {
+            RecordedDevice::Unsupported { message } => {
+                assert!(message.contains("Left, middle, and right"), "{message}");
+            }
+            other => panic!("expected primary-button rejection, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unidentified_devices_keep_edit_as_text() {
+        match normalize_button_event(8, RecorderDeviceKind::Other, KeyboardModifiers::default()) {
+            RecordedDevice::Unsupported { message } => {
+                assert!(message.contains("Edit as Text"), "{message}");
+                assert!(message.contains("MouseBack"), "{message}");
+            }
+            other => panic!("expected unidentified-device message, got {other:?}"),
+        }
+    }
+
+    #[cfg(feature = "tablet-input")]
+    #[test]
+    fn pen_barrel_buttons_record_stylus_names() {
+        match normalize_button_event(2, RecorderDeviceKind::Pen, KeyboardModifiers::default()) {
+            RecordedDevice::Trigger(trigger) => assert_eq!(trigger.to_string(), "StylusPrimary"),
+            other => panic!("expected StylusPrimary, got {other:?}"),
+        }
+        match normalize_button_event(3, RecorderDeviceKind::Pen, mods(false, false, true, false)) {
+            RecordedDevice::Trigger(trigger) => {
+                assert_eq!(trigger.to_string(), "Alt+StylusSecondary");
+            }
+            other => panic!("expected Alt+StylusSecondary, got {other:?}"),
+        }
+    }
+
+    #[cfg(not(feature = "tablet-input"))]
+    #[test]
+    fn pen_buttons_are_unavailable_without_tablet_input() {
+        match normalize_button_event(2, RecorderDeviceKind::Pen, KeyboardModifiers::default()) {
+            RecordedDevice::Unsupported { message } => {
+                assert!(message.contains("unavailable"), "{message}");
+            }
+            other => panic!("expected unavailable tablet message, got {other:?}"),
+        }
     }
 }

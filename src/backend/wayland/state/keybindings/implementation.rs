@@ -51,7 +51,7 @@ fn apply_keybinding_edit(
     let claimed = other_bindings.claimed_keys();
     let mut requested = HashMap::new();
     for binding_text in &bindings {
-        let binding = KeyBinding::parse(binding_text).map_err(KeybindingEditError::Edit)?;
+        let binding = ShortcutTrigger::parse(binding_text).map_err(KeybindingEditError::Edit)?;
         if let Some(existing_action) = claimed.get(&binding) {
             return Err(KeybindingEditError::Conflict {
                 binding: binding_text.clone(),
@@ -265,8 +265,8 @@ fn prepare_keybinding_edit(
 /// The run's keymap, and the two views built from it, after one edit lands.
 struct InstalledKeybindings {
     keybindings: KeybindingsConfig,
-    action_map: HashMap<KeyBinding, Action>,
-    action_bindings: HashMap<Action, Vec<KeyBinding>>,
+    action_map: HashMap<ShortcutTrigger, Action>,
+    action_bindings: HashMap<Action, Vec<ShortcutTrigger>>,
 }
 
 /// Fold one landed edit into the keymap the run holds *now*.

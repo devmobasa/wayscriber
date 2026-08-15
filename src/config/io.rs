@@ -1,6 +1,6 @@
 use super::ColorSpec;
 use super::action_meta::action_label;
-use super::keybindings::{Action, KeyBinding, KeybindingAuthorship};
+use super::keybindings::{Action, KeybindingAuthorship, ShortcutTrigger};
 use super::paths::primary_config_dir;
 use super::types::{PRESET_SLOTS_MAX, ToolPresetConfig};
 use super::validate::ConfigValidationReport;
@@ -576,7 +576,7 @@ fn refuse_shortcut_claimed_on_disk(
         .map_err(|error| anyhow!(error))?;
     let claimed = others.claimed_keys();
     for text in bindings {
-        let binding = KeyBinding::parse(text).map_err(|error| anyhow!(error))?;
+        let binding = ShortcutTrigger::parse(text).map_err(|error| anyhow!(error))?;
         if let Some(owner) = claimed.get(&binding) {
             return Err(anyhow!(ShortcutClaimedOnDisk {
                 binding: text.clone(),

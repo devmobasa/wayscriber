@@ -52,7 +52,8 @@ pub use io::{
     persist_preset_slot, persist_quick_color,
 };
 pub use keybindings::{
-    Action, KeyBinding, KeybindingAuthorship, KeybindingConflict, KeybindingsConfig,
+    Action, KeyBinding, KeybindingAuthorship, KeybindingConflict, KeybindingsConfig, PointerButton,
+    PointerTrigger, ShortcutTrigger, StylusButton, StylusTrigger,
 };
 pub use migration::{MigrationChange, MigrationPreview};
 #[allow(unused_imports)]

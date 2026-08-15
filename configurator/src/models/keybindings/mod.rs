@@ -18,9 +18,11 @@ pub use field::KeybindingField;
 pub(crate) use parse::parse_keybindings;
 #[cfg(test)]
 pub(crate) use recording::keyval;
+#[cfg(not(feature = "tablet-input"))]
+pub use recording::tablet_unavailable_hint;
 pub use recording::{
-    KeyboardModifiers, RecordedKeyboard, ShortcutRecorderState, normalize_key_event,
-    super_consumed_hint, waiting_prompt,
+    KeyboardModifiers, RecordedDevice, RecordedKeyboard, RecorderDeviceKind, ShortcutRecorderState,
+    normalize_button_event, normalize_key_event, super_consumed_hint, waiting_prompt,
 };
 
 #[cfg(test)]

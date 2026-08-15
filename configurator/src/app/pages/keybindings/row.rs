@@ -2,7 +2,7 @@ use relm4::prelude::*;
 use relm4::{adw, gtk};
 
 use adw::prelude::*;
-use wayscriber::config::KeyBinding;
+use wayscriber::config::ShortcutTrigger;
 
 use crate::messages::Message;
 use crate::models::KeybindingField;
@@ -249,7 +249,7 @@ fn row_visible(summary: &AppSearchSummary, field: KeybindingField) -> bool {
 fn sync_chips(
     flow: &gtk::FlowBox,
     field: KeybindingField,
-    bindings: &[KeyBinding],
+    bindings: &[ShortcutTrigger],
     sender: &ComponentSender<ConfiguratorApp>,
 ) {
     clear_flow(flow);
@@ -266,7 +266,7 @@ fn clear_flow(flow: &gtk::FlowBox) {
 
 fn shortcut_chip(
     field: KeybindingField,
-    binding: &KeyBinding,
+    binding: &ShortcutTrigger,
     sender: &ComponentSender<ConfiguratorApp>,
 ) -> gtk::Box {
     let label_text = binding.to_string();

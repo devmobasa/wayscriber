@@ -355,7 +355,11 @@ impl ConfigDraft {
 
             presets: PresetsDraft::from_config(config),
 
-            keybindings: KeybindingsDraft::from_config(&config.keybindings),
+            keybindings: {
+                let mut keybindings = KeybindingsDraft::from_config(&config.keybindings);
+                keybindings.set_legacy_from_config(config);
+                keybindings
+            },
         }
     }
 }

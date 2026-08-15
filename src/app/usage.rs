@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
-use crate::config::{Action, KeyBinding, KeybindingsConfig, action_display_label, action_label};
+use crate::config::{
+    Action, KeybindingsConfig, ShortcutTrigger, action_display_label, action_label,
+};
 use crate::label_format::format_binding_labels;
 
-fn default_action_bindings() -> HashMap<Action, Vec<KeyBinding>> {
+fn default_action_bindings() -> HashMap<Action, Vec<ShortcutTrigger>> {
     match KeybindingsConfig::default().build_action_bindings() {
         Ok(bindings) => bindings,
         Err(err) => {
@@ -14,7 +16,7 @@ fn default_action_bindings() -> HashMap<Action, Vec<KeyBinding>> {
 }
 
 fn action_binding_labels(
-    bindings: &HashMap<Action, Vec<KeyBinding>>,
+    bindings: &HashMap<Action, Vec<ShortcutTrigger>>,
     action: Action,
 ) -> Vec<String> {
     bindings
@@ -23,12 +25,15 @@ fn action_binding_labels(
         .unwrap_or_default()
 }
 
-fn action_binding_label(bindings: &HashMap<Action, Vec<KeyBinding>>, action: Action) -> String {
+fn action_binding_label(
+    bindings: &HashMap<Action, Vec<ShortcutTrigger>>,
+    action: Action,
+) -> String {
     format_binding_labels(&action_binding_labels(bindings, action))
 }
 
 fn action_primary_binding_label(
-    bindings: &HashMap<Action, Vec<KeyBinding>>,
+    bindings: &HashMap<Action, Vec<ShortcutTrigger>>,
     action: Action,
 ) -> Option<String> {
     bindings
@@ -37,7 +42,7 @@ fn action_primary_binding_label(
         .map(|binding| binding.to_string())
 }
 
-fn color_binding_labels(bindings: &HashMap<Action, Vec<KeyBinding>>) -> String {
+fn color_binding_labels(bindings: &HashMap<Action, Vec<ShortcutTrigger>>) -> String {
     let colors = [
         Action::SetColorRed,
         Action::SetColorGreen,

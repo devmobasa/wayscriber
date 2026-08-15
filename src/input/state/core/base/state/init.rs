@@ -8,7 +8,8 @@ use super::super::types::{
 };
 use super::structs::InputState;
 use crate::config::{
-    Action, BoardsConfig, KeyBinding, PRESET_SLOTS_MAX, QuickColorPalette, RadialMenuMouseBinding,
+    Action, BoardsConfig, PRESET_SLOTS_MAX, QuickColorPalette, RadialMenuMouseBinding,
+    ShortcutTrigger,
 };
 use crate::draw::{
     BlurStyle, DirtyTracker, EraserKind, FontDescriptor, REGULAR_POLYGON_DEFAULT_SIDES,
@@ -20,7 +21,7 @@ use crate::input::{
     modifiers::{DragToolBindings, Modifiers},
     tool::{EraserMode, PerToolDrawingSettings},
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 impl InputState {
@@ -60,7 +61,7 @@ impl InputState {
         arrow_head_at_end: bool,
         show_status_bar: bool,
         boards_config: BoardsConfig,
-        action_map: HashMap<KeyBinding, Action>,
+        action_map: HashMap<ShortcutTrigger, Action>,
         max_shapes_per_frame: usize,
         click_highlight_settings: ClickHighlightSettings,
         undo_all_delay_ms: u64,
@@ -206,6 +207,7 @@ impl InputState {
             text_input_revision: 0,
             action_map,
             action_bindings: HashMap::new(),
+            consumed_pointer_buttons: HashSet::new(),
             pending_backend_action: None,
             pending_toolbar_persistence: Vec::new(),
             pending_keybinding_edits: Vec::new(),

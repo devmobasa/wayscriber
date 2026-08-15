@@ -69,7 +69,7 @@ if its UI task is no longer observed.
 
 - **Drawing, Arrow, Performance, UI, Board, Capture** – numeric fields with inline validation, toggles, and color editors (RGBA/RGB components).
 - **Default color** – toggle between named colors and custom RGB triples.
-- **Keybindings** – per-action shortcut chips with press-to-bind recording, per-row reset, and a raw comma-separated text editor. Super/Meta chords record when the desktop delivers them.
+- **Keybindings** – per-action shortcut chips with press-to-bind recording for keys, auxiliary mouse buttons, and stylus barrel buttons, plus per-row reset and a raw comma-separated text editor. Super/Meta chords record when the desktop delivers them. Legacy `[tablet.stylus_button]` assignments can be moved into the keybinding list with an explicit confirmation.
 - **Session** – persistence settings plus named-session catalog management. Rename display labels, reveal files, and forget metadata without touching files. Clear Tool State preserves boards/history while removing persisted tool defaults. Duplicate, Move, Clear Tool State, and Clear are disabled while an overlay, manually started daemon, or background service is active.
 - Live dirty-state indicator plus status banner for success/error details.
 - Non-fatal warnings list unrecognized config paths. Those values are preserved for forward compatibility instead of being deleted.

@@ -6,7 +6,8 @@
 
 ## Architecture
 - `actions.rs` owns action enums.
-- `binding.rs` owns key binding parsing/display.
+- `binding.rs` owns keyboard chord parsing/display.
+- `shortcut.rs` owns the unified trigger type (keyboard, pointer, stylus).
 - `defaults/` owns default bindings.
 - `config/` owns typed keybinding config and per-domain action maps.
 
