@@ -154,7 +154,7 @@ impl fmt::Display for InvalidKeybinding {
     }
 }
 
-/// One duplicate shortcut resolved while loading a configuration.
+/// One shortcut conflict resolved while loading a configuration.
 ///
 /// The resolution applies to the running session only: a save writes just the
 /// delta its caller asked for, so nothing here is ever written to
@@ -162,15 +162,29 @@ impl fmt::Display for InvalidKeybinding {
 /// this is returned rather than only logged.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeybindingConflictResolution {
-    key: String,
+    kept_key: String,
+    dropped_key: String,
     kept: Action,
     dropped: Action,
 }
 
 impl KeybindingConflictResolution {
-    /// The conflicting shortcut in its normalized form (`Ctrl+Shift+P`).
+    /// The shortcut removed by this resolution, in normalized form.
+    ///
+    /// For an exact conflict this is also the shortcut the winner kept. Use
+    /// [`Self::kept_key`] when a sequence conflicts with one of its prefixes.
     pub fn key(&self) -> &str {
-        &self.key
+        &self.dropped_key
+    }
+
+    /// The shortcut retained by the winning action, in normalized form.
+    pub fn kept_key(&self) -> &str {
+        &self.kept_key
+    }
+
+    /// The shortcut removed from the losing action, in normalized form.
+    pub fn dropped_key(&self) -> &str {
+        &self.dropped_key
     }
 
     /// The action that keeps the shortcut for this session.
@@ -186,7 +200,7 @@ impl KeybindingConflictResolution {
     /// Whether one action listed the same shortcut more than once, rather than
     /// two actions claiming it.
     pub fn is_self_duplicate(&self) -> bool {
-        self.kept == self.dropped
+        self.kept == self.dropped && self.kept_key == self.dropped_key
     }
 
     /// The `[keybindings]` key the shortcut was removed from.
@@ -199,13 +213,28 @@ impl KeybindingConflictResolution {
         if self.is_self_duplicate() {
             format!(
                 "{} is listed more than once for {}.",
-                self.key,
+                self.dropped_key,
                 action_label(self.kept)
+            )
+        } else if self.kept_key != self.dropped_key && self.kept == self.dropped {
+            format!(
+                "{} kept for {}; conflicting {} dropped from that action.",
+                self.kept_key,
+                action_label(self.kept),
+                self.dropped_key
+            )
+        } else if self.kept_key != self.dropped_key {
+            format!(
+                "{} kept for {}; conflicting {} dropped from {}.",
+                self.kept_key,
+                action_label(self.kept),
+                self.dropped_key,
+                action_label(self.dropped)
             )
         } else {
             format!(
                 "{} kept for {}, dropped from {}.",
-                self.key,
+                self.dropped_key,
                 action_label(self.kept),
                 action_label(self.dropped)
             )
@@ -219,14 +248,38 @@ impl fmt::Display for KeybindingConflictResolution {
             return write!(
                 formatter,
                 "`{}` is listed more than once for {}; the repeats are ignored for this session",
-                self.key,
+                self.dropped_key,
                 action_label(self.kept)
+            );
+        }
+        if self.kept_key != self.dropped_key && self.kept == self.dropped {
+            return write!(
+                formatter,
+                "`{}` conflicts with earlier `{}` for {}; `{}` keeps the shortcut for this session",
+                self.dropped_key,
+                self.kept_key,
+                action_label(self.kept),
+                self.kept_key,
+            );
+        }
+        if self.kept_key != self.dropped_key {
+            return write!(
+                formatter,
+                "`{}` for {} conflicts with `{}` for {}; {} keeps `{}` for this session and {} loses `{}`",
+                self.dropped_key,
+                action_label(self.dropped),
+                self.kept_key,
+                action_label(self.kept),
+                action_label(self.kept),
+                self.kept_key,
+                action_label(self.dropped),
+                self.dropped_key,
             );
         }
         write!(
             formatter,
             "`{}` is bound to both {} and {}; {} keeps it for this session and {} loses it",
-            self.key,
+            self.dropped_key,
             action_label(self.kept),
             action_label(self.dropped),
             action_label(self.kept),
@@ -269,6 +322,22 @@ fn drop_binding(
     // the only failure mode of the setter cannot happen here.
     let _ = keybindings.set_bindings_for_action(action, bindings);
     true
+}
+
+/// The earliest binding on `action` that is this shortcut or a prefix partner.
+fn first_conflicting_binding(
+    keybindings: &KeybindingsConfig,
+    action: Action,
+    binding: &Shortcut,
+) -> Option<Shortcut> {
+    keybindings
+        .bindings_for_action(action)
+        .and_then(|bindings| {
+            bindings.iter().find_map(|candidate| {
+                let parsed = Shortcut::parse(candidate).ok()?;
+                (parsed == *binding || parsed.prefix_conflicts_with(binding)).then_some(parsed)
+            })
+        })
 }
 
 /// A compiled-in default shortcut that never took effect.
@@ -483,16 +552,45 @@ impl Config {
                 continue;
             };
             let key = conflict.binding().to_string();
-            let mut repeated = false;
+            let mut self_resolution = None;
             for &action in conflict.actions() {
                 if action == kept {
-                    repeated =
+                    let duplicate_removed =
                         drop_binding(&mut self.keybindings, action, conflict.binding(), true);
+                    // Drop a later same-action prefix partner even when another
+                    // action also claims this identity. `len() == 1` skipped
+                    // that cleanup, so Undo could keep both Ctrl+K and
+                    // Ctrl+K > Ctrl+C after Redo lost the prefix, and the
+                    // session keymap still failed to build.
+                    if let Some(first) =
+                        first_conflicting_binding(&self.keybindings, action, conflict.binding())
+                        && first != *conflict.binding()
+                        && drop_binding(&mut self.keybindings, action, conflict.binding(), false)
+                    {
+                        self_resolution = Some(KeybindingConflictResolution {
+                            kept_key: first.to_string(),
+                            dropped_key: key.clone(),
+                            kept,
+                            dropped: kept,
+                        });
+                    } else if duplicate_removed {
+                        self_resolution = Some(KeybindingConflictResolution {
+                            kept_key: key.clone(),
+                            dropped_key: key.clone(),
+                            kept,
+                            dropped: kept,
+                        });
+                    }
                     continue;
                 }
                 if drop_binding(&mut self.keybindings, action, conflict.binding(), false) {
+                    let kept_key =
+                        first_conflicting_binding(&self.keybindings, kept, conflict.binding())
+                            .unwrap_or_else(|| conflict.binding().clone())
+                            .to_string();
                     resolutions.push(KeybindingConflictResolution {
-                        key: key.clone(),
+                        kept_key,
+                        dropped_key: key.clone(),
                         kept,
                         dropped: action,
                     });
@@ -502,12 +600,8 @@ impl Config {
             // repeat in the winner's own list was still removed, and hearing
             // only about the cross-action side would leave that edit
             // unexplained.
-            if repeated {
-                resolutions.push(KeybindingConflictResolution {
-                    key,
-                    kept,
-                    dropped: kept,
-                });
+            if let Some(resolution) = self_resolution {
+                resolutions.push(resolution);
             }
         }
 
@@ -571,7 +665,8 @@ impl Config {
                     Some(owner) if owner == *action => {
                         dropped = true;
                         repeats.push(KeybindingConflictResolution {
-                            key: binding.to_string(),
+                            kept_key: binding.to_string(),
+                            dropped_key: binding.to_string(),
                             kept: *action,
                             dropped: *action,
                         });

@@ -101,6 +101,25 @@ impl InputState {
             .match_chord(&mut self.pending_sequence, &chord, now, is_repeat)
     }
 
+    /// Retry a shifted-punctuation fallback against the pending sequence as it
+    /// stood before the primary label mutated it.
+    pub(crate) fn match_keyboard_chord_with_fallback(
+        &mut self,
+        key_str: &str,
+        fallback: &str,
+        is_repeat: bool,
+        now: Instant,
+    ) -> SequenceMatch {
+        let snapshot = self.pending_sequence.clone();
+        match self.match_keyboard_chord(key_str, is_repeat, now) {
+            SequenceMatch::None => {
+                self.pending_sequence = snapshot;
+                self.match_keyboard_chord(fallback, is_repeat, now)
+            }
+            other => other,
+        }
+    }
+
     pub(crate) fn sequence_timeout(&self, now: Instant) -> Option<Duration> {
         self.pending_sequence
             .as_ref()

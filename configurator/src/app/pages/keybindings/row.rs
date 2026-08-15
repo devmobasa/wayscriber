@@ -20,7 +20,7 @@ use super::recorder::RecorderPopover;
 use super::text_editor::TextEditorPopover;
 use super::widgets::{
     connect_clicked, icon_button, set_accessible_label, set_label, set_sensitive, set_tooltip,
-    set_visible, watch_compact,
+    set_visible, unparent_on_destroy, watch_compact,
 };
 
 pub(super) type ManagerRefresh =
@@ -138,6 +138,7 @@ pub(super) fn binding_row(
 
     let editor_popover = gtk::Popover::builder().autohide(true).build();
     editor_popover.set_parent(&edit_shortcuts);
+    unparent_on_destroy(&edit_shortcuts, &editor_popover);
     {
         let editor_popover = editor_popover.clone();
         let editor = editor.clone();

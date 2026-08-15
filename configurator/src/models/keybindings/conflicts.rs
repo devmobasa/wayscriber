@@ -5,7 +5,7 @@ use wayscriber::config::{Action, Shortcut, ShortcutTrigger, StylusButton, action
 use super::draft::KeybindingsDraft;
 use super::edit::{FieldEditError, append_binding, remove_binding};
 use super::field::KeybindingField;
-use super::parse::parse_keybindings;
+use super::parse::{authored_shortcut_parts, parse_keybindings};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BindingSource {
@@ -22,7 +22,7 @@ pub struct ShortcutClaim {
 }
 
 impl ShortcutClaim {
-    fn from_field(field: KeybindingField, held: Shortcut) -> Self {
+    pub(crate) fn from_field(field: KeybindingField, held: Shortcut) -> Self {
         Self {
             field: Some(field),
             label: field.label().to_string(),
@@ -206,9 +206,7 @@ pub fn apply_recorded_replace(
     let snapshot = draft.clone();
     for claim in claimants {
         if claim.field == Some(target) {
-            if claim.held != *binding
-                && let Err(error) = remove_binding(draft, target, &claim.held)
-            {
+            if let Err(error) = remove_binding(draft, target, &claim.held) {
                 *draft = snapshot;
                 return Err(error);
             }
@@ -241,7 +239,12 @@ pub fn apply_text_replace(
     new_value: &str,
     conflicts: &[TextShortcutConflict],
 ) -> Result<(), FieldEditError> {
+    parse_keybindings(new_value).map_err(FieldEditError::InvalidText)?;
     let snapshot = draft.clone();
+    let mut parts: Vec<String> = authored_shortcut_parts(new_value)
+        .into_iter()
+        .map(str::to_string)
+        .collect();
     for conflict in conflicts {
         for claim in &conflict.claimants {
             if claim.field == Some(target) {
@@ -260,10 +263,33 @@ pub fn apply_text_replace(
             }
         }
     }
-    let parsed = parse_keybindings(new_value).map_err(FieldEditError::InvalidText)?;
-    let _ = parsed;
-    draft.set(target, new_value.trim().to_string());
+    remove_later_internal_conflicts(&mut parts);
+    draft.set(target, parts.join(", "));
     Ok(())
+}
+
+/// Drop the later side of each same-field prefix or exact pair, then look
+/// again. Prefix conflicts are not transitive: two branches that share a
+/// first step do not conflict with each other, so they must not be grouped
+/// with the prefix as one duplicate set.
+fn remove_later_internal_conflicts(parts: &mut Vec<String>) {
+    while let Some(drop_at) = later_internal_conflict_index(parts) {
+        parts.remove(drop_at);
+    }
+}
+
+fn later_internal_conflict_index(parts: &[String]) -> Option<usize> {
+    for (index, left) in parts.iter().enumerate() {
+        let Ok(left) = Shortcut::parse(left) else {
+            continue;
+        };
+        for (other, part) in parts.iter().enumerate().skip(index + 1) {
+            if Shortcut::parse(part).is_ok_and(|right| shortcuts_conflict(&left, &right)) {
+                return Some(other);
+            }
+        }
+    }
+    None
 }
 
 pub fn recorded_conflict_prompt(binding: &Shortcut, claimants: &[ShortcutClaim]) -> String {
@@ -543,5 +569,79 @@ mod tests {
                 .value_for(KeybindingField::Undo)
                 .is_some_and(|value| value.contains(&prefix.to_string()))
         );
+    }
+
+    #[test]
+    fn text_replace_removes_a_same_field_prefix() {
+        let mut draft = draft();
+        let prefix = "Ctrl+Alt+Shift+K";
+        let sequence = "Ctrl+Alt+Shift+K > Ctrl+Alt+Shift+C";
+        let new_value = format!("{prefix}, {sequence}");
+        draft.set(KeybindingField::ClearCanvas, new_value.clone());
+        let parsed = parse_keybindings(&new_value).expect("parses");
+        let conflicts = text_conflicts_for(&draft, KeybindingField::ClearCanvas, &parsed);
+        assert!(
+            !conflicts.is_empty(),
+            "same-field prefix must be a text conflict"
+        );
+        apply_text_replace(
+            &mut draft,
+            KeybindingField::ClearCanvas,
+            &new_value,
+            &conflicts,
+        )
+        .expect("replace");
+        assert_eq!(draft.value_for(KeybindingField::ClearCanvas), Some(prefix));
+    }
+
+    #[test]
+    fn text_replace_keeps_branching_sequences_when_dropping_a_prefix() {
+        let mut draft = draft();
+        let copy = "Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+C";
+        let prefix = "Ctrl+Shift+Alt+K";
+        let cut = "Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+X";
+        let new_value = format!("{copy}, {prefix}, {cut}");
+        draft.set(KeybindingField::ClearCanvas, new_value.clone());
+        let parsed = parse_keybindings(&new_value).expect("parses");
+        let conflicts = text_conflicts_for(&draft, KeybindingField::ClearCanvas, &parsed);
+        assert!(
+            !conflicts.is_empty(),
+            "a prefix beside branching sequences must be a text conflict"
+        );
+        apply_text_replace(
+            &mut draft,
+            KeybindingField::ClearCanvas,
+            &new_value,
+            &conflicts,
+        )
+        .expect("replace");
+        let expected = format!("{copy}, {cut}");
+        assert_eq!(
+            draft.value_for(KeybindingField::ClearCanvas),
+            Some(expected.as_str())
+        );
+    }
+
+    #[test]
+    fn recorded_replace_keeps_one_same_field_duplicate() {
+        let mut draft = draft();
+        draft.set(KeybindingField::ClearCanvas, "E, e".to_string());
+        let binding = Shortcut::parse("E").expect("parses");
+        let claimants = vec![ShortcutClaim::from_field(
+            KeybindingField::ClearCanvas,
+            binding.clone(),
+        )];
+        apply_recorded_replace(
+            &mut draft,
+            KeybindingField::ClearCanvas,
+            &binding,
+            &claimants,
+        )
+        .expect("replace");
+        let value = draft
+            .value_for(KeybindingField::ClearCanvas)
+            .expect("value");
+        let parsed = parse_keybindings(value).expect("parses");
+        assert_eq!(parsed, vec![binding]);
     }
 }

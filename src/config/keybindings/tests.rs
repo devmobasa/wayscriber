@@ -338,6 +338,29 @@ fn collect_binding_conflicts_reports_a_sequence_prefix() {
 }
 
 #[test]
+fn collect_binding_conflicts_reports_both_sides_of_a_same_action_prefix() {
+    let prefix = Shortcut::parse("Ctrl+Shift+Alt+K").unwrap();
+    let sequence = Shortcut::parse("Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+C").unwrap();
+    let mut config = KeybindingsConfig::default();
+    config.core.undo = vec![prefix.to_string(), sequence.to_string()];
+    let conflicts = config
+        .collect_binding_conflicts()
+        .expect("self-prefix is data");
+    assert!(
+        conflicts
+            .iter()
+            .any(|conflict| conflict.binding() == &prefix && conflict.actions() == [Action::Undo]),
+        "{conflicts:?}"
+    );
+    assert!(
+        conflicts
+            .iter()
+            .any(|conflict| conflict.binding() == &sequence && conflict.actions() == [Action::Undo]),
+        "{conflicts:?}"
+    );
+}
+
+#[test]
 fn test_parse_plus_key_without_modifiers() {
     let binding = KeyBinding::parse("+").unwrap();
     assert_eq!(binding.key, "+");

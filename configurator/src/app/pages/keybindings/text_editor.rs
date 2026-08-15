@@ -8,7 +8,7 @@ use crate::models::KeybindingField;
 
 use super::super::super::state::ConfiguratorApp;
 use super::super::set_text_blocked;
-use super::widgets::{field_canceled, ignore_activating_click, set_accessible_label, set_label};
+use super::widgets::{field_canceled, set_accessible_label, set_label, unparent_on_destroy};
 
 pub(super) struct TextEditorPopover {
     pub popover: gtk::Popover,
@@ -81,7 +81,7 @@ impl TextEditorPopover {
             .child(&content)
             .build();
         popover.set_parent(parent);
-        ignore_activating_click(&popover);
+        unparent_on_destroy(parent, &popover);
         field_canceled(&popover, field, sender, Message::ShortcutTextEditCanceled);
 
         Self {

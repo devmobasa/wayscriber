@@ -139,7 +139,12 @@ impl<'a> BindingInserter<'a> {
         };
         if let Some((other, existing_action)) = self.prefix_owner(&binding) {
             if let Some(conflicts) = self.conflicts.as_mut() {
+                // Record both identities so a same-action prefix pair is not a
+                // one-sided conflict that `keep_first` would leave untouched.
                 conflicts.record(&binding, existing_action, action);
+                if other != binding {
+                    conflicts.record(&other, existing_action, action);
+                }
                 return Ok(());
             }
             if self.tolerant {

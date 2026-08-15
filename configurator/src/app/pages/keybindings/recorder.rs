@@ -8,14 +8,14 @@ use crate::models::KeybindingField;
 #[cfg(not(feature = "tablet-input"))]
 use crate::models::keybindings::tablet_unavailable_hint;
 use crate::models::keybindings::{
-    KeyboardModifiers, RecorderDeviceKind, ShortcutRecorderState, super_consumed_hint,
-    waiting_prompt,
+    KeyboardModifiers, RecordedDevice, RecorderDeviceKind, ShortcutRecorderState,
+    normalize_button_event, super_consumed_hint, waiting_prompt,
 };
 
 use super::super::super::state::ConfiguratorApp;
 use super::widgets::{
-    field_canceled, ignore_activating_click, set_accessible_label, set_label, set_sensitive,
-    set_visible,
+    field_canceled, set_accessible_label, set_label, set_sensitive, set_visible,
+    unparent_on_destroy,
 };
 
 pub(super) struct RecorderPopover {
@@ -96,7 +96,7 @@ impl RecorderPopover {
             .child(&content)
             .build();
         popover.set_parent(parent);
-        ignore_activating_click(&popover);
+        unparent_on_destroy(parent, &popover);
         field_canceled(&popover, field, sender, Message::ShortcutRecordingCanceled);
         attach_key_controller(&popover, sender);
         attach_button_controller(&popover, sender);
@@ -184,13 +184,6 @@ fn device_hint_text() -> &'static str {
 }
 
 fn attach_button_controller(popover: &gtk::Popover, sender: &ComponentSender<ConfiguratorApp>) {
-    let ignore = std::rc::Rc::new(std::cell::Cell::new(false));
-    {
-        let ignore = ignore.clone();
-        popover.connect_show(move |_| {
-            ignore.set(true);
-        });
-    }
     let sender = sender.clone();
     let controller = gtk::EventControllerLegacy::new();
     controller.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -198,12 +191,8 @@ fn attach_button_controller(popover: &gtk::Popover, sender: &ComponentSender<Con
         if event.event_type() != gtk::gdk::EventType::ButtonPress {
             return gtk::glib::Propagation::Proceed;
         }
-        if ignore.get() {
-            ignore.set(false);
-            return gtk::glib::Propagation::Stop;
-        }
         let Some(button_event) = event.downcast_ref::<gtk::gdk::ButtonEvent>() else {
-            return gtk::glib::Propagation::Stop;
+            return gtk::glib::Propagation::Proceed;
         };
         let kind = event
             .device()
@@ -224,12 +213,19 @@ fn attach_button_controller(popover: &gtk::Popover, sender: &ComponentSender<Con
                 || modifiers.contains(gtk::gdk::ModifierType::META_MASK)
                 || modifiers.contains(gtk::gdk::ModifierType::HYPER_MASK),
         };
-        sender.input(Message::ShortcutRecorderButton(
-            button_event.button(),
-            kind,
-            recorded,
-        ));
-        gtk::glib::Propagation::Stop
+        // Primary clicks must reach Finish / Remove Last Step / Cancel. Stop
+        // only bindable auxiliary mouse or stylus barrel events.
+        match normalize_button_event(button_event.button(), kind, recorded) {
+            RecordedDevice::Trigger(_) => {
+                sender.input(Message::ShortcutRecorderButton(
+                    button_event.button(),
+                    kind,
+                    recorded,
+                ));
+                gtk::glib::Propagation::Stop
+            }
+            RecordedDevice::Unsupported { .. } => gtk::glib::Propagation::Proceed,
+        }
     });
     popover.add_controller(controller);
 }

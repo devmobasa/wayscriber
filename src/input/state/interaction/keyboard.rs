@@ -104,16 +104,11 @@ fn match_action_for_key_binding(
     };
 
     let now = Instant::now();
-    match state.match_keyboard_chord(&key_str, is_repeat, now) {
-        SequenceMatch::None => {}
-        other => return Ok(other),
-    }
-
     if state.modifiers.shift
         && let Some(fallback) = fallback_unshifted_label(&key_str)
     {
-        return Ok(state.match_keyboard_chord(fallback, is_repeat, now));
+        return Ok(state.match_keyboard_chord_with_fallback(&key_str, fallback, is_repeat, now));
     }
 
-    Ok(SequenceMatch::None)
+    Ok(state.match_keyboard_chord(&key_str, is_repeat, now))
 }

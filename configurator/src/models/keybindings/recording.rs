@@ -666,6 +666,18 @@ mod tests {
             }
             other => panic!("expected primary-button rejection, got {other:?}"),
         }
+        match normalize_button_event(10, RecorderDeviceKind::Mouse, KeyboardModifiers::default()) {
+            RecordedDevice::Trigger(trigger) => assert_eq!(trigger.to_string(), "MouseForward"),
+            other => panic!("expected Wayland BTN_FORWARD as MouseForward, got {other:?}"),
+        }
+        match normalize_button_event(11, RecorderDeviceKind::Mouse, KeyboardModifiers::default()) {
+            RecordedDevice::Trigger(trigger) => assert_eq!(trigger.to_string(), "MouseBack"),
+            other => panic!("expected Wayland BTN_BACK as MouseBack, got {other:?}"),
+        }
+        match normalize_button_event(12, RecorderDeviceKind::Mouse, KeyboardModifiers::default()) {
+            RecordedDevice::Trigger(trigger) => assert_eq!(trigger.to_string(), "MouseExtra1"),
+            other => panic!("expected Wayland BTN_TASK as MouseExtra1, got {other:?}"),
+        }
     }
 
     #[test]

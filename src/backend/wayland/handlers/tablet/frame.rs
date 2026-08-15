@@ -6,13 +6,7 @@ use crate::input::MouseButton;
 use crate::input::state::HelpOverlayPressSource;
 
 fn modal_blocks_stylus_barrel_actions(input_state: &crate::input::InputState) -> bool {
-    input_state.show_help
-        || input_state.tour_active
-        // A screen-region modal owns pointer and keyboard input while it is up.
-        // A barrel button is bound to an ordinary action — undo, clear canvas,
-        // the radial menu — so letting one through would run it on the canvas
-        // behind the selector.
-        || input_state.screen_modal_is_engaged()
+    input_state.modal_owns_pointer_shortcuts()
 }
 
 fn stylus_barrel_action(

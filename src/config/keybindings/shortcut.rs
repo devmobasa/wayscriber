@@ -229,7 +229,11 @@ impl ShortcutTrigger {
     pub fn is_deliverable(&self) -> bool {
         match self {
             Self::Keyboard(binding) => super::binding::is_deliverable_key_name(&binding.key),
-            Self::Pointer(_) | Self::Stylus(_) => true,
+            Self::Pointer(_) => true,
+            #[cfg(feature = "tablet-input")]
+            Self::Stylus(_) => true,
+            #[cfg(not(feature = "tablet-input"))]
+            Self::Stylus(_) => false,
         }
     }
 
@@ -243,6 +247,7 @@ impl ShortcutTrigger {
     pub fn unknown_key_name(&self) -> Option<String> {
         match self {
             Self::Keyboard(binding) => Some(binding.key.clone()),
+            Self::Pointer(_) | Self::Stylus(_) if !self.is_deliverable() => Some(self.to_string()),
             Self::Pointer(_) | Self::Stylus(_) => None,
         }
     }
@@ -557,16 +562,20 @@ pub mod linux {
     }
 }
 
-/// GTK/GDK 1-based button numbers (X11-style: 8 back, 9 forward, 10+ extras).
+/// GTK/GDK button numbers.
+///
+/// X11-style buttons 8/9 are Back/Forward. GTK's Wayland backend then maps
+/// evdev `BTN_FORWARD`/`BTN_BACK` to 10/11 and `BTN_TASK` through `BTN_EXTRA4`
+/// to 12 through 15, matching [`linux::pointer_button`].
 pub mod gdk {
     use super::{MAX_POINTER_EXTRA, PointerButton, StylusButton};
 
     pub fn pointer_button(button: u32) -> Option<PointerButton> {
         match button {
-            8 => Some(PointerButton::Back),
-            9 => Some(PointerButton::Forward),
-            extra if (10..10 + u32::from(MAX_POINTER_EXTRA)).contains(&extra) => {
-                Some(PointerButton::Extra((extra - 9) as u8))
+            8 | 11 => Some(PointerButton::Back),
+            9 | 10 => Some(PointerButton::Forward),
+            extra if (12..12 + u32::from(MAX_POINTER_EXTRA)).contains(&extra) => {
+                Some(PointerButton::Extra((extra - 11) as u8))
             }
             _ => None,
         }
@@ -604,8 +613,30 @@ mod tests {
         ] {
             let trigger = ShortcutTrigger::parse(text).unwrap();
             assert_eq!(trigger.to_string(), text);
-            assert!(trigger.is_deliverable());
+            match &trigger {
+                ShortcutTrigger::Stylus(_) => {
+                    #[cfg(feature = "tablet-input")]
+                    assert!(trigger.is_deliverable());
+                    #[cfg(not(feature = "tablet-input"))]
+                    assert!(!trigger.is_deliverable());
+                }
+                _ => assert!(trigger.is_deliverable()),
+            }
         }
+    }
+
+    #[cfg(not(feature = "tablet-input"))]
+    #[test]
+    fn stylus_triggers_are_undeliverable_without_tablet_input() {
+        let trigger = ShortcutTrigger::parse("StylusPrimary").unwrap();
+        assert!(!trigger.is_deliverable());
+        assert_eq!(trigger.unknown_key_name().as_deref(), Some("StylusPrimary"));
+        assert!(
+            ShortcutTrigger::parse("MouseBack")
+                .unwrap()
+                .is_deliverable()
+        );
+        assert!(!Shortcut::parse("StylusSecondary").unwrap().is_deliverable());
     }
 
     #[test]
@@ -640,7 +671,11 @@ mod tests {
         );
         assert_eq!(gdk::pointer_button(8), Some(PointerButton::Back));
         assert_eq!(gdk::pointer_button(9), Some(PointerButton::Forward));
-        assert_eq!(gdk::pointer_button(10), Some(PointerButton::Extra(1)));
+        assert_eq!(gdk::pointer_button(10), Some(PointerButton::Forward));
+        assert_eq!(gdk::pointer_button(11), Some(PointerButton::Back));
+        assert_eq!(gdk::pointer_button(12), Some(PointerButton::Extra(1)));
+        assert_eq!(gdk::pointer_button(15), Some(PointerButton::Extra(4)));
+        assert_eq!(gdk::pointer_button(16), None);
         assert_eq!(gdk::pointer_button(1), None);
         assert_eq!(
             linux::stylus_button(linux::BTN_STYLUS),

@@ -6,7 +6,9 @@
 
 use wayscriber::config::{Action, Shortcut, ShortcutTrigger};
 
-use super::conflicts::{claimants_for, field_has_internal_duplicate, other_claimants};
+use super::conflicts::{
+    ShortcutClaim, claimants_for, field_has_internal_duplicate, other_claimants,
+};
 use super::draft::KeybindingsDraft;
 use super::edit::field_matches_defaults;
 use super::field::KeybindingField;
@@ -225,11 +227,16 @@ pub fn next_review_conflict(
         let Ok(parsed) = parse_keybindings(value) else {
             continue;
         };
-        for binding in parsed {
-            let claimants = other_claimants(draft, field, &binding);
-            if !claimants.is_empty() {
-                return Some((field, binding, claimants));
+        for binding in &parsed {
+            let mut claimants = other_claimants(draft, field, binding);
+            if claimants.is_empty() {
+                let extras = parsed.iter().filter(|other| *other == binding).count();
+                if extras <= 1 {
+                    continue;
+                }
+                claimants.push(ShortcutClaim::from_field(field, binding.clone()));
             }
+            return Some((field, binding.clone(), claimants));
         }
     }
     None
@@ -631,5 +638,19 @@ mod tests {
                 Some(KeybindingField::ClearCanvas | KeybindingField::ToggleToolbar)
             )));
         assert!(field == KeybindingField::ClearCanvas || field == KeybindingField::ToggleToolbar);
+    }
+
+    #[test]
+    fn next_review_conflict_includes_same_field_duplicates() {
+        let (mut draft, _defaults) = drafts();
+        draft.set(KeybindingField::ClearCanvas, "E, e".to_string());
+        let (field, binding, claimants) = next_review_conflict(&draft).expect("duplicate");
+        assert_eq!(field, KeybindingField::ClearCanvas);
+        assert_eq!(binding.to_string(), "E");
+        assert!(
+            claimants
+                .iter()
+                .any(|claim| claim.field == Some(KeybindingField::ClearCanvas))
+        );
     }
 }

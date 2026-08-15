@@ -261,3 +261,23 @@ fn on_key_press_completes_a_sequence_and_repeat_does_not() {
     state.on_key_press(crate::input::Key::Char('c'));
     assert!(!state.show_floating_badge);
 }
+
+#[test]
+fn shifted_punctuation_fallback_completes_a_pending_sequence() {
+    let mut keybindings = crate::config::KeybindingsConfig::default();
+    keybindings.ui.toggle_floating_badge = vec!["Ctrl+Alt+Shift+K > Shift+/".to_string()];
+    let mut state = create_test_input_state_with_keybindings(keybindings);
+    assert!(state.show_floating_badge);
+
+    state.modifiers.ctrl = true;
+    state.modifiers.alt = true;
+    state.modifiers.shift = true;
+    state.on_key_press(crate::input::Key::Char('k'));
+    assert!(state.show_floating_badge);
+
+    state.modifiers.ctrl = false;
+    state.modifiers.alt = false;
+    state.modifiers.shift = true;
+    state.on_key_press(crate::input::Key::Char('?'));
+    assert!(!state.show_floating_badge);
+}

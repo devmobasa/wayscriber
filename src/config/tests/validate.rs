@@ -1127,6 +1127,140 @@ fn keybinding_listed_twice_for_one_action_is_deduplicated() {
 }
 
 #[test]
+fn same_action_sequence_prefix_is_resolved_so_the_keymap_still_builds() {
+    let prefix = "Ctrl+Shift+Alt+K";
+    let sequence = "Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+C";
+    let mut config = Config::default();
+    config.keybindings.core.undo = vec![prefix.to_string(), sequence.to_string()];
+
+    let report = config.validate_and_clamp();
+
+    assert_eq!(config.keybindings.core.undo, [prefix]);
+    config
+        .keybindings
+        .build_action_map()
+        .expect("self-prefix must not discard the rest of the keymap");
+    assert_eq!(report.keybinding_conflicts.len(), 1);
+    let resolution = &report.keybinding_conflicts[0];
+    assert!(!resolution.is_self_duplicate());
+    assert_eq!(resolution.kept_key(), prefix);
+    assert_eq!(resolution.dropped_key(), sequence);
+
+    let mut config = Config::default();
+    config.keybindings.core.undo = vec![sequence.to_string(), prefix.to_string()];
+    config.validate_and_clamp();
+    assert_eq!(config.keybindings.core.undo, [sequence]);
+    config
+        .keybindings
+        .build_action_map()
+        .expect("keeping the earlier sequence must still build");
+}
+
+#[test]
+fn same_action_prefix_is_resolved_after_deduplicating_the_prefix() {
+    let prefix = "Ctrl+Shift+Alt+K";
+    let sequence = "Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+C";
+    let mut config = Config::default();
+    config.keybindings.core.undo =
+        vec![sequence.to_string(), prefix.to_string(), prefix.to_string()];
+
+    let report = config.validate_and_clamp();
+
+    assert_eq!(config.keybindings.core.undo, [sequence]);
+    config
+        .keybindings
+        .build_action_map()
+        .expect("a leftover prefix after dedup must not discard the keymap");
+    assert!(!report.keybinding_conflicts.is_empty());
+}
+
+#[test]
+fn same_action_prefix_is_resolved_when_another_action_also_claims_the_prefix() {
+    let prefix = "Ctrl+Shift+Alt+K";
+    let sequence = "Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+C";
+
+    let mut config = Config::default();
+    config.keybindings.core.undo = vec![sequence.to_string(), prefix.to_string()];
+    config.keybindings.core.redo = vec![prefix.to_string()];
+    let report = config.validate_and_clamp();
+    assert_eq!(config.keybindings.core.undo, [sequence]);
+    assert!(config.keybindings.core.redo.is_empty());
+    config
+        .keybindings
+        .build_action_map()
+        .expect("cross-action prefix must not leave a same-action pair in the winner");
+    assert!(
+        report
+            .keybinding_conflicts
+            .iter()
+            .any(|resolution| resolution.dropped() == Action::Redo),
+        "{:?}",
+        report.keybinding_conflicts
+    );
+
+    let mut config = Config::default();
+    config.keybindings.core.undo = vec![prefix.to_string(), sequence.to_string()];
+    config.keybindings.core.redo = vec![prefix.to_string()];
+    config.validate_and_clamp();
+    assert_eq!(config.keybindings.core.undo, [prefix]);
+    assert!(config.keybindings.core.redo.is_empty());
+    config
+        .keybindings
+        .build_action_map()
+        .expect("keeping the winner's earlier prefix must still build");
+
+    let mut config = Config::default();
+    config.keybindings.core.undo = vec![sequence.to_string(), prefix.to_string()];
+    config.keybindings.core.redo = vec![sequence.to_string()];
+    config.validate_and_clamp();
+    assert_eq!(config.keybindings.core.undo, [sequence]);
+    assert!(config.keybindings.core.redo.is_empty());
+    config
+        .keybindings
+        .build_action_map()
+        .expect("keeping the winner's earlier sequence must still build");
+}
+
+#[test]
+fn prefix_conflict_report_names_the_shortcuts_each_action_actually_held() {
+    let prefix = "Ctrl+Shift+Alt+K";
+    let sequence = "Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+C";
+    let mut config = Config::default();
+    config.keybindings.core.undo = vec![prefix.to_string()];
+    config.keybindings.core.redo = vec![sequence.to_string()];
+
+    let report = config.validate_and_clamp();
+
+    let resolution = report
+        .keybinding_conflicts
+        .first()
+        .expect("prefix conflict must be reported");
+    assert_eq!(resolution.key(), sequence);
+    assert_eq!(resolution.kept_key(), prefix);
+    assert_eq!(resolution.dropped_key(), sequence);
+    assert_eq!(
+        resolution.summary(),
+        format!("{prefix} kept for Undo; conflicting {sequence} dropped from Redo.")
+    );
+    assert!(!resolution.is_self_duplicate());
+
+    let mut config = Config::default();
+    config.keybindings.core.undo = vec![prefix.to_string(), sequence.to_string()];
+    let report = config.validate_and_clamp();
+    let resolution = report
+        .keybinding_conflicts
+        .first()
+        .expect("same-action prefix conflict must be reported");
+    assert_eq!(resolution.kept_key(), prefix);
+    assert_eq!(resolution.dropped_key(), sequence);
+    assert_eq!(
+        resolution.summary(),
+        format!("{prefix} kept for Undo; conflicting {sequence} dropped from that action.")
+    );
+    assert!(!resolution.is_self_duplicate());
+}
+
+#[test]
 fn validating_the_defaults_reports_nothing_to_surface() {
     assert!(Config::default().validate_and_clamp().is_empty());
 }

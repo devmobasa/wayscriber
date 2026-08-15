@@ -72,24 +72,16 @@ pub(super) fn connect_clicked(
     });
 }
 
-pub(super) fn ignore_activating_click(popover: &gtk::Popover) {
-    let ignore = std::rc::Rc::new(std::cell::Cell::new(false));
-    {
-        let ignore = ignore.clone();
-        popover.connect_show(move |_| {
-            ignore.set(true);
-        });
-    }
-    let click = gtk::GestureClick::new();
-    click.set_button(0);
-    click.set_propagation_phase(gtk::PropagationPhase::Capture);
-    click.connect_pressed(move |gesture, _, _, _| {
-        if ignore.get() {
-            ignore.set(false);
-            gesture.set_state(gtk::EventSequenceState::Claimed);
+/// GtkPopover widgets created with `set_parent` are not ordinary children.
+/// If they are still attached when the parent is destroyed, GTK warns on
+/// finalize. Unparent in the destroy handler so shutdown stays quiet.
+pub(super) fn unparent_on_destroy(parent: &impl IsA<gtk::Widget>, popover: &gtk::Popover) {
+    let popover = popover.clone();
+    parent.connect_destroy(move |_| {
+        if popover.parent().is_some() {
+            popover.unparent();
         }
     });
-    popover.add_controller(click);
 }
 
 pub(super) fn field_canceled(

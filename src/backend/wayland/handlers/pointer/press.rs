@@ -131,7 +131,9 @@ impl WaylandState {
             return;
         }
 
-        if self.try_dispatch_pointer_shortcut(button) {
+        if !self.input_state.modal_owns_pointer_shortcuts()
+            && self.try_dispatch_pointer_shortcut(button)
+        {
             return;
         }
 
