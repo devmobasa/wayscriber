@@ -232,6 +232,16 @@ mod tests {
     }
 
     #[test]
+    fn conflict_lookup_treats_meta_and_super_as_the_same_binding() {
+        let mut draft = draft();
+        draft.set(KeybindingField::Undo, "Meta+X".to_string());
+        let binding = KeyBinding::parse("Super+X").expect("parses");
+        let claimants = claimants_for(&draft, &binding);
+        assert_eq!(claimants.len(), 1);
+        assert_eq!(claimants[0].field, KeybindingField::Undo);
+    }
+
+    #[test]
     fn duplicate_inside_one_action_is_a_conflict() {
         let mut draft = draft();
         draft.set(KeybindingField::ClearCanvas, "E, e".to_string());

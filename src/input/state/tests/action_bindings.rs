@@ -78,3 +78,25 @@ fn find_action_respects_exact_modifier_matches() {
     state.modifiers.ctrl = false;
     assert_eq!(state.find_action("z"), None);
 }
+
+#[test]
+fn find_action_treats_super_as_a_distinct_modifier() {
+    let mut keybindings = crate::config::KeybindingsConfig::default();
+    keybindings.core.exit = vec!["Super+X".to_string()];
+    let mut state = create_test_input_state_with_keybindings(keybindings);
+
+    state.modifiers.logo = true;
+    assert_eq!(state.find_action("x"), Some(Action::Exit));
+    assert_eq!(state.find_action("X"), Some(Action::Exit));
+
+    state.modifiers.logo = false;
+    assert_eq!(state.find_action("x"), None);
+
+    state.modifiers.ctrl = true;
+    assert_eq!(state.find_action("x"), None);
+
+    state.modifiers.logo = true;
+    state.reset_modifiers();
+    assert!(!state.modifiers.logo);
+    assert!(!state.modifiers.ctrl);
+}

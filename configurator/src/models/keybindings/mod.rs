@@ -19,7 +19,8 @@ pub(crate) use parse::parse_keybindings;
 #[cfg(test)]
 pub(crate) use recording::keyval;
 pub use recording::{
-    KeyboardModifiers, RecordedKeyboard, ShortcutRecorderState, normalize_key_event, waiting_prompt,
+    KeyboardModifiers, RecordedKeyboard, ShortcutRecorderState, normalize_key_event,
+    super_consumed_hint, waiting_prompt,
 };
 
 #[cfg(test)]

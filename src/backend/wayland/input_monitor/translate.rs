@@ -24,6 +24,7 @@ pub(super) fn modifiers_from_xkb(state: &xkb::State) -> Modifiers {
         shift: state.mod_name_is_active(xkb::MOD_NAME_SHIFT, xkb::STATE_MODS_EFFECTIVE),
         ctrl: state.mod_name_is_active(xkb::MOD_NAME_CTRL, xkb::STATE_MODS_EFFECTIVE),
         alt: state.mod_name_is_active(xkb::MOD_NAME_ALT, xkb::STATE_MODS_EFFECTIVE),
+        logo: state.mod_name_is_active(xkb::MOD_NAME_LOGO, xkb::STATE_MODS_EFFECTIVE),
         // Tab is a drag modifier the overlay tracks itself; it is not an xkb
         // modifier and never contributes to a chord label.
         tab: false,

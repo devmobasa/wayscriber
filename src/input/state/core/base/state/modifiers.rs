@@ -12,6 +12,7 @@ impl InputState {
         self.modifiers.shift = false;
         self.modifiers.ctrl = false;
         self.modifiers.alt = false;
+        self.modifiers.logo = false;
         self.modifiers.tab = false;
         if matches!(self.state, DrawingState::Idle) {
             self.sync_current_settings_from_active_tool();
@@ -22,10 +23,11 @@ impl InputState {
     ///
     /// This lets us correct cases where a key release event was missed but the compositor's
     /// authoritative modifier state is still accurate.
-    pub fn sync_modifiers(&mut self, shift: bool, ctrl: bool, alt: bool) {
+    pub fn sync_modifiers(&mut self, shift: bool, ctrl: bool, alt: bool, logo: bool) {
         self.modifiers.shift = shift;
         self.modifiers.ctrl = ctrl;
         self.modifiers.alt = alt;
+        self.modifiers.logo = logo;
         // Tab has no direct compositor flag; leave it unchanged.
         if matches!(self.state, DrawingState::Idle) {
             self.sync_current_settings_from_active_tool();

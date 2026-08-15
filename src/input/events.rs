@@ -43,6 +43,8 @@ pub enum Key {
     Ctrl,
     /// Alt modifier
     Alt,
+    /// Super / Meta / Windows (Wayland logo) modifier
+    Super,
     /// Context menu/application key
     Menu,
     /// F1 function key (help)

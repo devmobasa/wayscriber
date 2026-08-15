@@ -8,6 +8,8 @@ pub struct KeyBinding {
     pub ctrl: bool,
     pub shift: bool,
     pub alt: bool,
+    /// Super / Meta / Windows (Wayland logo modifier). Displayed as `Super`.
+    pub logo: bool,
 }
 
 /// Equality and hashing ignore the key name's case, exactly like [`Self::matches`]
@@ -22,6 +24,7 @@ impl PartialEq for KeyBinding {
             && self.ctrl == other.ctrl
             && self.shift == other.shift
             && self.alt == other.alt
+            && self.logo == other.logo
     }
 }
 
@@ -31,6 +34,7 @@ impl Hash for KeyBinding {
         self.ctrl.hash(state);
         self.shift.hash(state);
         self.alt.hash(state);
+        self.logo.hash(state);
     }
 }
 
@@ -90,7 +94,7 @@ pub fn suggest_key_name(key: &str) -> Option<String> {
     if let Some((head, rest)) = key.split_once('+') {
         // The parser only leaves a `+` in the key when a segment was not a
         // modifier it knows, so the head is almost always a typo for one.
-        let canonical = ["Ctrl", "Shift", "Alt"]
+        let canonical = ["Ctrl", "Shift", "Alt", "Super"]
             .into_iter()
             .find(|modifier| within_one_edit(&head.to_lowercase(), &modifier.to_lowercase()))?;
         return Some(format!("{canonical}+{rest}"));
@@ -165,6 +169,7 @@ impl KeyBinding {
         let mut ctrl = false;
         let mut shift = false;
         let mut alt = false;
+        let mut logo = false;
         let mut key_parts = Vec::new();
 
         // Process each part, checking if it's a modifier or the actual key
@@ -173,6 +178,7 @@ impl KeyBinding {
                 "ctrl" | "control" => ctrl = true,
                 "shift" => shift = true,
                 "alt" => alt = true,
+                "super" | "meta" | "logo" | "win" | "windows" => logo = true,
                 _ => {
                     // Not a modifier, so it's part of the key
                     key_parts.push(part);
@@ -197,6 +203,7 @@ impl KeyBinding {
                 ctrl,
                 shift,
                 alt,
+                logo,
             })
         } else {
             Ok(Self {
@@ -204,16 +211,18 @@ impl KeyBinding {
                 ctrl,
                 shift,
                 alt,
+                logo,
             })
         }
     }
 
     /// Check if this keybinding matches the current input state.
-    pub fn matches(&self, key: &str, ctrl: bool, shift: bool, alt: bool) -> bool {
+    pub fn matches(&self, key: &str, ctrl: bool, shift: bool, alt: bool, logo: bool) -> bool {
         self.key.eq_ignore_ascii_case(key)
             && self.ctrl == ctrl
             && self.shift == shift
             && self.alt == alt
+            && self.logo == logo
     }
 }
 
@@ -228,6 +237,9 @@ impl fmt::Display for KeyBinding {
         }
         if self.alt {
             parts.push("Alt");
+        }
+        if self.logo {
+            parts.push("Super");
         }
         parts.push(self.key.as_str());
         write!(f, "{}", parts.join("+"))

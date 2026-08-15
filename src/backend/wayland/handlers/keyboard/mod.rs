@@ -245,13 +245,17 @@ impl KeyboardHandler for WaylandState {
         _group: u32,
     ) {
         debug!(
-            "Modifiers: ctrl={} alt={} shift={}",
-            modifiers.ctrl, modifiers.alt, modifiers.shift
+            "Modifiers: ctrl={} alt={} shift={} logo={}",
+            modifiers.ctrl, modifiers.alt, modifiers.shift, modifiers.logo
         );
         // Trust compositor-reported modifier state to reconcile any missed key release
         // events and avoid "stuck" modifiers.
-        self.input_state
-            .sync_modifiers(modifiers.shift, modifiers.ctrl, modifiers.alt);
+        self.input_state.sync_modifiers(
+            modifiers.shift,
+            modifiers.ctrl,
+            modifiers.alt,
+            modifiers.logo,
+        );
     }
 
     fn repeat_key(

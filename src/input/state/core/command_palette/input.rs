@@ -145,14 +145,14 @@ impl InputState {
 
         match key {
             // Every modifier a `KeyBinding` can carry is tracked here, because
-            // the shortcut controls and the capture modal read all three:
+            // the shortcut controls and the capture modal read all four:
             // without this arm the palette would swallow the press, Ctrl+Shift+E
-            // could never be told apart from Ctrl+E, and an Alt already held
+            // could never be told apart from Ctrl+E, and a Super already held
             // when capture began would be missing from the chord that gets
             // saved. `on_key_release` clears them again on the way out,
             // whatever is open at the time. `Key::Tab` stays with the catch-all
             // below: it is the pointer-drag modifier, not part of a chord.
-            Key::Ctrl | Key::Shift | Key::Alt => {
+            Key::Ctrl | Key::Shift | Key::Alt | Key::Super => {
                 self.handle_modifier_key_press(key);
                 true
             }
@@ -287,6 +287,7 @@ impl InputState {
             ctrl: self.modifiers.ctrl,
             shift: self.modifiers.shift,
             alt: self.modifiers.alt,
+            logo: self.modifiers.logo,
         }
         .to_string();
         self.keybinding_capture_action = None;

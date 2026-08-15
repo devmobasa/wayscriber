@@ -21,6 +21,7 @@ pub(in crate::backend::wayland) fn keysym_to_key(keysym: Keysym) -> Key {
         Keysym::Shift_L | Keysym::Shift_R => Key::Shift,
         Keysym::Control_L | Keysym::Control_R => Key::Ctrl,
         Keysym::Alt_L | Keysym::Alt_R => Key::Alt,
+        Keysym::Super_L | Keysym::Super_R | Keysym::Hyper_L | Keysym::Hyper_R => Key::Super,
         Keysym::Menu => Key::Menu,
         Keysym::F1 => Key::F1,
         Keysym::F2 => Key::F2,
@@ -35,5 +36,19 @@ pub(in crate::backend::wayland) fn keysym_to_key(keysym: Keysym) -> Key {
         Keysym::F11 => Key::F11,
         Keysym::F12 => Key::F12,
         _ => keysym.key_char().map_or(Key::Unknown, Key::Char),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn super_and_hyper_keysyms_map_to_the_super_modifier() {
+        assert_eq!(keysym_to_key(Keysym::Super_L), Key::Super);
+        assert_eq!(keysym_to_key(Keysym::Super_R), Key::Super);
+        assert_eq!(keysym_to_key(Keysym::Hyper_L), Key::Super);
+        assert_eq!(keysym_to_key(Keysym::Hyper_R), Key::Super);
+        assert_eq!(keysym_to_key(Keysym::Alt_L), Key::Alt);
     }
 }

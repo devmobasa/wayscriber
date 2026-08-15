@@ -5,7 +5,7 @@ use gtk::prelude::*;
 
 use crate::messages::Message;
 use crate::models::KeybindingField;
-use crate::models::keybindings::{KeyboardModifiers, waiting_prompt};
+use crate::models::keybindings::{KeyboardModifiers, super_consumed_hint, waiting_prompt};
 
 use super::super::super::state::ConfiguratorApp;
 use super::widgets::{field_canceled, ignore_activating_click, set_accessible_label, set_label};
@@ -30,6 +30,15 @@ impl RecorderPopover {
             .build();
         set_accessible_label(&prompt, "Shortcut recorder");
 
+        let hint = gtk::Label::builder()
+            .label(super_consumed_hint())
+            .wrap(true)
+            .xalign(0.0)
+            .max_width_chars(36)
+            .css_classes(["dim-label"])
+            .build();
+        set_accessible_label(&hint, super_consumed_hint());
+
         let cancel = gtk::Button::builder().label("Cancel").build();
         set_accessible_label(&cancel, "Cancel recording");
         {
@@ -45,6 +54,7 @@ impl RecorderPopover {
         content.set_margin_start(12);
         content.set_margin_end(12);
         content.append(&prompt);
+        content.append(&hint);
         content.append(&cancel);
 
         let popover = gtk::Popover::builder()

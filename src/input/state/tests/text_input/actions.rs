@@ -40,12 +40,14 @@ fn capture_action_sets_pending_and_clears_modifiers() {
     state.modifiers.ctrl = true;
     state.modifiers.shift = true;
     state.modifiers.alt = true;
+    state.modifiers.logo = true;
 
     state.handle_action(Action::CaptureClipboardFull);
 
     assert!(!state.modifiers.ctrl);
     assert!(!state.modifiers.shift);
     assert!(!state.modifiers.alt);
+    assert!(!state.modifiers.logo);
 
     assert_eq!(
         state.take_pending_backend_action(),

@@ -241,9 +241,7 @@ pub(crate) fn handle_return_edit_selected_text_key(
     key: Key,
 ) -> Option<RoutingOutcome> {
     if matches!(key, Key::Return)
-        && !state.modifiers.ctrl
-        && !state.modifiers.shift
-        && !state.modifiers.alt
+        && !state.modifiers.has_shortcut_modifier()
         && matches!(state.state, DrawingState::Idle)
     {
         if state.edit_selected_text() {

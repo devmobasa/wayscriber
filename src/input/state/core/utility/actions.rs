@@ -13,6 +13,7 @@ impl InputState {
                 self.modifiers.ctrl,
                 self.modifiers.shift,
                 self.modifiers.alt,
+                self.modifiers.logo,
             ) {
                 return Some(*action);
             }

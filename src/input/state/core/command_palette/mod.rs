@@ -264,6 +264,33 @@ mod tests {
     }
 
     #[test]
+    fn super_held_through_the_palette_reaches_the_captured_chord() {
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "pen tool".to_string();
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Super));
+        assert!(state.modifiers.logo, "the palette must track Super itself");
+        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
+        assert_eq!(state.keybinding_capture_action, Some(Action::SelectPenTool));
+
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('k')));
+        assert_eq!(
+            state.take_pending_keybinding_edits(),
+            vec![crate::input::state::KeybindingEditRequest {
+                action: Action::SelectPenTool,
+                operation: crate::input::state::KeybindingEditOperation::Replace(vec![
+                    "Ctrl+Super+K".to_string()
+                ]),
+            }]
+        );
+
+        state.on_key_release(crate::input::Key::Super);
+        assert!(!state.modifiers.logo);
+    }
+
+    #[test]
     fn palette_shortcut_controls_request_delete_and_reset() {
         let mut state = make_state();
         state.toggle_command_palette();

@@ -10,9 +10,7 @@ use super::field::KeybindingField;
 
 /// Modifier flags taken from a GDK key event.
 ///
-/// Super is tracked so a Super-modified chord is rejected instead of being
-/// recorded as the same shortcut without Super. Super storage lands in a
-/// later phase.
+/// Super, Meta, and Hyper all map onto the runtime Super/logo modifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct KeyboardModifiers {
     pub ctrl: bool,
@@ -34,6 +32,9 @@ impl KeyboardModifiers {
         }
         if self.alt {
             parts.push("Alt");
+        }
+        if self.super_held {
+            parts.push("Super");
         }
         if parts.is_empty() {
             String::new()
@@ -76,12 +77,6 @@ pub fn waiting_prompt() -> String {
 
 /// Map a GDK/X11 keyval and current modifiers onto the shared binding type.
 pub fn normalize_key_event(keyval: u32, modifiers: KeyboardModifiers) -> RecordedKeyboard {
-    if is_super_family(keyval) || (modifiers.super_held && !is_supported_modifier_key(keyval)) {
-        return RecordedKeyboard::Unsupported {
-            message: super_unsupported_message().to_string(),
-        };
-    }
-
     if is_supported_modifier_key(keyval) {
         let preview = pending_preview(modifiers);
         return RecordedKeyboard::Pending { preview };
@@ -94,6 +89,7 @@ pub fn normalize_key_event(keyval: u32, modifiers: KeyboardModifiers) -> Recorde
                 ctrl: modifiers.ctrl,
                 shift: modifiers.shift,
                 alt: modifiers.alt,
+                logo: modifiers.super_held,
             };
             RecordedKeyboard::Chord(binding)
         }
@@ -112,8 +108,8 @@ pub fn pending_preview(modifiers: KeyboardModifiers) -> String {
     }
 }
 
-pub fn super_unsupported_message() -> &'static str {
-    "Super, Meta, and Hyper cannot be recorded yet. Use Edit as Text to type them."
+pub fn super_consumed_hint() -> &'static str {
+    "If Super never appears, the desktop captured it. Use Edit as Text."
 }
 
 pub fn unsupported_key_message() -> &'static str {
@@ -131,20 +127,14 @@ fn is_supported_modifier_key(keyval: u32) -> bool {
             | keyval::SHIFT_LOCK
             | keyval::ALT_L
             | keyval::ALT_R
-            | keyval::ISO_LEVEL3_SHIFT
-            | keyval::NUM_LOCK
-    )
-}
-
-fn is_super_family(keyval: u32) -> bool {
-    matches!(
-        keyval,
-        keyval::META_L
+            | keyval::META_L
             | keyval::META_R
             | keyval::SUPER_L
             | keyval::SUPER_R
             | keyval::HYPER_L
             | keyval::HYPER_R
+            | keyval::ISO_LEVEL3_SHIFT
+            | keyval::NUM_LOCK
     )
 }
 
@@ -342,12 +332,12 @@ pub mod keyval {
 mod tests {
     use super::*;
 
-    fn mods(ctrl: bool, shift: bool, alt: bool) -> KeyboardModifiers {
+    fn mods(ctrl: bool, shift: bool, alt: bool, super_held: bool) -> KeyboardModifiers {
         KeyboardModifiers {
             ctrl,
             shift,
             alt,
-            super_held: false,
+            super_held,
         }
     }
 
@@ -366,24 +356,24 @@ mod tests {
 
     #[test]
     fn ctrl_shift_x_uses_canonical_modifier_order() {
-        let binding = chord(u32::from(b'x'), mods(true, true, false));
+        let binding = chord(u32::from(b'x'), mods(true, true, false, false));
         assert_eq!(binding.to_string(), "Ctrl+Shift+X");
-        let from_uppercase = chord(u32::from(b'X'), mods(true, true, false));
+        let from_uppercase = chord(u32::from(b'X'), mods(true, true, false, false));
         assert_eq!(from_uppercase.to_string(), "Ctrl+Shift+X");
         assert_eq!(binding, from_uppercase);
     }
 
     #[test]
     fn shifted_punctuation_records_the_unshifted_key() {
-        let binding = chord(u32::from(b'!'), mods(false, true, false));
+        let binding = chord(u32::from(b'!'), mods(false, true, false, false));
         assert_eq!(binding.to_string(), "Shift+1");
-        assert!(binding.matches("1", false, true, false));
-        assert!(!binding.matches("!", false, true, false));
+        assert!(binding.matches("1", false, true, false, false));
+        assert!(!binding.matches("!", false, true, false, false));
     }
 
     #[test]
     fn ctrl_shift_plus_round_trips_the_plus_key() {
-        let binding = chord(keyval::PLUS, mods(true, true, false));
+        let binding = chord(keyval::PLUS, mods(true, true, false, false));
         assert_eq!(binding.key, "+");
         assert_eq!(binding.to_string(), "Ctrl+Shift++");
         let parsed = KeyBinding::parse("Ctrl+Shift++").expect("plus key parses");
@@ -399,8 +389,12 @@ mod tests {
             keyval::SHIFT_R,
             keyval::ALT_L,
             keyval::ALT_R,
+            keyval::SUPER_L,
+            keyval::SUPER_R,
+            keyval::META_L,
+            keyval::HYPER_L,
         ] {
-            match normalize_key_event(keyval, mods(true, false, false)) {
+            match normalize_key_event(keyval, mods(true, false, false, false)) {
                 RecordedKeyboard::Pending { preview } => {
                     assert_eq!(preview, "Ctrl+…");
                 }
@@ -436,20 +430,23 @@ mod tests {
     }
 
     #[test]
-    fn super_chords_are_rejected_instead_of_dropping_the_modifier() {
-        let mut modifiers = mods(false, false, false);
-        modifiers.super_held = true;
-        match normalize_key_event(u32::from(b'x'), modifiers) {
-            RecordedKeyboard::Unsupported { message } => {
-                assert!(message.contains("Super"));
-            }
-            other => panic!("expected Super to be unsupported, got {other:?}"),
-        }
-        match normalize_key_event(keyval::SUPER_L, KeyboardModifiers::default()) {
-            RecordedKeyboard::Unsupported { message } => {
-                assert!(message.contains("Super"));
-            }
-            other => panic!("expected Super_L to be unsupported, got {other:?}"),
+    fn super_chords_record_as_canonical_super() {
+        let binding = chord(u32::from(b'x'), mods(false, false, false, true));
+        assert_eq!(binding.to_string(), "Super+X");
+        assert!(binding.logo);
+        assert_eq!(binding, KeyBinding::parse("Meta+X").expect("Meta alias"));
+
+        assert_eq!(
+            chord(keyval::F5, mods(false, true, false, true)).to_string(),
+            "Shift+Super+F5"
+        );
+    }
+
+    #[test]
+    fn bare_super_stays_pending() {
+        match normalize_key_event(keyval::SUPER_L, mods(false, false, false, true)) {
+            RecordedKeyboard::Pending { preview } => assert_eq!(preview, "Super+…"),
+            other => panic!("expected Super to stay pending, got {other:?}"),
         }
     }
 

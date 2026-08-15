@@ -93,6 +93,38 @@ fn bindings_differing_only_in_key_case_are_the_same_binding() {
 fn test_parse_requires_non_modifier_key() {
     let err = KeyBinding::parse("Ctrl+Shift").unwrap_err();
     assert!(err.contains("No key specified"));
+    let super_only = KeyBinding::parse("Super").unwrap_err();
+    assert!(super_only.contains("No key specified"));
+}
+
+#[test]
+fn super_aliases_parse_display_equal_and_match_as_super() {
+    let canonical = KeyBinding::parse("Super+X").unwrap();
+    assert!(canonical.logo);
+    assert!(!canonical.ctrl);
+    assert_eq!(canonical.to_string(), "Super+X");
+    assert!(canonical.matches("x", false, false, false, true));
+    assert!(!canonical.matches("x", false, false, false, false));
+    assert!(!canonical.matches("x", true, false, false, false));
+
+    for alias in ["Meta+X", "Logo+X", "Win+X", "Windows+X", "meta+x", "WIN+X"] {
+        let parsed = KeyBinding::parse(alias).unwrap();
+        assert_eq!(parsed, canonical, "{alias} must equal Super+X");
+        assert!(
+            parsed.to_string().starts_with("Super+"),
+            "{alias} displays Super, got {parsed}"
+        );
+    }
+
+    let shifted = KeyBinding::parse("Shift+Super+F5").unwrap();
+    assert_eq!(shifted.to_string(), "Shift+Super+F5");
+    assert_eq!(KeyBinding::parse("Super+Shift+F5").unwrap(), shifted);
+
+    let mut map = std::collections::HashMap::new();
+    map.insert(canonical.clone(), ());
+    assert!(map.contains_key(&KeyBinding::parse("Meta+X").unwrap()));
+    assert!(!map.contains_key(&KeyBinding::parse("Ctrl+X").unwrap()));
+    assert!(!map.contains_key(&KeyBinding::parse("X").unwrap()));
 }
 
 #[test]
@@ -104,11 +136,11 @@ fn test_display_normalizes_modifier_order() {
 #[test]
 fn test_matches() {
     let binding = KeyBinding::parse("Ctrl+Shift+W").unwrap();
-    assert!(binding.matches("W", true, true, false));
-    assert!(binding.matches("w", true, true, false)); // Case insensitive
-    assert!(!binding.matches("W", false, true, false)); // Missing ctrl
-    assert!(!binding.matches("W", true, false, false)); // Missing shift
-    assert!(!binding.matches("A", true, true, false)); // Wrong key
+    assert!(binding.matches("W", true, true, false, false));
+    assert!(binding.matches("w", true, true, false, false)); // Case insensitive
+    assert!(!binding.matches("W", false, true, false, false)); // Missing ctrl
+    assert!(!binding.matches("W", true, false, false, false)); // Missing shift
+    assert!(!binding.matches("A", true, true, false, false)); // Wrong key
 }
 
 #[test]
@@ -260,8 +292,8 @@ fn test_parse_trims_surrounding_whitespace() {
 #[test]
 fn test_matches_requires_exact_alt_state() {
     let binding = KeyBinding::parse("Alt+X").unwrap();
-    assert!(binding.matches("x", false, false, true));
-    assert!(!binding.matches("x", false, false, false));
+    assert!(binding.matches("x", false, false, true, false));
+    assert!(!binding.matches("x", false, false, false, false));
 }
 
 #[test]
@@ -823,6 +855,12 @@ fn a_misspelled_modifier_is_reported_with_a_suggestion() {
         parsed.key
     );
     assert_eq!(suggest_key_name(&parsed.key).as_deref(), Some("Ctrl+Z"));
+
+    let super_typo = KeyBinding::parse("Supre+X").expect("the string still parses");
+    assert_eq!(
+        suggest_key_name(&super_typo.key).as_deref(),
+        Some("Super+X")
+    );
 }
 
 #[test]
@@ -858,6 +896,8 @@ fn ordinary_bindings_are_not_flagged() {
         "Escape",
         "F10",
         "Ctrl+Shift+P",
+        "Super+X",
+        "Meta+X",
         "a",
         "/",
         "PageUp",

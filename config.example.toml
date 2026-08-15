@@ -33,7 +33,8 @@ config_revision = 3
 [keybindings]
 # Customize keyboard shortcuts for all actions
 # Format: key names with modifiers separated by +
-# Examples: "Escape", "Ctrl+Z", "Ctrl+Shift+T", "F10"
+# Examples: "Escape", "Ctrl+Z", "Super+X", "Ctrl+Shift+T", "F10"
+# Super also accepts Meta, Logo, Win, and Windows.
 # Each action can have multiple keybindings (e.g., ["+", "="])
 
 # Exit overlay (or cancel current action)
@@ -758,7 +759,7 @@ position = "bottom-center"
 # Show mouse buttons and scroll wheel
 show_mouse = true
 
-# Show taps of bare modifiers (Ctrl, Shift, Alt) as their own chips
+# Show taps of bare modifiers (Ctrl, Shift, Alt, Super) as their own chips
 show_bare_modifiers = true
 
 # How long a chip stays after its last press, before fading (200 - 30000 ms)

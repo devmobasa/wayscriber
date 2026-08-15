@@ -13,6 +13,7 @@ impl InputState {
             Key::Shift => self.modifiers.shift = true,
             Key::Ctrl => self.modifiers.ctrl = true,
             Key::Alt => self.modifiers.alt = true,
+            Key::Super => self.modifiers.logo = true,
             Key::Tab => self.modifiers.tab = true,
             _ => return false,
         }

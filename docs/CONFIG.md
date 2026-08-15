@@ -860,7 +860,7 @@ names the keybinding config and help overlay print (`Ctrl+Shift+Z`, `Space`,
 | `mode` | enum | `"auto"` | `auto`, `overlay`, or `system` |
 | `position` | enum | `"bottom-center"` | Nine screen anchors (3×3 grid) |
 | `show_mouse` | bool | `true` | Show buttons and scroll |
-| `show_bare_modifiers` | bool | `true` | Show lone Ctrl/Shift/Alt taps |
+| `show_bare_modifiers` | bool | `true` | Show lone Ctrl/Shift/Alt/Super taps |
 | `display_ms` | u64 | `1600` | Hold before fading (200–30000) |
 | `fade_ms` | u64 | `350` | Fade duration (0–5000) |
 | `max_entries` | usize | `6` | Simultaneous chips (1–16) |
@@ -1597,6 +1597,13 @@ For end-to-end CLI, overlay, and configurator flows, see [`examples/session-mana
 
 Customize keyboard shortcuts for all actions. Each action can have multiple keybindings.
 For multi-monitor, customize `focus_prev_output` and `focus_next_output` in this section.
+
+A shortcut is a key name with optional modifiers joined by `+`. The modifiers are `Ctrl`
+(`Control`), `Shift`, `Alt`, and `Super` (`Meta`, `Logo`, `Win`, `Windows`). Matching,
+conflicts, and display use the canonical spelling `Super`. Examples: `Escape`, `Ctrl+Z`,
+`Super+X`, `Ctrl+Shift+T`, `F10`. Super chords work when the compositor delivers them;
+if the desktop consumes Super before Wayscriber or the configurator sees it, type the
+shortcut with Edit as Text.
 
 #### How a shortcut you did not write is decided
 
