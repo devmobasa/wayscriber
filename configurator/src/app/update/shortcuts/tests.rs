@@ -1,4 +1,4 @@
-use wayscriber::config::{CURRENT_CONFIG_REVISION, ConfigDocument, ShortcutTrigger};
+use wayscriber::config::{CURRENT_CONFIG_REVISION, ConfigDocument, Shortcut};
 
 use crate::app::effects::Effect;
 use crate::app::state::{ConfiguratorApp, PendingConfirmation, StatusMessage};
@@ -124,7 +124,7 @@ fn recording_reset_and_removal_dirty_without_saving() {
     );
     let effects = app.handle_shortcut_removed(
         KeybindingField::ToggleFloatingBadge,
-        ShortcutTrigger::parse("F5").expect("parses"),
+        Shortcut::parse("F5").expect("parses"),
     );
     assert!(effects.is_empty());
     assert_eq!(
@@ -325,5 +325,121 @@ fn recording_stylus_primary_prompts_to_move_the_default_legacy_barrel() {
             .keybindings
             .value_for(KeybindingField::Undo)
             .is_some_and(|value| value.contains("StylusPrimary"))
+    );
+}
+
+#[test]
+fn recording_a_two_step_sequence_commits_on_finish() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _ = app.handle_shortcut_sequence_recording_started(KeybindingField::ToggleFloatingBadge);
+    let chord = KeyboardModifiers {
+        ctrl: true,
+        shift: true,
+        alt: true,
+        super_held: false,
+    };
+    let effects = app.handle_shortcut_recorder_key(u32::from(b'k'), chord);
+    assert!(effects.is_empty());
+    assert!(app.active_shortcut_recorder.is_some());
+    let effects = app.handle_shortcut_recorder_key(u32::from(b'c'), chord);
+    assert!(effects.is_empty());
+    assert!(
+        app.active_shortcut_recorder
+            .as_ref()
+            .is_some_and(|recorder| recorder.can_finish())
+    );
+    let effects = app.handle_shortcut_sequence_finish();
+    assert!(effects.is_empty());
+    assert!(app.active_shortcut_recorder.is_none());
+    assert_eq!(
+        app.draft
+            .keybindings
+            .value_for(KeybindingField::ToggleFloatingBadge),
+        Some("Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+C")
+    );
+}
+
+#[test]
+fn third_sequence_step_finishes_automatically() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _ = app.handle_shortcut_sequence_recording_started(KeybindingField::ToggleFloatingBadge);
+    let chord = KeyboardModifiers {
+        ctrl: true,
+        shift: true,
+        alt: true,
+        super_held: false,
+    };
+    let _ = app.handle_shortcut_recorder_key(u32::from(b'k'), chord);
+    let _ = app.handle_shortcut_recorder_key(u32::from(b'c'), chord);
+    let effects = app.handle_shortcut_recorder_key(u32::from(b'v'), chord);
+    assert!(effects.is_empty());
+    assert!(app.active_shortcut_recorder.is_none());
+    assert_eq!(
+        app.draft
+            .keybindings
+            .value_for(KeybindingField::ToggleFloatingBadge),
+        Some("Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+C > Ctrl+Shift+Alt+V")
+    );
+}
+
+#[test]
+fn sequence_recording_rejects_device_buttons() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _ = app.handle_shortcut_sequence_recording_started(KeybindingField::ToggleFloatingBadge);
+    let effects = app.handle_shortcut_recorder_button(
+        8,
+        RecorderDeviceKind::Mouse,
+        KeyboardModifiers::default(),
+    );
+    assert!(effects.is_empty());
+    assert!(app.active_shortcut_recorder.is_some());
+    assert!(
+        app.active_shortcut_recorder
+            .as_ref()
+            .is_some_and(|recorder| recorder.prompt.contains("keyboard-only"))
+    );
+}
+
+#[test]
+fn sequence_prefix_conflict_uses_the_same_replace_flow() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _ = app.handle_shortcut_sequence_recording_started(KeybindingField::ToggleFloatingBadge);
+    let ctrl = KeyboardModifiers {
+        ctrl: true,
+        shift: false,
+        alt: false,
+        super_held: false,
+    };
+    let _ = app.handle_shortcut_recorder_key(u32::from(b'k'), ctrl);
+    let _ = app.handle_shortcut_recorder_key(u32::from(b'c'), ctrl);
+    let _ = app.handle_shortcut_sequence_finish();
+    let pending = app
+        .pending_shortcut_conflict
+        .as_ref()
+        .expect("Ctrl+K is the command palette");
+    let prompt = pending.prompt();
+    assert!(prompt.contains("Ctrl+K"), "{prompt}");
+    assert!(
+        prompt.contains("cannot coexist")
+            || prompt.contains("Command Palette")
+            || prompt.contains("command palette"),
+        "{prompt}"
+    );
+}
+
+#[test]
+fn text_editor_accepts_a_sequence_beside_a_single() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    let _ = app.handle_shortcut_text_edit_started(KeybindingField::ToggleFloatingBadge);
+    let _ = app
+        .handle_shortcut_text_edit_changed("F5, Ctrl+Alt+Shift+K > Ctrl+Alt+Shift+C".to_string());
+    let effects = app.handle_shortcut_text_edit_applied();
+    assert!(effects.is_empty());
+    assert!(app.pending_shortcut_conflict.is_none());
+    assert_eq!(
+        app.draft
+            .keybindings
+            .value_for(KeybindingField::ToggleFloatingBadge),
+        Some("F5, Ctrl+Alt+Shift+K > Ctrl+Alt+Shift+C")
     );
 }

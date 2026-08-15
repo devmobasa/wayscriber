@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::super::{Action, ShortcutTrigger};
+use super::super::{Action, Shortcut};
 use super::types::KeybindingsConfig;
 
 mod board;
@@ -22,13 +22,13 @@ mod zoom;
 /// action lists more than once yields a one-element `actions`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeybindingConflict {
-    binding: ShortcutTrigger,
+    binding: Shortcut,
     actions: Vec<Action>,
 }
 
 impl KeybindingConflict {
     /// The parsed shortcut every listed action claims.
-    pub fn binding(&self) -> &ShortcutTrigger {
+    pub fn binding(&self) -> &Shortcut {
         &self.binding
     }
 
@@ -41,11 +41,11 @@ impl KeybindingConflict {
 #[derive(Default)]
 struct ConflictLog {
     entries: Vec<KeybindingConflict>,
-    positions: HashMap<ShortcutTrigger, usize>,
+    positions: HashMap<Shortcut, usize>,
 }
 
 impl ConflictLog {
-    fn record(&mut self, binding: &ShortcutTrigger, first: Action, next: Action) {
+    fn record(&mut self, binding: &Shortcut, first: Action, next: Action) {
         match self.positions.get(binding) {
             Some(&position) => {
                 let actions = &mut self.entries[position].actions;
@@ -69,8 +69,8 @@ impl ConflictLog {
 }
 
 struct BindingInserter<'a> {
-    map: &'a mut HashMap<ShortcutTrigger, Action>,
-    ordered: Option<&'a mut HashMap<Action, Vec<ShortcutTrigger>>>,
+    map: &'a mut HashMap<Shortcut, Action>,
+    ordered: Option<&'a mut HashMap<Action, Vec<Shortcut>>>,
     conflicts: Option<&'a mut ConflictLog>,
     /// Whether a bad binding string or a duplicate key is data rather than a
     /// failure. Set only for the views that answer "which keys are taken",
@@ -79,7 +79,7 @@ struct BindingInserter<'a> {
 }
 
 impl<'a> BindingInserter<'a> {
-    fn new(map: &'a mut HashMap<ShortcutTrigger, Action>) -> Self {
+    fn new(map: &'a mut HashMap<Shortcut, Action>) -> Self {
         Self {
             map,
             ordered: None,
@@ -89,8 +89,8 @@ impl<'a> BindingInserter<'a> {
     }
 
     fn new_with_order(
-        map: &'a mut HashMap<ShortcutTrigger, Action>,
-        ordered: &'a mut HashMap<Action, Vec<ShortcutTrigger>>,
+        map: &'a mut HashMap<Shortcut, Action>,
+        ordered: &'a mut HashMap<Action, Vec<Shortcut>>,
     ) -> Self {
         Self {
             map,
@@ -101,7 +101,7 @@ impl<'a> BindingInserter<'a> {
     }
 
     fn new_collecting(
-        map: &'a mut HashMap<ShortcutTrigger, Action>,
+        map: &'a mut HashMap<Shortcut, Action>,
         conflicts: &'a mut ConflictLog,
     ) -> Self {
         Self {
@@ -112,7 +112,7 @@ impl<'a> BindingInserter<'a> {
         }
     }
 
-    fn new_tolerant(map: &'a mut HashMap<ShortcutTrigger, Action>) -> Self {
+    fn new_tolerant(map: &'a mut HashMap<Shortcut, Action>) -> Self {
         Self {
             map,
             ordered: None,
@@ -121,14 +121,34 @@ impl<'a> BindingInserter<'a> {
         }
     }
 
+    fn prefix_owner(&self, binding: &Shortcut) -> Option<(Shortcut, Action)> {
+        self.map.iter().find_map(|(existing, action)| {
+            existing
+                .prefix_conflicts_with(binding)
+                .then(|| (existing.clone(), *action))
+        })
+    }
+
     fn insert(&mut self, binding_str: &str, action: Action) -> Result<(), String> {
-        let binding = match ShortcutTrigger::parse(binding_str) {
+        let binding = match Shortcut::parse(binding_str) {
             Ok(binding) => binding,
             // A string the parser rejects binds nothing at runtime, so a view
             // of the keys in effect has nothing to record and nothing to say.
             Err(_) if self.tolerant => return Ok(()),
             Err(error) => return Err(error),
         };
+        if let Some((other, existing_action)) = self.prefix_owner(&binding) {
+            if let Some(conflicts) = self.conflicts.as_mut() {
+                conflicts.record(&binding, existing_action, action);
+                return Ok(());
+            }
+            if self.tolerant {
+                return Ok(());
+            }
+            return Err(format!(
+                "Sequence prefix conflict: '{binding}' for {action:?} cannot coexist with '{other}' for {existing_action:?}"
+            ));
+        }
         let Some(existing_action) = self.map.insert(binding.clone(), action) else {
             if let Some(ordered) = self.ordered.as_mut() {
                 ordered.entry(action).or_default().push(binding);
@@ -179,7 +199,7 @@ impl KeybindingsConfig {
 
     /// Build a lookup map from keybindings to actions for efficient matching.
     /// Returns an error if any keybinding string is invalid or if duplicates are detected.
-    pub fn build_action_map(&self) -> Result<HashMap<ShortcutTrigger, Action>, String> {
+    pub fn build_action_map(&self) -> Result<HashMap<Shortcut, Action>, String> {
         let mut map = HashMap::new();
         let mut inserter = BindingInserter::new(&mut map);
         self.insert_every_binding(&mut inserter)?;
@@ -188,7 +208,7 @@ impl KeybindingsConfig {
 
     /// Build an ordered list of keybindings per action.
     /// Returns an error if any keybinding string is invalid or if duplicates are detected.
-    pub fn build_action_bindings(&self) -> Result<HashMap<Action, Vec<ShortcutTrigger>>, String> {
+    pub fn build_action_bindings(&self) -> Result<HashMap<Action, Vec<Shortcut>>, String> {
         let mut map = HashMap::new();
         let mut ordered = HashMap::new();
         let mut inserter = BindingInserter::new_with_order(&mut map, &mut ordered);
@@ -222,7 +242,7 @@ impl KeybindingsConfig {
     /// claims nothing at runtime either. That keeps an editor able to accept an
     /// edit to an unrelated action while a tolerated problem sits elsewhere in
     /// the file (#293).
-    pub fn claimed_keys(&self) -> HashMap<ShortcutTrigger, Action> {
+    pub fn claimed_keys(&self) -> HashMap<Shortcut, Action> {
         let mut map = HashMap::new();
         let mut inserter = BindingInserter::new_tolerant(&mut map);
         // The tolerant inserter reports nothing, so there is no error to

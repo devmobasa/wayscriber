@@ -1,8 +1,9 @@
-//! Single-trigger shortcuts: keyboard chords, auxiliary pointer buttons, and
-//! stylus barrel buttons.
+//! Shortcut identity: a single trigger or a short keyboard sequence.
 //!
-//! Existing keyboard strings keep parsing as [`ShortcutTrigger::Keyboard`].
-//! Pointer and stylus names are reserved and never stored as key names.
+//! Existing keyboard strings keep parsing as
+//! [`Shortcut::Single`]`(`[`ShortcutTrigger::Keyboard`]`)`. Pointer and stylus
+//! names are reserved and never stored as key names. Sequences use `>` between
+//! keyboard chords (`Ctrl+K > Ctrl+C`).
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -13,6 +14,9 @@ use super::binding::{
 
 /// Highest `MouseExtraN` index accepted in this release (`MouseExtra1`..=`MouseExtra4`).
 pub const MAX_POINTER_EXTRA: u8 = 4;
+
+/// Maximum keyboard chords in a sequence (`Ctrl+K > Ctrl+C > Ctrl+V`).
+pub const MAX_SEQUENCE_STEPS: usize = 3;
 
 /// Auxiliary mouse buttons that can dispatch configured actions.
 ///
@@ -268,6 +272,207 @@ impl fmt::Display for ShortcutTrigger {
     }
 }
 
+/// One configured shortcut: a single trigger or a two-to-three-step keyboard
+/// sequence.
+///
+/// Storage uses spaced `>` between steps. User-facing labels use `then`.
+#[derive(Debug, Clone, Eq)]
+pub enum Shortcut {
+    Single(ShortcutTrigger),
+    Sequence(Vec<KeyBinding>),
+}
+
+impl PartialEq for Shortcut {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Single(left), Self::Single(right)) => left == right,
+            (Self::Sequence(left), Self::Sequence(right)) => left == right,
+            _ => false,
+        }
+    }
+}
+
+impl Hash for Shortcut {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Self::Single(trigger) => trigger.hash(state),
+            Self::Sequence(steps) => steps.hash(state),
+        }
+    }
+}
+
+impl From<ShortcutTrigger> for Shortcut {
+    fn from(trigger: ShortcutTrigger) -> Self {
+        Self::Single(trigger)
+    }
+}
+
+impl From<KeyBinding> for Shortcut {
+    fn from(binding: KeyBinding) -> Self {
+        Self::Single(ShortcutTrigger::Keyboard(binding))
+    }
+}
+
+impl Shortcut {
+    /// Parse one shortcut string: a single trigger or a keyboard sequence.
+    pub fn parse(s: &str) -> Result<Self, String> {
+        let Some(parts) = split_sequence_steps(s) else {
+            return ShortcutTrigger::parse(s).map(Self::Single);
+        };
+        if parts.iter().any(|part| part.is_empty()) {
+            if parses_as_greater_than_key(s) {
+                return ShortcutTrigger::parse(s).map(Self::Single);
+            }
+            return Err(
+                "Empty sequence step. Use a complete chord on each side of `>`, for example Ctrl+K > Ctrl+C."
+                    .to_string(),
+            );
+        }
+        if parts.len() == 1 {
+            return ShortcutTrigger::parse(parts[0]).map(Self::Single);
+        }
+        parse_keyboard_sequence(&parts)
+    }
+
+    pub fn as_trigger(&self) -> Option<&ShortcutTrigger> {
+        match self {
+            Self::Single(trigger) => Some(trigger),
+            Self::Sequence(_) => None,
+        }
+    }
+
+    pub fn as_key_binding(&self) -> Option<&KeyBinding> {
+        self.as_trigger().and_then(ShortcutTrigger::as_key_binding)
+    }
+
+    /// Keyboard chords that make up this shortcut, if it is keyboard-only.
+    pub fn keyboard_steps(&self) -> Option<&[KeyBinding]> {
+        match self {
+            Self::Single(ShortcutTrigger::Keyboard(binding)) => Some(std::slice::from_ref(binding)),
+            Self::Sequence(steps) => Some(steps.as_slice()),
+            Self::Single(_) => None,
+        }
+    }
+
+    /// Whether one keyboard shortcut is a strict prefix of the other.
+    ///
+    /// A standalone chord that starts a sequence, or a shorter sequence that
+    /// starts a longer one, cannot be dispatched without delaying the prefix.
+    pub fn prefix_conflicts_with(&self, other: &Self) -> bool {
+        let Some(left) = self.keyboard_steps() else {
+            return false;
+        };
+        let Some(right) = other.keyboard_steps() else {
+            return false;
+        };
+        left != right && (left.starts_with(right) || right.starts_with(left))
+    }
+
+    /// Label for chips, help, and the command palette (`Ctrl+K then Ctrl+C`).
+    pub fn display_label(&self) -> String {
+        match self {
+            Self::Single(trigger) => trigger.to_string(),
+            Self::Sequence(steps) => steps
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" then "),
+        }
+    }
+
+    pub fn is_deliverable(&self) -> bool {
+        match self {
+            Self::Single(trigger) => trigger.is_deliverable(),
+            Self::Sequence(steps) => steps
+                .iter()
+                .all(|step| super::binding::is_deliverable_key_name(&step.key)),
+        }
+    }
+
+    pub fn unknown_key_suggestion(&self) -> Option<String> {
+        match self {
+            Self::Single(trigger) => trigger.unknown_key_suggestion(),
+            Self::Sequence(steps) => steps.iter().find_map(|step| suggest_key_name(&step.key)),
+        }
+    }
+
+    pub fn unknown_key_name(&self) -> Option<String> {
+        match self {
+            Self::Single(trigger) => trigger.unknown_key_name(),
+            Self::Sequence(steps) => steps.iter().find_map(|step| {
+                (!super::binding::is_deliverable_key_name(&step.key)).then(|| step.key.clone())
+            }),
+        }
+    }
+
+    /// Action that already claims this identity or a keyboard prefix/extension.
+    pub fn claimed_by(
+        &self,
+        claimed: &std::collections::HashMap<Self, super::Action>,
+    ) -> Option<super::Action> {
+        if let Some(owner) = claimed.get(self) {
+            return Some(*owner);
+        }
+        claimed
+            .iter()
+            .find_map(|(existing, owner)| existing.prefix_conflicts_with(self).then_some(*owner))
+    }
+}
+
+impl fmt::Display for Shortcut {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Single(trigger) => write!(f, "{trigger}"),
+            Self::Sequence(steps) => {
+                let text = steps
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" > ");
+                write!(f, "{text}")
+            }
+        }
+    }
+}
+
+fn split_sequence_steps(s: &str) -> Option<Vec<&str>> {
+    if s.contains(" > ") {
+        return Some(s.split(" > ").map(str::trim).collect());
+    }
+    if s.contains('>') {
+        return Some(s.split('>').map(str::trim).collect());
+    }
+    None
+}
+
+fn parses_as_greater_than_key(s: &str) -> bool {
+    ShortcutTrigger::parse(s)
+        .ok()
+        .and_then(|trigger| trigger.as_key_binding().cloned())
+        .is_some_and(|binding| binding.key == ">")
+}
+
+fn parse_keyboard_sequence(parts: &[&str]) -> Result<Shortcut, String> {
+    if parts.len() > MAX_SEQUENCE_STEPS {
+        return Err(format!(
+            "Keyboard sequences can have at most {MAX_SEQUENCE_STEPS} steps."
+        ));
+    }
+    let mut steps = Vec::with_capacity(parts.len());
+    for part in parts {
+        match ShortcutTrigger::parse(part)? {
+            ShortcutTrigger::Keyboard(binding) => steps.push(binding),
+            ShortcutTrigger::Pointer(_) | ShortcutTrigger::Stylus(_) => {
+                return Err(format!(
+                    "Sequences are keyboard-only; `{part}` is a device button."
+                ));
+            }
+        }
+    }
+    Ok(Shortcut::Sequence(steps))
+}
+
 fn write_device_binding(
     f: &mut fmt::Formatter<'_>,
     ctrl: bool,
@@ -442,5 +647,69 @@ mod tests {
             Some(StylusButton::Primary)
         );
         assert_eq!(gdk::stylus_button(2), Some(StylusButton::Primary));
+    }
+
+    #[test]
+    fn two_and_three_step_sequences_round_trip() {
+        let two = Shortcut::parse("Ctrl+K > Ctrl+C").unwrap();
+        assert_eq!(two.to_string(), "Ctrl+K > Ctrl+C");
+        assert_eq!(two.display_label(), "Ctrl+K then Ctrl+C");
+        assert_eq!(Shortcut::parse("Ctrl+K>Ctrl+C").unwrap(), two);
+
+        let three = Shortcut::parse("Ctrl+K > Ctrl+C > Ctrl+V").unwrap();
+        assert_eq!(three.to_string(), "Ctrl+K > Ctrl+C > Ctrl+V");
+        assert_eq!(three.display_label(), "Ctrl+K then Ctrl+C then Ctrl+V");
+    }
+
+    #[test]
+    fn single_chords_remain_byte_compatible() {
+        let shortcut = Shortcut::parse("Ctrl+Shift+X").unwrap();
+        assert_eq!(shortcut.to_string(), "Ctrl+Shift+X");
+        assert!(matches!(shortcut, Shortcut::Single(_)));
+        assert_eq!(
+            shortcut,
+            Shortcut::Single(ShortcutTrigger::parse("Ctrl+Shift+X").unwrap())
+        );
+    }
+
+    #[test]
+    fn empty_oversized_device_and_modifier_only_sequences_fail() {
+        let empty = Shortcut::parse("Ctrl+K >").unwrap_err();
+        assert!(empty.contains("Empty sequence step"), "{empty}");
+
+        let oversized = Shortcut::parse("A > B > C > D").unwrap_err();
+        assert!(oversized.contains("at most"), "{oversized}");
+
+        let device = Shortcut::parse("Ctrl+K > MouseBack").unwrap_err();
+        assert!(device.contains("keyboard-only"), "{device}");
+
+        let modifiers = Shortcut::parse("Ctrl+K > Ctrl+Shift").unwrap_err();
+        assert!(modifiers.contains("No key specified"), "{modifiers}");
+    }
+
+    #[test]
+    fn greater_than_key_is_not_a_sequence_separator() {
+        let chord = Shortcut::parse("Ctrl+>").unwrap();
+        assert_eq!(chord.to_string(), "Ctrl+>");
+        assert!(matches!(chord, Shortcut::Single(_)));
+    }
+
+    #[test]
+    fn prefix_conflicts_are_detected_and_branching_sequences_are_not() {
+        let prefix = Shortcut::parse("Ctrl+K").unwrap();
+        let sequence = Shortcut::parse("Ctrl+K > Ctrl+C").unwrap();
+        let longer = Shortcut::parse("Ctrl+K > Ctrl+C > Ctrl+V").unwrap();
+        let branch = Shortcut::parse("Ctrl+K > Ctrl+X").unwrap();
+
+        assert!(prefix.prefix_conflicts_with(&sequence));
+        assert!(sequence.prefix_conflicts_with(&prefix));
+        assert!(sequence.prefix_conflicts_with(&longer));
+        assert!(!sequence.prefix_conflicts_with(&branch));
+        assert!(!prefix.prefix_conflicts_with(&prefix));
+        assert!(
+            !Shortcut::parse("MouseBack")
+                .unwrap()
+                .prefix_conflicts_with(&sequence)
+        );
     }
 }

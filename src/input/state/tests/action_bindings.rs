@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::{PointerButton, ShortcutTrigger};
+use crate::config::{PointerButton, Shortcut};
 use std::collections::HashMap;
 
 #[test]
@@ -9,9 +9,9 @@ fn explicit_action_binding_labels_dedup_and_preserve_order() {
     bindings.insert(
         Action::ToggleHelp,
         vec![
-            ShortcutTrigger::parse("Shift+F1").unwrap(),
-            ShortcutTrigger::parse("Shift+F1").unwrap(),
-            ShortcutTrigger::parse("F10").unwrap(),
+            Shortcut::parse("Shift+F1").unwrap(),
+            Shortcut::parse("Shift+F1").unwrap(),
+            Shortcut::parse("F10").unwrap(),
         ],
     );
     state.set_action_bindings(bindings);
@@ -26,10 +26,7 @@ fn explicit_action_binding_labels_dedup_and_preserve_order() {
 fn custom_action_bindings_override_fallback_action_map_labels() {
     let mut state = create_test_input_state();
     let mut bindings = HashMap::new();
-    bindings.insert(
-        Action::ToggleHelp,
-        vec![ShortcutTrigger::parse("Menu").unwrap()],
-    );
+    bindings.insert(Action::ToggleHelp, vec![Shortcut::parse("Menu").unwrap()]);
     state.set_action_bindings(bindings);
 
     assert_eq!(
@@ -56,8 +53,8 @@ fn action_binding_primary_label_prefers_first_explicit_binding() {
     bindings.insert(
         Action::ToggleStatusBar,
         vec![
-            ShortcutTrigger::parse("F4").unwrap(),
-            ShortcutTrigger::parse("F12").unwrap(),
+            Shortcut::parse("F4").unwrap(),
+            Shortcut::parse("F12").unwrap(),
         ],
     );
     state.set_action_bindings(bindings);
@@ -65,6 +62,21 @@ fn action_binding_primary_label_prefers_first_explicit_binding() {
     assert_eq!(
         state.action_binding_primary_label(Action::ToggleStatusBar),
         Some("F4".to_string())
+    );
+}
+
+#[test]
+fn sequence_binding_labels_use_then() {
+    let mut state = create_test_input_state();
+    let mut bindings = HashMap::new();
+    bindings.insert(
+        Action::ToggleHelp,
+        vec![Shortcut::parse("Ctrl+K > Ctrl+C").unwrap()],
+    );
+    state.set_action_bindings(bindings);
+    assert_eq!(
+        state.action_binding_labels(Action::ToggleHelp),
+        vec!["Ctrl+K then Ctrl+C".to_string()]
     );
 }
 
@@ -140,4 +152,112 @@ fn consumed_pointer_shortcut_buttons_clear_on_focus_loss() {
     state.consume_pointer_shortcut_button(0x113);
     state.reset_modifiers();
     assert!(!state.take_consumed_pointer_shortcut_button(0x113));
+}
+
+#[test]
+fn keyboard_sequences_dispatch_after_the_last_step() {
+    let mut keybindings = crate::config::KeybindingsConfig::default();
+    keybindings.ui.toggle_floating_badge = vec!["Ctrl+Alt+Shift+K > Ctrl+Alt+Shift+C".to_string()];
+    let mut state = create_test_input_state_with_keybindings(keybindings);
+    let now = std::time::Instant::now();
+
+    state.modifiers.ctrl = true;
+    state.modifiers.alt = true;
+    state.modifiers.shift = true;
+    assert_eq!(
+        state.match_keyboard_chord("k", false, now),
+        crate::input::state::core::SequenceMatch::Pending
+    );
+    assert_eq!(
+        state.match_keyboard_chord("c", false, now),
+        crate::input::state::core::SequenceMatch::Dispatched(Action::ToggleFloatingBadge)
+    );
+}
+
+#[test]
+fn sequence_timeout_and_focus_loss_clear_pending_without_dispatch() {
+    let mut keybindings = crate::config::KeybindingsConfig::default();
+    keybindings.ui.toggle_floating_badge = vec!["Ctrl+Alt+Shift+K > Ctrl+Alt+Shift+C".to_string()];
+    let mut state = create_test_input_state_with_keybindings(keybindings);
+    let now = std::time::Instant::now();
+
+    state.modifiers.ctrl = true;
+    state.modifiers.alt = true;
+    state.modifiers.shift = true;
+    assert_eq!(
+        state.match_keyboard_chord("k", false, now),
+        crate::input::state::core::SequenceMatch::Pending
+    );
+
+    assert!(state.expire_pending_sequence(now + std::time::Duration::from_secs(1)));
+    assert_eq!(
+        state.match_keyboard_chord("c", false, now + std::time::Duration::from_secs(1)),
+        crate::input::state::core::SequenceMatch::None
+    );
+
+    assert_eq!(
+        state.match_keyboard_chord("k", false, now),
+        crate::input::state::core::SequenceMatch::Pending
+    );
+    state.reset_modifiers();
+    state.modifiers.ctrl = true;
+    state.modifiers.alt = true;
+    state.modifiers.shift = true;
+    assert_eq!(
+        state.match_keyboard_chord("c", false, now),
+        crate::input::state::core::SequenceMatch::None
+    );
+}
+
+#[test]
+fn keymap_reload_and_modal_open_clear_pending_sequences() {
+    let mut keybindings = crate::config::KeybindingsConfig::default();
+    keybindings.ui.toggle_floating_badge = vec!["Ctrl+Alt+Shift+K > Ctrl+Alt+Shift+C".to_string()];
+    let mut state = create_test_input_state_with_keybindings(keybindings.clone());
+    let now = std::time::Instant::now();
+    state.modifiers.ctrl = true;
+    state.modifiers.alt = true;
+    state.modifiers.shift = true;
+    assert_eq!(
+        state.match_keyboard_chord("k", false, now),
+        crate::input::state::core::SequenceMatch::Pending
+    );
+
+    let action_map = keybindings.build_action_map().unwrap();
+    let action_bindings = keybindings.build_action_bindings().unwrap();
+    state.set_keybinding_maps(action_map, action_bindings);
+    assert_eq!(
+        state.match_keyboard_chord("c", false, now),
+        crate::input::state::core::SequenceMatch::None
+    );
+
+    assert_eq!(
+        state.match_keyboard_chord("k", false, now),
+        crate::input::state::core::SequenceMatch::Pending
+    );
+    state.close_modals_for_open(crate::input::state::core::modal::ModalSurface::HelpOverlay);
+    assert_eq!(
+        state.match_keyboard_chord("c", false, now),
+        crate::input::state::core::SequenceMatch::None
+    );
+}
+
+#[test]
+fn on_key_press_completes_a_sequence_and_repeat_does_not() {
+    let mut keybindings = crate::config::KeybindingsConfig::default();
+    keybindings.ui.toggle_floating_badge = vec!["Ctrl+Alt+Shift+K > Ctrl+Alt+Shift+C".to_string()];
+    let mut state = create_test_input_state_with_keybindings(keybindings);
+    assert!(state.show_floating_badge);
+
+    state.modifiers.ctrl = true;
+    state.modifiers.alt = true;
+    state.modifiers.shift = true;
+    state.on_key_press(crate::input::Key::Char('k'));
+    assert!(state.show_floating_badge);
+
+    state.on_key_repeat(crate::input::Key::Char('c'));
+    assert!(state.show_floating_badge);
+
+    state.on_key_press(crate::input::Key::Char('c'));
+    assert!(!state.show_floating_badge);
 }

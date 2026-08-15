@@ -4,13 +4,21 @@ use wayscriber::config::keybindings::KeybindingsConfig;
 
 use super::draft::KeybindingsDraft;
 use super::field::KeybindingField;
-use super::parse::parse_keybinding_list;
+use super::parse::{parse_keybinding_list, parse_keybindings};
 use crate::models::KeybindingsTabId;
 
 #[test]
 fn parse_keybinding_list_trims_and_ignores_empty() {
     let parsed = parse_keybinding_list(" Ctrl+Z, , Alt+K ").expect("parse succeeds");
     assert_eq!(parsed, vec!["Ctrl+Z".to_string(), "Alt+K".to_string()]);
+}
+
+#[test]
+fn parse_keybinding_list_accepts_a_sequence_beside_a_single() {
+    let parsed = parse_keybindings("F5, Ctrl+K > Ctrl+C").expect("parse succeeds");
+    assert_eq!(parsed[0].to_string(), "F5");
+    assert_eq!(parsed[1].to_string(), "Ctrl+K > Ctrl+C");
+    assert_eq!(parsed[1].display_label(), "Ctrl+K then Ctrl+C");
 }
 
 #[test]

@@ -260,7 +260,7 @@ impl InputState {
 
 #[cfg(test)]
 mod coach_tests {
-    use crate::config::{Action, ShortcutTrigger};
+    use crate::config::{Action, Shortcut};
     use crate::draw::{Color, Shape};
     use crate::input::InputState;
     use crate::input::state::test_support::{
@@ -347,8 +347,7 @@ mod coach_tests {
         // cannot name. (An empty map would fall back to the default action map,
         // which still binds Undo, so the override must be an explicit empty
         // binding list.)
-        let bindings: HashMap<Action, Vec<ShortcutTrigger>> =
-            HashMap::from([(Action::Undo, Vec::new())]);
+        let bindings: HashMap<Action, Vec<Shortcut>> = HashMap::from([(Action::Undo, Vec::new())]);
         let mut state = make_test_input_state_with_action_bindings(bindings);
         add_test_shape(&mut state);
         assert!(state.shortcut_for_action(Action::Undo).is_none());

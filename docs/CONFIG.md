@@ -1603,9 +1603,15 @@ A shortcut is a key name, auxiliary mouse button, or stylus barrel button with o
 modifiers joined by `+`. The modifiers are `Ctrl` (`Control`), `Shift`, `Alt`, and `Super`
 (`Meta`, `Logo`, `Win`, `Windows`). Matching, conflicts, and display use the canonical
 spelling `Super`. Examples: `Escape`, `Ctrl+Z`, `Super+X`, `Ctrl+Shift+T`, `F10`,
-`MouseBack`, `Ctrl+MouseForward`, `StylusPrimary`. Super chords work when the compositor
-delivers them; if the desktop consumes Super before Wayscriber or the configurator sees it,
-type the shortcut with Edit as Text.
+`MouseBack`, `Ctrl+MouseForward`, `StylusPrimary`, `Ctrl+K > Ctrl+C`. Super chords work when
+the compositor delivers them; if the desktop consumes Super before Wayscriber or the
+configurator sees it, type the shortcut with Edit as Text.
+
+Two or three keyboard chords can be chained with `>` (`Ctrl+K > Ctrl+C`). Help and the
+configurator show that as `Ctrl+K then Ctrl+C`. A comma still separates independent
+shortcuts on one action. A standalone chord cannot also be a prefix of a sequence; two
+sequences may share a first chord and diverge later. After a prefix, Wayscriber waits up
+to one second for the next step.
 
 Auxiliary mouse buttons `MouseBack`, `MouseForward`, and `MouseExtra1` through `MouseExtra4`
 can be bound to actions. Left, middle, and right cannot: they already own drawing and
@@ -1950,9 +1956,14 @@ Keybindings are specified as strings with modifiers and a key or device button s
 - With modifiers: `"Ctrl+Z"`, `"Shift+T"`, `"Ctrl+Shift+W"`, `"Super+X"`
 - Auxiliary mouse buttons: `"MouseBack"`, `"MouseForward"`, `"MouseExtra1"` through `"MouseExtra4"`
 - Stylus barrel buttons: `"StylusPrimary"`, `"StylusSecondary"`
+- Keyboard sequences (two or three chords): `"Ctrl+K > Ctrl+C"`. Help and the configurator show this as `Ctrl+K then Ctrl+C`.
 - Special keys: `"Escape"`, `"Return"`, `"Backspace"`, `"Space"`, `"F10"`, `"F11"`, `"Home"`, `"End"`, `"PageUp"`, `"PageDown"`, `"ArrowUp"`, `"ArrowDown"`, `"ArrowLeft"`, `"ArrowRight"`, `"+"`, `"-"`, `"="`, `"_"`
 
-Left, middle, and right mouse buttons cannot be bound as generic actions.
+Left, middle, and right mouse buttons cannot be bound as generic actions. Pointer and stylus buttons cannot appear as sequence steps.
+
+A comma still separates independent shortcuts on one action (`F5, Ctrl+K > Ctrl+C`). Spaces around `>` are optional in the file and canonicalized to spaced `>` when that binding is rewritten.
+
+A standalone chord cannot also be a prefix of a configured sequence (`Ctrl+K` and `Ctrl+K > Ctrl+C` cannot coexist). Two sequences may share a first chord and diverge later (`Ctrl+K > Ctrl+C` and `Ctrl+K > Ctrl+X`). After a prefix is pressed, Wayscriber waits up to one second for the next step; focus loss, overlay exit, a modal, a keymap reload, or a mismatch cancels the pending sequence. Key repeat does not advance a sequence.
 
 **Supported Modifiers:**
 - `Ctrl` (or `Control`)

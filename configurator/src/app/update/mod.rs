@@ -245,6 +245,9 @@ impl ConfiguratorApp {
             Message::ShortcutRecordingStarted(field) => {
                 self.handle_shortcut_recording_started(field)
             }
+            Message::ShortcutSequenceRecordingStarted(field) => {
+                self.handle_shortcut_sequence_recording_started(field)
+            }
             Message::ShortcutRecordingCanceled(field) => {
                 self.handle_shortcut_recording_canceled(field)
             }
@@ -253,6 +256,10 @@ impl ConfiguratorApp {
             }
             Message::ShortcutRecorderButton(button, kind, modifiers) => {
                 self.handle_shortcut_recorder_button(button, kind, modifiers)
+            }
+            Message::ShortcutSequenceFinish => self.handle_shortcut_sequence_finish(),
+            Message::ShortcutSequenceRemoveLastStep => {
+                self.handle_shortcut_sequence_remove_last_step()
             }
             Message::ShortcutRemoved(field, binding) => {
                 self.handle_shortcut_removed(field, binding)

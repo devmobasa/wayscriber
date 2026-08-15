@@ -34,10 +34,14 @@ config_revision = 3
 # Customize keyboard shortcuts for all actions
 # Format: key names with modifiers separated by +
 # Examples: "Escape", "Ctrl+Z", "Super+X", "Ctrl+Shift+T", "F10",
-# "MouseBack", "Ctrl+MouseForward", "StylusPrimary"
+# "MouseBack", "Ctrl+MouseForward", "StylusPrimary",
+# "Ctrl+K > Ctrl+C"
 # Super also accepts Meta, Logo, Win, and Windows.
 # Auxiliary mouse buttons: MouseBack, MouseForward, MouseExtra1–MouseExtra4.
 # Stylus barrel buttons: StylusPrimary, StylusSecondary.
+# Keyboard sequences use `>` between two or three chords (Ctrl+K > Ctrl+C).
+# Commas still separate independent shortcuts: F5, Ctrl+K > Ctrl+C
+# A standalone chord cannot also be a sequence prefix.
 # Left, middle, and right cannot be bound as actions.
 # Each action can have multiple keybindings (e.g., ["+", "="])
 

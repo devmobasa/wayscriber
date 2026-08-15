@@ -5,7 +5,7 @@ use std::ffi::{CStr, CString};
 use std::time::Duration;
 
 use super::*;
-use crate::config::{ShortcutTrigger, ToolbarSectionFlag, toolbar_item_ids as ids};
+use crate::config::{Shortcut, ToolbarSectionFlag, toolbar_item_ids as ids};
 use crate::input::state::test_support::make_test_input_state;
 use crate::toolbar_gtk::widgets::{emit_secondary_press, secondary_click_gesture};
 use crate::ui::toolbar::{
@@ -25,7 +25,7 @@ fn top_structure_rebuilds_when_current_shortcuts_change() {
 
     state.set_action_bindings(HashMap::from([(
         Action::SelectPenTool,
-        vec![ShortcutTrigger::parse("9").expect("binding")],
+        vec![Shortcut::parse("9").expect("binding")],
     )]));
     let changed = ToolbarSnapshot::from_input_with_bindings(
         &state,

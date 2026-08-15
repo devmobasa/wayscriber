@@ -4,7 +4,7 @@
 //! when the user explicitly adds, removes, resets, or applies a parsed list.
 //! Invalid text stays in place until one of those replacements happens.
 
-use wayscriber::config::ShortcutTrigger;
+use wayscriber::config::Shortcut;
 
 use super::draft::KeybindingsDraft;
 use super::field::KeybindingField;
@@ -51,7 +51,7 @@ impl FieldEditError {
 pub fn append_binding(
     draft: &mut KeybindingsDraft,
     field: KeybindingField,
-    binding: &ShortcutTrigger,
+    binding: &Shortcut,
 ) -> Result<AppendOutcome, FieldEditError> {
     let authored = draft.value_for(field).unwrap_or("").to_string();
     let parsed = parse_keybindings(&authored).map_err(FieldEditError::InvalidText)?;
@@ -71,14 +71,14 @@ pub fn append_binding(
 pub fn remove_binding(
     draft: &mut KeybindingsDraft,
     field: KeybindingField,
-    binding: &ShortcutTrigger,
+    binding: &Shortcut,
 ) -> Result<(), FieldEditError> {
     let authored = draft.value_for(field).unwrap_or("").to_string();
     parse_keybindings(&authored).map_err(FieldEditError::InvalidText)?;
     let mut removed = false;
     let mut kept = Vec::new();
     for part in authored_shortcut_parts(&authored) {
-        if !removed && ShortcutTrigger::parse(part).is_ok_and(|parsed| parsed == *binding) {
+        if !removed && Shortcut::parse(part).is_ok_and(|parsed| parsed == *binding) {
             removed = true;
             continue;
         }
@@ -102,7 +102,7 @@ fn apply_parsed_text(
     draft: &mut KeybindingsDraft,
     field: KeybindingField,
     text: &str,
-) -> Result<Vec<ShortcutTrigger>, FieldEditError> {
+) -> Result<Vec<Shortcut>, FieldEditError> {
     let parsed = parse_keybindings(text).map_err(FieldEditError::InvalidText)?;
     draft.set(field, text.trim().to_string());
     Ok(parsed)
@@ -136,7 +136,7 @@ pub fn reset_tooltip(defaults: &KeybindingsDraft, field: KeybindingField) -> Str
     }
 }
 
-pub fn serialize_bindings(bindings: &[ShortcutTrigger]) -> String {
+pub fn serialize_bindings(bindings: &[Shortcut]) -> String {
     bindings
         .iter()
         .map(ToString::to_string)
@@ -160,7 +160,7 @@ mod tests {
     fn equivalent_spelling_cannot_create_a_duplicate_chip() {
         let (mut draft, _defaults) = draft();
         draft.set(KeybindingField::Undo, "ctrl+z".to_string());
-        let binding = ShortcutTrigger::parse("Ctrl+Z").expect("parses");
+        let binding = Shortcut::parse("Ctrl+Z").expect("parses");
         let outcome = append_binding(&mut draft, KeybindingField::Undo, &binding).expect("append");
         assert_eq!(outcome, AppendOutcome::AlreadyPresent);
         assert_eq!(draft.value_for(KeybindingField::Undo), Some("ctrl+z"));
@@ -170,7 +170,7 @@ mod tests {
     fn removing_one_chip_preserves_siblings_and_authored_spelling() {
         let (mut draft, _defaults) = draft();
         draft.set(KeybindingField::Redo, "ctrl+shift+z, Ctrl+Y".to_string());
-        let binding = ShortcutTrigger::parse("Ctrl+Y").expect("parses");
+        let binding = Shortcut::parse("Ctrl+Y").expect("parses");
         remove_binding(&mut draft, KeybindingField::Redo, &binding).expect("remove");
         assert_eq!(draft.value_for(KeybindingField::Redo), Some("ctrl+shift+z"));
     }
@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn removing_the_last_chip_unbinds_instead_of_resetting() {
         let (mut draft, defaults) = draft();
-        let binding = ShortcutTrigger::parse("E").expect("parses");
+        let binding = Shortcut::parse("E").expect("parses");
         remove_binding(&mut draft, KeybindingField::ClearCanvas, &binding).expect("remove");
         assert_eq!(draft.value_for(KeybindingField::ClearCanvas), Some(""));
         assert!(!field_matches_defaults(
@@ -226,7 +226,7 @@ mod tests {
     fn invalid_raw_text_blocks_parsed_edits_and_stays_visible() {
         let (mut draft, _defaults) = draft();
         draft.set(KeybindingField::Exit, "Ctrl+Shift".to_string());
-        let binding = ShortcutTrigger::parse("F5").expect("parses");
+        let binding = Shortcut::parse("F5").expect("parses");
         let error = append_binding(&mut draft, KeybindingField::Exit, &binding)
             .expect_err("invalid text cannot append");
         assert!(error.message().contains("No key specified"));
@@ -263,11 +263,24 @@ mod tests {
     fn mouse_and_stylus_strings_append_as_chips() {
         let (mut draft, _defaults) = draft();
         draft.set(KeybindingField::Undo, "".to_string());
-        let binding = ShortcutTrigger::parse("Ctrl+MouseBack").expect("parses");
+        let binding = Shortcut::parse("Ctrl+MouseBack").expect("parses");
         append_binding(&mut draft, KeybindingField::Undo, &binding).expect("append");
         assert_eq!(
             draft.value_for(KeybindingField::Undo),
             Some("Ctrl+MouseBack")
         );
+    }
+
+    #[test]
+    fn sequences_append_in_storage_form() {
+        let (mut draft, _defaults) = draft();
+        draft.set(KeybindingField::Undo, "".to_string());
+        let binding = Shortcut::parse("Ctrl+K > Ctrl+C").expect("parses");
+        append_binding(&mut draft, KeybindingField::Undo, &binding).expect("append");
+        assert_eq!(
+            draft.value_for(KeybindingField::Undo),
+            Some("Ctrl+K > Ctrl+C")
+        );
+        assert_eq!(binding.display_label(), "Ctrl+K then Ctrl+C");
     }
 }

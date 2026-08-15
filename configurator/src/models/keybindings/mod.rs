@@ -22,7 +22,8 @@ pub(crate) use recording::keyval;
 pub use recording::tablet_unavailable_hint;
 pub use recording::{
     KeyboardModifiers, RecordedDevice, RecordedKeyboard, RecorderDeviceKind, ShortcutRecorderState,
-    normalize_button_event, normalize_key_event, super_consumed_hint, waiting_prompt,
+    normalize_button_event, normalize_key_event, sequence_keyboard_only_message,
+    super_consumed_hint, waiting_prompt,
 };
 
 #[cfg(test)]

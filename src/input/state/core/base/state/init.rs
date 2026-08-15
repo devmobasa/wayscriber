@@ -8,8 +8,7 @@ use super::super::types::{
 };
 use super::structs::InputState;
 use crate::config::{
-    Action, BoardsConfig, PRESET_SLOTS_MAX, QuickColorPalette, RadialMenuMouseBinding,
-    ShortcutTrigger,
+    Action, BoardsConfig, PRESET_SLOTS_MAX, QuickColorPalette, RadialMenuMouseBinding, Shortcut,
 };
 use crate::draw::{
     BlurStyle, DirtyTracker, EraserKind, FontDescriptor, REGULAR_POLYGON_DEFAULT_SIDES,
@@ -61,7 +60,7 @@ impl InputState {
         arrow_head_at_end: bool,
         show_status_bar: bool,
         boards_config: BoardsConfig,
-        action_map: HashMap<ShortcutTrigger, Action>,
+        action_map: HashMap<Shortcut, Action>,
         max_shapes_per_frame: usize,
         click_highlight_settings: ClickHighlightSettings,
         undo_all_delay_ms: u64,
@@ -77,6 +76,8 @@ impl InputState {
         let mut tool_settings = PerToolDrawingSettings::new(color, thickness);
         tool_settings.step_marker.thickness =
             super::super::super::utility::default_step_marker_size(font_size);
+        let sequence_trie =
+            crate::input::state::core::utility::SequenceTrie::from_action_map(&action_map);
         let mut state = Self {
             keymap_revision: 0,
             command_palette_results: std::cell::RefCell::new(None),
@@ -207,6 +208,8 @@ impl InputState {
             text_input_revision: 0,
             action_map,
             action_bindings: HashMap::new(),
+            sequence_trie,
+            pending_sequence: None,
             consumed_pointer_buttons: HashSet::new(),
             pending_backend_action: None,
             pending_toolbar_persistence: Vec::new(),

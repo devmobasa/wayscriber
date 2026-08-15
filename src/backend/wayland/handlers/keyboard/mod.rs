@@ -417,7 +417,7 @@ impl WaylandState {
         {
             return;
         }
-        self.apply_input_key(key);
+        self.apply_input_key_repeat(key);
     }
 }
 

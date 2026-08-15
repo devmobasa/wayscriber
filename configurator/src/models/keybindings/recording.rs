@@ -6,8 +6,9 @@
 
 #[cfg(feature = "tablet-input")]
 use wayscriber::config::StylusTrigger;
+use wayscriber::config::keybindings::MAX_SEQUENCE_STEPS;
 use wayscriber::config::keybindings::{MAX_POINTER_EXTRA, gdk};
-use wayscriber::config::{KeyBinding, PointerTrigger, ShortcutTrigger};
+use wayscriber::config::{KeyBinding, PointerTrigger, Shortcut, ShortcutTrigger};
 
 use super::field::KeybindingField;
 
@@ -78,6 +79,7 @@ pub enum RecordedDevice {
 pub struct ShortcutRecorderState {
     pub field: KeybindingField,
     pub prompt: String,
+    sequence_steps: Option<Vec<KeyBinding>>,
 }
 
 impl ShortcutRecorderState {
@@ -85,12 +87,102 @@ impl ShortcutRecorderState {
         Self {
             field,
             prompt: waiting_prompt(),
+            sequence_steps: None,
+        }
+    }
+
+    pub fn new_sequence(field: KeybindingField) -> Self {
+        Self {
+            field,
+            prompt: sequence_waiting_prompt(&[]),
+            sequence_steps: Some(Vec::new()),
+        }
+    }
+
+    pub fn is_sequence(&self) -> bool {
+        self.sequence_steps.is_some()
+    }
+
+    pub fn can_finish(&self) -> bool {
+        self.sequence_steps
+            .as_ref()
+            .is_some_and(|steps| steps.len() >= 2)
+    }
+
+    pub fn can_remove_last(&self) -> bool {
+        self.sequence_steps
+            .as_ref()
+            .is_some_and(|steps| !steps.is_empty())
+    }
+
+    pub fn apply_pending_preview(&mut self, preview: String) {
+        match &self.sequence_steps {
+            Some(steps) => self.prompt = sequence_pending_prompt(steps, &preview),
+            None => self.prompt = preview,
+        }
+    }
+
+    /// Record a keyboard chord. Returns the finished shortcut when recording
+    /// should commit (a single chord, or a sequence that reached three steps).
+    pub fn push_keyboard_step(&mut self, binding: KeyBinding) -> Option<Shortcut> {
+        let Some(steps) = self.sequence_steps.as_mut() else {
+            return Some(Shortcut::from(binding));
+        };
+        steps.push(binding);
+        if steps.len() >= MAX_SEQUENCE_STEPS {
+            return Some(Shortcut::Sequence(steps.clone()));
+        }
+        self.prompt = sequence_waiting_prompt(steps);
+        None
+    }
+
+    pub fn finish_sequence(&self) -> Option<Shortcut> {
+        let steps = self.sequence_steps.as_ref()?;
+        (steps.len() >= 2).then(|| Shortcut::Sequence(steps.clone()))
+    }
+
+    pub fn remove_last_step(&mut self) {
+        if let Some(steps) = self.sequence_steps.as_mut() {
+            steps.pop();
+            self.prompt = sequence_waiting_prompt(steps);
         }
     }
 }
 
 pub fn waiting_prompt() -> String {
     "Press a shortcut.".to_string()
+}
+
+fn sequence_waiting_prompt(steps: &[KeyBinding]) -> String {
+    match steps {
+        [] => "Press the first chord.".to_string(),
+        [first] => format!("{first} then …"),
+        [first, second] => format!("{first} then {second} then …"),
+        _ => steps
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(" then "),
+    }
+}
+
+fn sequence_pending_prompt(steps: &[KeyBinding], preview: &str) -> String {
+    if steps.is_empty() {
+        preview.to_string()
+    } else {
+        format!(
+            "{} then {preview}",
+            steps
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" then ")
+        )
+    }
+}
+
+pub fn sequence_keyboard_only_message() -> &'static str {
+    "Sequences are keyboard-only."
 }
 
 /// Map a GDK/X11 keyval and current modifiers onto the shared binding type.
@@ -611,5 +703,47 @@ mod tests {
             }
             other => panic!("expected unavailable tablet message, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn sequence_recorder_finishes_at_two_and_auto_completes_at_three() {
+        let mut recorder = ShortcutRecorderState::new_sequence(KeybindingField::Undo);
+        assert!(recorder.is_sequence());
+        assert!(!recorder.can_finish());
+        assert!(!recorder.can_remove_last());
+        assert_eq!(recorder.prompt, "Press the first chord.");
+
+        let first = chord(u32::from(b'k'), mods(true, false, false, false));
+        assert!(recorder.push_keyboard_step(first).is_none());
+        assert!(recorder.can_remove_last());
+        assert!(!recorder.can_finish());
+        assert_eq!(recorder.prompt, "Ctrl+K then …");
+
+        let second = chord(u32::from(b'c'), mods(true, false, false, false));
+        assert!(recorder.push_keyboard_step(second).is_none());
+        assert!(recorder.can_finish());
+        assert_eq!(
+            recorder
+                .finish_sequence()
+                .map(|shortcut| shortcut.to_string()),
+            Some("Ctrl+K > Ctrl+C".to_string())
+        );
+
+        let third = chord(u32::from(b'v'), mods(true, false, false, false));
+        let finished = recorder
+            .push_keyboard_step(third)
+            .expect("third step auto-finishes");
+        assert_eq!(finished.to_string(), "Ctrl+K > Ctrl+C > Ctrl+V");
+        assert_eq!(finished.display_label(), "Ctrl+K then Ctrl+C then Ctrl+V");
+    }
+
+    #[test]
+    fn sequence_recorder_can_remove_the_last_step() {
+        let mut recorder = ShortcutRecorderState::new_sequence(KeybindingField::Undo);
+        let first = chord(u32::from(b'k'), mods(true, false, false, false));
+        recorder.push_keyboard_step(first);
+        recorder.remove_last_step();
+        assert!(!recorder.can_remove_last());
+        assert_eq!(recorder.prompt, "Press the first chord.");
     }
 }

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use wayscriber::config::{ConfigDocument, ShortcutTrigger, ToolbarItemId, ToolbarItemOrderGroup};
+use wayscriber::config::{ConfigDocument, Shortcut, ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::models::{
     BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, ColorPickerId,
@@ -153,10 +153,13 @@ pub enum Message {
     ExportPdfLabelContentChanged(PdfLabelContentModeOption),
     BufferCountChanged(u32),
     ShortcutRecordingStarted(KeybindingField),
+    ShortcutSequenceRecordingStarted(KeybindingField),
     ShortcutRecordingCanceled(KeybindingField),
     ShortcutRecorderKey(u32, KeyboardModifiers),
     ShortcutRecorderButton(u32, RecorderDeviceKind, KeyboardModifiers),
-    ShortcutRemoved(KeybindingField, ShortcutTrigger),
+    ShortcutSequenceFinish,
+    ShortcutSequenceRemoveLastStep,
+    ShortcutRemoved(KeybindingField, Shortcut),
     ShortcutResetRequested(KeybindingField),
     ShortcutTextEditStarted(KeybindingField),
     ShortcutTextEditChanged(String),

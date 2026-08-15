@@ -301,6 +301,7 @@ impl WaylandState {
         let Some(action) = self.input_state.find_trigger_action(&trigger) else {
             return false;
         };
+        self.input_state.clear_pending_sequence();
         self.input_state.consume_pointer_shortcut_button(button);
         debug!("Pointer shortcut {trigger}: dispatching {action:?}");
         self.dispatch_input_action(action);

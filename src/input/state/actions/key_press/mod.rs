@@ -36,4 +36,8 @@ impl InputState {
     pub fn on_key_press(&mut self, key: Key) {
         let _ = interaction::route_key_press(self, key);
     }
+
+    pub fn on_key_repeat(&mut self, key: Key) {
+        let _ = interaction::route_key_repeat(self, key);
+    }
 }

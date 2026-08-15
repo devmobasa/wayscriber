@@ -173,7 +173,7 @@ fn an_edited_keymap_still_builds_both_runtime_views() {
         .build_action_bindings()
         .expect("action bindings");
 
-    let chord = ShortcutTrigger::parse("Ctrl+Alt+Shift+K").expect("a parseable chord");
+    let chord = Shortcut::parse("Ctrl+Alt+Shift+K").expect("a parseable chord");
     assert_eq!(action_map.get(&chord), Some(&Action::ClearCanvas));
     assert_eq!(
         action_bindings.get(&Action::ClearCanvas),

@@ -1187,11 +1187,11 @@ toggle_toolbar = ["F2", "F9"]
         .build_action_map()
         .expect("the resolved keymap has no duplicates left");
     assert_eq!(
-        map.get(&ShortcutTrigger::parse("F2").expect("F2 parses")),
+        map.get(&Shortcut::parse("F2").expect("F2 parses")),
         Some(&Action::ToggleToolbar)
     );
     assert_eq!(
-        map.get(&ShortcutTrigger::parse("Ctrl+Shift+P").expect("Ctrl+Shift+P parses")),
+        map.get(&Shortcut::parse("Ctrl+Shift+P").expect("Ctrl+Shift+P parses")),
         Some(&Action::CaptureFullScreen)
     );
 
@@ -1346,6 +1346,36 @@ future_knob = 7
     );
 }
 
+#[test]
+fn saving_a_sequence_preserves_unrelated_keybinding_nodes() {
+    let temp = TempConfig::new("sequence-preserve");
+    let original = format!(
+        "config_revision = {CURRENT_CONFIG_REVISION}\n\n# keep me\n[keybindings]\nundo = [\"Ctrl+Alt+U\"]\n# trailing\nunknown_future = true\n"
+    );
+    temp.write(&original);
+    let document = ConfigDocument::load_from_path(&temp.path).expect("load");
+    let mut config = document.config().clone();
+    config.keybindings.core.clear_canvas = vec![
+        "E".to_string(),
+        "Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+C".to_string(),
+    ];
+    document
+        .save_with_backup(config)
+        .expect("save a sequence on one action");
+    let saved = fs::read_to_string(&temp.path).expect("read");
+    assert!(saved.contains("# keep me"), "{saved}");
+    assert!(saved.contains("unknown_future = true"), "{saved}");
+    assert!(saved.contains("Ctrl+Alt+U"), "{saved}");
+    assert!(
+        saved.contains("Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+C"),
+        "{saved}"
+    );
+    assert!(
+        saved.contains(&format!("config_revision = {CURRENT_CONFIG_REVISION}")),
+        "{saved}"
+    );
+}
+
 /// #315 added `toggle_input_hud = ["Ctrl+Shift+K"]`, and a file written before
 /// the action existed cannot have opted out of it. Source presence settles that
 /// on every load without the file ever having to record the answer.
@@ -1387,7 +1417,7 @@ capture_clipboard_full = ["Ctrl+Shift+K"]
         .build_action_map()
         .expect("the resolved keymap has no duplicates");
     assert_eq!(
-        map.get(&ShortcutTrigger::parse("Ctrl+Shift+K").expect("Ctrl+Shift+K parses")),
+        map.get(&Shortcut::parse("Ctrl+Shift+K").expect("Ctrl+Shift+K parses")),
         Some(&Action::CaptureClipboardFull)
     );
     assert_eq!(fs::read_to_string(&temp.path).unwrap(), original);

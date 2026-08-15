@@ -8,15 +8,21 @@ use crate::models::KeybindingField;
 #[cfg(not(feature = "tablet-input"))]
 use crate::models::keybindings::tablet_unavailable_hint;
 use crate::models::keybindings::{
-    KeyboardModifiers, RecorderDeviceKind, super_consumed_hint, waiting_prompt,
+    KeyboardModifiers, RecorderDeviceKind, ShortcutRecorderState, super_consumed_hint,
+    waiting_prompt,
 };
 
 use super::super::super::state::ConfiguratorApp;
-use super::widgets::{field_canceled, ignore_activating_click, set_accessible_label, set_label};
+use super::widgets::{
+    field_canceled, ignore_activating_click, set_accessible_label, set_label, set_sensitive,
+    set_visible,
+};
 
 pub(super) struct RecorderPopover {
     pub popover: gtk::Popover,
     prompt: gtk::Label,
+    finish: gtk::Button,
+    remove_last: gtk::Button,
 }
 
 impl RecorderPopover {
@@ -52,6 +58,29 @@ impl RecorderPopover {
             });
         }
 
+        let finish = gtk::Button::builder().label("Finish").build();
+        set_accessible_label(&finish, "Finish sequence");
+        {
+            let sender = sender.clone();
+            finish.connect_clicked(move |_| {
+                sender.input(Message::ShortcutSequenceFinish);
+            });
+        }
+
+        let remove_last = gtk::Button::builder().label("Remove Last Step").build();
+        set_accessible_label(&remove_last, "Remove last sequence step");
+        {
+            let sender = sender.clone();
+            remove_last.connect_clicked(move |_| {
+                sender.input(Message::ShortcutSequenceRemoveLastStep);
+            });
+        }
+
+        let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        buttons.append(&finish);
+        buttons.append(&remove_last);
+        buttons.append(&cancel);
+
         let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
         content.set_margin_top(12);
         content.set_margin_bottom(12);
@@ -60,7 +89,7 @@ impl RecorderPopover {
         content.append(&prompt);
         content.append(&hint);
         content.append(&device_hint_label());
-        content.append(&cancel);
+        content.append(&buttons);
 
         let popover = gtk::Popover::builder()
             .autohide(true)
@@ -72,11 +101,33 @@ impl RecorderPopover {
         attach_key_controller(&popover, sender);
         attach_button_controller(&popover, sender);
 
-        Self { popover, prompt }
+        Self {
+            popover,
+            prompt,
+            finish,
+            remove_last,
+        }
     }
 
-    pub(super) fn refresh(&self, recording: bool, prompt: &str) {
-        set_label(&self.prompt, prompt);
+    pub(super) fn refresh(&self, recorder: Option<&ShortcutRecorderState>) {
+        let recording = recorder.is_some();
+        set_label(
+            &self.prompt,
+            recorder
+                .map(|recorder| recorder.prompt.as_str())
+                .unwrap_or(""),
+        );
+        let sequence = recorder.is_some_and(ShortcutRecorderState::is_sequence);
+        set_visible(&self.finish, sequence);
+        set_visible(&self.remove_last, sequence);
+        set_sensitive(
+            &self.finish,
+            recorder.is_some_and(ShortcutRecorderState::can_finish),
+        );
+        set_sensitive(
+            &self.remove_last,
+            recorder.is_some_and(ShortcutRecorderState::can_remove_last),
+        );
         if recording {
             if !self.popover.is_visible() {
                 self.popover.popup();

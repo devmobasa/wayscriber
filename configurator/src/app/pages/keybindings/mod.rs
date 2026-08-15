@@ -20,7 +20,7 @@ use row::binding_row;
 use widgets::{set_accessible_label, set_label, set_visible};
 
 const SECTION_DESCRIPTION: &str =
-    "Record a shortcut, reset one action, or edit the comma-separated list as text.";
+    "Record a shortcut or sequence, reset one action, or edit the comma-separated list as text.";
 
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     let stack = gtk::Stack::builder()

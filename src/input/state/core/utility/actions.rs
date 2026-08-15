@@ -1,26 +1,30 @@
 use super::super::base::InputState;
-use crate::config::{KeyBinding, PointerButton, PointerTrigger, ShortcutTrigger};
+use crate::config::{KeyBinding, PointerButton, PointerTrigger, Shortcut, ShortcutTrigger};
 #[cfg(feature = "tablet-input")]
 use crate::config::{StylusButton, StylusTrigger};
 use crate::domain::Action;
+use crate::input::state::core::utility::{SequenceMatch, SequenceTrie};
 use crate::label_format::format_binding_labels;
 use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 
 impl InputState {
-    /// Look up an action for the given key and modifiers.
+    /// Look up a complete single keyboard chord. Does not advance sequences.
     pub(crate) fn find_action(&self, key_str: &str) -> Option<Action> {
-        let trigger = ShortcutTrigger::Keyboard(KeyBinding {
+        let shortcut = Shortcut::Single(ShortcutTrigger::Keyboard(KeyBinding {
             key: key_str.to_string(),
             ctrl: self.modifiers.ctrl,
             shift: self.modifiers.shift,
             alt: self.modifiers.alt,
             logo: self.modifiers.logo,
-        });
-        self.action_map.get(&trigger).copied()
+        }));
+        self.action_map.get(&shortcut).copied()
     }
 
     pub(crate) fn find_trigger_action(&self, trigger: &ShortcutTrigger) -> Option<Action> {
-        self.action_map.get(trigger).copied()
+        self.action_map
+            .get(&Shortcut::Single(trigger.clone()))
+            .copied()
     }
 
     pub(crate) fn pointer_trigger(&self, button: PointerButton) -> ShortcutTrigger {
@@ -52,7 +56,7 @@ impl InputState {
         self.consumed_pointer_buttons.remove(&code)
     }
 
-    pub fn set_action_bindings(&mut self, action_bindings: HashMap<Action, Vec<ShortcutTrigger>>) {
+    pub fn set_action_bindings(&mut self, action_bindings: HashMap<Action, Vec<Shortcut>>) {
         self.action_bindings = action_bindings;
         self.keymap_revision = self.keymap_revision.wrapping_add(1);
     }
@@ -64,13 +68,54 @@ impl InputState {
     /// badge and help row reads back.
     pub(crate) fn set_keybinding_maps(
         &mut self,
-        action_map: HashMap<ShortcutTrigger, Action>,
-        action_bindings: HashMap<Action, Vec<ShortcutTrigger>>,
+        action_map: HashMap<Shortcut, Action>,
+        action_bindings: HashMap<Action, Vec<Shortcut>>,
     ) {
         self.action_map = action_map;
         self.action_bindings = action_bindings;
+        self.sequence_trie = SequenceTrie::from_action_map(&self.action_map);
+        self.clear_pending_sequence();
         self.keymap_revision = self.keymap_revision.wrapping_add(1);
         self.needs_redraw = true;
+    }
+
+    pub(crate) fn clear_pending_sequence(&mut self) {
+        self.pending_sequence = None;
+    }
+
+    /// Match a keyboard chord, advancing or dispatching a sequence when needed.
+    pub(crate) fn match_keyboard_chord(
+        &mut self,
+        key_str: &str,
+        is_repeat: bool,
+        now: Instant,
+    ) -> SequenceMatch {
+        let chord = KeyBinding {
+            key: key_str.to_string(),
+            ctrl: self.modifiers.ctrl,
+            shift: self.modifiers.shift,
+            alt: self.modifiers.alt,
+            logo: self.modifiers.logo,
+        };
+        self.sequence_trie
+            .match_chord(&mut self.pending_sequence, &chord, now, is_repeat)
+    }
+
+    pub(crate) fn sequence_timeout(&self, now: Instant) -> Option<Duration> {
+        self.pending_sequence
+            .as_ref()
+            .map(|pending| pending.deadline().saturating_duration_since(now))
+    }
+
+    pub(crate) fn expire_pending_sequence(&mut self, now: Instant) -> bool {
+        let expired = self
+            .pending_sequence
+            .as_ref()
+            .is_some_and(|pending| now >= pending.deadline());
+        if expired {
+            self.clear_pending_sequence();
+        }
+        expired
     }
 
     pub fn action_binding_labels(&self, action: Action) -> Vec<String> {
@@ -78,7 +123,7 @@ impl InputState {
             let mut labels = Vec::new();
             let mut seen = HashSet::new();
             for binding in bindings {
-                let label = binding.to_string();
+                let label = binding.display_label();
                 if seen.insert(label.clone()) {
                     labels.push(label);
                 }
@@ -89,7 +134,7 @@ impl InputState {
             .action_map
             .iter()
             .filter(|(_, mapped)| **mapped == action)
-            .map(|(binding, _)| binding.to_string())
+            .map(|(binding, _)| binding.display_label())
             .collect();
         labels.sort();
         labels.dedup();

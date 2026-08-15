@@ -121,6 +121,7 @@ impl InputState {
     /// The exclusion step every opener runs first: closes each open surface
     /// the opening one does not deliberately coexist with.
     pub(crate) fn close_modals_for_open(&mut self, opening: ModalSurface) {
+        self.clear_pending_sequence();
         for other in ModalSurface::ALL {
             if other != opening && !opening.keeps_open(other) && self.modal_is_open(other) {
                 self.close_modal(other);

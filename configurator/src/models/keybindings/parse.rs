@@ -1,4 +1,4 @@
-use wayscriber::config::ShortcutTrigger;
+use wayscriber::config::Shortcut;
 
 pub(crate) fn authored_shortcut_parts(value: &str) -> Vec<&str> {
     value
@@ -11,16 +11,16 @@ pub(crate) fn authored_shortcut_parts(value: &str) -> Vec<&str> {
 pub(crate) fn parse_keybinding_list(value: &str) -> Result<Vec<String>, String> {
     let mut entries = Vec::new();
     for part in authored_shortcut_parts(value) {
-        ShortcutTrigger::parse(part)?;
+        Shortcut::parse(part)?;
         entries.push(part.to_string());
     }
     Ok(entries)
 }
 
-pub(crate) fn parse_keybindings(value: &str) -> Result<Vec<ShortcutTrigger>, String> {
+pub(crate) fn parse_keybindings(value: &str) -> Result<Vec<Shortcut>, String> {
     let mut entries = Vec::new();
     for part in authored_shortcut_parts(value) {
-        entries.push(ShortcutTrigger::parse(part)?);
+        entries.push(Shortcut::parse(part)?);
     }
     Ok(entries)
 }

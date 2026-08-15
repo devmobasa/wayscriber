@@ -85,5 +85,6 @@ pub use selection::SelectionState;
 pub use tool_controls::PrecisionEntryState;
 pub use tour::TourStep;
 pub(crate) use utility::HelpOverlayPressSource;
+pub(crate) use utility::SequenceMatch;
 pub(crate) use utility::default_step_marker_size;
 pub use utility::{HelpOverlayClick, HelpOverlayCursorHint, HelpOverlayReleaseOutcome};

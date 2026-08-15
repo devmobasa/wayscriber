@@ -2,7 +2,7 @@ use relm4::prelude::*;
 use relm4::{adw, gtk};
 
 use adw::prelude::*;
-use wayscriber::config::ShortcutTrigger;
+use wayscriber::config::Shortcut;
 
 use crate::messages::Message;
 use crate::models::KeybindingField;
@@ -47,6 +47,20 @@ pub(super) fn binding_row(
         .build();
     let add = icon_button("input-keyboard-symbolic", "Add shortcut");
     connect_clicked(&add, sender, Message::ShortcutRecordingStarted(field));
+    let record_sequence = gtk::Button::builder()
+        .label("Record Sequence")
+        .valign(gtk::Align::Center)
+        .build();
+    set_accessible_label(&record_sequence, "Record sequence");
+    set_tooltip(
+        &record_sequence,
+        Some("Record a two- or three-chord keyboard sequence"),
+    );
+    connect_clicked(
+        &record_sequence,
+        sender,
+        Message::ShortcutSequenceRecordingStarted(field),
+    );
     let reset = icon_button("view-refresh-symbolic", "Reset to default");
     connect_clicked(&reset, sender, Message::ShortcutResetRequested(field));
     let edit = icon_button("document-edit-symbolic", "Edit as text");
@@ -54,6 +68,7 @@ pub(super) fn binding_row(
 
     let controls = gtk::Box::new(gtk::Orientation::Horizontal, 4);
     controls.append(&add);
+    controls.append(&record_sequence);
     controls.append(&reset);
     controls.append(&edit);
 
@@ -160,7 +175,7 @@ pub(super) fn binding_row(
         let parse_error = parsed.as_ref().err().cloned();
         match &parsed {
             Ok(bindings) => {
-                let labels: Vec<String> = bindings.iter().map(ToString::to_string).collect();
+                let labels: Vec<String> = bindings.iter().map(Shortcut::display_label).collect();
                 if seen_chips.borrow().as_slice() != labels.as_slice() {
                     sync_chips(&chips, field, bindings, &sender);
                     *seen_chips.borrow_mut() = labels;
@@ -189,6 +204,7 @@ pub(super) fn binding_row(
         let at_defaults =
             field_matches_defaults(&app.draft.keybindings, &app.defaults.keybindings, field);
         set_sensitive(&add, parse_error.is_none());
+        set_sensitive(&record_sequence, parse_error.is_none());
         set_sensitive(&reset, !at_defaults);
 
         let caption_text = match &parse_error {
@@ -222,12 +238,7 @@ pub(super) fn binding_row(
             .active_shortcut_recorder
             .as_ref()
             .filter(|recorder| recorder.field == field);
-        recorder.refresh(
-            recording.is_some(),
-            recording
-                .map(|recorder| recorder.prompt.as_str())
-                .unwrap_or_default(),
-        );
+        recorder.refresh(recording);
 
         let editing = app
             .shortcut_text_editor
@@ -249,7 +260,7 @@ fn row_visible(summary: &AppSearchSummary, field: KeybindingField) -> bool {
 fn sync_chips(
     flow: &gtk::FlowBox,
     field: KeybindingField,
-    bindings: &[ShortcutTrigger],
+    bindings: &[Shortcut],
     sender: &ComponentSender<ConfiguratorApp>,
 ) {
     clear_flow(flow);
@@ -266,10 +277,10 @@ fn clear_flow(flow: &gtk::FlowBox) {
 
 fn shortcut_chip(
     field: KeybindingField,
-    binding: &ShortcutTrigger,
+    binding: &Shortcut,
     sender: &ComponentSender<ConfiguratorApp>,
 ) -> gtk::Box {
-    let label_text = binding.to_string();
+    let label_text = binding.display_label();
     let chip = gtk::Box::new(gtk::Orientation::Horizontal, 4);
     chip.add_css_class("osd");
     chip.set_valign(gtk::Align::Center);

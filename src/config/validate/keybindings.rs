@@ -2,7 +2,7 @@ use std::fmt;
 
 use super::super::CURRENT_CONFIG_REVISION;
 use super::super::action_meta::action_label;
-use super::super::keybindings::{Action, KeybindingAuthorship, KeybindingsConfig, ShortcutTrigger};
+use super::super::keybindings::{Action, KeybindingAuthorship, KeybindingsConfig, Shortcut};
 use super::Config;
 
 const LEGACY_COMMAND_PALETTE_DEFAULT: &[&str] = &["Ctrl+K"];
@@ -30,7 +30,7 @@ fn bindings_from(expected: &[&str]) -> Vec<String> {
 
 /// Whether an action other than `owner` already claims `binding`.
 ///
-/// Candidates go through the parser and then [`ShortcutTrigger`] equality, so
+/// Candidates go through the parser and then [`Shortcut`] equality, so
 /// `shift+ctrl+k` counts as a claim on `Ctrl+Shift+K`: modifier order, spacing,
 /// and key case are all things the keymap ignores when a key is pressed. A
 /// binding string that does not parse is not a claim, because it binds nothing
@@ -38,7 +38,7 @@ fn bindings_from(expected: &[&str]) -> Vec<String> {
 fn binding_claimed_by_another_action(
     keybindings: &KeybindingsConfig,
     owner: Action,
-    binding: &ShortcutTrigger,
+    binding: &Shortcut,
 ) -> bool {
     KeybindingsConfig::configurable_actions()
         .iter()
@@ -48,7 +48,7 @@ fn binding_claimed_by_another_action(
                 .bindings_for_action(*action)
                 .is_some_and(|bindings| {
                     bindings.iter().any(|candidate| {
-                        ShortcutTrigger::parse(candidate).is_ok_and(|parsed| parsed == *binding)
+                        Shortcut::parse(candidate).is_ok_and(|parsed| parsed == *binding)
                     })
                 })
         })
@@ -243,7 +243,7 @@ impl fmt::Display for KeybindingConflictResolution {
 fn drop_binding(
     keybindings: &mut KeybindingsConfig,
     action: Action,
-    binding: &ShortcutTrigger,
+    binding: &Shortcut,
     keep_first: bool,
 ) -> bool {
     let Some(current) = keybindings.bindings_for_action(action) else {
@@ -253,7 +253,7 @@ fn drop_binding(
     let before = bindings.len();
     let mut kept_one = false;
     bindings.retain(|candidate| {
-        if !ShortcutTrigger::parse(candidate).is_ok_and(|parsed| parsed == *binding) {
+        if !Shortcut::parse(candidate).is_ok_and(|parsed| parsed == *binding) {
             return true;
         }
         if keep_first && !kept_one {
@@ -405,7 +405,7 @@ impl Config {
             let mut kept = Vec::with_capacity(current.len());
             let mut dropped = false;
             for binding in current {
-                match ShortcutTrigger::parse(binding) {
+                match Shortcut::parse(binding) {
                     Ok(parsed) if parsed.is_deliverable() => kept.push(binding.clone()),
                     Ok(parsed) => {
                         // Reported but kept: the string is well formed, and a
@@ -560,15 +560,15 @@ impl Config {
             let mut kept = Vec::with_capacity(current.len());
             let mut dropped = false;
             for text in current {
-                let Ok(binding) = ShortcutTrigger::parse(text) else {
+                let Ok(binding) = Shortcut::parse(text) else {
                     // `drop_unparseable_bindings` already removed anything the
                     // parser rejects, so this arm is only reachable if that
                     // pass changes; keep the string rather than losing it here.
                     kept.push(text.clone());
                     continue;
                 };
-                match claimed.get(&binding) {
-                    Some(owner) if *owner == *action => {
+                match binding.claimed_by(&claimed) {
+                    Some(owner) if owner == *action => {
                         dropped = true;
                         repeats.push(KeybindingConflictResolution {
                             key: binding.to_string(),
@@ -581,7 +581,7 @@ impl Config {
                         skipped.push(DefaultShortcutSkipped {
                             action: *action,
                             binding: binding.to_string(),
-                            claimed_by: *owner,
+                            claimed_by: owner,
                         });
                     }
                     None => {
@@ -735,7 +735,7 @@ impl Config {
         }
         let Some(contested) = CURRENT_TOGGLE_INPUT_HUD_DEFAULT
             .first()
-            .and_then(|binding| ShortcutTrigger::parse(binding).ok())
+            .and_then(|binding| Shortcut::parse(binding).ok())
         else {
             return;
         };

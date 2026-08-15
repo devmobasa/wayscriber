@@ -294,6 +294,7 @@ impl WaylandState {
     fn dispatch_stylus_button_press(&mut self, button: u32) {
         if let Some(action) = stylus_barrel_action(&self.input_state, button, &self.config.tablet) {
             debug!("Stylus button {}: dispatching {:?}", button, action);
+            self.input_state.clear_pending_sequence();
             self.dispatch_input_action(action);
         } else if linux::stylus_button(button).is_none() {
             debug!("Ignoring unknown stylus button {}", button);
