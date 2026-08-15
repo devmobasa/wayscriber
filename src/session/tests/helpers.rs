@@ -1,4 +1,4 @@
-use crate::config::{Action, BoardsConfig, KeyBinding, PresenterModeConfig};
+use crate::config::{Action, BoardsConfig, PresenterModeConfig, Shortcut};
 use crate::draw::Color as DrawColor;
 use crate::draw::FontDescriptor;
 use crate::input::{ClickHighlightSettings, EraserMode, InputState};
@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 pub(super) fn dummy_input_state() -> InputState {
     let mut action_map = HashMap::new();
-    action_map.insert(KeyBinding::parse("Escape").unwrap(), Action::Exit);
+    action_map.insert(Shortcut::parse("Escape").unwrap(), Action::Exit);
     InputState::with_defaults(
         DrawColor {
             r: 1.0,

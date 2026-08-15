@@ -99,6 +99,42 @@ impl FeedbackSender {
     }
 }
 
+fn gdk_pointer_modifiers(state: gtk4::gdk::ModifierType) -> (bool, bool, bool, bool) {
+    (
+        state.contains(gtk4::gdk::ModifierType::CONTROL_MASK),
+        state.contains(gtk4::gdk::ModifierType::SHIFT_MASK),
+        state.contains(gtk4::gdk::ModifierType::ALT_MASK),
+        state.contains(gtk4::gdk::ModifierType::SUPER_MASK)
+            || state.contains(gtk4::gdk::ModifierType::META_MASK)
+            || state.contains(gtk4::gdk::ModifierType::HYPER_MASK),
+    )
+}
+
+fn pointer_shortcut_feedback(
+    button: u32,
+    state: gtk4::gdk::ModifierType,
+) -> Option<GtkToolbarFeedback> {
+    crate::config::keybindings::gdk::pointer_button(button)?;
+    let (ctrl, shift, alt, logo) = gdk_pointer_modifiers(state);
+    Some(GtkToolbarFeedback::PointerShortcut {
+        button,
+        ctrl,
+        shift,
+        alt,
+        logo,
+    })
+}
+
+fn maybe_forward_auxiliary_pointer(gesture: &gtk4::GestureClick, feedback: &FeedbackSender) {
+    let Some(event) =
+        pointer_shortcut_feedback(gesture.current_button(), gesture.current_event_state())
+    else {
+        return;
+    };
+    gesture.set_state(gtk4::EventSequenceState::Claimed);
+    let _ = feedback.send(event);
+}
+
 pub(super) fn send_event(sender: &FeedbackSender, event: ToolbarEvent) {
     let rebind_requested = sender.click_rebind_requested.replace(false);
     let shift_click = sender.click_shift.replace(false);
@@ -165,10 +201,12 @@ pub(super) fn install_click_modifier_capture(
     feedback: &FeedbackSender,
 ) {
     let click = gtk4::GestureClick::new();
+    click.set_button(0);
     click.set_propagation_phase(gtk4::PropagationPhase::Capture);
     let press_feedback = feedback.clone();
     click.connect_pressed(move |gesture, _, _, _| {
         press_feedback.capture_click_modifiers(gesture.current_event_state());
+        maybe_forward_auxiliary_pointer(gesture, &press_feedback);
     });
     // Mirror the toolbar window's controller: a click that never activates a
     // button (cancelled, or dragged off it) still has to clear the pending
@@ -244,10 +282,12 @@ pub(super) fn install_shortcut_focus_policy(window: &gtk4::Window, feedback: &Fe
     // Inspect the pointer target after every click and keep focus only for
     // the editable hex field.
     let click = gtk4::GestureClick::new();
+    click.set_button(0);
     click.set_propagation_phase(gtk4::PropagationPhase::Capture);
     let click_feedback = feedback.clone();
     click.connect_pressed(move |gesture, _, _, _| {
         click_feedback.capture_click_modifiers(gesture.current_event_state());
+        maybe_forward_auxiliary_pointer(gesture, &click_feedback);
     });
     let release_feedback = feedback.clone();
     click.connect_released(move |_, _, _, _| {

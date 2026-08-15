@@ -157,6 +157,20 @@ pub enum GtkToolbarFeedback {
         event: ToolbarEvent,
         rebind_requested: bool,
     },
+    /// Auxiliary mouse button on a GTK toolbar surface.
+    ///
+    /// GTK bars are separate windows, so canvas pointer handlers never see
+    /// these clicks. The button number is a GDK button (8/11 Back, 9/10
+    /// Forward, 12–15 Extra1–4). Modifiers are captured from the GTK click:
+    /// focusing the toolbar can reset overlay modifier state, so Ctrl+MouseBack
+    /// and similar chords must use this snapshot rather than the overlay seat.
+    PointerShortcut {
+        button: u32,
+        ctrl: bool,
+        shift: bool,
+        alt: bool,
+        logo: bool,
+    },
     /// Pointer entered/left the GTK top strip. GTK runs on its own Wayland
     /// connection, so the backend cannot observe this hover itself; it drives
     /// the top-strip idle-fade restore/hold.

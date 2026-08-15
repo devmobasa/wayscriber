@@ -56,8 +56,8 @@ use super::super::config_edits::{
 };
 use super::WaylandState;
 use crate::config::{
-    Action, ConfigEditNotReadBack, ConfigEditOutcome, ConfigEditWrite, KeyBinding,
-    KeybindingsConfig, ShortcutClaimedOnDisk, action_label,
+    Action, ConfigEditNotReadBack, ConfigEditOutcome, ConfigEditWrite, KeybindingsConfig, Shortcut,
+    ShortcutClaimedOnDisk, action_label,
 };
 use crate::input::state::{
     InputState, KeybindingEditOperation, KeybindingEditRequest, Toast, ToastPriority,

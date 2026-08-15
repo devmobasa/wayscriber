@@ -197,6 +197,11 @@ impl Config {
         self.keybinding_authorship = KeybindingAuthorship::AllExplicit;
     }
 
+    /// Which `[keybindings]` keys the source this configuration came from spelled out.
+    pub fn keybinding_authorship(&self) -> &KeybindingAuthorship {
+        &self.keybinding_authorship
+    }
+
     /// Declares one action's `[keybindings]` list authored.
     ///
     /// The narrow shortcut editor's form of the above: it rewrites exactly one

@@ -162,3 +162,24 @@ fn openers_leave_no_excluded_surface_behind() {
         }
     }
 }
+
+#[test]
+fn popups_text_editor_and_pending_screen_modals_own_pointer_shortcuts() {
+    let mut state = create_test_input_state();
+    assert!(!state.modal_owns_pointer_shortcuts());
+
+    state.open_radial_menu(100.0, 100.0);
+    assert!(state.modal_owns_pointer_shortcuts());
+    state.close_radial_menu();
+
+    state.open_color_picker_popup();
+    assert!(state.modal_owns_pointer_shortcuts());
+    state.close_color_picker_popup(true);
+
+    state.state = crate::input::state::DrawingState::text_input(0, 0, String::new());
+    assert!(state.modal_owns_pointer_shortcuts());
+    state.state = crate::input::state::DrawingState::Idle;
+
+    state.set_eyedropper_pending_capture(crate::input::state::EyedropperCaptureSource::Frozen);
+    assert!(state.modal_owns_pointer_shortcuts());
+}

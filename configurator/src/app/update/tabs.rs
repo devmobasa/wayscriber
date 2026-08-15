@@ -18,6 +18,7 @@ impl ConfiguratorApp {
 
     pub(super) fn handle_keybindings_tab_selected(&mut self, tab: KeybindingsTabId) -> Vec<Effect> {
         self.active_keybindings_tab = tab;
+        self.keybindings_show_all = false;
         self.align_active_tabs_for_search();
         Vec::new()
     }

@@ -8,7 +8,7 @@
 use crate::input::events::Key;
 use crate::input::modifiers::Modifiers;
 
-/// Modifier prefix in the canonical `Ctrl+Shift+Alt+` order the keybinding
+/// Modifier prefix in the canonical `Ctrl+Shift+Alt+Super+` order the keybinding
 /// parser and `KeyBinding`'s `Display` both use. Empty when nothing is held.
 pub(crate) fn modifier_prefix(modifiers: Modifiers) -> String {
     let mut prefix = String::new();
@@ -21,13 +21,16 @@ pub(crate) fn modifier_prefix(modifiers: Modifiers) -> String {
     if modifiers.alt {
         prefix.push_str("Alt+");
     }
+    if modifiers.logo {
+        prefix.push_str("Super+");
+    }
     prefix
 }
 
 /// Whether a key is a bare modifier press (its own chip only when
 /// `show_bare_modifiers` is on).
 pub fn is_bare_modifier(key: Key) -> bool {
-    matches!(key, Key::Shift | Key::Ctrl | Key::Alt)
+    matches!(key, Key::Shift | Key::Ctrl | Key::Alt | Key::Super)
 }
 
 /// Display name of a single key without modifiers, or `None` for keys the HUD
@@ -58,6 +61,7 @@ pub(crate) fn key_display_name(key: Key) -> Option<String> {
         Key::Shift => "Shift",
         Key::Ctrl => "Ctrl",
         Key::Alt => "Alt",
+        Key::Super => "Super",
         Key::Menu => "Menu",
         Key::F1 => "F1",
         Key::F2 => "F2",
@@ -102,11 +106,12 @@ pub fn input_hud_scroll_label(up: bool, modifiers: Modifiers) -> String {
 mod tests {
     use super::*;
 
-    fn mods(ctrl: bool, shift: bool, alt: bool) -> Modifiers {
+    fn mods(ctrl: bool, shift: bool, alt: bool, logo: bool) -> Modifiers {
         Modifiers {
             shift,
             ctrl,
             alt,
+            logo,
             tab: false,
         }
     }
@@ -114,35 +119,43 @@ mod tests {
     #[test]
     fn chord_labels_use_the_canonical_modifier_order() {
         assert_eq!(
-            input_hud_key_label(Key::Char('z'), mods(true, true, false)).as_deref(),
+            input_hud_key_label(Key::Char('z'), mods(true, true, false, false)).as_deref(),
             Some("Ctrl+Shift+Z")
         );
         assert_eq!(
-            input_hud_key_label(Key::F10, mods(false, false, true)).as_deref(),
+            input_hud_key_label(Key::F10, mods(false, false, true, false)).as_deref(),
             Some("Alt+F10")
         );
         assert_eq!(
-            input_hud_key_label(Key::Char('a'), mods(false, false, false)).as_deref(),
+            input_hud_key_label(Key::Char('a'), mods(false, false, false, false)).as_deref(),
             Some("A")
+        );
+        assert_eq!(
+            input_hud_key_label(Key::Char('x'), mods(false, false, false, true)).as_deref(),
+            Some("Super+X")
+        );
+        assert_eq!(
+            input_hud_key_label(Key::F5, mods(false, true, false, true)).as_deref(),
+            Some("Shift+Super+F5")
         );
     }
 
     #[test]
     fn special_keys_use_the_help_overlay_names_and_arrow_glyphs() {
         assert_eq!(
-            input_hud_key_label(Key::Space, mods(false, false, false)).as_deref(),
+            input_hud_key_label(Key::Space, mods(false, false, false, false)).as_deref(),
             Some("Space")
         );
         assert_eq!(
-            input_hud_key_label(Key::Escape, mods(false, false, false)).as_deref(),
+            input_hud_key_label(Key::Escape, mods(false, false, false, false)).as_deref(),
             Some("Esc")
         );
         assert_eq!(
-            input_hud_key_label(Key::Up, mods(false, false, false)).as_deref(),
+            input_hud_key_label(Key::Up, mods(false, false, false, false)).as_deref(),
             Some("\u{2191}")
         );
         assert_eq!(
-            input_hud_key_label(Key::Left, mods(false, false, false)).as_deref(),
+            input_hud_key_label(Key::Left, mods(false, false, false, false)).as_deref(),
             Some("\u{2190}")
         );
     }
@@ -150,33 +163,39 @@ mod tests {
     #[test]
     fn bare_modifier_presses_do_not_prefix_themselves() {
         assert_eq!(
-            input_hud_key_label(Key::Ctrl, mods(true, false, false)).as_deref(),
+            input_hud_key_label(Key::Ctrl, mods(true, false, false, false)).as_deref(),
             Some("Ctrl")
         );
         assert_eq!(
-            input_hud_key_label(Key::Shift, mods(true, true, false)).as_deref(),
+            input_hud_key_label(Key::Shift, mods(true, true, false, false)).as_deref(),
             Some("Shift")
+        );
+        assert_eq!(
+            input_hud_key_label(Key::Super, mods(false, false, false, true)).as_deref(),
+            Some("Super")
         );
     }
 
     #[test]
     fn unmapped_keys_are_skipped() {
-        assert!(input_hud_key_label(Key::Unknown, mods(false, false, false)).is_none());
-        assert!(input_hud_key_label(Key::Char('\u{1}'), mods(false, false, false)).is_none());
+        assert!(input_hud_key_label(Key::Unknown, mods(false, false, false, false)).is_none());
+        assert!(
+            input_hud_key_label(Key::Char('\u{1}'), mods(false, false, false, false)).is_none()
+        );
     }
 
     #[test]
     fn mouse_and_scroll_labels_carry_the_modifier_prefix() {
         assert_eq!(
-            input_hud_mouse_label("Click", mods(true, false, false)),
+            input_hud_mouse_label("Click", mods(true, false, false, false)),
             "Ctrl+Click"
         );
         assert_eq!(
-            input_hud_scroll_label(true, mods(false, false, false)),
+            input_hud_scroll_label(true, mods(false, false, false, false)),
             "Scroll \u{2191}"
         );
         assert_eq!(
-            input_hud_scroll_label(false, mods(false, true, false)),
+            input_hud_scroll_label(false, mods(false, true, false, false)),
             "Shift+Scroll \u{2193}"
         );
     }

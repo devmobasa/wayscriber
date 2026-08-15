@@ -117,10 +117,10 @@ pub(crate) fn action_for_clear_preset(slot: usize) -> Option<Action> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::KeyBinding;
+    use crate::config::Shortcut;
     use crate::input::state::test_support::make_test_input_state_with_action_bindings;
 
-    fn binding_map(entries: &[(Action, &[&str])]) -> HashMap<Action, Vec<KeyBinding>> {
+    fn binding_map(entries: &[(Action, &[&str])]) -> HashMap<Action, Vec<Shortcut>> {
         entries
             .iter()
             .map(|(action, values)| {
@@ -128,7 +128,7 @@ mod tests {
                     *action,
                     values
                         .iter()
-                        .map(|value| KeyBinding::parse(value).expect("binding"))
+                        .map(|value| Shortcut::parse(value).expect("binding"))
                         .collect(),
                 )
             })
@@ -201,7 +201,7 @@ mod tests {
             (Action::Exit, &["Ctrl+Alt+Shift+Q"]),
         ]));
         let hints = ToolbarBindingHints::from_input_state(&state);
-        let expected = KeyBinding::parse("Ctrl+Alt+Shift+O").unwrap().to_string();
+        let expected = Shortcut::parse("Ctrl+Alt+Shift+O").unwrap().to_string();
 
         assert_eq!(
             hints.binding_for_action(Action::OpenConfigurator),

@@ -7,11 +7,16 @@ mod authorship;
 mod binding;
 mod config;
 mod defaults;
+mod shortcut;
 
 pub use crate::domain::Action;
 pub use authorship::KeybindingAuthorship;
 pub use binding::{KeyBinding, NAMED_KEYS, is_deliverable_key_name, suggest_key_name};
 pub use config::{KeybindingConflict, KeybindingsConfig};
+pub use shortcut::{
+    MAX_POINTER_EXTRA, MAX_SEQUENCE_STEPS, PointerButton, PointerTrigger, Shortcut,
+    ShortcutTrigger, StylusButton, StylusTrigger, gdk, linux,
+};
 
 /// The compiled-in default keymap, built once per process.
 ///

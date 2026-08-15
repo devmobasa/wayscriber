@@ -21,7 +21,7 @@ pub struct InputHudConfig {
     #[serde(default = "default_input_hud_show_mouse")]
     pub show_mouse: bool,
 
-    /// Show taps of bare modifiers (Ctrl, Shift, Alt) as their own chips
+    /// Show taps of bare modifiers (Ctrl, Shift, Alt, Super) as their own chips
     #[serde(default = "default_input_hud_show_bare_modifiers")]
     pub show_bare_modifiers: bool,
 

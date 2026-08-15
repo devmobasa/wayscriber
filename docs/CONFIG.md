@@ -860,7 +860,7 @@ names the keybinding config and help overlay print (`Ctrl+Shift+Z`, `Space`,
 | `mode` | enum | `"auto"` | `auto`, `overlay`, or `system` |
 | `position` | enum | `"bottom-center"` | Nine screen anchors (3×3 grid) |
 | `show_mouse` | bool | `true` | Show buttons and scroll |
-| `show_bare_modifiers` | bool | `true` | Show lone Ctrl/Shift/Alt taps |
+| `show_bare_modifiers` | bool | `true` | Show lone Ctrl/Shift/Alt/Super taps |
 | `display_ms` | u64 | `1600` | Hold before fading (200–30000) |
 | `fade_ms` | u64 | `350` | Fade duration (0–5000) |
 | `max_entries` | usize | `6` | Simultaneous chips (1–16) |
@@ -1513,6 +1513,7 @@ action = "toggle_radial_menu"
 - Pressure-to-thickness mapping applies only to pressure-sensitive freehand Pen strokes. Marker/Textmarker, Step Marker, and shape tools keep their selected sizes when used with a stylus.
 - `stylus_button` is the primary barrel button (`BTN_STYLUS` / 331); `stylus_button2` is the secondary barrel button (`BTN_STYLUS2` / 332).
 - Barrel button `action` values use normal action names, such as `toggle_radial_menu`, `undo`, and `redo`. Omit `action` to leave a button unbound.
+- These nodes are a compatibility source. Prefer `StylusPrimary` / `StylusSecondary` in `[keybindings]`. The configurator can move a legacy assignment into the keybinding list; loading alone never deletes the tablet nodes.
 
 ### `[session]` - Session Persistence
 
@@ -1597,6 +1598,27 @@ For end-to-end CLI, overlay, and configurator flows, see [`examples/session-mana
 
 Customize keyboard shortcuts for all actions. Each action can have multiple keybindings.
 For multi-monitor, customize `focus_prev_output` and `focus_next_output` in this section.
+
+A shortcut is a key name, auxiliary mouse button, or stylus barrel button with optional
+modifiers joined by `+`. The modifiers are `Ctrl` (`Control`), `Shift`, `Alt`, and `Super`
+(`Meta`, `Logo`, `Win`, `Windows`). Matching, conflicts, and display use the canonical
+spelling `Super`. Examples: `Escape`, `Ctrl+Z`, `Super+X`, `Ctrl+Shift+T`, `F10`,
+`MouseBack`, `Ctrl+MouseForward`, `StylusPrimary`, `Ctrl+K > Ctrl+C`. Super chords work when
+the compositor delivers them; if the desktop consumes Super before Wayscriber or the
+configurator sees it, type the shortcut with Edit as Text.
+
+Two or three keyboard chords can be chained with `>` (`Ctrl+K > Ctrl+C`). Help and the
+configurator show that as `Ctrl+K then Ctrl+C`. A comma still separates independent
+shortcuts on one action. A standalone chord cannot also be a prefix of a sequence; two
+sequences may share a first chord and diverge later. After a prefix, Wayscriber waits up
+to one second for the next step.
+
+Auxiliary mouse buttons `MouseBack`, `MouseForward`, and `MouseExtra1` through `MouseExtra4`
+can be bound to actions. Left, middle, and right cannot: they already own drawing and
+toolbar input. Stylus barrel buttons use `StylusPrimary` and `StylusSecondary`. Those names
+can be recorded in the configurator when the device is identifiable; otherwise type them
+with Edit as Text. Existing `[tablet.stylus_button]` / `[tablet.stylus_button2]` assignments
+keep working until you move them into the keybinding list with **Move Legacy Binding**.
 
 #### How a shortcut you did not write is decided
 
@@ -1929,15 +1951,25 @@ clear_preset_5 = ["Ctrl+5"]
 
 **Keybinding Format:**
 
-Keybindings are specified as strings with modifiers and keys separated by `+`:
+Keybindings are specified as strings with modifiers and a key or device button separated by `+`:
 - Simple keys: `"E"`, `"T"`, `"Escape"`, `"F10"`
-- With modifiers: `"Ctrl+Z"`, `"Shift+T"`, `"Ctrl+Shift+W"`
+- With modifiers: `"Ctrl+Z"`, `"Shift+T"`, `"Ctrl+Shift+W"`, `"Super+X"`
+- Auxiliary mouse buttons: `"MouseBack"`, `"MouseForward"`, `"MouseExtra1"` through `"MouseExtra4"`
+- Stylus barrel buttons: `"StylusPrimary"`, `"StylusSecondary"`
+- Keyboard sequences (two or three chords): `"Ctrl+K > Ctrl+C"`. Help and the configurator show this as `Ctrl+K then Ctrl+C`.
 - Special keys: `"Escape"`, `"Return"`, `"Backspace"`, `"Space"`, `"F10"`, `"F11"`, `"Home"`, `"End"`, `"PageUp"`, `"PageDown"`, `"ArrowUp"`, `"ArrowDown"`, `"ArrowLeft"`, `"ArrowRight"`, `"+"`, `"-"`, `"="`, `"_"`
+
+Left, middle, and right mouse buttons cannot be bound as generic actions. Pointer and stylus buttons cannot appear as sequence steps.
+
+A comma still separates independent shortcuts on one action (`F5, Ctrl+K > Ctrl+C`). Spaces around `>` are optional in the file and canonicalized to spaced `>` when that binding is rewritten.
+
+A standalone chord cannot also be a prefix of a configured sequence (`Ctrl+K` and `Ctrl+K > Ctrl+C` cannot coexist). Two sequences may share a first chord and diverge later (`Ctrl+K > Ctrl+C` and `Ctrl+K > Ctrl+X`). After a prefix is pressed, Wayscriber waits up to one second for the next step; focus loss, overlay exit, a modal, a keymap reload, or a mismatch cancels the pending sequence. Key repeat does not advance a sequence.
 
 **Supported Modifiers:**
 - `Ctrl` (or `Control`)
 - `Shift`
 - `Alt`
+- `Super` (or `Meta`, `Logo`, `Win`, `Windows`)
 
 **Modifier Order:**
 Modifiers can appear in any order - `"Ctrl+Shift+W"`, `"Shift+Ctrl+W"`, and `"Shift+W+Ctrl"` are all equivalent.

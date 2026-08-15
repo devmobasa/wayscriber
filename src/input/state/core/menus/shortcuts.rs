@@ -43,11 +43,11 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{KeyBinding, RadialMenuMouseBinding};
+    use crate::config::{RadialMenuMouseBinding, Shortcut};
     use crate::input::state::test_support::make_test_input_state_with_action_bindings;
     use std::collections::HashMap;
 
-    fn binding_map(entries: &[(Action, &[&str])]) -> HashMap<Action, Vec<KeyBinding>> {
+    fn binding_map(entries: &[(Action, &[&str])]) -> HashMap<Action, Vec<Shortcut>> {
         entries
             .iter()
             .map(|(action, values)| {
@@ -55,7 +55,7 @@ mod tests {
                     *action,
                     values
                         .iter()
-                        .map(|value| KeyBinding::parse(value).expect("binding"))
+                        .map(|value| Shortcut::parse(value).expect("binding"))
                         .collect(),
                 )
             })

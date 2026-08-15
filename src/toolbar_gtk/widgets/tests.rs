@@ -111,3 +111,58 @@ fn backend_modifier_latch_survives_focus_reset_during_click() {
         }
     );
 }
+
+#[test]
+fn auxiliary_mouse_buttons_forward_as_pointer_shortcuts() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let sender = FeedbackSender::new(tx);
+    let _ = sender.send(GtkToolbarFeedback::PointerShortcut {
+        button: 8,
+        ctrl: true,
+        shift: false,
+        alt: false,
+        logo: false,
+    });
+    assert_eq!(
+        rx.recv().unwrap(),
+        GtkToolbarFeedback::PointerShortcut {
+            button: 8,
+            ctrl: true,
+            shift: false,
+            alt: false,
+            logo: false,
+        }
+    );
+    assert_eq!(
+        crate::config::keybindings::gdk::pointer_button(8),
+        Some(crate::config::PointerButton::Back)
+    );
+    assert_eq!(crate::config::keybindings::gdk::pointer_button(1), None);
+}
+
+#[test]
+fn gtk_pointer_shortcuts_carry_click_modifiers() {
+    assert_eq!(
+        super::pointer_shortcut_feedback(8, gtk4::gdk::ModifierType::CONTROL_MASK),
+        Some(GtkToolbarFeedback::PointerShortcut {
+            button: 8,
+            ctrl: true,
+            shift: false,
+            alt: false,
+            logo: false,
+        })
+    );
+    assert_eq!(
+        super::pointer_shortcut_feedback(
+            9,
+            gtk4::gdk::ModifierType::SHIFT_MASK | gtk4::gdk::ModifierType::SUPER_MASK,
+        ),
+        Some(GtkToolbarFeedback::PointerShortcut {
+            button: 9,
+            ctrl: false,
+            shift: true,
+            alt: false,
+            logo: true,
+        })
+    );
+}

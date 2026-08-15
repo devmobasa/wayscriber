@@ -342,7 +342,7 @@ mod tests {
     /// hints) invalidates the key.
     #[test]
     fn base_cache_key_changes_with_binding_hints() {
-        use crate::config::{Action, KeyBinding};
+        use crate::config::{Action, Shortcut};
         use crate::input::state::test_support::make_test_input_state_with_action_bindings;
 
         let default_state = make_test_input_state();
@@ -351,7 +351,7 @@ mod tests {
             .expect("default bindings");
         bindings.insert(
             Action::SelectPenTool,
-            vec![KeyBinding::parse("F9").expect("parse F9")],
+            vec![Shortcut::parse("F9").expect("parse F9")],
         );
         let rebound_state = make_test_input_state_with_action_bindings(bindings);
 

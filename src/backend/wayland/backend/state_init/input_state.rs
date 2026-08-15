@@ -1,7 +1,7 @@
 use log::warn;
 use std::collections::HashMap;
 
-use crate::config::{Action, Config, KeyBinding, KeybindingsConfig, QuickColorPalette};
+use crate::config::{Action, Config, KeybindingsConfig, QuickColorPalette, Shortcut};
 use crate::draw::{FontDescriptor, clamp_regular_sides};
 use crate::input::{ClickHighlightSettings, DragToolBindings, InputHudSettings, InputState};
 
@@ -119,7 +119,7 @@ fn build_drag_tool_bindings(config: &Config) -> DragToolBindings {
     DragToolBindings::from_config(&drag_tools)
 }
 
-fn build_action_map(config: &Config) -> HashMap<KeyBinding, Action> {
+fn build_action_map(config: &Config) -> HashMap<Shortcut, Action> {
     match config.keybindings.build_action_map() {
         Ok(map) => map,
         Err(err) => {
@@ -140,7 +140,7 @@ fn build_action_map(config: &Config) -> HashMap<KeyBinding, Action> {
     }
 }
 
-fn build_action_bindings(config: &Config) -> HashMap<Action, Vec<KeyBinding>> {
+fn build_action_bindings(config: &Config) -> HashMap<Action, Vec<Shortcut>> {
     match config.keybindings.build_action_bindings() {
         Ok(map) => map,
         Err(err) => {

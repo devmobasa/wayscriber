@@ -25,9 +25,8 @@ use super::super::types::{
     ZoomAction,
 };
 use crate::config::{
-    Action, KeyBinding, PresenterModeConfig, QuickColorPalette, RadialMenuMouseBinding,
-    ResolvedToolbarItems, ToolPresetConfig, ToolbarItemId, ToolbarItemOrderGroup,
-    ToolbarItemsConfig,
+    Action, PresenterModeConfig, QuickColorPalette, RadialMenuMouseBinding, ResolvedToolbarItems,
+    Shortcut, ToolPresetConfig, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemsConfig,
 };
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{BlurStyle, Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
@@ -43,7 +42,7 @@ use crate::input::{
 use crate::render_profiles::RenderProfileSet;
 use crate::session::SessionOptions;
 use crate::util::Rect;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -369,9 +368,18 @@ pub struct InputState {
     /// the same bytes and selection are later restored.
     pub(crate) text_input_revision: u64,
     /// Keybinding action map for efficient lookup
-    pub(in crate::input::state::core) action_map: HashMap<KeyBinding, Action>,
+    pub(in crate::input::state::core) action_map: HashMap<Shortcut, Action>,
     /// Ordered keybindings per action (as configured)
-    pub(in crate::input::state::core) action_bindings: HashMap<Action, Vec<KeyBinding>>,
+    pub(in crate::input::state::core) action_bindings: HashMap<Action, Vec<Shortcut>>,
+    /// Keyboard sequence trie derived from `action_map`.
+    pub(in crate::input::state::core) sequence_trie:
+        crate::input::state::core::utility::SequenceTrie,
+    /// In-progress multi-step keyboard sequence, if any.
+    pub(in crate::input::state::core) pending_sequence:
+        Option<crate::input::state::core::utility::PendingSequence>,
+    /// Auxiliary pointer codes whose press dispatched a shortcut, so the
+    /// matching release is consumed instead of starting a stroke or UI action.
+    pub(crate) consumed_pointer_buttons: HashSet<u32>,
     /// Bumped whenever the keymap is replaced. Shortcut labels feed command
     /// scoring, so the palette's result cache keys on this.
     pub(in crate::input::state::core) keymap_revision: u64,

@@ -189,8 +189,9 @@ impl DragToolBindings {
 
 /// Keyboard modifier state.
 ///
-/// Tracks which modifier keys (Shift, Ctrl, Alt, Tab) are currently pressed.
-/// Used to determine the active drawing tool and handle keyboard shortcuts.
+/// Tracks which modifier keys (Shift, Ctrl, Alt, Super, Tab) are currently pressed.
+/// Super participates in shortcut matching; it does not change drag-tool priority.
+/// Tab is a drag-tool modifier only.
 #[derive(Debug, Clone, Copy)]
 pub struct Modifiers {
     /// Shift key pressed
@@ -199,6 +200,8 @@ pub struct Modifiers {
     pub ctrl: bool,
     /// Alt key pressed
     pub alt: bool,
+    /// Super / Meta / Windows (Wayland logo) key pressed
+    pub logo: bool,
     /// Tab key pressed
     pub tab: bool,
 }
@@ -216,6 +219,7 @@ impl Modifiers {
             shift: false,
             ctrl: false,
             alt: false,
+            logo: false,
             tab: false,
         }
     }
@@ -240,6 +244,12 @@ impl Modifiers {
         } else {
             DragModifier::None
         }
+    }
+
+    /// Ctrl, Shift, Alt, and Super — the modifiers a keybinding can carry.
+    /// Tab is a drag-tool modifier only.
+    pub fn has_shortcut_modifier(self) -> bool {
+        self.ctrl || self.shift || self.alt || self.logo
     }
 
     /// Determines which drawing tool is active based on current modifier state and drag mapping.

@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::{Action, BoardsConfig, Config, KeyBinding, PresenterModeConfig};
+use crate::config::{Action, BoardsConfig, Config, PresenterModeConfig, Shortcut};
 use crate::draw::{
     Color, EraserKind, FontDescriptor, Frame, PageDeleteOutcome, REGULAR_POLYGON_DEFAULT_SIDES,
     Shape, ShapeId,
@@ -105,7 +105,7 @@ fn can_create_probe(parent: &Path) -> bool {
 
 fn test_input_state() -> InputState {
     let mut action_map = HashMap::new();
-    action_map.insert(KeyBinding::parse("Escape").unwrap(), Action::Exit);
+    action_map.insert(Shortcut::parse("Escape").unwrap(), Action::Exit);
     InputState::with_defaults(
         Color {
             r: 1.0,

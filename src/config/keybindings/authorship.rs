@@ -31,7 +31,7 @@ impl KeybindingAuthorship {
     /// keys is exactly the set of authored actions, and a key that no action
     /// owns is harmless here (the document loader reports it as an unknown
     /// setting separately).
-    pub(crate) fn from_toml_source(input: &str) -> Self {
+    pub fn from_toml_source(input: &str) -> Self {
         let Ok(root) = input.parse::<toml::Table>() else {
             // Unreachable from the loaders, which both parse this same text
             // into a `Config` first. Claiming "nothing was authored" from a
@@ -53,13 +53,25 @@ impl KeybindingAuthorship {
     /// described by the source's presence set, while every other list still is.
     /// [`Config::mark_keybindings_explicit`](crate::config::Config::mark_keybindings_explicit)
     /// is the whole-section form, for an editor that rebuilds all of them.
-    pub(crate) fn mark_explicit(&mut self, config_key: &str) {
+    pub fn mark_explicit(&mut self, config_key: &str) {
         match self {
             // Nothing was omitted, so there is nothing to record.
             Self::AllExplicit => {}
             Self::FromFile(keys) => {
                 keys.insert(config_key.to_string());
             }
+        }
+    }
+
+    /// Drops one `[keybindings]` key from the file-presence set.
+    ///
+    /// An editor uses this when a field omitted by the loaded document returns
+    /// to its baseline value, so a transient edit does not invent source
+    /// authorship the value-based document merge cannot persist.
+    /// [`Self::AllExplicit`] has no omitted keys, so this is a no-op there.
+    pub fn clear_explicit(&mut self, config_key: &str) {
+        if let Self::FromFile(keys) = self {
+            keys.remove(config_key);
         }
     }
 
@@ -115,5 +127,17 @@ mod tests {
 
         assert!(authorship.is_explicit("undo"));
         assert!(authorship.is_explicit("anything"));
+    }
+
+    #[test]
+    fn clear_explicit_drops_file_presence_and_leaves_all_explicit_alone() {
+        let mut from_file =
+            KeybindingAuthorship::from_toml_source("[keybindings]\nundo = [\"Ctrl+Z\"]\n");
+        from_file.clear_explicit("undo");
+        assert!(!from_file.is_explicit("undo"));
+
+        let mut all = KeybindingAuthorship::default();
+        all.clear_explicit("undo");
+        assert!(all.is_explicit("undo"));
     }
 }

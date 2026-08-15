@@ -8,6 +8,8 @@ pub struct KeyBinding {
     pub ctrl: bool,
     pub shift: bool,
     pub alt: bool,
+    /// Super / Meta / Windows (Wayland logo modifier). Displayed as `Super`.
+    pub logo: bool,
 }
 
 /// Equality and hashing ignore the key name's case, exactly like [`Self::matches`]
@@ -22,6 +24,7 @@ impl PartialEq for KeyBinding {
             && self.ctrl == other.ctrl
             && self.shift == other.shift
             && self.alt == other.alt
+            && self.logo == other.logo
     }
 }
 
@@ -31,6 +34,7 @@ impl Hash for KeyBinding {
         self.ctrl.hash(state);
         self.shift.hash(state);
         self.alt.hash(state);
+        self.logo.hash(state);
     }
 }
 
@@ -90,7 +94,7 @@ pub fn suggest_key_name(key: &str) -> Option<String> {
     if let Some((head, rest)) = key.split_once('+') {
         // The parser only leaves a `+` in the key when a segment was not a
         // modifier it knows, so the head is almost always a typo for one.
-        let canonical = ["Ctrl", "Shift", "Alt"]
+        let canonical = ["Ctrl", "Shift", "Alt", "Super"]
             .into_iter()
             .find(|modifier| within_one_edit(&head.to_lowercase(), &modifier.to_lowercase()))?;
         return Some(format!("{canonical}+{rest}"));
@@ -142,94 +146,115 @@ fn within_one_edit(a: &str, b: &str) -> bool {
     true
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ChordParts {
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+    pub logo: bool,
+    pub key: String,
+}
+
+pub(crate) fn parse_chord_parts(s: &str) -> Result<ChordParts, String> {
+    let s = s.trim();
+    if s.is_empty() {
+        return Err("Empty keybinding string".to_string());
+    }
+
+    // Normalize by removing spaces around '+'
+    let s_normalized = s.replace(" + ", "+").replace("+ ", "+").replace(" +", "+");
+    let parts: Vec<&str> = s_normalized.split('+').collect();
+    if parts.is_empty() {
+        return Err("Empty keybinding string".to_string());
+    }
+
+    let mut ctrl = false;
+    let mut shift = false;
+    let mut alt = false;
+    let mut logo = false;
+    let mut key_parts = Vec::new();
+
+    for part in parts {
+        match part.to_lowercase().as_str() {
+            "ctrl" | "control" => ctrl = true,
+            "shift" => shift = true,
+            "alt" => alt = true,
+            "super" | "meta" | "logo" | "win" | "windows" => logo = true,
+            _ => key_parts.push(part),
+        }
+    }
+
+    if key_parts.is_empty() {
+        return Err(format!("No key specified in: {s}"));
+    }
+
+    let key = key_parts.join("+");
+    Ok(ChordParts {
+        ctrl,
+        shift,
+        alt,
+        logo,
+        key: if key.is_empty() { "+".to_string() } else { key },
+    })
+}
+
+pub(crate) fn format_modifiers(
+    ctrl: bool,
+    shift: bool,
+    alt: bool,
+    logo: bool,
+) -> Vec<&'static str> {
+    let mut parts = Vec::new();
+    if ctrl {
+        parts.push("Ctrl");
+    }
+    if shift {
+        parts.push("Shift");
+    }
+    if alt {
+        parts.push("Alt");
+    }
+    if logo {
+        parts.push("Super");
+    }
+    parts
+}
+
 impl KeyBinding {
     /// Parse a keybinding string like "Ctrl+Shift+W" or "Escape".
     /// Modifiers can appear in any order: "Shift+Ctrl+W", "Alt+Shift+Ctrl+W", etc.
     /// Supports spaces around '+' (e.g., "Ctrl + Shift + W")
     pub fn parse(s: &str) -> Result<Self, String> {
-        let s = s.trim();
-        if s.is_empty() {
-            return Err("Empty keybinding string".to_string());
-        }
-
-        // Normalize by removing spaces around '+'
-        let s_normalized = s.replace(" + ", "+").replace("+ ", "+").replace(" +", "+");
-
-        // Split on '+' to get all parts
-        let parts: Vec<&str> = s_normalized.split('+').collect();
-
-        if parts.is_empty() {
-            return Err("Empty keybinding string".to_string());
-        }
-
-        let mut ctrl = false;
-        let mut shift = false;
-        let mut alt = false;
-        let mut key_parts = Vec::new();
-
-        // Process each part, checking if it's a modifier or the actual key
-        for part in parts {
-            match part.to_lowercase().as_str() {
-                "ctrl" | "control" => ctrl = true,
-                "shift" => shift = true,
-                "alt" => alt = true,
-                _ => {
-                    // Not a modifier, so it's part of the key
-                    key_parts.push(part);
-                }
-            }
-        }
-
-        // Reconstruct the key from remaining parts (handles cases like "+" being the key)
-        if key_parts.is_empty() {
-            return Err(format!("No key specified in: {}", s));
-        }
-
-        // Join with '+' to handle the case where the key itself is '+'
-        // (e.g., "Ctrl+Shift++" becomes ["Ctrl", "Shift", "", ""] with last two being the '+' key)
-        let key = key_parts.join("+");
-
-        if key.is_empty() {
-            // This happens for "Ctrl+Shift++" where we have empty strings after the modifiers
-            // The key is actually '+'
-            Ok(Self {
-                key: "+".to_string(),
-                ctrl,
-                shift,
-                alt,
-            })
-        } else {
-            Ok(Self {
-                key,
-                ctrl,
-                shift,
-                alt,
-            })
-        }
+        let parts = parse_chord_parts(s)?;
+        Ok(Self {
+            key: parts.key,
+            ctrl: parts.ctrl,
+            shift: parts.shift,
+            alt: parts.alt,
+            logo: parts.logo,
+        })
     }
 
     /// Check if this keybinding matches the current input state.
-    pub fn matches(&self, key: &str, ctrl: bool, shift: bool, alt: bool) -> bool {
+    pub fn matches(&self, key: &str, ctrl: bool, shift: bool, alt: bool, logo: bool) -> bool {
         self.key.eq_ignore_ascii_case(key)
             && self.ctrl == ctrl
             && self.shift == shift
             && self.alt == alt
+            && self.logo == logo
     }
 }
 
 impl fmt::Display for KeyBinding {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut parts: Vec<&str> = Vec::new();
-        if self.ctrl {
-            parts.push("Ctrl");
-        }
-        if self.shift {
-            parts.push("Shift");
-        }
-        if self.alt {
-            parts.push("Alt");
-        }
-        parts.push(self.key.as_str());
-        write!(f, "{}", parts.join("+"))
+        write!(
+            f,
+            "{}",
+            format_modifiers(self.ctrl, self.shift, self.alt, self.logo)
+                .into_iter()
+                .chain(std::iter::once(self.key.as_str()))
+                .collect::<Vec<_>>()
+                .join("+")
+        )
     }
 }

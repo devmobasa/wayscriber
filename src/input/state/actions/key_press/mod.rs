@@ -13,6 +13,7 @@ impl InputState {
             Key::Shift => self.modifiers.shift = true,
             Key::Ctrl => self.modifiers.ctrl = true,
             Key::Alt => self.modifiers.alt = true,
+            Key::Super => self.modifiers.logo = true,
             Key::Tab => self.modifiers.tab = true,
             _ => return false,
         }
@@ -34,5 +35,9 @@ impl InputState {
     /// - Modifier key tracking
     pub fn on_key_press(&mut self, key: Key) {
         let _ = interaction::route_key_press(self, key);
+    }
+
+    pub fn on_key_repeat(&mut self, key: Key) {
+        let _ = interaction::route_key_repeat(self, key);
     }
 }

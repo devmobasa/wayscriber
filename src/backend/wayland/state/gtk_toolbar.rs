@@ -20,6 +20,7 @@ fn acknowledge_blocked_gtk_drag_feedback(top_seq: &mut u64, feedback: &GtkToolba
             *top_seq = (*top_seq).max(*seq);
         }
         GtkToolbarFeedback::Event { .. }
+        | GtkToolbarFeedback::PointerShortcut { .. }
         | GtkToolbarFeedback::TopHover { .. }
         | GtkToolbarFeedback::CaptureSuppressionReady { .. }
         | GtkToolbarFeedback::CaptureSuppressionFailed { .. } => {}
@@ -36,7 +37,9 @@ fn gtk_toolbar_feedback_is_blocked(
         | GtkToolbarFeedback::CaptureSuppressionFailed { .. } => false,
         // Hover is passive state, not a user action; never gate it.
         GtkToolbarFeedback::TopHover { .. } => false,
-        GtkToolbarFeedback::Event { .. } => modal_engaged,
+        GtkToolbarFeedback::Event { .. } | GtkToolbarFeedback::PointerShortcut { .. } => {
+            modal_engaged
+        }
         GtkToolbarFeedback::SetTopOffset { phase, .. } => {
             let blocked = modal_engaged || *top_drag_blocked;
             if blocked {
@@ -154,6 +157,17 @@ impl WaylandState {
                         Some(conn),
                         Some(qh),
                     );
+                }
+                GtkToolbarFeedback::PointerShortcut {
+                    button,
+                    ctrl,
+                    shift,
+                    alt,
+                    logo,
+                } => {
+                    if !self.input_state.modal_owns_pointer_shortcuts() {
+                        self.try_dispatch_gdk_pointer_shortcut(button, ctrl, shift, alt, logo);
+                    }
                 }
                 GtkToolbarFeedback::TopHover { hovered } => {
                     self.data.gtk_top_hover = hovered;
@@ -342,5 +356,27 @@ mod modal_tests {
             &GtkToolbarFeedback::CaptureSuppressionReady { generation: 7 },
         ));
         assert!(top_blocked);
+    }
+
+    #[test]
+    fn pointer_shortcuts_are_blocked_like_toolbar_events() {
+        let mut top_blocked = false;
+        let aux = GtkToolbarFeedback::PointerShortcut {
+            button: 8,
+            ctrl: false,
+            shift: false,
+            alt: false,
+            logo: false,
+        };
+        assert!(gtk_toolbar_feedback_is_blocked(
+            true,
+            &mut top_blocked,
+            &aux,
+        ));
+        assert!(!gtk_toolbar_feedback_is_blocked(
+            false,
+            &mut top_blocked,
+            &aux,
+        ));
     }
 }

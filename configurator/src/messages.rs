@@ -1,21 +1,22 @@
 use std::path::PathBuf;
 
-use wayscriber::config::{ConfigDocument, ToolbarItemId, ToolbarItemOrderGroup};
+use wayscriber::config::{ConfigDocument, Shortcut, ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::models::{
     BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, ColorPickerId,
     DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DragColorOption, DragMouseButton,
     DragToolField, DragToolOption, EraserModeOption, FontStyleOption, FontWeightOption,
     InputHudModeOption, InputHudPositionOption, KeybindingField, KeybindingsTabId,
-    NamedColorOption, OverrideOption, PdfFitModeOption, PdfLabelContentModeOption,
-    PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
+    KeyboardModifiers, NamedColorOption, OverrideOption, PdfFitModeOption,
+    PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
     PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField,
-    ReducedMotionOption, RenderProfileExportOption, RenderProfileMappingSide,
+    RecorderDeviceKind, ReducedMotionOption, RenderProfileExportOption, RenderProfileMappingSide,
     RenderProfileTextField, SessionCatalogActionResult, SessionCatalogItem,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TabId, TextField,
-    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, UiTabId, UiThemeOption, ZoomChipDisplayOption,
+    SessionCompressionOption, SessionStorageModeOption, ShortcutManagerFilter, ShortcutManagerSort,
+    StatusPositionOption, TabId, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
+    ToolbarOverrideField, ToolbarRebindModifierOption, UiTabId, UiThemeOption,
+    ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -62,9 +63,6 @@ pub enum Message {
     ResetToDefaultsConfirmed,
     /// Answers an armed confirmation with no.
     ResetToDefaultsCanceled,
-    /// Cancels whichever destructive confirmation currently owns the answer
-    /// controls. Used by the window-level Escape key binding.
-    ActiveConfirmationCanceled,
     SaveRequested,
     MigrationApplyRequested,
     MigrationDismissed,
@@ -92,6 +90,17 @@ pub enum Message {
     TabSelected(TabId),
     UiTabSelected(UiTabId),
     KeybindingsTabSelected(KeybindingsTabId),
+    ShortcutManagerShowAll,
+    ShortcutManagerFilterChanged(ShortcutManagerFilter),
+    ShortcutManagerSortChanged(ShortcutManagerSort),
+    ShortcutManagerRowSelected(KeybindingField),
+    ShortcutManagerJumpTo(KeybindingField),
+    ShortcutResetVisibleRequested,
+    ShortcutResetVisibleConfirmed,
+    ShortcutResetAllRequested,
+    ShortcutResetAllConfirmed,
+    ShortcutResetCanceled,
+    ShortcutConflictReviewStarted,
     ToggleChanged(ToggleField, bool),
     TextChanged(TextField, String),
     ColorPickerHexChanged(ColorPickerId, String),
@@ -155,7 +164,23 @@ pub enum Message {
     ExportPdfLabelPositionChanged(PdfLabelPositionOption),
     ExportPdfLabelContentChanged(PdfLabelContentModeOption),
     BufferCountChanged(u32),
-    KeybindingChanged(KeybindingField, String),
+    ShortcutRecordingStarted(KeybindingField),
+    ShortcutSequenceRecordingStarted(KeybindingField),
+    ShortcutRecordingCanceled(KeybindingField),
+    ShortcutRecorderKey(u32, KeyboardModifiers),
+    ShortcutRecorderButton(u32, RecorderDeviceKind, KeyboardModifiers),
+    ShortcutSequenceFinish,
+    ShortcutSequenceRemoveLastStep,
+    ShortcutRemoved(KeybindingField, Shortcut),
+    ShortcutResetRequested(KeybindingField),
+    ShortcutTextEditStarted(KeybindingField),
+    ShortcutTextEditChanged(String),
+    ShortcutTextEditApplied,
+    ShortcutTextEditCanceled(KeybindingField),
+    ShortcutConflictReplaceConfirmed,
+    ShortcutConflictCanceled,
+    /// Window-level Escape: cancel a confirmation unless a recorder owns the key.
+    WindowEscapePressed,
     FontStyleOptionSelected(FontStyleOption),
     FontWeightOptionSelected(FontWeightOption),
     #[cfg(feature = "tablet-input")]

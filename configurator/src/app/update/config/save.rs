@@ -29,6 +29,11 @@ impl ConfiguratorApp {
             return Vec::new();
         }
 
+        if self.pending_shortcut_conflict.is_some() {
+            self.status = StatusMessage::error("Resolve the shortcut conflict before saving.");
+            return Vec::new();
+        }
+
         // The write needs the document itself, so the model gives up its only
         // copy here and gets one back from `handle_config_saved` either way.
         // Taking it is also the "nothing loaded" check: there is one `Option`

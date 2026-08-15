@@ -65,7 +65,7 @@ pub use input_hud::{
 
 #[cfg(test)]
 pub(crate) mod test_support {
-    use crate::config::{Action, BoardsConfig, KeyBinding, KeybindingsConfig, PresenterModeConfig};
+    use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig, Shortcut};
     use crate::draw::{Color, FontDescriptor};
     use crate::input::{ClickHighlightSettings, EraserMode, InputState};
     use std::collections::HashMap;
@@ -82,7 +82,7 @@ pub(crate) mod test_support {
     // action-binding label overrides. It intentionally keeps the default
     // dispatch/action map and swaps only the formatted bindings.
     pub(crate) fn make_test_input_state_with_action_bindings(
-        action_bindings: HashMap<Action, Vec<KeyBinding>>,
+        action_bindings: HashMap<Action, Vec<Shortcut>>,
     ) -> InputState {
         let action_map = KeybindingsConfig::default()
             .build_action_map()

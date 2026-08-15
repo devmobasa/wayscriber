@@ -131,6 +131,12 @@ impl WaylandState {
             return;
         }
 
+        if !self.input_state.modal_owns_pointer_shortcuts()
+            && self.try_dispatch_pointer_shortcut(button)
+        {
+            return;
+        }
+
         if debug_toolbar_drag_logging_enabled() {
             debug!(
                 "pointer press: button={}, on_toolbar={}, inline_active={}, drag_active={}",
@@ -289,6 +295,58 @@ impl WaylandState {
         self.input_state.needs_redraw = true;
     }
 
+    fn try_dispatch_pointer_shortcut(&mut self, button: u32) -> bool {
+        let Some(pointer) = crate::config::keybindings::linux::pointer_button(button) else {
+            return false;
+        };
+        if self.dispatch_pointer_shortcut(pointer) {
+            self.input_state.consume_pointer_shortcut_button(button);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(in crate::backend::wayland) fn try_dispatch_gdk_pointer_shortcut(
+        &mut self,
+        button: u32,
+        ctrl: bool,
+        shift: bool,
+        alt: bool,
+        logo: bool,
+    ) -> bool {
+        let Some(pointer) = crate::config::keybindings::gdk::pointer_button(button) else {
+            return false;
+        };
+        self.dispatch_pointer_trigger(crate::config::PointerTrigger {
+            button: pointer,
+            ctrl,
+            shift,
+            alt,
+            logo,
+        })
+    }
+
+    fn dispatch_pointer_shortcut(&mut self, pointer: crate::config::PointerButton) -> bool {
+        match self.input_state.pointer_trigger(pointer) {
+            crate::config::ShortcutTrigger::Pointer(trigger) => {
+                self.dispatch_pointer_trigger(trigger)
+            }
+            _ => false,
+        }
+    }
+
+    fn dispatch_pointer_trigger(&mut self, trigger: crate::config::PointerTrigger) -> bool {
+        let shortcut = crate::config::ShortcutTrigger::Pointer(trigger);
+        let Some(action) = self.input_state.find_trigger_action(&shortcut) else {
+            return false;
+        };
+        self.input_state.clear_pending_sequence();
+        debug!("Pointer shortcut {shortcut}: dispatching {action:?}");
+        self.dispatch_input_action(action);
+        true
+    }
+
     /// Click-away dismissal for the top-strip menus/popovers. Defers to the
     /// canonical [`InputState::close_top_toolbar_menus`] so the click-away set
     /// stays in lockstep with the keyboard Escape route and the apply-action
@@ -314,13 +372,15 @@ impl WaylandState {
 }
 
 /// Input HUD label for a raw pointer button code. The three primary buttons
-/// get their spoken names; anything else reports its evdev code so extra mouse
-/// buttons stay visible without inventing names for them.
+/// get their spoken names; auxiliary buttons use the same semantic names as
+/// the shortcut parser; anything else reports its evdev code.
 fn input_hud_button_label(button: u32) -> String {
     match button {
         BTN_LEFT => "Click".to_string(),
         BTN_RIGHT => "Right Click".to_string(),
         BTN_MIDDLE => "Middle Click".to_string(),
-        other => format!("Button {other}"),
+        other => crate::config::keybindings::linux::pointer_button(other)
+            .map(|button| button.name())
+            .unwrap_or_else(|| format!("Button {other}")),
     }
 }

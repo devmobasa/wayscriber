@@ -53,6 +53,8 @@ pub use io::{
 };
 pub use keybindings::{
     Action, KeyBinding, KeybindingAuthorship, KeybindingConflict, KeybindingsConfig,
+    MAX_SEQUENCE_STEPS, PointerButton, PointerTrigger, Shortcut, ShortcutTrigger, StylusButton,
+    StylusTrigger,
 };
 pub use migration::{MigrationChange, MigrationPreview};
 #[allow(unused_imports)]

@@ -38,6 +38,8 @@ impl ConfigDraft {
             errors,
             |value| config.tablet.pressure_thickness_scale_step = value,
         );
+        config.tablet.stylus_button.action = self.keybindings.legacy_tablet.stylus_primary;
+        config.tablet.stylus_button2.action = self.keybindings.legacy_tablet.stylus_secondary;
     }
 }
 

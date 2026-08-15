@@ -15,8 +15,11 @@ pub(super) fn refresh(app: &ConfiguratorApp, widgets: &mut AppWidgets) {
     // A color field the parser rejects is an edit that never reached the
     // draft, so Save is not offered while one is on screen: pressing it
     // would write the last value that parsed and lose the text being typed.
-    let save_enabled =
-        app.is_dirty && !app.is_saving && !app.is_loading && app.invalid_color_hex_count() == 0;
+    let save_enabled = app.is_dirty
+        && !app.is_saving
+        && !app.is_loading
+        && app.invalid_color_hex_count() == 0
+        && app.pending_shortcut_conflict.is_none();
     if widgets.save_button.is_sensitive() != save_enabled {
         widgets.save_button.set_sensitive(save_enabled);
     }

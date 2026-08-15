@@ -420,14 +420,14 @@ mod tests {
 
     #[test]
     fn tour_copy_tracks_rebound_shortcuts() {
-        use crate::config::{KeyBinding, KeybindingsConfig};
+        use crate::config::{KeybindingsConfig, Shortcut};
 
         let mut bindings = KeybindingsConfig::default()
             .build_action_bindings()
             .expect("default bindings");
         bindings.insert(
             Action::ToggleCommandPalette,
-            vec![KeyBinding::parse("Ctrl+Shift+P").expect("binding")],
+            vec![Shortcut::parse("Ctrl+Shift+P").expect("binding")],
         );
         let mut state = make_test_input_state();
         state.set_action_bindings(bindings);
@@ -441,7 +441,7 @@ mod tests {
 
     #[test]
     fn status_bar_step_teaches_board_picker_and_tracks_binding() {
-        use crate::config::{KeyBinding, KeybindingsConfig};
+        use crate::config::{KeybindingsConfig, Shortcut};
 
         // The M9 board-picker beat always names the on-screen entry point (the
         // status bar) position-neutrally and resolves the board-picker key through
@@ -451,7 +451,7 @@ mod tests {
             .expect("default bindings");
         bindings.insert(
             Action::BoardPicker,
-            vec![KeyBinding::parse("Ctrl+Shift+B").expect("binding")],
+            vec![Shortcut::parse("Ctrl+Shift+B").expect("binding")],
         );
         let mut state = make_test_input_state();
         state.set_action_bindings(bindings);

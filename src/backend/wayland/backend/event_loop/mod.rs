@@ -171,6 +171,7 @@ pub(super) fn run_event_loop(
         let timeout = min_timeout(timeout, state.input_state.radial_menu_paint_timeout(now));
         // A held key must wake the loop to fire its next auto-repeat.
         let timeout = min_timeout(timeout, state.key_repeat_timeout(now));
+        let timeout = min_timeout(timeout, state.input_state.sequence_timeout(now));
         if let Err(e) =
             dispatch::dispatch_events(event_queue, state, runtime_wake, signal_state, timeout)
         {
@@ -262,6 +263,9 @@ pub(super) fn run_event_loop(
         // wired to this manual loop). `dispatch_key_repeat` sets needs_redraw
         // as its routed action requires.
         state.tick_key_repeat(Instant::now(), conn, qh);
+        if state.input_state.expire_pending_sequence(Instant::now()) {
+            state.input_state.needs_redraw = true;
+        }
 
         if !capture_active && state.ui_animation_due(std::time::Instant::now()) {
             state.input_state.needs_redraw = true;

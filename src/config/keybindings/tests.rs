@@ -93,6 +93,38 @@ fn bindings_differing_only_in_key_case_are_the_same_binding() {
 fn test_parse_requires_non_modifier_key() {
     let err = KeyBinding::parse("Ctrl+Shift").unwrap_err();
     assert!(err.contains("No key specified"));
+    let super_only = KeyBinding::parse("Super").unwrap_err();
+    assert!(super_only.contains("No key specified"));
+}
+
+#[test]
+fn super_aliases_parse_display_equal_and_match_as_super() {
+    let canonical = KeyBinding::parse("Super+X").unwrap();
+    assert!(canonical.logo);
+    assert!(!canonical.ctrl);
+    assert_eq!(canonical.to_string(), "Super+X");
+    assert!(canonical.matches("x", false, false, false, true));
+    assert!(!canonical.matches("x", false, false, false, false));
+    assert!(!canonical.matches("x", true, false, false, false));
+
+    for alias in ["Meta+X", "Logo+X", "Win+X", "Windows+X", "meta+x", "WIN+X"] {
+        let parsed = KeyBinding::parse(alias).unwrap();
+        assert_eq!(parsed, canonical, "{alias} must equal Super+X");
+        assert!(
+            parsed.to_string().starts_with("Super+"),
+            "{alias} displays Super, got {parsed}"
+        );
+    }
+
+    let shifted = KeyBinding::parse("Shift+Super+F5").unwrap();
+    assert_eq!(shifted.to_string(), "Shift+Super+F5");
+    assert_eq!(KeyBinding::parse("Super+Shift+F5").unwrap(), shifted);
+
+    let mut map = std::collections::HashMap::new();
+    map.insert(canonical.clone(), ());
+    assert!(map.contains_key(&KeyBinding::parse("Meta+X").unwrap()));
+    assert!(!map.contains_key(&KeyBinding::parse("Ctrl+X").unwrap()));
+    assert!(!map.contains_key(&KeyBinding::parse("X").unwrap()));
 }
 
 #[test]
@@ -104,11 +136,11 @@ fn test_display_normalizes_modifier_order() {
 #[test]
 fn test_matches() {
     let binding = KeyBinding::parse("Ctrl+Shift+W").unwrap();
-    assert!(binding.matches("W", true, true, false));
-    assert!(binding.matches("w", true, true, false)); // Case insensitive
-    assert!(!binding.matches("W", false, true, false)); // Missing ctrl
-    assert!(!binding.matches("W", true, false, false)); // Missing shift
-    assert!(!binding.matches("A", true, true, false)); // Wrong key
+    assert!(binding.matches("W", true, true, false, false));
+    assert!(binding.matches("w", true, true, false, false)); // Case insensitive
+    assert!(!binding.matches("W", false, true, false, false)); // Missing ctrl
+    assert!(!binding.matches("W", true, false, false, false)); // Missing shift
+    assert!(!binding.matches("A", true, true, false, false)); // Wrong key
 }
 
 #[test]
@@ -149,23 +181,23 @@ fn test_build_action_map() {
     let map = config.build_action_map().unwrap();
 
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+1").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Alt+Shift+1").unwrap()),
         Some(&Action::Exit)
     );
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+2").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Alt+Shift+2").unwrap()),
         Some(&Action::Undo)
     );
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+3").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Alt+Shift+3").unwrap()),
         Some(&Action::Redo)
     );
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+4").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Alt+Shift+4").unwrap()),
         Some(&Action::ToggleHelp)
     );
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+5").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Alt+Shift+5").unwrap()),
         Some(&Action::ToggleWhiteboard)
     );
 }
@@ -178,15 +210,15 @@ fn command_palette_and_full_screen_capture_defaults_are_distinct_and_ordered() {
 
     let map = config.build_action_map().expect("default keymap is valid");
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+K").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+K").unwrap()),
         Some(&Action::ToggleCommandPalette)
     );
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Shift+P").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Shift+P").unwrap()),
         Some(&Action::ToggleCommandPalette)
     );
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Alt+F").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Alt+F").unwrap()),
         Some(&Action::CaptureFullScreen)
     );
 }
@@ -200,11 +232,11 @@ fn toolbar_display_cycle_owns_f2_and_toggle_toolbar_keeps_f9() {
     // The split leaves no duplicate binding in the defaults.
     let map = config.build_action_map().expect("default keymap is valid");
     assert_eq!(
-        map.get(&KeyBinding::parse("F2").unwrap()),
+        map.get(&Shortcut::parse("F2").unwrap()),
         Some(&Action::CycleToolbarDisplay)
     );
     assert_eq!(
-        map.get(&KeyBinding::parse("F9").unwrap()),
+        map.get(&Shortcut::parse("F9").unwrap()),
         Some(&Action::ToggleToolbar)
     );
 }
@@ -240,6 +272,95 @@ fn test_duplicate_with_different_modifier_order() {
 }
 
 #[test]
+fn device_triggers_round_trip_through_the_action_map() {
+    let mut config = KeybindingsConfig::default();
+    config.core.undo = vec!["MouseBack".to_string(), "Ctrl+StylusSecondary".to_string()];
+    let map = config.build_action_map().unwrap();
+    assert_eq!(
+        map.get(&Shortcut::parse("MouseBack").unwrap()),
+        Some(&Action::Undo)
+    );
+    assert_eq!(
+        map.get(&Shortcut::parse("Ctrl+StylusSecondary").unwrap()),
+        Some(&Action::Undo)
+    );
+}
+
+#[test]
+fn primary_mouse_strings_are_rejected_from_the_keymap() {
+    let mut config = KeybindingsConfig::default();
+    config.core.undo = vec!["MouseLeft".to_string()];
+    let err = config.build_action_map().unwrap_err();
+    assert!(err.contains("cannot be bound"), "{err}");
+}
+
+#[test]
+fn sequence_prefix_conflict_is_rejected_and_branching_is_allowed() {
+    let prefix = Shortcut::parse("Ctrl+Shift+Alt+K").unwrap();
+    let copy = Shortcut::parse("Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+C").unwrap();
+    let cut = Shortcut::parse("Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+X").unwrap();
+
+    let mut config = KeybindingsConfig::default();
+    config.core.undo = vec![copy.to_string()];
+    config.core.redo = vec![prefix.to_string()];
+    let err = config.build_action_map().unwrap_err();
+    assert!(
+        err.contains("Sequence prefix conflict"),
+        "strict map should reject a prefix: {err}"
+    );
+
+    let mut config = KeybindingsConfig::default();
+    config.core.undo = vec![copy.to_string()];
+    config.core.redo = vec![cut.to_string()];
+    let map = config
+        .build_action_map()
+        .unwrap_or_else(|err| panic!("branching sequences should be valid: {err}"));
+    assert_eq!(map.get(&copy), Some(&Action::Undo));
+    assert_eq!(map.get(&cut), Some(&Action::Redo));
+}
+
+#[test]
+fn collect_binding_conflicts_reports_a_sequence_prefix() {
+    let prefix = Shortcut::parse("Ctrl+Shift+Alt+K").unwrap();
+    let sequence = Shortcut::parse("Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+C").unwrap();
+    let mut config = KeybindingsConfig::default();
+    config.core.undo = vec![sequence.to_string()];
+    config.core.redo = vec![prefix.to_string()];
+    let conflicts = config.collect_binding_conflicts().expect("prefix is data");
+    assert!(
+        conflicts.iter().any(|conflict| {
+            (conflict.binding() == &prefix || conflict.binding() == &sequence)
+                && conflict.actions().contains(&Action::Undo)
+                && conflict.actions().contains(&Action::Redo)
+        }),
+        "{conflicts:?}"
+    );
+}
+
+#[test]
+fn collect_binding_conflicts_reports_both_sides_of_a_same_action_prefix() {
+    let prefix = Shortcut::parse("Ctrl+Shift+Alt+K").unwrap();
+    let sequence = Shortcut::parse("Ctrl+Shift+Alt+K > Ctrl+Shift+Alt+C").unwrap();
+    let mut config = KeybindingsConfig::default();
+    config.core.undo = vec![prefix.to_string(), sequence.to_string()];
+    let conflicts = config
+        .collect_binding_conflicts()
+        .expect("self-prefix is data");
+    assert!(
+        conflicts
+            .iter()
+            .any(|conflict| conflict.binding() == &prefix && conflict.actions() == [Action::Undo]),
+        "{conflicts:?}"
+    );
+    assert!(
+        conflicts
+            .iter()
+            .any(|conflict| conflict.binding() == &sequence && conflict.actions() == [Action::Undo]),
+        "{conflicts:?}"
+    );
+}
+
+#[test]
 fn test_parse_plus_key_without_modifiers() {
     let binding = KeyBinding::parse("+").unwrap();
     assert_eq!(binding.key, "+");
@@ -260,8 +381,8 @@ fn test_parse_trims_surrounding_whitespace() {
 #[test]
 fn test_matches_requires_exact_alt_state() {
     let binding = KeyBinding::parse("Alt+X").unwrap();
-    assert!(binding.matches("x", false, false, true));
-    assert!(!binding.matches("x", false, false, false));
+    assert!(binding.matches("x", false, false, true, false));
+    assert!(!binding.matches("x", false, false, false, false));
 }
 
 #[test]
@@ -280,15 +401,15 @@ fn test_build_action_bindings_preserves_declared_binding_order() {
     assert_eq!(
         bindings.get(&Action::ToggleHelp),
         Some(&vec![
-            KeyBinding::parse("Ctrl+Alt+Shift+1").unwrap(),
-            KeyBinding::parse("Ctrl+Alt+Shift+2").unwrap(),
+            Shortcut::parse("Ctrl+Alt+Shift+1").unwrap(),
+            Shortcut::parse("Ctrl+Alt+Shift+2").unwrap(),
         ])
     );
     assert_eq!(
         bindings.get(&Action::Redo),
         Some(&vec![
-            KeyBinding::parse("Ctrl+Alt+Shift+3").unwrap(),
-            KeyBinding::parse("Ctrl+Alt+Shift+4").unwrap(),
+            Shortcut::parse("Ctrl+Alt+Shift+3").unwrap(),
+            Shortcut::parse("Ctrl+Alt+Shift+4").unwrap(),
         ])
     );
 }
@@ -318,23 +439,23 @@ fn build_action_map_includes_canvas_export_bindings() {
     let map = config.build_action_map().unwrap();
 
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+F").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Alt+Shift+F").unwrap()),
         Some(&Action::ExportCanvasFile)
     );
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+C").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Alt+Shift+C").unwrap()),
         Some(&Action::ExportCanvasClipboard)
     );
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+B").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Alt+Shift+B").unwrap()),
         Some(&Action::ExportCanvasClipboardAndFile)
     );
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+P").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Alt+Shift+P").unwrap()),
         Some(&Action::ExportBoardPdfFile)
     );
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+A").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Alt+Shift+A").unwrap()),
         Some(&Action::ExportAllBoardsPdfFile)
     );
 }
@@ -346,7 +467,7 @@ fn screen_eyedropper_defaults_to_i_and_maps_when_reconfigured() {
 
     let default_map = config.build_action_map().unwrap();
     assert_eq!(
-        default_map.get(&KeyBinding::parse("I").unwrap()),
+        default_map.get(&Shortcut::parse("I").unwrap()),
         Some(&Action::PickScreenColor)
     );
 
@@ -355,7 +476,7 @@ fn screen_eyedropper_defaults_to_i_and_maps_when_reconfigured() {
     let map = config.build_action_map().unwrap();
 
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Alt+Shift+E").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Alt+Shift+E").unwrap()),
         Some(&Action::PickScreenColor)
     );
 }
@@ -367,7 +488,7 @@ fn screen_text_recognition_is_unbound_by_default_and_leaves_o_to_orange() {
 
     let default_map = config.build_action_map().unwrap();
     assert_eq!(
-        default_map.get(&KeyBinding::parse("O").unwrap()),
+        default_map.get(&Shortcut::parse("O").unwrap()),
         Some(&Action::SetColorOrange)
     );
     assert!(
@@ -379,7 +500,7 @@ fn screen_text_recognition_is_unbound_by_default_and_leaves_o_to_orange() {
     config.capture.copy_text_from_screen = vec!["Ctrl+Alt+T".to_string()];
     let map = config.build_action_map().unwrap();
     assert_eq!(
-        map.get(&KeyBinding::parse("Ctrl+Alt+T").unwrap()),
+        map.get(&Shortcut::parse("Ctrl+Alt+T").unwrap()),
         Some(&Action::CopyTextFromScreen)
     );
 }
@@ -454,7 +575,7 @@ fn collect_binding_conflicts_reports_every_collision_in_traversal_order() {
     assert_eq!(conflicts.len(), 2, "collection does not stop at the first");
     assert_eq!(
         conflicts[0].binding(),
-        &KeyBinding::parse("Ctrl+Alt+Shift+1").unwrap()
+        &Shortcut::parse("Ctrl+Alt+Shift+1").unwrap()
     );
     assert_eq!(conflicts[0].actions(), [Action::Exit, Action::Undo]);
     assert_eq!(
@@ -823,6 +944,12 @@ fn a_misspelled_modifier_is_reported_with_a_suggestion() {
         parsed.key
     );
     assert_eq!(suggest_key_name(&parsed.key).as_deref(), Some("Ctrl+Z"));
+
+    let super_typo = KeyBinding::parse("Supre+X").expect("the string still parses");
+    assert_eq!(
+        suggest_key_name(&super_typo.key).as_deref(),
+        Some("Super+X")
+    );
 }
 
 #[test]
@@ -858,6 +985,8 @@ fn ordinary_bindings_are_not_flagged() {
         "Escape",
         "F10",
         "Ctrl+Shift+P",
+        "Super+X",
+        "Meta+X",
         "a",
         "/",
         "PageUp",

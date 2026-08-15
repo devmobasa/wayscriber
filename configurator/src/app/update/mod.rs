@@ -6,6 +6,7 @@ mod fields;
 mod presets;
 mod render_profiles;
 mod session_catalog;
+mod shortcuts;
 mod tabs;
 
 use crate::messages::{CommandMessage, Message};
@@ -46,7 +47,7 @@ impl ConfiguratorApp {
             Message::ResetToDefaultsRequested => self.handle_reset_to_defaults_requested(),
             Message::ResetToDefaultsConfirmed => self.handle_reset_to_defaults_confirmed(),
             Message::ResetToDefaultsCanceled => self.handle_reset_to_defaults_canceled(),
-            Message::ActiveConfirmationCanceled => self.handle_active_confirmation_canceled(),
+            Message::WindowEscapePressed => self.handle_window_escape_pressed(),
             Message::SaveRequested => self.handle_save_requested(),
             Message::MigrationApplyRequested => self.handle_migration_apply_requested(),
             Message::MigrationDismissed => self.handle_migration_dismissed(),
@@ -100,6 +101,29 @@ impl ConfiguratorApp {
             Message::TabSelected(tab) => self.handle_tab_selected(tab),
             Message::UiTabSelected(tab) => self.handle_ui_tab_selected(tab),
             Message::KeybindingsTabSelected(tab) => self.handle_keybindings_tab_selected(tab),
+            Message::ShortcutManagerShowAll => self.handle_shortcut_manager_show_all(),
+            Message::ShortcutManagerFilterChanged(filter) => {
+                self.handle_shortcut_manager_filter_changed(filter)
+            }
+            Message::ShortcutManagerSortChanged(sort) => {
+                self.handle_shortcut_manager_sort_changed(sort)
+            }
+            Message::ShortcutManagerRowSelected(field) => {
+                self.handle_shortcut_manager_row_selected(field)
+            }
+            Message::ShortcutManagerJumpTo(field) => self.handle_shortcut_manager_jump_to(field),
+            Message::ShortcutResetVisibleRequested => {
+                self.handle_shortcut_reset_visible_requested()
+            }
+            Message::ShortcutResetVisibleConfirmed => {
+                self.handle_shortcut_reset_visible_confirmed()
+            }
+            Message::ShortcutResetAllRequested => self.handle_shortcut_reset_all_requested(),
+            Message::ShortcutResetAllConfirmed => self.handle_shortcut_reset_all_confirmed(),
+            Message::ShortcutResetCanceled => self.handle_shortcut_reset_canceled(),
+            Message::ShortcutConflictReviewStarted => {
+                self.handle_shortcut_conflict_review_started()
+            }
             Message::ToggleChanged(field, value) => self.handle_toggle_changed(field, value),
             Message::TextChanged(field, value) => self.handle_text_changed(field, value),
             Message::ColorPickerHexChanged(id, value) => {
@@ -241,9 +265,43 @@ impl ConfiguratorApp {
                 self.handle_export_pdf_label_content_changed(option)
             }
             Message::BufferCountChanged(count) => self.handle_buffer_count_changed(count),
-            Message::KeybindingChanged(field, value) => {
-                self.handle_keybinding_changed(field, value)
+            Message::ShortcutRecordingStarted(field) => {
+                self.handle_shortcut_recording_started(field)
             }
+            Message::ShortcutSequenceRecordingStarted(field) => {
+                self.handle_shortcut_sequence_recording_started(field)
+            }
+            Message::ShortcutRecordingCanceled(field) => {
+                self.handle_shortcut_recording_canceled(field)
+            }
+            Message::ShortcutRecorderKey(keyval, modifiers) => {
+                self.handle_shortcut_recorder_key(keyval, modifiers)
+            }
+            Message::ShortcutRecorderButton(button, kind, modifiers) => {
+                self.handle_shortcut_recorder_button(button, kind, modifiers)
+            }
+            Message::ShortcutSequenceFinish => self.handle_shortcut_sequence_finish(),
+            Message::ShortcutSequenceRemoveLastStep => {
+                self.handle_shortcut_sequence_remove_last_step()
+            }
+            Message::ShortcutRemoved(field, binding) => {
+                self.handle_shortcut_removed(field, binding)
+            }
+            Message::ShortcutResetRequested(field) => self.handle_shortcut_reset_requested(field),
+            Message::ShortcutTextEditStarted(field) => {
+                self.handle_shortcut_text_edit_started(field)
+            }
+            Message::ShortcutTextEditChanged(value) => {
+                self.handle_shortcut_text_edit_changed(value)
+            }
+            Message::ShortcutTextEditApplied => self.handle_shortcut_text_edit_applied(),
+            Message::ShortcutTextEditCanceled(field) => {
+                self.handle_shortcut_text_edit_canceled(field)
+            }
+            Message::ShortcutConflictReplaceConfirmed => {
+                self.handle_shortcut_conflict_replace_confirmed()
+            }
+            Message::ShortcutConflictCanceled => self.handle_shortcut_conflict_canceled(),
             Message::FontStyleOptionSelected(option) => {
                 self.handle_font_style_option_selected(option)
             }

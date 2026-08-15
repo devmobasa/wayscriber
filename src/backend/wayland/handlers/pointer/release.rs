@@ -16,6 +16,13 @@ impl WaylandState {
         inline_active: bool,
         button: u32,
     ) {
+        if self
+            .input_state
+            .take_consumed_pointer_shortcut_button(button)
+        {
+            return;
+        }
+
         if self.input_state.ocr_is_active() {
             if button == BTN_LEFT {
                 let screen_position = if on_toolbar {

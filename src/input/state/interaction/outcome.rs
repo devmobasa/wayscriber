@@ -27,6 +27,7 @@ pub(crate) enum ConsumedBy {
     RadialMenuToggle,
     StatusHud,
     ZoomChip,
+    SequencePrefix,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

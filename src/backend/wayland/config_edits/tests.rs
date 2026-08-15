@@ -731,14 +731,14 @@ fn an_answered_edit_gives_its_projection_back_even_when_the_write_failed() {
 /// An input state the way the overlay's own suites build one, so the gestures
 /// below are recorded by the real code rather than poked into a field.
 fn test_input_state() -> crate::input::state::InputState {
-    use crate::config::{Action, BoardsConfig, KeyBinding, PresenterModeConfig};
+    use crate::config::{Action, BoardsConfig, PresenterModeConfig, Shortcut};
     use crate::draw::{Color, FontDescriptor};
     use crate::input::{ClickHighlightSettings, EraserMode};
     use std::collections::HashMap;
 
     let mut action_map = HashMap::new();
     action_map.insert(
-        KeyBinding::parse("Escape").expect("a chord this test spelled"),
+        Shortcut::parse("Escape").expect("a chord this test spelled"),
         Action::Exit,
     );
     crate::input::state::InputState::with_defaults(

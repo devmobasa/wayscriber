@@ -33,6 +33,10 @@ impl WaylandState {
         self.apply_input_update(|input_state| input_state.on_key_press(key));
     }
 
+    pub(in crate::backend::wayland) fn apply_input_key_repeat(&mut self, key: Key) {
+        self.apply_input_update(|input_state| input_state.on_key_repeat(key));
+    }
+
     pub(in crate::backend::wayland) fn dispatch_input_action(&mut self, action: Action) {
         self.apply_input_update(|input_state| input_state.handle_action(action));
     }

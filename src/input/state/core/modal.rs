@@ -8,6 +8,7 @@
 //! the rule instead: opening a surface closes every other open surface unless
 //! this module says the pair deliberately coexists.
 
+use super::DrawingState;
 use crate::input::state::InputState;
 
 /// Every popup surface that participates in modal mutual exclusion, in the
@@ -90,6 +91,14 @@ impl InputState {
             .find(|surface| self.modal_is_open(*surface))
     }
 
+    /// True when a popup, in-progress text editor, or pending screen-region
+    /// modal should receive pointer input before auxiliary-button shortcuts.
+    pub(crate) fn modal_owns_pointer_shortcuts(&self) -> bool {
+        self.engaged_modal().is_some()
+            || matches!(self.state, DrawingState::TextInput { .. })
+            || self.screen_modal_is_engaged()
+    }
+
     /// Closes the surface through its canonical closer, so caches, layouts,
     /// and pointer hit maps are dropped the same way a direct dismissal
     /// drops them.
@@ -121,6 +130,7 @@ impl InputState {
     /// The exclusion step every opener runs first: closes each open surface
     /// the opening one does not deliberately coexist with.
     pub(crate) fn close_modals_for_open(&mut self, opening: ModalSurface) {
+        self.clear_pending_sequence();
         for other in ModalSurface::ALL {
             if other != opening && !opening.keeps_open(other) && self.modal_is_open(other) {
                 self.close_modal(other);

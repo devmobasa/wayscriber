@@ -476,6 +476,24 @@ fn reset_modifiers_resyncs_current_settings_to_base_tool() {
 }
 
 #[test]
+fn super_does_not_change_drag_tool_priority() {
+    let mut state = create_test_input_state();
+    state.on_key_press(Key::Super);
+    assert!(state.modifiers.logo);
+    assert_eq!(state.active_tool(), Tool::Pen);
+
+    state.on_key_press(Key::Shift);
+    assert_eq!(state.active_tool(), Tool::Line);
+
+    state.on_key_press(Key::Ctrl);
+    assert_eq!(state.active_tool(), Tool::Arrow);
+
+    state.on_key_release(Key::Super);
+    assert!(!state.modifiers.logo);
+    assert_eq!(state.active_tool(), Tool::Arrow);
+}
+
+#[test]
 fn sync_modifiers_resyncs_current_settings_to_compositor_tool() {
     let mut state = create_test_input_state();
     let pen_color = state.color_for_tool(Tool::Pen);
@@ -497,7 +515,7 @@ fn sync_modifiers_resyncs_current_settings_to_compositor_tool() {
     assert_eq!(state.current_color, line_color);
     assert_eq!(state.current_thickness, 14.0);
 
-    state.sync_modifiers(false, false, false);
+    state.sync_modifiers(false, false, false, false);
     assert_eq!(state.active_tool(), Tool::Pen);
     assert_eq!(state.current_color, pen_color);
     assert_eq!(state.current_thickness, pen_thickness);

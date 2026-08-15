@@ -261,10 +261,10 @@ pub(super) fn build(
                 return gtk::glib::Propagation::Stop;
             }
             if key == gtk::gdk::Key::Escape {
-                // The model owns which destructive question is current.
-                // Propagate as well so a widget with its own Escape
-                // behavior does not lose it when no confirmation exists.
-                sender.input(Message::ActiveConfirmationCanceled);
+                // The recorder owns Escape while it is open so a recorded
+                // Escape becomes a binding. Confirmation cancel is the
+                // fallback when nothing is recording.
+                sender.input(Message::WindowEscapePressed);
             }
             // Tab is the user moving focus deliberately; a still-pending
             // startup search focus must not steal it back later.

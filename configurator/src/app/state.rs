@@ -7,8 +7,9 @@ use wayscriber::config::{
 
 use crate::models::{
     ColorPickerId, ConfigDraft, DaemonRuntimeStatus, DesktopEnvironment, DragMouseButton,
-    KeybindingsTabId, SearchQuery, SessionCatalogState, StartupRequest, TabId,
-    ToolbarLayoutModeOption, UiTabId,
+    KeybindingField, KeybindingsTabId, PendingShortcutConflict, SearchQuery, SessionCatalogState,
+    ShortcutManagerFilter, ShortcutManagerSort, ShortcutRecorderState, ShortcutTextEditor,
+    StartupRequest, TabId, ToolbarLayoutModeOption, UiTabId,
 };
 
 use super::effects::Effect;
@@ -27,6 +28,12 @@ pub(crate) struct ConfiguratorApp {
     pub(crate) active_tab: TabId,
     pub(crate) active_ui_tab: UiTabId,
     pub(crate) active_keybindings_tab: KeybindingsTabId,
+    pub(crate) keybindings_show_all: bool,
+    pub(crate) shortcut_filter: ShortcutManagerFilter,
+    pub(crate) shortcut_sort: ShortcutManagerSort,
+    pub(crate) selected_keybinding: Option<KeybindingField>,
+    pub(crate) keybinding_focus_serial: u64,
+    pub(crate) shortcut_conflict_review: bool,
     pub(crate) active_drawing_drag_button: Option<DragMouseButton>,
     pub(crate) preset_collapsed: Vec<bool>,
     pub(crate) boards_collapsed: Vec<bool>,
@@ -74,18 +81,25 @@ pub(crate) struct ConfiguratorApp {
     /// What the launching process asked to open, taken by the first config
     /// load and empty from then on.
     pub(crate) startup_request: StartupRequest,
+    pub(crate) active_shortcut_recorder: Option<ShortcutRecorderState>,
+    pub(crate) shortcut_text_editor: Option<ShortcutTextEditor>,
+    pub(crate) pending_shortcut_conflict: Option<PendingShortcutConflict>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConfirmationPrompt {
     DefaultsReset,
     SessionClear,
+    ShortcutResetVisible,
+    ShortcutResetAll,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PendingConfirmation {
     DefaultsReset,
     SessionClear(String),
+    ShortcutResetVisible(Vec<KeybindingField>),
+    ShortcutResetAll,
 }
 
 impl PendingConfirmation {
@@ -93,6 +107,10 @@ impl PendingConfirmation {
         match self {
             PendingConfirmation::DefaultsReset => ConfirmationPrompt::DefaultsReset,
             PendingConfirmation::SessionClear(_) => ConfirmationPrompt::SessionClear,
+            PendingConfirmation::ShortcutResetVisible(_) => {
+                ConfirmationPrompt::ShortcutResetVisible
+            }
+            PendingConfirmation::ShortcutResetAll => ConfirmationPrompt::ShortcutResetAll,
         }
     }
 }
@@ -105,6 +123,12 @@ impl ConfirmationPrompt {
             }
             ConfirmationPrompt::SessionClear => {
                 "Clear saved data removes the selected session primary and non-lock sidecars. Press Confirm Clear to continue."
+            }
+            ConfirmationPrompt::ShortcutResetVisible => {
+                "Reset Visible restores the currently listed keybindings to their defaults. Press \"Confirm Reset Visible\" to continue. Nothing is written until you Save."
+            }
+            ConfirmationPrompt::ShortcutResetAll => {
+                "Reset All restores every keybinding to its built-in default. Press \"Confirm Reset All\" to continue. Nothing is written until you Save."
             }
         }
     }
@@ -206,6 +230,12 @@ impl ConfiguratorApp {
             active_tab: TabId::Daemon,
             active_ui_tab: UiTabId::Toolbar,
             active_keybindings_tab: KeybindingsTabId::General,
+            keybindings_show_all: true,
+            shortcut_filter: ShortcutManagerFilter::All,
+            shortcut_sort: ShortcutManagerSort::Category,
+            selected_keybinding: None,
+            keybinding_focus_serial: 0,
+            shortcut_conflict_review: false,
             active_drawing_drag_button: None,
             preset_collapsed: vec![false; PRESET_SLOTS_MAX],
             boards_collapsed: vec![false; boards_len],
@@ -231,6 +261,9 @@ impl ConfiguratorApp {
             search_focus_serial: 0,
             startup_search_focus_pending: true,
             startup_request: startup,
+            active_shortcut_recorder: None,
+            shortcut_text_editor: None,
+            pending_shortcut_conflict: None,
         };
         app.sync_all_color_picker_hex();
 
@@ -248,6 +281,7 @@ impl ConfiguratorApp {
 
     pub(super) fn refresh_dirty_flag(&mut self) {
         self.clear_defaults_confirmation();
+        self.clear_keybinding_reset_confirmation();
         self.is_dirty = self.draft != self.baseline;
     }
 
@@ -261,7 +295,28 @@ impl ConfiguratorApp {
     pub(crate) fn pending_session_clear_id(&self) -> Option<&str> {
         match self.pending_confirmation.as_ref() {
             Some(PendingConfirmation::SessionClear(id)) => Some(id.as_str()),
-            Some(PendingConfirmation::DefaultsReset) | None => None,
+            _ => None,
+        }
+    }
+
+    pub(crate) fn shortcut_reset_visible_pending(&self) -> bool {
+        matches!(
+            self.pending_confirmation,
+            Some(PendingConfirmation::ShortcutResetVisible(_))
+        )
+    }
+
+    pub(crate) fn shortcut_reset_all_pending(&self) -> bool {
+        matches!(
+            self.pending_confirmation,
+            Some(PendingConfirmation::ShortcutResetAll)
+        )
+    }
+
+    pub(crate) fn pending_shortcut_reset_visible_fields(&self) -> Option<&[KeybindingField]> {
+        match self.pending_confirmation.as_ref() {
+            Some(PendingConfirmation::ShortcutResetVisible(fields)) => Some(fields.as_slice()),
+            _ => None,
         }
     }
 
@@ -273,6 +328,12 @@ impl ConfiguratorApp {
 
     pub(super) fn clear_session_confirmation(&mut self) {
         if self.pending_session_clear_id().is_some() {
+            self.pending_confirmation = None;
+        }
+    }
+
+    pub(super) fn clear_keybinding_reset_confirmation(&mut self) {
+        if self.shortcut_reset_visible_pending() || self.shortcut_reset_all_pending() {
             self.pending_confirmation = None;
         }
     }
@@ -295,6 +356,17 @@ impl ConfiguratorApp {
             return None;
         }
         self.migration_preview.as_ref()
+    }
+
+    pub(crate) fn shortcut_recorder_active(&self) -> bool {
+        self.active_shortcut_recorder.is_some()
+    }
+
+    pub(super) fn clear_shortcut_editing(&mut self) {
+        self.active_shortcut_recorder = None;
+        self.shortcut_text_editor = None;
+        self.pending_shortcut_conflict = None;
+        self.shortcut_conflict_review = false;
     }
 }
 
