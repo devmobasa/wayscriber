@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use relm4::prelude::*;
 use relm4::{adw, gtk};
 
@@ -7,11 +10,10 @@ use wayscriber::config::Shortcut;
 use crate::messages::Message;
 use crate::models::KeybindingField;
 use crate::models::keybindings::{
-    field_has_internal_duplicate, field_matches_defaults, parse_keybindings, reset_tooltip,
-    serialize_bindings,
+    ShortcutManagerSummary, field_has_internal_duplicate, field_matches_defaults,
+    parse_keybindings, reset_tooltip, serialize_bindings,
 };
 
-use super::super::super::search::AppSearchSummary;
 use super::super::super::state::ConfiguratorApp;
 use super::super::Binding;
 use super::recorder::RecorderPopover;
@@ -20,14 +22,17 @@ use super::widgets::{
     connect_clicked, icon_button, set_accessible_label, set_label, set_sensitive, set_tooltip,
     set_visible, watch_compact,
 };
-use crate::models::TabId;
+
+pub(super) type ManagerRefresh =
+    Rc<RefCell<Option<(ShortcutManagerSummary, Vec<KeybindingField>)>>>;
 
 pub(super) fn binding_row(
     group: &adw::PreferencesGroup,
     field: KeybindingField,
     sender: &ComponentSender<ConfiguratorApp>,
     bindings: &mut Vec<Binding>,
-) {
+    refresh: ManagerRefresh,
+) -> adw::PreferencesRow {
     let row = adw::PreferencesRow::builder().title(field.label()).build();
     let title = gtk::Label::builder()
         .label(field.label())
@@ -93,8 +98,13 @@ pub(super) fn binding_row(
     compact.append(&edit_shortcuts);
     compact.set_visible(false);
 
+    let badges = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    badges.set_halign(gtk::Align::End);
+    badges.set_valign(gtk::Align::Center);
+
     let header = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     header.append(&title);
+    header.append(&badges);
     header.append(&compact);
 
     let caption = gtk::Label::builder()
@@ -115,7 +125,16 @@ pub(super) fn binding_row(
     body.append(&inline_host);
     body.append(&caption);
     row.set_child(Some(&body));
+    row.set_can_focus(true);
     group.add(&row);
+    {
+        let sender = sender.clone();
+        let focus = gtk::EventControllerFocus::new();
+        focus.connect_enter(move |_| {
+            sender.input(Message::ShortcutManagerRowSelected(field));
+        });
+        row.add_controller(focus);
+    }
 
     let editor_popover = gtk::Popover::builder().autohide(true).build();
     editor_popover.set_parent(&edit_shortcuts);
@@ -144,7 +163,9 @@ pub(super) fn binding_row(
     let recorder = RecorderPopover::build(&row, field, sender);
     let text_editor = TextEditorPopover::build(&row, field, sender);
     let seen_chips = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+    let seen_badges = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
     let compact_mode = std::rc::Rc::new(std::cell::Cell::new(false));
+    let last_focus_serial = std::rc::Rc::new(std::cell::Cell::new(0));
     {
         let compact = compact.clone();
         let inline_host = inline_host.clone();
@@ -166,9 +187,14 @@ pub(super) fn binding_row(
     }
 
     let sender = sender.clone();
-    bindings.push(Box::new(move |app, search_summary| {
-        let visible = row_visible(search_summary, field);
-        set_visible(&row, visible);
+    let row_for_bind = row.clone();
+    bindings.push(Box::new(move |app, _search_summary| {
+        let refresh = refresh.borrow();
+        let Some((summary, visible)) = refresh.as_ref() else {
+            return;
+        };
+        let row_is_visible = visible.contains(&field);
+        set_visible(&row_for_bind, row_is_visible);
 
         let value = app.draft.keybindings.value_for(field).unwrap_or_default();
         let parsed = parse_keybindings(value);
@@ -247,14 +273,33 @@ pub(super) fn binding_row(
         let editor_text = editing.map(|editor| editor.text.as_str()).unwrap_or(value);
         let editor_error = editing.and_then(|editor| editor.parse_error());
         text_editor.refresh(editing.is_some(), editor_text, editor_error.as_deref());
-    }));
-}
 
-fn row_visible(summary: &AppSearchSummary, field: KeybindingField) -> bool {
-    summary.tab(TabId::Keybindings).is_none_or(|keybindings| {
-        keybindings.keybinding_field_visible(field)
-            || keybindings.keybinding_tab_title_visible(field.tab())
-    })
+        if let Some(manager_row) = summary.row(field) {
+            let titles: Vec<String> = manager_row
+                .badge_titles()
+                .into_iter()
+                .map(str::to_string)
+                .collect();
+            if seen_badges.borrow().as_slice() != titles.as_slice() {
+                sync_badges(&badges, &titles);
+                *seen_badges.borrow_mut() = titles;
+            }
+        }
+
+        let selected = app.selected_keybinding == Some(field);
+        if selected {
+            if !title.has_css_class("accent") {
+                title.add_css_class("accent");
+            }
+        } else if title.has_css_class("accent") {
+            title.remove_css_class("accent");
+        }
+        if selected && row_is_visible && app.keybinding_focus_serial > last_focus_serial.get() {
+            last_focus_serial.set(app.keybinding_focus_serial);
+            row_for_bind.grab_focus();
+        }
+    }));
+    row
 }
 
 fn sync_chips(
@@ -294,4 +339,17 @@ fn shortcut_chip(
     chip.append(&label);
     chip.append(&remove);
     chip
+}
+
+fn sync_badges(host: &gtk::Box, titles: &[String]) {
+    while let Some(child) = host.first_child() {
+        host.remove(&child);
+    }
+    for title in titles {
+        let badge = gtk::Label::builder()
+            .label(title)
+            .css_classes(["caption", "dim-label"])
+            .build();
+        host.append(&badge);
+    }
 }

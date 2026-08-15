@@ -33,12 +33,18 @@ impl ConfiguratorApp {
 
         match term {
             Some(term) => {
-                self.search_query = SearchQuery::new(term);
+                self.search_query = SearchQuery::new(term.clone());
                 // Aligned after the tab is set, never before: alignment only
                 // moves off a tab with no matches, so a destination whose own
                 // screen matches the term keeps it, and one whose screen has
                 // nothing to show lands where the matches actually are.
                 self.align_active_tabs_for_search();
+                if self.active_tab == TabId::Keybindings
+                    && let Some(field) =
+                        crate::models::keybindings::field_matching_search_term(&term)
+                {
+                    self.select_keybinding_field(field);
+                }
                 // The box now holds text the user will want to edit or clear.
                 self.handle_search_focus_requested()
             }
@@ -76,10 +82,13 @@ impl ConfiguratorApp {
             ConfiguratorScreen::Tablet => self.active_tab = TabId::Tablet,
             ConfiguratorScreen::Keybindings(section) => {
                 self.active_tab = TabId::Keybindings;
-                // No section means the tab, on whichever subtab it already
-                // shows; the launcher only knew which tab it wanted.
+                // No section means the whole manager; a named section keeps
+                // the destination contract of opening that category.
                 if let Some(section) = section {
                     self.active_keybindings_tab = keybindings_tab(section);
+                    self.keybindings_show_all = false;
+                } else {
+                    self.keybindings_show_all = true;
                 }
             }
         }
@@ -263,6 +272,10 @@ mod tests {
         assert_eq!(app.active_tab, TabId::Keybindings);
         assert_eq!(app.active_keybindings_tab, KeybindingsTabId::Drawing);
         assert_eq!(app.search_query.raw(), "Clear Canvas");
+        assert_eq!(
+            app.selected_keybinding,
+            Some(crate::models::KeybindingField::ClearCanvas)
+        );
         assert!(app.search_summary().tab(TabId::Keybindings).is_some());
     }
 
@@ -275,6 +288,10 @@ mod tests {
 
         assert_eq!(app.active_tab, TabId::Keybindings);
         assert_eq!(app.active_keybindings_tab, KeybindingsTabId::Drawing);
+        assert_eq!(
+            app.selected_keybinding,
+            Some(crate::models::KeybindingField::ClearCanvas)
+        );
     }
 
     /// A term with no match on the requested screen is the one case where

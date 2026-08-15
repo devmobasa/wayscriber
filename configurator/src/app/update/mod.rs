@@ -101,6 +101,29 @@ impl ConfiguratorApp {
             Message::TabSelected(tab) => self.handle_tab_selected(tab),
             Message::UiTabSelected(tab) => self.handle_ui_tab_selected(tab),
             Message::KeybindingsTabSelected(tab) => self.handle_keybindings_tab_selected(tab),
+            Message::ShortcutManagerShowAll => self.handle_shortcut_manager_show_all(),
+            Message::ShortcutManagerFilterChanged(filter) => {
+                self.handle_shortcut_manager_filter_changed(filter)
+            }
+            Message::ShortcutManagerSortChanged(sort) => {
+                self.handle_shortcut_manager_sort_changed(sort)
+            }
+            Message::ShortcutManagerRowSelected(field) => {
+                self.handle_shortcut_manager_row_selected(field)
+            }
+            Message::ShortcutManagerJumpTo(field) => self.handle_shortcut_manager_jump_to(field),
+            Message::ShortcutResetVisibleRequested => {
+                self.handle_shortcut_reset_visible_requested()
+            }
+            Message::ShortcutResetVisibleConfirmed => {
+                self.handle_shortcut_reset_visible_confirmed()
+            }
+            Message::ShortcutResetAllRequested => self.handle_shortcut_reset_all_requested(),
+            Message::ShortcutResetAllConfirmed => self.handle_shortcut_reset_all_confirmed(),
+            Message::ShortcutResetCanceled => self.handle_shortcut_reset_canceled(),
+            Message::ShortcutConflictReviewStarted => {
+                self.handle_shortcut_conflict_review_started()
+            }
             Message::ToggleChanged(field, value) => self.handle_toggle_changed(field, value),
             Message::TextChanged(field, value) => self.handle_text_changed(field, value),
             Message::ColorPickerHexChanged(id, value) => {

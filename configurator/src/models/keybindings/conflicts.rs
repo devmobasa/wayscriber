@@ -79,6 +79,25 @@ impl PendingShortcutConflict {
             Self::Text { .. } => "Resolve Conflicts",
         }
     }
+
+    pub fn jump_field(&self) -> Option<KeybindingField> {
+        match self {
+            Self::Recorded {
+                target, claimants, ..
+            } => claimants
+                .iter()
+                .find_map(|claim| claim.field.filter(|field| *field != *target))
+                .or_else(|| claimants.iter().find_map(|claim| claim.field)),
+            Self::Text {
+                target, conflicts, ..
+            } => conflicts.iter().find_map(|conflict| {
+                conflict
+                    .claimants
+                    .iter()
+                    .find_map(|claim| claim.field.filter(|field| *field != *target))
+            }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

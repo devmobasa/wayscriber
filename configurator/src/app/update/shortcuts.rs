@@ -5,12 +5,15 @@ mod tests;
 
 use wayscriber::config::Shortcut;
 
+use crate::app::search::keybinding_row_visible;
+use crate::app::state::{ConfirmationPrompt, PendingConfirmation};
 use crate::models::KeybindingField;
 use crate::models::keybindings::{
     AppendOutcome, KeyboardModifiers, RecordedDevice, RecordedKeyboard, RecorderDeviceKind,
-    ShortcutRecorderState, ShortcutTextEditor, append_binding, apply_recorded_replace,
-    apply_text_replace, normalize_button_event, normalize_key_event, other_claimants,
-    parse_keybindings, remove_binding, reset_field, sequence_keyboard_only_message,
+    ShortcutManagerFilter, ShortcutManagerSort, ShortcutManagerSummary, ShortcutRecorderState,
+    ShortcutTextEditor, append_binding, apply_recorded_replace, apply_text_replace,
+    next_review_conflict, normalize_button_event, normalize_key_event, other_claimants,
+    parse_keybindings, remove_binding, reset_field, reset_fields, sequence_keyboard_only_message,
     text_conflicts_for,
 };
 
@@ -253,8 +256,12 @@ impl ConfiguratorApp {
         };
         match result {
             Ok(()) => {
-                self.status = StatusMessage::idle();
                 self.refresh_dirty_flag();
+                if self.shortcut_conflict_review {
+                    self.arm_next_shortcut_conflict();
+                } else {
+                    self.status = StatusMessage::idle();
+                }
             }
             Err(error) => {
                 self.status = StatusMessage::error(error.message().to_string());
@@ -265,6 +272,7 @@ impl ConfiguratorApp {
 
     pub(super) fn handle_shortcut_conflict_canceled(&mut self) -> Vec<Effect> {
         self.pending_shortcut_conflict = None;
+        self.shortcut_conflict_review = false;
         Vec::new()
     }
 
@@ -273,6 +281,154 @@ impl ConfiguratorApp {
             return Vec::new();
         }
         self.handle_active_confirmation_canceled()
+    }
+
+    pub(crate) fn shortcut_manager_summary(&self) -> ShortcutManagerSummary {
+        ShortcutManagerSummary::from_drafts(&self.draft.keybindings, &self.defaults.keybindings)
+    }
+
+    pub(crate) fn visible_keybinding_fields(&self) -> Vec<KeybindingField> {
+        let search = self.search_summary();
+        let scope = (!self.keybindings_show_all).then_some(self.active_keybindings_tab);
+        self.shortcut_manager_summary().visible_fields(
+            self.shortcut_filter,
+            self.shortcut_sort,
+            scope,
+            |field| keybinding_row_visible(&search, field),
+        )
+    }
+
+    pub(crate) fn select_keybinding_field(&mut self, field: KeybindingField) {
+        self.selected_keybinding = Some(field);
+        self.active_keybindings_tab = field.tab();
+        self.keybinding_focus_serial = self.keybinding_focus_serial.saturating_add(1);
+    }
+
+    pub(super) fn handle_shortcut_manager_show_all(&mut self) -> Vec<Effect> {
+        self.keybindings_show_all = true;
+        Vec::new()
+    }
+
+    pub(super) fn handle_shortcut_manager_filter_changed(
+        &mut self,
+        filter: ShortcutManagerFilter,
+    ) -> Vec<Effect> {
+        self.shortcut_filter = filter;
+        Vec::new()
+    }
+
+    pub(super) fn handle_shortcut_manager_sort_changed(
+        &mut self,
+        sort: ShortcutManagerSort,
+    ) -> Vec<Effect> {
+        self.shortcut_sort = sort;
+        Vec::new()
+    }
+
+    pub(super) fn handle_shortcut_manager_row_selected(
+        &mut self,
+        field: KeybindingField,
+    ) -> Vec<Effect> {
+        self.selected_keybinding = Some(field);
+        Vec::new()
+    }
+
+    pub(super) fn handle_shortcut_manager_jump_to(
+        &mut self,
+        field: KeybindingField,
+    ) -> Vec<Effect> {
+        self.select_keybinding_field(field);
+        Vec::new()
+    }
+
+    pub(super) fn handle_shortcut_reset_visible_requested(&mut self) -> Vec<Effect> {
+        if self.is_loading || self.is_saving || self.shortcut_reset_visible_pending() {
+            return Vec::new();
+        }
+        let fields = self.visible_keybinding_fields();
+        if fields.is_empty() {
+            return Vec::new();
+        }
+        self.pending_confirmation = Some(PendingConfirmation::ShortcutResetVisible(fields));
+        self.status = StatusMessage::confirmation(ConfirmationPrompt::ShortcutResetVisible);
+        Vec::new()
+    }
+
+    pub(super) fn handle_shortcut_reset_visible_confirmed(&mut self) -> Vec<Effect> {
+        let Some(PendingConfirmation::ShortcutResetVisible(fields)) =
+            self.pending_confirmation.take()
+        else {
+            return Vec::new();
+        };
+        reset_fields(
+            &mut self.draft.keybindings,
+            &self.defaults.keybindings,
+            &fields,
+        );
+        self.status = StatusMessage::info("Reset visible keybindings (not saved).");
+        self.refresh_dirty_flag();
+        Vec::new()
+    }
+
+    pub(super) fn handle_shortcut_reset_all_requested(&mut self) -> Vec<Effect> {
+        if self.is_loading || self.is_saving || self.shortcut_reset_all_pending() {
+            return Vec::new();
+        }
+        self.pending_confirmation = Some(PendingConfirmation::ShortcutResetAll);
+        self.status = StatusMessage::confirmation(ConfirmationPrompt::ShortcutResetAll);
+        Vec::new()
+    }
+
+    pub(super) fn handle_shortcut_reset_all_confirmed(&mut self) -> Vec<Effect> {
+        if !self.shortcut_reset_all_pending() {
+            return Vec::new();
+        }
+        self.pending_confirmation = None;
+        self.draft.keybindings = self.defaults.keybindings.clone();
+        self.clear_shortcut_editing();
+        self.status = StatusMessage::info("Reset all keybindings (not saved).");
+        self.refresh_dirty_flag();
+        Vec::new()
+    }
+
+    pub(super) fn handle_shortcut_reset_canceled(&mut self) -> Vec<Effect> {
+        if !self.shortcut_reset_visible_pending() && !self.shortcut_reset_all_pending() {
+            return Vec::new();
+        }
+        self.handle_active_confirmation_canceled()
+    }
+
+    pub(super) fn handle_shortcut_conflict_review_started(&mut self) -> Vec<Effect> {
+        if !self.shortcut_manager_summary().has_conflicts() {
+            self.shortcut_conflict_review = false;
+            self.status = StatusMessage::info("No shortcut conflicts to review.");
+            return Vec::new();
+        }
+        self.shortcut_conflict_review = true;
+        if self.pending_shortcut_conflict.is_some() {
+            return Vec::new();
+        }
+        self.arm_next_shortcut_conflict();
+        Vec::new()
+    }
+
+    fn arm_next_shortcut_conflict(&mut self) {
+        match next_review_conflict(&self.draft.keybindings) {
+            Some((field, binding, claimants)) => {
+                self.select_keybinding_field(field);
+                self.pending_shortcut_conflict =
+                    Some(crate::models::PendingShortcutConflict::Recorded {
+                        target: field,
+                        binding,
+                        claimants,
+                    });
+                self.status = StatusMessage::info("Review the next conflicting shortcut.");
+            }
+            None => {
+                self.shortcut_conflict_review = false;
+                self.status = StatusMessage::success("No remaining shortcut conflicts.");
+            }
+        }
     }
 
     fn commit_recorded_binding(

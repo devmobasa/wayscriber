@@ -3,7 +3,7 @@ mod labels;
 mod list;
 mod tab;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KeybindingField {
     Exit,
     EnterTextMode,

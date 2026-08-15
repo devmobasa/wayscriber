@@ -97,6 +97,16 @@ pub fn reset_field(
     draft.set(field, value);
 }
 
+pub fn reset_fields(
+    draft: &mut KeybindingsDraft,
+    defaults: &KeybindingsDraft,
+    fields: &[KeybindingField],
+) {
+    for field in fields {
+        reset_field(draft, defaults, *field);
+    }
+}
+
 #[cfg(test)]
 fn apply_parsed_text(
     draft: &mut KeybindingsDraft,

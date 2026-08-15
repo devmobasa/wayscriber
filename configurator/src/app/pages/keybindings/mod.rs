@@ -1,9 +1,13 @@
-//! Keybindings page: shortcut chips, recorder, and per-row reset.
+//! Keybindings page: bulk shortcut manager over the shared row editor.
 
 mod recorder;
 mod row;
 mod text_editor;
+mod toolbar;
 mod widgets;
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use relm4::prelude::*;
 use relm4::{adw, gtk};
@@ -11,92 +15,106 @@ use relm4::{adw, gtk};
 use adw::prelude::*;
 
 use crate::messages::Message;
-use crate::models::{KeybindingField, KeybindingsTabId, TabId};
+use crate::models::{KeybindingField, KeybindingsTabId};
 
-use super::super::search::AppSearchSummary;
 use super::super::state::ConfiguratorApp;
 use super::{Binding, BuiltPage};
-use row::binding_row;
-use widgets::{set_accessible_label, set_label, set_visible};
+use row::{ManagerRefresh, binding_row};
+use toolbar::build_chrome;
+use widgets::{set_accessible_label, set_label, set_sensitive, set_visible};
 
-const SECTION_DESCRIPTION: &str =
-    "Record a shortcut or sequence, reset one action, or edit the comma-separated list as text.";
+const SECTION_DESCRIPTION: &str = "Record a shortcut or sequence, reset one action, or edit the comma-separated list as text. Filter and sort to review many actions at once.";
 
 pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
-    let stack = gtk::Stack::builder()
-        .transition_type(gtk::StackTransitionType::Crossfade)
-        .vexpand(true)
-        .build();
     let mut bindings: Vec<Binding> = Vec::new();
-    let mut sections: Vec<(KeybindingsTabId, adw::PreferencesPage)> = Vec::new();
+    let refresh: ManagerRefresh = Rc::new(RefCell::new(None));
+    {
+        let refresh = refresh.clone();
+        bindings.push(Box::new(move |app, _summary| {
+            *refresh.borrow_mut() = Some((
+                app.shortcut_manager_summary(),
+                app.visible_keybinding_fields(),
+            ));
+        }));
+    }
+
+    let page = adw::PreferencesPage::new();
     let fields = KeybindingField::all();
+    let mut groups: Vec<(KeybindingsTabId, adw::PreferencesGroup)> = Vec::new();
+    let mut slots: Vec<(KeybindingField, adw::PreferencesRow, adw::PreferencesGroup)> = Vec::new();
 
     for tab in KeybindingsTabId::ALL {
-        let section = adw::PreferencesPage::new();
         let group = adw::PreferencesGroup::builder()
+            .title(tab.title())
             .description(SECTION_DESCRIPTION)
             .build();
-        section.add(&group);
         for field in fields.iter().copied().filter(|field| field.tab() == tab) {
-            binding_row(&group, field, sender, &mut bindings);
+            let row = binding_row(&group, field, sender, &mut bindings, refresh.clone());
+            slots.push((field, row, group.clone()));
         }
-        stack.add_titled(&section, Some(tab.title()), tab.title());
-        sections.push((tab, section));
+        page.add(&group);
+        groups.push((tab, group));
     }
 
     {
-        let sender = sender.clone();
-        stack.connect_visible_child_name_notify(move |stack| {
-            let Some(name) = stack.visible_child_name() else {
+        let groups = groups.clone();
+        let refresh = refresh.clone();
+        bindings.push(Box::new(move |app, _summary| {
+            let refresh = refresh.borrow();
+            let Some((_summary, visible)) = refresh.as_ref() else {
                 return;
             };
-            let Some(tab) = tab_from_name(&name) else {
-                return;
-            };
-            sender.input(Message::KeybindingsTabSelected(tab));
-        });
-    }
-
-    {
-        let stack = stack.clone();
-        bindings.push(Box::new(move |app, summary| {
-            for (tab, section) in &sections {
-                if section_visible(summary, *tab) && !section.is_visible() {
-                    section.set_visible(true);
-                }
-            }
-            let name = app.active_keybindings_tab.title();
-            if stack.visible_child_name().as_deref() != Some(name) {
-                stack.set_visible_child_name(name);
-            }
-            for (tab, section) in &sections {
-                if !section_visible(summary, *tab) && section.is_visible() {
-                    section.set_visible(false);
-                }
+            for (tab, group) in &groups {
+                let show = (app.keybindings_show_all || app.active_keybindings_tab == *tab)
+                    && visible.iter().any(|field| field.tab() == *tab);
+                set_visible(group, show);
             }
         }));
     }
 
-    let switcher = gtk::StackSwitcher::builder()
-        .stack(&stack)
-        .halign(gtk::Align::Center)
-        .margin_top(12)
-        .margin_start(12)
-        .margin_end(12)
-        .build();
-    let switcher_scroll = gtk::ScrolledWindow::builder()
-        .hscrollbar_policy(gtk::PolicyType::Automatic)
-        .vscrollbar_policy(gtk::PolicyType::Never)
-        .propagate_natural_height(true)
-        .child(&switcher)
-        .build();
+    {
+        let refresh = refresh.clone();
+        let mut last_order: Vec<(KeybindingsTabId, Vec<KeybindingField>)> = KeybindingsTabId::ALL
+            .into_iter()
+            .map(|tab| (tab, Vec::new()))
+            .collect();
+        bindings.push(Box::new(move |_app, _summary| {
+            let refresh = refresh.borrow();
+            let Some((_summary, visible)) = refresh.as_ref() else {
+                return;
+            };
+            for (tab, group) in &groups {
+                let ordered: Vec<KeybindingField> = visible
+                    .iter()
+                    .copied()
+                    .filter(|field| field.tab() == *tab)
+                    .collect();
+                let Some((_, last)) = last_order.iter_mut().find(|(known, _)| *known == *tab)
+                else {
+                    continue;
+                };
+                if last.as_slice() == ordered.as_slice() {
+                    continue;
+                }
+                for field in &ordered {
+                    if let Some((_, row, home)) = slots.iter().find(|(known, _, _)| known == field)
+                    {
+                        home.remove(row);
+                        group.add(row);
+                    }
+                }
+                *last = ordered;
+            }
+        }));
+    }
 
     let conflict = conflict_banner(sender, &mut bindings);
+    let chrome = build_chrome(sender, &mut bindings);
 
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    content.append(&chrome);
     content.append(&conflict);
-    content.append(&switcher_scroll);
-    content.append(&stack);
+    content.append(&page);
 
     BuiltPage {
         widget: content.upcast(),
@@ -124,6 +142,8 @@ fn conflict_banner(
             sender.input(Message::ShortcutConflictReplaceConfirmed);
         });
     }
+    let jump = gtk::Button::with_label("Jump to Conflict");
+    set_accessible_label(&jump, "Jump to conflicting action");
     let cancel = gtk::Button::builder().label("Cancel").build();
     set_accessible_label(&cancel, "Cancel shortcut conflict");
     {
@@ -134,6 +154,7 @@ fn conflict_banner(
     }
     let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     buttons.append(&replace);
+    buttons.append(&jump);
     buttons.append(&cancel);
 
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
@@ -149,6 +170,17 @@ fn conflict_banner(
         .child(&row)
         .build();
 
+    let jump_field = std::rc::Rc::new(std::cell::Cell::new(None::<KeybindingField>));
+    {
+        let sender = sender.clone();
+        let jump_field = jump_field.clone();
+        jump.connect_clicked(move |_| {
+            if let Some(field) = jump_field.get() {
+                sender.input(Message::ShortcutManagerJumpTo(field));
+            }
+        });
+    }
+
     let revealer_for_bind = revealer.clone();
     bindings.push(Box::new(move |app, _summary| {
         match &app.pending_shortcut_conflict {
@@ -156,12 +188,16 @@ fn conflict_banner(
                 set_label(&label, &conflict.prompt());
                 replace.set_label(conflict.replace_label());
                 set_accessible_label(&replace, conflict.replace_label());
+                let target = conflict.jump_field();
+                jump_field.set(target);
+                set_sensitive(&jump, target.is_some());
                 if !revealer_for_bind.reveals_child() {
                     revealer_for_bind.set_reveal_child(true);
                 }
                 set_visible(&revealer_for_bind, true);
             }
             None => {
+                jump_field.set(None);
                 if revealer_for_bind.reveals_child() {
                     revealer_for_bind.set_reveal_child(false);
                 }
@@ -169,16 +205,4 @@ fn conflict_banner(
         }
     }));
     revealer
-}
-
-fn tab_from_name(name: &str) -> Option<KeybindingsTabId> {
-    KeybindingsTabId::ALL
-        .into_iter()
-        .find(|tab| tab.title() == name)
-}
-
-fn section_visible(summary: &AppSearchSummary, tab: KeybindingsTabId) -> bool {
-    summary
-        .tab(TabId::Keybindings)
-        .is_none_or(|keybindings| keybindings.keybindings_tab_visible(tab))
 }
