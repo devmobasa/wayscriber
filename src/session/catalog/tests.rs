@@ -333,6 +333,35 @@ fn rename_display_name_rejects_empty_names() {
 }
 
 #[test]
+fn rename_display_name_by_path_changes_metadata_only() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let session = temp.path().join("lecture.wayscriber-session");
+    fs::write(&session, b"{}").unwrap();
+    upsert_session_event(&session, CatalogEvent::Saved).unwrap();
+
+    let renamed = rename_session_display_name_by_path(&session, "Lecture 04")
+        .expect("rename by path should work")
+        .expect("entry should exist");
+
+    assert_eq!(renamed.display_name, "Lecture 04");
+    assert!(session.exists(), "rename should not touch the session file");
+    let recents = recent_sessions().unwrap();
+    assert_eq!(recents[0].display_name, "Lecture 04");
+}
+
+#[test]
+fn rename_display_name_by_path_returns_none_for_unknown_path() {
+    let temp = crate::test_temp::tempdir().unwrap();
+    let _env = EnvGuard::set_xdg_data_home(temp.path());
+    let missing = temp.path().join("missing.wayscriber-session");
+
+    let renamed = rename_session_display_name_by_path(&missing, "Lecture")
+        .expect("unknown path is not a catalog write error");
+    assert!(renamed.is_none());
+}
+
+#[test]
 fn failed_temp_write_leaves_existing_catalog_intact() {
     let temp = crate::test_temp::tempdir().unwrap();
     let path = temp.path().join("sessions.json");

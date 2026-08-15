@@ -2,6 +2,26 @@ use crate::cli::Cli;
 use crate::env_vars::WAYLAND_DISPLAY_ENV;
 
 pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
+    if let Some(display_name) = cli.rename_session.as_deref() {
+        let raw_path = cli
+            .session_file
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("--rename-session requires --session-file"))?;
+        let raw = raw_path
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("--session-file path must be valid UTF-8"))?;
+        let path = crate::session::normalize_named_session_file_arg(raw);
+        match crate::session::catalog::rename_session_display_name_by_path(&path, display_name)? {
+            Some(entry) => {
+                println!("Renamed session to {}.", entry.display_name);
+            }
+            None => {
+                anyhow::bail!("session is not in the named-session catalog");
+            }
+        }
+        return Ok(());
+    }
+
     let loaded = crate::config::Config::load()?;
     // [session] configures which files these commands act on. A load that
     // fell back to defaults for that section would silently retarget a

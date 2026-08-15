@@ -182,6 +182,9 @@ pub(crate) fn print_usage() {
     println!("  wayscriber --active --session-file PATH  Use a named session file");
     println!("  wayscriber --freeze --session-file PATH  Use a named session file");
     println!("  wayscriber --session-info [--session-file PATH]  Inspect saved session data");
+    println!(
+        "  wayscriber --rename-session NAME --session-file PATH  Rename a catalog display name"
+    );
     println!("  wayscriber --clear-session [--session-file PATH]  Remove saved session data");
     println!(
         "  wayscriber --clear-tool-state [--session-file PATH]  Reset saved tool defaults only"

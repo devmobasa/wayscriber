@@ -47,6 +47,9 @@ pub struct Cli {
     /// Show session persistence status and file paths
     pub session_info: bool,
 
+    /// Rename a named session's catalog display name (session files are untouched)
+    pub rename_session: Option<String>,
+
     /// Use a named session file for active/freeze/info/clear operations
     pub session_file: Option<PathBuf>,
 
@@ -132,6 +135,10 @@ impl Cli {
                 "--clear-session" => cli.clear_session = true,
                 "--clear-tool-state" => cli.clear_tool_state = true,
                 "--session-info" => cli.session_info = true,
+                "--rename-session" => {
+                    index += 1;
+                    cli.rename_session = Some(value_after(&args, index, "--rename-session")?);
+                }
                 "--session-file" => {
                     index += 1;
                     cli.session_file =
@@ -156,6 +163,9 @@ impl Cli {
                 _ if arg.starts_with("--session-file=") => {
                     cli.session_file =
                         Some(PathBuf::from(value_from_equals(arg, "--session-file")?));
+                }
+                _ if arg.starts_with("--rename-session=") => {
+                    cli.rename_session = Some(value_from_equals(arg, "--rename-session")?);
                 }
                 _ if is_short_option_cluster(arg) => {
                     match parse_short_option_cluster(&args, index, &mut cli)? {
@@ -214,7 +224,31 @@ impl Cli {
             || self.clear_session
             || self.clear_tool_state
             || self.session_info
+            || self.rename_session.is_some()
             || self.session_file.is_some()
+            || self.freeze
+            || self.exit_after_capture
+            || self.no_exit_after_capture
+            || self.resume_session
+            || self.no_resume_session
+    }
+
+    /// Whether an option belongs to an overlay launch or daemon interaction.
+    ///
+    /// Catalog-only commands must reject these options because they return
+    /// before any overlay or daemon behavior can honor them.
+    fn selects_overlay_option(&self) -> bool {
+        self.daemon
+            || self.daemon_toggle
+            || self.daemon_action.is_some()
+            || self.light_toggle
+            || self.light_draw_toggle
+            || self.light_draw_on
+            || self.light_draw_off
+            || self.active
+            || self.mode.is_some()
+            || self.no_tray
+            || self.freeze_on_show
             || self.freeze
             || self.exit_after_capture
             || self.no_exit_after_capture
@@ -243,6 +277,22 @@ impl Cli {
         }
         if self.clear_tool_state && self.session_info {
             return Err(conflict("--clear-tool-state", "--session-info"));
+        }
+        if self.rename_session.is_some() && self.session_info {
+            return Err(conflict("--rename-session", "--session-info"));
+        }
+        if self.rename_session.is_some() && self.clear_session {
+            return Err(conflict("--rename-session", "--clear-session"));
+        }
+        if self.rename_session.is_some() && self.clear_tool_state {
+            return Err(conflict("--rename-session", "--clear-tool-state"));
+        }
+
+        if self.rename_session.is_some() && self.session_file.is_none() {
+            return Err("--rename-session requires --session-file".to_string());
+        }
+        if self.rename_session.is_some() && self.selects_overlay_option() {
+            return Err("--rename-session conflicts with overlay/daemon options".to_string());
         }
 
         if self.freeze_on_show && !self.daemon {
@@ -282,10 +332,11 @@ impl Cli {
                 || self.daemon_toggle
                 || self.clear_session
                 || self.clear_tool_state
-                || self.session_info)
+                || self.session_info
+                || self.rename_session.is_some())
             {
                 return Err(
-                    "--session-file requires --active, --freeze, --daemon, --daemon-toggle, --session-info, --clear-session, or --clear-tool-state"
+                    "--session-file requires --active, --freeze, --daemon, --daemon-toggle, --session-info, --clear-session, --clear-tool-state, or --rename-session"
                         .to_string(),
                 );
             }
@@ -307,6 +358,7 @@ impl Cli {
                 || self.clear_session
                 || self.clear_tool_state
                 || self.session_info
+                || self.rename_session.is_some()
                 || self.about)
         {
             return Err("--daemon-toggle conflicts with the selected command".to_string());
@@ -325,6 +377,7 @@ impl Cli {
                 || self.clear_session
                 || self.clear_tool_state
                 || self.session_info
+                || self.rename_session.is_some()
                 || self.session_file.is_some()
                 || self.freeze
                 || self.exit_after_capture
@@ -346,22 +399,33 @@ impl Cli {
             return Err("--session-info conflicts with --daemon/--active".to_string());
         }
         if self.freeze
-            && (self.daemon || self.clear_session || self.clear_tool_state || self.session_info)
+            && (self.daemon
+                || self.clear_session
+                || self.clear_tool_state
+                || self.session_info
+                || self.rename_session.is_some())
         {
             return Err("--freeze conflicts with the selected command".to_string());
         }
-        if (self.clear_session || self.clear_tool_state || self.session_info) && self.resume_session
+        if (self.clear_session
+            || self.clear_tool_state
+            || self.session_info
+            || self.rename_session.is_some())
+            && self.resume_session
         {
             return Err(
-                "--resume-session conflicts with --clear-session/--session-info/--clear-tool-state"
+                "--resume-session conflicts with --clear-session/--session-info/--clear-tool-state/--rename-session"
                     .to_string(),
             );
         }
-        if (self.clear_session || self.clear_tool_state || self.session_info)
+        if (self.clear_session
+            || self.clear_tool_state
+            || self.session_info
+            || self.rename_session.is_some())
             && self.no_resume_session
         {
             return Err(
-                "--no-resume-session conflicts with --clear-session/--session-info/--clear-tool-state"
+                "--no-resume-session conflicts with --clear-session/--session-info/--clear-tool-state/--rename-session"
                     .to_string(),
             );
         }
@@ -469,6 +533,7 @@ pub(crate) fn print_help() {
     println!("  wayscriber --active --session-file PATH");
     println!("  wayscriber --freeze [--session-file PATH]");
     println!("  wayscriber --session-info [--session-file PATH]");
+    println!("  wayscriber --rename-session NAME --session-file PATH");
     println!("  wayscriber --clear-session [--session-file PATH]");
     println!("  wayscriber --clear-tool-state [--session-file PATH]");
     println!("  wayscriber --about");
@@ -494,6 +559,7 @@ pub(crate) fn print_help() {
     println!("      --clear-session           Delete persisted session data and backups");
     println!("      --clear-tool-state        Remove saved tool defaults but keep boards");
     println!("      --session-info            Show session persistence status");
+    println!("      --rename-session NAME     Rename a named session catalog label");
     println!("      --session-file PATH       Use a named session file");
     println!("      --about                   Show the About window");
     println!("      --check-update            Check wayscriber.com for a newer release");
