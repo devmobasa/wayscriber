@@ -196,6 +196,7 @@ impl InputState {
                 self.apply_toolbar_toggle_context_aware_ui(enabled)
             }
             ToolbarEvent::TogglePresetToasts(show) => self.apply_toolbar_toggle_preset_toasts(show),
+            ToolbarEvent::ToggleIdleFade(enable) => self.apply_toolbar_toggle_idle_fade(enable),
             ToolbarEvent::ToggleToolPreview(show) => self.apply_toolbar_toggle_tool_preview(show),
             ToolbarEvent::ToggleStatusBar(show) => self.apply_toolbar_toggle_status_bar(show),
             ToolbarEvent::SetStatusBarInteractive(interactive) => {

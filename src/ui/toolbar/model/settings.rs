@@ -87,6 +87,13 @@ impl ToolbarSettingsModel {
                     "Preset toasts: apply/save/clear.",
                 ),
                 ToolbarSettingsToggle::new(
+                    ToolbarControlId::SettingsIdleFade,
+                    "Dim toolbar when idle",
+                    snapshot.idle_fade,
+                    ToolbarEvent::ToggleIdleFade(!snapshot.idle_fade),
+                    "Fade the top bar to 55% after a few seconds without drawing. Turn off to keep it fully visible.",
+                ),
+                ToolbarSettingsToggle::new(
                     ToolbarControlId::SettingsInputHud,
                     "Input HUD",
                     snapshot.input_hud_enabled,

@@ -127,6 +127,7 @@ pub(crate) enum InteractionSeedTarget {
     ToolbarMoreColors,
     ToolbarContextAwareUi,
     ToolbarPresetToasts,
+    ToolbarIdleFade,
     ToolbarToolPreview,
     ToolbarDelaySliders,
     /// The history pane's custom-step section.
@@ -177,6 +178,7 @@ impl InteractionSeedValue {
                     | Target::ToolbarMoreColors
                     | Target::ToolbarContextAwareUi
                     | Target::ToolbarPresetToasts
+                    | Target::ToolbarIdleFade
                     | Target::ToolbarToolPreview
                     | Target::ToolbarDelaySliders
                     | Target::HistoryCustomSection

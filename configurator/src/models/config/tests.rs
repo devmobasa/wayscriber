@@ -1335,6 +1335,20 @@ fn config_draft_round_trips_ui_reduced_motion() {
     assert_eq!(round_trip.ui.reduced_motion, ReducedMotion::On);
 }
 
+#[test]
+fn config_draft_round_trips_ui_toolbar_idle_fade() {
+    let mut config = Config::default();
+    config.ui.toolbar.idle_fade = false;
+
+    let draft = ConfigDraft::from_config(&config);
+    assert!(!draft.ui_toolbar_idle_fade);
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("expected config to round trip");
+    assert!(!round_trip.ui.toolbar.idle_fade);
+}
+
 /// The revision is provenance for a review the user went through, so a draft
 /// that never applied a migration must not stamp one on an old file.
 #[test]

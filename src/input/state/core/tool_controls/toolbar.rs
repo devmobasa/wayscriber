@@ -197,6 +197,7 @@ impl InputState {
         show_delay_sliders: bool,
         show_marker_opacity_section: bool,
         show_preset_toasts: bool,
+        idle_fade: bool,
         show_tool_preview: bool,
     ) {
         self.toolbar_top_pinned = top_pinned;
@@ -221,6 +222,7 @@ impl InputState {
         self.show_delay_sliders = show_delay_sliders;
         self.show_marker_opacity_section = show_marker_opacity_section;
         self.show_preset_toasts = show_preset_toasts;
+        self.idle_fade = idle_fade;
         self.show_tool_preview = show_tool_preview;
         // Fold the legacy show_* booleans into explicit item overrides,
         // then re-derive them from the one resolver. Effective visibility
@@ -549,6 +551,7 @@ mod tests {
             true,  // context aware ui
             false,
             false,
+            true,
             true,
             false,
         );

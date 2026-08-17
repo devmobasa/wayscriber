@@ -22,7 +22,7 @@ saved separately so moving through the UI does not rewrite unrelated configurati
 - individual toolbar item visibility and toolbar item order;
 - the toolbar layout preset and which named toolbar sections are shown;
 - the toolbar's own appearance and behaviour toggles — icons vs text labels, extra colours,
-  context-aware UI, preset toasts, the tool preview, and the delay sliders;
+  context-aware UI, preset toasts, idle fade, the tool preview, and the delay sliders;
 - the status bar, whether its segments respond to clicks, and which segments are shown;
 - the board and page badges, the floating badge, and the zoom chip;
 - the click highlight and the ring the highlight tool keeps on screen;
@@ -167,7 +167,7 @@ Both `config.toml` mechanisms leave a timestamped `.bak` beside the file.
 | Toggle the status bar, its interactivity, or one of its items; the board/page badges, floating badge, or zoom chip | `runtime-ui.toml` | Runtime-UI writer |
 | Toggle click highlight or the highlight-tool ring | `runtime-ui.toml` — both at once | Runtime-UI writer |
 | Toggle the input HUD | `runtime-ui.toml` | Runtime-UI writer |
-| Toggle the Step section, delay sliders, tool preview, preset toasts, extra colors, or context-aware UI | `runtime-ui.toml` | Runtime-UI writer |
+| Toggle the Step section, delay sliders, tool preview, preset toasts, idle fade, extra colors, or context-aware UI | `runtime-ui.toml` | Runtime-UI writer |
 | Save or clear a preset slot in the overlay | `config.toml` — that one `[presets.slot_N]` table | Overlay editor (with a timestamped `.bak`) |
 | Recolor a quick color swatch in the overlay | `config.toml` — that one `[[drawing.quick_colors]]` entry | Overlay editor (with a timestamped `.bak`) |
 | Rename, recolor, add, or delete a board | The session file, for boards marked `persist` | Configurator → Boards for the templates a new session starts from |
@@ -1107,6 +1107,10 @@ context_aware_ui = true
 # Show preset action toast notifications on apply/save/clear
 show_preset_toasts = true
 
+# Dim the top strip after ~4 seconds without drawing. Set false to keep
+# the bar fully visible (accessibility).
+idle_fade = true
+
 # Show cursor tool preview bubble
 show_tool_preview = false
 
@@ -1188,7 +1192,7 @@ top_controls = [
 - **Pinned**: `top_pinned` is the authored default for whether the top toolbar opens on startup. Pinning or unpinning in the overlay saves to `runtime-ui.toml` and leaves this value alone. The show/hide keybinding (`toggle_toolbar`, default <kbd>F9</kbd>) updates the remembered pin, so the next start matches what was on screen.
 - **Minimize**: the toolbar minimize button collapses the top strip to a small edge tab instead of hiding it, so there is always an on-screen way back; `top_minimized` is the authored default, and the state you leave the bar in survives restarts as a runtime preference in `runtime-ui.toml`. F9 still toggles full visibility.
 - **Micro mode**: `cycle_toolbar_display` (default <kbd>F2</kbd>) cycles the top strip full → micro → hidden. Micro collapses the strip to one 44px round chip showing the active tool inside a ring stroked in the current color (ring width follows stroke thickness); clicking the chip restores the full strip. The full/micro form persists as a runtime preference in `runtime-ui.toml`, seeded by the authored `top_display_mode`; the hidden step alone is runtime-only — the next start derives the strip's visibility from the remembered pin (which the F9 show/hide toggle updates durably), so a cycle-hidden strip comes back. Entering micro un-minimizes the strip; if a config sets both `top_minimized` and micro, the minimized restore tab wins.
-- **Idle fade**: the top-strip islands dim to 55% opacity after ~4 seconds without drawing activity and restore when the pointer approaches the toolbar (or on the next stroke). Open top-strip menus, the minimized tab, and the micro chip never fade. With `[ui] reduced_motion` the fade snaps instantly instead of animating; there is no separate config key.
+- **Idle fade**: `idle_fade` dims the top-strip islands to 55% opacity after ~4 seconds without drawing activity and restores when the pointer approaches the toolbar (or on the next stroke). Open top-strip menus, the minimized tab, and the micro chip never fade. With `[ui] reduced_motion` the fade snaps instantly instead of animating. Set `idle_fade = false` (or uncheck **Idle fade** in the overlay Settings popover / **Dim toolbar when idle** in the configurator) to keep the bar fully visible.
 - **Top-only toolbar**: the unified top toolbar is the only supported layout. Drawing properties live in the contextual style pill; canvas management lives in the **"Canvas…" overflow popover**, the **bottom-right zoom chip**, and the **status-bar board picker**; presets live in the **top-strip presets island**; Session and Settings live in overflow popovers. Older panel keys (`side_layout`, `side_pinned`, `side_minimized`, `side_active_pane`, `collapsed_sections`, `side_offset`, `side_offset_x`, `show_settings_section`, and the retired `items.order.*` lists `side_sections`, `actions`, `pages`, `boards`, `presets`, `tool_options`, and `sessions`) remain readable, are preserved on unrelated saves, and surface as retired-setting diagnostics so they can be removed manually.
 - **Session/Settings popovers**: the top strip's overflow menu always carries "Session..." and "Settings..." entries. Opening one closes the other and the overflow menu; Escape and clicking away dismiss it. Content taller than the popover cap scrolls internally.
 - **Hidden items**: `ui.toolbar.items.hidden` removes known toolbar buttons/sections from sizing, drawing, and hit testing while preserving unknown future IDs.

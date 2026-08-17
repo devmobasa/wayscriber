@@ -197,6 +197,11 @@ fn a_rollback_restores_every_durable_chrome_preference() {
             |i| i.show_preset_toasts = !i.show_preset_toasts,
         ),
         (
+            InteractionSeedTarget::ToolbarIdleFade,
+            |i| i.idle_fade,
+            |i| i.idle_fade = !i.idle_fade,
+        ),
+        (
             InteractionSeedTarget::ToolbarToolPreview,
             |i| i.show_tool_preview,
             |i| i.show_tool_preview = !i.show_tool_preview,

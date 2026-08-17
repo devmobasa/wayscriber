@@ -315,6 +315,8 @@ pub struct ToolbarSnapshot {
     pub show_marker_opacity_section: bool,
     /// Whether to show preset action toasts
     pub show_preset_toasts: bool,
+    /// Whether the top strip dims after a few seconds without drawing
+    pub idle_fade: bool,
     /// Whether to show the Presets section
     pub show_presets: bool,
     /// Whether to show the Step Undo/Redo section

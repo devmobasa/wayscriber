@@ -20,7 +20,7 @@ use crate::runtime_ui_state::{
 /// The retired side fields (`side_pinned`, `side_minimized`, `side_pane`,
 /// `side_position`, and the `collapsed_sections` table) are deliberately absent:
 /// they now flow through `WirePassthrough::toolbar` as complete inert raw values.
-const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 22] = [
+const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 23] = [
     ("top_pinned", InteractionSeedTarget::TopPinned),
     ("top_minimized", InteractionSeedTarget::TopMinimized),
     ("top_position", InteractionSeedTarget::TopPosition),
@@ -57,6 +57,7 @@ const TOOLBAR_SCALARS: [(&str, InteractionSeedTarget); 22] = [
         "show_preset_toasts",
         InteractionSeedTarget::ToolbarPresetToasts,
     ),
+    ("idle_fade", InteractionSeedTarget::ToolbarIdleFade),
     (
         "show_tool_preview",
         InteractionSeedTarget::ToolbarToolPreview,
@@ -216,6 +217,7 @@ fn decode_value(
         | Target::ToolbarMoreColors
         | Target::ToolbarContextAwareUi
         | Target::ToolbarPresetToasts
+        | Target::ToolbarIdleFade
         | Target::ToolbarToolPreview
         | Target::ToolbarDelaySliders
         | Target::HistoryCustomSection
@@ -391,6 +393,9 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
             InteractionSeedTarget::ToolbarPresetToasts => {
                 insert_recognized(&mut toolbar, "show_preset_toasts", entry)
             }
+            InteractionSeedTarget::ToolbarIdleFade => {
+                insert_recognized(&mut toolbar, "idle_fade", entry)
+            }
             InteractionSeedTarget::ToolbarToolPreview => {
                 insert_recognized(&mut toolbar, "show_tool_preview", entry)
             }
@@ -474,6 +479,7 @@ fn encode_value(
             | InteractionSeedTarget::ToolbarMoreColors
             | InteractionSeedTarget::ToolbarContextAwareUi
             | InteractionSeedTarget::ToolbarPresetToasts
+            | InteractionSeedTarget::ToolbarIdleFade
             | InteractionSeedTarget::ToolbarToolPreview
             | InteractionSeedTarget::ToolbarDelaySliders
             | InteractionSeedTarget::HistoryCustomSection

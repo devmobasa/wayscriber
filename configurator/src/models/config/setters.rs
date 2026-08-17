@@ -190,6 +190,7 @@ impl ConfigDraft {
             ToggleField::UiToolbarUseIcons => self.ui_toolbar_use_icons = value,
             ToggleField::UiToolbarShowMoreColors => self.ui_toolbar_show_more_colors = value,
             ToggleField::UiToolbarPresetToasts => self.ui_toolbar_show_preset_toasts = value,
+            ToggleField::UiToolbarIdleFade => self.ui_toolbar_idle_fade = value,
             ToggleField::UiToolbarShowPresets => {
                 self.set_toolbar_section_visible(ToolbarSectionFlag::Presets, value);
             }

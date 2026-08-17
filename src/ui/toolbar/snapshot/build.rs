@@ -159,6 +159,7 @@ impl ToolbarSnapshot {
             show_boards_section,
             show_marker_opacity_section: state.show_marker_opacity_section,
             show_preset_toasts: state.show_preset_toasts,
+            idle_fade: state.idle_fade,
             show_presets: state.show_presets,
             show_step_section,
             show_text_controls: state.show_text_controls,
