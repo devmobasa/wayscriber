@@ -100,6 +100,7 @@ pub(crate) enum ToolbarRuntimeUiPersistenceTarget {
     ToolbarMoreColors,
     ToolbarContextAwareUi,
     ToolbarPresetToasts,
+    ToolbarIdleFade,
     ToolbarToolPreview,
     ToolbarDelaySliders,
     HistoryCustomSection,
@@ -341,6 +342,7 @@ pub(crate) fn popovers_for_event(event: &ToolbarEvent) -> &'static [ToolbarPopov
         | ToolbarEvent::ToggleStatusPageBadge(_)
         | ToolbarEvent::ToggleFloatingBadgeAlways(_)
         | ToolbarEvent::TogglePresetToasts(_)
+        | ToolbarEvent::ToggleIdleFade(_)
         | ToolbarEvent::ToggleInputHud(_)
         | ToolbarEvent::TogglePresets(_)
         | ToolbarEvent::ToggleActionsSection(_)
@@ -447,6 +449,9 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         }
         ToolbarEvent::TogglePresetToasts(_) => {
             ToolbarPersistence::RuntimeUi(Runtime::ToolbarPresetToasts)
+        }
+        ToolbarEvent::ToggleIdleFade(_) => {
+            ToolbarPersistence::RuntimeUi(Runtime::ToolbarIdleFade)
         }
         ToolbarEvent::ToggleToolPreview(_) => {
             ToolbarPersistence::RuntimeUi(Runtime::ToolbarToolPreview)

@@ -1270,6 +1270,23 @@ fn ui_status_bar_interactive_round_trips_disabled_value() {
     assert!(!reparsed.ui.status_bar_interactive);
 }
 
+#[test]
+fn ui_toolbar_idle_fade_defaults_to_true_and_round_trips_disabled() {
+    assert!(Config::default().ui.toolbar.idle_fade);
+
+    let omitted: Config = toml::from_str("[ui.toolbar]\nuse_icons = true\n")
+        .expect("toolbar table without idle_fade should parse");
+    assert!(omitted.ui.toolbar.idle_fade);
+
+    let parsed: Config = toml::from_str("[ui.toolbar]\nidle_fade = false\n")
+        .expect("idle_fade = false should parse");
+    assert!(!parsed.ui.toolbar.idle_fade);
+
+    let serialized = toml::to_string(&parsed).expect("config serializes");
+    let reparsed: Config = toml::from_str(&serialized).expect("serialized config reparses");
+    assert!(!reparsed.ui.toolbar.idle_fade);
+}
+
 #[cfg(feature = "tablet-input")]
 #[test]
 fn load_defaults_tablet_input_to_enabled_when_section_is_missing() {

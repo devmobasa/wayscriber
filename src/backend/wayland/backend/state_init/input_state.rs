@@ -102,6 +102,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
         config.ui.toolbar.show_delay_sliders,
         config.ui.toolbar.show_marker_opacity_section,
         config.ui.toolbar.show_preset_toasts,
+        config.ui.toolbar.idle_fade,
         config.ui.toolbar.show_tool_preview,
     );
     input_state.init_toolbar_minimized_from_config(config.ui.toolbar.top_minimized);

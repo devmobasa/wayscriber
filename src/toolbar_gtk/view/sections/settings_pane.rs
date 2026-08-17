@@ -109,6 +109,7 @@ fn settings_toggle_event(template: &ToolbarEvent, checked: bool) -> ToolbarEvent
             ToolbarEvent::ToggleFloatingBadgeAlways(checked)
         }
         ToolbarEvent::TogglePresetToasts(_) => ToolbarEvent::TogglePresetToasts(checked),
+        ToolbarEvent::ToggleIdleFade(_) => ToolbarEvent::ToggleIdleFade(checked),
         ToolbarEvent::ToggleInputHud(_) => ToolbarEvent::ToggleInputHud(checked),
         ToolbarEvent::TogglePresets(_) => ToolbarEvent::TogglePresets(checked),
         ToolbarEvent::ToggleActionsSection(_) => ToolbarEvent::ToggleActionsSection(checked),

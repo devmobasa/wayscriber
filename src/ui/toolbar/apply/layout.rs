@@ -204,6 +204,15 @@ impl InputState {
         }
     }
 
+    pub(super) fn apply_toolbar_toggle_idle_fade(&mut self, enable: bool) -> bool {
+        if self.idle_fade != enable {
+            self.idle_fade = enable;
+            true
+        } else {
+            false
+        }
+    }
+
     pub(super) fn apply_toolbar_toggle_tool_preview(&mut self, show: bool) -> bool {
         if self.presenter_mode && self.presenter_mode_config.hide_tool_preview {
             return false;

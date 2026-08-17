@@ -48,6 +48,7 @@ impl ConfigDraft {
         config.ui.toolbar.use_icons = self.ui_toolbar_use_icons;
         config.ui.toolbar.show_more_colors = self.ui_toolbar_show_more_colors;
         config.ui.toolbar.show_preset_toasts = self.ui_toolbar_show_preset_toasts;
+        config.ui.toolbar.idle_fade = self.ui_toolbar_idle_fade;
         config.ui.toolbar.layout_mode = self.ui_toolbar_layout_mode.to_mode();
         config.ui.toolbar.zoom_chip_display = self.ui_toolbar_zoom_chip_display.to_config();
         config.ui.toolbar.show_zoom_chip = self.ui_toolbar_show_zoom_chip;

@@ -495,6 +495,8 @@ pub struct InputState {
     pub show_marker_opacity_section: bool,
     /// Whether to show preset action toast notifications
     pub show_preset_toasts: bool,
+    /// Whether the top strip dims after a few seconds without drawing
+    pub idle_fade: bool,
     /// Whether to show the cursor tool preview bubble
     pub show_tool_preview: bool,
     /// Active (visible) UI toast (errors/warnings/info)

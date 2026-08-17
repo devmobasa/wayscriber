@@ -56,6 +56,7 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
             Target::ToolbarMoreColors => set_bool(value, |v| input.show_more_colors = v),
             Target::ToolbarContextAwareUi => set_bool(value, |v| input.context_aware_ui = v),
             Target::ToolbarPresetToasts => set_bool(value, |v| input.show_preset_toasts = v),
+            Target::ToolbarIdleFade => set_bool(value, |v| input.idle_fade = v),
             Target::ToolbarToolPreview => set_bool(value, |v| input.show_tool_preview = v),
             Target::ToolbarDelaySliders => set_bool(value, |v| input.show_delay_sliders = v),
             Target::HistoryCustomSection => set_bool(value, |v| input.custom_section_enabled = v),

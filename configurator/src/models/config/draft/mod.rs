@@ -103,6 +103,7 @@ pub struct ConfigDraft {
     pub ui_toolbar_use_icons: bool,
     pub ui_toolbar_show_more_colors: bool,
     pub ui_toolbar_show_preset_toasts: bool,
+    pub ui_toolbar_idle_fade: bool,
     pub ui_toolbar_layout_mode: ToolbarLayoutModeOption,
     pub ui_toolbar_zoom_chip_display: ZoomChipDisplayOption,
     pub ui_toolbar_show_zoom_chip: bool,

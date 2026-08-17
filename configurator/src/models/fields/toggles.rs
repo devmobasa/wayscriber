@@ -24,6 +24,7 @@ pub enum ToggleField {
     UiToolbarUseIcons,
     UiToolbarShowMoreColors,
     UiToolbarPresetToasts,
+    UiToolbarIdleFade,
     UiToolbarShowPresets,
     UiToolbarShowActionsSection,
     UiToolbarShowActionsAdvanced,

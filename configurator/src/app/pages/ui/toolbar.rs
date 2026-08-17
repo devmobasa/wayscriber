@@ -69,6 +69,12 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             "",
             |app| app.draft.ui_toolbar_use_icons,
             |value| Message::ToggleChanged(ToggleField::UiToolbarUseIcons, value),
+        )
+        .switch_row(
+            "Dim toolbar when idle",
+            "Fade the top bar to 55% after a few seconds without drawing. Turn off to keep it fully visible.",
+            |app| app.draft.ui_toolbar_idle_fade,
+            |value| Message::ToggleChanged(ToggleField::UiToolbarIdleFade, value),
         );
 
     page.group("Sections")

@@ -259,6 +259,8 @@ pub enum ToolbarEvent {
     ToggleContextAwareUi(bool),
     /// Toggle preset action toast notifications
     TogglePresetToasts(bool),
+    /// Toggle top-strip idle fade
+    ToggleIdleFade(bool),
     /// Toggle cursor tool preview bubble
     #[allow(dead_code)]
     ToggleToolPreview(bool),

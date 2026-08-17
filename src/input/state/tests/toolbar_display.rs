@@ -896,6 +896,10 @@ fn run_only_toolbar_preference_events_never_mark_the_session_dirty() {
             ToolbarEvent::TogglePresetToasts(true),
         ],
         [
+            ToolbarEvent::ToggleIdleFade(false),
+            ToolbarEvent::ToggleIdleFade(true),
+        ],
+        [
             ToolbarEvent::ToggleToolPreview(false),
             ToolbarEvent::ToggleToolPreview(true),
         ],

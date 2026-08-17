@@ -113,6 +113,10 @@ pub struct ToolbarConfig {
     #[serde(default = "default_show_preset_toasts")]
     pub show_preset_toasts: bool,
 
+    /// Dim the top strip after a few seconds without drawing
+    #[serde(default = "default_idle_fade")]
+    pub idle_fade: bool,
+
     /// Show the cursor tool preview bubble
     #[serde(default = "default_show_tool_preview")]
     pub show_tool_preview: bool,
@@ -161,6 +165,7 @@ impl Default for ToolbarConfig {
             show_marker_opacity_section: default_show_marker_opacity_section(),
             context_aware_ui: default_context_aware_ui(),
             show_preset_toasts: default_show_preset_toasts(),
+            idle_fade: default_idle_fade(),
             show_tool_preview: default_show_tool_preview(),
             top_offset: 0.0,
             top_offset_y: 0.0,
@@ -239,6 +244,10 @@ fn default_context_aware_ui() -> bool {
 }
 
 fn default_show_preset_toasts() -> bool {
+    true
+}
+
+fn default_idle_fade() -> bool {
     true
 }
 

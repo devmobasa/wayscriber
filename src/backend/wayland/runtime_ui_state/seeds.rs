@@ -52,6 +52,10 @@ pub(super) fn runtime_seeds_from_config(
         InteractionSeedValue::Bool(config.ui.toolbar.show_preset_toasts),
     )?;
     insert(
+        InteractionSeedTarget::ToolbarIdleFade,
+        InteractionSeedValue::Bool(config.ui.toolbar.idle_fade),
+    )?;
+    insert(
         InteractionSeedTarget::ToolbarToolPreview,
         InteractionSeedValue::Bool(config.ui.toolbar.show_tool_preview),
     )?;
@@ -237,6 +241,10 @@ pub(super) fn toolbar_values(
         Target::ToolbarPresetToasts => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarPresetToasts,
             InteractionSeedValue::Bool(input.show_preset_toasts),
+        ),
+        Target::ToolbarIdleFade => RuntimeUiMutationValues::one(
+            InteractionSeedTarget::ToolbarIdleFade,
+            InteractionSeedValue::Bool(input.idle_fade),
         ),
         Target::ToolbarToolPreview => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarToolPreview,

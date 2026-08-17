@@ -35,11 +35,14 @@ pub struct TopStripFadeInputs {
     /// Minimized restore tab, micro chip, or hidden strip: minimal chrome
     /// never fades.
     pub reduced_chrome: bool,
+    /// Authored/runtime preference: when false the strip stays at full
+    /// opacity and the idle timer is not scheduled.
+    pub idle_fade_enabled: bool,
 }
 
 impl TopStripFadeInputs {
     fn dim_candidate(&self) -> bool {
-        !self.pointer_near && !self.menus_open && !self.reduced_chrome
+        self.idle_fade_enabled && !self.pointer_near && !self.menus_open && !self.reduced_chrome
     }
 
     fn wants_dim(&self) -> bool {
@@ -128,6 +131,7 @@ mod tests {
             pointer_near: false,
             menus_open: false,
             reduced_chrome: false,
+            idle_fade_enabled: true,
         }
     }
 
@@ -266,5 +270,37 @@ mod tests {
         near.pointer_near = true;
         assert_eq!(fade.update(&near, start), 1.0);
         assert!(!fade.animating());
+    }
+
+    #[test]
+    fn disabled_idle_fade_stays_full_and_does_not_schedule_a_wakeup() {
+        let _motion = override_motion_for_test(true);
+        let mut fade = TopStripFade::new();
+        let start = Instant::now();
+        let mut disabled = inputs(30);
+        disabled.idle_fade_enabled = false;
+
+        assert_eq!(fade.update(&disabled, start), 1.0);
+        assert!(!fade.animating());
+        assert_eq!(fade.wake_after(&disabled), None);
+    }
+
+    #[test]
+    fn disabling_idle_fade_restores_a_dimmed_strip() {
+        let _motion = override_motion_for_test(true);
+        let mut fade = TopStripFade::new();
+        let start = Instant::now();
+        fade.update(&inputs(10), start);
+        fade.update(&inputs(10), start + TOP_STRIP_FADE_OUT);
+        assert_eq!(fade.value(), TOP_STRIP_DIM_LEVEL);
+
+        let mut disabled = inputs(10);
+        disabled.idle_fade_enabled = false;
+        fade.update(&disabled, start + TOP_STRIP_FADE_OUT);
+        assert_eq!(
+            fade.update(&disabled, start + TOP_STRIP_FADE_OUT + TOP_STRIP_RESTORE),
+            1.0
+        );
+        assert_eq!(fade.wake_after(&disabled), None);
     }
 }

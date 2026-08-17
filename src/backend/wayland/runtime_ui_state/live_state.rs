@@ -123,6 +123,11 @@ pub(super) fn apply_live_toolbar_state(
     {
         input.show_preset_toasts = value;
     }
+    if include(&InteractionSeedTarget::ToolbarIdleFade)
+        && let Some(value) = bool_value(InteractionSeedTarget::ToolbarIdleFade)
+    {
+        input.idle_fade = value;
+    }
     if include(&InteractionSeedTarget::ToolbarToolPreview)
         && let Some(value) = bool_value(InteractionSeedTarget::ToolbarToolPreview)
     {

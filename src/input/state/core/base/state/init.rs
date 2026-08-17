@@ -256,6 +256,7 @@ impl InputState {
             show_delay_sliders: false, // Default to hidden
             show_marker_opacity_section: false,
             show_preset_toasts: true,
+            idle_fade: true,
             show_tool_preview: false,
             ui_toast: None,
             toast_queue: super::super::toast_queue::ToastQueue::default(),
