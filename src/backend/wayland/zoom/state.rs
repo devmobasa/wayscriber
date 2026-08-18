@@ -21,6 +21,7 @@ pub struct ZoomState {
     pub(super) output_layout_generation: u64,
     pub(super) capture: Option<CaptureSession>,
     pub(super) image: Option<FrozenImage>,
+    pub(super) image_target_dimensions: Option<(u32, u32)>,
     image_generation: u64,
     pub(super) portal_task: Option<PortalTask<PortalCaptureResult>>,
     pub(super) portal_in_progress: bool,
@@ -63,6 +64,7 @@ impl ZoomState {
             output_layout_generation: 0,
             capture: None,
             image: None,
+            image_target_dimensions: None,
             image_generation: 0,
             portal_task: None,
             portal_in_progress: false,
@@ -97,14 +99,6 @@ impl ZoomState {
         self.active_geometry = geometry;
     }
 
-    pub fn active_geometry(&self) -> Option<&OutputGeometry> {
-        self.active_geometry.as_ref()
-    }
-
-    pub fn active_output_matches(&self, info_id: u32) -> bool {
-        self.active_output_id == Some(info_id)
-    }
-
     pub fn image(&self) -> Option<&FrozenImage> {
         self.image.as_ref()
     }
@@ -114,12 +108,18 @@ impl ZoomState {
     }
 
     pub fn set_image(&mut self, image: FrozenImage) {
+        self.image_target_dimensions = self
+            .active_geometry
+            .as_ref()
+            .and_then(OutputGeometry::buffer_size)
+            .or(Some((image.width, image.height)));
         self.image = Some(image);
         self.bump_image_generation();
     }
 
     pub fn clear_image(&mut self) -> bool {
         let had_image = self.image.take().is_some();
+        self.image_target_dimensions = None;
         if had_image {
             self.bump_image_generation();
         }

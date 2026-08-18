@@ -40,6 +40,31 @@ pub(in crate::backend::wayland) struct PendingPdfExport {
     pub action: Action,
     pub operation: ImageOperationKind,
     pub save_config: FileSaveConfig,
+    pub layout_context: CaptureLayoutContext,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::backend::wayland) struct CaptureLayoutContext {
+    target_output_id: u32,
+    layout_generation: u64,
+}
+
+impl CaptureLayoutContext {
+    pub(in crate::backend::wayland) fn new(target_output_id: u32, layout_generation: u64) -> Self {
+        Self {
+            target_output_id,
+            layout_generation,
+        }
+    }
+
+    pub(in crate::backend::wayland) fn matches(
+        self,
+        active_output_id: Option<u32>,
+        layout_generation: u64,
+    ) -> bool {
+        active_output_id == Some(self.target_output_id)
+            && layout_generation == self.layout_generation
+    }
 }
 
 /// Tracks capture manager state and in-progress flag.
@@ -221,5 +246,15 @@ mod tests {
         state.clear_in_progress();
         assert_eq!(state.accepted_id(), None);
         assert!(!state.is_in_progress());
+    }
+
+    #[test]
+    fn capture_layout_context_rejects_output_or_geometry_generation_changes() {
+        let context = CaptureLayoutContext::new(7, 3);
+
+        assert!(context.matches(Some(7), 3));
+        assert!(!context.matches(Some(8), 3));
+        assert!(!context.matches(Some(7), 4));
+        assert!(!context.matches(None, 3));
     }
 }

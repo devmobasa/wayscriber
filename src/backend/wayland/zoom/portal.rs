@@ -3,6 +3,7 @@ use log::warn;
 use std::time::{Duration, Instant};
 
 use crate::backend::wayland::frozen::FrozenImage;
+use crate::backend::wayland::frozen_geometry::OutputGeometry;
 use crate::backend::wayland::portal_capture::{
     capture_via_portal_fullscreen_bytes, crop_argb, portal_output_matches,
 };
@@ -27,11 +28,18 @@ impl ZoomState {
             .runtime_wake
             .clone()
             .ok_or_else(|| anyhow::anyhow!("portal capture runtime wake is unavailable"))?;
+        let geo = self.active_geometry.clone().ok_or_else(|| {
+            anyhow::anyhow!("active output geometry is unavailable for portal zoom capture")
+        })?;
+        geo.verified_pixel_size().ok_or_else(|| {
+            anyhow::anyhow!("active output pixel size is unavailable for portal zoom capture")
+        })?;
+        let target_output_id = self.active_output_id.ok_or_else(|| {
+            anyhow::anyhow!("active output identity is unavailable for portal zoom capture")
+        })?;
         self.portal_in_progress = true;
-        self.portal_target_output_id = self.active_output_id;
+        self.portal_target_output_id = Some(target_output_id);
 
-        let geo = self.active_geometry.clone();
-        let target_output_id = self.active_output_id;
         let layout_generation = self.output_layout_generation;
         crate::notification::send_notification_async(
             tokio_handle,
@@ -43,43 +51,11 @@ impl ZoomState {
             async {
                 let bytes = capture_via_portal_fullscreen_bytes().await?;
 
-                let (mut data, mut width, mut height) = decode_image_to_argb(&bytes)
+                let (data, width, height) = decode_image_to_argb(&bytes)
                     .map_err(|error| CaptureError::ImageError(format!("Decode failed: {error}")))?;
+                let image = crop_portal_image(data, width, height, &geo)?;
 
-                if let Some(geo) = geo {
-                    let (phys_w, phys_h) = geo.physical_size();
-                    let Some((origin_x, origin_y)) = geo.portal_crop_origin(width, height) else {
-                        return Err(CaptureError::ImageError(
-                            "Zoom capture does not contain the active output".to_string(),
-                        ));
-                    };
-                    let Some((cropped_w, cropped_h, cropped)) =
-                        crop_argb(&data, width, height, origin_x, origin_y, phys_w, phys_h)
-                    else {
-                        return Err(CaptureError::ImageError(
-                            "Zoom capture does not contain the active output".to_string(),
-                        ));
-                    };
-                    if cropped_w != phys_w || cropped_h != phys_h {
-                        return Err(CaptureError::ImageError(
-                            "Zoom capture does not contain the active output".to_string(),
-                        ));
-                    }
-                    data = cropped;
-                    width = cropped_w;
-                    height = cropped_h;
-                }
-
-                Ok((
-                    target_output_id,
-                    layout_generation,
-                    FrozenImage {
-                        width,
-                        height,
-                        stride: (width * 4) as i32,
-                        data,
-                    },
-                ))
+                Ok((Some(target_output_id), layout_generation, image))
             }
             .await
         }));
@@ -187,6 +163,61 @@ impl ZoomState {
     }
 }
 
+fn crop_portal_image(
+    data: Vec<u8>,
+    width: u32,
+    height: u32,
+    geometry: &OutputGeometry,
+) -> Result<FrozenImage, CaptureError> {
+    let expected_len = u64::from(width)
+        .checked_mul(u64::from(height))
+        .and_then(|pixels| pixels.checked_mul(4))
+        .and_then(|bytes| usize::try_from(bytes).ok())
+        .ok_or_else(|| CaptureError::ImageError("Zoom capture is too large".to_string()))?;
+    if data.len() != expected_len {
+        return Err(CaptureError::ImageError(
+            "Zoom capture buffer length does not match its dimensions".to_string(),
+        ));
+    }
+
+    let (phys_w, phys_h) = geometry.verified_pixel_size().ok_or_else(|| {
+        CaptureError::ImageError("Zoom capture output dimensions are invalid".to_string())
+    })?;
+    let buffer_size = geometry.buffer_size().ok_or_else(|| {
+        CaptureError::ImageError("Zoom capture overlay dimensions are invalid".to_string())
+    })?;
+    if !OutputGeometry::dimensions_have_compatible_aspect((phys_w, phys_h), buffer_size) {
+        return Err(CaptureError::ImageError(
+            "Zoom capture aspect does not match the overlay surface".to_string(),
+        ));
+    }
+    let (origin_x, origin_y) = geometry.portal_crop_origin(width, height).ok_or_else(|| {
+        CaptureError::ImageError("Zoom capture does not match the active output layout".to_string())
+    })?;
+    let (cropped_w, cropped_h, cropped) =
+        crop_argb(&data, width, height, origin_x, origin_y, phys_w, phys_h).ok_or_else(|| {
+            CaptureError::ImageError("Zoom capture does not contain the active output".to_string())
+        })?;
+    if cropped_w != phys_w || cropped_h != phys_h {
+        return Err(CaptureError::ImageError(
+            "Zoom capture does not contain the active output".to_string(),
+        ));
+    }
+    let stride = i32::try_from(
+        cropped_w
+            .checked_mul(4)
+            .ok_or_else(|| CaptureError::ImageError("Zoom capture stride overflow".to_string()))?,
+    )
+    .map_err(|_| CaptureError::ImageError("Zoom capture stride is too large".to_string()))?;
+
+    Ok(FrozenImage {
+        width: cropped_w,
+        height: cropped_h,
+        stride,
+        data: cropped,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,8 +243,86 @@ mod tests {
             logical_height: 1,
             scale: 1,
             transform: wayland_client::protocol::wl_output::Transform::Normal,
+            overlay_buffer_size: (2, 1),
+            pixel_size: Some((2, 1)),
             screenshot_origin: Some(origin),
+            screenshot_size: None,
         }
+    }
+
+    #[tokio::test]
+    async fn portal_start_requires_verifiable_geometry_and_output_identity() -> anyhow::Result<()> {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+        let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
+
+        let error = zoom
+            .capture_via_portal(&tokio::runtime::Handle::current())
+            .expect_err("missing geometry must fail closed");
+        assert!(error.to_string().contains("geometry is unavailable"));
+        assert!(!zoom.portal_in_progress);
+        assert!(zoom.portal_task.is_none());
+
+        zoom.set_active_geometry(Some(crop_geometry((0, 0))));
+        let error = zoom
+            .capture_via_portal(&tokio::runtime::Handle::current())
+            .expect_err("missing output identity must fail closed");
+        assert!(error.to_string().contains("identity is unavailable"));
+        assert!(!zoom.portal_in_progress);
+        assert!(zoom.portal_task.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn portal_crop_uses_fractional_output_pixels_not_the_overlay_buffer_size() {
+        let geometry = OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((3, 2)),
+            (3, 2),
+            2,
+            wayland_client::protocol::wl_output::Transform::Normal,
+            Some((5, 3)),
+        )
+        .expect("fractional geometry")
+        .with_desktop_backdrop_geometry(Some(crate::capture::DesktopBackdropGeometry {
+            logical_x: 0,
+            logical_y: 0,
+            logical_width: 3,
+            logical_height: 2,
+            scale: 2,
+            physical_width: Some(5),
+            physical_height: Some(3),
+            crop_x: Some(0),
+            crop_y: Some(0),
+            screenshot_width: Some(5),
+            screenshot_height: Some(3),
+        }));
+
+        let image = crop_portal_image(vec![7; 5 * 3 * 4], 5, 3, &geometry)
+            .expect("fractional output screenshot");
+
+        assert_eq!((image.width, image.height), (5, 3));
+        assert_eq!(image.stride, 20);
+    }
+
+    #[test]
+    fn portal_crop_rejects_a_different_screenshot_layout() {
+        let geometry = crop_geometry((0, 0)).with_desktop_backdrop_geometry(Some(
+            crate::capture::DesktopBackdropGeometry {
+                logical_x: 0,
+                logical_y: 0,
+                logical_width: 2,
+                logical_height: 1,
+                scale: 1,
+                physical_width: Some(2),
+                physical_height: Some(1),
+                crop_x: Some(0),
+                crop_y: Some(0),
+                screenshot_width: Some(2),
+                screenshot_height: Some(1),
+            },
+        ));
+
+        assert!(crop_portal_image(vec![0; 3 * 4], 3, 1, &geometry).is_err());
     }
 
     async fn poll_until_finished(zoom: &mut ZoomState, input: &mut InputState) {

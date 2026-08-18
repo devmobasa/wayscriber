@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::backend::wayland::capture::CaptureLayoutContext;
 use crate::input::state::{Toast, ToastPriority};
 
 impl WaylandState {
@@ -33,7 +34,18 @@ impl WaylandState {
         let save_config = self.board_pdf_save_config(action);
 
         if self.should_capture_desktop_for_pdf_export(action) {
-            let request = self.desktop_backdrop_capture_request(operation);
+            let Some((request, layout_context)) = self.desktop_backdrop_capture_request(operation)
+            else {
+                let message =
+                    "Board PDF export failed: active output geometry is unavailable".to_string();
+                log::error!("{message}");
+                self.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "capture.pdf",
+                    Toast::error(message),
+                );
+                return;
+            };
             if !self.enter_overlay_suppression(OverlaySuppression::DesktopBackdrop) {
                 log::warn!(
                     "Board PDF export action {:?} requested while overlay is suppressed; ignoring",
@@ -54,6 +66,7 @@ impl WaylandState {
                 action,
                 operation,
                 save_config,
+                layout_context,
             });
             log::info!(
                 "Queued {:?} desktop backdrop capture for PDF export; waiting for suppression frame",
@@ -98,6 +111,25 @@ impl WaylandState {
             );
             return;
         };
+
+        let active_output_id = self
+            .surface
+            .current_output()
+            .and_then(|output| self.output_state.info(&output).map(|info| info.id));
+        if !pending
+            .layout_context
+            .matches(active_output_id, self.frozen.output_layout_generation())
+        {
+            let message =
+                "Board PDF export failed: output layout changed during desktop capture".to_string();
+            log::error!("{message}");
+            self.input_state.push_toast(
+                ToastPriority::Critical,
+                "capture.pdf",
+                Toast::error(message),
+            );
+            return;
+        }
 
         let snapshot = match self.board_pdf_export_snapshot_with_desktop_backdrop(
             pending.action,
@@ -193,13 +225,19 @@ impl WaylandState {
     fn desktop_backdrop_capture_request(
         &self,
         operation: ImageOperationKind,
-    ) -> DesktopBackdropCaptureRequest {
-        DesktopBackdropCaptureRequest {
+    ) -> Option<(DesktopBackdropCaptureRequest, CaptureLayoutContext)> {
+        let output = self.surface.current_output()?;
+        let output_id = self.output_state.info(&output)?.id;
+        let geometry = self.desktop_backdrop_geometry()?;
+        let layout_context =
+            CaptureLayoutContext::new(output_id, self.frozen.output_layout_generation());
+        let request = DesktopBackdropCaptureRequest {
             logical_width: self.surface.width(),
             logical_height: self.surface.height(),
             scale: self.surface.scale(),
-            geometry: self.desktop_backdrop_geometry(),
+            geometry: Some(geometry),
             operation,
-        }
+        };
+        Some((request, layout_context))
     }
 }

@@ -74,22 +74,34 @@ pub(super) const DIRECT_CAPTURE_TIMEOUT: Duration = Duration::from_secs(3);
 pub(super) struct DirectCaptureContext {
     pub(super) target_output_id: u32,
     pub(super) source_geometry: Option<OutputGeometry>,
+    layout_generation: u64,
     started_at: Instant,
 }
 
 impl DirectCaptureContext {
-    pub(super) fn new(target_output_id: u32, source_geometry: Option<OutputGeometry>) -> Self {
-        Self::new_at(target_output_id, source_geometry, Instant::now())
+    pub(super) fn new(
+        target_output_id: u32,
+        source_geometry: Option<OutputGeometry>,
+        layout_generation: u64,
+    ) -> Self {
+        Self::new_at(
+            target_output_id,
+            source_geometry,
+            layout_generation,
+            Instant::now(),
+        )
     }
 
     fn new_at(
         target_output_id: u32,
         source_geometry: Option<OutputGeometry>,
+        layout_generation: u64,
         started_at: Instant,
     ) -> Self {
         Self {
             target_output_id,
             source_geometry,
+            layout_generation,
             started_at,
         }
     }
@@ -101,8 +113,13 @@ impl DirectCaptureContext {
             .unwrap_or(Duration::ZERO)
     }
 
-    pub(super) fn output_matches(&self, current_output_id: Option<u32>) -> bool {
+    pub(super) fn output_and_layout_match(
+        &self,
+        current_output_id: Option<u32>,
+        current_layout_generation: u64,
+    ) -> bool {
         current_output_id == Some(self.target_output_id)
+            && current_layout_generation == self.layout_generation
     }
 }
 
@@ -211,12 +228,8 @@ impl FrozenState {
         self.active_geometry = geometry;
     }
 
-    pub fn active_geometry(&self) -> Option<&OutputGeometry> {
-        self.active_geometry.as_ref()
-    }
-
-    pub fn active_output_matches(&self, info_id: u32) -> bool {
-        self.active_output_id == Some(info_id)
+    pub(in crate::backend::wayland) fn output_layout_generation(&self) -> u64 {
+        self.output_layout_generation
     }
 
     pub fn image(&self) -> Option<&FrozenImage> {
@@ -363,24 +376,72 @@ impl FrozenState {
                     .map(|geo| geo.transform)
                     .unwrap_or(wl_output::Transform::Normal)
             });
-            image = image.with_output_transform(output_transform);
+            image = match image.with_output_transform(output_transform) {
+                Ok(image) => image,
+                Err(error) => {
+                    self.capture_done = true;
+                    input_state.set_frozen_active(false);
+                    input_state.needs_redraw = true;
+                    return Err(format!("Freeze capture transform failed: {error}"));
+                }
+            };
         }
 
-        if matches!(pending.source, FrozenCaptureSource::Desktop)
-            && (image.width != phys_width || image.height != phys_height)
+        if matches!(pending.source, FrozenCaptureSource::ActiveOutput)
+            && pending
+                .source_geometry
+                .as_ref()
+                .or(self.active_geometry.as_ref())
+                .is_some_and(|geometry| {
+                    !geometry.accepts_transformed_pixel_size(image.width, image.height)
+                })
         {
-            let Some(cropped) = self.crop_pending_image(
-                image,
-                pending.source_geometry.as_ref(),
-                phys_width,
-                phys_height,
-            ) else {
+            self.capture_done = true;
+            input_state.set_frozen_active(false);
+            input_state.needs_redraw = true;
+            return Err("Freeze capture dimensions do not match the active output".to_string());
+        }
+
+        if matches!(pending.source, FrozenCaptureSource::Desktop) {
+            let geometry = pending
+                .source_geometry
+                .as_ref()
+                .or(self.active_geometry.as_ref());
+            let capture_dimensions = match geometry {
+                Some(geometry) => geometry.verified_pixel_size(),
+                None if image.width == phys_width && image.height == phys_height => {
+                    Some((phys_width, phys_height))
+                }
+                None => None,
+            };
+            let Some((capture_width, capture_height)) = capture_dimensions else {
                 self.capture_done = true;
                 input_state.set_frozen_active(false);
                 input_state.needs_redraw = true;
                 return Err("Freeze failed after the display changed size".to_string());
             };
-            image = cropped;
+
+            if let Some(geometry) = geometry {
+                let Some(cropped) =
+                    self.crop_pending_image(image, Some(geometry), capture_width, capture_height)
+                else {
+                    self.capture_done = true;
+                    input_state.set_frozen_active(false);
+                    input_state.needs_redraw = true;
+                    return Err("Freeze failed after the display changed size".to_string());
+                };
+                image = cropped;
+            }
+        }
+
+        if !OutputGeometry::dimensions_have_compatible_aspect(
+            (image.width, image.height),
+            (phys_width, phys_height),
+        ) {
+            self.capture_done = true;
+            input_state.set_frozen_active(false);
+            input_state.needs_redraw = true;
+            return Err("Freeze capture aspect does not match the overlay surface".to_string());
         }
 
         self.image_target_dimensions = Some((phys_width, phys_height));
@@ -417,10 +478,11 @@ impl FrozenState {
         if width != target_width || height != target_height {
             return None;
         }
+        let stride = i32::try_from(target_width.checked_mul(4)?).ok()?;
         Some(FrozenImage {
             width: target_width,
             height: target_height,
-            stride: (target_width * 4) as i32,
+            stride,
             data,
         })
     }
@@ -555,16 +617,17 @@ mod tests {
     #[test]
     fn direct_capture_context_tracks_its_deadline_and_output_identity() {
         let started_at = Instant::now();
-        let capture = DirectCaptureContext::new_at(7, None, started_at);
+        let capture = DirectCaptureContext::new_at(7, None, 3, started_at);
 
         assert_eq!(capture.timeout(started_at), DIRECT_CAPTURE_TIMEOUT);
         assert_eq!(
             capture.timeout(started_at + DIRECT_CAPTURE_TIMEOUT),
             Duration::ZERO
         );
-        assert!(capture.output_matches(Some(7)));
-        assert!(!capture.output_matches(Some(8)));
-        assert!(!capture.output_matches(None));
+        assert!(capture.output_and_layout_match(Some(7), 3));
+        assert!(!capture.output_and_layout_match(Some(8), 3));
+        assert!(!capture.output_and_layout_match(None, 3));
+        assert!(!capture.output_and_layout_match(Some(7), 4));
     }
 
     #[test]
@@ -600,6 +663,40 @@ mod tests {
     }
 
     #[test]
+    fn active_output_capture_rejects_known_pixel_size_mismatch() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(7));
+        let geometry = OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((3, 2)),
+            (3, 2),
+            2,
+            wl_output::Transform::Normal,
+            Some((5, 3)),
+        )
+        .expect("known output geometry");
+        state.set_pending_output_image(
+            FrozenImage {
+                width: 4,
+                height: 3,
+                stride: 16,
+                data: vec![0; 4 * 3 * 4],
+            },
+            7,
+            Some(geometry),
+        );
+
+        assert!(
+            state
+                .activate_pending_image(6, 4, &mut input_state)
+                .is_err()
+        );
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
+    }
+
+    #[test]
     fn active_output_capture_uses_protocol_transform_without_output_geometry() {
         let mut state = FrozenState::new(None);
         let mut input_state = make_test_input_state();
@@ -622,6 +719,57 @@ mod tests {
 
         let image = state.image().expect("the frozen image should be active");
         assert_eq!((image.width, image.height), (1, 2));
+    }
+
+    #[test]
+    fn active_output_capture_fails_closed_when_transform_input_is_malformed() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(7));
+        state.set_pending_output_image_with_transform(
+            FrozenImage {
+                width: 2,
+                height: 2,
+                stride: 8,
+                data: vec![0; 12],
+            },
+            7,
+            None,
+            Some(wl_output::Transform::_90),
+        );
+
+        assert!(
+            state
+                .activate_pending_image(2, 2, &mut input_state)
+                .is_err()
+        );
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
+        assert!(state.take_capture_done());
+    }
+
+    #[test]
+    fn active_output_capture_rejects_stretching_into_a_different_viewport() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(7));
+        state.set_pending_output_image(
+            FrozenImage {
+                width: 320,
+                height: 180,
+                stride: 1280,
+                data: vec![0; 320 * 180 * 4],
+            },
+            7,
+            None,
+        );
+
+        let error = state
+            .activate_pending_image(320, 176, &mut input_state)
+            .expect_err("a full output cannot be stretched into a shorter viewport");
+        assert!(error.contains("aspect does not match"));
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
     }
 
     #[test]
@@ -656,6 +804,7 @@ mod tests {
         scale: i32,
         screenshot_origin: Option<(u32, u32)>,
     ) -> OutputGeometry {
+        let pixel_scale = u32::try_from(scale).expect("test scale must be positive");
         OutputGeometry {
             logical_x,
             logical_y,
@@ -663,7 +812,10 @@ mod tests {
             logical_height,
             scale,
             transform: wl_output::Transform::Normal,
+            overlay_buffer_size: (logical_width * pixel_scale, logical_height * pixel_scale),
+            pixel_size: Some((logical_width * pixel_scale, logical_height * pixel_scale)),
             screenshot_origin,
+            screenshot_size: None,
         }
     }
 
@@ -711,6 +863,73 @@ mod tests {
             image.data,
             vec![6, 6, 6, 255, 7, 7, 7, 255, 8, 8, 8, 255, 9, 9, 9, 255]
         );
+    }
+
+    #[test]
+    fn desktop_capture_keeps_fractional_output_pixels_for_a_larger_overlay_buffer() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        let mut geometry = desktop_geometry(0, 0, 3, 2, 2, Some((0, 0)));
+        geometry.pixel_size = Some((5, 3));
+        state.set_pending_desktop_image(
+            FrozenImage {
+                width: 5,
+                height: 3,
+                stride: 20,
+                data: vec![7; 5 * 3 * 4],
+            },
+            None,
+            Some(geometry),
+        );
+
+        state
+            .activate_pending_image(6, 4, &mut input_state)
+            .expect("native output pixels should render into the integer-scale overlay buffer");
+
+        let image = state.image().expect("the frozen image should be active");
+        assert_eq!((image.width, image.height), (5, 3));
+        state.handle_resize(6, 4, &mut input_state);
+        assert!(state.image().is_some());
+        assert!(input_state.frozen_active());
+    }
+
+    #[test]
+    fn desktop_capture_rejects_a_portal_image_from_a_different_layout_size() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        let geometry = desktop_geometry(0, 0, 4, 1, 1, None).with_desktop_backdrop_geometry(Some(
+            crate::capture::DesktopBackdropGeometry {
+                logical_x: 0,
+                logical_y: 0,
+                logical_width: 4,
+                logical_height: 1,
+                scale: 1,
+                physical_width: Some(4),
+                physical_height: Some(1),
+                crop_x: Some(6),
+                crop_y: Some(0),
+                screenshot_width: Some(10),
+                screenshot_height: Some(1),
+            },
+        ));
+        state.set_pending_desktop_image(
+            FrozenImage {
+                width: 11,
+                height: 1,
+                stride: 44,
+                data: vec![0; 11 * 4],
+            },
+            None,
+            Some(geometry),
+        );
+
+        assert!(
+            state
+                .activate_pending_image(4, 1, &mut input_state)
+                .is_err()
+        );
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
     }
 
     #[test]

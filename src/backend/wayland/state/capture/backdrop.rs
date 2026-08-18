@@ -9,15 +9,8 @@ pub(super) fn desktop_backdrop_output_geometry_from_info(
     if logical_width <= 0 || logical_height <= 0 {
         return None;
     }
-    let (physical_width, physical_height) = current_or_preferred_mode_size(info)
-        .map(|(width, height)| transformed_output_size(width, height, info.transform))
-        .or_else(|| {
-            let scale = u32::try_from(info.scale_factor.max(1)).ok()?;
-            Some((
-                u32::try_from(logical_width).ok()?.checked_mul(scale)?,
-                u32::try_from(logical_height).ok()?.checked_mul(scale)?,
-            ))
-        })?;
+    let (physical_width, physical_height) = current_mode_size(info)
+        .map(|(width, height)| transformed_output_size(width, height, info.transform))?;
     if physical_width == 0 || physical_height == 0 {
         return None;
     }
@@ -32,13 +25,10 @@ pub(super) fn desktop_backdrop_output_geometry_from_info(
     })
 }
 
-fn current_or_preferred_mode_size(
-    info: &smithay_client_toolkit::output::OutputInfo,
-) -> Option<(u32, u32)> {
+fn current_mode_size(info: &smithay_client_toolkit::output::OutputInfo) -> Option<(u32, u32)> {
     info.modes
         .iter()
         .find(|mode| mode.current)
-        .or_else(|| info.modes.iter().find(|mode| mode.preferred))
         .and_then(|mode| {
             Some((
                 u32::try_from(mode.dimensions.0).ok()?,
@@ -103,31 +93,61 @@ impl WaylandState {
         geometry: Option<OutputGeometry>,
         exclude: Option<&wl_output::WlOutput>,
     ) {
-        let screenshot_origin = self
-            .desktop_backdrop_geometry_excluding(exclude)
-            .and_then(DesktopBackdropGeometry::physical_origin);
-        let geometry = geometry.map(|geo| geo.with_screenshot_origin(screenshot_origin));
+        let backdrop_geometry = self.desktop_backdrop_geometry_excluding(exclude);
+        let geometry = geometry.map(|geo| geo.with_desktop_backdrop_geometry(backdrop_geometry));
         self.frozen.set_active_geometry(geometry.clone());
         self.zoom.set_active_geometry(geometry);
     }
 
     pub(in crate::backend::wayland) fn refresh_freeze_zoom_screenshot_origin(&mut self) {
-        self.refresh_freeze_zoom_screenshot_origin_excluding(None);
+        self.refresh_freeze_zoom_geometry_excluding(None);
     }
 
     pub(in crate::backend::wayland) fn refresh_freeze_zoom_screenshot_origin_excluding(
         &mut self,
         exclude: Option<&wl_output::WlOutput>,
     ) {
-        let Some(geometry) = self
-            .frozen
-            .active_geometry()
-            .cloned()
-            .or_else(|| self.zoom.active_geometry().cloned())
-        else {
+        self.refresh_freeze_zoom_geometry_excluding(exclude);
+    }
+
+    pub(in crate::backend::wayland) fn refresh_freeze_zoom_geometry(&mut self) {
+        self.refresh_freeze_zoom_geometry_excluding(None);
+    }
+
+    fn refresh_freeze_zoom_geometry_excluding(&mut self, exclude: Option<&wl_output::WlOutput>) {
+        let Some(output) = self.surface.current_output() else {
+            self.set_freeze_zoom_geometry_excluding(None, exclude);
+            self.frozen.set_active_output(None, None);
+            self.zoom.set_active_output(None, None);
             return;
         };
-        self.set_freeze_zoom_geometry_excluding(Some(geometry), exclude);
+        if exclude.is_some_and(|destroyed| destroyed == &output) {
+            self.set_freeze_zoom_geometry_excluding(None, exclude);
+            self.frozen.set_active_output(None, None);
+            self.zoom.set_active_output(None, None);
+            return;
+        }
+        let Some(info) = self.output_state.info(&output) else {
+            self.set_freeze_zoom_geometry_excluding(None, exclude);
+            self.frozen.set_active_output(None, None);
+            self.zoom.set_active_output(None, None);
+            return;
+        };
+
+        let pixel_size = current_mode_size(&info)
+            .map(|(width, height)| transformed_output_size(width, height, info.transform));
+        let geometry = OutputGeometry::update_from(
+            info.logical_position,
+            info.logical_size,
+            (self.surface.width(), self.surface.height()),
+            self.surface.scale(),
+            info.transform,
+            pixel_size,
+        );
+        self.set_freeze_zoom_geometry_excluding(geometry, exclude);
+        self.frozen
+            .set_active_output(Some(output.clone()), Some(info.id));
+        self.zoom.set_active_output(Some(output), Some(info.id));
     }
 }
 

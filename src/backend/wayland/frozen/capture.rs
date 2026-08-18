@@ -236,7 +236,11 @@ impl FrozenState {
         capture.pool = Some(pool);
         self.direct_capture = Some(DirectCaptureAttempt::WlrScreencopy {
             session: Box::new(capture),
-            context: DirectCaptureContext::new(target_output_id, source_geometry),
+            context: DirectCaptureContext::new(
+                target_output_id,
+                source_geometry,
+                self.output_layout_generation,
+            ),
         });
 
         Ok(())
@@ -404,7 +408,7 @@ impl FrozenState {
         })();
         capture.frame.destroy();
         let image = result?;
-        if !context.output_matches(self.active_output_id) {
+        if !context.output_and_layout_match(self.active_output_id, self.output_layout_generation) {
             return Ok(false);
         }
 

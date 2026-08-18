@@ -175,7 +175,11 @@ impl FrozenState {
             .create_session(&source, Options::empty(), qh, ());
         self.direct_capture = Some(DirectCaptureAttempt::ExtImageCopy {
             session: Box::new(ExtImageCopySession::new(source, session, pool)),
-            context: DirectCaptureContext::new(target_output_id, source_geometry),
+            context: DirectCaptureContext::new(
+                target_output_id,
+                source_geometry,
+                self.output_layout_generation,
+            ),
         });
         debug!("Requested ext-image-copy capture constraints for active output");
         Ok(())
@@ -396,7 +400,7 @@ impl FrozenState {
             .take_ext_capture()
             .context("ext-image-copy capture attempt missing after frame completion")?;
         (*capture).destroy();
-        if !context.output_matches(self.active_output_id) {
+        if !context.output_and_layout_match(self.active_output_id, self.output_layout_generation) {
             return Ok(false);
         }
         self.set_pending_output_image_with_transform(

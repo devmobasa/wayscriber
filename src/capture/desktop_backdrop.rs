@@ -6,6 +6,7 @@ use crate::capture::{
     dependencies::CaptureDependencies,
     types::{
         CaptureError, CaptureType, DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult,
+        DesktopBackdropGeometry,
     },
 };
 use crate::image_decode::{decode_rgba, format_from_mime_or_bytes};
@@ -75,6 +76,17 @@ pub(crate) fn desktop_backdrop_from_argb(
     let (logical_width, logical_height, expected_width, expected_height) =
         expected_backdrop_dimensions(request)?;
 
+    if let Some(expected_layout_size) = request
+        .geometry
+        .and_then(DesktopBackdropGeometry::screenshot_size)
+        && (width, height) != expected_layout_size
+    {
+        return Err(CaptureError::ImageError(format!(
+            "Desktop backdrop capture {width}x{height} does not match output layout {}x{}",
+            expected_layout_size.0, expected_layout_size.1
+        )));
+    }
+
     if width == expected_width && height == expected_height {
         return desktop_backdrop_result(data, width, height, logical_width, logical_height);
     }
@@ -126,6 +138,13 @@ fn expected_backdrop_dimensions(
     }
 
     if let Some(geometry) = request.geometry {
+        if (request.logical_width, request.logical_height)
+            != (geometry.logical_width, geometry.logical_height)
+        {
+            return Err(CaptureError::ImageError(
+                "Desktop backdrop surface does not match active output geometry".to_string(),
+            ));
+        }
         let (width, height) = geometry.physical_size().ok_or_else(|| {
             CaptureError::ImageError("Active output dimensions are too large".to_string())
         })?;

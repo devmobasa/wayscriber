@@ -198,6 +198,8 @@ pub struct DesktopBackdropGeometry {
     pub physical_height: Option<u32>,
     pub crop_x: Option<u32>,
     pub crop_y: Option<u32>,
+    pub screenshot_width: Option<u32>,
+    pub screenshot_height: Option<u32>,
 }
 
 impl DesktopBackdropGeometry {
@@ -224,6 +226,8 @@ impl DesktopBackdropGeometry {
                 Axis::Vertical,
                 outputs,
             )?),
+            screenshot_width: Some(physical_axis_size(Axis::Horizontal, outputs)?),
+            screenshot_height: Some(physical_axis_size(Axis::Vertical, outputs)?),
         })
     }
 
@@ -242,8 +246,20 @@ impl DesktopBackdropGeometry {
         ))
     }
 
+    pub fn verified_physical_size(self) -> Option<(u32, u32)> {
+        let width = self.physical_width?;
+        let height = self.physical_height?;
+        (width > 0 && height > 0).then_some((width, height))
+    }
+
     pub fn physical_origin(self) -> Option<(u32, u32)> {
         Some((self.crop_x?, self.crop_y?))
+    }
+
+    pub fn screenshot_size(self) -> Option<(u32, u32)> {
+        let width = self.screenshot_width?;
+        let height = self.screenshot_height?;
+        (width > 0 && height > 0).then_some((width, height))
     }
 }
 
@@ -320,6 +336,16 @@ fn physical_axis_origin(
         return None;
     }
     Some(physical_origin.round() as u32)
+}
+
+fn physical_axis_size(axis: Axis, outputs: &[DesktopBackdropOutputGeometry]) -> Option<u32> {
+    let max_end = outputs
+        .iter()
+        .map(|output| axis_span(*output, axis).map(|span| span.logical_end))
+        .collect::<Option<Vec<_>>>()?
+        .into_iter()
+        .max()?;
+    physical_axis_origin(i32::try_from(max_end).ok()?, axis, outputs)
 }
 
 #[derive(Debug, Clone, Copy)]
