@@ -31,6 +31,7 @@ pub(crate) fn path(path: &Path) -> DesktopOpenInvocation {
 }
 
 /// Open an HTTPS URL on the update check's exact Wayscriber host allowlist.
+#[cfg(any(feature = "tray", test))]
 pub(crate) fn trusted_wayscriber_url(url: &str) -> Result<DesktopOpenInvocation> {
     if !crate::update_check::is_trusted_url(url) {
         bail!("refusing to open an untrusted Wayscriber URL: {url:?}");

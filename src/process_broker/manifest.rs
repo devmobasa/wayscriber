@@ -127,10 +127,10 @@ fn validate_arguments(kind: HelperKind, basename: &str, arguments: &[OsWire]) ->
                 bail!("desktop opener URL is not a trusted Wayscriber HTTPS URL");
             }
         }
-        HelperKind::Systemctl => {
-            if arguments.first().map(|argument| argument.0.as_slice()) != Some(b"--user") {
-                bail!("systemctl helper is restricted to the user service manager");
-            }
+        HelperKind::Systemctl
+            if arguments.first().map(|argument| argument.0.as_slice()) != Some(b"--user") =>
+        {
+            bail!("systemctl helper is restricted to the user service manager");
         }
         _ => {}
     }

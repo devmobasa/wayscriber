@@ -101,7 +101,7 @@ fn run_systemctl_user(args: &[&str]) -> Result<()> {
 
 fn systemctl_user_arguments<'a>(args: &'a [&'a str]) -> Vec<&'a OsStr> {
     std::iter::once(OsStr::new("--user"))
-        .chain(args.iter().map(|argument| OsStr::new(argument)))
+        .chain(args.iter().map(OsStr::new))
         .collect()
 }
 
