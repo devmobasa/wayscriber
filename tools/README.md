@@ -64,7 +64,7 @@ Helper scripts for development, installation, packaging, and release workflows.
   - Usage: `./tools/bump-version.sh [--dry-run] [new_version]`
 
 - **check-version-consistency.sh** - Check release metadata alignment
-  - Verifies Cargo manifests, the workspace lockfile, packaging metadata, and flake version sourcing
+  - Verifies Cargo manifests, the workspace lockfile, packaging metadata, flake version sourcing, and that the flake compares nixpkgs rustc to Cargo.toml rust-version
   - Keeps the configurator's libadwaita 1.4 floor aligned across Cargo, deb, rpm, PKGBUILD, and `.SRCINFO`
   - With `--release-version X.Y.Z[.N]`, rejects tags that do not match Cargo or an explicit packaging hotfix of Cargo
   - Usage: `bash tools/check-version-consistency.sh [--release-version X.Y.Z[.N]]`
