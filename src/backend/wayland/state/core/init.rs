@@ -114,6 +114,10 @@ impl WaylandState {
             clipboard_operation_ids.clone(),
             runtime_wake.clone(),
         );
+        let desktop_open = ClipboardOperationController::new(
+            clipboard_operation_ids.clone(),
+            runtime_wake.clone(),
+        );
         let clipboard_text_copy = ClipboardOperationController::new(
             clipboard_operation_ids.clone(),
             runtime_wake.clone(),
@@ -148,6 +152,7 @@ impl WaylandState {
             clipboard_publish,
             clipboard_paste,
             clipboard_hex_copy,
+            desktop_open,
             pending_hex_copy: None,
             clipboard_text_copy,
             pending_text_copy: Default::default(),

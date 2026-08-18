@@ -62,6 +62,7 @@ use crate::{
         types::CaptureType,
     },
     config::{Action, Config},
+    desktop_open::DesktopOpenRequest,
     input::state::{ClipboardPasteRequest, TextClipboardRequest, TextPasteTarget},
     input::{DrawingState, EraserMode, InputState, Key, Tool, ZoomAction},
     session::SessionOptions,
@@ -101,6 +102,7 @@ mod clipboard;
 mod color_picker;
 mod core;
 mod data;
+mod desktop_open;
 mod eyedropper;
 mod gtk_toolbar;
 mod helpers;
@@ -254,6 +256,9 @@ pub(super) struct WaylandState {
     pub(super) clipboard_paste:
         ClipboardOperationController<ClipboardPasteRequest, ClipboardPasteCompletion>,
     pub(super) clipboard_hex_copy: ClipboardOperationController<String, Result<(), String>>,
+    /// Desktop-open work completes off-dispatch; successful completion is what
+    /// requests overlay exit, so runtime-owned broker teardown cannot race it.
+    pub(super) desktop_open: ClipboardOperationController<DesktopOpenRequest, Result<(), String>>,
     pub(super) pending_hex_copy: Option<String>,
     /// Async wl-copy pipeline for text-editor selections (Ctrl+C / Ctrl+X).
     pub(super) clipboard_text_copy:

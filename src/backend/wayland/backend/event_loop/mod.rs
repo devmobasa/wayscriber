@@ -211,6 +211,7 @@ pub(super) fn run_event_loop(
         }
         if state.surface.is_xdg_window()
             && !state.has_keyboard_focus()
+            && !state.desktop_open_in_progress()
             && state.focus_exit_suppression_expired(Instant::now())
         {
             if state.xdg_focus_loss_exits_overlay() {

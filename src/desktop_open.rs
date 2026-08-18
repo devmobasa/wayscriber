@@ -5,7 +5,7 @@
 //! trusted Wayscriber HTTPS host rule before they reach the broker.
 
 use std::ffi::{OsStr, OsString};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -17,6 +17,38 @@ const OUTPUT_CAP: usize = 16 * 1024;
 pub(crate) struct DesktopOpenInvocation {
     program: OsString,
     arguments: Vec<OsString>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DesktopOpenRequest {
+    CaptureFolder(PathBuf),
+    ConfigFile(PathBuf),
+}
+
+impl DesktopOpenRequest {
+    pub(crate) fn invocation(&self) -> DesktopOpenInvocation {
+        path(self.path())
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        match self {
+            Self::CaptureFolder(path) | Self::ConfigFile(path) => path,
+        }
+    }
+
+    pub(crate) fn target_name(&self) -> &'static str {
+        match self {
+            Self::CaptureFolder(_) => "capture folder",
+            Self::ConfigFile(_) => "config file",
+        }
+    }
+
+    pub(crate) fn failure_notice(&self) -> &'static str {
+        match self {
+            Self::CaptureFolder(_) => "Failed to open capture folder.",
+            Self::ConfigFile(_) => "Failed to open config file.",
+        }
+    }
 }
 
 impl DesktopOpenInvocation {
@@ -34,16 +66,7 @@ impl DesktopOpenInvocation {
 /// cannot cancel the helper they just requested.
 pub(crate) fn open(invocation: &DesktopOpenInvocation) -> Result<()> {
     let broker = crate::process_broker::current()?;
-    run_with(invocation, |program, arguments, timeout, output_cap| {
-        broker.run(
-            crate::process_broker::HelperKind::DesktopOpen,
-            program,
-            arguments,
-            Vec::new(),
-            timeout,
-            output_cap,
-        )
-    })
+    run_with_broker(&broker, invocation)
 }
 
 /// Run a desktop opener without blocking the Wayland or tray callback that
@@ -54,16 +77,7 @@ pub(crate) fn open_in_background(invocation: DesktopOpenInvocation) -> Result<()
     std::thread::Builder::new()
         .name("wayscriber-desktop-open".to_string())
         .spawn(move || {
-            if let Err(err) = run_with(&invocation, |program, arguments, timeout, output_cap| {
-                broker.run(
-                    crate::process_broker::HelperKind::DesktopOpen,
-                    program,
-                    arguments,
-                    Vec::new(),
-                    timeout,
-                    output_cap,
-                )
-            }) {
+            if let Err(err) = run_with_broker(&broker, &invocation) {
                 // Do not include the target or captured output: an About report
                 // URL can carry diagnostics in its fragment.
                 log::warn!("Desktop opener failed: {err:#}");
@@ -71,6 +85,22 @@ pub(crate) fn open_in_background(invocation: DesktopOpenInvocation) -> Result<()
         })
         .context("failed to start desktop-open worker")?;
     Ok(())
+}
+
+fn run_with_broker(
+    broker: &crate::process_broker::ProcessBroker,
+    invocation: &DesktopOpenInvocation,
+) -> Result<()> {
+    run_with(invocation, |program, arguments, timeout, output_cap| {
+        broker.run(
+            crate::process_broker::HelperKind::DesktopOpen,
+            program,
+            arguments,
+            Vec::new(),
+            timeout,
+            output_cap,
+        )
+    })
 }
 
 fn run_with(

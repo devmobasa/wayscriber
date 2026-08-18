@@ -17,7 +17,7 @@ mod image;
 mod system;
 pub(in crate::backend::wayland) mod transfer;
 pub(in crate::backend::wayland) use completion::{
-    ClipboardOperationController, ClipboardOperationIdSource, ClipboardPoll,
+    ClipboardOperationController, ClipboardOperationIdSource, ClipboardPoll, ClipboardSubmitFailure,
 };
 
 pub(super) const WAYSCRIBER_SELECTION_MIME: &str = "application/vnd.wayscriber.selection+json";
