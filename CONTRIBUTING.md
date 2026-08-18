@@ -15,7 +15,9 @@ module boundary.
 
 ## Workspace and toolchain
 
-The repository is one Cargo workspace using Rust 1.95 and edition 2024:
+The repository is one Cargo workspace using Rust 1.95 and edition 2024. The
+Nix flake compiles with `nixpkgs` rustc from `flake.lock`; after raising
+`rust-version`, run `nix flake update` so that lock is new enough.
 
 - the root `wayscriber` package owns the overlay, daemon, CLI, shared domain/config/session code,
   rendering, and integration tests;
