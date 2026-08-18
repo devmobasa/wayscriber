@@ -11,9 +11,9 @@ use super::{AboutWindowState, clipboard, icon, surface_size};
 
 /// How the footer acknowledges an action that has no visible result of its own.
 const COPIED_NOTICE: &str = "Copied to clipboard";
-const OPENED_NOTICE: &str = "Opened in your browser";
+const OPENING_NOTICE: &str = "Opening in your browser";
 const OPEN_FAILED_NOTICE: &str = "Could not open your browser — see logs";
-const REPORTED_NOTICE: &str = "Diagnostics copied — paste them if the form asks";
+const REPORTED_NOTICE: &str = "Diagnostics copied — opening browser";
 const REPORT_OPEN_FAILED_NOTICE: &str = "Diagnostics copied — browser open failed";
 
 impl AboutWindowState {
@@ -127,9 +127,9 @@ impl AboutWindowState {
     fn perform(&mut self, action: AboutAction) {
         match action {
             AboutAction::OpenUrl(url) => match clipboard::open_url(&url) {
-                Ok(()) => self.set_notice(OPENED_NOTICE),
+                Ok(()) => self.set_notice(OPENING_NOTICE),
                 Err(err) => {
-                    warn!("About dialog refused or failed to open URL {url:?}: {err:#}");
+                    warn!("About dialog refused or failed to open a URL: {err:#}");
                     self.set_notice(OPEN_FAILED_NOTICE);
                 }
             },
@@ -141,14 +141,14 @@ impl AboutWindowState {
             // fragment, but a browser that never launches, or a form that drops
             // the prefill, still leaves them one paste away.
             AboutAction::ReportBug { url, diagnostics } => {
-                // Start the non-blocking desktop-open exchange before the
-                // clipboard worker can take the broker transport.
+                // Queue the bounded desktop-open worker before the independent
+                // clipboard publication worker.
                 let opened = clipboard::open_url(&url);
                 clipboard::copy_text_to_clipboard(&diagnostics);
                 match opened {
                     Ok(()) => self.set_notice(REPORTED_NOTICE),
                     Err(err) => {
-                        warn!("About dialog failed to open report URL {url:?}: {err:#}");
+                        warn!("About dialog failed to open the report URL: {err:#}");
                         self.set_notice(REPORT_OPEN_FAILED_NOTICE);
                     }
                 }

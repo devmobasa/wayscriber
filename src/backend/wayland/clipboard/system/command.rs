@@ -51,6 +51,7 @@ impl ClipboardCommandRunner for WlClipboardCommandRunner {
             [OsStr::new("--type"), OsStr::new(WAYSCRIBER_SELECTION_MIME)],
             payload.to_vec(),
             timeout,
+            0,
         )
     }
 }

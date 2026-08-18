@@ -21,6 +21,7 @@ pub(crate) fn copy_text_via_command(text: &str) -> Result<(), String> {
                 clipboard_text_copy_args(),
                 text.as_bytes().to_vec(),
                 Duration::from_secs(5),
+                0,
             )
         })
         .map_err(|error| format!("Failed to run wl-copy: {error:#}"))?;

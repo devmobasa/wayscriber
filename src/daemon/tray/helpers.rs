@@ -39,7 +39,6 @@ fn spawn_detached(
 }
 
 #[cfg(feature = "tray")]
-#[cfg(feature = "tray")]
 impl WayscriberTray {
     /// Open the configurator, optionally at the screen for the menu item used.
     pub(super) fn launch_configurator(&self, destination: Option<ConfiguratorDestination>) {
@@ -131,12 +130,8 @@ impl WayscriberTray {
                 return;
             }
         };
-        match spawn_detached(
-            crate::process_broker::HelperKind::DesktopOpen,
-            invocation.program(),
-            invocation.arguments(),
-        ) {
-            Ok(child) => info!("Opened update instructions {url} (pid {})", child.id()),
+        match crate::desktop_open::open_in_background(invocation) {
+            Ok(()) => info!("Opening update instructions"),
             Err(err) => warn!("Failed to open update instructions {url}: {err}"),
         }
     }
@@ -191,12 +186,8 @@ impl WayscriberTray {
         }
 
         let invocation = crate::desktop_open::path(&dir);
-        match spawn_detached(
-            crate::process_broker::HelperKind::DesktopOpen,
-            invocation.program(),
-            invocation.arguments(),
-        ) {
-            Ok(child) => info!("Opened log directory via xdg-open (pid {})", child.id()),
+        match crate::desktop_open::open_in_background(invocation) {
+            Ok(()) => info!("Opening log directory via desktop integration"),
             Err(err) => warn!("Failed to open log directory {}: {}", dir.display(), err),
         }
     }
@@ -211,17 +202,9 @@ impl WayscriberTray {
         };
 
         let invocation = crate::desktop_open::path(&path);
-        match spawn_detached(
-            crate::process_broker::HelperKind::DesktopOpen,
-            invocation.program(),
-            invocation.arguments(),
-        ) {
-            Ok(child) => {
-                info!(
-                    "Opened config file at {} (pid {})",
-                    path.display(),
-                    child.id()
-                );
+        match crate::desktop_open::open_in_background(invocation) {
+            Ok(()) => {
+                info!("Opening config file at {}", path.display());
                 true
             }
             Err(err) => {

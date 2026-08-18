@@ -372,6 +372,7 @@ impl ProcessBroker {
         arguments: I,
         input: Vec<u8>,
         timeout: Duration,
+        output_cap: usize,
     ) -> Result<BrokerOutput>
     where
         I: IntoIterator<Item = S>,
@@ -396,6 +397,7 @@ impl ProcessBroker {
                 environment: Vec::new(),
                 input,
                 timeout_ms: u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX),
+                output_cap: output_cap.min(MAX_OUTPUT_BYTES),
             },
             &request_descriptors,
             ExchangeWait::Queue,

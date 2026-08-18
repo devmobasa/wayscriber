@@ -91,6 +91,7 @@ pub(super) enum BrokerOperation {
         environment: Vec<(OsWire, Option<OsWire>)>,
         input: BlobWire,
         timeout_ms: u64,
+        /// Retained publication discards output, so callers must declare zero.
         output_cap: usize,
         output_mode: OutputMode,
     },
@@ -101,6 +102,7 @@ pub(super) enum BrokerOperation {
         environment: Vec<(OsWire, Option<OsWire>)>,
         input: BlobWire,
         timeout_ms: u64,
+        output_cap: usize,
     },
     Spawn {
         kind: HelperKind,

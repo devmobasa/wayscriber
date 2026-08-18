@@ -668,6 +668,7 @@ fn normal_broker_shutdown_releases_successful_provider_descendant() {
             ],
             Vec::new(),
             Duration::from_secs(2),
+            0,
         )
         .unwrap();
     assert_eq!(output.status, 0);
@@ -703,6 +704,7 @@ fn shutdown_channel_peer_loss_kills_retained_provider() {
             ],
             Vec::new(),
             Duration::from_secs(2),
+            0,
         )
         .unwrap();
     assert_eq!(output.status, 0);
@@ -760,6 +762,7 @@ fn retained_publication_replacement_disposes_the_previous_provider() {
             ],
             Vec::new(),
             Duration::from_secs(2),
+            0,
         )
         .unwrap();
     assert_eq!(first.status, 0);
@@ -780,6 +783,7 @@ fn retained_publication_replacement_disposes_the_previous_provider() {
             ],
             Vec::new(),
             Duration::from_secs(2),
+            0,
         )
         .unwrap();
     assert_eq!(second.status, 0);
@@ -842,6 +846,7 @@ fn failed_publication_replacement_preserves_the_current_provider() {
             ],
             Vec::new(),
             Duration::from_secs(2),
+            0,
         )
         .unwrap();
     assert_eq!(current.status, 0);
@@ -859,6 +864,7 @@ fn failed_publication_replacement_preserves_the_current_provider() {
             ],
             Vec::new(),
             Duration::from_secs(2),
+            0,
         )
         .unwrap();
     assert_eq!(failed.status, 7);
@@ -919,6 +925,7 @@ fn retained_publication_kills_failed_or_input_stalled_provider_groups() {
             ],
             input,
             Duration::from_millis(100),
+            0,
         );
         let provider_pid = std::fs::read_to_string(pid_path)
             .unwrap()
@@ -954,9 +961,26 @@ fn retained_publication_rejects_incomplete_input_after_successful_exit() {
         [OsStr::new("-c"), OsStr::new("exit 0")],
         vec![b'x'; 1024 * 1024],
         Duration::from_secs(1),
+        0,
     );
 
     assert!(result.is_err(), "incomplete publication input was accepted");
+}
+
+#[test]
+fn retained_publication_requires_an_explicit_zero_output_cap() {
+    let guard = start_for_runtime().unwrap();
+    let result = guard.broker().publish(
+        HelperKind::TestShell,
+        OsStr::new("sh"),
+        [OsStr::new("-c"), OsStr::new("exit 0")],
+        Vec::new(),
+        Duration::from_secs(1),
+        1,
+    );
+
+    let error = result.expect_err("nonzero publication output cap was accepted");
+    assert!(format!("{error:#}").contains("output cap must be zero"));
 }
 
 #[test]
@@ -985,6 +1009,7 @@ fn broker_shutdown_preempts_retained_publication_stdin_writer() {
             ],
             Vec::new(),
             Duration::from_secs(2),
+            0,
         )
         .unwrap();
     assert_eq!(current.status, 0);
@@ -1007,6 +1032,7 @@ fn broker_shutdown_preempts_retained_publication_stdin_writer() {
                 ],
                 vec![b'x'; 1024 * 1024],
                 Duration::from_secs(2),
+                0,
             )
         }
     });
@@ -1070,6 +1096,7 @@ fn wl_copy_publication_accepts_capture_sized_input() {
             // observed to exceed 5 s when the full parallel suite saturates
             // the machine - the broker then SIGKILLs the helper (status 137).
             Duration::from_secs(30),
+            0,
         )
         .unwrap();
 

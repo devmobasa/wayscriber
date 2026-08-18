@@ -158,17 +158,9 @@ impl InputState {
         };
 
         let invocation = crate::desktop_open::path(&folder);
-        match spawn_detached(
-            crate::process_broker::HelperKind::DesktopOpen,
-            invocation.program(),
-            invocation.arguments(),
-        ) {
-            Ok(child) => {
-                log::info!(
-                    "Opened capture folder at {} (pid {})",
-                    folder.display(),
-                    child.id()
-                );
+        match crate::desktop_open::open_in_background(invocation) {
+            Ok(()) => {
+                log::info!("Opening capture folder at {}", folder.display());
                 self.should_exit = true;
             }
             Err(err) => {
@@ -205,17 +197,9 @@ impl InputState {
         };
 
         let invocation = crate::desktop_open::path(&path);
-        match spawn_detached(
-            crate::process_broker::HelperKind::DesktopOpen,
-            invocation.program(),
-            invocation.arguments(),
-        ) {
-            Ok(child) => {
-                log::info!(
-                    "Opened config file at {} (pid {})",
-                    path.display(),
-                    child.id()
-                );
+        match crate::desktop_open::open_in_background(invocation) {
+            Ok(()) => {
+                log::info!("Opening config file at {}", path.display());
                 self.should_exit = true;
                 true
             }

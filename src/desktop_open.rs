@@ -6,8 +6,12 @@
 
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
+use std::time::Duration;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
+
+const HELPER_TIMEOUT: Duration = Duration::from_secs(10);
+const OUTPUT_CAP: usize = 16 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DesktopOpenInvocation {
@@ -23,6 +27,60 @@ impl DesktopOpenInvocation {
     pub(crate) fn arguments(&self) -> &[OsString] {
         &self.arguments
     }
+}
+
+/// Run a desktop opener without blocking the Wayland or tray callback that
+/// requested it. The broker still owns the complete helper lifetime and
+/// enforces the timeout/output policy inside the worker.
+pub(crate) fn open_in_background(invocation: DesktopOpenInvocation) -> Result<()> {
+    let broker = crate::process_broker::current()?;
+    std::thread::Builder::new()
+        .name("wayscriber-desktop-open".to_string())
+        .spawn(move || {
+            if let Err(err) = run_with(&invocation, |program, arguments, timeout, output_cap| {
+                broker.run(
+                    crate::process_broker::HelperKind::DesktopOpen,
+                    program,
+                    arguments,
+                    Vec::new(),
+                    timeout,
+                    output_cap,
+                )
+            }) {
+                // Do not include the target or captured output: an About report
+                // URL can carry diagnostics in its fragment.
+                log::warn!("Desktop opener failed: {err:#}");
+            }
+        })
+        .context("failed to start desktop-open worker")?;
+    Ok(())
+}
+
+fn run_with(
+    invocation: &DesktopOpenInvocation,
+    run: impl FnOnce(
+        &OsStr,
+        &[OsString],
+        Duration,
+        usize,
+    ) -> Result<crate::process_broker::BrokerOutput>,
+) -> Result<()> {
+    let output = run(
+        invocation.program(),
+        invocation.arguments(),
+        HELPER_TIMEOUT,
+        OUTPUT_CAP,
+    )?;
+    if output.timed_out {
+        bail!("desktop opener timed out");
+    }
+    if output.status != 0 {
+        bail!(
+            "desktop opener exited unsuccessfully with status {}",
+            output.status
+        );
+    }
+    Ok(())
 }
 
 /// Open a local path with the platform's desktop integration.
@@ -82,6 +140,48 @@ mod tests {
             invocation.arguments(),
             [OsString::from("/tmp/Wayscriber Captures")]
         );
+    }
+
+    #[test]
+    fn desktop_open_run_declares_argv_timeout_and_output_cap() {
+        let invocation = path(Path::new("/tmp/Wayscriber Captures"));
+        let mut observed = None;
+
+        run_with(&invocation, |program, arguments, timeout, output_cap| {
+            observed = Some((program.to_owned(), arguments.to_vec(), timeout, output_cap));
+            Ok(crate::process_broker::BrokerOutput {
+                status: 0,
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+                timed_out: false,
+                stdout_limit_reached: false,
+            })
+        })
+        .unwrap();
+
+        let (program, arguments, timeout, output_cap) = observed.unwrap();
+        assert!(!matches!(program.to_str(), Some("sh" | "bash" | "cmd")));
+        assert_eq!(arguments, [OsString::from("/tmp/Wayscriber Captures")]);
+        assert_eq!(timeout, Duration::from_secs(10));
+        assert_eq!(output_cap, 16 * 1024);
+    }
+
+    #[test]
+    fn desktop_open_run_surfaces_timeout_and_nonzero_exit() {
+        let invocation = path(Path::new("/tmp/capture"));
+        let output = |status, timed_out| crate::process_broker::BrokerOutput {
+            status,
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+            timed_out,
+            stdout_limit_reached: false,
+        };
+
+        let timeout = run_with(&invocation, |_, _, _, _| Ok(output(137, true))).unwrap_err();
+        assert!(timeout.to_string().contains("timed out"));
+
+        let nonzero = run_with(&invocation, |_, _, _, _| Ok(output(4, false))).unwrap_err();
+        assert!(nonzero.to_string().contains("status 4"));
     }
 
     #[test]

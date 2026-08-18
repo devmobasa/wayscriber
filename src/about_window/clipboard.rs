@@ -3,26 +3,16 @@ use log::warn;
 
 pub(super) fn open_url(url: &str) -> Result<()> {
     open_url_with(url, |invocation| {
-        // This runs from a Wayland protocol handler. Match the overlay
-        // launchers by refusing a contended broker exchange instead of
-        // stalling input and redraw behind another helper.
-        crate::process_broker::current()?.try_spawn(
-            crate::process_broker::HelperKind::DesktopOpen,
-            crate::process_broker::HelperLifetime::DetachedAfterExec,
-            invocation.program(),
-            invocation.arguments(),
-            Vec::new(),
-        )?;
-        Ok(())
+        crate::desktop_open::open_in_background(invocation.clone())
     })
 }
 
 fn open_url_with(
     url: &str,
-    spawn: impl FnOnce(&crate::desktop_open::DesktopOpenInvocation) -> Result<()>,
+    open: impl FnOnce(&crate::desktop_open::DesktopOpenInvocation) -> Result<()>,
 ) -> Result<()> {
     let invocation = crate::desktop_open::about_url(url)?;
-    spawn(&invocation)
+    open(&invocation)
 }
 
 pub(super) fn copy_text_to_clipboard(text: &str) {
@@ -59,7 +49,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn open_url_uses_the_broker_ready_desktop_open_argv() {
+    fn open_url_builds_the_broker_ready_desktop_open_argv() {
         let mut observed = None;
 
         open_url_with("https://wayscriber.com/report#d=abc", |invocation| {
@@ -71,7 +61,7 @@ mod tests {
         })
         .unwrap();
 
-        let (program, arguments) = observed.expect("trusted URL reaches the spawn adapter");
+        let (program, arguments) = observed.expect("trusted URL reaches the open adapter");
         assert!(!matches!(program.to_str(), Some("sh" | "bash" | "cmd")));
         assert_eq!(
             arguments,

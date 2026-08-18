@@ -41,6 +41,7 @@ fn copy_via_command(image_data: &[u8]) -> Result<(), CaptureError> {
                 [OsStr::new("--type"), OsStr::new("image/png")],
                 image_data.to_vec(),
                 Duration::from_secs(10),
+                0,
             )
         })
         .map_err(|e| {
