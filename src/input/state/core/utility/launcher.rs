@@ -42,24 +42,6 @@ fn launch_failure_message(error: &anyhow::Error, failed: &'static str) -> &'stat
     }
 }
 
-fn opener_arguments(path: &std::path::Path) -> (OsString, Vec<OsString>) {
-    if cfg!(target_os = "macos") {
-        ("open".into(), vec![path.as_os_str().into()])
-    } else if cfg!(target_os = "windows") {
-        (
-            "cmd".into(),
-            vec![
-                "/C".into(),
-                "start".into(),
-                "".into(),
-                path.as_os_str().into(),
-            ],
-        )
-    } else {
-        ("xdg-open".into(), vec![path.as_os_str().into()])
-    }
-}
-
 impl InputState {
     /// Open the About dialog, closing the overlay first.
     ///
@@ -175,11 +157,11 @@ impl InputState {
             return;
         };
 
-        let (opener, arguments) = opener_arguments(&folder);
+        let invocation = crate::desktop_open::path(&folder);
         match spawn_detached(
             crate::process_broker::HelperKind::DesktopOpen,
-            &opener,
-            &arguments,
+            invocation.program(),
+            invocation.arguments(),
         ) {
             Ok(child) => {
                 log::info!(
@@ -222,11 +204,11 @@ impl InputState {
             }
         };
 
-        let (opener, arguments) = opener_arguments(&path);
+        let invocation = crate::desktop_open::path(&path);
         match spawn_detached(
             crate::process_broker::HelperKind::DesktopOpen,
-            &opener,
-            &arguments,
+            invocation.program(),
+            invocation.arguments(),
         ) {
             Ok(child) => {
                 log::info!(

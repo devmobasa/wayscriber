@@ -39,24 +39,6 @@ fn spawn_detached(
 }
 
 #[cfg(feature = "tray")]
-fn opener_arguments(path: &std::path::Path) -> (OsString, Vec<OsString>) {
-    if cfg!(target_os = "macos") {
-        ("open".into(), vec![path.as_os_str().into()])
-    } else if cfg!(target_os = "windows") {
-        (
-            "cmd".into(),
-            vec![
-                "/C".into(),
-                "start".into(),
-                "".into(),
-                path.as_os_str().into(),
-            ],
-        )
-    } else {
-        ("xdg-open".into(), vec![path.as_os_str().into()])
-    }
-}
-
 #[cfg(feature = "tray")]
 impl WayscriberTray {
     /// Open the configurator, optionally at the screen for the menu item used.
@@ -142,10 +124,17 @@ impl WayscriberTray {
     /// Open the update instructions the watcher recorded. The URL comes from
     /// `update_check`, which only ever hands out validated wayscriber.com links.
     pub(super) fn open_update_instructions(&self, url: &str) {
+        let invocation = match crate::desktop_open::trusted_wayscriber_url(url) {
+            Ok(invocation) => invocation,
+            Err(err) => {
+                warn!("Refused to open update instructions {url:?}: {err:#}");
+                return;
+            }
+        };
         match spawn_detached(
             crate::process_broker::HelperKind::DesktopOpen,
-            OsStr::new("xdg-open"),
-            &[OsString::from(url)],
+            invocation.program(),
+            invocation.arguments(),
         ) {
             Ok(child) => info!("Opened update instructions {url} (pid {})", child.id()),
             Err(err) => warn!("Failed to open update instructions {url}: {err}"),
@@ -201,10 +190,11 @@ impl WayscriberTray {
             return;
         }
 
+        let invocation = crate::desktop_open::path(&dir);
         match spawn_detached(
             crate::process_broker::HelperKind::DesktopOpen,
-            OsStr::new("xdg-open"),
-            &[dir.as_os_str().into()],
+            invocation.program(),
+            invocation.arguments(),
         ) {
             Ok(child) => info!("Opened log directory via xdg-open (pid {})", child.id()),
             Err(err) => warn!("Failed to open log directory {}: {}", dir.display(), err),
@@ -220,11 +210,11 @@ impl WayscriberTray {
             }
         };
 
-        let (opener, arguments) = opener_arguments(&path);
+        let invocation = crate::desktop_open::path(&path);
         match spawn_detached(
             crate::process_broker::HelperKind::DesktopOpen,
-            &opener,
-            &arguments,
+            invocation.program(),
+            invocation.arguments(),
         ) {
             Ok(child) => {
                 info!(

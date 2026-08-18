@@ -63,12 +63,13 @@ pub(super) fn validate(
         HelperKind::SessionZenity => basename == "zenity",
         HelperKind::SessionKdialog => basename == "kdialog",
         HelperKind::Gsettings => basename == "gsettings",
+        HelperKind::Systemctl => basename == "systemctl",
         HelperKind::Configurator => std::env::var_os(crate::env_vars::CONFIGURATOR_ENV)
             .map_or_else(
                 || basename.contains("configurator"),
                 |configured| configured == program,
             ),
-        HelperKind::DesktopOpen => matches!(basename.as_str(), "xdg-open" | "open" | "cmd"),
+        HelperKind::DesktopOpen => matches!(basename.as_str(), "xdg-open" | "open"),
         HelperKind::UpdateFetcher => matches!(basename.as_str(), "curl" | "wget"),
         #[cfg(test)]
         HelperKind::TestSleep => basename == "sleep",
@@ -80,6 +81,7 @@ pub(super) fn validate(
     if !allowed {
         bail!("program {basename:?} is not allowed for helper kind {kind:?}");
     }
+    validate_arguments(kind, &basename, arguments)?;
     for (name, _) in environment {
         let name = std::str::from_utf8(&name.0)?;
         if !matches!(
@@ -95,6 +97,53 @@ pub(super) fn validate(
         }
     }
     Ok(())
+}
+
+/// Cheap exec-gate checks for helpers whose safety relies on one indispensable
+/// argument. Complete argv content remains the caller's policy.
+fn validate_arguments(kind: HelperKind, basename: &str, arguments: &[OsWire]) -> Result<()> {
+    match kind {
+        HelperKind::UpdateFetcher => {
+            let required_first = if basename == "curl" {
+                b"--disable".as_slice()
+            } else {
+                b"--no-config".as_slice()
+            };
+            if arguments.first().map(|argument| argument.0.as_slice()) != Some(required_first) {
+                bail!("update fetcher must disable user configuration in argument one");
+            }
+        }
+        HelperKind::DesktopOpen => {
+            let [target] = arguments else {
+                bail!("desktop opener requires exactly one target argument");
+            };
+            if target.0.starts_with(b"-") {
+                bail!("desktop opener target must not be an option");
+            }
+            if let Ok(target) = std::str::from_utf8(&target.0)
+                && looks_like_uri(target)
+                && !crate::update_check::is_trusted_url(target)
+            {
+                bail!("desktop opener URL is not a trusted Wayscriber HTTPS URL");
+            }
+        }
+        HelperKind::Systemctl => {
+            if arguments.first().map(|argument| argument.0.as_slice()) != Some(b"--user") {
+                bail!("systemctl helper is restricted to the user service manager");
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn looks_like_uri(value: &str) -> bool {
+    let Some((scheme, _)) = value.split_once(':') else {
+        return false;
+    };
+    let mut bytes = scheme.bytes();
+    bytes.next().is_some_and(|byte| byte.is_ascii_alphabetic())
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'-' | b'.'))
 }
 
 pub(super) fn command(

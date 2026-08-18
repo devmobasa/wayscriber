@@ -1,9 +1,10 @@
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
 use anyhow::{Context, Result, bail};
+use std::ffi::OsStr;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::time::Duration;
 
 use crate::systemd_user_service::{
     USER_SERVICE_NAME, render_user_service_unit, user_service_unit_path,
@@ -65,13 +66,24 @@ fn write_if_changed(path: &Path, content: &str) -> Result<()> {
 }
 
 fn run_systemctl_user(args: &[&str]) -> Result<()> {
-    let output = Command::new("systemctl")
-        .arg("--user")
-        .args(args)
-        .output()
+    let arguments = systemctl_user_arguments(args);
+    let output = crate::process_broker::current()
+        .and_then(|broker| {
+            broker.run(
+                crate::process_broker::HelperKind::Systemctl,
+                OsStr::new("systemctl"),
+                &arguments,
+                Vec::new(),
+                Duration::from_secs(30),
+                256 * 1024,
+            )
+        })
         .with_context(|| format!("failed to execute systemctl --user {}", args.join(" ")))?;
 
-    if output.status.success() {
+    if output.timed_out {
+        bail!("systemctl --user {} timed out", args.join(" "));
+    }
+    if output.status == 0 {
         return Ok(());
     }
 
@@ -87,11 +99,48 @@ fn run_systemctl_user(args: &[&str]) -> Result<()> {
     );
 }
 
+fn systemctl_user_arguments<'a>(args: &'a [&'a str]) -> Vec<&'a OsStr> {
+    std::iter::once(OsStr::new("--user"))
+        .chain(args.iter().map(|argument| OsStr::new(argument)))
+        .collect()
+}
+
 fn systemctl_error_detail(stdout: &str, stderr: &str) -> String {
     match (stdout.is_empty(), stderr.is_empty()) {
         (true, true) => "no output from systemctl".to_string(),
         (true, false) => stderr.to_string(),
         (false, true) => stdout.to_string(),
         (false, false) => format!("{stderr} | {stdout}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn background_setup_systemctl_argv_is_explicit_and_user_scoped() {
+        assert_eq!(
+            systemctl_user_arguments(&["daemon-reload"]),
+            [OsStr::new("--user"), OsStr::new("daemon-reload")]
+        );
+        assert_eq!(
+            systemctl_user_arguments(&["enable", "--now", USER_SERVICE_NAME]),
+            [
+                OsStr::new("--user"),
+                OsStr::new("enable"),
+                OsStr::new("--now"),
+                OsStr::new("wayscriber.service"),
+            ]
+        );
+    }
+
+    #[test]
+    fn systemctl_error_output_prefers_stderr_without_losing_stdout() {
+        assert_eq!(
+            systemctl_error_detail("stdout detail", "stderr detail"),
+            "stderr detail | stdout detail"
+        );
+        assert_eq!(systemctl_error_detail("", ""), "no output from systemctl");
     }
 }

@@ -165,9 +165,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
 
     // Runtime and update-checking modes create their process broker before
     // acquiring locks or starting threads. The guard spans the complete run.
-    let update_mode_needs_broker =
-        !crate::update_check::compiled_out() && (cli.about || cli.check_update);
-    let _process_broker = (cli.daemon || cli.active || cli.freeze || update_mode_needs_broker)
+    let _process_broker = needs_process_broker(&cli)
         .then(crate::process_broker::start_for_runtime)
         .transpose()?;
     crate::daemon::protocol_v2::start_daemon_watchdog_from_environment()?;
@@ -291,9 +289,35 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn needs_process_broker(cli: &Cli) -> bool {
+    cli.daemon
+        || cli.active
+        || cli.freeze
+        // About's URL and clipboard helpers need the broker even when network
+        // update checks were compiled out of this build.
+        || cli.about
+        || (cli.check_update && !crate::update_check::compiled_out())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn about_always_starts_the_process_broker() {
+        assert!(needs_process_broker(&Cli {
+            about: true,
+            ..Cli::default()
+        }));
+    }
+
+    #[test]
+    fn print_only_mode_does_not_start_the_process_broker() {
+        assert!(!needs_process_broker(&Cli {
+            runtime_capabilities: true,
+            ..Cli::default()
+        }));
+    }
 
     #[test]
     fn daemon_request_session_file_anchors_relative_paths_to_caller_directory() {

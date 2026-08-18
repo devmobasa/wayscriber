@@ -1,28 +1,28 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use log::warn;
 
-pub(super) fn open_url(url: &str) {
-    let opener = if cfg!(target_os = "macos") {
-        "open"
-    } else if cfg!(target_os = "windows") {
-        "cmd"
-    } else {
-        "xdg-open"
-    };
+pub(super) fn open_url(url: &str) -> Result<()> {
+    open_url_with(url, |invocation| {
+        // This runs from a Wayland protocol handler. Match the overlay
+        // launchers by refusing a contended broker exchange instead of
+        // stalling input and redraw behind another helper.
+        crate::process_broker::current()?.try_spawn(
+            crate::process_broker::HelperKind::DesktopOpen,
+            crate::process_broker::HelperLifetime::DetachedAfterExec,
+            invocation.program(),
+            invocation.arguments(),
+            Vec::new(),
+        )?;
+        Ok(())
+    })
+}
 
-    let mut cmd = std::process::Command::new(opener);
-    if cfg!(target_os = "windows") {
-        cmd.args(["/C", "start", ""]).arg(url);
-    } else {
-        cmd.arg(url);
-    }
-    cmd.stdin(std::process::Stdio::null());
-    cmd.stdout(std::process::Stdio::null());
-    cmd.stderr(std::process::Stdio::null());
-
-    if let Err(err) = cmd.spawn() {
-        warn!("Failed to open URL {}: {}", url, err);
-    }
+fn open_url_with(
+    url: &str,
+    spawn: impl FnOnce(&crate::desktop_open::DesktopOpenInvocation) -> Result<()>,
+) -> Result<()> {
+    let invocation = crate::desktop_open::about_url(url)?;
+    spawn(&invocation)
 }
 
 pub(super) fn copy_text_to_clipboard(text: &str) {
@@ -33,7 +33,7 @@ pub(super) fn copy_text_to_clipboard(text: &str) {
     let text = text.to_string();
     std::thread::spawn(move || {
         if let Err(err) = copy_text_with_command(&text, copy_text_via_command) {
-            warn!("Failed to copy commit id to clipboard: {}", err);
+            warn!("Failed to copy About text to clipboard: {err:#}");
         }
     });
 }
@@ -49,32 +49,7 @@ where
 }
 
 fn copy_text_via_command(text: &str) -> Result<()> {
-    use std::io::Write;
-
-    let mut child = std::process::Command::new("wl-copy")
-        .arg("--type")
-        .arg("text/plain")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .context("Failed to spawn wl-copy")?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(text.as_bytes())
-            .context("Failed to write to wl-copy stdin")?;
-    }
-
-    let output = child
-        .wait_with_output()
-        .context("Failed to wait for wl-copy")?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow::anyhow!("wl-copy failed: {}", stderr.trim()));
-    }
-
-    Ok(())
+    crate::clipboard_text::copy_text_via_command(text).map_err(anyhow::Error::msg)
 }
 
 #[cfg(test)]
@@ -82,6 +57,49 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
+
+    #[test]
+    fn open_url_uses_the_broker_ready_desktop_open_argv() {
+        let mut observed = None;
+
+        open_url_with("https://wayscriber.com/report#d=abc", |invocation| {
+            observed = Some((
+                invocation.program().to_owned(),
+                invocation.arguments().to_vec(),
+            ));
+            Ok(())
+        })
+        .unwrap();
+
+        let (program, arguments) = observed.expect("trusted URL reaches the spawn adapter");
+        assert!(!matches!(program.to_str(), Some("sh" | "bash" | "cmd")));
+        assert_eq!(
+            arguments,
+            [std::ffi::OsString::from(
+                "https://wayscriber.com/report#d=abc"
+            )]
+        );
+    }
+
+    #[test]
+    fn open_url_refuses_untrusted_hosts_before_spawning() {
+        let spawn_calls = AtomicUsize::new(0);
+
+        for url in [
+            "http://wayscriber.com/report",
+            "https://wayscriber.com.example/report",
+            "https://www.wayscriber.com/report",
+            "https://example.com/report",
+        ] {
+            let result = open_url_with(url, |_| {
+                spawn_calls.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            });
+            assert!(result.is_err(), "unexpectedly accepted {url}");
+        }
+
+        assert_eq!(spawn_calls.load(Ordering::SeqCst), 0);
+    }
 
     #[test]
     fn copy_text_with_command_short_circuits_for_empty_text() {

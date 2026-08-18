@@ -16,6 +16,7 @@ pub(crate) mod clipboard_text;
 pub mod config;
 pub mod configurator_destination;
 mod daemon;
+mod desktop_open;
 pub mod domain;
 pub mod draw;
 pub mod durable_io;

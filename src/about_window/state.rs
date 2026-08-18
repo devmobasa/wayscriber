@@ -1,6 +1,6 @@
 //! About-window state: focus, hover, and the actions the handlers trigger.
 
-use log::debug;
+use log::{debug, warn};
 use smithay_client_toolkit::seat::pointer::CursorIcon;
 use wayland_client::Connection;
 
@@ -12,7 +12,9 @@ use super::{AboutWindowState, clipboard, icon, surface_size};
 /// How the footer acknowledges an action that has no visible result of its own.
 const COPIED_NOTICE: &str = "Copied to clipboard";
 const OPENED_NOTICE: &str = "Opened in your browser";
+const OPEN_FAILED_NOTICE: &str = "Could not open your browser — see logs";
 const REPORTED_NOTICE: &str = "Diagnostics copied — paste them if the form asks";
+const REPORT_OPEN_FAILED_NOTICE: &str = "Diagnostics copied — browser open failed";
 
 impl AboutWindowState {
     #[allow(clippy::too_many_arguments)]
@@ -124,10 +126,13 @@ impl AboutWindowState {
 
     fn perform(&mut self, action: AboutAction) {
         match action {
-            AboutAction::OpenUrl(url) => {
-                clipboard::open_url(&url);
-                self.set_notice(OPENED_NOTICE);
-            }
+            AboutAction::OpenUrl(url) => match clipboard::open_url(&url) {
+                Ok(()) => self.set_notice(OPENED_NOTICE),
+                Err(err) => {
+                    warn!("About dialog refused or failed to open URL {url:?}: {err:#}");
+                    self.set_notice(OPEN_FAILED_NOTICE);
+                }
+            },
             AboutAction::CopyText(text) => {
                 clipboard::copy_text_to_clipboard(&text);
                 self.set_notice(COPIED_NOTICE);
@@ -136,9 +141,17 @@ impl AboutWindowState {
             // fragment, but a browser that never launches, or a form that drops
             // the prefill, still leaves them one paste away.
             AboutAction::ReportBug { url, diagnostics } => {
+                // Start the non-blocking desktop-open exchange before the
+                // clipboard worker can take the broker transport.
+                let opened = clipboard::open_url(&url);
                 clipboard::copy_text_to_clipboard(&diagnostics);
-                clipboard::open_url(&url);
-                self.set_notice(REPORTED_NOTICE);
+                match opened {
+                    Ok(()) => self.set_notice(REPORTED_NOTICE),
+                    Err(err) => {
+                        warn!("About dialog failed to open report URL {url:?}: {err:#}");
+                        self.set_notice(REPORT_OPEN_FAILED_NOTICE);
+                    }
+                }
             }
             AboutAction::CheckForUpdates => self.begin_update_check(),
             AboutAction::Close => self.should_exit = true,
