@@ -1,4 +1,4 @@
-//! Identified capacity-one completion transport for event-loop clipboard operations.
+//! Identified capacity-one completion transport for event-loop runtime operations.
 
 use std::fmt;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -8,124 +8,127 @@ use std::sync::{Arc, Mutex};
 use crate::backend::wayland::RuntimeWakeHandle;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(in crate::backend::wayland) struct ClipboardOperationId(u64);
+pub(in crate::backend::wayland) struct RuntimeOperationId(u64);
 
-impl fmt::Display for ClipboardOperationId {
+impl fmt::Display for RuntimeOperationId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(formatter)
     }
 }
 
 #[derive(Clone)]
-pub(in crate::backend::wayland) struct ClipboardOperationIdSource {
+pub(in crate::backend::wayland) struct RuntimeOperationIdSource {
     next: Arc<Mutex<Option<u64>>>,
 }
 
-impl ClipboardOperationIdSource {
+impl RuntimeOperationIdSource {
     pub(in crate::backend::wayland) fn new() -> Self {
         Self {
             next: Arc::new(Mutex::new(Some(1))),
         }
     }
 
-    fn allocate(&self) -> Result<ClipboardOperationId, ClipboardSubmitError> {
+    fn allocate(&self) -> Result<RuntimeOperationId, RuntimeOperationSubmitError> {
         let mut next = self
             .next
             .lock()
-            .map_err(|_| ClipboardSubmitError::Unhealthy)?;
-        let value = next.ok_or(ClipboardSubmitError::IdentityExhausted)?;
+            .map_err(|_| RuntimeOperationSubmitError::Unhealthy)?;
+        let value = next.ok_or(RuntimeOperationSubmitError::IdentityExhausted)?;
         *next = value.checked_add(1);
-        Ok(ClipboardOperationId(value))
+        Ok(RuntimeOperationId(value))
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(in crate::backend::wayland) enum ClipboardSubmitError {
-    Busy { active_id: ClipboardOperationId },
+pub(in crate::backend::wayland) enum RuntimeOperationSubmitError {
+    Busy { active_id: RuntimeOperationId },
     IdentityExhausted,
     Unhealthy,
     SpawnFailed { reason: String },
 }
 
-impl fmt::Display for ClipboardSubmitError {
+impl fmt::Display for RuntimeOperationSubmitError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Busy { active_id } => {
-                write!(formatter, "clipboard operation {active_id} is still active")
+                write!(formatter, "runtime operation {active_id} is still active")
             }
-            Self::IdentityExhausted => formatter.write_str("clipboard operation IDs exhausted"),
-            Self::Unhealthy => formatter.write_str("clipboard completion controller is unhealthy"),
+            Self::IdentityExhausted => formatter.write_str("runtime operation IDs exhausted"),
+            Self::Unhealthy => formatter.write_str("runtime operation controller is unhealthy"),
             Self::SpawnFailed { reason } => {
-                write!(formatter, "failed to spawn clipboard producer: {reason}")
+                write!(
+                    formatter,
+                    "failed to spawn runtime operation worker: {reason}"
+                )
             }
         }
     }
 }
 
 #[derive(Debug)]
-pub(in crate::backend::wayland) struct ClipboardSubmitFailure<C> {
-    error: ClipboardSubmitError,
+pub(in crate::backend::wayland) struct RuntimeOperationSubmitFailure<C> {
+    error: RuntimeOperationSubmitError,
     context: C,
 }
 
-impl<C> ClipboardSubmitFailure<C> {
-    pub(in crate::backend::wayland) fn into_parts(self) -> (ClipboardSubmitError, C) {
+impl<C> RuntimeOperationSubmitFailure<C> {
+    pub(in crate::backend::wayland) fn into_parts(self) -> (RuntimeOperationSubmitError, C) {
         (self.error, self.context)
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(in crate::backend::wayland) enum ClipboardPoll<C, T> {
+pub(in crate::backend::wayland) enum RuntimeOperationPoll<C, T> {
     Idle,
     Pending {
-        id: ClipboardOperationId,
+        id: RuntimeOperationId,
     },
     Ready {
-        id: ClipboardOperationId,
+        id: RuntimeOperationId,
         context: C,
         outcome: T,
     },
     ProducerFailed {
-        id: ClipboardOperationId,
+        id: RuntimeOperationId,
         context: C,
         reason: String,
     },
     Disconnected {
-        id: ClipboardOperationId,
+        id: RuntimeOperationId,
         context: C,
     },
 }
 
 enum ProducerMessage<T> {
     Ready {
-        id: ClipboardOperationId,
+        id: RuntimeOperationId,
         outcome: T,
     },
     Failed {
-        id: ClipboardOperationId,
+        id: RuntimeOperationId,
         reason: String,
     },
 }
 
 struct ActiveOperation<C, T> {
-    id: ClipboardOperationId,
+    id: RuntimeOperationId,
     context: C,
     receiver: Receiver<ProducerMessage<T>>,
 }
 
-pub(in crate::backend::wayland) struct ClipboardOperationController<C, T> {
-    ids: ClipboardOperationIdSource,
+pub(in crate::backend::wayland) struct RuntimeOperationController<C, T> {
+    ids: RuntimeOperationIdSource,
     runtime_wake: RuntimeWakeHandle,
     active: Option<ActiveOperation<C, T>>,
     healthy: bool,
 }
 
-impl<C, T> ClipboardOperationController<C, T>
+impl<C, T> RuntimeOperationController<C, T>
 where
     T: Send + 'static,
 {
     pub(in crate::backend::wayland) fn new(
-        ids: ClipboardOperationIdSource,
+        ids: RuntimeOperationIdSource,
         runtime_wake: RuntimeWakeHandle,
     ) -> Self {
         Self {
@@ -145,7 +148,7 @@ where
         context: C,
         thread_name: &'static str,
         operation: impl FnOnce() -> T + Send + 'static,
-    ) -> Result<ClipboardOperationId, ClipboardSubmitFailure<C>> {
+    ) -> Result<RuntimeOperationId, RuntimeOperationSubmitFailure<C>> {
         self.try_submit_with_spawner(context, operation, |job| {
             std::thread::Builder::new()
                 .name(thread_name.to_string())
@@ -159,16 +162,16 @@ where
         context: C,
         operation: impl FnOnce() -> T + Send + 'static,
         spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::io::Result<()>,
-    ) -> Result<ClipboardOperationId, ClipboardSubmitFailure<C>> {
+    ) -> Result<RuntimeOperationId, RuntimeOperationSubmitFailure<C>> {
         if !self.healthy {
-            return Err(ClipboardSubmitFailure {
-                error: ClipboardSubmitError::Unhealthy,
+            return Err(RuntimeOperationSubmitFailure {
+                error: RuntimeOperationSubmitError::Unhealthy,
                 context,
             });
         }
         if let Some(active) = &self.active {
-            return Err(ClipboardSubmitFailure {
-                error: ClipboardSubmitError::Busy {
+            return Err(RuntimeOperationSubmitFailure {
+                error: RuntimeOperationSubmitError::Busy {
                     active_id: active.id,
                 },
                 context,
@@ -177,16 +180,16 @@ where
         let id = match self.ids.allocate() {
             Ok(id) => id,
             Err(error) => {
-                if error == ClipboardSubmitError::Unhealthy {
+                if error == RuntimeOperationSubmitError::Unhealthy {
                     self.healthy = false;
                 }
-                return Err(ClipboardSubmitFailure { error, context });
+                return Err(RuntimeOperationSubmitFailure { error, context });
             }
         };
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
         let runtime_wake = self.runtime_wake.clone();
         let job = Box::new(move || {
-            let guard = ClipboardProducerExitGuard::new(id, sender, runtime_wake);
+            let guard = RuntimeOperationExitGuard::new(id, sender, runtime_wake);
             let message = match catch_unwind(AssertUnwindSafe(operation)) {
                 Ok(outcome) => ProducerMessage::Ready { id, outcome },
                 Err(payload) => ProducerMessage::Failed {
@@ -197,8 +200,8 @@ where
             guard.publish(message);
         });
         if let Err(err) = spawn(job) {
-            return Err(ClipboardSubmitFailure {
-                error: ClipboardSubmitError::SpawnFailed {
+            return Err(RuntimeOperationSubmitFailure {
+                error: RuntimeOperationSubmitError::SpawnFailed {
                     reason: err.to_string(),
                 },
                 context,
@@ -212,27 +215,29 @@ where
         Ok(id)
     }
 
-    pub(in crate::backend::wayland) fn poll(&mut self) -> ClipboardPoll<C, T> {
+    pub(in crate::backend::wayland) fn poll(&mut self) -> RuntimeOperationPoll<C, T> {
         let Some(active) = self.active.take() else {
-            return ClipboardPoll::Idle;
+            return RuntimeOperationPoll::Idle;
         };
         let active_id = active.id;
         match active.receiver.try_recv() {
             Err(TryRecvError::Empty) => {
                 self.active = Some(active);
-                ClipboardPoll::Pending { id: active_id }
+                RuntimeOperationPoll::Pending { id: active_id }
             }
-            Err(TryRecvError::Disconnected) => ClipboardPoll::Disconnected {
+            Err(TryRecvError::Disconnected) => RuntimeOperationPoll::Disconnected {
                 id: active.id,
                 context: active.context,
             },
-            Ok(ProducerMessage::Ready { id, outcome }) if id == active_id => ClipboardPoll::Ready {
-                id,
-                context: active.context,
-                outcome,
-            },
+            Ok(ProducerMessage::Ready { id, outcome }) if id == active_id => {
+                RuntimeOperationPoll::Ready {
+                    id,
+                    context: active.context,
+                    outcome,
+                }
+            }
             Ok(ProducerMessage::Failed { id, reason }) if id == active_id => {
-                ClipboardPoll::ProducerFailed {
+                RuntimeOperationPoll::ProducerFailed {
                     id,
                     context: active.context,
                     reason,
@@ -240,11 +245,11 @@ where
             }
             Ok(ProducerMessage::Ready { id, .. } | ProducerMessage::Failed { id, .. }) => {
                 self.healthy = false;
-                ClipboardPoll::ProducerFailed {
+                RuntimeOperationPoll::ProducerFailed {
                     id: active.id,
                     context: active.context,
                     reason: format!(
-                        "clipboard producer reported transport identity {id}, expected {}",
+                        "runtime operation worker reported transport identity {id}, expected {}",
                         active.id
                     ),
                 }
@@ -259,20 +264,20 @@ fn panic_reason(payload: Box<dyn std::any::Any + Send>) -> String {
     } else if let Some(message) = payload.downcast_ref::<String>() {
         message.clone()
     } else {
-        "clipboard producer panicked with a non-string payload".to_string()
+        "runtime operation worker panicked with a non-string payload".to_string()
     }
 }
 
-struct ClipboardProducerExitGuard<T> {
-    id: ClipboardOperationId,
+struct RuntimeOperationExitGuard<T> {
+    id: RuntimeOperationId,
     sender: Option<SyncSender<ProducerMessage<T>>>,
     runtime_wake: RuntimeWakeHandle,
     terminal_published: bool,
 }
 
-impl<T> ClipboardProducerExitGuard<T> {
+impl<T> RuntimeOperationExitGuard<T> {
     fn new(
-        id: ClipboardOperationId,
+        id: RuntimeOperationId,
         sender: SyncSender<ProducerMessage<T>>,
         runtime_wake: RuntimeWakeHandle,
     ) -> Self {
@@ -288,28 +293,28 @@ impl<T> ClipboardProducerExitGuard<T> {
         let sender = self
             .sender
             .take()
-            .expect("clipboard producer still holds its sender until publish");
+            .expect("runtime operation worker still holds its sender until publish");
         let result = sender.try_send(message);
         self.terminal_published = true;
         match result {
             Ok(()) | Err(TrySendError::Disconnected(_)) => {}
             Err(TrySendError::Full(_)) => {
                 log::error!(
-                    "Clipboard producer {} found an impossible full terminal channel",
+                    "Runtime operation worker {} found an impossible full terminal channel",
                     self.id
                 );
             }
         }
         if let Err(err) = self.runtime_wake.wake() {
             log::error!(
-                "Failed to wake runtime for clipboard operation {}: {err}",
+                "Failed to wake runtime for runtime operation {}: {err}",
                 self.id
             );
         }
     }
 }
 
-impl<T> Drop for ClipboardProducerExitGuard<T> {
+impl<T> Drop for RuntimeOperationExitGuard<T> {
     fn drop(&mut self) {
         if self.terminal_published {
             return;
@@ -318,7 +323,7 @@ impl<T> Drop for ClipboardProducerExitGuard<T> {
         self.sender.take();
         if let Err(err) = self.runtime_wake.wake() {
             log::error!(
-                "Failed to wake runtime for disconnected clipboard operation {}: {err}",
+                "Failed to wake runtime for disconnected runtime operation {}: {err}",
                 self.id
             );
         }
@@ -335,11 +340,10 @@ mod tests {
     use super::*;
     use crate::backend::wayland::RuntimeWakeSource;
 
-    fn controller<C, T: Send + 'static>() -> (RuntimeWakeSource, ClipboardOperationController<C, T>)
-    {
+    fn controller<C, T: Send + 'static>() -> (RuntimeWakeSource, RuntimeOperationController<C, T>) {
         let wake = RuntimeWakeSource::new().unwrap();
         let controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+            RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle());
         (wake, controller)
     }
 
@@ -373,14 +377,14 @@ mod tests {
     #[test]
     fn shared_source_allocates_distinct_ids_across_controllers() {
         let wake = RuntimeWakeSource::new().unwrap();
-        let ids = ClipboardOperationIdSource::new();
-        let mut publish = ClipboardOperationController::new(ids.clone(), wake.handle());
-        let mut paste = ClipboardOperationController::new(ids, wake.handle());
+        let ids = RuntimeOperationIdSource::new();
+        let mut publish = RuntimeOperationController::new(ids.clone(), wake.handle());
+        let mut paste = RuntimeOperationController::new(ids, wake.handle());
 
         let publish_id = publish.try_submit("publish", "test-publish", || 1).unwrap();
         let paste_id = paste.try_submit("paste", "test-paste", || 2).unwrap();
-        assert_eq!(publish_id, ClipboardOperationId(1));
-        assert_eq!(paste_id, ClipboardOperationId(2));
+        assert_eq!(publish_id, RuntimeOperationId(1));
+        assert_eq!(paste_id, RuntimeOperationId(2));
     }
 
     #[test]
@@ -393,11 +397,11 @@ mod tests {
             .unwrap_err();
         assert_eq!(
             failure.into_parts().0,
-            ClipboardSubmitError::Busy { active_id: first }
+            RuntimeOperationSubmitError::Busy { active_id: first }
         );
         assert_eq!(
             controller.poll(),
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Ready {
                 id: first,
                 context: "first",
                 outcome: 7,
@@ -423,12 +427,18 @@ mod tests {
             .unwrap_err();
         assert_eq!(
             failure.into_parts(),
-            (ClipboardSubmitError::Busy { active_id: first }, "second",)
+            (
+                RuntimeOperationSubmitError::Busy { active_id: first },
+                "second",
+            )
         );
 
         release_tx.send(()).unwrap();
         wait_for_wake(&wake);
-        assert!(matches!(controller.poll(), ClipboardPoll::Ready { .. }));
+        assert!(matches!(
+            controller.poll(),
+            RuntimeOperationPoll::Ready { .. }
+        ));
     }
 
     #[test]
@@ -438,7 +448,7 @@ mod tests {
         wait_for_wake(&wake);
         assert_eq!(
             controller.poll(),
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Ready {
                 id,
                 context: 11,
                 outcome: 29,
@@ -469,7 +479,7 @@ mod tests {
         poller.join().unwrap();
         assert_eq!(
             controller.poll(),
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Ready {
                 id,
                 context: 5,
                 outcome: 13,
@@ -486,7 +496,7 @@ mod tests {
         wait_for_wake(&wake);
         assert_eq!(
             controller.poll(),
-            ClipboardPoll::ProducerFailed {
+            RuntimeOperationPoll::ProducerFailed {
                 id,
                 context: 17,
                 reason: "expected producer panic".to_string(),
@@ -497,20 +507,20 @@ mod tests {
     #[test]
     fn exit_guard_disconnects_before_waking() {
         let wake = RuntimeWakeSource::new().unwrap();
-        let ids = ClipboardOperationIdSource::new();
-        let mut controller = ClipboardOperationController::<u64, u64>::new(ids, wake.handle());
-        let id = ClipboardOperationId(9);
+        let ids = RuntimeOperationIdSource::new();
+        let mut controller = RuntimeOperationController::<u64, u64>::new(ids, wake.handle());
+        let id = RuntimeOperationId(9);
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
         controller.active = Some(ActiveOperation {
             id,
             context: 31,
             receiver,
         });
-        drop(ClipboardProducerExitGuard::new(id, sender, wake.handle()));
+        drop(RuntimeOperationExitGuard::new(id, sender, wake.handle()));
         wait_for_wake(&wake);
         assert_eq!(
             controller.poll(),
-            ClipboardPoll::Disconnected { id, context: 31 }
+            RuntimeOperationPoll::Disconnected { id, context: 31 }
         );
     }
 
@@ -527,7 +537,7 @@ mod tests {
         assert_eq!(
             failure.into_parts(),
             (
-                ClipboardSubmitError::SpawnFailed {
+                RuntimeOperationSubmitError::SpawnFailed {
                     reason: "injected spawn failure".to_string(),
                 },
                 41,
@@ -545,14 +555,14 @@ mod tests {
             controller
                 .try_submit(42, "test-after-spawn-failure", || 2)
                 .unwrap(),
-            ClipboardOperationId(2)
+            RuntimeOperationId(2)
         );
     }
 
     #[test]
     fn identity_mismatch_restores_active_context_and_disables_controller() {
         let (_wake, mut controller) = controller::<u64, u64>();
-        let active_id = ClipboardOperationId(3);
+        let active_id = RuntimeOperationId(3);
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
         controller.active = Some(ActiveOperation {
             id: active_id,
@@ -561,13 +571,13 @@ mod tests {
         });
         sender
             .try_send(ProducerMessage::Ready {
-                id: ClipboardOperationId(4),
+                id: RuntimeOperationId(4),
                 outcome: 99,
             })
             .unwrap();
         assert!(matches!(
             controller.poll(),
-            ClipboardPoll::ProducerFailed {
+            RuntimeOperationPoll::ProducerFailed {
                 id,
                 context: 43,
                 ..
@@ -576,7 +586,10 @@ mod tests {
         let failure = controller
             .try_submit(44, "test-unhealthy", || 1)
             .unwrap_err();
-        assert_eq!(failure.into_parts().0, ClipboardSubmitError::Unhealthy);
+        assert_eq!(
+            failure.into_parts().0,
+            RuntimeOperationSubmitError::Unhealthy
+        );
     }
 
     #[test]
@@ -584,15 +597,18 @@ mod tests {
         let (wake, mut controller) = controller::<u64, u64>();
         *controller.ids.next.lock().unwrap() = Some(u64::MAX);
         let id = controller.try_submit(1, "test-max-id", || 2).unwrap();
-        assert_eq!(id, ClipboardOperationId(u64::MAX));
+        assert_eq!(id, RuntimeOperationId(u64::MAX));
         wait_for_wake(&wake);
-        assert!(matches!(controller.poll(), ClipboardPoll::Ready { .. }));
+        assert!(matches!(
+            controller.poll(),
+            RuntimeOperationPoll::Ready { .. }
+        ));
         let failure = controller
             .try_submit(3, "test-exhausted", || 4)
             .unwrap_err();
         assert_eq!(
             failure.into_parts().0,
-            ClipboardSubmitError::IdentityExhausted
+            RuntimeOperationSubmitError::IdentityExhausted
         );
     }
 

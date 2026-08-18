@@ -1,10 +1,13 @@
 //! Wayland-state glue for clipboard publish and paste requests.
 
 use super::WaylandState;
-use crate::backend::wayland::clipboard::{
-    self, ClipboardPasteCompletion, ClipboardPasteResult, ClipboardPoll,
-    ClipboardPublishCompletion, FailedLocalSelectionProbe, PasteAction, TransferEffect,
-    TransferPlan, TransferWarning, transfer,
+use crate::backend::wayland::{
+    RuntimeOperationPoll,
+    clipboard::{
+        self, ClipboardPasteCompletion, ClipboardPasteResult, ClipboardPublishCompletion,
+        FailedLocalSelectionProbe, PasteAction, TransferEffect, TransferPlan, TransferWarning,
+        transfer,
+    },
 };
 use crate::input::state::ClipboardPasteRequest;
 use crate::input::state::{Toast, ToastPriority};
@@ -32,8 +35,8 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn poll_clipboard_publish_completion(&mut self) {
         match self.clipboard_publish.poll() {
-            ClipboardPoll::Idle | ClipboardPoll::Pending { .. } => {}
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Idle | RuntimeOperationPoll::Pending { .. } => {}
+            RuntimeOperationPoll::Ready {
                 id,
                 context: generation,
                 outcome,
@@ -50,7 +53,7 @@ impl WaylandState {
                     );
                 }
             }
-            ClipboardPoll::ProducerFailed {
+            RuntimeOperationPoll::ProducerFailed {
                 id,
                 context: generation,
                 reason,
@@ -60,7 +63,7 @@ impl WaylandState {
                     failed_clipboard_publish_completion(generation),
                 );
             }
-            ClipboardPoll::Disconnected {
+            RuntimeOperationPoll::Disconnected {
                 id,
                 context: generation,
             } => {
@@ -74,8 +77,8 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn poll_clipboard_paste_completion(&mut self) {
         match self.clipboard_paste.poll() {
-            ClipboardPoll::Idle | ClipboardPoll::Pending { .. } => {}
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Idle | RuntimeOperationPoll::Pending { .. } => {}
+            RuntimeOperationPoll::Ready {
                 id,
                 context: request,
                 outcome,
@@ -97,7 +100,7 @@ impl WaylandState {
                     ));
                 }
             }
-            ClipboardPoll::ProducerFailed {
+            RuntimeOperationPoll::ProducerFailed {
                 id,
                 context: request,
                 reason,
@@ -107,7 +110,7 @@ impl WaylandState {
                     request, &reason,
                 ));
             }
-            ClipboardPoll::Disconnected {
+            RuntimeOperationPoll::Disconnected {
                 id,
                 context: request,
             } => {

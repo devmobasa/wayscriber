@@ -9,6 +9,7 @@ pub(crate) mod input_monitor;
 mod overlay_passthrough;
 mod portal_capture;
 mod portal_task;
+mod runtime_operation;
 mod runtime_ui_state;
 mod session;
 mod state;
@@ -34,5 +35,9 @@ mod zoom;
 
 pub use backend::WaylandBackend;
 pub(crate) use backend::runtime_wake::{RuntimeWakeHandle, RuntimeWakeSource};
+pub(in crate::backend::wayland) use runtime_operation::{
+    RuntimeOperationController, RuntimeOperationIdSource, RuntimeOperationPoll,
+    RuntimeOperationSubmitFailure,
+};
 #[cfg(feature = "tablet-input")]
 pub use tablet_types::TabletToolType;

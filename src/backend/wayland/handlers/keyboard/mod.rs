@@ -14,6 +14,34 @@ use crate::{config::Action, input::Key, notification};
 use super::super::state::WaylandState;
 pub(in crate::backend::wayland) use translate::keysym_to_key;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::backend::wayland) enum XdgFocusLeaveAction {
+    Ignore,
+    AwaitDesktopOpen,
+    RestoreClipboardFocus,
+    StayOpen,
+    Exit,
+}
+
+pub(in crate::backend::wayland) fn xdg_focus_leave_action(
+    is_xdg_window: bool,
+    desktop_open_in_progress: bool,
+    focus_exit_suppressed: bool,
+    focus_loss_exits_overlay: bool,
+) -> XdgFocusLeaveAction {
+    if !is_xdg_window {
+        XdgFocusLeaveAction::Ignore
+    } else if desktop_open_in_progress {
+        XdgFocusLeaveAction::AwaitDesktopOpen
+    } else if focus_exit_suppressed {
+        XdgFocusLeaveAction::RestoreClipboardFocus
+    } else if focus_loss_exits_overlay {
+        XdgFocusLeaveAction::Exit
+    } else {
+        XdgFocusLeaveAction::StayOpen
+    }
+}
+
 impl KeyboardHandler for WaylandState {
     fn enter(
         &mut self,
@@ -67,30 +95,44 @@ impl KeyboardHandler for WaylandState {
         self.set_board_pan_key_held(false);
         self.stop_board_pan();
 
-        if self.surface.is_xdg_window() && self.focus_exit_suppressed() {
-            warn!("Keyboard focus lost in xdg fallback; suppressing exit after clipboard action");
-            self.set_xdg_close_guard_for(Duration::from_millis(2500));
-            self.request_xdg_activation(qh);
-            return;
-        }
-
-        if self.surface.is_xdg_window() {
-            if !self.xdg_focus_loss_exits_overlay() {
+        match xdg_focus_leave_action(
+            self.surface.is_xdg_window(),
+            self.desktop_open_in_progress(),
+            self.focus_exit_suppressed(),
+            self.xdg_focus_loss_exits_overlay(),
+        ) {
+            XdgFocusLeaveAction::Ignore => {}
+            XdgFocusLeaveAction::AwaitDesktopOpen => {
+                // The opener deliberately transfers focus. Its completion owns
+                // overlay exit so the broker guard cannot be dropped mid-run.
+                warn!(
+                    "Keyboard focus left the xdg fallback during desktop-open; awaiting helper completion"
+                );
+            }
+            XdgFocusLeaveAction::RestoreClipboardFocus => {
+                warn!(
+                    "Keyboard focus lost in xdg fallback; suppressing exit after clipboard action"
+                );
+                self.set_xdg_close_guard_for(Duration::from_millis(2500));
+                self.request_xdg_activation(qh);
+            }
+            XdgFocusLeaveAction::StayOpen => {
                 warn!(
                     "Keyboard focus lost in xdg fallback; keeping overlay open without auto-reactivation (ui.xdg_focus_loss_behavior=stay)"
                 );
                 self.set_xdg_close_guard_for(Duration::from_millis(2500));
-                return;
             }
-            warn!("Keyboard focus lost in xdg fallback; exiting overlay");
-            notification::send_notification_async(
-                &self.tokio_handle,
-                "Wayscriber lost focus".to_string(),
-                "The desktop could not keep the overlay focused, so Wayscriber closed it."
-                    .to_string(),
-                Some("dialog-warning".to_string()),
-            );
-            self.input_state.should_exit = true;
+            XdgFocusLeaveAction::Exit => {
+                warn!("Keyboard focus lost in xdg fallback; exiting overlay");
+                notification::send_notification_async(
+                    &self.tokio_handle,
+                    "Wayscriber lost focus".to_string(),
+                    "The desktop could not keep the overlay focused, so Wayscriber closed it."
+                        .to_string(),
+                    Some("dialog-warning".to_string()),
+                );
+                self.input_state.should_exit = true;
+            }
         }
     }
 
@@ -468,5 +510,42 @@ mod tests {
         assert!(!is_repeatable_key(Key::Escape));
         assert!(!is_repeatable_key(Key::Tab));
         assert!(!is_repeatable_key(Key::F10));
+    }
+
+    #[test]
+    fn active_desktop_open_owns_xdg_focus_leave_for_every_focus_policy() {
+        for focus_exit_suppressed in [false, true] {
+            for focus_loss_exits_overlay in [false, true] {
+                assert_eq!(
+                    xdg_focus_leave_action(
+                        true,
+                        true,
+                        focus_exit_suppressed,
+                        focus_loss_exits_overlay,
+                    ),
+                    XdgFocusLeaveAction::AwaitDesktopOpen,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn focus_leave_routing_preserves_non_desktop_open_policies() {
+        assert_eq!(
+            xdg_focus_leave_action(false, true, true, true),
+            XdgFocusLeaveAction::Ignore,
+        );
+        assert_eq!(
+            xdg_focus_leave_action(true, false, true, true),
+            XdgFocusLeaveAction::RestoreClipboardFocus,
+        );
+        assert_eq!(
+            xdg_focus_leave_action(true, false, false, false),
+            XdgFocusLeaveAction::StayOpen,
+        );
+        assert_eq!(
+            xdg_focus_leave_action(true, false, false, true),
+            XdgFocusLeaveAction::Exit,
+        );
     }
 }

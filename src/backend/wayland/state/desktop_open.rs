@@ -6,8 +6,8 @@
 
 use std::time::Duration;
 
-use super::{ClipboardOperationController, WaylandState};
-use crate::backend::wayland::clipboard::{ClipboardPoll, ClipboardSubmitFailure};
+use super::{RuntimeOperationController, WaylandState};
+use crate::backend::wayland::{RuntimeOperationPoll, RuntimeOperationSubmitFailure};
 use crate::desktop_open::{DesktopOpenInvocation, DesktopOpenRequest};
 use crate::input::state::{Toast, ToastPriority};
 
@@ -71,10 +71,10 @@ impl WaylandState {
 }
 
 fn queue_desktop_open(
-    controller: &mut ClipboardOperationController<DesktopOpenRequest, Result<(), String>>,
+    controller: &mut RuntimeOperationController<DesktopOpenRequest, Result<(), String>>,
     request: DesktopOpenRequest,
     open: impl FnOnce(&DesktopOpenInvocation) -> anyhow::Result<()> + Send + 'static,
-) -> Result<(), ClipboardSubmitFailure<DesktopOpenRequest>> {
+) -> Result<(), RuntimeOperationSubmitFailure<DesktopOpenRequest>> {
     let invocation = request.invocation();
     controller
         .try_submit(request, "wayscriber-desktop-open", move || {
@@ -84,21 +84,23 @@ fn queue_desktop_open(
 }
 
 fn classify_completion(
-    poll: ClipboardPoll<DesktopOpenRequest, Result<(), String>>,
+    poll: RuntimeOperationPoll<DesktopOpenRequest, Result<(), String>>,
 ) -> DesktopOpenCompletion {
     match poll {
-        ClipboardPoll::Idle | ClipboardPoll::Pending { .. } => DesktopOpenCompletion::Pending,
-        ClipboardPoll::Ready {
+        RuntimeOperationPoll::Idle | RuntimeOperationPoll::Pending { .. } => {
+            DesktopOpenCompletion::Pending
+        }
+        RuntimeOperationPoll::Ready {
             context: request,
             outcome,
             ..
         } => classify_result(request, outcome),
-        ClipboardPoll::ProducerFailed {
+        RuntimeOperationPoll::ProducerFailed {
             context: request,
             reason,
             ..
         } => DesktopOpenCompletion::Failed { request, reason },
-        ClipboardPoll::Disconnected {
+        RuntimeOperationPoll::Disconnected {
             context: request, ..
         } => DesktopOpenCompletion::Failed {
             request,
@@ -129,13 +131,16 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::*;
-    use crate::backend::wayland::{RuntimeWakeSource, clipboard::ClipboardOperationIdSource};
+    use crate::backend::wayland::{
+        RuntimeOperationIdSource, RuntimeWakeSource,
+        handlers::keyboard::{XdgFocusLeaveAction, xdg_focus_leave_action},
+    };
 
     #[test]
     fn dispatch_returns_before_helper_completion_and_exit_waits_for_success() {
         let wake = RuntimeWakeSource::new().unwrap();
         let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+            RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle());
         let request = DesktopOpenRequest::CaptureFolder("/tmp/capture".into());
         let (release_tx, release_rx) = mpsc::channel();
         let fallback_release = release_tx.clone();
@@ -153,6 +158,11 @@ mod tests {
         assert!(
             started.elapsed() < Duration::from_millis(250),
             "desktop-open submission blocked event dispatch"
+        );
+        assert!(controller.is_active());
+        assert_eq!(
+            xdg_focus_leave_action(true, controller.is_active(), false, true),
+            XdgFocusLeaveAction::AwaitDesktopOpen,
         );
         assert!(matches!(
             {

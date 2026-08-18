@@ -1,7 +1,7 @@
 //! Clipboard helpers for color hex values.
 
-use super::{ClipboardOperationController, WaylandState};
-use crate::backend::wayland::clipboard::ClipboardPoll;
+use super::{RuntimeOperationController, WaylandState};
+use crate::backend::wayland::RuntimeOperationPoll;
 use crate::clipboard_text::{
     ClipboardTextError, copy_text_via_command, read_clipboard_text_via_command,
 };
@@ -34,8 +34,8 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn poll_hex_copy_completion(&mut self) {
         match self.clipboard_hex_copy.poll() {
-            ClipboardPoll::Idle | ClipboardPoll::Pending { .. } => {}
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Idle | RuntimeOperationPoll::Pending { .. } => {}
+            RuntimeOperationPoll::Ready {
                 context: hex,
                 outcome: Ok(()),
                 ..
@@ -46,7 +46,7 @@ impl WaylandState {
                     Toast::info(format!("Copied {hex}")),
                 );
             }
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Ready {
                 context: hex,
                 outcome: Err(err),
                 ..
@@ -58,7 +58,7 @@ impl WaylandState {
                     Toast::warning("Failed to copy to clipboard"),
                 );
             }
-            ClipboardPoll::ProducerFailed {
+            RuntimeOperationPoll::ProducerFailed {
                 context: hex,
                 reason,
                 ..
@@ -70,7 +70,7 @@ impl WaylandState {
                     Toast::warning("Failed to copy to clipboard"),
                 );
             }
-            ClipboardPoll::Disconnected { context: hex, .. } => {
+            RuntimeOperationPoll::Disconnected { context: hex, .. } => {
                 log::error!("Hex copy producer disconnected for {hex}");
                 self.input_state.push_toast(
                     ToastPriority::Info,
@@ -171,7 +171,7 @@ impl WaylandState {
 }
 
 fn start_clipboard_copy(
-    controller: &mut ClipboardOperationController<String, Result<(), String>>,
+    controller: &mut RuntimeOperationController<String, Result<(), String>>,
     hex: String,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
 ) -> Result<(), String> {
@@ -183,7 +183,7 @@ fn start_clipboard_copy(
 }
 
 pub(super) fn queue_latest_clipboard_copy(
-    controller: &mut ClipboardOperationController<String, Result<(), String>>,
+    controller: &mut RuntimeOperationController<String, Result<(), String>>,
     pending: &mut Option<String>,
     hex: String,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
@@ -193,7 +193,7 @@ pub(super) fn queue_latest_clipboard_copy(
 }
 
 pub(super) fn submit_pending_clipboard_copy_if_idle(
-    controller: &mut ClipboardOperationController<String, Result<(), String>>,
+    controller: &mut RuntimeOperationController<String, Result<(), String>>,
     pending: &mut Option<String>,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
 ) -> Result<(), String> {
@@ -212,14 +212,14 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
+    use crate::backend::wayland::RuntimeOperationIdSource;
     use crate::backend::wayland::RuntimeWakeSource;
-    use crate::backend::wayland::clipboard::ClipboardOperationIdSource;
 
     #[test]
     fn hex_copy_submission_stays_off_the_event_thread_until_completion() {
         let wake = RuntimeWakeSource::new().unwrap();
         let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+            RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle());
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
 
@@ -234,7 +234,10 @@ mod tests {
         .unwrap();
 
         started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-        assert!(matches!(controller.poll(), ClipboardPoll::Pending { .. }));
+        assert!(matches!(
+            controller.poll(),
+            RuntimeOperationPoll::Pending { .. }
+        ));
         release_tx.send(()).unwrap();
         assert!(
             wake.wait_readable(Some(Duration::from_secs(1))).unwrap(),
@@ -242,7 +245,7 @@ mod tests {
         );
         assert!(matches!(
             controller.poll(),
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Ready {
                 context,
                 outcome: Ok(()),
                 ..
@@ -254,7 +257,7 @@ mod tests {
     fn active_hex_copy_retains_only_the_newest_pending_request() {
         let wake = RuntimeWakeSource::new().unwrap();
         let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+            RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle());
         let mut pending = None;
         let (first_started_tx, first_started_rx) = mpsc::channel();
         let (first_release_tx, first_release_rx) = mpsc::channel();
@@ -292,13 +295,16 @@ mod tests {
         )
         .unwrap();
         assert_eq!(pending.as_deref(), Some("#333333"));
-        assert!(matches!(controller.poll(), ClipboardPoll::Pending { .. }));
+        assert!(matches!(
+            controller.poll(),
+            RuntimeOperationPoll::Pending { .. }
+        ));
 
         first_release_tx.send(()).unwrap();
         assert!(wake.wait_readable(Some(Duration::from_secs(1))).unwrap());
         assert!(matches!(
             controller.poll(),
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Ready {
                 context,
                 outcome: Ok(()),
                 ..
@@ -327,7 +333,7 @@ mod tests {
         assert!(wake.wait_readable(Some(Duration::from_secs(1))).unwrap());
         assert!(matches!(
             controller.poll(),
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Ready {
                 context,
                 outcome: Ok(()),
                 ..

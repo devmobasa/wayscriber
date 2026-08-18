@@ -101,29 +101,19 @@ impl WaylandState {
             WaylandState::ui_animation_interval_from_fps(config.performance.ui_animation_fps);
 
         let buffer_count = config.performance.buffer_count as usize;
-        let clipboard_operation_ids = ClipboardOperationIdSource::new();
-        let clipboard_publish = ClipboardOperationController::new(
-            clipboard_operation_ids.clone(),
-            runtime_wake.clone(),
-        );
-        let clipboard_paste = ClipboardOperationController::new(
-            clipboard_operation_ids.clone(),
-            runtime_wake.clone(),
-        );
-        let clipboard_hex_copy = ClipboardOperationController::new(
-            clipboard_operation_ids.clone(),
-            runtime_wake.clone(),
-        );
-        let desktop_open = ClipboardOperationController::new(
-            clipboard_operation_ids.clone(),
-            runtime_wake.clone(),
-        );
-        let clipboard_text_copy = ClipboardOperationController::new(
-            clipboard_operation_ids.clone(),
-            runtime_wake.clone(),
-        );
+        let runtime_operation_ids = RuntimeOperationIdSource::new();
+        let clipboard_publish =
+            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
+        let clipboard_paste =
+            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
+        let clipboard_hex_copy =
+            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
+        let desktop_open =
+            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
+        let clipboard_text_copy =
+            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
         let clipboard_text_paste =
-            ClipboardOperationController::new(clipboard_operation_ids, runtime_wake.clone());
+            RuntimeOperationController::new(runtime_operation_ids, runtime_wake.clone());
         let ocr = crate::ocr::OcrController::new(runtime_wake.clone());
 
         Self {
