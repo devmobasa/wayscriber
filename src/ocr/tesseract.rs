@@ -29,33 +29,49 @@ impl TextRecognizer for TesseractRecognizer {
             return Err(OcrFailure::EngineMissing);
         }
 
-        // A securely created temporary file with automatic deletion on every
-        // path. A file rather than broker stdin because the broker's input cap
-        // is 16 MiB and a lossless desktop crop can exceed it.
-        let mut input = tempfile::Builder::new()
-            .prefix("wayscriber-ocr-")
-            .suffix(".png")
-            .tempfile()
-            .map_err(|err| {
-                log::warn!("OCR temporary file creation failed: {err}");
-                OcrFailure::TemporaryFileFailed
-            })?;
-        input
-            .write_all(png)
-            .and_then(|()| input.as_file_mut().sync_all())
-            .map_err(|err| {
-                log::warn!("OCR temporary file write failed: {err}");
-                OcrFailure::TemporaryFileFailed
-            })?;
-
-        let output = run_tesseract(input.path(), languages);
-        // Explicit close so the deletion error is observable rather than
-        // swallowed by `Drop`; either way the file is gone before returning.
-        if let Err(err) = input.close() {
-            log::warn!("OCR temporary file cleanup failed: {err}");
-        }
-        output
+        with_temporary_png(png, |input| run_tesseract(input, languages))
     }
+}
+
+/// Run one OCR operation with a securely created PNG that cannot outlive the
+/// stack frame, including while unwinding from a panic.
+fn with_temporary_png<T>(
+    png: &[u8],
+    operation: impl FnOnce(&Path) -> Result<T, OcrFailure>,
+) -> Result<T, OcrFailure> {
+    with_temporary_png_in(png, &std::env::temp_dir(), operation)
+}
+
+fn with_temporary_png_in<T>(
+    png: &[u8],
+    directory: &Path,
+    operation: impl FnOnce(&Path) -> Result<T, OcrFailure>,
+) -> Result<T, OcrFailure> {
+    // A file rather than broker stdin because the broker's input cap is 16 MiB
+    // and a lossless desktop crop can exceed it. NamedTempFile's Drop removes
+    // the path during unwinding; explicit close makes ordinary cleanup errors
+    // observable before the operation returns.
+    let mut input = tempfile::Builder::new()
+        .prefix("wayscriber-ocr-")
+        .suffix(".png")
+        .tempfile_in(directory)
+        .map_err(|err| {
+            log::warn!("OCR temporary file creation failed: {err}");
+            OcrFailure::TemporaryFileFailed
+        })?;
+    input
+        .write_all(png)
+        .and_then(|()| input.as_file_mut().sync_all())
+        .map_err(|err| {
+            log::warn!("OCR temporary file write failed: {err}");
+            OcrFailure::TemporaryFileFailed
+        })?;
+
+    let output = operation(input.path());
+    if let Err(err) = input.close() {
+        log::warn!("OCR temporary file cleanup failed: {err}");
+    }
+    output
 }
 
 fn run_tesseract(input: &Path, languages: &OcrLanguages) -> Result<RecognizedOutput, OcrFailure> {
@@ -295,19 +311,50 @@ mod tests {
     }
 
     #[test]
-    fn a_temporary_input_file_is_removed_on_every_path() {
-        // The recognizer owns the file through `tempfile`; the guarantee under
-        // test is that no wayscriber-ocr file survives a run that fails before,
-        // during, or after the engine call. Without a broker the run fails at
-        // the invocation step, which is the hardest path to clean up.
-        let before = temporary_ocr_files();
-        let outcome = TesseractRecognizer.recognize(b"not a png", &languages());
-        assert!(outcome.is_err());
-        assert_eq!(temporary_ocr_files(), before);
+    fn temporary_input_is_removed_after_success() {
+        let directory = crate::test_temp::tempdir().unwrap();
+
+        let result = with_temporary_png_in(b"png", directory.path(), |path| {
+            assert!(path.exists());
+            assert_eq!(std::fs::read(path).unwrap(), b"png");
+            Ok("recognized")
+        });
+
+        assert_eq!(result.unwrap(), "recognized");
+        assert!(temporary_ocr_files(directory.path()).is_empty());
     }
 
-    fn temporary_ocr_files() -> Vec<std::path::PathBuf> {
-        let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
+    #[test]
+    fn temporary_input_is_removed_after_operation_failure() {
+        let directory = crate::test_temp::tempdir().unwrap();
+
+        let result = with_temporary_png_in(b"png", directory.path(), |path| {
+            assert!(path.exists());
+            Err::<(), _>(OcrFailure::EngineFailed)
+        });
+
+        assert!(matches!(result, Err(OcrFailure::EngineFailed)));
+        assert!(temporary_ocr_files(directory.path()).is_empty());
+    }
+
+    #[test]
+    fn temporary_input_is_removed_while_unwinding_from_a_panic() {
+        let directory = crate::test_temp::tempdir().unwrap();
+
+        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _: Result<(), OcrFailure> =
+                with_temporary_png_in(b"png", directory.path(), |path| {
+                    assert!(path.exists());
+                    panic!("simulated OCR adapter panic");
+                });
+        }));
+
+        assert!(panic.is_err());
+        assert!(temporary_ocr_files(directory.path()).is_empty());
+    }
+
+    fn temporary_ocr_files(directory: &Path) -> Vec<std::path::PathBuf> {
+        let Ok(entries) = std::fs::read_dir(directory) else {
             return Vec::new();
         };
         let mut paths: Vec<_> = entries
