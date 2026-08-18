@@ -42,6 +42,26 @@ fn launch_failure_message(error: &anyhow::Error, failed: &'static str) -> &'stat
     }
 }
 
+/// Complete desktop-open before requesting runtime exit. Dropping the runtime
+/// also tears down its broker, so reversing these operations would race the
+/// bounded helper against broker shutdown.
+fn open_before_runtime_exit(
+    invocation: &crate::desktop_open::DesktopOpenInvocation,
+    should_exit: &mut bool,
+) -> anyhow::Result<()> {
+    open_before_runtime_exit_with(invocation, should_exit, crate::desktop_open::open)
+}
+
+fn open_before_runtime_exit_with(
+    invocation: &crate::desktop_open::DesktopOpenInvocation,
+    should_exit: &mut bool,
+    open: impl FnOnce(&crate::desktop_open::DesktopOpenInvocation) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    open(invocation)?;
+    *should_exit = true;
+    Ok(())
+}
+
 impl InputState {
     /// Open the About dialog, closing the overlay first.
     ///
@@ -158,10 +178,9 @@ impl InputState {
         };
 
         let invocation = crate::desktop_open::path(&folder);
-        match crate::desktop_open::open_in_background(invocation) {
+        match open_before_runtime_exit(&invocation, &mut self.should_exit) {
             Ok(()) => {
-                log::info!("Opening capture folder at {}", folder.display());
-                self.should_exit = true;
+                log::info!("Opened capture folder at {}", folder.display());
             }
             Err(err) => {
                 log::error!(
@@ -197,10 +216,9 @@ impl InputState {
         };
 
         let invocation = crate::desktop_open::path(&path);
-        match crate::desktop_open::open_in_background(invocation) {
+        match open_before_runtime_exit(&invocation, &mut self.should_exit) {
             Ok(()) => {
-                log::info!("Opening config file at {}", path.display());
-                self.should_exit = true;
+                log::info!("Opened config file at {}", path.display());
                 true
             }
             Err(err) => {
@@ -213,5 +231,43 @@ impl InputState {
                 false
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::path::Path;
+
+    use super::*;
+
+    #[test]
+    fn desktop_open_must_complete_before_runtime_exit_is_requested() {
+        let invocation = crate::desktop_open::path(Path::new("/tmp/capture"));
+        let completed = Cell::new(false);
+        let mut should_exit = false;
+
+        open_before_runtime_exit_with(&invocation, &mut should_exit, |_| {
+            completed.set(true);
+            Ok(())
+        })
+        .unwrap();
+
+        assert!(completed.get());
+        assert!(should_exit);
+    }
+
+    #[test]
+    fn failed_desktop_open_keeps_the_runtime_and_broker_owner_alive() {
+        let invocation = crate::desktop_open::path(Path::new("/tmp/capture"));
+        let mut should_exit = false;
+
+        let error = open_before_runtime_exit_with(&invocation, &mut should_exit, |_| {
+            Err(anyhow::anyhow!("injected desktop-open failure"))
+        })
+        .unwrap_err();
+
+        assert!(error.to_string().contains("injected desktop-open failure"));
+        assert!(!should_exit);
     }
 }

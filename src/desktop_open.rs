@@ -29,6 +29,23 @@ impl DesktopOpenInvocation {
     }
 }
 
+/// Complete a bounded desktop-open operation before the caller continues.
+/// Runtime owners that exit after the action use this form so broker teardown
+/// cannot cancel the helper they just requested.
+pub(crate) fn open(invocation: &DesktopOpenInvocation) -> Result<()> {
+    let broker = crate::process_broker::current()?;
+    run_with(invocation, |program, arguments, timeout, output_cap| {
+        broker.run(
+            crate::process_broker::HelperKind::DesktopOpen,
+            program,
+            arguments,
+            Vec::new(),
+            timeout,
+            output_cap,
+        )
+    })
+}
+
 /// Run a desktop opener without blocking the Wayland or tray callback that
 /// requested it. The broker still owns the complete helper lifetime and
 /// enforces the timeout/output policy inside the worker.
