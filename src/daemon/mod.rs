@@ -1,5 +1,6 @@
 //! Daemon mode implementation: background service with toggle activation
 
+mod binary_conflict;
 mod control;
 mod core;
 mod global_shortcuts;

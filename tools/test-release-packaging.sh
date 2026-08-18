@@ -361,6 +361,9 @@ assert_contains "${WORK_DIR}/release-package-job.yml" "https://wayscriber.com/ar
 assert_contains "${WORK_DIR}/release-package-job.yml" "./tools/check-arch-installer-manifest.sh"
 assert_contains "${WORK_DIR}/release-package-job.yml" 'wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz'
 assert_not_contains "${WORK_DIR}/release-package-job.yml" 'sh "$RUNNER_TEMP/arch-install.sh"'
+assert_contains "${REPO_ROOT}/README.md" "--replace-other"
+assert_contains "${REPO_ROOT}/README.md" "--no-restart"
+assert_contains "${REPO_ROOT}/README.md" "--remove-unmanaged-usr"
 test -x "${ARCH_INSTALLER_CHECKER}"
 assert_contains "${ARCH_INSTALLER_CHECKER}" "The installer is parsed as data and is not run."
 

@@ -281,10 +281,16 @@ sh arch-install.sh
 ```
 
 The dry run verifies the latest stable release, its checksum and install manifest, the
-required Arch packages, and package ownership without installing files. The full run
-installs allowlisted files under `/usr/local`, refuses to shadow a pacman-owned Wayscriber
-installation, and does not start or restart the user service. To update this installation,
-download a fresh script, rerun it, then restart `wayscriber.service` when ready.
+required Arch packages, and package ownership without installing files. Both the dry run
+and the full run refuse another Wayscriber copy that is not this install: an unmanaged
+file under `/usr`, `~/.local/bin/wayscriber`, or a user unit / drop-in whose `ExecStart`
+is not `/usr/local/bin/wayscriber`. A symlink that already resolves to the dest is not a
+conflict. Pass `--replace-other` on those commands to remove the other copy first. If
+`wayscriber.service` is already active, the installer restarts it so the overlay daemon
+follows `/usr/local/bin/wayscriber`; pass `--no-restart` to leave the running unit alone.
+`--version` is the crate version, not a git hash, so inspect the installed path and the
+running service `ExecStart` after install. To update this installation, download a fresh
+script and rerun it.
 
 Remove the direct installation before moving to the AUR. Otherwise, `/usr/local/bin` and
 `/usr/local/lib/systemd/user` continue to take priority over the package files under
@@ -299,10 +305,12 @@ yay -S wayscriber-bin
 systemctl --user enable --now wayscriber.service
 ```
 
-The uninstaller removes only unmanaged files in the direct install manifest, including
-the same files from the legacy `/usr` location. It leaves pacman-owned files and your user
-configuration and data unchanged, and refuses actual removal while the service is active
-or enabled.
+The uninstaller removes only unmanaged files in the direct install manifest under
+`/usr/local`. It leaves pacman-owned files and your user configuration and data unchanged,
+and refuses actual removal while the service is active or enabled. A leftover unmanaged
+git build under `/usr` is left in place; pass `--remove-unmanaged-usr` only when that
+`/usr` copy should go too. Default uninstall does not remove `~/.local/bin/wayscriber` or
+a user unit / drop-in; the script warns if those still point at `/usr/local`.
 
 ### NixOS and Nix
 

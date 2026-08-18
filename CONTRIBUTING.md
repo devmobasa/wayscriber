@@ -141,5 +141,11 @@ not as a reason for mechanical splitting.
 - Drafts under `docs/temp/` are planning material unless explicitly promoted.
 - Version changes must go through `tools/bump-version.sh`; keep both package manifests, root
   `Cargo.lock`, packaging metadata, and tag/release policy aligned.
+- Close a user-visible "I don't have that setting / this build" report only after the change is in
+  a tagged GitHub release. `main` is not what `arch-install.sh`, AUR `wayscriber-bin`, or other
+  packaged installs ship. `--version` reports the crate version, not the git hash, so bump with
+  `tools/bump-version.sh` in the same change as a user-visible overlay, settings, or config toggle
+  (or immediately before tagging that release). Otherwise two binaries can print the same
+  `wayscriber 0.9.x` and look identical.
 
 See [tools/README.md](tools/README.md) for build, install, packaging, version, and release helpers.
