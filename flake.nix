@@ -7,12 +7,22 @@
   };
 
   outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+    # Linux only. eachDefaultSystem also evaluates x86_64-darwin, which
+    # nixpkgs 26.11 dropped.
+    flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
+        cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+        version = cargoToml.package.version;
+        rustVersion = cargoToml.package.rust-version;
         servicePath = pkgs.lib.makeBinPath [ pkgs.grim pkgs.slurp pkgs.wl-clipboard ];
-      in {
+      in
+      # Instantiation (and CI `nix eval`) must fail before cargoBuildHook
+      # when flake.lock's nixpkgs rustc lags Cargo.toml's rust-version.
+      assert pkgs.lib.assertMsg
+        (pkgs.lib.versionAtLeast pkgs.rustc.version rustVersion)
+        "nixpkgs rustc ${pkgs.rustc.version} is older than Cargo.toml rust-version ${rustVersion}; run `nix flake update`.";
+      {
         packages = {
           wayscriber = pkgs.rustPlatform.buildRustPackage {
             pname = "wayscriber";
