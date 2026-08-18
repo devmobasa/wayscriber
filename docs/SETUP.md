@@ -37,8 +37,13 @@ Run the install script:
 
 This will:
 1. Build the release binary
-2. Copy it to `~/.local/bin/wayscriber`
-3. Tell you how to add Hyprland keybind
+2. Copy it to `/usr/bin/wayscriber` (or `$WAYSCRIBER_INSTALL_DIR`)
+3. Refuse a second copy under `/usr/local/bin` or `~/.local/bin` unless you pass `--replace-other` or confirm
+4. Optionally set up the systemd user service or a Hyprland keybind
+
+If `/usr/local/bin/wayscriber` already exists from the direct Arch installer, keep only one
+prefix. Overlay spawn follows the running daemon file, not whichever path you passed to
+`--version` or `--about`.
 
 ### Manual Install
 
@@ -250,9 +255,15 @@ Press <kbd>Escape</kbd> (should hide overlay)
 - If `wayscriber` is not found from the compositor, use the absolute path from `command -v wayscriber`
 
 **Binary not found?**
-- Check PATH: `echo $PATH | grep .local/bin`
-- Add to PATH if missing (see Manual Install)
-- Restart terminal after PATH change
+- Check `type -a wayscriber` and the path you installed to (`/usr/bin`, `/usr/local/bin`, or `~/.local/bin`)
+- If you used `./tools/install.sh`, the default dest is `/usr/bin/wayscriber` (or `$WAYSCRIBER_INSTALL_DIR`)
+- If you copied the binary by hand, add `~/.local/bin` to PATH (see Manual Install) and restart the terminal
+
+**Settings or `--about` do not match the binary you just built?**
+- Two copies can exist: the direct installer uses `/usr/local`, source `tools/install.sh` uses `/usr/bin`, and a manual copy may live in `~/.local/bin`.
+- Check `type -a wayscriber`, `systemctl --user show wayscriber.service -p ExecStart,MainPID,FragmentPath`, and `readlink -f /proc/$(systemctl --user show -p MainPID --value wayscriber.service)/exe`.
+- `--version` is the crate version and can be identical on both copies. `--about` opens a window; use it on the path you intend to run, not as a substitute for the running daemon path.
+- Keep one prefix. `./tools/install.sh --replace-other` removes the other known copies when installing to `/usr/bin`.
 
 **Want different key?**
 - Edit `bindings.lua` or `hyprland.conf`, depending on your Hyprland config format
@@ -262,6 +273,16 @@ Press <kbd>Escape</kbd> (should hide overlay)
   - `CTRL SHIFT, 2` → <kbd>Ctrl+Shift+2</kbd>
 
 ## Uninstall
+
+If you used `./tools/install.sh` (default `/usr/bin`):
+
+```bash
+sudo rm -f /usr/bin/wayscriber
+systemctl --user disable --now wayscriber.service
+# Remove the keybind from bindings.lua or hyprland.conf
+```
+
+If you copied the binary by hand to `~/.local/bin`:
 
 ```bash
 rm ~/.local/bin/wayscriber

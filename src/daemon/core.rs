@@ -245,6 +245,7 @@ impl Daemon {
     /// Run daemon with signal handling
     pub fn run(&mut self) -> Result<()> {
         info!("Starting wayscriber daemon");
+        super::binary_conflict::warn_if_other_wayscriber_binaries();
         if self.freeze_on_show {
             info!("Daemon activations will request frozen mode on show");
         }

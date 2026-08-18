@@ -41,7 +41,10 @@ backend entry in `src/backend/mod.rs`.
    action applier.
 5. Overlay candidates and runtime helpers are created only by the pre-lock process broker. The
    daemon owns generation/pidfd decisions while the broker owns wait/reap; overlay readiness is
-   accepted only after the child wins its lock and publishes matching process identity.
+   accepted only after the child wins its lock and publishes matching process identity. Startup
+   also warns when another `wayscriber` file exists on `PATH` or under `/usr`, `/usr/local`,
+   or `~/.local/bin`, because overlay spawn follows this process file rather than whichever
+   path the user inspected.
 6. Queue renames, producer eventfds, signals, and child pidfds drive the loop without a lifecycle
    polling tick. Shutdown invalidates readiness, terminates owned work, and joins listeners.
 

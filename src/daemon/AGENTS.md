@@ -5,6 +5,7 @@
 
 ## Architecture
 - `core.rs`, `control.rs`, and `types.rs` own daemon state and toggle/control behavior.
+- `binary_conflict.rs` warns when another Wayscriber binary exists besides the running daemon.
 - `overlay/` owns overlay process spawn/control.
 - `tray/` owns tray integration and shortcut hint I/O.
 - `setup.rs` and `global_shortcuts.rs` support daemon setup workflows.

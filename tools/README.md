@@ -41,9 +41,11 @@ Helper scripts for development, installation, packaging, and release workflows.
 
 - **install.sh** - Full installation script
   - Builds and installs binary to `/usr/bin` (or `$WAYSCRIBER_INSTALL_DIR`)
+  - Refuses a second copy under `/usr/bin`, `/usr/local/bin`, or `~/.local/bin` unless
+    `--replace-other` is passed or you confirm on a TTY
   - Sets up config directory with example config
   - Optionally configures systemd service or Hyprland autostart
-  - Usage: `./tools/install.sh`
+  - Usage: `./tools/install.sh [--replace-other]`
 
 - **install-configurator.sh** - Install configurator only
   - Builds and installs wayscriber-configurator, its desktop entry, and icons
@@ -60,6 +62,8 @@ Helper scripts for development, installation, packaging, and release workflows.
   - Updates Cargo.toml, configurator/Cargo.toml, the workspace Cargo.lock, PKGBUILD, and .SRCINFO
   - flake.nix package version follows Cargo.toml automatically
   - Auto-increments patch version if no version specified
+  - Use this in the same change as a user-visible overlay/settings/config toggle, or immediately
+    before tagging that release, so `--version` is not identical to the last shipped crate
   - Supports MAJOR.MINOR.PATCH.HOTFIX for packaging-only hotfix releases
   - Usage: `./tools/bump-version.sh [--dry-run] [new_version]`
 
@@ -100,6 +104,8 @@ Packaging-only hotfix policy:
   - Strictly parses the installer's static allowlist as data; it never executes the installer, and unsupported manifest syntax fails closed
   - Requires the archive file set, modes, and service command to match what the installer accepts
   - Runs against the deployed installer during release packaging
+  - Live `https://wayscriber.com/arch-install.sh` is what CI fetches. Dual-prefix flags in a
+    local website checkout are not checked until that file is published.
   - Usage: `./tools/check-arch-installer-manifest.sh --installer FILE --archive FILE`
 
   When the tarball file manifest changes, build and check the new tarball locally, deploy
