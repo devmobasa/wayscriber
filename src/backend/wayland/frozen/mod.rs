@@ -6,6 +6,7 @@ mod state;
 
 pub(in crate::backend::wayland) use ext_image_copy::ExtImageCopyManagers;
 pub use image::FrozenImage;
+pub(in crate::backend::wayland) use image::{copy_shm_argb, validate_shm_buffer_layout};
 pub(in crate::backend::wayland) use state::FrozenCaptureBackend;
 pub use state::FrozenState;
 

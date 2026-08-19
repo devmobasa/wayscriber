@@ -52,6 +52,7 @@ impl CompositorHandler for WaylandState {
         let scale = new_factor.max(1);
         debug!("Scale factor changed to {}", scale);
         self.surface.set_scale(scale);
+        self.refresh_freeze_zoom_geometry();
         self.buffer_damage
             .mark_all_full(FullDamageReason::ScaleChanged);
         let (phys_w, phys_h) = self.surface.physical_dimensions();
@@ -79,6 +80,7 @@ impl CompositorHandler for WaylandState {
         }
 
         debug!("Transform changed");
+        self.refresh_freeze_zoom_geometry();
     }
 
     fn frame(
@@ -132,26 +134,8 @@ impl CompositorHandler for WaylandState {
                 .mark_all_full(FullDamageReason::OutputChanged);
             self.toolbar.maybe_update_scale(Some(output), scale);
             self.toolbar.mark_dirty();
-            let (logical_w, logical_h) = info
-                .logical_size
-                .unwrap_or((self.surface.width() as i32, self.surface.height() as i32));
-            let (logical_x, logical_y) = info.logical_position.unwrap_or((0, 0));
-            self.set_freeze_zoom_geometry(Some(
-                crate::backend::wayland::frozen_geometry::OutputGeometry {
-                    logical_x,
-                    logical_y,
-                    logical_width: logical_w.max(0) as u32,
-                    logical_height: logical_h.max(0) as u32,
-                    scale,
-                    transform: info.transform,
-                    screenshot_origin: None,
-                },
-            ));
-            self.frozen
-                .set_active_output(Some(output.clone()), Some(info.id));
-            self.zoom
-                .set_active_output(Some(output.clone()), Some(info.id));
         }
+        self.refresh_freeze_zoom_geometry();
         self.frozen.unfreeze(&mut self.input_state);
         self.zoom.deactivate(&mut self.input_state);
 

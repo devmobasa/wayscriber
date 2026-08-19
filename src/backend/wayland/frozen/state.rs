@@ -4,11 +4,13 @@ use wayland_client::protocol::wl_output;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 use crate::backend::wayland::RuntimeWakeHandle;
+use crate::backend::wayland::capture::CaptureLayoutContext;
 use crate::backend::wayland::frozen::FrozenImage;
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
-use crate::backend::wayland::portal_capture::crop_argb;
+use crate::backend::wayland::portal_capture::{crop_argb, layout_token_matches};
 use crate::backend::wayland::portal_task::PortalTask;
 use crate::input::InputState;
+use crate::input::state::{Toast, ToastPriority};
 
 use super::PortalCaptureResult;
 use super::capture::CaptureSession;
@@ -17,9 +19,9 @@ use super::ext_image_copy::{ExtImageCopyManagers, ExtImageCopySession};
 struct PendingFrozenImage {
     image: FrozenImage,
     target_output_id: Option<u32>,
+    layout_generation: u64,
     source_geometry: Option<OutputGeometry>,
     output_transform: Option<wl_output::Transform>,
-    needs_output_transform: bool,
     source: FrozenCaptureSource,
 }
 
@@ -72,23 +74,23 @@ impl DirectCaptureAttempt {
 pub(super) const DIRECT_CAPTURE_TIMEOUT: Duration = Duration::from_secs(3);
 
 pub(super) struct DirectCaptureContext {
-    pub(super) target_output_id: u32,
-    pub(super) source_geometry: Option<OutputGeometry>,
+    pub(super) layout: CaptureLayoutContext,
+    pub(super) source_geometry: OutputGeometry,
     started_at: Instant,
 }
 
 impl DirectCaptureContext {
-    pub(super) fn new(target_output_id: u32, source_geometry: Option<OutputGeometry>) -> Self {
-        Self::new_at(target_output_id, source_geometry, Instant::now())
+    pub(super) fn new(layout: CaptureLayoutContext, source_geometry: OutputGeometry) -> Self {
+        Self::new_at(layout, source_geometry, Instant::now())
     }
 
     fn new_at(
-        target_output_id: u32,
-        source_geometry: Option<OutputGeometry>,
+        layout: CaptureLayoutContext,
+        source_geometry: OutputGeometry,
         started_at: Instant,
     ) -> Self {
         Self {
-            target_output_id,
+            layout,
             source_geometry,
             started_at,
         }
@@ -99,10 +101,6 @@ impl DirectCaptureContext {
             .checked_add(DIRECT_CAPTURE_TIMEOUT)
             .map(|deadline| deadline.saturating_duration_since(now))
             .unwrap_or(Duration::ZERO)
-    }
-
-    pub(super) fn output_matches(&self, current_output_id: Option<u32>) -> bool {
-        current_output_id == Some(self.target_output_id)
     }
 }
 
@@ -128,6 +126,8 @@ pub struct FrozenState {
     pub(super) runtime_wake: Option<RuntimeWakeHandle>,
     pub(super) preflight_pending: bool,
     pub(super) preflight_backend: Option<FrozenCaptureBackend>,
+    preflight_output_id: Option<u32>,
+    preflight_layout_generation: Option<u64>,
     pub(super) capture_done: bool,
     pending_image: Option<PendingFrozenImage>,
 }
@@ -179,6 +179,8 @@ impl FrozenState {
             runtime_wake,
             preflight_pending: false,
             preflight_backend: None,
+            preflight_output_id: None,
+            preflight_layout_generation: None,
             capture_done: false,
             pending_image: None,
         }
@@ -211,12 +213,8 @@ impl FrozenState {
         self.active_geometry = geometry;
     }
 
-    pub fn active_geometry(&self) -> Option<&OutputGeometry> {
-        self.active_geometry.as_ref()
-    }
-
-    pub fn active_output_matches(&self, info_id: u32) -> bool {
-        self.active_output_id == Some(info_id)
+    pub(in crate::backend::wayland) fn output_layout_generation(&self) -> u64 {
+        self.output_layout_generation
     }
 
     pub fn image(&self) -> Option<&FrozenImage> {
@@ -238,14 +236,14 @@ impl FrozenState {
         &mut self,
         image: FrozenImage,
         target_output_id: u32,
-        source_geometry: Option<OutputGeometry>,
+        source_geometry: OutputGeometry,
     ) {
         self.pending_image = Some(PendingFrozenImage {
             image,
             target_output_id: Some(target_output_id),
-            source_geometry,
+            layout_generation: self.output_layout_generation,
+            source_geometry: Some(source_geometry),
             output_transform: None,
-            needs_output_transform: true,
             source: FrozenCaptureSource::ActiveOutput,
         });
     }
@@ -254,15 +252,15 @@ impl FrozenState {
         &mut self,
         image: FrozenImage,
         target_output_id: u32,
-        source_geometry: Option<OutputGeometry>,
+        source_geometry: OutputGeometry,
         output_transform: Option<wl_output::Transform>,
     ) {
         self.pending_image = Some(PendingFrozenImage {
             image,
             target_output_id: Some(target_output_id),
-            source_geometry,
+            layout_generation: self.output_layout_generation,
+            source_geometry: Some(source_geometry),
             output_transform,
-            needs_output_transform: true,
             source: FrozenCaptureSource::ActiveOutput,
         });
     }
@@ -276,9 +274,9 @@ impl FrozenState {
         self.pending_image = Some(PendingFrozenImage {
             image,
             target_output_id,
+            layout_generation: self.output_layout_generation,
             source_geometry,
             output_transform: None,
-            needs_output_transform: false,
             source: FrozenCaptureSource::Desktop,
         });
     }
@@ -302,6 +300,52 @@ impl FrozenState {
         }
         self.preflight_pending = false;
         self.preflight_backend.take()
+    }
+
+    pub(super) fn snapshot_preflight_layout(&mut self) {
+        self.preflight_output_id = self.active_output_id;
+        self.preflight_layout_generation = Some(self.output_layout_generation);
+    }
+
+    pub(super) fn ensure_preflight_layout_current(&self) -> Result<(), String> {
+        let Some(generation) = self.preflight_layout_generation else {
+            return Ok(());
+        };
+        if layout_token_matches(
+            self.preflight_output_id,
+            generation,
+            self.active_output_id,
+            self.output_layout_generation,
+        ) {
+            Ok(())
+        } else {
+            Err("Freeze failed after the display layout changed".to_string())
+        }
+    }
+
+    #[cfg(test)]
+    pub fn preflight_layout_is_current(&self) -> bool {
+        self.ensure_preflight_layout_current().is_ok()
+    }
+
+    pub(super) fn push_stale_layout_toast(input_state: &mut InputState) {
+        input_state.push_toast(
+            ToastPriority::Critical,
+            "freeze",
+            Toast::error("Freeze failed after the display layout changed"),
+        );
+    }
+
+    pub(in crate::backend::wayland) fn finish_failed_fallback_capture(
+        &mut self,
+        input_state: &mut InputState,
+    ) {
+        let message = self
+            .ensure_preflight_layout_current()
+            .err()
+            .unwrap_or_else(|| "Freeze could not capture the screen.".to_string());
+        input_state.push_toast(ToastPriority::Critical, "freeze", Toast::error(message));
+        self.cancel(input_state);
     }
 
     pub fn take_capture_done(&mut self) -> bool {
@@ -333,54 +377,100 @@ impl FrozenState {
         Some(backend)
     }
 
+    #[cfg(test)]
     pub fn activate_pending_image(
         &mut self,
         phys_width: u32,
         phys_height: u32,
         input_state: &mut InputState,
     ) -> Result<bool, String> {
+        self.activate_pending_image_with_live_outputs(phys_width, phys_height, input_state, None)
+    }
+
+    pub fn activate_pending_image_with_live_outputs(
+        &mut self,
+        phys_width: u32,
+        phys_height: u32,
+        input_state: &mut InputState,
+        live_output_count: Option<u32>,
+    ) -> Result<bool, String> {
         let Some(pending) = self.pending_image.take() else {
             return Ok(false);
         };
-        if !crate::backend::wayland::portal_capture::portal_output_matches(
+        if !layout_token_matches(
             pending.target_output_id,
+            pending.layout_generation,
             self.active_output_id,
+            self.output_layout_generation,
         ) {
-            info!("Pending frozen capture discarded after the active output changed");
-            self.capture_done = true;
-            input_state.set_frozen_active(false);
-            input_state.needs_redraw = true;
-            return Ok(false);
+            return self.reject_pending_image(
+                input_state,
+                "Freeze failed after the display layout changed",
+            );
         }
         let mut image = pending.image;
 
-        if pending.needs_output_transform {
-            let output_transform = pending.output_transform.unwrap_or_else(|| {
-                pending
-                    .source_geometry
-                    .as_ref()
-                    .or(self.active_geometry.as_ref())
-                    .map(|geo| geo.transform)
-                    .unwrap_or(wl_output::Transform::Normal)
-            });
-            image = image.with_output_transform(output_transform);
+        if matches!(pending.source, FrozenCaptureSource::ActiveOutput) {
+            let Some(geometry) = pending.source_geometry.as_ref() else {
+                return self
+                    .reject_pending_image(input_state, "Freeze capture geometry is unavailable");
+            };
+            let output_transform = pending.output_transform.unwrap_or(geometry.transform);
+            image = match image.with_output_transform(output_transform) {
+                Ok(image) => image,
+                Err(error) => {
+                    return self.reject_pending_image(
+                        input_state,
+                        format!("Freeze capture transform failed: {error}"),
+                    );
+                }
+            };
+            if !geometry.accepts_transformed_pixel_size(image.width, image.height) {
+                return self.reject_pending_image(
+                    input_state,
+                    "Freeze capture dimensions do not match the active output",
+                );
+            }
         }
 
-        if matches!(pending.source, FrozenCaptureSource::Desktop)
-            && (image.width != phys_width || image.height != phys_height)
-        {
-            let Some(cropped) = self.crop_pending_image(
-                image,
-                pending.source_geometry.as_ref(),
-                phys_width,
-                phys_height,
-            ) else {
-                self.capture_done = true;
-                input_state.set_frozen_active(false);
-                input_state.needs_redraw = true;
-                return Err("Freeze failed after the display changed size".to_string());
+        if matches!(pending.source, FrozenCaptureSource::Desktop) {
+            let Some(geometry) = pending
+                .source_geometry
+                .as_ref()
+                .or(self.active_geometry.as_ref())
+                .cloned()
+                .and_then(|geometry| geometry.with_revalidated_output_count(live_output_count))
+            else {
+                return self.reject_pending_image(
+                    input_state,
+                    "Freeze failed after the output layout changed",
+                );
+            };
+            let Some((capture_width, capture_height)) = geometry.verified_pixel_size() else {
+                return self.reject_pending_image(
+                    input_state,
+                    "Freeze failed after the display changed size",
+                );
+            };
+            let Some(cropped) =
+                self.crop_pending_image(image, &geometry, capture_width, capture_height)
+            else {
+                return self.reject_pending_image(
+                    input_state,
+                    "Freeze failed after the display changed size",
+                );
             };
             image = cropped;
+        }
+
+        if !OutputGeometry::dimensions_have_compatible_aspect(
+            (image.width, image.height),
+            (phys_width, phys_height),
+        ) {
+            return self.reject_pending_image(
+                input_state,
+                "Freeze capture aspect does not match the overlay surface",
+            );
         }
 
         self.image_target_dimensions = Some((phys_width, phys_height));
@@ -393,17 +483,27 @@ impl FrozenState {
         Ok(true)
     }
 
+    fn reject_pending_image(
+        &mut self,
+        input_state: &mut InputState,
+        error: impl Into<String>,
+    ) -> Result<bool, String> {
+        self.capture_done = true;
+        input_state.set_frozen_active(false);
+        input_state.needs_redraw = true;
+        Err(error.into())
+    }
+
     fn crop_pending_image(
         &self,
         image: FrozenImage,
-        source_geometry: Option<&OutputGeometry>,
+        geometry: &OutputGeometry,
         target_width: u32,
         target_height: u32,
     ) -> Option<FrozenImage> {
         if target_width == 0 || target_height == 0 {
             return None;
         }
-        let geometry = source_geometry.or(self.active_geometry.as_ref())?;
         let (origin_x, origin_y) = geometry.portal_crop_origin(image.width, image.height)?;
         let (width, height, data) = crop_argb(
             &image.data,
@@ -417,10 +517,11 @@ impl FrozenState {
         if width != target_width || height != target_height {
             return None;
         }
+        let stride = i32::try_from(target_width.checked_mul(4)?).ok()?;
         Some(FrozenImage {
             width: target_width,
             height: target_height,
-            stride: (target_width * 4) as i32,
+            stride,
             data,
         })
     }
@@ -455,6 +556,8 @@ impl FrozenState {
         }
         self.preflight_pending = false;
         self.preflight_backend = None;
+        self.preflight_output_id = None;
+        self.preflight_layout_generation = None;
         self.portal_in_progress = false;
         if let Some(mut task) = self.portal_task.take() {
             task.cancel();
@@ -519,6 +622,26 @@ mod tests {
     use super::*;
     use crate::input::state::test_support::make_test_input_state;
 
+    fn verified_output_geometry(
+        overlay_logical: (u32, u32),
+        scale: i32,
+        transform: wl_output::Transform,
+        pixel_size: (u32, u32),
+    ) -> OutputGeometry {
+        OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((
+                i32::try_from(overlay_logical.0).expect("test width"),
+                i32::try_from(overlay_logical.1).expect("test height"),
+            )),
+            overlay_logical,
+            scale,
+            transform,
+            Some(pixel_size),
+        )
+        .expect("verified test output geometry")
+    }
+
     #[test]
     fn capture_backend_priority_is_wlr_then_ext_then_portal() {
         assert_eq!(
@@ -555,16 +678,27 @@ mod tests {
     #[test]
     fn direct_capture_context_tracks_its_deadline_and_output_identity() {
         let started_at = Instant::now();
-        let capture = DirectCaptureContext::new_at(7, None, started_at);
+        let geometry = OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((1, 1)),
+            (1, 1),
+            1,
+            wl_output::Transform::Normal,
+            Some((1, 1)),
+        )
+        .expect("geometry");
+        let capture =
+            DirectCaptureContext::new_at(CaptureLayoutContext::new(7, 3), geometry, started_at);
 
         assert_eq!(capture.timeout(started_at), DIRECT_CAPTURE_TIMEOUT);
         assert_eq!(
             capture.timeout(started_at + DIRECT_CAPTURE_TIMEOUT),
             Duration::ZERO
         );
-        assert!(capture.output_matches(Some(7)));
-        assert!(!capture.output_matches(Some(8)));
-        assert!(!capture.output_matches(None));
+        assert!(capture.layout.matches(Some(7), 3));
+        assert!(!capture.layout.matches(Some(8), 3));
+        assert!(!capture.layout.matches(None, 3));
+        assert!(!capture.layout.matches(Some(7), 4));
     }
 
     #[test]
@@ -580,7 +714,7 @@ mod tests {
                 data: vec![0; 10 * 10 * 4],
             },
             7,
-            None,
+            verified_output_geometry((6, 6), 2, wl_output::Transform::Normal, (10, 10)),
         );
 
         state
@@ -600,7 +734,75 @@ mod tests {
     }
 
     #[test]
-    fn active_output_capture_uses_protocol_transform_without_output_geometry() {
+    fn active_output_capture_rejects_known_pixel_size_mismatch() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(7));
+        let geometry = OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((3, 2)),
+            (3, 2),
+            2,
+            wl_output::Transform::Normal,
+            Some((5, 3)),
+        )
+        .expect("known output geometry");
+        state.set_pending_output_image(
+            FrozenImage {
+                width: 4,
+                height: 3,
+                stride: 16,
+                data: vec![0; 4 * 3 * 4],
+            },
+            7,
+            geometry,
+        );
+
+        assert!(
+            state
+                .activate_pending_image(6, 4, &mut input_state)
+                .is_err()
+        );
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
+    }
+
+    #[test]
+    fn active_output_capture_rejects_unknown_pixel_size() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(7));
+        let geometry = OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((3, 2)),
+            (3, 2),
+            2,
+            wl_output::Transform::Normal,
+            None,
+        )
+        .expect("geometry without mode pixels");
+        state.set_pending_output_image(
+            FrozenImage {
+                width: 6,
+                height: 4,
+                stride: 24,
+                data: vec![0; 6 * 4 * 4],
+            },
+            7,
+            geometry,
+        );
+
+        assert!(
+            state
+                .activate_pending_image(6, 4, &mut input_state)
+                .is_err()
+        );
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
+    }
+
+    #[test]
+    fn active_output_capture_prefers_protocol_transform_over_geometry() {
         let mut state = FrozenState::new(None);
         let mut input_state = make_test_input_state();
         state.set_active_output(None, Some(7));
@@ -612,7 +814,7 @@ mod tests {
                 data: vec![1, 0, 0, 255, 2, 0, 0, 255],
             },
             7,
-            None,
+            verified_output_geometry((1, 2), 1, wl_output::Transform::Normal, (1, 2)),
             Some(wl_output::Transform::_90),
         );
 
@@ -622,6 +824,57 @@ mod tests {
 
         let image = state.image().expect("the frozen image should be active");
         assert_eq!((image.width, image.height), (1, 2));
+    }
+
+    #[test]
+    fn active_output_capture_fails_closed_when_transform_input_is_malformed() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(7));
+        state.set_pending_output_image_with_transform(
+            FrozenImage {
+                width: 2,
+                height: 2,
+                stride: 8,
+                data: vec![0; 12],
+            },
+            7,
+            verified_output_geometry((2, 2), 1, wl_output::Transform::Normal, (2, 2)),
+            Some(wl_output::Transform::_90),
+        );
+
+        assert!(
+            state
+                .activate_pending_image(2, 2, &mut input_state)
+                .is_err()
+        );
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
+        assert!(state.take_capture_done());
+    }
+
+    #[test]
+    fn active_output_capture_rejects_stretching_into_a_different_viewport() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(7));
+        state.set_pending_output_image(
+            FrozenImage {
+                width: 320,
+                height: 180,
+                stride: 1280,
+                data: vec![0; 320 * 180 * 4],
+            },
+            7,
+            verified_output_geometry((320, 176), 1, wl_output::Transform::Normal, (320, 180)),
+        );
+
+        let error = state
+            .activate_pending_image(320, 176, &mut input_state)
+            .expect_err("a full output cannot be stretched into a shorter viewport");
+        assert!(error.contains("aspect does not match"));
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
     }
 
     #[test]
@@ -656,6 +909,7 @@ mod tests {
         scale: i32,
         screenshot_origin: Option<(u32, u32)>,
     ) -> OutputGeometry {
+        let pixel_scale = u32::try_from(scale).expect("test scale must be positive");
         OutputGeometry {
             logical_x,
             logical_y,
@@ -663,7 +917,11 @@ mod tests {
             logical_height,
             scale,
             transform: wl_output::Transform::Normal,
+            overlay_buffer_size: (logical_width * pixel_scale, logical_height * pixel_scale),
+            pixel_size: Some((logical_width * pixel_scale, logical_height * pixel_scale)),
             screenshot_origin,
+            screenshot_size: None,
+            known_output_count: None,
         }
     }
 
@@ -714,12 +972,78 @@ mod tests {
     }
 
     #[test]
-    fn desktop_capture_crops_at_buffer_origin_when_screenshot_origin_is_unknown() {
+    fn desktop_capture_keeps_fractional_output_pixels_for_a_larger_overlay_buffer() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        let mut geometry = desktop_geometry(0, 0, 3, 2, 2, Some((0, 0)));
+        geometry.pixel_size = Some((5, 3));
+        state.set_pending_desktop_image(
+            FrozenImage {
+                width: 5,
+                height: 3,
+                stride: 20,
+                data: vec![7; 5 * 3 * 4],
+            },
+            None,
+            Some(geometry),
+        );
+
+        state
+            .activate_pending_image(6, 4, &mut input_state)
+            .expect("native output pixels should render into the integer-scale overlay buffer");
+
+        let image = state.image().expect("the frozen image should be active");
+        assert_eq!((image.width, image.height), (5, 3));
+        state.handle_resize(6, 4, &mut input_state);
+        assert!(state.image().is_some());
+        assert!(input_state.frozen_active());
+    }
+
+    #[test]
+    fn desktop_capture_rejects_a_portal_image_from_a_different_layout_size() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        let geometry = desktop_geometry(0, 0, 4, 1, 1, None).with_desktop_backdrop_geometry(Some(
+            crate::capture::DesktopBackdropGeometry {
+                logical_x: 0,
+                logical_y: 0,
+                logical_width: 4,
+                logical_height: 1,
+                physical_width: Some(4),
+                physical_height: Some(1),
+                crop_x: Some(6),
+                crop_y: Some(0),
+                screenshot_width: Some(10),
+                screenshot_height: Some(1),
+            },
+        ));
+        state.set_pending_desktop_image(
+            FrozenImage {
+                width: 11,
+                height: 1,
+                stride: 44,
+                data: vec![0; 11 * 4],
+            },
+            None,
+            Some(geometry),
+        );
+
+        assert!(
+            state
+                .activate_pending_image(4, 1, &mut input_state)
+                .is_err()
+        );
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
+    }
+
+    #[test]
+    fn desktop_capture_fails_closed_when_screenshot_origin_is_unknown() {
         let mut state = FrozenState::new(None);
         let mut input_state = make_test_input_state();
         let geometry = desktop_geometry(10, 20, 2, 1, 2, None);
         assert_eq!(geometry.physical_origin(), (20, 40));
-        assert_eq!(geometry.portal_crop_origin(4, 2), Some((0, 0)));
+        assert_eq!(geometry.portal_crop_origin(4, 2), None);
         assert_eq!(geometry.portal_crop_origin(10, 2), None);
 
         state.set_pending_desktop_image(
@@ -733,11 +1057,66 @@ mod tests {
             Some(geometry),
         );
 
+        assert!(
+            state
+                .activate_pending_image(4, 2, &mut input_state)
+                .is_err()
+        );
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
+    }
+
+    #[test]
+    fn desktop_capture_crops_at_buffer_origin_for_a_proven_single_output() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        let geometry = desktop_geometry(10, 20, 2, 1, 2, None).with_known_output_count(Some(1));
+        assert_eq!(geometry.portal_crop_origin(4, 2), Some((0, 0)));
+
+        state.set_pending_desktop_image(
+            FrozenImage {
+                width: 4,
+                height: 2,
+                stride: 16,
+                data: vec![7; 4 * 2 * 4],
+            },
+            None,
+            Some(geometry),
+        );
+
         state
-            .activate_pending_image(4, 2, &mut input_state)
-            .expect("a single-output desktop shot should crop from the buffer origin");
+            .activate_pending_image_with_live_outputs(4, 2, &mut input_state, Some(1))
+            .expect(
+                "a single-output desktop shot without zxdg layout still crops at the buffer origin",
+            );
         assert!(state.image().is_some());
         assert!(input_state.frozen_active());
+    }
+
+    #[test]
+    fn desktop_capture_rejects_a_stale_single_output_snapshot_when_live_count_grows() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        let geometry = desktop_geometry(10, 20, 2, 1, 2, None).with_known_output_count(Some(1));
+
+        state.set_pending_desktop_image(
+            FrozenImage {
+                width: 4,
+                height: 2,
+                stride: 16,
+                data: vec![7; 4 * 2 * 4],
+            },
+            None,
+            Some(geometry),
+        );
+
+        assert!(
+            state
+                .activate_pending_image_with_live_outputs(4, 2, &mut input_state, Some(2))
+                .is_err()
+        );
+        assert!(state.image().is_none());
+        assert!(!input_state.frozen_active());
     }
 
     #[test]
@@ -767,7 +1146,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_capture_is_discarded_if_output_changes_before_activation() {
+    fn pending_capture_is_rejected_if_output_changes_before_activation() {
         let mut state = FrozenState::new(None);
         let mut input_state = make_test_input_state();
         state.set_active_output(None, Some(7));
@@ -779,19 +1158,101 @@ mod tests {
                 data: vec![0; 4],
             },
             7,
-            None,
+            verified_output_geometry((1, 1), 1, wl_output::Transform::Normal, (1, 1)),
         );
 
         state.set_active_output(None, Some(8));
-        let activated = state
+        let error = state
             .activate_pending_image(1, 1, &mut input_state)
-            .expect("the stale-output path is a handled non-error outcome");
+            .expect_err("stale output identity must fail closed");
 
-        assert!(!activated);
+        assert!(error.contains("display layout changed"));
         assert!(state.image().is_none());
         assert!(!state.has_pending_image());
         assert!(state.take_capture_done());
         assert!(!input_state.frozen_active());
+    }
+
+    #[test]
+    fn pending_capture_is_rejected_if_layout_changes_before_activation() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        let first = verified_output_geometry((1, 1), 1, wl_output::Transform::Normal, (1, 1));
+        let second = verified_output_geometry((2, 2), 1, wl_output::Transform::Normal, (2, 2));
+        state.set_active_output(None, Some(7));
+        state.set_active_geometry(Some(first.clone()));
+        state.set_pending_output_image(
+            FrozenImage {
+                width: 1,
+                height: 1,
+                stride: 4,
+                data: vec![0; 4],
+            },
+            7,
+            first,
+        );
+
+        state.set_active_geometry(Some(second));
+        let error = state
+            .activate_pending_image(1, 1, &mut input_state)
+            .expect_err("stale layout token must fail closed after delayed activation");
+
+        assert!(error.contains("display layout changed"));
+        assert!(state.image().is_none());
+        assert!(!state.has_pending_image());
+        assert!(!input_state.frozen_active());
+    }
+
+    #[test]
+    fn preflight_layout_snapshot_goes_stale_when_geometry_changes() {
+        let mut state = FrozenState::new(None);
+        state.snapshot_preflight_layout();
+        assert!(state.preflight_layout_is_current());
+        state.set_active_geometry(Some(verified_output_geometry(
+            (1, 1),
+            1,
+            wl_output::Transform::Normal,
+            (1, 1),
+        )));
+        assert!(!state.preflight_layout_is_current());
+    }
+
+    #[test]
+    fn exhausted_fallback_toasts_layout_change_when_preflight_is_stale() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.snapshot_preflight_layout();
+        state.set_active_geometry(Some(verified_output_geometry(
+            (1, 1),
+            1,
+            wl_output::Transform::Normal,
+            (1, 1),
+        )));
+
+        state.finish_failed_fallback_capture(&mut input_state);
+
+        let toast = input_state
+            .ui_toast
+            .as_ref()
+            .expect("visible stale rejection");
+        assert!(toast.message.contains("display layout changed"));
+        assert!(state.take_capture_done());
+    }
+
+    #[test]
+    fn exhausted_fallback_toasts_a_generic_failure_when_layout_is_current() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        state.snapshot_preflight_layout();
+
+        state.finish_failed_fallback_capture(&mut input_state);
+
+        let toast = input_state
+            .ui_toast
+            .as_ref()
+            .expect("visible capture failure");
+        assert_eq!(toast.message, "Freeze could not capture the screen.");
+        assert!(state.take_capture_done());
     }
 
     #[test]

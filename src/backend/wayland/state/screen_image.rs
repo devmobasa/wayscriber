@@ -451,7 +451,9 @@ mod tests {
         for value in [1u8, 2, 3, 4, 5, 6] {
             data.extend_from_slice(&[value, 0, 0, 0xFF]);
         }
-        let rotated = image(3, 2, 12, data).with_output_transform(wl_output::Transform::_270);
+        let rotated = image(3, 2, 12, data)
+            .with_output_transform(wl_output::Transform::_270)
+            .expect("valid transform");
         assert_eq!((rotated.width, rotated.height), (2, 3));
 
         let crop = copy_image_rect(

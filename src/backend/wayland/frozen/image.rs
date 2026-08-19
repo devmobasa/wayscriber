@@ -1,16 +1,16 @@
 use anyhow::{Context, Result};
 use wayland_client::protocol::{wl_output, wl_shm};
 
-pub(super) struct ShmBufferLayout {
-    pub(super) width: i32,
-    pub(super) height: i32,
-    pub(super) stride: i32,
-    pub(super) total_size: usize,
+pub(in crate::backend::wayland) struct ShmBufferLayout {
+    pub(in crate::backend::wayland) width: i32,
+    pub(in crate::backend::wayland) height: i32,
+    pub(in crate::backend::wayland) stride: i32,
+    pub(in crate::backend::wayland) total_size: usize,
 }
 
 /// Validate compositor-owned dimensions before allocating or creating a
 /// `wl_buffer` from them.
-pub(super) fn validate_shm_buffer_layout(
+pub(in crate::backend::wayland) fn validate_shm_buffer_layout(
     width: u32,
     height: u32,
     stride: u32,
@@ -62,30 +62,45 @@ impl FrozenImage {
     /// WLR screencopy buffers are returned in output framebuffer coordinates.
     /// Frozen/zoom rendering paints them onto a logical surface, so rotated or
     /// flipped outputs need the same transform applied to the captured pixels.
-    pub fn with_output_transform(mut self, transform: wl_output::Transform) -> Self {
+    pub fn with_output_transform(mut self, transform: wl_output::Transform) -> Result<Self> {
+        let width =
+            usize::try_from(self.width).context("Frozen image width does not fit memory")?;
+        let height =
+            usize::try_from(self.height).context("Frozen image height does not fit memory")?;
+        let row_bytes = width
+            .checked_mul(4)
+            .context("Frozen image row size overflow")?;
+        let expected_len = row_bytes
+            .checked_mul(height)
+            .context("Frozen image size overflow")?;
+        let expected_stride =
+            i32::try_from(row_bytes).context("Frozen image stride exceeds i32")?;
+        if self.stride != expected_stride || self.data.len() != expected_len {
+            anyhow::bail!("Frozen image buffer does not match its dimensions");
+        }
         if transform == wl_output::Transform::Normal {
-            return self;
+            return Ok(self);
         }
 
-        if let Some((width, height, data)) = transform_argb(
-            self.width as usize,
-            self.height as usize,
-            &self.data,
-            transform,
-        ) {
-            self.width = width as u32;
-            self.height = height as u32;
-            self.stride = (width * 4) as i32;
-            self.data = data;
-        }
+        let (width, height, data) = transform_argb(width, height, &self.data, transform)
+            .context("Frozen image transform rejected its pixel buffer")?;
+        self.width = u32::try_from(width).context("Transformed frozen width exceeds u32")?;
+        self.height = u32::try_from(height).context("Transformed frozen height exceeds u32")?;
+        self.stride = i32::try_from(
+            width
+                .checked_mul(4)
+                .context("Transformed frozen stride overflow")?,
+        )
+        .context("Transformed frozen stride exceeds i32")?;
+        self.data = data;
 
-        self
+        Ok(self)
     }
 }
 
 /// Copy a compositor-provided SHM buffer into tightly packed Cairo-compatible
 /// ARGB data while validating every advertised dimension and row boundary.
-pub(super) fn copy_shm_argb(
+pub(in crate::backend::wayland) fn copy_shm_argb(
     canvas: &[u8],
     width: u32,
     height: u32,
@@ -161,6 +176,19 @@ fn transform_argb(
     data: &[u8],
     transform: wl_output::Transform,
 ) -> Option<(usize, usize, Vec<u8>)> {
+    if !matches!(
+        transform,
+        wl_output::Transform::Normal
+            | wl_output::Transform::_90
+            | wl_output::Transform::_180
+            | wl_output::Transform::_270
+            | wl_output::Transform::Flipped
+            | wl_output::Transform::Flipped90
+            | wl_output::Transform::Flipped180
+            | wl_output::Transform::Flipped270
+    ) {
+        return None;
+    }
     if data.len() != width.checked_mul(height)?.checked_mul(4)? {
         return None;
     }
@@ -234,9 +262,26 @@ mod tests {
     }
 
     #[test]
+    fn output_transform_rejects_an_invalid_pixel_buffer() {
+        let malformed = FrozenImage {
+            width: 2,
+            height: 2,
+            stride: 8,
+            data: vec![0; 12],
+        };
+
+        assert!(
+            malformed
+                .with_output_transform(wl_output::Transform::_90)
+                .is_err()
+        );
+    }
+
+    #[test]
     fn output_transform_270_rotates_into_logical_orientation() {
-        let transformed =
-            image(3, 2, &[1, 2, 3, 4, 5, 6]).with_output_transform(wl_output::Transform::_270);
+        let transformed = image(3, 2, &[1, 2, 3, 4, 5, 6])
+            .with_output_transform(wl_output::Transform::_270)
+            .expect("valid transform");
 
         assert_eq!((transformed.width, transformed.height), (2, 3));
         assert_eq!(values(&transformed), vec![4, 1, 5, 2, 6, 3]);
@@ -245,8 +290,9 @@ mod tests {
 
     #[test]
     fn output_transform_90_rotates_into_logical_orientation() {
-        let transformed =
-            image(3, 2, &[1, 2, 3, 4, 5, 6]).with_output_transform(wl_output::Transform::_90);
+        let transformed = image(3, 2, &[1, 2, 3, 4, 5, 6])
+            .with_output_transform(wl_output::Transform::_90)
+            .expect("valid transform");
 
         assert_eq!((transformed.width, transformed.height), (2, 3));
         assert_eq!(values(&transformed), vec![3, 6, 2, 5, 1, 4]);
@@ -254,8 +300,9 @@ mod tests {
 
     #[test]
     fn flipped_transform_mirrors_pixels() {
-        let transformed =
-            image(3, 2, &[1, 2, 3, 4, 5, 6]).with_output_transform(wl_output::Transform::Flipped);
+        let transformed = image(3, 2, &[1, 2, 3, 4, 5, 6])
+            .with_output_transform(wl_output::Transform::Flipped)
+            .expect("valid transform");
 
         assert_eq!((transformed.width, transformed.height), (3, 2));
         assert_eq!(values(&transformed), vec![3, 2, 1, 6, 5, 4]);

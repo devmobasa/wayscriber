@@ -16,7 +16,10 @@ pub(super) fn poll_portal_captures(state: &mut WaylandState, now: Instant) {
         .frozen
         .poll_portal_capture(&mut state.input_state, now);
     handle_pending_frozen_image(state, now);
-    state.zoom.poll_portal_capture(&mut state.input_state, now);
+    let live_output_count = state.live_output_count();
+    state
+        .zoom
+        .poll_portal_capture(&mut state.input_state, now, live_output_count);
     // Portal completion can make the capture controller idle before dispatch.
     // Release its overlay suppression now so the normal blocking dispatch does
     // not wait forever for a wake that has already been consumed.

@@ -9,15 +9,8 @@ pub(super) fn desktop_backdrop_output_geometry_from_info(
     if logical_width <= 0 || logical_height <= 0 {
         return None;
     }
-    let (physical_width, physical_height) = current_or_preferred_mode_size(info)
-        .map(|(width, height)| transformed_output_size(width, height, info.transform))
-        .or_else(|| {
-            let scale = u32::try_from(info.scale_factor.max(1)).ok()?;
-            Some((
-                u32::try_from(logical_width).ok()?.checked_mul(scale)?,
-                u32::try_from(logical_height).ok()?.checked_mul(scale)?,
-            ))
-        })?;
+    let (physical_width, physical_height) = current_mode_size(info)
+        .map(|(width, height)| transformed_output_size(width, height, info.transform))?;
     if physical_width == 0 || physical_height == 0 {
         return None;
     }
@@ -32,13 +25,10 @@ pub(super) fn desktop_backdrop_output_geometry_from_info(
     })
 }
 
-fn current_or_preferred_mode_size(
-    info: &smithay_client_toolkit::output::OutputInfo,
-) -> Option<(u32, u32)> {
+fn current_mode_size(info: &smithay_client_toolkit::output::OutputInfo) -> Option<(u32, u32)> {
     info.modes
         .iter()
         .find(|mode| mode.current)
-        .or_else(|| info.modes.iter().find(|mode| mode.preferred))
         .and_then(|mode| {
             Some((
                 u32::try_from(mode.dimensions.0).ok()?,
@@ -88,7 +78,26 @@ impl WaylandState {
             outputs.push(desktop_backdrop_output_geometry_from_info(&info)?);
         }
 
-        DesktopBackdropGeometry::from_outputs(active, &outputs, active_info.scale_factor.max(1))
+        DesktopBackdropGeometry::from_outputs(active, &outputs)
+    }
+
+    /// Count advertised `wl_output` objects, including ones whose `new_output`
+    /// callback has not run yet. SCTK can insert the proxy before metadata
+    /// completes; Freeze/Zoom must not treat that window as a proven single
+    /// output.
+    pub(in crate::backend::wayland) fn live_output_count(&self) -> Option<u32> {
+        self.known_output_count_excluding(None)
+    }
+
+    fn known_output_count_excluding(&self, exclude: Option<&wl_output::WlOutput>) -> Option<u32> {
+        let mut count = 0u32;
+        for candidate in self.output_state.outputs() {
+            if exclude.is_some_and(|destroyed| destroyed == &candidate) {
+                continue;
+            }
+            count = count.checked_add(1)?;
+        }
+        Some(count)
     }
 
     pub(in crate::backend::wayland) fn set_freeze_zoom_geometry(
@@ -103,31 +112,57 @@ impl WaylandState {
         geometry: Option<OutputGeometry>,
         exclude: Option<&wl_output::WlOutput>,
     ) {
-        let screenshot_origin = self
-            .desktop_backdrop_geometry_excluding(exclude)
-            .and_then(DesktopBackdropGeometry::physical_origin);
-        let geometry = geometry.map(|geo| geo.with_screenshot_origin(screenshot_origin));
+        let backdrop_geometry = self.desktop_backdrop_geometry_excluding(exclude);
+        let known_output_count = self.known_output_count_excluding(exclude);
+        let geometry = geometry.map(|geo| {
+            geo.with_desktop_backdrop_geometry(backdrop_geometry)
+                .with_known_output_count(known_output_count)
+        });
         self.frozen.set_active_geometry(geometry.clone());
         self.zoom.set_active_geometry(geometry);
     }
 
-    pub(in crate::backend::wayland) fn refresh_freeze_zoom_screenshot_origin(&mut self) {
-        self.refresh_freeze_zoom_screenshot_origin_excluding(None);
+    pub(in crate::backend::wayland) fn refresh_freeze_zoom_geometry(&mut self) {
+        self.refresh_freeze_zoom_geometry_excluding(None);
     }
 
-    pub(in crate::backend::wayland) fn refresh_freeze_zoom_screenshot_origin_excluding(
+    pub(in crate::backend::wayland) fn refresh_freeze_zoom_geometry_excluding(
         &mut self,
         exclude: Option<&wl_output::WlOutput>,
     ) {
-        let Some(geometry) = self
-            .frozen
-            .active_geometry()
-            .cloned()
-            .or_else(|| self.zoom.active_geometry().cloned())
-        else {
+        let Some(output) = self.surface.current_output() else {
+            self.set_freeze_zoom_geometry_excluding(None, exclude);
+            self.frozen.set_active_output(None, None);
+            self.zoom.set_active_output(None, None);
             return;
         };
-        self.set_freeze_zoom_geometry_excluding(Some(geometry), exclude);
+        if exclude.is_some_and(|destroyed| destroyed == &output) {
+            self.set_freeze_zoom_geometry_excluding(None, exclude);
+            self.frozen.set_active_output(None, None);
+            self.zoom.set_active_output(None, None);
+            return;
+        }
+        let Some(info) = self.output_state.info(&output) else {
+            self.set_freeze_zoom_geometry_excluding(None, exclude);
+            self.frozen.set_active_output(None, None);
+            self.zoom.set_active_output(None, None);
+            return;
+        };
+
+        let pixel_size = current_mode_size(&info)
+            .map(|(width, height)| transformed_output_size(width, height, info.transform));
+        let geometry = OutputGeometry::update_from(
+            info.logical_position,
+            info.logical_size,
+            (self.surface.width(), self.surface.height()),
+            self.surface.scale(),
+            info.transform,
+            pixel_size,
+        );
+        self.set_freeze_zoom_geometry_excluding(geometry, exclude);
+        self.frozen
+            .set_active_output(Some(output.clone()), Some(info.id));
+        self.zoom.set_active_output(Some(output), Some(info.id));
     }
 }
 

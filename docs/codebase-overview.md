@@ -79,7 +79,7 @@ Daemon mode therefore provides a persistent background service that reacts to us
 
 `WaylandState` centralizes everything the handlers need: current buffers, Cairo context, mouse positions, capture state, and tokio handle for async work.
 
-Freeze capture waits for the overlay-suppression frame, then selects `wlr-screencopy`, `ext-image-copy-capture`, or the screenshot portal in that order. The two direct protocols capture the active output into shared memory; the portal captures the desktop and the client crops the selected output when needed.
+Freeze capture waits for the overlay-suppression frame, then selects `wlr-screencopy`, `ext-image-copy-capture`, or the screenshot portal in that order. The two direct protocols capture the active output into shared memory; the portal captures the desktop and the client crops the selected output when needed. Direct capture and portal crop both require compositor-reported output pixels; a missing current mode fails instead of guessing from the overlay buffer.
 
 ---
 

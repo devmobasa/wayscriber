@@ -44,6 +44,16 @@ pub(crate) const fn portal_output_matches(target: Option<u32>, current: Option<u
     }
 }
 
+pub(crate) const fn layout_token_matches(
+    captured_output: Option<u32>,
+    captured_generation: u64,
+    active_output: Option<u32>,
+    active_generation: u64,
+) -> bool {
+    portal_output_matches(captured_output, active_output)
+        && captured_generation == active_generation
+}
+
 pub(crate) fn crop_argb(
     data: &[u8],
     width: u32,
@@ -86,7 +96,7 @@ pub(crate) fn crop_argb(
 
 #[cfg(test)]
 mod tests {
-    use super::{crop_argb, portal_output_matches};
+    use super::{crop_argb, layout_token_matches, portal_output_matches};
 
     #[test]
     fn crop_argb_respects_bounds() {
@@ -120,5 +130,14 @@ mod tests {
         assert!(portal_output_matches(None, None));
         assert!(!portal_output_matches(None, Some(1)));
         assert!(!portal_output_matches(Some(1), None));
+    }
+
+    #[test]
+    fn layout_token_matches_requires_output_and_generation() {
+        assert!(layout_token_matches(Some(7), 3, Some(7), 3));
+        assert!(!layout_token_matches(Some(7), 3, Some(8), 3));
+        assert!(!layout_token_matches(Some(7), 3, Some(7), 4));
+        assert!(!layout_token_matches(None, 3, Some(7), 3));
+        assert!(layout_token_matches(None, 3, None, 3));
     }
 }
