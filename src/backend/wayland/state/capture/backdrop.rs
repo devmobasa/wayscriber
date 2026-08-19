@@ -78,7 +78,26 @@ impl WaylandState {
             outputs.push(desktop_backdrop_output_geometry_from_info(&info)?);
         }
 
-        DesktopBackdropGeometry::from_outputs(active, &outputs, active_info.scale_factor.max(1))
+        DesktopBackdropGeometry::from_outputs(active, &outputs)
+    }
+
+    /// Count advertised `wl_output` objects, including ones whose `new_output`
+    /// callback has not run yet. SCTK can insert the proxy before metadata
+    /// completes; Freeze/Zoom must not treat that window as a proven single
+    /// output.
+    pub(in crate::backend::wayland) fn live_output_count(&self) -> Option<u32> {
+        self.known_output_count_excluding(None)
+    }
+
+    fn known_output_count_excluding(&self, exclude: Option<&wl_output::WlOutput>) -> Option<u32> {
+        let mut count = 0u32;
+        for candidate in self.output_state.outputs() {
+            if exclude.is_some_and(|destroyed| destroyed == &candidate) {
+                continue;
+            }
+            count = count.checked_add(1)?;
+        }
+        Some(count)
     }
 
     pub(in crate::backend::wayland) fn set_freeze_zoom_geometry(
@@ -94,27 +113,23 @@ impl WaylandState {
         exclude: Option<&wl_output::WlOutput>,
     ) {
         let backdrop_geometry = self.desktop_backdrop_geometry_excluding(exclude);
-        let geometry = geometry.map(|geo| geo.with_desktop_backdrop_geometry(backdrop_geometry));
+        let known_output_count = self.known_output_count_excluding(exclude);
+        let geometry = geometry.map(|geo| {
+            geo.with_desktop_backdrop_geometry(backdrop_geometry)
+                .with_known_output_count(known_output_count)
+        });
         self.frozen.set_active_geometry(geometry.clone());
         self.zoom.set_active_geometry(geometry);
-    }
-
-    pub(in crate::backend::wayland) fn refresh_freeze_zoom_screenshot_origin(&mut self) {
-        self.refresh_freeze_zoom_geometry_excluding(None);
-    }
-
-    pub(in crate::backend::wayland) fn refresh_freeze_zoom_screenshot_origin_excluding(
-        &mut self,
-        exclude: Option<&wl_output::WlOutput>,
-    ) {
-        self.refresh_freeze_zoom_geometry_excluding(exclude);
     }
 
     pub(in crate::backend::wayland) fn refresh_freeze_zoom_geometry(&mut self) {
         self.refresh_freeze_zoom_geometry_excluding(None);
     }
 
-    fn refresh_freeze_zoom_geometry_excluding(&mut self, exclude: Option<&wl_output::WlOutput>) {
+    pub(in crate::backend::wayland) fn refresh_freeze_zoom_geometry_excluding(
+        &mut self,
+        exclude: Option<&wl_output::WlOutput>,
+    ) {
         let Some(output) = self.surface.current_output() else {
             self.set_freeze_zoom_geometry_excluding(None, exclude);
             self.frozen.set_active_output(None, None);

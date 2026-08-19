@@ -4,8 +4,10 @@ use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::Z
 use crate::backend::wayland::RuntimeWakeHandle;
 use crate::backend::wayland::frozen::FrozenImage;
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
+use crate::backend::wayland::portal_capture::layout_token_matches;
 use crate::backend::wayland::portal_task::PortalTask;
 use crate::input::InputState;
+use crate::input::state::{Toast, ToastPriority};
 
 use super::capture::CaptureSession;
 use super::{MIN_ZOOM_SCALE, PortalCaptureResult};
@@ -29,6 +31,8 @@ pub struct ZoomState {
     pub(super) runtime_wake: Option<RuntimeWakeHandle>,
     pub(super) preflight_pending: bool,
     pub(super) preflight_use_fallback: bool,
+    preflight_output_id: Option<u32>,
+    preflight_layout_generation: Option<u64>,
     pub(super) capture_done: bool,
     pub(super) pending_activation: bool,
     pub active: bool,
@@ -72,6 +76,8 @@ impl ZoomState {
             runtime_wake,
             preflight_pending: false,
             preflight_use_fallback: false,
+            preflight_output_id: None,
+            preflight_layout_generation: None,
             capture_done: false,
             pending_activation: false,
             active: false,
@@ -111,7 +117,7 @@ impl ZoomState {
         self.image_target_dimensions = self
             .active_geometry
             .as_ref()
-            .and_then(OutputGeometry::buffer_size)
+            .map(OutputGeometry::buffer_size)
             .or(Some((image.width, image.height)));
         self.image = Some(image);
         self.bump_image_generation();
@@ -143,6 +149,50 @@ impl ZoomState {
         self.preflight_pending = false;
         self.preflight_use_fallback = false;
         Some(use_fallback)
+    }
+
+    pub(super) fn snapshot_preflight_layout(&mut self) {
+        self.preflight_output_id = self.active_output_id;
+        self.preflight_layout_generation = Some(self.output_layout_generation);
+    }
+
+    pub(super) fn ensure_preflight_layout_current(&self) -> Result<(), String> {
+        let Some(generation) = self.preflight_layout_generation else {
+            return Ok(());
+        };
+        if layout_token_matches(
+            self.preflight_output_id,
+            generation,
+            self.active_output_id,
+            self.output_layout_generation,
+        ) {
+            Ok(())
+        } else {
+            Err("Zoom failed after the display layout changed".to_string())
+        }
+    }
+
+    #[cfg(test)]
+    pub fn preflight_layout_is_current(&self) -> bool {
+        self.ensure_preflight_layout_current().is_ok()
+    }
+
+    pub(super) fn push_stale_layout_toast(input_state: &mut InputState) {
+        input_state.push_toast(
+            ToastPriority::Critical,
+            "zoom",
+            Toast::error("Zoom failed after the display layout changed"),
+        );
+    }
+
+    pub(super) fn finish_stale_direct_capture(&mut self, input_state: &mut InputState) {
+        Self::push_stale_layout_toast(input_state);
+        self.cancel(input_state, false);
+    }
+
+    fn clear_preflight_layout_snapshot(&mut self) {
+        self.preflight_output_id = None;
+        self.preflight_layout_generation = None;
     }
 
     pub fn take_capture_done(&mut self) -> bool {
@@ -177,6 +227,7 @@ impl ZoomState {
         }
         self.preflight_pending = false;
         self.preflight_use_fallback = false;
+        self.clear_preflight_layout_snapshot();
         self.portal_in_progress = false;
         if let Some(mut task) = self.portal_task.take() {
             task.cancel();
@@ -206,6 +257,7 @@ impl ZoomState {
         }
         self.preflight_pending = false;
         self.preflight_use_fallback = false;
+        self.clear_preflight_layout_snapshot();
         self.capture_done = true;
         self.portal_in_progress = false;
         if let Some(mut task) = self.portal_task.take() {
@@ -234,6 +286,7 @@ impl ZoomState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::input::state::test_support::make_test_input_state;
 
     #[test]
     fn aborting_pending_activation_completes_the_capture_lifecycle() {
@@ -245,6 +298,30 @@ mod tests {
         assert!(state.abort_capture());
 
         assert!(!state.is_engaged());
+        assert!(state.take_capture_done());
+    }
+
+    #[test]
+    fn stale_direct_capture_toasts_and_preserves_the_current_image() {
+        let mut state = ZoomState::new(None);
+        let mut input_state = make_test_input_state();
+        state.set_image(FrozenImage {
+            width: 1,
+            height: 1,
+            stride: 4,
+            data: vec![4; 4],
+        });
+        let generation = state.image_generation();
+
+        state.finish_stale_direct_capture(&mut input_state);
+
+        let toast = input_state
+            .ui_toast
+            .as_ref()
+            .expect("visible stale rejection");
+        assert!(toast.message.contains("display layout changed"));
+        assert_eq!(state.image_generation(), generation);
+        assert_eq!(state.image().unwrap().data, vec![4; 4]);
         assert!(state.take_capture_done());
     }
 }

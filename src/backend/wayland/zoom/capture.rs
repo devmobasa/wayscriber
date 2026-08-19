@@ -4,17 +4,15 @@ use smithay_client_toolkit::shm::{
     Shm,
     slot::{Buffer, SlotPool},
 };
-use wayland_client::{
-    Dispatch, QueueHandle, WEnum,
-    protocol::{wl_output, wl_shm},
-};
+use wayland_client::{Dispatch, QueueHandle, WEnum, protocol::wl_shm};
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{
     Event as FrameEvent, Flags, ZwlrScreencopyFrameV1,
 };
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
+use crate::backend::wayland::capture::CaptureLayoutContext;
 use crate::backend::wayland::frozen::{FrozenImage, copy_shm_argb, validate_shm_buffer_layout};
-use crate::backend::wayland::frozen_geometry::OutputGeometry;
+use crate::backend::wayland::frozen_geometry::{OutputGeometry, require_verified_capture_source};
 use crate::input::InputState;
 
 use super::state::ZoomState;
@@ -74,53 +72,28 @@ impl CaptureSession {
 }
 
 struct CaptureContext {
-    target_output_id: u32,
-    source_geometry: Option<OutputGeometry>,
-    layout_generation: u64,
+    layout: CaptureLayoutContext,
+    source_geometry: OutputGeometry,
 }
 
 impl CaptureContext {
-    fn new(
-        target_output_id: u32,
-        source_geometry: Option<OutputGeometry>,
-        layout_generation: u64,
-    ) -> Self {
+    fn new(target_output_id: u32, source_geometry: OutputGeometry, layout_generation: u64) -> Self {
         Self {
-            target_output_id,
+            layout: CaptureLayoutContext::new(target_output_id, layout_generation),
             source_geometry,
-            layout_generation,
         }
-    }
-
-    fn output_and_layout_match(
-        &self,
-        active_output_id: Option<u32>,
-        layout_generation: u64,
-    ) -> bool {
-        active_output_id == Some(self.target_output_id)
-            && layout_generation == self.layout_generation
     }
 }
 
 fn finalize_capture_image(image: FrozenImage, context: &CaptureContext) -> Result<FrozenImage> {
-    let output_transform = context
+    let image = image.with_output_transform(context.source_geometry.transform)?;
+    if !context
         .source_geometry
-        .as_ref()
-        .map(|geometry| geometry.transform)
-        .unwrap_or(wl_output::Transform::Normal);
-    let image = image.with_output_transform(output_transform)?;
-    if context
-        .source_geometry
-        .as_ref()
-        .is_some_and(|geometry| !geometry.accepts_transformed_pixel_size(image.width, image.height))
+        .accepts_transformed_pixel_size(image.width, image.height)
     {
         anyhow::bail!("Zoom capture dimensions do not match the active output");
     }
-    let buffer_size = context
-        .source_geometry
-        .as_ref()
-        .and_then(OutputGeometry::buffer_size)
-        .context("Zoom capture has no overlay buffer geometry")?;
+    let buffer_size = context.source_geometry.buffer_size();
     if !OutputGeometry::dimensions_have_compatible_aspect((image.width, image.height), buffer_size)
     {
         anyhow::bail!("Zoom capture aspect does not match the overlay surface");
@@ -142,6 +115,7 @@ impl ZoomState {
 
         self.capture_done = false;
         self.preflight_use_fallback = use_fallback || self.manager.is_none();
+        self.snapshot_preflight_layout();
         self.preflight_pending = true;
         Ok(())
     }
@@ -157,6 +131,8 @@ impl ZoomState {
         State:
             Dispatch<ZwlrScreencopyFrameV1, ()> + Dispatch<ZwlrScreencopyManagerV1, ()> + 'static,
     {
+        self.ensure_preflight_layout_current()
+            .map_err(anyhow::Error::msg)?;
         if use_fallback || self.manager.is_none() {
             info!("capture.preflight component=zoom phase=portal-start suppression_ready=true");
             self.capture_via_portal(tokio_handle)
@@ -183,16 +159,15 @@ impl ZoomState {
                 anyhow::bail!("No active output available for zoom capture");
             }
         };
-        let target_output_id = self
-            .active_output_id
-            .context("Active output has no stable identity for zoom capture")?;
-        let source_geometry = self
-            .active_geometry
-            .clone()
-            .context("Active output geometry is unavailable for zoom capture")?;
+        let (source_geometry, target_output_id) = require_verified_capture_source(
+            self.active_geometry.clone(),
+            self.active_output_id,
+            "zoom capture",
+        )
+        .map_err(anyhow::Error::msg)?;
         let context = CaptureContext::new(
             target_output_id,
-            Some(source_geometry),
+            source_geometry,
             self.output_layout_generation,
         );
 
@@ -251,7 +226,7 @@ impl ZoomState {
                     Ok(true) => {}
                     Ok(false) => {
                         warn!("Zoom capture discarded after the output layout changed");
-                        self.cancel(input_state, false);
+                        self.finish_stale_direct_capture(input_state);
                         return;
                     }
                     Err(err) => {
@@ -357,7 +332,8 @@ impl ZoomState {
         let image = result?;
         if !capture
             .context
-            .output_and_layout_match(self.active_output_id, self.output_layout_generation)
+            .layout
+            .matches(self.active_output_id, self.output_layout_generation)
         {
             return Ok(false);
         }
@@ -371,15 +347,7 @@ impl ZoomState {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn capture_context_rejects_output_or_layout_changes() {
-        let context = CaptureContext::new(7, None, 3);
-
-        assert!(context.output_and_layout_match(Some(7), 3));
-        assert!(!context.output_and_layout_match(Some(8), 3));
-        assert!(!context.output_and_layout_match(Some(7), 4));
-    }
+    use wayland_client::protocol::wl_output;
 
     #[test]
     fn finalized_capture_rejects_known_pixel_size_mismatch() {
@@ -392,7 +360,7 @@ mod tests {
             Some((5, 3)),
         )
         .expect("known output geometry");
-        let context = CaptureContext::new(7, Some(geometry), 3);
+        let context = CaptureContext::new(7, geometry, 3);
         let image = crate::backend::wayland::frozen::FrozenImage {
             width: 4,
             height: 3,
@@ -414,7 +382,7 @@ mod tests {
             Some((2, 3)),
         )
         .expect("rotated output geometry");
-        let context = CaptureContext::new(7, Some(geometry), 3);
+        let context = CaptureContext::new(7, geometry, 3);
         let image = crate::backend::wayland::frozen::FrozenImage {
             width: 3,
             height: 2,
@@ -437,7 +405,7 @@ mod tests {
             Some((3200, 1800)),
         )
         .expect("known output geometry");
-        let context = CaptureContext::new(7, Some(geometry), 3);
+        let context = CaptureContext::new(7, geometry, 3);
         let image = FrozenImage {
             width: 3200,
             height: 1800,
@@ -464,5 +432,25 @@ mod tests {
         assert!(state.preflight_pending());
         assert!(!state.portal_in_progress);
         assert_eq!(state.take_preflight_pending(), Some(true));
+    }
+
+    #[test]
+    fn preflight_layout_snapshot_goes_stale_when_geometry_changes() {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new().expect("runtime wake");
+        let mut state = ZoomState::new_with_runtime_wake(None, wake.handle());
+        state.snapshot_preflight_layout();
+        assert!(state.preflight_layout_is_current());
+        state.set_active_geometry(Some(
+            OutputGeometry::update_from(
+                Some((0, 0)),
+                Some((1, 1)),
+                (1, 1),
+                1,
+                wl_output::Transform::Normal,
+                Some((1, 1)),
+            )
+            .expect("geometry"),
+        ));
+        assert!(!state.preflight_layout_is_current());
     }
 }

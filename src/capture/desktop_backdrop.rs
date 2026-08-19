@@ -73,12 +73,9 @@ pub(crate) fn desktop_backdrop_from_argb(
     request: &DesktopBackdropCaptureRequest,
 ) -> Result<DesktopBackdropCaptureResult, CaptureError> {
     validate_argb_buffer(&data, width, height)?;
-    let (logical_width, logical_height, expected_width, expected_height) =
-        expected_backdrop_dimensions(request)?;
+    let (geometry, expected_width, expected_height) = expected_backdrop_dimensions(request)?;
 
-    if let Some(expected_layout_size) = request
-        .geometry
-        .and_then(DesktopBackdropGeometry::screenshot_size)
+    if let Some(expected_layout_size) = geometry.screenshot_size()
         && (width, height) != expected_layout_size
     {
         return Err(CaptureError::ImageError(format!(
@@ -88,14 +85,15 @@ pub(crate) fn desktop_backdrop_from_argb(
     }
 
     if width == expected_width && height == expected_height {
-        return desktop_backdrop_result(data, width, height, logical_width, logical_height);
+        return desktop_backdrop_result(
+            data,
+            width,
+            height,
+            geometry.logical_width,
+            geometry.logical_height,
+        );
     }
 
-    let Some(geometry) = request.geometry else {
-        return Err(CaptureError::ImageError(format!(
-            "Desktop backdrop capture returned {width}x{height}, but active output is {expected_width}x{expected_height} and no output geometry is available"
-        )));
-    };
     let (origin_x, origin_y) = geometry.physical_origin().ok_or_else(|| {
         CaptureError::ImageError(
             "Active output crop origin is unavailable for desktop capture".to_string(),
@@ -120,14 +118,14 @@ pub(crate) fn desktop_backdrop_from_argb(
         cropped,
         expected_width,
         expected_height,
-        logical_width,
-        logical_height,
+        geometry.logical_width,
+        geometry.logical_height,
     )
 }
 
 fn expected_backdrop_dimensions(
     request: &DesktopBackdropCaptureRequest,
-) -> Result<(u32, u32, u32, u32), CaptureError> {
+) -> Result<(DesktopBackdropGeometry, u32, u32), CaptureError> {
     let scale = u32::try_from(request.scale).map_err(|_| {
         CaptureError::ImageError(format!("Invalid desktop backdrop scale: {}", request.scale))
     })?;
@@ -137,38 +135,24 @@ fn expected_backdrop_dimensions(
         ));
     }
 
-    if let Some(geometry) = request.geometry {
-        if (request.logical_width, request.logical_height)
-            != (geometry.logical_width, geometry.logical_height)
-        {
-            return Err(CaptureError::ImageError(
-                "Desktop backdrop surface does not match active output geometry".to_string(),
-            ));
-        }
-        let (width, height) = geometry.physical_size().ok_or_else(|| {
-            CaptureError::ImageError("Active output dimensions are too large".to_string())
-        })?;
-        if geometry.logical_width == 0 || geometry.logical_height == 0 || width == 0 || height == 0
-        {
-            return Err(CaptureError::ImageError(
-                "Desktop backdrop capture requires a non-empty active output geometry".to_string(),
-            ));
-        }
-        Ok((
-            geometry.logical_width,
-            geometry.logical_height,
-            width,
-            height,
-        ))
-    } else {
-        let width = request.logical_width.checked_mul(scale).ok_or_else(|| {
-            CaptureError::ImageError("Active output width is too large".to_string())
-        })?;
-        let height = request.logical_height.checked_mul(scale).ok_or_else(|| {
-            CaptureError::ImageError("Active output height is too large".to_string())
-        })?;
-        Ok((request.logical_width, request.logical_height, width, height))
+    let Some(geometry) = request.geometry else {
+        return Err(CaptureError::ImageError(
+            "Desktop backdrop capture requires verified active output geometry".to_string(),
+        ));
+    };
+    if (request.logical_width, request.logical_height)
+        != (geometry.logical_width, geometry.logical_height)
+    {
+        return Err(CaptureError::ImageError(
+            "Desktop backdrop surface does not match active output geometry".to_string(),
+        ));
     }
+    let (width, height) = geometry.verified_physical_size().ok_or_else(|| {
+        CaptureError::ImageError(
+            "Active output pixel size is unavailable for desktop capture".to_string(),
+        )
+    })?;
+    Ok((geometry, width, height))
 }
 
 fn validate_argb_buffer(data: &[u8], width: u32, height: u32) -> Result<(), CaptureError> {

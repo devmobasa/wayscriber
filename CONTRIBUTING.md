@@ -143,10 +143,15 @@ on real hardware; this checklist is manual evidence, not CI coverage.
 | Sway | [ ] | [ ] | [ ] |
 | GNOME | [ ] | [ ] | [ ] |
 
-For each cell, record the selected capture backend from the logs. Verify that Freeze, Zoom, a
-screenshot, and a PDF desktop backdrop all use the active output's exact pixels. Repeat while
-switching outputs and, where supported, changing scale or transform during capture: the result must
-either stay exact or fail visibly, never shift, stretch, or reuse another output's image.
+For each cell, record the selected capture backend from the logs. Verify that Freeze, Zoom,
+and a PDF desktop backdrop all use the active output's exact pixels. User full-screen
+screenshots remain whole-desktop captures. Repeat while switching outputs and, where supported,
+changing scale or transform during capture: the result must either stay exact or fail visibly,
+never shift, stretch, or reuse another output's image.
+
+These captures now fail when the active output does not advertise a current `wl_output` mode.
+Plugging or unplugging any monitor also cancels in-flight Freeze and Zoom captures on unrelated
+outputs, because output count is part of the layout identity used to reject stale frames.
 
 `./tools/code-health-report.sh` reports navigational maintainability metrics. Its CI artifact is
 observational, not a global file/function-size gate; use the report to find code worth understanding,

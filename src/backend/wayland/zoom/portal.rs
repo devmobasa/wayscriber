@@ -3,7 +3,7 @@ use log::warn;
 use std::time::{Duration, Instant};
 
 use crate::backend::wayland::frozen::FrozenImage;
-use crate::backend::wayland::frozen_geometry::OutputGeometry;
+use crate::backend::wayland::frozen_geometry::{OutputGeometry, require_verified_capture_source};
 use crate::backend::wayland::portal_capture::{
     capture_via_portal_fullscreen_bytes, crop_argb, portal_output_matches,
 };
@@ -28,15 +28,12 @@ impl ZoomState {
             .runtime_wake
             .clone()
             .ok_or_else(|| anyhow::anyhow!("portal capture runtime wake is unavailable"))?;
-        let geo = self.active_geometry.clone().ok_or_else(|| {
-            anyhow::anyhow!("active output geometry is unavailable for portal zoom capture")
-        })?;
-        geo.verified_pixel_size().ok_or_else(|| {
-            anyhow::anyhow!("active output pixel size is unavailable for portal zoom capture")
-        })?;
-        let target_output_id = self.active_output_id.ok_or_else(|| {
-            anyhow::anyhow!("active output identity is unavailable for portal zoom capture")
-        })?;
+        let (geo, target_output_id) = require_verified_capture_source(
+            self.active_geometry.clone(),
+            self.active_output_id,
+            "portal zoom capture",
+        )
+        .map_err(anyhow::Error::msg)?;
         self.portal_in_progress = true;
         self.portal_target_output_id = Some(target_output_id);
 
@@ -63,7 +60,12 @@ impl ZoomState {
         Ok(())
     }
 
-    pub fn poll_portal_capture(&mut self, input_state: &mut InputState, now: Instant) {
+    pub fn poll_portal_capture(
+        &mut self,
+        input_state: &mut InputState,
+        now: Instant,
+        live_output_count: Option<u32>,
+    ) {
         if !self.portal_in_progress {
             return;
         }
@@ -96,6 +98,23 @@ impl ZoomState {
                 let layout_matches = layout_generation == self.output_layout_generation;
 
                 if output_matches && layout_matches {
+                    // Crop used the spawn-time geometry moved into the task.
+                    // A processed topology change updates `known_output_count`,
+                    // so `OutputGeometry`'s equality bumps
+                    // `output_layout_generation` and `layout_matches` drops the
+                    // result. This live-count check covers the SCTK window
+                    // where a new `wl_output` is already in `OutputState`
+                    // before `new_output` refreshes `active_geometry`. Freeze
+                    // instead revalidates the pending snapshot, because it
+                    // crops on the Wayland thread at activate.
+                    if self.active_geometry.as_ref().is_some_and(|geometry| {
+                        geometry.output_count_conflicts_with_live(live_output_count)
+                    }) {
+                        warn!("Portal zoom capture discarded after output topology changed");
+                        Self::push_stale_layout_toast(input_state);
+                        self.finish_failed_portal_task(input_state);
+                        return;
+                    }
                     self.set_image(image);
                 } else {
                     if !layout_matches {
@@ -103,6 +122,7 @@ impl ZoomState {
                     } else {
                         warn!("Portal zoom capture for inactive output discarded");
                     }
+                    Self::push_stale_layout_toast(input_state);
                     self.finish_failed_portal_task(input_state);
                     return;
                 }
@@ -183,9 +203,7 @@ fn crop_portal_image(
     let (phys_w, phys_h) = geometry.verified_pixel_size().ok_or_else(|| {
         CaptureError::ImageError("Zoom capture output dimensions are invalid".to_string())
     })?;
-    let buffer_size = geometry.buffer_size().ok_or_else(|| {
-        CaptureError::ImageError("Zoom capture overlay dimensions are invalid".to_string())
-    })?;
+    let buffer_size = geometry.buffer_size();
     if !OutputGeometry::dimensions_have_compatible_aspect((phys_w, phys_h), buffer_size) {
         return Err(CaptureError::ImageError(
             "Zoom capture aspect does not match the overlay surface".to_string(),
@@ -247,6 +265,7 @@ mod tests {
             pixel_size: Some((2, 1)),
             screenshot_origin: Some(origin),
             screenshot_size: None,
+            known_output_count: None,
         }
     }
 
@@ -288,7 +307,6 @@ mod tests {
             logical_y: 0,
             logical_width: 3,
             logical_height: 2,
-            scale: 2,
             physical_width: Some(5),
             physical_height: Some(3),
             crop_x: Some(0),
@@ -312,7 +330,6 @@ mod tests {
                 logical_y: 0,
                 logical_width: 2,
                 logical_height: 1,
-                scale: 1,
                 physical_width: Some(2),
                 physical_height: Some(1),
                 crop_x: Some(0),
@@ -326,8 +343,16 @@ mod tests {
     }
 
     async fn poll_until_finished(zoom: &mut ZoomState, input: &mut InputState) {
+        poll_until_finished_with_live_outputs(zoom, input, None).await;
+    }
+
+    async fn poll_until_finished_with_live_outputs(
+        zoom: &mut ZoomState,
+        input: &mut InputState,
+        live_output_count: Option<u32>,
+    ) {
         for _ in 0..100 {
-            zoom.poll_portal_capture(input, Instant::now());
+            zoom.poll_portal_capture(input, Instant::now(), live_output_count);
             if !zoom.portal_in_progress {
                 return;
             }
@@ -405,7 +430,7 @@ mod tests {
             });
             zoom.portal_in_progress = true;
 
-            zoom.poll_portal_capture(&mut input, now);
+            zoom.poll_portal_capture(&mut input, now, None);
 
             assert!(!zoom.is_in_progress());
             assert!(!zoom.active);
@@ -438,6 +463,7 @@ mod tests {
         assert_eq!(zoom.image_generation(), generation);
         assert_eq!(zoom.image().unwrap().data, vec![4; 8]);
         assert!(zoom.take_capture_done());
+        assert!(input.ui_toast.is_some());
     }
 
     #[tokio::test]
@@ -465,6 +491,7 @@ mod tests {
         assert_eq!(zoom.image_generation(), generation);
         assert_eq!(zoom.image().unwrap().data, vec![4; 8]);
         assert!(zoom.take_capture_done());
+        assert!(input.ui_toast.is_some());
     }
 
     #[tokio::test]
@@ -490,6 +517,33 @@ mod tests {
         assert!(!zoom.pending_activation);
         assert_eq!(zoom.image().unwrap().data, vec![3; 8]);
         assert!(zoom.take_capture_done());
+    }
+
+    #[tokio::test]
+    async fn stale_live_output_count_discards_a_single_output_portal_image() {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
+        let mut input = make_test_input_state();
+        zoom.set_image(image(4));
+        let generation = zoom.image_generation();
+        zoom.set_active_geometry(Some(crop_geometry((0, 0)).with_known_output_count(Some(1))));
+        let layout_generation = zoom.output_layout_generation;
+        zoom.request_activation();
+        zoom.portal_task = Some(PortalTask::spawn(
+            &tokio::runtime::Handle::current(),
+            wake.handle(),
+            async move { Ok((None, layout_generation, image(9))) },
+        ));
+        zoom.portal_in_progress = true;
+
+        poll_until_finished_with_live_outputs(&mut zoom, &mut input, Some(2)).await;
+
+        assert!(!zoom.active);
+        assert!(!zoom.pending_activation);
+        assert_eq!(zoom.image_generation(), generation);
+        assert_eq!(zoom.image().unwrap().data, vec![4; 8]);
+        assert!(zoom.take_capture_done());
+        assert!(input.ui_toast.is_some());
     }
 
     #[tokio::test]

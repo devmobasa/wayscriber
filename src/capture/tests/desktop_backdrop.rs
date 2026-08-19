@@ -21,7 +21,19 @@ fn request(
 #[test]
 fn desktop_backdrop_accepts_exact_active_output_size() {
     let data = vec![7u8; 4 * 2 * 4];
-    let result = desktop_backdrop_from_argb(data.clone(), 4, 2, &request(2, 1, 2, None))
+    let geometry = DesktopBackdropGeometry {
+        logical_x: 0,
+        logical_y: 0,
+        logical_width: 2,
+        logical_height: 1,
+        physical_width: Some(4),
+        physical_height: Some(2),
+        crop_x: Some(0),
+        crop_y: Some(0),
+        screenshot_width: Some(4),
+        screenshot_height: Some(2),
+    };
+    let result = desktop_backdrop_from_argb(data.clone(), 4, 2, &request(2, 1, 2, Some(geometry)))
         .expect("exact backdrop");
 
     assert_eq!(result.width, 4);
@@ -33,6 +45,43 @@ fn desktop_backdrop_accepts_exact_active_output_size() {
 }
 
 #[test]
+fn desktop_backdrop_rejects_missing_geometry() {
+    let error = desktop_backdrop_from_argb(vec![7u8; 4 * 2 * 4], 4, 2, &request(2, 1, 2, None))
+        .expect_err("backdrop capture must not guess logical * scale");
+
+    assert!(
+        error
+            .to_string()
+            .contains("requires verified active output geometry"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
+fn desktop_backdrop_rejects_unverified_physical_size() {
+    let geometry = DesktopBackdropGeometry {
+        logical_x: 2,
+        logical_y: 0,
+        logical_width: 2,
+        logical_height: 1,
+        physical_width: None,
+        physical_height: None,
+        crop_x: Some(2),
+        crop_y: Some(0),
+        screenshot_width: None,
+        screenshot_height: None,
+    };
+
+    let error = desktop_backdrop_from_argb(vec![0; 6 * 4], 6, 1, &request(2, 1, 1, Some(geometry)))
+        .expect_err("missing mode pixels must fail closed");
+
+    assert!(
+        error.to_string().contains("pixel size is unavailable"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
 fn desktop_backdrop_accepts_fractional_scale_output_mode_size() {
     let data = vec![7u8; 5 * 3 * 4];
     let geometry = DesktopBackdropGeometry {
@@ -40,7 +89,6 @@ fn desktop_backdrop_accepts_fractional_scale_output_mode_size() {
         logical_y: 0,
         logical_width: 3,
         logical_height: 2,
-        scale: 2,
         physical_width: Some(5),
         physical_height: Some(3),
         crop_x: Some(0),
@@ -65,7 +113,6 @@ fn desktop_backdrop_rejects_a_surface_that_is_not_the_active_output() {
         logical_y: 0,
         logical_width: 4,
         logical_height: 2,
-        scale: 1,
         physical_width: Some(4),
         physical_height: Some(2),
         crop_x: Some(0),
@@ -92,9 +139,8 @@ fn desktop_backdrop_crops_multi_output_capture_to_active_output() {
         logical_y: 0,
         logical_width: 2,
         logical_height: 1,
-        scale: 1,
-        physical_width: None,
-        physical_height: None,
+        physical_width: Some(2),
+        physical_height: Some(1),
         crop_x: Some(2),
         crop_y: Some(0),
         screenshot_width: None,
@@ -117,9 +163,8 @@ fn desktop_backdrop_crop_failure_returns_error() {
         logical_y: 0,
         logical_width: 2,
         logical_height: 2,
-        scale: 1,
-        physical_width: None,
-        physical_height: None,
+        physical_width: Some(2),
+        physical_height: Some(2),
         crop_x: Some(2),
         crop_y: Some(0),
         screenshot_width: None,
@@ -139,7 +184,7 @@ fn desktop_backdrop_crop_failure_returns_error() {
 fn desktop_backdrop_crops_mixed_scale_output_using_screenshot_origin() {
     let outputs = [output(-4, 0, 4, 1, 6, 1), output(0, 0, 4, 1, 4, 1)];
     let geometry =
-        DesktopBackdropGeometry::from_outputs(outputs[1], &outputs, 1).expect("mixed scale origin");
+        DesktopBackdropGeometry::from_outputs(outputs[1], &outputs).expect("mixed scale origin");
     let mut data = Vec::new();
     for pixel in 0u8..10 {
         data.extend_from_slice(&[pixel, pixel, pixel, 255]);
@@ -160,14 +205,14 @@ fn desktop_backdrop_crops_mixed_scale_output_using_screenshot_origin() {
 fn desktop_backdrop_rejects_layout_bounds_that_exceed_supported_coordinates() {
     let output = output(i32::MAX - 1, 0, 4, 1, 4, 1);
 
-    assert!(DesktopBackdropGeometry::from_outputs(output, &[output], 1).is_none());
+    assert!(DesktopBackdropGeometry::from_outputs(output, &[output]).is_none());
 }
 
 #[test]
 fn desktop_backdrop_rejects_a_screenshot_whose_layout_size_does_not_match() {
     let outputs = [output(-4, 0, 4, 1, 6, 1), output(0, 0, 4, 1, 4, 1)];
     let geometry =
-        DesktopBackdropGeometry::from_outputs(outputs[1], &outputs, 1).expect("desktop geometry");
+        DesktopBackdropGeometry::from_outputs(outputs[1], &outputs).expect("desktop geometry");
     let data = vec![0u8; 11 * 4];
 
     let err = desktop_backdrop_from_argb(data, 11, 1, &request(4, 1, 1, Some(geometry)))
@@ -183,7 +228,7 @@ fn desktop_backdrop_rejects_a_screenshot_whose_layout_size_does_not_match() {
 fn desktop_backdrop_single_output_at_nonzero_logical_origin_crops_at_zero() {
     let outputs = [output(10, 20, 4, 2, 8, 4)];
     let geometry =
-        DesktopBackdropGeometry::from_outputs(outputs[0], &outputs, 2).expect("single output");
+        DesktopBackdropGeometry::from_outputs(outputs[0], &outputs).expect("single output");
 
     assert_eq!(geometry.physical_origin(), Some((0, 0)));
 }
@@ -193,8 +238,8 @@ fn desktop_backdrop_origin_shifts_when_a_left_output_is_removed() {
     let left = output(-4, 0, 4, 1, 6, 1);
     let right = output(0, 0, 4, 1, 4, 1);
     let with_left =
-        DesktopBackdropGeometry::from_outputs(right, &[left, right], 1).expect("with left");
-    let without_left = DesktopBackdropGeometry::from_outputs(right, &[right], 1).expect("removed");
+        DesktopBackdropGeometry::from_outputs(right, &[left, right]).expect("with left");
+    let without_left = DesktopBackdropGeometry::from_outputs(right, &[right]).expect("removed");
 
     assert_eq!(with_left.physical_origin(), Some((6, 0)));
     assert_eq!(without_left.physical_origin(), Some((0, 0)));
@@ -204,7 +249,7 @@ fn desktop_backdrop_origin_shifts_when_a_left_output_is_removed() {
 fn desktop_backdrop_normalizes_negative_output_origins() {
     let outputs = [output(-2, 0, 2, 2, 2, 2), output(0, 0, 3, 2, 3, 2)];
     let geometry =
-        DesktopBackdropGeometry::from_outputs(outputs[0], &outputs, 1).expect("negative origin");
+        DesktopBackdropGeometry::from_outputs(outputs[0], &outputs).expect("negative origin");
 
     assert_eq!(geometry.physical_origin(), Some((0, 0)));
 }
@@ -213,7 +258,7 @@ fn desktop_backdrop_normalizes_negative_output_origins() {
 fn desktop_backdrop_crops_rotated_output_using_transformed_size() {
     let outputs = [output(0, 0, 2, 4, 4, 2), output(2, 0, 2, 4, 2, 4)];
     let geometry =
-        DesktopBackdropGeometry::from_outputs(outputs[0], &outputs, 1).expect("rotated output");
+        DesktopBackdropGeometry::from_outputs(outputs[0], &outputs).expect("rotated output");
     let mut data = Vec::new();
     for pixel in 0u8..24 {
         data.extend_from_slice(&[pixel, pixel, pixel, 255]);
@@ -222,7 +267,7 @@ fn desktop_backdrop_crops_rotated_output_using_transformed_size() {
     let result =
         desktop_backdrop_from_argb(data, 6, 4, &request(2, 4, 1, Some(geometry))).expect("crop");
 
-    assert_eq!(geometry.physical_size(), Some((4, 2)));
+    assert_eq!(geometry.verified_physical_size(), Some((4, 2)));
     assert_eq!(geometry.physical_origin(), Some((0, 0)));
     assert_eq!(result.width, 4);
     assert_eq!(result.height, 2);

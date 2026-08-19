@@ -24,6 +24,9 @@ pub struct OutputGeometry {
     pub screenshot_origin: Option<(u32, u32)>,
     /// Expected full-desktop screenshot dimensions for the captured layout.
     pub(super) screenshot_size: Option<(u32, u32)>,
+    /// Number of live `wl_output` objects when this snapshot was taken.
+    /// `None` means topology was not recorded (tests / incomplete refresh).
+    pub(super) known_output_count: Option<u32>,
 }
 
 impl OutputGeometry {
@@ -64,6 +67,7 @@ impl OutputGeometry {
             pixel_size,
             screenshot_origin: None,
             screenshot_size: None,
+            known_output_count: None,
         })
     }
 }
@@ -91,9 +95,27 @@ mod tests {
         assert_eq!(geo.logical_height, 1080);
         assert_eq!(geo.transform, wl_output::Transform::_270);
         assert_eq!(geo.verified_pixel_size(), Some((3840, 2160)));
-        assert_eq!(geo.buffer_size(), Some((1600, 1200)));
+        assert_eq!(geo.buffer_size(), (1600, 1200));
         assert_eq!(geo.physical_origin(), (20, 40));
-        assert_eq!(geo.portal_crop_origin(3840, 2160), Some((0, 0)));
+        assert_eq!(geo.portal_crop_origin(3840, 2160), None);
+        assert_eq!(
+            geo.clone()
+                .with_known_output_count(Some(1))
+                .portal_crop_origin(3840, 2160),
+            Some((0, 0))
+        );
+        assert_eq!(
+            geo.clone()
+                .with_known_output_count(Some(2))
+                .portal_crop_origin(3840, 2160),
+            None
+        );
+        assert_eq!(
+            geo.clone()
+                .with_screenshot_origin(Some((0, 0)))
+                .portal_crop_origin(3840, 2160),
+            Some((0, 0))
+        );
         assert_eq!(geo.portal_crop_origin(8000, 2160), None);
         assert_eq!(
             geo.with_screenshot_origin(Some((6, 0)))
@@ -162,7 +184,6 @@ mod tests {
             logical_y: 0,
             logical_width: 3,
             logical_height: 2,
-            scale: 2,
             physical_width: Some(5),
             physical_height: Some(3),
             crop_x: Some(0),
@@ -190,7 +211,6 @@ mod tests {
             logical_y: 0,
             logical_width: 3,
             logical_height: 2,
-            scale: 2,
             physical_width: Some(5),
             physical_height: Some(3),
             crop_x: Some(7),
@@ -202,6 +222,125 @@ mod tests {
 
         assert_eq!(geo.verified_pixel_size(), Some((5, 3)));
         assert_eq!(geo.portal_crop_origin(12, 3), None);
+        assert_eq!(geo.portal_crop_origin(5, 3), None);
+        assert_eq!(
+            geo.with_known_output_count(Some(1))
+                .portal_crop_origin(5, 3),
+            Some((0, 0))
+        );
+    }
+
+    #[test]
+    fn portal_crop_origin_requires_layout_origin_even_when_the_image_matches_this_output() {
+        let geo = OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((1920, 1080)),
+            (1920, 1080),
+            1,
+            wl_output::Transform::Normal,
+            Some((1920, 1080)),
+        )
+        .expect("matching output geometry");
+
+        assert_eq!(geo.portal_crop_origin(1920, 1080), None);
+    }
+
+    #[test]
+    fn portal_crop_origin_infers_buffer_origin_only_for_a_proven_single_output() {
+        let geo = OutputGeometry::update_from(
+            Some((10, 20)),
+            Some((1920, 1080)),
+            (1920, 1080),
+            1,
+            wl_output::Transform::Normal,
+            Some((1920, 1080)),
+        )
+        .expect("single output without zxdg layout");
+
+        assert_eq!(
+            geo.clone()
+                .with_known_output_count(Some(1))
+                .portal_crop_origin(1920, 1080),
+            Some((0, 0))
+        );
+        assert_eq!(
+            geo.clone()
+                .with_known_output_count(Some(1))
+                .portal_crop_origin(3840, 1080),
+            None
+        );
+        assert_eq!(
+            geo.with_known_output_count(Some(2))
+                .portal_crop_origin(1920, 1080),
+            None
+        );
+    }
+
+    #[test]
+    fn revalidated_output_count_rejects_stale_single_output_snapshots() {
+        let geo = OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((1920, 1080)),
+            (1920, 1080),
+            1,
+            wl_output::Transform::Normal,
+            Some((1920, 1080)),
+        )
+        .expect("geometry")
+        .with_known_output_count(Some(1));
+
+        assert!(geo.clone().with_revalidated_output_count(Some(2)).is_none());
+        let live = geo
+            .clone()
+            .with_revalidated_output_count(Some(1))
+            .expect("matching live topology");
+        assert_eq!(live.portal_crop_origin(1920, 1080), Some((0, 0)));
+        assert_eq!(
+            geo.with_revalidated_output_count(None)
+                .expect("tests without a live count keep the snapshot")
+                .portal_crop_origin(1920, 1080),
+            Some((0, 0))
+        );
+    }
+
+    #[test]
+    fn require_verified_capture_source_fails_closed_without_geometry_pixels_or_identity() {
+        assert_eq!(
+            require_verified_capture_source(None, Some(1), "test capture").unwrap_err(),
+            "active output geometry is unavailable for test capture"
+        );
+
+        let geo = OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((800, 600)),
+            (800, 600),
+            1,
+            wl_output::Transform::Normal,
+            None,
+        )
+        .expect("geometry without mode pixels");
+        assert_eq!(
+            require_verified_capture_source(Some(geo), Some(1), "test capture").unwrap_err(),
+            "active output pixel size is unavailable for test capture"
+        );
+
+        let geo = OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((800, 600)),
+            (800, 600),
+            1,
+            wl_output::Transform::Normal,
+            Some((800, 600)),
+        )
+        .expect("geometry with mode pixels");
+        assert_eq!(
+            require_verified_capture_source(Some(geo.clone()), None, "test capture").unwrap_err(),
+            "active output identity is unavailable for test capture"
+        );
+        let (verified, output_id) =
+            require_verified_capture_source(Some(geo), Some(7), "test capture").expect("verified");
+        assert_eq!(verified.verified_pixel_size(), Some((800, 600)));
+        assert_eq!(output_id, 7);
     }
 
     #[test]
@@ -262,22 +401,24 @@ impl OutputGeometry {
     }
 
     /// Returns the integer-scale buffer dimensions used by the overlay surface.
-    pub fn buffer_size(&self) -> Option<(u32, u32)> {
-        Some(self.overlay_buffer_size)
+    pub fn buffer_size(&self) -> (u32, u32) {
+        self.overlay_buffer_size
     }
 
-    /// Validate post-transform pixels when the compositor's physical mode is known.
+    /// Validate post-transform pixels against the compositor's physical mode.
+    ///
+    /// Unknown mode size is a mismatch: guessing from the overlay buffer would
+    /// accept another output with the same aspect.
     pub fn accepts_transformed_pixel_size(&self, width: u32, height: u32) -> bool {
-        self.pixel_size
-            .is_none_or(|pixel_size| pixel_size == (width, height))
+        self.pixel_size == Some((width, height))
     }
 
     /// Returns physical pixel origin of the logical position on this output.
     ///
     /// Portal desktop screenshots must use [`Self::portal_crop_origin`] instead:
     /// mixed-scale layouts are not `logical * this output's scale`, and an
-    /// unknown origin must not be treated as `(0, 0)` unless the capture is
-    /// already this output's physical size.
+    /// unknown origin must not be treated as `(0, 0)` unless topology proves
+    /// there is a single output whose pixels match the capture.
     #[allow(dead_code)] // used by geometry tests; portal crop uses screenshot_origin
     pub fn physical_origin(&self) -> (i32, i32) {
         (
@@ -306,12 +447,36 @@ impl OutputGeometry {
         self
     }
 
+    pub fn with_known_output_count(mut self, count: Option<u32>) -> Self {
+        self.known_output_count = count;
+        self
+    }
+
+    /// Apply the live `wl_output` count at capture accept time.
+    ///
+    /// SCTK can insert a new output into `OutputState` before `new_output`
+    /// runs, so a snapshot of `Some(1)` must not survive that window.
+    pub fn with_revalidated_output_count(self, live_output_count: Option<u32>) -> Option<Self> {
+        if self.output_count_conflicts_with_live(live_output_count) {
+            return None;
+        }
+        let known_output_count = self.known_output_count;
+        Some(self.with_known_output_count(live_output_count.or(known_output_count)))
+    }
+
+    pub fn output_count_conflicts_with_live(&self, live_output_count: Option<u32>) -> bool {
+        matches!(
+            (self.known_output_count, live_output_count),
+            (Some(known), Some(live)) if known != live
+        )
+    }
+
     /// Crop origin inside a portal/desktop screenshot of `image_width` ×
     /// `image_height`.
     ///
-    /// Unknown origin is `(0, 0)` only when those dimensions are this output's
-    /// physical size (a single-output capture). Otherwise the origin stays
-    /// unknown so a multi-output shot is not cropped from the first monitor.
+    /// Prefer the walked layout origin. If optional zxdg_output metadata is
+    /// missing, `(0, 0)` is inferred only when topology proves there is a
+    /// single output and the image is that output's physical size.
     pub fn portal_crop_origin(&self, image_width: u32, image_height: u32) -> Option<(u32, u32)> {
         if self
             .screenshot_size
@@ -323,6 +488,27 @@ impl OutputGeometry {
             return Some(origin);
         }
         let (phys_width, phys_height) = self.verified_pixel_size()?;
-        (image_width == phys_width && image_height == phys_height).then_some((0, 0))
+        (self.known_output_count == Some(1)
+            && image_width == phys_width
+            && image_height == phys_height)
+            .then_some((0, 0))
     }
+}
+
+/// Require compositor-reported output pixels and a stable output identity.
+pub fn require_verified_capture_source(
+    geometry: Option<OutputGeometry>,
+    output_id: Option<u32>,
+    what: &str,
+) -> Result<(OutputGeometry, u32), String> {
+    let geometry =
+        geometry.ok_or_else(|| format!("active output geometry is unavailable for {what}"))?;
+    if geometry.verified_pixel_size().is_none() {
+        return Err(format!(
+            "active output pixel size is unavailable for {what}"
+        ));
+    }
+    let output_id =
+        output_id.ok_or_else(|| format!("active output identity is unavailable for {what}"))?;
+    Ok((geometry, output_id))
 }

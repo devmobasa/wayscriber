@@ -4,6 +4,7 @@ use log::warn;
 use std::time::{Duration, Instant};
 
 use crate::backend::wayland::frozen::FrozenImage;
+use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
 use crate::backend::wayland::portal_capture::{
     capture_via_portal_fullscreen_bytes, portal_output_matches,
 };
@@ -28,15 +29,12 @@ impl FrozenState {
             .runtime_wake
             .clone()
             .ok_or_else(|| anyhow::anyhow!("portal capture runtime wake is unavailable"))?;
-        let source_geometry = self.active_geometry.clone().ok_or_else(|| {
-            anyhow::anyhow!("active output geometry is unavailable for portal freeze capture")
-        })?;
-        source_geometry.verified_pixel_size().ok_or_else(|| {
-            anyhow::anyhow!("active output pixel size is unavailable for portal freeze capture")
-        })?;
-        let target_output_id = self.active_output_id.ok_or_else(|| {
-            anyhow::anyhow!("active output identity is unavailable for portal freeze capture")
-        })?;
+        let (source_geometry, target_output_id) = require_verified_capture_source(
+            self.active_geometry.clone(),
+            self.active_output_id,
+            "portal freeze capture",
+        )
+        .map_err(anyhow::Error::msg)?;
         self.portal_in_progress = true;
         self.portal_target_output_id = Some(target_output_id);
 
@@ -115,6 +113,7 @@ impl FrozenState {
                     } else {
                         warn!("Portal capture for inactive output discarded");
                     }
+                    Self::push_stale_layout_toast(input_state);
                     self.capture_done = true;
                 }
 
@@ -201,6 +200,7 @@ mod tests {
             pixel_size: Some((2, 1)),
             screenshot_origin: Some(origin),
             screenshot_size: None,
+            known_output_count: None,
         }
     }
 
@@ -249,7 +249,7 @@ mod tests {
         frozen.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async { Ok((None, 0, None, image(0))) },
+            async { Ok((None, 0, Some(crop_geometry((0, 0))), image(0))) },
         ));
         frozen.portal_in_progress = true;
         poll_until_finished(&mut frozen, &mut input).await?;
@@ -374,6 +374,7 @@ mod tests {
         assert!(input.frozen_active());
         assert!(!frozen.has_pending_image());
         assert!(frozen.take_capture_done());
+        assert!(input.ui_toast.is_some());
         Ok(())
     }
 
@@ -396,6 +397,7 @@ mod tests {
 
         assert!(!frozen.has_pending_image());
         assert!(frozen.take_capture_done());
+        assert!(input.ui_toast.is_some());
         Ok(())
     }
 

@@ -18,7 +18,7 @@ impl OutputHandler for WaylandState {
     ) {
         debug!("New output detected");
         self.refresh_active_output_label();
-        self.refresh_freeze_zoom_screenshot_origin();
+        self.refresh_freeze_zoom_geometry();
     }
 
     fn update_output(
@@ -31,14 +31,10 @@ impl OutputHandler for WaylandState {
         if self.surface.current_output().as_ref() == Some(&output) {
             self.refresh_active_output_label();
         }
-        if self.surface.current_output().as_ref() == Some(&output) {
-            self.refresh_freeze_zoom_geometry();
-            return;
-        }
         // Screenshot origin walks every output, so a non-active monitor that
         // is added, moved, scaled, or given logical geometry still has to
         // refresh the active crop.
-        self.refresh_freeze_zoom_screenshot_origin();
+        self.refresh_freeze_zoom_geometry();
     }
 
     fn output_destroyed(
@@ -56,6 +52,6 @@ impl OutputHandler for WaylandState {
         // SCTK 0.20 calls this before removing the output from OutputState, so
         // a walk of current outputs would still include it. Exclude it here;
         // there is no later callback after the removal.
-        self.refresh_freeze_zoom_screenshot_origin_excluding(Some(&output));
+        self.refresh_freeze_zoom_geometry_excluding(Some(&output));
     }
 }

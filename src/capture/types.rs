@@ -193,7 +193,6 @@ pub struct DesktopBackdropGeometry {
     pub logical_y: i32,
     pub logical_width: u32,
     pub logical_height: u32,
-    pub scale: i32,
     pub physical_width: Option<u32>,
     pub physical_height: Option<u32>,
     pub crop_x: Option<u32>,
@@ -206,14 +205,12 @@ impl DesktopBackdropGeometry {
     pub fn from_outputs(
         active: DesktopBackdropOutputGeometry,
         outputs: &[DesktopBackdropOutputGeometry],
-        scale: i32,
     ) -> Option<Self> {
         Some(Self {
             logical_x: active.logical_x,
             logical_y: active.logical_y,
             logical_width: active.logical_width,
             logical_height: active.logical_height,
-            scale,
             physical_width: Some(active.physical_width),
             physical_height: Some(active.physical_height),
             crop_x: Some(physical_axis_origin(
@@ -229,21 +226,6 @@ impl DesktopBackdropGeometry {
             screenshot_width: Some(physical_axis_size(Axis::Horizontal, outputs)?),
             screenshot_height: Some(physical_axis_size(Axis::Vertical, outputs)?),
         })
-    }
-
-    pub fn physical_size(self) -> Option<(u32, u32)> {
-        if let (Some(width), Some(height)) = (self.physical_width, self.physical_height)
-            && width > 0
-            && height > 0
-        {
-            return Some((width, height));
-        }
-
-        let scale = u32::try_from(self.scale).ok()?;
-        Some((
-            self.logical_width.checked_mul(scale)?,
-            self.logical_height.checked_mul(scale)?,
-        ))
     }
 
     pub fn verified_physical_size(self) -> Option<(u32, u32)> {

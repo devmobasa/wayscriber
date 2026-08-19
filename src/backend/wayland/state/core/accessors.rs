@@ -357,10 +357,13 @@ impl WaylandState {
     ) {
         let was_xdg_frozen_fullscreen = self.xdg_frozen_fullscreen_requested();
         let (phys_width, phys_height) = self.surface.physical_dimensions();
-        match self
-            .frozen
-            .activate_pending_image(phys_width, phys_height, &mut self.input_state)
-        {
+        let live_output_count = self.live_output_count();
+        match self.frozen.activate_pending_image_with_live_outputs(
+            phys_width,
+            phys_height,
+            &mut self.input_state,
+            live_output_count,
+        ) {
             Ok(true) => {
                 if was_xdg_frozen_fullscreen {
                     self.data.xdg_frozen_fullscreen_state =

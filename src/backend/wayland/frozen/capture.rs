@@ -21,6 +21,8 @@ use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{
 };
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
+use crate::backend::wayland::capture::CaptureLayoutContext;
+use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
 use crate::input::InputState;
 
 use super::image::{copy_shm_argb, validate_shm_buffer_layout};
@@ -91,6 +93,7 @@ impl FrozenState {
             self.preferred_backend()
                 .context("no frozen capture backend is available")?,
         );
+        self.snapshot_preflight_layout();
         self.preflight_pending = true;
         Ok(())
     }
@@ -155,6 +158,8 @@ impl FrozenState {
             + Dispatch<ExtOutputImageCaptureSourceManagerV1, ()>
             + 'static,
     {
+        self.ensure_preflight_layout_current()
+            .map_err(anyhow::Error::msg)?;
         let mut backend = Some(first_backend);
         let mut last_error = None;
 
@@ -224,10 +229,12 @@ impl FrozenState {
                 anyhow::bail!("No active output available for frozen capture");
             }
         };
-        let target_output_id = self
-            .active_output_id
-            .context("Active output has no stable identity for frozen capture")?;
-        let source_geometry = self.active_geometry.clone();
+        let (source_geometry, target_output_id) = require_verified_capture_source(
+            self.active_geometry.clone(),
+            self.active_output_id,
+            "frozen capture",
+        )
+        .map_err(anyhow::Error::msg)?;
 
         let pool = SlotPool::new(4, shm).context("Failed to create frozen capture pool")?;
         debug!("Requesting screencopy frame for active output");
@@ -237,9 +244,8 @@ impl FrozenState {
         self.direct_capture = Some(DirectCaptureAttempt::WlrScreencopy {
             session: Box::new(capture),
             context: DirectCaptureContext::new(
-                target_output_id,
+                CaptureLayoutContext::new(target_output_id, self.output_layout_generation),
                 source_geometry,
-                self.output_layout_generation,
             ),
         });
 
@@ -408,11 +414,18 @@ impl FrozenState {
         })();
         capture.frame.destroy();
         let image = result?;
-        if !context.output_and_layout_match(self.active_output_id, self.output_layout_generation) {
+        if !context
+            .layout
+            .matches(self.active_output_id, self.output_layout_generation)
+        {
             return Ok(false);
         }
 
-        self.set_pending_output_image(image, context.target_output_id, context.source_geometry);
+        self.set_pending_output_image(
+            image,
+            context.layout.target_output_id(),
+            context.source_geometry,
+        );
 
         Ok(true)
     }
@@ -421,5 +434,6 @@ impl FrozenState {
         self.capture_done = true;
         input_state.set_frozen_active(false);
         input_state.needs_redraw = true;
+        Self::push_stale_layout_toast(input_state);
     }
 }

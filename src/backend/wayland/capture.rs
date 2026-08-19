@@ -57,6 +57,10 @@ impl CaptureLayoutContext {
         }
     }
 
+    pub(in crate::backend::wayland) fn target_output_id(self) -> u32 {
+        self.target_output_id
+    }
+
     pub(in crate::backend::wayland) fn matches(
         self,
         active_output_id: Option<u32>,
