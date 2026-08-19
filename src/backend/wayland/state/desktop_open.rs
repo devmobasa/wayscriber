@@ -1,8 +1,8 @@
 //! Runtime-owned desktop-open completion.
 //!
-//! Input handlers record intent only. The bounded broker operation runs on a
+//! Input handlers record intent only. The detached broker spawn runs on a
 //! worker, wakes the Wayland loop, and requests overlay exit only after the
-//! opener has completed successfully.
+//! opener has been handed off successfully.
 
 use std::time::Duration;
 
@@ -13,11 +13,32 @@ use crate::input::state::{Toast, ToastPriority};
 
 enum DesktopOpenCompletion {
     Pending,
-    Opened(DesktopOpenRequest),
+    /// Broker accepted the detached spawn; the opener may still be starting.
+    HandedOff(DesktopOpenRequest),
     Failed {
         request: DesktopOpenRequest,
         reason: String,
     },
+}
+
+/// Overlay exit requested by a successful desktop-open handoff.
+///
+/// Successful opens deliberately transfer focus, so the exit must be marked
+/// explicit: xdg stay-mode otherwise cancels `should_exit` and reactivates the
+/// overlay over the application the user just opened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HandoffExitIntent {
+    None,
+    ExitExplicitly,
+}
+
+fn handoff_exit_intent(completion: &DesktopOpenCompletion) -> HandoffExitIntent {
+    match completion {
+        DesktopOpenCompletion::HandedOff(_) => HandoffExitIntent::ExitExplicitly,
+        DesktopOpenCompletion::Pending | DesktopOpenCompletion::Failed { .. } => {
+            HandoffExitIntent::None
+        }
+    }
 }
 
 impl WaylandState {
@@ -32,12 +53,18 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn poll_desktop_open_completion(&mut self) {
         let completion = classify_completion(self.desktop_open.poll());
-        apply_exit_policy(&completion, &mut self.input_state.should_exit);
+        match handoff_exit_intent(&completion) {
+            HandoffExitIntent::None => {}
+            HandoffExitIntent::ExitExplicitly => {
+                self.mark_xdg_explicit_close_requested();
+                self.input_state.should_exit = true;
+            }
+        }
         match completion {
             DesktopOpenCompletion::Pending => {}
-            DesktopOpenCompletion::Opened(request) => {
+            DesktopOpenCompletion::HandedOff(request) => {
                 log::info!(
-                    "Opened {} at {}",
+                    "Handed off desktop open for {} at {}",
                     request.target_name(),
                     request.path().display()
                 );
@@ -114,14 +141,8 @@ fn classify_result(
     outcome: Result<(), String>,
 ) -> DesktopOpenCompletion {
     match outcome {
-        Ok(()) => DesktopOpenCompletion::Opened(request),
+        Ok(()) => DesktopOpenCompletion::HandedOff(request),
         Err(reason) => DesktopOpenCompletion::Failed { request, reason },
-    }
-}
-
-fn apply_exit_policy(completion: &DesktopOpenCompletion, should_exit: &mut bool) {
-    if matches!(completion, DesktopOpenCompletion::Opened(_)) {
-        *should_exit = true;
     }
 }
 
@@ -167,9 +188,7 @@ mod tests {
         assert!(matches!(
             {
                 let completion = classify_completion(controller.poll());
-                let mut should_exit = false;
-                apply_exit_policy(&completion, &mut should_exit);
-                assert!(!should_exit);
+                assert_eq!(handoff_exit_intent(&completion), HandoffExitIntent::None);
                 completion
             },
             DesktopOpenCompletion::Pending,
@@ -186,11 +205,10 @@ mod tests {
                     );
                     std::thread::yield_now();
                 }
-                DesktopOpenCompletion::Opened(completed) => {
+                DesktopOpenCompletion::HandedOff(completed) => {
                     assert_eq!(completed, request);
-                    let mut should_exit = false;
-                    apply_exit_policy(&DesktopOpenCompletion::Opened(completed), &mut should_exit);
-                    assert!(should_exit);
+                    let intent = handoff_exit_intent(&DesktopOpenCompletion::HandedOff(completed));
+                    assert_eq!(intent, HandoffExitIntent::ExitExplicitly);
                     break;
                 }
                 DesktopOpenCompletion::Failed { reason, .. } => {
@@ -204,16 +222,24 @@ mod tests {
     fn failed_helper_completion_never_requests_exit() {
         let request = DesktopOpenRequest::ConfigFile("/tmp/config.toml".into());
         let completion = classify_result(request.clone(), Err("injected failure".to_string()));
-        let mut should_exit = false;
-        apply_exit_policy(&completion, &mut should_exit);
 
         assert!(matches!(
-            completion,
+            &completion,
             DesktopOpenCompletion::Failed {
                 request: failed,
                 reason,
-            } if failed == request && reason == "injected failure"
+            } if *failed == request && reason == "injected failure"
         ));
-        assert!(!should_exit);
+        assert_eq!(handoff_exit_intent(&completion), HandoffExitIntent::None);
+    }
+
+    #[test]
+    fn successful_handoff_requests_explicit_overlay_exit() {
+        assert_eq!(
+            handoff_exit_intent(&DesktopOpenCompletion::HandedOff(
+                DesktopOpenRequest::CaptureFolder("/tmp/capture".into()),
+            )),
+            HandoffExitIntent::ExitExplicitly
+        );
     }
 }

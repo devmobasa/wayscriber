@@ -51,6 +51,7 @@ impl AboutWindowState {
             should_exit: false,
             needs_redraw: true,
             check_requested: false,
+            helper_workers: Vec::new(),
             content,
             plan,
             update,
@@ -127,26 +128,36 @@ impl AboutWindowState {
     fn perform(&mut self, action: AboutAction) {
         match action {
             AboutAction::OpenUrl(url) => match clipboard::open_url(&url) {
-                Ok(()) => self.set_notice(OPENING_NOTICE),
+                Ok(worker) => {
+                    self.track_helper_worker(worker);
+                    self.set_notice(OPENING_NOTICE);
+                }
                 Err(err) => {
                     warn!("About dialog refused or failed to open a URL: {err:#}");
                     self.set_notice(OPEN_FAILED_NOTICE);
                 }
             },
             AboutAction::CopyText(text) => {
-                clipboard::copy_text_to_clipboard(&text);
+                if let Some(worker) = clipboard::copy_text_to_clipboard(&text) {
+                    self.track_helper_worker(worker);
+                }
                 self.set_notice(COPIED_NOTICE);
             }
             // Copy as well as open: the URL carries the same diagnostics in its
             // fragment, but a browser that never launches, or a form that drops
             // the prefill, still leaves them one paste away.
             AboutAction::ReportBug { url, diagnostics } => {
-                // Queue the bounded desktop-open worker before the independent
-                // clipboard publication worker.
+                // Start the desktop-open worker before the independent clipboard
+                // publication worker.
                 let opened = clipboard::open_url(&url);
-                clipboard::copy_text_to_clipboard(&diagnostics);
+                if let Some(worker) = clipboard::copy_text_to_clipboard(&diagnostics) {
+                    self.track_helper_worker(worker);
+                }
                 match opened {
-                    Ok(()) => self.set_notice(REPORTED_NOTICE),
+                    Ok(worker) => {
+                        self.track_helper_worker(worker);
+                        self.set_notice(REPORTED_NOTICE);
+                    }
                     Err(err) => {
                         warn!("About dialog failed to open the report URL: {err:#}");
                         self.set_notice(REPORT_OPEN_FAILED_NOTICE);
@@ -155,6 +166,17 @@ impl AboutWindowState {
             }
             AboutAction::CheckForUpdates => self.begin_update_check(),
             AboutAction::Close => self.should_exit = true,
+        }
+    }
+
+    fn track_helper_worker(&mut self, worker: std::thread::JoinHandle<()>) {
+        self.helper_workers.push(worker);
+    }
+
+    /// Finish in-flight open/copy workers before the process broker tears down.
+    pub(super) fn join_helper_workers(&mut self) {
+        for worker in self.helper_workers.drain(..) {
+            let _ = worker.join();
         }
     }
 

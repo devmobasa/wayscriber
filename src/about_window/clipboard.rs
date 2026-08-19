@@ -1,31 +1,32 @@
 use anyhow::Result;
 use log::warn;
+use std::thread::JoinHandle;
 
-pub(super) fn open_url(url: &str) -> Result<()> {
+pub(super) fn open_url(url: &str) -> Result<JoinHandle<()>> {
     open_url_with(url, |invocation| {
         crate::desktop_open::open_in_background(invocation.clone())
     })
 }
 
-fn open_url_with(
+fn open_url_with<R>(
     url: &str,
-    open: impl FnOnce(&crate::desktop_open::DesktopOpenInvocation) -> Result<()>,
-) -> Result<()> {
-    let invocation = crate::desktop_open::about_url(url)?;
+    open: impl FnOnce(&crate::desktop_open::DesktopOpenInvocation) -> Result<R>,
+) -> Result<R> {
+    let invocation = crate::desktop_open::trusted_url(url)?;
     open(&invocation)
 }
 
-pub(super) fn copy_text_to_clipboard(text: &str) {
+pub(super) fn copy_text_to_clipboard(text: &str) -> Option<JoinHandle<()>> {
     if text.is_empty() {
-        return;
+        return None;
     }
 
     let text = text.to_string();
-    std::thread::spawn(move || {
+    Some(std::thread::spawn(move || {
         if let Err(err) = copy_text_with_command(&text, copy_text_via_command) {
             warn!("Failed to copy About text to clipboard: {err:#}");
         }
-    });
+    }))
 }
 
 fn copy_text_with_command<C>(text: &str, command_copy: C) -> Result<()>
@@ -78,7 +79,6 @@ mod tests {
         for url in [
             "http://wayscriber.com/report",
             "https://wayscriber.com.example/report",
-            "https://www.wayscriber.com/report",
             "https://example.com/report",
         ] {
             let result = open_url_with(url, |_| {
@@ -89,6 +89,25 @@ mod tests {
         }
 
         assert_eq!(spawn_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn open_url_accepts_manifest_trusted_www_host() {
+        let mut observed = None;
+        open_url_with(
+            "https://www.wayscriber.com/docs/getting-started/updating.html",
+            |invocation| {
+                observed = Some(invocation.arguments().to_vec());
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            observed.unwrap(),
+            [std::ffi::OsString::from(
+                "https://www.wayscriber.com/docs/getting-started/updating.html"
+            )]
+        );
     }
 
     #[test]

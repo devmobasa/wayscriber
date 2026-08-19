@@ -103,10 +103,10 @@ impl KeyboardHandler for WaylandState {
         ) {
             XdgFocusLeaveAction::Ignore => {}
             XdgFocusLeaveAction::AwaitDesktopOpen => {
-                // The opener deliberately transfers focus. Its completion owns
-                // overlay exit so the broker guard cannot be dropped mid-run.
+                // The opener deliberately transfers focus. Overlay exit waits
+                // for the detached spawn handoff so teardown cannot race it.
                 warn!(
-                    "Keyboard focus left the xdg fallback during desktop-open; awaiting helper completion"
+                    "Keyboard focus left the xdg fallback during desktop-open; awaiting helper handoff"
                 );
             }
             XdgFocusLeaveAction::RestoreClipboardFocus => {

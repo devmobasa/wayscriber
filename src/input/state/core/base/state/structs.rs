@@ -154,6 +154,9 @@ pub struct InputState {
     pub state: DrawingState,
     /// Whether user requested to exit the overlay
     pub should_exit: bool,
+    /// Exit that must not be deferred by XDG stay-mode focus loss (for example
+    /// exit-after-capture). Consumed together with the Wayland explicit-close bit.
+    pub(crate) explicit_exit_requested: bool,
     /// Whether the display needs to be redrawn
     pub needs_redraw: bool,
     /// Whether session persistence should capture changes (cleared after autosave check)

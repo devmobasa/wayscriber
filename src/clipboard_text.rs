@@ -18,10 +18,9 @@ pub(crate) fn copy_text_via_command(text: &str) -> Result<(), String> {
             broker.publish(
                 crate::process_broker::HelperKind::WlCopy,
                 OsStr::new("wl-copy"),
-                clipboard_text_copy_args(),
+                [OsStr::new("--type"), OsStr::new("text/plain;charset=utf-8")],
                 text.as_bytes().to_vec(),
                 Duration::from_secs(5),
-                0,
             )
         })
         .map_err(|error| format!("Failed to run wl-copy: {error:#}"))?;
@@ -37,10 +36,6 @@ pub(crate) fn copy_text_via_command(text: &str) -> Result<(), String> {
         };
     }
     Ok(())
-}
-
-fn clipboard_text_copy_args() -> [&'static OsStr; 2] {
-    [OsStr::new("--type"), OsStr::new("text/plain;charset=utf-8")]
 }
 
 pub(crate) fn read_clipboard_text_via_command() -> Result<String, ClipboardTextError> {
@@ -99,14 +94,6 @@ mod tests {
                 OsStr::new("--type"),
                 OsStr::new("text"),
             ]
-        );
-    }
-
-    #[test]
-    fn clipboard_text_copy_publishes_one_explicit_utf8_mime() {
-        assert_eq!(
-            clipboard_text_copy_args(),
-            [OsStr::new("--type"), OsStr::new("text/plain;charset=utf-8"),]
         );
     }
 }

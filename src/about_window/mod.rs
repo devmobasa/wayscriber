@@ -84,8 +84,20 @@ pub fn run_about_window() -> Result<()> {
         plan,
     );
 
+    // Join helpers on every return path so ProcessBrokerGuard teardown cannot
+    // cancel an in-flight Report/open/copy that already showed a success notice.
+    let result = run_about_event_loop(&conn, &mut event_queue, &mut state);
+    state.join_helper_workers();
+    result
+}
+
+fn run_about_event_loop(
+    conn: &Connection,
+    event_queue: &mut wayland_client::EventQueue<AboutWindowState>,
+    state: &mut AboutWindowState,
+) -> Result<()> {
     loop {
-        event_queue.blocking_dispatch(&mut state)?;
+        event_queue.blocking_dispatch(state)?;
         if state.should_exit {
             break;
         }
@@ -134,6 +146,8 @@ struct AboutWindowState {
     /// Set when the update card is activated; serviced by the event loop so the
     /// blocking fetch never runs inside a protocol handler.
     check_requested: bool,
+    /// Open/copy workers that must finish before the process broker shuts down.
+    helper_workers: Vec<std::thread::JoinHandle<()>>,
     content: AboutContent,
     plan: Plan,
     update: UpdateState,

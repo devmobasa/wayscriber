@@ -8,10 +8,6 @@ use std::time::Duration;
 // Large, noisy multi-monitor PNGs can exceed the former 16 MiB transport cap.
 // Keep capture bounded while allowing several uncompressed 8K-sized frames.
 const CAPTURE_OUTPUT_CAP: usize = 256 * 1024 * 1024;
-const GRIM_FULL_SCREEN_ARGUMENTS: [&str; 1] = ["-"];
-const HYPRCTL_ACTIVE_WINDOW_ARGUMENTS: [&str; 2] = ["activewindow", "-j"];
-const HYPRCTL_MONITORS_ARGUMENTS: [&str; 2] = ["monitors", "-j"];
-const SLURP_SELECTION_ARGUMENTS: [&str; 2] = ["-f", "%x,%y %wx%h"];
 
 fn grim_geometry_arguments(geometry: &str) -> [&str; 3] {
     ["-g", geometry, "-"]
@@ -45,7 +41,7 @@ pub async fn capture_full_screen_hyprland() -> Result<Vec<u8>, CaptureError> {
         let output = run_helper(
             HelperKind::Grim,
             "grim",
-            &GRIM_FULL_SCREEN_ARGUMENTS,
+            &["-"],
             Duration::from_secs(30),
             CAPTURE_OUTPUT_CAP,
         )?;
@@ -81,7 +77,7 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
         let output = run_helper(
             HelperKind::Hyprctl,
             "hyprctl",
-            &HYPRCTL_ACTIVE_WINDOW_ARGUMENTS,
+            &["activewindow", "-j"],
             Duration::from_secs(5),
             2 * 1024 * 1024,
         )?;
@@ -189,7 +185,7 @@ pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
         let output = run_helper(
             HelperKind::Slurp,
             "slurp",
-            &SLURP_SELECTION_ARGUMENTS,
+            &["-f", "%x,%y %wx%h"],
             Duration::from_secs(120),
             4096,
         )?;
@@ -261,7 +257,7 @@ fn hyprland_monitor_scale(
     let output = run_helper(
         HelperKind::Hyprctl,
         "hyprctl",
-        &HYPRCTL_MONITORS_ARGUMENTS,
+        &["monitors", "-j"],
         Duration::from_secs(5),
         2 * 1024 * 1024,
     )?;
@@ -317,11 +313,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn capture_helper_argv_contracts_are_explicit() {
-        assert_eq!(GRIM_FULL_SCREEN_ARGUMENTS, ["-"]);
-        assert_eq!(HYPRCTL_ACTIVE_WINDOW_ARGUMENTS, ["activewindow", "-j"]);
-        assert_eq!(HYPRCTL_MONITORS_ARGUMENTS, ["monitors", "-j"]);
-        assert_eq!(SLURP_SELECTION_ARGUMENTS, ["-f", "%x,%y %wx%h"]);
+    fn grim_geometry_arguments_are_explicit() {
         assert_eq!(
             grim_geometry_arguments("12,34 800x600"),
             ["-g", "12,34 800x600", "-"]

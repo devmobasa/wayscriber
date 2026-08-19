@@ -123,7 +123,7 @@ impl WayscriberTray {
     /// Open the update instructions the watcher recorded. The URL comes from
     /// `update_check`, which only ever hands out validated wayscriber.com links.
     pub(super) fn open_update_instructions(&self, url: &str) {
-        let invocation = match crate::desktop_open::trusted_wayscriber_url(url) {
+        let invocation = match crate::desktop_open::trusted_url(url) {
             Ok(invocation) => invocation,
             Err(err) => {
                 warn!("Refused to open update instructions {url:?}: {err:#}");
@@ -131,7 +131,7 @@ impl WayscriberTray {
             }
         };
         match crate::desktop_open::open_in_background(invocation) {
-            Ok(()) => info!("Opening update instructions"),
+            Ok(_worker) => info!("Opening update instructions"),
             Err(err) => warn!("Failed to open update instructions {url}: {err}"),
         }
     }
@@ -187,7 +187,7 @@ impl WayscriberTray {
 
         let invocation = crate::desktop_open::path(&dir);
         match crate::desktop_open::open_in_background(invocation) {
-            Ok(()) => info!("Opening log directory via desktop integration"),
+            Ok(_worker) => info!("Opening log directory via desktop integration"),
             Err(err) => warn!("Failed to open log directory {}: {}", dir.display(), err),
         }
     }
@@ -203,7 +203,7 @@ impl WayscriberTray {
 
         let invocation = crate::desktop_open::path(&path);
         match crate::desktop_open::open_in_background(invocation) {
-            Ok(()) => {
+            Ok(_worker) => {
                 info!("Opening config file at {}", path.display());
                 true
             }

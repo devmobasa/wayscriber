@@ -410,6 +410,10 @@ fn handle_capture_results(state: &mut WaylandState) {
         }
     }
     if should_exit {
+        // Exit-after-capture is intentional teardown. Mark it explicit so XDG
+        // stay-mode cannot clear should_exit while the overlay is unfocused
+        // (for example after a portal dialog stole focus during capture).
+        state.mark_xdg_explicit_close_requested();
         state.input_state.should_exit = true;
     }
 }

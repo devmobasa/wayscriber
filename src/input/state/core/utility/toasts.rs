@@ -190,6 +190,19 @@ impl InputState {
         Some((elapsed / total).min(1.0))
     }
 
+    /// Request overlay exit that must not be deferred by XDG stay-mode focus loss.
+    pub(crate) fn request_explicit_exit(&mut self) {
+        self.explicit_exit_requested = true;
+        self.should_exit = true;
+    }
+
+    /// Take and clear the explicit-exit bit set by [`Self::request_explicit_exit`].
+    pub(crate) fn take_explicit_exit_requested(&mut self) -> bool {
+        let was_requested = self.explicit_exit_requested;
+        self.explicit_exit_requested = false;
+        was_requested
+    }
+
     /// Store image data for clipboard fallback (when clipboard copy fails).
     /// Used by wayland backend when capture clipboard copy fails.
     #[allow(dead_code)]
@@ -250,7 +263,7 @@ impl InputState {
                 }
                 // Exit if exit-after-capture was originally enabled
                 if fallback.exit_after_save {
-                    self.should_exit = true;
+                    self.request_explicit_exit();
                 }
             }
             Err(err) => {
@@ -774,6 +787,28 @@ mod tests {
         assert_eq!(toast.kind, UiToastKind::Warning);
         assert_eq!(toast.message, "No pending image to save");
         assert!(state.blocked_action_feedback.is_some());
+    }
+
+    #[test]
+    fn clipboard_fallback_exit_after_save_requests_explicit_overlay_exit() {
+        let mut state = make_state();
+        let temp = crate::test_temp::tempdir().expect("tempdir");
+        state.set_clipboard_fallback(
+            b"not-a-real-png-but-save-writes-bytes".to_vec(),
+            FileSaveConfig {
+                save_directory: temp.path().to_path_buf(),
+                filename_template: "fallback".to_string(),
+                format: "png".to_string(),
+            },
+            ImageOperationKind::Screenshot,
+            true,
+        );
+
+        state.save_pending_clipboard_to_file();
+
+        assert!(state.should_exit);
+        assert!(state.take_explicit_exit_requested());
+        assert!(!state.take_explicit_exit_requested());
     }
 
     #[test]

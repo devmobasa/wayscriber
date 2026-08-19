@@ -194,22 +194,11 @@ pub(super) fn run_event_loop(
         state.process_gtk_toolbar(conn, qh);
 
         // Check immediately after dispatch returns.
-        if state.input_state.should_exit {
-            let explicit_xdg_close_requested = state.take_xdg_explicit_close_requested();
-            if should_defer_xdg_unfocused_exit(
-                state.surface.is_xdg_window(),
-                !state.xdg_focus_loss_exits_overlay(),
-                state.has_keyboard_focus(),
-                explicit_xdg_close_requested,
-            ) {
-                warn!("Exit requested while unfocused in xdg stay mode; keeping overlay open");
-                state.input_state.should_exit = false;
-            } else {
-                info!("Exit requested after dispatch, breaking event loop");
-                break;
-            }
+        if break_on_requested_exit(state) {
+            break;
         }
         if state.surface.is_xdg_window()
+            && !state.input_state.should_exit
             && !state.has_keyboard_focus()
             && !state.desktop_open_in_progress()
             && state.focus_exit_suppression_expired(Instant::now())
@@ -279,6 +268,12 @@ pub(super) fn run_event_loop(
             .tick_radial_menu_paint(std::time::Instant::now());
 
         capture::handle_pending_actions(state, qh);
+        // Desktop-open handoff (and other pending-action completions) can set
+        // should_exit after the post-dispatch check. Break here so exit does not
+        // wait on another compositor wake under a blocking dispatch timeout.
+        if break_on_requested_exit(state) {
+            break;
+        }
         state.sync_overlay_interactivity();
         state.apply_onboarding_hints();
 
@@ -406,6 +401,27 @@ fn should_defer_xdg_unfocused_exit(
     is_xdg_window && stay_mode && !has_keyboard_focus && !explicit_xdg_close_requested
 }
 
+fn break_on_requested_exit(state: &mut WaylandState) -> bool {
+    if !state.input_state.should_exit {
+        return false;
+    }
+    let explicit_xdg_close_requested = state.take_xdg_explicit_close_requested()
+        || state.input_state.take_explicit_exit_requested();
+    if should_defer_xdg_unfocused_exit(
+        state.surface.is_xdg_window(),
+        !state.xdg_focus_loss_exits_overlay(),
+        state.has_keyboard_focus(),
+        explicit_xdg_close_requested,
+    ) {
+        warn!("Exit requested while unfocused in xdg stay mode; keeping overlay open");
+        state.input_state.should_exit = false;
+        false
+    } else {
+        info!("Exit requested, breaking event loop");
+        true
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
@@ -437,6 +453,9 @@ mod tests {
         assert!(!should_defer_xdg_unfocused_exit(true, true, true, false));
         assert!(!should_defer_xdg_unfocused_exit(true, false, false, false));
         assert!(!should_defer_xdg_unfocused_exit(false, true, false, false));
+        // Desktop-open handoff marks the close explicit so stay-mode does not
+        // cancel exit and reactivate over the opened application. Exit-after-
+        // capture uses the same explicit-close bit for the same reason.
         assert!(!should_defer_xdg_unfocused_exit(true, true, false, true));
     }
 
