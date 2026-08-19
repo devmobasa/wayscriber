@@ -11,15 +11,10 @@ pub(in crate::backend::wayland) use transfer::{
     FailedLocalSelectionProbe, PasteAction, TransferEffect, TransferPlan, TransferWarning,
 };
 
-mod completion;
 mod file_list;
 mod image;
 mod system;
 pub(in crate::backend::wayland) mod transfer;
-pub(in crate::backend::wayland) use completion::{
-    ClipboardOperationController, ClipboardOperationIdSource, ClipboardPoll,
-};
-
 pub(super) const WAYSCRIBER_SELECTION_MIME: &str = "application/vnd.wayscriber.selection+json";
 
 // A pasted image is persisted in the visible frame and in the Create undo action.

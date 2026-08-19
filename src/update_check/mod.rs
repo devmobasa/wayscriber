@@ -21,6 +21,7 @@ use std::time::Duration;
 
 use log::debug;
 
+pub(crate) use manifest::is_trusted_url;
 pub use manifest::{DEFAULT_NOTES_URL, DEFAULT_UPDATE_URL, MANIFEST_URL, install_source};
 
 use crate::env_vars::DISABLE_UPDATE_CHECK_ENV;

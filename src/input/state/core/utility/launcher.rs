@@ -2,7 +2,7 @@ use super::super::base::InputState;
 use crate::config::Config;
 use crate::configurator_destination::{ConfiguratorDestination, configurator_launch_arguments};
 use crate::env_vars::CONFIGURATOR_ENV;
-use crate::input::state::{Toast, ToastPriority};
+use crate::input::state::{PendingBackendAction, Toast, ToastPriority};
 use std::ffi::{OsStr, OsString};
 
 /// Launch a helper from the Wayland callback thread.
@@ -39,24 +39,6 @@ fn launch_failure_message(error: &anyhow::Error, failed: &'static str) -> &'stat
         "Busy with another task — try again in a moment."
     } else {
         failed
-    }
-}
-
-fn opener_arguments(path: &std::path::Path) -> (OsString, Vec<OsString>) {
-    if cfg!(target_os = "macos") {
-        ("open".into(), vec![path.as_os_str().into()])
-    } else if cfg!(target_os = "windows") {
-        (
-            "cmd".into(),
-            vec![
-                "/C".into(),
-                "start".into(),
-                "".into(),
-                path.as_os_str().into(),
-            ],
-        )
-    } else {
-        ("xdg-open".into(), vec![path.as_os_str().into()])
     }
 }
 
@@ -135,7 +117,7 @@ impl InputState {
                 // transport to do it.
                 if !launch_deferred_by_busy_broker(&err) && self.open_config_file_default() {
                     log::info!(
-                        "Opened config file with default application because wayscriber-configurator was unavailable"
+                        "Queued config file for the default application because wayscriber-configurator was unavailable"
                     );
                 } else {
                     self.push_toast(
@@ -175,36 +157,10 @@ impl InputState {
             return;
         };
 
-        let (opener, arguments) = opener_arguments(&folder);
-        match spawn_detached(
-            crate::process_broker::HelperKind::DesktopOpen,
-            &opener,
-            &arguments,
-        ) {
-            Ok(child) => {
-                log::info!(
-                    "Opened capture folder at {} (pid {})",
-                    folder.display(),
-                    child.id()
-                );
-                self.should_exit = true;
-            }
-            Err(err) => {
-                log::error!(
-                    "Failed to open capture folder at {}: {}",
-                    folder.display(),
-                    err
-                );
-                self.push_toast(
-                    ToastPriority::Critical,
-                    "launcher",
-                    Toast::error(launch_failure_message(
-                        &err,
-                        "Failed to open capture folder.",
-                    )),
-                );
-            }
-        }
+        log::info!("Queued capture folder open at {}", folder.display());
+        self.set_pending_backend_action(PendingBackendAction::DesktopOpen(
+            crate::desktop_open::DesktopOpenRequest::CaptureFolder(folder),
+        ));
     }
 
     /// Opens the primary config file using the desktop default application.
@@ -222,30 +178,10 @@ impl InputState {
             }
         };
 
-        let (opener, arguments) = opener_arguments(&path);
-        match spawn_detached(
-            crate::process_broker::HelperKind::DesktopOpen,
-            &opener,
-            &arguments,
-        ) {
-            Ok(child) => {
-                log::info!(
-                    "Opened config file at {} (pid {})",
-                    path.display(),
-                    child.id()
-                );
-                self.should_exit = true;
-                true
-            }
-            Err(err) => {
-                log::error!("Failed to open config file at {}: {}", path.display(), err);
-                self.push_toast(
-                    ToastPriority::Critical,
-                    "launcher",
-                    Toast::error(launch_failure_message(&err, "Failed to open config file.")),
-                );
-                false
-            }
-        }
+        log::info!("Queued config file open at {}", path.display());
+        self.set_pending_backend_action(PendingBackendAction::DesktopOpen(
+            crate::desktop_open::DesktopOpenRequest::ConfigFile(path),
+        ));
+        true
     }
 }

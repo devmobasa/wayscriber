@@ -42,6 +42,7 @@ pub(crate) enum HelperKind {
     SessionZenity,
     SessionKdialog,
     Gsettings,
+    Systemctl,
     Configurator,
     About,
     DesktopOpen,

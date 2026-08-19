@@ -9,6 +9,10 @@ use std::time::Duration;
 // Keep capture bounded while allowing several uncompressed 8K-sized frames.
 const CAPTURE_OUTPUT_CAP: usize = 256 * 1024 * 1024;
 
+fn grim_geometry_arguments(geometry: &str) -> [&str; 3] {
+    ["-g", geometry, "-"]
+}
+
 fn run_helper(
     kind: HelperKind,
     program: &str,
@@ -145,10 +149,11 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
         );
 
         log::debug!("Capturing active window via grim: {}", geometry);
+        let arguments = grim_geometry_arguments(&geometry);
         let grim_output = run_helper(
             HelperKind::Grim,
             "grim",
-            &["-g", &geometry, "-"],
+            &arguments,
             Duration::from_secs(30),
             CAPTURE_OUTPUT_CAP,
         )?;
@@ -208,10 +213,11 @@ pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
         }
 
         log::debug!("Capturing region via grim: {}", geometry);
+        let arguments = grim_geometry_arguments(geometry);
         let grim_output = run_helper(
             HelperKind::Grim,
             "grim",
-            &["-g", geometry, "-"],
+            &arguments,
             Duration::from_secs(30),
             CAPTURE_OUTPUT_CAP,
         )?;
@@ -300,4 +306,17 @@ fn hyprland_monitor_scale(
     }
 
     Ok(None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn grim_geometry_arguments_are_explicit() {
+        assert_eq!(
+            grim_geometry_arguments("12,34 800x600"),
+            ["-g", "12,34 800x600", "-"]
+        );
+    }
 }

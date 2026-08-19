@@ -12,8 +12,6 @@ ROOT = Path(__file__).resolve().parent.parent
 BROKER_ROOT = Path("src/process_broker")
 BROKER_BOOTSTRAP = BROKER_ROOT / "bootstrap.rs"
 DIRECT_PRODUCTION_ALLOWLIST = {
-    Path("src/about_window/clipboard.rs"),  # standalone, descriptor-free About process
-    Path("src/daemon/setup.rs"),  # pre-runtime systemd setup
     Path("configurator/src/app/session_catalog.rs"),  # separate configurator process
     Path("configurator/src/app/daemon_setup/command.rs"),
     Path("configurator/src/app/daemon_setup/service.rs"),

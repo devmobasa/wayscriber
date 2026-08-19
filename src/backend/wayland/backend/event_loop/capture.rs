@@ -97,6 +97,7 @@ pub(super) fn handle_pending_actions(
     state.poll_text_paste_completion();
     state.poll_ocr_completion();
     state.poll_session_file_dialog_completion(qh);
+    state.poll_desktop_open_completion();
     state.drain_clipboard_requests();
     state.handle_pending_eyedropper_toggle();
     state.handle_pending_ocr_request();
@@ -137,6 +138,7 @@ pub(super) fn handle_pending_actions(
             PendingBackendAction::BoardPdfExport(action) => {
                 state.handle_board_pdf_export_action(action);
             }
+            PendingBackendAction::DesktopOpen(request) => state.handle_desktop_open(request),
             PendingBackendAction::ClearSavedToolState => {
                 state.handle_clear_saved_tool_state_action();
             }
@@ -411,6 +413,10 @@ fn handle_capture_results(state: &mut WaylandState) {
         }
     }
     if should_exit {
+        // Exit-after-capture is intentional teardown. Mark it explicit so XDG
+        // stay-mode cannot clear should_exit while the overlay is unfocused
+        // (for example after a portal dialog stole focus during capture).
+        state.mark_xdg_explicit_close_requested();
         state.input_state.should_exit = true;
     }
 }

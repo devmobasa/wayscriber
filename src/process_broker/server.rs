@@ -300,6 +300,8 @@ fn handle_operation(
             let input = decode_blob(input, descriptors, super::manifest::input_cap(kind))?;
             reject_descriptors(descriptors)?;
             super::manifest::validate(kind, &program, &arguments, &environment, &input)?;
+            // Retained publication discards stdout/stderr structurally
+            // (publish_bounded uses Stdio::null); there is no output cap to enforce.
             let output = publish_bounded(
                 super::manifest::command(program, arguments, environment),
                 input,

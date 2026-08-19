@@ -31,7 +31,7 @@ where
     Ok(())
 }
 
-/// Copy to clipboard by shelling out to wl-copy command.
+/// Copy to the clipboard through the brokered `wl-copy` helper.
 fn copy_via_command(image_data: &[u8]) -> Result<(), CaptureError> {
     let output = crate::process_broker::current()
         .and_then(|broker| {

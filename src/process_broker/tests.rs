@@ -5,6 +5,13 @@ use std::time::{Duration, Instant};
 
 use super::*;
 
+fn wire_arguments(arguments: &[&str]) -> Vec<super::wire::OsWire> {
+    arguments
+        .iter()
+        .map(|argument| super::wire::OsWire::from_os(OsStr::new(argument)).unwrap())
+        .collect()
+}
+
 fn release_test_provider(
     release_path: &std::path::Path,
     proof_path: &std::path::Path,
@@ -72,15 +79,192 @@ fn configurator_manifest_preserves_arbitrary_explicit_override_name() {
 
 #[test]
 fn update_fetcher_manifest_allows_only_curl_and_wget() {
-    for program in ["/usr/bin/curl", "/usr/bin/wget"] {
+    for (program, arguments) in [
+        ("/usr/bin/curl", &["--disable"][..]),
+        ("/usr/bin/wget", &["--no-config"][..]),
+    ] {
         let program = super::wire::OsWire::from_os(OsStr::new(program)).unwrap();
-        super::manifest::validate(HelperKind::UpdateFetcher, &program, &[], &[], &[]).unwrap();
+        super::manifest::validate(
+            HelperKind::UpdateFetcher,
+            &program,
+            &wire_arguments(arguments),
+            &[],
+            &[],
+        )
+        .unwrap();
     }
 
     let unrelated = super::wire::OsWire::from_os(OsStr::new("/usr/bin/sh")).unwrap();
     assert!(
-        super::manifest::validate(HelperKind::UpdateFetcher, &unrelated, &[], &[], &[]).is_err()
+        super::manifest::validate(
+            HelperKind::UpdateFetcher,
+            &unrelated,
+            &wire_arguments(&["--disable"]),
+            &[],
+            &[],
+        )
+        .is_err()
     );
+
+    for (program, arguments) in [
+        ("curl", &[][..]),
+        ("curl", &["--silent", "--disable"][..]),
+        ("wget", &[][..]),
+        ("wget", &["--quiet", "--no-config"][..]),
+        ("curl", &["--disable", "--config", "/tmp/curlrc"][..]),
+        ("curl", &["--disable", "--config=/tmp/curlrc"][..]),
+        ("curl", &["--disable", "--conf"][..]),
+        ("curl", &["--disable", "-K", "/tmp/curlrc"][..]),
+        ("curl", &["--disable", "-K/tmp/curlrc"][..]),
+        ("curl", &["--disable", "-sK/path"][..]),
+        ("wget", &["--no-config", "--config=/tmp/wgetrc"][..]),
+        ("wget", &["--no-config", "--conf"][..]),
+        ("wget", &["--no-config", "--execute=header=X:1"][..]),
+        ("wget", &["--no-config", "--execute", "header=X:1"][..]),
+        ("wget", &["--no-config", "--exec=header=X:1"][..]),
+        ("wget", &["--no-config", "-e", "header=X:1"][..]),
+        ("wget", &["--no-config", "-eheader=X:1"][..]),
+        ("wget", &["--no-config", "-qeheader=X:1"][..]),
+    ] {
+        let program = super::wire::OsWire::from_os(OsStr::new(program)).unwrap();
+        assert!(
+            super::manifest::validate(
+                HelperKind::UpdateFetcher,
+                &program,
+                &wire_arguments(arguments),
+                &[],
+                &[],
+            )
+            .is_err(),
+            "{program:?} accepted unsafe arguments {arguments:?}"
+        );
+    }
+}
+
+#[test]
+fn desktop_open_manifest_accepts_one_path_or_trusted_url_without_a_shell() {
+    for target in [
+        "/tmp/Wayscriber Captures",
+        "https://wayscriber.com/report#d=abc",
+        "https://www.wayscriber.com/docs/",
+    ] {
+        let program = super::wire::OsWire::from_os(OsStr::new("xdg-open")).unwrap();
+        super::manifest::validate(
+            HelperKind::DesktopOpen,
+            &program,
+            &wire_arguments(&[target]),
+            &[],
+            &[],
+        )
+        .unwrap();
+    }
+
+    for target in [
+        "http://wayscriber.com/report",
+        "https://wayscriber.com.example/report",
+        "https://example.com/",
+        "file:///etc/passwd",
+        "--help",
+    ] {
+        let program = super::wire::OsWire::from_os(OsStr::new("xdg-open")).unwrap();
+        assert!(
+            super::manifest::validate(
+                HelperKind::DesktopOpen,
+                &program,
+                &wire_arguments(&[target]),
+                &[],
+                &[],
+            )
+            .is_err(),
+            "desktop-open accepted {target:?}"
+        );
+    }
+
+    let opener = super::wire::OsWire::from_os(OsStr::new("xdg-open")).unwrap();
+    assert!(super::manifest::validate(HelperKind::DesktopOpen, &opener, &[], &[], &[]).is_err());
+    assert!(
+        super::manifest::validate(
+            HelperKind::DesktopOpen,
+            &opener,
+            &wire_arguments(&["/tmp/one", "/tmp/two"]),
+            &[],
+            &[],
+        )
+        .is_err()
+    );
+
+    let shell = super::wire::OsWire::from_os(OsStr::new("cmd")).unwrap();
+    assert!(
+        super::manifest::validate(
+            HelperKind::DesktopOpen,
+            &shell,
+            &wire_arguments(&["/tmp/file"]),
+            &[],
+            &[],
+        )
+        .is_err()
+    );
+
+    // Undecodable URI-shaped targets must not skip the trusted-host gate.
+    let mut evil = b"https://evil.example/".to_vec();
+    evil.push(0x80);
+    let opener = super::wire::OsWire::from_os(OsStr::new("xdg-open")).unwrap();
+    assert!(
+        super::manifest::validate(
+            HelperKind::DesktopOpen,
+            &opener,
+            &[super::wire::OsWire(evil)],
+            &[],
+            &[],
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn systemctl_manifest_requires_the_user_service_manager() {
+    let program = super::wire::OsWire::from_os(OsStr::new("systemctl")).unwrap();
+    super::manifest::validate(
+        HelperKind::Systemctl,
+        &program,
+        &wire_arguments(&["--user", "daemon-reload"]),
+        &[],
+        &[],
+    )
+    .unwrap();
+    assert!(
+        super::manifest::validate(
+            HelperKind::Systemctl,
+            &program,
+            &wire_arguments(&["daemon-reload"]),
+            &[],
+            &[],
+        )
+        .is_err()
+    );
+    for arguments in [
+        &["--user", "--system", "daemon-reload"][..],
+        &["--user", "--syst", "daemon-reload"][..],
+        &["--user", "--global", "enable", "wayscriber.service"][..],
+        &["--user", "--glob", "enable", "wayscriber.service"][..],
+        &["--user", "--machine=.host", "daemon-reload"][..],
+        &["--user", "--machine", ".host", "daemon-reload"][..],
+        &["--user", "--mach=.host", "daemon-reload"][..],
+        &["--user", "-M", ".host", "daemon-reload"][..],
+        &["--user", "-M.host", "daemon-reload"][..],
+    ] {
+        assert!(
+            super::manifest::validate(
+                HelperKind::Systemctl,
+                &program,
+                &wire_arguments(arguments),
+                &[],
+                &[],
+            )
+            .is_err(),
+            "systemctl accepted non-user manager flags {arguments:?}"
+        );
+    }
 }
 
 #[test]
@@ -535,7 +719,7 @@ fn normal_broker_shutdown_releases_successful_provider_descendant() {
                 pid_path.as_os_str(),
             ],
             Vec::new(),
-            Duration::from_secs(2),
+            Duration::from_secs(2)
         )
         .unwrap();
     assert_eq!(output.status, 0);
@@ -647,7 +831,7 @@ fn retained_publication_replacement_disposes_the_previous_provider() {
                 second_pid_path.as_os_str(),
             ],
             Vec::new(),
-            Duration::from_secs(2),
+            Duration::from_secs(2)
         )
         .unwrap();
     assert_eq!(second.status, 0);
@@ -709,7 +893,7 @@ fn failed_publication_replacement_preserves_the_current_provider() {
                 current_pid_path.as_os_str(),
             ],
             Vec::new(),
-            Duration::from_secs(2),
+            Duration::from_secs(2)
         )
         .unwrap();
     assert_eq!(current.status, 0);
@@ -852,7 +1036,7 @@ fn broker_shutdown_preempts_retained_publication_stdin_writer() {
                 current_pid_path.as_os_str(),
             ],
             Vec::new(),
-            Duration::from_secs(2),
+            Duration::from_secs(2)
         )
         .unwrap();
     assert_eq!(current.status, 0);

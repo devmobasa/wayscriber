@@ -115,6 +115,7 @@ impl InputState {
             active_drag_color: None,
             state: DrawingState::Idle,
             should_exit: false,
+            explicit_exit_requested: false,
             needs_redraw: true,
             session_dirty: false,
             session_preflight_options: None,

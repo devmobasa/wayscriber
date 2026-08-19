@@ -62,6 +62,7 @@ use crate::{
         types::CaptureType,
     },
     config::{Action, Config},
+    desktop_open::DesktopOpenRequest,
     input::state::{ClipboardPasteRequest, TextClipboardRequest, TextPasteTarget},
     input::{DrawingState, EraserMode, InputState, Key, Tool, ZoomAction},
     session::SessionOptions,
@@ -73,11 +74,9 @@ pub use self::data::{
     MoveDragKind, OverlaySuppression, OverlaySuppressionKeyboardPolicy, XdgFrozenFullscreenState,
 };
 use super::{
+    RuntimeOperationController, RuntimeOperationIdSource,
     capture::{CapturePreflightRequest, CaptureState, PendingPdfExport},
-    clipboard::{
-        ClipboardOperationController, ClipboardOperationIdSource, ClipboardPasteCompletion,
-        ClipboardPublishCompletion,
-    },
+    clipboard::{ClipboardPasteCompletion, ClipboardPublishCompletion},
     frozen::{ExtImageCopyManagers, FrozenState},
     overlay_passthrough::set_surface_clickthrough,
     session::SessionState,
@@ -101,6 +100,7 @@ mod clipboard;
 mod color_picker;
 mod core;
 mod data;
+mod desktop_open;
 mod eyedropper;
 mod gtk_toolbar;
 mod helpers;
@@ -250,18 +250,21 @@ pub(super) struct WaylandState {
     /// remember, so the reader can never be left running for a HUD that is
     /// already off.
     pub(super) last_input_hud_request: Option<(bool, crate::config::InputHudMode)>,
-    pub(super) clipboard_publish: ClipboardOperationController<u64, ClipboardPublishCompletion>,
+    pub(super) clipboard_publish: RuntimeOperationController<u64, ClipboardPublishCompletion>,
     pub(super) clipboard_paste:
-        ClipboardOperationController<ClipboardPasteRequest, ClipboardPasteCompletion>,
-    pub(super) clipboard_hex_copy: ClipboardOperationController<String, Result<(), String>>,
+        RuntimeOperationController<ClipboardPasteRequest, ClipboardPasteCompletion>,
+    pub(super) clipboard_hex_copy: RuntimeOperationController<String, Result<(), String>>,
+    /// Desktop-open work completes off-dispatch; successful completion is what
+    /// requests overlay exit, so runtime-owned broker teardown cannot race it.
+    pub(super) desktop_open: RuntimeOperationController<DesktopOpenRequest, Result<(), String>>,
     pub(super) pending_hex_copy: Option<String>,
     /// Async wl-copy pipeline for text-editor selections (Ctrl+C / Ctrl+X).
     pub(super) clipboard_text_copy:
-        ClipboardOperationController<TextClipboardRequest, Result<(), String>>,
+        RuntimeOperationController<TextClipboardRequest, Result<(), String>>,
     pub(super) pending_text_copy: VecDeque<TextClipboardRequest>,
     /// Async wl-paste pipeline for text-editor paste requests (Ctrl+V).
     pub(super) clipboard_text_paste:
-        ClipboardOperationController<TextPasteTarget, Result<Option<String>, String>>,
+        RuntimeOperationController<TextPasteTarget, Result<Option<String>, String>>,
     /// Text paste requests waiting behind an active read. Repeated requests in
     /// the current edit generation remain distinct; a new generation replaces
     /// stale queued requests from the old edit session.

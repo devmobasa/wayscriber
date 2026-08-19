@@ -8,8 +8,8 @@
 //! handlers, drained each input cycle, fulfill it against the compositor
 //! clipboard (reusing the generic clipboard worker pipeline).
 
-use super::{ClipboardOperationController, WaylandState};
-use crate::backend::wayland::clipboard::ClipboardPoll;
+use super::{RuntimeOperationController, WaylandState};
+use crate::backend::wayland::RuntimeOperationPoll;
 use crate::clipboard_text::{
     ClipboardTextError, copy_text_via_command, read_clipboard_text_via_command,
 };
@@ -44,13 +44,13 @@ impl WaylandState {
     /// queued copy once the controller goes idle.
     pub(in crate::backend::wayland) fn poll_text_copy_completion(&mut self) {
         match self.clipboard_text_copy.poll() {
-            ClipboardPoll::Idle | ClipboardPoll::Pending { .. } => {}
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Idle | RuntimeOperationPoll::Pending { .. } => {}
+            RuntimeOperationPoll::Ready {
                 context: request,
                 outcome: Ok(()),
                 ..
             } => self.input_state.complete_text_copy(request),
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Ready {
                 outcome: Err(err), ..
             } => {
                 log::warn!("wl-copy failed for text copy: {err}");
@@ -60,7 +60,7 @@ impl WaylandState {
                     Toast::warning("Failed to copy to clipboard"),
                 );
             }
-            ClipboardPoll::ProducerFailed { reason, .. } => {
+            RuntimeOperationPoll::ProducerFailed { reason, .. } => {
                 log::error!("Text copy producer failed: {reason}");
                 self.input_state.push_toast(
                     ToastPriority::Info,
@@ -68,7 +68,7 @@ impl WaylandState {
                     Toast::warning("Failed to copy to clipboard"),
                 );
             }
-            ClipboardPoll::Disconnected { .. } => {
+            RuntimeOperationPoll::Disconnected { .. } => {
                 log::error!("Text copy producer disconnected");
             }
         }
@@ -102,8 +102,8 @@ impl WaylandState {
     /// text-edit session. A later edit must never receive a stale completion.
     pub(in crate::backend::wayland) fn poll_text_paste_completion(&mut self) {
         match self.clipboard_text_paste.poll() {
-            ClipboardPoll::Idle | ClipboardPoll::Pending { .. } => {}
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Idle | RuntimeOperationPoll::Pending { .. } => {}
+            RuntimeOperationPoll::Ready {
                 context: target,
                 outcome,
                 ..
@@ -127,7 +127,7 @@ impl WaylandState {
                     log::debug!("Discarding stale text clipboard paste completion");
                 }
             }
-            ClipboardPoll::ProducerFailed {
+            RuntimeOperationPoll::ProducerFailed {
                 context: target,
                 reason,
                 ..
@@ -137,7 +137,7 @@ impl WaylandState {
                     self.push_text_paste_failure();
                 }
             }
-            ClipboardPoll::Disconnected {
+            RuntimeOperationPoll::Disconnected {
                 context: target, ..
             } => {
                 log::error!("Text paste producer disconnected");
@@ -178,7 +178,7 @@ impl WaylandState {
 }
 
 fn start_text_copy(
-    controller: &mut ClipboardOperationController<TextClipboardRequest, Result<(), String>>,
+    controller: &mut RuntimeOperationController<TextClipboardRequest, Result<(), String>>,
     request: TextClipboardRequest,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
 ) -> Result<(), String> {
@@ -192,7 +192,7 @@ fn start_text_copy(
 }
 
 fn queue_text_copy(
-    controller: &mut ClipboardOperationController<TextClipboardRequest, Result<(), String>>,
+    controller: &mut RuntimeOperationController<TextClipboardRequest, Result<(), String>>,
     pending: &mut VecDeque<TextClipboardRequest>,
     request: TextClipboardRequest,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
@@ -209,7 +209,7 @@ fn queue_text_copy(
 }
 
 fn submit_pending_text_copy_if_idle(
-    controller: &mut ClipboardOperationController<TextClipboardRequest, Result<(), String>>,
+    controller: &mut RuntimeOperationController<TextClipboardRequest, Result<(), String>>,
     pending: &mut VecDeque<TextClipboardRequest>,
     operation: impl FnOnce(&str) -> Result<(), String> + Send + 'static,
 ) -> Result<(), String> {
@@ -233,7 +233,7 @@ fn read_text_paste() -> TextPasteOutcome {
 }
 
 fn start_text_paste(
-    controller: &mut ClipboardOperationController<TextPasteTarget, TextPasteOutcome>,
+    controller: &mut RuntimeOperationController<TextPasteTarget, TextPasteOutcome>,
     target: TextPasteTarget,
     operation: impl FnOnce() -> TextPasteOutcome + Send + 'static,
 ) -> Result<(), String> {
@@ -244,7 +244,7 @@ fn start_text_paste(
 }
 
 fn queue_text_paste(
-    controller: &mut ClipboardOperationController<TextPasteTarget, TextPasteOutcome>,
+    controller: &mut RuntimeOperationController<TextPasteTarget, TextPasteOutcome>,
     pending: &mut VecDeque<TextPasteTarget>,
     target: TextPasteTarget,
     operation: impl FnOnce() -> TextPasteOutcome + Send + 'static,
@@ -299,8 +299,8 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
+    use crate::backend::wayland::RuntimeOperationIdSource;
     use crate::backend::wayland::RuntimeWakeSource;
-    use crate::backend::wayland::clipboard::ClipboardOperationIdSource;
 
     fn copy_request(text: &str) -> TextClipboardRequest {
         TextClipboardRequest {
@@ -333,7 +333,7 @@ mod tests {
     fn text_copy_keeps_its_request_context_until_worker_completion() {
         let wake = RuntimeWakeSource::new().unwrap();
         let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+            RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle());
 
         start_text_copy(&mut controller, copy_request("selected"), |text| {
             assert_eq!(text, "selected");
@@ -347,7 +347,7 @@ mod tests {
         );
         assert!(matches!(
             controller.poll(),
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Ready {
                 context: TextClipboardRequest { text, .. },
                 outcome: Ok(()),
                 ..
@@ -359,7 +359,7 @@ mod tests {
     fn active_text_copy_retains_only_the_newest_request() {
         let wake = RuntimeWakeSource::new().unwrap();
         let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+            RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle());
         let mut pending = VecDeque::new();
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
@@ -403,7 +403,7 @@ mod tests {
     fn active_text_copy_preserves_every_pending_cut_request() {
         let wake = RuntimeWakeSource::new().unwrap();
         let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+            RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle());
         let mut pending = VecDeque::new();
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
@@ -450,7 +450,7 @@ mod tests {
     fn text_paste_read_stays_off_the_event_thread_until_completion() {
         let wake = RuntimeWakeSource::new().unwrap();
         let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+            RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle());
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
 
@@ -462,7 +462,10 @@ mod tests {
         .unwrap();
 
         started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-        assert!(matches!(controller.poll(), ClipboardPoll::Pending { .. }));
+        assert!(matches!(
+            controller.poll(),
+            RuntimeOperationPoll::Pending { .. }
+        ));
         release_tx.send(()).unwrap();
         assert!(
             wake.wait_readable(Some(Duration::from_secs(1))).unwrap(),
@@ -470,7 +473,7 @@ mod tests {
         );
         assert!(matches!(
             controller.poll(),
-            ClipboardPoll::Ready {
+            RuntimeOperationPoll::Ready {
                 context: TextPasteTarget { generation: 7, .. },
                 outcome: Ok(Some(text)),
                 ..
@@ -482,7 +485,7 @@ mod tests {
     fn active_text_paste_preserves_every_request_from_the_same_session() {
         let wake = RuntimeWakeSource::new().unwrap();
         let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+            RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle());
         let mut pending = VecDeque::new();
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
@@ -518,7 +521,7 @@ mod tests {
     fn newer_text_session_supersedes_older_pending_pastes_without_coalescing_its_own() {
         let wake = RuntimeWakeSource::new().unwrap();
         let mut controller =
-            ClipboardOperationController::new(ClipboardOperationIdSource::new(), wake.handle());
+            RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle());
         let mut pending = VecDeque::new();
         let (started_tx, started_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();

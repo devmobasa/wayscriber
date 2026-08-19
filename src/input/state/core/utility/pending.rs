@@ -243,6 +243,20 @@ mod tests {
     }
 
     #[test]
+    fn pending_desktop_open_is_taken_without_requesting_early_exit() {
+        let mut state = make_state();
+        let request = crate::desktop_open::DesktopOpenRequest::CaptureFolder("/tmp/capture".into());
+        state.set_pending_backend_action(PendingBackendAction::DesktopOpen(request.clone()));
+
+        assert!(!state.should_exit);
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(PendingBackendAction::DesktopOpen(request))
+        );
+        assert_eq!(state.take_pending_backend_action(), None);
+    }
+
+    #[test]
     fn pending_output_focus_action_is_taken_once() {
         let mut state = make_state();
         state.request_output_focus_action(OutputFocusAction::Next);

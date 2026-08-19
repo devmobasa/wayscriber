@@ -502,6 +502,7 @@ pub enum PendingBackendAction {
     Screenshot(Action),
     CanvasExport(Action),
     BoardPdfExport(Action),
+    DesktopOpen(crate::desktop_open::DesktopOpenRequest),
     ClearSavedToolState,
 }
 
