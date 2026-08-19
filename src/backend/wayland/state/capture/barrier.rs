@@ -329,6 +329,11 @@ impl WaylandState {
                         .begin_preflight_capture(backend, &self.shm, qh, &self.tokio_handle)
                 {
                     log::warn!("Frozen preflight capture failed: {err}");
+                    self.input_state.push_toast(
+                        ToastPriority::Critical,
+                        "freeze",
+                        Toast::error(err.to_string()),
+                    );
                     self.frozen.cancel(&mut self.input_state);
                 }
             }
@@ -345,6 +350,11 @@ impl WaylandState {
                     &self.tokio_handle,
                 ) {
                     log::warn!("Zoom preflight capture failed: {err}");
+                    self.input_state.push_toast(
+                        ToastPriority::Critical,
+                        "zoom",
+                        Toast::error(err.to_string()),
+                    );
                     self.zoom.cancel(&mut self.input_state, false);
                 }
             }

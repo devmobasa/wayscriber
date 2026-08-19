@@ -29,7 +29,8 @@ impl WaylandState {
                 .begin_fallback_capture(failed_backend, &self.shm, qh, &self.tokio_handle)
         {
             log::warn!("No frozen capture fallback succeeded after {failed_backend:?}: {error:#}");
-            self.frozen.cancel(&mut self.input_state);
+            self.frozen
+                .finish_failed_fallback_capture(&mut self.input_state);
         }
     }
 

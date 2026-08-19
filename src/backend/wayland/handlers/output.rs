@@ -18,7 +18,7 @@ impl OutputHandler for WaylandState {
     ) {
         debug!("New output detected");
         self.refresh_active_output_label();
-        self.refresh_freeze_zoom_screenshot_origin();
+        self.refresh_freeze_zoom_geometry();
     }
 
     fn update_output(
@@ -31,28 +31,10 @@ impl OutputHandler for WaylandState {
         if self.surface.current_output().as_ref() == Some(&output) {
             self.refresh_active_output_label();
         }
-        if let Some(info) = self.output_state.info(&output)
-            && (self.frozen.active_output_matches(info.id)
-                || self.zoom.active_output_matches(info.id))
-            && let Some(geo) = crate::backend::wayland::frozen_geometry::OutputGeometry::update_from(
-                info.logical_position,
-                info.logical_size,
-                (self.surface.width(), self.surface.height()),
-                info.scale_factor.max(1),
-                info.transform,
-            )
-        {
-            self.set_freeze_zoom_geometry(Some(geo));
-            self.frozen
-                .set_active_output(Some(output.clone()), Some(info.id));
-            self.zoom
-                .set_active_output(Some(output.clone()), Some(info.id));
-            return;
-        }
         // Screenshot origin walks every output, so a non-active monitor that
         // is added, moved, scaled, or given logical geometry still has to
         // refresh the active crop.
-        self.refresh_freeze_zoom_screenshot_origin();
+        self.refresh_freeze_zoom_geometry();
     }
 
     fn output_destroyed(
@@ -70,6 +52,6 @@ impl OutputHandler for WaylandState {
         // SCTK 0.20 calls this before removing the output from OutputState, so
         // a walk of current outputs would still include it. Exclude it here;
         // there is no later callback after the removal.
-        self.refresh_freeze_zoom_screenshot_origin_excluding(Some(&output));
+        self.refresh_freeze_zoom_geometry_excluding(Some(&output));
     }
 }

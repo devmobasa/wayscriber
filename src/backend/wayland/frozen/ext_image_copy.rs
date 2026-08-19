@@ -22,6 +22,8 @@ use wayland_protocols::ext::{
     },
 };
 
+use crate::backend::wayland::capture::CaptureLayoutContext;
+use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
 use crate::input::InputState;
 
 use super::image::{copy_shm_argb, validate_shm_buffer_layout};
@@ -160,10 +162,12 @@ impl FrozenState {
             .active_output
             .as_ref()
             .context("No active output available for ext-image-copy capture")?;
-        let target_output_id = self
-            .active_output_id
-            .context("Active output has no stable identity for ext-image-copy capture")?;
-        let source_geometry = self.active_geometry.clone();
+        let (source_geometry, target_output_id) = require_verified_capture_source(
+            self.active_geometry.clone(),
+            self.active_output_id,
+            "ext-image-copy capture",
+        )
+        .map_err(anyhow::Error::msg)?;
 
         // Allocate the only fallible local resource before creating protocol
         // objects so an allocation failure cannot leave a live source/session.
@@ -175,7 +179,10 @@ impl FrozenState {
             .create_session(&source, Options::empty(), qh, ());
         self.direct_capture = Some(DirectCaptureAttempt::ExtImageCopy {
             session: Box::new(ExtImageCopySession::new(source, session, pool)),
-            context: DirectCaptureContext::new(target_output_id, source_geometry),
+            context: DirectCaptureContext::new(
+                CaptureLayoutContext::new(target_output_id, self.output_layout_generation),
+                source_geometry,
+            ),
         });
         debug!("Requested ext-image-copy capture constraints for active output");
         Ok(())
@@ -396,12 +403,15 @@ impl FrozenState {
             .take_ext_capture()
             .context("ext-image-copy capture attempt missing after frame completion")?;
         (*capture).destroy();
-        if !context.output_matches(self.active_output_id) {
+        if !context
+            .layout
+            .matches(self.active_output_id, self.output_layout_generation)
+        {
             return Ok(false);
         }
         self.set_pending_output_image_with_transform(
             image,
-            context.target_output_id,
+            context.layout.target_output_id(),
             context.source_geometry,
             output_transform,
         );

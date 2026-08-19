@@ -129,6 +129,30 @@ For offline work, prefetch dependencies first:
 ./tools/fetch-all-deps.sh
 ```
 
+### Freeze, zoom, and capture manual matrix
+
+Geometry unit tests cover crop arithmetic and stale-output rejection, but they do not prove a
+compositor's protocol behavior. For capture-related changes, exercise every unchecked cell below
+on real hardware; this checklist is manual evidence, not CI coverage.
+
+| Compositor | 1x | Fractional scale | Mixed DPI |
+|---|---|---|---|
+| Hyprland | [ ] | [ ] | [ ] |
+| Plasma/KWin | [ ] | [ ] | [ ] |
+| Niri | [ ] | [ ] | [ ] |
+| Sway | [ ] | [ ] | [ ] |
+| GNOME | [ ] | [ ] | [ ] |
+
+For each cell, record the selected capture backend from the logs. Verify that Freeze, Zoom,
+and a PDF desktop backdrop all use the active output's exact pixels. User full-screen
+screenshots remain whole-desktop captures. Repeat while switching outputs and, where supported,
+changing scale or transform during capture: the result must either stay exact or fail visibly,
+never shift, stretch, or reuse another output's image.
+
+These captures now fail when the active output does not advertise a current `wl_output` mode.
+Plugging or unplugging any monitor also cancels in-flight Freeze and Zoom captures on unrelated
+outputs, because output count is part of the layout identity used to reject stale frames.
+
 `./tools/code-health-report.sh` reports navigational maintainability metrics. Its CI artifact is
 observational, not a global file/function-size gate; use the report to find code worth understanding,
 not as a reason for mechanical splitting.
@@ -141,5 +165,11 @@ not as a reason for mechanical splitting.
 - Drafts under `docs/temp/` are planning material unless explicitly promoted.
 - Version changes must go through `tools/bump-version.sh`; keep both package manifests, root
   `Cargo.lock`, packaging metadata, and tag/release policy aligned.
+- Close a user-visible "I don't have that setting / this build" report only after the change is in
+  a tagged GitHub release. `main` is not what `arch-install.sh`, AUR `wayscriber-bin`, or other
+  packaged installs ship. `--version` reports the crate version, not the git hash, so bump with
+  `tools/bump-version.sh` in the same change as a user-visible overlay, settings, or config toggle
+  (or immediately before tagging that release). Otherwise two binaries can print the same
+  `wayscriber 0.9.x` and look identical.
 
 See [tools/README.md](tools/README.md) for build, install, packaging, version, and release helpers.

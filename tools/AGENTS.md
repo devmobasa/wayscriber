@@ -17,6 +17,8 @@
 ## Coupled Changes
 - Version and packaging scripts must stay aligned with `tools/README.md`, `packaging/`, `.github/`, `Cargo.toml`, and release docs.
 - Install/reload scripts may affect setup docs and daemon service behavior.
+- `install.sh` and the website `arch-install.sh` must refuse a second unmanaged prefix
+  (`/usr` vs `/usr/local`) unless the operator opts into replacing the other copy.
 
 ## Validation
 - Run changed scripts directly when safe.

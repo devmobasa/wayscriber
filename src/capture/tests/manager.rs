@@ -10,8 +10,8 @@ use std::{
 use tokio::time::{Duration, sleep};
 
 use crate::capture::{
-    DesktopBackdropCaptureRequest, DocumentDeliveryRequest, ImageDeliveryRequest,
-    ImageFormatMetadata, ImageOperationKind, RenderedDocument, RenderedImage,
+    DesktopBackdropCaptureRequest, DesktopBackdropGeometry, DocumentDeliveryRequest,
+    ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, RenderedDocument, RenderedImage,
     dependencies::{CaptureDependencies, CaptureFuture, CaptureSource},
     file::FileSaveConfig,
     manager::{CaptureManager, CapturePoll, CaptureSubmitError},
@@ -424,7 +424,18 @@ async fn desktop_backdrop_completion_releases_the_manager_for_pdf_delivery() {
             logical_width: 100,
             logical_height: 100,
             scale: 1,
-            geometry: None,
+            geometry: Some(DesktopBackdropGeometry {
+                logical_x: 0,
+                logical_y: 0,
+                logical_width: 100,
+                logical_height: 100,
+                physical_width: Some(100),
+                physical_height: Some(100),
+                crop_x: Some(0),
+                crop_y: Some(0),
+                screenshot_width: Some(100),
+                screenshot_height: Some(100),
+            }),
             operation: ImageOperationKind::BoardPdfExport,
         })
         .unwrap();

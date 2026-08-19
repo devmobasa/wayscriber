@@ -77,11 +77,49 @@ impl ZoomState {
         phys_height: u32,
         input_state: &mut InputState,
     ) {
-        if let Some(img) = &self.image
-            && (img.width != phys_width || img.height != phys_height)
+        if let Some(target_dimensions) = self.image_target_dimensions
+            && target_dimensions != (phys_width, phys_height)
         {
             info!("Surface resized; clearing zoom image");
             self.deactivate(input_state);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::backend::wayland::frozen::FrozenImage;
+    use crate::backend::wayland::frozen_geometry::OutputGeometry;
+    use crate::input::state::test_support::make_test_input_state;
+    use wayland_client::protocol::wl_output;
+
+    #[test]
+    fn fractional_output_image_tracks_the_overlay_buffer_size() {
+        let mut zoom = ZoomState::new(None);
+        let mut input = make_test_input_state();
+        zoom.set_active_geometry(OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((3, 2)),
+            (3, 2),
+            2,
+            wl_output::Transform::Normal,
+            Some((5, 3)),
+        ));
+        zoom.set_image(FrozenImage {
+            width: 5,
+            height: 3,
+            stride: 20,
+            data: vec![0; 5 * 3 * 4],
+        });
+        zoom.activate_without_capture();
+
+        zoom.handle_resize(6, 4, &mut input);
+        assert!(zoom.image().is_some());
+        assert!(zoom.active);
+
+        zoom.handle_resize(7, 4, &mut input);
+        assert!(zoom.image().is_none());
+        assert!(!zoom.active);
     }
 }

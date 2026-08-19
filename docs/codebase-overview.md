@@ -41,7 +41,10 @@ backend entry in `src/backend/mod.rs`.
    action applier.
 5. Overlay candidates and runtime helpers are created only by the pre-lock process broker. The
    daemon owns generation/pidfd decisions while the broker owns wait/reap; overlay readiness is
-   accepted only after the child wins its lock and publishes matching process identity.
+   accepted only after the child wins its lock and publishes matching process identity. Startup
+   also warns when another `wayscriber` file exists on `PATH` or under `/usr`, `/usr/local`,
+   or `~/.local/bin`, because overlay spawn follows this process file rather than whichever
+   path the user inspected.
 6. Queue renames, producer eventfds, signals, and child pidfds drive the loop without a lifecycle
    polling tick. Shutdown invalidates readiness, terminates owned work, and joins listeners.
 
@@ -76,7 +79,7 @@ Daemon mode therefore provides a persistent background service that reacts to us
 
 `WaylandState` centralizes everything the handlers need: current buffers, Cairo context, mouse positions, capture state, and tokio handle for async work.
 
-Freeze capture waits for the overlay-suppression frame, then selects `wlr-screencopy`, `ext-image-copy-capture`, or the screenshot portal in that order. The two direct protocols capture the active output into shared memory; the portal captures the desktop and the client crops the selected output when needed.
+Freeze capture waits for the overlay-suppression frame, then selects `wlr-screencopy`, `ext-image-copy-capture`, or the screenshot portal in that order. The two direct protocols capture the active output into shared memory; the portal captures the desktop and the client crops the selected output when needed. Direct capture and portal crop both require compositor-reported output pixels; a missing current mode fails instead of guessing from the overlay buffer.
 
 ---
 

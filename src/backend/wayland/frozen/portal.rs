@@ -4,6 +4,7 @@ use log::warn;
 use std::time::{Duration, Instant};
 
 use crate::backend::wayland::frozen::FrozenImage;
+use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
 use crate::backend::wayland::portal_capture::{
     capture_via_portal_fullscreen_bytes, portal_output_matches,
 };
@@ -28,11 +29,15 @@ impl FrozenState {
             .runtime_wake
             .clone()
             .ok_or_else(|| anyhow::anyhow!("portal capture runtime wake is unavailable"))?;
+        let (source_geometry, target_output_id) = require_verified_capture_source(
+            self.active_geometry.clone(),
+            self.active_output_id,
+            "portal freeze capture",
+        )
+        .map_err(anyhow::Error::msg)?;
         self.portal_in_progress = true;
-        self.portal_target_output_id = self.active_output_id;
+        self.portal_target_output_id = Some(target_output_id);
 
-        let source_geometry = self.active_geometry.clone();
-        let target_output_id = self.active_output_id;
         let layout_generation = self.output_layout_generation;
         // Notify user that portal fallback is in progress
         crate::notification::send_notification_async(
@@ -49,9 +54,9 @@ impl FrozenState {
                     .map_err(|error| CaptureError::ImageError(format!("Decode failed: {error}")))?;
 
                 Ok((
-                    target_output_id,
+                    Some(target_output_id),
                     layout_generation,
-                    source_geometry,
+                    Some(source_geometry),
                     FrozenImage {
                         width,
                         height,
@@ -108,6 +113,7 @@ impl FrozenState {
                     } else {
                         warn!("Portal capture for inactive output discarded");
                     }
+                    Self::push_stale_layout_toast(input_state);
                     self.capture_done = true;
                 }
 
@@ -190,7 +196,11 @@ mod tests {
             logical_height: 1,
             scale: 1,
             transform: wayland_client::protocol::wl_output::Transform::Normal,
+            overlay_buffer_size: (2, 1),
+            pixel_size: Some((2, 1)),
             screenshot_origin: Some(origin),
+            screenshot_size: None,
+            known_output_count: None,
         }
     }
 
@@ -209,6 +219,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn portal_start_requires_verifiable_geometry_and_output_identity() -> anyhow::Result<()> {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+        let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
+
+        let error = frozen
+            .capture_via_portal(&tokio::runtime::Handle::current())
+            .expect_err("missing geometry must fail closed");
+        assert!(error.to_string().contains("geometry is unavailable"));
+        assert!(!frozen.portal_in_progress);
+        assert!(frozen.portal_task.is_none());
+
+        frozen.set_active_geometry(Some(crop_geometry((0, 0))));
+        let error = frozen
+            .capture_via_portal(&tokio::runtime::Handle::current())
+            .expect_err("missing output identity must fail closed");
+        assert!(error.to_string().contains("identity is unavailable"));
+        assert!(!frozen.portal_in_progress);
+        assert!(frozen.portal_task.is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn poll_portal_applies_image() -> anyhow::Result<()> {
         let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
@@ -217,7 +249,7 @@ mod tests {
         frozen.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async { Ok((None, 0, None, image(0))) },
+            async { Ok((None, 0, Some(crop_geometry((0, 0))), image(0))) },
         ));
         frozen.portal_in_progress = true;
         poll_until_finished(&mut frozen, &mut input).await?;
@@ -342,6 +374,7 @@ mod tests {
         assert!(input.frozen_active());
         assert!(!frozen.has_pending_image());
         assert!(frozen.take_capture_done());
+        assert!(input.ui_toast.is_some());
         Ok(())
     }
 
@@ -364,6 +397,7 @@ mod tests {
 
         assert!(!frozen.has_pending_image());
         assert!(frozen.take_capture_done());
+        assert!(input.ui_toast.is_some());
         Ok(())
     }
 
