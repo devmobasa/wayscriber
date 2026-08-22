@@ -30,6 +30,10 @@ impl SelectionPolicy {
 }
 
 impl RegionPurposeTag {
+    pub const fn is_capture(self) -> bool {
+        matches!(self, Self::CaptureDeliver | Self::CaptureInteractive)
+    }
+
     pub const fn selection_policy(self) -> SelectionPolicy {
         match self {
             Self::Ocr => SelectionPolicy {
@@ -320,6 +324,7 @@ mod tests {
 
     #[test]
     fn region_policy_preserves_ocr_geometry_and_reserves_capture_geometry() {
+        assert!(!RegionPurposeTag::Ocr.is_capture());
         let ocr = RegionPurposeTag::Ocr.selection_policy();
         assert_eq!(ocr.min_submit_logical_px(), Some(4.0));
         assert!(!ocr.allow_square());
@@ -329,6 +334,7 @@ mod tests {
             RegionPurposeTag::CaptureDeliver,
             RegionPurposeTag::CaptureInteractive,
         ] {
+            assert!(purpose.is_capture());
             let capture = purpose.selection_policy();
             assert_eq!(capture.min_submit_logical_px(), None);
             assert!(capture.allow_square());

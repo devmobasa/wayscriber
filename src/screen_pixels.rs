@@ -1,7 +1,3 @@
-// Phase 0a establishes capture-purpose pixel geometry whose remaining callers
-// arrive with the native region picker in Phase 1.
-#![allow(dead_code)]
-
 /// A point in source-image pixel-edge coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ImagePoint {
@@ -102,10 +98,12 @@ pub struct PixelSpan {
 }
 
 impl PixelSpan {
+    #[allow(dead_code)] // Phase 2 review nudging and board placement need the span origin.
     pub const fn x(self) -> u32 {
         self.x
     }
 
+    #[allow(dead_code)] // Phase 2 review nudging and board placement need the span origin.
     pub const fn y(self) -> u32 {
         self.y
     }
@@ -118,6 +116,7 @@ impl PixelSpan {
         self.height
     }
 
+    #[allow(dead_code)] // Tests and Phase 2 review use the paired dimensions.
     pub const fn size(self) -> (u32, u32) {
         (self.width, self.height)
     }
@@ -166,6 +165,7 @@ impl ImagePixelRect {
         })
     }
 
+    #[allow(dead_code)] // Tests and Phase 2 review use the paired dimensions.
     pub const fn size(self) -> (u32, u32) {
         (self.width, self.height)
     }
@@ -192,11 +192,13 @@ impl ImagePixelRect {
     }
 
     /// Quantize two unordered image edges into a non-empty in-bounds rectangle.
+    #[allow(dead_code)] // Phase 2 review constructs rectangles from edited endpoints.
     pub fn from_points(first: ImagePoint, second: ImagePoint, bounds: (u32, u32)) -> Option<Self> {
         pixel_span(first, second, bounds)?.try_into().ok()
     }
 
     /// Translate the rectangle and clamp its origin while preserving its size.
+    #[allow(dead_code)] // Phase 2 review uses this for keyboard nudging.
     pub fn translated_clamped(
         self,
         delta_x: i64,

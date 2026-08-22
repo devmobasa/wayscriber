@@ -745,6 +745,14 @@ Light passthrough (layer-shell compositors only) lets normal keyboard and pointe
 | <kbd>Ctrl+Alt+6</kbd> | Region → save PNG (explicit) |
 | <kbd>Ctrl+Alt+O</kbd> | Open last capture folder |
 
+Region shortcuts use Wayscriber's native frozen-image picker by default. Set
+`capture.region.picker = "slurp"` for the external selector; native selection
+also falls back to `slurp` when no screen capture backend is available. The
+readout and hotkey legend are configurable under `[capture.region]`; the loupe
+setting is accepted but is not rendered yet. Region captures are encoded and
+named as PNG even when the general screenshot format is set to JPEG. An
+explicit `picker = "slurp"` keeps the configured legacy screenshot format.
+
 Shortcuts marked "respects `capture.copy_to_clipboard`" send the capture to the clipboard or a file according to that `config.toml` setting; the other shortcuts always use the destination shown. Captures need the [screenshot tools](#screenshot-tools) and fall back to xdg-desktop-portal if they are missing.
 
 Use `--exit-after-capture` / `--no-exit-after-capture` to override whether the overlay closes after a capture.

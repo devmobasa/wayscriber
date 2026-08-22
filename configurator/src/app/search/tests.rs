@@ -238,6 +238,28 @@ fn exact_static_section_labels_match_their_sections() {
     }
 }
 
+#[test]
+fn region_picker_labels_match_the_region_section() {
+    for query in [
+        "selection frontend",
+        "show pointer position and selection size",
+        "show magnified pixel loupe",
+        "show hotkey legend",
+        "slurp",
+    ] {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.search_query = SearchQuery::new(query);
+
+        let summary = app.search_summary();
+        let capture = summary.tab(TabId::Capture).expect("capture match");
+
+        assert!(
+            capture.area_matches(SearchArea::CaptureRegion),
+            "query should show Region picker: {query}",
+        );
+    }
+}
+
 #[cfg(feature = "tablet-input")]
 #[test]
 fn exact_tablet_labels_match_tablet_section() {

@@ -390,3 +390,25 @@ fn production_domain_sources_have_no_upward_crate_dependencies() {
         "architecture test must cover every domain source"
     );
 }
+
+#[test]
+fn region_capture_action_classification_is_complete_and_narrow() {
+    for action in [
+        Action::CaptureSelection,
+        Action::CaptureClipboardSelection,
+        Action::CaptureFileSelection,
+        Action::CaptureClipboardRegion,
+        Action::CaptureFileRegion,
+    ] {
+        assert!(action.is_region_capture(), "action={action:?}");
+    }
+    for action in [
+        Action::CaptureFullScreen,
+        Action::CaptureActiveWindow,
+        Action::CaptureClipboardFull,
+        Action::CaptureFileFull,
+        Action::CopyTextFromScreen,
+    ] {
+        assert!(!action.is_region_capture(), "action={action:?}");
+    }
+}

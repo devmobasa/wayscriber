@@ -488,7 +488,6 @@ impl FrozenState {
         input_state.needs_redraw = true;
     }
 
-    #[allow(dead_code)] // Used by public modal-owner cancellation adapters.
     pub(in crate::backend::wayland) fn acquisition_completion(
         &self,
     ) -> Option<&ScreenAcquisitionCompletion> {
@@ -505,7 +504,6 @@ impl FrozenState {
         self.acquisition_completion.take()
     }
 
-    #[allow(dead_code)] // Used by public modal-owner cancellation adapters.
     pub(in crate::backend::wayland) fn take_matching_acquisition_completion(
         &mut self,
         id: ScreenAcquisitionId,

@@ -370,6 +370,18 @@ impl WaylandState {
         });
 
         let draw_duration = draw_start.elapsed();
+        if self.input_state.region_is_active()
+            && self
+                .input_state
+                .region_state()
+                .purpose()
+                .is_some_and(|purpose| purpose.is_capture())
+        {
+            debug!(
+                "Region picker frame: logical={}x{}, physical={}x{}, scale={}, cairo_draw={:?}",
+                width, height, phys_width, phys_height, scale, draw_duration
+            );
+        }
         if draw_duration > std::time::Duration::from_millis(2) {
             debug!("Cairo draw took {:?}", draw_duration);
         }

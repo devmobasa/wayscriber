@@ -1417,6 +1417,24 @@ exit_after_capture = false
 # language packages must be installed. OCR also needs `enabled = true` above.
 ocr_languages = "eng"
 
+[capture.region]
+# "native" draws Wayscriber's picker over a frozen desktop image.
+# "slurp" keeps the external selector. Native falls back to slurp when no
+# screen capture backend is available.
+# Native region selections are encoded and named as PNG. The explicit "slurp"
+# picker keeps [capture].format for compatibility with the legacy grim path.
+picker = "native"
+
+# Pointer-side readout: position while idle, W x H in export pixels while dragging.
+show_size_readout = true
+
+# Magnified pixel loupe next to the pointer while dragging.
+# This key is accepted now; the loupe is not rendered yet.
+show_loupe = false
+
+# Short hotkey legend at the top centre until the first drag.
+show_legend = true
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # EXPORT SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -5,6 +5,18 @@ use crate::util::ConfigHexColorError;
 use log::warn;
 use serde::{Deserialize, Serialize};
 
+/// Region selection frontend used by screenshot actions.
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum RegionPicker {
+    /// Draw Wayscriber's picker over a captured desktop image.
+    #[default]
+    Native,
+    /// Delegate region selection to the external `slurp` command.
+    Slurp,
+}
+
 /// Status bar position on screen.
 ///
 /// Controls where the status bar appears relative to screen edges.

@@ -18,6 +18,7 @@ impl WaylandState {
         damage_world: &[crate::util::Rect],
         mut perf: Option<&mut PerfRenderBreakdown>,
     ) -> Result<()> {
+        let capture_picker_suppresses_canvas_chrome = self.capture_picker_chrome_suppressed();
         let canvas_transform_active = self.canvas_transform_active();
         let (canvas_origin_x, canvas_origin_y) = self.canvas_view_origin();
         let shapes_total = self.input_state.boards.active_frame().shapes.len();
@@ -26,12 +27,13 @@ impl WaylandState {
         // shapes from the baked layer cache: pan frames force full damage, so
         // this turns an O(shapes) Cairo replay into a single aligned blit.
         let layer_cache_start = perf.as_ref().map(|_| Instant::now());
-        let layer_cache_ready = if self.canvas_layer_cache_usable() {
-            self.ensure_canvas_layer_cache(width, height, scale)
-        } else {
-            self.canvas_layer_cache.clear();
-            false
-        };
+        let layer_cache_ready =
+            if !capture_picker_suppresses_canvas_chrome && self.canvas_layer_cache_usable() {
+                self.ensure_canvas_layer_cache(width, height, scale)
+            } else {
+                self.canvas_layer_cache.clear();
+                false
+            };
         if let (Some(perf), Some(layer_cache_start)) = (perf.as_mut(), layer_cache_start) {
             perf.stages.completed_shapes = perf
                 .stages
@@ -46,6 +48,22 @@ impl WaylandState {
                 .stages
                 .background
                 .saturating_add(Instant::now().saturating_duration_since(background_start));
+        }
+
+        // A capture picker selects pixels from the frozen desktop, never from
+        // Wayscriber's annotation canvas. Keep only the backdrop: committed
+        // shapes, spotlight, selection handles, provisional/text previews,
+        // and click/highlight effects all return automatically when the
+        // derived picker state ends.
+        if capture_picker_suppresses_canvas_chrome {
+            self.spotlight_dimmed_last_frame = false;
+            if let Some(perf) = perf.as_mut() {
+                perf.shapes_total = shapes_total;
+                perf.shapes_tested = 0;
+                perf.shapes_rendered = 0;
+                perf.canvas_layer_cache_used = false;
+            }
+            return Ok(());
         }
 
         // Scale subsequent drawing to logical coordinates

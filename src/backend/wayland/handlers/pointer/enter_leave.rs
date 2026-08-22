@@ -80,6 +80,9 @@ impl WaylandState {
             self.is_move_dragging()
         );
         self.set_pointer_focus(false);
+        if !on_toolbar {
+            self.cancel_region_selection_from(RegionInputSource::Pointer);
+        }
         if on_toolbar {
             self.set_pointer_over_toolbar(false);
             self.toolbar.pointer_leave(&event.surface);

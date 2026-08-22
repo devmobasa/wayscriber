@@ -90,6 +90,7 @@ impl KeyboardHandler for WaylandState {
         // and breaking shortcuts/tools, aggressively reset our modifier state on
         // focus loss.
         self.input_state.reset_modifiers();
+        self.sync_region_square_modifier(false);
         self.input_state.clear_command_palette_repeat();
         self.clear_key_repeat();
         self.set_board_pan_key_held(false);
@@ -160,16 +161,53 @@ impl KeyboardHandler for WaylandState {
         // re-arms it at the end of this handler.
         self.clear_key_repeat();
         if self.input_state.region_is_engaged() {
-            let action = self.input_state.action_for_key(key);
-            if action.is_some_and(|action| {
-                self.input_state
-                    .refuse_region_capture_while_screen_modal_engaged(action)
-            }) {
+            if region_capture_select_all_pressed(
+                self.input_state.region_is_active(),
+                self.input_state.region_state().purpose(),
+                self.input_state.modifiers.ctrl,
+                key,
+            ) {
+                self.submit_whole_region_capture();
                 return;
+            }
+            let action = self.input_state.action_for_key(key);
+            if let Some(action) = action {
+                if self
+                    .input_state
+                    .refuse_region_capture_while_screen_modal_engaged(action)
+                {
+                    return;
+                }
+                if self
+                    .input_state
+                    .capture_region_action_reaches_backend(action)
+                {
+                    // Route the opening action directly while its picker owns
+                    // the modal. Going through InputState would clear held
+                    // modifiers before the backend can distinguish same-action
+                    // cancellation from a different-action refusal, visibly
+                    // changing a Shift-squared drag that remains active.
+                    self.handle_capture_action(action);
+                    return;
+                }
             }
             // Every other shortcut is swallowed while the selector is up so a
             // key cannot change the active tool mid-drag.
-            if matches!(key, Key::Escape) || action == Some(Action::CopyTextFromScreen) {
+            if matches!(key, Key::Escape) {
+                if self
+                    .input_state
+                    .region_state()
+                    .purpose()
+                    .is_some_and(crate::input::state::RegionPurposeTag::is_capture)
+                {
+                    self.cancel_region_capture();
+                } else {
+                    self.cancel_ocr();
+                }
+            } else if action == Some(Action::CopyTextFromScreen)
+                && self.input_state.region_state().purpose()
+                    == Some(crate::input::state::RegionPurposeTag::Ocr)
+            {
                 self.cancel_ocr();
             }
             return;
@@ -311,6 +349,7 @@ impl KeyboardHandler for WaylandState {
             modifiers.alt,
             modifiers.logo,
         );
+        self.sync_region_square_modifier(modifiers.shift);
     }
 
     fn repeat_key(
@@ -490,6 +529,18 @@ fn screen_modal_swallows_key_release(
     region_selector_engaged || eyedropper_engaged
 }
 
+fn region_capture_select_all_pressed(
+    region_active: bool,
+    purpose: Option<crate::input::state::RegionPurposeTag>,
+    ctrl: bool,
+    key: Key,
+) -> bool {
+    region_active
+        && purpose.is_some_and(crate::input::state::RegionPurposeTag::is_capture)
+        && ctrl
+        && matches!(key, Key::Char('a' | 'A'))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -526,6 +577,42 @@ mod tests {
             !input.modifiers.shift,
             "compositor modifier sync is authoritative"
         );
+    }
+
+    #[test]
+    fn ctrl_a_selects_all_only_for_an_active_capture_picker() {
+        use crate::input::state::RegionPurposeTag;
+
+        assert!(region_capture_select_all_pressed(
+            true,
+            Some(RegionPurposeTag::CaptureDeliver),
+            true,
+            Key::Char('a'),
+        ));
+        assert!(region_capture_select_all_pressed(
+            true,
+            Some(RegionPurposeTag::CaptureInteractive),
+            true,
+            Key::Char('A'),
+        ));
+        assert!(!region_capture_select_all_pressed(
+            false,
+            Some(RegionPurposeTag::CaptureDeliver),
+            true,
+            Key::Char('a'),
+        ));
+        assert!(!region_capture_select_all_pressed(
+            true,
+            Some(RegionPurposeTag::Ocr),
+            true,
+            Key::Char('a'),
+        ));
+        assert!(!region_capture_select_all_pressed(
+            true,
+            Some(RegionPurposeTag::CaptureDeliver),
+            false,
+            Key::Char('a'),
+        ));
     }
 
     #[test]

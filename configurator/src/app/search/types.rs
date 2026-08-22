@@ -16,6 +16,7 @@ pub(crate) enum SearchArea {
     BoardsGeneral,
     RenderProfilesGeneral,
     CaptureFiles,
+    CaptureRegion,
     CapturePdf,
     DaemonStatus,
     DaemonService,

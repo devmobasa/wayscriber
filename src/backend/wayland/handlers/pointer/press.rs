@@ -42,7 +42,7 @@ impl WaylandState {
             if on_toolbar || self.pointer_over_toolbar() {
                 // A toolbar interaction ends the region first, then runs
                 // normally; the click never lands on the selector.
-                self.cancel_ocr_for_toolbar_interaction();
+                self.cancel_region_for_toolbar_interaction();
             } else {
                 match button {
                     BTN_LEFT => {
@@ -53,7 +53,7 @@ impl WaylandState {
                         );
                     }
                     BTN_RIGHT => {
-                        self.cancel_ocr();
+                        self.cancel_active_region_selector();
                         self.set_suppress_next_release(true);
                     }
                     _ => {}

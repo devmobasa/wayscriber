@@ -9,7 +9,10 @@ mod pdf;
 
 pub(super) use barrier::OverlayCaptureBarrier;
 
-fn should_exit_after_capture(mode: ExitAfterCaptureMode, destination: CaptureDestination) -> bool {
+pub(super) fn should_exit_after_capture(
+    mode: ExitAfterCaptureMode,
+    destination: CaptureDestination,
+) -> bool {
     let is_clipboard_only = matches!(destination, CaptureDestination::ClipboardOnly);
     match mode {
         ExitAfterCaptureMode::Always => true,
@@ -68,6 +71,33 @@ impl WaylandState {
 
     /// Handles capture actions by delegating to the CaptureManager.
     pub(in crate::backend::wayland) fn handle_capture_action(&mut self, action: Action) {
+        if action.is_region_capture() {
+            if let Some(opening_action) = self.capture.active_region_action() {
+                if opening_action == action {
+                    self.cancel_region_capture();
+                } else {
+                    self.input_state.push_toast(
+                        ToastPriority::Info,
+                        "capture.region.refused",
+                        Toast::info("Finish or cancel the current screen selection first."),
+                    );
+                }
+                return;
+            }
+            if self
+                .input_state
+                .refuse_region_capture_while_screen_modal_engaged(action)
+            {
+                return;
+            }
+            let default_destination = if self.config.capture.copy_to_clipboard {
+                CaptureDestination::ClipboardAndFile
+            } else {
+                CaptureDestination::FileOnly
+            };
+            self.begin_region_capture_action(action, default_destination);
+            return;
+        }
         if self
             .input_state
             .refuse_region_capture_while_screen_modal_engaged(action)
@@ -328,7 +358,7 @@ impl WaylandState {
         self.accept_capture_submission(result, operation);
     }
 
-    fn accept_capture_submission(
+    pub(super) fn accept_capture_submission(
         &mut self,
         submission: Result<CaptureRequestId, CaptureSubmitError>,
         operation: ImageOperationKind,

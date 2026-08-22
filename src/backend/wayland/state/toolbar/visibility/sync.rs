@@ -5,7 +5,11 @@ fn toolbar_visibility_for_frontend(
     requested: bool,
     gtk_active: bool,
     gtk_drag_preview: Option<crate::toolbar_gtk::GtkToolbarKind>,
+    capture_picker_suppressed: bool,
 ) -> bool {
+    if capture_picker_suppressed {
+        return false;
+    }
     if !gtk_active {
         return requested;
     }
@@ -23,8 +27,9 @@ impl WaylandState {
         // from Exclusive to OnDemand while they are mapped, or compositors
         // that honor exclusivity (Hyprland) lock all input to the canvas
         // and the bars become click-through.
-        let toolbar_visible = self.toolbar.is_visible()
-            || (self.gtk_toolbars_active() && self.input_state.toolbar_top_visible());
+        let toolbar_visible = !self.capture_picker_chrome_suppressed()
+            && (self.toolbar.is_visible()
+                || (self.gtk_toolbars_active() && self.input_state.toolbar_top_visible()));
         desired_keyboard_interactivity_for(
             self.layer_shell.is_some(),
             toolbar_visible,
@@ -81,6 +86,7 @@ impl WaylandState {
             self.input_state.toolbar_top_visible(),
             gtk_active,
             self.data.gtk_drag_preview,
+            self.capture_picker_chrome_suppressed(),
         );
         let inline_active = self.inline_toolbars_active();
         let drag_preview =
@@ -247,16 +253,29 @@ mod tests {
 
     #[test]
     fn gtk_frontend_maps_only_the_inline_preview_target() {
-        assert!(!toolbar_visibility_for_frontend(true, true, None));
+        assert!(!toolbar_visibility_for_frontend(true, true, None, false));
         assert!(toolbar_visibility_for_frontend(
             true,
             true,
-            Some(GtkToolbarKind::Top)
+            Some(GtkToolbarKind::Top),
+            false,
         ));
     }
 
     #[test]
     fn builtin_frontend_ignores_gtk_preview_state() {
-        assert!(toolbar_visibility_for_frontend(true, false, None));
+        assert!(toolbar_visibility_for_frontend(true, false, None, false));
+    }
+
+    #[test]
+    fn capture_picker_suppresses_every_toolbar_frontend_without_changing_request() {
+        assert!(!toolbar_visibility_for_frontend(true, false, None, true));
+        assert!(!toolbar_visibility_for_frontend(
+            true,
+            true,
+            Some(GtkToolbarKind::Top),
+            true,
+        ));
+        assert!(toolbar_visibility_for_frontend(true, false, None, false));
     }
 }

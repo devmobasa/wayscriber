@@ -38,6 +38,22 @@ fn performance_metadata_paths_exist_in_json_schema() {
     }
 }
 
+#[test]
+fn region_capture_paths_exist_in_json_schema() {
+    let schema = Config::json_schema();
+    for path in [
+        "capture.region.picker",
+        "capture.region.show_size_readout",
+        "capture.region.show_loupe",
+        "capture.region.show_legend",
+    ] {
+        assert!(
+            schema_contains_path(&schema, path),
+            "schema missing region capture path {path}"
+        );
+    }
+}
+
 fn schema_contains_path(schema: &serde_json::Value, path: &str) -> bool {
     let mut node = schema;
     for segment in path.split('.') {

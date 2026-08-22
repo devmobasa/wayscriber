@@ -245,7 +245,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 }
                 if state.input_state.region_is_active() {
                     if state.stylus_on_toolbar {
-                        state.cancel_ocr_for_toolbar_interaction();
+                        state.cancel_region_for_toolbar_interaction();
                     } else if state.stylus_on_overlay {
                         let (x, y) = state.current_or_pending_stylus_position();
                         state.begin_region_selection(RegionInputSource::Stylus, x, y);

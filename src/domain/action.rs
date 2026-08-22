@@ -218,3 +218,17 @@ pub enum Action {
     // Clipboard fallback
     SavePendingToFile,
 }
+
+impl Action {
+    /// Whether this action opens or addresses the native screen-region picker.
+    pub const fn is_region_capture(self) -> bool {
+        matches!(
+            self,
+            Self::CaptureSelection
+                | Self::CaptureClipboardSelection
+                | Self::CaptureFileSelection
+                | Self::CaptureClipboardRegion
+                | Self::CaptureFileRegion
+        )
+    }
+}

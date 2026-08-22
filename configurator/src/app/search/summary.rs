@@ -286,6 +286,13 @@ fn capture_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
         SearchArea::CaptureFiles,
         CAPTURE_FILE_TERMS,
     );
+    add_area_if(
+        query,
+        summary,
+        TabId::Capture,
+        SearchArea::CaptureRegion,
+        CAPTURE_REGION_TERMS,
+    );
     if query.matches_parts(CAPTURE_PDF_TERMS.iter().copied())
         || (query.matches_any_raw_text(CAPTURE_PDF_IDENTITY_TERMS)
             && query.matches_parts_scoped_to_tab(TabId::Capture, CAPTURE_PDF_TERMS.iter().copied()))

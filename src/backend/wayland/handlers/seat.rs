@@ -4,6 +4,7 @@ use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState, pointer::
 use wayland_client::{Connection, QueueHandle, protocol::wl_seat};
 
 use super::super::state::WaylandState;
+use crate::input::RegionInputSource;
 
 impl SeatHandler for WaylandState {
     fn seat_state(&mut self) -> &mut SeatState {
@@ -105,6 +106,7 @@ impl SeatHandler for WaylandState {
         }
         if capability == Capability::Pointer {
             info!("Pointer capability removed");
+            self.cancel_region_selection_from(RegionInputSource::Pointer);
             self.themed_pointer = None;
             self.current_pointer_shape = None;
             self.cursor_hidden = false;

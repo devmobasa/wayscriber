@@ -114,6 +114,9 @@ mod onboarding;
 mod pdf_export;
 mod perf;
 mod region_capture;
+pub(in crate::backend::wayland) use region_capture::RegionCaptureIntent;
+#[cfg(test)]
+pub(in crate::backend::wayland) use region_capture::RegionPickerOptions;
 mod render;
 mod screen_image;
 mod text_clipboard;

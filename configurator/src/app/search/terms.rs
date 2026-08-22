@@ -376,6 +376,18 @@ pub(super) const CAPTURE_FILE_TERMS: &[&str] = &[
     "always exit overlay after capture",
     "format",
 ];
+pub(super) const CAPTURE_REGION_TERMS: &[&str] = &[
+    "region picker",
+    "selection frontend",
+    "native",
+    "slurp",
+    "show pointer position and selection size",
+    "size readout",
+    "show magnified pixel loupe",
+    "pixel loupe",
+    "show hotkey legend",
+    "hotkey legend",
+];
 pub(super) const CAPTURE_PDF_TERMS: &[&str] = &[
     "pdf",
     "export",

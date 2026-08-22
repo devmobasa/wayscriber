@@ -7,8 +7,8 @@ use super::super::fields::{
     InputHudPositionOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
     PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
-    ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
+    RegionPickerOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
+    ToolOption, ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -183,6 +183,10 @@ pub struct ConfigDraft {
     pub capture_copy_to_clipboard: bool,
     pub capture_exit_after: bool,
     pub capture_ocr_languages: String,
+    pub capture_region_picker: RegionPickerOption,
+    pub capture_region_show_size_readout: bool,
+    pub capture_region_show_loupe: bool,
+    pub capture_region_show_legend: bool,
     pub export_pdf_filename_template: String,
     pub export_pdf_all_boards_filename_template: String,
     pub export_pdf_page_size: PdfPageSizeOption,

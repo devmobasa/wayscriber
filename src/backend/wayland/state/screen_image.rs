@@ -209,7 +209,6 @@ pub(super) fn image_point_for_screen_point(
     )
 }
 
-#[allow(dead_code)] // Phase 0b derives the region preview from image-space state.
 pub(super) fn screen_point_for_image_point(
     token: &ScreenSourceToken,
     point: ImagePoint,
@@ -228,7 +227,7 @@ pub(super) fn screen_point_for_image_point(
     }
 }
 
-#[allow(dead_code)] // Phase 0b derives the region preview from image-space state.
+#[allow(dead_code)] // Phase 2 review maps its authoritative pixel rectangle back to the overlay.
 pub(super) fn screen_rect_for_image_rect(token: &ScreenSourceToken, rect: ImagePixelRect) -> Rect {
     let first = screen_point_for_image_point(
         token,
@@ -249,7 +248,7 @@ pub(super) fn screen_rect_for_image_rect(token: &ScreenSourceToken, rect: ImageP
         .expect("a non-empty image rectangle must map to a non-empty screen rectangle")
 }
 
-#[allow(dead_code)] // Phase 0b derives the selecting preview from a possibly empty span.
+#[allow(dead_code)] // Phase 2 review reuses the non-empty pixel-span mapping.
 pub(super) fn screen_rect_for_pixel_span(
     token: &ScreenSourceToken,
     span: PixelSpan,

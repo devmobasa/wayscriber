@@ -10,8 +10,8 @@ use crate::backend::wayland::zoom::{
 use crate::input::state::{EyedropperCaptureSource, ScreenCaptureSource};
 
 use transaction::{
-    AcquisitionTransactionRuntime, cancel_modal_owner_resources, report_inconsistent_capture_to,
-    report_screen_terminal_to, route_acquisition_transaction,
+    AcquisitionTransactionRuntime, cancel_modal_owner_resources, release_owned_generation,
+    report_inconsistent_capture_to, report_screen_terminal_to, route_acquisition_transaction,
 };
 pub(super) use transaction::{
     report_screen_source_activation_rejected_to, report_zoom_terminal_to,
@@ -58,6 +58,14 @@ impl AcquisitionTransactionRuntime for WaylandState {
 
     fn finish_ocr_ready(&mut self, installed_generation: u64) -> bool {
         self.finish_pending_ocr_capture(ScreenCaptureSource::Frozen, installed_generation)
+    }
+
+    fn finish_region_capture_ready(&mut self, installed_generation: u64) -> bool {
+        self.finish_pending_region_capture(ScreenCaptureSource::Frozen, installed_generation)
+    }
+
+    fn handoff_region_capture_to_legacy(&mut self) {
+        WaylandState::handoff_region_capture_to_legacy(self);
     }
 
     fn cancel_owner_ui(&mut self, owner: ScreenAcquisitionOwner) {
@@ -163,7 +171,10 @@ impl WaylandState {
                         ScreenCaptureSource::Zoom,
                         installed_generation,
                     ),
-                    ZoomWaiterOwner::RegionCapture => true,
+                    ZoomWaiterOwner::RegionCapture => self.finish_pending_region_capture(
+                        ScreenCaptureSource::Zoom,
+                        installed_generation,
+                    ),
                 };
                 if !activated {
                     self.cancel_zoom_owner_ui_only(waiter.owner);
@@ -198,7 +209,19 @@ impl WaylandState {
                         super::region_capture::ActiveScreenRegion::PendingZoom { .. }
                     )
             }),
-            ZoomWaiterOwner::RegionCapture => false,
+            ZoomWaiterOwner::RegionCapture => {
+                self.data.active_screen_region.is_some_and(|region| {
+                    region.purpose().is_capture()
+                        && matches!(
+                            region,
+                            super::region_capture::ActiveScreenRegion::PendingZoom { .. }
+                        )
+                        && matches!(
+                            self.capture.region_phase(),
+                            crate::backend::wayland::capture::RegionCapturePhase::Reserved(_)
+                        )
+                })
+            }
         };
         if !waiting {
             return false;
@@ -227,7 +250,7 @@ impl WaylandState {
         match owner {
             ZoomWaiterOwner::Eyedropper => self.cancel_eyedropper_ui_only(),
             ZoomWaiterOwner::Ocr => self.cancel_ocr_ui_only(),
-            ZoomWaiterOwner::RegionCapture => {}
+            ZoomWaiterOwner::RegionCapture => self.cancel_region_capture_ui_and_lifecycle(),
         }
     }
 
@@ -297,7 +320,16 @@ impl WaylandState {
                 region.purpose() == crate::input::state::RegionPurposeTag::Ocr
                     && region.waits_for_acquisition(completion.id)
             }),
-            ScreenAcquisitionOwner::RegionCapture => false,
+            ScreenAcquisitionOwner::RegionCapture => {
+                self.data.active_screen_region.is_some_and(|region| {
+                    region.purpose().is_capture()
+                        && region.waits_for_acquisition(completion.id)
+                        && matches!(
+                            self.capture.region_phase(),
+                            crate::backend::wayland::capture::RegionCapturePhase::Reserved(_)
+                        )
+                })
+            }
         };
         if !waiting {
             return false;
@@ -328,7 +360,15 @@ impl WaylandState {
                     )
                     .is_some()
             }
-            ScreenAcquisitionOwner::RegionCapture => false,
+            ScreenAcquisitionOwner::RegionCapture => {
+                self.frozen.image_generation() == installed_generation
+                    && displayed_screen_image(
+                        &self.zoom,
+                        &self.frozen,
+                        self.input_state.board_is_transparent(),
+                    )
+                    .is_some()
+            }
         }
     }
 
@@ -354,9 +394,7 @@ impl WaylandState {
             ScreenAcquisitionOwner::UserFreeze => {}
             ScreenAcquisitionOwner::Eyedropper => self.cancel_eyedropper_ui_only(),
             ScreenAcquisitionOwner::Ocr => self.cancel_ocr_ui_only(),
-            ScreenAcquisitionOwner::RegionCapture => {
-                // Phase 1 supplies the region UI-only teardown.
-            }
+            ScreenAcquisitionOwner::RegionCapture => self.cancel_region_capture_ui_and_lifecycle(),
         }
     }
 
@@ -367,5 +405,9 @@ impl WaylandState {
         owned_generation: Option<u64>,
     ) {
         cancel_modal_owner_resources(self, owner, pending_acquisition, owned_generation);
+    }
+
+    pub(super) fn release_owned_frozen_generation(&mut self, generation: u64) -> bool {
+        release_owned_generation(self, generation)
     }
 }

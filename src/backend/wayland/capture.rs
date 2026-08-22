@@ -11,6 +11,8 @@ use crate::{
     config::Action,
 };
 
+use super::state::RegionCaptureIntent;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CapturePreflight {
     None,
@@ -49,6 +51,15 @@ pub(in crate::backend::wayland) struct CaptureLayoutContext {
     layout_generation: u64,
 }
 
+/// Backend-owned lifecycle for a native region capture.
+#[derive(Clone, Debug)]
+pub(in crate::backend::wayland) enum RegionCapturePhase {
+    Idle,
+    Reserved(RegionCaptureIntent),
+    Submitting(RegionCaptureIntent),
+    Accepted,
+}
+
 impl CaptureLayoutContext {
     pub(in crate::backend::wayland) fn new(target_output_id: u32, layout_generation: u64) -> Self {
         Self {
@@ -80,6 +91,7 @@ pub struct CaptureState {
     preflight: CapturePreflight,
     pending_request: Option<CapturePreflightRequest>,
     pending_pdf_export: Option<PendingPdfExport>,
+    region: RegionCapturePhase,
 }
 
 impl CaptureState {
@@ -93,6 +105,7 @@ impl CaptureState {
             preflight: CapturePreflight::None,
             pending_request: None,
             pending_pdf_export: None,
+            region: RegionCapturePhase::Idle,
         }
     }
 
@@ -157,15 +170,88 @@ impl CaptureState {
         self.in_progress = true;
     }
 
+    /// Reserve the shared capture lifecycle for a native region picker.
+    ///
+    /// The intent is accepted only from a fully idle lifecycle. Once reserved,
+    /// every other capture path observes `is_in_progress() == true`.
+    pub(in crate::backend::wayland) fn reserve_region(
+        &mut self,
+        intent: RegionCaptureIntent,
+    ) -> bool {
+        if self.in_progress || !matches!(&self.region, RegionCapturePhase::Idle) {
+            return false;
+        }
+
+        self.in_progress = true;
+        self.accepted_id = None;
+        self.region = RegionCapturePhase::Reserved(intent);
+        true
+    }
+
+    /// Transfer a reserved native picker to the existing slurp lifecycle.
+    ///
+    /// The returned intent is the original immutable snapshot. Region-specific
+    /// ownership is cleared, while the generic in-progress reservation stays
+    /// held for suppression, preflight, and manager submission.
+    pub(in crate::backend::wayland) fn handoff_region_to_legacy(
+        &mut self,
+    ) -> Option<RegionCaptureIntent> {
+        let RegionCapturePhase::Reserved(_) = &self.region else {
+            return None;
+        };
+        let RegionCapturePhase::Reserved(intent) =
+            std::mem::replace(&mut self.region, RegionCapturePhase::Idle)
+        else {
+            unreachable!("region phase changed after reservation check");
+        };
+        debug_assert!(self.in_progress);
+        debug_assert!(self.accepted_id.is_none());
+        Some(intent)
+    }
+
+    /// Start the synchronous crop-to-manager handoff for a reserved picker.
+    ///
+    /// A clone is returned for building the submission request; the lifecycle
+    /// retains its own copy until the manager accepts or terminal cleanup runs.
+    pub(in crate::backend::wayland) fn begin_region_submission(
+        &mut self,
+    ) -> Option<RegionCaptureIntent> {
+        let RegionCapturePhase::Reserved(intent) = &self.region else {
+            return None;
+        };
+        let submission_intent = intent.clone();
+        let RegionCapturePhase::Reserved(intent) =
+            std::mem::replace(&mut self.region, RegionCapturePhase::Idle)
+        else {
+            unreachable!("region phase changed after reservation check");
+        };
+        debug_assert!(self.in_progress);
+        debug_assert!(self.accepted_id.is_none());
+        self.region = RegionCapturePhase::Submitting(intent);
+        Some(submission_intent)
+    }
+
+    pub(in crate::backend::wayland) fn region_phase(&self) -> &RegionCapturePhase {
+        &self.region
+    }
+
+    pub(in crate::backend::wayland) fn active_region_action(&self) -> Option<Action> {
+        match &self.region {
+            RegionCapturePhase::Reserved(intent) | RegionCapturePhase::Submitting(intent) => {
+                Some(intent.action())
+            }
+            RegionCapturePhase::Idle | RegionCapturePhase::Accepted => None,
+        }
+    }
+
     /// Finishes the current capture lifecycle and clears all reusable state.
     ///
-    /// Region-capture and board-delivery lifecycle fields are intentionally
-    /// absent until their later implementation phases.
     pub fn finish_capture_lifecycle(&mut self) {
         self.in_progress = false;
         self.accepted_id = None;
         self.exit_on_success = false;
         self.clear_preflight();
+        self.region = RegionCapturePhase::Idle;
     }
 
     /// Records the manager identity accepted for the current lifecycle.
@@ -173,13 +259,26 @@ impl CaptureState {
         if !self.in_progress || self.accepted_id.is_some() {
             return false;
         }
+
+        match &self.region {
+            RegionCapturePhase::Reserved(_) | RegionCapturePhase::Accepted => return false,
+            RegionCapturePhase::Idle => {}
+            RegionCapturePhase::Submitting(_) => {
+                self.region = RegionCapturePhase::Accepted;
+            }
+        }
         self.accepted_id = Some(id);
         true
     }
 
     /// Consumes the accepted identity only when the completion matches it.
     pub fn consume_accepted(&mut self, id: CaptureRequestId) -> bool {
-        if self.accepted_id != Some(id) {
+        if self.accepted_id != Some(id)
+            || matches!(
+                &self.region,
+                RegionCapturePhase::Reserved(_) | RegionCapturePhase::Submitting(_)
+            )
+        {
             return false;
         }
         self.accepted_id = None;
@@ -204,7 +303,23 @@ impl CaptureState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capture::types::{CaptureDestination, CaptureType};
+    use crate::{
+        backend::ExitAfterCaptureMode,
+        backend::wayland::state::RegionPickerOptions,
+        capture::types::{CaptureDestination, CaptureType},
+        input::state::RegionPurposeTag,
+    };
+
+    fn region_intent(action: Action) -> RegionCaptureIntent {
+        RegionCaptureIntent::new(
+            action,
+            RegionPurposeTag::CaptureDeliver,
+            CaptureDestination::ClipboardOnly,
+            None,
+            ExitAfterCaptureMode::Auto,
+            RegionPickerOptions::new(true, false, true),
+        )
+    }
 
     fn screenshot_request() -> CapturePreflightRequest {
         CapturePreflightRequest::Screenshot(CaptureRequest {
@@ -297,6 +412,128 @@ mod tests {
         assert!(!state.exit_on_success());
         assert!(!state.preflight_pending());
         assert!(state.take_preflight_request().is_none());
+    }
+
+    #[test]
+    fn region_reservation_is_exclusive_and_marks_the_generic_lifecycle_busy() {
+        let manager = CaptureManager::with_closed_channel_for_test();
+        let mut state = CaptureState::new(manager);
+
+        assert!(state.reserve_region(region_intent(Action::CaptureSelection)));
+        assert!(state.is_in_progress());
+        assert!(matches!(
+            state.region_phase(),
+            RegionCapturePhase::Reserved(intent)
+                if intent.action() == Action::CaptureSelection
+        ));
+        assert!(!state.reserve_region(region_intent(Action::CaptureClipboardSelection)));
+
+        state.finish_capture_lifecycle();
+        state.mark_in_progress();
+        assert!(!state.reserve_region(region_intent(Action::CaptureClipboardSelection)));
+        assert!(matches!(state.region_phase(), RegionCapturePhase::Idle));
+    }
+
+    #[test]
+    fn legacy_handoff_returns_the_snapshot_and_keeps_generic_ownership() {
+        let manager = CaptureManager::with_closed_channel_for_test();
+        let mut state = CaptureState::new(manager);
+        assert!(state.reserve_region(region_intent(Action::CaptureFileRegion)));
+
+        let handed_off = state
+            .handoff_region_to_legacy()
+            .expect("reserved intent should hand off");
+
+        assert_eq!(handed_off.action(), Action::CaptureFileRegion);
+        assert_eq!(handed_off.purpose(), RegionPurposeTag::CaptureDeliver);
+        assert!(state.is_in_progress());
+        assert_eq!(state.accepted_id(), None);
+        assert!(matches!(state.region_phase(), RegionCapturePhase::Idle));
+        assert!(state.handoff_region_to_legacy().is_none());
+
+        let legacy_id = CaptureRequestId::for_test(20);
+        assert!(state.record_accepted(legacy_id));
+        assert!(state.consume_accepted(legacy_id));
+    }
+
+    #[test]
+    fn submission_can_begin_only_once_and_preserves_the_intent_until_acceptance() {
+        let manager = CaptureManager::with_closed_channel_for_test();
+        let mut state = CaptureState::new(manager);
+        assert!(state.reserve_region(region_intent(Action::CaptureClipboardRegion)));
+
+        let submission = state
+            .begin_region_submission()
+            .expect("reserved region should begin submission");
+
+        assert_eq!(submission.action(), Action::CaptureClipboardRegion);
+        assert!(matches!(
+            state.region_phase(),
+            RegionCapturePhase::Submitting(intent)
+                if intent.action() == Action::CaptureClipboardRegion
+        ));
+        assert!(state.begin_region_submission().is_none());
+        assert!(state.handoff_region_to_legacy().is_none());
+    }
+
+    #[test]
+    fn region_accepted_identity_requires_the_submitting_phase() {
+        let manager = CaptureManager::with_closed_channel_for_test();
+        let mut state = CaptureState::new(manager);
+        let accepted = CaptureRequestId::for_test(21);
+        let other = CaptureRequestId::for_test(22);
+        assert!(state.reserve_region(region_intent(Action::CaptureSelection)));
+
+        assert!(!state.record_accepted(accepted));
+        assert!(matches!(
+            state.region_phase(),
+            RegionCapturePhase::Reserved(_)
+        ));
+        assert!(state.begin_region_submission().is_some());
+        assert!(state.record_accepted(accepted));
+        assert!(matches!(state.region_phase(), RegionCapturePhase::Accepted));
+        assert_eq!(state.accepted_id(), Some(accepted));
+        assert!(!state.record_accepted(other));
+        assert!(!state.consume_accepted(other));
+        assert_eq!(state.accepted_id(), Some(accepted));
+        assert!(state.consume_accepted(accepted));
+        assert_eq!(state.accepted_id(), None);
+        assert!(!state.record_accepted(other));
+    }
+
+    #[test]
+    fn terminal_finish_resets_every_region_phase() {
+        let manager = CaptureManager::with_closed_channel_for_test();
+        let mut state = CaptureState::new(manager);
+
+        assert!(state.reserve_region(region_intent(Action::CaptureSelection)));
+        state.set_exit_on_success(true);
+        state.finish_capture_lifecycle();
+        assert_region_lifecycle_is_idle(&state);
+
+        assert!(state.reserve_region(region_intent(Action::CaptureFileSelection)));
+        assert!(state.begin_region_submission().is_some());
+        state.set_exit_on_success(true);
+        state.finish_capture_lifecycle();
+        assert_region_lifecycle_is_idle(&state);
+
+        assert!(state.reserve_region(region_intent(Action::CaptureClipboardSelection)));
+        assert!(state.begin_region_submission().is_some());
+        assert!(state.record_accepted(CaptureRequestId::for_test(23)));
+        state.set_exit_on_success(true);
+        state.finish_capture_lifecycle();
+        assert_region_lifecycle_is_idle(&state);
+
+        // Terminal cleanup remains safe when called again by teardown.
+        state.finish_capture_lifecycle();
+        assert_region_lifecycle_is_idle(&state);
+    }
+
+    fn assert_region_lifecycle_is_idle(state: &CaptureState) {
+        assert!(!state.is_in_progress());
+        assert_eq!(state.accepted_id(), None);
+        assert!(!state.exit_on_success());
+        assert!(matches!(state.region_phase(), RegionCapturePhase::Idle));
     }
 
     #[test]

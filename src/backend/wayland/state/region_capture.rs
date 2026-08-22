@@ -1,8 +1,15 @@
 use crate::backend::wayland::acquisition::ScreenAcquisitionId;
 use crate::input::state::{
-    RegionInputSource, RegionPurposeTag, RegionSelectUiState, ScreenCaptureSource,
+    RegionInputSource, RegionPurposeTag, RegionSelectUiState, RegionSelection, ScreenCaptureSource,
 };
-use crate::screen_pixels::{ImagePixelRect, ImagePoint, clamp_edge, pixel_span};
+
+mod geometry;
+mod intent;
+mod picker;
+
+use crate::screen_pixels::{ImagePixelRect, ImagePoint, clamp_edge};
+pub(in crate::backend::wayland) use geometry::{RegionPickerMeasurement, RegionSelectionGeometry};
+pub(in crate::backend::wayland) use intent::{RegionCaptureIntent, RegionPickerOptions};
 
 use super::WaylandState;
 use super::screen_image::{
@@ -35,6 +42,8 @@ pub(super) enum ActiveScreenRegion {
         raw_edge: Option<ImagePoint>,
         logical_anchor: Option<(f64, f64)>,
         logical_edge: Option<(f64, f64)>,
+        square_modifier: bool,
+        legend_dismissed: bool,
     },
 }
 
@@ -81,14 +90,21 @@ impl ActiveScreenRegion {
         }
     }
 
+    pub const fn legend_dismissed(self) -> bool {
+        matches!(
+            self,
+            Self::Ready {
+                legend_dismissed: true,
+                ..
+            }
+        )
+    }
+
     fn selection_rect(self) -> Option<ImagePixelRect> {
         let Self::Ready {
             purpose,
-            anchor: Some(anchor),
-            raw_edge: Some(raw_edge),
             logical_anchor,
             logical_edge,
-            source,
             ..
         } = self
         else {
@@ -104,9 +120,87 @@ impl ActiveScreenRegion {
                 return None;
             }
         }
-        pixel_span(anchor, raw_edge, source.image_size)?
-            .try_into()
-            .ok()
+        self.selection_geometry()?.image_rect()
+    }
+
+    fn selection_geometry(self) -> Option<RegionSelectionGeometry> {
+        let Self::Ready {
+            purpose,
+            source,
+            anchor: Some(anchor),
+            raw_edge: Some(raw_edge),
+            logical_anchor,
+            logical_edge,
+            square_modifier,
+            ..
+        } = self
+        else {
+            return None;
+        };
+        geometry::selection_geometry(
+            purpose,
+            source,
+            anchor,
+            raw_edge,
+            logical_anchor
+                .zip(logical_edge)
+                .map(|(start, end)| RegionSelection { start, end }),
+            square_modifier,
+        )
+    }
+
+    fn set_square_modifier(&mut self, active: bool) -> bool {
+        let Self::Ready {
+            purpose,
+            square_modifier,
+            ..
+        } = self
+        else {
+            return false;
+        };
+        let next = active && purpose.selection_policy().allow_square();
+        if *square_modifier == next {
+            return false;
+        }
+        *square_modifier = next;
+        true
+    }
+
+    fn whole_image_selection(self) -> Option<RegionSelectionFinalize> {
+        let Self::Ready {
+            purpose, source, ..
+        } = self
+        else {
+            return None;
+        };
+        Some(RegionSelectionFinalize::Selected {
+            purpose,
+            rect: geometry::whole_image_rect(purpose, source.image_size)?,
+        })
+    }
+
+    fn picker_measurement(self, pointer: (f64, f64)) -> Option<RegionPickerMeasurement> {
+        let Self::Ready {
+            purpose, source, ..
+        } = self
+        else {
+            return None;
+        };
+        if !purpose.is_capture() {
+            return None;
+        }
+        if let Some(geometry) = self.selection_geometry() {
+            let span = geometry.image_span();
+            return Some(RegionPickerMeasurement::Size {
+                width: span.width(),
+                height: span.height(),
+            });
+        }
+        geometry::point_measurement(
+            purpose,
+            image_point_for_screen_point(&source, pointer),
+            source.image_size,
+        )
     }
 
     fn begin_selection(&mut self, logical: (f64, f64)) -> bool {
@@ -117,6 +211,7 @@ impl ActiveScreenRegion {
             raw_edge,
             logical_anchor,
             logical_edge,
+            legend_dismissed,
             ..
         } = self
         else {
@@ -135,11 +230,19 @@ impl ActiveScreenRegion {
         ) else {
             return false;
         };
-        debug_assert_eq!(*purpose, RegionPurposeTag::Ocr);
-        *anchor = Some(mapped);
-        *raw_edge = Some(mapped);
+        let Some(anchor_point) = geometry::selection_anchor(*purpose, mapped, source.image_size)
+        else {
+            return false;
+        };
+        *anchor = Some(anchor_point);
+        *raw_edge = Some(if purpose.is_capture() {
+            anchor_point
+        } else {
+            mapped
+        });
         *logical_anchor = Some(logical);
         *logical_edge = Some(logical);
+        *legend_dismissed = true;
         true
     }
 
@@ -166,10 +269,20 @@ impl ActiveScreenRegion {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RegionSelectionFinalize {
+pub(in crate::backend::wayland) enum RegionSelectionFinalize {
     NotOwned,
     Rearmed,
-    Selected(ImagePixelRect),
+    Selected {
+        purpose: RegionPurposeTag,
+        rect: ImagePixelRect,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::backend::wayland) enum RegionOwnerLoss {
+    NotOwned,
+    RearmedCapture,
+    Cancel(RegionPurposeTag),
 }
 
 fn begin_region_selection_event(
@@ -178,13 +291,23 @@ fn begin_region_selection_event(
     owner: RegionInputSource,
     logical: (f64, f64),
 ) -> bool {
-    if !backend
-        .as_mut()
-        .is_some_and(|region| region.begin_selection(logical))
-    {
+    let Some(region) = backend.as_mut() else {
+        return false;
+    };
+    if !region.begin_selection(logical) {
         return false;
     }
-    input_state.start_region_selection(owner, logical)
+    let Some(preview) = region
+        .selection_geometry()
+        .map(RegionSelectionGeometry::display_selection)
+    else {
+        return false;
+    };
+    if !input_state.start_region_selection(owner, preview.start) {
+        return false;
+    }
+    input_state.update_region_selection(owner, preview.end);
+    true
 }
 
 fn update_region_selection_event(
@@ -196,12 +319,39 @@ fn update_region_selection_event(
     if !input_state.region_selection_is_owned_by(owner) {
         return;
     }
-    if backend
-        .as_mut()
-        .is_some_and(|region| region.update_endpoint(logical))
+    if let Some(region) = backend.as_mut()
+        && region.update_endpoint(logical)
+        && let Some(preview) = region
+            .selection_geometry()
+            .map(RegionSelectionGeometry::display_selection)
     {
-        input_state.update_region_selection(owner, logical);
+        input_state.update_region_selection(owner, preview.end);
     }
+}
+
+fn sync_region_square_modifier_event(
+    backend: &mut Option<ActiveScreenRegion>,
+    input_state: &mut crate::input::InputState,
+    shift: bool,
+) -> bool {
+    let Some(region) = backend.as_mut() else {
+        return false;
+    };
+    if !region.set_square_modifier(shift) {
+        return false;
+    }
+    if let Some(owner) = input_state.region_state().selection_owner()
+        && let Some(preview) = region
+            .selection_geometry()
+            .map(RegionSelectionGeometry::display_selection)
+    {
+        input_state.update_region_selection(owner, preview.end);
+    }
+    true
+}
+
+fn initial_square_modifier(purpose: RegionPurposeTag, shift: bool) -> bool {
+    shift && purpose.selection_policy().allow_square()
 }
 
 fn rearm_region_selection_event(
@@ -224,6 +374,24 @@ fn rearm_region_selection_event(
     input_state.rearm_region_selection();
 }
 
+fn region_owner_lost_event(
+    backend: &mut Option<ActiveScreenRegion>,
+    input_state: &mut crate::input::InputState,
+    source: RegionInputSource,
+) -> RegionOwnerLoss {
+    if !input_state.region_selection_is_owned_by(source) {
+        return RegionOwnerLoss::NotOwned;
+    }
+    let Some(purpose) = backend.as_ref().map(|region| region.purpose()) else {
+        return RegionOwnerLoss::NotOwned;
+    };
+    if !purpose.is_capture() {
+        return RegionOwnerLoss::Cancel(purpose);
+    }
+    rearm_region_selection_event(backend, input_state);
+    RegionOwnerLoss::RearmedCapture
+}
+
 pub(super) fn finalize_region_selection_event(
     backend: &mut Option<ActiveScreenRegion>,
     input_state: &mut crate::input::InputState,
@@ -242,7 +410,11 @@ pub(super) fn finalize_region_selection_event(
         rearm_region_selection_event(backend, input_state);
         return RegionSelectionFinalize::Rearmed;
     };
-    RegionSelectionFinalize::Selected(rect)
+    let purpose = backend
+        .as_ref()
+        .expect("a selected region still has backend state")
+        .purpose();
+    RegionSelectionFinalize::Selected { purpose, rect }
 }
 
 impl WaylandState {
@@ -307,6 +479,8 @@ impl WaylandState {
             raw_edge: None,
             logical_anchor: None,
             logical_edge: None,
+            square_modifier: initial_square_modifier(purpose, self.input_state.modifiers.shift),
+            legend_dismissed: false,
         });
         self.input_state.activate_region(purpose, generation);
         self.debug_assert_screen_region_invariant();
@@ -349,6 +523,73 @@ impl WaylandState {
         );
     }
 
+    pub(in crate::backend::wayland) fn region_selection_geometry(
+        &self,
+    ) -> Option<RegionSelectionGeometry> {
+        self.data
+            .active_screen_region
+            .and_then(ActiveScreenRegion::selection_geometry)
+    }
+
+    pub(in crate::backend::wayland) fn region_picker_legend_dismissed(&self) -> bool {
+        self.data
+            .active_screen_region
+            .is_some_and(ActiveScreenRegion::legend_dismissed)
+    }
+
+    pub(in crate::backend::wayland) fn whole_image_region_selection(
+        &self,
+    ) -> Option<RegionSelectionFinalize> {
+        self.data
+            .active_screen_region
+            .and_then(ActiveScreenRegion::whole_image_selection)
+    }
+
+    pub(in crate::backend::wayland) fn whole_image_capture_rect(&self) -> Option<ImagePixelRect> {
+        match self.whole_image_region_selection()? {
+            RegionSelectionFinalize::Selected {
+                purpose: RegionPurposeTag::CaptureDeliver,
+                rect,
+            } => Some(rect),
+            RegionSelectionFinalize::Selected { .. }
+            | RegionSelectionFinalize::NotOwned
+            | RegionSelectionFinalize::Rearmed => None,
+        }
+    }
+
+    pub(in crate::backend::wayland) fn region_picker_measurement(
+        &self,
+        pointer: (f64, f64),
+    ) -> Option<RegionPickerMeasurement> {
+        self.data
+            .active_screen_region
+            .and_then(|region| region.picker_measurement(pointer))
+    }
+
+    /// Recompute capture geometry from compositor-authoritative Shift state.
+    /// Individual key events remain swallowed by the modal selector.
+    pub(in crate::backend::wayland) fn sync_region_square_modifier(&mut self, shift: bool) -> bool {
+        sync_region_square_modifier_event(
+            &mut self.data.active_screen_region,
+            &mut self.input_state,
+            shift,
+        )
+    }
+
+    /// Resolve loss of the device that owns a drag without crossing lifecycle
+    /// ownership. Capture keeps its reservation and image; OCR asks its owner
+    /// to run the existing terminal cancellation path.
+    pub(in crate::backend::wayland) fn region_owner_lost(
+        &mut self,
+        source: RegionInputSource,
+    ) -> RegionOwnerLoss {
+        region_owner_lost_event(
+            &mut self.data.active_screen_region,
+            &mut self.input_state,
+            source,
+        )
+    }
+
     pub(super) fn debug_assert_screen_region_invariant(&self) {
         debug_assert!(screen_region_invariant(
             self.data.active_screen_region,
@@ -357,7 +598,7 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn cancel_screen_modals_if_source_changed(&mut self) {
-        let (cancel_eyedropper, cancel_ocr) = {
+        let (cancel_eyedropper, cancel_region) = {
             let current_source = super::screen_image::displayed_screen_image(
                 &self.zoom,
                 &self.frozen,
@@ -380,14 +621,26 @@ impl WaylandState {
                     self.data.active_eyedropper_source,
                     &source_matches,
                 ),
-                active_ocr_source_changed(self.data.active_screen_region, &source_matches),
+                active_region_source_changed(self.data.active_screen_region, &source_matches),
             )
         };
         if cancel_eyedropper {
             self.cancel_eyedropper();
         }
-        if cancel_ocr {
-            self.cancel_ocr();
+        if cancel_region {
+            match self
+                .data
+                .active_screen_region
+                .map(ActiveScreenRegion::purpose)
+            {
+                Some(RegionPurposeTag::Ocr) => {
+                    self.cancel_ocr();
+                }
+                Some(purpose) if purpose.is_capture() => {
+                    self.cancel_region_capture_for_source_change();
+                }
+                Some(_) | None => {}
+            }
         }
     }
 }
@@ -402,17 +655,13 @@ fn screen_region_invariant(backend: Option<ActiveScreenRegion>, ui: RegionSelect
     }
 }
 
-fn active_ocr_source_changed(
+fn active_region_source_changed(
     region: Option<ActiveScreenRegion>,
     source_matches: &impl Fn(ScreenSourceToken) -> bool,
 ) -> bool {
     matches!(
         region,
-        Some(ActiveScreenRegion::Ready {
-            purpose: RegionPurposeTag::Ocr,
-            source,
-            ..
-        }) if !source_matches(source)
+        Some(ActiveScreenRegion::Ready { source, .. }) if !source_matches(source)
     )
 }
 
@@ -471,6 +720,8 @@ mod tests {
             raw_edge: None,
             logical_anchor: None,
             logical_edge: None,
+            square_modifier: false,
+            legend_dismissed: false,
         };
         assert_eq!(ready.generation(), pending.generation());
         assert_eq!(ready.owned_frozen_generation(), Some(44));
@@ -556,11 +807,13 @@ mod tests {
             raw_edge: None,
             logical_anchor: None,
             logical_edge: None,
+            square_modifier: false,
+            legend_dismissed: false,
         }
     }
 
     #[test]
-    fn ready_ocr_detects_replaced_or_missing_source_but_pending_ocr_keeps_waiting() {
+    fn ready_regions_detect_replaced_or_missing_source_but_pending_regions_keep_waiting() {
         let ready = ocr_region(1.0);
         let ActiveScreenRegion::Ready { source, .. } = ready else {
             unreachable!("OCR fixture is ready")
@@ -568,20 +821,23 @@ mod tests {
         let mut replacement = source;
         replacement.image_generation += 1;
 
-        assert!(!active_ocr_source_changed(Some(ready), &|expected| {
+        assert!(!active_region_source_changed(Some(ready), &|expected| {
             expected == source
         }));
-        assert!(active_ocr_source_changed(Some(ready), &|expected| {
+        assert!(active_region_source_changed(Some(ready), &|expected| {
             expected == replacement
         }));
-        assert!(active_ocr_source_changed(Some(ready), &|_| false));
-        assert!(!active_ocr_source_changed(
+        assert!(active_region_source_changed(Some(ready), &|_| false));
+        assert!(!active_region_source_changed(
             Some(ActiveScreenRegion::PendingZoom {
                 purpose: RegionPurposeTag::Ocr,
                 generation: 1,
             }),
             &|_| false,
         ));
+
+        let capture = capture_region();
+        assert!(active_region_source_changed(Some(capture), &|_| false));
     }
 
     #[test]
@@ -697,6 +953,23 @@ mod tests {
     }
 
     #[test]
+    fn held_shift_seeds_capture_but_not_ocr_before_the_first_press() {
+        assert!(initial_square_modifier(
+            RegionPurposeTag::CaptureDeliver,
+            true
+        ));
+        assert!(initial_square_modifier(
+            RegionPurposeTag::CaptureInteractive,
+            true
+        ));
+        assert!(!initial_square_modifier(RegionPurposeTag::Ocr, true));
+        assert!(!initial_square_modifier(
+            RegionPurposeTag::CaptureDeliver,
+            false
+        ));
+    }
+
+    #[test]
     fn production_ocr_event_adapter_uses_release_endpoint_at_every_scale() {
         for (scale, expected) in [
             (1.0, (10, 20, (5, 5))),
@@ -728,12 +1001,16 @@ mod tests {
                             (30.0, 35.0),
                         );
                     }
-                    let RegionSelectionFinalize::Selected(rect) = finalize_region_selection_event(
+                    let RegionSelectionFinalize::Selected {
+                        purpose: RegionPurposeTag::Ocr,
+                        rect,
+                    } = finalize_region_selection_event(
                         &mut backend,
                         &mut input,
                         RegionInputSource::Pointer,
                         release,
-                    ) else {
+                    )
+                    else {
                         panic!(
                             "release must submit at scale={scale} reversed={reversed} motion={has_motion}"
                         );
@@ -770,12 +1047,16 @@ mod tests {
             RegionInputSource::Pointer,
             (10.0, 20.0),
         ));
-        let RegionSelectionFinalize::Selected(rect) = finalize_region_selection_event(
+        let RegionSelectionFinalize::Selected {
+            purpose: RegionPurposeTag::Ocr,
+            rect,
+        } = finalize_region_selection_event(
             &mut backend,
             &mut input,
             RegionInputSource::Pointer,
             (14.0, 28.0),
-        ) else {
+        )
+        else {
             panic!("Shift-held OCR drag must submit");
         };
         assert_eq!(rect.size(), (4, 8));
@@ -802,5 +1083,342 @@ mod tests {
             input.region_state(),
             RegionSelectUiState::Armed { .. }
         ));
+    }
+
+    fn capture_region() -> ActiveScreenRegion {
+        capture_region_at_scale(1.0)
+    }
+
+    fn capture_region_at_scale(scale: f64) -> ActiveScreenRegion {
+        let ActiveScreenRegion::Ready {
+            generation,
+            source,
+            freeze_ownership,
+            ..
+        } = ocr_region(scale)
+        else {
+            unreachable!("OCR fixture is ready")
+        };
+        ActiveScreenRegion::Ready {
+            purpose: RegionPurposeTag::CaptureDeliver,
+            generation,
+            source,
+            freeze_ownership,
+            anchor: None,
+            raw_edge: None,
+            logical_anchor: None,
+            logical_edge: None,
+            square_modifier: false,
+            legend_dismissed: false,
+        }
+    }
+
+    #[test]
+    fn capture_press_snaps_its_anchor_and_starts_with_a_zero_pixel_span() {
+        let mut region = capture_region();
+
+        assert!(region.begin_selection((10.8, 20.6)));
+
+        let geometry = region.selection_geometry().expect("fresh drag geometry");
+        assert_eq!(geometry.image_span().size(), (0, 0));
+        assert_eq!(geometry.display_selection().start, (10.0, 20.0));
+        assert_eq!(geometry.display_selection().end, (10.0, 20.0));
+        assert_eq!(geometry.image_rect(), None);
+    }
+
+    #[test]
+    fn capture_pixel_span_reports_one_axis_empty_without_submitting_it() {
+        let mut region = capture_region();
+        assert!(region.begin_selection((10.8, 20.6)));
+        assert!(region.update_endpoint((10.0, 40.0)));
+
+        let geometry = region.selection_geometry().expect("drag geometry");
+        assert_eq!(geometry.image_span().size(), (0, 20));
+        assert_eq!(geometry.image_rect(), None);
+        assert_eq!(region.selection_rect(), None);
+    }
+
+    #[test]
+    fn capture_finalize_is_purpose_aware_and_one_axis_empty_rearms() {
+        let mut backend = Some(capture_region());
+        let mut input = make_test_input_state();
+        input.activate_region(RegionPurposeTag::CaptureDeliver, 1);
+        assert!(begin_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Pointer,
+            (10.8, 20.6),
+        ));
+        assert_eq!(
+            finalize_region_selection_event(
+                &mut backend,
+                &mut input,
+                RegionInputSource::Pointer,
+                (18.2, 35.8),
+            ),
+            RegionSelectionFinalize::Selected {
+                purpose: RegionPurposeTag::CaptureDeliver,
+                rect: ImagePixelRect::new(10, 20, 9, 16, (100, 80)).unwrap(),
+            }
+        );
+
+        let mut backend = Some(capture_region());
+        let mut input = make_test_input_state();
+        input.activate_region(RegionPurposeTag::CaptureDeliver, 1);
+        assert!(begin_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Touch,
+            (10.8, 20.6),
+        ));
+        assert_eq!(
+            finalize_region_selection_event(
+                &mut backend,
+                &mut input,
+                RegionInputSource::Touch,
+                (10.0, 40.0),
+            ),
+            RegionSelectionFinalize::Rearmed
+        );
+        assert!(matches!(
+            input.region_state(),
+            RegionSelectUiState::Armed {
+                purpose: RegionPurposeTag::CaptureDeliver,
+                generation: 1,
+            }
+        ));
+        assert_eq!(backend.unwrap().selection_geometry(), None);
+    }
+
+    #[test]
+    fn capture_shift_square_uses_the_dominant_image_axis_and_restores_the_raw_edge() {
+        let mut region = capture_region();
+        assert!(region.begin_selection((10.8, 20.6)));
+        assert!(region.update_endpoint((18.2, 35.8)));
+        assert_eq!(
+            region.selection_geometry().unwrap().image_span().size(),
+            (9, 16)
+        );
+
+        assert!(region.set_square_modifier(true));
+        assert_eq!(
+            region.selection_geometry().unwrap().image_span().size(),
+            (16, 16)
+        );
+
+        assert!(region.set_square_modifier(false));
+        assert_eq!(
+            region.selection_geometry().unwrap().image_span().size(),
+            (9, 16),
+            "releasing Shift must recompute from the canonical raw edge"
+        );
+    }
+
+    #[test]
+    fn capture_shift_square_caps_the_side_to_the_first_image_edge() {
+        let mut region = capture_region();
+        assert!(region.begin_selection((90.8, 70.4)));
+        assert!(region.update_endpoint((10.0, 40.0)));
+        assert!(region.set_square_modifier(true));
+
+        let geometry = region.selection_geometry().unwrap();
+        assert_eq!(geometry.image_span().size(), (70, 70));
+        assert_eq!(geometry.image_span().x(), 20);
+        assert_eq!(geometry.image_span().y(), 0);
+    }
+
+    #[test]
+    fn capture_square_and_readout_share_image_pixels_at_integer_fractional_and_zoom_views() {
+        let mut cases = [
+            ("scale-1", capture_region_at_scale(1.0)),
+            ("scale-2", capture_region_at_scale(2.0)),
+            ("fractional-1.5", capture_region_at_scale(1.5)),
+            ("zoom-2", capture_region_at_scale(1.0)),
+        ];
+        if let ActiveScreenRegion::Ready { source, .. } = &mut cases[3].1 {
+            source.zoom_transformed = true;
+            source.zoom_scale = 2.0;
+            source.zoom_view_offset = (10.0, 5.0);
+        }
+
+        for (name, mut region) in cases {
+            assert!(region.begin_selection((20.25, 20.5)), "{name}");
+            assert!(region.update_endpoint((40.25, 50.5)), "{name}");
+            assert!(region.set_square_modifier(true), "{name}");
+
+            let geometry = region.selection_geometry().expect("square geometry");
+            let (width, height) = geometry.image_span().size();
+            assert_eq!(
+                width, height,
+                "square must be square in image pixels: {name}"
+            );
+            assert!(width > 0, "test drag must cover pixels: {name}");
+            assert_eq!(
+                region.picker_measurement((0.0, 0.0)),
+                Some(RegionPickerMeasurement::Size { width, height }),
+                "readout must describe the exact square crop: {name}"
+            );
+            assert_eq!(
+                geometry.image_rect().map(ImagePixelRect::size),
+                Some((width, height)),
+                "submitted crop must share the readout's pixel span: {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn capture_measurement_maps_armed_pointer_and_reports_exact_selecting_span() {
+        let mut region = capture_region_at_scale(2.0);
+        assert_eq!(
+            region.picker_measurement((10.25, 20.5)),
+            Some(RegionPickerMeasurement::Point { x: 20, y: 41 })
+        );
+
+        assert!(region.begin_selection((10.25, 20.5)));
+        assert_eq!(
+            region.picker_measurement((999.0, 999.0)),
+            Some(RegionPickerMeasurement::Size {
+                width: 0,
+                height: 0,
+            })
+        );
+        assert!(region.update_endpoint((14.25, 24.5)));
+        assert_eq!(
+            region.picker_measurement((0.0, 0.0)),
+            Some(RegionPickerMeasurement::Size {
+                width: 9,
+                height: 8,
+            })
+        );
+        assert_eq!(ocr_region(2.0).picker_measurement((10.25, 20.5)), None);
+    }
+
+    #[test]
+    fn compositor_shift_sync_recomputes_capture_preview_without_changing_ownership() {
+        let mut backend = Some(capture_region());
+        let mut input = make_test_input_state();
+        input.activate_region(RegionPurposeTag::CaptureDeliver, 1);
+
+        assert!(sync_region_square_modifier_event(
+            &mut backend,
+            &mut input,
+            true,
+        ));
+        assert!(begin_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Touch,
+            (10.8, 20.6),
+        ));
+        update_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Touch,
+            (18.2, 35.8),
+        );
+        let square = backend.unwrap().selection_geometry().unwrap();
+        assert_eq!(square.image_span().size(), (16, 16));
+        assert_eq!(
+            input.region_state().selection().unwrap(),
+            square.display_selection()
+        );
+        assert!(input.region_selection_is_owned_by(RegionInputSource::Touch));
+
+        assert!(sync_region_square_modifier_event(
+            &mut backend,
+            &mut input,
+            false,
+        ));
+        let raw = backend.unwrap().selection_geometry().unwrap();
+        assert_eq!(raw.image_span().size(), (9, 16));
+        assert_eq!(
+            input.region_state().selection().unwrap(),
+            raw.display_selection()
+        );
+        assert!(input.region_selection_is_owned_by(RegionInputSource::Touch));
+    }
+
+    #[test]
+    fn capture_owner_loss_rearms_without_releasing_backend_ownership() {
+        let mut backend = Some(capture_region());
+        let mut input = make_test_input_state();
+        input.activate_region(RegionPurposeTag::CaptureDeliver, 1);
+        assert!(begin_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Stylus,
+            (10.0, 20.0),
+        ));
+        assert!(
+            backend.is_some_and(ActiveScreenRegion::legend_dismissed),
+            "the first press permanently dismisses this picker's legend"
+        );
+        update_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Stylus,
+            (30.0, 40.0),
+        );
+
+        assert_eq!(
+            region_owner_lost_event(&mut backend, &mut input, RegionInputSource::Touch),
+            RegionOwnerLoss::NotOwned
+        );
+        assert!(input.region_selection_is_owned_by(RegionInputSource::Stylus));
+
+        assert_eq!(
+            region_owner_lost_event(&mut backend, &mut input, RegionInputSource::Stylus),
+            RegionOwnerLoss::RearmedCapture
+        );
+        assert!(matches!(
+            input.region_state(),
+            RegionSelectUiState::Armed {
+                purpose: RegionPurposeTag::CaptureDeliver,
+                generation: 1,
+            }
+        ));
+        assert!(backend.is_some(), "capture source ownership was released");
+        let backend = backend.unwrap();
+        assert_eq!(backend.selection_geometry(), None);
+        assert!(
+            backend.legend_dismissed(),
+            "rearming must not show the first-use legend again"
+        );
+    }
+
+    #[test]
+    fn ocr_owner_loss_requests_its_existing_terminal_cancel_path() {
+        let mut backend = Some(ocr_region(1.0));
+        let mut input = make_test_input_state();
+        input.activate_region(RegionPurposeTag::Ocr, 1);
+        assert!(begin_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Pointer,
+            (10.0, 20.0),
+        ));
+
+        assert_eq!(
+            region_owner_lost_event(&mut backend, &mut input, RegionInputSource::Pointer),
+            RegionOwnerLoss::Cancel(RegionPurposeTag::Ocr)
+        );
+        assert!(
+            input.region_selection_is_owned_by(RegionInputSource::Pointer),
+            "the lifecycle owner must perform OCR cleanup"
+        );
+    }
+
+    #[test]
+    fn whole_image_is_available_only_to_capture_purposes() {
+        let capture = capture_region();
+        let RegionSelectionFinalize::Selected { purpose, rect } = capture
+            .whole_image_selection()
+            .expect("capture whole image")
+        else {
+            panic!("whole image must be a selected result")
+        };
+        assert_eq!(purpose, RegionPurposeTag::CaptureDeliver);
+        assert_eq!((rect.x(), rect.y(), rect.size()), (0, 0, (100, 80)));
+        assert_eq!(ocr_region(1.0).whole_image_selection(), None);
     }
 }

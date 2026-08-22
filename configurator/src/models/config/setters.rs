@@ -258,6 +258,11 @@ impl ConfigDraft {
             ToggleField::CaptureEnabled => self.capture_enabled = value,
             ToggleField::CaptureCopyToClipboard => self.capture_copy_to_clipboard = value,
             ToggleField::CaptureExitAfter => self.capture_exit_after = value,
+            ToggleField::CaptureRegionShowSizeReadout => {
+                self.capture_region_show_size_readout = value;
+            }
+            ToggleField::CaptureRegionShowLoupe => self.capture_region_show_loupe = value,
+            ToggleField::CaptureRegionShowLegend => self.capture_region_show_legend = value,
             ToggleField::ExportPdfLabelsEnabled => self.export_pdf_labels_enabled = value,
             ToggleField::ExportPdfLabelBackgroundEnabled => {
                 self.export_pdf_label_background_enabled = value;

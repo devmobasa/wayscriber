@@ -39,6 +39,38 @@ fn load_parses_xdg_focus_loss_behavior_stay() {
 }
 
 #[test]
+fn region_capture_defaults_and_explicit_values_round_trip() {
+    let defaults: Config = toml::from_str("").expect("empty config should use defaults");
+    assert_eq!(defaults.capture.region.picker, RegionPicker::Native);
+    assert!(defaults.capture.region.show_size_readout);
+    assert!(!defaults.capture.region.show_loupe);
+    assert!(defaults.capture.region.show_legend);
+
+    let config: Config = toml::from_str(
+        "[capture.region]\npicker = 'slurp'\nshow_size_readout = false\nshow_loupe = true\nshow_legend = false\n",
+    )
+    .expect("supported region capture settings should parse");
+    assert_eq!(config.capture.region.picker, RegionPicker::Slurp);
+    assert!(!config.capture.region.show_size_readout);
+    assert!(config.capture.region.show_loupe);
+    assert!(!config.capture.region.show_legend);
+
+    let serialized = toml::to_string(&config).expect("region capture settings serialize");
+    let reloaded: Config = toml::from_str(&serialized).expect("serialized settings reload");
+    assert_eq!(reloaded.capture.region.picker, RegionPicker::Slurp);
+    assert!(!reloaded.capture.region.show_size_readout);
+    assert!(reloaded.capture.region.show_loupe);
+    assert!(!reloaded.capture.region.show_legend);
+}
+
+#[test]
+fn region_capture_rejects_unknown_picker_values() {
+    let error = toml::from_str::<Config>("[capture.region]\npicker = 'automatic'\n")
+        .expect_err("unknown region picker should fail");
+    assert!(error.to_string().contains("unknown variant"));
+}
+
+#[test]
 fn ui_theme_defaults_to_auto_and_parses_explicit_values() {
     let default_config: Config = toml::from_str("").expect("empty config should use defaults");
     assert_eq!(default_config.ui.theme, UiTheme::Auto);

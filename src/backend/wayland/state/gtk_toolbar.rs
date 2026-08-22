@@ -12,6 +12,19 @@ use crate::toolbar_gtk::{GtkToolbarBridge, GtkToolbarFeedback, GtkToolbarUpdate}
 
 fn gtk_toolbar_feedback_blocked(input_state: &crate::input::InputState) -> bool {
     input_state.command_palette_is_engaged()
+        || (input_state.region_is_engaged()
+            && input_state
+                .region_state()
+                .purpose()
+                .is_some_and(|purpose| purpose.is_capture()))
+}
+
+fn gtk_toolbar_top_visible(
+    requested: bool,
+    unmap_suppressed: bool,
+    capture_picker_suppressed: bool,
+) -> bool {
+    requested && !unmap_suppressed && !capture_picker_suppressed
 }
 
 fn acknowledge_blocked_gtk_drag_feedback(top_seq: &mut u64, feedback: &GtkToolbarFeedback) {
@@ -213,8 +226,13 @@ impl WaylandState {
         // snapshots. Other suppression and light passthrough still unmap.
         let capture_suppressed = self.data.overlay_suppression.requires_capture_barrier();
         let unmap_suppressed = self.overlay_passthrough_requested() && !capture_suppressed;
+        let capture_picker_suppressed = self.capture_picker_chrome_suppressed();
         let update = GtkToolbarUpdate {
-            top_visible: self.input_state.toolbar_top_visible() && !unmap_suppressed,
+            top_visible: gtk_toolbar_top_visible(
+                self.input_state.toolbar_top_visible(),
+                unmap_suppressed,
+                capture_picker_suppressed,
+            ),
             top_offset: (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y),
             top_offset_seq: self.data.gtk_top_offset_seq,
             top_base_x: self.gtk_top_base_x(),
@@ -276,6 +294,28 @@ mod modal_tests {
         input_state.toggle_command_palette();
         assert!(input_state.begin_keybinding_capture(Action::Undo));
         assert!(gtk_toolbar_feedback_blocked(&input_state));
+    }
+
+    #[test]
+    fn capture_picker_blocks_feedback_but_ocr_does_not() {
+        use crate::input::state::RegionPurposeTag;
+
+        let mut input_state = make_test_input_state();
+        input_state.activate_region(RegionPurposeTag::Ocr, 1);
+        assert!(!gtk_toolbar_feedback_blocked(&input_state));
+
+        input_state.cancel_region_ui_only();
+        input_state.activate_region(RegionPurposeTag::CaptureDeliver, 2);
+        assert!(gtk_toolbar_feedback_blocked(&input_state));
+    }
+
+    #[test]
+    fn capture_picker_hides_gtk_toolbar_without_mutating_requested_visibility() {
+        let requested = true;
+        assert!(!gtk_toolbar_top_visible(requested, false, true));
+        assert!(gtk_toolbar_top_visible(requested, false, false));
+        assert!(!gtk_toolbar_top_visible(requested, true, false));
+        assert!(requested, "the persisted/live request remains untouched");
     }
 
     #[test]

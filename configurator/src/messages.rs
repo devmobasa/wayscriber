@@ -11,12 +11,12 @@ use crate::models::{
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
     PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField,
-    RecorderDeviceKind, ReducedMotionOption, RenderProfileExportOption, RenderProfileMappingSide,
-    RenderProfileTextField, SessionCatalogActionResult, SessionCatalogItem,
-    SessionCompressionOption, SessionStorageModeOption, ShortcutManagerFilter, ShortcutManagerSort,
-    StatusPositionOption, TabId, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
-    ToolbarOverrideField, ToolbarRebindModifierOption, UiTabId, UiThemeOption,
-    ZoomChipDisplayOption,
+    RecorderDeviceKind, ReducedMotionOption, RegionPickerOption, RenderProfileExportOption,
+    RenderProfileMappingSide, RenderProfileTextField, SessionCatalogActionResult,
+    SessionCatalogItem, SessionCompressionOption, SessionStorageModeOption, ShortcutManagerFilter,
+    ShortcutManagerSort, StatusPositionOption, TabId, TextField, ToggleField, ToolOption,
+    ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption, UiTabId,
+    UiThemeOption, ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -157,6 +157,7 @@ pub enum Message {
     SessionCompressionChanged(SessionCompressionOption),
     PresenterToolBehaviorChanged(PresenterToolBehaviorOption),
     PresenterToolbarModeChanged(PresenterToolbarModeOption),
+    CaptureRegionPickerChanged(RegionPickerOption),
     ExportPdfPageSizeChanged(PdfPageSizeOption),
     ExportPdfOrientationChanged(PdfOrientationOption),
     ExportPdfFitChanged(PdfFitModeOption),

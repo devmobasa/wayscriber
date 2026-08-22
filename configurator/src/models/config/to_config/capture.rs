@@ -24,6 +24,10 @@ impl ConfigDraft {
         }
         config.capture.copy_to_clipboard = self.capture_copy_to_clipboard;
         config.capture.exit_after_capture = self.capture_exit_after;
+        config.capture.region.picker = self.capture_region_picker.to_picker();
+        config.capture.region.show_size_readout = self.capture_region_show_size_readout;
+        config.capture.region.show_loupe = self.capture_region_show_loupe;
+        config.capture.region.show_legend = self.capture_region_show_legend;
         match validate_ocr_languages(&self.capture_ocr_languages) {
             Ok(languages) => config.capture.ocr_languages = languages,
             Err(reason) => errors.push(FormError::new(

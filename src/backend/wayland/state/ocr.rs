@@ -15,7 +15,8 @@ use crate::ocr::{OcrFailure, OcrLanguages, OcrPoll, OcrRequest, OcrSubmitError, 
 use super::WaylandState;
 use super::acquisition::report_screen_source_activation_rejected_to;
 use super::region_capture::{
-    ActiveScreenRegion, FreezeOwnership, RegionSelectionFinalize, finalize_region_selection_event,
+    ActiveScreenRegion, FreezeOwnership, RegionOwnerLoss, RegionSelectionFinalize,
+    finalize_region_selection_event,
 };
 use super::screen_image::{
     CropError, DisplayedScreenImage, ScreenSourceEntry, copy_image_rect, displayed_screen_image,
@@ -23,6 +24,21 @@ use super::screen_image::{
 };
 
 const TOAST_SOURCE: &str = "ocr";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ActiveRegionCancelTarget {
+    None,
+    Ocr,
+    Capture,
+}
+
+fn active_region_cancel_target(purpose: Option<RegionPurposeTag>) -> ActiveRegionCancelTarget {
+    match purpose {
+        Some(RegionPurposeTag::Ocr) => ActiveRegionCancelTarget::Ocr,
+        Some(purpose) if purpose.is_capture() => ActiveRegionCancelTarget::Capture,
+        Some(_) | None => ActiveRegionCancelTarget::None,
+    }
+}
 
 impl WaylandState {
     /// Drain a `Copy text from screen` request into the region selector.
@@ -241,6 +257,22 @@ impl WaylandState {
         true
     }
 
+    pub(in crate::backend::wayland) fn cancel_active_region_selector(&mut self) -> bool {
+        match active_region_cancel_target(self.input_state.region_state().purpose()) {
+            ActiveRegionCancelTarget::Ocr => self.cancel_ocr(),
+            ActiveRegionCancelTarget::Capture => self.cancel_region_capture(),
+            ActiveRegionCancelTarget::None => false,
+        }
+    }
+
+    pub(in crate::backend::wayland) fn cancel_region_for_toolbar_interaction(&mut self) -> bool {
+        match active_region_cancel_target(self.input_state.region_state().purpose()) {
+            ActiveRegionCancelTarget::Ocr => self.cancel_ocr_for_toolbar_interaction(),
+            ActiveRegionCancelTarget::Capture => self.cancel_region_capture(),
+            ActiveRegionCancelTarget::None => false,
+        }
+    }
+
     /// Discard a region because the device dragging it went away — the pen left
     /// proximity, the touch sequence was cancelled. Devices that are not
     /// dragging have nothing to withdraw, so this leaves the selector armed for
@@ -249,10 +281,15 @@ impl WaylandState {
         &mut self,
         source: RegionInputSource,
     ) -> bool {
-        if !self.input_state.region_selection_is_owned_by(source) {
-            return false;
+        match self.region_owner_lost(source) {
+            RegionOwnerLoss::NotOwned => false,
+            RegionOwnerLoss::RearmedCapture => true,
+            RegionOwnerLoss::Cancel(RegionPurposeTag::Ocr) => self.cancel_ocr(),
+            RegionOwnerLoss::Cancel(purpose) => {
+                debug_assert!(purpose.is_capture());
+                self.cancel_region_capture()
+            }
         }
-        self.cancel_ocr()
     }
 
     /// End the drag: own the selected pixels, release an OCR-created freeze,
@@ -276,7 +313,21 @@ impl WaylandState {
         ) {
             RegionSelectionFinalize::NotOwned => return false,
             RegionSelectionFinalize::Rearmed => return true,
-            RegionSelectionFinalize::Selected(rect) => rect,
+            RegionSelectionFinalize::Selected {
+                purpose: RegionPurposeTag::Ocr,
+                rect,
+            } => rect,
+            RegionSelectionFinalize::Selected {
+                purpose: RegionPurposeTag::CaptureDeliver,
+                rect,
+            } => {
+                self.submit_region_capture(rect);
+                return true;
+            }
+            RegionSelectionFinalize::Selected {
+                purpose: RegionPurposeTag::CaptureInteractive,
+                ..
+            } => return false,
         };
 
         // The crop is taken while the capture is still held: releasing first
@@ -486,6 +537,27 @@ mod tests {
         assert_eq!(
             normalized_rect((10.0, 20.0), (30.0, 40.0)),
             (10.0, 20.0, 20.0, 20.0)
+        );
+    }
+
+    #[test]
+    fn active_region_cancellation_routes_every_selector_purpose_to_its_owner() {
+        assert_eq!(
+            active_region_cancel_target(Some(RegionPurposeTag::Ocr)),
+            ActiveRegionCancelTarget::Ocr
+        );
+        for purpose in [
+            RegionPurposeTag::CaptureDeliver,
+            RegionPurposeTag::CaptureInteractive,
+        ] {
+            assert_eq!(
+                active_region_cancel_target(Some(purpose)),
+                ActiveRegionCancelTarget::Capture
+            );
+        }
+        assert_eq!(
+            active_region_cancel_target(None),
+            ActiveRegionCancelTarget::None
         );
     }
 

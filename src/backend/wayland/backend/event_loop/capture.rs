@@ -140,6 +140,12 @@ pub(super) fn handle_pending_actions(
     // requests that produced it; the worker also wakes the loop when it
     // completes, so the answer is not left waiting for unrelated input.
     state.drain_config_edit_completions();
+    // A native region action queues its frozen acquisition. Drain that action
+    // before the established frozen-toggle slot so acquisition starts in this
+    // pass instead of waiting for an unrelated wake or protocol event.
+    if let Some(action) = take_pending_region_capture_action(&mut state.input_state) {
+        state.handle_capture_action(action);
+    }
     handle_frozen_toggle(state);
     state.drain_pending_board_runtime_ui_actions();
 
@@ -184,6 +190,21 @@ enum FrozenUserToggleAction {
 struct FrozenTogglePassDecision {
     user_action: FrozenUserToggleAction,
     queued_to_start: Option<AcquisitionRecord>,
+}
+
+fn take_pending_region_capture_action(
+    input_state: &mut crate::input::InputState,
+) -> Option<Action> {
+    match input_state.take_pending_backend_action() {
+        Some(PendingBackendAction::Screenshot(action)) if action.is_region_capture() => {
+            Some(action)
+        }
+        Some(pending) => {
+            input_state.set_pending_backend_action(pending);
+            None
+        }
+        None => None,
+    }
 }
 
 fn frozen_toggle_pass_decision(
@@ -570,6 +591,7 @@ mod tests {
         for owner in [
             ScreenAcquisitionOwner::Eyedropper,
             ScreenAcquisitionOwner::Ocr,
+            ScreenAcquisitionOwner::RegionCapture,
         ] {
             let modal = record(owner, AcquisitionStage::Queued);
 
@@ -585,15 +607,21 @@ mod tests {
 
     #[test]
     fn started_modal_ignores_same_batch_user_toggle_without_starting_another_capture() {
-        let modal = record(ScreenAcquisitionOwner::Ocr, AcquisitionStage::Started);
+        for owner in [
+            ScreenAcquisitionOwner::Ocr,
+            ScreenAcquisitionOwner::RegionCapture,
+        ] {
+            let modal = record(owner, AcquisitionStage::Started);
 
-        let decision = frozen_toggle_pass_decision(true, Some(modal), false, true);
+            let decision = frozen_toggle_pass_decision(true, Some(modal), false, true);
 
-        assert_eq!(
-            decision.user_action,
-            FrozenUserToggleAction::IgnoreInProgress
-        );
-        assert_eq!(decision.queued_to_start, None);
+            assert_eq!(
+                decision.user_action,
+                FrozenUserToggleAction::IgnoreInProgress,
+                "owner={owner:?}"
+            );
+            assert_eq!(decision.queued_to_start, None, "owner={owner:?}");
+        }
     }
 
     #[test]
@@ -614,6 +642,34 @@ mod tests {
                 user_action: FrozenUserToggleAction::IgnoreInProgress,
                 queued_to_start: Some(user),
             }
+        );
+    }
+
+    #[test]
+    fn region_capture_action_is_partitioned_before_the_frozen_drain() {
+        let mut input = crate::input::state::test_support::make_test_input_state();
+        input.set_pending_backend_action(PendingBackendAction::Screenshot(
+            Action::CaptureClipboardSelection,
+        ));
+        assert_eq!(
+            take_pending_region_capture_action(&mut input),
+            Some(Action::CaptureClipboardSelection)
+        );
+        assert_eq!(input.take_pending_backend_action(), None);
+
+        input.set_pending_backend_action(PendingBackendAction::Screenshot(
+            Action::CaptureClipboardFull,
+        ));
+        assert_eq!(
+            take_pending_region_capture_action(&mut input),
+            None,
+            "non-region screenshots keep their established drain position"
+        );
+        assert_eq!(
+            input.take_pending_backend_action(),
+            Some(PendingBackendAction::Screenshot(
+                Action::CaptureClipboardFull
+            ))
         );
     }
 }

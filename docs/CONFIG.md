@@ -1399,13 +1399,52 @@ exit_after_capture = false
 # Languages for "Copy text from screen" (OCR), in Tesseract's plus-separated
 # form. The matching Tesseract language packages must be installed.
 ocr_languages = "eng"
+
+[capture.region]
+# "native" draws Wayscriber's picker over a frozen desktop image.
+# "slurp" keeps the external selector. Native falls back to slurp when no
+# screen capture backend is available. Native selections are PNG; explicit
+# slurp selections keep [capture].format.
+picker = "native"
+
+# Pointer position while idle; W x H in export pixels while dragging
+show_size_readout = true
+
+# Accepted and saved now, but the picker does not render the loupe yet
+show_loupe = false
+
+# Short hotkey guide shown until the first drag
+show_legend = true
 ```
 
 **Tips:**
 - Set `copy_to_clipboard = false` if you prefer file-only captures.
 - Clipboard-only shortcuts ignore the save directory automatically.
 - `filename_template` must be a single file name (no `/` or `..`). `format` is `png`, `jpg`, or `jpeg`.
-- `wl-clipboard`, `grim`, and `slurp` are installed automatically by deb/rpm/AUR packages. For source/tarball installs, add them manually; otherwise wayscriber falls back to `xdg-desktop-portal`.
+- `wl-clipboard`, `grim`, and `slurp` are installed automatically by deb/rpm/AUR packages. For source/tarball installs, add them manually. Wayscriber uses its native region picker by default and falls back to `slurp` when it cannot obtain the desktop image; other screenshot capture paths can fall back to `xdg-desktop-portal`.
+
+#### Region picker
+
+Bound region screenshot actions use the native picker by default. It draws over
+the active output's frozen desktop image, shows a crosshair and optional size
+readout/legend, and sends the selected pixels to the shortcut's existing
+clipboard or file destination. If no screen capture backend is available, it
+falls back to `slurp`.
+
+- Set `picker = "slurp"` to always use the external selector. This is also the
+  option for selecting a region on a monitor other than Wayscriber's active
+  output.
+- `show_size_readout` shows pointer coordinates before the drag and the
+  selected width and height in exported image pixels during it.
+- `show_legend` shows the short hotkey guide until the first drag.
+- `show_loupe` is accepted and preserved in configuration, but the native
+  picker does not render the loupe yet.
+- Native region screenshot actions encode PNG and use a `.png` filename even
+  when `[capture].format` is `jpg` or `jpeg`; this prevents PNG bytes from being
+  written under a JPEG extension. An explicit `picker = "slurp"` keeps the
+  configured format used by the legacy `slurp`/`grim` path.
+- A configuration reload affects the next region selection; it does not change
+  a picker that is already open.
 
 #### Copy text from screen (OCR)
 

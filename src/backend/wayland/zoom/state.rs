@@ -52,7 +52,6 @@ impl ZoomSourceTerminal {
 pub(in crate::backend::wayland) enum ZoomWaiterOwner {
     Eyedropper,
     Ocr,
-    #[allow(dead_code)] // Phase 1 connects the native region-capture owner.
     RegionCapture,
 }
 
