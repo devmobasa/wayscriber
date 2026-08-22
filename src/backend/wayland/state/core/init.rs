@@ -113,6 +113,8 @@ impl WaylandState {
         let clipboard_text_copy =
             RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
         let clipboard_text_paste =
+            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
+        let window_query =
             RuntimeOperationController::new(runtime_operation_ids, runtime_wake.clone());
         let ocr = crate::ocr::OcrController::new(runtime_wake.clone());
 
@@ -148,6 +150,7 @@ impl WaylandState {
             pending_text_copy: Default::default(),
             clipboard_text_paste,
             pending_text_paste: Default::default(),
+            window_query,
             ocr,
             gtk_toolbar: None,
             onboarding,

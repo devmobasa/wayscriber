@@ -53,7 +53,8 @@ pub(super) fn validate(
             "grim" | "hyprctl" | "slurp" | "wl-copy" | "wl-paste" | "zenity" | "kdialog"
         ),
         HelperKind::Grim => basename == "grim",
-        HelperKind::Hyprctl => basename == "hyprctl",
+        HelperKind::Hyprctl | HelperKind::HyprctlActiveWindow => basename == "hyprctl",
+        HelperKind::Swaymsg => basename == "swaymsg",
         HelperKind::Slurp => basename == "slurp",
         HelperKind::Tesseract => basename == "tesseract",
         HelperKind::WlPaste => basename == "wl-paste",
@@ -79,6 +80,13 @@ pub(super) fn validate(
     if !allowed {
         bail!("program {basename:?} is not allowed for helper kind {kind:?}");
     }
+    if matches!(
+        kind,
+        HelperKind::Hyprctl | HelperKind::HyprctlActiveWindow | HelperKind::Swaymsg
+    ) && (!environment.is_empty() || !input.is_empty())
+    {
+        bail!("window geometry helpers do not accept environment overrides or input");
+    }
     validate_arguments(kind, &basename, arguments)?;
     for (name, _) in environment {
         let name = std::str::from_utf8(&name.0)?;
@@ -97,10 +105,36 @@ pub(super) fn validate(
     Ok(())
 }
 
-/// Cheap exec-gate checks for helpers whose safety relies on one indispensable
-/// argument. Complete argv content remains the caller's policy.
+/// Helper-specific argv gates.
+///
+/// Window-geometry helpers use exact read-only query vectors. Other helpers
+/// below retain their established indispensable-argument policy.
 fn validate_arguments(kind: HelperKind, basename: &str, arguments: &[OsWire]) -> Result<()> {
     match kind {
+        HelperKind::Hyprctl => {
+            if !arguments_equal(arguments, &[b"clients", b"-j"])
+                && !arguments_equal(arguments, &[b"monitors", b"-j"])
+            {
+                bail!("hyprctl window geometry is restricted to JSON clients or monitors queries");
+            }
+        }
+        HelperKind::HyprctlActiveWindow => {
+            if !arguments_equal(arguments, &[b"activewindow", b"-j"])
+                && !arguments_equal(arguments, &[b"monitors", b"-j"])
+            {
+                bail!("active-window hyprctl is restricted to its two JSON queries");
+            }
+        }
+        HelperKind::Swaymsg => {
+            let expected = [b"-t".as_slice(), b"get_tree".as_slice(), b"-r".as_slice()];
+            if arguments
+                .iter()
+                .map(|argument| argument.0.as_slice())
+                .ne(expected)
+            {
+                bail!("swaymsg helper is restricted to a raw get_tree query");
+            }
+        }
         HelperKind::UpdateFetcher => {
             let required_first = if basename == "curl" {
                 b"--disable".as_slice()
@@ -167,6 +201,14 @@ fn validate_arguments(kind: HelperKind, basename: &str, arguments: &[OsWire]) ->
         _ => {}
     }
     Ok(())
+}
+
+fn arguments_equal(arguments: &[OsWire], expected: &[&[u8]]) -> bool {
+    arguments.len() == expected.len()
+        && arguments
+            .iter()
+            .zip(expected)
+            .all(|(argument, expected)| argument.0.as_slice() == *expected)
 }
 
 fn is_curl_config_argument(argument: &[u8]) -> bool {

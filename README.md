@@ -754,6 +754,16 @@ readout, hotkey legend, and optional magnified pixel loupe are configurable
 under `[capture.region]`. Region captures are encoded and
 named as PNG even when the general screenshot format is set to JPEG. An
 explicit `picker = "slurp"` keeps the configured legacy screenshot format.
+On Hyprland and Sway, press <kbd>Space</kbd> in the native picker to switch
+between free-area selection and current-workspace window selection. Point and
+click a window, or use <kbd>Super</kbd>+Arrow and <kbd>Enter</kbd>. The window
+control is omitted when the compositor cannot provide reliable geometry.
+It is also omitted when the picker reuses an older user Freeze or Zoom image;
+window bounds are offered only with the fresh auto-freeze created for that
+picker. The provider result is checked against that source's output and layout
+identity before candidates are shown; a mismatch simply leaves window mode
+unavailable. Wayland has no portable workspace identity at the freeze boundary,
+so candidates reflect the workspace visible when the compositor query runs.
 `capture_region_interactive` is available from the command palette and is
 unbound by default; bind it in the configurator or under `[keybindings]`. It
 always uses the native picker so Review cannot be bypassed by an external
@@ -768,6 +778,9 @@ exports** (or <kbd>D</kbd>) starts from the configured default and can override
 it for that one Copy, Save, or Both action. Board always inserts the original
 crop so existing annotations are not baked into a duplicate image on the same
 board.
+The native region picker shows those committed drawings over its frozen desktop
+while you select, so the visible preview matches the annotated export; toggling
+drawings off in Review immediately returns the preview to raw desktop pixels.
 On a transparent board, full-screen and legacy `slurp` captures retain the
 desktop behind the annotations; a solid board retains its canvas background.
 The native region picker always composites committed drawings over its frozen

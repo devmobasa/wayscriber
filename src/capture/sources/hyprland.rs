@@ -75,7 +75,7 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
 
         // Query Hyprland for the active window geometry
         let output = run_helper(
-            HelperKind::Hyprctl,
+            HelperKind::HyprctlActiveWindow,
             "hyprctl",
             &["activewindow", "-j"],
             Duration::from_secs(5),
@@ -255,7 +255,7 @@ fn hyprland_monitor_scale(
     }
 
     let output = run_helper(
-        HelperKind::Hyprctl,
+        HelperKind::HyprctlActiveWindow,
         "hyprctl",
         &["monitors", "-j"],
         Duration::from_secs(5),

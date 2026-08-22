@@ -122,7 +122,7 @@ impl WaylandState {
         self.set_pending_toast_press(None);
         self.set_pending_status_hud_press(false);
         self.set_pending_zoom_chip_press(ZoomChipPress::None);
-        self.set_suppress_next_release(false);
+        self.clear_suppressed_release_from(RegionInputSource::Touch);
         self.input_state
             .clear_help_overlay_press_for(HelpOverlayPressSource::Touch);
 
@@ -274,7 +274,7 @@ impl WaylandState {
                 screen_width,
                 screen_height,
             ) {
-                self.set_suppress_next_release(true);
+                self.suppress_next_release_from(RegionInputSource::Touch);
             }
             return TouchTarget::Other;
         }
@@ -456,6 +456,9 @@ impl WaylandState {
         target: TouchTarget,
     ) {
         if self.input_state.region_is_active() {
+            if self.take_suppressed_release_from(RegionInputSource::Touch) {
+                return;
+            }
             if let Some((x, y)) = self.touch_screen_position(surface, position, target) {
                 self.finish_region_selection(RegionInputSource::Touch, x, y);
             } else {
@@ -464,7 +467,7 @@ impl WaylandState {
             return;
         }
 
-        if self.take_suppress_next_release() {
+        if self.take_suppressed_release_from(RegionInputSource::Touch) {
             self.set_pending_toast_press(None);
             self.set_pending_status_hud_press(false);
             self.set_pending_zoom_chip_press(ZoomChipPress::None);

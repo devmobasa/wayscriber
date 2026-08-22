@@ -35,6 +35,8 @@ pub(crate) enum HelperKind {
     CapabilityProbe,
     Grim,
     Hyprctl,
+    HyprctlActiveWindow,
+    Swaymsg,
     Slurp,
     Tesseract,
     WlPaste,

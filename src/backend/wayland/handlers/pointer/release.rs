@@ -25,6 +25,11 @@ impl WaylandState {
 
         if self.input_state.region_is_active() {
             if button == BTN_LEFT {
+                if self
+                    .take_suppressed_release_from(crate::input::state::RegionInputSource::Pointer)
+                {
+                    return;
+                }
                 let screen_position = if on_toolbar {
                     self.toolbar_surface_screen_coords(&event.surface, event.position)
                 } else {
@@ -42,7 +47,7 @@ impl WaylandState {
         }
 
         // Swallow releases after modal clicks (e.g., palette dismiss)
-        if self.take_suppress_next_release() {
+        if self.take_suppressed_release_from(crate::input::state::RegionInputSource::Pointer) {
             self.set_pending_toast_press(None);
             self.set_pending_status_hud_press(false);
             self.set_pending_zoom_chip_press(ZoomChipPress::None);

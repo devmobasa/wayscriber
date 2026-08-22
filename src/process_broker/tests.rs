@@ -142,6 +142,140 @@ fn update_fetcher_manifest_allows_only_curl_and_wget() {
 }
 
 #[test]
+fn swaymsg_manifest_allows_only_tree_queries() {
+    let program = super::wire::OsWire::from_os(OsStr::new("/usr/bin/swaymsg")).unwrap();
+    super::manifest::validate(
+        HelperKind::Swaymsg,
+        &program,
+        &wire_arguments(&["-t", "get_tree", "-r"]),
+        &[],
+        &[],
+    )
+    .unwrap();
+
+    for arguments in [
+        &[][..],
+        &["-t", "get_outputs", "-r"][..],
+        &["-t", "command", "exit"][..],
+        &["-r", "-t", "get_tree"][..],
+    ] {
+        assert!(
+            super::manifest::validate(
+                HelperKind::Swaymsg,
+                &program,
+                &wire_arguments(arguments),
+                &[],
+                &[],
+            )
+            .is_err(),
+            "swaymsg accepted arguments {arguments:?}"
+        );
+    }
+
+    let unrelated = super::wire::OsWire::from_os(OsStr::new("/usr/bin/sh")).unwrap();
+    assert!(
+        super::manifest::validate(
+            HelperKind::Swaymsg,
+            &unrelated,
+            &wire_arguments(&["-t", "get_tree", "-r"]),
+            &[],
+            &[],
+        )
+        .is_err()
+    );
+    assert!(
+        super::manifest::validate(
+            HelperKind::Swaymsg,
+            &program,
+            &wire_arguments(&["-t", "get_tree", "-r"]),
+            &[],
+            b"command payload",
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn hyprctl_window_geometry_manifest_allows_only_clients_and_monitors_json_queries() {
+    let program = super::wire::OsWire::from_os(OsStr::new("/usr/bin/hyprctl")).unwrap();
+    for arguments in [&["clients", "-j"][..], &["monitors", "-j"][..]] {
+        super::manifest::validate(
+            HelperKind::Hyprctl,
+            &program,
+            &wire_arguments(arguments),
+            &[],
+            &[],
+        )
+        .unwrap();
+    }
+
+    for arguments in [
+        &[][..],
+        &["clients"][..],
+        &["activewindow", "-j"][..],
+        &["-j", "clients"][..],
+        &["clients", "-j", "extra"][..],
+        &["dispatch", "exit"][..],
+    ] {
+        assert!(
+            super::manifest::validate(
+                HelperKind::Hyprctl,
+                &program,
+                &wire_arguments(arguments),
+                &[],
+                &[],
+            )
+            .is_err(),
+            "window-geometry hyprctl accepted arguments {arguments:?}"
+        );
+    }
+
+    assert!(
+        super::manifest::validate(
+            HelperKind::Hyprctl,
+            &program,
+            &wire_arguments(&["clients", "-j"]),
+            &[],
+            b"command payload",
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn active_window_hyprctl_manifest_preserves_only_its_existing_queries() {
+    let program = super::wire::OsWire::from_os(OsStr::new("hyprctl")).unwrap();
+    for arguments in [&["activewindow", "-j"][..], &["monitors", "-j"][..]] {
+        super::manifest::validate(
+            HelperKind::HyprctlActiveWindow,
+            &program,
+            &wire_arguments(arguments),
+            &[],
+            &[],
+        )
+        .unwrap();
+    }
+
+    for arguments in [
+        &["clients", "-j"][..],
+        &["activewindow"][..],
+        &["activewindow", "-j", "extra"][..],
+    ] {
+        assert!(
+            super::manifest::validate(
+                HelperKind::HyprctlActiveWindow,
+                &program,
+                &wire_arguments(arguments),
+                &[],
+                &[],
+            )
+            .is_err(),
+            "active-window hyprctl accepted arguments {arguments:?}"
+        );
+    }
+}
+
+#[test]
 fn desktop_open_manifest_accepts_one_path_or_trusted_url_without_a_shell() {
     for target in [
         "/tmp/Wayscriber Captures",

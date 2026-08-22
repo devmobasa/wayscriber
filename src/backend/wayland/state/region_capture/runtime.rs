@@ -1,6 +1,19 @@
 use super::*;
 
 impl WaylandState {
+    pub(in crate::backend::wayland::state) fn retire_region_selection_owner(
+        &mut self,
+        owner: Option<RegionInputSource>,
+    ) {
+        match owner {
+            Some(source @ (RegionInputSource::Pointer | RegionInputSource::Touch)) => {
+                self.suppress_next_release_from(source);
+            }
+            Some(RegionInputSource::Stylus) => self.retire_stylus_contact(),
+            None => {}
+        }
+    }
+
     pub(in crate::backend::wayland) fn handle_measure_mode_action(&mut self) {
         match measure_mode_transition(
             self.input_state.region_state().purpose(),
@@ -141,11 +154,13 @@ impl WaylandState {
             include_drawings,
         });
         self.input_state.activate_region(purpose, generation);
+        self.start_region_window_query(purpose, generation, token, freeze_ownership);
         self.debug_assert_screen_region_invariant();
         true
     }
 
     pub(in crate::backend::wayland::state) fn clear_screen_region_ui_only(&mut self) {
+        self.clear_region_window_snap();
         self.data.active_screen_region = None;
         self.input_state.cancel_region_ui_only();
         self.debug_assert_screen_region_invariant();
@@ -158,6 +173,9 @@ impl WaylandState {
         y: f64,
     ) -> bool {
         self.cancel_screen_modals_if_source_changed();
+        if self.begin_region_window_choice(owner, (x, y)) {
+            return true;
+        }
         begin_region_selection_event(
             &mut self.data.active_screen_region,
             &mut self.input_state,
@@ -173,6 +191,9 @@ impl WaylandState {
         y: f64,
     ) {
         self.cancel_screen_modals_if_source_changed();
+        if self.update_region_window_hover((x, y)) {
+            return;
+        }
         update_region_selection_event(
             &mut self.data.active_screen_region,
             &mut self.input_state,
@@ -184,6 +205,24 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn region_selection_geometry(
         &self,
     ) -> Option<RegionSelectionGeometry> {
+        if let Some(rect) = self.highlighted_region_window_rect()
+            && let Some(ActiveScreenRegion::Ready {
+                purpose, source, ..
+            }) = self.data.active_screen_region
+        {
+            let display = super::super::screen_image::screen_rect_for_image_rect(&source, rect);
+            return Some(RegionSelectionGeometry::authoritative(
+                purpose,
+                rect,
+                RegionSelection {
+                    start: (f64::from(display.x), f64::from(display.y)),
+                    end: (
+                        f64::from(display.x + display.width),
+                        f64::from(display.y + display.height),
+                    ),
+                },
+            ));
+        }
         self.data
             .active_screen_region
             .and_then(ActiveScreenRegion::selection_geometry)
@@ -273,6 +312,12 @@ impl WaylandState {
         &self,
         pointer: (f64, f64),
     ) -> Option<RegionPickerMeasurement> {
+        if let Some(rect) = self.highlighted_region_window_rect() {
+            return Some(RegionPickerMeasurement::Size {
+                width: rect.width(),
+                height: rect.height(),
+            });
+        }
         self.data
             .active_screen_region
             .and_then(|region| region.picker_measurement(pointer))

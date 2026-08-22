@@ -1440,6 +1440,10 @@ ocr_languages = "eng"
 # screen capture backend is available.
 # Native region selections are encoded and named as PNG. The explicit "slurp"
 # picker keeps [capture].format for compatibility with the legacy grim path.
+# On Hyprland and Sway, native selection also offers Space-triggered window
+# snapping for visible windows on the active output and workspace when the
+# picker creates a fresh auto-freeze (not when reusing an older Freeze/Zoom).
+# Candidates reflect the workspace visible when the compositor query runs.
 picker = "native"
 
 # Pointer-side readout: position while idle, W x H in export pixels while dragging.

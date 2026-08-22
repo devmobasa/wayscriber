@@ -14,12 +14,57 @@ const PANEL_HEIGHT: f64 = 22.0;
 const PANEL_RADIUS: f64 = 6.0;
 const READOUT_FONT_SIZE: f64 = 12.0;
 const LEGEND_FONT_SIZE: f64 = 12.0;
-const LEGEND_TEXT: &str = "Drag to select   Shift: square   Ctrl+A: all   Esc: cancel";
+const AREA_LEGEND_TEXT: &str = "Drag to select   Shift: square   Ctrl+A: all   Esc: cancel";
+const AREA_WITH_WINDOWS_LEGEND_TEXT: &str =
+    "Drag to select   Shift: square   Ctrl+A: all   Space: window   Esc: cancel";
+const WINDOW_LEGEND_TEXT: &str =
+    "Click: select   Super+Arrows: choose   Enter: select   Space: area   Esc: cancel";
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct RegionCaptureWindowVisual<'a> {
+    pub available: bool,
+    pub active: bool,
+    pub targets: &'a [RegionSelection],
+    /// The pointer-hovered or keyboard-focused window candidate.
+    pub highlighted_target: Option<usize>,
+}
+
+impl RegionCaptureWindowVisual<'_> {
+    #[cfg(test)]
+    pub(crate) const fn disabled() -> Self {
+        Self {
+            available: false,
+            active: false,
+            targets: &[],
+            highlighted_target: None,
+        }
+    }
+
+    fn highlighted_selection(self) -> Option<RegionSelection> {
+        self.active
+            .then(|| {
+                self.highlighted_target
+                    .and_then(|index| self.targets.get(index).copied())
+            })
+            .flatten()
+    }
+}
+
+fn picker_legend_text(window: RegionCaptureWindowVisual<'_>) -> &'static str {
+    if window.active {
+        WINDOW_LEGEND_TEXT
+    } else if window.available {
+        AREA_WITH_WINDOWS_LEGEND_TEXT
+    } else {
+        AREA_LEGEND_TEXT
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct RegionCapturePickerVisual<'a> {
     pub selection: Option<RegionSelection>,
     pub pointer: (f64, f64),
+    /// Authoritative pixel coordinates or size supplied by the picker owner.
     pub measurement: Option<&'a str>,
     pub show_scrim: bool,
     pub show_legend: bool,
@@ -27,6 +72,7 @@ pub(crate) struct RegionCapturePickerVisual<'a> {
     pub action_bar: Option<RegionActionBar>,
     pub hovered_action: Option<RegionAction>,
     pub include_drawings: bool,
+    pub window: RegionCaptureWindowVisual<'a>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -168,11 +214,18 @@ pub(crate) fn render_region_capture_picker(
     let width = f64::from(screen_width);
     let height = f64::from(screen_height);
 
+    let highlighted_window = visual.window.highlighted_selection();
+    let effective_selection = if visual.window.active {
+        highlighted_window
+    } else {
+        visual.selection
+    };
+
     let _ = ctx.save();
     if visual.show_scrim {
         ctx.set_source_rgba(SCRIM.0, SCRIM.1, SCRIM.2, SCRIM.3);
         ctx.rectangle(0.0, 0.0, width, height);
-        if let Some(selection) = visual.selection {
+        if let Some(selection) = effective_selection {
             let (x, y, w, h) = normalized_rect(selection);
             ctx.rectangle(x, y, w, h);
             ctx.set_fill_rule(cairo::FillRule::EvenOdd);
@@ -181,11 +234,16 @@ pub(crate) fn render_region_capture_picker(
         ctx.set_fill_rule(cairo::FillRule::Winding);
     }
 
-    if let Some(selection) = visual.selection {
+    if visual.window.active {
+        draw_window_target_frames(ctx, visual.window);
+    }
+    if let Some(selection) = effective_selection {
         let (x, y, w, h) = normalized_rect(selection);
         draw_selection_frame(ctx, x, y, w, h);
     }
-    draw_crosshair(ctx, visual.pointer, (width, height));
+    if !visual.window.active {
+        draw_crosshair(ctx, visual.pointer, (width, height));
+    }
 
     if let Some(measurement) = visual.measurement {
         draw_pointer_panel(
@@ -197,8 +255,12 @@ pub(crate) fn render_region_capture_picker(
             cairo::FontWeight::Bold,
         );
     }
-    if visual.show_legend && visual.selection.is_none() {
-        draw_legend(ctx, (screen_width, screen_height));
+    if visual.show_legend && (visual.window.active || visual.selection.is_none()) {
+        draw_legend(
+            ctx,
+            (screen_width, screen_height),
+            picker_legend_text(visual.window),
+        );
     }
     if let Some(loupe) = visual.loupe {
         render_region_capture_loupe(ctx, (screen_width, screen_height), loupe, &mut sample_loupe);
@@ -243,6 +305,21 @@ fn draw_selection_frame(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
         ctx.move_to(corner_x + dx * arm, corner_y);
         ctx.line_to(corner_x, corner_y);
         ctx.line_to(corner_x, corner_y + dy * arm);
+        let _ = ctx.stroke();
+    }
+}
+
+fn draw_window_target_frames(ctx: &cairo::Context, window: RegionCaptureWindowVisual<'_>) {
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.34);
+    ctx.set_line_width(1.0);
+    for target in window.targets {
+        let (x, y, width, height) = normalized_rect(*target);
+        ctx.rectangle(
+            x + 0.5,
+            y + 0.5,
+            (width - 1.0).max(0.0),
+            (height - 1.0).max(0.0),
+        );
         let _ = ctx.stroke();
     }
 }
@@ -348,14 +425,14 @@ fn draw_pointer_panel(
     let _ = ctx.restore();
 }
 
-fn draw_legend(ctx: &cairo::Context, screen: (u32, u32)) {
+fn draw_legend(ctx: &cairo::Context, screen: (u32, u32), text: &str) {
     let extents = text_extents_for(
         ctx,
         "Sans",
         cairo::FontSlant::Normal,
         cairo::FontWeight::Normal,
         LEGEND_FONT_SIZE,
-        LEGEND_TEXT,
+        text,
     );
     let screen_width = f64::from(screen.0);
     let screen_height = f64::from(screen.1);
@@ -379,7 +456,7 @@ fn draw_legend(ctx: &cairo::Context, screen: (u32, u32)) {
     ctx.rectangle(x, y, width, height);
     ctx.clip();
     ctx.move_to(text_x, baseline);
-    let _ = ctx.show_text(LEGEND_TEXT);
+    let _ = ctx.show_text(text);
     let _ = ctx.restore();
 }
 
@@ -391,6 +468,37 @@ mod tests {
     fn size_readout_uses_export_pixel_units_and_multiplication_sign() {
         assert_eq!(capture_size_text((0, 0)), "0 × 0");
         assert_eq!(capture_size_text((900, 620)), "900 × 620");
+    }
+
+    #[test]
+    fn legend_only_advertises_supported_window_controls() {
+        assert_eq!(
+            picker_legend_text(RegionCaptureWindowVisual {
+                available: false,
+                active: false,
+                targets: &[],
+                highlighted_target: None,
+            }),
+            "Drag to select   Shift: square   Ctrl+A: all   Esc: cancel"
+        );
+        assert_eq!(
+            picker_legend_text(RegionCaptureWindowVisual {
+                available: true,
+                active: false,
+                targets: &[],
+                highlighted_target: None,
+            }),
+            "Drag to select   Shift: square   Ctrl+A: all   Space: window   Esc: cancel"
+        );
+        assert_eq!(
+            picker_legend_text(RegionCaptureWindowVisual {
+                available: true,
+                active: true,
+                targets: &[],
+                highlighted_target: None,
+            }),
+            "Click: select   Super+Arrows: choose   Enter: select   Space: area   Esc: cancel"
+        );
     }
 
     #[test]
@@ -445,6 +553,7 @@ mod tests {
                 action_bar: None,
                 hovered_action: None,
                 include_drawings: false,
+                window: RegionCaptureWindowVisual::disabled(),
             },
             |_x, _y| None,
         );
@@ -455,6 +564,140 @@ mod tests {
         let alpha = |x: usize, y: usize| data[y * stride + x * 4 + 3];
         assert!(alpha(2, 2) > 0, "outside the selection must be scrimmed");
         assert_eq!(alpha(20, 20), 0, "the selected pixels must remain clear");
+    }
+
+    #[test]
+    fn highlighted_window_is_cut_out_in_window_mode() {
+        let targets = [
+            RegionSelection {
+                start: (4.0, 4.0),
+                end: (14.0, 14.0),
+            },
+            RegionSelection {
+                start: (20.0, 20.0),
+                end: (36.0, 36.0),
+            },
+        ];
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 40, 40).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        render_region_capture_picker(
+            &ctx,
+            40,
+            40,
+            RegionCapturePickerVisual {
+                selection: None,
+                pointer: (28.0, 28.0),
+                measurement: None,
+                show_scrim: true,
+                show_legend: false,
+                loupe: None,
+                action_bar: None,
+                hovered_action: None,
+                include_drawings: false,
+                window: RegionCaptureWindowVisual {
+                    available: true,
+                    active: true,
+                    targets: &targets,
+                    highlighted_target: Some(1),
+                },
+            },
+            |_x, _y| None,
+        );
+        drop(ctx);
+        surface.flush();
+        let stride = surface.stride() as usize;
+        let data = surface.data().unwrap();
+        let alpha = |x: usize, y: usize| data[y * stride + x * 4 + 3];
+        assert!(alpha(1, 1) > 0, "outside windows remains scrimmed");
+        assert!(alpha(9, 9) > 0, "an unhighlighted window remains scrimmed");
+        assert_eq!(alpha(28, 28), 0, "highlighted window is the clear target");
+    }
+
+    #[test]
+    fn window_mode_omits_the_area_crosshair() {
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 40, 40).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        render_region_capture_picker(
+            &ctx,
+            40,
+            40,
+            RegionCapturePickerVisual {
+                selection: None,
+                pointer: (20.0, 20.0),
+                measurement: None,
+                show_scrim: false,
+                show_legend: false,
+                loupe: None,
+                action_bar: None,
+                hovered_action: None,
+                include_drawings: false,
+                window: RegionCaptureWindowVisual {
+                    available: true,
+                    active: true,
+                    targets: &[],
+                    highlighted_target: None,
+                },
+            },
+            |_x, _y| None,
+        );
+        drop(ctx);
+        surface.flush();
+        let stride = surface.stride() as usize;
+        let data = surface.data().unwrap();
+        assert_eq!(data[20 * stride + 20 * 4 + 3], 0);
+    }
+
+    #[test]
+    fn highlighted_window_outline_is_stronger_than_other_targets() {
+        let targets = [
+            RegionSelection {
+                start: (4.0, 4.0),
+                end: (16.0, 16.0),
+            },
+            RegionSelection {
+                start: (24.0, 4.0),
+                end: (36.0, 16.0),
+            },
+        ];
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 40, 20).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        render_region_capture_picker(
+            &ctx,
+            40,
+            20,
+            RegionCapturePickerVisual {
+                selection: None,
+                pointer: (20.0, 18.0),
+                measurement: None,
+                show_scrim: false,
+                show_legend: false,
+                loupe: None,
+                action_bar: None,
+                hovered_action: None,
+                include_drawings: false,
+                window: RegionCaptureWindowVisual {
+                    available: true,
+                    active: true,
+                    targets: &targets,
+                    highlighted_target: Some(1),
+                },
+            },
+            |_x, _y| None,
+        );
+        drop(ctx);
+        surface.flush();
+        let stride = surface.stride() as usize;
+        let data = surface.data().unwrap();
+        let edge_alpha = |x: usize| {
+            (3..=6)
+                .flat_map(|y| ((x - 1)..=(x + 1)).map(move |sample_x| (sample_x, y)))
+                .map(|(sample_x, y)| u32::from(data[y * stride + sample_x * 4 + 3]))
+                .sum::<u32>()
+        };
+        assert!(
+            edge_alpha(24) > edge_alpha(4),
+            "the highlighted candidate must be visually stronger"
+        );
     }
 
     #[test]
@@ -475,6 +718,7 @@ mod tests {
                 action_bar: None,
                 hovered_action: None,
                 include_drawings: false,
+                window: RegionCaptureWindowVisual::disabled(),
             },
             |_x, _y| None,
         );
@@ -538,6 +782,7 @@ mod tests {
                 action_bar: None,
                 hovered_action: None,
                 include_drawings: false,
+                window: RegionCaptureWindowVisual::disabled(),
             },
             |_x, _y| None,
         );
@@ -574,6 +819,7 @@ mod tests {
                 action_bar: Some(bar),
                 hovered_action: Some(crate::ui::RegionAction::Both),
                 include_drawings: true,
+                window: RegionCaptureWindowVisual::disabled(),
             },
             |_x, _y| None,
         );

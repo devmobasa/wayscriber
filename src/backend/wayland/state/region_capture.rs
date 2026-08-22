@@ -16,6 +16,7 @@ mod review_state;
 mod runtime;
 mod selection_state;
 mod source_guard;
+mod window_snap;
 
 pub(super) use active_state::{ActiveScreenRegion, FreezeOwnership};
 pub(in crate::backend::wayland) use board::{
@@ -29,6 +30,8 @@ use measure::*;
 pub(in crate::backend::wayland) use measure::{RegionOwnerLoss, RegionSelectionFinalize};
 pub(super) use source_guard::owned_generation_is_current;
 use source_guard::*;
+pub(in crate::backend::wayland) use window_snap::WindowSnapDirection;
+pub(super) use window_snap::{WindowSnapQuery, WindowSnapSession};
 
 use super::WaylandState;
 use super::screen_image::{

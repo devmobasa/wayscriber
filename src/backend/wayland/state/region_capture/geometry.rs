@@ -28,6 +28,15 @@ impl RegionSelectionGeometry {
         display_selection: RegionSelection,
     ) -> Self {
         debug_assert_eq!(purpose, RegionPurposeTag::CaptureInteractive);
+        Self::authoritative(purpose, rect, display_selection)
+    }
+
+    pub(super) fn authoritative(
+        purpose: RegionPurposeTag,
+        rect: ImagePixelRect,
+        display_selection: RegionSelection,
+    ) -> Self {
+        debug_assert!(purpose.is_capture());
         let image_span = pixel_span(
             ImagePoint::new(f64::from(rect.x()), f64::from(rect.y())),
             ImagePoint::new(

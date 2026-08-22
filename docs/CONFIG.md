@@ -1447,6 +1447,27 @@ readout/legend, and sends the selected pixels to the shortcut's existing
 clipboard or file destination. If no screen capture backend is available, it
 falls back to `slurp`.
 
+On Hyprland and Sway, the native picker also discovers visible windows on the
+active output and workspace. Press `Space` to switch between free-area and
+window selection, point at a window and click it, or move between candidates
+with `Super+Arrow` and choose with `Enter`. Press `Space` again to return to
+area selection. Window controls stay hidden when the compositor is unsupported,
+the geometry helper fails, or no selectable windows are available. The
+external `slurp` picker does not provide this mode.
+Window mode is also hidden when the picker reuses a pre-existing Freeze or Zoom
+image. Wayscriber currently offers it only for the fresh auto-freeze created by
+the picker. It checks the provider result against that source's output and
+layout identity before showing candidates; a mismatch leaves window mode
+unavailable. At fractional scales, Wayland and Hyprland can round the same
+logical output size one pixel differently. That one-pixel size difference is
+accepted, but candidate bounds are restricted to the overlap; larger size
+differences or any origin change disable window mode.
+Wayland has no portable workspace identity at the freeze boundary, so window
+candidates reflect the workspace visible when the compositor query runs. A
+workspace switch in the short freeze-to-query interval can therefore make
+window mode describe the new workspace while the frozen image still shows the
+old one; returning to area mode remains safe.
+
 `capture_region_interactive` opens the same picker, then keeps the selection in
 a review step where you can copy it, save it, do both, or add it to the active
 board. It is available from the command palette and has no default shortcut;
@@ -1463,6 +1484,9 @@ included. Set it to `false` for raw desktop pixels by default. On a transparent
 board, full-screen and legacy `slurp` capture keep the desktop behind the
 annotations; a solid board keeps its canvas background. The native region
 picker instead composites committed drawings over the frozen desktop crop.
+Those committed drawings are visible inside the native picker itself, so the
+selection preview matches the annotated export. Provisional strokes, selection
+handles, tool previews, toolbars, and other transient UI remain hidden.
 
 The Review bar's **Include drawings in exports** toggle (or `D`) starts from
 that configured default and can override it for one interactive region capture.

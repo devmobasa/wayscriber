@@ -3,9 +3,7 @@ use crate::capture::{
     CaptureDestination, ImageFormatMetadata, ImageOperationKind, RenderImageRequest,
     RenderedImageDeliveryRequest,
 };
-use crate::input::state::{
-    BoardPasteTarget, RegionInputSource, RegionPurposeTag, Toast, ToastPriority,
-};
+use crate::input::state::{BoardPasteTarget, RegionPurposeTag, Toast, ToastPriority};
 use crate::screen_pixels::{EmbeddedImageLimits, ImagePixelRect};
 use crate::ui::RegionAction;
 
@@ -148,13 +146,8 @@ impl WaylandState {
         else {
             return;
         };
-        match self.input_state.region_state().selection_owner() {
-            Some(RegionInputSource::Pointer | RegionInputSource::Touch) => {
-                self.set_suppress_next_release(true);
-            }
-            Some(RegionInputSource::Stylus) => self.retire_stylus_contact(),
-            None => {}
-        }
+        self.clear_region_window_snap();
+        self.retire_region_selection_owner(self.input_state.region_state().selection_owner());
         if purpose == RegionPurposeTag::CaptureInteractive {
             self.enter_region_review(rect);
         } else {

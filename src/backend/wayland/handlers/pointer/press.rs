@@ -57,7 +57,7 @@ impl WaylandState {
                             // generic post-modal latch here would swallow an
                             // unrelated canvas release after a keyboard exit.
                             if review_action_suppresses_next_release(action) {
-                                self.set_suppress_next_release(true);
+                                self.suppress_next_release_from(RegionInputSource::Pointer);
                             }
                             return;
                         }
@@ -72,7 +72,7 @@ impl WaylandState {
                     }
                     BTN_RIGHT => {
                         self.cancel_active_region_selector();
-                        self.set_suppress_next_release(true);
+                        self.suppress_next_release_from(RegionInputSource::Pointer);
                     }
                     _ => {}
                 }
@@ -87,11 +87,11 @@ impl WaylandState {
                 match button {
                     BTN_LEFT => {
                         self.sample_eyedropper(event.position.0, event.position.1);
-                        self.set_suppress_next_release(true);
+                        self.suppress_next_release_from(RegionInputSource::Pointer);
                     }
                     BTN_RIGHT => {
                         self.cancel_eyedropper();
-                        self.set_suppress_next_release(true);
+                        self.suppress_next_release_from(RegionInputSource::Pointer);
                     }
                     _ => {}
                 }
@@ -143,7 +143,7 @@ impl WaylandState {
                     screen_width,
                     screen_height,
                 ) {
-                    self.set_suppress_next_release(true);
+                    self.suppress_next_release_from(RegionInputSource::Pointer);
                 }
             }
             return;

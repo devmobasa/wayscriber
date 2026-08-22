@@ -161,6 +161,19 @@ impl KeyboardHandler for WaylandState {
         // re-arms it at the end of this handler.
         self.clear_key_repeat();
         if self.input_state.region_is_engaged() {
+            if matches!(key, Key::Space) && self.toggle_region_window_snap() {
+                self.update_pointer_cursor(false, conn);
+                return;
+            }
+            if let Some(direction) =
+                region_window_snap_direction(key, self.input_state.modifiers.logo)
+                && self.navigate_region_window_snap(direction)
+            {
+                return;
+            }
+            if matches!(key, Key::Return) && self.choose_hovered_region_window() {
+                return;
+            }
             let action = self.input_state.action_for_key(key);
             if let Some(action) = action {
                 if self
@@ -566,6 +579,24 @@ fn region_capture_select_all_pressed(
         && matches!(key, Key::Char('a' | 'A'))
 }
 
+fn region_window_snap_direction(
+    key: Key,
+    logo: bool,
+) -> Option<crate::backend::wayland::state::WindowSnapDirection> {
+    use crate::backend::wayland::state::WindowSnapDirection;
+
+    if !logo {
+        return None;
+    }
+    match key {
+        Key::Left => Some(WindowSnapDirection::Left),
+        Key::Right => Some(WindowSnapDirection::Right),
+        Key::Up => Some(WindowSnapDirection::Up),
+        Key::Down => Some(WindowSnapDirection::Down),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RegionReviewKeyAction {
     Nudge(i64, i64),
@@ -668,6 +699,22 @@ mod tests {
             false,
             Key::Char('a'),
         ));
+    }
+
+    #[test]
+    fn super_arrows_route_window_snap_navigation_only_with_logo_held() {
+        use crate::backend::wayland::state::WindowSnapDirection;
+
+        assert_eq!(
+            region_window_snap_direction(Key::Left, true),
+            Some(WindowSnapDirection::Left)
+        );
+        assert_eq!(
+            region_window_snap_direction(Key::Down, true),
+            Some(WindowSnapDirection::Down)
+        );
+        assert_eq!(region_window_snap_direction(Key::Right, false), None);
+        assert_eq!(region_window_snap_direction(Key::Return, true), None);
     }
 
     #[test]

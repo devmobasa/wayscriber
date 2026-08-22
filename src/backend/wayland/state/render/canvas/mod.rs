@@ -19,7 +19,12 @@ impl WaylandState {
         render_transients: bool,
         mut perf: Option<&mut PerfRenderBreakdown>,
     ) -> Result<()> {
-        let capture_picker_suppresses_canvas_chrome = self.capture_picker_chrome_suppressed();
+        let capture_picker_active = self.capture_picker_chrome_suppressed();
+        let capture_picker_draws_committed = capture_picker_draws_committed(
+            capture_picker_active,
+            self.region_picker_include_drawings(),
+        );
+        let render_transients = render_transients && !capture_picker_active;
         let canvas_transform_active = self.canvas_transform_active();
         let (canvas_origin_x, canvas_origin_y) = self.canvas_view_origin();
         let shapes_total = self.input_state.boards.active_frame().shapes.len();
@@ -28,13 +33,12 @@ impl WaylandState {
         // shapes from the baked layer cache: pan frames force full damage, so
         // this turns an O(shapes) Cairo replay into a single aligned blit.
         let layer_cache_start = perf.as_ref().map(|_| Instant::now());
-        let layer_cache_ready =
-            if !capture_picker_suppresses_canvas_chrome && self.canvas_layer_cache_usable() {
-                self.ensure_canvas_layer_cache(width, height, scale)
-            } else {
-                self.canvas_layer_cache.clear();
-                false
-            };
+        let layer_cache_ready = if !capture_picker_active && self.canvas_layer_cache_usable() {
+            self.ensure_canvas_layer_cache(width, height, scale)
+        } else {
+            self.canvas_layer_cache.clear();
+            false
+        };
         if let (Some(perf), Some(layer_cache_start)) = (perf.as_mut(), layer_cache_start) {
             perf.stages.completed_shapes = perf
                 .stages
@@ -51,12 +55,14 @@ impl WaylandState {
                 .saturating_add(Instant::now().saturating_duration_since(background_start));
         }
 
-        // A capture picker selects pixels from the frozen desktop, never from
-        // Wayscriber's annotation canvas. Keep only the backdrop: committed
-        // shapes, spotlight, selection handles, provisional/text previews,
-        // and click/highlight effects all return automatically when the
-        // derived picker state ends.
-        if capture_picker_suppresses_canvas_chrome {
+        // A capture picker always selects against the frozen desktop. When its
+        // captured intent includes drawings, replay committed annotations over
+        // that backdrop so the preview matches the exported PNG. The layer
+        // cache stays disabled because its baked board background is not the
+        // frozen capture. Turning the Review toggle off keeps only the raw
+        // backdrop. Transient handles, provisional strokes, text previews,
+        // hover effects, and click highlights remain suppressed in both cases.
+        if !capture_picker_draws_committed {
             self.spotlight_dimmed_last_frame = false;
             if let Some(perf) = perf.as_mut() {
                 perf.shapes_total = shapes_total;
@@ -307,5 +313,25 @@ fn provisional_point_count(stroke: &crate::input::tool::ProvisionalToolStroke<'_
         crate::input::tool::ProvisionalToolStroke::Shape(_)
         | crate::input::tool::ProvisionalToolStroke::BlurReplayPreview(_)
         | crate::input::tool::ProvisionalToolStroke::None => 0,
+    }
+}
+
+const fn capture_picker_draws_committed(
+    capture_picker_active: bool,
+    include_drawings: bool,
+) -> bool {
+    !capture_picker_active || include_drawings
+}
+
+#[cfg(test)]
+mod tests {
+    use super::capture_picker_draws_committed;
+
+    #[test]
+    fn picker_preview_follows_the_annotated_export_choice() {
+        assert!(capture_picker_draws_committed(false, false));
+        assert!(capture_picker_draws_committed(false, true));
+        assert!(capture_picker_draws_committed(true, true));
+        assert!(!capture_picker_draws_committed(true, false));
     }
 }

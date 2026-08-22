@@ -394,6 +394,26 @@ impl WaylandState {
                 (image_point.x, image_point.y),
             )
         });
+        let window_targets: Vec<_> = self
+            .region_window_snap_targets()
+            .iter()
+            .map(|target| {
+                let rect = target.screen_rect();
+                crate::input::state::RegionSelection {
+                    start: (f64::from(rect.x), f64::from(rect.y)),
+                    end: (
+                        f64::from(rect.x + rect.width),
+                        f64::from(rect.y + rect.height),
+                    ),
+                }
+            })
+            .collect();
+        let window = crate::ui::RegionCaptureWindowVisual {
+            available: self.region_window_snap_available(),
+            active: self.region_window_snap_active(),
+            targets: &window_targets,
+            highlighted_target: self.region_window_snap_highlighted_index(),
+        };
 
         crate::ui::render_region_capture_picker(
             ctx,
@@ -410,6 +430,7 @@ impl WaylandState {
                 action_bar,
                 hovered_action,
                 include_drawings: self.region_picker_include_drawings(),
+                window,
             },
             |image_x, image_y| {
                 loupe_source.as_ref().and_then(|(source, _token)| {

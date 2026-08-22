@@ -4,7 +4,7 @@ use crate::backend::wayland::acquisition::ScreenAcquisitionRegistry;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::zoom::ZoomWaiterRegistry;
 
-use super::region_capture::ActiveScreenRegion;
+use super::region_capture::{ActiveScreenRegion, WindowSnapSession};
 use super::screen_image::ScreenSourceToken;
 
 use super::capture::OverlayCaptureBarrier;
@@ -30,6 +30,43 @@ pub enum OverlaySuppressionKeyboardPolicy {
     #[default]
     Release,
     Retain,
+}
+
+/// One-shot release latches owned by the pointing device whose press armed
+/// them. Pointer and touch can both have an outstanding release; neither may
+/// consume or clear the other's sequence. Stylus contacts use tablet-tool
+/// retirement instead of this latch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) struct ReleaseSuppression {
+    pointer: bool,
+    touch: bool,
+}
+
+impl ReleaseSuppression {
+    pub(super) fn arm(&mut self, source: crate::input::state::RegionInputSource) {
+        match source {
+            crate::input::state::RegionInputSource::Pointer => self.pointer = true,
+            crate::input::state::RegionInputSource::Touch => self.touch = true,
+            crate::input::state::RegionInputSource::Stylus => {}
+        }
+    }
+
+    pub(super) fn clear(&mut self, source: crate::input::state::RegionInputSource) {
+        match source {
+            crate::input::state::RegionInputSource::Pointer => self.pointer = false,
+            crate::input::state::RegionInputSource::Touch => self.touch = false,
+            crate::input::state::RegionInputSource::Stylus => {}
+        }
+    }
+
+    pub(super) fn take(&mut self, source: crate::input::state::RegionInputSource) -> bool {
+        let slot = match source {
+            crate::input::state::RegionInputSource::Pointer => &mut self.pointer,
+            crate::input::state::RegionInputSource::Touch => &mut self.touch,
+            crate::input::state::RegionInputSource::Stylus => return false,
+        };
+        std::mem::take(slot)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -152,6 +189,7 @@ pub struct StateData {
     pub(super) zoom_waiter: ZoomWaiterRegistry,
     pub(super) active_eyedropper_source: Option<ScreenSourceToken>,
     pub(super) active_screen_region: Option<ActiveScreenRegion>,
+    pub(super) window_snap: Option<WindowSnapSession>,
     pub(super) next_screen_region_generation: u64,
     pub(super) frozen_enabled: bool,
     pub(super) has_seen_surface_enter: bool,
@@ -166,8 +204,8 @@ pub struct StateData {
     pub(super) overlay_clickthrough: bool,
     /// True when surface is configured and has keyboard focus; keys are blocked until ready.
     pub(super) overlay_ready: bool,
-    /// Suppress the next pointer release after a modal click (e.g., command palette).
-    pub(super) suppress_next_release: bool,
+    /// Suppress modal-owned pointer/touch releases without crossing devices.
+    pub(super) release_suppression: ReleaseSuppression,
     /// Exact toast activation a left press began inside. A release is accepted
     /// only while this same activation remains visible.
     pub(super) pending_toast_press: Option<crate::input::state::ToastPress>,
@@ -263,6 +301,7 @@ impl StateData {
             zoom_waiter: ZoomWaiterRegistry::default(),
             active_eyedropper_source: None,
             active_screen_region: None,
+            window_snap: None,
             next_screen_region_generation: 1,
             frozen_enabled: false,
             has_seen_surface_enter: false,
@@ -276,7 +315,7 @@ impl StateData {
             overlay_capture_barrier: OverlayCaptureBarrier::default(),
             overlay_clickthrough: false,
             overlay_ready: false,
-            suppress_next_release: false,
+            release_suppression: ReleaseSuppression::default(),
             pending_toast_press: None,
             pending_status_hud_press: false,
             pending_zoom_chip_press: crate::ui::ZoomChipPress::None,
@@ -305,6 +344,28 @@ impl StateData {
 #[cfg(test)]
 mod tests {
     use super::OverlaySuppression;
+    use crate::input::state::RegionInputSource;
+
+    #[test]
+    fn release_suppression_is_owned_by_the_originating_device() {
+        let mut suppression = super::ReleaseSuppression::default();
+        suppression.arm(RegionInputSource::Pointer);
+
+        assert!(!suppression.take(RegionInputSource::Touch));
+        assert!(suppression.take(RegionInputSource::Pointer));
+        assert!(!suppression.take(RegionInputSource::Pointer));
+    }
+
+    #[test]
+    fn clearing_one_device_keeps_the_other_devices_latch() {
+        let mut suppression = super::ReleaseSuppression::default();
+        suppression.arm(RegionInputSource::Pointer);
+        suppression.arm(RegionInputSource::Touch);
+        suppression.clear(RegionInputSource::Touch);
+
+        assert!(!suppression.take(RegionInputSource::Touch));
+        assert!(suppression.take(RegionInputSource::Pointer));
+    }
 
     #[test]
     fn desktop_backdrop_suppression_hides_canvas_and_ui() {

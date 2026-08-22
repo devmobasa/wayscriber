@@ -14,6 +14,7 @@ pub(crate) mod png;
 pub mod portal;
 pub mod sources;
 pub mod types;
+pub(crate) mod window_geometry;
 
 mod dependencies;
 mod desktop_backdrop;
