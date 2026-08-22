@@ -256,8 +256,12 @@ impl WaylandState {
         &mut self,
         id: ScreenAcquisitionId,
         owner: ScreenAcquisitionOwner,
-    ) -> bool {
-        self.data.screen_acquisition.mark_started(id, owner)
+    ) {
+        // This transition is a required side effect, not a debug-only check.
+        // Keeping the mutation outside `debug_assert!` prevents release builds
+        // from leaving the record queued and starting it again next pass.
+        let transitioned = self.data.screen_acquisition.mark_started(id, owner);
+        debug_assert!(transitioned, "the queued acquisition was just started");
     }
 
     pub(in crate::backend::wayland) fn complete_queued_acquisition(

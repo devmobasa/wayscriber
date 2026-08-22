@@ -274,7 +274,7 @@ fn handle_frozen_toggle(state: &mut WaylandState) {
     }
     match state.frozen.start_capture_for(record.id, record.owner) {
         Ok(()) => {
-            debug_assert!(state.mark_screen_acquisition_started(record.id, record.owner));
+            state.mark_screen_acquisition_started(record.id, record.owner);
         }
         Err(err) => {
             warn!("Frozen capture failed to start: {err}");
