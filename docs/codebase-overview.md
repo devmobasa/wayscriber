@@ -145,7 +145,8 @@ The result is a predictable pipeline: Wayland → handlers → `InputState` →
 9. `perform_capture`:
    - Calls the configured `CaptureSource` (default: `sources::capture_image` with Hyprland→portal fallback).
    - Optionally saves via `CaptureFileSaver`.
-   - Optionally copies to clipboard via `CaptureClipboard`.
+   - Optionally copies to clipboard via `CaptureClipboard`; the production
+     implementation reads image data back and retries once unless it matches.
    - Returns `CaptureResult` used for desktop notifications.
 10. The worker publishes one identified terminal result before waking the shared Wayland runtime descriptor. `WaylandState` non-blockingly polls `CaptureManager`, accepts only the recorded ID, restores the overlay, and emits notifications. Worker loss and identity mismatches are terminal and are reported once.
 

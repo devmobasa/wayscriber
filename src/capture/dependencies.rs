@@ -20,9 +20,10 @@ pub trait CaptureFileSaver: Send + Sync {
     fn save(&self, image_data: &[u8], config: &FileSaveConfig) -> Result<PathBuf, CaptureError>;
 }
 
-/// Abstraction over copying screenshots to the clipboard.
+/// Abstraction over publishing and verifying screenshot clipboard data.
 pub trait CaptureClipboard: Send + Sync {
     fn copy(&self, image_data: &[u8]) -> Result<(), CaptureError>;
+    fn verify(&self, expected: &[u8], output_cap: usize) -> Result<bool, CaptureError>;
 }
 
 /// Bundle of dependencies used by the capture pipeline. Each component can be mocked in tests.
@@ -38,14 +39,13 @@ impl Default for CaptureDependencies {
         Self {
             source: Arc::new(DefaultCaptureSource),
             saver: Arc::new(DefaultFileSaver),
-            clipboard: Arc::new(DefaultClipboard),
+            clipboard: Arc::new(clipboard::BrokerClipboard),
         }
     }
 }
 
 struct DefaultCaptureSource;
 struct DefaultFileSaver;
-struct DefaultClipboard;
 
 impl CaptureSource for DefaultCaptureSource {
     fn capture(&self, capture_type: CaptureType) -> CaptureFuture<'_> {
@@ -56,11 +56,5 @@ impl CaptureSource for DefaultCaptureSource {
 impl CaptureFileSaver for DefaultFileSaver {
     fn save(&self, image_data: &[u8], config: &FileSaveConfig) -> Result<PathBuf, CaptureError> {
         file::save_screenshot(image_data, config)
-    }
-}
-
-impl CaptureClipboard for DefaultClipboard {
-    fn copy(&self, image_data: &[u8]) -> Result<(), CaptureError> {
-        clipboard::copy_to_clipboard(image_data)
     }
 }

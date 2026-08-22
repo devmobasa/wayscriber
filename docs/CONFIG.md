@@ -1420,6 +1420,10 @@ show_legend = true
 **Tips:**
 - Set `copy_to_clipboard = false` if you prefer file-only captures.
 - Clipboard-only shortcuts ignore the save directory automatically.
+- Image clipboard delivery publishes PNG data with `wl-copy`, reads it back
+  with `wl-paste`, and retries the complete write once unless the bytes match.
+  Read-back is used for PNG payloads smaller than 64 MiB; larger successful
+  `wl-copy` publications keep the previous status-only behavior.
 - `filename_template` must be a single file name (no `/` or `..`). `format` is `png`, `jpg`, or `jpeg`.
 - `wl-clipboard`, `grim`, and `slurp` are installed automatically by deb/rpm/AUR packages. For source/tarball installs, add them manually. Wayscriber uses its native region picker by default and falls back to `slurp` when it cannot obtain the desktop image; other screenshot capture paths can fall back to `xdg-desktop-portal`.
 

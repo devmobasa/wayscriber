@@ -3,13 +3,11 @@ use std::process::Command;
 
 use anyhow::{Result, anyhow, bail};
 
-use super::wire::{
-    HelperKind, MAX_ARGUMENT_BYTES, MAX_ARGUMENTS, MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, OsWire,
-};
+use super::wire::{HelperKind, MAX_ARGUMENT_BYTES, MAX_ARGUMENTS, MAX_INPUT_BYTES, OsWire};
 
 pub(super) fn input_cap(kind: HelperKind) -> usize {
     if matches!(kind, HelperKind::WlCopy) {
-        MAX_OUTPUT_BYTES
+        super::max_publish_bytes()
     } else {
         MAX_INPUT_BYTES
     }

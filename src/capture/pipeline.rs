@@ -410,9 +410,15 @@ async fn save_bytes(
 }
 
 async fn copy_to_clipboard(clipboard: Arc<dyn CaptureClipboard>, image_data: Vec<u8>) -> bool {
-    match task::spawn_blocking(move || clipboard.copy(&image_data))
-        .await
-        .map_err(|e| CaptureError::ClipboardError(format!("Clipboard task failed: {}", e)))
+    match task::spawn_blocking(move || {
+        super::clipboard::copy_to_clipboard_with(
+            &image_data,
+            clipboard.as_ref(),
+            crate::process_broker::max_publish_bytes(),
+        )
+    })
+    .await
+    .map_err(|e| CaptureError::ClipboardError(format!("Clipboard task failed: {}", e)))
     {
         Ok(Ok(())) => {
             log::info!("Successfully copied to clipboard");

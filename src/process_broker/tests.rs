@@ -1117,10 +1117,6 @@ fn wl_copy_publication_accepts_capture_sized_input() {
             helper.as_os_str(),
             [count_path.as_os_str()],
             vec![b'x'; PUBLICATION_BYTES],
-            // Generous on purpose: this test proves byte-count integrity, not
-            // latency, and pushing 16 MiB through a real subprocess has been
-            // observed to exceed 5 s when the full parallel suite saturates
-            // the machine - the broker then SIGKILLs the helper (status 137).
             Duration::from_secs(30),
         )
         .unwrap();

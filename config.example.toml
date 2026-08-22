@@ -1406,8 +1406,10 @@ filename_template = "screenshot_%Y-%m-%d_%H%M%S"
 # Image format for saved screenshots: png, jpg, or jpeg
 format = "png"
 
-# Copy screenshots to clipboard by default
-# Shortcut-specific actions may override this
+# Copy screenshots to clipboard by default. Image writes smaller than 64 MiB
+# are read back and retried once unless the PNG bytes match; larger writes
+# trust wl-copy.
+# Shortcut-specific actions may override this.
 copy_to_clipboard = true
 
 # Exit overlay after any capture completes (forces exit for all capture types)
