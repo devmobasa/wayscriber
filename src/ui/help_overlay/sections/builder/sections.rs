@@ -283,6 +283,7 @@ pub(super) fn build_main_sections(
         ]);
     }
     screenshot_rows.extend([
+        action_row(bindings, Action::MeasureMode, NOT_BOUND_LABEL),
         action_row(bindings, Action::ExportCanvasClipboard, NOT_BOUND_LABEL),
         action_row(bindings, Action::ExportCanvasFile, NOT_BOUND_LABEL),
         action_row(

@@ -249,6 +249,7 @@ impl ConfigDraft {
             capture_filename_template: config.capture.filename_template.clone(),
             capture_format: config.capture.format.clone(),
             capture_copy_to_clipboard: config.capture.copy_to_clipboard,
+            capture_include_drawings: config.capture.include_drawings,
             capture_exit_after: config.capture.exit_after_capture,
             capture_ocr_languages: config.capture.ocr_languages.clone(),
             capture_region_picker: RegionPickerOption::from_picker(config.capture.region.picker),

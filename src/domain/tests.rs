@@ -203,6 +203,7 @@ fn action_serialization_matches_established_contract() {
             Action::CaptureRegionInteractive,
             "capture_region_interactive",
         ),
+        (Action::MeasureMode, "measure_mode"),
         (Action::ExportCanvasFile, "export_canvas_file"),
         (Action::ExportCanvasClipboard, "export_canvas_clipboard"),
         (
@@ -413,6 +414,7 @@ fn region_capture_action_classification_is_complete_and_narrow() {
         Action::CaptureClipboardFull,
         Action::CaptureFileFull,
         Action::CopyTextFromScreen,
+        Action::MeasureMode,
     ] {
         assert!(!action.is_region_capture(), "action={action:?}");
     }

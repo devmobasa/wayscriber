@@ -1396,6 +1396,11 @@ format = "png"
 # Copy captures to clipboard in addition to saving files
 copy_to_clipboard = true
 
+# Composite the active board's committed annotations into full-screen and
+# region screenshots. Set to false for raw desktop pixels by default; the
+# interactive region Review toggle can still override this per capture.
+include_drawings = true
+
 # Exit the overlay after any capture completes (forces exit for all capture types)
 # When false, clipboard-only captures still auto-exit by default.
 # Use --no-exit-after-capture to keep the overlay open for a run.
@@ -1424,6 +1429,8 @@ show_legend = true
 
 **Tips:**
 - Set `copy_to_clipboard = false` if you prefer file-only captures.
+- Set `include_drawings = false` if full-screen and region captures should use
+  raw desktop pixels by default.
 - Clipboard-only shortcuts ignore the save directory automatically.
 - Image clipboard delivery publishes PNG data with `wl-copy`, reads it back
   with `wl-paste`, and retries the complete write once unless the bytes match.
@@ -1448,6 +1455,28 @@ always uses the native picker even when `picker = "slurp"`; if native capture
 is unavailable it reports that limitation instead of silently skipping Review.
 The **Both** button (and `Enter`) always copies the PNG and saves it to a file,
 independently of `[capture].copy_to_clipboard`.
+
+`[capture].include_drawings` defaults to `true`, so full-screen and region
+screenshots include the active board's committed shapes. Provisional strokes,
+selection handles, tool previews, toolbars, and other Wayscriber UI are not
+included. Set it to `false` for raw desktop pixels by default. On a transparent
+board, full-screen and legacy `slurp` capture keep the desktop behind the
+annotations; a solid board keeps its canvas background. The native region
+picker instead composites committed drawings over the frozen desktop crop.
+
+The Review bar's **Include drawings in exports** toggle (or `D`) starts from
+that configured default and can override it for one interactive region capture.
+Copy, Save, and Both honour the current toggle. Board always inserts the
+original crop because compositing the current board first would permanently
+duplicate its existing annotations inside the new image.
+
+`measure_mode` opens a capture-free screen ruler over the live Wayscriber
+view. Drag to measure a rectangle in logical screen pixels; the completed
+rectangle stays visible so you can read it, and another drag replaces it.
+`Esc`, right-click, or invoking **Measure Mode** again exits. It does not
+reserve capture state, freeze the desktop, encode an image, or deliver a file
+or clipboard payload. The action is available from the command palette and is
+unbound by default.
 
 - Set `picker = "slurp"` to always use the external selector. This is also the
   option for selecting a region on a monitor other than Wayscriber's active
@@ -1973,6 +2002,7 @@ capture_file_region = ["Ctrl+Alt+6"]
 # Open the region review/action bar. Available from the command palette and
 # unbound by default.
 capture_region_interactive = []
+measure_mode = []
 export_canvas_file = []
 export_canvas_clipboard = []
 export_canvas_clipboard_and_file = []

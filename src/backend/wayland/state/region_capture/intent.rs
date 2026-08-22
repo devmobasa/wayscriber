@@ -55,6 +55,7 @@ pub(in crate::backend::wayland) struct RegionCaptureIntent {
     save_config: Option<FileSaveConfig>,
     exit_mode: ExitAfterCaptureMode,
     options: RegionPickerOptions,
+    include_drawings: bool,
 }
 
 impl RegionCaptureIntent {
@@ -65,6 +66,7 @@ impl RegionCaptureIntent {
         save_config: Option<FileSaveConfig>,
         exit_mode: ExitAfterCaptureMode,
         options: RegionPickerOptions,
+        include_drawings: bool,
     ) -> Self {
         Self {
             action,
@@ -73,6 +75,7 @@ impl RegionCaptureIntent {
             save_config,
             exit_mode,
             options,
+            include_drawings,
         }
     }
 
@@ -99,6 +102,10 @@ impl RegionCaptureIntent {
     pub(in crate::backend::wayland) const fn options(&self) -> RegionPickerOptions {
         self.options
     }
+
+    pub(in crate::backend::wayland) const fn include_drawings(&self) -> bool {
+        self.include_drawings
+    }
 }
 
 #[cfg(test)]
@@ -122,6 +129,7 @@ mod tests {
             Some(save_config),
             ExitAfterCaptureMode::Auto,
             options,
+            true,
         );
 
         assert_eq!(intent.action(), Action::CaptureClipboardRegion);
@@ -138,6 +146,7 @@ mod tests {
         assert_eq!(intent.save_config().unwrap().format, "png");
         assert_eq!(intent.exit_mode(), ExitAfterCaptureMode::Auto);
         assert_eq!(intent.options(), options);
+        assert!(intent.include_drawings());
         assert!(intent.options().show_size_readout());
         assert!(!intent.options().show_loupe());
         assert!(intent.options().show_legend());
@@ -153,6 +162,7 @@ mod tests {
             None,
             ExitAfterCaptureMode::Never,
             options,
+            false,
         );
 
         assert_eq!(intent.purpose(), RegionPurposeTag::CaptureInteractive);
@@ -160,5 +170,6 @@ mod tests {
         assert!(!intent.options().show_size_readout());
         assert!(intent.options().show_loupe());
         assert!(!intent.options().show_legend());
+        assert!(!intent.include_drawings());
     }
 }

@@ -5,9 +5,10 @@ use super::primitives::{draw_rounded_rect, text_extents_for};
 const SURFACE_MARGIN: f64 = 8.0;
 const SELECTION_GAP: f64 = 10.0;
 const BAR_WIDTH: f64 = 296.0;
-const BAR_HEIGHT: f64 = 44.0;
+const BAR_HEIGHT: f64 = 78.0;
 const BAR_PADDING: f64 = 6.0;
 const ITEM_GAP: f64 = 4.0;
+const ACTION_ROW_HEIGHT: f64 = 32.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RegionAction {
@@ -15,6 +16,7 @@ pub(crate) enum RegionAction {
     Save,
     Both,
     Board,
+    ToggleIncludeDrawings,
 }
 
 impl RegionAction {
@@ -24,6 +26,7 @@ impl RegionAction {
             Self::Save => "Save",
             Self::Both => "Both",
             Self::Board => "Board",
+            Self::ToggleIncludeDrawings => "Include drawings in exports",
         }
     }
 
@@ -33,6 +36,7 @@ impl RegionAction {
             Self::Save => "Ctrl+S",
             Self::Both => "Enter",
             Self::Board => "B",
+            Self::ToggleIncludeDrawings => "D",
         }
     }
 }
@@ -73,6 +77,7 @@ struct RegionActionItem {
 pub(crate) struct RegionActionBar {
     bounds: RegionActionRect,
     items: [RegionActionItem; 4],
+    toggle: RegionActionItem,
 }
 
 impl RegionActionBar {
@@ -100,7 +105,7 @@ impl RegionActionBar {
             (surface_height - height - SURFACE_MARGIN).max(SURFACE_MARGIN),
         );
         let bounds = RegionActionRect::new(x, y, width, height);
-        let item_height = (height - BAR_PADDING * 2.0).max(0.0);
+        let item_height = ACTION_ROW_HEIGHT.min((height - BAR_PADDING * 2.0).max(0.0));
         let item_width = ((width - BAR_PADDING * 2.0 - ITEM_GAP * 3.0) / 4.0).max(0.0);
         let item = |index: usize, action| RegionActionItem {
             action,
@@ -111,6 +116,16 @@ impl RegionActionBar {
                 item_height,
             ),
         };
+        let toggle_y = y + BAR_PADDING + item_height + ITEM_GAP;
+        let toggle = RegionActionItem {
+            action: RegionAction::ToggleIncludeDrawings,
+            bounds: RegionActionRect::new(
+                x + BAR_PADDING,
+                toggle_y,
+                (width - BAR_PADDING * 2.0).max(0.0),
+                (y + height - BAR_PADDING - toggle_y).max(0.0),
+            ),
+        };
         Self {
             bounds,
             items: [
@@ -119,6 +134,7 @@ impl RegionActionBar {
                 item(2, RegionAction::Both),
                 item(3, RegionAction::Board),
             ],
+            toggle,
         }
     }
 
@@ -132,6 +148,12 @@ impl RegionActionBar {
             .iter()
             .find(|item| item.bounds.contains(point))
             .map(|item| item.action)
+            .or_else(|| {
+                self.toggle
+                    .bounds
+                    .contains(point)
+                    .then_some(self.toggle.action)
+            })
     }
 
     pub(crate) fn contains(self, point: (f64, f64)) -> bool {
@@ -143,6 +165,7 @@ pub(crate) fn render_region_action_bar(
     ctx: &cairo::Context,
     bar: RegionActionBar,
     hovered: Option<RegionAction>,
+    include_drawings: bool,
 ) {
     let _ = ctx.save();
     ctx.set_source_rgba(0.045, 0.05, 0.065, 0.96);
@@ -188,6 +211,94 @@ pub(crate) fn render_region_action_bar(
         let _ = ctx.fill();
         draw_action_text(ctx, item);
     }
+    draw_toggle(ctx, bar.toggle, hovered, include_drawings);
+    let _ = ctx.restore();
+}
+
+fn draw_toggle(
+    ctx: &cairo::Context,
+    item: RegionActionItem,
+    hovered: Option<RegionAction>,
+    checked: bool,
+) {
+    if item.bounds.width <= 0.0 || item.bounds.height <= 0.0 {
+        return;
+    }
+    let _ = ctx.save();
+    ctx.rectangle(
+        item.bounds.x,
+        item.bounds.y,
+        item.bounds.width,
+        item.bounds.height,
+    );
+    ctx.clip();
+    if checked {
+        ctx.set_source_rgba(0.24, 0.48, 1.0, 0.42);
+    } else if hovered == Some(item.action) {
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.14);
+    } else {
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.07);
+    }
+    draw_rounded_rect(
+        ctx,
+        item.bounds.x,
+        item.bounds.y,
+        item.bounds.width,
+        item.bounds.height,
+        6.0,
+    );
+    let _ = ctx.fill();
+
+    let marker_x = item.bounds.x + 10.0;
+    let marker_y = item.bounds.y + item.bounds.height / 2.0;
+    ctx.set_line_width(1.4);
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.88);
+    ctx.rectangle(marker_x - 4.0, marker_y - 4.0, 8.0, 8.0);
+    if checked {
+        let _ = ctx.fill();
+    } else {
+        let _ = ctx.stroke();
+    }
+
+    let label = item.action.label();
+    let extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        10.5,
+        label,
+    );
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.94);
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ctx.set_font_size(10.5);
+    ctx.move_to(
+        marker_x + 10.0 - extents.x_bearing(),
+        item.bounds.y + (item.bounds.height - extents.height()) / 2.0 - extents.y_bearing(),
+    );
+    let _ = ctx.show_text(label);
+
+    let shortcut = item.action.shortcut();
+    let shortcut_extents = text_extents_for(
+        ctx,
+        "Sans",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Normal,
+        8.0,
+        shortcut,
+    );
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.58);
+    ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+    ctx.set_font_size(8.0);
+    ctx.move_to(
+        item.bounds.x + item.bounds.width
+            - 10.0
+            - shortcut_extents.width()
+            - shortcut_extents.x_bearing(),
+        item.bounds.y + (item.bounds.height - shortcut_extents.height()) / 2.0
+            - shortcut_extents.y_bearing(),
+    );
+    let _ = ctx.show_text(shortcut);
     let _ = ctx.restore();
 }
 
@@ -254,7 +365,7 @@ mod tests {
         );
         assert_eq!(
             centered.bounds(),
-            RegionActionRect::new(52.0, 210.0, 296.0, 44.0)
+            RegionActionRect::new(52.0, 210.0, 296.0, 78.0)
         );
 
         let flipped = RegionActionBar::place(
@@ -266,7 +377,7 @@ mod tests {
         );
         assert_eq!(
             flipped.bounds(),
-            RegionActionRect::new(496.0, 506.0, 296.0, 44.0)
+            RegionActionRect::new(496.0, 472.0, 296.0, 78.0)
         );
     }
 
@@ -284,6 +395,10 @@ mod tests {
         assert_eq!(bar.hit((164.0, 232.0)), Some(RegionAction::Save));
         assert_eq!(bar.hit((236.0, 232.0)), Some(RegionAction::Both));
         assert_eq!(bar.hit((308.0, 232.0)), Some(RegionAction::Board));
+        assert_eq!(
+            bar.hit((200.0, 267.0)),
+            Some(RegionAction::ToggleIncludeDrawings)
+        );
         assert_eq!(bar.hit((128.0, 232.0)), None, "inter-item gap");
         assert!(bar.contains((128.0, 232.0)), "bar gaps stay modal-owned");
         assert_eq!(bar.hit((20.0, 20.0)), None, "outside the bar");
@@ -300,6 +415,11 @@ mod tests {
         assert_eq!(RegionAction::Both.shortcut(), "Enter");
         assert_eq!(RegionAction::Board.label(), "Board");
         assert_eq!(RegionAction::Board.shortcut(), "B");
+        assert_eq!(
+            RegionAction::ToggleIncludeDrawings.label(),
+            "Include drawings in exports"
+        );
+        assert_eq!(RegionAction::ToggleIncludeDrawings.shortcut(), "D");
     }
 
     #[test]
@@ -313,7 +433,7 @@ mod tests {
         );
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
-        render_region_action_bar(&ctx, bar, Some(RegionAction::Both));
+        render_region_action_bar(&ctx, bar, Some(RegionAction::Both), true);
         drop(ctx);
         surface.flush();
         let stride = surface.stride() as usize;
@@ -324,6 +444,7 @@ mod tests {
         for x in [92, 164, 236, 308] {
             assert!(alpha(x, 232) > 0, "control at x={x}");
         }
+        assert!(alpha(200, 267) > 0, "checked drawings toggle");
         assert_eq!(alpha(20, 20), 0, "outside remains untouched");
     }
 }

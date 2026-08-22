@@ -5,6 +5,19 @@ pub struct ImagePoint {
     pub y: f64,
 }
 
+/// Immutable CPU-side screen pixels in Cairo-compatible ARGB32 layout.
+///
+/// Acquisition backends may attach their own provenance and transform
+/// behavior, while render/export workers can share this neutral value without
+/// depending on a compositor implementation.
+#[derive(Debug)]
+pub struct ScreenImage {
+    pub width: u32,
+    pub height: u32,
+    pub stride: i32,
+    pub data: Vec<u8>,
+}
+
 impl ImagePoint {
     pub const fn new(x: f64, y: f64) -> Self {
         Self { x, y }
@@ -273,6 +286,10 @@ impl PackedArgb32 {
 
     pub fn data(&self) -> &[u8] {
         &self.data
+    }
+
+    pub(crate) fn into_data(self) -> Vec<u8> {
+        self.data
     }
 }
 

@@ -11,6 +11,10 @@ use crate::ui::toolbar::ToolbarEvent;
 
 use super::*;
 
+fn review_action_suppresses_next_release(action: crate::ui::RegionAction) -> bool {
+    action != crate::ui::RegionAction::ToggleIncludeDrawings
+}
+
 impl WaylandState {
     pub(super) fn handle_pointer_press(
         &mut self,
@@ -48,7 +52,13 @@ impl WaylandState {
                     BTN_LEFT => {
                         if let Some(action) = self.region_review_action_at(event.position) {
                             self.submit_region_review_action(action);
-                            self.set_suppress_next_release(true);
+                            // The toggle keeps Review active, so its release is
+                            // consumed by the active-region branch. Arming the
+                            // generic post-modal latch here would swallow an
+                            // unrelated canvas release after a keyboard exit.
+                            if review_action_suppresses_next_release(action) {
+                                self.set_suppress_next_release(true);
+                            }
                             return;
                         }
                         if self.region_review_bar_contains(event.position) {
@@ -390,5 +400,26 @@ fn input_hud_button_label(button: u32) -> String {
         other => crate::config::keybindings::linux::pointer_button(other)
             .map(|button| button.name())
             .unwrap_or_else(|| format!("Button {other}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::review_action_suppresses_next_release;
+    use crate::ui::RegionAction;
+
+    #[test]
+    fn retained_review_toggle_does_not_arm_the_post_modal_release_latch() {
+        assert!(!review_action_suppresses_next_release(
+            RegionAction::ToggleIncludeDrawings
+        ));
+        for terminal in [
+            RegionAction::Copy,
+            RegionAction::Save,
+            RegionAction::Both,
+            RegionAction::Board,
+        ] {
+            assert!(review_action_suppresses_next_release(terminal));
+        }
     }
 }

@@ -5,6 +5,7 @@ use crate::draw::{
     BlurRectParams, Color, EraserReplayContext, Frame, Shape, SpotlightPass, render_blur_rect,
     render_eraser_stroke, render_shape, render_spotlight_pass, spotlight_regions_for_frame,
 };
+use crate::screen_pixels::ScreenImage;
 
 #[derive(Debug, Clone)]
 pub struct CanvasPageExportSnapshot {
@@ -153,6 +154,11 @@ pub(crate) struct ExportBackdrop {
     bg_color: Option<Color>,
     logical_to_image_scale_x: f64,
     logical_to_image_scale_y: f64,
+    logical_image_origin_x: f64,
+    logical_image_origin_y: f64,
+    // Keeps zero-copy region pixels alive until Cairo's borrowed surface and
+    // pattern have both been dropped.
+    _region_source: Option<Arc<ScreenImage>>,
 }
 
 impl ExportBackdrop {
@@ -164,6 +170,9 @@ impl ExportBackdrop {
                 bg_color: None,
                 logical_to_image_scale_x: 1.0,
                 logical_to_image_scale_y: 1.0,
+                logical_image_origin_x: 0.0,
+                logical_image_origin_y: 0.0,
+                _region_source: None,
             }),
             CanvasExportBackdropSnapshot::Solid(color) => Ok(Self {
                 surface: None,
@@ -171,6 +180,9 @@ impl ExportBackdrop {
                 bg_color: Some(*color),
                 logical_to_image_scale_x: 1.0,
                 logical_to_image_scale_y: 1.0,
+                logical_image_origin_x: 0.0,
+                logical_image_origin_y: 0.0,
+                _region_source: None,
             }),
             CanvasExportBackdropSnapshot::PersistedImage {
                 data,
@@ -211,9 +223,68 @@ impl ExportBackdrop {
                     bg_color: None,
                     logical_to_image_scale_x: *logical_to_image_scale_x,
                     logical_to_image_scale_y: *logical_to_image_scale_y,
+                    logical_image_origin_x: 0.0,
+                    logical_image_origin_y: 0.0,
+                    _region_source: None,
                 })
             }
         }
+    }
+
+    pub(crate) fn from_region_source(
+        image: Arc<ScreenImage>,
+        logical_bounds: CanvasExportRect,
+    ) -> Result<Self, CaptureError> {
+        let width = i32::try_from(image.width).map_err(|_| {
+            CaptureError::ImageError("Region backdrop width is too large".to_string())
+        })?;
+        let height = i32::try_from(image.height).map_err(|_| {
+            CaptureError::ImageError("Region backdrop height is too large".to_string())
+        })?;
+        validate_persisted_image_backdrop(image.data.len(), width, height, image.stride)?;
+        let scale_x = f64::from(width) / logical_bounds.width;
+        let scale_y = f64::from(height) / logical_bounds.height;
+        if !scale_x.is_finite() || !scale_y.is_finite() || scale_x <= 0.0 || scale_y <= 0.0 {
+            return Err(CaptureError::ImageError(
+                "Region backdrop has an invalid canvas mapping".to_string(),
+            ));
+        }
+        // SAFETY: ScreenImage owns at least every validated row and remains
+        // alive in `_region_source` until after this private Cairo source
+        // surface and its pattern are dropped. This backdrop is read-only:
+        // it is used only as a paint/blur/eraser replay source.
+        let surface = unsafe {
+            cairo::ImageSurface::create_for_data_unsafe(
+                image.data.as_ptr() as *mut u8,
+                cairo::Format::ARgb32,
+                width,
+                height,
+                image.stride,
+            )
+        }
+        .map_err(|err| {
+            CaptureError::ImageError(format!("Failed to create region backdrop: {err}"))
+        })?;
+        let pattern = cairo::SurfacePattern::create(&surface);
+        pattern.set_extend(cairo::Extend::Pad);
+        pattern.set_matrix(cairo::Matrix::new(
+            scale_x,
+            0.0,
+            0.0,
+            scale_y,
+            -logical_bounds.x * scale_x,
+            -logical_bounds.y * scale_y,
+        ));
+        Ok(Self {
+            surface: Some(surface),
+            pattern: Some(pattern),
+            bg_color: None,
+            logical_to_image_scale_x: scale_x,
+            logical_to_image_scale_y: scale_y,
+            logical_image_origin_x: logical_bounds.x,
+            logical_image_origin_y: logical_bounds.y,
+            _region_source: Some(image),
+        })
     }
 
     fn paint(&self, ctx: &cairo::Context) {
@@ -227,6 +298,7 @@ impl ExportBackdrop {
             return;
         };
         let _ = ctx.save();
+        ctx.translate(self.logical_image_origin_x, self.logical_image_origin_y);
         ctx.scale(
             1.0 / self.logical_to_image_scale_x.max(f64::MIN_POSITIVE),
             1.0 / self.logical_to_image_scale_y.max(f64::MIN_POSITIVE),
@@ -245,6 +317,8 @@ impl ExportBackdrop {
             bg_color: self.bg_color,
             logical_to_image_scale_x: self.logical_to_image_scale_x,
             logical_to_image_scale_y: self.logical_to_image_scale_y,
+            logical_image_origin_x: self.logical_image_origin_x,
+            logical_image_origin_y: self.logical_image_origin_y,
         }
     }
 }
@@ -342,4 +416,32 @@ fn validate_persisted_image_backdrop(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn region_backdrop_retains_the_exact_shared_image_without_copying_pixels() {
+        let image = Arc::new(ScreenImage {
+            width: 2,
+            height: 2,
+            stride: 8,
+            data: vec![0xFF; 16],
+        });
+        let pixels = image.data.as_ptr();
+        let backdrop = ExportBackdrop::from_region_source(
+            Arc::clone(&image),
+            CanvasExportRect::new(10.0, 20.0, 2.0, 2.0).unwrap(),
+        )
+        .expect("shared region backdrop");
+
+        let retained = backdrop
+            ._region_source
+            .as_ref()
+            .expect("region source is retained");
+        assert!(Arc::ptr_eq(retained, &image));
+        assert_eq!(retained.data.as_ptr(), pixels);
+    }
 }

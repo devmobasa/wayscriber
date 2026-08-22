@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use wayland_client::protocol::wl_output;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
@@ -108,7 +109,7 @@ pub struct ZoomState {
     /// portal captures can be rejected after a layout change.
     pub(super) output_layout_generation: u64,
     pub(super) capture: Option<CaptureSession>,
-    pub(super) image: Option<FrozenImage>,
+    pub(super) image: Option<Arc<FrozenImage>>,
     image_provenance: Option<ScreenImageProvenance>,
     pub(super) image_target_dimensions: Option<(u32, u32)>,
     image_generation: u64,
@@ -213,7 +214,11 @@ impl ZoomState {
     }
 
     pub fn image(&self) -> Option<&FrozenImage> {
-        self.image.as_ref()
+        self.image.as_deref()
+    }
+
+    pub(in crate::backend::wayland) fn shared_image(&self) -> Option<Arc<FrozenImage>> {
+        self.image.clone()
     }
 
     pub fn image_generation(&self) -> u64 {
@@ -230,7 +235,7 @@ impl ZoomState {
             .as_ref()
             .map(OutputGeometry::buffer_size)
             .or(Some((image.width, image.height)));
-        self.image = Some(image);
+        self.image = Some(Arc::new(image));
         self.image_provenance = Some(provenance);
         self.bump_image_generation();
     }
@@ -242,7 +247,7 @@ impl ZoomState {
             .as_ref()
             .map(OutputGeometry::buffer_size)
             .or(Some((image.width, image.height)));
-        self.image = Some(image);
+        self.image = Some(Arc::new(image));
         self.image_provenance = None;
         self.bump_image_generation();
     }
@@ -258,7 +263,7 @@ impl ZoomState {
             .as_ref()
             .map(OutputGeometry::buffer_size)
             .or(Some((image.width, image.height)));
-        self.image = Some(image);
+        self.image = Some(Arc::new(image));
         self.image_provenance = Some(provenance);
         self.bump_image_generation();
     }

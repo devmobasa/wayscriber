@@ -21,6 +21,54 @@ pub(super) fn should_exit_after_capture(
     }
 }
 
+pub(super) const fn overlay_suppression_for_screenshot(
+    capture_type: CaptureType,
+    include_drawings: bool,
+) -> OverlaySuppression {
+    if !include_drawings
+        && matches!(
+            capture_type,
+            CaptureType::FullScreen | CaptureType::Selection { .. }
+        )
+    {
+        OverlaySuppression::DesktopBackdrop
+    } else {
+        OverlaySuppression::Capture
+    }
+}
+
+#[cfg(test)]
+mod include_drawings_tests {
+    use super::*;
+
+    #[test]
+    fn drawing_preference_selects_the_capture_frame_for_full_and_region_only() {
+        for capture_type in [
+            CaptureType::FullScreen,
+            CaptureType::Selection {
+                x: 0,
+                y: 0,
+                width: 0,
+                height: 0,
+            },
+        ] {
+            assert_eq!(
+                overlay_suppression_for_screenshot(capture_type, true),
+                OverlaySuppression::Capture
+            );
+            assert_eq!(
+                overlay_suppression_for_screenshot(capture_type, false),
+                OverlaySuppression::DesktopBackdrop
+            );
+        }
+
+        assert_eq!(
+            overlay_suppression_for_screenshot(CaptureType::ActiveWindow, false),
+            OverlaySuppression::Capture
+        );
+    }
+}
+
 impl WaylandState {
     pub(in crate::backend::wayland) fn continue_frozen_capture_after_failure(
         &mut self,
@@ -204,8 +252,12 @@ impl WaylandState {
         let exit_on_success = self.should_exit_after_capture(destination);
         self.capture.set_exit_on_success(exit_on_success);
 
-        // Suppress overlay before capture to prevent capturing the overlay itself
-        if !self.enter_overlay_suppression(OverlaySuppression::Capture) {
+        // Full-screen capture deliberately keeps the committed canvas visible
+        // unless the user requested raw desktop pixels. Other capture types
+        // retain their established suppression behavior.
+        let suppression =
+            overlay_suppression_for_screenshot(capture_type, self.config.capture.include_drawings);
+        if !self.enter_overlay_suppression(suppression) {
             log::warn!(
                 "Capture action {:?} requested while overlay is suppressed; ignoring",
                 action

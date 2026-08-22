@@ -361,6 +361,7 @@ mod tests {
             None,
             ExitAfterCaptureMode::Auto,
             RegionPickerOptions::new(true, false, true),
+            true,
         )
     }
 

@@ -33,22 +33,23 @@ pub struct BoardExportSnapshot {
 
 pub fn render_canvas_png(snapshot: &CanvasExportSnapshot) -> Result<RenderedImage, CaptureError> {
     let surface = render_canvas_surface(snapshot)?;
+    encode_surface_png(&surface, "canvas")
+}
+
+pub(crate) fn encode_surface_png(
+    surface: &cairo::ImageSurface,
+    subject: &str,
+) -> Result<RenderedImage, CaptureError> {
     let mut bytes = Vec::new();
-    surface
-        .write_to_png(&mut bytes)
-        .map_err(|err| CaptureError::ImageError(format!("Failed to encode canvas PNG: {err}")))?;
+    surface.write_to_png(&mut bytes).map_err(|err| {
+        CaptureError::ImageError(format!("Failed to encode {subject} PNG: {err}"))
+    })?;
 
     Ok(RenderedImage {
         bytes,
         format: ImageFormatMetadata::png(),
-        width: snapshot
-            .viewport
-            .logical_width
-            .saturating_mul(snapshot.viewport.scale.max(1) as u32),
-        height: snapshot
-            .viewport
-            .logical_height
-            .saturating_mul(snapshot.viewport.scale.max(1) as u32),
+        width: surface.width() as u32,
+        height: surface.height() as u32,
     })
 }
 

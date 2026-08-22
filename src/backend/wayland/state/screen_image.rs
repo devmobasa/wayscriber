@@ -5,6 +5,8 @@
 //! screenshot, so source resolution, the logical→image mapping, and the checked
 //! rectangle copy live here instead of inside either feature.
 
+use std::sync::Arc;
+
 use crate::backend::wayland::frozen::{FrozenImage, FrozenState, ScreenImageProvenance};
 use crate::backend::wayland::zoom::ZoomState;
 use crate::screen_pixels::{ImagePixelRect, ImagePoint, PixelSpan};
@@ -132,6 +134,20 @@ pub(super) fn displayed_screen_image<'a>(
             provenance,
             zoom_transformed: false,
         })
+}
+
+/// Share the exact displayed image without copying its compositor-sized pixel
+/// buffer. Callers validate the source token before retaining this handle for
+/// asynchronous work.
+pub(super) fn shared_displayed_screen_image(
+    zoom: &ZoomState,
+    frozen: &FrozenState,
+    kind: ScreenImageKind,
+) -> Option<Arc<FrozenImage>> {
+    match kind {
+        ScreenImageKind::Zoom => zoom.shared_image(),
+        ScreenImageKind::Frozen => frozen.shared_image(),
+    }
 }
 
 /// Map a logical screen point onto source-image pixel coordinates. The result
@@ -432,6 +448,19 @@ mod tests {
         zoom.active = false;
         zoom.request_activation();
         assert!(displayed_screen_image(&zoom, &frozen, false).is_none());
+    }
+
+    #[test]
+    fn asynchronous_region_work_shares_the_exact_displayed_pixel_buffer() {
+        let zoom = zoom_state();
+        let mut frozen = FrozenState::new(None);
+        install_frozen(&mut frozen, opaque(3840, 2));
+        let source = displayed_screen_image(&zoom, &frozen, true).unwrap();
+
+        let shared = shared_displayed_screen_image(&zoom, &frozen, source.kind).unwrap();
+
+        assert!(std::ptr::eq(shared.as_ref(), source.image));
+        assert_eq!(shared.data.as_ptr(), source.image.data.as_ptr());
     }
 
     #[test]

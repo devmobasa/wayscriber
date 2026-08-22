@@ -35,6 +35,7 @@ impl KeybindingsConfig {
             &self.capture.capture_region_interactive,
             Action::CaptureRegionInteractive,
         )?;
+        inserter.insert_all(&self.capture.measure_mode, Action::MeasureMode)?;
         inserter.insert_all(&self.capture.export_canvas_file, Action::ExportCanvasFile)?;
         inserter.insert_all(
             &self.capture.export_canvas_clipboard,

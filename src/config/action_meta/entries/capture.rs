@@ -103,6 +103,17 @@ pub const ENTRIES: &[ActionMeta] = &[
         &["region", "snip", "paste to board", "screenshot"]
     ),
     meta!(
+        MeasureMode,
+        "Measure Mode",
+        Some("Measure"),
+        "Measure a screen region without capturing it",
+        Capture,
+        true,
+        true,
+        false,
+        &["ruler", "dimensions", "screen size"]
+    ),
+    meta!(
         ExportCanvasFile,
         "Export Canvas to File",
         Some("Canvas to File"),

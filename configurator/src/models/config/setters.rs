@@ -258,6 +258,7 @@ impl ConfigDraft {
             }
             ToggleField::CaptureEnabled => self.capture_enabled = value,
             ToggleField::CaptureCopyToClipboard => self.capture_copy_to_clipboard = value,
+            ToggleField::CaptureIncludeDrawings => self.capture_include_drawings = value,
             ToggleField::CaptureExitAfter => self.capture_exit_after = value,
             ToggleField::CaptureRegionShowSizeReadout => {
                 self.capture_region_show_size_readout = value;

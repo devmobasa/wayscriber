@@ -54,6 +54,12 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             |value| Message::ToggleChanged(ToggleField::CaptureCopyToClipboard, value),
         )
         .switch_row(
+            "Include drawings in screenshots",
+            "Composites the active board's committed annotations into full-screen and region captures by default. Interactive region capture can override this per screenshot.",
+            |app| app.draft.capture_include_drawings,
+            |value| Message::ToggleChanged(ToggleField::CaptureIncludeDrawings, value),
+        )
+        .switch_row(
             "Always exit overlay after capture",
             "",
             |app| app.draft.capture_exit_after,

@@ -278,6 +278,9 @@ capture_file_region = ["Ctrl+Alt+6"]
 # Open the region review/action bar. Available from the command palette and
 # unbound by default.
 capture_region_interactive = []
+# Show a logical-pixel screen ruler without capturing anything. Available from
+# the command palette and unbound by default.
+measure_mode = []
 export_canvas_file = []
 export_canvas_clipboard = []
 export_canvas_clipboard_and_file = []
@@ -1415,6 +1418,11 @@ format = "png"
 # trust wl-copy.
 # Shortcut-specific actions may override this.
 copy_to_clipboard = true
+
+# Composite the active board's committed annotations into full-screen and
+# region screenshots. Set to false for raw desktop pixels by default; the
+# interactive region Review toggle can still override this per capture.
+include_drawings = true
 
 # Exit overlay after any capture completes (forces exit for all capture types)
 # When false, clipboard-only captures still auto-exit by default.

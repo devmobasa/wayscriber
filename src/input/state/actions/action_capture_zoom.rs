@@ -6,6 +6,12 @@ use super::super::{InputState, PendingBackendAction};
 
 impl InputState {
     pub(in crate::input::state) fn handle_capture_zoom_action(&mut self, action: Action) -> bool {
+        if action == Action::MeasureMode {
+            if !self.refuse_measure_mode_while_screen_modal_engaged(action) {
+                self.set_pending_backend_action(PendingBackendAction::MeasureMode);
+            }
+            return true;
+        }
         if self.refuse_region_capture_while_screen_modal_engaged(action) {
             return true;
         }
@@ -140,6 +146,24 @@ impl InputState {
             .is_some_and(RegionPurposeTag::is_capture)
             && action.is_region_capture()
     }
+
+    pub(crate) fn refuse_measure_mode_while_screen_modal_engaged(
+        &mut self,
+        action: Action,
+    ) -> bool {
+        if action != Action::MeasureMode
+            || !self.screen_modal_is_engaged()
+            || self.region_state().purpose() == Some(RegionPurposeTag::Measure)
+        {
+            return false;
+        }
+        self.push_toast(
+            ToastPriority::Info,
+            "measure.refused",
+            Toast::info("Finish or cancel the current screen selection first."),
+        );
+        true
+    }
 }
 
 #[cfg(test)]
@@ -202,5 +226,33 @@ mod tests {
             ))
         );
         assert_eq!(state.test_toast_count(), 0);
+    }
+
+    #[test]
+    fn measure_mode_requests_its_non_capture_backend_path() {
+        let mut state = make_test_input_state();
+
+        assert!(state.handle_capture_zoom_action(Action::MeasureMode));
+        assert_eq!(state.region_state().purpose(), None);
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(PendingBackendAction::MeasureMode)
+        );
+    }
+
+    #[test]
+    fn measure_mode_refuses_to_replace_another_screen_modal() {
+        let mut state = make_test_input_state();
+        state.set_region_pending_capture(RegionPurposeTag::Ocr, 1, ScreenCaptureSource::Frozen);
+
+        assert!(state.handle_capture_zoom_action(Action::MeasureMode));
+
+        assert_eq!(state.region_state().purpose(), Some(RegionPurposeTag::Ocr));
+        assert_eq!(state.test_toast_count(), 1);
+        assert_eq!(
+            state.test_active_toast_message(),
+            Some("Finish or cancel the current screen selection first.")
+        );
+        assert!(state.take_pending_backend_action().is_none());
     }
 }

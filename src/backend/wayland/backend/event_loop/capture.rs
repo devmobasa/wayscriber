@@ -152,6 +152,7 @@ pub(super) fn handle_pending_actions(
     if let Some(action) = state.input_state.take_pending_backend_action() {
         match action {
             PendingBackendAction::Screenshot(action) => state.handle_capture_action(action),
+            PendingBackendAction::MeasureMode => state.handle_measure_mode_action(),
             PendingBackendAction::CanvasExport(action) => state.handle_canvas_export_action(action),
             PendingBackendAction::BoardPdfExport(action) => {
                 state.handle_board_pdf_export_action(action);

@@ -179,6 +179,12 @@ mod tests {
                 generation: 1,
             }
         ));
+        assert!(!capture_picker_chrome_suppressed_for(
+            RegionSelectUiState::Armed {
+                purpose: RegionPurposeTag::Measure,
+                generation: 1,
+            }
+        ));
         for purpose in [
             RegionPurposeTag::CaptureDeliver,
             RegionPurposeTag::CaptureInteractive,

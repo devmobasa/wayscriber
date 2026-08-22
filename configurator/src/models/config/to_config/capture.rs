@@ -23,6 +23,7 @@ impl ConfigDraft {
             )),
         }
         config.capture.copy_to_clipboard = self.capture_copy_to_clipboard;
+        config.capture.include_drawings = self.capture_include_drawings;
         config.capture.exit_after_capture = self.capture_exit_after;
         config.capture.region.picker = self.capture_region_picker.to_picker();
         config.capture.region.show_size_readout = self.capture_region_show_size_readout;

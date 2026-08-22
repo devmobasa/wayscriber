@@ -94,6 +94,7 @@ const HELP_ACTIONS: &[Action] = &[
     Action::CaptureActiveWindow,
     Action::CaptureSelection,
     Action::CaptureRegionInteractive,
+    Action::MeasureMode,
     Action::OpenCaptureFolder,
 ];
 
@@ -253,6 +254,7 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::SetColorBlack,
     Action::PickScreenColor,
     Action::CaptureRegionInteractive,
+    Action::MeasureMode,
     Action::CaptureClipboardFull,
     Action::CaptureFileFull,
     Action::ExportCanvasFile,
@@ -490,6 +492,18 @@ fn interactive_region_capture_metadata_matches_its_public_surfaces() {
         meta.search_aliases,
         ["region", "snip", "paste to board", "screenshot"]
     );
+    assert_eq!(meta.category, ActionCategory::Capture);
+    assert!(meta.in_command_palette);
+    assert!(meta.in_help);
+    assert!(!meta.in_toolbar);
+}
+
+#[test]
+fn measure_mode_metadata_exposes_a_palette_first_screen_tool() {
+    let meta = action_meta(Action::MeasureMode).expect("measure mode metadata");
+
+    assert_eq!(meta.label, "Measure Mode");
+    assert_eq!(meta.short_label(), "Measure");
     assert_eq!(meta.category, ActionCategory::Capture);
     assert!(meta.in_command_palette);
     assert!(meta.in_help);

@@ -171,6 +171,16 @@ impl KeyboardHandler for WaylandState {
                 }
                 if self
                     .input_state
+                    .refuse_measure_mode_while_screen_modal_engaged(action)
+                {
+                    return;
+                }
+                if action == Action::MeasureMode {
+                    self.handle_measure_mode_action();
+                    return;
+                }
+                if self
+                    .input_state
                     .capture_region_action_reaches_backend(action)
                 {
                     // Route the opening action directly while its picker owns
@@ -217,16 +227,7 @@ impl KeyboardHandler for WaylandState {
             // Every other shortcut is swallowed while the selector is up so a
             // key cannot change the active tool mid-drag.
             if matches!(key, Key::Escape) {
-                if self
-                    .input_state
-                    .region_state()
-                    .purpose()
-                    .is_some_and(crate::input::state::RegionPurposeTag::is_capture)
-                {
-                    self.cancel_region_capture();
-                } else {
-                    self.cancel_ocr();
-                }
+                self.cancel_active_region_selector();
             }
             return;
         }
@@ -235,6 +236,12 @@ impl KeyboardHandler for WaylandState {
             if action.is_some_and(|action| {
                 self.input_state
                     .refuse_region_capture_while_screen_modal_engaged(action)
+            }) {
+                return;
+            }
+            if action.is_some_and(|action| {
+                self.input_state
+                    .refuse_measure_mode_while_screen_modal_engaged(action)
             }) {
                 return;
             }
@@ -582,6 +589,9 @@ fn region_review_key_action(key: Key, ctrl: bool, shift: bool) -> Option<RegionR
         Key::Char('b' | 'B') if !ctrl => Some(RegionReviewKeyAction::Submit(
             crate::ui::RegionAction::Board,
         )),
+        Key::Char('d' | 'D') if !ctrl => Some(RegionReviewKeyAction::Submit(
+            crate::ui::RegionAction::ToggleIncludeDrawings,
+        )),
         _ => None,
     }
 }
@@ -689,6 +699,13 @@ mod tests {
             ))
         );
         assert_eq!(region_review_key_action(Key::Char('b'), true, false), None);
+        assert_eq!(
+            region_review_key_action(Key::Char('d'), false, false),
+            Some(RegionReviewKeyAction::Submit(
+                crate::ui::RegionAction::ToggleIncludeDrawings
+            ))
+        );
+        assert_eq!(region_review_key_action(Key::Char('d'), true, false), None);
     }
 
     #[test]

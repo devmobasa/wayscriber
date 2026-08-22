@@ -40,6 +40,12 @@ pub(crate) fn default_capture_region_interactive() -> Vec<String> {
     Vec::new()
 }
 
+/// Deliberately empty: measure mode is palette-first until the user chooses a
+/// shortcut that fits their compositor and existing bindings.
+pub(crate) fn default_measure_mode() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_export_canvas_file() -> Vec<String> {
     Vec::new()
 }

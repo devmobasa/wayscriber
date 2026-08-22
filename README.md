@@ -744,6 +744,7 @@ Light passthrough (layer-shell compositors only) lets normal keyboard and pointe
 | <kbd>Ctrl+6</kbd> | Region → clipboard (explicit) |
 | <kbd>Ctrl+Alt+6</kbd> | Region → save PNG (explicit) |
 | Unbound | Capture region interactively, then choose Copy, Save, Both, or Board (`capture_region_interactive`) |
+| Unbound | Measure a logical screen region without capturing it (`measure_mode`) |
 | <kbd>Ctrl+Alt+O</kbd> | Open last capture folder |
 
 Region shortcuts use Wayscriber's native frozen-image picker by default. Set
@@ -758,6 +759,23 @@ unbound by default; bind it in the configurator or under `[keybindings]`. It
 always uses the native picker so Review cannot be bypassed by an external
 selector. In Review, **Both** (or <kbd>Enter</kbd>) always copies the PNG and
 saves it to a file.
+
+Full-screen and region captures include the active board's committed drawings
+by default. Set `[capture].include_drawings = false` for raw desktop pixels.
+Provisional strokes, selection handles, previews, toolbars, and other
+Wayscriber UI are never included. In interactive Review, **Include drawings in
+exports** (or <kbd>D</kbd>) starts from the configured default and can override
+it for that one Copy, Save, or Both action. Board always inserts the original
+crop so existing annotations are not baked into a duplicate image on the same
+board.
+On a transparent board, full-screen and legacy `slurp` captures retain the
+desktop behind the annotations; a solid board retains its canvas background.
+The native region picker always composites committed drawings over its frozen
+desktop crop.
+
+`measure_mode` is also command-palette-first and unbound by default. It shows a
+crosshair and logical-pixel size readout without freezing or capturing the
+screen; press <kbd>Esc</kbd> or run the action again to leave it.
 
 Shortcuts marked "respects `capture.copy_to_clipboard`" send the capture to the clipboard or a file according to that `config.toml` setting; the other shortcuts always use the destination shown. Captures need the [screenshot tools](#screenshot-tools) and fall back to xdg-desktop-portal if they are missing.
 

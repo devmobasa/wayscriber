@@ -16,6 +16,7 @@ impl WaylandState {
         phys_height: u32,
         now: Instant,
         damage_world: &[crate::util::Rect],
+        render_transients: bool,
         mut perf: Option<&mut PerfRenderBreakdown>,
     ) -> Result<()> {
         let capture_picker_suppresses_canvas_chrome = self.capture_picker_chrome_suppressed();
@@ -218,11 +219,13 @@ impl WaylandState {
         // strokes clear their path and replay the original backdrop into it, so a
         // dim layer painted earlier would be punched away and every past erasure
         // would show as a bright trail outside the openings.
-        let spotlight_cursor = {
+        let spotlight_regions = if render_transients {
             let (screen_x, screen_y) = self.current_mouse();
-            self.canvas_world_coords(screen_x as f64, screen_y as f64)
+            let spotlight_cursor = self.canvas_world_coords(screen_x as f64, screen_y as f64);
+            self.input_state.spotlight_regions(spotlight_cursor)
+        } else {
+            crate::draw::spotlight_regions_for_frame(self.input_state.boards.active_frame())
         };
-        let spotlight_regions = self.input_state.spotlight_regions(spotlight_cursor);
         // Remember for the next frame's damage decision: once the last spotlight
         // is gone this buffer still carries its dim until a full repaint.
         self.spotlight_dimmed_last_frame = !spotlight_regions.is_empty();
@@ -234,6 +237,14 @@ impl WaylandState {
                 feather: self.input_state.spotlight_feather,
             },
         );
+
+        if !render_transients {
+            if canvas_transform_active {
+                let _ = ctx.restore();
+            }
+            let _ = ctx.restore();
+            return Ok(());
+        }
 
         self.render_selection_overlays(ctx);
 

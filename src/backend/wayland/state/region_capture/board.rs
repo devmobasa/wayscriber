@@ -1,4 +1,5 @@
 use crate::util::Rect;
+use crate::{canvas_export::CanvasExportRect, screen_pixels::ImagePixelRect};
 
 use super::super::screen_image::ScreenSourceToken;
 
@@ -33,6 +34,39 @@ pub(in crate::backend::wayland) fn world_rect_for_screen_rect(
     let right = first.0.max(second.0).ceil() as i32;
     let bottom = first.1.max(second.1).ceil() as i32;
     Rect::from_min_max(left, top, right, bottom)
+}
+
+/// Map authoritative source-image pixel edges directly into board-world space.
+///
+/// This intentionally bypasses the integer display rectangle used by picker
+/// chrome. Its floor/ceil quantization can expand a crop at fractional output
+/// scales. Zoom does not appear here: selecting an image-space rectangle has
+/// already inverted the captured zoom view, so only the board offset and the
+/// source image-to-logical-surface ratio remain.
+pub(in crate::backend::wayland) fn world_rect_for_image_rect_exact(
+    rect: ImagePixelRect,
+    board_offset: (f64, f64),
+    source: ScreenSourceToken,
+) -> Option<CanvasExportRect> {
+    if !board_offset.0.is_finite()
+        || !board_offset.1.is_finite()
+        || source.image_size.0 == 0
+        || source.image_size.1 == 0
+        || source.surface.0 == 0
+        || source.surface.1 == 0
+        || rect.x().checked_add(rect.width())? > source.image_size.0
+        || rect.y().checked_add(rect.height())? > source.image_size.1
+    {
+        return None;
+    }
+    let scale_x = f64::from(source.surface.0) / f64::from(source.image_size.0);
+    let scale_y = f64::from(source.surface.1) / f64::from(source.image_size.1);
+    CanvasExportRect::new(
+        board_offset.0 + f64::from(rect.x()) * scale_x,
+        board_offset.1 + f64::from(rect.y()) * scale_y,
+        f64::from(rect.width()) * scale_x,
+        f64::from(rect.height()) * scale_y,
+    )
 }
 
 #[cfg(test)]
@@ -80,6 +114,41 @@ mod tests {
         assert_ne!(
             world_rect_for_screen_rect(display, (7.0, 11.0), source(true)),
             Some(display)
+        );
+    }
+
+    #[test]
+    fn exact_image_mapping_preserves_native_and_fractional_scale_edges() {
+        let rect = ImagePixelRect::new(150, 225, 300, 150, (1200, 900)).unwrap();
+        let mut token = source(false);
+        token.image_size = (1200, 900);
+        token.surface = (800, 600);
+        token.output_scale = 2;
+        assert_eq!(
+            world_rect_for_image_rect_exact(rect, (7.0, 11.0), token),
+            CanvasExportRect::new(107.0, 161.0, 200.0, 100.0)
+        );
+
+        token.image_size = (1600, 1200);
+        let rect = ImagePixelRect::new(200, 300, 400, 200, token.image_size).unwrap();
+        assert_eq!(
+            world_rect_for_image_rect_exact(rect, (7.0, 11.0), token),
+            CanvasExportRect::new(107.0, 161.0, 200.0, 100.0)
+        );
+    }
+
+    #[test]
+    fn exact_image_mapping_is_invariant_to_the_captured_zoom_view() {
+        let rect = ImagePixelRect::new(20, 30, 80, 40, (800, 600)).unwrap();
+        let plain = source(false);
+        let zoomed = source(true);
+        assert_eq!(
+            world_rect_for_image_rect_exact(rect, (7.0, 11.0), plain),
+            world_rect_for_image_rect_exact(rect, (7.0, 11.0), zoomed)
+        );
+        assert_eq!(
+            world_rect_for_image_rect_exact(rect, (7.0, 11.0), zoomed),
+            CanvasExportRect::new(27.0, 41.0, 80.0, 40.0)
         );
     }
 }

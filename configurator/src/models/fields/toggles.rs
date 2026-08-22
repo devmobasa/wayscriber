@@ -64,6 +64,7 @@ pub enum ToggleField {
     BoardsPersistCustomizations,
     CaptureEnabled,
     CaptureCopyToClipboard,
+    CaptureIncludeDrawings,
     CaptureExitAfter,
     CaptureRegionShowSizeReadout,
     CaptureRegionShowLoupe,

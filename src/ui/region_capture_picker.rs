@@ -1,4 +1,5 @@
 use crate::input::state::RegionSelection;
+use crate::util::Rect;
 
 use super::primitives::{draw_rounded_rect, text_extents_for};
 use super::region_action_bar::{RegionAction, RegionActionBar, render_region_action_bar};
@@ -20,10 +21,12 @@ pub(crate) struct RegionCapturePickerVisual<'a> {
     pub selection: Option<RegionSelection>,
     pub pointer: (f64, f64),
     pub measurement: Option<&'a str>,
+    pub show_scrim: bool,
     pub show_legend: bool,
     pub loupe: Option<RegionCaptureLoupeVisual>,
     pub action_bar: Option<RegionActionBar>,
     pub hovered_action: Option<RegionAction>,
+    pub include_drawings: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,6 +60,94 @@ pub(crate) fn capture_size_text(size: (u32, u32)) -> String {
     format!("{} × {}", size.0, size.1)
 }
 
+/// Conservative targeted damage for Measure Mode's chrome. The crosshair is
+/// represented as two thin strips; the selection as four edge strips; and the
+/// pointer readout by a bounded box covering every flip direction. This avoids
+/// the capture picker's full-surface scrim damage without leaving trails.
+pub(crate) fn measure_picker_damage(
+    selection: Option<RegionSelection>,
+    pointer: (f64, f64),
+    screen: (u32, u32),
+) -> Vec<Rect> {
+    let width = screen.0.min(i32::MAX as u32) as i32;
+    let height = screen.1.min(i32::MAX as u32) as i32;
+    if width <= 0 || height <= 0 {
+        return Vec::new();
+    }
+    let x = pointer.0.round().clamp(0.0, f64::from(width - 1)) as i32;
+    let y = pointer.1.round().clamp(0.0, f64::from(height - 1)) as i32;
+    let mut damage = Vec::with_capacity(7);
+    push_clipped_damage(&mut damage, x - 2, 0, 5, height, width, height);
+    push_clipped_damage(&mut damage, 0, y - 2, width, 5, width, height);
+    // The monospace readout is short, but cover both horizontal and vertical
+    // flip choices so the damage remains correct without a Cairo text pass.
+    push_clipped_damage(&mut damage, x - 240, y - 48, 480, 96, width, height);
+
+    if let Some(selection) = selection {
+        let min_x = selection.start.0.min(selection.end.0).floor() as i32;
+        let min_y = selection.start.1.min(selection.end.1).floor() as i32;
+        let max_x = selection.start.0.max(selection.end.0).ceil() as i32;
+        let max_y = selection.start.1.max(selection.end.1).ceil() as i32;
+        let rect_width = max_x.saturating_sub(min_x);
+        let rect_height = max_y.saturating_sub(min_y);
+        push_clipped_damage(
+            &mut damage,
+            min_x - 4,
+            min_y - 4,
+            rect_width + 8,
+            8,
+            width,
+            height,
+        );
+        push_clipped_damage(
+            &mut damage,
+            min_x - 4,
+            max_y - 4,
+            rect_width + 8,
+            8,
+            width,
+            height,
+        );
+        push_clipped_damage(
+            &mut damage,
+            min_x - 4,
+            min_y - 4,
+            8,
+            rect_height + 8,
+            width,
+            height,
+        );
+        push_clipped_damage(
+            &mut damage,
+            max_x - 4,
+            min_y - 4,
+            8,
+            rect_height + 8,
+            width,
+            height,
+        );
+    }
+    damage
+}
+
+fn push_clipped_damage(
+    damage: &mut Vec<Rect>,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    screen_width: i32,
+    screen_height: i32,
+) {
+    let min_x = x.clamp(0, screen_width);
+    let min_y = y.clamp(0, screen_height);
+    let max_x = x.saturating_add(width).clamp(0, screen_width);
+    let max_y = y.saturating_add(height).clamp(0, screen_height);
+    if let Some(rect) = Rect::from_min_max(min_x, min_y, max_x, max_y) {
+        damage.push(rect);
+    }
+}
+
 pub(crate) fn render_region_capture_loupe(
     ctx: &cairo::Context,
     screen: (u32, u32),
@@ -78,15 +169,17 @@ pub(crate) fn render_region_capture_picker(
     let height = f64::from(screen_height);
 
     let _ = ctx.save();
-    ctx.set_source_rgba(SCRIM.0, SCRIM.1, SCRIM.2, SCRIM.3);
-    ctx.rectangle(0.0, 0.0, width, height);
-    if let Some(selection) = visual.selection {
-        let (x, y, w, h) = normalized_rect(selection);
-        ctx.rectangle(x, y, w, h);
-        ctx.set_fill_rule(cairo::FillRule::EvenOdd);
+    if visual.show_scrim {
+        ctx.set_source_rgba(SCRIM.0, SCRIM.1, SCRIM.2, SCRIM.3);
+        ctx.rectangle(0.0, 0.0, width, height);
+        if let Some(selection) = visual.selection {
+            let (x, y, w, h) = normalized_rect(selection);
+            ctx.rectangle(x, y, w, h);
+            ctx.set_fill_rule(cairo::FillRule::EvenOdd);
+        }
+        let _ = ctx.fill();
+        ctx.set_fill_rule(cairo::FillRule::Winding);
     }
-    let _ = ctx.fill();
-    ctx.set_fill_rule(cairo::FillRule::Winding);
 
     if let Some(selection) = visual.selection {
         let (x, y, w, h) = normalized_rect(selection);
@@ -111,7 +204,12 @@ pub(crate) fn render_region_capture_picker(
         render_region_capture_loupe(ctx, (screen_width, screen_height), loupe, &mut sample_loupe);
     }
     if let Some(action_bar) = visual.action_bar {
-        render_region_action_bar(ctx, action_bar, visual.hovered_action);
+        render_region_action_bar(
+            ctx,
+            action_bar,
+            visual.hovered_action,
+            visual.include_drawings,
+        );
     }
     let _ = ctx.restore();
 }
@@ -341,10 +439,12 @@ mod tests {
                 }),
                 pointer: (30.0, 30.0),
                 measurement: None,
+                show_scrim: true,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
                 hovered_action: None,
+                include_drawings: false,
             },
             |_x, _y| None,
         );
@@ -355,6 +455,66 @@ mod tests {
         let alpha = |x: usize, y: usize| data[y * stride + x * 4 + 3];
         assert!(alpha(2, 2) > 0, "outside the selection must be scrimmed");
         assert_eq!(alpha(20, 20), 0, "the selected pixels must remain clear");
+    }
+
+    #[test]
+    fn measure_visual_leaves_the_screen_unscrimmed() {
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 40, 40).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        render_region_capture_picker(
+            &ctx,
+            40,
+            40,
+            RegionCapturePickerVisual {
+                selection: None,
+                pointer: (20.0, 20.0),
+                measurement: Some("20, 20"),
+                show_scrim: false,
+                show_legend: false,
+                loupe: None,
+                action_bar: None,
+                hovered_action: None,
+                include_drawings: false,
+            },
+            |_x, _y| None,
+        );
+        drop(ctx);
+        surface.flush();
+        let stride = surface.stride() as usize;
+        let data = surface.data().unwrap();
+        assert_eq!(data[2 * stride + 2 * 4 + 3], 0, "no measure scrim");
+        assert!(data[20 * stride + 20 * 4 + 3] > 0, "measure crosshair");
+    }
+
+    #[test]
+    fn measure_damage_uses_thin_chrome_regions_instead_of_the_full_surface() {
+        let damage = measure_picker_damage(
+            Some(RegionSelection {
+                start: (100.0, 80.0),
+                end: (700.0, 500.0),
+            }),
+            (400.0, 300.0),
+            (800, 600),
+        );
+
+        assert!(damage.len() >= 7);
+        assert!(damage.iter().all(|rect| {
+            rect.x >= 0
+                && rect.y >= 0
+                && rect.x + rect.width <= 800
+                && rect.y + rect.height <= 600
+                && (rect.width < 800 || rect.height < 600)
+        }));
+        assert!(
+            damage
+                .iter()
+                .any(|rect| rect.width == 800 && rect.height <= 5)
+        );
+        assert!(
+            damage
+                .iter()
+                .any(|rect| rect.height == 600 && rect.width <= 5)
+        );
     }
 
     #[test]
@@ -372,10 +532,12 @@ mod tests {
                 }),
                 pointer: (20.0, 20.0),
                 measurement: None,
+                show_scrim: true,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
                 hovered_action: None,
+                include_drawings: false,
             },
             |_x, _y| None,
         );
@@ -406,10 +568,12 @@ mod tests {
                 selection: Some(selection),
                 pointer: (200.0, 150.0),
                 measurement: Some("200 × 100"),
+                show_scrim: true,
                 show_legend: false,
                 loupe: None,
                 action_bar: Some(bar),
                 hovered_action: Some(crate::ui::RegionAction::Both),
+                include_drawings: true,
             },
             |_x, _y| None,
         );

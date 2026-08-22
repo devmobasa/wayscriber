@@ -55,6 +55,15 @@ fn region_capture_paths_exist_in_json_schema() {
 }
 
 #[test]
+fn capture_include_drawings_exists_in_json_schema() {
+    let schema = Config::json_schema();
+    assert!(
+        schema_contains_path(&schema, "capture.include_drawings"),
+        "schema missing capture drawing preference"
+    );
+}
+
+#[test]
 fn shape_size_readout_exists_in_json_schema() {
     let schema = Config::json_schema();
     assert!(

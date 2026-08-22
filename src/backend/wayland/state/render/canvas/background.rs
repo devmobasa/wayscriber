@@ -20,6 +20,8 @@ impl CanvasEraserContext {
             bg_color: self.bg_color,
             logical_to_image_scale_x: self.logical_to_image_scale_x,
             logical_to_image_scale_y: self.logical_to_image_scale_y,
+            logical_image_origin_x: 0.0,
+            logical_image_origin_y: 0.0,
         }
     }
 }

@@ -6,6 +6,7 @@ pub enum RegionPurposeTag {
     Ocr,
     CaptureDeliver,
     CaptureInteractive,
+    Measure,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -46,6 +47,11 @@ impl RegionPurposeTag {
                 allow_square: true,
                 snap_anchor: true,
             },
+            Self::Measure => SelectionPolicy {
+                min_submit_logical_px: None,
+                allow_square: false,
+                snap_anchor: false,
+            },
         }
     }
 }
@@ -77,7 +83,8 @@ pub struct RegionSelection {
     pub end: (f64, f64),
 }
 
-/// UI-facing lifecycle shared by OCR and native screen-region capture.
+/// UI-facing lifecycle shared by OCR, native screen-region capture, and the
+/// capture-free logical screen ruler.
 ///
 /// It owns transient input and render state only. The selected pixels and the
 /// recognition work belong outside `InputState`, so cancelling here can never
@@ -114,13 +121,23 @@ pub enum RegionSelectUiState {
         display: RegionSelection,
         move_owner: Option<RegionInputSource>,
     },
+    /// Measure mode keeps the last completed logical rectangle visible until
+    /// a new press replaces it or the user exits the mode.
+    Measured {
+        purpose: RegionPurposeTag,
+        generation: u64,
+        display: RegionSelection,
+    },
 }
 
 impl RegionSelectUiState {
     pub fn is_active(self) -> bool {
         matches!(
             self,
-            Self::Armed { .. } | Self::Selecting { .. } | Self::Review { .. }
+            Self::Armed { .. }
+                | Self::Selecting { .. }
+                | Self::Review { .. }
+                | Self::Measured { .. }
         )
     }
 
@@ -140,6 +157,10 @@ impl RegionSelectUiState {
         matches!(self, Self::Review { .. })
     }
 
+    pub fn is_measured(self) -> bool {
+        matches!(self, Self::Measured { .. })
+    }
+
     /// The region drag in logical screen coordinates, if one is in progress.
     pub fn selection(self) -> Option<RegionSelection> {
         match self {
@@ -147,7 +168,7 @@ impl RegionSelectUiState {
                 start,
                 end: current,
             }),
-            Self::Review { display, .. } => Some(display),
+            Self::Review { display, .. } | Self::Measured { display, .. } => Some(display),
             Self::Inactive | Self::PendingCapture { .. } | Self::Armed { .. } => None,
         }
     }
@@ -157,16 +178,21 @@ impl RegionSelectUiState {
         match self {
             Self::Selecting { owner, .. } => Some(owner),
             Self::Review { move_owner, .. } => move_owner,
-            Self::Inactive | Self::PendingCapture { .. } | Self::Armed { .. } => None,
+            Self::Inactive
+            | Self::PendingCapture { .. }
+            | Self::Armed { .. }
+            | Self::Measured { .. } => None,
         }
     }
 
     pub fn pending_source(self) -> Option<ScreenCaptureSource> {
         match self {
             Self::PendingCapture { source, .. } => Some(source),
-            Self::Inactive | Self::Armed { .. } | Self::Selecting { .. } | Self::Review { .. } => {
-                None
-            }
+            Self::Inactive
+            | Self::Armed { .. }
+            | Self::Selecting { .. }
+            | Self::Review { .. }
+            | Self::Measured { .. } => None,
         }
     }
 
@@ -175,7 +201,8 @@ impl RegionSelectUiState {
             Self::PendingCapture { purpose, .. }
             | Self::Armed { purpose, .. }
             | Self::Selecting { purpose, .. }
-            | Self::Review { purpose, .. } => Some(purpose),
+            | Self::Review { purpose, .. }
+            | Self::Measured { purpose, .. } => Some(purpose),
             Self::Inactive => None,
         }
     }
@@ -185,13 +212,18 @@ impl RegionSelectUiState {
             Self::PendingCapture { generation, .. }
             | Self::Armed { generation, .. }
             | Self::Selecting { generation, .. }
-            | Self::Review { generation, .. } => Some(generation),
+            | Self::Review { generation, .. }
+            | Self::Measured { generation, .. } => Some(generation),
             Self::Inactive => None,
         }
     }
 }
 
 impl InputState {
+    pub(crate) fn activate_measure_mode(&mut self, generation: u64) {
+        self.activate_region(RegionPurposeTag::Measure, generation);
+    }
+
     pub(crate) fn request_copy_text_from_screen(&mut self) {
         self.pending_ocr_request = true;
     }
@@ -263,6 +295,11 @@ impl InputState {
                 generation,
             }
             | RegionSelectUiState::Review {
+                purpose,
+                generation,
+                ..
+            }
+            | RegionSelectUiState::Measured {
                 purpose,
                 generation,
                 ..
@@ -348,6 +385,32 @@ impl InputState {
         }
     }
 
+    pub(crate) fn complete_measurement(&mut self, source: RegionInputSource) -> bool {
+        let RegionSelectUiState::Selecting {
+            purpose: RegionPurposeTag::Measure,
+            generation,
+            owner,
+            start,
+            current,
+        } = self.region_select_ui_state
+        else {
+            return false;
+        };
+        if owner != source {
+            return false;
+        }
+        self.region_select_ui_state = RegionSelectUiState::Measured {
+            purpose: RegionPurposeTag::Measure,
+            generation,
+            display: RegionSelection {
+                start,
+                end: current,
+            },
+        };
+        self.mark_region_dirty();
+        true
+    }
+
     /// Whether `source` is the device dragging the region right now. The
     /// release and per-device cancellation paths check this before acting, so
     /// one device cannot submit or discard another's region.
@@ -375,8 +438,10 @@ impl InputState {
 
     pub(crate) fn cancel_region_ui_only(&mut self) {
         if !matches!(self.region_select_ui_state, RegionSelectUiState::Inactive) {
+            let was_measure =
+                self.region_select_ui_state.purpose() == Some(RegionPurposeTag::Measure);
             self.region_select_ui_state = RegionSelectUiState::Inactive;
-            self.mark_region_dirty();
+            self.mark_region_dirty_for(was_measure);
         }
     }
 
@@ -384,7 +449,15 @@ impl InputState {
     /// out of it, so every change repaints the whole surface: an incremental
     /// buffer would otherwise keep the scrim from an earlier frame.
     fn mark_region_dirty(&mut self) {
-        self.dirty_tracker.mark_full();
+        self.mark_region_dirty_for(
+            self.region_select_ui_state.purpose() == Some(RegionPurposeTag::Measure),
+        );
+    }
+
+    fn mark_region_dirty_for(&mut self, targeted_measure_damage: bool) {
+        if !targeted_measure_damage {
+            self.dirty_tracker.mark_full();
+        }
         self.needs_redraw = true;
     }
 }
@@ -499,6 +572,26 @@ mod tests {
         assert!(!state.finish_region_review_move(RegionInputSource::Stylus));
         assert!(state.finish_region_review_move(RegionInputSource::Pointer));
         assert!(state.region_state().selection_owner().is_none());
+    }
+
+    #[test]
+    fn measure_mode_keeps_the_completed_rectangle_without_capture_state() {
+        let mut state = make_test_input_state();
+        state.activate_measure_mode(7);
+        assert!(state.start_region_selection(RegionInputSource::Pointer, (12.0, 18.0)));
+        state.update_region_selection(RegionInputSource::Pointer, (42.0, 63.0));
+
+        assert!(state.complete_measurement(RegionInputSource::Pointer));
+
+        assert!(state.region_state().is_measured());
+        assert_eq!(
+            state.region_state().selection(),
+            Some(RegionSelection {
+                start: (12.0, 18.0),
+                end: (42.0, 63.0),
+            })
+        );
+        assert!(state.take_pending_backend_action().is_none());
     }
 
     #[test]

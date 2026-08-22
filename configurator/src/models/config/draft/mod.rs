@@ -182,6 +182,7 @@ pub struct ConfigDraft {
     pub capture_filename_template: String,
     pub capture_format: String,
     pub capture_copy_to_clipboard: bool,
+    pub capture_include_drawings: bool,
     pub capture_exit_after: bool,
     pub capture_ocr_languages: String,
     pub capture_region_picker: RegionPickerOption,

@@ -647,6 +647,19 @@ fn exact_capture_file_labels_match_capture_file_section() {
 }
 
 #[test]
+fn capture_drawing_preference_matches_capture_file_section() {
+    for query in ["include drawings in screenshots", "capture annotations"] {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.search_query = SearchQuery::new(query);
+
+        let summary = app.search_summary();
+        let capture = summary.tab(TabId::Capture).expect("capture match");
+
+        assert!(capture.area_matches(SearchArea::CaptureFiles));
+    }
+}
+
+#[test]
 fn exact_capture_filename_labels_match_capture_sections() {
     let cases = [
         (

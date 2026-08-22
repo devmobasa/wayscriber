@@ -271,6 +271,22 @@ impl WaylandState {
         );
         self.data.prev_shape_measure_badge_damage = measure_badge_rect;
 
+        let measure_picker_damage = if self.input_state.region_state().purpose()
+            == Some(crate::input::state::RegionPurposeTag::Measure)
+        {
+            let (pointer_x, pointer_y) = self.current_mouse();
+            crate::ui::measure_picker_damage(
+                self.input_state.region_state().selection(),
+                (f64::from(pointer_x), f64::from(pointer_y)),
+                (width, height),
+            )
+        } else {
+            Vec::new()
+        };
+        regions.extend(self.data.prev_measure_picker_damage.iter().copied());
+        regions.extend(measure_picker_damage.iter().copied());
+        self.data.prev_measure_picker_damage = measure_picker_damage;
+
         regions
     }
 

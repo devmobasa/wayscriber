@@ -301,6 +301,15 @@ impl WaylandState {
                 self.render_inline_toolbars(ctx, &snapshot);
             }
 
+            if self.input_state.region_state().purpose()
+                == Some(crate::input::state::RegionPurposeTag::Measure)
+            {
+                // Measure mode is screen chrome over the live annotated
+                // canvas, not capture suppression. Paint it once, above the
+                // ordinary Wayscriber UI.
+                self.render_capture_picker(ctx, width, height);
+            }
+
             // Modal overlays render last (on top of everything including toolbars)
             if !capture_picker {
                 if let Some(card) = self.first_run_onboarding_card() {
@@ -315,15 +324,16 @@ impl WaylandState {
     }
 
     fn render_capture_picker(&self, ctx: &cairo::Context, width: u32, height: u32) {
+        let purpose = self.input_state.region_state().purpose();
         if !self.input_state.region_is_active()
-            || !self
-                .input_state
-                .region_state()
-                .purpose()
-                .is_some_and(|purpose| purpose.is_capture())
+            || !purpose.is_some_and(|purpose| {
+                purpose.is_capture() || purpose == crate::input::state::RegionPurposeTag::Measure
+            })
         {
             return;
         }
+
+        let measure_mode = purpose == Some(crate::input::state::RegionPurposeTag::Measure);
 
         let options = match self.capture.region_phase() {
             crate::backend::wayland::capture::RegionCapturePhase::Reserved(intent) => {
@@ -334,18 +344,23 @@ impl WaylandState {
             | crate::backend::wayland::capture::RegionCapturePhase::Accepted => None,
         };
         let geometry = self.region_selection_geometry();
+        let selection = if measure_mode {
+            self.region_measure_selection()
+        } else {
+            geometry.map(|geometry| geometry.display_selection())
+        };
         let (pointer_x, pointer_y) = self.current_mouse();
         let pointer = (f64::from(pointer_x), f64::from(pointer_y));
-        let measurement = options
-            .is_some_and(|options| options.show_size_readout())
-            .then(|| self.region_picker_measurement(pointer))
-            .flatten()
-            .map(|measurement| match measurement {
-                RegionPickerMeasurement::Point { x, y } => format!("{x}, {y}"),
-                RegionPickerMeasurement::Size { width, height } => {
-                    crate::ui::capture_size_text((width, height))
-                }
-            });
+        let measurement = (measure_mode
+            || options.is_some_and(|options| options.show_size_readout()))
+        .then(|| self.region_picker_measurement(pointer))
+        .flatten()
+        .map(|measurement| match measurement {
+            RegionPickerMeasurement::Point { x, y } => format!("{x}, {y}"),
+            RegionPickerMeasurement::Size { width, height } => {
+                crate::ui::capture_size_text((width, height))
+            }
+        });
         let region_state = self.input_state.region_state();
         let action_bar = if region_state.is_review() {
             geometry.map(|geometry| {
@@ -385,14 +400,16 @@ impl WaylandState {
             width,
             height,
             crate::ui::RegionCapturePickerVisual {
-                selection: geometry.map(|geometry| geometry.display_selection()),
+                selection,
                 pointer,
                 measurement: measurement.as_deref(),
+                show_scrim: !measure_mode,
                 show_legend: options.is_some_and(|options| options.show_legend())
                     && !self.region_picker_legend_dismissed(),
                 loupe,
                 action_bar,
                 hovered_action,
+                include_drawings: self.region_picker_include_drawings(),
             },
             |image_x, image_y| {
                 loupe_source.as_ref().and_then(|(source, _token)| {

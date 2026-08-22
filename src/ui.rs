@@ -49,7 +49,7 @@ pub use properties_panel::render_properties_panel;
 pub use radial_menu::render_radial_menu;
 pub(crate) use region_action_bar::{RegionAction, RegionActionBar};
 pub(crate) use region_capture_picker::{
-    RegionCaptureLoupeVisual, RegionCapturePickerVisual, capture_size_text,
+    RegionCaptureLoupeVisual, RegionCapturePickerVisual, capture_size_text, measure_picker_damage,
     render_region_capture_picker,
 };
 pub use status::{

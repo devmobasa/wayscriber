@@ -534,10 +534,12 @@ pub fn render_blur_rect(
     let scale_y = replay_ctx.logical_to_image_scale_y.max(f64::MIN_POSITIVE);
     let recipe = blur_recipe(strength, style);
 
-    let src_x = ((left * scale_x).floor() as i32).saturating_sub(recipe.padding_px);
-    let src_y = ((top * scale_y).floor() as i32).saturating_sub(recipe.padding_px);
-    let src_x2 = ((left + width) * scale_x).ceil() as i32 + recipe.padding_px;
-    let src_y2 = ((top + height) * scale_y).ceil() as i32 + recipe.padding_px;
+    let origin_x = replay_ctx.logical_image_origin_x;
+    let origin_y = replay_ctx.logical_image_origin_y;
+    let src_x = (((left - origin_x) * scale_x).floor() as i32).saturating_sub(recipe.padding_px);
+    let src_y = (((top - origin_y) * scale_y).floor() as i32).saturating_sub(recipe.padding_px);
+    let src_x2 = ((left + width - origin_x) * scale_x).ceil() as i32 + recipe.padding_px;
+    let src_y2 = ((top + height - origin_y) * scale_y).ceil() as i32 + recipe.padding_px;
 
     let src_x = src_x.clamp(0, surface.width().saturating_sub(1));
     let src_y = src_y.clamp(0, surface.height().saturating_sub(1));
@@ -556,8 +558,8 @@ pub fn render_blur_rect(
     };
     let overlay_palette = blur_overlay_palette(blurred.stats, recipe.overlay_alpha);
 
-    let dest_x = src_x as f64 / scale_x;
-    let dest_y = src_y as f64 / scale_y;
+    let dest_x = origin_x + src_x as f64 / scale_x;
+    let dest_y = origin_y + src_y as f64 / scale_y;
     let dest_w = src_w as f64 / scale_x;
     let dest_h = src_h as f64 / scale_y;
 

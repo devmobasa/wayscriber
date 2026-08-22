@@ -379,6 +379,11 @@ pub(super) const CAPTURE_FILE_TERMS: &[&str] = &[
     "capture filename template",
     "clipboard",
     "copy to clipboard",
+    "include drawings in screenshots",
+    "include drawings",
+    "capture annotations",
+    "screenshot annotations",
+    "include_drawings",
     "always exit overlay after capture",
     "format",
 ];

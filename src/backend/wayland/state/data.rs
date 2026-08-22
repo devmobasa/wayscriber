@@ -66,6 +66,13 @@ impl OverlaySuppression {
         )
     }
 
+    /// Whether pointer-driven previews and editing affordances belong in the
+    /// canvas pass. A capture frame retains committed annotations but omits
+    /// transient state that is not part of the saved drawing.
+    pub(in crate::backend::wayland) fn renders_canvas_transients(self) -> bool {
+        self == Self::None
+    }
+
     pub(in crate::backend::wayland) fn renders_ui(self) -> bool {
         self == Self::None
     }
@@ -193,6 +200,8 @@ pub struct StateData {
     pub(super) prev_color_picker_damage: Option<crate::util::Rect>,
     pub(super) prev_tool_preview_damage: Option<crate::util::Rect>,
     pub(super) prev_shape_measure_badge_damage: Option<crate::util::Rect>,
+    /// Previous-frame strips for Measure Mode's crosshair, frame, and readout.
+    pub(super) prev_measure_picker_damage: Vec<crate::util::Rect>,
     /// Idle-fade engine for the top-strip islands; its value is published
     /// on every toolbar snapshot as `top_fade`.
     pub(super) top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade,
@@ -286,6 +295,7 @@ impl StateData {
             prev_color_picker_damage: None,
             prev_tool_preview_damage: None,
             prev_shape_measure_badge_damage: None,
+            prev_measure_picker_damage: Vec::new(),
             top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade::new(),
             shortcut_coach: super::onboarding::ShortcutCoachSession::default(),
         }
@@ -310,6 +320,8 @@ mod tests {
 
         assert!(suppression.renders_canvas());
         assert!(!suppression.renders_ui());
+        assert!(!suppression.renders_canvas_transients());
+        assert!(OverlaySuppression::None.renders_canvas_transients());
     }
 
     #[test]

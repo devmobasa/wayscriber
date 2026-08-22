@@ -64,6 +64,20 @@ fn region_capture_defaults_and_explicit_values_round_trip() {
 }
 
 #[test]
+fn capture_drawings_default_on_and_explicit_false_round_trips() {
+    let defaults: Config = toml::from_str("").expect("empty config should use defaults");
+    assert!(defaults.capture.include_drawings);
+
+    let disabled: Config = toml::from_str("[capture]\ninclude_drawings = false\n")
+        .expect("capture drawing preference should parse");
+    assert!(!disabled.capture.include_drawings);
+
+    let serialized = toml::to_string(&disabled).expect("capture drawing preference serializes");
+    let reloaded: Config = toml::from_str(&serialized).expect("serialized preference reloads");
+    assert!(!reloaded.capture.include_drawings);
+}
+
+#[test]
 fn region_capture_rejects_unknown_picker_values() {
     let error = toml::from_str::<Config>("[capture.region]\npicker = 'automatic'\n")
         .expect_err("unknown region picker should fail");

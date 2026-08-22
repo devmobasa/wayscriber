@@ -64,6 +64,11 @@ pub struct CaptureConfig {
     #[serde(default = "default_capture_clipboard")]
     pub copy_to_clipboard: bool,
 
+    /// Composite the active board's committed drawings into full-screen and
+    /// region screenshot exports.
+    #[serde(default = "default_capture_include_drawings")]
+    pub include_drawings: bool,
+
     /// Exit the overlay after any capture completes (forces exit for all capture types).
     /// When false, clipboard-only captures still auto-exit by default.
     #[serde(default = "default_capture_exit_after")]
@@ -88,6 +93,7 @@ impl Default for CaptureConfig {
             filename_template: default_capture_filename(),
             format: default_capture_format(),
             copy_to_clipboard: default_capture_clipboard(),
+            include_drawings: default_capture_include_drawings(),
             exit_after_capture: default_capture_exit_after(),
             ocr_languages: default_capture_ocr_languages(),
             region: RegionCaptureConfig::default(),
@@ -189,6 +195,10 @@ fn default_capture_format() -> String {
 }
 
 fn default_capture_clipboard() -> bool {
+    true
+}
+
+fn default_capture_include_drawings() -> bool {
     true
 }
 

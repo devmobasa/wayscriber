@@ -31,6 +31,7 @@ impl WaylandState {
             .overlay_suppression
             .effective_for_board(board_is_transparent);
         let render_canvas = suppression.renders_canvas();
+        let render_canvas_transients = suppression.renders_canvas_transients();
         let render_ui = suppression.renders_ui();
 
         // Create pool if needed
@@ -295,6 +296,7 @@ impl WaylandState {
                 phys_height,
                 now,
                 &damage_world,
+                render_canvas_transients,
                 render_breakdown.as_mut(),
             )?;
         }

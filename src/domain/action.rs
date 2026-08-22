@@ -179,6 +179,8 @@ pub enum Action {
     CaptureFileRegion,
     /// Select a screen region, then choose its destination in the review UI.
     CaptureRegionInteractive,
+    /// Measure a logical screen region without capturing or delivering pixels.
+    MeasureMode,
     ExportCanvasFile,
     ExportCanvasClipboard,
     ExportCanvasClipboardAndFile,

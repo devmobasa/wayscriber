@@ -2,6 +2,7 @@ mod page;
 mod pdf;
 mod pdf_labels;
 mod png;
+mod region;
 
 pub use page::{
     CanvasExportBackdropSnapshot, CanvasExportRect, CanvasPageExportSnapshot, SpotlightPassSnapshot,
@@ -12,6 +13,7 @@ pub use pdf::{
     render_board_pdf, resolve_pdf_page_layout,
 };
 pub use png::{BoardExportSnapshot, CanvasExportSnapshot, CanvasExportViewport, render_canvas_png};
+pub(crate) use region::{CanvasRegionExportSnapshot, CanvasRegionSource, render_canvas_region_png};
 
 #[cfg(test)]
 mod tests {

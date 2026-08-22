@@ -136,6 +136,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::CaptureClipboardRegion
         | Action::CaptureFileRegion
         | Action::CaptureRegionInteractive
+        | Action::MeasureMode
         | Action::ExportCanvasFile
         | Action::ExportCanvasClipboard
         | Action::ExportCanvasClipboardAndFile

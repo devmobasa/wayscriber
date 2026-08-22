@@ -96,6 +96,19 @@ fn config_draft_round_trips_region_capture_settings() {
     assert!(round_trip.capture.region.show_loupe);
     assert!(!round_trip.capture.region.show_legend);
 }
+
+#[test]
+fn config_draft_round_trips_capture_drawing_preference() {
+    let config = Config::default();
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(draft.capture_include_drawings);
+
+    draft.set_toggle(ToggleField::CaptureIncludeDrawings, false);
+    let round_trip = draft
+        .to_config(&config)
+        .expect("capture drawing preference should round trip");
+    assert!(!round_trip.capture.include_drawings);
+}
 use super::super::{ColorMode, NamedColorOption};
 use super::{ConfigDraft, RenderProfileSelectionOption};
 use wayscriber::config::{

@@ -184,6 +184,7 @@ define_action_binding_accessors! {
     CaptureClipboardRegion => capture.capture_clipboard_region,
     CaptureFileRegion => capture.capture_file_region,
     CaptureRegionInteractive => capture.capture_region_interactive,
+    MeasureMode => capture.measure_mode,
     ExportCanvasFile => capture.export_canvas_file,
     ExportCanvasClipboard => capture.export_canvas_clipboard,
     ExportCanvasClipboardAndFile => capture.export_canvas_clipboard_and_file,

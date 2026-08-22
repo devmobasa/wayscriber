@@ -30,13 +30,17 @@ enum ActiveRegionCancelTarget {
     None,
     Ocr,
     Capture,
+    Measure,
 }
 
 fn active_region_cancel_target(purpose: Option<RegionPurposeTag>) -> ActiveRegionCancelTarget {
     match purpose {
         Some(RegionPurposeTag::Ocr) => ActiveRegionCancelTarget::Ocr,
-        Some(purpose) if purpose.is_capture() => ActiveRegionCancelTarget::Capture,
-        Some(_) | None => ActiveRegionCancelTarget::None,
+        Some(RegionPurposeTag::CaptureDeliver | RegionPurposeTag::CaptureInteractive) => {
+            ActiveRegionCancelTarget::Capture
+        }
+        Some(RegionPurposeTag::Measure) => ActiveRegionCancelTarget::Measure,
+        None => ActiveRegionCancelTarget::None,
     }
 }
 
@@ -223,7 +227,7 @@ impl WaylandState {
     /// request itself cancelled.
     fn activate_ocr_selector(&mut self, generation: u64, ownership: FreezeOwnership) -> bool {
         self.retire_stylus_contact();
-        self.activate_screen_region(RegionPurposeTag::Ocr, generation, ownership)
+        self.activate_screen_region(RegionPurposeTag::Ocr, generation, ownership, false)
     }
 
     /// Leave OCR selection, releasing only a freeze OCR created itself.
@@ -261,6 +265,7 @@ impl WaylandState {
         match active_region_cancel_target(self.input_state.region_state().purpose()) {
             ActiveRegionCancelTarget::Ocr => self.cancel_ocr(),
             ActiveRegionCancelTarget::Capture => self.cancel_region_capture(),
+            ActiveRegionCancelTarget::Measure => self.cancel_measure_mode(),
             ActiveRegionCancelTarget::None => false,
         }
     }
@@ -269,6 +274,7 @@ impl WaylandState {
         match active_region_cancel_target(self.input_state.region_state().purpose()) {
             ActiveRegionCancelTarget::Ocr => self.cancel_ocr_for_toolbar_interaction(),
             ActiveRegionCancelTarget::Capture => self.cancel_region_capture(),
+            ActiveRegionCancelTarget::Measure => self.cancel_measure_mode(),
             ActiveRegionCancelTarget::None => false,
         }
     }
@@ -283,8 +289,9 @@ impl WaylandState {
     ) -> bool {
         match self.region_owner_lost(source) {
             RegionOwnerLoss::NotOwned => false,
-            RegionOwnerLoss::RearmedCapture => true,
+            RegionOwnerLoss::Rearmed => true,
             RegionOwnerLoss::Cancel(RegionPurposeTag::Ocr) => self.cancel_ocr(),
+            RegionOwnerLoss::Cancel(RegionPurposeTag::Measure) => self.cancel_measure_mode(),
             RegionOwnerLoss::Cancel(purpose) => {
                 debug_assert!(purpose.is_capture());
                 self.cancel_region_capture()
@@ -315,6 +322,7 @@ impl WaylandState {
             RegionSelectionFinalize::NotOwned => return false,
             RegionSelectionFinalize::Rearmed => return true,
             RegionSelectionFinalize::Reviewed => return true,
+            RegionSelectionFinalize::Measured => return true,
             RegionSelectionFinalize::Selected {
                 purpose: RegionPurposeTag::Ocr,
                 rect,
@@ -328,6 +336,10 @@ impl WaylandState {
             }
             RegionSelectionFinalize::Selected {
                 purpose: RegionPurposeTag::CaptureInteractive,
+                ..
+            } => return true,
+            RegionSelectionFinalize::Selected {
+                purpose: RegionPurposeTag::Measure,
                 ..
             } => return true,
         };
@@ -557,6 +569,10 @@ mod tests {
                 ActiveRegionCancelTarget::Capture
             );
         }
+        assert_eq!(
+            active_region_cancel_target(Some(RegionPurposeTag::Measure)),
+            ActiveRegionCancelTarget::Measure
+        );
         assert_eq!(
             active_region_cancel_target(None),
             ActiveRegionCancelTarget::None
