@@ -176,7 +176,7 @@ impl InputState {
     /// It is deliberately not the pen boundary — see
     /// [`Self::screen_modal_is_active`].
     pub(crate) fn screen_modal_is_engaged(&self) -> bool {
-        self.eyedropper_is_engaged() || self.ocr_is_engaged()
+        self.eyedropper_is_engaged() || self.region_is_engaged()
     }
 
     /// Whether a screen-region modal is on screen and owns pointer input.
@@ -188,6 +188,6 @@ impl InputState {
     /// keeps its pressure. Activation cancels it; a capture that fails or is
     /// cancelled first leaves it intact.
     pub(crate) fn screen_modal_is_active(&self) -> bool {
-        self.eyedropper_is_active() || self.ocr_is_active()
+        self.eyedropper_is_active() || self.region_is_active()
     }
 }

@@ -2,15 +2,102 @@ use wayland_client::protocol::wl_output;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 use crate::backend::wayland::RuntimeWakeHandle;
-use crate::backend::wayland::frozen::FrozenImage;
+use crate::backend::wayland::frozen::{FrozenImage, ScreenImageProvenance};
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
 use crate::backend::wayland::portal_capture::layout_token_matches;
 use crate::backend::wayland::portal_task::PortalTask;
 use crate::input::InputState;
-use crate::input::state::{Toast, ToastPriority};
 
 use super::capture::CaptureSession;
 use super::{MIN_ZOOM_SCALE, PortalCaptureResult};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(in crate::backend::wayland) struct ZoomCaptureId(u64);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::backend::wayland) enum ZoomSourceOutcome {
+    Ready { installed_generation: u64 },
+    Aborted,
+    Cancelled,
+    Deactivated,
+    StaleLayout,
+    Failed(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::backend::wayland) struct ZoomSourceTerminal {
+    pub id: ZoomCaptureId,
+    pub outcome: ZoomSourceOutcome,
+    pub report: Option<ZoomTerminalReport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::backend::wayland) struct ZoomTerminalReport {
+    pub source: &'static str,
+    pub message: String,
+}
+
+#[cfg(test)]
+impl ZoomSourceTerminal {
+    pub fn for_test(outcome: ZoomSourceOutcome, report: Option<ZoomTerminalReport>) -> Self {
+        Self {
+            id: ZoomCaptureId(1),
+            outcome,
+            report,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(in crate::backend::wayland) enum ZoomWaiterOwner {
+    Eyedropper,
+    Ocr,
+    #[allow(dead_code)] // Phase 1 connects the native region-capture owner.
+    RegionCapture,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::backend::wayland) struct ZoomWaiter {
+    pub id: ZoomCaptureId,
+    pub owner: ZoomWaiterOwner,
+}
+
+#[derive(Debug, Default)]
+pub(in crate::backend::wayland) struct ZoomWaiterRegistry {
+    waiter: Option<ZoomWaiter>,
+}
+
+impl ZoomWaiterRegistry {
+    pub fn register(&mut self, waiter: ZoomWaiter) -> bool {
+        if self.waiter.is_some() {
+            return false;
+        }
+        self.waiter = Some(waiter);
+        true
+    }
+
+    #[cfg(test)]
+    pub fn waiter(&self) -> Option<ZoomWaiter> {
+        self.waiter
+    }
+
+    pub fn take_for_terminal(
+        &mut self,
+        terminal: &ZoomSourceTerminal,
+    ) -> Option<(ZoomWaiter, bool)> {
+        let waiter = self.waiter.take()?;
+        let matches = waiter.id == terminal.id;
+        Some((waiter, matches))
+    }
+
+    pub fn clear_owner(&mut self, owner: ZoomWaiterOwner) -> bool {
+        if !self.waiter.is_some_and(|waiter| waiter.owner == owner) {
+            return false;
+        }
+        self.waiter.take();
+        true
+    }
+}
 
 /// Zoom state, capture logic, and pan/lock bookkeeping.
 pub struct ZoomState {
@@ -23,6 +110,7 @@ pub struct ZoomState {
     pub(super) output_layout_generation: u64,
     pub(super) capture: Option<CaptureSession>,
     pub(super) image: Option<FrozenImage>,
+    image_provenance: Option<ScreenImageProvenance>,
     pub(super) image_target_dimensions: Option<(u32, u32)>,
     image_generation: u64,
     pub(super) portal_task: Option<PortalTask<PortalCaptureResult>>,
@@ -34,6 +122,9 @@ pub struct ZoomState {
     preflight_output_id: Option<u32>,
     preflight_layout_generation: Option<u64>,
     pub(super) capture_done: bool,
+    next_capture_id: u64,
+    current_capture_id: Option<ZoomCaptureId>,
+    pub(super) source_terminal: Option<ZoomSourceTerminal>,
     pub(super) pending_activation: bool,
     pub active: bool,
     pub locked: bool,
@@ -68,6 +159,7 @@ impl ZoomState {
             output_layout_generation: 0,
             capture: None,
             image: None,
+            image_provenance: None,
             image_target_dimensions: None,
             image_generation: 0,
             portal_task: None,
@@ -79,6 +171,9 @@ impl ZoomState {
             preflight_output_id: None,
             preflight_layout_generation: None,
             capture_done: false,
+            next_capture_id: 1,
+            current_capture_id: None,
+            source_terminal: None,
             pending_activation: false,
             active: false,
             locked: false,
@@ -105,6 +200,11 @@ impl ZoomState {
         self.active_geometry = geometry;
     }
 
+    pub(in crate::backend::wayland) fn image_provenance(&self) -> Option<ScreenImageProvenance> {
+        self.image.as_ref()?;
+        self.image_provenance
+    }
+
     pub fn image(&self) -> Option<&FrozenImage> {
         self.image.as_ref()
     }
@@ -113,6 +213,22 @@ impl ZoomState {
         self.image_generation
     }
 
+    pub(in crate::backend::wayland) fn install_image(
+        &mut self,
+        image: FrozenImage,
+        provenance: ScreenImageProvenance,
+    ) {
+        self.image_target_dimensions = self
+            .active_geometry
+            .as_ref()
+            .map(OutputGeometry::buffer_size)
+            .or(Some((image.width, image.height)));
+        self.image = Some(image);
+        self.image_provenance = Some(provenance);
+        self.bump_image_generation();
+    }
+
+    #[cfg(test)]
     pub fn set_image(&mut self, image: FrozenImage) {
         self.image_target_dimensions = self
             .active_geometry
@@ -120,11 +236,29 @@ impl ZoomState {
             .map(OutputGeometry::buffer_size)
             .or(Some((image.width, image.height)));
         self.image = Some(image);
+        self.image_provenance = None;
+        self.bump_image_generation();
+    }
+
+    #[cfg(test)]
+    pub(in crate::backend::wayland) fn set_image_with_provenance_for_test(
+        &mut self,
+        image: FrozenImage,
+        provenance: ScreenImageProvenance,
+    ) {
+        self.image_target_dimensions = self
+            .active_geometry
+            .as_ref()
+            .map(OutputGeometry::buffer_size)
+            .or(Some((image.width, image.height)));
+        self.image = Some(image);
+        self.image_provenance = Some(provenance);
         self.bump_image_generation();
     }
 
     pub fn clear_image(&mut self) -> bool {
         let had_image = self.image.take().is_some();
+        self.image_provenance = None;
         self.image_target_dimensions = None;
         if had_image {
             self.bump_image_generation();
@@ -177,17 +311,8 @@ impl ZoomState {
         self.ensure_preflight_layout_current().is_ok()
     }
 
-    pub(super) fn push_stale_layout_toast(input_state: &mut InputState) {
-        input_state.push_toast(
-            ToastPriority::Critical,
-            "zoom",
-            Toast::error("Zoom failed after the display layout changed"),
-        );
-    }
-
     pub(super) fn finish_stale_direct_capture(&mut self, input_state: &mut InputState) {
-        Self::push_stale_layout_toast(input_state);
-        self.cancel(input_state, false);
+        self.cancel_with_outcome(input_state, false, ZoomSourceOutcome::StaleLayout);
     }
 
     fn clear_preflight_layout_snapshot(&mut self) {
@@ -199,6 +324,54 @@ impl ZoomState {
         let done = self.capture_done;
         self.capture_done = false;
         done
+    }
+
+    pub(in crate::backend::wayland) fn current_capture_id(&self) -> Option<ZoomCaptureId> {
+        self.current_capture_id
+    }
+
+    pub(in crate::backend::wayland) fn take_source_terminal(
+        &mut self,
+    ) -> Option<ZoomSourceTerminal> {
+        self.source_terminal.take()
+    }
+
+    pub(super) fn begin_identified_capture(&mut self) -> ZoomCaptureId {
+        let id = ZoomCaptureId(self.next_capture_id);
+        self.next_capture_id = self
+            .next_capture_id
+            .checked_add(1)
+            .expect("zoom capture id space exhausted");
+        self.current_capture_id = Some(id);
+        id
+    }
+
+    pub(super) fn finish_source_capture(&mut self, outcome: ZoomSourceOutcome) {
+        self.finish_source_capture_with_report(outcome, None);
+    }
+
+    fn finish_source_capture_with_report(
+        &mut self,
+        outcome: ZoomSourceOutcome,
+        report: Option<ZoomTerminalReport>,
+    ) {
+        let Some(id) = self.current_capture_id.take() else {
+            return;
+        };
+        let report = report.or_else(|| {
+            matches!(outcome, ZoomSourceOutcome::StaleLayout).then(|| ZoomTerminalReport {
+                source: "zoom",
+                message: "Zoom failed after the display layout changed".to_string(),
+            })
+        });
+        debug_assert!(self.source_terminal.is_none());
+        if self.source_terminal.is_none() {
+            self.source_terminal = Some(ZoomSourceTerminal {
+                id,
+                outcome,
+                report,
+            });
+        }
     }
 
     pub fn is_engaged(&self) -> bool {
@@ -235,13 +408,14 @@ impl ZoomState {
         self.portal_target_output_id = None;
         self.pending_activation = false;
         if changed {
+            self.finish_source_capture(ZoomSourceOutcome::Aborted);
             self.capture_done = true;
         }
         changed
     }
 
     pub fn deactivate(&mut self, input_state: &mut InputState) {
-        self.cancel(input_state, true);
+        self.cancel_with_outcome(input_state, true, ZoomSourceOutcome::Deactivated);
     }
 
     pub fn reset_view(&mut self) {
@@ -251,7 +425,57 @@ impl ZoomState {
         self.last_pan_pos = (0.0, 0.0);
     }
 
+    #[allow(dead_code)] // Kept as the explicit non-deactivation capture terminal.
     pub fn cancel(&mut self, input_state: &mut InputState, force_reset: bool) {
+        self.cancel_with_outcome(input_state, force_reset, ZoomSourceOutcome::Cancelled);
+    }
+
+    pub(in crate::backend::wayland) fn fail_capture(
+        &mut self,
+        input_state: &mut InputState,
+        force_reset: bool,
+        message: impl Into<String>,
+    ) {
+        self.cancel_with_outcome(
+            input_state,
+            force_reset,
+            ZoomSourceOutcome::Failed(message.into()),
+        );
+    }
+
+    pub(in crate::backend::wayland) fn finish_preflight_failure(
+        &mut self,
+        input_state: &mut InputState,
+        message: String,
+    ) {
+        let report = ZoomTerminalReport {
+            source: "zoom",
+            message: message.clone(),
+        };
+        let outcome = if message == "Zoom failed after the display layout changed" {
+            ZoomSourceOutcome::StaleLayout
+        } else {
+            ZoomSourceOutcome::Failed(message)
+        };
+        self.cancel_with_outcome_and_report(input_state, false, outcome, Some(report));
+    }
+
+    pub(super) fn cancel_with_outcome(
+        &mut self,
+        input_state: &mut InputState,
+        force_reset: bool,
+        outcome: ZoomSourceOutcome,
+    ) {
+        self.cancel_with_outcome_and_report(input_state, force_reset, outcome, None);
+    }
+
+    fn cancel_with_outcome_and_report(
+        &mut self,
+        input_state: &mut InputState,
+        force_reset: bool,
+        outcome: ZoomSourceOutcome,
+        report: Option<ZoomTerminalReport>,
+    ) {
         if let Some(capture) = self.capture.take() {
             capture.frame.destroy();
         }
@@ -265,6 +489,7 @@ impl ZoomState {
         }
         self.portal_target_output_id = None;
         self.pending_activation = false;
+        self.finish_source_capture_with_report(outcome, report);
 
         if force_reset || self.image.is_none() {
             self.active = false;
@@ -288,6 +513,170 @@ mod tests {
     use super::*;
     use crate::input::state::test_support::make_test_input_state;
 
+    #[tokio::test]
+    async fn capture_ids_are_monotonic_and_terminals_require_a_current_capture() {
+        let mut state = ZoomState::new(None);
+
+        assert_eq!(state.current_capture_id(), None);
+        state.abort_capture();
+        assert_eq!(state.take_source_terminal(), None);
+
+        state
+            .start_capture(false, &tokio::runtime::Handle::current())
+            .expect("first capture starts");
+        let first = state.current_capture_id().expect("first capture id");
+        assert!(state.abort_capture());
+        assert_eq!(
+            state.take_source_terminal(),
+            Some(ZoomSourceTerminal {
+                id: first,
+                outcome: ZoomSourceOutcome::Aborted,
+                report: None,
+            })
+        );
+
+        state
+            .start_capture(false, &tokio::runtime::Handle::current())
+            .expect("second capture starts");
+        let second = state.current_capture_id().expect("second capture id");
+        assert!(second > first);
+    }
+
+    #[tokio::test]
+    async fn capture_refuses_to_start_until_the_previous_terminal_is_drained() {
+        let mut state = ZoomState::new(None);
+
+        state
+            .start_capture(false, &tokio::runtime::Handle::current())
+            .expect("first capture starts");
+        let first = state.current_capture_id().expect("first capture id");
+        assert!(state.abort_capture());
+
+        let error = state
+            .start_capture(false, &tokio::runtime::Handle::current())
+            .expect_err("an undrained terminal blocks the next capture");
+
+        assert_eq!(
+            error.to_string(),
+            "a zoom capture terminal is still pending"
+        );
+        assert_eq!(state.current_capture_id(), None);
+        assert!(!state.preflight_pending());
+        assert_eq!(
+            state.take_source_terminal(),
+            Some(ZoomSourceTerminal {
+                id: first,
+                outcome: ZoomSourceOutcome::Aborted,
+                report: None,
+            })
+        );
+    }
+
+    #[test]
+    fn mismatched_terminal_takes_the_waiter_for_fail_closed_owner_cancellation() {
+        let stale_id = ZoomCaptureId(3);
+        let newer = ZoomWaiter {
+            id: ZoomCaptureId(4),
+            owner: ZoomWaiterOwner::Ocr,
+        };
+        let mut registry = ZoomWaiterRegistry::default();
+        assert!(registry.register(newer));
+
+        let terminal = ZoomSourceTerminal {
+            id: stale_id,
+            outcome: ZoomSourceOutcome::Failed("old failure".to_string()),
+            report: None,
+        };
+
+        assert_eq!(registry.take_for_terminal(&terminal), Some((newer, false)));
+        assert_eq!(registry.waiter(), None);
+    }
+
+    #[test]
+    fn typed_terminal_is_emitted_once_for_each_current_capture() {
+        let outcomes = [
+            ZoomSourceOutcome::Ready {
+                installed_generation: 9,
+            },
+            ZoomSourceOutcome::Aborted,
+            ZoomSourceOutcome::Cancelled,
+            ZoomSourceOutcome::Deactivated,
+            ZoomSourceOutcome::StaleLayout,
+            ZoomSourceOutcome::Failed("failed".to_string()),
+        ];
+
+        for outcome in outcomes {
+            let mut state = ZoomState::new(None);
+            let id = state.begin_identified_capture();
+            state.finish_source_capture(outcome.clone());
+            state.finish_source_capture(ZoomSourceOutcome::Failed("duplicate".to_string()));
+            let report =
+                matches!(&outcome, ZoomSourceOutcome::StaleLayout).then(|| ZoomTerminalReport {
+                    source: "zoom",
+                    message: "Zoom failed after the display layout changed".to_string(),
+                });
+
+            assert_eq!(
+                state.take_source_terminal(),
+                Some(ZoomSourceTerminal {
+                    id,
+                    outcome,
+                    report,
+                })
+            );
+            assert_eq!(state.current_capture_id(), None);
+            assert_eq!(state.take_source_terminal(), None);
+        }
+    }
+
+    #[test]
+    fn cancel_and_deactivate_publish_distinct_terminals() {
+        let mut state = ZoomState::new(None);
+        let mut input_state = make_test_input_state();
+        let cancelled = state.begin_identified_capture();
+        state.cancel(&mut input_state, false);
+        assert_eq!(
+            state.take_source_terminal(),
+            Some(ZoomSourceTerminal {
+                id: cancelled,
+                outcome: ZoomSourceOutcome::Cancelled,
+                report: None,
+            })
+        );
+
+        let deactivated = state.begin_identified_capture();
+        state.deactivate(&mut input_state);
+        assert_eq!(
+            state.take_source_terminal(),
+            Some(ZoomSourceTerminal {
+                id: deactivated,
+                outcome: ZoomSourceOutcome::Deactivated,
+                report: None,
+            })
+        );
+    }
+
+    #[test]
+    fn preflight_failure_terminal_carries_the_specific_error_report() {
+        let mut state = ZoomState::new(None);
+        let mut input_state = make_test_input_state();
+        let id = state.begin_identified_capture();
+
+        state.finish_preflight_failure(&mut input_state, "specific backend failure".to_string());
+
+        assert_eq!(
+            state.take_source_terminal(),
+            Some(ZoomSourceTerminal {
+                id,
+                outcome: ZoomSourceOutcome::Failed("specific backend failure".to_string()),
+                report: Some(ZoomTerminalReport {
+                    source: "zoom",
+                    message: "specific backend failure".to_string(),
+                }),
+            })
+        );
+    }
+
     #[test]
     fn aborting_pending_activation_completes_the_capture_lifecycle() {
         let mut state = ZoomState::new(None);
@@ -302,9 +691,10 @@ mod tests {
     }
 
     #[test]
-    fn stale_direct_capture_toasts_and_preserves_the_current_image() {
+    fn stale_direct_capture_publishes_one_report_and_preserves_the_current_image() {
         let mut state = ZoomState::new(None);
         let mut input_state = make_test_input_state();
+        let id = state.begin_identified_capture();
         state.set_image(FrozenImage {
             width: 1,
             height: 1,
@@ -315,11 +705,18 @@ mod tests {
 
         state.finish_stale_direct_capture(&mut input_state);
 
-        let toast = input_state
-            .ui_toast
-            .as_ref()
-            .expect("visible stale rejection");
-        assert!(toast.message.contains("display layout changed"));
+        assert_eq!(input_state.test_toast_count(), 0);
+        assert_eq!(
+            state.take_source_terminal(),
+            Some(ZoomSourceTerminal {
+                id,
+                outcome: ZoomSourceOutcome::StaleLayout,
+                report: Some(ZoomTerminalReport {
+                    source: "zoom",
+                    message: "Zoom failed after the display layout changed".to_string(),
+                }),
+            })
+        );
         assert_eq!(state.image_generation(), generation);
         assert_eq!(state.image().unwrap().data, vec![4; 4]);
         assert!(state.take_capture_done());

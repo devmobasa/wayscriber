@@ -10,7 +10,7 @@ use crate::backend::wayland::state::{
 };
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
-use crate::input::state::{HelpOverlayPressSource, OcrInputSource};
+use crate::input::state::{HelpOverlayPressSource, RegionInputSource};
 use crate::ui::ZoomChipPress;
 
 impl TouchHandler for WaylandState {
@@ -118,7 +118,7 @@ impl WaylandState {
         // started has to end here — otherwise the selector, and any freeze it
         // owns, would outlive the touch that opened it. A region another device
         // is dragging is untouched.
-        self.cancel_ocr_selection_from(OcrInputSource::Touch);
+        self.cancel_region_selection_from(RegionInputSource::Touch);
         self.set_pending_toast_press(None);
         self.set_pending_status_hud_press(false);
         self.set_pending_zoom_chip_press(ZoomChipPress::None);
@@ -209,7 +209,7 @@ impl WaylandState {
                 .clear_help_overlay_press_for(HelpOverlayPressSource::Touch);
         }
 
-        if self.input_state.ocr_is_active() {
+        if self.input_state.region_is_active() {
             let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
             let inline_hit = target == TouchTarget::Overlay
                 && inline_active
@@ -217,8 +217,8 @@ impl WaylandState {
             if target == TouchTarget::Toolbar || inline_hit {
                 self.cancel_ocr_for_toolbar_interaction();
             } else if target == TouchTarget::Overlay {
-                self.begin_ocr_selection(
-                    OcrInputSource::Touch,
+                self.begin_region_selection(
+                    RegionInputSource::Touch,
                     screen_position.0,
                     screen_position.1,
                 );
@@ -358,10 +358,10 @@ impl WaylandState {
         let screen_y = screen_position.1.round() as i32;
         self.set_current_mouse(screen_x, screen_y);
 
-        if self.input_state.ocr_is_active() {
+        if self.input_state.region_is_active() {
             if target == TouchTarget::Overlay {
-                self.update_ocr_selection(
-                    OcrInputSource::Touch,
+                self.update_region_selection(
+                    RegionInputSource::Touch,
                     screen_position.0,
                     screen_position.1,
                 );
@@ -448,11 +448,11 @@ impl WaylandState {
         position: (f64, f64),
         target: TouchTarget,
     ) {
-        if self.input_state.ocr_is_active() {
+        if self.input_state.region_is_active() {
             if let Some((x, y)) = self.touch_screen_position(surface, position, target) {
-                self.finish_ocr_selection(OcrInputSource::Touch, x, y);
+                self.finish_region_selection(RegionInputSource::Touch, x, y);
             } else {
-                self.cancel_ocr_selection_from(OcrInputSource::Touch);
+                self.cancel_region_selection_from(RegionInputSource::Touch);
             }
             return;
         }

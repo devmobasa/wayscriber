@@ -1,3 +1,6 @@
+use crate::backend::wayland::acquisition::{
+    AcquisitionRecord, AcquisitionStage, ScreenAcquisitionOutcome, ScreenAcquisitionOwner,
+};
 use crate::input::state::{Toast, ToastPriority};
 use log::{info, warn};
 use std::time::{Duration, Instant};
@@ -69,13 +72,22 @@ fn handle_pending_frozen_image(state: &mut WaylandState, now: Instant) {
         if state.xdg_frozen_fullscreen_pending_configure() {
             if state.xdg_frozen_fullscreen_timed_out(now) {
                 warn!("Frozen xdg fullscreen configure timed out; cancelling freeze");
-                state.input_state.push_toast(
-                    ToastPriority::Critical,
-                    "capture",
-                    Toast::error("Freeze failed because fullscreen was not confirmed"),
-                );
                 state.restore_xdg_after_frozen();
-                state.frozen.cancel(&mut state.input_state);
+                if state.frozen.has_acquisition_attempt() {
+                    state.frozen.finish_acquisition(
+                        ScreenAcquisitionOutcome::Failed(
+                            "Freeze failed because fullscreen was not confirmed".to_string(),
+                        ),
+                        &mut state.input_state,
+                    );
+                } else {
+                    state.input_state.push_toast(
+                        ToastPriority::Critical,
+                        "capture",
+                        Toast::error("Freeze failed because fullscreen was not confirmed"),
+                    );
+                    state.frozen.cancel(&mut state.input_state);
+                }
             }
             return;
         }
@@ -152,44 +164,125 @@ pub(super) fn handle_pending_actions(
         state.handle_zoom_action(action);
     }
     state.sync_zoom_board_mode();
+    state.resolve_pending_zoom_terminal();
     state.sync_input_monitor_if_changed();
 
     handle_capture_results(state);
 }
 
-fn handle_frozen_toggle(state: &mut WaylandState) {
-    if !state.input_state.take_pending_frozen_toggle() {
-        return;
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FrozenUserToggleAction {
+    None,
+    AbsorbQueuedModal,
+    IgnoreInProgress,
+    Unfreeze,
+    ReportUnavailable,
+    RequestUserFreeze,
+}
 
-    if !state.frozen_enabled() {
-        warn!(
-            "Frozen mode unavailable: no direct capture backend and no screenshot portal backend; ignoring toggle"
-        );
-        state.input_state.push_toast(
-            ToastPriority::Info,
-            "capture",
-            Toast::warning("Freeze is unavailable because screen capture is not available."),
-        );
-    } else if state.frozen.is_in_progress() {
-        warn!("Frozen capture already in progress; ignoring toggle");
-    } else if state.input_state.frozen_active() {
-        state.restore_xdg_after_frozen();
-        state.frozen.unfreeze(&mut state.input_state);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FrozenTogglePassDecision {
+    user_action: FrozenUserToggleAction,
+    queued_to_start: Option<AcquisitionRecord>,
+}
+
+fn frozen_toggle_pass_decision(
+    user_toggle: bool,
+    slot: Option<AcquisitionRecord>,
+    frozen_active: bool,
+    frozen_enabled: bool,
+) -> FrozenTogglePassDecision {
+    let user_action = if !user_toggle {
+        FrozenUserToggleAction::None
     } else {
-        if !state.enter_overlay_suppression(OverlaySuppression::Frozen) {
-            warn!("Frozen mode requested while overlay is suppressed; ignoring toggle");
+        match slot {
+            Some(record)
+                if record.stage == AcquisitionStage::Queued
+                    && record.owner != ScreenAcquisitionOwner::UserFreeze =>
+            {
+                FrozenUserToggleAction::AbsorbQueuedModal
+            }
+            Some(_) => FrozenUserToggleAction::IgnoreInProgress,
+            None if frozen_active => FrozenUserToggleAction::Unfreeze,
+            None if !frozen_enabled => FrozenUserToggleAction::ReportUnavailable,
+            None => FrozenUserToggleAction::RequestUserFreeze,
+        }
+    };
+    FrozenTogglePassDecision {
+        user_action,
+        queued_to_start: slot.filter(|record| record.stage == AcquisitionStage::Queued),
+    }
+}
+
+fn handle_frozen_toggle(state: &mut WaylandState) {
+    let decision = frozen_toggle_pass_decision(
+        state.input_state.take_pending_frozen_toggle(),
+        state.screen_acquisition_slot(),
+        state.input_state.frozen_active(),
+        state.frozen_enabled(),
+    );
+    match decision.user_action {
+        FrozenUserToggleAction::None => {}
+        FrozenUserToggleAction::AbsorbQueuedModal => {
+            let record = decision
+                .queued_to_start
+                .expect("absorbed modal acquisition remains queued");
+            log::debug!(
+                "User freeze toggle absorbed by queued {:?} acquisition",
+                record.owner
+            );
+        }
+        FrozenUserToggleAction::IgnoreInProgress => {
+            warn!("Frozen capture already in progress; ignoring toggle");
+        }
+        FrozenUserToggleAction::Unfreeze => {
+            state.restore_xdg_after_frozen();
+            state.frozen.unfreeze(&mut state.input_state);
+        }
+        FrozenUserToggleAction::ReportUnavailable => {
+            warn!(
+                "Frozen mode unavailable: no direct capture backend and no screenshot portal backend; ignoring toggle"
+            );
             state.input_state.push_toast(
                 ToastPriority::Info,
                 "capture",
-                Toast::warning("Freeze is already preparing another overlay operation."),
+                Toast::warning("Freeze is unavailable because screen capture is not available."),
             );
-            return;
         }
-        if let Err(err) = state.frozen.start_capture() {
-            warn!("Frozen capture failed to start: {}", err);
+        FrozenUserToggleAction::RequestUserFreeze => {
+            let _ = state.request_screen_acquisition(ScreenAcquisitionOwner::UserFreeze);
+        }
+    }
+
+    let record = if decision.user_action == FrozenUserToggleAction::RequestUserFreeze {
+        state.queued_screen_acquisition()
+    } else {
+        decision.queued_to_start
+    };
+    let Some(record) = record else {
+        return;
+    };
+    if !state.enter_overlay_suppression(OverlaySuppression::Frozen) {
+        warn!("Frozen mode requested while overlay is suppressed; ignoring toggle");
+        state.complete_queued_acquisition(
+            record.id,
+            record.owner,
+            ScreenAcquisitionOutcome::Unavailable,
+        );
+        return;
+    }
+    match state.frozen.start_capture_for(record.id, record.owner) {
+        Ok(()) => {
+            debug_assert!(state.mark_screen_acquisition_started(record.id, record.owner));
+        }
+        Err(err) => {
+            warn!("Frozen capture failed to start: {err}");
             state.exit_overlay_suppression(OverlaySuppression::Frozen);
-            state.frozen.cancel(&mut state.input_state);
+            state.complete_queued_acquisition(
+                record.id,
+                record.owner,
+                ScreenAcquisitionOutcome::Unavailable,
+            );
         }
     }
 }
@@ -230,9 +323,8 @@ fn handle_capture_results(state: &mut WaylandState) {
 
     // Restore overlay.
     state.show_overlay();
-    state.capture.clear_in_progress();
-
-    let exit_after_capture = state.capture.take_exit_on_success();
+    let exit_after_capture = state.capture.exit_on_success();
+    state.capture.finish_capture_lifecycle();
     let mut should_exit = false;
 
     match outcome {
@@ -426,11 +518,9 @@ fn handle_capture_manager_failure(
     operation: Option<ImageOperationKind>,
     error: &str,
 ) {
-    state.capture.clear_preflight();
     state.capture.clear_pending_pdf_export();
     state.show_overlay();
-    state.capture.clear_in_progress();
-    state.capture.clear_exit_on_success();
+    state.capture.finish_capture_lifecycle();
 
     let message = match operation {
         Some(ImageOperationKind::Screenshot) => friendly_capture_error(error),
@@ -455,4 +545,74 @@ fn handle_capture_manager_failure(
         message,
         Some("dialog-error".to_string()),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::backend::wayland::acquisition::ScreenAcquisitionRegistry;
+
+    fn record(
+        owner: ScreenAcquisitionOwner,
+        stage: AcquisitionStage,
+    ) -> crate::backend::wayland::acquisition::AcquisitionRecord {
+        let mut registry = ScreenAcquisitionRegistry::default();
+        let id = registry.request(owner).expect("test acquisition");
+        if stage == AcquisitionStage::Started {
+            assert!(registry.mark_started(id, owner));
+        }
+        registry.take().expect("test record")
+    }
+
+    #[test]
+    fn queued_modal_absorbs_same_batch_user_toggle_then_still_drains_modal() {
+        for owner in [
+            ScreenAcquisitionOwner::Eyedropper,
+            ScreenAcquisitionOwner::Ocr,
+        ] {
+            let modal = record(owner, AcquisitionStage::Queued);
+
+            let decision = frozen_toggle_pass_decision(true, Some(modal), false, true);
+
+            assert_eq!(
+                decision.user_action,
+                FrozenUserToggleAction::AbsorbQueuedModal
+            );
+            assert_eq!(decision.queued_to_start, Some(modal));
+        }
+    }
+
+    #[test]
+    fn started_modal_ignores_same_batch_user_toggle_without_starting_another_capture() {
+        let modal = record(ScreenAcquisitionOwner::Ocr, AcquisitionStage::Started);
+
+        let decision = frozen_toggle_pass_decision(true, Some(modal), false, true);
+
+        assert_eq!(
+            decision.user_action,
+            FrozenUserToggleAction::IgnoreInProgress
+        );
+        assert_eq!(decision.queued_to_start, None);
+    }
+
+    #[test]
+    fn queued_acquisition_drains_with_or_without_a_user_toggle() {
+        let modal = record(ScreenAcquisitionOwner::Ocr, AcquisitionStage::Queued);
+        let user = record(ScreenAcquisitionOwner::UserFreeze, AcquisitionStage::Queued);
+
+        assert_eq!(
+            frozen_toggle_pass_decision(false, Some(modal), false, true),
+            FrozenTogglePassDecision {
+                user_action: FrozenUserToggleAction::None,
+                queued_to_start: Some(modal),
+            }
+        );
+        assert_eq!(
+            frozen_toggle_pass_decision(true, Some(user), false, true),
+            FrozenTogglePassDecision {
+                user_action: FrozenUserToggleAction::IgnoreInProgress,
+                queued_to_start: Some(user),
+            }
+        );
+    }
 }

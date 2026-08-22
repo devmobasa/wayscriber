@@ -171,9 +171,9 @@ impl WaylandState {
                 .clear_help_overlay_press_for(HelpOverlayPressSource::Stylus);
         }
 
-        if self.input_state.ocr_is_active() {
+        if self.input_state.region_is_active() {
             let (x, y) = self.current_stylus_position();
-            self.begin_ocr_selection(crate::input::state::OcrInputSource::Stylus, x, y);
+            self.begin_region_selection(crate::input::state::RegionInputSource::Stylus, x, y);
             return;
         }
 
@@ -331,21 +331,21 @@ mod tests {
     /// including while they are still waiting on a capture.
     #[test]
     fn screen_region_modals_block_stylus_barrel_actions() {
-        use crate::input::state::{EyedropperCaptureSource, OcrCaptureSource};
+        use crate::input::state::{EyedropperCaptureSource, RegionPurposeTag, ScreenCaptureSource};
 
         let mut state = make_test_input_state();
         assert!(!modal_blocks_stylus_barrel_actions(&state));
 
-        state.set_ocr_pending_capture(OcrCaptureSource::Frozen);
+        state.set_region_pending_capture(RegionPurposeTag::Ocr, 1, ScreenCaptureSource::Frozen);
         assert!(modal_blocks_stylus_barrel_actions(&state));
-        state.activate_ocr(true);
+        state.activate_region(RegionPurposeTag::Ocr, 1);
         assert!(modal_blocks_stylus_barrel_actions(&state));
-        state.cancel_ocr();
+        state.cancel_region_ui_only();
         assert!(!modal_blocks_stylus_barrel_actions(&state));
 
         state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
         assert!(modal_blocks_stylus_barrel_actions(&state));
-        state.activate_eyedropper(true);
+        state.activate_eyedropper(Some(1));
         assert!(modal_blocks_stylus_barrel_actions(&state));
         state.cancel_eyedropper();
         assert!(!modal_blocks_stylus_barrel_actions(&state));

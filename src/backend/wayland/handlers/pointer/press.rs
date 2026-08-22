@@ -38,7 +38,7 @@ impl WaylandState {
                 .clear_help_overlay_press_for(help_press_source);
         }
 
-        if self.input_state.ocr_is_active() {
+        if self.input_state.region_is_active() {
             if on_toolbar || self.pointer_over_toolbar() {
                 // A toolbar interaction ends the region first, then runs
                 // normally; the click never lands on the selector.
@@ -46,8 +46,8 @@ impl WaylandState {
             } else {
                 match button {
                     BTN_LEFT => {
-                        self.begin_ocr_selection(
-                            OcrInputSource::Pointer,
+                        self.begin_region_selection(
+                            RegionInputSource::Pointer,
                             event.position.0,
                             event.position.1,
                         );

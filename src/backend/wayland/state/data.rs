@@ -1,6 +1,10 @@
 use std::time::Instant;
 
+use crate::backend::wayland::acquisition::ScreenAcquisitionRegistry;
 use crate::backend::wayland::toolbar::hit::HitRegion;
+use crate::backend::wayland::zoom::ZoomWaiterRegistry;
+
+use super::region_capture::ActiveScreenRegion;
 
 use super::capture::OverlayCaptureBarrier;
 
@@ -136,6 +140,10 @@ pub struct StateData {
     pub(super) pending_activation_token: Option<String>,
     pub(super) startup_activation_token: Option<String>,
     pub(super) pending_freeze_on_start: bool,
+    pub(super) screen_acquisition: ScreenAcquisitionRegistry,
+    pub(super) zoom_waiter: ZoomWaiterRegistry,
+    pub(super) active_screen_region: Option<ActiveScreenRegion>,
+    pub(super) next_screen_region_generation: u64,
     pub(super) frozen_enabled: bool,
     pub(super) has_seen_surface_enter: bool,
     pub(super) preferred_output_identity: Option<String>,
@@ -239,6 +247,10 @@ impl StateData {
             pending_activation_token: None,
             startup_activation_token: None,
             pending_freeze_on_start: false,
+            screen_acquisition: ScreenAcquisitionRegistry::default(),
+            zoom_waiter: ZoomWaiterRegistry::default(),
+            active_screen_region: None,
+            next_screen_region_generation: 1,
             frozen_enabled: false,
             has_seen_surface_enter: false,
             preferred_output_identity: None,

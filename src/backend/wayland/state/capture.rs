@@ -41,10 +41,9 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn apply_capture_completion(&mut self) {
         if self.frozen.take_capture_done() {
             self.exit_overlay_suppression(OverlaySuppression::Frozen);
-            self.finish_pending_eyedropper_capture(
-                crate::input::state::EyedropperCaptureSource::Frozen,
-            );
-            self.finish_pending_ocr_capture(crate::input::state::OcrCaptureSource::Frozen);
+        }
+        if let Some(completion) = self.frozen.take_acquisition_completion() {
+            self.route_acquisition_completion(completion);
         }
         if self.zoom.take_capture_done() {
             log::info!(
@@ -53,11 +52,8 @@ impl WaylandState {
                 self.zoom.image_generation()
             );
             self.exit_overlay_suppression(OverlaySuppression::Zoom);
-            self.finish_pending_eyedropper_capture(
-                crate::input::state::EyedropperCaptureSource::Zoom,
-            );
-            self.finish_pending_ocr_capture(crate::input::state::OcrCaptureSource::Zoom);
         }
+        self.resolve_pending_zoom_terminal();
     }
 
     /// Restore the overlay after screenshot capture completes.
@@ -177,7 +173,7 @@ impl WaylandState {
                 "Capture action {:?} requested while overlay is suppressed; ignoring",
                 action
             );
-            self.capture.clear_exit_on_success();
+            self.capture.finish_capture_lifecycle();
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "capture",
@@ -348,6 +344,9 @@ impl WaylandState {
                     "{} submission rejected while capture operation {active_id} is active",
                     operation.saved_log_label()
                 );
+                self.capture.clear_pending_pdf_export();
+                self.show_overlay();
+                self.capture.finish_capture_lifecycle();
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "capture",
@@ -364,11 +363,9 @@ impl WaylandState {
 
     fn restore_rejected_capture_submission(&mut self, operation: ImageOperationKind, error: &str) {
         log::error!("Failed to submit {}: {error}", operation.saved_log_label());
-        self.capture.clear_preflight();
         self.capture.clear_pending_pdf_export();
         self.show_overlay();
-        self.capture.clear_in_progress();
-        self.capture.clear_exit_on_success();
+        self.capture.finish_capture_lifecycle();
         self.input_state.push_toast(
             ToastPriority::Critical,
             "capture",

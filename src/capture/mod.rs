@@ -9,6 +9,7 @@
 
 pub mod clipboard;
 pub mod file;
+pub(crate) mod png;
 #[cfg(feature = "portal")]
 pub mod portal;
 pub mod sources;

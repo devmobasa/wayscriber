@@ -1,4 +1,3 @@
-use crate::input::state::{Toast, ToastPriority};
 use smithay_client_toolkit::shell::{WaylandSurface, wlr_layer::Layer};
 
 use super::super::*;
@@ -20,6 +19,14 @@ fn xdg_frozen_fullscreen_timeout(
             .map(|deadline| deadline.saturating_duration_since(now))
             .unwrap_or(Duration::ZERO),
     )
+}
+
+fn finish_xdg_frozen_fullscreen_request(
+    state: &mut XdgFrozenFullscreenState,
+    requested_at: &mut Option<Instant>,
+) {
+    *state = XdgFrozenFullscreenState::Inactive;
+    *requested_at = None;
 }
 
 impl WaylandState {
@@ -347,9 +354,10 @@ impl WaylandState {
             }
             window.commit();
         }
-        self.data.xdg_frozen_fullscreen_state =
-            crate::backend::wayland::state::XdgFrozenFullscreenState::Inactive;
-        self.data.xdg_frozen_fullscreen_requested_at = None;
+        finish_xdg_frozen_fullscreen_request(
+            &mut self.data.xdg_frozen_fullscreen_state,
+            &mut self.data.xdg_frozen_fullscreen_requested_at,
+        );
     }
 
     pub(in crate::backend::wayland) fn activate_pending_frozen_image_for_current_surface(
@@ -374,8 +382,6 @@ impl WaylandState {
             Ok(false) => {}
             Err(err) => {
                 log::warn!("Frozen pending image activation failed: {}", err);
-                self.input_state
-                    .push_toast(ToastPriority::Critical, "freeze", Toast::error(err));
                 self.restore_xdg_after_frozen();
             }
         }
@@ -445,6 +451,26 @@ mod tests {
         assert_eq!(
             xdg_frozen_fullscreen_timeout(true, None, start),
             Some(Duration::ZERO)
+        );
+    }
+
+    #[test]
+    fn finishing_xdg_frozen_fullscreen_request_eliminates_an_expired_timeout() {
+        let start = Instant::now();
+        let mut state = XdgFrozenFullscreenState::PendingConfigure;
+        let mut requested_at = Some(start);
+
+        finish_xdg_frozen_fullscreen_request(&mut state, &mut requested_at);
+
+        assert_eq!(state, XdgFrozenFullscreenState::Inactive);
+        assert_eq!(requested_at, None);
+        assert_eq!(
+            xdg_frozen_fullscreen_timeout(
+                state == XdgFrozenFullscreenState::PendingConfigure,
+                requested_at,
+                start + XDG_FROZEN_FULLSCREEN_TIMEOUT,
+            ),
+            None
         );
     }
 }

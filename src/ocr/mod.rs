@@ -8,6 +8,9 @@
 
 use std::fmt;
 
+use crate::capture::png::encode_packed_argb32_png;
+use crate::screen_pixels::PackedArgb32;
+
 mod controller;
 mod tesseract;
 
@@ -29,30 +32,6 @@ pub(crate) trait OcrTextPublisher {
     fn publish(&self, text: &str) -> Result<(), OcrFailure>;
 }
 
-/// Tightly packed premultiplied ARGB32 pixels in Cairo's native byte order.
-///
-/// Owned by the request: the crop is taken from the displayed screen image on
-/// the event thread and handed to the worker, so a later freeze, zoom, or
-/// display change cannot change what is recognized.
-pub(crate) struct OcrPixels {
-    pub(crate) width: u32,
-    pub(crate) height: u32,
-    pub(crate) stride: i32,
-    pub(crate) data: Vec<u8>,
-}
-
-impl fmt::Debug for OcrPixels {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("OcrPixels")
-            .field("width", &self.width)
-            .field("height", &self.height)
-            .field("stride", &self.stride)
-            .field("bytes", &self.data.len())
-            .finish()
-    }
-}
-
 /// A validated Tesseract language argument, such as `eng` or `eng+deu`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OcrLanguages(String);
@@ -71,7 +50,7 @@ impl OcrLanguages {
 
 #[derive(Debug)]
 pub(crate) struct OcrRequest {
-    pub(crate) pixels: OcrPixels,
+    pub(crate) pixels: PackedArgb32,
     pub(crate) languages: OcrLanguages,
 }
 
@@ -184,8 +163,11 @@ fn run_request(
     recognizer: &dyn TextRecognizer,
     publisher: &dyn OcrTextPublisher,
 ) -> OcrOutcome {
-    let png = encode_png(&request.pixels)?;
-    let recognized = recognizer.recognize(&png, &request.languages)?;
+    let png = encode_packed_argb32_png(&request.pixels).map_err(|err| {
+        log::warn!("OCR crop PNG encoding failed: {err}");
+        OcrFailure::EncodeFailed
+    })?;
+    let recognized = recognizer.recognize(&png.bytes, &request.languages)?;
     if recognized.text.is_empty() {
         return Ok(OcrSuccess::NoTextFound);
     }
@@ -202,31 +184,6 @@ fn run_request(
 pub(crate) struct RecognizedOutput {
     pub(crate) text: RecognizedText,
     pub(crate) replaced_invalid_utf8: bool,
-}
-
-fn encode_png(pixels: &OcrPixels) -> Result<Vec<u8>, OcrFailure> {
-    if pixels.width == 0 || pixels.height == 0 {
-        return Err(OcrFailure::EncodeFailed);
-    }
-    let width = i32::try_from(pixels.width).map_err(|_| OcrFailure::EncodeFailed)?;
-    let height = i32::try_from(pixels.height).map_err(|_| OcrFailure::EncodeFailed)?;
-    let surface = cairo::ImageSurface::create_for_data(
-        pixels.data.clone(),
-        cairo::Format::ARgb32,
-        width,
-        height,
-        pixels.stride,
-    )
-    .map_err(|err| {
-        log::warn!("OCR crop surface creation failed: {err}");
-        OcrFailure::EncodeFailed
-    })?;
-    let mut bytes = Vec::new();
-    surface.write_to_png(&mut bytes).map_err(|err| {
-        log::warn!("OCR crop PNG encoding failed: {err}");
-        OcrFailure::EncodeFailed
-    })?;
-    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -262,13 +219,14 @@ mod tests {
         }
     }
 
-    pub(super) fn pixels(width: u32, height: u32) -> OcrPixels {
-        OcrPixels {
+    pub(super) fn pixels(width: u32, height: u32) -> PackedArgb32 {
+        PackedArgb32::new(
             width,
             height,
-            stride: (width * 4) as i32,
-            data: vec![0xFF; (width * height * 4) as usize],
-        }
+            (width * 4) as i32,
+            vec![0xFF; (width * height * 4) as usize],
+        )
+        .unwrap()
     }
 
     fn request() -> OcrRequest {
@@ -383,31 +341,19 @@ mod tests {
     }
 
     #[test]
-    fn encoding_rejects_an_empty_crop_before_touching_cairo() {
-        assert_eq!(encode_png(&pixels(0, 4)), Err(OcrFailure::EncodeFailed));
-        assert_eq!(encode_png(&pixels(4, 0)), Err(OcrFailure::EncodeFailed));
-    }
-
-    #[test]
-    fn encoding_preserves_opaque_transparent_and_premultiplied_pixels() {
-        let source = OcrPixels {
-            width: 3,
-            height: 1,
-            stride: 12,
-            // Cairo ARgb32 is native-endian premultiplied BGRA on little-endian
-            // targets: opaque blue, fully transparent, half-alpha grey.
-            data: vec![255, 0, 0, 255, 0, 0, 0, 0, 64, 64, 64, 128],
+    fn empty_crop_still_maps_png_failure_to_the_ocr_failure_contract() {
+        let request = OcrRequest {
+            pixels: pixels(0, 4),
+            languages: OcrLanguages::from_validated("eng".to_string()),
         };
+        let publisher = RecordingPublisher(std::sync::Mutex::new(Vec::new()));
+        let outcome = run_request(
+            request,
+            &StubRecognizer(|| panic!("empty pixels must not reach the recognizer")),
+            &publisher,
+        );
 
-        let png = encode_png(&source).expect("crop encodes");
-        let decoded =
-            cairo::ImageSurface::create_from_png(&mut png.as_slice()).expect("encoded PNG decodes");
-        assert_eq!((decoded.width(), decoded.height()), (3, 1));
-
-        let mut decoded = decoded;
-        let stride = decoded.stride() as usize;
-        let data = decoded.data().expect("decoded pixels");
-        assert_eq!(&data[..12], &source.data[..12]);
-        assert!(stride >= 12);
+        assert_eq!(outcome, Err(OcrFailure::EncodeFailed));
+        assert!(publisher.0.lock().unwrap().is_empty());
     }
 }

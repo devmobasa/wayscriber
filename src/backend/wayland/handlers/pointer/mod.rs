@@ -4,7 +4,7 @@ use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind, Poin
 use wayland_client::{Connection, QueueHandle, protocol::wl_pointer};
 
 use crate::backend::wayland::state::{debug_toolbar_drag_logging_enabled, surface_id};
-use crate::input::state::OcrInputSource;
+use crate::input::state::RegionInputSource;
 
 use super::super::state::WaylandState;
 

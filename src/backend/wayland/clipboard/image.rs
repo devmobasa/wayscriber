@@ -1,10 +1,9 @@
-use super::{
-    ClipboardPasteResult, MAX_CLIPBOARD_IMAGE_PIXELS, WAYSCRIBER_SELECTION_MIME, file_list,
-};
+use super::{ClipboardPasteResult, WAYSCRIBER_SELECTION_MIME, file_list};
 use crate::draw::EmbeddedImage;
 use crate::image_decode::{
     EncodedImageFormat, decode_rgba, format_from_mime_or_bytes, image_dimensions,
 };
+use crate::screen_pixels::EmbeddedImageLimits;
 
 pub(super) fn choose_supported_mime(offered: &[String]) -> Option<String> {
     if let Some(mime) = [
@@ -35,12 +34,12 @@ pub(super) fn decode_clipboard_image(mime_type: &str, bytes: Vec<u8>) -> Clipboa
         Ok(dimensions) => dimensions,
         Err(err) => return ClipboardPasteResult::DecodeFailed(err),
     };
-    let pixels = dimensions.0 as u64 * dimensions.1 as u64;
-    if pixels > MAX_CLIPBOARD_IMAGE_PIXELS {
+    let limits = EmbeddedImageLimits::default();
+    if !limits.allows_pixels(dimensions.0, dimensions.1) {
         return ClipboardPasteResult::TooManyPixels {
             width: dimensions.0,
             height: dimensions.1,
-            limit: MAX_CLIPBOARD_IMAGE_PIXELS,
+            limit: limits.max_pixels(),
         };
     }
     if let Err(err) = decode_rgba(format, &bytes) {
@@ -71,11 +70,11 @@ fn canonical_image_mime_type(format: EncodedImageFormat) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use crate::backend::wayland::clipboard::MAX_CLIPBOARD_IMAGE_BYTES;
+    use crate::screen_pixels::EmbeddedImageLimits;
 
     #[test]
     fn image_byte_cap_leaves_room_for_default_persisted_create_history() {
-        let encoded_len = MAX_CLIPBOARD_IMAGE_BYTES.div_ceil(3) * 4;
+        let encoded_len = EmbeddedImageLimits::default().max_bytes().div_ceil(3) * 4;
         let duplicated_history_len = encoded_len * 2;
         let default_session_budget = 50 * 1024 * 1024;
         let json_margin = 512 * 1024;
