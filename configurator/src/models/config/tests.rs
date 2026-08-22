@@ -58,6 +58,20 @@ fn config_draft_round_trips_automatic_onboarding_preference() {
 }
 
 #[test]
+fn config_draft_round_trips_shape_size_readout_preference() {
+    let mut config = Config::default();
+    config.ui.show_shape_size_readout = false;
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(!draft.ui_show_shape_size_readout);
+
+    draft.set_toggle(ToggleField::UiShowShapeSizeReadout, true);
+    let round_trip = draft
+        .to_config(&config)
+        .expect("shape size readout preference should round trip");
+    assert!(round_trip.ui.show_shape_size_readout);
+}
+
+#[test]
 fn config_draft_round_trips_region_capture_settings() {
     let config = Config::default();
     let mut draft = ConfigDraft::from_config(&config);

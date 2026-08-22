@@ -712,6 +712,10 @@ show_capabilities_warning = true
 # appearances. The guided tour remains available manually when this is false.
 show_onboarding_hints = true
 
+# Show rectangle and ellipse preview dimensions in logical board pixels.
+# This is separate from capture.region.show_size_readout.
+show_shape_size_readout = true
+
 # Command palette action toast duration (ms)
 command_palette_toast_duration_ms = 1500
 
@@ -1183,6 +1187,7 @@ top_controls = [
 - **Context-aware UI**: `context_aware_ui` shows/hides tool-specific controls (colors, thickness, arrow labels, etc.) based on the active tool; disable to always show all controls.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.
 - **Automatic guidance**: `show_onboarding_hints` controls first-run cards, discovery tips, and shortcut coaching. Discovery and coaching tips offer **Got it** (permanently acknowledge that tip) and **Tip settings…** (acknowledge it, then open the Configurator at this setting); the toolbar-hidden recovery tip keeps **Show** as its primary control and offers the same settings route. Using the board picker, bottom-right zoom controls, or Canvas popover also acknowledges the matching tip. Clicking the message body dismisses a tip only for the current run; an unattended tip stops after three appearances. Set this option to `false` to disable all automatic tutorials on later overlay launches; the running overlay does not live-reload this Configurator change. The guided tour remains available manually, and capability, safety, and configuration warnings are unaffected. Completed profiles migrated from onboarding versions before v6 are not enrolled in the later status-bar, Canvas, and zoom tip series. If onboarding progress cannot be saved, automatic guidance is disabled for that run and an actionable persistence warning is shown.
+- **Shape size readout**: `show_shape_size_readout` controls the live rectangle and ellipse preview dimensions, measured in logical board pixels. Ellipse values match the diameter that will be committed, so an odd drag span rounds down to the nearest even diameter. It defaults to `true` and is separate from `capture.region.show_size_readout`, which describes a region-capture selection.
 - **Capability warnings**: `show_capabilities_warning` independently controls compositor limitation warnings; disabling tutorials does not hide safety, configuration, or capability diagnostics.
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
 - **Offsets**: `top_offset` and `top_offset_y` are the authored default top-toolbar position. Dragging the strip saves its position as a runtime preference in `runtime-ui.toml` and leaves these untouched; editing one here again takes over from the saved drag.

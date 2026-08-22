@@ -1,6 +1,7 @@
 use super::*;
 
 mod canvas;
+mod measure_badge;
 mod tool_preview;
 mod ui;
 mod ui_effect_damage;
@@ -146,6 +147,7 @@ impl WaylandState {
             let command_palette_active = render_ui && self.input_state.command_palette_is_engaged();
             let color_picker_active = render_ui && self.input_state.is_color_picker_popup_open();
             let input_hud_active = render_ui && self.input_state.input_hud_visible();
+            let shape_measure_badge_active = render_ui && !self.capture_picker_chrome_suppressed();
             let ui_effect_damage = self.collect_ui_effect_damage(
                 ui_toast_active,
                 preset_feedback_active,
@@ -157,6 +159,7 @@ impl WaylandState {
                 command_palette_active,
                 color_picker_active,
                 tool_preview_active,
+                shape_measure_badge_active,
                 width,
                 height,
             );

@@ -121,6 +121,10 @@ pub struct UiConfig {
     #[serde(default = "default_show_onboarding_hints")]
     pub show_onboarding_hints: bool,
 
+    /// Show rectangle and ellipse preview dimensions in logical board pixels.
+    #[serde(default = "default_show_shape_size_readout")]
+    pub show_shape_size_readout: bool,
+
     /// Preferred output name for the xdg-shell fallback overlay (GNOME).
     /// Falls back to last entered output or first available.
     #[serde(default)]
@@ -199,6 +203,7 @@ impl Default for UiConfig {
             help_overlay_context_filter: default_help_overlay_context_filter(),
             show_capabilities_warning: default_show_capabilities_warning(),
             show_onboarding_hints: default_show_onboarding_hints(),
+            show_shape_size_readout: default_show_shape_size_readout(),
             preferred_output: None,
             multi_monitor_enabled: default_multi_monitor_enabled(),
             active_output_badge: default_active_output_badge(),
@@ -318,6 +323,10 @@ fn default_show_capabilities_warning() -> bool {
 }
 
 fn default_show_onboarding_hints() -> bool {
+    true
+}
+
+fn default_show_shape_size_readout() -> bool {
     true
 }
 

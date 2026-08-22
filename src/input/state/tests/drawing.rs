@@ -802,6 +802,64 @@ fn sync_highlight_color_marks_dirty_when_pen_color_changes() {
     assert!(state.needs_redraw);
 }
 
+#[test]
+fn provisional_shape_size_reports_rect_and_ellipse_logical_extents() {
+    let mut state = create_test_input_state();
+
+    for tool in [Tool::Rect, Tool::Ellipse] {
+        state.state = DrawingState::Drawing {
+            tool,
+            start_x: 140,
+            start_y: 95,
+            points: Vec::new(),
+            point_thicknesses: Vec::new(),
+        };
+
+        assert_eq!(state.provisional_shape_size(20, 175), Some((120, 80)));
+    }
+
+    state.state = DrawingState::Drawing {
+        tool: Tool::Ellipse,
+        start_x: 11,
+        start_y: 15,
+        points: Vec::new(),
+        point_thicknesses: Vec::new(),
+    };
+    assert_eq!(state.provisional_shape_size(0, 0), Some((10, 14)));
+
+    state.state = DrawingState::Drawing {
+        tool: Tool::Rect,
+        start_x: 7,
+        start_y: 9,
+        points: Vec::new(),
+        point_thicknesses: Vec::new(),
+    };
+    assert_eq!(state.provisional_shape_size(7, 9), Some((0, 0)));
+}
+
+#[test]
+fn provisional_shape_size_excludes_freehand_and_non_size_badge_tools() {
+    let mut state = create_test_input_state();
+
+    for tool in Tool::ALL
+        .into_iter()
+        .filter(|tool| !matches!(tool, Tool::Rect | Tool::Ellipse))
+    {
+        state.state = DrawingState::Drawing {
+            tool,
+            start_x: 10,
+            start_y: 20,
+            points: vec![(10, 20)],
+            point_thicknesses: vec![2.0],
+        };
+
+        assert_eq!(state.provisional_shape_size(40, 70), None, "{tool:?}");
+    }
+
+    state.state = DrawingState::Idle;
+    assert_eq!(state.provisional_shape_size(40, 70), None);
+}
+
 fn test_rects_intersect(a: crate::util::Rect, b: crate::util::Rect) -> bool {
     let a_right = a.x.saturating_add(a.width);
     let a_bottom = a.y.saturating_add(a.height);

@@ -9,6 +9,7 @@ mod context_menu;
 mod eyedropper_loupe;
 mod help_overlay;
 mod input_hud;
+mod measure_badge;
 mod onboarding_card;
 mod precision_entry;
 mod primitives;
@@ -36,11 +37,14 @@ pub use help_overlay::{
     HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at, render_help_overlay,
 };
 pub use input_hud::{input_hud_geometry, render_input_hud};
+pub(crate) use measure_badge::{
+    ShapeMeasureBadge, measure_shape_badge, shape_measure_badge_text_style,
+};
 pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboarding_card};
 pub use precision_entry::render_precision_entry_popup;
-pub(crate) use primitives::checkerboard_behind;
 /// Shared measured-text trimming, also used by the standalone about dialog.
 pub(crate) use primitives::ellipsize_to_fit;
+pub(crate) use primitives::{checkerboard_behind, draw_pill};
 pub use properties_panel::render_properties_panel;
 pub use radial_menu::render_radial_menu;
 pub(crate) use region_action_bar::{RegionAction, RegionActionBar};

@@ -16,6 +16,7 @@ pub enum ToggleField {
     UiShowFrozenBadge,
     UiShowCapabilitiesWarning,
     UiShowOnboardingHints,
+    UiShowShapeSizeReadout,
     UiHelpOverlayContextFilter,
     UiContextMenuEnabled,
     UiXdgFullscreen,

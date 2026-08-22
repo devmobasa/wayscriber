@@ -101,6 +101,20 @@ fn automatic_onboarding_hints_default_on_and_can_be_disabled() {
 }
 
 #[test]
+fn shape_size_readout_defaults_on_and_can_be_disabled_after_reload() {
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert!(default_config.ui.show_shape_size_readout);
+
+    let disabled: Config = toml::from_str("[ui]\nshow_shape_size_readout = false\n")
+        .expect("shape size readout preference should parse");
+    assert!(!disabled.ui.show_shape_size_readout);
+
+    let serialized = toml::to_string(&disabled).expect("config should serialize");
+    let reloaded: Config = toml::from_str(&serialized).expect("round trip should parse");
+    assert!(!reloaded.ui.show_shape_size_readout);
+}
+
+#[test]
 fn presenter_toolbar_mode_defaults_to_hidden_and_round_trips() {
     let default_config: Config = toml::from_str("").expect("empty config should use defaults");
     assert_eq!(

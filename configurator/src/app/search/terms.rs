@@ -179,6 +179,12 @@ pub(super) const UI_GENERAL_TERMS: &[&str] = &[
     "tutorial",
     "guidance",
     "tips",
+    "show shape size readout",
+    "shape size readout",
+    "show_shape_size_readout",
+    "shape dimensions",
+    "rectangle ellipse preview",
+    "logical board pixels",
     "command palette toast",
 ];
 pub(super) const UI_TOOLBAR_TERMS: &[&str] = &[

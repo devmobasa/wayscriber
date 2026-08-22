@@ -192,6 +192,7 @@ pub struct StateData {
     pub(super) prev_command_palette_damage: Option<crate::util::Rect>,
     pub(super) prev_color_picker_damage: Option<crate::util::Rect>,
     pub(super) prev_tool_preview_damage: Option<crate::util::Rect>,
+    pub(super) prev_shape_measure_badge_damage: Option<crate::util::Rect>,
     /// Idle-fade engine for the top-strip islands; its value is published
     /// on every toolbar snapshot as `top_fade`.
     pub(super) top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade,
@@ -284,6 +285,7 @@ impl StateData {
             prev_command_palette_damage: None,
             prev_color_picker_damage: None,
             prev_tool_preview_damage: None,
+            prev_shape_measure_badge_damage: None,
             top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade::new(),
             shortcut_coach: super::onboarding::ShortcutCoachSession::default(),
         }

@@ -94,6 +94,7 @@ pub struct ConfigDraft {
     pub ui_show_frozen_badge: bool,
     pub ui_show_capabilities_warning: bool,
     pub ui_show_onboarding_hints: bool,
+    pub ui_show_shape_size_readout: bool,
     pub ui_context_menu_enabled: bool,
     pub ui_preferred_output: String,
     pub ui_xdg_fullscreen: bool,

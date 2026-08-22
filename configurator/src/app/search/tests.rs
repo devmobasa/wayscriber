@@ -614,6 +614,11 @@ fn exact_general_ui_field_labels_match_general_ui_section() {
         "hints",
         "onboarding hints",
         "show_onboarding_hints",
+        "show shape size readout",
+        "shape size readout",
+        "show_shape_size_readout",
+        "rectangle ellipse preview",
+        "logical board pixels",
     ] {
         let (mut app, _effects) = ConfiguratorApp::new_app();
         app.search_query = SearchQuery::new(query);

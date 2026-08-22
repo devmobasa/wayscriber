@@ -460,6 +460,10 @@ show_capabilities_warning = true
 # The guided tour remains available manually when this is false.
 show_onboarding_hints = true
 
+# Show rectangle and ellipse preview dimensions in logical board pixels.
+# This is separate from capture.region.show_size_readout.
+show_shape_size_readout = true
+
 # Command palette action toast duration (ms)
 command_palette_toast_duration_ms = 1500
 

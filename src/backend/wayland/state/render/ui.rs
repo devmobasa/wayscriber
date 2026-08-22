@@ -47,6 +47,9 @@ impl WaylandState {
                     height as f64,
                 );
             }
+            if !capture_picker {
+                self.render_shape_measure_badge(ctx, width, height);
+            }
             if let Some((cursor_x, cursor_y)) = self.stylus_hover_cursor_position()
                 && !capture_picker
                 && !self.cursor_blocked_by_toolbar()

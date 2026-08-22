@@ -97,6 +97,7 @@ impl WaylandState {
         command_palette_active: bool,
         color_picker_active: bool,
         tool_preview_active: bool,
+        shape_measure_badge_active: bool,
         width: u32,
         height: u32,
     ) -> Vec<Rect> {
@@ -259,6 +260,17 @@ impl WaylandState {
         regions.extend(preview_update.rects);
         self.data.prev_tool_preview_damage = preview_update.current;
 
+        let measure_badge_rect = shape_measure_badge_active
+            .then(|| self.shape_measure_badge_visual(width, height))
+            .flatten()
+            .and_then(|badge| effect_rect(badge.bounds, width, height));
+        push_effect_damage(
+            &mut regions,
+            self.data.prev_shape_measure_badge_damage,
+            measure_badge_rect,
+        );
+        self.data.prev_shape_measure_badge_damage = measure_badge_rect;
+
         regions
     }
 
@@ -306,6 +318,29 @@ mod tests {
         let clamped = effect_rect((-5.0, -5.0, 20.0, 20.0), 100, 100).expect("clamped rect");
         assert_eq!(clamped.x, 0);
         assert_eq!(clamped.y, 0);
+    }
+
+    #[test]
+    fn shape_badge_damage_unions_appear_move_and_disappear_footprints() {
+        let first = crate::ui::measure_shape_badge(true, (20, 30), (100.0, 100.0), 800, 600)
+            .and_then(|badge| effect_rect(badge.bounds, 800, 600));
+        let second = crate::ui::measure_shape_badge(true, (200, 300), (300.0, 250.0), 800, 600)
+            .and_then(|badge| effect_rect(badge.bounds, 800, 600));
+        let mut damage = Vec::new();
+
+        push_effect_damage(&mut damage, None, first);
+        assert_eq!(damage, vec![first.expect("appeared")]);
+
+        damage.clear();
+        push_effect_damage(&mut damage, first, second);
+        assert_eq!(
+            damage,
+            vec![first.expect("previous"), second.expect("moved")]
+        );
+
+        damage.clear();
+        push_effect_damage(&mut damage, second, None);
+        assert_eq!(damage, vec![second.expect("disappeared")]);
     }
 
     #[test]

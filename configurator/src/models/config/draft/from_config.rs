@@ -134,6 +134,7 @@ impl ConfigDraft {
             ui_show_frozen_badge: config.ui.show_frozen_badge,
             ui_show_capabilities_warning: config.ui.show_capabilities_warning,
             ui_show_onboarding_hints: config.ui.show_onboarding_hints,
+            ui_show_shape_size_readout: config.ui.show_shape_size_readout,
             ui_context_menu_enabled: config.ui.context_menu.enabled,
             ui_preferred_output: config.ui.preferred_output.clone().unwrap_or_default(),
             ui_xdg_fullscreen: config.ui.xdg_fullscreen,

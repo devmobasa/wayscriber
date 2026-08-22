@@ -55,6 +55,15 @@ fn region_capture_paths_exist_in_json_schema() {
 }
 
 #[test]
+fn shape_size_readout_exists_in_json_schema() {
+    let schema = Config::json_schema();
+    assert!(
+        schema_contains_path(&schema, "ui.show_shape_size_readout"),
+        "schema missing shape size readout preference"
+    );
+}
+
+#[test]
 fn interactive_region_capture_keybinding_exists_in_json_schema() {
     let schema = Config::json_schema();
     assert!(
