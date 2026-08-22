@@ -238,6 +238,7 @@ fn handle_frozen_toggle(state: &mut WaylandState) {
         FrozenUserToggleAction::Unfreeze => {
             state.restore_xdg_after_frozen();
             state.frozen.unfreeze(&mut state.input_state);
+            state.cancel_screen_modals_if_source_changed();
         }
         FrozenUserToggleAction::ReportUnavailable => {
             warn!(

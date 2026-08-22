@@ -1427,6 +1427,9 @@ does not change the active tool, the drawing history, or the board.
   does nothing.
 - On a solid whiteboard or blackboard with no visible screen capture, OCR
   refuses rather than reading the board.
+- An active OCR selection cancels if the displayed screen image changes, the
+  zoom level or pan changes, or freeze, output, scale, or display layout state
+  is replaced.
 
 **Requirements:** the `tesseract` command plus the language data for every code
 in `ocr_languages`, and `wl-copy` (from `wl-clipboard`) for the clipboard write.

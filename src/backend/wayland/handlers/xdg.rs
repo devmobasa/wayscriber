@@ -120,10 +120,9 @@ impl WindowHandler for WaylandState {
             .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.zoom
             .handle_resize(phys_w, phys_h, &mut self.input_state);
-        self.cancel_eyedropper_if_source_missing();
-        self.cancel_ocr_if_source_missing();
 
         self.refresh_freeze_zoom_geometry();
+        self.cancel_screen_modals_if_source_changed();
         if self.xdg_frozen_fullscreen_requested() && self.frozen.has_pending_image() {
             if self.xdg_frozen_fullscreen_pending_configure() && !configure.is_fullscreen() {
                 warn!("xdg frozen fullscreen was not granted; activating freeze on current size");

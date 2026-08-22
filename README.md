@@ -557,6 +557,9 @@ it to the clipboard. It is optional: the action has no default shortcut and its
 toolbar button is hidden until you turn it on. Install Tesseract and the language
 data you configure in `[capture].ocr_languages` (default `eng`):
 
+An active OCR selection cancels if the displayed screen image changes, so the
+selected coordinates can never be applied to replacement freeze or zoom pixels.
+
 ```bash
 sudo pacman -S tesseract tesseract-data-eng       # Arch/Omarchy
 sudo apt-get install tesseract-ocr                # Debian/Ubuntu

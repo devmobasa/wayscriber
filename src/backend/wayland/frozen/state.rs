@@ -227,6 +227,14 @@ impl FrozenState {
         self.output_layout_generation
     }
 
+    pub(in crate::backend::wayland) fn source_context_matches(
+        &self,
+        provenance: ScreenImageProvenance,
+    ) -> bool {
+        self.active_output_id == Some(provenance.output_id)
+            && self.output_layout_generation == provenance.output_layout_generation
+    }
+
     pub(in crate::backend::wayland) fn image_provenance(&self) -> Option<ScreenImageProvenance> {
         self.image.as_ref()?;
         self.image_provenance

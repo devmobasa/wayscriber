@@ -6,9 +6,10 @@ use crate::input::state::EyedropperCaptureSource;
 use crate::input::state::{Toast, ToastPriority};
 
 use super::WaylandState;
+use super::acquisition::report_screen_source_activation_rejected_to;
 use super::screen_image::{
-    DisplayedScreenImage, ScreenSourceEntry, displayed_screen_image, image_point_for_screen_point,
-    screen_source_entry, screen_source_token,
+    DisplayedScreenImage, ScreenSourceEntry, current_screen_source_token, displayed_screen_image,
+    image_point_for_screen_point, screen_source_entry, screen_source_token,
 };
 
 fn sample_at(image: &FrozenImage, image_x: f64, image_y: f64) -> Option<Color> {
@@ -75,7 +76,15 @@ impl WaylandState {
             self.frozen_enabled(),
         );
         match decision {
-            ScreenSourceEntry::Activate => self.activate_eyedropper_sampler(None),
+            ScreenSourceEntry::Activate => {
+                if !self.activate_eyedropper_sampler(None) {
+                    self.cancel_eyedropper_ui_only();
+                    report_screen_source_activation_rejected_to(
+                        &mut self.input_state,
+                        ScreenAcquisitionOwner::Eyedropper,
+                    );
+                }
+            }
             ScreenSourceEntry::WaitForZoom => {
                 if self.wait_for_current_zoom_capture(ZoomWaiterOwner::Eyedropper) {
                     self.input_state
@@ -146,41 +155,49 @@ impl WaylandState {
         &mut self,
         capture_source: EyedropperCaptureSource,
         owned_frozen_generation: Option<u64>,
-    ) {
+    ) -> bool {
         if self.input_state.eyedropper_state().pending_source() != Some(capture_source) {
-            return;
+            return false;
         }
-        if self.background_image_source().is_some() {
-            self.activate_eyedropper_sampler(owned_frozen_generation);
-        } else {
-            self.cancel_eyedropper_ui_only();
-        }
+        self.activate_eyedropper_sampler(owned_frozen_generation)
     }
 
     /// Arm the screen sampler. Retires an in-flight stylus contact for the same
     /// reason OCR does: from here the modal swallows the tip-up that would
     /// otherwise end it.
-    fn activate_eyedropper_sampler(&mut self, owned_frozen_generation: Option<u64>) {
+    fn activate_eyedropper_sampler(&mut self, owned_frozen_generation: Option<u64>) -> bool {
+        let Some(source) = self.background_image_source() else {
+            return false;
+        };
+        let Some(token) = current_screen_source_token(
+            &source,
+            &self.zoom,
+            &self.frozen,
+            (self.surface.width(), self.surface.height()),
+        ) else {
+            return false;
+        };
         self.retire_stylus_contact();
+        self.data.active_eyedropper_source = Some(token);
         self.input_state
             .activate_eyedropper(owned_frozen_generation);
+        true
     }
 
     pub(in crate::backend::wayland) fn update_eyedropper_hover(&mut self, x: f64, y: f64) {
+        self.cancel_screen_modals_if_source_changed();
         if self.input_state.eyedropper_is_active() {
             self.input_state.update_eyedropper_hover((x, y));
-        }
-    }
-
-    pub(in crate::backend::wayland) fn cancel_eyedropper_if_source_missing(&mut self) {
-        if self.input_state.eyedropper_is_active() && self.background_image_source().is_none() {
-            self.cancel_eyedropper();
         }
     }
 
     pub(in crate::backend::wayland) fn sample_eyedropper(&mut self, x: f64, y: f64) -> bool {
         if !self.input_state.eyedropper_is_active() {
             return false;
+        }
+        self.cancel_screen_modals_if_source_changed();
+        if !self.input_state.eyedropper_is_active() {
+            return true;
         }
         let Some(source) = self.background_image_source() else {
             self.cancel_eyedropper();

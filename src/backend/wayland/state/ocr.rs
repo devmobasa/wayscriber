@@ -13,6 +13,7 @@ use crate::input::state::{
 use crate::ocr::{OcrFailure, OcrLanguages, OcrPoll, OcrRequest, OcrSubmitError, OcrSuccess};
 
 use super::WaylandState;
+use super::acquisition::report_screen_source_activation_rejected_to;
 use super::region_capture::{
     ActiveScreenRegion, FreezeOwnership, RegionSelectionFinalize, finalize_region_selection_event,
 };
@@ -83,7 +84,13 @@ impl WaylandState {
             self.frozen_enabled(),
         ) {
             ScreenSourceEntry::Activate => {
-                self.activate_ocr_selector(generation, FreezeOwnership::PreExisting);
+                if !self.activate_ocr_selector(generation, FreezeOwnership::PreExisting) {
+                    self.clear_screen_region_ui_only();
+                    report_screen_source_activation_rejected_to(
+                        &mut self.input_state,
+                        ScreenAcquisitionOwner::Ocr,
+                    );
+                }
             }
             ScreenSourceEntry::WaitForZoom => {
                 if self.wait_for_current_zoom_capture(ZoomWaiterOwner::Ocr) {
@@ -159,9 +166,9 @@ impl WaylandState {
         &mut self,
         capture_source: ScreenCaptureSource,
         installed_generation: u64,
-    ) {
+    ) -> bool {
         let Some(region) = self.data.active_screen_region else {
-            return;
+            return false;
         };
         let generation = region.generation();
         let waiting = matches!(
@@ -175,20 +182,19 @@ impl WaylandState {
             )
         );
         if !waiting {
-            return;
+            return false;
         }
-        if self.ocr_screen_source().is_some() {
-            let ownership = if capture_source == ScreenCaptureSource::Frozen {
-                FreezeOwnership::PickerOwned {
-                    image_generation: installed_generation,
-                }
-            } else {
-                FreezeOwnership::PreExisting
-            };
-            self.activate_ocr_selector(generation, ownership);
+        if self.ocr_screen_source().is_none() {
+            return false;
+        }
+        let ownership = if capture_source == ScreenCaptureSource::Frozen {
+            FreezeOwnership::PickerOwned {
+                image_generation: installed_generation,
+            }
         } else {
-            self.cancel_ocr_ui_only();
-        }
+            FreezeOwnership::PreExisting
+        };
+        self.activate_ocr_selector(generation, ownership)
     }
 
     /// Arm the region selector.
@@ -199,11 +205,9 @@ impl WaylandState {
     /// separated: a capture that lands seconds after the request arms the
     /// selector against a gesture that started during the wait, not the one the
     /// request itself cancelled.
-    fn activate_ocr_selector(&mut self, generation: u64, ownership: FreezeOwnership) {
+    fn activate_ocr_selector(&mut self, generation: u64, ownership: FreezeOwnership) -> bool {
         self.retire_stylus_contact();
-        if !self.activate_screen_region(RegionPurposeTag::Ocr, generation, ownership) {
-            self.clear_screen_region_ui_only();
-        }
+        self.activate_screen_region(RegionPurposeTag::Ocr, generation, ownership)
     }
 
     /// Leave OCR selection, releasing only a freeze OCR created itself.
@@ -237,16 +241,6 @@ impl WaylandState {
         true
     }
 
-    /// A display or source change invalidates the pixels the user is selecting.
-    pub(in crate::backend::wayland) fn cancel_ocr_if_source_missing(&mut self) {
-        if region_source_is_missing(
-            self.input_state.region_is_active(),
-            self.ocr_screen_source().is_some(),
-        ) {
-            self.cancel_ocr();
-        }
-    }
-
     /// Discard a region because the device dragging it went away — the pen left
     /// proximity, the touch sequence was cancelled. Devices that are not
     /// dragging have nothing to withdraw, so this leaves the selector armed for
@@ -269,6 +263,11 @@ impl WaylandState {
         x: f64,
         y: f64,
     ) -> bool {
+        let was_engaged = self.input_state.region_is_engaged();
+        self.cancel_screen_modals_if_source_changed();
+        if was_engaged && !self.input_state.region_is_engaged() {
+            return true;
+        }
         let rect = match finalize_region_selection_event(
             &mut self.data.active_screen_region,
             &mut self.input_state,
@@ -454,10 +453,6 @@ fn normalized_rect(start: (f64, f64), end: (f64, f64)) -> (f64, f64, f64, f64) {
     (x, y, (end.0 - start.0).abs(), (end.1 - start.1).abs())
 }
 
-fn region_source_is_missing(region_active: bool, source_present: bool) -> bool {
-    region_active && !source_present
-}
-
 /// Four bracket corners, the visual language a scan frame reads as. The arm
 /// length shrinks with the region so a small selection is not swallowed by it.
 fn draw_scan_corners(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
@@ -503,12 +498,5 @@ mod tests {
             assert!(arm <= 20.0);
             assert!(arm >= 4.0);
         }
-    }
-
-    #[test]
-    fn active_region_cancels_only_when_its_screen_source_is_missing() {
-        assert!(region_source_is_missing(true, false));
-        assert!(!region_source_is_missing(true, true));
-        assert!(!region_source_is_missing(false, false));
     }
 }

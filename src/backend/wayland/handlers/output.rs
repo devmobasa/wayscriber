@@ -19,6 +19,7 @@ impl OutputHandler for WaylandState {
         debug!("New output detected");
         self.refresh_active_output_label();
         self.refresh_freeze_zoom_geometry();
+        self.cancel_screen_modals_if_source_changed();
     }
 
     fn update_output(
@@ -35,6 +36,7 @@ impl OutputHandler for WaylandState {
         // is added, moved, scaled, or given logical geometry still has to
         // refresh the active crop.
         self.refresh_freeze_zoom_geometry();
+        self.cancel_screen_modals_if_source_changed();
     }
 
     fn output_destroyed(
@@ -53,5 +55,6 @@ impl OutputHandler for WaylandState {
         // a walk of current outputs would still include it. Exclude it here;
         // there is no later callback after the removal.
         self.refresh_freeze_zoom_geometry_excluding(Some(&output));
+        self.cancel_screen_modals_if_source_changed();
     }
 }

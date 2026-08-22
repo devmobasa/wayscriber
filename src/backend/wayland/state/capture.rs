@@ -54,6 +54,7 @@ impl WaylandState {
             self.exit_overlay_suppression(OverlaySuppression::Zoom);
         }
         self.resolve_pending_zoom_terminal();
+        self.cancel_screen_modals_if_source_changed();
     }
 
     /// Restore the overlay after screenshot capture completes.
@@ -67,6 +68,12 @@ impl WaylandState {
 
     /// Handles capture actions by delegating to the CaptureManager.
     pub(in crate::backend::wayland) fn handle_capture_action(&mut self, action: Action) {
+        if self
+            .input_state
+            .refuse_region_capture_while_screen_modal_engaged(action)
+        {
+            return;
+        }
         if !self.config.capture.enabled {
             log::warn!("Capture action triggered but capture is disabled in config");
             return;

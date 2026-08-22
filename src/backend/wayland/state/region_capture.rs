@@ -5,7 +5,9 @@ use crate::input::state::{
 use crate::screen_pixels::{ImagePixelRect, ImagePoint, clamp_edge, pixel_span};
 
 use super::WaylandState;
-use super::screen_image::{ScreenSourceToken, image_point_for_screen_point, screen_source_token};
+use super::screen_image::{
+    ScreenSourceToken, current_screen_source_token, image_point_for_screen_point, screen_source_is,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum FreezeOwnership {
@@ -288,12 +290,14 @@ impl WaylandState {
         ) else {
             return false;
         };
-        let token = screen_source_token(
+        let Some(token) = current_screen_source_token(
             &source,
             &self.zoom,
             &self.frozen,
             (self.surface.width(), self.surface.height()),
-        );
+        ) else {
+            return false;
+        };
         self.data.active_screen_region = Some(ActiveScreenRegion::Ready {
             purpose,
             generation,
@@ -321,6 +325,7 @@ impl WaylandState {
         x: f64,
         y: f64,
     ) -> bool {
+        self.cancel_screen_modals_if_source_changed();
         begin_region_selection_event(
             &mut self.data.active_screen_region,
             &mut self.input_state,
@@ -335,6 +340,7 @@ impl WaylandState {
         x: f64,
         y: f64,
     ) {
+        self.cancel_screen_modals_if_source_changed();
         update_region_selection_event(
             &mut self.data.active_screen_region,
             &mut self.input_state,
@@ -349,6 +355,41 @@ impl WaylandState {
             self.input_state.region_state(),
         ));
     }
+
+    pub(in crate::backend::wayland) fn cancel_screen_modals_if_source_changed(&mut self) {
+        let (cancel_eyedropper, cancel_ocr) = {
+            let current_source = super::screen_image::displayed_screen_image(
+                &self.zoom,
+                &self.frozen,
+                self.input_state.board_is_transparent(),
+            );
+            let source_matches = |expected| {
+                current_source.as_ref().is_some_and(|source| {
+                    screen_source_is(
+                        &expected,
+                        source,
+                        &self.zoom,
+                        &self.frozen,
+                        (self.surface.width(), self.surface.height()),
+                    )
+                })
+            };
+            (
+                active_eyedropper_source_changed(
+                    self.input_state.eyedropper_is_active(),
+                    self.data.active_eyedropper_source,
+                    &source_matches,
+                ),
+                active_ocr_source_changed(self.data.active_screen_region, &source_matches),
+            )
+        };
+        if cancel_eyedropper {
+            self.cancel_eyedropper();
+        }
+        if cancel_ocr {
+            self.cancel_ocr();
+        }
+    }
 }
 
 fn screen_region_invariant(backend: Option<ActiveScreenRegion>, ui: RegionSelectUiState) -> bool {
@@ -359,6 +400,28 @@ fn screen_region_invariant(backend: Option<ActiveScreenRegion>, ui: RegionSelect
             ui.generation() == Some(region.generation()) && ui.purpose() == Some(region.purpose())
         }
     }
+}
+
+fn active_ocr_source_changed(
+    region: Option<ActiveScreenRegion>,
+    source_matches: &impl Fn(ScreenSourceToken) -> bool,
+) -> bool {
+    matches!(
+        region,
+        Some(ActiveScreenRegion::Ready {
+            purpose: RegionPurposeTag::Ocr,
+            source,
+            ..
+        }) if !source_matches(source)
+    )
+}
+
+fn active_eyedropper_source_changed(
+    active: bool,
+    expected_source: Option<ScreenSourceToken>,
+    source_matches: &impl Fn(ScreenSourceToken) -> bool,
+) -> bool {
+    active && !expected_source.is_some_and(source_matches)
 }
 
 pub(super) fn owned_generation_is_current(
@@ -494,6 +557,62 @@ mod tests {
             logical_anchor: None,
             logical_edge: None,
         }
+    }
+
+    #[test]
+    fn ready_ocr_detects_replaced_or_missing_source_but_pending_ocr_keeps_waiting() {
+        let ready = ocr_region(1.0);
+        let ActiveScreenRegion::Ready { source, .. } = ready else {
+            unreachable!("OCR fixture is ready")
+        };
+        let mut replacement = source;
+        replacement.image_generation += 1;
+
+        assert!(!active_ocr_source_changed(Some(ready), &|expected| {
+            expected == source
+        }));
+        assert!(active_ocr_source_changed(Some(ready), &|expected| {
+            expected == replacement
+        }));
+        assert!(active_ocr_source_changed(Some(ready), &|_| false));
+        assert!(!active_ocr_source_changed(
+            Some(ActiveScreenRegion::PendingZoom {
+                purpose: RegionPurposeTag::Ocr,
+                generation: 1,
+            }),
+            &|_| false,
+        ));
+    }
+
+    #[test]
+    fn active_eyedropper_detects_replaced_missing_or_untracked_source() {
+        let ActiveScreenRegion::Ready { source, .. } = ocr_region(1.0) else {
+            unreachable!("OCR fixture is ready")
+        };
+        let mut replacement = source;
+        replacement.image_generation += 1;
+
+        assert!(!active_eyedropper_source_changed(
+            true,
+            Some(source),
+            &|expected| expected == source,
+        ));
+        assert!(active_eyedropper_source_changed(
+            true,
+            Some(source),
+            &|expected| expected == replacement,
+        ));
+        assert!(active_eyedropper_source_changed(
+            true,
+            Some(source),
+            &|_| false,
+        ));
+        assert!(active_eyedropper_source_changed(true, None, &|_| true));
+        assert!(!active_eyedropper_source_changed(
+            false,
+            Some(source),
+            &|_| false,
+        ));
     }
 
     #[test]

@@ -160,19 +160,29 @@ impl KeyboardHandler for WaylandState {
         // re-arms it at the end of this handler.
         self.clear_key_repeat();
         if self.input_state.region_is_engaged() {
+            let action = self.input_state.action_for_key(key);
+            if action.is_some_and(|action| {
+                self.input_state
+                    .refuse_region_capture_while_screen_modal_engaged(action)
+            }) {
+                return;
+            }
             // Every other shortcut is swallowed while the selector is up so a
             // key cannot change the active tool mid-drag.
-            if matches!(key, Key::Escape)
-                || self.input_state.action_for_key(key) == Some(Action::CopyTextFromScreen)
-            {
+            if matches!(key, Key::Escape) || action == Some(Action::CopyTextFromScreen) {
                 self.cancel_ocr();
             }
             return;
         }
         if self.input_state.eyedropper_is_engaged() {
-            if matches!(key, Key::Escape)
-                || self.input_state.action_for_key(key) == Some(Action::PickScreenColor)
-            {
+            let action = self.input_state.action_for_key(key);
+            if action.is_some_and(|action| {
+                self.input_state
+                    .refuse_region_capture_while_screen_modal_engaged(action)
+            }) {
+                return;
+            }
+            if matches!(key, Key::Escape) || action == Some(Action::PickScreenColor) {
                 self.cancel_eyedropper();
             }
             return;

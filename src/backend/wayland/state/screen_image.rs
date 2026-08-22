@@ -168,7 +168,6 @@ pub(super) fn screen_source_token(
     }
 }
 
-#[allow(dead_code)] // Phase 0b compares the stored token before routing input.
 pub(super) fn screen_source_is(
     expected: &ScreenSourceToken,
     source: &DisplayedScreenImage<'_>,
@@ -176,7 +175,20 @@ pub(super) fn screen_source_is(
     frozen: &FrozenState,
     surface: (u32, u32),
 ) -> bool {
-    *expected == screen_source_token(source, zoom, frozen, surface)
+    current_screen_source_token(source, zoom, frozen, surface) == Some(*expected)
+}
+
+pub(super) fn current_screen_source_token(
+    source: &DisplayedScreenImage<'_>,
+    zoom: &ZoomState,
+    frozen: &FrozenState,
+    surface: (u32, u32),
+) -> Option<ScreenSourceToken> {
+    let context_matches = match source.kind {
+        ScreenImageKind::Zoom => zoom.source_context_matches(source.provenance),
+        ScreenImageKind::Frozen => frozen.source_context_matches(source.provenance),
+    };
+    context_matches.then(|| screen_source_token(source, zoom, frozen, surface))
 }
 
 pub(super) fn image_point_for_screen_point(
@@ -564,7 +576,7 @@ mod tests {
     }
 
     #[test]
-    fn source_provenance_survives_live_output_changes_and_detects_image_replacement() {
+    fn source_identity_rejects_live_output_layout_view_and_image_replacement() {
         use crate::backend::wayland::frozen_geometry::OutputGeometry;
         use wayland_client::protocol::wl_output;
 
@@ -596,7 +608,13 @@ mod tests {
 
         frozen.set_active_output(None, Some(12));
         let source = displayed_screen_image(&zoom, &frozen, true).unwrap();
-        assert!(screen_source_is(&token, &source, &zoom, &frozen, (100, 50)));
+        assert!(!screen_source_is(
+            &token,
+            &source,
+            &zoom,
+            &frozen,
+            (100, 50)
+        ));
         frozen.set_active_output(None, Some(11));
 
         frozen.set_active_geometry(OutputGeometry::update_from(
@@ -608,7 +626,13 @@ mod tests {
             Some((100, 50)),
         ));
         let source = displayed_screen_image(&zoom, &frozen, true).unwrap();
-        assert!(screen_source_is(&token, &source, &zoom, &frozen, (100, 50)));
+        assert!(!screen_source_is(
+            &token,
+            &source,
+            &zoom,
+            &frozen,
+            (100, 50)
+        ));
 
         zoom.active = true;
         zoom.set_active_output(None, Some(12));
@@ -639,7 +663,7 @@ mod tests {
         ));
         {
             let source = displayed_screen_image(&zoom, &frozen, true).unwrap();
-            assert!(screen_source_is(
+            assert!(!screen_source_is(
                 &zoom_token,
                 &source,
                 &zoom,
