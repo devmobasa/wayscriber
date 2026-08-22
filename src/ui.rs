@@ -14,6 +14,7 @@ mod precision_entry;
 mod primitives;
 mod properties_panel;
 mod radial_menu;
+mod region_action_bar;
 mod region_capture_picker;
 mod status;
 mod text_highlight;
@@ -42,8 +43,10 @@ pub(crate) use primitives::checkerboard_behind;
 pub(crate) use primitives::ellipsize_to_fit;
 pub use properties_panel::render_properties_panel;
 pub use radial_menu::render_radial_menu;
+pub(crate) use region_action_bar::{RegionAction, RegionActionBar};
 pub(crate) use region_capture_picker::{
-    RegionCapturePickerVisual, capture_size_text, render_region_capture_picker,
+    RegionCaptureLoupeVisual, RegionCapturePickerVisual, capture_size_text,
+    render_region_capture_picker,
 };
 pub use status::{
     StatusHudLayout, StatusHudSegmentKind, ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress,

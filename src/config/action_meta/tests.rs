@@ -93,6 +93,7 @@ const HELP_ACTIONS: &[Action] = &[
     Action::CaptureFileSelection,
     Action::CaptureActiveWindow,
     Action::CaptureSelection,
+    Action::CaptureRegionInteractive,
     Action::OpenCaptureFolder,
 ];
 
@@ -251,6 +252,7 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::SetColorWhite,
     Action::SetColorBlack,
     Action::PickScreenColor,
+    Action::CaptureRegionInteractive,
     Action::CaptureClipboardFull,
     Action::CaptureFileFull,
     Action::ExportCanvasFile,
@@ -476,4 +478,20 @@ fn action_display_label_strips_mode_suffix() {
 #[test]
 fn action_display_label_uses_short_label_for_ellipse_tool() {
     assert_eq!(action_display_label(Action::SelectEllipseTool), "Circle");
+}
+
+#[test]
+fn interactive_region_capture_metadata_matches_its_public_surfaces() {
+    let meta = action_meta(Action::CaptureRegionInteractive).expect("interactive capture metadata");
+
+    assert_eq!(meta.label, "Capture Region (Interactive)");
+    assert_eq!(meta.short_label(), "Region…");
+    assert_eq!(
+        meta.search_aliases,
+        ["region", "snip", "paste to board", "screenshot"]
+    );
+    assert_eq!(meta.category, ActionCategory::Capture);
+    assert!(meta.in_command_palette);
+    assert!(meta.in_help);
+    assert!(!meta.in_toolbar);
 }

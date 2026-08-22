@@ -34,6 +34,12 @@ pub(crate) fn default_capture_file_region() -> Vec<String> {
     vec!["Ctrl+Alt+6".to_string()]
 }
 
+/// Deliberately empty: interactive capture is palette-first until the user
+/// chooses a shortcut that fits their compositor and existing bindings.
+pub(crate) fn default_capture_region_interactive() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_export_canvas_file() -> Vec<String> {
     Vec::new()
 }

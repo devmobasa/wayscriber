@@ -161,15 +161,6 @@ impl KeyboardHandler for WaylandState {
         // re-arms it at the end of this handler.
         self.clear_key_repeat();
         if self.input_state.region_is_engaged() {
-            if region_capture_select_all_pressed(
-                self.input_state.region_is_active(),
-                self.input_state.region_state().purpose(),
-                self.input_state.modifiers.ctrl,
-                key,
-            ) {
-                self.submit_whole_region_capture();
-                return;
-            }
             let action = self.input_state.action_for_key(key);
             if let Some(action) = action {
                 if self
@@ -185,11 +176,43 @@ impl KeyboardHandler for WaylandState {
                     // Route the opening action directly while its picker owns
                     // the modal. Going through InputState would clear held
                     // modifiers before the backend can distinguish same-action
-                    // cancellation from a different-action refusal, visibly
-                    // changing a Shift-squared drag that remains active.
+                    // cancellation from a different-action refusal.
                     self.handle_capture_action(action);
                     return;
                 }
+                if action == Action::CopyTextFromScreen
+                    && self.input_state.region_state().purpose()
+                        == Some(crate::input::state::RegionPurposeTag::Ocr)
+                {
+                    self.cancel_ocr();
+                    return;
+                }
+            }
+            if self.input_state.region_state().is_review()
+                && let Some(review_action) = region_review_key_action(
+                    key,
+                    self.input_state.modifiers.ctrl,
+                    self.input_state.modifiers.shift,
+                )
+            {
+                match review_action {
+                    RegionReviewKeyAction::Nudge(dx, dy) => {
+                        self.nudge_region_review(dx, dy);
+                    }
+                    RegionReviewKeyAction::Submit(action) => {
+                        self.submit_region_review_action(action);
+                    }
+                }
+                return;
+            }
+            if region_capture_select_all_pressed(
+                self.input_state.region_is_active(),
+                self.input_state.region_state().purpose(),
+                self.input_state.modifiers.ctrl,
+                key,
+            ) {
+                self.submit_whole_region_capture();
+                return;
             }
             // Every other shortcut is swallowed while the selector is up so a
             // key cannot change the active tool mid-drag.
@@ -204,11 +227,6 @@ impl KeyboardHandler for WaylandState {
                 } else {
                     self.cancel_ocr();
                 }
-            } else if action == Some(Action::CopyTextFromScreen)
-                && self.input_state.region_state().purpose()
-                    == Some(crate::input::state::RegionPurposeTag::Ocr)
-            {
-                self.cancel_ocr();
             }
             return;
         }
@@ -541,6 +559,33 @@ fn region_capture_select_all_pressed(
         && matches!(key, Key::Char('a' | 'A'))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RegionReviewKeyAction {
+    Nudge(i64, i64),
+    Submit(crate::ui::RegionAction),
+}
+
+fn region_review_key_action(key: Key, ctrl: bool, shift: bool) -> Option<RegionReviewKeyAction> {
+    let step = if shift { 10 } else { 1 };
+    match key {
+        Key::Left => Some(RegionReviewKeyAction::Nudge(-step, 0)),
+        Key::Right => Some(RegionReviewKeyAction::Nudge(step, 0)),
+        Key::Up => Some(RegionReviewKeyAction::Nudge(0, -step)),
+        Key::Down => Some(RegionReviewKeyAction::Nudge(0, step)),
+        Key::Char('c' | 'C') if ctrl => {
+            Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Copy))
+        }
+        Key::Char('s' | 'S') if ctrl => {
+            Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Save))
+        }
+        Key::Return => Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Both)),
+        Key::Char('b' | 'B') if !ctrl => Some(RegionReviewKeyAction::Submit(
+            crate::ui::RegionAction::Board,
+        )),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -613,6 +658,37 @@ mod tests {
             false,
             Key::Char('a'),
         ));
+    }
+
+    #[test]
+    fn review_keys_map_to_one_shot_pixel_edits_and_typed_destinations() {
+        assert_eq!(
+            region_review_key_action(Key::Left, false, false),
+            Some(RegionReviewKeyAction::Nudge(-1, 0))
+        );
+        assert_eq!(
+            region_review_key_action(Key::Down, false, true),
+            Some(RegionReviewKeyAction::Nudge(0, 10))
+        );
+        assert_eq!(
+            region_review_key_action(Key::Char('c'), true, false),
+            Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Copy))
+        );
+        assert_eq!(
+            region_review_key_action(Key::Char('s'), true, false),
+            Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Save))
+        );
+        assert_eq!(
+            region_review_key_action(Key::Return, false, false),
+            Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Both))
+        );
+        assert_eq!(
+            region_review_key_action(Key::Char('b'), false, false),
+            Some(RegionReviewKeyAction::Submit(
+                crate::ui::RegionAction::Board
+            ))
+        );
+        assert_eq!(region_review_key_action(Key::Char('b'), true, false), None);
     }
 
     #[test]

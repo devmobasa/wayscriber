@@ -177,6 +177,8 @@ pub enum Action {
     CaptureFileSelection,
     CaptureClipboardRegion,
     CaptureFileRegion,
+    /// Select a screen region, then choose its destination in the review UI.
+    CaptureRegionInteractive,
     ExportCanvasFile,
     ExportCanvasClipboard,
     ExportCanvasClipboardAndFile,
@@ -229,6 +231,7 @@ impl Action {
                 | Self::CaptureFileSelection
                 | Self::CaptureClipboardRegion
                 | Self::CaptureFileRegion
+                | Self::CaptureRegionInteractive
         )
     }
 }

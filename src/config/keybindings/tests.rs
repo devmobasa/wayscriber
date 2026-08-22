@@ -506,6 +506,26 @@ fn screen_text_recognition_is_unbound_by_default_and_leaves_o_to_orange() {
 }
 
 #[test]
+fn interactive_region_capture_is_unbound_by_default_and_maps_when_configured() {
+    let mut config = KeybindingsConfig::default();
+    assert!(config.capture.capture_region_interactive.is_empty());
+    assert!(
+        !config
+            .build_action_map()
+            .unwrap()
+            .values()
+            .any(|action| *action == Action::CaptureRegionInteractive)
+    );
+
+    config.capture.capture_region_interactive = vec!["Ctrl+Alt+Shift+I".to_string()];
+    let map = config.build_action_map().unwrap();
+    assert_eq!(
+        map.get(&Shortcut::parse("Ctrl+Alt+Shift+I").unwrap()),
+        Some(&Action::CaptureRegionInteractive)
+    );
+}
+
+#[test]
 fn canvas_export_actions_deserialize_from_config_names() {
     #[derive(serde::Deserialize)]
     struct ActionFixture {
@@ -776,6 +796,7 @@ const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
     ("capture_file_selection", &["Ctrl+Shift+S"]),
     ("capture_clipboard_region", &["Ctrl+6"]),
     ("capture_file_region", &["Ctrl+Alt+6"]),
+    ("capture_region_interactive", &[]),
     ("export_canvas_file", &[]),
     ("export_canvas_clipboard", &[]),
     ("export_canvas_clipboard_and_file", &[]),

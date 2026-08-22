@@ -22,6 +22,27 @@ pub(in crate::backend::wayland) enum RegionPickerMeasurement {
 }
 
 impl RegionSelectionGeometry {
+    pub(super) fn review(
+        purpose: RegionPurposeTag,
+        rect: ImagePixelRect,
+        display_selection: RegionSelection,
+    ) -> Self {
+        debug_assert_eq!(purpose, RegionPurposeTag::CaptureInteractive);
+        let image_span = pixel_span(
+            ImagePoint::new(f64::from(rect.x()), f64::from(rect.y())),
+            ImagePoint::new(
+                f64::from(rect.x() + rect.width()),
+                f64::from(rect.y() + rect.height()),
+            ),
+            (rect.x() + rect.width(), rect.y() + rect.height()),
+        )
+        .expect("a review rectangle is a non-empty pixel span");
+        Self {
+            image_span,
+            display_selection,
+        }
+    }
+
     pub const fn image_span(self) -> PixelSpan {
         self.image_span
     }

@@ -1,21 +1,26 @@
 use crate::backend::wayland::acquisition::ScreenAcquisitionOwner;
 use crate::backend::wayland::zoom::ZoomWaiterOwner;
 use crate::capture::{
-    CaptureDestination, CaptureType, ImageFormatMetadata, ImageOperationKind,
+    CaptureDestination, CaptureType, ImageFormatMetadata, ImageOperationKind, RenderImageRequest,
     RenderedImageDeliveryRequest,
     file::{FileSaveConfig, expand_tilde},
 };
 use crate::config::{Action, RegionPicker};
 use crate::input::state::{
-    RegionInputSource, RegionPurposeTag, ScreenCaptureSource, Toast, ToastPriority,
+    BoardPasteTarget, RegionInputSource, RegionPurposeTag, ScreenCaptureSource, Toast,
+    ToastPriority,
 };
-use crate::screen_pixels::{ImagePixelRect, PackedArgb32};
+use crate::screen_pixels::{EmbeddedImageLimits, ImagePixelRect, PackedArgb32};
+use crate::ui::RegionAction;
 
 use super::super::capture::should_exit_after_capture;
 use super::super::screen_image::{
     CropError, copy_image_rect, displayed_screen_image, screen_source_is,
 };
-use super::{ActiveScreenRegion, FreezeOwnership, RegionCaptureIntent, RegionPickerOptions};
+use super::{
+    ActiveScreenRegion, FreezeOwnership, RegionCaptureIntent, RegionPickerOptions,
+    RegionSelectionFinalize,
+};
 use crate::backend::wayland::state::WaylandState;
 
 const TOAST_SOURCE: &str = "capture";
@@ -66,6 +71,7 @@ fn region_destination(
         Action::CaptureFileSelection | Action::CaptureFileRegion => {
             Some(CaptureDestination::FileOnly)
         }
+        Action::CaptureRegionInteractive => Some(default_destination),
         _ => None,
     }
 }
@@ -73,6 +79,7 @@ fn region_destination(
 fn region_delivery_request(
     pixels: PackedArgb32,
     intent: &RegionCaptureIntent,
+    destination: CaptureDestination,
 ) -> RenderedImageDeliveryRequest {
     let save_config = intent.save_config().cloned().map(|mut save_config| {
         // The source crop is encoded by the shared Cairo PNG path regardless
@@ -85,10 +92,25 @@ fn region_delivery_request(
         Box::new(move || crate::capture::png::encode_packed_argb32_png(&pixels));
     RenderedImageDeliveryRequest {
         render,
-        destination: intent.destination(),
+        destination,
         save_config,
         operation: ImageOperationKind::Screenshot,
         fallback_format_override: Some(ImageFormatMetadata::png()),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RegionSubmit {
+    Deliver(CaptureDestination),
+    Board(BoardPasteTarget),
+}
+
+const fn review_delivery_destination(action: RegionAction) -> Option<CaptureDestination> {
+    match action {
+        RegionAction::Copy => Some(CaptureDestination::ClipboardOnly),
+        RegionAction::Save => Some(CaptureDestination::FileOnly),
+        RegionAction::Both => Some(CaptureDestination::ClipboardAndFile),
+        RegionAction::Board => None,
     }
 }
 
@@ -106,12 +128,84 @@ fn legacy_region_request(intent: &RegionCaptureIntent) -> crate::capture::Captur
 }
 
 impl WaylandState {
+    pub(in crate::backend::wayland) fn region_review_action_at(
+        &self,
+        point: (f64, f64),
+    ) -> Option<RegionAction> {
+        if !self.input_state.region_state().is_review() {
+            return None;
+        }
+        let selection = self.region_selection_geometry()?.display_selection();
+        crate::ui::RegionActionBar::place(selection, (self.surface.width(), self.surface.height()))
+            .hit(point)
+    }
+
+    pub(in crate::backend::wayland) fn region_review_bar_contains(
+        &self,
+        point: (f64, f64),
+    ) -> bool {
+        if !self.input_state.region_state().is_review() {
+            return false;
+        }
+        self.region_selection_geometry().is_some_and(|geometry| {
+            crate::ui::RegionActionBar::place(
+                geometry.display_selection(),
+                (self.surface.width(), self.surface.height()),
+            )
+            .contains(point)
+        })
+    }
+
+    pub(in crate::backend::wayland) fn submit_region_review_action(
+        &mut self,
+        action: RegionAction,
+    ) -> bool {
+        let Some(rect) = self.region_review_rect() else {
+            return false;
+        };
+        let submit = match review_delivery_destination(action) {
+            Some(destination) => RegionSubmit::Deliver(destination),
+            None => {
+                debug_assert_eq!(action, RegionAction::Board);
+                let limits = EmbeddedImageLimits::default();
+                if !limits.allows_pixels(rect.width(), rect.height()) {
+                    self.input_state.push_toast(
+                        ToastPriority::Info,
+                        TOAST_SOURCE,
+                        Toast::warning("Region is too large to add to the board."),
+                    );
+                    return true;
+                }
+                let Some(ActiveScreenRegion::Ready { source, .. }) = self.data.active_screen_region
+                else {
+                    return false;
+                };
+                let display = super::super::screen_image::screen_rect_for_image_rect(&source, rect);
+                let Some(world_bounds) =
+                    super::world_rect_for_screen_rect(display, self.board_view_offset(), source)
+                else {
+                    return false;
+                };
+                RegionSubmit::Board(BoardPasteTarget {
+                    board_id: self.input_state.boards.active_board_id().to_string(),
+                    page_index: self.input_state.boards.active_page_index(),
+                    page_generation: self.input_state.boards.active_page_generation(),
+                    world_bounds,
+                })
+            }
+        };
+        self.submit_region_capture_with(rect, submit);
+        true
+    }
+
     /// Submit the whole displayed image and retire any in-flight drag owner.
     ///
     /// Keeping this transaction on WaylandState leaves the keyboard protocol
     /// callback responsible only for translating Ctrl+A into one state action.
     pub(in crate::backend::wayland) fn submit_whole_region_capture(&mut self) {
-        let Some(rect) = self.whole_image_capture_rect() else {
+        let Some(RegionSelectionFinalize::Selected { purpose, rect }) =
+            self.whole_image_region_selection()
+        else {
             return;
         };
         match self.input_state.region_state().selection_owner() {
@@ -121,7 +215,11 @@ impl WaylandState {
             Some(RegionInputSource::Stylus) => self.retire_stylus_contact(),
             None => {}
         }
-        self.submit_region_capture(rect);
+        if purpose == RegionPurposeTag::CaptureInteractive {
+            self.enter_region_review(rect);
+        } else {
+            self.submit_region_capture(rect);
+        }
     }
 
     pub(in crate::backend::wayland::state) fn begin_region_capture_action(
@@ -149,16 +247,23 @@ impl WaylandState {
             return;
         }
 
-        let save_config = (!matches!(destination, CaptureDestination::ClipboardOnly)).then(|| {
-            FileSaveConfig {
-                save_directory: expand_tilde(&self.config.capture.save_directory),
-                filename_template: self.config.capture.filename_template.clone(),
-                // Keep the configured format in the immutable intent so an
-                // explicit slurp handoff preserves legacy behavior. Native
-                // delivery converts its own save metadata to PNG below.
-                format: self.config.capture.format.clone(),
-            }
-        });
+        let interactive = action == Action::CaptureRegionInteractive;
+        let purpose = if interactive {
+            RegionPurposeTag::CaptureInteractive
+        } else {
+            RegionPurposeTag::CaptureDeliver
+        };
+        let save_config =
+            (interactive || !matches!(destination, CaptureDestination::ClipboardOnly)).then(|| {
+                FileSaveConfig {
+                    save_directory: expand_tilde(&self.config.capture.save_directory),
+                    filename_template: self.config.capture.filename_template.clone(),
+                    // Keep the configured format in the immutable intent so an
+                    // explicit slurp handoff preserves legacy behavior. Native
+                    // delivery converts its own save metadata to PNG below.
+                    format: self.config.capture.format.clone(),
+                }
+            });
         let region = &self.config.capture.region;
         let options = RegionPickerOptions::new(
             region.show_size_readout,
@@ -167,7 +272,7 @@ impl WaylandState {
         );
         let intent = RegionCaptureIntent::new(
             action,
-            RegionPurposeTag::CaptureDeliver,
+            purpose,
             destination,
             save_config,
             self.exit_after_capture_mode,
@@ -182,7 +287,16 @@ impl WaylandState {
             return;
         }
 
-        if region.picker == RegionPicker::Slurp || !self.frozen_enabled() {
+        if interactive && !self.frozen_enabled() {
+            self.cancel_region_capture_ui_and_lifecycle();
+            self.input_state.push_toast(
+                ToastPriority::Info,
+                TOAST_SOURCE,
+                Toast::warning("Interactive region capture requires the native screen picker."),
+            );
+            return;
+        }
+        if !interactive && (region.picker == RegionPicker::Slurp || !self.frozen_enabled()) {
             self.handoff_region_capture_to_legacy();
             return;
         }
@@ -210,18 +324,14 @@ impl WaylandState {
             self.frozen_enabled(),
         ) {
             RegionPickerEntry::Activate => {
-                if !self.activate_screen_region(
-                    RegionPurposeTag::CaptureDeliver,
-                    generation,
-                    FreezeOwnership::PreExisting,
-                ) {
+                if !self.activate_screen_region(purpose, generation, FreezeOwnership::PreExisting) {
                     self.finish_region_activation_rejection();
                 }
             }
             RegionPickerEntry::WaitForZoom => {
                 if self.wait_for_current_zoom_capture(ZoomWaiterOwner::RegionCapture) {
                     self.set_pending_screen_region(
-                        RegionPurposeTag::CaptureDeliver,
+                        purpose,
                         generation,
                         ScreenCaptureSource::Zoom,
                         None,
@@ -234,7 +344,7 @@ impl WaylandState {
             RegionPickerEntry::AutoFreeze => {
                 match self.request_screen_acquisition(ScreenAcquisitionOwner::RegionCapture) {
                     Ok(acquisition) => self.set_pending_screen_region(
-                        RegionPurposeTag::CaptureDeliver,
+                        purpose,
                         generation,
                         ScreenCaptureSource::Frozen,
                         Some(acquisition),
@@ -392,6 +502,16 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn submit_region_capture(&mut self, rect: ImagePixelRect) {
+        let destination = match self.capture.region_phase() {
+            crate::backend::wayland::capture::RegionCapturePhase::Reserved(intent) => {
+                intent.destination()
+            }
+            _ => return,
+        };
+        self.submit_region_capture_with(rect, RegionSubmit::Deliver(destination));
+    }
+
+    fn submit_region_capture_with(&mut self, rect: ImagePixelRect, submit: RegionSubmit) {
         let Some(ActiveScreenRegion::Ready {
             source: token,
             freeze_ownership,
@@ -454,16 +574,47 @@ impl WaylandState {
             self.release_owned_frozen_generation(image_generation);
         }
 
-        self.capture.set_exit_on_success(should_exit_after_capture(
-            intent.exit_mode(),
-            intent.destination(),
-        ));
-        let request = region_delivery_request(pixels, &intent);
-        let submission = self
-            .capture
-            .manager_mut()
-            .request_rendered_image_delivery(request);
-        self.accept_capture_submission(submission, ImageOperationKind::Screenshot);
+        match submit {
+            RegionSubmit::Deliver(destination) => {
+                self.capture.set_exit_on_success(should_exit_after_capture(
+                    intent.exit_mode(),
+                    destination,
+                ));
+                let request = region_delivery_request(pixels, &intent, destination);
+                let submission = self
+                    .capture
+                    .manager_mut()
+                    .request_rendered_image_delivery(request);
+                self.accept_capture_submission(submission, ImageOperationKind::Screenshot);
+            }
+            RegionSubmit::Board(target) => {
+                self.capture.set_exit_on_success(false);
+                let render =
+                    Box::new(move || crate::capture::png::encode_packed_argb32_png(&pixels));
+                let submission =
+                    self.capture
+                        .manager_mut()
+                        .request_render_image(RenderImageRequest {
+                            render,
+                            operation: ImageOperationKind::Screenshot,
+                        });
+                let accepted_id = submission.as_ref().ok().copied();
+                if self.accept_capture_submission(submission, ImageOperationKind::Screenshot) {
+                    let Some(id) = accepted_id else {
+                        unreachable!("an accepted submission has an id")
+                    };
+                    if !self.capture.set_pending_board_paste(id, target) {
+                        self.capture.manager_mut().mark_unhealthy();
+                        self.capture.finish_capture_lifecycle();
+                        self.input_state.push_toast(
+                            ToastPriority::Critical,
+                            TOAST_SOURCE,
+                            Toast::error("Region was not added to the board."),
+                        );
+                    }
+                }
+            }
+        }
     }
 
     pub(super) fn cancel_region_capture_for_source_change(&mut self) {
@@ -504,7 +655,29 @@ mod tests {
                 Some(CaptureDestination::FileOnly)
             );
         }
+        assert_eq!(
+            region_destination(Action::CaptureRegionInteractive, default),
+            Some(default)
+        );
         assert_eq!(region_destination(Action::CaptureFullScreen, default), None);
+    }
+
+    #[test]
+    fn review_destination_labels_match_the_delivery_they_request() {
+        assert_eq!(
+            review_delivery_destination(RegionAction::Copy),
+            Some(CaptureDestination::ClipboardOnly)
+        );
+        assert_eq!(
+            review_delivery_destination(RegionAction::Save),
+            Some(CaptureDestination::FileOnly)
+        );
+        assert_eq!(
+            review_delivery_destination(RegionAction::Both),
+            Some(CaptureDestination::ClipboardAndFile),
+            "Both must always match its label"
+        );
+        assert_eq!(review_delivery_destination(RegionAction::Board), None);
     }
 
     #[test]
@@ -583,7 +756,7 @@ mod tests {
         let pixels = PackedArgb32::new(1, 1, 4, 0xff33_2211_u32.to_ne_bytes().to_vec())
             .expect("one native ARGB32 pixel");
 
-        let request = region_delivery_request(pixels, &intent);
+        let request = region_delivery_request(pixels, &intent, intent.destination());
 
         assert_eq!(request.destination, CaptureDestination::FileOnly);
         assert_eq!(request.operation, ImageOperationKind::Screenshot);

@@ -9,6 +9,7 @@ use crate::{
         ImageOperationKind, file::FileSaveConfig,
     },
     config::Action,
+    input::state::BoardPasteTarget,
 };
 
 use super::state::RegionCaptureIntent;
@@ -60,6 +61,12 @@ pub(in crate::backend::wayland) enum RegionCapturePhase {
     Accepted,
 }
 
+#[derive(Clone, Debug)]
+pub(in crate::backend::wayland) struct PendingBoardPaste {
+    pub accepted_id: CaptureRequestId,
+    pub target: BoardPasteTarget,
+}
+
 impl CaptureLayoutContext {
     pub(in crate::backend::wayland) fn new(target_output_id: u32, layout_generation: u64) -> Self {
         Self {
@@ -92,6 +99,7 @@ pub struct CaptureState {
     pending_request: Option<CapturePreflightRequest>,
     pending_pdf_export: Option<PendingPdfExport>,
     region: RegionCapturePhase,
+    pending_board_paste: Option<PendingBoardPaste>,
 }
 
 impl CaptureState {
@@ -106,6 +114,7 @@ impl CaptureState {
             pending_request: None,
             pending_pdf_export: None,
             region: RegionCapturePhase::Idle,
+            pending_board_paste: None,
         }
     }
 
@@ -252,6 +261,7 @@ impl CaptureState {
         self.exit_on_success = false;
         self.clear_preflight();
         self.region = RegionCapturePhase::Idle;
+        self.pending_board_paste = None;
     }
 
     /// Records the manager identity accepted for the current lifecycle.
@@ -287,6 +297,39 @@ impl CaptureState {
 
     pub fn accepted_id(&self) -> Option<CaptureRequestId> {
         self.accepted_id
+    }
+
+    pub(in crate::backend::wayland) fn set_pending_board_paste(
+        &mut self,
+        accepted_id: CaptureRequestId,
+        target: BoardPasteTarget,
+    ) -> bool {
+        if self.accepted_id != Some(accepted_id)
+            || !matches!(self.region, RegionCapturePhase::Accepted)
+            || self.pending_board_paste.is_some()
+        {
+            return false;
+        }
+        self.pending_board_paste = Some(PendingBoardPaste {
+            accepted_id,
+            target,
+        });
+        true
+    }
+
+    pub(in crate::backend::wayland) fn take_pending_board_paste_for(
+        &mut self,
+        accepted_id: CaptureRequestId,
+    ) -> Option<PendingBoardPaste> {
+        if self
+            .pending_board_paste
+            .as_ref()
+            .is_some_and(|pending| pending.accepted_id == accepted_id)
+        {
+            self.pending_board_paste.take()
+        } else {
+            None
+        }
     }
 
     /// Marks whether the current capture should exit the overlay on success.
@@ -327,6 +370,15 @@ mod tests {
             destination: CaptureDestination::ClipboardOnly,
             save_config: None,
         })
+    }
+
+    fn board_target() -> BoardPasteTarget {
+        BoardPasteTarget {
+            board_id: "transparent".to_string(),
+            page_index: 0,
+            page_generation: 1,
+            world_bounds: crate::util::Rect::new(10, 20, 30, 40).unwrap(),
+        }
     }
 
     #[test]
@@ -370,6 +422,27 @@ mod tests {
         assert!(state.record_accepted(other));
         state.finish_capture_lifecycle();
         assert_eq!(state.accepted_id(), None);
+        assert!(!state.is_in_progress());
+    }
+
+    #[test]
+    fn pending_board_paste_is_correlated_and_cleared_by_terminal_cleanup() {
+        let manager = CaptureManager::with_closed_channel_for_test();
+        let mut state = CaptureState::new(manager);
+        let id = CaptureRequestId::for_test(21);
+        assert!(state.reserve_region(region_intent(Action::CaptureRegionInteractive)));
+        assert!(state.begin_region_submission().is_some());
+        assert!(state.record_accepted(id));
+        assert!(state.set_pending_board_paste(id, board_target()));
+        assert!(
+            state
+                .take_pending_board_paste_for(CaptureRequestId::for_test(22))
+                .is_none()
+        );
+
+        state.finish_capture_lifecycle();
+
+        assert!(state.take_pending_board_paste_for(id).is_none());
         assert!(!state.is_in_progress());
     }
 

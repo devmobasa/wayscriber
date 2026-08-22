@@ -134,6 +134,10 @@ The result is a predictable pipeline: Wayland → handlers → `InputState` →
 2. The Wayland event loop centrally drains that pending work, so keybindings, command-palette Return, and command-palette mouse clicks share the same dispatch path without the two preference saves overwriting one another.
 3. Screenshot actions call `WaylandState::handle_capture_action`; explicit canvas PNG export actions call `WaylandState::handle_canvas_export_action`; board PDF actions call `WaylandState::handle_board_pdf_export_action`.
 4. `WaylandState::handle_capture_action` builds a `CaptureRequest` (type + destination + save config), hides the overlay, and queues the request until the suppression frame is confirmed; it then calls `CaptureManager::request_capture`.
+   Region actions first reserve an immutable intent and select against the
+   frozen desktop image. Straight-delivery actions submit immediately after
+   selection; `capture_region_interactive` enters review so Copy, Save, Both,
+   or Board can choose the terminal request.
 5. Canvas export snapshots persisted board content in the current panned viewport, renders PNG bytes, and calls `CaptureManager::request_image_delivery`.
 6. Board PDF export snapshots active-board or all-board pages with per-page layout metadata, renders PDF bytes, and calls `CaptureManager::request_document_delivery`.
 7. A mutable `CaptureManager` submission returns a checked `CaptureRequestId`. `CaptureState` records that ID and remains the sole event-side completion owner until the matching terminal result is consumed.

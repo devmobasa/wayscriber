@@ -199,6 +199,10 @@ fn action_serialization_matches_established_contract() {
         (Action::CaptureFileSelection, "capture_file_selection"),
         (Action::CaptureClipboardRegion, "capture_clipboard_region"),
         (Action::CaptureFileRegion, "capture_file_region"),
+        (
+            Action::CaptureRegionInteractive,
+            "capture_region_interactive",
+        ),
         (Action::ExportCanvasFile, "export_canvas_file"),
         (Action::ExportCanvasClipboard, "export_canvas_clipboard"),
         (
@@ -399,6 +403,7 @@ fn region_capture_action_classification_is_complete_and_narrow() {
         Action::CaptureFileSelection,
         Action::CaptureClipboardRegion,
         Action::CaptureFileRegion,
+        Action::CaptureRegionInteractive,
     ] {
         assert!(action.is_region_capture(), "action={action:?}");
     }

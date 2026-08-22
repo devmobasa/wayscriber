@@ -1,6 +1,7 @@
 mod base;
 mod board;
 pub(crate) mod board_picker;
+mod captured_image;
 pub(crate) mod color_picker_popup;
 mod command_palette;
 mod dirty;
@@ -45,6 +46,7 @@ pub(crate) use base::{
 };
 pub(crate) use base::{KeybindingEditOperation, KeybindingEditRequest};
 pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout};
+pub(crate) use captured_image::BoardPasteTarget;
 pub(crate) use color_picker_popup::HexPasteTarget;
 pub use color_picker_popup::PickerDrag;
 pub use color_picker_popup::{

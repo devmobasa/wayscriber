@@ -33,7 +33,6 @@ impl RegionPickerOptions {
         self.show_size_readout
     }
 
-    #[allow(dead_code)] // Persisted in Phase 1; the loupe renderer arrives in Phase 2.
     pub(in crate::backend::wayland) const fn show_loupe(self) -> bool {
         self.show_loupe
     }

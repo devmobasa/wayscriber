@@ -275,6 +275,9 @@ capture_clipboard_selection = ["Ctrl+Shift+C"]
 capture_file_selection = ["Ctrl+Shift+S"]
 capture_clipboard_region = ["Ctrl+6"]
 capture_file_region = ["Ctrl+Alt+6"]
+# Open the region review/action bar. Available from the command palette and
+# unbound by default.
+capture_region_interactive = []
 export_canvas_file = []
 export_canvas_clipboard = []
 export_canvas_clipboard_and_file = []
@@ -1429,7 +1432,6 @@ picker = "native"
 show_size_readout = true
 
 # Magnified pixel loupe next to the pointer while dragging.
-# This key is accepted now; the loupe is not rendered yet.
 show_loupe = false
 
 # Short hotkey legend at the top centre until the first drag.

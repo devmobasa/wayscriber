@@ -46,6 +46,14 @@ impl WaylandState {
             } else {
                 match button {
                     BTN_LEFT => {
+                        if let Some(action) = self.region_review_action_at(event.position) {
+                            self.submit_region_review_action(action);
+                            self.set_suppress_next_release(true);
+                            return;
+                        }
+                        if self.region_review_bar_contains(event.position) {
+                            return;
+                        }
                         self.begin_region_selection(
                             RegionInputSource::Pointer,
                             event.position.0,

@@ -1410,7 +1410,7 @@ picker = "native"
 # Pointer position while idle; W x H in export pixels while dragging
 show_size_readout = true
 
-# Accepted and saved now, but the picker does not render the loupe yet
+# Magnified pixel grid beside the pointer while selecting or reviewing
 show_loupe = false
 
 # Short hotkey guide shown until the first drag
@@ -1431,14 +1431,23 @@ readout/legend, and sends the selected pixels to the shortcut's existing
 clipboard or file destination. If no screen capture backend is available, it
 falls back to `slurp`.
 
+`capture_region_interactive` opens the same picker, then keeps the selection in
+a review step where you can copy it, save it, do both, or add it to the active
+board. It is available from the command palette and has no default shortcut;
+bind it in the configurator or under `[keybindings]`. The interactive action
+always uses the native picker even when `picker = "slurp"`; if native capture
+is unavailable it reports that limitation instead of silently skipping Review.
+The **Both** button (and `Enter`) always copies the PNG and saves it to a file,
+independently of `[capture].copy_to_clipboard`.
+
 - Set `picker = "slurp"` to always use the external selector. This is also the
   option for selecting a region on a monitor other than Wayscriber's active
   output.
 - `show_size_readout` shows pointer coordinates before the drag and the
   selected width and height in exported image pixels during it.
 - `show_legend` shows the short hotkey guide until the first drag.
-- `show_loupe` is accepted and preserved in configuration, but the native
-  picker does not render the loupe yet.
+- `show_loupe` shows a magnified pixel grid beside the pointer while dragging
+  or reviewing a selection.
 - Native region screenshot actions encode PNG and use a `.png` filename even
   when `[capture].format` is `jpg` or `jpeg`; this prevents PNG bytes from being
   written under a JPEG extension. An explicit `picker = "slurp"` keeps the
@@ -1952,6 +1961,9 @@ capture_clipboard_selection = ["Ctrl+Shift+C"]
 capture_file_selection = ["Ctrl+Shift+S"]
 capture_clipboard_region = ["Ctrl+6"]
 capture_file_region = ["Ctrl+Alt+6"]
+# Open the region review/action bar. Available from the command palette and
+# unbound by default.
+capture_region_interactive = []
 export_canvas_file = []
 export_canvas_clipboard = []
 export_canvas_clipboard_and_file = []

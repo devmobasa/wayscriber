@@ -98,12 +98,12 @@ pub struct PixelSpan {
 }
 
 impl PixelSpan {
-    #[allow(dead_code)] // Phase 2 review nudging and board placement need the span origin.
+    #[allow(dead_code)] // Geometry diagnostics and tests inspect the quantized origin.
     pub const fn x(self) -> u32 {
         self.x
     }
 
-    #[allow(dead_code)] // Phase 2 review nudging and board placement need the span origin.
+    #[allow(dead_code)] // Geometry diagnostics and tests inspect the quantized origin.
     pub const fn y(self) -> u32 {
         self.y
     }

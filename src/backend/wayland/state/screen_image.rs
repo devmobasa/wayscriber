@@ -227,7 +227,6 @@ pub(super) fn screen_point_for_image_point(
     }
 }
 
-#[allow(dead_code)] // Phase 2 review maps its authoritative pixel rectangle back to the overlay.
 pub(super) fn screen_rect_for_image_rect(token: &ScreenSourceToken, rect: ImagePixelRect) -> Rect {
     let first = screen_point_for_image_point(
         token,
@@ -248,7 +247,7 @@ pub(super) fn screen_rect_for_image_rect(token: &ScreenSourceToken, rect: ImageP
         .expect("a non-empty image rectangle must map to a non-empty screen rectangle")
 }
 
-#[allow(dead_code)] // Phase 2 review reuses the non-empty pixel-span mapping.
+#[allow(dead_code)] // The empty-span contract is exercised by mapping tests.
 pub(super) fn screen_rect_for_pixel_span(
     token: &ScreenSourceToken,
     span: PixelSpan,

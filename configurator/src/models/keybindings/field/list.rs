@@ -122,6 +122,7 @@ impl KeybindingField {
             Self::CaptureFileSelection,
             Self::CaptureClipboardRegion,
             Self::CaptureFileRegion,
+            Self::CaptureRegionInteractive,
             Self::ExportCanvasFile,
             Self::ExportCanvasClipboard,
             Self::ExportCanvasClipboardAndFile,

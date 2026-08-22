@@ -1,6 +1,9 @@
 use super::tool_preview::{draw_stylus_hover_cursor, draw_tool_preview, mouse_tool_preview_redraw};
 use super::*;
 use crate::backend::wayland::state::region_capture::RegionPickerMeasurement;
+use crate::backend::wayland::state::screen_image::{
+    displayed_screen_image, image_point_for_screen_point, screen_source_is,
+};
 
 impl WaylandState {
     pub(super) fn render_ui_layer(
@@ -340,6 +343,39 @@ impl WaylandState {
                     crate::ui::capture_size_text((width, height))
                 }
             });
+        let region_state = self.input_state.region_state();
+        let action_bar = if region_state.is_review() {
+            geometry.map(|geometry| {
+                crate::ui::RegionActionBar::place(geometry.display_selection(), (width, height))
+            })
+        } else {
+            None
+        };
+        let hovered_action: Option<crate::ui::RegionAction> =
+            action_bar.and_then(|bar| bar.hit(pointer));
+        let loupe_enabled = options.is_some_and(|options| options.show_loupe())
+            && (region_state.is_selecting() || region_state.is_review());
+        let loupe_source = if loupe_enabled {
+            self.region_picker_source_token().and_then(|token| {
+                let source = displayed_screen_image(
+                    &self.zoom,
+                    &self.frozen,
+                    self.input_state.board_is_transparent(),
+                )?;
+                screen_source_is(&token, &source, &self.zoom, &self.frozen, (width, height))
+                    .then_some((source, token))
+            })
+        } else {
+            None
+        };
+        let loupe = loupe_source.as_ref().and_then(|(_source, token)| {
+            let image_point = image_point_for_screen_point(token, pointer);
+            crate::ui::RegionCaptureLoupeVisual::when_enabled(
+                loupe_enabled,
+                pointer,
+                (image_point.x, image_point.y),
+            )
+        });
 
         crate::ui::render_region_capture_picker(
             ctx,
@@ -351,6 +387,18 @@ impl WaylandState {
                 measurement: measurement.as_deref(),
                 show_legend: options.is_some_and(|options| options.show_legend())
                     && !self.region_picker_legend_dismissed(),
+                loupe,
+                action_bar,
+                hovered_action,
+            },
+            |image_x, image_y| {
+                loupe_source.as_ref().and_then(|(source, _token)| {
+                    crate::backend::wayland::state::eyedropper::sample_at(
+                        source.image,
+                        image_x,
+                        image_y,
+                    )
+                })
             },
         );
     }

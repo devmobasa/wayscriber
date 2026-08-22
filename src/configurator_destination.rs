@@ -205,6 +205,7 @@ pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSecti
         | Action::CaptureFileSelection
         | Action::CaptureClipboardRegion
         | Action::CaptureFileRegion
+        | Action::CaptureRegionInteractive
         | Action::ExportCanvasFile
         | Action::ExportCanvasClipboard
         | Action::ExportCanvasClipboardAndFile

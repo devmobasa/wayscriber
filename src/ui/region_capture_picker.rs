@@ -1,6 +1,7 @@
 use crate::input::state::RegionSelection;
 
 use super::primitives::{draw_rounded_rect, text_extents_for};
+use super::region_action_bar::{RegionAction, RegionActionBar, render_region_action_bar};
 
 const SCRIM: (f64, f64, f64, f64) = (0.02, 0.03, 0.05, 0.48);
 const PANEL_FILL: (f64, f64, f64, f64) = (12.0 / 255.0, 12.0 / 255.0, 15.0 / 255.0, 0.92);
@@ -20,6 +21,28 @@ pub(crate) struct RegionCapturePickerVisual<'a> {
     pub pointer: (f64, f64),
     pub measurement: Option<&'a str>,
     pub show_legend: bool,
+    pub loupe: Option<RegionCaptureLoupeVisual>,
+    pub action_bar: Option<RegionActionBar>,
+    pub hovered_action: Option<RegionAction>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct RegionCaptureLoupeVisual {
+    pub pointer: (f64, f64),
+    pub image_center: (f64, f64),
+}
+
+impl RegionCaptureLoupeVisual {
+    pub(crate) fn when_enabled(
+        show_loupe: bool,
+        pointer: (f64, f64),
+        image_center: (f64, f64),
+    ) -> Option<Self> {
+        show_loupe.then_some(Self {
+            pointer,
+            image_center,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -34,11 +57,22 @@ pub(crate) fn capture_size_text(size: (u32, u32)) -> String {
     format!("{} × {}", size.0, size.1)
 }
 
+pub(crate) fn render_region_capture_loupe(
+    ctx: &cairo::Context,
+    screen: (u32, u32),
+    visual: RegionCaptureLoupeVisual,
+    sample: impl FnMut(f64, f64) -> Option<crate::draw::Color>,
+) {
+    let layout = crate::ui::compute_eyedropper_loupe_layout(visual.pointer, screen);
+    crate::ui::render_eyedropper_loupe(ctx, layout, visual.image_center, sample);
+}
+
 pub(crate) fn render_region_capture_picker(
     ctx: &cairo::Context,
     screen_width: u32,
     screen_height: u32,
     visual: RegionCapturePickerVisual<'_>,
+    mut sample_loupe: impl FnMut(f64, f64) -> Option<crate::draw::Color>,
 ) {
     let width = f64::from(screen_width);
     let height = f64::from(screen_height);
@@ -72,6 +106,12 @@ pub(crate) fn render_region_capture_picker(
     }
     if visual.show_legend && visual.selection.is_none() {
         draw_legend(ctx, (screen_width, screen_height));
+    }
+    if let Some(loupe) = visual.loupe {
+        render_region_capture_loupe(ctx, (screen_width, screen_height), loupe, &mut sample_loupe);
+    }
+    if let Some(action_bar) = visual.action_bar {
+        render_region_action_bar(ctx, action_bar, visual.hovered_action);
     }
     let _ = ctx.restore();
 }
@@ -302,7 +342,11 @@ mod tests {
                 pointer: (30.0, 30.0),
                 measurement: None,
                 show_legend: false,
+                loupe: None,
+                action_bar: None,
+                hovered_action: None,
             },
+            |_x, _y| None,
         );
         drop(ctx);
         surface.flush();
@@ -329,7 +373,11 @@ mod tests {
                 pointer: (20.0, 20.0),
                 measurement: None,
                 show_legend: false,
+                loupe: None,
+                action_bar: None,
+                hovered_action: None,
             },
+            |_x, _y| None,
         );
         drop(ctx);
         surface.flush();
@@ -339,5 +387,61 @@ mod tests {
             data[20 * stride + 20 * 4 + 3] > 0,
             "crosshair must be painted inside the clear selection"
         );
+    }
+
+    #[test]
+    fn review_visual_composes_the_action_bar_after_the_scrim() {
+        let selection = RegionSelection {
+            start: (100.0, 100.0),
+            end: (300.0, 200.0),
+        };
+        let bar = crate::ui::RegionActionBar::place(selection, (800, 600));
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        render_region_capture_picker(
+            &ctx,
+            800,
+            600,
+            RegionCapturePickerVisual {
+                selection: Some(selection),
+                pointer: (200.0, 150.0),
+                measurement: Some("200 × 100"),
+                show_legend: false,
+                loupe: None,
+                action_bar: Some(bar),
+                hovered_action: Some(crate::ui::RegionAction::Both),
+            },
+            |_x, _y| None,
+        );
+        drop(ctx);
+        surface.flush();
+        let stride = surface.stride() as usize;
+        let data = surface.data().unwrap();
+        assert!(data[212 * stride + 54 * 4 + 3] > 0, "action bar surface");
+        assert!(
+            data[150 * stride + 200 * 4 + 3] > 0,
+            "review keeps the pointer crosshair with its size readout"
+        );
+    }
+
+    #[test]
+    fn capture_loupe_reuses_the_pixel_loupe_renderer_when_enabled() {
+        let visual = RegionCaptureLoupeVisual::when_enabled(true, (20.0, 30.0), (50.0, 50.0))
+            .expect("enabled immutable option");
+        assert!(
+            RegionCaptureLoupeVisual::when_enabled(false, (20.0, 30.0), (50.0, 50.0),).is_none()
+        );
+
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 200, 200).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        render_region_capture_loupe(&ctx, (200, 200), visual, |_x, _y| {
+            Some(crate::draw::Color::new(1.0, 0.0, 0.0, 1.0))
+        });
+        drop(ctx);
+        surface.flush();
+        let stride = surface.stride() as usize;
+        let data = surface.data().unwrap();
+        assert!(data[98 * stride + 88 * 4 + 3] > 0, "loupe center pixel");
+        assert_eq!(data[5 * stride + 5 * 4 + 3], 0, "outside untouched");
     }
 }

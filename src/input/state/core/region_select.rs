@@ -77,7 +77,7 @@ pub struct RegionSelection {
     pub end: (f64, f64),
 }
 
-/// UI-facing lifecycle for the modal `Copy text from screen` region selector.
+/// UI-facing lifecycle shared by OCR and native screen-region capture.
 ///
 /// It owns transient input and render state only. The selected pixels and the
 /// recognition work belong outside `InputState`, so cancelling here can never
@@ -105,11 +105,23 @@ pub enum RegionSelectUiState {
         start: (f64, f64),
         current: (f64, f64),
     },
+    /// An interactive capture has a non-empty, image-space rectangle ready
+    /// for an explicit destination choice. `display` is derived from that
+    /// rectangle and exists here only for painting and hit testing.
+    Review {
+        purpose: RegionPurposeTag,
+        generation: u64,
+        display: RegionSelection,
+        move_owner: Option<RegionInputSource>,
+    },
 }
 
 impl RegionSelectUiState {
     pub fn is_active(self) -> bool {
-        matches!(self, Self::Armed { .. } | Self::Selecting { .. })
+        matches!(
+            self,
+            Self::Armed { .. } | Self::Selecting { .. } | Self::Review { .. }
+        )
     }
 
     pub fn is_pending(self) -> bool {
@@ -124,6 +136,10 @@ impl RegionSelectUiState {
         matches!(self, Self::Selecting { .. })
     }
 
+    pub fn is_review(self) -> bool {
+        matches!(self, Self::Review { .. })
+    }
+
     /// The region drag in logical screen coordinates, if one is in progress.
     pub fn selection(self) -> Option<RegionSelection> {
         match self {
@@ -131,6 +147,7 @@ impl RegionSelectUiState {
                 start,
                 end: current,
             }),
+            Self::Review { display, .. } => Some(display),
             Self::Inactive | Self::PendingCapture { .. } | Self::Armed { .. } => None,
         }
     }
@@ -139,6 +156,7 @@ impl RegionSelectUiState {
     pub fn selection_owner(self) -> Option<RegionInputSource> {
         match self {
             Self::Selecting { owner, .. } => Some(owner),
+            Self::Review { move_owner, .. } => move_owner,
             Self::Inactive | Self::PendingCapture { .. } | Self::Armed { .. } => None,
         }
     }
@@ -146,7 +164,9 @@ impl RegionSelectUiState {
     pub fn pending_source(self) -> Option<ScreenCaptureSource> {
         match self {
             Self::PendingCapture { source, .. } => Some(source),
-            Self::Inactive | Self::Armed { .. } | Self::Selecting { .. } => None,
+            Self::Inactive | Self::Armed { .. } | Self::Selecting { .. } | Self::Review { .. } => {
+                None
+            }
         }
     }
 
@@ -154,7 +174,8 @@ impl RegionSelectUiState {
         match self {
             Self::PendingCapture { purpose, .. }
             | Self::Armed { purpose, .. }
-            | Self::Selecting { purpose, .. } => Some(purpose),
+            | Self::Selecting { purpose, .. }
+            | Self::Review { purpose, .. } => Some(purpose),
             Self::Inactive => None,
         }
     }
@@ -163,7 +184,8 @@ impl RegionSelectUiState {
         match self {
             Self::PendingCapture { generation, .. }
             | Self::Armed { generation, .. }
-            | Self::Selecting { generation, .. } => Some(generation),
+            | Self::Selecting { generation, .. }
+            | Self::Review { generation, .. } => Some(generation),
             Self::Inactive => None,
         }
     }
@@ -235,12 +257,17 @@ impl InputState {
         owner: RegionInputSource,
         point: (f64, f64),
     ) -> bool {
-        let RegionSelectUiState::Armed {
-            purpose,
-            generation,
-        } = self.region_select_ui_state
-        else {
-            return false;
+        let (purpose, generation) = match self.region_select_ui_state {
+            RegionSelectUiState::Armed {
+                purpose,
+                generation,
+            }
+            | RegionSelectUiState::Review {
+                purpose,
+                generation,
+                ..
+            } => (purpose, generation),
+            _ => return false,
         };
         self.region_select_ui_state = RegionSelectUiState::Selecting {
             purpose,
@@ -249,6 +276,61 @@ impl InputState {
             start: point,
             current: point,
         };
+        self.mark_region_dirty();
+        true
+    }
+
+    pub(crate) fn activate_region_review(
+        &mut self,
+        purpose: RegionPurposeTag,
+        generation: u64,
+        display: RegionSelection,
+    ) {
+        debug_assert_eq!(purpose, RegionPurposeTag::CaptureInteractive);
+        self.region_select_ui_state = RegionSelectUiState::Review {
+            purpose,
+            generation,
+            display,
+            move_owner: None,
+        };
+        self.mark_region_dirty();
+    }
+
+    pub(crate) fn begin_region_review_move(&mut self, owner: RegionInputSource) -> bool {
+        let RegionSelectUiState::Review { move_owner, .. } = &mut self.region_select_ui_state
+        else {
+            return false;
+        };
+        if move_owner.is_some() {
+            return false;
+        }
+        *move_owner = Some(owner);
+        self.mark_region_dirty();
+        true
+    }
+
+    pub(crate) fn update_region_review_display(&mut self, display: RegionSelection) {
+        let RegionSelectUiState::Review {
+            display: current, ..
+        } = &mut self.region_select_ui_state
+        else {
+            return;
+        };
+        if *current != display {
+            *current = display;
+            self.mark_region_dirty();
+        }
+    }
+
+    pub(crate) fn finish_region_review_move(&mut self, owner: RegionInputSource) -> bool {
+        let RegionSelectUiState::Review { move_owner, .. } = &mut self.region_select_ui_state
+        else {
+            return false;
+        };
+        if *move_owner != Some(owner) {
+            return false;
+        }
+        *move_owner = None;
         self.mark_region_dirty();
         true
     }
@@ -390,6 +472,57 @@ mod tests {
         );
         state.cancel_region_ui_only();
         assert_eq!(state.region_state(), RegionSelectUiState::Inactive);
+    }
+
+    #[test]
+    fn interactive_review_keeps_display_and_move_ownership_explicit() {
+        let mut state = make_test_input_state();
+        let display = RegionSelection {
+            start: (20.0, 30.0),
+            end: (80.0, 90.0),
+        };
+        state.activate_region_review(RegionPurposeTag::CaptureInteractive, 14, display);
+
+        assert!(state.region_state().is_review());
+        assert!(state.region_is_active());
+        assert_eq!(state.region_state().selection(), Some(display));
+        assert!(state.begin_region_review_move(RegionInputSource::Pointer));
+        assert!(!state.begin_region_review_move(RegionInputSource::Touch));
+        assert!(state.region_selection_is_owned_by(RegionInputSource::Pointer));
+
+        let moved = RegionSelection {
+            start: (25.0, 35.0),
+            end: (85.0, 95.0),
+        };
+        state.update_region_review_display(moved);
+        assert_eq!(state.region_state().selection(), Some(moved));
+        assert!(!state.finish_region_review_move(RegionInputSource::Stylus));
+        assert!(state.finish_region_review_move(RegionInputSource::Pointer));
+        assert!(state.region_state().selection_owner().is_none());
+    }
+
+    #[test]
+    fn pressing_outside_review_can_start_a_fresh_owned_selection() {
+        let mut state = make_test_input_state();
+        state.activate_region_review(
+            RegionPurposeTag::CaptureInteractive,
+            15,
+            RegionSelection {
+                start: (20.0, 30.0),
+                end: (80.0, 90.0),
+            },
+        );
+
+        assert!(state.start_region_selection(RegionInputSource::Touch, (4.0, 5.0)));
+        assert!(state.region_state().is_selecting());
+        assert!(state.region_selection_is_owned_by(RegionInputSource::Touch));
+        assert_eq!(
+            state.region_state().selection(),
+            Some(RegionSelection {
+                start: (4.0, 5.0),
+                end: (4.0, 5.0),
+            })
+        );
     }
 
     #[test]

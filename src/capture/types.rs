@@ -150,6 +150,12 @@ pub struct ImageDeliveryRequest {
 /// snapshot moves to the worker; it is never shared.
 pub type ImageRenderJob = Box<dyn FnOnce() -> Result<RenderedImage, CaptureError> + Send>;
 
+/// An image render performed by the capture worker without delivery.
+pub struct RenderImageRequest {
+    pub render: ImageRenderJob,
+    pub operation: ImageOperationKind,
+}
+
 /// See [`ImageRenderJob`].
 pub type DocumentRenderJob = Box<dyn FnOnce() -> Result<RenderedDocument, CaptureError> + Send>;
 
@@ -431,6 +437,7 @@ pub struct CaptureResult {
 pub enum CaptureOutcome {
     Success(CaptureResult),
     DesktopBackdropSuccess(DesktopBackdropCaptureResult),
+    RenderedImageReady(RenderedImage),
     Failed {
         operation: ImageOperationKind,
         message: String,

@@ -137,6 +137,7 @@ impl KeybindingField {
             Self::CaptureFileSelection => "capture_file_selection",
             Self::CaptureClipboardRegion => "capture_clipboard_region",
             Self::CaptureFileRegion => "capture_file_region",
+            Self::CaptureRegionInteractive => "capture_region_interactive",
             Self::ExportCanvasFile => "export_canvas_file",
             Self::ExportCanvasClipboard => "export_canvas_clipboard",
             Self::ExportCanvasClipboardAndFile => "export_canvas_clipboard_and_file",

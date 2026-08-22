@@ -322,8 +322,24 @@ fn handle_capture_results(state: &mut WaylandState) {
             operation,
             error,
         } => {
+            let pending_board =
+                active_id.and_then(|id| state.capture.take_pending_board_paste_for(id));
             if let Some(id) = active_id {
                 let _ = state.capture.consume_accepted(id);
+            }
+            if pending_board.is_some() {
+                state.capture.finish_capture_lifecycle();
+                let message = operation
+                    .filter(|operation| *operation == ImageOperationKind::Screenshot)
+                    .map(|_| friendly_capture_error(&error))
+                    .unwrap_or_else(|| "Capture services stopped unexpectedly.".to_string());
+                warn!("Board region capture worker failed: {error}");
+                state.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "capture",
+                    Toast::error(message),
+                );
+                return;
             }
             handle_capture_manager_failure(state, operation, &error);
             return;
@@ -342,6 +358,64 @@ fn handle_capture_results(state: &mut WaylandState) {
     }
 
     info!("Capture completed");
+
+    let pending_board = state.capture.take_pending_board_paste_for(id);
+    let outcome = match (outcome, pending_board) {
+        (CaptureOutcome::RenderedImageReady(image), Some(pending)) => {
+            state.capture.finish_capture_lifecycle();
+            let embedded = crate::draw::EmbeddedImage {
+                mime_type: image.format.mime_type,
+                width: image.width,
+                height: image.height,
+                bytes: image.bytes,
+            };
+            state
+                .input_state
+                .insert_captured_image(embedded, &pending.target);
+            return;
+        }
+        (CaptureOutcome::RenderedImageReady(_), None) => {
+            state.capture.finish_capture_lifecycle();
+            warn!("Rendered region {id} completed without a pending board target");
+            state.input_state.push_toast(
+                ToastPriority::Critical,
+                "capture.region.board",
+                Toast::error("Region was not added to the board."),
+            );
+            return;
+        }
+        (CaptureOutcome::Failed { operation, message }, Some(_)) => {
+            state.capture.finish_capture_lifecycle();
+            let friendly_error = if matches!(operation, ImageOperationKind::Screenshot) {
+                friendly_capture_error(&message)
+            } else {
+                message.clone()
+            };
+            warn!("Board region render failed: {message}");
+            state.input_state.push_toast(
+                ToastPriority::Critical,
+                "capture",
+                Toast::error(friendly_error),
+            );
+            return;
+        }
+        (CaptureOutcome::Cancelled { operation, reason }, Some(_)) => {
+            state.capture.finish_capture_lifecycle();
+            info!("{} cancelled: {}", operation.saved_log_label(), reason);
+            return;
+        }
+        (unexpected, Some(_)) => {
+            state.capture.finish_capture_lifecycle();
+            warn!("Board region {id} completed with unexpected outcome: {unexpected:?}");
+            state.input_state.push_toast(
+                ToastPriority::Critical,
+                "capture.region.board",
+                Toast::error("Region was not added to the board."),
+            );
+            return;
+        }
+        (outcome, None) => outcome,
+    };
 
     // Restore overlay.
     state.show_overlay();
@@ -524,6 +598,9 @@ fn handle_capture_results(state: &mut WaylandState) {
         CaptureOutcome::Cancelled { operation, reason } => {
             state.capture.clear_pending_pdf_export();
             info!("{} cancelled: {}", operation.saved_log_label(), reason);
+        }
+        CaptureOutcome::RenderedImageReady(_) => {
+            unreachable!("rendered images return through the board path above")
         }
     }
     if should_exit {

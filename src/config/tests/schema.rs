@@ -54,6 +54,15 @@ fn region_capture_paths_exist_in_json_schema() {
     }
 }
 
+#[test]
+fn interactive_region_capture_keybinding_exists_in_json_schema() {
+    let schema = Config::json_schema();
+    assert!(
+        schema_contains_path(&schema, "keybindings.capture_region_interactive"),
+        "schema missing interactive region capture keybinding"
+    );
+}
+
 fn schema_contains_path(schema: &serde_json::Value, path: &str) -> bool {
     let mut node = schema;
     for segment in path.split('.') {

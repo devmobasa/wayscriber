@@ -217,6 +217,13 @@ impl WaylandState {
             if target == TouchTarget::Toolbar || inline_hit {
                 self.cancel_region_for_toolbar_interaction();
             } else if target == TouchTarget::Overlay {
+                if let Some(action) = self.region_review_action_at(screen_position) {
+                    self.submit_region_review_action(action);
+                    return TouchTarget::Other;
+                }
+                if self.region_review_bar_contains(screen_position) {
+                    return TouchTarget::Other;
+                }
                 self.begin_region_selection(
                     RegionInputSource::Touch,
                     screen_position.0,

@@ -11,7 +11,8 @@ use tokio::time::{Duration, sleep};
 
 use crate::capture::{
     DesktopBackdropCaptureRequest, DesktopBackdropGeometry, DocumentDeliveryRequest,
-    ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, RenderedDocument, RenderedImage,
+    ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, RenderImageRequest,
+    RenderedDocument, RenderedImage,
     dependencies::{CaptureDependencies, CaptureFuture, CaptureSource},
     file::FileSaveConfig,
     manager::{CaptureManager, CapturePoll, CaptureSubmitError},
@@ -723,4 +724,60 @@ async fn request_image_delivery_preserves_clipboard_success_when_file_fails() {
     }
     assert_eq!(*clipboard_calls.lock().unwrap(), 1);
     assert!(captured_types.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn request_render_image_returns_the_rendered_image_without_delivery() {
+    let mut manager = CaptureManager::new(&tokio::runtime::Handle::current());
+
+    manager
+        .request_render_image(RenderImageRequest {
+            render: Box::new(|| Ok(rendered_png(vec![7, 8, 9]))),
+            operation: ImageOperationKind::Screenshot,
+        })
+        .unwrap();
+
+    match wait_for_manager_outcome(&mut manager).await {
+        Some(CaptureOutcome::RenderedImageReady(image)) => {
+            assert_eq!(image.bytes, vec![7, 8, 9]);
+            assert_eq!(image.format, ImageFormatMetadata::png());
+            assert_eq!((image.width, image.height), (1, 1));
+        }
+        other => panic!("Expected rendered-image outcome, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn request_render_image_reports_render_failure_and_keeps_the_manager_healthy() {
+    let mut manager = CaptureManager::new(&tokio::runtime::Handle::current());
+
+    manager
+        .request_render_image(RenderImageRequest {
+            render: Box::new(|| {
+                Err(CaptureError::ImageError(
+                    "generic render failed".to_string(),
+                ))
+            }),
+            operation: ImageOperationKind::Screenshot,
+        })
+        .unwrap();
+
+    assert!(matches!(
+        wait_for_manager_outcome(&mut manager).await,
+        Some(CaptureOutcome::Failed {
+            operation: ImageOperationKind::Screenshot,
+            message,
+        }) if message.contains("generic render failed")
+    ));
+
+    manager
+        .request_render_image(RenderImageRequest {
+            render: Box::new(|| Ok(rendered_png(vec![4, 5, 6]))),
+            operation: ImageOperationKind::Screenshot,
+        })
+        .expect("a render failure must not poison the manager");
+    assert!(matches!(
+        wait_for_manager_outcome(&mut manager).await,
+        Some(CaptureOutcome::RenderedImageReady(image)) if image.bytes == vec![4, 5, 6]
+    ));
 }

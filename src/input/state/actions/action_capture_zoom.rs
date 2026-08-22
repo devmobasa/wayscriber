@@ -18,7 +18,8 @@ impl InputState {
             | Action::CaptureClipboardSelection
             | Action::CaptureFileSelection
             | Action::CaptureClipboardRegion
-            | Action::CaptureFileRegion => {
+            | Action::CaptureFileRegion
+            | Action::CaptureRegionInteractive => {
                 // Capture actions are handled externally by WaylandState
                 // since they require access to CaptureManager
                 // Store the action for later retrieval
@@ -155,6 +156,7 @@ mod tests {
             Action::CaptureFileSelection,
             Action::CaptureClipboardRegion,
             Action::CaptureFileRegion,
+            Action::CaptureRegionInteractive,
         ] {
             for modal in ["ocr", "eyedropper"] {
                 let mut state = make_test_input_state();

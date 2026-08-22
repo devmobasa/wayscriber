@@ -3,11 +3,13 @@ use crate::input::state::{
     RegionInputSource, RegionPurposeTag, RegionSelectUiState, RegionSelection, ScreenCaptureSource,
 };
 
+mod board;
 mod geometry;
 mod intent;
 mod picker;
 
 use crate::screen_pixels::{ImagePixelRect, ImagePoint, clamp_edge};
+pub(in crate::backend::wayland) use board::world_rect_for_screen_rect;
 pub(in crate::backend::wayland) use geometry::{RegionPickerMeasurement, RegionSelectionGeometry};
 pub(in crate::backend::wayland) use intent::{RegionCaptureIntent, RegionPickerOptions};
 
@@ -101,6 +103,9 @@ impl ActiveScreenRegion {
     }
 
     fn selection_rect(self) -> Option<ImagePixelRect> {
+        if let Some(rect) = self.stored_review_rect() {
+            return Some(rect);
+        }
         let Self::Ready {
             purpose,
             logical_anchor,
@@ -124,6 +129,9 @@ impl ActiveScreenRegion {
     }
 
     fn selection_geometry(self) -> Option<RegionSelectionGeometry> {
+        if self.stored_review_rect().is_some() {
+            return self.review_geometry();
+        }
         let Self::Ready {
             purpose,
             source,
@@ -147,6 +155,62 @@ impl ActiveScreenRegion {
                 .map(|(start, end)| RegionSelection { start, end }),
             square_modifier,
         )
+    }
+
+    fn review_geometry(self) -> Option<RegionSelectionGeometry> {
+        let Self::Ready {
+            purpose, source, ..
+        } = self
+        else {
+            return None;
+        };
+        let image_rect = self.stored_review_rect()?;
+        let display = super::screen_image::screen_rect_for_image_rect(&source, image_rect);
+        Some(RegionSelectionGeometry::review(
+            purpose,
+            image_rect,
+            RegionSelection {
+                start: (f64::from(display.x), f64::from(display.y)),
+                end: (
+                    f64::from(display.x.saturating_add(display.width)),
+                    f64::from(display.y.saturating_add(display.height)),
+                ),
+            },
+        ))
+    }
+
+    fn stored_review_rect(self) -> Option<ImagePixelRect> {
+        let Self::Ready {
+            purpose: RegionPurposeTag::CaptureInteractive,
+            source,
+            anchor: Some(anchor),
+            raw_edge: Some(raw_edge),
+            logical_edge: None,
+            ..
+        } = self
+        else {
+            return None;
+        };
+        ImagePixelRect::from_points(anchor, raw_edge, source.image_size)
+    }
+
+    fn store_review_rect(&mut self, rect: ImagePixelRect) -> bool {
+        let Self::Ready {
+            anchor,
+            raw_edge,
+            logical_edge,
+            ..
+        } = self
+        else {
+            return false;
+        };
+        *anchor = Some(ImagePoint::new(f64::from(rect.x()), f64::from(rect.y())));
+        *raw_edge = Some(ImagePoint::new(
+            f64::from(rect.x() + rect.width()),
+            f64::from(rect.y() + rect.height()),
+        ));
+        *logical_edge = None;
+        true
     }
 
     fn set_square_modifier(&mut self, active: bool) -> bool {
@@ -201,6 +265,144 @@ impl ActiveScreenRegion {
             image_point_for_screen_point(&source, pointer),
             source.image_size,
         )
+    }
+
+    fn enter_review(&mut self, rect: ImagePixelRect) -> Option<RegionSelection> {
+        let Self::Ready {
+            purpose,
+            anchor,
+            raw_edge,
+            logical_anchor,
+            logical_edge,
+            ..
+        } = self
+        else {
+            return None;
+        };
+        if *purpose != RegionPurposeTag::CaptureInteractive {
+            return None;
+        }
+        *anchor = None;
+        *raw_edge = None;
+        *logical_anchor = None;
+        *logical_edge = None;
+        *anchor = Some(ImagePoint::new(f64::from(rect.x()), f64::from(rect.y())));
+        *raw_edge = Some(ImagePoint::new(
+            f64::from(rect.x() + rect.width()),
+            f64::from(rect.y() + rect.height()),
+        ));
+        self.review_geometry()
+            .map(|geometry| geometry.display_selection())
+    }
+
+    fn begin_review_move(&mut self, logical: (f64, f64)) -> bool {
+        let Some(rect) = (*self).stored_review_rect() else {
+            return false;
+        };
+        let Self::Ready {
+            source,
+            logical_anchor,
+            ..
+        } = self
+        else {
+            return false;
+        };
+        if logical_anchor.is_some() {
+            return false;
+        }
+        let display = super::screen_image::screen_rect_for_image_rect(source, rect);
+        let x = logical.0.floor() as i32;
+        let y = logical.1.floor() as i32;
+        if x < display.x
+            || y < display.y
+            || x >= display.x.saturating_add(display.width)
+            || y >= display.y.saturating_add(display.height)
+        {
+            return false;
+        }
+        let origin = image_point_for_screen_point(source, logical);
+        *logical_anchor = Some((origin.x, origin.y));
+        true
+    }
+
+    fn update_review_move(&mut self, logical: (f64, f64)) -> bool {
+        let Some(image_rect) = (*self).stored_review_rect() else {
+            return false;
+        };
+        let Self::Ready {
+            source,
+            logical_anchor: Some(origin),
+            ..
+        } = self
+        else {
+            return false;
+        };
+        let current = image_point_for_screen_point(source, logical);
+        let delta_x = (current.x - origin.0).round() as i64;
+        let delta_y = (current.y - origin.1).round() as i64;
+        if delta_x == 0 && delta_y == 0 {
+            return false;
+        }
+        let Some(next) = image_rect.translated_clamped(delta_x, delta_y, source.image_size) else {
+            return false;
+        };
+        if image_rect == next {
+            return false;
+        }
+        let applied_x = i64::from(next.x()) - i64::from(image_rect.x());
+        let applied_y = i64::from(next.y()) - i64::from(image_rect.y());
+        let next_origin = (origin.0 + applied_x as f64, origin.1 + applied_y as f64);
+        if !self.store_review_rect(next) {
+            return false;
+        }
+        if let Self::Ready { logical_anchor, .. } = self {
+            *logical_anchor = Some(next_origin);
+        }
+        true
+    }
+
+    fn finish_review_move(&mut self) -> bool {
+        let Self::Ready { logical_anchor, .. } = self else {
+            return false;
+        };
+        if logical_anchor.is_none() {
+            return false;
+        }
+        *logical_anchor = None;
+        true
+    }
+
+    fn reset_review_for_selection(&mut self) {
+        if let Self::Ready {
+            anchor,
+            raw_edge,
+            logical_anchor,
+            ..
+        } = self
+        {
+            *anchor = None;
+            *raw_edge = None;
+            *logical_anchor = None;
+        }
+    }
+
+    fn nudge_review(&mut self, delta_x: i64, delta_y: i64) -> Option<RegionSelection> {
+        let review_rect = (*self).stored_review_rect()?;
+        let Self::Ready {
+            source,
+            logical_anchor,
+            ..
+        } = self
+        else {
+            return None;
+        };
+        if logical_anchor.is_some() {
+            return None;
+        }
+        let rect = review_rect.translated_clamped(delta_x, delta_y, source.image_size)?;
+        self.store_review_rect(rect);
+        self.review_geometry()
+            .map(|geometry| geometry.display_selection())
     }
 
     fn begin_selection(&mut self, logical: (f64, f64)) -> bool {
@@ -272,6 +474,7 @@ impl ActiveScreenRegion {
 pub(in crate::backend::wayland) enum RegionSelectionFinalize {
     NotOwned,
     Rearmed,
+    Reviewed,
     Selected {
         purpose: RegionPurposeTag,
         rect: ImagePixelRect,
@@ -291,9 +494,18 @@ fn begin_region_selection_event(
     owner: RegionInputSource,
     logical: (f64, f64),
 ) -> bool {
+    if input_state.region_state().selection_owner().is_some() {
+        return false;
+    }
     let Some(region) = backend.as_mut() else {
         return false;
     };
+    if input_state.region_state().is_review() {
+        if region.begin_review_move(logical) {
+            return input_state.begin_region_review_move(owner);
+        }
+        region.reset_review_for_selection();
+    }
     if !region.begin_selection(logical) {
         return false;
     }
@@ -316,7 +528,30 @@ fn update_region_selection_event(
     owner: RegionInputSource,
     logical: (f64, f64),
 ) {
+    if backend
+        .as_ref()
+        .is_some_and(|region| region.purpose().is_capture())
+        && input_state.region_is_active()
+    {
+        // Capture chrome follows hover even when no device owns a drag: Armed
+        // paints the crosshair/readout, while Review paints bar hover and the
+        // optional loupe. Motion adapters call this only after a position
+        // event, so schedule the selector's full-surface repaint here.
+        input_state.dirty_tracker.mark_full();
+        input_state.needs_redraw = true;
+    }
     if !input_state.region_selection_is_owned_by(owner) {
+        return;
+    }
+    if input_state.region_state().is_review() {
+        if let Some(region) = backend.as_mut()
+            && region.update_review_move(logical)
+            && let Some(preview) = region
+                .review_geometry()
+                .map(RegionSelectionGeometry::display_selection)
+        {
+            input_state.update_region_review_display(preview);
+        }
         return;
     }
     if let Some(region) = backend.as_mut()
@@ -388,6 +623,14 @@ fn region_owner_lost_event(
     if !purpose.is_capture() {
         return RegionOwnerLoss::Cancel(purpose);
     }
+    if input_state.region_state().is_review() {
+        let finished_backend = backend
+            .as_mut()
+            .is_some_and(ActiveScreenRegion::finish_review_move);
+        let finished_ui = input_state.finish_region_review_move(source);
+        debug_assert_eq!(finished_backend, finished_ui);
+        return RegionOwnerLoss::RearmedCapture;
+    }
     rearm_region_selection_event(backend, input_state);
     RegionOwnerLoss::RearmedCapture
 }
@@ -400,6 +643,19 @@ pub(super) fn finalize_region_selection_event(
 ) -> RegionSelectionFinalize {
     if !input_state.region_selection_is_owned_by(owner) {
         return RegionSelectionFinalize::NotOwned;
+    }
+    if input_state.region_state().is_review() {
+        update_region_selection_event(backend, input_state, owner, logical);
+        let finished_backend = backend
+            .as_mut()
+            .is_some_and(ActiveScreenRegion::finish_review_move);
+        let finished_ui = input_state.finish_region_review_move(owner);
+        debug_assert_eq!(finished_backend, finished_ui);
+        return if finished_backend {
+            RegionSelectionFinalize::Reviewed
+        } else {
+            RegionSelectionFinalize::NotOwned
+        };
     }
     update_region_selection_event(backend, input_state, owner, logical);
     let Some(rect) = backend
@@ -414,6 +670,18 @@ pub(super) fn finalize_region_selection_event(
         .as_ref()
         .expect("a selected region still has backend state")
         .purpose();
+    if purpose == RegionPurposeTag::CaptureInteractive {
+        let generation = backend
+            .as_ref()
+            .expect("a reviewed region still has backend state")
+            .generation();
+        let display = backend
+            .as_mut()
+            .and_then(|region| region.enter_review(rect))
+            .expect("an interactive rectangle enters review");
+        input_state.activate_region_review(purpose, generation, display);
+        return RegionSelectionFinalize::Reviewed;
+    }
     RegionSelectionFinalize::Selected { purpose, rect }
 }
 
@@ -531,6 +799,15 @@ impl WaylandState {
             .and_then(ActiveScreenRegion::selection_geometry)
     }
 
+    pub(super) fn region_picker_source_token(&self) -> Option<ScreenSourceToken> {
+        match self.data.active_screen_region {
+            Some(ActiveScreenRegion::Ready { source, .. }) => Some(source),
+            Some(ActiveScreenRegion::PendingFrozen { .. })
+            | Some(ActiveScreenRegion::PendingZoom { .. })
+            | None => None,
+        }
+    }
+
     pub(in crate::backend::wayland) fn region_picker_legend_dismissed(&self) -> bool {
         self.data
             .active_screen_region
@@ -545,15 +822,51 @@ impl WaylandState {
             .and_then(ActiveScreenRegion::whole_image_selection)
     }
 
-    pub(in crate::backend::wayland) fn whole_image_capture_rect(&self) -> Option<ImagePixelRect> {
-        match self.whole_image_region_selection()? {
-            RegionSelectionFinalize::Selected {
-                purpose: RegionPurposeTag::CaptureDeliver,
-                rect,
-            } => Some(rect),
-            RegionSelectionFinalize::Selected { .. }
-            | RegionSelectionFinalize::NotOwned
-            | RegionSelectionFinalize::Rearmed => None,
+    pub(in crate::backend::wayland) fn enter_region_review(
+        &mut self,
+        rect: ImagePixelRect,
+    ) -> bool {
+        let Some(region) = self.data.active_screen_region.as_mut() else {
+            return false;
+        };
+        let purpose = region.purpose();
+        let generation = region.generation();
+        let Some(display) = region.enter_review(rect) else {
+            return false;
+        };
+        self.input_state
+            .activate_region_review(purpose, generation, display);
+        self.debug_assert_screen_region_invariant();
+        true
+    }
+
+    pub(in crate::backend::wayland) fn nudge_region_review(
+        &mut self,
+        delta_x: i64,
+        delta_y: i64,
+    ) -> bool {
+        self.cancel_screen_modals_if_source_changed();
+        if !self.input_state.region_state().is_review() {
+            return false;
+        }
+        let Some(display) = self
+            .data
+            .active_screen_region
+            .as_mut()
+            .and_then(|region| region.nudge_review(delta_x, delta_y))
+        else {
+            return false;
+        };
+        self.input_state.update_region_review_display(display);
+        true
+    }
+
+    pub(in crate::backend::wayland) fn region_review_rect(&self) -> Option<ImagePixelRect> {
+        match self.data.active_screen_region {
+            Some(region) if self.input_state.region_state().is_review() => {
+                region.stored_review_rect()
+            }
+            _ => None,
         }
     }
 
@@ -1089,6 +1402,14 @@ mod tests {
         capture_region_at_scale(1.0)
     }
 
+    fn interactive_region() -> ActiveScreenRegion {
+        let mut region = capture_region();
+        if let ActiveScreenRegion::Ready { purpose, .. } = &mut region {
+            *purpose = RegionPurposeTag::CaptureInteractive;
+        }
+        region
+    }
+
     fn capture_region_at_scale(scale: f64) -> ActiveScreenRegion {
         let ActiveScreenRegion::Ready {
             generation,
@@ -1124,6 +1445,192 @@ mod tests {
         assert_eq!(geometry.display_selection().start, (10.0, 20.0));
         assert_eq!(geometry.display_selection().end, (10.0, 20.0));
         assert_eq!(geometry.image_rect(), None);
+    }
+
+    #[test]
+    fn interactive_release_enters_integer_authoritative_review() {
+        let mut backend = Some(interactive_region());
+        let mut input = make_test_input_state();
+        input.activate_region(RegionPurposeTag::CaptureInteractive, 1);
+
+        assert!(begin_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Pointer,
+            (10.2, 20.7),
+        ));
+        assert_eq!(
+            finalize_region_selection_event(
+                &mut backend,
+                &mut input,
+                RegionInputSource::Pointer,
+                (30.1, 42.2),
+            ),
+            RegionSelectionFinalize::Reviewed
+        );
+        assert!(input.region_state().is_review());
+        let rect = backend
+            .and_then(ActiveScreenRegion::selection_rect)
+            .expect("review owns a non-empty pixel rectangle");
+        assert_eq!(
+            (rect.x(), rect.y(), rect.width(), rect.height()),
+            (10, 20, 21, 23)
+        );
+        assert_eq!(
+            input.region_state().selection(),
+            backend
+                .and_then(ActiveScreenRegion::selection_geometry)
+                .map(|geometry| geometry.display_selection())
+        );
+    }
+
+    #[test]
+    fn capture_hover_motion_requests_a_repaint_while_armed_and_in_review() {
+        let mut armed_backend = Some(capture_region());
+        let mut armed_input = make_test_input_state();
+        armed_input.activate_region(RegionPurposeTag::CaptureDeliver, 1);
+        let _ = armed_input.dirty_tracker.take_region_report(100, 80);
+        armed_input.needs_redraw = false;
+
+        update_region_selection_event(
+            &mut armed_backend,
+            &mut armed_input,
+            RegionInputSource::Pointer,
+            (35.0, 45.0),
+        );
+
+        assert!(armed_input.needs_redraw, "armed crosshair follows hover");
+        assert_eq!(
+            armed_input
+                .dirty_tracker
+                .take_region_report(100, 80)
+                .regions,
+            vec![crate::util::Rect::new(0, 0, 100, 80).unwrap()]
+        );
+
+        let mut review_region = interactive_region();
+        let rect = ImagePixelRect::new(20, 20, 30, 25, (100, 80)).unwrap();
+        let display = review_region.enter_review(rect).unwrap();
+        let mut review_backend = Some(review_region);
+        let mut review_input = make_test_input_state();
+        review_input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
+        let _ = review_input.dirty_tracker.take_region_report(100, 80);
+        review_input.needs_redraw = false;
+
+        update_region_selection_event(
+            &mut review_backend,
+            &mut review_input,
+            RegionInputSource::Pointer,
+            (70.0, 70.0),
+        );
+
+        assert!(
+            review_input.needs_redraw,
+            "review hover, action bar, and loupe follow the pointer"
+        );
+        assert_eq!(
+            review_input
+                .dirty_tracker
+                .take_region_report(100, 80)
+                .regions,
+            vec![crate::util::Rect::new(0, 0, 100, 80).unwrap()]
+        );
+    }
+
+    #[test]
+    fn review_nudge_and_move_clamp_without_resizing_and_owner_loss_keeps_review() {
+        let mut region = interactive_region();
+        let rect = ImagePixelRect::new(70, 60, 20, 15, (100, 80)).unwrap();
+        let display = region.enter_review(rect).unwrap();
+        let mut backend = Some(region);
+        let mut input = make_test_input_state();
+        input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
+
+        let nudged = backend
+            .as_mut()
+            .and_then(|region| region.nudge_review(50, 50))
+            .unwrap();
+        input.update_region_review_display(nudged);
+        let clamped = backend
+            .and_then(ActiveScreenRegion::selection_rect)
+            .unwrap();
+        assert_eq!(
+            (clamped.x(), clamped.y(), clamped.size()),
+            (80, 65, (20, 15))
+        );
+
+        assert!(begin_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Stylus,
+            (85.0, 70.0),
+        ));
+        update_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Stylus,
+            (20.0, 20.0),
+        );
+        assert_eq!(
+            region_owner_lost_event(&mut backend, &mut input, RegionInputSource::Stylus),
+            RegionOwnerLoss::RearmedCapture
+        );
+        assert!(input.region_state().is_review());
+        assert!(input.region_state().selection_owner().is_none());
+        assert!(
+            backend
+                .and_then(ActiveScreenRegion::selection_rect)
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn review_move_preserves_subpixel_motion_until_it_reaches_a_pixel() {
+        let mut region = interactive_region();
+        let rect = ImagePixelRect::new(20, 20, 30, 25, (100, 80)).unwrap();
+        region.enter_review(rect).unwrap();
+        assert!(region.begin_review_move((25.0, 25.0)));
+
+        for x in [25.6, 26.2, 26.8, 27.4, 28.0] {
+            region.update_review_move((x, 25.0));
+        }
+
+        let moved = region.stored_review_rect().unwrap();
+        assert_eq!(
+            (moved.x(), moved.y(), moved.size()),
+            (23, 20, (30, 25)),
+            "three logical pixels of motion must move exactly three image pixels"
+        );
+    }
+
+    #[test]
+    fn second_device_press_cannot_replace_an_in_progress_review_move() {
+        let mut region = interactive_region();
+        let rect = ImagePixelRect::new(20, 20, 30, 25, (100, 80)).unwrap();
+        let display = region.enter_review(rect).unwrap();
+        let mut backend = Some(region);
+        let mut input = make_test_input_state();
+        input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
+
+        assert!(begin_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Pointer,
+            (25.0, 25.0),
+        ));
+        assert!(!begin_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Touch,
+            (70.0, 70.0),
+        ));
+
+        assert!(input.region_state().is_review());
+        assert!(input.region_selection_is_owned_by(RegionInputSource::Pointer));
+        assert_eq!(
+            backend.and_then(ActiveScreenRegion::selection_rect),
+            Some(rect)
+        );
     }
 
     #[test]

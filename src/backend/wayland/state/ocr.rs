@@ -292,8 +292,9 @@ impl WaylandState {
         }
     }
 
-    /// End the drag: own the selected pixels, release an OCR-created freeze,
-    /// and submit. Returns whether `source` had a region drag to finish.
+    /// End the drag: OCR and direct capture submit their selected pixels;
+    /// interactive capture enters Review. Returns whether `source` had a
+    /// region drag or review move to finish.
     pub(in crate::backend::wayland) fn finish_region_selection(
         &mut self,
         source: RegionInputSource,
@@ -313,6 +314,7 @@ impl WaylandState {
         ) {
             RegionSelectionFinalize::NotOwned => return false,
             RegionSelectionFinalize::Rearmed => return true,
+            RegionSelectionFinalize::Reviewed => return true,
             RegionSelectionFinalize::Selected {
                 purpose: RegionPurposeTag::Ocr,
                 rect,
@@ -327,7 +329,7 @@ impl WaylandState {
             RegionSelectionFinalize::Selected {
                 purpose: RegionPurposeTag::CaptureInteractive,
                 ..
-            } => return false,
+            } => return true,
         };
 
         // The crop is taken while the capture is still held: releasing first

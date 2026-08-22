@@ -31,5 +31,6 @@ pub use types::{
     DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult, DesktopBackdropGeometry,
     DesktopBackdropOutputGeometry, DocumentDeliveryRequest, DocumentRenderJob,
     ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, ImageRenderJob,
-    RenderedDocument, RenderedDocumentDeliveryRequest, RenderedImage, RenderedImageDeliveryRequest,
+    RenderImageRequest, RenderedDocument, RenderedDocumentDeliveryRequest, RenderedImage,
+    RenderedImageDeliveryRequest,
 };

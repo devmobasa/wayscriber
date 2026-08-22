@@ -89,7 +89,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
         )
         .switch_row(
             "Show magnified pixel loupe",
-            "The preference is saved now; loupe rendering will become available in a later release.",
+            "Shows a magnified pixel grid beside the pointer while selecting or reviewing.",
             |app| app.draft.capture_region_show_loupe,
             |value| Message::ToggleChanged(ToggleField::CaptureRegionShowLoupe, value),
         )

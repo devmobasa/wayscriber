@@ -92,6 +92,17 @@ pub const ENTRIES: &[ActionMeta] = &[
         false
     ),
     meta!(
+        CaptureRegionInteractive,
+        "Capture Region (Interactive)",
+        Some("Region…"),
+        "Select a region, then choose how to use it",
+        Capture,
+        true,
+        true,
+        false,
+        &["region", "snip", "paste to board", "screenshot"]
+    ),
+    meta!(
         ExportCanvasFile,
         "Export Canvas to File",
         Some("Canvas to File"),
