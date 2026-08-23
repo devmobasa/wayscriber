@@ -487,8 +487,8 @@ mod tests {
     #[test]
     fn conflict_filter_includes_every_claimant() {
         let (mut draft, defaults) = drafts();
-        draft.set(KeybindingField::ClearCanvas, "Ctrl+Shift+X".to_string());
-        draft.set(KeybindingField::ToggleToolbar, "Ctrl+Shift+X".to_string());
+        draft.set(KeybindingField::ClearCanvas, "Ctrl+Shift+Q".to_string());
+        draft.set(KeybindingField::ToggleToolbar, "Ctrl+Shift+Q".to_string());
         let summary = ShortcutManagerSummary::from_drafts(&draft, &defaults);
         let visible = summary.visible_fields(
             ShortcutManagerFilter::Conflicts,
@@ -651,10 +651,10 @@ mod tests {
     #[test]
     fn next_review_conflict_names_the_other_claimant() {
         let (mut draft, _defaults) = drafts();
-        draft.set(KeybindingField::ClearCanvas, "Ctrl+Shift+X".to_string());
-        draft.set(KeybindingField::ToggleToolbar, "Ctrl+Shift+X".to_string());
+        draft.set(KeybindingField::ClearCanvas, "Ctrl+Shift+Q".to_string());
+        draft.set(KeybindingField::ToggleToolbar, "Ctrl+Shift+Q".to_string());
         let (field, binding, claimants) = next_review_conflict(&draft).expect("conflict");
-        assert_eq!(binding.to_string(), "Ctrl+Shift+X");
+        assert_eq!(binding.to_string(), "Ctrl+Shift+Q");
         assert!(claimants.iter().any(|claim| claim.field == Some(field)
             || matches!(
                 claim.field,

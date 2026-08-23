@@ -389,9 +389,10 @@ mod tests {
 
     #[test]
     fn conflict_lookup_returns_all_claimants() {
-        // The count below is exact, so this needs a chord no shipped default
-        // claims. Asserted rather than assumed: a future default taking it
-        // should fail here saying why, not as an off-by-one somewhere else.
+        // This and the other generic multi-claimant fixtures use a chord no
+        // shipped default claims. Asserted rather than assumed: a future default
+        // taking `Ctrl+Shift+Q` should fail here saying why, not as an off-by-one
+        // somewhere else.
         let binding = Shortcut::parse("Ctrl+Shift+Q").expect("parses");
         assert!(
             claimants_for(&draft(), &binding).is_empty(),
@@ -439,10 +440,10 @@ mod tests {
         let mut draft = draft();
         draft.set(
             KeybindingField::ToggleHelp,
-            "F10, F1, Ctrl+Shift+X".to_string(),
+            "F10, F1, Ctrl+Shift+Q".to_string(),
         );
-        draft.set(KeybindingField::Undo, "Ctrl+Z, Ctrl+Shift+X".to_string());
-        let binding = Shortcut::parse("Ctrl+Shift+X").expect("parses");
+        draft.set(KeybindingField::Undo, "Ctrl+Z, Ctrl+Shift+Q".to_string());
+        let binding = Shortcut::parse("Ctrl+Shift+Q").expect("parses");
         let claimants = other_claimants(&draft, KeybindingField::ClearCanvas, &binding);
         apply_recorded_replace(
             &mut draft,
@@ -458,7 +459,7 @@ mod tests {
         assert_eq!(draft.value_for(KeybindingField::Undo), Some("Ctrl+Z"));
         assert_eq!(
             draft.value_for(KeybindingField::ClearCanvas),
-            Some("E, Ctrl+Shift+X")
+            Some("E, Ctrl+Shift+Q")
         );
     }
 

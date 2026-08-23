@@ -672,10 +672,10 @@ fn conflict_review_queue_arms_the_next_conflict_after_replace() {
     app.is_loading = false;
     app.draft
         .keybindings
-        .set(KeybindingField::ClearCanvas, "Ctrl+Shift+X".to_string());
+        .set(KeybindingField::ClearCanvas, "Ctrl+Shift+Q".to_string());
     app.draft
         .keybindings
-        .set(KeybindingField::ToggleToolbar, "Ctrl+Shift+X".to_string());
+        .set(KeybindingField::ToggleToolbar, "Ctrl+Shift+Q".to_string());
     app.draft
         .keybindings
         .set(KeybindingField::Undo, "Ctrl+Alt+Shift+Y".to_string());
@@ -713,10 +713,10 @@ fn conflict_review_cancel_stops_the_queue() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.draft
         .keybindings
-        .set(KeybindingField::ClearCanvas, "Ctrl+Shift+X".to_string());
+        .set(KeybindingField::ClearCanvas, "Ctrl+Shift+Q".to_string());
     app.draft
         .keybindings
-        .set(KeybindingField::ToggleToolbar, "Ctrl+Shift+X".to_string());
+        .set(KeybindingField::ToggleToolbar, "Ctrl+Shift+Q".to_string());
     let _ = app.handle_shortcut_conflict_review_started();
     let _ = app.handle_shortcut_conflict_canceled();
     assert!(!app.shortcut_conflict_review);
@@ -728,10 +728,10 @@ fn jump_to_conflict_selects_the_other_claimant() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     app.draft
         .keybindings
-        .set(KeybindingField::ClearCanvas, "Ctrl+Shift+X".to_string());
+        .set(KeybindingField::ClearCanvas, "Ctrl+Shift+Q".to_string());
     app.draft
         .keybindings
-        .set(KeybindingField::ToggleToolbar, "Ctrl+Shift+X".to_string());
+        .set(KeybindingField::ToggleToolbar, "Ctrl+Shift+Q".to_string());
     let _ = app.handle_shortcut_conflict_review_started();
     let jump = app
         .pending_shortcut_conflict

@@ -834,8 +834,7 @@ const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
     ("export_board_pdf_file", &[]),
     ("export_all_boards_pdf_file", &[]),
     ("open_capture_folder", &["Ctrl+Alt+O"]),
-    // Intentionally unbound: `O` is the orange quick color, and no other
-    // conflict-free chord is obviously right, so the user picks one.
+    // `O` stays the orange quick color; recognition takes the free letter.
     ("copy_text_from_screen", &["Ctrl+Shift+X"]),
     ("toggle_frozen_mode", &["Ctrl+Shift+F"]),
     ("zoom_in", &["Ctrl+Alt++", "Ctrl+Alt+="]),

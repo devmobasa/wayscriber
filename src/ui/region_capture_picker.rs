@@ -286,7 +286,7 @@ pub(crate) fn render_region_capture_picker(
         );
     }
     if visual.show_legend && (visual.window.active || visual.selection.is_none()) {
-        draw_legend(
+        render_region_legend(
             ctx,
             (screen_width, screen_height),
             picker_legend_text(visual.window),
@@ -533,10 +533,6 @@ fn draw_readout_panel(
 /// The hint strip along the top of a region selector. Shared so every selector
 /// teaches its keys the same way and in the same place.
 pub(crate) fn render_region_legend(ctx: &cairo::Context, screen: (u32, u32), text: &str) {
-    draw_legend(ctx, screen, text);
-}
-
-fn draw_legend(ctx: &cairo::Context, screen: (u32, u32), text: &str) {
     let extents = text_extents_for(
         ctx,
         "Sans",
