@@ -1514,11 +1514,13 @@ that configured default and can override it for one interactive region capture.
 Copy, Save, Both, and Board all honour the current toggle. Note that adding an
 annotated crop to the board it was composited from bakes a second, flattened
 copy of those annotations into the image, sitting over the live shapes until
-you move the pasted image. A pasted image occupies whole board pixels, so at a
-fractional output scale the baked copy normally sits within half a board pixel
-of the live shapes; a crop only one or two source pixels wide has to be widened
-to a whole board pixel, and can sit up to one pixel out. Turn the toggle off
-before pressing **Board** when you want the raw crop instead.
+you move the pasted image. A pasted image occupies whole board pixels, so the
+baked copy normally sits within half a board pixel of the live shapes. A crop
+under a board pixel across — a few source pixels at any output scale above 1x —
+can have both its edges round onto the same board pixel, depending on where it
+falls; it then takes the whole board pixel centred on it, and its edges can sit
+up to a pixel out. Turn the toggle off before pressing **Board** when you want
+the raw crop instead.
 
 `measure_mode` opens a capture-free screen ruler over the live Wayscriber
 view. Drag to measure a rectangle in logical screen pixels; the completed

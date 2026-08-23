@@ -10,37 +10,62 @@ use super::super::screen_image::ScreenSourceToken;
 /// display rectangle instead would compound two outward quantizations and could
 /// only ever stretch the crop, never shrink it.
 ///
-/// One exception: when both edges of an axis round to the same integer the
-/// image would have no extent, so the far edge is pushed a whole pixel out to
-/// give it one. That edge can then sit up to one board pixel from its exact
-/// position — 0.7 for a crop spanning 10.1 to 10.3, for instance. It is
-/// unavoidable while `Shape::Image` bounds are integers, and only reachable for
-/// a crop of one or two source pixels at a fractional scale.
+/// One exception: when both rounded edges of a sub-pixel crop coincide, the
+/// image would have no extent, so it is given the single board pixel centred on
+/// it. Each edge then stays strictly within one board pixel of its exact
+/// position. Pushing the far edge out from an already-rounded near edge instead
+/// would allow 1.5. Being under a board pixel wide is necessary but not
+/// sufficient — position decides too, and `[0, ⅔]` rounds normally to `[0, 1]`.
+///
+/// This is not confined to fractional scales: at any output scale above 1x a
+/// crop a few source pixels wide is under a board pixel across.
 pub(in crate::backend::wayland) fn board_bounds_for_world_rect(
     exact: CanvasExportRect,
 ) -> Option<Rect> {
-    let round_edge = |value: f64| {
-        if !value.is_finite() {
-            return None;
-        }
-        let rounded = value.round();
-        if rounded < f64::from(i32::MIN) || rounded > f64::from(i32::MAX) {
-            return None;
-        }
-        Some(rounded as i32)
-    };
-    let left = round_edge(exact.x)?;
-    let top = round_edge(exact.y)?;
-    let right = round_edge(exact.x + exact.width)?;
-    let bottom = round_edge(exact.y + exact.height)?;
-    // A crop narrower than a board pixel still has to occupy one. This is the
-    // documented exception to the half-pixel bound above.
-    Rect::from_min_max(
-        left,
-        top,
-        right.max(left.checked_add(1)?),
-        bottom.max(top.checked_add(1)?),
-    )
+    let (left, right) = board_axis(exact.x, exact.width)?;
+    let (top, bottom) = board_axis(exact.y, exact.height)?;
+    Rect::from_min_max(left, top, right, bottom)
+}
+
+/// One axis of the placement: the rounded edge pair, widened to the centred
+/// board pixel when rounding collapses them.
+fn board_axis(origin: f64, extent: f64) -> Option<(i32, i32)> {
+    let near = round_edge(origin)?;
+    let far = round_edge(origin + extent)?;
+    if far > near {
+        return Some((near, far));
+    }
+    // The unit cell centred on the crop. Its start is clamped into the range a
+    // pair of edges can express: a crop straddling `i32::MAX` still has
+    // `[MAX - 1, MAX]` available, and one at `i32::MIN` has `[MIN, MIN + 1]`,
+    // so neither should fail for want of a representable neighbour.
+    let centre_start = origin + extent / 2.0 - 0.5;
+    if !centre_start.is_finite() {
+        return None;
+    }
+    let start = centre_start
+        .round()
+        .clamp(f64::from(i32::MIN), f64::from(i32::MAX - 1)) as i32;
+    let end = start + 1;
+    // Clamping only bites within a pixel of the representable edges, but a crop
+    // pushed past them cannot keep the bound this function promises. Refuse
+    // rather than place it somewhere it does not belong.
+    if (f64::from(start) - origin).abs() >= 1.0 || (f64::from(end) - (origin + extent)).abs() >= 1.0
+    {
+        return None;
+    }
+    Some((start, end))
+}
+
+fn round_edge(value: f64) -> Option<i32> {
+    if !value.is_finite() {
+        return None;
+    }
+    let rounded = value.round();
+    if rounded < f64::from(i32::MIN) || rounded > f64::from(i32::MAX) {
+        return None;
+    }
+    Some(rounded as i32)
 }
 
 /// Map authoritative source-image pixel edges directly into board-world space.
@@ -165,9 +190,9 @@ mod tests {
         );
 
         // This is the documented exception to the half-pixel bound. Both edges
-        // of a crop this thin round to the same integer, so the far edge is
-        // pushed a whole pixel out to give the image an extent at all, landing
-        // 0.7 board pixels from where composition drew it.
+        // of a crop this thin round onto the same integer, so it takes the
+        // whole board pixel centred on it — here landing 0.7 past its far edge,
+        // still inside the one-pixel bound.
         let far_edge_drift = f64::from(bounds.x + bounds.width) - (10.1 + 0.2);
         assert!(
             (far_edge_drift - 0.7).abs() < 1e-9,
@@ -232,5 +257,145 @@ mod tests {
                 .and_then(board_bounds_for_world_rect),
             Some(placed)
         );
+    }
+
+    /// The case that motivated centring: rounding the near edge first and then
+    /// pushing the far edge out puts `[10.5, 10.75]` at `[11, 12]`, 1.25 board
+    /// pixels past its far edge. The centred pixel keeps both edges under one.
+    #[test]
+    fn a_collapsed_axis_is_centred_rather_than_pushed_off_its_near_edge() {
+        let placed =
+            board_bounds_for_world_rect(CanvasExportRect::new(10.5, 10.5, 0.25, 0.25).unwrap())
+                .expect("a quarter-pixel crop places");
+        assert_eq!(
+            (placed.x, placed.y, placed.width, placed.height),
+            (10, 10, 1, 1)
+        );
+        assert!(
+            (f64::from(placed.x + placed.width) - 10.75).abs() <= 0.5,
+            "the far edge stays close, not 1.25 out"
+        );
+    }
+
+    /// A crop under a board pixel across is not a fractional-scale curiosity:
+    /// two source pixels at an integer 2x output scale is one board pixel, so a
+    /// one-pixel crop there already collapses.
+    #[test]
+    fn an_integer_two_times_scale_also_reaches_the_collapsed_case() {
+        let mut token = source(false);
+        token.image_size = (1600, 1200);
+        token.surface = (800, 600);
+        token.output_scale = 2;
+        let one_pixel = ImagePixelRect::new(41, 41, 1, 1, token.image_size).unwrap();
+
+        let exact = world_rect_for_image_rect_exact(one_pixel, (0.0, 0.0), token).unwrap();
+        assert_eq!(
+            (exact.x, exact.width),
+            (20.5, 0.5),
+            "half a board pixel wide"
+        );
+        let placed = board_bounds_for_world_rect(exact).expect("it still places");
+        assert_eq!((placed.width, placed.height), (1, 1));
+        assert!(
+            edge_drifts(exact, placed)
+                .into_iter()
+                .all(|drift| drift < 1.0)
+        );
+    }
+
+    /// The bound the documentation promises, swept rather than sampled: every
+    /// edge lands strictly within one board pixel, and within half of one
+    /// whenever rounding did not collapse the axis.
+    #[test]
+    fn every_placement_stays_within_a_board_pixel_of_the_exact_crop() {
+        let steps = 0..40;
+        for origin_step in steps.clone() {
+            for extent_step in 1..40 {
+                let x = -3.0 + f64::from(origin_step) * 0.17;
+                let width = f64::from(extent_step) * 0.13;
+                let exact = CanvasExportRect::new(x, x, width, width).unwrap();
+                let placed = board_bounds_for_world_rect(exact)
+                    .unwrap_or_else(|| panic!("{x} + {width} must place"));
+                // Collapse is decided by the rounded edges, not by the placed
+                // width: an ordinary interval can round to width one too, and
+                // counting it as collapsed would excuse it from the tighter
+                // bound it actually keeps.
+                let collapsed = (x + width).round() <= x.round();
+                for drift in edge_drifts(exact, placed) {
+                    if collapsed {
+                        assert!(
+                            drift < 1.0,
+                            "x={x} width={width} placed={placed:?} drifted {drift}, \
+                             outside the collapsed bound"
+                        );
+                    } else {
+                        assert!(
+                            drift <= 0.5 + f64::EPSILON,
+                            "x={x} width={width} placed={placed:?} drifted {drift}, \
+                             outside the ordinary bound"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Distance from each placed edge to the exact edge it represents.
+    fn edge_drifts(exact: CanvasExportRect, placed: Rect) -> [f64; 4] {
+        [
+            (f64::from(placed.x) - exact.x).abs(),
+            (f64::from(placed.y) - exact.y).abs(),
+            (f64::from(placed.x + placed.width) - (exact.x + exact.width)).abs(),
+            (f64::from(placed.y + placed.height) - (exact.y + exact.height)).abs(),
+        ]
+    }
+
+    /// A crop straddling the far end of the representable range still has
+    /// `[MAX - 1, MAX]` to sit in, and one at the near end has `[MIN, MIN + 1]`.
+    /// Neither may fail for want of a neighbour on the side it collapsed toward.
+    #[test]
+    fn a_collapsed_axis_at_the_integer_limits_still_places() {
+        let max = f64::from(i32::MAX);
+        let placed =
+            board_bounds_for_world_rect(CanvasExportRect::new(max - 0.4, 0.0, 0.8, 1.0).unwrap())
+                .expect("a crop straddling i32::MAX places");
+        assert_eq!((placed.x, placed.width), (i32::MAX - 1, 1));
+        assert!(
+            edge_drifts_x(max - 0.4, 0.8, placed)
+                .into_iter()
+                .all(|d| d < 1.0)
+        );
+
+        let min = f64::from(i32::MIN);
+        let placed =
+            board_bounds_for_world_rect(CanvasExportRect::new(min - 0.4, 0.0, 0.8, 1.0).unwrap())
+                .expect("a crop straddling i32::MIN places");
+        assert_eq!((placed.x, placed.width), (i32::MIN, 1));
+        assert!(
+            edge_drifts_x(min - 0.4, 0.8, placed)
+                .into_iter()
+                .all(|d| d < 1.0)
+        );
+    }
+
+    /// Clamping must not become a licence to place a crop that has run off the
+    /// representable range entirely: that keeps no bound at all.
+    #[test]
+    fn a_collapsed_axis_pushed_past_the_limits_is_refused() {
+        let max = f64::from(i32::MAX);
+        assert_eq!(
+            board_bounds_for_world_rect(CanvasExportRect::new(max + 0.3, 0.0, 0.1, 1.0).unwrap()),
+            None,
+            "a cell clamped back inside would sit more than a pixel from the crop"
+        );
+    }
+
+    /// Horizontal drifts only, for the cases whose vertical axis is an ordinary
+    /// one-pixel interval.
+    fn edge_drifts_x(origin: f64, extent: f64, placed: Rect) -> [f64; 2] {
+        [
+            (f64::from(placed.x) - origin).abs(),
+            (f64::from(placed.x + placed.width) - (origin + extent)).abs(),
+        ]
     }
 }
