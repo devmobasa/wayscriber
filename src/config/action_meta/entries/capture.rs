@@ -7,7 +7,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Capture the full screen",
         Capture,
-        false,
+        true,
         false,
         false
     ),
@@ -17,7 +17,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Capture the active window",
         Capture,
-        false,
+        true,
         true,
         false
     ),
@@ -27,7 +27,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Capture a selection using defaults",
         Capture,
-        false,
+        true,
         true,
         true
     ),
@@ -57,7 +57,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Selection to clipboard",
         Capture,
-        false,
+        true,
         true,
         false
     ),
@@ -67,7 +67,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Selection to file",
         Capture,
-        false,
+        true,
         true,
         false
     ),
@@ -77,7 +77,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Region to clipboard",
         Capture,
-        false,
+        true,
         false,
         false
     ),
@@ -87,7 +87,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Region to file",
         Capture,
-        false,
+        true,
         false,
         false
     ),

@@ -255,8 +255,18 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::PickScreenColor,
     Action::CaptureRegionInteractive,
     Action::MeasureMode,
+    // Every bindable capture action is searchable here. The help overlay is
+    // curated for density and omits some of these, but an action a user can
+    // bind must be runnable without knowing its shortcut.
+    Action::CaptureFullScreen,
+    Action::CaptureActiveWindow,
+    Action::CaptureSelection,
     Action::CaptureClipboardFull,
     Action::CaptureFileFull,
+    Action::CaptureClipboardSelection,
+    Action::CaptureFileSelection,
+    Action::CaptureClipboardRegion,
+    Action::CaptureFileRegion,
     Action::ExportCanvasFile,
     Action::ExportCanvasClipboard,
     Action::ExportCanvasClipboardAndFile,
