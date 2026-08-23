@@ -271,13 +271,15 @@ capture_selection = ["Ctrl+Shift+I"]
 # Clipboard/File capture variants
 capture_clipboard_full = ["Ctrl+C"]
 capture_file_full = ["Ctrl+S"]
-capture_clipboard_selection = ["Ctrl+Shift+C"]
+# Unbound by default: Ctrl+Shift+C now opens the interactive picker below,
+# whose Copy action reaches the same clipboard result. Bind a chord here to get
+# the one-step region copy back.
+capture_clipboard_selection = []
 capture_file_selection = ["Ctrl+Shift+S"]
 capture_clipboard_region = ["Ctrl+6"]
 capture_file_region = ["Ctrl+Alt+6"]
-# Open the region review/action bar. Available from the command palette and
-# unbound by default.
-capture_region_interactive = []
+# Open the region review/action bar. Also available from the command palette.
+capture_region_interactive = ["Ctrl+Shift+C"]
 # Show a logical-pixel screen ruler without capturing anything. Available from
 # the command palette and unbound by default.
 measure_mode = []

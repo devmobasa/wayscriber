@@ -739,11 +739,11 @@ Light passthrough (layer-shell compositors only) lets normal keyboard and pointe
 | <kbd>Ctrl+Shift+I</kbd> | Capture selection (respects `capture.copy_to_clipboard`) |
 | <kbd>Ctrl+C</kbd> | Copy full screen to clipboard |
 | <kbd>Ctrl+S</kbd> | Save full screen as PNG |
-| <kbd>Ctrl+Shift+C</kbd> | Select region → clipboard |
+| <kbd>Ctrl+Shift+C</kbd> | Select a region, then choose Copy, Save, Both, or Board (`capture_region_interactive`) |
 | <kbd>Ctrl+Shift+S</kbd> | Select region → save PNG |
 | <kbd>Ctrl+6</kbd> | Region → clipboard (explicit) |
 | <kbd>Ctrl+Alt+6</kbd> | Region → save PNG (explicit) |
-| Unbound | Capture region interactively, then choose Copy, Save, Both, or Board (`capture_region_interactive`) |
+| Unbound | Select region → clipboard in one step (`capture_clipboard_selection`) |
 | Unbound | Measure a logical screen region without capturing it (`measure_mode`) |
 | <kbd>Ctrl+Alt+O</kbd> | Open last capture folder |
 
@@ -764,8 +764,11 @@ picker. The provider result is checked against that source's output and layout
 identity before candidates are shown; a mismatch simply leaves window mode
 unavailable. Wayland has no portable workspace identity at the freeze boundary,
 so candidates reflect the workspace visible when the compositor query runs.
-`capture_region_interactive` is available from the command palette and is
-unbound by default; bind it in the configurator or under `[keybindings]`. It
+`capture_region_interactive` owns <kbd>Ctrl+Shift+C</kbd> by default and is
+also in the command palette. That chord previously ran the one-step
+`capture_clipboard_selection`, which now ships unbound; Review's **Copy**
+(<kbd>Ctrl+C</kbd>) reaches the same clipboard result, and binding
+`capture_clipboard_selection` explicitly brings the one-step copy back. It
 always uses the native picker so Review cannot be bypassed by an external
 selector. In Review, **Both** (or <kbd>Enter</kbd>) always copies the PNG and
 saves it to a file.

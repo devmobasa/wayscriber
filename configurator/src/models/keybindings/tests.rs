@@ -176,7 +176,11 @@ fn interactive_region_capture_keybinding_is_visible_and_round_trips() {
     assert!(KeybindingField::all().contains(&field));
     assert_eq!(field.tab(), KeybindingsTabId::CaptureView);
     assert_eq!(field.label(), "Capture Region (Interactive)");
-    assert!(field.get(&config).is_empty());
+    assert_eq!(
+        field.get(&config),
+        &vec!["Ctrl+Shift+C".to_string()],
+        "the shipped default"
+    );
 
     field.set(&mut config, vec!["Ctrl+Alt+Shift+I".to_string()]);
     assert_eq!(

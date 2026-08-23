@@ -32,8 +32,9 @@ pub struct CaptureKeybindingsConfig {
     #[serde(default = "default_capture_file_region")]
     pub capture_file_region: Vec<String>,
 
-    /// Opens the post-selection review UI. Palette-first and unbound by
-    /// default so it does not claim another screenshot chord.
+    /// Opens the post-selection review UI. Owns `Ctrl+Shift+C` by default,
+    /// taking it from `capture_clipboard_selection`, which now ships unbound:
+    /// Review's Copy reaches the same clipboard result from the same chord.
     #[serde(default = "default_capture_region_interactive")]
     pub capture_region_interactive: Vec<String>,
 

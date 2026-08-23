@@ -506,15 +506,22 @@ fn screen_text_recognition_is_unbound_by_default_and_leaves_o_to_orange() {
 }
 
 #[test]
-fn interactive_region_capture_is_unbound_by_default_and_maps_when_configured() {
+fn interactive_region_capture_owns_the_region_chord_and_remaps_when_configured() {
     let mut config = KeybindingsConfig::default();
-    assert!(config.capture.capture_region_interactive.is_empty());
+    assert_eq!(
+        config.capture.capture_region_interactive,
+        vec!["Ctrl+Shift+C".to_string()]
+    );
     assert!(
-        !config
+        config.capture.capture_clipboard_selection.is_empty(),
+        "the immediate region copy gives up the chord rather than colliding"
+    );
+    assert_eq!(
+        config
             .build_action_map()
             .unwrap()
-            .values()
-            .any(|action| *action == Action::CaptureRegionInteractive)
+            .get(&Shortcut::parse("Ctrl+Shift+C").unwrap()),
+        Some(&Action::CaptureRegionInteractive)
     );
 
     config.capture.capture_region_interactive = vec!["Ctrl+Alt+Shift+I".to_string()];
@@ -812,11 +819,11 @@ const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
     ("capture_selection", &["Ctrl+Shift+I"]),
     ("capture_clipboard_full", &["Ctrl+C"]),
     ("capture_file_full", &["Ctrl+S"]),
-    ("capture_clipboard_selection", &["Ctrl+Shift+C"]),
+    ("capture_clipboard_selection", &[]),
     ("capture_file_selection", &["Ctrl+Shift+S"]),
     ("capture_clipboard_region", &["Ctrl+6"]),
     ("capture_file_region", &["Ctrl+Alt+6"]),
-    ("capture_region_interactive", &[]),
+    ("capture_region_interactive", &["Ctrl+Shift+C"]),
     ("measure_mode", &[]),
     ("export_canvas_file", &[]),
     ("export_canvas_clipboard", &[]),

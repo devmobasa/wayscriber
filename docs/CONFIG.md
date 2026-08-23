@@ -1470,8 +1470,11 @@ old one; returning to area mode remains safe.
 
 `capture_region_interactive` opens the same picker, then keeps the selection in
 a review step where you can copy it, save it, do both, or add it to the active
-board. It is available from the command palette and has no default shortcut;
-bind it in the configurator or under `[keybindings]`. The interactive action
+board. It owns <kbd>Ctrl+Shift+C</kbd> by default, and is also in the command
+palette. That chord previously ran `capture_clipboard_selection`, which now
+ships unbound: Review's **Copy** (<kbd>Ctrl+C</kbd>) reaches the same clipboard
+result, so bind `capture_clipboard_selection` explicitly if you want the
+one-step copy back. The interactive action
 always uses the native picker even when `picker = "slurp"`; if native capture
 is unavailable it reports that limitation instead of silently skipping Review.
 The **Both** button (and `Enter`) always copies the PNG and saves it to a file,
@@ -2043,13 +2046,14 @@ capture_selection = ["Ctrl+Shift+I"]
 # Clipboard/File specific captures
 capture_clipboard_full = ["Ctrl+C"]
 capture_file_full = ["Ctrl+S"]
-capture_clipboard_selection = ["Ctrl+Shift+C"]
+# Unbound by default: Ctrl+Shift+C opens the interactive picker below, whose
+# Copy action reaches the same clipboard result.
+capture_clipboard_selection = []
 capture_file_selection = ["Ctrl+Shift+S"]
 capture_clipboard_region = ["Ctrl+6"]
 capture_file_region = ["Ctrl+Alt+6"]
-# Open the region review/action bar. Available from the command palette and
-# unbound by default.
-capture_region_interactive = []
+# Open the region review/action bar. Also available from the command palette.
+capture_region_interactive = ["Ctrl+Shift+C"]
 measure_mode = []
 export_canvas_file = []
 export_canvas_clipboard = []
@@ -2169,9 +2173,10 @@ clear_canvas = ["X"]
 
 **Defaults:**
 Defaults match the original hardcoded keybindings where possible. Copy/paste selection uses
-<kbd>Ctrl+Alt+C</kbd>/<kbd>Ctrl+Alt+V</kbd>, so the clipboard-selection capture shortcut
-defaults to <kbd>Ctrl+Shift+C</kbd> to avoid conflicts. The paste action also accepts PNG/JPEG
-image data and local image files copied from a file manager.
+<kbd>Ctrl+Alt+C</kbd>/<kbd>Ctrl+Alt+V</kbd>, so the region capture shortcut uses
+<kbd>Ctrl+Shift+C</kbd> to avoid conflicts. That chord now runs
+`capture_region_interactive`; `capture_clipboard_selection` ships unbound. The paste action
+also accepts PNG/JPEG image data and local image files copied from a file manager.
 
 ## Creating Your Configuration
 
