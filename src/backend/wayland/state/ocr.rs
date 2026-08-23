@@ -7,6 +7,7 @@
 
 use crate::backend::wayland::acquisition::{ScreenAcquisitionOutcome, ScreenAcquisitionOwner};
 use crate::backend::wayland::zoom::ZoomWaiterOwner;
+use crate::input::state::OcrScanOutcome;
 use crate::input::state::{
     RegionInputSource, RegionPurposeTag, ScreenCaptureSource, Toast, ToastPriority,
 };
@@ -346,11 +347,36 @@ impl WaylandState {
 
         // The crop is taken while the capture is still held: releasing first
         // would leave the worker reading pixels that no longer exist.
-        match self.crop_ocr_selection(rect) {
-            Ok(pixels) => {
-                self.cancel_ocr();
-                self.submit_ocr_request(pixels);
-            }
+        self.submit_ocr_for_rect(rect);
+        true
+    }
+
+    /// Recognize an already-chosen rectangle — the whole image, from `Ctrl+A`.
+    pub(in crate::backend::wayland) fn submit_whole_image_ocr(
+        &mut self,
+        rect: crate::screen_pixels::ImagePixelRect,
+    ) {
+        self.submit_ocr_for_rect(rect);
+    }
+
+    /// The one path from a chosen rectangle to a running recognition: map the
+    /// area the sweep will cover, crop while the source is still held, release
+    /// it, submit, and start the overlay. Both entry points share it so a fix
+    /// to one cannot leave the other behind.
+    fn submit_ocr_for_rect(&mut self, rect: crate::screen_pixels::ImagePixelRect) {
+        // Mapped before the region is released: the token is what turns the
+        // authoritative image rectangle into the surface pixels the sweep is
+        // painted over.
+        let scan_region = match self.data.active_screen_region {
+            Some(ActiveScreenRegion::Ready { source, .. }) => Some(
+                crate::backend::wayland::state::screen_image::screen_rect_for_image_rect(
+                    &source, rect,
+                ),
+            ),
+            _ => None,
+        };
+        let pixels = match self.crop_ocr_selection(rect) {
+            Ok(pixels) => pixels,
             Err(message) => {
                 self.cancel_ocr();
                 self.input_state.push_toast(
@@ -358,9 +384,20 @@ impl WaylandState {
                     TOAST_SOURCE,
                     Toast::warning(message),
                 );
+                return;
             }
+        };
+        self.cancel_ocr();
+        // The overlay starts only for a request that was actually accepted. A
+        // refused submission produces no completion, and an overlay waiting on
+        // one would sweep until something dismissed it.
+        let Some(id) = self.submit_ocr_request(pixels) else {
+            return;
+        };
+        if let Some(region) = scan_region {
+            self.input_state
+                .begin_ocr_scan(id, region, std::time::Instant::now());
         }
-        true
     }
 
     fn crop_ocr_selection(
@@ -376,7 +413,12 @@ impl WaylandState {
         })
     }
 
-    fn submit_ocr_request(&mut self, pixels: crate::screen_pixels::PackedArgb32) {
+    /// Hand the crop to the worker, reporting the accepted request. `None`
+    /// means nothing is running and no completion will arrive.
+    fn submit_ocr_request(
+        &mut self,
+        pixels: crate::screen_pixels::PackedArgb32,
+    ) -> Option<crate::ocr::OcrRequestId> {
         let languages = OcrLanguages::from_validated(self.config.capture.resolved_ocr_languages());
         log::debug!(
             "OCR submitting {}x{} crop for languages {}",
@@ -390,6 +432,7 @@ impl WaylandState {
                 // the selection it publishes.
                 self.suppress_focus_exit_for(std::time::Duration::from_millis(1500));
                 log::debug!("OCR request {id} started");
+                Some(id)
             }
             Err(OcrSubmitError::Busy { .. }) => {
                 self.input_state.push_toast(
@@ -397,6 +440,7 @@ impl WaylandState {
                     TOAST_SOURCE,
                     Toast::info("OCR is already running"),
                 );
+                None
             }
             Err(error) => {
                 log::warn!("Failed to start screen text recognition: {error}");
@@ -405,6 +449,7 @@ impl WaylandState {
                     TOAST_SOURCE,
                     Toast::warning("Could not start screen text recognition."),
                 );
+                None
             }
         }
     }
@@ -423,6 +468,14 @@ impl WaylandState {
                     }),
             } => {
                 log::debug!("OCR request {id} copied {character_count} characters");
+                self.input_state.settle_ocr_scan(
+                    id,
+                    OcrScanOutcome::Copied {
+                        character_count,
+                        replaced_invalid_utf8,
+                    },
+                    std::time::Instant::now(),
+                );
                 let message = if replaced_invalid_utf8 {
                     "Text copied (some characters were unreadable)"
                 } else {
@@ -435,9 +488,14 @@ impl WaylandState {
                 );
             }
             OcrPoll::Ready {
+                id,
                 outcome: Ok(OcrSuccess::NoTextFound),
-                ..
             } => {
+                self.input_state.settle_ocr_scan(
+                    id,
+                    OcrScanOutcome::NoTextFound,
+                    std::time::Instant::now(),
+                );
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     TOAST_SOURCE,
@@ -449,6 +507,11 @@ impl WaylandState {
                 outcome: Err(failure),
             } => {
                 log::warn!("OCR request {id} failed: {failure:?}");
+                self.input_state.settle_ocr_scan(
+                    id,
+                    OcrScanOutcome::Failed,
+                    std::time::Instant::now(),
+                );
                 let toast = match failure {
                     OcrFailure::EngineMissing | OcrFailure::LanguageMissing { .. } => {
                         Toast::warning(failure.message())
@@ -460,6 +523,11 @@ impl WaylandState {
             }
             OcrPoll::WorkerLost { id, reason } => {
                 log::error!("OCR request {id} lost its worker: {reason}");
+                self.input_state.settle_ocr_scan(
+                    id,
+                    OcrScanOutcome::Failed,
+                    std::time::Instant::now(),
+                );
                 self.input_state.push_toast(
                     ToastPriority::Critical,
                     TOAST_SOURCE,

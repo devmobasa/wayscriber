@@ -104,6 +104,7 @@ impl WaylandState {
             blocked_feedback_active,
             text_edit_entry_active,
             input_hud_animating,
+            ocr_scan_animating,
         ) = record_stage!(advance_animations, {
             (
                 self.input_state.advance_click_highlights(now),
@@ -112,6 +113,7 @@ impl WaylandState {
                 self.input_state.advance_blocked_feedback(now),
                 self.input_state.advance_text_edit_entry_feedback(now),
                 self.input_state.advance_input_hud(now),
+                self.input_state.advance_ocr_scan(now),
             )
         });
         let ui_animation_active = highlight_active
@@ -119,7 +121,8 @@ impl WaylandState {
             || ui_toast_active
             || blocked_feedback_active
             || text_edit_entry_active
-            || input_hud_animating;
+            || input_hud_animating
+            || ocr_scan_animating;
         self.update_ui_animation_tick(now, ui_animation_active);
         let keep_rendering = ui_animation_active && self.ui_animation_interval.is_none();
 

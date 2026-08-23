@@ -434,7 +434,7 @@ fn ocr_owner_loss_requests_its_existing_terminal_cancel_path() {
 }
 
 #[test]
-fn whole_image_is_available_only_to_capture_purposes() {
+fn whole_image_is_available_to_every_purpose_that_can_submit_one() {
     let capture = capture_region();
     let RegionSelectionFinalize::Selected { purpose, rect } = capture
         .whole_image_selection()
@@ -444,7 +444,26 @@ fn whole_image_is_available_only_to_capture_purposes() {
     };
     assert_eq!(purpose, RegionPurposeTag::CaptureDeliver);
     assert_eq!((rect.x(), rect.y(), rect.size()), (0, 0, (100, 80)));
-    assert_eq!(ocr_region(1.0).whole_image_selection(), None);
+
+    // Recognition wants the whole image as much as capture does: reading a
+    // full screen of text should not need a drag across the whole output.
+    let RegionSelectionFinalize::Selected { purpose, rect } = ocr_region(1.0)
+        .whole_image_selection()
+        .expect("ocr whole image")
+    else {
+        panic!("whole image must be a selected result")
+    };
+    assert_eq!(purpose, RegionPurposeTag::Ocr);
+    assert_eq!((rect.x(), rect.y(), rect.size()), (0, 0, (100, 80)));
+
+    // Measure has nothing to submit.
+    let measure = ActiveScreenRegion::Measure {
+        generation: 1,
+        bounds: (100, 80),
+        anchor: None,
+        edge: None,
+    };
+    assert_eq!(measure.whole_image_selection(), None);
 }
 
 #[test]

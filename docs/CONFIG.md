@@ -1566,6 +1566,18 @@ does not change the active tool, the drawing history, or the board.
   does nothing.
 - On a solid whiteboard or blackboard with no visible screen capture, OCR
   refuses rather than reading the board.
+- <kbd>Ctrl+A</kbd> reads the whole displayed image, so a full screen of text
+  does not need a drag across the whole output.
+- While recognition runs, a band sweeps the region being read. When it finishes,
+  a short card beside the region says what happened — copied and how many
+  characters, no text found, or that recognition failed — and fades after a few
+  seconds. Any click, touch, stylus press or key dismisses the card early; a
+  sweep still waiting on the recognizer is left alone, so a stray keystroke
+  cannot discard a result that is about to arrive. The card never shows the
+  recognized text: Wayscriber keeps screen contents out of its own UI, and the
+  text goes only to the clipboard. With `[ui] reduced_motion` set, the region is
+  marked with a static tint instead of a moving band and the card appears as
+  soon as the result does.
 - An active OCR selection cancels if the displayed screen image changes, the
   zoom level or pan changes, or freeze, output, scale, or display layout state
   is replaced.

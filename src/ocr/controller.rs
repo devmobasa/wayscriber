@@ -20,6 +20,15 @@ use super::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct OcrRequestId(u64);
 
+impl OcrRequestId {
+    /// A request identity for tests that drive consumers of a completion
+    /// without running the controller that would mint one.
+    #[cfg(test)]
+    pub(crate) const fn for_test(value: u64) -> Self {
+        Self(value)
+    }
+}
+
 impl fmt::Display for OcrRequestId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(formatter)

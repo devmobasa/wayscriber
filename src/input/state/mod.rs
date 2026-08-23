@@ -19,6 +19,7 @@ pub(crate) use core::board_picker::{
 #[cfg(test)]
 pub(crate) use core::build_text_input_preview;
 pub use core::color_picker_popup::{HEX_INPUT_MAX_CHARS, color_to_hex, parse_hex_color};
+pub(crate) use core::utility::ocr_scan::{OcrScanOutcome, result_opacity};
 #[allow(unused_imports)]
 pub use core::{
     BLOCKED_ACTION_DURATION_MS, BoardPickerCursorHint, BoardPickerLayout,

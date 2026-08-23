@@ -160,6 +160,9 @@ impl KeyboardHandler for WaylandState {
         // Any fresh key press ends the previous auto-repeat; a repeatable one
         // re-arms it at the end of this handler.
         self.clear_key_repeat();
+        // A finished scan card is transient chrome: the next interaction of any
+        // kind takes it away rather than making the user wait it out.
+        self.input_state.dismiss_ocr_scan_result();
         if self.input_state.region_is_engaged() {
             if matches!(key, Key::Space) && self.toggle_region_window_snap() {
                 self.update_pointer_cursor(false, conn);
@@ -228,7 +231,7 @@ impl KeyboardHandler for WaylandState {
                 }
                 return;
             }
-            if region_capture_select_all_pressed(
+            if region_select_all_pressed(
                 self.input_state.region_is_active(),
                 self.input_state.region_state().purpose(),
                 self.input_state.modifiers.ctrl,
@@ -567,14 +570,20 @@ fn screen_modal_swallows_key_release(
     region_selector_engaged || eyedropper_engaged
 }
 
-fn region_capture_select_all_pressed(
+/// `Ctrl+A` takes the whole displayed image. Recognition wants it as much as
+/// capture does — reading a full screen of text should not need a drag across
+/// the whole output — so Measure is the only purpose left out, having nothing
+/// to submit.
+fn region_select_all_pressed(
     region_active: bool,
     purpose: Option<crate::input::state::RegionPurposeTag>,
     ctrl: bool,
     key: Key,
 ) -> bool {
+    use crate::input::state::RegionPurposeTag;
+
     region_active
-        && purpose.is_some_and(crate::input::state::RegionPurposeTag::is_capture)
+        && purpose.is_some_and(|purpose| purpose.is_capture() || purpose == RegionPurposeTag::Ocr)
         && ctrl
         && matches!(key, Key::Char('a' | 'A'))
 }
@@ -666,39 +675,48 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_a_selects_all_only_for_an_active_capture_picker() {
+    fn ctrl_a_selects_all_for_capture_and_recognition_but_not_measure() {
         use crate::input::state::RegionPurposeTag;
 
-        assert!(region_capture_select_all_pressed(
-            true,
-            Some(RegionPurposeTag::CaptureDeliver),
-            true,
-            Key::Char('a'),
-        ));
-        assert!(region_capture_select_all_pressed(
-            true,
-            Some(RegionPurposeTag::CaptureInteractive),
-            true,
-            Key::Char('A'),
-        ));
-        assert!(!region_capture_select_all_pressed(
-            false,
-            Some(RegionPurposeTag::CaptureDeliver),
-            true,
-            Key::Char('a'),
-        ));
-        assert!(!region_capture_select_all_pressed(
-            true,
-            Some(RegionPurposeTag::Ocr),
-            true,
-            Key::Char('a'),
-        ));
-        assert!(!region_capture_select_all_pressed(
-            true,
-            Some(RegionPurposeTag::CaptureDeliver),
-            false,
-            Key::Char('a'),
-        ));
+        for purpose in [
+            RegionPurposeTag::CaptureDeliver,
+            RegionPurposeTag::CaptureInteractive,
+            RegionPurposeTag::Ocr,
+        ] {
+            assert!(
+                region_select_all_pressed(true, Some(purpose), true, Key::Char('a')),
+                "{purpose:?} can submit the whole image"
+            );
+            assert!(region_select_all_pressed(
+                true,
+                Some(purpose),
+                true,
+                Key::Char('A')
+            ));
+        }
+
+        assert!(
+            !region_select_all_pressed(true, Some(RegionPurposeTag::Measure), true, Key::Char('a')),
+            "measure has nothing to submit"
+        );
+        assert!(
+            !region_select_all_pressed(
+                false,
+                Some(RegionPurposeTag::CaptureDeliver),
+                true,
+                Key::Char('a')
+            ),
+            "no selector open"
+        );
+        assert!(
+            !region_select_all_pressed(
+                true,
+                Some(RegionPurposeTag::CaptureDeliver),
+                false,
+                Key::Char('a')
+            ),
+            "plain A is a colour, not select-all"
+        );
     }
 
     #[test]

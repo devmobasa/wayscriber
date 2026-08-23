@@ -34,6 +34,10 @@ impl WaylandState {
                 .note_input_hud_mouse(&input_hud_button_label(button), self.input_state.modifiers);
         }
 
+        // A finished scan card is transient chrome: the next interaction of any
+        // kind takes it away rather than making the user wait it out.
+        self.input_state.dismiss_ocr_scan_result();
+
         let help_press_source = HelpOverlayPressSource::Pointer(button);
         if !self.input_state.show_help {
             // A new press proves any older help-owned sequence for this button

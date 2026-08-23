@@ -14,7 +14,7 @@ use crate::screen_pixels::PackedArgb32;
 mod controller;
 mod tesseract;
 
-pub(crate) use controller::{OcrController, OcrPoll, OcrSubmitError};
+pub(crate) use controller::{OcrController, OcrPoll, OcrRequestId, OcrSubmitError};
 pub(crate) use tesseract::{TesseractRecognizer, WlCopyPublisher};
 
 /// Turns encoded image bytes into text. The production implementation shells
