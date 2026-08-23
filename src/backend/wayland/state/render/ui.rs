@@ -424,6 +424,7 @@ impl WaylandState {
                 pointer,
                 measurement: measurement.as_deref(),
                 show_scrim: !measure_mode,
+                review: region_state.is_review(),
                 show_legend: options.is_some_and(|options| options.show_legend())
                     && !self.region_picker_legend_dismissed(),
                 loupe,

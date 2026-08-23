@@ -75,6 +75,26 @@ impl WaylandState {
             .hit(point)
     }
 
+    /// Whether the pointer sits over the reviewed rectangle — the area a press
+    /// would start moving. Cursor feedback only; `begin_review_move` remains
+    /// the authoritative test in image space.
+    pub(in crate::backend::wayland) fn region_review_selection_contains(
+        &self,
+        point: (f64, f64),
+    ) -> bool {
+        if !self.input_state.region_state().is_review() {
+            return false;
+        }
+        self.region_selection_geometry().is_some_and(|geometry| {
+            let selection = geometry.display_selection();
+            let left = selection.start.0.min(selection.end.0);
+            let right = selection.start.0.max(selection.end.0);
+            let top = selection.start.1.min(selection.end.1);
+            let bottom = selection.start.1.max(selection.end.1);
+            point.0 >= left && point.0 < right && point.1 >= top && point.1 < bottom
+        })
+    }
+
     pub(in crate::backend::wayland) fn region_review_bar_contains(
         &self,
         point: (f64, f64),

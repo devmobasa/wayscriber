@@ -1475,7 +1475,15 @@ bind it in the configurator or under `[keybindings]`. The interactive action
 always uses the native picker even when `picker = "slurp"`; if native capture
 is unavailable it reports that limitation instead of silently skipping Review.
 The **Both** button (and `Enter`) always copies the PNG and saves it to a file,
-independently of `[capture].copy_to_clipboard`.
+independently of `[capture].copy_to_clipboard`; it is the accented default in
+the Review bar for that reason.
+
+Review drops the targeting chrome once the rectangle is committed. The
+crosshair disappears, the size badge parks on the selection's corner instead of
+trailing the pointer — moving inside the rectangle when the action bar or a
+screen edge needs that space — and the cursor stops being a crosshair: a hand
+over an action-bar button, a grab hand over the rectangle you can still drag,
+and an arrow everywhere else.
 
 `[capture].include_drawings` defaults to `true`, so full-screen and region
 screenshots include the active board's committed shapes. Provisional strokes,
@@ -1506,7 +1514,8 @@ unbound by default.
   option for selecting a region on a monitor other than Wayscriber's active
   output.
 - `show_size_readout` shows pointer coordinates before the drag and the
-  selected width and height in exported image pixels during it.
+  selected width and height in exported image pixels during it. In Review the
+  same readout is anchored to the selection instead of the pointer.
 - `show_legend` shows the short hotkey guide until the first drag.
 - `show_loupe` shows a magnified pixel grid beside the pointer while dragging
   or reviewing a selection.
