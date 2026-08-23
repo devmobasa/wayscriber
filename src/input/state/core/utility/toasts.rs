@@ -38,6 +38,21 @@ impl InputState {
         self.ui_toast.is_none() && self.toast_queue.is_empty()
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_toast_count(&self) -> usize {
+        usize::from(self.ui_toast.is_some()) + self.toast_queue.pending_len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_active_toast_message(&self) -> Option<&str> {
+        self.ui_toast.as_ref().map(|toast| toast.message.as_str())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_active_toast_key(&self) -> Option<&'static str> {
+        self.ui_toast.as_ref().map(|toast| toast.key)
+    }
+
     #[allow(dead_code)]
     pub(crate) fn set_capture_feedback(
         &mut self,

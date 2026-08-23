@@ -1,8 +1,9 @@
 use super::{
-    CLIPBOARD_READ_TIMEOUT, ClipboardPasteResult, ClipboardReadError, MAX_CLIPBOARD_IMAGE_BYTES,
+    CLIPBOARD_READ_TIMEOUT, ClipboardPasteResult, ClipboardReadError,
     image::decode_clipboard_image, system::read_pipe_with_timeout,
 };
 use crate::file_uri;
+use crate::screen_pixels::EmbeddedImageLimits;
 #[cfg(unix)]
 use std::fs::OpenOptions;
 use std::fs::{self, File};
@@ -97,7 +98,11 @@ fn parse_clipboard_file_uris(mime_type: &str, bytes: &[u8]) -> Result<Vec<String
 fn read_clipboard_file(path: &Path) -> Result<Vec<u8>, ClipboardReadError> {
     ensure_regular_clipboard_path(path)?;
     let file = open_regular_clipboard_file(path)?;
-    read_pipe_with_timeout(file, MAX_CLIPBOARD_IMAGE_BYTES, CLIPBOARD_READ_TIMEOUT)
+    read_pipe_with_timeout(
+        file,
+        EmbeddedImageLimits::default().max_bytes(),
+        CLIPBOARD_READ_TIMEOUT,
+    )
 }
 
 fn map_clipboard_file_read_error(path: &Path, err: ClipboardReadError) -> ClipboardPasteResult {
@@ -142,9 +147,13 @@ fn validate_clipboard_file_metadata(
             path.display()
         )));
     }
-    if metadata.len() > MAX_CLIPBOARD_IMAGE_BYTES as u64 {
+    let limits = EmbeddedImageLimits::default();
+    if usize::try_from(metadata.len())
+        .ok()
+        .is_none_or(|byte_len| !limits.allows_bytes(byte_len))
+    {
         return Err(ClipboardReadError::TooLarge {
-            limit: MAX_CLIPBOARD_IMAGE_BYTES,
+            limit: limits.max_bytes(),
         });
     }
     Ok(())

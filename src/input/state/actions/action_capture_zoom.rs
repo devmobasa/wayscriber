@@ -1,10 +1,14 @@
 use crate::domain::Action;
+use crate::input::state::{Toast, ToastPriority};
 use crate::input::{OutputFocusAction, ZoomAction};
 
 use super::super::{InputState, PendingBackendAction};
 
 impl InputState {
     pub(in crate::input::state) fn handle_capture_zoom_action(&mut self, action: Action) -> bool {
+        if self.refuse_region_capture_while_screen_modal_engaged(action) {
+            return true;
+        }
         match action {
             Action::CaptureFullScreen
             | Action::CaptureActiveWindow
@@ -99,6 +103,72 @@ impl InputState {
                 true
             }
             _ => false,
+        }
+    }
+
+    pub(crate) fn refuse_region_capture_while_screen_modal_engaged(
+        &mut self,
+        action: Action,
+    ) -> bool {
+        if !self.screen_modal_is_engaged()
+            || !matches!(
+                action,
+                Action::CaptureSelection
+                    | Action::CaptureClipboardSelection
+                    | Action::CaptureFileSelection
+                    | Action::CaptureClipboardRegion
+                    | Action::CaptureFileRegion
+            )
+        {
+            return false;
+        }
+        self.push_toast(
+            ToastPriority::Info,
+            "capture.region.refused",
+            Toast::info("Finish or cancel the current screen selection first."),
+        );
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::state::test_support::make_test_input_state;
+    use crate::input::state::{EyedropperCaptureSource, RegionPurposeTag, ScreenCaptureSource};
+
+    #[test]
+    fn region_actions_refuse_without_replacing_an_engaged_screen_modal() {
+        for action in [
+            Action::CaptureSelection,
+            Action::CaptureClipboardSelection,
+            Action::CaptureFileSelection,
+            Action::CaptureClipboardRegion,
+            Action::CaptureFileRegion,
+        ] {
+            for modal in ["ocr", "eyedropper"] {
+                let mut state = make_test_input_state();
+                if modal == "ocr" {
+                    state.set_region_pending_capture(
+                        RegionPurposeTag::Ocr,
+                        1,
+                        ScreenCaptureSource::Frozen,
+                    );
+                } else {
+                    state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
+                    state.activate_eyedropper(None);
+                }
+
+                assert!(state.handle_capture_zoom_action(action));
+
+                assert!(state.take_pending_backend_action().is_none());
+                assert!(state.screen_modal_is_engaged());
+                assert_eq!(state.test_toast_count(), 1);
+                assert_eq!(
+                    state.test_active_toast_message(),
+                    Some("Finish or cancel the current screen selection first.")
+                );
+            }
         }
     }
 }

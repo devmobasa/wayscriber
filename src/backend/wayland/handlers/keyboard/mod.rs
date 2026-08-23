@@ -159,20 +159,30 @@ impl KeyboardHandler for WaylandState {
         // Any fresh key press ends the previous auto-repeat; a repeatable one
         // re-arms it at the end of this handler.
         self.clear_key_repeat();
-        if self.input_state.ocr_is_engaged() {
+        if self.input_state.region_is_engaged() {
+            let action = self.input_state.action_for_key(key);
+            if action.is_some_and(|action| {
+                self.input_state
+                    .refuse_region_capture_while_screen_modal_engaged(action)
+            }) {
+                return;
+            }
             // Every other shortcut is swallowed while the selector is up so a
             // key cannot change the active tool mid-drag.
-            if matches!(key, Key::Escape)
-                || self.input_state.action_for_key(key) == Some(Action::CopyTextFromScreen)
-            {
+            if matches!(key, Key::Escape) || action == Some(Action::CopyTextFromScreen) {
                 self.cancel_ocr();
             }
             return;
         }
         if self.input_state.eyedropper_is_engaged() {
-            if matches!(key, Key::Escape)
-                || self.input_state.action_for_key(key) == Some(Action::PickScreenColor)
-            {
+            let action = self.input_state.action_for_key(key);
+            if action.is_some_and(|action| {
+                self.input_state
+                    .refuse_region_capture_while_screen_modal_engaged(action)
+            }) {
+                return;
+            }
+            if matches!(key, Key::Escape) || action == Some(Action::PickScreenColor) {
                 self.cancel_eyedropper();
             }
             return;
@@ -265,7 +275,10 @@ impl KeyboardHandler for WaylandState {
         if self.key_repeat_key == Some(key) {
             self.clear_key_repeat();
         }
-        if self.input_state.eyedropper_is_engaged() {
+        if screen_modal_swallows_key_release(
+            self.input_state.region_is_engaged(),
+            self.input_state.eyedropper_is_engaged(),
+        ) {
             return;
         }
         if matches!(key, Key::Space) && self.board_pan_key_held() {
@@ -412,7 +425,7 @@ impl WaylandState {
         // exactly like a fresh press reports the first one.
         self.input_state
             .note_input_hud_key(key, self.input_state.modifiers);
-        if self.input_state.eyedropper_is_engaged() {
+        if self.input_state.region_is_engaged() || self.input_state.eyedropper_is_engaged() {
             return;
         }
         if matches!(key, Key::Space) && self.board_pan_key_held() {
@@ -470,6 +483,13 @@ fn should_try_toolbar_key(key: Key, modal_capture_active: bool) -> bool {
     matches!(key, Key::Tab | Key::Return | Key::Space | Key::Escape)
 }
 
+fn screen_modal_swallows_key_release(
+    region_selector_engaged: bool,
+    eyedropper_engaged: bool,
+) -> bool {
+    region_selector_engaged || eyedropper_engaged
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -479,6 +499,33 @@ mod tests {
         assert!(!should_try_toolbar_key(Key::Tab, true));
         assert!(!should_try_toolbar_key(Key::Return, true));
         assert!(!should_try_toolbar_key(Key::Space, true));
+    }
+
+    #[test]
+    fn engaged_region_modal_swallows_shift_release_until_modifier_sync() {
+        assert!(screen_modal_swallows_key_release(true, false));
+        assert!(screen_modal_swallows_key_release(false, true));
+        assert!(!screen_modal_swallows_key_release(false, false));
+
+        let mut input = crate::input::state::test_support::make_test_input_state();
+        input.sync_modifiers(true, false, false, false);
+        input.set_region_pending_capture(
+            crate::input::state::RegionPurposeTag::Ocr,
+            1,
+            crate::input::state::ScreenCaptureSource::Frozen,
+        );
+        if !screen_modal_swallows_key_release(input.region_is_engaged(), false) {
+            input.on_key_release(Key::Shift);
+        }
+        assert!(
+            input.modifiers.shift,
+            "key release must not outrun modifier sync"
+        );
+        input.sync_modifiers(false, false, false, false);
+        assert!(
+            !input.modifiers.shift,
+            "compositor modifier sync is authoritative"
+        );
     }
 
     #[test]

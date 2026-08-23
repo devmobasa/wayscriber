@@ -5,18 +5,22 @@
 //! OCR releases, and a user-owned freeze or zoom survives untouched. Nothing
 //! here mutates annotations, history, boards, sessions, or the active tool.
 
-use crate::input::state::{OcrCaptureSource, OcrInputSource, Toast, ToastPriority};
+use crate::backend::wayland::acquisition::{ScreenAcquisitionOutcome, ScreenAcquisitionOwner};
+use crate::backend::wayland::zoom::ZoomWaiterOwner;
+use crate::input::state::{
+    RegionInputSource, RegionPurposeTag, ScreenCaptureSource, Toast, ToastPriority,
+};
 use crate::ocr::{OcrFailure, OcrLanguages, OcrPoll, OcrRequest, OcrSubmitError, OcrSuccess};
 
 use super::WaylandState;
+use super::acquisition::report_screen_source_activation_rejected_to;
+use super::region_capture::{
+    ActiveScreenRegion, FreezeOwnership, RegionSelectionFinalize, finalize_region_selection_event,
+};
 use super::screen_image::{
     CropError, DisplayedScreenImage, ScreenSourceEntry, copy_image_rect, displayed_screen_image,
-    image_rect_for_screen_rect, screen_source_entry,
+    screen_source_entry,
 };
-
-/// Drags below this many logical pixels on either axis are treated as a stray
-/// click and never reach the engine.
-const MIN_REGION_LOGICAL_PIXELS: f64 = 4.0;
 
 const TOAST_SOURCE: &str = "ocr";
 
@@ -28,7 +32,7 @@ impl WaylandState {
         if !self.input_state.take_pending_ocr_request() {
             return;
         }
-        if self.input_state.ocr_state().is_engaged() {
+        if self.input_state.region_is_engaged() {
             // A second invocation while the selector is up cancels it, matching
             // the eyedropper's toggle behavior.
             self.cancel_ocr();
@@ -71,6 +75,7 @@ impl WaylandState {
         // wait would commit the cancelled stroke's peak pressure to the tool.
         self.retire_stylus_contact();
 
+        let generation = self.next_screen_region_generation();
         match screen_source_entry(
             self.ocr_screen_source().is_some(),
             self.input_state.board_is_transparent(),
@@ -78,15 +83,40 @@ impl WaylandState {
             self.zoom.active,
             self.frozen_enabled(),
         ) {
-            ScreenSourceEntry::Activate => self.activate_ocr_selector(false),
+            ScreenSourceEntry::Activate => {
+                if !self.activate_ocr_selector(generation, FreezeOwnership::PreExisting) {
+                    self.clear_screen_region_ui_only();
+                    report_screen_source_activation_rejected_to(
+                        &mut self.input_state,
+                        ScreenAcquisitionOwner::Ocr,
+                    );
+                }
+            }
             ScreenSourceEntry::WaitForZoom => {
-                self.input_state
-                    .set_ocr_pending_capture(OcrCaptureSource::Zoom);
+                if self.wait_for_current_zoom_capture(ZoomWaiterOwner::Ocr) {
+                    self.set_pending_screen_region(
+                        RegionPurposeTag::Ocr,
+                        generation,
+                        ScreenCaptureSource::Zoom,
+                        None,
+                    );
+                } else {
+                    self.report_ocr_zoom_image_unavailable();
+                }
             }
             ScreenSourceEntry::AutoFreeze => {
-                self.input_state
-                    .set_ocr_pending_capture(OcrCaptureSource::Frozen);
-                self.input_state.request_frozen_toggle();
+                match self.request_screen_acquisition(ScreenAcquisitionOwner::Ocr) {
+                    Ok(acquisition) => self.set_pending_screen_region(
+                        RegionPurposeTag::Ocr,
+                        generation,
+                        ScreenCaptureSource::Frozen,
+                        Some(acquisition),
+                    ),
+                    Err(_) => self.report_terminal(
+                        ScreenAcquisitionOwner::Ocr,
+                        &ScreenAcquisitionOutcome::Unavailable,
+                    ),
+                }
             }
             ScreenSourceEntry::RefuseWhileZoomedOnSolidBoard
             | ScreenSourceEntry::RefuseSolidBoard => {
@@ -109,15 +139,19 @@ impl WaylandState {
                 );
             }
             ScreenSourceEntry::ZoomImageUnavailable => {
-                self.input_state.push_toast(
-                    ToastPriority::Info,
-                    TOAST_SOURCE,
-                    Toast::warning(
-                        "Screen text recognition is unavailable because zoom has no captured screen image.",
-                    ),
-                );
+                self.report_ocr_zoom_image_unavailable();
             }
         }
+    }
+
+    fn report_ocr_zoom_image_unavailable(&mut self) {
+        self.input_state.push_toast(
+            ToastPriority::Info,
+            TOAST_SOURCE,
+            Toast::warning(
+                "Screen text recognition is unavailable because zoom has no captured screen image.",
+            ),
+        );
     }
 
     fn ocr_screen_source(&self) -> Option<DisplayedScreenImage<'_>> {
@@ -130,17 +164,37 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn finish_pending_ocr_capture(
         &mut self,
-        capture_source: OcrCaptureSource,
-    ) {
-        if self.input_state.ocr_state().pending_source() != Some(capture_source) {
-            return;
+        capture_source: ScreenCaptureSource,
+        installed_generation: u64,
+    ) -> bool {
+        let Some(region) = self.data.active_screen_region else {
+            return false;
+        };
+        let generation = region.generation();
+        let waiting = matches!(
+            (region, capture_source),
+            (
+                ActiveScreenRegion::PendingZoom { .. },
+                ScreenCaptureSource::Zoom
+            ) | (
+                ActiveScreenRegion::PendingFrozen { .. },
+                ScreenCaptureSource::Frozen
+            )
+        );
+        if !waiting {
+            return false;
         }
-        if self.ocr_screen_source().is_some() {
-            self.activate_ocr_selector(matches!(capture_source, OcrCaptureSource::Frozen));
+        if self.ocr_screen_source().is_none() {
+            return false;
+        }
+        let ownership = if capture_source == ScreenCaptureSource::Frozen {
+            FreezeOwnership::PickerOwned {
+                image_generation: installed_generation,
+            }
         } else {
-            self.cancel_ocr();
-            self.input_state.report_ocr_capture_failure_if_unreported();
-        }
+            FreezeOwnership::PreExisting
+        };
+        self.activate_ocr_selector(generation, ownership)
     }
 
     /// Arm the region selector.
@@ -151,34 +205,26 @@ impl WaylandState {
     /// separated: a capture that lands seconds after the request arms the
     /// selector against a gesture that started during the wait, not the one the
     /// request itself cancelled.
-    fn activate_ocr_selector(&mut self, auto_froze: bool) {
+    fn activate_ocr_selector(&mut self, generation: u64, ownership: FreezeOwnership) -> bool {
         self.retire_stylus_contact();
-        self.input_state.activate_ocr(auto_froze);
+        self.activate_screen_region(RegionPurposeTag::Ocr, generation, ownership)
     }
 
     /// Leave OCR selection, releasing only a freeze OCR created itself.
     pub(in crate::backend::wayland) fn cancel_ocr(&mut self) -> bool {
-        let state = self.input_state.ocr_state();
-        let was_engaged = state.is_engaged();
-        let pending_source = state.pending_source();
-        let auto_froze = self.input_state.cancel_ocr();
-        self.release_ocr_capture(auto_froze, pending_source);
-        was_engaged
-    }
-
-    /// Give back the temporary freeze OCR created. A user-owned freeze or an
-    /// active zoom is never touched here.
-    fn release_ocr_capture(&mut self, auto_froze: bool, pending_source: Option<OcrCaptureSource>) {
-        if !auto_froze {
-            return;
-        }
-        self.restore_xdg_after_frozen();
-        if pending_source == Some(OcrCaptureSource::Frozen) && self.frozen.is_in_progress() {
-            self.frozen.cancel(&mut self.input_state);
-            self.exit_overlay_suppression(super::OverlaySuppression::Frozen);
-        } else {
-            self.frozen.unfreeze(&mut self.input_state);
-        }
+        let Some(region) = self.data.active_screen_region else {
+            self.clear_zoom_waiter_for(ZoomWaiterOwner::Ocr);
+            self.input_state.cancel_region_ui_only();
+            return false;
+        };
+        let pending_acquisition = region.pending_acquisition();
+        let owned_generation = region.owned_frozen_generation();
+        self.cancel_modal_owner_resources(
+            ScreenAcquisitionOwner::Ocr,
+            pending_acquisition,
+            owned_generation,
+        );
+        true
     }
 
     /// Dismiss the selector because a toolbar interaction took over.
@@ -195,40 +241,15 @@ impl WaylandState {
         true
     }
 
-    /// A display or source change invalidates the pixels the user is selecting.
-    pub(in crate::backend::wayland) fn cancel_ocr_if_source_missing(&mut self) {
-        if self.input_state.ocr_is_active() && self.ocr_screen_source().is_none() {
-            self.cancel_ocr();
-        }
-    }
-
-    pub(in crate::backend::wayland) fn begin_ocr_selection(
-        &mut self,
-        owner: OcrInputSource,
-        x: f64,
-        y: f64,
-    ) -> bool {
-        self.input_state.start_ocr_selection(owner, (x, y))
-    }
-
-    pub(in crate::backend::wayland) fn update_ocr_selection(
-        &mut self,
-        source: OcrInputSource,
-        x: f64,
-        y: f64,
-    ) {
-        self.input_state.update_ocr_selection(source, (x, y));
-    }
-
     /// Discard a region because the device dragging it went away — the pen left
     /// proximity, the touch sequence was cancelled. Devices that are not
     /// dragging have nothing to withdraw, so this leaves the selector armed for
     /// whichever one is.
-    pub(in crate::backend::wayland) fn cancel_ocr_selection_from(
+    pub(in crate::backend::wayland) fn cancel_region_selection_from(
         &mut self,
-        source: OcrInputSource,
+        source: RegionInputSource,
     ) -> bool {
-        if !self.input_state.ocr_selection_is_owned_by(source) {
+        if !self.input_state.region_selection_is_owned_by(source) {
             return false;
         }
         self.cancel_ocr()
@@ -236,34 +257,37 @@ impl WaylandState {
 
     /// End the drag: own the selected pixels, release an OCR-created freeze,
     /// and submit. Returns whether `source` had a region drag to finish.
-    pub(in crate::backend::wayland) fn finish_ocr_selection(
+    pub(in crate::backend::wayland) fn finish_region_selection(
         &mut self,
-        source: OcrInputSource,
+        source: RegionInputSource,
         x: f64,
         y: f64,
     ) -> bool {
-        // A release from a device that is not dragging must not submit — or
-        // even see — the region another one is still drawing.
-        if !self.input_state.ocr_selection_is_owned_by(source) {
-            return false;
+        let was_engaged = self.input_state.region_is_engaged();
+        self.cancel_screen_modals_if_source_changed();
+        if was_engaged && !self.input_state.region_is_engaged() {
+            return true;
         }
-        self.input_state.update_ocr_selection(source, (x, y));
-        let Some(selection) = self.input_state.ocr_state().selection() else {
-            return false;
+        let rect = match finalize_region_selection_event(
+            &mut self.data.active_screen_region,
+            &mut self.input_state,
+            source,
+            (x, y),
+        ) {
+            RegionSelectionFinalize::NotOwned => return false,
+            RegionSelectionFinalize::Rearmed => return true,
+            RegionSelectionFinalize::Selected(rect) => rect,
         };
 
         // The crop is taken while the capture is still held: releasing first
         // would leave the worker reading pixels that no longer exist.
-        match self.crop_ocr_selection(selection.start, selection.end) {
-            Ok(None) => self.input_state.rearm_ocr_selection(),
-            Ok(Some(pixels)) => {
-                let auto_froze = self.input_state.cancel_ocr();
-                self.release_ocr_capture(auto_froze, None);
+        match self.crop_ocr_selection(rect) {
+            Ok(pixels) => {
+                self.cancel_ocr();
                 self.submit_ocr_request(pixels);
             }
             Err(message) => {
-                let auto_froze = self.input_state.cancel_ocr();
-                self.release_ocr_capture(auto_froze, None);
+                self.cancel_ocr();
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     TOAST_SOURCE,
@@ -274,44 +298,25 @@ impl WaylandState {
         true
     }
 
-    /// `Ok(None)` means the drag was too small to be a region — a stray click,
-    /// not a failure worth a toast.
     fn crop_ocr_selection(
         &self,
-        start: (f64, f64),
-        end: (f64, f64),
-    ) -> Result<Option<crate::ocr::OcrPixels>, &'static str> {
-        if (end.0 - start.0).abs() < MIN_REGION_LOGICAL_PIXELS
-            || (end.1 - start.1).abs() < MIN_REGION_LOGICAL_PIXELS
-        {
-            return Ok(None);
-        }
+        rect: crate::screen_pixels::ImagePixelRect,
+    ) -> Result<crate::screen_pixels::PackedArgb32, &'static str> {
         let Some(source) = self.ocr_screen_source() else {
             return Err("The screen image for text recognition is no longer available.");
         };
-        let Some(rect) = image_rect_for_screen_rect(
-            &source,
-            &self.zoom,
-            (self.surface.width(), self.surface.height()),
-            start,
-            end,
-        ) else {
-            return Ok(None);
-        };
-        copy_image_rect(source.image, rect)
-            .map(Some)
-            .map_err(|error| match error {
-                CropError::Empty => "That selection has no screen pixels.",
-                CropError::OutOfBounds => "Could not read that region of the screen image.",
-            })
+        copy_image_rect(source.image, rect).map_err(|error| match error {
+            CropError::Empty => "That selection has no screen pixels.",
+            CropError::OutOfBounds => "Could not read that region of the screen image.",
+        })
     }
 
-    fn submit_ocr_request(&mut self, pixels: crate::ocr::OcrPixels) {
+    fn submit_ocr_request(&mut self, pixels: crate::screen_pixels::PackedArgb32) {
         let languages = OcrLanguages::from_validated(self.config.capture.resolved_ocr_languages());
         log::debug!(
             "OCR submitting {}x{} crop for languages {}",
-            pixels.width,
-            pixels.height,
+            pixels.width(),
+            pixels.height(),
             languages.as_str()
         );
         match self.ocr.try_submit(OcrRequest { pixels, languages }) {
@@ -408,12 +413,14 @@ impl WaylandState {
         screen_width: u32,
         screen_height: u32,
     ) {
-        if !self.input_state.ocr_is_active() {
+        if !self.input_state.region_is_active()
+            || self.input_state.region_state().purpose() != Some(RegionPurposeTag::Ocr)
+        {
             return;
         }
         let width = f64::from(screen_width);
         let height = f64::from(screen_height);
-        let selection = self.input_state.ocr_state().selection();
+        let selection = self.input_state.region_state().selection();
 
         let _ = ctx.save();
         ctx.set_source_rgba(0.02, 0.03, 0.05, 0.35);

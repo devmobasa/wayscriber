@@ -28,6 +28,7 @@ impl WaylandState {
                 self.input_state.dirty_tracker.mark_full();
                 self.input_state.needs_redraw = true;
             }
+            self.cancel_screen_modals_if_source_changed();
             return;
         }
 
@@ -39,6 +40,7 @@ impl WaylandState {
             warn!("Zoom capture failed to start: {}", err);
             self.zoom.deactivate(&mut self.input_state);
             self.exit_overlay_suppression(OverlaySuppression::Zoom);
+            self.cancel_screen_modals_if_source_changed();
         }
     }
 
@@ -118,6 +120,7 @@ impl WaylandState {
         if self.zoom.is_engaged() {
             self.zoom.deactivate(&mut self.input_state);
             self.exit_overlay_suppression(OverlaySuppression::Zoom);
+            self.cancel_screen_modals_if_source_changed();
         }
     }
 
@@ -143,6 +146,7 @@ impl WaylandState {
             if cleared {
                 self.input_state.dirty_tracker.mark_full();
                 self.input_state.needs_redraw = true;
+                self.cancel_screen_modals_if_source_changed();
             }
         }
 
@@ -170,6 +174,7 @@ impl WaylandState {
             .zoom_at_screen_point(factor, screen_x, screen_y, screen_w, screen_h);
         if self.zoom.active && changed {
             self.sync_input_zoom_state();
+            self.cancel_screen_modals_if_source_changed();
         }
 
         if self.zoom.is_engaged()
@@ -179,6 +184,7 @@ impl WaylandState {
             warn!("Zoom capture failed to start: {}", err);
             self.zoom.deactivate(&mut self.input_state);
             self.exit_overlay_suppression(OverlaySuppression::Zoom);
+            self.cancel_screen_modals_if_source_changed();
         }
     }
 

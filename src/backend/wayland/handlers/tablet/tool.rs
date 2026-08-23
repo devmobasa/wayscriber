@@ -9,7 +9,7 @@ use crate::{
 };
 
 use crate::backend::wayland::state::WaylandState;
-use crate::input::state::OcrInputSource;
+use crate::input::state::RegionInputSource;
 
 const STYLUS_CURSOR_DAMAGE_RADIUS: i32 = 64;
 
@@ -193,7 +193,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 // and any OCR-owned freeze — alive until the user cancels by
                 // hand. A region the mouse or a finger is dragging is not ours
                 // to withdraw.
-                state.cancel_ocr_selection_from(OcrInputSource::Stylus);
+                state.cancel_region_selection_from(RegionInputSource::Stylus);
                 // The pen is gone, so the tip-up the latch was waiting for is
                 // never coming; leaving it armed would swallow a later contact.
                 state.take_retired_stylus_contact();
@@ -243,12 +243,12 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 if state.stylus_contact_retired {
                     return;
                 }
-                if state.input_state.ocr_is_active() {
+                if state.input_state.region_is_active() {
                     if state.stylus_on_toolbar {
                         state.cancel_ocr_for_toolbar_interaction();
                     } else if state.stylus_on_overlay {
                         let (x, y) = state.current_or_pending_stylus_position();
-                        state.begin_ocr_selection(OcrInputSource::Stylus, x, y);
+                        state.begin_region_selection(RegionInputSource::Stylus, x, y);
                         return;
                     }
                 }
@@ -295,17 +295,17 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 // the tip-up that actually ends the disowned contact, whatever
                 // else this Up does.
                 let retired_contact = state.take_retired_stylus_contact();
-                if state.input_state.ocr_is_active() {
+                if state.input_state.region_is_active() {
                     if state.stylus_on_overlay {
                         let (x, y) = state.current_or_pending_stylus_position();
                         // A no-op unless this pen owns the region, so a retired
                         // contact lifting cannot submit one the mouse or a
                         // finger is still drawing.
-                        state.finish_ocr_selection(OcrInputSource::Stylus, x, y);
+                        state.finish_region_selection(RegionInputSource::Stylus, x, y);
                     } else {
                         // The tip left the overlay before lifting; there is no
                         // region of ours to submit, so withdraw only our own.
-                        state.cancel_ocr_selection_from(OcrInputSource::Stylus);
+                        state.cancel_region_selection_from(RegionInputSource::Stylus);
                     }
                     return;
                 }
@@ -330,13 +330,13 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 state.queue_stylus_up();
             }
             Event::Motion { x, y } => {
-                if state.input_state.ocr_is_active() && state.stylus_on_overlay {
+                if state.input_state.region_is_active() && state.stylus_on_overlay {
                     state.stylus_last_pos = Some((x, y));
                     state.set_current_mouse(x.round() as i32, y.round() as i32);
                     // Dropped unless this pen owns the region: a pen hovering
                     // over the overlay, or one whose contact was retired, must
                     // not drag somebody else's selection around.
-                    state.update_ocr_selection(OcrInputSource::Stylus, x, y);
+                    state.update_region_selection(RegionInputSource::Stylus, x, y);
                     return;
                 }
                 if state.input_state.eyedropper_is_active() && state.stylus_on_overlay {
@@ -465,28 +465,28 @@ mod tests {
     #[test]
     fn stylus_pressure_stops_at_the_selector_not_at_the_request() {
         use crate::input::state::test_support::make_test_input_state;
-        use crate::input::state::{EyedropperCaptureSource, OcrCaptureSource};
+        use crate::input::state::{EyedropperCaptureSource, RegionPurposeTag, ScreenCaptureSource};
 
         let fresh_contact = |state: &_| drop_stylus_pressure(true, false, state);
 
         let mut state = make_test_input_state();
         assert!(!fresh_contact(&state));
 
-        state.set_ocr_pending_capture(OcrCaptureSource::Frozen);
+        state.set_region_pending_capture(RegionPurposeTag::Ocr, 1, ScreenCaptureSource::Frozen);
         assert!(
             !fresh_contact(&state),
             "a stroke drawn while the capture is pending is still a real stroke"
         );
-        state.activate_ocr(true);
+        state.activate_region(RegionPurposeTag::Ocr, 1);
         assert!(fresh_contact(&state));
-        state.start_ocr_selection(OcrInputSource::Stylus, (10.0, 10.0));
+        state.start_region_selection(RegionInputSource::Stylus, (10.0, 10.0));
         assert!(fresh_contact(&state));
-        state.cancel_ocr();
+        state.cancel_region_ui_only();
         assert!(!fresh_contact(&state));
 
         state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
         assert!(!fresh_contact(&state));
-        state.activate_eyedropper(true);
+        state.activate_eyedropper(Some(1));
         assert!(fresh_contact(&state));
         state.cancel_eyedropper();
         assert!(!fresh_contact(&state));
@@ -497,19 +497,19 @@ mod tests {
     /// pen again during the wait, but this contact is not the user drawing.
     #[test]
     fn a_retired_contact_never_reaches_the_tool_whatever_the_modal_is_doing() {
-        use crate::input::state::OcrCaptureSource;
         use crate::input::state::test_support::make_test_input_state;
+        use crate::input::state::{RegionPurposeTag, ScreenCaptureSource};
 
         let mut state = make_test_input_state();
 
         // The window the previous test allows, and the one that matters here.
-        state.set_ocr_pending_capture(OcrCaptureSource::Frozen);
+        state.set_region_pending_capture(RegionPurposeTag::Ocr, 1, ScreenCaptureSource::Frozen);
         assert!(!drop_stylus_pressure(true, false, &state));
         assert!(drop_stylus_pressure(true, true, &state));
 
         // And it outlives the modal: cancelling before activation leaves the pen
         // physically down with no modal to blame.
-        state.cancel_ocr();
+        state.cancel_region_ui_only();
         assert!(!drop_stylus_pressure(true, false, &state));
         assert!(drop_stylus_pressure(true, true, &state));
 

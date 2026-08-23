@@ -12,9 +12,9 @@ mod index;
 mod input_hud_controls;
 mod menus;
 pub(crate) mod modal;
-mod ocr;
 mod properties;
 pub(crate) mod radial_menu;
+mod region_select;
 mod selection;
 mod selection_actions;
 mod session;
@@ -72,7 +72,6 @@ pub use ime::{ImeCompositionState, ImePreedit};
 pub use menus::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,
 };
-pub use ocr::{OcrCaptureSource, OcrInputSource, OcrSelection, OcrUiState};
 pub use properties::{SelectionPropertyEntry, SelectionPropertyKind};
 pub use radial_menu::{
     COMPASS_SLICES as RADIAL_COMPASS_SLICES, CompassDir, RADIAL_PAINT_DELAY, RadialMenuLayout,
@@ -80,6 +79,10 @@ pub use radial_menu::{
     SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START, TOOL_SEGMENT_COUNT as RADIAL_TOOL_SEGMENT_COUNT,
     compass_slice, size_ring_angle_for_value, size_ring_value_for_angle, slice_parent,
     sub_ring_child_count, sub_ring_children,
+};
+pub use region_select::{
+    RegionInputSource, RegionPurposeTag, RegionSelectUiState, RegionSelection, ScreenCaptureSource,
+    SelectionPolicy,
 };
 pub use selection::SelectionState;
 pub use tool_controls::PrecisionEntryState;

@@ -283,9 +283,8 @@ mod tests {
 
     use super::*;
     use crate::backend::wayland::RuntimeWakeSource;
-    use crate::ocr::{
-        OcrFailure, OcrLanguages, OcrPixels, OcrSuccess, RecognizedOutput, RecognizedText,
-    };
+    use crate::ocr::{OcrFailure, OcrLanguages, OcrSuccess, RecognizedOutput, RecognizedText};
+    use crate::screen_pixels::PackedArgb32;
 
     struct FakeRecognizer {
         outcome: fn() -> Result<RecognizedOutput, OcrFailure>,
@@ -347,12 +346,7 @@ mod tests {
 
     fn request() -> OcrRequest {
         OcrRequest {
-            pixels: OcrPixels {
-                width: 2,
-                height: 2,
-                stride: 8,
-                data: vec![0xFF; 16],
-            },
+            pixels: PackedArgb32::new(2, 2, 8, vec![0xFF; 16]).unwrap(),
             languages: OcrLanguages::from_validated("eng".to_string()),
         }
     }

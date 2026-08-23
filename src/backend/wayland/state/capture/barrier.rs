@@ -4,6 +4,26 @@ use std::time::{Duration, Instant};
 
 const MAIN_SURFACE_FRAME_TIMEOUT: Duration = Duration::from_secs(1);
 
+fn push_capture_preflight_cancellation_toast(
+    input_state: &mut crate::input::InputState,
+    message: &str,
+) {
+    input_state.push_toast(ToastPriority::Critical, "capture", Toast::warning(message));
+}
+
+/// Finishes an identified zoom capture with a report-bearing terminal. The
+/// event-loop router owns that report; an uncorrelated standalone failure has
+/// no terminal, so its caller must retain the immediate capture toast.
+fn finish_zoom_preflight_cancellation(
+    zoom: &mut crate::backend::wayland::zoom::ZoomState,
+    input_state: &mut crate::input::InputState,
+    message: &str,
+) -> bool {
+    let terminal_will_report = zoom.current_capture_id().is_some();
+    zoom.finish_preflight_failure(input_state, message.to_string());
+    terminal_will_report
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MainSurfaceCapturePhase {
     AwaitingRender,
@@ -226,8 +246,10 @@ impl WaylandState {
         // before restoring suppression state so the recovery frame is allowed
         // to commit even if the original callback never arrives.
         self.surface.clear_frame_callback_pending();
-        self.cancel_overlay_capture_preflight(timeout.reason);
-        self.input_state.push_toast(ToastPriority::Critical, "capture", Toast::warning("Screen capture cancelled because the compositor did not confirm the hidden overlay frame."));
+        let message = "Screen capture cancelled because the compositor did not confirm the hidden overlay frame.";
+        if !self.cancel_overlay_capture_preflight(timeout.reason, Some(message)) {
+            push_capture_preflight_cancellation_toast(&mut self.input_state, message);
+        }
     }
 
     /// Records the frame callback for the fresh hidden main-surface commit.
@@ -281,14 +303,11 @@ impl WaylandState {
         log::warn!(
             "capture.preflight id={generation} component=gtk reason={reason:?} phase=capture-cancelled error={error}"
         );
-        self.cancel_overlay_capture_preflight(reason);
-        self.input_state.push_toast(
-            ToastPriority::Critical,
-            "capture",
-            Toast::warning(
-                "Screen capture cancelled because GTK toolbar transparency was not confirmed.",
-            ),
-        );
+        let message =
+            "Screen capture cancelled because GTK toolbar transparency was not confirmed.";
+        if !self.cancel_overlay_capture_preflight(reason, Some(message)) {
+            push_capture_preflight_cancellation_toast(&mut self.input_state, message);
+        }
     }
 
     /// A failed GTK connection cannot prove that its mapped surfaces painted
@@ -300,8 +319,11 @@ impl WaylandState {
         log::warn!(
             "Cancelling {reason:?} because the GTK toolbars could not confirm capture suppression"
         );
-        self.cancel_overlay_capture_preflight(reason);
-        self.input_state.push_toast(ToastPriority::Critical, "capture", Toast::warning("Screen capture cancelled because the GTK toolbar could not become transparent safely."));
+        let message =
+            "Screen capture cancelled because the GTK toolbar could not become transparent safely.";
+        if !self.cancel_overlay_capture_preflight(reason, Some(message)) {
+            push_capture_preflight_cancellation_toast(&mut self.input_state, message);
+        }
     }
 
     fn begin_ready_overlay_capture(&mut self, qh: &QueueHandle<Self>) {
@@ -313,7 +335,7 @@ impl WaylandState {
                 "Capture barrier completed for {reason:?} while suppression is {:?}; cancelling",
                 self.data.overlay_suppression
             );
-            self.cancel_overlay_capture_preflight(reason);
+            self.cancel_overlay_capture_preflight(reason, None);
             return;
         }
 
@@ -321,7 +343,7 @@ impl WaylandState {
             OverlaySuppression::Frozen => {
                 let Some(backend) = self.frozen.take_preflight_pending() else {
                     log::warn!("Frozen capture barrier completed without a pending preflight");
-                    self.cancel_overlay_capture_preflight(reason);
+                    self.cancel_overlay_capture_preflight(reason, None);
                     return;
                 };
                 if let Err(err) =
@@ -329,18 +351,23 @@ impl WaylandState {
                         .begin_preflight_capture(backend, &self.shm, qh, &self.tokio_handle)
                 {
                     log::warn!("Frozen preflight capture failed: {err}");
-                    self.input_state.push_toast(
-                        ToastPriority::Critical,
-                        "freeze",
-                        Toast::error(err.to_string()),
-                    );
-                    self.frozen.cancel(&mut self.input_state);
+                    if self.frozen.has_acquisition_attempt() {
+                        self.frozen
+                            .finish_preflight_failure(err.to_string(), &mut self.input_state);
+                    } else {
+                        self.input_state.push_toast(
+                            ToastPriority::Critical,
+                            "freeze",
+                            Toast::error(err.to_string()),
+                        );
+                        self.frozen.cancel(&mut self.input_state);
+                    }
                 }
             }
             OverlaySuppression::Zoom => {
                 let Some(use_fallback) = self.zoom.take_preflight_pending() else {
                     log::warn!("Zoom capture barrier completed without a pending preflight");
-                    self.cancel_overlay_capture_preflight(reason);
+                    self.cancel_overlay_capture_preflight(reason, None);
                     return;
                 };
                 if let Err(err) = self.zoom.begin_preflight_capture(
@@ -350,25 +377,21 @@ impl WaylandState {
                     &self.tokio_handle,
                 ) {
                     log::warn!("Zoom preflight capture failed: {err}");
-                    self.input_state.push_toast(
-                        ToastPriority::Critical,
-                        "zoom",
-                        Toast::error(err.to_string()),
-                    );
-                    self.zoom.cancel(&mut self.input_state, false);
+                    self.zoom
+                        .finish_preflight_failure(&mut self.input_state, err.to_string());
                 }
             }
             OverlaySuppression::Capture | OverlaySuppression::DesktopBackdrop => {
                 let Some(request) = self.capture.take_preflight_request() else {
                     log::warn!("Capture barrier completed without a pending request");
-                    self.cancel_overlay_capture_preflight(reason);
+                    self.cancel_overlay_capture_preflight(reason, None);
                     return;
                 };
                 if !self.capture_suppressed() {
                     log::warn!(
                         "Capture preflight completed without capture suppression; cancelling"
                     );
-                    self.cancel_overlay_capture_preflight(reason);
+                    self.cancel_overlay_capture_preflight(reason, None);
                 } else {
                     self.begin_pending_capture(request);
                 }
@@ -379,25 +402,47 @@ impl WaylandState {
         }
     }
 
-    fn cancel_overlay_capture_preflight(&mut self, reason: OverlaySuppression) {
+    fn cancel_overlay_capture_preflight(
+        &mut self,
+        reason: OverlaySuppression,
+        frozen_message: Option<&str>,
+    ) -> bool {
         match reason {
             OverlaySuppression::Capture | OverlaySuppression::DesktopBackdrop => {
-                self.capture.clear_preflight();
-                self.capture.clear_in_progress();
-                self.capture.clear_exit_on_success();
                 self.capture.clear_pending_pdf_export();
+                self.capture.finish_capture_lifecycle();
                 self.show_overlay();
+                false
             }
             OverlaySuppression::Frozen => {
-                self.frozen.cancel(&mut self.input_state);
-                self.exit_overlay_suppression(reason);
+                let acquisition_terminal = self.frozen.has_acquisition_attempt();
+                if acquisition_terminal {
+                    self.frozen.finish_acquisition(
+                        crate::backend::wayland::acquisition::ScreenAcquisitionOutcome::Failed(
+                            frozen_message
+                                .unwrap_or("Freeze capture could not start.")
+                                .to_string(),
+                        ),
+                        &mut self.input_state,
+                    );
+                } else {
+                    self.frozen.cancel(&mut self.input_state);
+                    self.exit_overlay_suppression(reason);
+                }
+                acquisition_terminal
             }
             OverlaySuppression::Zoom => {
-                self.zoom.cancel(&mut self.input_state, false);
+                let terminal_will_report = finish_zoom_preflight_cancellation(
+                    &mut self.zoom,
+                    &mut self.input_state,
+                    frozen_message.unwrap_or("Zoom capture preflight was cancelled"),
+                );
                 self.exit_overlay_suppression(reason);
+                terminal_will_report
             }
             OverlaySuppression::None | OverlaySuppression::ExternalDialog => {
                 self.data.overlay_capture_barrier.cancel(reason);
+                false
             }
         }
     }
@@ -406,6 +451,9 @@ impl WaylandState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::wayland::state::acquisition::report_zoom_terminal_to;
+    use crate::backend::wayland::zoom::ZoomWaiterOwner;
+    use crate::input::state::test_support::make_test_input_state;
 
     #[test]
     fn main_surface_frame_deadline_starts_only_after_submission() {
@@ -588,6 +636,53 @@ mod tests {
         assert_eq!(
             barrier.reason_waiting_for_gtk_generation(generation),
             Some(OverlaySuppression::Zoom)
+        );
+    }
+
+    #[tokio::test]
+    async fn zoom_preflight_failure_has_exactly_one_report_with_or_without_a_waiter() {
+        for owner in [Some(ZoomWaiterOwner::Ocr), None] {
+            let mut zoom = crate::backend::wayland::zoom::ZoomState::new(None);
+            let mut input_state = make_test_input_state();
+            zoom.start_capture(false, &tokio::runtime::Handle::current())
+                .expect("identified zoom capture");
+
+            assert!(finish_zoom_preflight_cancellation(
+                &mut zoom,
+                &mut input_state,
+                "specific preflight failure",
+            ));
+            assert_eq!(input_state.test_toast_count(), 0);
+            let terminal = zoom.take_source_terminal().expect("typed terminal");
+
+            report_zoom_terminal_to(&mut input_state, owner, &terminal);
+
+            assert_eq!(input_state.test_toast_count(), 1, "owner={owner:?}");
+            assert_eq!(
+                input_state.test_active_toast_message(),
+                Some("specific preflight failure"),
+                "owner={owner:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn standalone_zoom_preflight_failure_keeps_the_caller_report() {
+        let mut zoom = crate::backend::wayland::zoom::ZoomState::new(None);
+        let mut input_state = make_test_input_state();
+
+        assert!(!finish_zoom_preflight_cancellation(
+            &mut zoom,
+            &mut input_state,
+            "standalone preflight failure",
+        ));
+        push_capture_preflight_cancellation_toast(&mut input_state, "standalone preflight failure");
+
+        assert_eq!(zoom.take_source_terminal(), None);
+        assert_eq!(input_state.test_toast_count(), 1);
+        assert_eq!(
+            input_state.test_active_toast_message(),
+            Some("standalone preflight failure")
         );
     }
 }

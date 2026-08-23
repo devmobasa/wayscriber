@@ -23,7 +23,7 @@ impl WaylandState {
             return;
         }
 
-        if self.input_state.ocr_is_active() {
+        if self.input_state.region_is_active() {
             if button == BTN_LEFT {
                 let screen_position = if on_toolbar {
                     self.toolbar_surface_screen_coords(&event.surface, event.position)
@@ -31,7 +31,7 @@ impl WaylandState {
                     Some(event.position)
                 };
                 if let Some((x, y)) = screen_position {
-                    self.finish_ocr_selection(OcrInputSource::Pointer, x, y);
+                    self.finish_region_selection(RegionInputSource::Pointer, x, y);
                 }
             }
             return;

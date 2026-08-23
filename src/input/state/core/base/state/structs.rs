@@ -601,8 +601,9 @@ pub struct InputState {
         crate::input::state::core::EyedropperUiState,
     /// Pending eyedropper activation request for the Wayland backend.
     pub(in crate::input::state::core) pending_eyedropper_toggle: bool,
-    /// Screen text recognition (OCR) region-selector lifecycle.
-    pub(in crate::input::state::core) ocr_ui_state: crate::input::state::core::OcrUiState,
+    /// Generalized screen-region selector lifecycle.
+    pub(in crate::input::state::core) region_select_ui_state:
+        crate::input::state::core::RegionSelectUiState,
     /// Pending `Copy text from screen` request for the Wayland backend.
     pub(in crate::input::state::core) pending_ocr_request: bool,
     /// A toolbar interaction dismissed the selector in this input batch, so a

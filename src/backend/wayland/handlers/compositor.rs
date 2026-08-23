@@ -60,8 +60,7 @@ impl CompositorHandler for WaylandState {
             .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.zoom
             .handle_resize(phys_w, phys_h, &mut self.input_state);
-        self.cancel_eyedropper_if_source_missing();
-        self.cancel_ocr_if_source_missing();
+        self.cancel_screen_modals_if_source_changed();
         self.toolbar
             .maybe_update_scale(self.surface.current_output().as_ref(), scale);
         self.toolbar.mark_dirty();
@@ -81,6 +80,7 @@ impl CompositorHandler for WaylandState {
 
         debug!("Transform changed");
         self.refresh_freeze_zoom_geometry();
+        self.cancel_screen_modals_if_source_changed();
     }
 
     fn frame(
@@ -145,8 +145,7 @@ impl CompositorHandler for WaylandState {
             .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.zoom
             .handle_resize(phys_w, phys_h, &mut self.input_state);
-        self.cancel_eyedropper_if_source_missing();
-        self.cancel_ocr_if_source_missing();
+        self.cancel_screen_modals_if_source_changed();
 
         // If freeze-on-start was requested, trigger it once the surface is configured and active.
         if self.pending_freeze_on_start() {
@@ -182,5 +181,6 @@ impl CompositorHandler for WaylandState {
         self.set_freeze_zoom_geometry(None);
         self.frozen.unfreeze(&mut self.input_state);
         self.zoom.deactivate(&mut self.input_state);
+        self.cancel_screen_modals_if_source_changed();
     }
 }

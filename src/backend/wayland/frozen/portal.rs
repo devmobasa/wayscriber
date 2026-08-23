@@ -3,6 +3,7 @@ use anyhow::Result;
 use log::warn;
 use std::time::{Duration, Instant};
 
+use crate::backend::wayland::acquisition::ScreenAcquisitionOutcome;
 use crate::backend::wayland::frozen::FrozenImage;
 use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
 use crate::backend::wayland::portal_capture::{
@@ -84,14 +85,23 @@ impl FrozenState {
             .is_some_and(|task| task.timed_out(now))
         {
             warn!("Portal frozen capture timed out; restoring overlay");
-            input_state.push_toast(
-                ToastPriority::Critical,
-                "freeze",
-                Toast::error("Freeze timed out while waiting for screen capture."),
-            );
-            input_state.set_frozen_active(false);
-            self.finish_portal_task();
-            self.capture_done = true;
+            if self.has_acquisition_attempt() {
+                self.finish_acquisition(
+                    ScreenAcquisitionOutcome::Failed(
+                        "Freeze timed out while waiting for screen capture.".to_string(),
+                    ),
+                    input_state,
+                );
+            } else {
+                input_state.push_toast(
+                    ToastPriority::Critical,
+                    "freeze",
+                    Toast::error("Freeze timed out while waiting for screen capture."),
+                );
+                input_state.set_frozen_active(false);
+                self.finish_portal_task();
+                self.capture_done = true;
+            }
             return;
         }
 
@@ -113,48 +123,86 @@ impl FrozenState {
                     } else {
                         warn!("Portal capture for inactive output discarded");
                     }
-                    Self::push_stale_layout_toast(input_state);
-                    self.capture_done = true;
+                    if self.has_acquisition_attempt() {
+                        self.finish_acquisition(ScreenAcquisitionOutcome::StaleLayout, input_state);
+                    } else {
+                        Self::push_stale_layout_toast(input_state);
+                        self.capture_done = true;
+                    }
                 }
 
                 self.finish_portal_task();
             }
             PortalPoll::Ready(Err(CaptureError::Cancelled(reason))) => {
                 log::info!("Portal frozen capture cancelled: {reason}");
-                input_state.set_frozen_active(false);
-                input_state.needs_redraw = true;
-                self.finish_portal_task();
-                self.capture_done = true;
+                if self.has_acquisition_attempt() {
+                    self.finish_acquisition(ScreenAcquisitionOutcome::Cancelled, input_state);
+                } else {
+                    input_state.set_frozen_active(false);
+                    input_state.needs_redraw = true;
+                    self.finish_portal_task();
+                    self.capture_done = true;
+                }
             }
             PortalPoll::Ready(Err(err)) => {
                 warn!("Portal frozen capture failed: {err}");
-                input_state.push_toast(
-                    ToastPriority::Critical,
-                    "freeze",
-                    Toast::error("Freeze could not capture the screen."),
-                );
-                input_state.set_frozen_active(false);
-                self.finish_portal_task();
-                self.capture_done = true;
+                if self.has_acquisition_attempt() {
+                    self.finish_acquisition(
+                        ScreenAcquisitionOutcome::Failed(
+                            "Freeze could not capture the screen.".to_string(),
+                        ),
+                        input_state,
+                    );
+                } else {
+                    input_state.push_toast(
+                        ToastPriority::Critical,
+                        "freeze",
+                        Toast::error("Freeze could not capture the screen."),
+                    );
+                    input_state.set_frozen_active(false);
+                    self.finish_portal_task();
+                    self.capture_done = true;
+                }
             }
             PortalPoll::Failed(err) => {
                 warn!("Portal frozen capture task failed: {err}");
-                input_state.push_toast(
-                    ToastPriority::Critical,
-                    "freeze",
-                    Toast::error("Freeze could not capture the screen."),
-                );
-                input_state.set_frozen_active(false);
-                self.finish_portal_task();
-                self.capture_done = true;
+                if self.has_acquisition_attempt() {
+                    self.finish_acquisition(
+                        ScreenAcquisitionOutcome::Failed(
+                            "Freeze could not capture the screen.".to_string(),
+                        ),
+                        input_state,
+                    );
+                } else {
+                    input_state.push_toast(
+                        ToastPriority::Critical,
+                        "freeze",
+                        Toast::error("Freeze could not capture the screen."),
+                    );
+                    input_state.set_frozen_active(false);
+                    self.finish_portal_task();
+                    self.capture_done = true;
+                }
             }
             PortalPoll::Pending => {}
             PortalPoll::Disconnected => {
                 warn!("Portal frozen capture channel disconnected");
-                input_state.push_toast(ToastPriority::Critical, "freeze", Toast::error("Freeze could not capture the screen because the system capture service stopped responding."));
-                input_state.set_frozen_active(false);
-                self.finish_portal_task();
-                self.capture_done = true;
+                let message = "Freeze could not capture the screen because the system capture service stopped responding.";
+                if self.has_acquisition_attempt() {
+                    self.finish_acquisition(
+                        ScreenAcquisitionOutcome::Failed(message.to_string()),
+                        input_state,
+                    );
+                } else {
+                    input_state.push_toast(
+                        ToastPriority::Critical,
+                        "freeze",
+                        Toast::error(message),
+                    );
+                    input_state.set_frozen_active(false);
+                    self.finish_portal_task();
+                    self.capture_done = true;
+                }
             }
         }
     }
@@ -173,6 +221,9 @@ impl FrozenState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::wayland::acquisition::{
+        ScreenAcquisitionOutcome, ScreenAcquisitionOwner, ScreenAcquisitionRegistry,
+    };
     use crate::backend::wayland::frozen::FrozenState;
     use crate::backend::wayland::portal_task::PORTAL_CAPTURE_TIMEOUT;
     use crate::input::state::test_support::make_test_input_state;
@@ -245,11 +296,12 @@ mod tests {
         let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
         let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
+        frozen.set_active_output(None, Some(1));
 
         frozen.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async { Ok((None, 0, Some(crop_geometry((0, 0))), image(0))) },
+            async { Ok((Some(1), 0, Some(crop_geometry((0, 0))), image(0))) },
         ));
         frozen.portal_in_progress = true;
         poll_until_finished(&mut frozen, &mut input).await?;
@@ -350,6 +402,40 @@ mod tests {
         assert!(!frozen.is_in_progress());
         assert!(frozen.take_capture_done());
         assert!(!input.frozen_active());
+        assert!(input.ui_toast.is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn portal_cancellation_finishes_the_correlated_attempt() -> anyhow::Result<()> {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new()?;
+        let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
+        let mut input = make_test_input_state();
+        let mut registry = ScreenAcquisitionRegistry::default();
+        let id = registry
+            .request(ScreenAcquisitionOwner::UserFreeze)
+            .expect("id");
+        frozen.start_capture_for(id, ScreenAcquisitionOwner::UserFreeze)?;
+        frozen.portal_task = Some(PortalTask::spawn(
+            &tokio::runtime::Handle::current(),
+            wake.handle(),
+            async {
+                Err(CaptureError::Cancelled(
+                    "user closed the chooser".to_string(),
+                ))
+            },
+        ));
+        frozen.portal_in_progress = true;
+
+        poll_until_finished(&mut frozen, &mut input).await?;
+
+        assert_eq!(
+            frozen
+                .take_acquisition_completion()
+                .map(|completion| completion.outcome),
+            Some(ScreenAcquisitionOutcome::Cancelled)
+        );
+        assert!(frozen.take_capture_done());
         assert!(input.ui_toast.is_none());
         Ok(())
     }

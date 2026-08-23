@@ -135,7 +135,7 @@ impl CaptureState {
     }
 
     /// Clear any pending preflight capture request.
-    pub fn clear_preflight(&mut self) {
+    fn clear_preflight(&mut self) {
         self.preflight = CapturePreflight::None;
         self.pending_request = None;
     }
@@ -157,10 +157,15 @@ impl CaptureState {
         self.in_progress = true;
     }
 
-    /// Marks capture as finished.
-    pub fn clear_in_progress(&mut self) {
+    /// Finishes the current capture lifecycle and clears all reusable state.
+    ///
+    /// Region-capture and board-delivery lifecycle fields are intentionally
+    /// absent until their later implementation phases.
+    pub fn finish_capture_lifecycle(&mut self) {
         self.in_progress = false;
         self.accepted_id = None;
+        self.exit_on_success = false;
+        self.clear_preflight();
     }
 
     /// Records the manager identity accepted for the current lifecycle.
@@ -190,16 +195,9 @@ impl CaptureState {
         self.exit_on_success = value;
     }
 
-    /// Clears any pending exit request for the current capture.
-    pub fn clear_exit_on_success(&mut self) {
-        self.exit_on_success = false;
-    }
-
-    /// Returns and clears the exit-on-success flag for the last capture.
-    pub fn take_exit_on_success(&mut self) -> bool {
-        let value = self.exit_on_success;
-        self.exit_on_success = false;
-        value
+    /// Returns whether the current capture should exit on success.
+    pub fn exit_on_success(&self) -> bool {
+        self.exit_on_success
     }
 }
 
@@ -207,6 +205,14 @@ impl CaptureState {
 mod tests {
     use super::*;
     use crate::capture::types::{CaptureDestination, CaptureType};
+
+    fn screenshot_request() -> CapturePreflightRequest {
+        CapturePreflightRequest::Screenshot(CaptureRequest {
+            capture_type: CaptureType::FullScreen,
+            destination: CaptureDestination::ClipboardOnly,
+            save_config: None,
+        })
+    }
 
     #[test]
     fn preflight_waits_for_render_before_request() {
@@ -247,9 +253,50 @@ mod tests {
         assert_eq!(state.accepted_id(), None);
 
         assert!(state.record_accepted(other));
-        state.clear_in_progress();
+        state.finish_capture_lifecycle();
         assert_eq!(state.accepted_id(), None);
         assert!(!state.is_in_progress());
+    }
+
+    #[test]
+    fn lifecycle_finish_cancels_awaiting_render_and_clears_the_pending_request() {
+        let manager = CaptureManager::with_closed_channel_for_test();
+        let mut state = CaptureState::new(manager);
+        let accepted = CaptureRequestId::for_test(9);
+
+        state.mark_in_progress();
+        state.set_exit_on_success(true);
+        assert!(state.record_accepted(accepted));
+        state.queue_preflight(screenshot_request());
+
+        state.finish_capture_lifecycle();
+
+        assert!(!state.is_in_progress());
+        assert_eq!(state.accepted_id(), None);
+        assert!(!state.exit_on_success());
+        assert!(!state.preflight_pending());
+        assert!(state.take_preflight_request().is_none());
+    }
+
+    #[test]
+    fn lifecycle_finish_cancels_awaiting_frame_and_clears_the_pending_request() {
+        let manager = CaptureManager::with_closed_channel_for_test();
+        let mut state = CaptureState::new(manager);
+        let accepted = CaptureRequestId::for_test(10);
+
+        state.mark_in_progress();
+        state.set_exit_on_success(true);
+        assert!(state.record_accepted(accepted));
+        state.queue_preflight(screenshot_request());
+        state.mark_preflight_rendered();
+
+        state.finish_capture_lifecycle();
+
+        assert!(!state.is_in_progress());
+        assert_eq!(state.accepted_id(), None);
+        assert!(!state.exit_on_success());
+        assert!(!state.preflight_pending());
+        assert!(state.take_preflight_request().is_none());
     }
 
     #[test]

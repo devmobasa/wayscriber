@@ -21,6 +21,7 @@ use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{
 };
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
+use crate::backend::wayland::acquisition::ScreenAcquisitionOutcome;
 use crate::backend::wayland::capture::CaptureLayoutContext;
 use crate::backend::wayland::frozen_geometry::require_verified_capture_source;
 use crate::input::InputState;
@@ -431,6 +432,10 @@ impl FrozenState {
     }
 
     pub(super) fn finish_stale_direct_capture(&mut self, input_state: &mut InputState) {
+        if self.has_acquisition_attempt() {
+            self.finish_acquisition(ScreenAcquisitionOutcome::StaleLayout, input_state);
+            return;
+        }
         self.capture_done = true;
         input_state.set_frozen_active(false);
         input_state.needs_redraw = true;

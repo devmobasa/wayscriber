@@ -68,8 +68,7 @@ impl LayerShellHandler for WaylandState {
                 .handle_resize(phys_w, phys_h, &mut self.input_state);
             self.zoom
                 .handle_resize(phys_w, phys_h, &mut self.input_state);
-            self.cancel_eyedropper_if_source_missing();
-            self.cancel_ocr_if_source_missing();
+            self.cancel_screen_modals_if_source_changed();
 
             // Refresh active geometry for capture validation using the latest
             // configured surface size and compositor output metadata.
@@ -91,8 +90,7 @@ impl LayerShellHandler for WaylandState {
             .handle_resize(phys_w, phys_h, &mut self.input_state);
         self.zoom
             .handle_resize(phys_w, phys_h, &mut self.input_state);
-        self.cancel_eyedropper_if_source_missing();
-        self.cancel_ocr_if_source_missing();
+        self.cancel_screen_modals_if_source_changed();
 
         // Re-apply toolbar offsets now that we have a configured surface size; avoids clamping to 0
         // on startup before the compositor provides dimensions.

@@ -1,12 +1,15 @@
+use crate::backend::wayland::acquisition::{ScreenAcquisitionOutcome, ScreenAcquisitionOwner};
 use crate::backend::wayland::frozen::FrozenImage;
+use crate::backend::wayland::zoom::ZoomWaiterOwner;
 use crate::draw::Color;
 use crate::input::state::EyedropperCaptureSource;
 use crate::input::state::{Toast, ToastPriority};
 
 use super::WaylandState;
+use super::acquisition::report_screen_source_activation_rejected_to;
 use super::screen_image::{
-    DisplayedScreenImage, ScreenSourceEntry, displayed_screen_image, image_point_for_screen_point,
-    screen_source_entry,
+    DisplayedScreenImage, ScreenSourceEntry, current_screen_source_token, displayed_screen_image,
+    image_point_for_screen_point, screen_source_entry, screen_source_token,
 };
 
 fn sample_at(image: &FrozenImage, image_x: f64, image_y: f64) -> Option<Color> {
@@ -73,14 +76,33 @@ impl WaylandState {
             self.frozen_enabled(),
         );
         match decision {
-            ScreenSourceEntry::Activate => self.activate_eyedropper_sampler(false),
-            ScreenSourceEntry::WaitForZoom => self
-                .input_state
-                .set_eyedropper_pending_capture(EyedropperCaptureSource::Zoom),
+            ScreenSourceEntry::Activate => {
+                if !self.activate_eyedropper_sampler(None) {
+                    self.cancel_eyedropper_ui_only();
+                    report_screen_source_activation_rejected_to(
+                        &mut self.input_state,
+                        ScreenAcquisitionOwner::Eyedropper,
+                    );
+                }
+            }
+            ScreenSourceEntry::WaitForZoom => {
+                if self.wait_for_current_zoom_capture(ZoomWaiterOwner::Eyedropper) {
+                    self.input_state
+                        .set_eyedropper_pending_capture(EyedropperCaptureSource::Zoom);
+                } else {
+                    self.report_zoom_image_unavailable();
+                }
+            }
             ScreenSourceEntry::AutoFreeze => {
-                self.input_state
-                    .set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
-                self.input_state.request_frozen_toggle();
+                match self.request_screen_acquisition(ScreenAcquisitionOwner::Eyedropper) {
+                    Ok(_) => self
+                        .input_state
+                        .set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen),
+                    Err(_) => self.report_terminal(
+                        ScreenAcquisitionOwner::Eyedropper,
+                        &ScreenAcquisitionOutcome::Unavailable,
+                    ),
+                }
             }
             ScreenSourceEntry::RefuseWhileZoomedOnSolidBoard => {
                 self.input_state.push_toast(
@@ -106,9 +128,19 @@ impl WaylandState {
                 );
             }
             ScreenSourceEntry::ZoomImageUnavailable => {
-                self.input_state.push_toast(ToastPriority::Info, "eyedropper", Toast::warning("Screen eyedropper is unavailable because zoom has no captured screen image."));
+                self.report_zoom_image_unavailable();
             }
         }
+    }
+
+    fn report_zoom_image_unavailable(&mut self) {
+        self.input_state.push_toast(
+            ToastPriority::Info,
+            "eyedropper",
+            Toast::warning(
+                "Screen eyedropper is unavailable because zoom has no captured screen image.",
+            ),
+        );
     }
 
     fn background_image_source(&self) -> Option<DisplayedScreenImage<'_>> {
@@ -122,45 +154,50 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn finish_pending_eyedropper_capture(
         &mut self,
         capture_source: EyedropperCaptureSource,
-    ) {
+        owned_frozen_generation: Option<u64>,
+    ) -> bool {
         if self.input_state.eyedropper_state().pending_source() != Some(capture_source) {
-            return;
+            return false;
         }
-        if self.background_image_source().is_some() {
-            self.activate_eyedropper_sampler(matches!(
-                capture_source,
-                EyedropperCaptureSource::Frozen
-            ));
-        } else {
-            self.cancel_eyedropper();
-            self.input_state
-                .report_eyedropper_capture_failure_if_unreported();
-        }
+        self.activate_eyedropper_sampler(owned_frozen_generation)
     }
 
     /// Arm the screen sampler. Retires an in-flight stylus contact for the same
     /// reason OCR does: from here the modal swallows the tip-up that would
     /// otherwise end it.
-    fn activate_eyedropper_sampler(&mut self, auto_froze: bool) {
+    fn activate_eyedropper_sampler(&mut self, owned_frozen_generation: Option<u64>) -> bool {
+        let Some(source) = self.background_image_source() else {
+            return false;
+        };
+        let Some(token) = current_screen_source_token(
+            &source,
+            &self.zoom,
+            &self.frozen,
+            (self.surface.width(), self.surface.height()),
+        ) else {
+            return false;
+        };
         self.retire_stylus_contact();
-        self.input_state.activate_eyedropper(auto_froze);
+        self.data.active_eyedropper_source = Some(token);
+        self.input_state
+            .activate_eyedropper(owned_frozen_generation);
+        true
     }
 
     pub(in crate::backend::wayland) fn update_eyedropper_hover(&mut self, x: f64, y: f64) {
+        self.cancel_screen_modals_if_source_changed();
         if self.input_state.eyedropper_is_active() {
             self.input_state.update_eyedropper_hover((x, y));
-        }
-    }
-
-    pub(in crate::backend::wayland) fn cancel_eyedropper_if_source_missing(&mut self) {
-        if self.input_state.eyedropper_is_active() && self.background_image_source().is_none() {
-            self.cancel_eyedropper();
         }
     }
 
     pub(in crate::backend::wayland) fn sample_eyedropper(&mut self, x: f64, y: f64) -> bool {
         if !self.input_state.eyedropper_is_active() {
             return false;
+        }
+        self.cancel_screen_modals_if_source_changed();
+        if !self.input_state.eyedropper_is_active() {
+            return true;
         }
         let Some(source) = self.background_image_source() else {
             self.cancel_eyedropper();
@@ -187,12 +224,14 @@ impl WaylandState {
         x: f64,
         y: f64,
     ) -> (f64, f64) {
-        image_point_for_screen_point(
+        let token = screen_source_token(
             source,
             &self.zoom,
+            &self.frozen,
             (self.surface.width(), self.surface.height()),
-            (x, y),
-        )
+        );
+        let point = image_point_for_screen_point(&token, (x, y));
+        (point.x, point.y)
     }
 
     pub(in crate::backend::wayland) fn render_eyedropper_loupe(
@@ -201,11 +240,6 @@ impl WaylandState {
         screen_width: u32,
         screen_height: u32,
     ) {
-        const PIXELS: i32 = 11;
-        const CELL: f64 = 8.0;
-        const GAP: f64 = 18.0;
-        const LABEL_HEIGHT: f64 = 24.0;
-
         let Some((pointer_x, pointer_y)) = self.input_state.eyedropper_state().hover() else {
             return;
         };
@@ -213,106 +247,30 @@ impl WaylandState {
             return;
         };
         let (image_x, image_y) = self.eyedropper_image_coords(&source, pointer_x, pointer_y);
-        let center_x = image_x.floor();
-        let center_y = image_y.floor();
-        let grid_size = f64::from(PIXELS) * CELL;
-        let panel_w = grid_size + 12.0;
-        let panel_h = grid_size + LABEL_HEIGHT + 12.0;
-        let mut panel_x = pointer_x + GAP;
-        let mut panel_y = pointer_y + GAP;
-        if panel_x + panel_w > f64::from(screen_width) {
-            panel_x = pointer_x - GAP - panel_w;
-        }
-        if panel_y + panel_h > f64::from(screen_height) {
-            panel_y = pointer_y - GAP - panel_h;
-        }
-        panel_x = panel_x.clamp(4.0, (f64::from(screen_width) - panel_w - 4.0).max(4.0));
-        panel_y = panel_y.clamp(4.0, (f64::from(screen_height) - panel_h - 4.0).max(4.0));
-
-        let _ = ctx.save();
-        ctx.set_source_rgba(0.04, 0.05, 0.07, 0.96);
-        ctx.rectangle(panel_x, panel_y, panel_w, panel_h);
-        let _ = ctx.fill();
-
-        let grid_x = panel_x + 6.0;
-        let grid_y = panel_y + 6.0;
-        let half = PIXELS / 2;
-        for row in 0..PIXELS {
-            for col in 0..PIXELS {
-                if let Some(color) = sample_at(
-                    source.image,
-                    center_x + f64::from(col - half),
-                    center_y + f64::from(row - half),
-                ) {
-                    ctx.set_source_rgb(color.r, color.g, color.b);
-                    ctx.rectangle(
-                        grid_x + f64::from(col) * CELL,
-                        grid_y + f64::from(row) * CELL,
-                        CELL,
-                        CELL,
-                    );
-                    let _ = ctx.fill();
-                }
-            }
-        }
-
-        let center = f64::from(half) * CELL;
-        ctx.set_source_rgb(1.0, 1.0, 1.0);
-        ctx.set_line_width(2.0);
-        ctx.rectangle(grid_x + center, grid_y + center, CELL, CELL);
-        let _ = ctx.stroke();
-        ctx.set_source_rgb(0.0, 0.0, 0.0);
-        ctx.set_line_width(1.0);
-        ctx.rectangle(
-            grid_x + center + 2.0,
-            grid_y + center + 2.0,
-            CELL - 4.0,
-            CELL - 4.0,
+        let layout = crate::ui::compute_eyedropper_loupe_layout(
+            (pointer_x, pointer_y),
+            (screen_width, screen_height),
         );
-        let _ = ctx.stroke();
-
-        if let Some(color) = sample_at(source.image, center_x, center_y) {
-            let hex = format!(
-                "#{:02X}{:02X}{:02X}",
-                (color.r * 255.0).round() as u8,
-                (color.g * 255.0).round() as u8,
-                (color.b * 255.0).round() as u8
-            );
-            let swatch = 14.0;
-            let label_y = grid_y + grid_size + 5.0;
-            ctx.set_source_rgb(color.r, color.g, color.b);
-            ctx.rectangle(grid_x, label_y, swatch, swatch);
-            let _ = ctx.fill();
-            ctx.set_source_rgb(1.0, 1.0, 1.0);
-            ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-            ctx.set_font_size(12.0);
-            ctx.move_to(grid_x + swatch + 7.0, label_y + 12.0);
-            let _ = ctx.show_text(&hex);
-        }
-
-        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.65);
-        ctx.set_line_width(1.0);
-        ctx.rectangle(panel_x + 0.5, panel_y + 0.5, panel_w - 1.0, panel_h - 1.0);
-        let _ = ctx.stroke();
-        let _ = ctx.restore();
+        crate::ui::render_eyedropper_loupe(ctx, layout, (image_x, image_y), |x, y| {
+            sample_at(source.image, x, y)
+        });
     }
 
     pub(in crate::backend::wayland) fn cancel_eyedropper(&mut self) -> bool {
         let eyedropper_state = self.input_state.eyedropper_state();
         let was_active = eyedropper_state.is_engaged();
-        let pending_source = eyedropper_state.pending_source();
-        let auto_froze = self.input_state.cancel_eyedropper();
-        if auto_froze {
-            self.restore_xdg_after_frozen();
-            if pending_source == Some(EyedropperCaptureSource::Frozen)
-                && self.frozen.is_in_progress()
-            {
-                self.frozen.cancel(&mut self.input_state);
-                self.exit_overlay_suppression(super::OverlaySuppression::Frozen);
-            } else {
-                self.frozen.unfreeze(&mut self.input_state);
-            }
-        }
+        let pending_acquisition = (eyedropper_state.pending_source()
+            == Some(EyedropperCaptureSource::Frozen))
+        .then(|| self.screen_acquisition_slot())
+        .flatten()
+        .filter(|record| record.owner == ScreenAcquisitionOwner::Eyedropper)
+        .map(|record| record.id);
+        let owned_generation = eyedropper_state.owned_frozen_generation();
+        self.cancel_modal_owner_resources(
+            ScreenAcquisitionOwner::Eyedropper,
+            pending_acquisition,
+            owned_generation,
+        );
         was_active
     }
 }

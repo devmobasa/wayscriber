@@ -91,6 +91,7 @@ use super::{
     zoom::ZoomState,
 };
 
+mod acquisition;
 mod activation;
 mod boards;
 mod buffer_damage;
@@ -112,6 +113,7 @@ mod ocr;
 mod onboarding;
 mod pdf_export;
 mod perf;
+mod region_capture;
 mod render;
 mod screen_image;
 mod text_clipboard;

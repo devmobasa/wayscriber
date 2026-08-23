@@ -1,3 +1,4 @@
+mod acquisition;
 mod backend;
 mod capture;
 mod clipboard;

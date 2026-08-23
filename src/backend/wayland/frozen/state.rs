@@ -4,8 +4,12 @@ use wayland_client::protocol::wl_output;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 use crate::backend::wayland::RuntimeWakeHandle;
+use crate::backend::wayland::acquisition::{
+    ScreenAcquisitionCompletion, ScreenAcquisitionId, ScreenAcquisitionOutcome,
+    ScreenAcquisitionOwner,
+};
 use crate::backend::wayland::capture::CaptureLayoutContext;
-use crate::backend::wayland::frozen::FrozenImage;
+use crate::backend::wayland::frozen::{FrozenImage, ScreenImageProvenance};
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
 use crate::backend::wayland::portal_capture::{crop_argb, layout_token_matches};
 use crate::backend::wayland::portal_task::PortalTask;
@@ -118,6 +122,7 @@ pub struct FrozenState {
     pub(super) output_layout_generation: u64,
     pub(super) direct_capture: Option<DirectCaptureAttempt>,
     pub(super) image: Option<FrozenImage>,
+    image_provenance: Option<ScreenImageProvenance>,
     image_target_dimensions: Option<(u32, u32)>,
     image_generation: u64,
     pub(super) portal_task: Option<PortalTask<PortalCaptureResult>>,
@@ -130,6 +135,8 @@ pub struct FrozenState {
     preflight_layout_generation: Option<u64>,
     pub(super) capture_done: bool,
     pending_image: Option<PendingFrozenImage>,
+    acquisition_attempt: Option<(ScreenAcquisitionId, ScreenAcquisitionOwner)>,
+    acquisition_completion: Option<ScreenAcquisitionCompletion>,
 }
 
 impl FrozenState {
@@ -171,6 +178,7 @@ impl FrozenState {
             output_layout_generation: 0,
             direct_capture: None,
             image: None,
+            image_provenance: None,
             image_target_dimensions: None,
             image_generation: 0,
             portal_task: None,
@@ -183,6 +191,8 @@ impl FrozenState {
             preflight_layout_generation: None,
             capture_done: false,
             pending_image: None,
+            acquisition_attempt: None,
+            acquisition_completion: None,
         }
     }
 
@@ -217,6 +227,19 @@ impl FrozenState {
         self.output_layout_generation
     }
 
+    pub(in crate::backend::wayland) fn source_context_matches(
+        &self,
+        provenance: ScreenImageProvenance,
+    ) -> bool {
+        self.active_output_id == Some(provenance.output_id)
+            && self.output_layout_generation == provenance.output_layout_generation
+    }
+
+    pub(in crate::backend::wayland) fn image_provenance(&self) -> Option<ScreenImageProvenance> {
+        self.image.as_ref()?;
+        self.image_provenance
+    }
+
     pub fn image(&self) -> Option<&FrozenImage> {
         self.image.as_ref()
     }
@@ -229,6 +252,19 @@ impl FrozenState {
     pub fn set_image(&mut self, image: FrozenImage) {
         self.image_target_dimensions = Some((image.width, image.height));
         self.image = Some(image);
+        self.image_provenance = None;
+        self.bump_image_generation();
+    }
+
+    #[cfg(test)]
+    pub(in crate::backend::wayland) fn set_image_with_provenance_for_test(
+        &mut self,
+        image: FrozenImage,
+        provenance: ScreenImageProvenance,
+    ) {
+        self.image_target_dimensions = Some((image.width, image.height));
+        self.image = Some(image);
+        self.image_provenance = Some(provenance);
         self.bump_image_generation();
     }
 
@@ -340,18 +376,154 @@ impl FrozenState {
         &mut self,
         input_state: &mut InputState,
     ) {
-        let message = self
-            .ensure_preflight_layout_current()
-            .err()
+        let stale_message = self.ensure_preflight_layout_current().err();
+        let message = stale_message
+            .clone()
             .unwrap_or_else(|| "Freeze could not capture the screen.".to_string());
+        if self.has_acquisition_attempt() {
+            let outcome = if stale_message.is_some() {
+                ScreenAcquisitionOutcome::StaleLayout
+            } else {
+                ScreenAcquisitionOutcome::Failed(message)
+            };
+            self.finish_acquisition(outcome, input_state);
+            return;
+        }
         input_state.push_toast(ToastPriority::Critical, "freeze", Toast::error(message));
         self.cancel(input_state);
+    }
+
+    pub(in crate::backend::wayland) fn finish_preflight_failure(
+        &mut self,
+        message: String,
+        input_state: &mut InputState,
+    ) {
+        let outcome = if self.ensure_preflight_layout_current().is_err() {
+            ScreenAcquisitionOutcome::StaleLayout
+        } else {
+            ScreenAcquisitionOutcome::Failed(message)
+        };
+        self.finish_acquisition(outcome, input_state);
     }
 
     pub fn take_capture_done(&mut self) -> bool {
         let done = self.capture_done;
         self.capture_done = false;
         done
+    }
+
+    pub(in crate::backend::wayland) fn start_capture_for(
+        &mut self,
+        id: ScreenAcquisitionId,
+        owner: ScreenAcquisitionOwner,
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.acquisition_attempt.is_none() && self.acquisition_completion.is_none(),
+            "another screen acquisition is still pending"
+        );
+        anyhow::ensure!(
+            !self.is_in_progress(),
+            "another frozen capture is already in progress"
+        );
+        self.start_capture()?;
+        self.acquisition_attempt = Some((id, owner));
+        Ok(())
+    }
+
+    fn finish_attempt_resources(&mut self) {
+        if let Some(capture) = self.direct_capture.take() {
+            capture.destroy();
+        }
+        self.preflight_pending = false;
+        self.preflight_backend = None;
+        self.preflight_output_id = None;
+        self.preflight_layout_generation = None;
+        self.portal_in_progress = false;
+        if let Some(mut task) = self.portal_task.take() {
+            task.cancel();
+        }
+        self.portal_target_output_id = None;
+        self.pending_image = None;
+        self.capture_done = true;
+    }
+
+    pub(in crate::backend::wayland) fn finish_ready_acquisition(
+        &mut self,
+        input_state: &mut InputState,
+    ) {
+        debug_assert!(self.image().is_some());
+        debug_assert!(input_state.frozen_active());
+        self.finish_acquisition(
+            ScreenAcquisitionOutcome::Ready {
+                installed_generation: self.image_generation(),
+            },
+            input_state,
+        );
+    }
+
+    pub(in crate::backend::wayland) fn finish_acquisition(
+        &mut self,
+        outcome: ScreenAcquisitionOutcome,
+        input_state: &mut InputState,
+    ) {
+        let Some((id, owner)) = self.acquisition_attempt.take() else {
+            return;
+        };
+        debug_assert!(self.acquisition_completion.is_none());
+        self.finish_attempt_resources();
+        if !matches!(outcome, ScreenAcquisitionOutcome::Ready { .. }) {
+            input_state.set_frozen_active(false);
+            input_state.needs_redraw = true;
+        }
+        self.acquisition_completion = Some(ScreenAcquisitionCompletion { id, owner, outcome });
+    }
+
+    pub(in crate::backend::wayland) fn abandon_acquisition(
+        &mut self,
+        input_state: &mut InputState,
+    ) {
+        self.acquisition_attempt = None;
+        self.finish_attempt_resources();
+        input_state.set_frozen_active(false);
+        input_state.needs_redraw = true;
+    }
+
+    #[allow(dead_code)] // Used by public modal-owner cancellation adapters.
+    pub(in crate::backend::wayland) fn acquisition_completion(
+        &self,
+    ) -> Option<&ScreenAcquisitionCompletion> {
+        self.acquisition_completion.as_ref()
+    }
+
+    pub(in crate::backend::wayland) fn has_acquisition_attempt(&self) -> bool {
+        self.acquisition_attempt.is_some()
+    }
+
+    pub(in crate::backend::wayland) fn take_acquisition_completion(
+        &mut self,
+    ) -> Option<ScreenAcquisitionCompletion> {
+        self.acquisition_completion.take()
+    }
+
+    #[allow(dead_code)] // Used by public modal-owner cancellation adapters.
+    pub(in crate::backend::wayland) fn take_matching_acquisition_completion(
+        &mut self,
+        id: ScreenAcquisitionId,
+        owner: ScreenAcquisitionOwner,
+    ) -> Option<ScreenAcquisitionCompletion> {
+        if !self
+            .acquisition_completion
+            .as_ref()
+            .is_some_and(|completion| completion.id == id && completion.owner == owner)
+        {
+            return None;
+        }
+        self.acquisition_completion.take()
+    }
+
+    #[cfg(test)]
+    fn attempt(&self) -> Option<(ScreenAcquisitionId, ScreenAcquisitionOwner)> {
+        self.acquisition_attempt
     }
 
     pub(in crate::backend::wayland) fn direct_capture_timeout(
@@ -409,6 +581,7 @@ impl FrozenState {
             );
         }
         let mut image = pending.image;
+        let mut provenance = None;
 
         if matches!(pending.source, FrozenCaptureSource::ActiveOutput) {
             let Some(geometry) = pending.source_geometry.as_ref() else {
@@ -416,6 +589,14 @@ impl FrozenState {
                     .reject_pending_image(input_state, "Freeze capture geometry is unavailable");
             };
             let output_transform = pending.output_transform.unwrap_or(geometry.transform);
+            provenance = pending.target_output_id.and_then(|output_id| {
+                ScreenImageProvenance::new(
+                    output_id,
+                    pending.layout_generation,
+                    geometry.scale,
+                    output_transform,
+                )
+            });
             image = match image.with_output_transform(output_transform) {
                 Ok(image) => image,
                 Err(error) => {
@@ -437,7 +618,6 @@ impl FrozenState {
             let Some(geometry) = pending
                 .source_geometry
                 .as_ref()
-                .or(self.active_geometry.as_ref())
                 .cloned()
                 .and_then(|geometry| geometry.with_revalidated_output_count(live_output_count))
             else {
@@ -446,6 +626,14 @@ impl FrozenState {
                     "Freeze failed after the output layout changed",
                 );
             };
+            provenance = pending.target_output_id.and_then(|output_id| {
+                ScreenImageProvenance::new(
+                    output_id,
+                    pending.layout_generation,
+                    geometry.scale,
+                    geometry.transform,
+                )
+            });
             let Some((capture_width, capture_height)) = geometry.verified_pixel_size() else {
                 return self.reject_pending_image(
                     input_state,
@@ -463,6 +651,13 @@ impl FrozenState {
             image = cropped;
         }
 
+        let Some(provenance) = provenance else {
+            return self.reject_pending_image(
+                input_state,
+                "Freeze capture source identity is unavailable",
+            );
+        };
+
         if !OutputGeometry::dimensions_have_compatible_aspect(
             (image.width, image.height),
             (phys_width, phys_height),
@@ -475,10 +670,14 @@ impl FrozenState {
 
         self.image_target_dimensions = Some((phys_width, phys_height));
         self.image = Some(image);
+        self.image_provenance = Some(provenance);
         self.bump_image_generation();
         input_state.set_frozen_active(true);
         input_state.dirty_tracker.mark_full();
         input_state.needs_redraw = true;
+        self.finish_ready_acquisition(input_state);
+        // Legacy tests and late callbacks without an acquisition still use the
+        // capture-done wakeup as their resource-restoration boundary.
         self.capture_done = true;
         Ok(true)
     }
@@ -488,10 +687,12 @@ impl FrozenState {
         input_state: &mut InputState,
         error: impl Into<String>,
     ) -> Result<bool, String> {
+        let error = error.into();
+        self.finish_acquisition(ScreenAcquisitionOutcome::Failed(error.clone()), input_state);
         self.capture_done = true;
         input_state.set_frozen_active(false);
         input_state.needs_redraw = true;
-        Err(error.into())
+        Err(error)
     }
 
     fn crop_pending_image(
@@ -551,26 +752,12 @@ impl FrozenState {
     }
 
     pub fn cancel(&mut self, input_state: &mut InputState) {
-        if let Some(capture) = self.direct_capture.take() {
-            capture.destroy();
-        }
-        self.preflight_pending = false;
-        self.preflight_backend = None;
-        self.preflight_output_id = None;
-        self.preflight_layout_generation = None;
-        self.portal_in_progress = false;
-        if let Some(mut task) = self.portal_task.take() {
-            task.cancel();
-        }
-        self.portal_target_output_id = None;
-        self.pending_image = None;
-        self.capture_done = true;
-        input_state.set_frozen_active(false);
-        input_state.needs_redraw = true;
+        self.abandon_acquisition(input_state);
     }
 
     fn clear_image(&mut self) -> bool {
         let had_image = self.image.take().is_some();
+        self.image_provenance = None;
         self.image_target_dimensions = None;
         if had_image {
             self.bump_image_generation();
@@ -620,6 +807,10 @@ fn next_capture_backend_after(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::wayland::acquisition::{
+        ScreenAcquisitionCompletion, ScreenAcquisitionOutcome, ScreenAcquisitionOwner,
+        ScreenAcquisitionRegistry,
+    };
     use crate::input::state::test_support::make_test_input_state;
 
     fn verified_output_geometry(
@@ -942,6 +1133,7 @@ mod tests {
     fn desktop_capture_crops_from_screenshot_origin_not_logical_times_scale() {
         let mut state = FrozenState::new(None);
         let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(7));
         let mut data = Vec::new();
         for pixel in 0u8..10 {
             data.extend_from_slice(&[pixel, pixel, pixel, 255]);
@@ -956,7 +1148,7 @@ mod tests {
                 stride: 40,
                 data,
             },
-            None,
+            Some(7),
             Some(geometry),
         );
 
@@ -965,6 +1157,10 @@ mod tests {
             .expect("mixed-scale screenshot origin should crop the active output");
 
         let image = state.image().expect("the frozen image should be active");
+        assert_eq!(
+            state.image_provenance(),
+            ScreenImageProvenance::new(7, 0, 1, wl_output::Transform::Normal)
+        );
         assert_eq!(
             image.data,
             vec![6, 6, 6, 255, 7, 7, 7, 255, 8, 8, 8, 255, 9, 9, 9, 255]
@@ -975,6 +1171,7 @@ mod tests {
     fn desktop_capture_keeps_fractional_output_pixels_for_a_larger_overlay_buffer() {
         let mut state = FrozenState::new(None);
         let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(7));
         let mut geometry = desktop_geometry(0, 0, 3, 2, 2, Some((0, 0)));
         geometry.pixel_size = Some((5, 3));
         state.set_pending_desktop_image(
@@ -984,7 +1181,7 @@ mod tests {
                 stride: 20,
                 data: vec![7; 5 * 3 * 4],
             },
-            None,
+            Some(7),
             Some(geometry),
         );
 
@@ -1070,6 +1267,7 @@ mod tests {
     fn desktop_capture_crops_at_buffer_origin_for_a_proven_single_output() {
         let mut state = FrozenState::new(None);
         let mut input_state = make_test_input_state();
+        state.set_active_output(None, Some(7));
         let geometry = desktop_geometry(10, 20, 2, 1, 2, None).with_known_output_count(Some(1));
         assert_eq!(geometry.portal_crop_origin(4, 2), Some((0, 0)));
 
@@ -1080,7 +1278,7 @@ mod tests {
                 stride: 16,
                 data: vec![7; 4 * 2 * 4],
             },
-            None,
+            Some(7),
             Some(geometry),
         );
 
@@ -1091,6 +1289,32 @@ mod tests {
             );
         assert!(state.image().is_some());
         assert!(input_state.frozen_active());
+    }
+
+    #[test]
+    fn desktop_capture_refuses_activation_without_capture_time_output_identity() {
+        let mut state = FrozenState::new(None);
+        let mut input_state = make_test_input_state();
+        let geometry = desktop_geometry(0, 0, 2, 1, 1, Some((0, 0)));
+        state.set_pending_desktop_image(
+            FrozenImage {
+                width: 2,
+                height: 1,
+                stride: 8,
+                data: vec![7; 8],
+            },
+            None,
+            Some(geometry),
+        );
+
+        let error = state
+            .activate_pending_image(2, 1, &mut input_state)
+            .expect_err("missing capture-time output identity must fail closed");
+
+        assert_eq!(error, "Freeze capture source identity is unavailable");
+        assert!(state.image().is_none());
+        assert!(state.image_provenance().is_none());
+        assert!(!input_state.frozen_active());
     }
 
     #[test]
@@ -1265,5 +1489,363 @@ mod tests {
 
         assert!(!state.is_in_progress());
         assert!(state.take_capture_done());
+    }
+
+    #[test]
+    fn acquisition_terminal_consumes_attempt_once_and_retains_old_image_on_failure() {
+        let mut state = FrozenState::new_inner(None, None, true, None);
+        let mut input_state = make_test_input_state();
+        let mut registry = ScreenAcquisitionRegistry::default();
+        let id = registry.request(ScreenAcquisitionOwner::Ocr).expect("id");
+        state.set_image(FrozenImage {
+            width: 1,
+            height: 1,
+            stride: 4,
+            data: vec![0; 4],
+        });
+        input_state.set_frozen_active(true);
+
+        state
+            .start_capture_for(id, ScreenAcquisitionOwner::Ocr)
+            .expect("capture starts");
+        state.finish_acquisition(
+            ScreenAcquisitionOutcome::Failed("capture failed".to_string()),
+            &mut input_state,
+        );
+        state.finish_acquisition(ScreenAcquisitionOutcome::Cancelled, &mut input_state);
+
+        assert_eq!(state.attempt(), None);
+        assert!(state.image().is_some());
+        assert!(!input_state.frozen_active());
+        assert!(state.take_capture_done());
+        let completion = state.take_acquisition_completion().expect("one completion");
+        assert_eq!(completion.id, id);
+        assert_eq!(completion.owner, ScreenAcquisitionOwner::Ocr);
+        assert_eq!(
+            completion.outcome,
+            ScreenAcquisitionOutcome::Failed("capture failed".to_string())
+        );
+        assert_eq!(state.take_acquisition_completion(), None);
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum PendingImageRejectionFixture {
+        LayoutMismatch,
+        MissingActiveOutputGeometry,
+        MalformedTransformBuffer,
+        ActiveOutputSizeMismatch,
+        MissingDesktopGeometry,
+        StaleDesktopGeometry,
+        MissingVerifiedPixelSize,
+        DesktopCropFailure,
+        MissingOutputIdentity,
+        AspectMismatch,
+    }
+
+    impl PendingImageRejectionFixture {
+        const ALL: [Self; 10] = [
+            Self::LayoutMismatch,
+            Self::MissingActiveOutputGeometry,
+            Self::MalformedTransformBuffer,
+            Self::ActiveOutputSizeMismatch,
+            Self::MissingDesktopGeometry,
+            Self::StaleDesktopGeometry,
+            Self::MissingVerifiedPixelSize,
+            Self::DesktopCropFailure,
+            Self::MissingOutputIdentity,
+            Self::AspectMismatch,
+        ];
+
+        fn expected_error(self) -> &'static str {
+            match self {
+                Self::LayoutMismatch => "Freeze failed after the display layout changed",
+                Self::MissingActiveOutputGeometry => "Freeze capture geometry is unavailable",
+                Self::MalformedTransformBuffer => "Freeze capture transform failed:",
+                Self::ActiveOutputSizeMismatch => {
+                    "Freeze capture dimensions do not match the active output"
+                }
+                Self::MissingDesktopGeometry | Self::StaleDesktopGeometry => {
+                    "Freeze failed after the output layout changed"
+                }
+                Self::MissingVerifiedPixelSize | Self::DesktopCropFailure => {
+                    "Freeze failed after the display changed size"
+                }
+                Self::MissingOutputIdentity => "Freeze capture source identity is unavailable",
+                Self::AspectMismatch => "Freeze capture aspect does not match the overlay surface",
+            }
+        }
+
+        fn active_output_id(self) -> Option<u32> {
+            match self {
+                Self::StaleDesktopGeometry | Self::MissingOutputIdentity => None,
+                _ => Some(7),
+            }
+        }
+
+        fn install_pending(self, state: &mut FrozenState) -> ((u32, u32), Option<u32>) {
+            let image = |width, height, stride, data_len| FrozenImage {
+                width,
+                height,
+                stride,
+                data: vec![2; data_len],
+            };
+            let output_geometry =
+                || verified_output_geometry((2, 1), 1, wl_output::Transform::Normal, (2, 1));
+
+            match self {
+                Self::LayoutMismatch => {
+                    state.set_pending_output_image(image(2, 1, 8, 8), 7, output_geometry());
+                    state.set_active_output(None, Some(8));
+                    ((2, 1), None)
+                }
+                Self::MissingActiveOutputGeometry => {
+                    state.set_pending_output_image(image(2, 1, 8, 8), 7, output_geometry());
+                    state
+                        .pending_image
+                        .as_mut()
+                        .expect("pending image installed through the production setter")
+                        .source_geometry = None;
+                    ((2, 1), None)
+                }
+                Self::MalformedTransformBuffer => {
+                    state.set_pending_output_image_with_transform(
+                        image(2, 2, 8, 12),
+                        7,
+                        verified_output_geometry((2, 2), 1, wl_output::Transform::Normal, (2, 2)),
+                        Some(wl_output::Transform::_90),
+                    );
+                    ((2, 2), None)
+                }
+                Self::ActiveOutputSizeMismatch => {
+                    state.set_pending_output_image(image(3, 1, 12, 12), 7, output_geometry());
+                    ((2, 1), None)
+                }
+                Self::MissingDesktopGeometry => {
+                    state.set_pending_desktop_image(image(2, 1, 8, 8), Some(7), None);
+                    ((2, 1), None)
+                }
+                Self::StaleDesktopGeometry => {
+                    state.set_pending_desktop_image(
+                        image(2, 1, 8, 8),
+                        None,
+                        Some(
+                            desktop_geometry(0, 0, 2, 1, 1, None).with_known_output_count(Some(1)),
+                        ),
+                    );
+                    ((2, 1), Some(2))
+                }
+                Self::MissingVerifiedPixelSize => {
+                    let mut geometry = desktop_geometry(0, 0, 2, 1, 1, Some((0, 0)));
+                    geometry.pixel_size = None;
+                    state.set_pending_desktop_image(image(2, 1, 8, 8), Some(7), Some(geometry));
+                    ((2, 1), None)
+                }
+                Self::DesktopCropFailure => {
+                    state.set_pending_desktop_image(
+                        image(2, 1, 8, 8),
+                        Some(7),
+                        Some(desktop_geometry(0, 0, 2, 1, 1, Some((3, 0)))),
+                    );
+                    ((2, 1), None)
+                }
+                Self::MissingOutputIdentity => {
+                    state.set_pending_desktop_image(
+                        image(2, 1, 8, 8),
+                        None,
+                        Some(desktop_geometry(0, 0, 2, 1, 1, Some((0, 0)))),
+                    );
+                    ((2, 1), None)
+                }
+                Self::AspectMismatch => {
+                    state.set_pending_output_image(
+                        image(10, 1, 40, 40),
+                        7,
+                        verified_output_geometry((10, 1), 1, wl_output::Transform::Normal, (10, 1)),
+                    );
+                    ((1, 10), None)
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_pending_image_rejection_finishes_its_acquisition_exactly_once() {
+        for fixture in PendingImageRejectionFixture::ALL {
+            let mut state = FrozenState::new_inner(None, None, true, None);
+            let mut input_state = make_test_input_state();
+            let mut registry = ScreenAcquisitionRegistry::default();
+            let owner = ScreenAcquisitionOwner::UserFreeze;
+            let id = registry.request(owner).expect("id");
+            let retained_provenance =
+                ScreenImageProvenance::new(42, 9, 1, wl_output::Transform::Normal)
+                    .expect("valid retained image provenance");
+            state.set_image_with_provenance_for_test(
+                FrozenImage {
+                    width: 2,
+                    height: 1,
+                    stride: 8,
+                    data: vec![1; 8],
+                },
+                retained_provenance,
+            );
+            let retained_generation = state.image_generation();
+            input_state.set_frozen_active(true);
+            state.set_active_output(None, fixture.active_output_id());
+            state
+                .start_capture_for(id, owner)
+                .expect("capture attempt starts");
+            let ((phys_width, phys_height), live_output_count) =
+                fixture.install_pending(&mut state);
+
+            let message = state
+                .activate_pending_image_with_live_outputs(
+                    phys_width,
+                    phys_height,
+                    &mut input_state,
+                    live_output_count,
+                )
+                .expect_err("pending image fixture must be rejected");
+
+            if matches!(
+                fixture,
+                PendingImageRejectionFixture::MalformedTransformBuffer
+            ) {
+                assert!(
+                    message.starts_with(fixture.expected_error()),
+                    "{fixture:?} returned {message:?}"
+                );
+            } else {
+                assert_eq!(message, fixture.expected_error(), "{fixture:?}");
+            }
+            assert_eq!(state.attempt(), None, "{fixture:?}");
+            assert!(!state.has_pending_image(), "{fixture:?}");
+            assert!(!state.is_in_progress(), "{fixture:?}");
+            assert_eq!(state.image_generation(), retained_generation, "{fixture:?}");
+            assert_eq!(
+                state.image_provenance(),
+                Some(retained_provenance),
+                "{fixture:?}"
+            );
+            let retained = state.image().expect("the old image remains installed");
+            assert_eq!(
+                (retained.width, retained.height, retained.stride),
+                (2, 1, 8)
+            );
+            assert_eq!(retained.data, vec![1; 8], "{fixture:?}");
+            assert!(!input_state.frozen_active(), "{fixture:?}");
+            assert!(state.take_capture_done(), "{fixture:?}");
+            assert!(!state.take_capture_done(), "{fixture:?}");
+
+            assert_eq!(
+                state.take_matching_acquisition_completion(id, owner),
+                Some(ScreenAcquisitionCompletion {
+                    id,
+                    owner,
+                    outcome: ScreenAcquisitionOutcome::Failed(message),
+                }),
+                "{fixture:?}"
+            );
+            assert_eq!(
+                state.take_matching_acquisition_completion(id, owner),
+                None,
+                "{fixture:?} published more than one terminal"
+            );
+            assert_eq!(state.take_acquisition_completion(), None, "{fixture:?}");
+        }
+    }
+
+    #[test]
+    fn undrained_terminal_is_taken_only_by_its_correlated_owner() {
+        let mut state = FrozenState::new_inner(None, None, true, None);
+        let mut input_state = make_test_input_state();
+        let mut registry = ScreenAcquisitionRegistry::default();
+        let id = registry.request(ScreenAcquisitionOwner::Ocr).expect("id");
+        state
+            .start_capture_for(id, ScreenAcquisitionOwner::Ocr)
+            .expect("capture starts");
+        state.finish_acquisition(ScreenAcquisitionOutcome::Cancelled, &mut input_state);
+
+        assert_eq!(
+            state.take_matching_acquisition_completion(id, ScreenAcquisitionOwner::Eyedropper),
+            None
+        );
+        assert!(state.acquisition_completion().is_some());
+        assert_eq!(
+            state
+                .take_matching_acquisition_completion(id, ScreenAcquisitionOwner::Ocr)
+                .map(|completion| completion.outcome),
+            Some(ScreenAcquisitionOutcome::Cancelled)
+        );
+        assert!(state.acquisition_completion().is_none());
+    }
+
+    #[test]
+    fn undrained_ready_terminal_transfers_its_exact_generation_once() {
+        let mut state = FrozenState::new_inner(None, None, true, None);
+        let mut input_state = make_test_input_state();
+        let mut registry = ScreenAcquisitionRegistry::default();
+        let id = registry
+            .request(ScreenAcquisitionOwner::Eyedropper)
+            .expect("id");
+        state.set_image(FrozenImage {
+            width: 1,
+            height: 1,
+            stride: 4,
+            data: vec![7; 4],
+        });
+        let generation = state.image_generation();
+        input_state.set_frozen_active(true);
+        state
+            .start_capture_for(id, ScreenAcquisitionOwner::Eyedropper)
+            .expect("capture starts");
+
+        state.finish_ready_acquisition(&mut input_state);
+
+        assert_eq!(
+            state.take_matching_acquisition_completion(id, ScreenAcquisitionOwner::Eyedropper,),
+            Some(ScreenAcquisitionCompletion {
+                id,
+                owner: ScreenAcquisitionOwner::Eyedropper,
+                outcome: ScreenAcquisitionOutcome::Ready {
+                    installed_generation: generation,
+                },
+            })
+        );
+        assert_eq!(
+            state.take_matching_acquisition_completion(id, ScreenAcquisitionOwner::Eyedropper,),
+            None,
+            "a second cancellation cannot consume or release the generation again"
+        );
+        assert!(state.take_capture_done());
+        assert!(!state.take_capture_done());
+        assert!(input_state.frozen_active());
+    }
+
+    #[test]
+    fn preflight_layout_failure_is_classified_as_stale_layout() {
+        let mut state = FrozenState::new_inner(None, None, true, None);
+        let mut input_state = make_test_input_state();
+        let mut registry = ScreenAcquisitionRegistry::default();
+        let id = registry
+            .request(ScreenAcquisitionOwner::UserFreeze)
+            .expect("id");
+        state
+            .start_capture_for(id, ScreenAcquisitionOwner::UserFreeze)
+            .expect("capture starts");
+        state.set_active_geometry(Some(verified_output_geometry(
+            (1, 1),
+            1,
+            wl_output::Transform::Normal,
+            (1, 1),
+        )));
+
+        state.finish_preflight_failure("backend refused".to_string(), &mut input_state);
+
+        assert_eq!(
+            state
+                .take_acquisition_completion()
+                .map(|completion| completion.outcome),
+            Some(ScreenAcquisitionOutcome::StaleLayout)
+        );
     }
 }

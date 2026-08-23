@@ -2,7 +2,7 @@ use anyhow::Result;
 use log::warn;
 use std::time::{Duration, Instant};
 
-use crate::backend::wayland::frozen::FrozenImage;
+use crate::backend::wayland::frozen::{FrozenImage, ScreenImageProvenance};
 use crate::backend::wayland::frozen_geometry::{OutputGeometry, require_verified_capture_source};
 use crate::backend::wayland::portal_capture::{
     capture_via_portal_fullscreen_bytes, crop_argb, portal_output_matches,
@@ -12,7 +12,7 @@ use crate::capture::sources::frozen::decode_image_to_argb;
 use crate::capture::types::CaptureError;
 use crate::input::InputState;
 
-use super::state::ZoomState;
+use super::state::{ZoomSourceOutcome, ZoomState};
 
 impl ZoomState {
     pub(super) fn capture_via_portal(
@@ -38,6 +38,13 @@ impl ZoomState {
         self.portal_target_output_id = Some(target_output_id);
 
         let layout_generation = self.output_layout_generation;
+        let provenance = ScreenImageProvenance::new(
+            target_output_id,
+            layout_generation,
+            geo.scale,
+            geo.transform,
+        )
+        .expect("verified output geometry has a positive scale");
         crate::notification::send_notification_async(
             tokio_handle,
             "Zoom capture".to_string(),
@@ -52,7 +59,7 @@ impl ZoomState {
                     .map_err(|error| CaptureError::ImageError(format!("Decode failed: {error}")))?;
                 let image = crop_portal_image(data, width, height, &geo)?;
 
-                Ok((Some(target_output_id), layout_generation, image))
+                Ok((Some(target_output_id), layout_generation, provenance, image))
             }
             .await
         }));
@@ -76,14 +83,10 @@ impl ZoomState {
             .is_some_and(|task| task.timed_out(now))
         {
             warn!("Portal zoom capture timed out; restoring overlay");
-            self.finish_portal_task();
-            if self.image.is_none() {
-                self.active = false;
-            }
-            self.pending_activation = false;
-            input_state.set_zoom_status(self.active, self.locked, self.scale, self.view_offset);
-            input_state.needs_redraw = true;
-            self.capture_done = true;
+            self.finish_failed_portal_task(
+                input_state,
+                ZoomSourceOutcome::Failed("Portal zoom capture timed out".to_string()),
+            );
             return;
         }
 
@@ -93,7 +96,7 @@ impl ZoomState {
             .map(PortalTask::poll)
             .unwrap_or(PortalPoll::Disconnected);
         match poll {
-            PortalPoll::Ready(Ok((target_output, layout_generation, image))) => {
+            PortalPoll::Ready(Ok((target_output, layout_generation, provenance, image))) => {
                 let output_matches = portal_output_matches(target_output, self.active_output_id);
                 let layout_matches = layout_generation == self.output_layout_generation;
 
@@ -111,19 +114,17 @@ impl ZoomState {
                         geometry.output_count_conflicts_with_live(live_output_count)
                     }) {
                         warn!("Portal zoom capture discarded after output topology changed");
-                        Self::push_stale_layout_toast(input_state);
-                        self.finish_failed_portal_task(input_state);
+                        self.finish_failed_portal_task(input_state, ZoomSourceOutcome::StaleLayout);
                         return;
                     }
-                    self.set_image(image);
+                    self.install_image(image, provenance);
                 } else {
                     if !layout_matches {
                         warn!("Portal zoom capture discarded after the output layout changed");
                     } else {
                         warn!("Portal zoom capture for inactive output discarded");
                     }
-                    Self::push_stale_layout_toast(input_state);
-                    self.finish_failed_portal_task(input_state);
+                    self.finish_failed_portal_task(input_state, ZoomSourceOutcome::StaleLayout);
                     return;
                 }
 
@@ -139,24 +140,35 @@ impl ZoomState {
                 input_state.set_zoom_status(self.active, self.locked, self.scale, self.view_offset);
                 input_state.dirty_tracker.mark_full();
                 input_state.needs_redraw = true;
+                self.finish_source_capture(ZoomSourceOutcome::Ready {
+                    installed_generation: self.image_generation(),
+                });
                 self.capture_done = true;
             }
             PortalPoll::Ready(Err(CaptureError::Cancelled(reason))) => {
                 log::info!("Portal zoom capture cancelled: {reason}");
-                self.finish_failed_portal_task(input_state);
+                self.finish_failed_portal_task(input_state, ZoomSourceOutcome::Cancelled);
             }
             PortalPoll::Ready(Err(err)) => {
                 warn!("Portal zoom capture failed: {err}");
-                self.finish_failed_portal_task(input_state);
+                self.finish_failed_portal_task(
+                    input_state,
+                    ZoomSourceOutcome::Failed(err.to_string()),
+                );
             }
             PortalPoll::Failed(err) => {
                 warn!("Portal zoom capture task failed: {err}");
-                self.finish_failed_portal_task(input_state);
+                self.finish_failed_portal_task(input_state, ZoomSourceOutcome::Failed(err));
             }
             PortalPoll::Pending => {}
             PortalPoll::Disconnected => {
                 warn!("Portal zoom capture channel disconnected");
-                self.finish_failed_portal_task(input_state);
+                self.finish_failed_portal_task(
+                    input_state,
+                    ZoomSourceOutcome::Failed(
+                        "Portal zoom capture channel disconnected".to_string(),
+                    ),
+                );
             }
         }
     }
@@ -171,12 +183,17 @@ impl ZoomState {
         self.portal_target_output_id = None;
     }
 
-    fn finish_failed_portal_task(&mut self, input_state: &mut InputState) {
+    fn finish_failed_portal_task(
+        &mut self,
+        input_state: &mut InputState,
+        outcome: ZoomSourceOutcome,
+    ) {
         self.finish_portal_task();
         if self.image.is_none() {
             self.active = false;
         }
         self.pending_activation = false;
+        self.finish_source_capture(outcome);
         input_state.set_zoom_status(self.active, self.locked, self.scale, self.view_offset);
         input_state.needs_redraw = true;
         self.capture_done = true;
@@ -249,6 +266,23 @@ mod tests {
             stride: 8,
             data: vec![byte; 8],
         }
+    }
+
+    fn provenance(output_id: u32, layout_generation: u64) -> ScreenImageProvenance {
+        ScreenImageProvenance::new(
+            output_id,
+            layout_generation,
+            1,
+            wayland_client::protocol::wl_output::Transform::Normal,
+        )
+        .unwrap()
+    }
+
+    fn stale_report() -> Option<super::super::state::ZoomTerminalReport> {
+        Some(super::super::state::ZoomTerminalReport {
+            source: "zoom",
+            message: "Zoom failed after the display layout changed".to_string(),
+        })
     }
 
     fn crop_geometry(
@@ -366,11 +400,13 @@ mod tests {
         let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
+        let id = zoom.begin_identified_capture();
+        zoom.set_active_output(None, Some(1));
         zoom.request_activation();
         zoom.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async { Ok((None, 0, image(3))) },
+            async { Ok((Some(1), 0, provenance(1, 0), image(3))) },
         ));
         zoom.portal_in_progress = true;
 
@@ -379,7 +415,18 @@ mod tests {
         assert!(zoom.active);
         assert!(!zoom.pending_activation);
         assert_eq!(zoom.image().unwrap().data, vec![3; 8]);
+        assert_eq!(zoom.image_provenance(), Some(provenance(1, 0)));
         assert!(zoom.take_capture_done());
+        assert_eq!(
+            zoom.take_source_terminal(),
+            Some(super::super::state::ZoomSourceTerminal {
+                id,
+                outcome: ZoomSourceOutcome::Ready {
+                    installed_generation: zoom.image_generation(),
+                },
+                report: None,
+            })
+        );
     }
 
     #[tokio::test]
@@ -388,6 +435,7 @@ mod tests {
             let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
             let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
             let mut input = make_test_input_state();
+            let id = zoom.begin_identified_capture();
             zoom.request_activation();
             zoom.portal_task = Some(if panic_task {
                 PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
@@ -407,7 +455,41 @@ mod tests {
             assert!(!zoom.pending_activation);
             assert!(zoom.portal_task.is_none());
             assert!(zoom.take_capture_done());
+            assert!(matches!(
+                zoom.take_source_terminal(),
+                Some(super::super::state::ZoomSourceTerminal {
+                    id: terminal_id,
+                    outcome: ZoomSourceOutcome::Failed(_),
+                    ..
+                }) if terminal_id == id
+            ));
         }
+    }
+
+    #[tokio::test]
+    async fn portal_dismissal_emits_a_correlated_cancelled_terminal() {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
+        let mut input = make_test_input_state();
+        let id = zoom.begin_identified_capture();
+        zoom.portal_task = Some(PortalTask::spawn(
+            &tokio::runtime::Handle::current(),
+            wake.handle(),
+            async { Err(CaptureError::Cancelled("dismissed".to_string())) },
+        ));
+        zoom.portal_in_progress = true;
+
+        poll_until_finished(&mut zoom, &mut input).await;
+
+        assert_eq!(
+            zoom.take_source_terminal(),
+            Some(super::super::state::ZoomSourceTerminal {
+                id,
+                outcome: ZoomSourceOutcome::Cancelled,
+                report: None,
+            })
+        );
+        assert_eq!(zoom.current_capture_id(), None);
     }
 
     #[tokio::test]
@@ -417,6 +499,7 @@ mod tests {
             let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
             let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
             let mut input = make_test_input_state();
+            let id = zoom.begin_identified_capture();
             zoom.request_activation();
             zoom.portal_task = Some(if timed_out {
                 PortalTask::spawn_at_for_test(
@@ -437,6 +520,14 @@ mod tests {
             assert!(!zoom.pending_activation);
             assert!(zoom.portal_task.is_none());
             assert!(zoom.take_capture_done());
+            assert!(matches!(
+                zoom.take_source_terminal(),
+                Some(super::super::state::ZoomSourceTerminal {
+                    id: terminal_id,
+                    outcome: ZoomSourceOutcome::Failed(_),
+                    ..
+                }) if terminal_id == id
+            ));
         }
     }
 
@@ -445,6 +536,7 @@ mod tests {
         let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
+        let id = zoom.begin_identified_capture();
         zoom.set_image(image(4));
         let generation = zoom.image_generation();
         zoom.set_active_output(None, Some(2));
@@ -452,7 +544,7 @@ mod tests {
         zoom.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async { Ok((Some(1), 0, image(9))) },
+            async { Ok((Some(1), 0, provenance(1, 0), image(9))) },
         ));
         zoom.portal_in_progress = true;
 
@@ -463,7 +555,15 @@ mod tests {
         assert_eq!(zoom.image_generation(), generation);
         assert_eq!(zoom.image().unwrap().data, vec![4; 8]);
         assert!(zoom.take_capture_done());
-        assert!(input.ui_toast.is_some());
+        assert_eq!(input.test_toast_count(), 0);
+        assert_eq!(
+            zoom.take_source_terminal(),
+            Some(super::super::state::ZoomSourceTerminal {
+                id,
+                outcome: ZoomSourceOutcome::StaleLayout,
+                report: stale_report(),
+            })
+        );
     }
 
     #[tokio::test]
@@ -471,15 +571,24 @@ mod tests {
         let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
+        let id = zoom.begin_identified_capture();
         zoom.set_image(image(4));
         let generation = zoom.image_generation();
         zoom.set_active_geometry(Some(crop_geometry((0, 0))));
+        zoom.set_active_output(None, Some(1));
         let layout_generation = zoom.output_layout_generation;
         zoom.request_activation();
         zoom.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async move { Ok((None, layout_generation, image(9))) },
+            async move {
+                Ok((
+                    Some(1),
+                    layout_generation,
+                    provenance(1, layout_generation),
+                    image(9),
+                ))
+            },
         ));
         zoom.portal_in_progress = true;
         zoom.set_active_geometry(Some(crop_geometry((6, 0))));
@@ -491,7 +600,15 @@ mod tests {
         assert_eq!(zoom.image_generation(), generation);
         assert_eq!(zoom.image().unwrap().data, vec![4; 8]);
         assert!(zoom.take_capture_done());
-        assert!(input.ui_toast.is_some());
+        assert_eq!(input.test_toast_count(), 0);
+        assert_eq!(
+            zoom.take_source_terminal(),
+            Some(super::super::state::ZoomSourceTerminal {
+                id,
+                outcome: ZoomSourceOutcome::StaleLayout,
+                report: stale_report(),
+            })
+        );
     }
 
     #[tokio::test]
@@ -499,14 +616,23 @@ mod tests {
         let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
+        let id = zoom.begin_identified_capture();
         let geometry = crop_geometry((0, 0));
         zoom.set_active_geometry(Some(geometry.clone()));
+        zoom.set_active_output(None, Some(1));
         let layout_generation = zoom.output_layout_generation;
         zoom.request_activation();
         zoom.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async move { Ok((None, layout_generation, image(3))) },
+            async move {
+                Ok((
+                    Some(1),
+                    layout_generation,
+                    provenance(1, layout_generation),
+                    image(3),
+                ))
+            },
         ));
         zoom.portal_in_progress = true;
         zoom.set_active_geometry(Some(geometry));
@@ -517,6 +643,16 @@ mod tests {
         assert!(!zoom.pending_activation);
         assert_eq!(zoom.image().unwrap().data, vec![3; 8]);
         assert!(zoom.take_capture_done());
+        assert_eq!(
+            zoom.take_source_terminal(),
+            Some(super::super::state::ZoomSourceTerminal {
+                id,
+                outcome: ZoomSourceOutcome::Ready {
+                    installed_generation: zoom.image_generation(),
+                },
+                report: None,
+            })
+        );
     }
 
     #[tokio::test]
@@ -524,15 +660,24 @@ mod tests {
         let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
         let mut input = make_test_input_state();
+        let id = zoom.begin_identified_capture();
         zoom.set_image(image(4));
         let generation = zoom.image_generation();
         zoom.set_active_geometry(Some(crop_geometry((0, 0)).with_known_output_count(Some(1))));
+        zoom.set_active_output(None, Some(1));
         let layout_generation = zoom.output_layout_generation;
         zoom.request_activation();
         zoom.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
             wake.handle(),
-            async move { Ok((None, layout_generation, image(9))) },
+            async move {
+                Ok((
+                    Some(1),
+                    layout_generation,
+                    provenance(1, layout_generation),
+                    image(9),
+                ))
+            },
         ));
         zoom.portal_in_progress = true;
 
@@ -543,13 +688,22 @@ mod tests {
         assert_eq!(zoom.image_generation(), generation);
         assert_eq!(zoom.image().unwrap().data, vec![4; 8]);
         assert!(zoom.take_capture_done());
-        assert!(input.ui_toast.is_some());
+        assert_eq!(input.test_toast_count(), 0);
+        assert_eq!(
+            zoom.take_source_terminal(),
+            Some(super::super::state::ZoomSourceTerminal {
+                id,
+                outcome: ZoomSourceOutcome::StaleLayout,
+                report: stale_report(),
+            })
+        );
     }
 
     #[tokio::test]
     async fn supersession_is_ignored_and_explicit_abort_owns_task_cancellation() {
         let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
         let mut zoom = ZoomState::new_with_runtime_wake(None, wake.handle());
+        let id = zoom.begin_identified_capture();
         zoom.request_activation();
         zoom.portal_task = Some(PortalTask::spawn(
             &tokio::runtime::Handle::current(),
@@ -564,5 +718,13 @@ mod tests {
         assert!(zoom.abort_capture());
         assert!(zoom.portal_task.is_none());
         assert!(!zoom.portal_in_progress);
+        assert_eq!(
+            zoom.take_source_terminal(),
+            Some(super::super::state::ZoomSourceTerminal {
+                id,
+                outcome: ZoomSourceOutcome::Aborted,
+                report: None,
+            })
+        );
     }
 }

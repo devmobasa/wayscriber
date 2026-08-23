@@ -19,9 +19,7 @@ pub(super) const WAYSCRIBER_SELECTION_MIME: &str = "application/vnd.wayscriber.s
 
 // A pasted image is persisted in the visible frame and in the Create undo action.
 // Keep one accepted image comfortably below the default 50 MiB session JSON budget.
-pub(super) const MAX_CLIPBOARD_IMAGE_BYTES: usize = 3 * 1024 * 1024;
 pub(super) const MAX_CLIPBOARD_SELECTION_BYTES: usize = 2 * 1024 * 1024;
-pub(super) const MAX_CLIPBOARD_IMAGE_PIXELS: u64 = 48_000_000;
 pub(super) const CLIPBOARD_READ_TIMEOUT: Duration = Duration::from_millis(1500);
 pub(super) const CLIPBOARD_FINGERPRINT_BYTES: usize = 4096;
 pub(super) const CLIPBOARD_FINGERPRINT_TIMEOUT: Duration = Duration::from_millis(300);

@@ -11,7 +11,9 @@ use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 use crate::backend::wayland::capture::CaptureLayoutContext;
-use crate::backend::wayland::frozen::{FrozenImage, copy_shm_argb, validate_shm_buffer_layout};
+use crate::backend::wayland::frozen::{
+    FrozenImage, ScreenImageProvenance, copy_shm_argb, validate_shm_buffer_layout,
+};
 use crate::backend::wayland::frozen_geometry::{OutputGeometry, require_verified_capture_source};
 use crate::input::InputState;
 
@@ -73,6 +75,7 @@ impl CaptureSession {
 
 struct CaptureContext {
     layout: CaptureLayoutContext,
+    layout_generation: u64,
     source_geometry: OutputGeometry,
 }
 
@@ -80,8 +83,19 @@ impl CaptureContext {
     fn new(target_output_id: u32, source_geometry: OutputGeometry, layout_generation: u64) -> Self {
         Self {
             layout: CaptureLayoutContext::new(target_output_id, layout_generation),
+            layout_generation,
             source_geometry,
         }
+    }
+
+    fn provenance(&self) -> ScreenImageProvenance {
+        ScreenImageProvenance::new(
+            self.layout.target_output_id(),
+            self.layout_generation,
+            self.source_geometry.scale,
+            self.source_geometry.transform,
+        )
+        .expect("verified output geometry has a positive scale")
     }
 }
 
@@ -108,11 +122,16 @@ impl ZoomState {
         use_fallback: bool,
         _tokio_handle: &tokio::runtime::Handle,
     ) -> Result<()> {
+        anyhow::ensure!(
+            self.source_terminal.is_none(),
+            "a zoom capture terminal is still pending"
+        );
         if self.capture.is_some() || self.portal_in_progress || self.preflight_pending {
             warn!("Zoom capture already in progress; ignoring request");
             return Ok(());
         }
 
+        self.begin_identified_capture();
         self.capture_done = false;
         self.preflight_use_fallback = use_fallback || self.manager.is_none();
         self.snapshot_preflight_layout();
@@ -198,7 +217,7 @@ impl ZoomState {
                 );
                 if let Err(err) = self.on_buffer(format, width, height, stride) {
                     warn!("Failed to prepare zoom buffer: {}", err);
-                    self.cancel(input_state, false);
+                    self.fail_capture(input_state, false, err.to_string());
                 }
             }
             FrameEvent::LinuxDmabuf { .. } => {
@@ -207,7 +226,7 @@ impl ZoomState {
             FrameEvent::BufferDone => {
                 if let Err(err) = self.on_buffer_done() {
                     warn!("Failed to issue zoom copy: {}", err);
-                    self.cancel(input_state, false);
+                    self.fail_capture(input_state, false, err.to_string());
                 }
             }
             FrameEvent::Flags { flags } => {
@@ -231,7 +250,7 @@ impl ZoomState {
                     }
                     Err(err) => {
                         warn!("Zoom capture ready handling failed: {}", err);
-                        self.cancel(input_state, false);
+                        self.fail_capture(input_state, false, err.to_string());
                         return;
                     }
                 }
@@ -243,6 +262,9 @@ impl ZoomState {
                 input_state.set_zoom_status(self.active, self.locked, self.scale, self.view_offset);
                 input_state.dirty_tracker.mark_full();
                 input_state.needs_redraw = true;
+                self.finish_source_capture(super::state::ZoomSourceOutcome::Ready {
+                    installed_generation: self.image_generation(),
+                });
                 self.capture_done = true;
                 if let Some(image) = self.image() {
                     info!(
@@ -256,7 +278,7 @@ impl ZoomState {
             }
             FrameEvent::Failed => {
                 warn!("Zoom capture failed");
-                self.cancel(input_state, false);
+                self.fail_capture(input_state, false, "Zoom capture failed");
             }
             _ => {}
         }
@@ -338,7 +360,8 @@ impl ZoomState {
             return Ok(false);
         }
 
-        self.set_image(finalize_capture_image(image, &capture.context)?);
+        let provenance = capture.context.provenance();
+        self.install_image(finalize_capture_image(image, &capture.context)?, provenance);
 
         Ok(true)
     }
@@ -348,6 +371,25 @@ impl ZoomState {
 mod tests {
     use super::*;
     use wayland_client::protocol::wl_output;
+
+    #[test]
+    fn capture_context_retains_complete_source_provenance() {
+        let geometry = OutputGeometry::update_from(
+            Some((0, 0)),
+            Some((3, 2)),
+            (3, 2),
+            2,
+            wl_output::Transform::_90,
+            Some((5, 3)),
+        )
+        .expect("verified source geometry");
+        let context = CaptureContext::new(7, geometry, 3);
+
+        assert_eq!(
+            context.provenance(),
+            ScreenImageProvenance::new(7, 3, 2, wl_output::Transform::_90).unwrap()
+        );
+    }
 
     #[test]
     fn finalized_capture_rejects_known_pixel_size_mismatch() {

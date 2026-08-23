@@ -300,7 +300,7 @@ impl InputState {
             pending_frozen_toggle: false,
             eyedropper_ui_state: crate::input::state::core::EyedropperUiState::Inactive,
             pending_eyedropper_toggle: false,
-            ocr_ui_state: crate::input::state::core::OcrUiState::Inactive,
+            region_select_ui_state: crate::input::state::core::RegionSelectUiState::Inactive,
             pending_ocr_request: false,
             ocr_cancelled_by_toolbar: false,
             zoom_active: false,

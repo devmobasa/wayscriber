@@ -1,7 +1,6 @@
 use super::InputState;
 use crate::domain::Action;
 use crate::input::Key;
-use crate::input::state::{Toast, ToastPriority};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EyedropperCaptureSource {
@@ -16,11 +15,11 @@ pub enum EyedropperUiState {
     Inactive,
     PendingCapture {
         source: EyedropperCaptureSource,
-        auto_froze: bool,
+        owned_frozen_generation: Option<u64>,
     },
     Active {
         hover: Option<(f64, f64)>,
-        auto_froze: bool,
+        owned_frozen_generation: Option<u64>,
     },
 }
 
@@ -51,10 +50,17 @@ impl EyedropperUiState {
         }
     }
 
-    fn auto_froze(self) -> bool {
+    pub(crate) fn owned_frozen_generation(self) -> Option<u64> {
         match self {
-            Self::PendingCapture { auto_froze, .. } | Self::Active { auto_froze, .. } => auto_froze,
-            Self::Inactive => false,
+            Self::PendingCapture {
+                owned_frozen_generation,
+                ..
+            }
+            | Self::Active {
+                owned_frozen_generation,
+                ..
+            } => owned_frozen_generation,
+            Self::Inactive => None,
         }
     }
 }
@@ -110,20 +116,20 @@ impl InputState {
     pub(crate) fn set_eyedropper_pending_capture(&mut self, source: EyedropperCaptureSource) {
         self.eyedropper_ui_state = EyedropperUiState::PendingCapture {
             source,
-            auto_froze: matches!(source, EyedropperCaptureSource::Frozen),
+            owned_frozen_generation: None,
         };
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
 
-    pub(crate) fn activate_eyedropper(&mut self, auto_froze: bool) {
+    pub(crate) fn activate_eyedropper(&mut self, owned_frozen_generation: Option<u64>) {
         // A capture can take long enough for another interaction to begin while
         // the eyedropper is pending. Entering the modal state must cancel it so
         // the eyedropper cannot swallow the matching release event.
         self.prepare_for_screen_modal();
         self.eyedropper_ui_state = EyedropperUiState::Active {
             hover: None,
-            auto_froze,
+            owned_frozen_generation,
         };
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -139,25 +145,15 @@ impl InputState {
         }
     }
 
-    /// Leave eyedropper mode and return whether it created frozen mode itself.
-    pub(crate) fn cancel_eyedropper(&mut self) -> bool {
-        let auto_froze = self.eyedropper_ui_state.auto_froze();
+    /// Leave eyedropper mode and return the exact frozen generation it owns.
+    pub(crate) fn cancel_eyedropper(&mut self) -> Option<u64> {
+        let owned_frozen_generation = self.eyedropper_ui_state.owned_frozen_generation();
         if !matches!(self.eyedropper_ui_state, EyedropperUiState::Inactive) {
             self.eyedropper_ui_state = EyedropperUiState::Inactive;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }
-        auto_froze
-    }
-
-    pub(crate) fn report_eyedropper_capture_failure_if_unreported(&mut self) {
-        if self.ui_toast.is_none() {
-            self.push_toast(
-                ToastPriority::Critical,
-                "eyedropper",
-                Toast::error("Screen eyedropper capture failed."),
-            );
-        }
+        owned_frozen_generation
     }
 }
 
@@ -168,12 +164,12 @@ mod tests {
     use crate::input::{DrawingState, MouseButton};
 
     #[test]
-    fn cancel_reports_auto_frozen_ownership() {
+    fn cancel_returns_the_exact_owned_frozen_generation() {
         let mut state = make_test_input_state();
         state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
-        state.activate_eyedropper(true);
+        state.activate_eyedropper(Some(17));
 
-        assert!(state.cancel_eyedropper());
+        assert_eq!(state.cancel_eyedropper(), Some(17));
         assert_eq!(state.eyedropper_state(), EyedropperUiState::Inactive);
     }
 
@@ -182,37 +178,8 @@ mod tests {
         let mut state = make_test_input_state();
         state.set_eyedropper_pending_capture(EyedropperCaptureSource::Zoom);
 
-        assert!(!state.cancel_eyedropper());
+        assert_eq!(state.cancel_eyedropper(), None);
         assert_eq!(state.eyedropper_state(), EyedropperUiState::Inactive);
-    }
-
-    #[test]
-    fn capture_failure_preserves_a_more_specific_existing_error() {
-        let mut state = make_test_input_state();
-        state.push_toast(
-            ToastPriority::Critical,
-            "eyedropper",
-            Toast::error("Freeze failed after the display changed size"),
-        );
-
-        state.report_eyedropper_capture_failure_if_unreported();
-
-        assert_eq!(
-            state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
-            Some("Freeze failed after the display changed size")
-        );
-    }
-
-    #[test]
-    fn capture_failure_reports_a_fallback_when_capture_did_not() {
-        let mut state = make_test_input_state();
-
-        state.report_eyedropper_capture_failure_if_unreported();
-
-        assert_eq!(
-            state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
-            Some("Screen eyedropper capture failed.")
-        );
     }
 
     #[test]
@@ -222,7 +189,7 @@ mod tests {
         state.on_mouse_press(MouseButton::Left, 10, 20);
         assert!(matches!(state.state, DrawingState::Drawing { .. }));
 
-        state.activate_eyedropper(true);
+        state.activate_eyedropper(Some(1));
 
         assert!(matches!(state.state, DrawingState::Idle));
         assert!(state.active_drag_button.is_none());
@@ -239,7 +206,7 @@ mod tests {
         state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
         assert!(state.modal_blocks_canvas_key_repeat());
 
-        state.activate_eyedropper(true);
+        state.activate_eyedropper(Some(1));
         assert!(state.modal_blocks_canvas_key_repeat());
 
         state.cancel_eyedropper();

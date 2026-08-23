@@ -1,12 +1,13 @@
 use super::{
     CLIPBOARD_READ_TIMEOUT, ClipboardPasteCompletion, ClipboardPasteResult,
-    ClipboardPublishCompletion, ClipboardReadError, MAX_CLIPBOARD_IMAGE_BYTES,
-    MAX_CLIPBOARD_SELECTION_BYTES, WAYSCRIBER_SELECTION_MIME, file_list, image, system,
+    ClipboardPublishCompletion, ClipboardReadError, MAX_CLIPBOARD_SELECTION_BYTES,
+    WAYSCRIBER_SELECTION_MIME, file_list, image, system,
 };
 use crate::draw::{EmbeddedImage, Shape};
 use crate::input::state::{
     ClipboardFingerprint, ClipboardPasteRequest, WayscriberClipboardSelection,
 };
+use crate::screen_pixels::EmbeddedImageLimits;
 
 #[derive(Debug, Clone)]
 pub(in crate::backend::wayland) struct FailedLocalSelectionProbe {
@@ -153,7 +154,7 @@ pub(in crate::backend::wayland) fn resolve_system_clipboard() -> ClipboardPasteR
     let limit = if mime_type == WAYSCRIBER_SELECTION_MIME {
         MAX_CLIPBOARD_SELECTION_BYTES
     } else {
-        MAX_CLIPBOARD_IMAGE_BYTES
+        EmbeddedImageLimits::default().max_bytes()
     };
 
     let bytes = match system::read_clipboard_mime(&mime_type, limit, CLIPBOARD_READ_TIMEOUT) {
