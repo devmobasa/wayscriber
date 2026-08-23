@@ -5,6 +5,13 @@ use crate::util::Rect;
 use std::collections::{HashMap, HashSet};
 
 pub(super) const SPATIAL_GRID_CELL_SIZE: i32 = 64;
+const MAX_SPATIAL_CELLS_PER_SHAPE: usize = 4_096;
+
+#[derive(Debug, PartialEq, Eq)]
+enum CellMembership {
+    Cells(Vec<(i32, i32)>),
+    Global,
+}
 
 /// Spatial grid for efficient hit-testing using ShapeId instead of indices.
 ///
@@ -17,6 +24,11 @@ pub(super) struct SpatialGrid {
     pub(super) cells: HashMap<(i32, i32), Vec<ShapeId>>,
     /// Reverse mapping from ShapeId to the cells it occupies for efficient removal.
     pub(super) shape_cells: HashMap<ShapeId, Vec<(i32, i32)>>,
+    /// Shapes spanning too many cells to index individually.
+    ///
+    /// These remain candidates for every query, bounding per-shape index work
+    /// and memory without introducing hit-test false negatives.
+    global_shapes: HashSet<ShapeId>,
     /// Number of shapes when the grid was built (for validation).
     pub(super) shape_count: usize,
 }
@@ -282,53 +294,70 @@ impl SpatialGrid {
             return None;
         }
 
-        let mut cells: HashMap<(i32, i32), Vec<ShapeId>> = HashMap::new();
-        let mut shape_cells: HashMap<ShapeId, Vec<(i32, i32)>> = HashMap::new();
+        let mut grid = Self {
+            cell_size,
+            cells: HashMap::new(),
+            shape_cells: HashMap::new(),
+            global_shapes: HashSet::new(),
+            shape_count: frame.shapes.len(),
+        };
 
         for drawn in &frame.shapes {
             let Some(bounds) = drawn.bounding_box() else {
                 continue;
             };
-
-            let cell_keys = Self::compute_cell_keys(bounds, cell_size);
-            for &key in &cell_keys {
-                cells.entry(key).or_default().push(drawn.id);
-            }
-            shape_cells.insert(drawn.id, cell_keys);
+            grid.add_shape_with_bounds(drawn.id, bounds);
         }
 
-        if cells.is_empty() {
+        if grid.cells.is_empty() && grid.global_shapes.is_empty() {
             return None;
         }
 
-        Some(Self {
-            cell_size,
-            cells,
-            shape_cells,
-            shape_count: frame.shapes.len(),
-        })
+        Some(grid)
     }
 
-    /// Computes the cell keys that a bounding box occupies.
-    fn compute_cell_keys(bounds: Rect, cell_size: i32) -> Vec<(i32, i32)> {
-        let min_cell_x = bounds.x.div_euclid(cell_size);
-        let max_cell_x = (bounds.x + bounds.width - 1).div_euclid(cell_size);
-        let min_cell_y = bounds.y.div_euclid(cell_size);
-        let max_cell_y = (bounds.y + bounds.height - 1).div_euclid(cell_size);
+    /// Computes bounded cell membership for a bounding box.
+    fn compute_cell_membership(bounds: Rect, cell_size: i32) -> CellMembership {
+        if !bounds.is_valid() {
+            return CellMembership::Global;
+        }
 
-        let mut keys = Vec::with_capacity(
-            ((max_cell_x - min_cell_x + 1) * (max_cell_y - min_cell_y + 1)) as usize,
-        );
+        let cell_size = i64::from(cell_size.max(1));
+        let min_cell_x = i64::from(bounds.x).div_euclid(cell_size);
+        let max_cell_x = (i64::from(bounds.x) + i64::from(bounds.width) - 1).div_euclid(cell_size);
+        let min_cell_y = i64::from(bounds.y).div_euclid(cell_size);
+        let max_cell_y = (i64::from(bounds.y) + i64::from(bounds.height) - 1).div_euclid(cell_size);
+
+        let columns = (max_cell_x - min_cell_x + 1) as u64;
+        let rows = (max_cell_y - min_cell_y + 1) as u64;
+        let Some(cell_count) = columns.checked_mul(rows) else {
+            return CellMembership::Global;
+        };
+        if cell_count > MAX_SPATIAL_CELLS_PER_SHAPE as u64 {
+            return CellMembership::Global;
+        }
+
+        let (Ok(min_cell_x), Ok(max_cell_x), Ok(min_cell_y), Ok(max_cell_y)) = (
+            i32::try_from(min_cell_x),
+            i32::try_from(max_cell_x),
+            i32::try_from(min_cell_y),
+            i32::try_from(max_cell_y),
+        ) else {
+            return CellMembership::Global;
+        };
+
+        let mut keys = Vec::with_capacity(cell_count as usize);
         for cx in min_cell_x..=max_cell_x {
             for cy in min_cell_y..=max_cell_y {
                 keys.push((cx, cy));
             }
         }
-        keys
+        CellMembership::Cells(keys)
     }
 
     /// Removes a shape from all cells it occupies.
     fn remove_shape(&mut self, id: ShapeId) {
+        self.global_shapes.remove(&id);
         if let Some(cell_keys) = self.shape_cells.remove(&id) {
             for key in cell_keys {
                 if let Some(ids) = self.cells.get_mut(&key) {
@@ -344,11 +373,17 @@ impl SpatialGrid {
 
     /// Adds a shape with known bounds to the grid.
     fn add_shape_with_bounds(&mut self, id: ShapeId, bounds: Rect) {
-        let cell_keys = Self::compute_cell_keys(bounds, self.cell_size);
-        for &key in &cell_keys {
-            self.cells.entry(key).or_default().push(id);
+        match Self::compute_cell_membership(bounds, self.cell_size) {
+            CellMembership::Cells(cell_keys) => {
+                for &key in &cell_keys {
+                    self.cells.entry(key).or_default().push(id);
+                }
+                self.shape_cells.insert(id, cell_keys);
+            }
+            CellMembership::Global => {
+                self.global_shapes.insert(id);
+            }
         }
-        self.shape_cells.insert(id, cell_keys);
     }
 
     /// Queries for all ShapeIds in cells near the given point with tolerance-aware radius.
@@ -364,7 +399,8 @@ impl SpatialGrid {
         let extra_cells = (tolerance / self.cell_size as f64).ceil() as i32;
         let radius = 1 + extra_cells;
 
-        let mut unique = HashSet::new();
+        let mut unique = HashSet::with_capacity(self.global_shapes.len());
+        unique.extend(self.global_shapes.iter().copied());
         for dx in -radius..=radius {
             for dy in -radius..=radius {
                 let key = (cell_x + dx, cell_y + dy);
@@ -377,3 +413,6 @@ impl SpatialGrid {
         unique.into_iter().collect()
     }
 }
+
+#[cfg(test)]
+mod tests;
