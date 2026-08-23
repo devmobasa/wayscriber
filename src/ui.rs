@@ -17,6 +17,7 @@ mod properties_panel;
 mod radial_menu;
 mod region_action_bar;
 mod region_capture_picker;
+mod region_resize_handles;
 mod status;
 mod text_highlight;
 pub mod theme;
@@ -52,6 +53,7 @@ pub(crate) use region_capture_picker::{
     RegionCaptureLoupeVisual, RegionCapturePickerVisual, RegionCaptureWindowVisual,
     capture_size_text, measure_picker_damage, render_region_capture_picker,
 };
+pub(crate) use region_resize_handles::RegionResizeHandles;
 pub use status::{
     StatusHudLayout, StatusHudSegmentKind, ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress,
     compute_status_hud_layout, compute_zoom_chip_layout, render_editing_badge, render_frozen_badge,

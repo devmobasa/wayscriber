@@ -1,3 +1,4 @@
+use crate::input::SelectionHandle;
 use crate::input::state::RegionSelection;
 use crate::util::Rect;
 
@@ -5,6 +6,7 @@ use super::primitives::{draw_rounded_rect, text_extents_for};
 use super::region_action_bar::{
     RegionAction, RegionActionBar, RegionActionRect, render_region_action_bar,
 };
+use super::region_resize_handles::{RegionResizeHandles, render_region_resize_handles};
 
 const SCRIM: (f64, f64, f64, f64) = (0.02, 0.03, 0.05, 0.48);
 const PANEL_FILL: (f64, f64, f64, f64) = (12.0 / 255.0, 12.0 / 255.0, 15.0 / 255.0, 0.92);
@@ -78,6 +80,10 @@ pub(crate) struct RegionCapturePickerVisual<'a> {
     /// drops the targeting chrome: no crosshair, and the size badge anchors to
     /// the rectangle rather than following the pointer.
     pub review: bool,
+    /// Resize grips on the reviewed rectangle. Present only in Review, where
+    /// they replace the corner arms the targeting frame draws.
+    pub resize_handles: Option<RegionResizeHandles>,
+    pub hovered_handle: Option<SelectionHandle>,
     pub loupe: Option<RegionCaptureLoupeVisual>,
     pub action_bar: Option<RegionActionBar>,
     pub hovered_action: Option<RegionAction>,
@@ -249,7 +255,12 @@ pub(crate) fn render_region_capture_picker(
     }
     if let Some(selection) = effective_selection {
         let (x, y, w, h) = normalized_rect(selection);
-        draw_selection_frame(ctx, x, y, w, h);
+        // Corner arms and corner grips would occupy the same pixels, so the
+        // frame drops its arms wherever grips are offered.
+        draw_selection_frame(ctx, x, y, w, h, visual.resize_handles.is_none());
+    }
+    if let Some(handles) = visual.resize_handles {
+        render_region_resize_handles(ctx, handles, visual.hovered_handle);
     }
     if !visual.window.active && !visual.review {
         draw_crosshair(ctx, visual.pointer, (width, height));
@@ -302,12 +313,15 @@ fn normalized_rect(selection: RegionSelection) -> (f64, f64, f64, f64) {
     )
 }
 
-fn draw_selection_frame(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
+fn draw_selection_frame(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, corner_arms: bool) {
     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
     ctx.set_line_width(1.0);
     ctx.rectangle(x + 0.5, y + 0.5, (w - 1.0).max(0.0), (h - 1.0).max(0.0));
     let _ = ctx.stroke();
 
+    if !corner_arms {
+        return;
+    }
     let arm = (w.min(h) / 4.0).clamp(4.0, 20.0);
     ctx.set_line_width(2.0);
     ctx.set_line_cap(cairo::LineCap::Square);
@@ -636,6 +650,8 @@ mod tests {
                 measurement: None,
                 show_scrim: true,
                 review: false,
+                resize_handles: None,
+                hovered_handle: None,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
@@ -678,6 +694,8 @@ mod tests {
                 measurement: None,
                 show_scrim: true,
                 review: false,
+                resize_handles: None,
+                hovered_handle: None,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
@@ -716,6 +734,8 @@ mod tests {
                 measurement: None,
                 show_scrim: false,
                 review: false,
+                resize_handles: None,
+                hovered_handle: None,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
@@ -761,6 +781,8 @@ mod tests {
                 measurement: None,
                 show_scrim: false,
                 review: false,
+                resize_handles: None,
+                hovered_handle: None,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
@@ -805,6 +827,8 @@ mod tests {
                 measurement: Some("20, 20"),
                 show_scrim: false,
                 review: false,
+                resize_handles: None,
+                hovered_handle: None,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
@@ -870,6 +894,8 @@ mod tests {
                 measurement: None,
                 show_scrim: true,
                 review: false,
+                resize_handles: None,
+                hovered_handle: None,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
@@ -908,6 +934,8 @@ mod tests {
                 measurement: Some("200 × 100"),
                 show_scrim: true,
                 review: true,
+                resize_handles: None,
+                hovered_handle: None,
                 show_legend: false,
                 loupe: None,
                 action_bar: Some(bar),
@@ -1016,6 +1044,8 @@ mod tests {
                     measurement,
                     show_scrim: true,
                     review: true,
+                    resize_handles: None,
+                    hovered_handle: None,
                     show_legend: false,
                     loupe: None,
                     action_bar: Some(bar),
@@ -1087,6 +1117,72 @@ mod tests {
                 height: 22.0,
             },
             "inside the rectangle's top-left corner is the fallback"
+        );
+    }
+
+    #[test]
+    fn review_paints_grips_where_targeting_paints_corner_arms() {
+        let selection = RegionSelection {
+            start: (60.0, 60.0),
+            end: (240.0, 200.0),
+        };
+        let render = |review: bool| {
+            let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 300, 260).unwrap();
+            let ctx = cairo::Context::new(&surface).unwrap();
+            render_region_capture_picker(
+                &ctx,
+                300,
+                260,
+                RegionCapturePickerVisual {
+                    selection: Some(selection),
+                    // Park the pointer in a corner: targeting still paints a
+                    // crosshair, and its two lines must not cross the pixels
+                    // this test samples.
+                    pointer: (8.0, 252.0),
+                    measurement: None,
+                    // No scrim, so only chrome puts ink on the surface and
+                    // the two frames can be compared pixel for pixel.
+                    show_scrim: false,
+                    review,
+                    resize_handles: review
+                        .then(|| crate::ui::RegionResizeHandles::place(selection)),
+                    hovered_handle: None,
+                    show_legend: false,
+                    loupe: None,
+                    action_bar: None,
+                    hovered_action: None,
+                    include_drawings: false,
+                    window: RegionCaptureWindowVisual::disabled(),
+                },
+                |_x, _y| None,
+            );
+            drop(ctx);
+            surface.flush();
+            let stride = surface.stride() as usize;
+            (surface.data().unwrap().to_vec(), stride)
+        };
+
+        let (reviewing, stride) = render(true);
+        let (targeting, _) = render(false);
+        let alpha = |data: &[u8], x: usize, y: usize| data[y * stride + x * 4 + 3];
+
+        // An edge midpoint carries a grip only in Review, and the chip reaches
+        // above the frame line the two modes share.
+        assert!(alpha(&reviewing, 150, 57) > 0, "top edge grip");
+        assert_eq!(alpha(&targeting, 150, 57), 0, "targeting has no edge grip");
+        assert!(alpha(&reviewing, 60, 60) > 0, "top-left corner grip");
+
+        // The corner arms run inward along both edges from each corner. Review
+        // drops them so they cannot fight the corner grip for the same pixels;
+        // this row is past the grip but still inside the arm's reach.
+        assert!(
+            alpha(&targeting, 59, 75) > 0,
+            "targeting draws a corner arm below the top-left corner"
+        );
+        assert_eq!(
+            alpha(&reviewing, 59, 75),
+            0,
+            "review drops the arm; the grip covers the corner instead"
         );
     }
 

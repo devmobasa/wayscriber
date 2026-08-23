@@ -1,4 +1,5 @@
 use crate::backend::wayland::acquisition::ScreenAcquisitionId;
+use crate::input::SelectionHandle;
 use crate::input::state::{
     RegionInputSource, RegionPurposeTag, RegionSelectUiState, RegionSelection, ScreenCaptureSource,
 };
@@ -28,6 +29,9 @@ pub(in crate::backend::wayland) use geometry::{RegionPickerMeasurement, RegionSe
 pub(in crate::backend::wayland) use intent::{RegionCaptureIntent, RegionPickerOptions};
 use measure::*;
 pub(in crate::backend::wayland) use measure::{RegionOwnerLoss, RegionSelectionFinalize};
+use review_state::ReviewResizeGrip;
+#[cfg(test)]
+use review_state::resized_review_rect;
 pub(super) use source_guard::owned_generation_is_current;
 use source_guard::*;
 pub(in crate::backend::wayland) use window_snap::WindowSnapDirection;

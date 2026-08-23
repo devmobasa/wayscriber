@@ -22,6 +22,8 @@ struct ScreenModalCursorContext {
     /// Inside the Review bar, whether or not over one of its controls.
     over_bar: bool,
     over_selection: bool,
+    /// The grip being dragged, or hovered when nothing is being dragged.
+    resize_handle: Option<SelectionHandle>,
 }
 
 /// Cursor for the screen-modal surfaces. Targeting keeps the crosshair; a
@@ -35,6 +37,11 @@ fn screen_modal_cursor(context: ScreenModalCursorContext) -> CursorIcon {
     if !context.review {
         return CursorIcon::Crosshair;
     }
+    // A held grip outranks everything: the pointer can leave both the grip and
+    // the rectangle mid-drag and the cursor must keep describing the drag.
+    if let Some(handle) = context.resize_handle.filter(|_| context.review_dragging) {
+        return resize_cursor(handle);
+    }
     if context.review_dragging {
         return CursorIcon::Grabbing;
     }
@@ -44,10 +51,24 @@ fn screen_modal_cursor(context: ScreenModalCursorContext) -> CursorIcon {
     if context.over_bar {
         return CursorIcon::Default;
     }
+    if let Some(handle) = context.resize_handle {
+        return resize_cursor(handle);
+    }
     if context.over_selection {
         return CursorIcon::Grab;
     }
     CursorIcon::Default
+}
+
+/// The one place a resize grip becomes a cursor. Shared by the Review grips
+/// and the canvas selection handles so the two can never disagree.
+const fn resize_cursor(handle: SelectionHandle) -> CursorIcon {
+    match handle {
+        SelectionHandle::TopLeft | SelectionHandle::BottomRight => CursorIcon::NwseResize,
+        SelectionHandle::TopRight | SelectionHandle::BottomLeft => CursorIcon::NeswResize,
+        SelectionHandle::Top | SelectionHandle::Bottom => CursorIcon::NsResize,
+        SelectionHandle::Left | SelectionHandle::Right => CursorIcon::EwResize,
+    }
 }
 
 impl WaylandState {
@@ -109,13 +130,22 @@ impl WaylandState {
         }
         let (mouse_x, mouse_y) = self.current_mouse();
         let point = (f64::from(mouse_x), f64::from(mouse_y));
+        let dragging = region_state.selection_owner().is_some();
+        // While a grip is held its identity comes from the drag, not from
+        // whatever the pointer currently happens to be over.
+        let resize_handle = if dragging {
+            self.region_review_resize_handle()
+        } else {
+            self.region_review_handle_at(point)
+        };
         ScreenModalCursorContext {
             window_snap_active,
             review: true,
-            review_dragging: region_state.selection_owner().is_some(),
+            review_dragging: dragging,
             over_action: self.region_review_action_at(point).is_some(),
             over_bar: self.region_review_bar_contains(point),
             over_selection: self.region_review_selection_contains(point),
+            resize_handle,
         }
     }
 
@@ -262,16 +292,7 @@ impl WaylandState {
             }
             // Resizing selection - show appropriate resize cursor
             DrawingState::ResizingSelection { handle, .. } => {
-                return match handle {
-                    SelectionHandle::TopLeft | SelectionHandle::BottomRight => {
-                        CursorIcon::NwseResize
-                    }
-                    SelectionHandle::TopRight | SelectionHandle::BottomLeft => {
-                        CursorIcon::NeswResize
-                    }
-                    SelectionHandle::Top | SelectionHandle::Bottom => CursorIcon::NsResize,
-                    SelectionHandle::Left | SelectionHandle::Right => CursorIcon::EwResize,
-                };
+                return resize_cursor(*handle);
             }
             // Idle - check for hover contexts
             DrawingState::Idle => {}
@@ -295,12 +316,7 @@ impl WaylandState {
         // Check if hovering over selection handles
         let (canvas_x, canvas_y) = self.input_state.canvas_pointer_position();
         if let Some(handle) = self.input_state.hit_selection_handle(canvas_x, canvas_y) {
-            return match handle {
-                SelectionHandle::TopLeft | SelectionHandle::BottomRight => CursorIcon::NwseResize,
-                SelectionHandle::TopRight | SelectionHandle::BottomLeft => CursorIcon::NeswResize,
-                SelectionHandle::Top | SelectionHandle::Bottom => CursorIcon::NsResize,
-                SelectionHandle::Left | SelectionHandle::Right => CursorIcon::EwResize,
-            };
+            return resize_cursor(handle);
         }
 
         // Check if hovering over text resize handle
@@ -348,6 +364,7 @@ impl WaylandState {
 #[cfg(test)]
 mod tests {
     use super::{ScreenModalCursorContext, screen_modal_cursor};
+    use crate::input::SelectionHandle;
     use smithay_client_toolkit::seat::pointer::CursorIcon;
 
     fn review(context: ScreenModalCursorContext) -> ScreenModalCursorContext {
@@ -433,6 +450,82 @@ mod tests {
         ];
         for (context, expected, what) in cases {
             assert_eq!(screen_modal_cursor(review(context)), expected, "{what}");
+        }
+    }
+
+    #[test]
+    fn each_grip_takes_the_resize_cursor_that_matches_its_axis() {
+        for (handle, expected) in [
+            (SelectionHandle::TopLeft, CursorIcon::NwseResize),
+            (SelectionHandle::BottomRight, CursorIcon::NwseResize),
+            (SelectionHandle::TopRight, CursorIcon::NeswResize),
+            (SelectionHandle::BottomLeft, CursorIcon::NeswResize),
+            (SelectionHandle::Top, CursorIcon::NsResize),
+            (SelectionHandle::Bottom, CursorIcon::NsResize),
+            (SelectionHandle::Left, CursorIcon::EwResize),
+            (SelectionHandle::Right, CursorIcon::EwResize),
+        ] {
+            assert_eq!(
+                screen_modal_cursor(review(ScreenModalCursorContext {
+                    resize_handle: Some(handle),
+                    // A grip sits on the rectangle's own edge, so hovering one
+                    // always also hovers the rectangle.
+                    over_selection: true,
+                    ..ScreenModalCursorContext::default()
+                })),
+                expected,
+                "{handle:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_held_grip_keeps_its_resize_cursor_instead_of_the_move_hand() {
+        // Mid-drag the pointer can be anywhere, including off the rectangle
+        // entirely, and the cursor must keep describing the resize.
+        assert_eq!(
+            screen_modal_cursor(review(ScreenModalCursorContext {
+                review_dragging: true,
+                resize_handle: Some(SelectionHandle::Right),
+                ..ScreenModalCursorContext::default()
+            })),
+            CursorIcon::EwResize
+        );
+        assert_eq!(
+            screen_modal_cursor(review(ScreenModalCursorContext {
+                review_dragging: true,
+                resize_handle: None,
+                over_selection: true,
+                ..ScreenModalCursorContext::default()
+            })),
+            CursorIcon::Grabbing,
+            "a move-drag still reads as grabbing"
+        );
+    }
+
+    #[test]
+    fn the_action_bar_outranks_a_grip_it_is_painted_over() {
+        // A bar clamped over the selection hides the grips underneath it, so
+        // the cursor must describe what is actually visible.
+        for context in [
+            ScreenModalCursorContext {
+                over_action: true,
+                over_bar: true,
+                resize_handle: Some(SelectionHandle::Bottom),
+                ..ScreenModalCursorContext::default()
+            },
+            ScreenModalCursorContext {
+                over_bar: true,
+                resize_handle: Some(SelectionHandle::Bottom),
+                ..ScreenModalCursorContext::default()
+            },
+        ] {
+            let expected = if context.over_action {
+                CursorIcon::Pointer
+            } else {
+                CursorIcon::Default
+            };
+            assert_eq!(screen_modal_cursor(review(context)), expected);
         }
     }
 

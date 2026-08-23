@@ -1,5 +1,18 @@
 use super::*;
 
+/// The grip under `logical`, placed from the rectangle Review is showing. The
+/// renderer places its chips from the same geometry, so what is painted and
+/// what is grabbable cannot drift.
+pub(super) fn review_resize_handle_at(
+    region: &ActiveScreenRegion,
+    logical: (f64, f64),
+) -> Option<SelectionHandle> {
+    let selection = region
+        .review_geometry()
+        .map(RegionSelectionGeometry::display_selection)?;
+    crate::ui::RegionResizeHandles::place(selection).hit(logical)
+}
+
 pub(super) fn begin_region_selection_event(
     backend: &mut Option<ActiveScreenRegion>,
     input_state: &mut crate::input::InputState,
@@ -13,6 +26,14 @@ pub(super) fn begin_region_selection_event(
         return false;
     };
     if input_state.region_state().is_review() {
+        // A grip is checked before the rectangle it decorates: corner chips sit
+        // on the rectangle's own edge, so the interior test would otherwise
+        // swallow every resize press.
+        if let Some(handle) = review_resize_handle_at(region, logical)
+            && region.begin_review_resize(handle, logical)
+        {
+            return input_state.begin_region_review_move(owner);
+        }
         if region.begin_review_move(logical) {
             return input_state.begin_region_review_move(owner);
         }
@@ -62,7 +83,7 @@ pub(super) fn update_region_selection_event(
     }
     if input_state.region_state().is_review() {
         if let Some(region) = backend.as_mut()
-            && region.update_review_move(logical)
+            && (region.update_review_resize(logical) || region.update_review_move(logical))
             && let Some(preview) = region
                 .review_geometry()
                 .map(RegionSelectionGeometry::display_selection)
@@ -77,6 +98,13 @@ pub(super) fn update_region_selection_event(
     {
         input_state.update_region_selection(owner, preview.end);
     }
+}
+
+/// End whichever Review drag a device owned. Exactly one of the two can be in
+/// flight, so this reports a single "the drag ended" answer that stays in step
+/// with the UI state's own move owner.
+fn finish_review_drag(region: &mut ActiveScreenRegion) -> bool {
+    region.finish_review_resize() || region.finish_review_move()
 }
 
 pub(super) fn sync_region_square_modifier_event(
@@ -113,6 +141,7 @@ pub(super) fn rearm_region_selection_event(
         raw_edge,
         logical_anchor,
         logical_edge,
+        review_resize,
         ..
     }) = backend.as_mut()
     {
@@ -120,6 +149,7 @@ pub(super) fn rearm_region_selection_event(
         *raw_edge = None;
         *logical_anchor = None;
         *logical_edge = None;
+        *review_resize = None;
     }
     if let Some(ActiveScreenRegion::Measure { anchor, edge, .. }) = backend.as_mut() {
         *anchor = None;
@@ -147,9 +177,7 @@ pub(super) fn region_owner_lost_event(
         return RegionOwnerLoss::Cancel(purpose);
     }
     if input_state.region_state().is_review() {
-        let finished_backend = backend
-            .as_mut()
-            .is_some_and(ActiveScreenRegion::finish_review_move);
+        let finished_backend = backend.as_mut().is_some_and(finish_review_drag);
         let finished_ui = input_state.finish_region_review_move(source);
         debug_assert_eq!(finished_backend, finished_ui);
         return RegionOwnerLoss::Rearmed;
@@ -182,9 +210,7 @@ pub(in crate::backend::wayland::state) fn finalize_region_selection_event(
     }
     if input_state.region_state().is_review() {
         update_region_selection_event(backend, input_state, owner, logical);
-        let finished_backend = backend
-            .as_mut()
-            .is_some_and(ActiveScreenRegion::finish_review_move);
+        let finished_backend = backend.as_mut().is_some_and(finish_review_drag);
         let finished_ui = input_state.finish_region_review_move(owner);
         debug_assert_eq!(finished_backend, finished_ui);
         return if finished_backend {

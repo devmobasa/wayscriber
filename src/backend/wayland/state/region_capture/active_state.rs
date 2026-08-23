@@ -35,6 +35,9 @@ pub(in crate::backend::wayland::state) enum ActiveScreenRegion {
         square_modifier: bool,
         legend_dismissed: bool,
         include_drawings: bool,
+        /// The grip a device is dragging in Review, if any. Mutually exclusive
+        /// with `logical_anchor`, which owns a Review move-drag.
+        review_resize: Option<ReviewResizeGrip>,
     },
 }
 

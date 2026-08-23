@@ -38,6 +38,7 @@ fn pending_and_ready_region_state_preserve_generation_and_freeze_ownership() {
         square_modifier: false,
         legend_dismissed: false,
         include_drawings: false,
+        review_resize: None,
     };
     assert_eq!(ready.generation(), pending.generation());
     assert_eq!(ready.owned_frozen_generation(), Some(44));
@@ -285,6 +286,7 @@ pub(super) fn ocr_region(scale: f64) -> ActiveScreenRegion {
         square_modifier: false,
         legend_dismissed: false,
         include_drawings: false,
+        review_resize: None,
     }
 }
 

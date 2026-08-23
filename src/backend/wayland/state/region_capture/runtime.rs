@@ -152,6 +152,7 @@ impl WaylandState {
             square_modifier: initial_square_modifier(purpose, self.input_state.modifiers.shift),
             legend_dismissed: false,
             include_drawings,
+            review_resize: None,
         });
         self.input_state.activate_region(purpose, generation);
         self.start_region_window_query(purpose, generation, token, freeze_ownership);
@@ -297,6 +298,33 @@ impl WaylandState {
         };
         self.input_state.update_region_review_display(display);
         true
+    }
+
+    /// The grip a device is currently dragging in Review, if any.
+    pub(in crate::backend::wayland) fn region_review_resize_handle(
+        &self,
+    ) -> Option<SelectionHandle> {
+        if !self.input_state.region_state().is_review() {
+            return None;
+        }
+        self.data
+            .active_screen_region
+            .and_then(ActiveScreenRegion::review_resize_handle)
+    }
+
+    /// The grip under `point`, for hover feedback. Shares its placement with
+    /// the press path and the renderer.
+    pub(in crate::backend::wayland) fn region_review_handle_at(
+        &self,
+        point: (f64, f64),
+    ) -> Option<SelectionHandle> {
+        if !self.input_state.region_state().is_review() {
+            return None;
+        }
+        self.data
+            .active_screen_region
+            .as_ref()
+            .and_then(|region| review_resize_handle_at(region, point))
     }
 
     pub(in crate::backend::wayland) fn region_review_rect(&self) -> Option<ImagePixelRect> {

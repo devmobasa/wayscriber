@@ -446,3 +446,389 @@ fn whole_image_is_available_only_to_capture_purposes() {
     assert_eq!((rect.x(), rect.y(), rect.size()), (0, 0, (100, 80)));
     assert_eq!(ocr_region(1.0).whole_image_selection(), None);
 }
+
+#[test]
+fn a_grip_moves_the_edges_it_owns_and_leaves_the_opposite_ones_put() {
+    let bounds = (100, 80);
+    let rect = ImagePixelRect::new(20, 20, 40, 30, bounds).unwrap();
+    let at = |x: f64, y: f64| ImagePoint::new(x, y);
+
+    for (handle, edge, expected) in [
+        (SelectionHandle::TopLeft, at(10.0, 5.0), (10, 5, 50, 45)),
+        (SelectionHandle::TopRight, at(80.0, 5.0), (20, 5, 60, 45)),
+        (
+            SelectionHandle::BottomLeft,
+            at(10.0, 70.0),
+            (10, 20, 50, 50),
+        ),
+        (
+            SelectionHandle::BottomRight,
+            at(80.0, 70.0),
+            (20, 20, 60, 50),
+        ),
+        (SelectionHandle::Top, at(0.0, 5.0), (20, 5, 40, 45)),
+        (SelectionHandle::Bottom, at(0.0, 70.0), (20, 20, 40, 50)),
+        (SelectionHandle::Left, at(10.0, 0.0), (10, 20, 50, 30)),
+        (SelectionHandle::Right, at(80.0, 0.0), (20, 20, 60, 30)),
+    ] {
+        let resized = resized_review_rect(rect, handle, edge, bounds).unwrap();
+        assert_eq!(
+            (resized.x(), resized.y(), resized.width(), resized.height()),
+            expected,
+            "{handle:?}"
+        );
+    }
+}
+
+#[test]
+fn a_grip_dragged_past_its_opposite_edge_stops_instead_of_inverting() {
+    let bounds = (100, 80);
+    let rect = ImagePixelRect::new(20, 20, 40, 30, bounds).unwrap();
+
+    let crossed = resized_review_rect(
+        rect,
+        SelectionHandle::Left,
+        ImagePoint::new(95.0, 0.0),
+        bounds,
+    )
+    .unwrap();
+    assert_eq!(
+        (crossed.x(), crossed.width()),
+        (59, 1),
+        "the left edge stops one pixel short of the right"
+    );
+
+    let crossed = resized_review_rect(
+        rect,
+        SelectionHandle::Bottom,
+        ImagePoint::new(0.0, 0.0),
+        bounds,
+    )
+    .unwrap();
+    assert_eq!(
+        (crossed.y(), crossed.height()),
+        (20, 1),
+        "the bottom edge stops one pixel below the top"
+    );
+}
+
+#[test]
+fn a_grip_dragged_off_screen_clamps_to_the_image_bounds() {
+    let bounds = (100, 80);
+    let rect = ImagePixelRect::new(20, 20, 40, 30, bounds).unwrap();
+
+    let out = resized_review_rect(
+        rect,
+        SelectionHandle::BottomRight,
+        ImagePoint::new(400.0, 400.0),
+        bounds,
+    )
+    .unwrap();
+    assert_eq!(
+        (out.x(), out.y(), out.width(), out.height()),
+        (20, 20, 80, 60),
+        "the rectangle may end exactly on the image edge"
+    );
+
+    let out = resized_review_rect(
+        rect,
+        SelectionHandle::TopLeft,
+        ImagePoint::new(-40.0, -40.0),
+        bounds,
+    )
+    .unwrap();
+    assert_eq!(
+        (out.x(), out.y()),
+        (0, 0),
+        "a finite drag past the origin clamps to it"
+    );
+
+    for broken in [
+        ImagePoint::new(f64::NAN, 10.0),
+        ImagePoint::new(10.0, f64::INFINITY),
+        ImagePoint::new(f64::NEG_INFINITY, f64::NAN),
+    ] {
+        assert!(
+            resized_review_rect(rect, SelectionHandle::TopLeft, broken, bounds).is_none(),
+            "a non-finite coordinate is a broken event, not a drag to the origin"
+        );
+    }
+}
+
+#[test]
+fn pressing_a_grip_resizes_while_pressing_the_interior_still_moves() {
+    let bounds = (100, 80);
+    let mut region = interactive_region();
+    let rect = ImagePixelRect::new(20, 20, 40, 30, bounds).unwrap();
+    let display = region.enter_review(rect).unwrap();
+    let mut backend = Some(region);
+    let mut input = make_test_input_state();
+    input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
+
+    // The bottom-right grip sits on the rectangle's own corner.
+    assert!(begin_region_selection_event(
+        &mut backend,
+        &mut input,
+        RegionInputSource::Pointer,
+        (60.0, 50.0),
+    ));
+    assert_eq!(
+        backend.and_then(ActiveScreenRegion::review_resize_handle),
+        Some(SelectionHandle::BottomRight),
+        "a press on a corner grip starts a resize, not a move"
+    );
+
+    update_region_selection_event(
+        &mut backend,
+        &mut input,
+        RegionInputSource::Pointer,
+        (75.0, 65.0),
+    );
+    assert_eq!(
+        backend
+            .and_then(ActiveScreenRegion::selection_rect)
+            .map(|rect| (rect.x(), rect.y(), rect.width(), rect.height())),
+        Some((20, 20, 55, 45)),
+        "the held corner follows the pointer"
+    );
+
+    assert_eq!(
+        finalize_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Pointer,
+            (75.0, 65.0),
+        ),
+        RegionSelectionFinalize::Reviewed
+    );
+    assert!(
+        backend
+            .and_then(ActiveScreenRegion::review_resize_handle)
+            .is_none(),
+        "release drops the grip"
+    );
+    assert!(input.region_state().selection_owner().is_none());
+
+    // Well inside the rectangle there is no grip, so the press moves it.
+    assert!(begin_region_selection_event(
+        &mut backend,
+        &mut input,
+        RegionInputSource::Pointer,
+        (45.0, 40.0),
+    ));
+    assert!(
+        backend
+            .and_then(ActiveScreenRegion::review_resize_handle)
+            .is_none(),
+        "an interior press is still a move-drag"
+    );
+    update_region_selection_event(
+        &mut backend,
+        &mut input,
+        RegionInputSource::Pointer,
+        (50.0, 40.0),
+    );
+    assert_eq!(
+        backend
+            .and_then(ActiveScreenRegion::selection_rect)
+            .map(|rect| (rect.x(), rect.y(), rect.width(), rect.height())),
+        Some((25, 20, 55, 45)),
+        "the whole rectangle translates, keeping its size"
+    );
+}
+
+#[test]
+fn a_held_grip_blocks_nudging_and_a_second_devices_press() {
+    let bounds = (100, 80);
+    let mut region = interactive_region();
+    let rect = ImagePixelRect::new(20, 20, 40, 30, bounds).unwrap();
+    let display = region.enter_review(rect).unwrap();
+    let mut backend = Some(region);
+    let mut input = make_test_input_state();
+    input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
+
+    assert!(begin_region_selection_event(
+        &mut backend,
+        &mut input,
+        RegionInputSource::Pointer,
+        (20.0, 20.0),
+    ));
+    assert_eq!(
+        backend.and_then(ActiveScreenRegion::review_resize_handle),
+        Some(SelectionHandle::TopLeft)
+    );
+    assert!(
+        backend
+            .as_mut()
+            .and_then(|region| region.nudge_review(1, 0))
+            .is_none(),
+        "arrows must not fight a live grip drag"
+    );
+    assert!(!begin_region_selection_event(
+        &mut backend,
+        &mut input,
+        RegionInputSource::Touch,
+        (60.0, 50.0),
+    ));
+
+    assert_eq!(
+        region_owner_lost_event(&mut backend, &mut input, RegionInputSource::Pointer),
+        RegionOwnerLoss::Rearmed
+    );
+    assert!(
+        backend
+            .and_then(ActiveScreenRegion::review_resize_handle)
+            .is_none(),
+        "losing the device drops the grip and keeps Review"
+    );
+    assert!(input.region_state().is_review());
+}
+
+#[test]
+fn selecting_the_whole_image_mid_resize_leaves_review_usable() {
+    // `Ctrl+A` replaces the rectangle while a grip is still held. The grip must
+    // not survive into the new rectangle, or every later move, resize and
+    // nudge would be refused.
+    let bounds = (100, 80);
+    let mut region = interactive_region();
+    let rect = ImagePixelRect::new(20, 20, 40, 30, bounds).unwrap();
+    let display = region.enter_review(rect).unwrap();
+    let mut backend = Some(region);
+    let mut input = make_test_input_state();
+    input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
+
+    assert!(begin_region_selection_event(
+        &mut backend,
+        &mut input,
+        RegionInputSource::Pointer,
+        (20.0, 20.0),
+    ));
+    assert!(
+        backend
+            .and_then(ActiveScreenRegion::review_resize_handle)
+            .is_some()
+    );
+
+    let whole = ImagePixelRect::whole(bounds).unwrap();
+    let display = backend
+        .as_mut()
+        .and_then(|region| region.enter_review(whole))
+        .unwrap();
+    input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
+
+    assert!(
+        backend
+            .and_then(ActiveScreenRegion::review_resize_handle)
+            .is_none(),
+        "the held grip does not survive the new rectangle"
+    );
+    assert!(
+        backend
+            .as_mut()
+            .and_then(|region| region.nudge_review(1, 0))
+            .is_some(),
+        "nudging is answered again; a stale grip would refuse it"
+    );
+    assert!(
+        backend
+            .as_mut()
+            .is_some_and(|region| region.begin_review_move((50.0, 40.0))),
+        "and the rectangle can be dragged again"
+    );
+}
+
+#[test]
+fn a_grip_click_without_motion_leaves_the_rectangle_untouched_at_any_scale() {
+    // Grips are placed on the display rectangle, which rounds outward from the
+    // image rectangle. Without the grab offset the release event alone would
+    // re-round that position and shift an edge by a pixel.
+    let bounds = (100, 80);
+    for scale in [1.0, 1.5, 2.0] {
+        let mut region = capture_region_at_scale(scale);
+        if let ActiveScreenRegion::Ready { purpose, .. } = &mut region {
+            *purpose = RegionPurposeTag::CaptureInteractive;
+        }
+        let rect = ImagePixelRect::new(21, 17, 43, 31, bounds).unwrap();
+        let Some(display) = region.enter_review(rect) else {
+            continue;
+        };
+        let mut backend = Some(region);
+        let mut input = make_test_input_state();
+        input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
+
+        let left = display.start.0.min(display.end.0);
+        let top = display.start.1.min(display.end.1);
+        let right = display.start.0.max(display.end.0);
+        let bottom = display.start.1.max(display.end.1);
+        for grip in [(left, top), (right, bottom), (right, top), (left, bottom)] {
+            assert!(
+                begin_region_selection_event(
+                    &mut backend,
+                    &mut input,
+                    RegionInputSource::Pointer,
+                    grip,
+                ),
+                "scale {scale}: {grip:?} must grab a grip"
+            );
+            assert!(
+                backend
+                    .and_then(ActiveScreenRegion::review_resize_handle)
+                    .is_some(),
+                "scale {scale}: {grip:?} grabbed the interior instead of a grip"
+            );
+            assert_eq!(
+                finalize_region_selection_event(
+                    &mut backend,
+                    &mut input,
+                    RegionInputSource::Pointer,
+                    grip,
+                ),
+                RegionSelectionFinalize::Reviewed
+            );
+            assert_eq!(
+                backend.and_then(ActiveScreenRegion::selection_rect),
+                Some(rect),
+                "scale {scale}: pressing and releasing {grip:?} must not move an edge"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_grip_drag_tracks_the_pointer_from_where_it_was_grabbed() {
+    let bounds = (100, 80);
+    let mut region = interactive_region();
+    // Tall enough that the right edge keeps its midpoint grip.
+    let rect = ImagePixelRect::new(20, 10, 40, 60, bounds).unwrap();
+    let display = region.enter_review(rect).unwrap();
+    let mut backend = Some(region);
+    let mut input = make_test_input_state();
+    input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
+
+    // Grab the right-edge grip two pixels outside the edge itself, then drag
+    // ten pixels right: the edge advances by ten and keeps the two-pixel
+    // offset, rather than jumping onto the pointer.
+    assert!(begin_region_selection_event(
+        &mut backend,
+        &mut input,
+        RegionInputSource::Pointer,
+        (62.0, 40.0),
+    ));
+    assert_eq!(
+        backend.and_then(ActiveScreenRegion::review_resize_handle),
+        Some(SelectionHandle::Right)
+    );
+    update_region_selection_event(
+        &mut backend,
+        &mut input,
+        RegionInputSource::Pointer,
+        (72.0, 40.0),
+    );
+    assert_eq!(
+        backend
+            .and_then(ActiveScreenRegion::selection_rect)
+            .map(|rect| (rect.x(), rect.width())),
+        Some((20, 50)),
+        "the grabbed edge keeps its offset from the pointer"
+    );
+}

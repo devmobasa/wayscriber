@@ -1485,6 +1485,16 @@ screen edge needs that space — and the cursor stops being a crosshair: a hand
 over an action-bar button, a grab hand over the rectangle you can still drag,
 and an arrow everywhere else.
 
+Adjust the rectangle before you send it. Drag its interior to move it, or the
+arrow keys to nudge it one pixel at a time (`Shift` makes that ten). Eight
+resize grips sit on the rectangle: drag a corner to move two edges at once, or
+an edge midpoint to move one. A grip dragged past the opposite edge stops
+rather than flipping the rectangle, and one dragged off the screen stops at the
+edge of the captured image. Short sides drop their midpoint grip so it cannot
+crowd the corners, and a small rectangle scales its grips down so its middle
+always stays draggable; corners are always offered. Pressing outside the
+rectangle starts a new selection instead.
+
 `[capture].include_drawings` defaults to `true`, so full-screen and region
 screenshots include the active board's committed shapes. Provisional strokes,
 selection handles, tool previews, toolbars, and other Wayscriber UI are not

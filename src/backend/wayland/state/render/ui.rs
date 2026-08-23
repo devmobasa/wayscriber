@@ -371,6 +371,20 @@ impl WaylandState {
         };
         let hovered_action: Option<crate::ui::RegionAction> =
             action_bar.and_then(|bar| bar.hit(pointer));
+        // Grips belong to the reviewed rectangle, not the window-mode
+        // candidate, so they follow `region_selection_geometry` rather than
+        // the effective selection the scrim cuts out.
+        let resize_handles = region_state.is_review().then(|| {
+            geometry
+                .map(|geometry| crate::ui::RegionResizeHandles::place(geometry.display_selection()))
+        });
+        let resize_handles = resize_handles.flatten();
+        // A grip sitting under the action bar is painted over by it, so the
+        // bar's hover wins the pointer.
+        let hovered_handle = (hovered_action.is_none()
+            && !action_bar.is_some_and(|bar| bar.contains(pointer)))
+        .then(|| resize_handles.and_then(|handles| handles.hit(pointer)))
+        .flatten();
         let loupe_enabled = options.is_some_and(|options| options.show_loupe())
             && (region_state.is_selecting() || region_state.is_review());
         let loupe_source = if loupe_enabled {
@@ -425,6 +439,8 @@ impl WaylandState {
                 measurement: measurement.as_deref(),
                 show_scrim: !measure_mode,
                 review: region_state.is_review(),
+                resize_handles,
+                hovered_handle,
                 show_legend: options.is_some_and(|options| options.show_legend())
                     && !self.region_picker_legend_dismissed(),
                 loupe,
