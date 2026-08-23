@@ -74,8 +74,11 @@ pub(crate) fn default_open_capture_folder() -> Vec<String> {
     vec!["Ctrl+Alt+O".to_string()]
 }
 
-/// Deliberately empty: `O` is the orange quick color and no other
-/// conflict-free chord is obviously right, so the user picks one.
+/// e**X**tract text. `O` is the orange quick color and every other mnemonic is
+/// taken — `Ctrl+Shift+O` captures the active window, `Ctrl+Alt+O` opens the
+/// capture folder, `R` is spoken for in both modifier sets, and `Ctrl+Shift+T`
+/// returns to transparent — so this sits with the rest of the capture family in
+/// `Ctrl+Shift+` on a letter nothing else wants.
 pub(crate) fn default_copy_text_from_screen() -> Vec<String> {
-    Vec::new()
+    vec!["Ctrl+Shift+X".to_string()]
 }

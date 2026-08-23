@@ -1554,8 +1554,9 @@ the result to the clipboard. It reads the underlying screen capture only —
 never your annotations, the toolbars, or any other wayscriber chrome — and it
 does not change the active tool, the drawing history, or the board.
 
-- The action is `copy_text_from_screen`. It has **no default shortcut**, because
-  `O` is already the orange quick color; bind one in the configurator or in
+- The action is `copy_text_from_screen`, bound to <kbd>Ctrl+Shift+X</kbd>
+  ("extract text"). `O` belongs to the orange quick color, so it takes a letter
+  the rest of the capture family had left; rebind it in the configurator or in
   `[keybindings.capture]`.
 - It is also in the command palette (search for "OCR"), and as an optional top
   toolbar button (`top.utility.ocr`), hidden by default like Screenshot.
@@ -2081,8 +2082,8 @@ export_all_boards_pdf_file = []
 open_capture_folder = ["Ctrl+Alt+O"]
 
 # Select a screen region and copy the text recognized in it (needs Tesseract).
-# Unbound by default: "O" is already the orange quick color.
-copy_text_from_screen = []
+# Ctrl+A inside the selector reads the whole screen instead.
+copy_text_from_screen = ["Ctrl+Shift+X"]
 
 # Toggle frozen mode
 toggle_frozen_mode = ["Ctrl+Shift+F"]

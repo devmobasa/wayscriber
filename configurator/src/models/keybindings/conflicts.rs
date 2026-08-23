@@ -389,11 +389,19 @@ mod tests {
 
     #[test]
     fn conflict_lookup_returns_all_claimants() {
+        // The count below is exact, so this needs a chord no shipped default
+        // claims. Asserted rather than assumed: a future default taking it
+        // should fail here saying why, not as an off-by-one somewhere else.
+        let binding = Shortcut::parse("Ctrl+Shift+Q").expect("parses");
+        assert!(
+            claimants_for(&draft(), &binding).is_empty(),
+            "the fixture chord must stay unbound by default"
+        );
+
         let mut draft = draft();
-        draft.set(KeybindingField::ClearCanvas, "Ctrl+Shift+X".to_string());
-        draft.set(KeybindingField::ToggleToolbar, "Ctrl+Shift+X".to_string());
-        draft.set(KeybindingField::Undo, "ctrl+shift+x".to_string());
-        let binding = Shortcut::parse("Ctrl+Shift+X").expect("parses");
+        draft.set(KeybindingField::ClearCanvas, "Ctrl+Shift+Q".to_string());
+        draft.set(KeybindingField::ToggleToolbar, "Ctrl+Shift+Q".to_string());
+        draft.set(KeybindingField::Undo, "ctrl+shift+q".to_string());
         let claimants = claimants_for(&draft, &binding);
         let fields: Vec<_> = claimants.iter().map(|claim| claim.field).collect();
         assert!(fields.contains(&Some(KeybindingField::ClearCanvas)));
