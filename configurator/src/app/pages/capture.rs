@@ -12,7 +12,7 @@ use crate::models::util::format_float;
 use crate::models::{
     ColorPickerId, ColorQuadInput, PdfFitModeOption, PdfLabelContentModeOption,
     PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
-    PdfTransparentBackgroundOption, TabId, TextField, ToggleField,
+    PdfTransparentBackgroundOption, RegionPickerOption, TabId, TextField, ToggleField,
 };
 
 use wayscriber::config::validate_ocr_languages;
@@ -54,6 +54,12 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             |value| Message::ToggleChanged(ToggleField::CaptureCopyToClipboard, value),
         )
         .switch_row(
+            "Include drawings in screenshots",
+            "Composites the active board's committed annotations into full-screen and region captures by default. Interactive region capture can override this per screenshot.",
+            |app| app.draft.capture_include_drawings,
+            |value| Message::ToggleChanged(ToggleField::CaptureIncludeDrawings, value),
+        )
+        .switch_row(
             "Always exit overlay after capture",
             "",
             |app| app.draft.capture_exit_after,
@@ -70,6 +76,34 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
                         format!("{reason}. Use Tesseract codes joined by '+', such as eng+deu.")
                     })
             },
+        );
+
+    page.group_in_area("Region picker", SearchArea::CaptureRegion)
+        .combo_row(
+            "Selection frontend",
+            "Native draws the picker over a frozen desktop image. Slurp uses the external selector.",
+            RegionPickerOption::list(),
+            labels(RegionPickerOption::list(), RegionPickerOption::label),
+            |app| app.draft.capture_region_picker,
+            Message::CaptureRegionPickerChanged,
+        )
+        .switch_row(
+            "Show pointer position and selection size",
+            "Shows coordinates while idle and the selected export size while dragging.",
+            |app| app.draft.capture_region_show_size_readout,
+            |value| Message::ToggleChanged(ToggleField::CaptureRegionShowSizeReadout, value),
+        )
+        .switch_row(
+            "Show magnified pixel loupe",
+            "Shows a magnified pixel grid beside the pointer while selecting or reviewing.",
+            |app| app.draft.capture_region_show_loupe,
+            |value| Message::ToggleChanged(ToggleField::CaptureRegionShowLoupe, value),
+        )
+        .switch_row(
+            "Show hotkey legend",
+            "Shows a short picker hotkey guide until the first drag.",
+            |app| app.draft.capture_region_show_legend,
+            |value| Message::ToggleChanged(ToggleField::CaptureRegionShowLegend, value),
         );
 
     page.group_in_area("PDF export", SearchArea::CapturePdf)

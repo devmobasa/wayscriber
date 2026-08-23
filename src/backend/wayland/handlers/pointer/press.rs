@@ -11,6 +11,10 @@ use crate::ui::toolbar::ToolbarEvent;
 
 use super::*;
 
+fn review_action_suppresses_next_release(action: crate::ui::RegionAction) -> bool {
+    action != crate::ui::RegionAction::ToggleIncludeDrawings
+}
+
 impl WaylandState {
     pub(super) fn handle_pointer_press(
         &mut self,
@@ -42,10 +46,24 @@ impl WaylandState {
             if on_toolbar || self.pointer_over_toolbar() {
                 // A toolbar interaction ends the region first, then runs
                 // normally; the click never lands on the selector.
-                self.cancel_ocr_for_toolbar_interaction();
+                self.cancel_region_for_toolbar_interaction();
             } else {
                 match button {
                     BTN_LEFT => {
+                        if let Some(action) = self.region_review_action_at(event.position) {
+                            self.submit_region_review_action(action);
+                            // The toggle keeps Review active, so its release is
+                            // consumed by the active-region branch. Arming the
+                            // generic post-modal latch here would swallow an
+                            // unrelated canvas release after a keyboard exit.
+                            if review_action_suppresses_next_release(action) {
+                                self.suppress_next_release_from(RegionInputSource::Pointer);
+                            }
+                            return;
+                        }
+                        if self.region_review_bar_contains(event.position) {
+                            return;
+                        }
                         self.begin_region_selection(
                             RegionInputSource::Pointer,
                             event.position.0,
@@ -53,8 +71,8 @@ impl WaylandState {
                         );
                     }
                     BTN_RIGHT => {
-                        self.cancel_ocr();
-                        self.set_suppress_next_release(true);
+                        self.cancel_active_region_selector();
+                        self.suppress_next_release_from(RegionInputSource::Pointer);
                     }
                     _ => {}
                 }
@@ -69,11 +87,11 @@ impl WaylandState {
                 match button {
                     BTN_LEFT => {
                         self.sample_eyedropper(event.position.0, event.position.1);
-                        self.set_suppress_next_release(true);
+                        self.suppress_next_release_from(RegionInputSource::Pointer);
                     }
                     BTN_RIGHT => {
                         self.cancel_eyedropper();
-                        self.set_suppress_next_release(true);
+                        self.suppress_next_release_from(RegionInputSource::Pointer);
                     }
                     _ => {}
                 }
@@ -125,7 +143,7 @@ impl WaylandState {
                     screen_width,
                     screen_height,
                 ) {
-                    self.set_suppress_next_release(true);
+                    self.suppress_next_release_from(RegionInputSource::Pointer);
                 }
             }
             return;
@@ -382,5 +400,26 @@ fn input_hud_button_label(button: u32) -> String {
         other => crate::config::keybindings::linux::pointer_button(other)
             .map(|button| button.name())
             .unwrap_or_else(|| format!("Button {other}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::review_action_suppresses_next_release;
+    use crate::ui::RegionAction;
+
+    #[test]
+    fn retained_review_toggle_does_not_arm_the_post_modal_release_latch() {
+        assert!(!review_action_suppresses_next_release(
+            RegionAction::ToggleIncludeDrawings
+        ));
+        for terminal in [
+            RegionAction::Copy,
+            RegionAction::Save,
+            RegionAction::Both,
+            RegionAction::Board,
+        ] {
+            assert!(review_action_suppresses_next_release(terminal));
+        }
     }
 }

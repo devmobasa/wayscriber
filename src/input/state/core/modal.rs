@@ -165,9 +165,9 @@ impl InputState {
                 .any(|surface| surface.blocks_canvas_key_repeat() && self.modal_is_open(surface))
     }
 
-    /// Whether either screen-region modal — the eyedropper or the OCR region
-    /// selector — has been asked for, including while it still waits on a
-    /// capture.
+    /// Whether either screen-region modal — the eyedropper or the generalized
+    /// OCR/capture/measure region selector — has been asked for, including
+    /// while a capture-backed purpose still waits on its screen image.
     ///
     /// This is the *keyboard* boundary: the key that requested the modal is the
     /// last one the canvas sees, and every press from then on is swallowed, so

@@ -9,7 +9,6 @@ impl ScreenAcquisitionId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[allow(dead_code)] // Modal owners are connected by the Phase-0a owner adapters.
 pub(in crate::backend::wayland) enum ScreenAcquisitionOwner {
     UserFreeze,
     Eyedropper,
@@ -104,7 +103,6 @@ impl ScreenAcquisitionRegistry {
         self.slot.take()
     }
 
-    #[allow(dead_code)] // Used by public modal-owner cancellation adapters.
     pub fn take_matching(
         &mut self,
         id: ScreenAcquisitionId,

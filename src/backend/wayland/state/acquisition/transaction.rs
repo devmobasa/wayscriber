@@ -60,7 +60,17 @@ fn zoom_terminal_report(
     match owner? {
         ZoomWaiterOwner::Eyedropper => Some(("eyedropper", "Screen eyedropper capture failed.")),
         ZoomWaiterOwner::Ocr => Some(("ocr", "Screen capture for text recognition failed.")),
-        ZoomWaiterOwner::RegionCapture => None,
+        ZoomWaiterOwner::RegionCapture
+            if matches!(
+                outcome,
+                ZoomSourceOutcome::Aborted | ZoomSourceOutcome::Deactivated
+            ) =>
+        {
+            None
+        }
+        ZoomWaiterOwner::RegionCapture => {
+            Some(("capture", "Screen capture for region selection failed."))
+        }
     }
 }
 
@@ -80,6 +90,17 @@ pub(super) fn report_screen_terminal_to(
     owner: ScreenAcquisitionOwner,
     outcome: &ScreenAcquisitionOutcome,
 ) {
+    if owner == ScreenAcquisitionOwner::RegionCapture
+        && matches!(
+            outcome,
+            ScreenAcquisitionOutcome::Ready { .. }
+                | ScreenAcquisitionOutcome::Cancelled
+                | ScreenAcquisitionOutcome::Unavailable
+                | ScreenAcquisitionOutcome::Failed(_)
+        )
+    {
+        return;
+    }
     if owner == ScreenAcquisitionOwner::UserFreeze
         && matches!(outcome, ScreenAcquisitionOutcome::Unavailable)
     {
@@ -133,6 +154,8 @@ pub(super) trait AcquisitionTransactionRuntime {
     fn input_state(&mut self) -> &mut crate::input::InputState;
     fn finish_eyedropper_ready(&mut self, installed_generation: u64) -> bool;
     fn finish_ocr_ready(&mut self, installed_generation: u64) -> bool;
+    fn finish_region_capture_ready(&mut self, installed_generation: u64) -> bool;
+    fn handoff_region_capture_to_legacy(&mut self);
     fn cancel_owner_ui(&mut self, owner: ScreenAcquisitionOwner);
     fn clear_zoom_waiter_effect(&mut self, owner: ZoomWaiterOwner);
     fn frozen_generation(&self) -> u64;
@@ -151,7 +174,7 @@ pub(super) trait AcquisitionTransactionRuntime {
     fn end_frozen_suppression(&mut self);
 }
 
-fn release_owned_generation<R: AcquisitionTransactionRuntime>(
+pub(super) fn release_owned_generation<R: AcquisitionTransactionRuntime>(
     runtime: &mut R,
     generation: u64,
 ) -> bool {
@@ -183,7 +206,10 @@ fn cancel_owner_transition<R: AcquisitionTransactionRuntime>(
         ScreenAcquisitionOwner::Ocr => {
             runtime.clear_zoom_waiter_effect(ZoomWaiterOwner::Ocr);
         }
-        ScreenAcquisitionOwner::UserFreeze | ScreenAcquisitionOwner::RegionCapture => {}
+        ScreenAcquisitionOwner::RegionCapture => {
+            runtime.clear_zoom_waiter_effect(ZoomWaiterOwner::RegionCapture);
+        }
+        ScreenAcquisitionOwner::UserFreeze => {}
     }
     runtime.cancel_owner_ui(owner);
 }
@@ -278,11 +304,36 @@ pub(super) fn route_acquisition_transaction<R: AcquisitionTransactionRuntime>(
                 );
             }
         }
-        (ScreenAcquisitionOwner::Eyedropper | ScreenAcquisitionOwner::Ocr, _) => {
-            cancel_owner_transition(runtime, completion.owner);
+        (
+            ScreenAcquisitionOwner::RegionCapture,
+            ScreenAcquisitionOutcome::Ready {
+                installed_generation,
+            },
+        ) => {
+            if !runtime.finish_region_capture_ready(installed_generation) {
+                cancel_modal_owner_resources(
+                    runtime,
+                    ScreenAcquisitionOwner::RegionCapture,
+                    None,
+                    Some(installed_generation),
+                );
+                report_screen_source_activation_rejected_to(
+                    runtime.input_state(),
+                    ScreenAcquisitionOwner::RegionCapture,
+                );
+            }
         }
-        (ScreenAcquisitionOwner::RegionCapture, _) => {
-            // Phase 1 supplies the capture-purpose transition and legacy handoff.
+        (
+            ScreenAcquisitionOwner::RegionCapture,
+            ScreenAcquisitionOutcome::Unavailable | ScreenAcquisitionOutcome::Failed(_),
+        ) => runtime.handoff_region_capture_to_legacy(),
+        (
+            ScreenAcquisitionOwner::Eyedropper
+            | ScreenAcquisitionOwner::Ocr
+            | ScreenAcquisitionOwner::RegionCapture,
+            _,
+        ) => {
+            cancel_owner_transition(runtime, completion.owner);
         }
     }
 }

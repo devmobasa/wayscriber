@@ -3,8 +3,9 @@ use super::super::fields::{
     DragMouseButton, DragToolField, DragToolOption, FontWeightOption, InputHudModeOption,
     InputHudPositionOption, OverrideOption, PdfFitModeOption, PdfLabelContentModeOption,
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption, QuadField,
-    ReducedMotionOption, SessionStorageModeOption, TextField, ToggleField, ToolOption,
-    ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption, UiThemeOption,
+    ReducedMotionOption, RegionPickerOption, SessionStorageModeOption, TextField, ToggleField,
+    ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
+    UiThemeOption,
 };
 
 #[test]
@@ -54,6 +55,59 @@ fn config_draft_round_trips_automatic_onboarding_preference() {
         .to_config(&config)
         .expect("onboarding preference should round trip");
     assert!(!round_trip.ui.show_onboarding_hints);
+}
+
+#[test]
+fn config_draft_round_trips_shape_size_readout_preference() {
+    let mut config = Config::default();
+    config.ui.show_shape_size_readout = false;
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(!draft.ui_show_shape_size_readout);
+
+    draft.set_toggle(ToggleField::UiShowShapeSizeReadout, true);
+    let round_trip = draft
+        .to_config(&config)
+        .expect("shape size readout preference should round trip");
+    assert!(round_trip.ui.show_shape_size_readout);
+}
+
+#[test]
+fn config_draft_round_trips_region_capture_settings() {
+    let config = Config::default();
+    let mut draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.capture_region_picker, RegionPickerOption::Native);
+    assert!(draft.capture_region_show_size_readout);
+    assert!(!draft.capture_region_show_loupe);
+    assert!(draft.capture_region_show_legend);
+
+    draft.capture_region_picker = RegionPickerOption::Slurp;
+    draft.set_toggle(ToggleField::CaptureRegionShowSizeReadout, false);
+    draft.set_toggle(ToggleField::CaptureRegionShowLoupe, true);
+    draft.set_toggle(ToggleField::CaptureRegionShowLegend, false);
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("region capture settings should round trip");
+    assert_eq!(
+        round_trip.capture.region.picker,
+        wayscriber::config::RegionPicker::Slurp
+    );
+    assert!(!round_trip.capture.region.show_size_readout);
+    assert!(round_trip.capture.region.show_loupe);
+    assert!(!round_trip.capture.region.show_legend);
+}
+
+#[test]
+fn config_draft_round_trips_capture_drawing_preference() {
+    let config = Config::default();
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(draft.capture_include_drawings);
+
+    draft.set_toggle(ToggleField::CaptureIncludeDrawings, false);
+    let round_trip = draft
+        .to_config(&config)
+        .expect("capture drawing preference should round trip");
+    assert!(!round_trip.capture.include_drawings);
 }
 use super::super::{ColorMode, NamedColorOption};
 use super::{ConfigDraft, RenderProfileSelectionOption};

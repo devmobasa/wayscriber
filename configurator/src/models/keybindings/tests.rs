@@ -168,6 +168,41 @@ fn board_pdf_export_keybinding_field_reads_and_writes_config() {
     );
 }
 
+#[test]
+fn interactive_region_capture_keybinding_is_visible_and_round_trips() {
+    let field = KeybindingField::CaptureRegionInteractive;
+    let mut config = KeybindingsConfig::default();
+
+    assert!(KeybindingField::all().contains(&field));
+    assert_eq!(field.tab(), KeybindingsTabId::CaptureView);
+    assert_eq!(field.label(), "Capture Region (Interactive)");
+    assert_eq!(
+        field.get(&config),
+        &vec!["Ctrl+Shift+C".to_string()],
+        "the shipped default"
+    );
+
+    field.set(&mut config, vec!["Ctrl+Alt+Shift+I".to_string()]);
+    assert_eq!(
+        config.capture.capture_region_interactive,
+        ["Ctrl+Alt+Shift+I"]
+    );
+}
+
+#[test]
+fn measure_mode_keybinding_is_visible_and_round_trips() {
+    let field = KeybindingField::MeasureMode;
+    let mut config = KeybindingsConfig::default();
+
+    assert!(KeybindingField::all().contains(&field));
+    assert_eq!(field.tab(), KeybindingsTabId::CaptureView);
+    assert_eq!(field.label(), "Measure Mode");
+    assert!(field.get(&config).is_empty());
+
+    field.set(&mut config, vec!["Ctrl+Alt+M".to_string()]);
+    assert_eq!(config.capture.measure_mode, ["Ctrl+Alt+M"]);
+}
+
 /// Saving in the configurator rebuilds `KeybindingsConfig` from `default()` and
 /// writes back only the fields present in `KeybindingField::all()`. A binding
 /// missing from that registry is therefore silently reset to its default the

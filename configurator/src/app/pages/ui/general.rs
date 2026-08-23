@@ -65,6 +65,12 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             |app| app.draft.ui_show_onboarding_hints,
             |value| Message::ToggleChanged(ToggleField::UiShowOnboardingHints, value),
         )
+        .switch_row(
+            "Show shape size readout",
+            "Shows rectangle and ellipse preview dimensions in logical board pixels. Separate from the region-capture size readout.",
+            |app| app.draft.ui_show_shape_size_readout,
+            |value| Message::ToggleChanged(ToggleField::UiShowShapeSizeReadout, value),
+        )
         .entry_row(
             "Command palette toast (ms)",
             |app| app.draft.ui_command_palette_toast_duration_ms.clone(),

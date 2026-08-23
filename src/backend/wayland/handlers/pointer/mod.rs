@@ -53,10 +53,14 @@ impl PointerHandler for WaylandState {
                 }
                 PointerEventKind::Press { button, serial, .. } => {
                     self.set_last_activation_serial(Some(serial));
+                    let modal_before = self.input_state.screen_modal_is_active();
                     self.handle_pointer_press(conn, qh, event, on_toolbar, inline_active, button);
+                    self.refresh_screen_modal_cursor(modal_before, on_toolbar, conn);
                 }
                 PointerEventKind::Release { button, .. } => {
+                    let modal_before = self.input_state.screen_modal_is_active();
                     self.handle_pointer_release(event, on_toolbar, inline_active, button);
+                    self.refresh_screen_modal_cursor(modal_before, on_toolbar, conn);
                 }
                 PointerEventKind::Axis { vertical, .. } => {
                     self.handle_pointer_axis(event, on_toolbar, vertical);

@@ -128,6 +128,8 @@ impl KeybindingField {
             Self::CaptureFileSelection => config.capture.capture_file_selection = value,
             Self::CaptureClipboardRegion => config.capture.capture_clipboard_region = value,
             Self::CaptureFileRegion => config.capture.capture_file_region = value,
+            Self::CaptureRegionInteractive => config.capture.capture_region_interactive = value,
+            Self::MeasureMode => config.capture.measure_mode = value,
             Self::ExportCanvasFile => config.capture.export_canvas_file = value,
             Self::ExportCanvasClipboard => config.capture.export_canvas_clipboard = value,
             Self::ExportCanvasClipboardAndFile => {

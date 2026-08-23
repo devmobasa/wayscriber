@@ -60,3 +60,33 @@ fn canvas_export_rows_remain_visible_when_capture_context_is_disabled() {
         "Screenshot rows should stay hidden when capture context is disabled"
     );
 }
+
+#[test]
+fn interactive_region_capture_has_a_help_row_when_capture_is_enabled() {
+    let bindings = HelpOverlayBindings::default();
+    let sections = build_section_sets(&bindings, false, true, true, true).all;
+    let rows = sections
+        .iter()
+        .flat_map(|section| section.rows.iter())
+        .collect::<Vec<_>>();
+
+    assert!(rows.iter().any(|row| {
+        row.action == action_label(Action::CaptureRegionInteractive)
+            && row.key == crate::label_format::NOT_BOUND_LABEL
+    }));
+}
+
+#[test]
+fn capture_free_measure_mode_stays_visible_when_capture_is_disabled() {
+    let bindings = HelpOverlayBindings::default();
+    let sections = build_section_sets(&bindings, false, true, true, false).all;
+    let rows = sections
+        .iter()
+        .flat_map(|section| section.rows.iter())
+        .collect::<Vec<_>>();
+
+    assert!(rows.iter().any(|row| {
+        row.action == action_label(Action::MeasureMode)
+            && row.key == crate::label_format::NOT_BOUND_LABEL
+    }));
+}

@@ -1,6 +1,7 @@
 use super::*;
 
 mod canvas;
+mod measure_badge;
 mod tool_preview;
 mod ui;
 mod ui_effect_damage;
@@ -30,6 +31,7 @@ impl WaylandState {
             .overlay_suppression
             .effective_for_board(board_is_transparent);
         let render_canvas = suppression.renders_canvas();
+        let render_canvas_transients = suppression.renders_canvas_transients();
         let render_ui = suppression.renders_ui();
 
         // Create pool if needed
@@ -146,6 +148,7 @@ impl WaylandState {
             let command_palette_active = render_ui && self.input_state.command_palette_is_engaged();
             let color_picker_active = render_ui && self.input_state.is_color_picker_popup_open();
             let input_hud_active = render_ui && self.input_state.input_hud_visible();
+            let shape_measure_badge_active = render_ui && !self.capture_picker_chrome_suppressed();
             let ui_effect_damage = self.collect_ui_effect_damage(
                 ui_toast_active,
                 preset_feedback_active,
@@ -157,6 +160,7 @@ impl WaylandState {
                 command_palette_active,
                 color_picker_active,
                 tool_preview_active,
+                shape_measure_badge_active,
                 width,
                 height,
             );
@@ -292,6 +296,7 @@ impl WaylandState {
                 phys_height,
                 now,
                 &damage_world,
+                render_canvas_transients,
                 render_breakdown.as_mut(),
             )?;
         }
@@ -370,6 +375,18 @@ impl WaylandState {
         });
 
         let draw_duration = draw_start.elapsed();
+        if self.input_state.region_is_active()
+            && self
+                .input_state
+                .region_state()
+                .purpose()
+                .is_some_and(|purpose| purpose.is_capture())
+        {
+            debug!(
+                "Region picker frame: logical={}x{}, physical={}x{}, scale={}, cairo_draw={:?}",
+                width, height, phys_width, phys_height, scale, draw_duration
+            );
+        }
         if draw_duration > std::time::Duration::from_millis(2) {
             debug!("Cairo draw took {:?}", draw_duration);
         }

@@ -179,6 +179,12 @@ pub(super) const UI_GENERAL_TERMS: &[&str] = &[
     "tutorial",
     "guidance",
     "tips",
+    "show shape size readout",
+    "shape size readout",
+    "show_shape_size_readout",
+    "shape dimensions",
+    "rectangle ellipse preview",
+    "logical board pixels",
     "command palette toast",
 ];
 pub(super) const UI_TOOLBAR_TERMS: &[&str] = &[
@@ -373,8 +379,25 @@ pub(super) const CAPTURE_FILE_TERMS: &[&str] = &[
     "capture filename template",
     "clipboard",
     "copy to clipboard",
+    "include drawings in screenshots",
+    "include drawings",
+    "capture annotations",
+    "screenshot annotations",
+    "include_drawings",
     "always exit overlay after capture",
     "format",
+];
+pub(super) const CAPTURE_REGION_TERMS: &[&str] = &[
+    "region picker",
+    "selection frontend",
+    "native",
+    "slurp",
+    "show pointer position and selection size",
+    "size readout",
+    "show magnified pixel loupe",
+    "pixel loupe",
+    "show hotkey legend",
+    "hotkey legend",
 ];
 pub(super) const CAPTURE_PDF_TERMS: &[&str] = &[
     "pdf",

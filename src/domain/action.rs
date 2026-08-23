@@ -177,6 +177,10 @@ pub enum Action {
     CaptureFileSelection,
     CaptureClipboardRegion,
     CaptureFileRegion,
+    /// Select a screen region, then choose its destination in the review UI.
+    CaptureRegionInteractive,
+    /// Measure a logical screen region without capturing or delivering pixels.
+    MeasureMode,
     ExportCanvasFile,
     ExportCanvasClipboard,
     ExportCanvasClipboardAndFile,
@@ -217,4 +221,19 @@ pub enum Action {
 
     // Clipboard fallback
     SavePendingToFile,
+}
+
+impl Action {
+    /// Whether this action opens or addresses the native screen-region picker.
+    pub const fn is_region_capture(self) -> bool {
+        matches!(
+            self,
+            Self::CaptureSelection
+                | Self::CaptureClipboardSelection
+                | Self::CaptureFileSelection
+                | Self::CaptureClipboardRegion
+                | Self::CaptureFileRegion
+                | Self::CaptureRegionInteractive
+        )
+    }
 }

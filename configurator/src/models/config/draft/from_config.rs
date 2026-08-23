@@ -5,8 +5,8 @@ use super::super::super::fields::{
     InputHudPositionOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
     PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, ToolOption,
-    ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
+    RegionPickerOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
+    ToolOption, ToolbarLayoutModeOption, ToolbarRebindModifierOption, UiThemeOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::super::fields::{
@@ -134,6 +134,7 @@ impl ConfigDraft {
             ui_show_frozen_badge: config.ui.show_frozen_badge,
             ui_show_capabilities_warning: config.ui.show_capabilities_warning,
             ui_show_onboarding_hints: config.ui.show_onboarding_hints,
+            ui_show_shape_size_readout: config.ui.show_shape_size_readout,
             ui_context_menu_enabled: config.ui.context_menu.enabled,
             ui_preferred_output: config.ui.preferred_output.clone().unwrap_or_default(),
             ui_xdg_fullscreen: config.ui.xdg_fullscreen,
@@ -248,8 +249,13 @@ impl ConfigDraft {
             capture_filename_template: config.capture.filename_template.clone(),
             capture_format: config.capture.format.clone(),
             capture_copy_to_clipboard: config.capture.copy_to_clipboard,
+            capture_include_drawings: config.capture.include_drawings,
             capture_exit_after: config.capture.exit_after_capture,
             capture_ocr_languages: config.capture.ocr_languages.clone(),
+            capture_region_picker: RegionPickerOption::from_picker(config.capture.region.picker),
+            capture_region_show_size_readout: config.capture.region.show_size_readout,
+            capture_region_show_loupe: config.capture.region.show_loupe,
+            capture_region_show_legend: config.capture.region.show_legend,
             export_pdf_filename_template: config
                 .export
                 .pdf

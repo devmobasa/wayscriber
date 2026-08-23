@@ -174,6 +174,7 @@ impl ConfigDraft {
             ToggleField::UiShowFrozenBadge => self.ui_show_frozen_badge = value,
             ToggleField::UiShowCapabilitiesWarning => self.ui_show_capabilities_warning = value,
             ToggleField::UiShowOnboardingHints => self.ui_show_onboarding_hints = value,
+            ToggleField::UiShowShapeSizeReadout => self.ui_show_shape_size_readout = value,
             ToggleField::UiShowStatusBoardBadge => self.ui_show_status_board_badge = value,
             ToggleField::UiShowStatusPageBadge => self.ui_show_status_page_badge = value,
             ToggleField::UiShowToolbarHint => self.ui_show_toolbar_hint = value,
@@ -257,7 +258,13 @@ impl ConfigDraft {
             }
             ToggleField::CaptureEnabled => self.capture_enabled = value,
             ToggleField::CaptureCopyToClipboard => self.capture_copy_to_clipboard = value,
+            ToggleField::CaptureIncludeDrawings => self.capture_include_drawings = value,
             ToggleField::CaptureExitAfter => self.capture_exit_after = value,
+            ToggleField::CaptureRegionShowSizeReadout => {
+                self.capture_region_show_size_readout = value;
+            }
+            ToggleField::CaptureRegionShowLoupe => self.capture_region_show_loupe = value,
+            ToggleField::CaptureRegionShowLegend => self.capture_region_show_legend = value,
             ToggleField::ExportPdfLabelsEnabled => self.export_pdf_labels_enabled = value,
             ToggleField::ExportPdfLabelBackgroundEnabled => {
                 self.export_pdf_label_background_enabled = value;

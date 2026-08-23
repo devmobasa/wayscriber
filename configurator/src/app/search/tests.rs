@@ -238,6 +238,28 @@ fn exact_static_section_labels_match_their_sections() {
     }
 }
 
+#[test]
+fn region_picker_labels_match_the_region_section() {
+    for query in [
+        "selection frontend",
+        "show pointer position and selection size",
+        "show magnified pixel loupe",
+        "show hotkey legend",
+        "slurp",
+    ] {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.search_query = SearchQuery::new(query);
+
+        let summary = app.search_summary();
+        let capture = summary.tab(TabId::Capture).expect("capture match");
+
+        assert!(
+            capture.area_matches(SearchArea::CaptureRegion),
+            "query should show Region picker: {query}",
+        );
+    }
+}
+
 #[cfg(feature = "tablet-input")]
 #[test]
 fn exact_tablet_labels_match_tablet_section() {
@@ -592,6 +614,11 @@ fn exact_general_ui_field_labels_match_general_ui_section() {
         "hints",
         "onboarding hints",
         "show_onboarding_hints",
+        "show shape size readout",
+        "shape size readout",
+        "show_shape_size_readout",
+        "rectangle ellipse preview",
+        "logical board pixels",
     ] {
         let (mut app, _effects) = ConfiguratorApp::new_app();
         app.search_query = SearchQuery::new(query);
@@ -617,6 +644,19 @@ fn exact_capture_file_labels_match_capture_file_section() {
     let capture = summary.tab(TabId::Capture).expect("capture match");
 
     assert!(capture.area_matches(SearchArea::CaptureFiles));
+}
+
+#[test]
+fn capture_drawing_preference_matches_capture_file_section() {
+    for query in ["include drawings in screenshots", "capture annotations"] {
+        let (mut app, _effects) = ConfiguratorApp::new_app();
+        app.search_query = SearchQuery::new(query);
+
+        let summary = app.search_summary();
+        let capture = summary.tab(TabId::Capture).expect("capture match");
+
+        assert!(capture.area_matches(SearchArea::CaptureFiles));
+    }
 }
 
 #[test]

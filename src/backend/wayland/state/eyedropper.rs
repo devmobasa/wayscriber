@@ -12,7 +12,11 @@ use super::screen_image::{
     image_point_for_screen_point, screen_source_entry, screen_source_token,
 };
 
-fn sample_at(image: &FrozenImage, image_x: f64, image_y: f64) -> Option<Color> {
+pub(in crate::backend::wayland) fn sample_at(
+    image: &FrozenImage,
+    image_x: f64,
+    image_y: f64,
+) -> Option<Color> {
     if image.width == 0 || image.height == 0 || image.stride <= 0 {
         return None;
     }

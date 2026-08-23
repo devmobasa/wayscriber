@@ -18,3 +18,8 @@ mod tests;
 pub(crate) use client::{BROKER_BUSY, BrokerChild, ProcessBroker, current, start_for_runtime};
 pub(crate) use server::run_internal_broker_if_requested;
 pub(crate) use wire::{BrokerOutput, HelperKind, HelperLifetime, STDOUT_CAP_EXCEEDED};
+
+/// Largest payload accepted by retained clipboard publication.
+pub(crate) const fn max_publish_bytes() -> usize {
+    wire::MAX_OUTPUT_BYTES
+}

@@ -32,6 +32,17 @@ pub struct CaptureKeybindingsConfig {
     #[serde(default = "default_capture_file_region")]
     pub capture_file_region: Vec<String>,
 
+    /// Opens the post-selection review UI. Owns `Ctrl+Shift+C` by default,
+    /// taking it from `capture_clipboard_selection`, which now ships unbound:
+    /// Review's Copy reaches the same clipboard result from the same chord.
+    #[serde(default = "default_capture_region_interactive")]
+    pub capture_region_interactive: Vec<String>,
+
+    /// Opens the screen ruler without capturing pixels. Palette-first and
+    /// unbound by default.
+    #[serde(default = "default_measure_mode")]
+    pub measure_mode: Vec<String>,
+
     #[serde(default = "default_export_canvas_file")]
     pub export_canvas_file: Vec<String>,
 
@@ -68,6 +79,8 @@ impl Default for CaptureKeybindingsConfig {
             capture_file_selection: default_capture_file_selection(),
             capture_clipboard_region: default_capture_clipboard_region(),
             capture_file_region: default_capture_file_region(),
+            capture_region_interactive: default_capture_region_interactive(),
+            measure_mode: default_measure_mode(),
             export_canvas_file: default_export_canvas_file(),
             export_canvas_clipboard: default_export_canvas_clipboard(),
             export_canvas_clipboard_and_file: default_export_canvas_clipboard_and_file(),

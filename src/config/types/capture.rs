@@ -1,5 +1,42 @@
 use serde::{Deserialize, Serialize};
 
+use crate::config::enums::RegionPicker;
+
+/// Region screenshot picker configuration.
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegionCaptureConfig {
+    /// Region selection frontend.
+    #[serde(default)]
+    pub picker: RegionPicker,
+
+    /// Show pointer coordinates and the selected export size.
+    #[serde(default = "default_region_show_size_readout")]
+    pub show_size_readout: bool,
+
+    /// Show a magnified pixel loupe while selecting a region.
+    ///
+    /// The setting is persisted for the picker; the loupe renderer may be
+    /// unavailable in builds that do not yet consume it.
+    #[serde(default = "default_region_show_loupe")]
+    pub show_loupe: bool,
+
+    /// Show the short picker hotkey legend until the first drag.
+    #[serde(default = "default_region_show_legend")]
+    pub show_legend: bool,
+}
+
+impl Default for RegionCaptureConfig {
+    fn default() -> Self {
+        Self {
+            picker: RegionPicker::default(),
+            show_size_readout: default_region_show_size_readout(),
+            show_loupe: default_region_show_loupe(),
+            show_legend: default_region_show_legend(),
+        }
+    }
+}
+
 /// Screenshot capture configuration.
 ///
 /// Controls the behavior of screenshot capture features including file saving,
@@ -27,6 +64,11 @@ pub struct CaptureConfig {
     #[serde(default = "default_capture_clipboard")]
     pub copy_to_clipboard: bool,
 
+    /// Composite the active board's committed drawings into full-screen and
+    /// region screenshot exports.
+    #[serde(default = "default_capture_include_drawings")]
+    pub include_drawings: bool,
+
     /// Exit the overlay after any capture completes (forces exit for all capture types).
     /// When false, clipboard-only captures still auto-exit by default.
     #[serde(default = "default_capture_exit_after")]
@@ -37,6 +79,10 @@ pub struct CaptureConfig {
     /// Tesseract language packages must be installed.
     #[serde(default = "default_capture_ocr_languages")]
     pub ocr_languages: String,
+
+    /// Region screenshot picker behavior and chrome.
+    #[serde(default)]
+    pub region: RegionCaptureConfig,
 }
 
 impl Default for CaptureConfig {
@@ -47,8 +93,10 @@ impl Default for CaptureConfig {
             filename_template: default_capture_filename(),
             format: default_capture_format(),
             copy_to_clipboard: default_capture_clipboard(),
+            include_drawings: default_capture_include_drawings(),
             exit_after_capture: default_capture_exit_after(),
             ocr_languages: default_capture_ocr_languages(),
+            region: RegionCaptureConfig::default(),
         }
     }
 }
@@ -150,8 +198,24 @@ fn default_capture_clipboard() -> bool {
     true
 }
 
+fn default_capture_include_drawings() -> bool {
+    true
+}
+
 fn default_capture_exit_after() -> bool {
     false
+}
+
+fn default_region_show_size_readout() -> bool {
+    true
+}
+
+fn default_region_show_loupe() -> bool {
+    false
+}
+
+fn default_region_show_legend() -> bool {
+    true
 }
 
 #[cfg(test)]
@@ -162,6 +226,16 @@ mod tests {
     fn default_ocr_language_is_english() {
         assert_eq!(CaptureConfig::default().ocr_languages, "eng");
         assert_eq!(CaptureConfig::default().resolved_ocr_languages(), "eng");
+    }
+
+    #[test]
+    fn region_picker_defaults_match_the_documented_native_experience() {
+        let region = RegionCaptureConfig::default();
+
+        assert_eq!(region.picker, RegionPicker::Native);
+        assert!(region.show_size_readout);
+        assert!(!region.show_loupe);
+        assert!(region.show_legend);
     }
 
     #[test]

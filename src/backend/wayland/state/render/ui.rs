@@ -1,5 +1,9 @@
 use super::tool_preview::{draw_stylus_hover_cursor, draw_tool_preview, mouse_tool_preview_redraw};
 use super::*;
+use crate::backend::wayland::state::region_capture::RegionPickerMeasurement;
+use crate::backend::wayland::state::screen_image::{
+    displayed_screen_image, image_point_for_screen_point, screen_source_is,
+};
 
 impl WaylandState {
     pub(super) fn render_ui_layer(
@@ -20,7 +24,12 @@ impl WaylandState {
 
     fn render_ui_layers(&mut self, ctx: &cairo::Context, width: u32, height: u32, render_ui: bool) {
         if render_ui {
-            if self.mouse_tool_preview_eligible() {
+            let capture_picker = self.capture_picker_chrome_suppressed();
+            if capture_picker {
+                self.render_capture_picker(ctx, width, height);
+            }
+
+            if !capture_picker && self.mouse_tool_preview_eligible() {
                 let (cursor_x, cursor_y) =
                     self.stylus_hover_cursor_position().unwrap_or_else(|| {
                         let (x, y) = self.current_mouse();
@@ -38,7 +47,11 @@ impl WaylandState {
                     height as f64,
                 );
             }
+            if !capture_picker {
+                self.render_shape_measure_badge(ctx, width, height);
+            }
             if let Some((cursor_x, cursor_y)) = self.stylus_hover_cursor_position()
+                && !capture_picker
                 && !self.cursor_blocked_by_toolbar()
             {
                 draw_stylus_hover_cursor(
@@ -55,7 +68,8 @@ impl WaylandState {
             // top-corner badges below cover the hidden-status-bar case only.
             // Focus Mode suppresses the whole fallback family; otherwise its
             // intentional status/chip hide would make these badges reappear.
-            let fallback_mode_badges_visible = self.input_state.fallback_mode_badges_visible();
+            let fallback_mode_badges_visible =
+                !capture_picker && self.input_state.fallback_mode_badges_visible();
             let status_hud_visible = self.input_state.status_hud_effectively_visible();
             if self.input_state.frozen_active()
                 && !self.zoom.active
@@ -111,7 +125,7 @@ impl WaylandState {
             {
                 crate::ui::render_editing_badge(ctx, width, height, top_badge_offset);
             }
-            if self.input_state.floating_badge_visible() {
+            if !capture_picker && self.input_state.floating_badge_visible() {
                 let board_count = self.input_state.boards.board_count();
                 let page_count = self.input_state.boards.page_count();
                 let board_index = self.input_state.boards.active_index();
@@ -144,7 +158,7 @@ impl WaylandState {
             // Render the interactive bottom-right zoom chip (layout cached for
             // this frame by collect_ui_effect_damage). Reuses the status-bar
             // style tokens so it reads as the same chrome family.
-            if self.zoom_chip_visible() {
+            if !capture_picker && self.zoom_chip_visible() {
                 crate::ui::render_zoom_chip(
                     ctx,
                     &self.input_state,
@@ -158,7 +172,7 @@ impl WaylandState {
             // the status pills it uses the status-bar style tokens, and it
             // lives behind the same `render_ui` gate so overlay suppression
             // hides it with the rest of the chrome.
-            if self.input_state.input_hud_visible() {
+            if !capture_picker && self.input_state.input_hud_visible() {
                 crate::ui::render_input_hud(
                     ctx,
                     &self.input_state,
@@ -169,7 +183,7 @@ impl WaylandState {
             }
 
             // Render help overlay if toggled
-            if self.input_state.show_help {
+            if !capture_picker && self.input_state.show_help {
                 let bindings = crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);
                 let scroll_max = crate::ui::render_help_overlay(
                     ctx,
@@ -191,7 +205,7 @@ impl WaylandState {
                     self.input_state.help_overlay_scroll.clamp(0.0, scroll_max);
             }
 
-            if self.input_state.is_board_picker_open() {
+            if !capture_picker && self.input_state.is_board_picker_open() {
                 self.input_state
                     .update_board_picker_layout(ctx, width, height);
                 crate::ui::render_board_picker(ctx, &self.input_state, width, height);
@@ -199,7 +213,7 @@ impl WaylandState {
                 self.input_state.clear_board_picker_layout();
             }
 
-            if self.input_state.is_color_picker_popup_open() {
+            if !capture_picker && self.input_state.is_color_picker_popup_open() {
                 self.input_state
                     .update_color_picker_popup_layout(width, height);
                 crate::ui::render_color_picker_popup(ctx, &self.input_state, width, height);
@@ -207,7 +221,7 @@ impl WaylandState {
                 self.input_state.clear_color_picker_popup_layout();
             }
 
-            if self.input_state.is_precision_entry_open() {
+            if !capture_picker && self.input_state.is_precision_entry_open() {
                 // Anchor under the top strip (the pill is its bottom row):
                 // the same base position both the inline fallback and the
                 // layer-shell margins derive from.
@@ -226,10 +240,12 @@ impl WaylandState {
                 );
             }
 
-            self.render_eyedropper_loupe(ctx, width, height);
+            if !capture_picker {
+                self.render_eyedropper_loupe(ctx, width, height);
+            }
             self.render_ocr_selection(ctx, width, height);
 
-            if self.input_state.is_radial_menu_open() {
+            if !capture_picker && self.input_state.is_radial_menu_open() {
                 // Layout (and with it hit-testing) is live from the moment
                 // of opening so pre-paint flicks resolve correctly; painting
                 // waits out the flick window (RADIAL_PAINT_DELAY).
@@ -252,7 +268,7 @@ impl WaylandState {
             crate::ui::render_preset_toast(ctx, &self.input_state, width, height);
             crate::ui::render_blocked_feedback(ctx, &self.input_state, width, height);
 
-            if !self.zoom.active && !self.input_state.is_board_picker_open() {
+            if !capture_picker && !self.zoom.active && !self.input_state.is_board_picker_open() {
                 if self.input_state.is_properties_panel_open() {
                     self.input_state
                         .update_properties_panel_layout(ctx, width, height);
@@ -276,7 +292,8 @@ impl WaylandState {
             }
 
             // Inline toolbars (xdg fallback or drag preview) render directly into main surface.
-            if self.toolbar.is_visible() && self.inline_toolbars_render_active() {
+            if !capture_picker && self.toolbar.is_visible() && self.inline_toolbars_render_active()
+            {
                 let snapshot = self.toolbar_snapshot();
                 if self.toolbar.update_snapshot(&snapshot) {
                     self.toolbar.mark_dirty();
@@ -284,15 +301,164 @@ impl WaylandState {
                 self.render_inline_toolbars(ctx, &snapshot);
             }
 
-            // Modal overlays render last (on top of everything including toolbars)
-            if let Some(card) = self.first_run_onboarding_card() {
-                crate::ui::render_onboarding_card(ctx, width, height, &card);
+            if self.input_state.region_state().purpose()
+                == Some(crate::input::state::RegionPurposeTag::Measure)
+            {
+                // Measure mode is screen chrome over the live annotated
+                // canvas, not capture suppression. Paint it once, above the
+                // ordinary Wayscriber UI.
+                self.render_capture_picker(ctx, width, height);
             }
-            crate::ui::render_command_palette(ctx, &self.input_state, width, height);
-            crate::ui::render_tour(ctx, &self.input_state, width, height);
+
+            // Modal overlays render last (on top of everything including toolbars)
+            if !capture_picker {
+                if let Some(card) = self.first_run_onboarding_card() {
+                    crate::ui::render_onboarding_card(ctx, width, height, &card);
+                }
+                crate::ui::render_command_palette(ctx, &self.input_state, width, height);
+                crate::ui::render_tour(ctx, &self.input_state, width, height);
+            }
         } else {
             self.input_state.clear_context_menu_layout();
         }
+    }
+
+    fn render_capture_picker(&self, ctx: &cairo::Context, width: u32, height: u32) {
+        let purpose = self.input_state.region_state().purpose();
+        if !self.input_state.region_is_active()
+            || !purpose.is_some_and(|purpose| {
+                purpose.is_capture() || purpose == crate::input::state::RegionPurposeTag::Measure
+            })
+        {
+            return;
+        }
+
+        let measure_mode = purpose == Some(crate::input::state::RegionPurposeTag::Measure);
+
+        let options = match self.capture.region_phase() {
+            crate::backend::wayland::capture::RegionCapturePhase::Reserved(intent) => {
+                Some(intent.options())
+            }
+            crate::backend::wayland::capture::RegionCapturePhase::Idle
+            | crate::backend::wayland::capture::RegionCapturePhase::Submitting(_)
+            | crate::backend::wayland::capture::RegionCapturePhase::Accepted => None,
+        };
+        let geometry = self.region_selection_geometry();
+        let selection = if measure_mode {
+            self.region_measure_selection()
+        } else {
+            geometry.map(|geometry| geometry.display_selection())
+        };
+        let (pointer_x, pointer_y) = self.current_mouse();
+        let pointer = (f64::from(pointer_x), f64::from(pointer_y));
+        let measurement = (measure_mode
+            || options.is_some_and(|options| options.show_size_readout()))
+        .then(|| self.region_picker_measurement(pointer))
+        .flatten()
+        .map(|measurement| match measurement {
+            RegionPickerMeasurement::Point { x, y } => format!("{x}, {y}"),
+            RegionPickerMeasurement::Size { width, height } => {
+                crate::ui::capture_size_text((width, height))
+            }
+        });
+        let region_state = self.input_state.region_state();
+        let action_bar = if region_state.is_review() {
+            geometry.map(|geometry| {
+                crate::ui::RegionActionBar::place(geometry.display_selection(), (width, height))
+            })
+        } else {
+            None
+        };
+        let hovered_action: Option<crate::ui::RegionAction> =
+            action_bar.and_then(|bar| bar.hit(pointer));
+        // Grips belong to the reviewed rectangle, not the window-mode
+        // candidate, so they follow `region_selection_geometry` rather than
+        // the effective selection the scrim cuts out.
+        let resize_handles = region_state.is_review().then(|| {
+            geometry
+                .map(|geometry| crate::ui::RegionResizeHandles::place(geometry.display_selection()))
+        });
+        let resize_handles = resize_handles.flatten();
+        // A grip sitting under the action bar is painted over by it, so the
+        // bar's hover wins the pointer.
+        let hovered_handle = (hovered_action.is_none()
+            && !action_bar.is_some_and(|bar| bar.contains(pointer)))
+        .then(|| resize_handles.and_then(|handles| handles.hit(pointer)))
+        .flatten();
+        let loupe_enabled = options.is_some_and(|options| options.show_loupe())
+            && (region_state.is_selecting() || region_state.is_review());
+        let loupe_source = if loupe_enabled {
+            self.region_picker_source_token().and_then(|token| {
+                let source = displayed_screen_image(
+                    &self.zoom,
+                    &self.frozen,
+                    self.input_state.board_is_transparent(),
+                )?;
+                screen_source_is(&token, &source, &self.zoom, &self.frozen, (width, height))
+                    .then_some((source, token))
+            })
+        } else {
+            None
+        };
+        let loupe = loupe_source.as_ref().and_then(|(_source, token)| {
+            let image_point = image_point_for_screen_point(token, pointer);
+            crate::ui::RegionCaptureLoupeVisual::when_enabled(
+                loupe_enabled,
+                pointer,
+                (image_point.x, image_point.y),
+            )
+        });
+        let window_targets: Vec<_> = self
+            .region_window_snap_targets()
+            .iter()
+            .map(|target| {
+                let rect = target.screen_rect();
+                crate::input::state::RegionSelection {
+                    start: (f64::from(rect.x), f64::from(rect.y)),
+                    end: (
+                        f64::from(rect.x + rect.width),
+                        f64::from(rect.y + rect.height),
+                    ),
+                }
+            })
+            .collect();
+        let window = crate::ui::RegionCaptureWindowVisual {
+            available: self.region_window_snap_available(),
+            active: self.region_window_snap_active(),
+            targets: &window_targets,
+            highlighted_target: self.region_window_snap_highlighted_index(),
+        };
+
+        crate::ui::render_region_capture_picker(
+            ctx,
+            width,
+            height,
+            crate::ui::RegionCapturePickerVisual {
+                selection,
+                pointer,
+                measurement: measurement.as_deref(),
+                show_scrim: !measure_mode,
+                review: region_state.is_review(),
+                resize_handles,
+                hovered_handle,
+                show_legend: options.is_some_and(|options| options.show_legend())
+                    && !self.region_picker_legend_dismissed(),
+                loupe,
+                action_bar,
+                hovered_action,
+                include_drawings: self.region_picker_include_drawings(),
+                window,
+            },
+            |image_x, image_y| {
+                loupe_source.as_ref().and_then(|(source, _token)| {
+                    crate::backend::wayland::state::eyedropper::sample_at(
+                        source.image,
+                        image_x,
+                        image_y,
+                    )
+                })
+            },
+        );
     }
 
     /// The render-time gate for the mouse-anchored tool-preview bubble: it is

@@ -712,6 +712,10 @@ show_capabilities_warning = true
 # appearances. The guided tour remains available manually when this is false.
 show_onboarding_hints = true
 
+# Show rectangle and ellipse preview dimensions in logical board pixels.
+# This is separate from capture.region.show_size_readout.
+show_shape_size_readout = true
+
 # Command palette action toast duration (ms)
 command_palette_toast_duration_ms = 1500
 
@@ -1183,6 +1187,7 @@ top_controls = [
 - **Context-aware UI**: `context_aware_ui` shows/hides tool-specific controls (colors, thickness, arrow labels, etc.) based on the active tool; disable to always show all controls.
 - **Preset toasts**: `show_preset_toasts` enables toast confirmations for preset apply/save/clear.
 - **Automatic guidance**: `show_onboarding_hints` controls first-run cards, discovery tips, and shortcut coaching. Discovery and coaching tips offer **Got it** (permanently acknowledge that tip) and **Tip settings…** (acknowledge it, then open the Configurator at this setting); the toolbar-hidden recovery tip keeps **Show** as its primary control and offers the same settings route. Using the board picker, bottom-right zoom controls, or Canvas popover also acknowledges the matching tip. Clicking the message body dismisses a tip only for the current run; an unattended tip stops after three appearances. Set this option to `false` to disable all automatic tutorials on later overlay launches; the running overlay does not live-reload this Configurator change. The guided tour remains available manually, and capability, safety, and configuration warnings are unaffected. Completed profiles migrated from onboarding versions before v6 are not enrolled in the later status-bar, Canvas, and zoom tip series. If onboarding progress cannot be saved, automatic guidance is disabled for that run and an actionable persistence warning is shown.
+- **Shape size readout**: `show_shape_size_readout` controls the live rectangle and ellipse preview dimensions, measured in logical board pixels. Ellipse values match the diameter that will be committed, so an odd drag span rounds down to the nearest even diameter. It defaults to `true` and is separate from `capture.region.show_size_readout`, which describes a region-capture selection.
 - **Capability warnings**: `show_capabilities_warning` independently controls compositor limitation warnings; disabling tutorials does not hide safety, configuration, or capability diagnostics.
 - **Tool preview**: `show_tool_preview` toggles the cursor bubble.
 - **Offsets**: `top_offset` and `top_offset_y` are the authored default top-toolbar position. Dragging the strip saves its position as a runtime preference in `runtime-ui.toml` and leaves these untouched; editing one here again takes over from the saved drag.
@@ -1391,6 +1396,11 @@ format = "png"
 # Copy captures to clipboard in addition to saving files
 copy_to_clipboard = true
 
+# Composite the active board's committed annotations into full-screen and
+# region screenshots. Set to false for raw desktop pixels by default; the
+# interactive region Review toggle can still override this per capture.
+include_drawings = true
+
 # Exit the overlay after any capture completes (forces exit for all capture types)
 # When false, clipboard-only captures still auto-exit by default.
 # Use --no-exit-after-capture to keep the overlay open for a run.
@@ -1399,13 +1409,142 @@ exit_after_capture = false
 # Languages for "Copy text from screen" (OCR), in Tesseract's plus-separated
 # form. The matching Tesseract language packages must be installed.
 ocr_languages = "eng"
+
+[capture.region]
+# "native" draws Wayscriber's picker over a frozen desktop image.
+# "slurp" keeps the external selector. Native falls back to slurp when no
+# screen capture backend is available. Native selections are PNG; explicit
+# slurp selections keep [capture].format.
+picker = "native"
+
+# Pointer position while idle; W x H in export pixels while dragging
+show_size_readout = true
+
+# Magnified pixel grid beside the pointer while selecting or reviewing
+show_loupe = false
+
+# Short hotkey guide shown until the first drag
+show_legend = true
 ```
 
 **Tips:**
 - Set `copy_to_clipboard = false` if you prefer file-only captures.
+- Set `include_drawings = false` if full-screen and region captures should use
+  raw desktop pixels by default.
 - Clipboard-only shortcuts ignore the save directory automatically.
+- Image clipboard delivery publishes PNG data with `wl-copy`, reads it back
+  with `wl-paste`, and retries the complete write once unless the bytes match.
+  Read-back is used for PNG payloads smaller than 64 MiB; larger successful
+  `wl-copy` publications keep the previous status-only behavior.
 - `filename_template` must be a single file name (no `/` or `..`). `format` is `png`, `jpg`, or `jpeg`.
-- `wl-clipboard`, `grim`, and `slurp` are installed automatically by deb/rpm/AUR packages. For source/tarball installs, add them manually; otherwise wayscriber falls back to `xdg-desktop-portal`.
+- `wl-clipboard`, `grim`, and `slurp` are installed automatically by deb/rpm/AUR packages. For source/tarball installs, add them manually. Wayscriber uses its native region picker by default and falls back to `slurp` when it cannot obtain the desktop image; other screenshot capture paths can fall back to `xdg-desktop-portal`.
+
+#### Region picker
+
+Bound region screenshot actions use the native picker by default. It draws over
+the active output's frozen desktop image, shows a crosshair and optional size
+readout/legend, and sends the selected pixels to the shortcut's existing
+clipboard or file destination. If no screen capture backend is available, it
+falls back to `slurp`.
+
+On Hyprland and Sway, the native picker also discovers visible windows on the
+active output and workspace. Press `Space` to switch between free-area and
+window selection, point at a window and click it, or move between candidates
+with `Super+Arrow` and choose with `Enter`. Press `Space` again to return to
+area selection. Window controls stay hidden when the compositor is unsupported,
+the geometry helper fails, or no selectable windows are available. The
+external `slurp` picker does not provide this mode.
+Window mode is also hidden when the picker reuses a pre-existing Freeze or Zoom
+image. Wayscriber currently offers it only for the fresh auto-freeze created by
+the picker. It checks the provider result against that source's output and
+layout identity before showing candidates; a mismatch leaves window mode
+unavailable. At fractional scales, Wayland and Hyprland can round the same
+logical output size one pixel differently. That one-pixel size difference is
+accepted, but candidate bounds are restricted to the overlap; larger size
+differences or any origin change disable window mode.
+Wayland has no portable workspace identity at the freeze boundary, so window
+candidates reflect the workspace visible when the compositor query runs. A
+workspace switch in the short freeze-to-query interval can therefore make
+window mode describe the new workspace while the frozen image still shows the
+old one; returning to area mode remains safe.
+
+`capture_region_interactive` opens the same picker, then keeps the selection in
+a review step where you can copy it, save it, do both, or add it to the active
+board. It owns <kbd>Ctrl+Shift+C</kbd> by default, and is also in the command
+palette. That chord previously ran `capture_clipboard_selection`, which now
+ships unbound: Review's **Copy** (<kbd>Ctrl+C</kbd>) reaches the same clipboard
+result, so bind `capture_clipboard_selection` explicitly if you want the
+one-step copy back. The interactive action
+always uses the native picker even when `picker = "slurp"`; if native capture
+is unavailable it reports that limitation instead of silently skipping Review.
+The **Both** button (and `Enter`) always copies the PNG and saves it to a file,
+independently of `[capture].copy_to_clipboard`; it is the accented default in
+the Review bar for that reason.
+
+Review drops the targeting chrome once the rectangle is committed. The
+crosshair disappears, the size badge parks on the selection's corner instead of
+trailing the pointer — moving inside the rectangle when the action bar or a
+screen edge needs that space — and the cursor stops being a crosshair: a hand
+over an action-bar button, a grab hand over the rectangle you can still drag,
+and an arrow everywhere else.
+
+Adjust the rectangle before you send it. Drag its interior to move it, or the
+arrow keys to nudge it one pixel at a time (`Shift` makes that ten). Eight
+resize grips sit on the rectangle: drag a corner to move two edges at once, or
+an edge midpoint to move one. A grip dragged past the opposite edge stops
+rather than flipping the rectangle, and one dragged off the screen stops at the
+edge of the captured image. Short sides drop their midpoint grip so it cannot
+crowd the corners, and a small rectangle scales its grips down so its middle
+always stays draggable; corners are always offered. Pressing outside the
+rectangle starts a new selection instead.
+
+`[capture].include_drawings` defaults to `true`, so full-screen and region
+screenshots include the active board's committed shapes. Provisional strokes,
+selection handles, tool previews, toolbars, and other Wayscriber UI are not
+included. Set it to `false` for raw desktop pixels by default. On a transparent
+board, full-screen and legacy `slurp` capture keep the desktop behind the
+annotations; a solid board keeps its canvas background. The native region
+picker instead composites committed drawings over the frozen desktop crop.
+Those committed drawings are visible inside the native picker itself, so the
+selection preview matches the annotated export. Provisional strokes, selection
+handles, tool previews, toolbars, and other transient UI remain hidden.
+
+The Review bar's **Include drawings in exports** toggle (or `D`) starts from
+that configured default and can override it for one interactive region capture.
+Copy, Save, Both, and Board all honour the current toggle. Note that adding an
+annotated crop to the board it was composited from bakes a second, flattened
+copy of those annotations into the image, sitting over the live shapes until
+you move the pasted image. A pasted image occupies whole board pixels, so the
+baked copy normally sits within half a board pixel of the live shapes. A crop
+under a board pixel across — a few source pixels at any output scale above 1x —
+can have both its edges round onto the same board pixel, depending on where it
+falls; it then takes the whole board pixel centred on it, and its edges can sit
+up to a pixel out. Turn the toggle off before pressing **Board** when you want
+the raw crop instead.
+
+`measure_mode` opens a capture-free screen ruler over the live Wayscriber
+view. Drag to measure a rectangle in logical screen pixels; the completed
+rectangle stays visible so you can read it, and another drag replaces it.
+`Esc`, right-click, or invoking **Measure Mode** again exits. It does not
+reserve capture state, freeze the desktop, encode an image, or deliver a file
+or clipboard payload. The action is available from the command palette and is
+unbound by default.
+
+- Set `picker = "slurp"` to always use the external selector. This is also the
+  option for selecting a region on a monitor other than Wayscriber's active
+  output.
+- `show_size_readout` shows pointer coordinates before the drag and the
+  selected width and height in exported image pixels during it. In Review the
+  same readout is anchored to the selection instead of the pointer.
+- `show_legend` shows the short hotkey guide until the first drag.
+- `show_loupe` shows a magnified pixel grid beside the pointer while dragging
+  or reviewing a selection.
+- Native region screenshot actions encode PNG and use a `.png` filename even
+  when `[capture].format` is `jpg` or `jpeg`; this prevents PNG bytes from being
+  written under a JPEG extension. An explicit `picker = "slurp"` keeps the
+  configured format used by the legacy `slurp`/`grim` path.
+- A configuration reload affects the next region selection; it does not change
+  a picker that is already open.
 
 #### Copy text from screen (OCR)
 
@@ -1909,10 +2048,15 @@ capture_selection = ["Ctrl+Shift+I"]
 # Clipboard/File specific captures
 capture_clipboard_full = ["Ctrl+C"]
 capture_file_full = ["Ctrl+S"]
-capture_clipboard_selection = ["Ctrl+Shift+C"]
+# Unbound by default: Ctrl+Shift+C opens the interactive picker below, whose
+# Copy action reaches the same clipboard result.
+capture_clipboard_selection = []
 capture_file_selection = ["Ctrl+Shift+S"]
 capture_clipboard_region = ["Ctrl+6"]
 capture_file_region = ["Ctrl+Alt+6"]
+# Open the region review/action bar. Also available from the command palette.
+capture_region_interactive = ["Ctrl+Shift+C"]
+measure_mode = []
 export_canvas_file = []
 export_canvas_clipboard = []
 export_canvas_clipboard_and_file = []
@@ -2031,9 +2175,10 @@ clear_canvas = ["X"]
 
 **Defaults:**
 Defaults match the original hardcoded keybindings where possible. Copy/paste selection uses
-<kbd>Ctrl+Alt+C</kbd>/<kbd>Ctrl+Alt+V</kbd>, so the clipboard-selection capture shortcut
-defaults to <kbd>Ctrl+Shift+C</kbd> to avoid conflicts. The paste action also accepts PNG/JPEG
-image data and local image files copied from a file manager.
+<kbd>Ctrl+Alt+C</kbd>/<kbd>Ctrl+Alt+V</kbd>, so the region capture shortcut uses
+<kbd>Ctrl+Shift+C</kbd> to avoid conflicts. That chord now runs
+`capture_region_interactive`; `capture_clipboard_selection` ships unbound. The paste action
+also accepts PNG/JPEG image data and local image files copied from a file manager.
 
 ## Creating Your Configuration
 

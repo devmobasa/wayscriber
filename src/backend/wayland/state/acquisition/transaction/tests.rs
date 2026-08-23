@@ -8,6 +8,8 @@ struct TransactionRuntime {
     input_state: crate::input::InputState,
     finished_eyedropper: Vec<u64>,
     finished_ocr: Vec<u64>,
+    finished_region_capture: Vec<u64>,
+    region_legacy_handoffs: usize,
     ready_activation_succeeds: bool,
     cancelled_owners: Vec<ScreenAcquisitionOwner>,
     cleared_zoom_waiters: Vec<ZoomWaiterOwner>,
@@ -33,6 +35,8 @@ impl TransactionRuntime {
             input_state: make_test_input_state(),
             finished_eyedropper: Vec::new(),
             finished_ocr: Vec::new(),
+            finished_region_capture: Vec::new(),
+            region_legacy_handoffs: 0,
             ready_activation_succeeds: true,
             cancelled_owners: Vec::new(),
             cleared_zoom_waiters: Vec::new(),
@@ -96,6 +100,17 @@ impl AcquisitionTransactionRuntime for TransactionRuntime {
         self.ready_activation_succeeds
     }
 
+    fn finish_region_capture_ready(&mut self, installed_generation: u64) -> bool {
+        if self.ready_activation_succeeds {
+            self.finished_region_capture.push(installed_generation);
+        }
+        self.ready_activation_succeeds
+    }
+
+    fn handoff_region_capture_to_legacy(&mut self) {
+        self.region_legacy_handoffs += 1;
+    }
+
     fn cancel_owner_ui(&mut self, owner: ScreenAcquisitionOwner) {
         self.cancelled_owners.push(owner);
         match owner {
@@ -103,7 +118,8 @@ impl AcquisitionTransactionRuntime for TransactionRuntime {
                 let _ = self.input_state.cancel_eyedropper();
             }
             ScreenAcquisitionOwner::Ocr => self.input_state.cancel_region_ui_only(),
-            ScreenAcquisitionOwner::UserFreeze | ScreenAcquisitionOwner::RegionCapture => {}
+            ScreenAcquisitionOwner::RegionCapture => self.input_state.cancel_region_ui_only(),
+            ScreenAcquisitionOwner::UserFreeze => {}
         }
     }
 
@@ -196,10 +212,40 @@ fn zoom_owner_outcome_reporting_matrix_is_typed() {
         }
     }
     for (outcome, _) in &outcomes {
+        let reports = matches!(outcome, ZoomSourceOutcome::Failed(_));
         assert_eq!(
             zoom_terminal_report(
                 Some(ZoomWaiterOwner::RegionCapture),
                 &ZoomSourceTerminal::for_test(outcome.clone(), None),
+            )
+            .is_some(),
+            reports,
+            "owner=RegionCapture outcome={outcome:?}"
+        );
+    }
+}
+
+#[test]
+fn region_capture_zoom_failure_has_a_typed_fallback() {
+    assert_eq!(
+        zoom_terminal_report(
+            Some(ZoomWaiterOwner::RegionCapture),
+            &ZoomSourceTerminal::for_test(
+                ZoomSourceOutcome::Failed("backend failed".to_string()),
+                None,
+            ),
+        ),
+        Some(("capture", "Screen capture for region selection failed."))
+    );
+}
+
+#[test]
+fn region_capture_zoom_abort_and_deactivation_cancel_quietly() {
+    for outcome in [ZoomSourceOutcome::Aborted, ZoomSourceOutcome::Deactivated] {
+        assert_eq!(
+            zoom_terminal_report(
+                Some(ZoomWaiterOwner::RegionCapture),
+                &ZoomSourceTerminal::for_test(outcome, None),
             ),
             None
         );
@@ -216,7 +262,11 @@ fn specific_zoom_failure_report_replaces_the_owner_fallback() {
         }),
     );
 
-    for owner in [Some(ZoomWaiterOwner::Ocr), None] {
+    for owner in [
+        Some(ZoomWaiterOwner::Ocr),
+        Some(ZoomWaiterOwner::RegionCapture),
+        None,
+    ] {
         let mut input_state = make_test_input_state();
 
         report_zoom_terminal_to(&mut input_state, owner, &terminal);
@@ -282,7 +332,8 @@ fn screen_terminal_reporting_is_exactly_once_for_the_full_owner_outcome_matrix()
             ),
             (
                 ScreenAcquisitionOutcome::Failed("specific backend failure".to_string()),
-                Some((key, "specific backend failure")),
+                (owner != ScreenAcquisitionOwner::RegionCapture)
+                    .then_some((key, "specific backend failure")),
             ),
         ];
 
@@ -316,6 +367,7 @@ fn matched_ready_completions_run_the_owner_production_transactions() {
         ScreenAcquisitionOwner::UserFreeze,
         ScreenAcquisitionOwner::Eyedropper,
         ScreenAcquisitionOwner::Ocr,
+        ScreenAcquisitionOwner::RegionCapture,
     ] {
         let mut runtime = TransactionRuntime::started(owner);
         if owner == ScreenAcquisitionOwner::Ocr {
@@ -353,6 +405,15 @@ fn matched_ready_completions_run_the_owner_production_transactions() {
             },
             "owner={owner:?}"
         );
+        assert_eq!(
+            runtime.finished_region_capture,
+            if owner == ScreenAcquisitionOwner::RegionCapture {
+                vec![7]
+            } else {
+                Vec::new()
+            },
+            "owner={owner:?}"
+        );
         assert_eq!(runtime.input_state.test_toast_count(), 0);
         assert_eq!(runtime.restore_count, 0);
         assert_eq!(runtime.unfreeze_count, 0);
@@ -364,6 +425,7 @@ fn ready_activation_rejection_releases_the_modal_owned_freeze_once() {
     for owner in [
         ScreenAcquisitionOwner::Eyedropper,
         ScreenAcquisitionOwner::Ocr,
+        ScreenAcquisitionOwner::RegionCapture,
     ] {
         let mut runtime = TransactionRuntime::started(owner);
         runtime.ready_activation_succeeds = false;
@@ -376,9 +438,14 @@ fn ready_activation_rejection_releases_the_modal_owned_freeze_once() {
                 1,
                 ScreenCaptureSource::Frozen,
             ),
-            ScreenAcquisitionOwner::UserFreeze | ScreenAcquisitionOwner::RegionCapture => {
-                unreachable!()
+            ScreenAcquisitionOwner::RegionCapture => {
+                runtime.input_state.set_region_pending_capture(
+                    crate::input::state::RegionPurposeTag::CaptureDeliver,
+                    1,
+                    ScreenCaptureSource::Frozen,
+                )
             }
+            ScreenAcquisitionOwner::UserFreeze => unreachable!(),
         }
         assert!(runtime.input_state.screen_modal_is_engaged());
         let id = runtime.record().expect("started record").id;
@@ -461,6 +528,51 @@ fn matched_nonready_completions_report_then_cancel_the_owner_ui() {
 }
 
 #[test]
+fn region_capture_nonready_completion_falls_back_only_for_acquisition_failure() {
+    for (outcome, expected_handoffs, expected_cancellations, expected_toasts) in [
+        (ScreenAcquisitionOutcome::Cancelled, 0, 1, 0),
+        (ScreenAcquisitionOutcome::Unavailable, 1, 0, 0),
+        (
+            ScreenAcquisitionOutcome::Failed("activation rejected".to_string()),
+            1,
+            0,
+            0,
+        ),
+        (ScreenAcquisitionOutcome::StaleLayout, 0, 1, 1),
+    ] {
+        let mut runtime = TransactionRuntime::started(ScreenAcquisitionOwner::RegionCapture);
+        let id = runtime.record().expect("started record").id;
+
+        route_acquisition_transaction(
+            &mut runtime,
+            ScreenAcquisitionCompletion {
+                id,
+                owner: ScreenAcquisitionOwner::RegionCapture,
+                outcome: outcome.clone(),
+            },
+        );
+
+        assert_eq!(runtime.record(), None, "outcome={outcome:?}");
+        assert_eq!(
+            runtime.region_legacy_handoffs, expected_handoffs,
+            "outcome={outcome:?}"
+        );
+        assert_eq!(
+            runtime.cancelled_owners.len(),
+            expected_cancellations,
+            "outcome={outcome:?}"
+        );
+        assert_eq!(
+            runtime.input_state.test_toast_count(),
+            expected_toasts,
+            "outcome={outcome:?}"
+        );
+        assert_eq!(runtime.restore_count, 0, "outcome={outcome:?}");
+        assert_eq!(runtime.unfreeze_count, 0, "outcome={outcome:?}");
+    }
+}
+
+#[test]
 fn id_owner_waiter_and_empty_slot_mismatches_fail_closed_once() {
     let cases = ["id", "owner", "waiter", "empty"];
     for case in cases {
@@ -518,82 +630,82 @@ fn id_owner_waiter_and_empty_slot_mismatches_fail_closed_once() {
 
 #[test]
 fn activation_terminal_then_same_batch_cancel_releases_once_and_cleans_up() {
-    let mut runtime = TransactionRuntime::started(ScreenAcquisitionOwner::Ocr);
-    let id = runtime.record().expect("started record").id;
-    runtime.frozen_completion = Some(ScreenAcquisitionCompletion {
-        id,
-        owner: ScreenAcquisitionOwner::Ocr,
-        outcome: ScreenAcquisitionOutcome::Ready {
-            installed_generation: 7,
-        },
-    });
-    runtime.capture_done = true;
-
-    assert!(cancel_acquisition_transaction(
-        &mut runtime,
-        id,
+    for owner in [
         ScreenAcquisitionOwner::Ocr,
-    ));
+        ScreenAcquisitionOwner::RegionCapture,
+    ] {
+        let mut runtime = TransactionRuntime::started(owner);
+        let id = runtime.record().expect("started record").id;
+        runtime.frozen_completion = Some(ScreenAcquisitionCompletion {
+            id,
+            owner,
+            outcome: ScreenAcquisitionOutcome::Ready {
+                installed_generation: 7,
+            },
+        });
+        runtime.capture_done = true;
 
-    assert_eq!(runtime.record(), None);
-    assert_eq!(runtime.frozen_completion, None);
-    assert!(!runtime.capture_done);
-    assert!(!runtime.frozen_active);
-    assert_eq!(runtime.restore_count, 1);
-    assert_eq!(runtime.unfreeze_count, 1);
-    assert!(!runtime.frozen_suppressed);
-    assert_eq!(runtime.suppression_end_count, 1);
-    assert_eq!(runtime.input_state.test_toast_count(), 0);
+        assert!(cancel_acquisition_transaction(&mut runtime, id, owner));
 
-    assert!(!cancel_acquisition_transaction(
-        &mut runtime,
-        id,
-        ScreenAcquisitionOwner::Ocr,
-    ));
-    assert_eq!(runtime.restore_count, 1);
-    assert_eq!(runtime.unfreeze_count, 1);
-    assert_eq!(runtime.suppression_end_count, 1);
+        assert_eq!(runtime.record(), None, "owner={owner:?}");
+        assert_eq!(runtime.frozen_completion, None, "owner={owner:?}");
+        assert!(!runtime.capture_done, "owner={owner:?}");
+        assert!(!runtime.frozen_active, "owner={owner:?}");
+        assert_eq!(runtime.restore_count, 1, "owner={owner:?}");
+        assert_eq!(runtime.unfreeze_count, 1, "owner={owner:?}");
+        assert!(!runtime.frozen_suppressed, "owner={owner:?}");
+        assert_eq!(runtime.suppression_end_count, 1, "owner={owner:?}");
+        assert_eq!(runtime.input_state.test_toast_count(), 0, "owner={owner:?}");
+
+        assert!(!cancel_acquisition_transaction(&mut runtime, id, owner));
+        assert_eq!(runtime.restore_count, 1, "owner={owner:?}");
+        assert_eq!(runtime.unfreeze_count, 1, "owner={owner:?}");
+        assert_eq!(runtime.suppression_end_count, 1, "owner={owner:?}");
+    }
 }
 
 #[test]
 fn started_and_queued_cancellation_have_exact_resource_postconditions() {
-    let mut started = TransactionRuntime::started(ScreenAcquisitionOwner::Eyedropper);
-    let started_id = started.record().expect("started record").id;
-    started.capture_done = true;
-
-    assert!(cancel_acquisition_transaction(
-        &mut started,
-        started_id,
+    for owner in [
         ScreenAcquisitionOwner::Eyedropper,
-    ));
-    assert_eq!(started.record(), None);
-    assert_eq!(started.restore_count, 1);
-    assert_eq!(started.abandon_count, 1);
-    assert_eq!(started.unfreeze_count, 0);
-    assert!(!started.capture_done);
-    assert!(!started.frozen_suppressed);
-    assert_eq!(started.suppression_end_count, 1);
-    assert_eq!(started.input_state.test_toast_count(), 0);
-
-    let mut queued = TransactionRuntime::started(ScreenAcquisitionOwner::Ocr);
-    let queued_record = queued.registry.take().expect("started record");
-    let queued_id = queued
-        .registry
-        .request(ScreenAcquisitionOwner::Ocr)
-        .expect("queued replacement");
-    assert_ne!(queued_record.id, queued_id);
-    queued.frozen_suppressed = false;
-
-    assert!(cancel_acquisition_transaction(
-        &mut queued,
-        queued_id,
         ScreenAcquisitionOwner::Ocr,
-    ));
-    assert_eq!(queued.record(), None);
-    assert_eq!(queued.restore_count, 0);
-    assert_eq!(queued.abandon_count, 0);
-    assert_eq!(queued.unfreeze_count, 0);
-    assert_eq!(queued.suppression_end_count, 0);
+        ScreenAcquisitionOwner::RegionCapture,
+    ] {
+        let mut started = TransactionRuntime::started(owner);
+        let started_id = started.record().expect("started record").id;
+        started.capture_done = true;
+
+        assert!(cancel_acquisition_transaction(
+            &mut started,
+            started_id,
+            owner,
+        ));
+        assert_eq!(started.record(), None, "owner={owner:?}");
+        assert_eq!(started.restore_count, 1, "owner={owner:?}");
+        assert_eq!(started.abandon_count, 1, "owner={owner:?}");
+        assert_eq!(started.unfreeze_count, 0, "owner={owner:?}");
+        assert!(!started.capture_done, "owner={owner:?}");
+        assert!(!started.frozen_suppressed, "owner={owner:?}");
+        assert_eq!(started.suppression_end_count, 1, "owner={owner:?}");
+        assert_eq!(started.input_state.test_toast_count(), 0, "owner={owner:?}");
+
+        let mut queued = TransactionRuntime::started(owner);
+        let queued_record = queued.registry.take().expect("started record");
+        let queued_id = queued.registry.request(owner).expect("queued replacement");
+        assert_ne!(queued_record.id, queued_id);
+        queued.frozen_suppressed = false;
+
+        assert!(cancel_acquisition_transaction(
+            &mut queued,
+            queued_id,
+            owner,
+        ));
+        assert_eq!(queued.record(), None, "owner={owner:?}");
+        assert_eq!(queued.restore_count, 0, "owner={owner:?}");
+        assert_eq!(queued.abandon_count, 0, "owner={owner:?}");
+        assert_eq!(queued.unfreeze_count, 0, "owner={owner:?}");
+        assert_eq!(queued.suppression_end_count, 0, "owner={owner:?}");
+    }
 }
 
 #[test]
@@ -699,6 +811,10 @@ fn armed_owner_cleanup_releases_generation_clears_waiter_and_cancels_ui_once() {
             ZoomWaiterOwner::Eyedropper,
         ),
         (ScreenAcquisitionOwner::Ocr, ZoomWaiterOwner::Ocr),
+        (
+            ScreenAcquisitionOwner::RegionCapture,
+            ZoomWaiterOwner::RegionCapture,
+        ),
     ] {
         let mut runtime = TransactionRuntime::started(owner);
         runtime.registry.take();

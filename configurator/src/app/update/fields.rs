@@ -9,7 +9,7 @@ use crate::models::{
     FontStyleOption, FontWeightOption, KeybindingField, PdfFitModeOption,
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
-    SessionCompressionOption, SessionStorageModeOption, TextField, ToggleField,
+    RegionPickerOption, SessionCompressionOption, SessionStorageModeOption, TextField, ToggleField,
 };
 #[cfg(feature = "tablet-input")]
 use crate::models::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
@@ -68,6 +68,16 @@ impl ConfiguratorApp {
     ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         self.draft.presenter_toolbar_mode = option;
+        self.refresh_dirty_flag();
+        Vec::new()
+    }
+
+    pub(super) fn handle_capture_region_picker_changed(
+        &mut self,
+        option: RegionPickerOption,
+    ) -> Vec<Effect> {
+        self.status = StatusMessage::idle();
+        self.draft.capture_region_picker = option;
         self.refresh_dirty_flag();
         Vec::new()
     }

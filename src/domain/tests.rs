@@ -199,6 +199,11 @@ fn action_serialization_matches_established_contract() {
         (Action::CaptureFileSelection, "capture_file_selection"),
         (Action::CaptureClipboardRegion, "capture_clipboard_region"),
         (Action::CaptureFileRegion, "capture_file_region"),
+        (
+            Action::CaptureRegionInteractive,
+            "capture_region_interactive",
+        ),
+        (Action::MeasureMode, "measure_mode"),
         (Action::ExportCanvasFile, "export_canvas_file"),
         (Action::ExportCanvasClipboard, "export_canvas_clipboard"),
         (
@@ -389,4 +394,28 @@ fn production_domain_sources_have_no_upward_crate_dependencies() {
         checked, 6,
         "architecture test must cover every domain source"
     );
+}
+
+#[test]
+fn region_capture_action_classification_is_complete_and_narrow() {
+    for action in [
+        Action::CaptureSelection,
+        Action::CaptureClipboardSelection,
+        Action::CaptureFileSelection,
+        Action::CaptureClipboardRegion,
+        Action::CaptureFileRegion,
+        Action::CaptureRegionInteractive,
+    ] {
+        assert!(action.is_region_capture(), "action={action:?}");
+    }
+    for action in [
+        Action::CaptureFullScreen,
+        Action::CaptureActiveWindow,
+        Action::CaptureClipboardFull,
+        Action::CaptureFileFull,
+        Action::CopyTextFromScreen,
+        Action::MeasureMode,
+    ] {
+        assert!(!action.is_region_capture(), "action={action:?}");
+    }
 }

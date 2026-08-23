@@ -271,10 +271,18 @@ capture_selection = ["Ctrl+Shift+I"]
 # Clipboard/File capture variants
 capture_clipboard_full = ["Ctrl+C"]
 capture_file_full = ["Ctrl+S"]
-capture_clipboard_selection = ["Ctrl+Shift+C"]
+# Unbound by default: Ctrl+Shift+C now opens the interactive picker below,
+# whose Copy action reaches the same clipboard result. Bind a chord here to get
+# the one-step region copy back.
+capture_clipboard_selection = []
 capture_file_selection = ["Ctrl+Shift+S"]
 capture_clipboard_region = ["Ctrl+6"]
 capture_file_region = ["Ctrl+Alt+6"]
+# Open the region review/action bar. Also available from the command palette.
+capture_region_interactive = ["Ctrl+Shift+C"]
+# Show a logical-pixel screen ruler without capturing anything. Available from
+# the command palette and unbound by default.
+measure_mode = []
 export_canvas_file = []
 export_canvas_clipboard = []
 export_canvas_clipboard_and_file = []
@@ -456,6 +464,10 @@ show_capabilities_warning = true
 # Show automatic first-run guidance, discovery tips, and shortcut coaching.
 # The guided tour remains available manually when this is false.
 show_onboarding_hints = true
+
+# Show rectangle and ellipse preview dimensions in logical board pixels.
+# This is separate from capture.region.show_size_readout.
+show_shape_size_readout = true
 
 # Command palette action toast duration (ms)
 command_palette_toast_duration_ms = 1500
@@ -1403,9 +1415,16 @@ filename_template = "screenshot_%Y-%m-%d_%H%M%S"
 # Image format for saved screenshots: png, jpg, or jpeg
 format = "png"
 
-# Copy screenshots to clipboard by default
-# Shortcut-specific actions may override this
+# Copy screenshots to clipboard by default. Image writes smaller than 64 MiB
+# are read back and retried once unless the PNG bytes match; larger writes
+# trust wl-copy.
+# Shortcut-specific actions may override this.
 copy_to_clipboard = true
+
+# Composite the active board's committed annotations into full-screen and
+# region screenshots. Set to false for raw desktop pixels by default; the
+# interactive region Review toggle can still override this per capture.
+include_drawings = true
 
 # Exit overlay after any capture completes (forces exit for all capture types)
 # When false, clipboard-only captures still auto-exit by default.
@@ -1416,6 +1435,27 @@ exit_after_capture = false
 # plus-separated form, for example "eng" or "eng+deu". The matching Tesseract
 # language packages must be installed. OCR also needs `enabled = true` above.
 ocr_languages = "eng"
+
+[capture.region]
+# "native" draws Wayscriber's picker over a frozen desktop image.
+# "slurp" keeps the external selector. Native falls back to slurp when no
+# screen capture backend is available.
+# Native region selections are encoded and named as PNG. The explicit "slurp"
+# picker keeps [capture].format for compatibility with the legacy grim path.
+# On Hyprland and Sway, native selection also offers Space-triggered window
+# snapping for visible windows on the active output and workspace when the
+# picker creates a fresh auto-freeze (not when reusing an older Freeze/Zoom).
+# Candidates reflect the workspace visible when the compositor query runs.
+picker = "native"
+
+# Pointer-side readout: position while idle, W x H in export pixels while dragging.
+show_size_readout = true
+
+# Magnified pixel loupe next to the pointer while dragging.
+show_loupe = false
+
+# Short hotkey legend at the top centre until the first drag.
+show_legend = true
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # EXPORT SETTINGS

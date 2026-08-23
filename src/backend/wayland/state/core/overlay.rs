@@ -1,6 +1,16 @@
 use super::super::*;
 
 impl WaylandState {
+    /// Derived chrome suppression for the native capture picker.
+    ///
+    /// This never changes the user's toolbar/chrome preferences and never
+    /// enters the capture-preflight suppression state. Ending the picker
+    /// therefore reveals whatever Focus/Light/overlay suppression still
+    /// permits instead of restoring a stale snapshot over it.
+    pub(in crate::backend::wayland) fn capture_picker_chrome_suppressed(&self) -> bool {
+        capture_picker_chrome_suppressed_for(self.input_state.region_state())
+    }
+
     pub(in crate::backend::wayland) fn overlay_suppressed(&self) -> bool {
         self.data.overlay_suppression != OverlaySuppression::None
     }
@@ -127,6 +137,10 @@ fn overlay_keyboard_passthrough_requested_for(
             && keyboard_policy == OverlaySuppressionKeyboardPolicy::Release)
 }
 
+fn capture_picker_chrome_suppressed_for(region: crate::input::state::RegionSelectUiState) -> bool {
+    region.is_engaged() && region.purpose().is_some_and(|purpose| purpose.is_capture())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,5 +162,55 @@ mod tests {
             OverlaySuppressionKeyboardPolicy::Retain,
             true,
         ));
+    }
+
+    #[test]
+    fn capture_picker_chrome_suppression_is_derived_without_affecting_ocr() {
+        use crate::input::state::{
+            RegionInputSource, RegionPurposeTag, RegionSelectUiState, ScreenCaptureSource,
+        };
+
+        assert!(!capture_picker_chrome_suppressed_for(
+            RegionSelectUiState::Inactive
+        ));
+        assert!(!capture_picker_chrome_suppressed_for(
+            RegionSelectUiState::Armed {
+                purpose: RegionPurposeTag::Ocr,
+                generation: 1,
+            }
+        ));
+        assert!(!capture_picker_chrome_suppressed_for(
+            RegionSelectUiState::Armed {
+                purpose: RegionPurposeTag::Measure,
+                generation: 1,
+            }
+        ));
+        for purpose in [
+            RegionPurposeTag::CaptureDeliver,
+            RegionPurposeTag::CaptureInteractive,
+        ] {
+            assert!(capture_picker_chrome_suppressed_for(
+                RegionSelectUiState::PendingCapture {
+                    purpose,
+                    generation: 2,
+                    source: ScreenCaptureSource::Frozen,
+                }
+            ));
+            assert!(capture_picker_chrome_suppressed_for(
+                RegionSelectUiState::Armed {
+                    purpose,
+                    generation: 2,
+                }
+            ));
+            assert!(capture_picker_chrome_suppressed_for(
+                RegionSelectUiState::Selecting {
+                    purpose,
+                    generation: 2,
+                    owner: RegionInputSource::Pointer,
+                    start: (10.0, 20.0),
+                    current: (30.0, 40.0),
+                }
+            ));
+        }
     }
 }

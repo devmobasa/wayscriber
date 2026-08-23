@@ -988,6 +988,57 @@ fn an_omitted_default_loses_only_the_key_an_authored_list_claims() {
     assert!(!report.is_empty(), "the user has to be told");
 }
 
+/// The upgrade case for the `Ctrl+Shift+C` handover. A config written before
+/// interactive capture took that chord spells out `capture_clipboard_selection`
+/// and says nothing about `capture_region_interactive`. The authored one-step
+/// copy has to survive untouched: the new default stands down and the user is
+/// told, rather than a shortcut they chose being taken away by an upgrade.
+#[test]
+fn an_authored_region_copy_keeps_the_chord_the_new_interactive_default_wants() {
+    let mut config =
+        config_from_toml("[keybindings]\ncapture_clipboard_selection = [\"Ctrl+Shift+C\"]\n");
+    assert_eq!(
+        config.keybindings.capture.capture_region_interactive,
+        ["Ctrl+Shift+C"],
+        "fixture depends on the interactive default owning the same chord"
+    );
+
+    let report = config.validate_and_clamp();
+
+    assert_eq!(
+        config.keybindings.capture.capture_clipboard_selection,
+        ["Ctrl+Shift+C"],
+        "the authored binding is untouched"
+    );
+    assert!(
+        config
+            .keybindings
+            .capture
+            .capture_region_interactive
+            .is_empty(),
+        "the omitted default stands down"
+    );
+    assert_eq!(
+        config
+            .keybindings
+            .build_action_map()
+            .unwrap()
+            .get(&Shortcut::parse("Ctrl+Shift+C").unwrap()),
+        Some(&Action::CaptureClipboardSelection)
+    );
+
+    assert!(
+        report.keybinding_conflicts.is_empty(),
+        "nothing for the user to settle: they never wrote the collision"
+    );
+    assert_eq!(report.skipped_default_shortcuts.len(), 1);
+    let skipped = &report.skipped_default_shortcuts[0];
+    assert_eq!(skipped.action(), Action::CaptureRegionInteractive);
+    assert_eq!(skipped.claimed_by(), Action::CaptureClipboardSelection);
+    assert_eq!(skipped.binding(), "Ctrl+Shift+C");
+    assert_eq!(skipped.config_key(), Some("capture_region_interactive"));
+}
+
 /// A default that only overlaps part of an authored list keeps the rest of its
 /// own keys: the offer is made one key at a time, not per action.
 #[test]

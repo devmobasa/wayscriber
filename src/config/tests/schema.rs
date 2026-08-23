@@ -38,6 +38,49 @@ fn performance_metadata_paths_exist_in_json_schema() {
     }
 }
 
+#[test]
+fn region_capture_paths_exist_in_json_schema() {
+    let schema = Config::json_schema();
+    for path in [
+        "capture.region.picker",
+        "capture.region.show_size_readout",
+        "capture.region.show_loupe",
+        "capture.region.show_legend",
+    ] {
+        assert!(
+            schema_contains_path(&schema, path),
+            "schema missing region capture path {path}"
+        );
+    }
+}
+
+#[test]
+fn capture_include_drawings_exists_in_json_schema() {
+    let schema = Config::json_schema();
+    assert!(
+        schema_contains_path(&schema, "capture.include_drawings"),
+        "schema missing capture drawing preference"
+    );
+}
+
+#[test]
+fn shape_size_readout_exists_in_json_schema() {
+    let schema = Config::json_schema();
+    assert!(
+        schema_contains_path(&schema, "ui.show_shape_size_readout"),
+        "schema missing shape size readout preference"
+    );
+}
+
+#[test]
+fn interactive_region_capture_keybinding_exists_in_json_schema() {
+    let schema = Config::json_schema();
+    assert!(
+        schema_contains_path(&schema, "keybindings.capture_region_interactive"),
+        "schema missing interactive region capture keybinding"
+    );
+}
+
 fn schema_contains_path(schema: &serde_json::Value, path: &str) -> bool {
     let mut node = schema;
     for segment in path.split('.') {

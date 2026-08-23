@@ -279,9 +279,11 @@ pub(super) fn build_main_sections(
                 "Selection (capture defaults)",
             )
             .with_action(Action::CaptureSelection),
+            action_row(bindings, Action::CaptureRegionInteractive, NOT_BOUND_LABEL),
         ]);
     }
     screenshot_rows.extend([
+        action_row(bindings, Action::MeasureMode, NOT_BOUND_LABEL),
         action_row(bindings, Action::ExportCanvasClipboard, NOT_BOUND_LABEL),
         action_row(bindings, Action::ExportCanvasFile, NOT_BOUND_LABEL),
         action_row(

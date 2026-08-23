@@ -59,6 +59,24 @@ fn capture_action_sets_pending_and_clears_modifiers() {
 }
 
 #[test]
+fn region_capture_action_preserves_live_shift_until_the_picker_arms() {
+    let mut state = create_test_input_state();
+    state.modifiers.ctrl = true;
+    state.modifiers.shift = true;
+
+    state.handle_action(Action::CaptureClipboardSelection);
+
+    assert!(state.modifiers.ctrl);
+    assert!(state.modifiers.shift);
+    assert_eq!(
+        state.take_pending_backend_action(),
+        Some(PendingBackendAction::Screenshot(
+            Action::CaptureClipboardSelection
+        ))
+    );
+}
+
+#[test]
 fn canvas_export_action_sets_pending_backend_action() {
     let mut state = create_test_input_state();
 

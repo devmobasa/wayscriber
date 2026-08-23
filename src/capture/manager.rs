@@ -12,11 +12,13 @@ use crate::capture::{
     pipeline::{
         CaptureManagerRequest, CaptureManagerResult, CaptureRequest, deliver_document,
         deliver_image, perform_capture, render_and_deliver_document, render_and_deliver_image,
+        render_image,
     },
     types::{
         CaptureDestination, CaptureError, CaptureOutcome, CaptureType,
         DesktopBackdropCaptureRequest, DocumentDeliveryRequest, ImageDeliveryRequest,
-        ImageOperationKind, RenderedDocumentDeliveryRequest, RenderedImageDeliveryRequest,
+        ImageOperationKind, RenderImageRequest, RenderedDocumentDeliveryRequest,
+        RenderedImageDeliveryRequest,
     },
 };
 
@@ -225,6 +227,13 @@ impl CaptureManager {
         self.try_submit(CaptureManagerRequest::RenderAndDeliverImage(request))
     }
 
+    pub fn request_render_image(
+        &mut self,
+        request: RenderImageRequest,
+    ) -> Result<CaptureRequestId, CaptureSubmitError> {
+        self.try_submit(CaptureManagerRequest::RenderImage(request))
+    }
+
     pub fn request_rendered_document_delivery(
         &mut self,
         request: RenderedDocumentDeliveryRequest,
@@ -405,6 +414,9 @@ async fn run_capture_worker(
                     .await
                     .map(CaptureManagerResult::Capture)
             }
+            CaptureManagerRequest::RenderImage(request) => render_image(request)
+                .await
+                .map(CaptureManagerResult::RenderedImage),
             CaptureManagerRequest::RenderAndDeliverImage(request) => {
                 render_and_deliver_image(request, dependencies.clone())
                     .await
@@ -438,6 +450,10 @@ fn outcome_from_result(
         Ok(CaptureManagerResult::DesktopBackdrop(result)) => {
             log::info!("Desktop backdrop capture successful");
             CaptureOutcome::DesktopBackdropSuccess(result)
+        }
+        Ok(CaptureManagerResult::RenderedImage(image)) => {
+            log::info!("Deferred image render successful");
+            CaptureOutcome::RenderedImageReady(image)
         }
         Err(CaptureError::Cancelled(reason)) => {
             log::info!("Image operation cancelled: {reason}");

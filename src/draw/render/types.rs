@@ -14,4 +14,8 @@ pub struct EraserReplayContext<'a> {
     pub logical_to_image_scale_x: f64,
     /// Vertical scale from logical canvas coordinates to captured image pixels.
     pub logical_to_image_scale_y: f64,
+    /// Logical canvas coordinate represented by captured-image pixel edge zero.
+    pub logical_image_origin_x: f64,
+    /// Logical canvas coordinate represented by captured-image pixel edge zero.
+    pub logical_image_origin_y: f64,
 }

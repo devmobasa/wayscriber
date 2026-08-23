@@ -107,6 +107,8 @@ pub enum KeybindingField {
     CaptureFileSelection,
     CaptureClipboardRegion,
     CaptureFileRegion,
+    CaptureRegionInteractive,
+    MeasureMode,
     ExportCanvasFile,
     ExportCanvasClipboard,
     ExportCanvasClipboardAndFile,

@@ -71,6 +71,10 @@ impl CaptureClipboard for MockClipboard {
             Ok(())
         }
     }
+
+    fn verify(&self, _expected: &[u8], _output_cap: usize) -> Result<bool, CaptureError> {
+        Ok(true)
+    }
 }
 
 pub(super) fn create_placeholder_image() -> Vec<u8> {

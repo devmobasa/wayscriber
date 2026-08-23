@@ -107,6 +107,7 @@ pub(super) fn handle_pending_actions(
     state.poll_hex_copy_completion();
     state.poll_text_copy_completion();
     state.poll_text_paste_completion();
+    state.poll_region_window_query_completion();
     state.poll_ocr_completion();
     state.poll_session_file_dialog_completion(qh);
     state.poll_desktop_open_completion();
@@ -140,12 +141,19 @@ pub(super) fn handle_pending_actions(
     // requests that produced it; the worker also wakes the loop when it
     // completes, so the answer is not left waiting for unrelated input.
     state.drain_config_edit_completions();
+    // A native region action queues its frozen acquisition. Drain that action
+    // before the established frozen-toggle slot so acquisition starts in this
+    // pass instead of waiting for an unrelated wake or protocol event.
+    if let Some(action) = take_pending_region_capture_action(&mut state.input_state) {
+        state.handle_capture_action(action);
+    }
     handle_frozen_toggle(state);
     state.drain_pending_board_runtime_ui_actions();
 
     if let Some(action) = state.input_state.take_pending_backend_action() {
         match action {
             PendingBackendAction::Screenshot(action) => state.handle_capture_action(action),
+            PendingBackendAction::MeasureMode => state.handle_measure_mode_action(),
             PendingBackendAction::CanvasExport(action) => state.handle_canvas_export_action(action),
             PendingBackendAction::BoardPdfExport(action) => {
                 state.handle_board_pdf_export_action(action);
@@ -184,6 +192,21 @@ enum FrozenUserToggleAction {
 struct FrozenTogglePassDecision {
     user_action: FrozenUserToggleAction,
     queued_to_start: Option<AcquisitionRecord>,
+}
+
+fn take_pending_region_capture_action(
+    input_state: &mut crate::input::InputState,
+) -> Option<Action> {
+    match input_state.take_pending_backend_action() {
+        Some(PendingBackendAction::Screenshot(action)) if action.is_region_capture() => {
+            Some(action)
+        }
+        Some(pending) => {
+            input_state.set_pending_backend_action(pending);
+            None
+        }
+        None => None,
+    }
 }
 
 fn frozen_toggle_pass_decision(
@@ -301,8 +324,24 @@ fn handle_capture_results(state: &mut WaylandState) {
             operation,
             error,
         } => {
+            let pending_board =
+                active_id.and_then(|id| state.capture.take_pending_board_paste_for(id));
             if let Some(id) = active_id {
                 let _ = state.capture.consume_accepted(id);
+            }
+            if pending_board.is_some() {
+                state.capture.finish_capture_lifecycle();
+                let message = operation
+                    .filter(|operation| *operation == ImageOperationKind::Screenshot)
+                    .map(|_| friendly_capture_error(&error))
+                    .unwrap_or_else(|| "Capture services stopped unexpectedly.".to_string());
+                warn!("Board region capture worker failed: {error}");
+                state.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "capture",
+                    Toast::error(message),
+                );
+                return;
             }
             handle_capture_manager_failure(state, operation, &error);
             return;
@@ -321,6 +360,64 @@ fn handle_capture_results(state: &mut WaylandState) {
     }
 
     info!("Capture completed");
+
+    let pending_board = state.capture.take_pending_board_paste_for(id);
+    let outcome = match (outcome, pending_board) {
+        (CaptureOutcome::RenderedImageReady(image), Some(pending)) => {
+            state.capture.finish_capture_lifecycle();
+            let embedded = crate::draw::EmbeddedImage {
+                mime_type: image.format.mime_type,
+                width: image.width,
+                height: image.height,
+                bytes: image.bytes,
+            };
+            state
+                .input_state
+                .insert_captured_image(embedded, &pending.target);
+            return;
+        }
+        (CaptureOutcome::RenderedImageReady(_), None) => {
+            state.capture.finish_capture_lifecycle();
+            warn!("Rendered region {id} completed without a pending board target");
+            state.input_state.push_toast(
+                ToastPriority::Critical,
+                "capture.region.board",
+                Toast::error("Region was not added to the board."),
+            );
+            return;
+        }
+        (CaptureOutcome::Failed { operation, message }, Some(_)) => {
+            state.capture.finish_capture_lifecycle();
+            let friendly_error = if matches!(operation, ImageOperationKind::Screenshot) {
+                friendly_capture_error(&message)
+            } else {
+                message.clone()
+            };
+            warn!("Board region render failed: {message}");
+            state.input_state.push_toast(
+                ToastPriority::Critical,
+                "capture",
+                Toast::error(friendly_error),
+            );
+            return;
+        }
+        (CaptureOutcome::Cancelled { operation, reason }, Some(_)) => {
+            state.capture.finish_capture_lifecycle();
+            info!("{} cancelled: {}", operation.saved_log_label(), reason);
+            return;
+        }
+        (unexpected, Some(_)) => {
+            state.capture.finish_capture_lifecycle();
+            warn!("Board region {id} completed with unexpected outcome: {unexpected:?}");
+            state.input_state.push_toast(
+                ToastPriority::Critical,
+                "capture.region.board",
+                Toast::error("Region was not added to the board."),
+            );
+            return;
+        }
+        (outcome, None) => outcome,
+    };
 
     // Restore overlay.
     state.show_overlay();
@@ -504,6 +601,9 @@ fn handle_capture_results(state: &mut WaylandState) {
             state.capture.clear_pending_pdf_export();
             info!("{} cancelled: {}", operation.saved_log_label(), reason);
         }
+        CaptureOutcome::RenderedImageReady(_) => {
+            unreachable!("rendered images return through the board path above")
+        }
     }
     if should_exit {
         // Exit-after-capture is intentional teardown. Mark it explicit so XDG
@@ -570,6 +670,7 @@ mod tests {
         for owner in [
             ScreenAcquisitionOwner::Eyedropper,
             ScreenAcquisitionOwner::Ocr,
+            ScreenAcquisitionOwner::RegionCapture,
         ] {
             let modal = record(owner, AcquisitionStage::Queued);
 
@@ -585,15 +686,21 @@ mod tests {
 
     #[test]
     fn started_modal_ignores_same_batch_user_toggle_without_starting_another_capture() {
-        let modal = record(ScreenAcquisitionOwner::Ocr, AcquisitionStage::Started);
+        for owner in [
+            ScreenAcquisitionOwner::Ocr,
+            ScreenAcquisitionOwner::RegionCapture,
+        ] {
+            let modal = record(owner, AcquisitionStage::Started);
 
-        let decision = frozen_toggle_pass_decision(true, Some(modal), false, true);
+            let decision = frozen_toggle_pass_decision(true, Some(modal), false, true);
 
-        assert_eq!(
-            decision.user_action,
-            FrozenUserToggleAction::IgnoreInProgress
-        );
-        assert_eq!(decision.queued_to_start, None);
+            assert_eq!(
+                decision.user_action,
+                FrozenUserToggleAction::IgnoreInProgress,
+                "owner={owner:?}"
+            );
+            assert_eq!(decision.queued_to_start, None, "owner={owner:?}");
+        }
     }
 
     #[test]
@@ -614,6 +721,34 @@ mod tests {
                 user_action: FrozenUserToggleAction::IgnoreInProgress,
                 queued_to_start: Some(user),
             }
+        );
+    }
+
+    #[test]
+    fn region_capture_action_is_partitioned_before_the_frozen_drain() {
+        let mut input = crate::input::state::test_support::make_test_input_state();
+        input.set_pending_backend_action(PendingBackendAction::Screenshot(
+            Action::CaptureClipboardSelection,
+        ));
+        assert_eq!(
+            take_pending_region_capture_action(&mut input),
+            Some(Action::CaptureClipboardSelection)
+        );
+        assert_eq!(input.take_pending_backend_action(), None);
+
+        input.set_pending_backend_action(PendingBackendAction::Screenshot(
+            Action::CaptureClipboardFull,
+        ));
+        assert_eq!(
+            take_pending_region_capture_action(&mut input),
+            None,
+            "non-region screenshots keep their established drain position"
+        );
+        assert_eq!(
+            input.take_pending_backend_action(),
+            Some(PendingBackendAction::Screenshot(
+                Action::CaptureClipboardFull
+            ))
         );
     }
 }

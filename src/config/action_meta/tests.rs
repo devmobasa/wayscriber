@@ -93,6 +93,8 @@ const HELP_ACTIONS: &[Action] = &[
     Action::CaptureFileSelection,
     Action::CaptureActiveWindow,
     Action::CaptureSelection,
+    Action::CaptureRegionInteractive,
+    Action::MeasureMode,
     Action::OpenCaptureFolder,
 ];
 
@@ -251,8 +253,20 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::SetColorWhite,
     Action::SetColorBlack,
     Action::PickScreenColor,
+    Action::CaptureRegionInteractive,
+    Action::MeasureMode,
+    // Every bindable capture action is searchable here. The help overlay is
+    // curated for density and omits some of these, but an action a user can
+    // bind must be runnable without knowing its shortcut.
+    Action::CaptureFullScreen,
+    Action::CaptureActiveWindow,
+    Action::CaptureSelection,
     Action::CaptureClipboardFull,
     Action::CaptureFileFull,
+    Action::CaptureClipboardSelection,
+    Action::CaptureFileSelection,
+    Action::CaptureClipboardRegion,
+    Action::CaptureFileRegion,
     Action::ExportCanvasFile,
     Action::ExportCanvasClipboard,
     Action::ExportCanvasClipboardAndFile,
@@ -476,4 +490,32 @@ fn action_display_label_strips_mode_suffix() {
 #[test]
 fn action_display_label_uses_short_label_for_ellipse_tool() {
     assert_eq!(action_display_label(Action::SelectEllipseTool), "Circle");
+}
+
+#[test]
+fn interactive_region_capture_metadata_matches_its_public_surfaces() {
+    let meta = action_meta(Action::CaptureRegionInteractive).expect("interactive capture metadata");
+
+    assert_eq!(meta.label, "Capture Region (Interactive)");
+    assert_eq!(meta.short_label(), "Region…");
+    assert_eq!(
+        meta.search_aliases,
+        ["region", "snip", "paste to board", "screenshot"]
+    );
+    assert_eq!(meta.category, ActionCategory::Capture);
+    assert!(meta.in_command_palette);
+    assert!(meta.in_help);
+    assert!(!meta.in_toolbar);
+}
+
+#[test]
+fn measure_mode_metadata_exposes_a_palette_first_screen_tool() {
+    let meta = action_meta(Action::MeasureMode).expect("measure mode metadata");
+
+    assert_eq!(meta.label, "Measure Mode");
+    assert_eq!(meta.short_label(), "Measure");
+    assert_eq!(meta.category, ActionCategory::Capture);
+    assert!(meta.in_command_palette);
+    assert!(meta.in_help);
+    assert!(!meta.in_toolbar);
 }

@@ -1,3 +1,4 @@
+mod capture;
 mod eraser;
 mod export;
 mod font;
@@ -12,6 +13,7 @@ mod toggles;
 mod tool;
 mod toolbar;
 
+pub use capture::RegionPickerOption;
 pub use eraser::{EraserModeOption, PresetEraserKindOption, PresetEraserModeOption};
 pub use export::{
     PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption,

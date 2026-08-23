@@ -57,6 +57,10 @@ impl CaptureClipboard for RecordingClipboard {
             Ok(())
         }
     }
+
+    fn verify(&self, _expected: &[u8], _output_cap: usize) -> Result<bool, CaptureError> {
+        Ok(true)
+    }
 }
 
 fn rendered_png(bytes: Vec<u8>) -> RenderedImage {
@@ -503,7 +507,7 @@ async fn test_perform_capture_clipboard_failure() {
         .await
         .unwrap();
     assert!(!result.copied_to_clipboard);
-    assert_eq!(*clipboard_handle.calls.lock().unwrap(), 1);
+    assert_eq!(*clipboard_handle.calls.lock().unwrap(), 2);
 }
 
 #[tokio::test]

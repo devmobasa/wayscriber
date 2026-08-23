@@ -73,6 +73,7 @@ use self::data::{MoveDrag, StateData};
 pub use self::data::{
     MoveDragKind, OverlaySuppression, OverlaySuppressionKeyboardPolicy, XdgFrozenFullscreenState,
 };
+pub(in crate::backend::wayland) use self::region_capture::WindowSnapDirection;
 use super::{
     RuntimeOperationController, RuntimeOperationIdSource,
     capture::{CapturePreflightRequest, CaptureState, PendingPdfExport},
@@ -114,6 +115,9 @@ mod onboarding;
 mod pdf_export;
 mod perf;
 mod region_capture;
+pub(in crate::backend::wayland) use region_capture::RegionCaptureIntent;
+#[cfg(test)]
+pub(in crate::backend::wayland) use region_capture::RegionPickerOptions;
 mod render;
 mod screen_image;
 mod text_clipboard;
@@ -267,6 +271,16 @@ pub(super) struct WaylandState {
     /// Async wl-paste pipeline for text-editor paste requests (Ctrl+V).
     pub(super) clipboard_text_paste:
         RuntimeOperationController<TextPasteTarget, Result<Option<String>, String>>,
+    /// Capacity-one compositor window query for the current native region picker.
+    /// Its context owns the picker/source correlation, so stale workers cannot
+    /// mutate a later picker generation.
+    pub(super) window_query: RuntimeOperationController<
+        region_capture::WindowSnapQuery,
+        Result<
+            crate::capture::window_geometry::WindowQueryResult,
+            crate::capture::window_geometry::WindowGeometryError,
+        >,
+    >,
     /// Text paste requests waiting behind an active read. Repeated requests in
     /// the current edit generation remain distinct; a new generation replaces
     /// stale queued requests from the old edit session.

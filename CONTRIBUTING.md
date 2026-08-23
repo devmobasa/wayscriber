@@ -149,6 +149,42 @@ screenshots remain whole-desktop captures. Repeat while switching outputs and, w
 changing scale or transform during capture: the result must either stay exact or fail visibly,
 never shift, stretch, or reuse another output's image.
 
+For changes to the native region picker, use the same compositor/scale matrix and record the
+following permission-gated evidence (these checks open or foreground the overlay):
+
+- `Ctrl+Shift+C` delivers the selected frozen pixels; the saved PNG dimensions match the picker
+  readout, including while zoomed or panned.
+- With `[capture].include_drawings = true`, committed annotations are already visible over the
+  frozen desktop while selecting and match the delivered PNG; transient strokes, handles, and UI
+  stay hidden. In interactive Review, toggling drawings off/on updates that preview immediately.
+- Cancelling while pending, armed, or selecting leaves no picker-owned freeze behind, and the next
+  capture action works.
+- Output, scale, transform, zoom-level, and pan changes cancel with one visible message.
+- `picker = "slurp"` restores the external selector. Native acquisition failure hands off to it,
+  while a dismissed portal request does not.
+- Pointer, touch, and stylus drags all select when the hardware is available; losing the owning
+  device during a drag rearms the picker.
+- Holding Shift before the first press produces a square crop, and the crosshair remains on the
+  physical pointer while the squared frame follows the constrained endpoint.
+- `Ctrl+A` during a pointer, touch, or stylus drag captures the whole output and consumes the
+  outstanding release without starting a canvas gesture.
+- Deactivating or aborting zoom while the picker waits cancels quietly; a reported zoom failure
+  produces exactly one message.
+- With `picker = "slurp"` and `format = "jpg"`, the legacy path remains JPEG; native selection
+  remains PNG-only.
+- On Hyprland and Sway, `Space` enters window mode only after the provider is ready. Verify pointer,
+  touch, and stylus selection, plus `Super+Arrow` navigation and `Enter`, on overlapping tiled and
+  floating windows. The highlighted readout and delivered PNG must have identical pixel bounds.
+  Also switch workspaces during picker startup: candidates intentionally follow the workspace
+  visible at provider-query time, while output/layout mismatches still disable window mode.
+- On Plasma/KWin, Niri, and GNOME, the window-mode legend and `Space` control stay absent while area
+  selection continues to work. Provider failure or an empty workspace must also fall back quietly.
+
+At 1080p@1, 4K@2, and a fractional-scale 4K setup, capture the debug-level `Region picker frame`
+timings during pointer motion. Also record the process peak-RSS delta while encoding a full-output
+`Ctrl+A` crop. Keep these measurements with the change's manual test evidence; they are intentionally
+not collected by CI.
+
 These captures now fail when the active output does not advertise a current `wl_output` mode.
 Plugging or unplugging any monitor also cancels in-flight Freeze and Zoom captures on unrelated
 outputs, because output count is part of the layout identity used to reject stale frames.

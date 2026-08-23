@@ -6,8 +6,8 @@ use crate::capture::{
     types::{
         CaptureDestination, CaptureError, CaptureResult, CaptureType,
         DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult, DocumentDeliveryRequest,
-        ImageDeliveryRequest, ImageOperationKind, RenderedDocumentDeliveryRequest,
-        RenderedImageDeliveryRequest,
+        ImageDeliveryRequest, ImageOperationKind, RenderImageRequest,
+        RenderedDocumentDeliveryRequest, RenderedImage, RenderedImageDeliveryRequest,
     },
 };
 use tokio::task;
@@ -40,6 +40,7 @@ pub(crate) enum CaptureManagerRequest {
     CaptureDesktopBackdrop(DesktopBackdropCaptureRequest),
     DeliverImage(ImageDeliveryRequest),
     DeliverDocument(DocumentDeliveryRequest),
+    RenderImage(RenderImageRequest),
     RenderAndDeliverImage(RenderedImageDeliveryRequest),
     RenderAndDeliverDocument(RenderedDocumentDeliveryRequest),
 }
@@ -51,6 +52,7 @@ impl CaptureManagerRequest {
             Self::CaptureDesktopBackdrop(request) => request.operation,
             Self::DeliverImage(request) => request.operation,
             Self::DeliverDocument(request) => request.operation,
+            Self::RenderImage(request) => request.operation,
             Self::RenderAndDeliverImage(request) => request.operation,
             Self::RenderAndDeliverDocument(request) => request.operation,
         }
@@ -84,6 +86,10 @@ impl fmt::Debug for CaptureManagerRequest {
                 .field("extension", &request.document.extension)
                 .field("mime_type", &request.document.mime_type)
                 .finish(),
+            Self::RenderImage(request) => f
+                .debug_struct("RenderImage")
+                .field("operation", &request.operation)
+                .finish(),
             Self::RenderAndDeliverImage(request) => f
                 .debug_struct("RenderAndDeliverImage")
                 .field("destination", &request.destination)
@@ -101,6 +107,7 @@ impl fmt::Debug for CaptureManagerRequest {
 pub(crate) enum CaptureManagerResult {
     Capture(CaptureResult),
     DesktopBackdrop(DesktopBackdropCaptureResult),
+    RenderedImage(RenderedImage),
 }
 
 pub(crate) async fn perform_capture(
@@ -291,11 +298,11 @@ pub(crate) async fn render_and_deliver_image(
     request: RenderedImageDeliveryRequest,
     dependencies: Arc<CaptureDependencies>,
 ) -> Result<CaptureResult, CaptureError> {
-    log::info!("Starting deferred image render: {:?}", request.operation);
-    let render = request.render;
-    let image = task::spawn_blocking(render)
-        .await
-        .map_err(|e| CaptureError::ImageError(format!("Render task failed: {}", e)))??;
+    let image = render_image(RenderImageRequest {
+        render: request.render,
+        operation: request.operation,
+    })
+    .await?;
     log::info!("Deferred image render completed: {:?}", request.operation);
     deliver_image(
         ImageDeliveryRequest {
@@ -308,6 +315,16 @@ pub(crate) async fn render_and_deliver_image(
         dependencies,
     )
     .await
+}
+
+/// Runs an image render on a blocking worker without applying delivery policy.
+pub(crate) async fn render_image(
+    request: RenderImageRequest,
+) -> Result<RenderedImage, CaptureError> {
+    log::info!("Starting deferred image render: {:?}", request.operation);
+    task::spawn_blocking(request.render)
+        .await
+        .map_err(|error| CaptureError::ImageError(format!("Render task failed: {error}")))?
 }
 
 /// Runs the deferred render on a blocking worker, then delivers like
@@ -393,9 +410,15 @@ async fn save_bytes(
 }
 
 async fn copy_to_clipboard(clipboard: Arc<dyn CaptureClipboard>, image_data: Vec<u8>) -> bool {
-    match task::spawn_blocking(move || clipboard.copy(&image_data))
-        .await
-        .map_err(|e| CaptureError::ClipboardError(format!("Clipboard task failed: {}", e)))
+    match task::spawn_blocking(move || {
+        super::clipboard::copy_to_clipboard_with(
+            &image_data,
+            clipboard.as_ref(),
+            crate::process_broker::max_publish_bytes(),
+        )
+    })
+    .await
+    .map_err(|e| CaptureError::ClipboardError(format!("Clipboard task failed: {}", e)))
     {
         Ok(Ok(())) => {
             log::info!("Successfully copied to clipboard");

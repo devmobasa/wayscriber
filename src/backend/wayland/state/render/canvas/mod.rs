@@ -16,8 +16,15 @@ impl WaylandState {
         phys_height: u32,
         now: Instant,
         damage_world: &[crate::util::Rect],
+        render_transients: bool,
         mut perf: Option<&mut PerfRenderBreakdown>,
     ) -> Result<()> {
+        let capture_picker_active = self.capture_picker_chrome_suppressed();
+        let capture_picker_draws_committed = capture_picker_draws_committed(
+            capture_picker_active,
+            self.region_picker_include_drawings(),
+        );
+        let render_transients = render_transients && !capture_picker_active;
         let canvas_transform_active = self.canvas_transform_active();
         let (canvas_origin_x, canvas_origin_y) = self.canvas_view_origin();
         let shapes_total = self.input_state.boards.active_frame().shapes.len();
@@ -26,7 +33,7 @@ impl WaylandState {
         // shapes from the baked layer cache: pan frames force full damage, so
         // this turns an O(shapes) Cairo replay into a single aligned blit.
         let layer_cache_start = perf.as_ref().map(|_| Instant::now());
-        let layer_cache_ready = if self.canvas_layer_cache_usable() {
+        let layer_cache_ready = if !capture_picker_active && self.canvas_layer_cache_usable() {
             self.ensure_canvas_layer_cache(width, height, scale)
         } else {
             self.canvas_layer_cache.clear();
@@ -46,6 +53,24 @@ impl WaylandState {
                 .stages
                 .background
                 .saturating_add(Instant::now().saturating_duration_since(background_start));
+        }
+
+        // A capture picker always selects against the frozen desktop. When its
+        // captured intent includes drawings, replay committed annotations over
+        // that backdrop so the preview matches the exported PNG. The layer
+        // cache stays disabled because its baked board background is not the
+        // frozen capture. Turning the Review toggle off keeps only the raw
+        // backdrop. Transient handles, provisional strokes, text previews,
+        // hover effects, and click highlights remain suppressed in both cases.
+        if !capture_picker_draws_committed {
+            self.spotlight_dimmed_last_frame = false;
+            if let Some(perf) = perf.as_mut() {
+                perf.shapes_total = shapes_total;
+                perf.shapes_tested = 0;
+                perf.shapes_rendered = 0;
+                perf.canvas_layer_cache_used = false;
+            }
+            return Ok(());
         }
 
         // Scale subsequent drawing to logical coordinates
@@ -200,11 +225,13 @@ impl WaylandState {
         // strokes clear their path and replay the original backdrop into it, so a
         // dim layer painted earlier would be punched away and every past erasure
         // would show as a bright trail outside the openings.
-        let spotlight_cursor = {
+        let spotlight_regions = if render_transients {
             let (screen_x, screen_y) = self.current_mouse();
-            self.canvas_world_coords(screen_x as f64, screen_y as f64)
+            let spotlight_cursor = self.canvas_world_coords(screen_x as f64, screen_y as f64);
+            self.input_state.spotlight_regions(spotlight_cursor)
+        } else {
+            crate::draw::spotlight_regions_for_frame(self.input_state.boards.active_frame())
         };
-        let spotlight_regions = self.input_state.spotlight_regions(spotlight_cursor);
         // Remember for the next frame's damage decision: once the last spotlight
         // is gone this buffer still carries its dim until a full repaint.
         self.spotlight_dimmed_last_frame = !spotlight_regions.is_empty();
@@ -216,6 +243,14 @@ impl WaylandState {
                 feather: self.input_state.spotlight_feather,
             },
         );
+
+        if !render_transients {
+            if canvas_transform_active {
+                let _ = ctx.restore();
+            }
+            let _ = ctx.restore();
+            return Ok(());
+        }
 
         self.render_selection_overlays(ctx);
 
@@ -278,5 +313,25 @@ fn provisional_point_count(stroke: &crate::input::tool::ProvisionalToolStroke<'_
         crate::input::tool::ProvisionalToolStroke::Shape(_)
         | crate::input::tool::ProvisionalToolStroke::BlurReplayPreview(_)
         | crate::input::tool::ProvisionalToolStroke::None => 0,
+    }
+}
+
+const fn capture_picker_draws_committed(
+    capture_picker_active: bool,
+    include_drawings: bool,
+) -> bool {
+    !capture_picker_active || include_drawings
+}
+
+#[cfg(test)]
+mod tests {
+    use super::capture_picker_draws_committed;
+
+    #[test]
+    fn picker_preview_follows_the_annotated_export_choice() {
+        assert!(capture_picker_draws_committed(false, false));
+        assert!(capture_picker_draws_committed(false, true));
+        assert!(capture_picker_draws_committed(true, true));
+        assert!(!capture_picker_draws_committed(true, false));
     }
 }

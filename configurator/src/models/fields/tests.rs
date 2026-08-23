@@ -1,4 +1,24 @@
 use super::*;
+
+#[test]
+fn region_picker_options_cover_the_core_enum() {
+    assert_eq!(
+        RegionPickerOption::from_picker(wayscriber::config::RegionPicker::Native),
+        RegionPickerOption::Native
+    );
+    assert_eq!(
+        RegionPickerOption::from_picker(wayscriber::config::RegionPicker::Slurp),
+        RegionPickerOption::Slurp
+    );
+    assert_eq!(
+        RegionPickerOption::Slurp.to_picker(),
+        wayscriber::config::RegionPicker::Slurp
+    );
+    assert_eq!(
+        RegionPickerOption::list(),
+        vec![RegionPickerOption::Native, RegionPickerOption::Slurp]
+    );
+}
 use wayscriber::config::{
     PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize,
     PdfTransparentBackground, ReducedMotion, SessionCompression, SessionStorageMode,

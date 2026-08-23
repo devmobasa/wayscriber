@@ -251,6 +251,8 @@ impl WaylandState {
                 bg_color: background,
                 logical_to_image_scale_x: 1.0,
                 logical_to_image_scale_y: 1.0,
+                logical_image_origin_x: 0.0,
+                logical_image_origin_y: 0.0,
             };
 
             let bake_bounds = Rect {

@@ -14,6 +14,7 @@ pub(crate) mod png;
 pub mod portal;
 pub mod sources;
 pub mod types;
+pub(crate) mod window_geometry;
 
 mod dependencies;
 mod desktop_backdrop;
@@ -31,5 +32,6 @@ pub use types::{
     DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult, DesktopBackdropGeometry,
     DesktopBackdropOutputGeometry, DocumentDeliveryRequest, DocumentRenderJob,
     ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, ImageRenderJob,
-    RenderedDocument, RenderedDocumentDeliveryRequest, RenderedImage, RenderedImageDeliveryRequest,
+    RenderImageRequest, RenderedDocument, RenderedDocumentDeliveryRequest, RenderedImage,
+    RenderedImageDeliveryRequest,
 };

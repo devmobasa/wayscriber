@@ -9,11 +9,15 @@ mod context_menu;
 mod eyedropper_loupe;
 mod help_overlay;
 mod input_hud;
+mod measure_badge;
 mod onboarding_card;
 mod precision_entry;
 mod primitives;
 mod properties_panel;
 mod radial_menu;
+mod region_action_bar;
+mod region_capture_picker;
+mod region_resize_handles;
 mod status;
 mod text_highlight;
 pub mod theme;
@@ -34,13 +38,22 @@ pub use help_overlay::{
     HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at, render_help_overlay,
 };
 pub use input_hud::{input_hud_geometry, render_input_hud};
+pub(crate) use measure_badge::{
+    ShapeMeasureBadge, measure_shape_badge, shape_measure_badge_text_style,
+};
 pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboarding_card};
 pub use precision_entry::render_precision_entry_popup;
-pub(crate) use primitives::checkerboard_behind;
 /// Shared measured-text trimming, also used by the standalone about dialog.
 pub(crate) use primitives::ellipsize_to_fit;
+pub(crate) use primitives::{checkerboard_behind, draw_pill};
 pub use properties_panel::render_properties_panel;
 pub use radial_menu::render_radial_menu;
+pub(crate) use region_action_bar::{RegionAction, RegionActionBar};
+pub(crate) use region_capture_picker::{
+    RegionCaptureLoupeVisual, RegionCapturePickerVisual, RegionCaptureWindowVisual,
+    capture_size_text, measure_picker_damage, render_region_capture_picker,
+};
+pub(crate) use region_resize_handles::RegionResizeHandles;
 pub use status::{
     StatusHudLayout, StatusHudSegmentKind, ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress,
     compute_status_hud_layout, compute_zoom_chip_layout, render_editing_badge, render_frozen_badge,

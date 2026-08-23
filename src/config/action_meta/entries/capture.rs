@@ -7,7 +7,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Capture the full screen",
         Capture,
-        false,
+        true,
         false,
         false
     ),
@@ -17,7 +17,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Capture the active window",
         Capture,
-        false,
+        true,
         true,
         false
     ),
@@ -27,7 +27,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Capture a selection using defaults",
         Capture,
-        false,
+        true,
         true,
         true
     ),
@@ -57,7 +57,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Selection to clipboard",
         Capture,
-        false,
+        true,
         true,
         false
     ),
@@ -67,7 +67,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Selection to file",
         Capture,
-        false,
+        true,
         true,
         false
     ),
@@ -77,7 +77,7 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Region to clipboard",
         Capture,
-        false,
+        true,
         false,
         false
     ),
@@ -87,9 +87,31 @@ pub const ENTRIES: &[ActionMeta] = &[
         None,
         "Region to file",
         Capture,
-        false,
+        true,
         false,
         false
+    ),
+    meta!(
+        CaptureRegionInteractive,
+        "Capture Region (Interactive)",
+        Some("Region…"),
+        "Select a region, then choose how to use it",
+        Capture,
+        true,
+        true,
+        false,
+        &["region", "snip", "paste to board", "screenshot"]
+    ),
+    meta!(
+        MeasureMode,
+        "Measure Mode",
+        Some("Measure"),
+        "Measure a screen region without capturing it",
+        Capture,
+        true,
+        true,
+        false,
+        &["ruler", "dimensions", "screen size"]
     ),
     meta!(
         ExportCanvasFile,

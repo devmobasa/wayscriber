@@ -245,9 +245,18 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 }
                 if state.input_state.region_is_active() {
                     if state.stylus_on_toolbar {
-                        state.cancel_ocr_for_toolbar_interaction();
+                        state.cancel_region_for_toolbar_interaction();
                     } else if state.stylus_on_overlay {
                         let (x, y) = state.current_or_pending_stylus_position();
+                        if let Some(action) = state.region_review_action_at((x, y)) {
+                            state.submit_region_review_action(action);
+                            state.retire_stylus_contact();
+                            return;
+                        }
+                        if state.region_review_bar_contains((x, y)) {
+                            state.retire_stylus_contact();
+                            return;
+                        }
                         state.begin_region_selection(RegionInputSource::Stylus, x, y);
                         return;
                     }

@@ -13,6 +13,34 @@ use std::ops::Range;
 use super::{DrawingState, InputState};
 
 impl InputState {
+    /// Logical canvas dimensions for the in-progress shape-size badge.
+    ///
+    /// Only the rectangle and ellipse tools expose a width/height readout;
+    /// path-like and line-like tools keep their existing uncluttered preview.
+    pub(crate) fn provisional_shape_size(
+        &self,
+        current_x: i32,
+        current_y: i32,
+    ) -> Option<(u32, u32)> {
+        let DrawingState::Drawing { tool, .. } = &self.state else {
+            return None;
+        };
+        if !matches!(tool, Tool::Rect | Tool::Ellipse) {
+            return None;
+        }
+
+        match self.provisional_tool_stroke(current_x, current_y) {
+            ProvisionalToolStroke::Shape(Shape::Rect { w, h, .. }) => {
+                Some((w.unsigned_abs(), h.unsigned_abs()))
+            }
+            ProvisionalToolStroke::Shape(Shape::Ellipse { rx, ry, .. }) => Some((
+                rx.unsigned_abs().saturating_mul(2),
+                ry.unsigned_abs().saturating_mul(2),
+            )),
+            _ => None,
+        }
+    }
+
     pub(crate) fn provisional_tool_stroke(
         &self,
         current_x: i32,

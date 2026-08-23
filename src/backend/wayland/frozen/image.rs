@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use wayland_client::protocol::{wl_output, wl_shm};
 
+pub use crate::screen_pixels::ScreenImage as FrozenImage;
+
 pub(in crate::backend::wayland) struct ShmBufferLayout {
     pub(in crate::backend::wayland) width: i32,
     pub(in crate::backend::wayland) height: i32,
@@ -46,14 +48,6 @@ pub(in crate::backend::wayland) fn validate_shm_buffer_layout(
         stride: buffer_stride,
         total_size,
     })
-}
-
-/// CPU-side frozen image ready for Cairo rendering.
-pub struct FrozenImage {
-    pub width: u32,
-    pub height: u32,
-    pub stride: i32,
-    pub data: Vec<u8>,
 }
 
 impl FrozenImage {
