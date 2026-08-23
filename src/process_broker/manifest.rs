@@ -112,16 +112,20 @@ pub(super) fn validate(
 fn validate_arguments(kind: HelperKind, basename: &str, arguments: &[OsWire]) -> Result<()> {
     match kind {
         HelperKind::Hyprctl => {
-            if !arguments_equal(arguments, &[b"clients", b"-j"])
-                && !arguments_equal(arguments, &[b"monitors", b"-j"])
-            {
+            // Named rather than inlined into the `if`: a lone `if` as the arm
+            // body trips `collapsible_match` on the toolchain CI pins, and its
+            // suggested match guard would silently fall through to the
+            // permissive catch-all when the guard is false.
+            let allowed = arguments_equal(arguments, &[b"clients", b"-j"])
+                || arguments_equal(arguments, &[b"monitors", b"-j"]);
+            if !allowed {
                 bail!("hyprctl window geometry is restricted to JSON clients or monitors queries");
             }
         }
         HelperKind::HyprctlActiveWindow => {
-            if !arguments_equal(arguments, &[b"activewindow", b"-j"])
-                && !arguments_equal(arguments, &[b"monitors", b"-j"])
-            {
+            let allowed = arguments_equal(arguments, &[b"activewindow", b"-j"])
+                || arguments_equal(arguments, &[b"monitors", b"-j"]);
+            if !allowed {
                 bail!("active-window hyprctl is restricted to its two JSON queries");
             }
         }
