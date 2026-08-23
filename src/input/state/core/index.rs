@@ -6,6 +6,9 @@ use std::collections::{HashMap, HashSet};
 
 pub(super) const SPATIAL_GRID_CELL_SIZE: i32 = 64;
 const MAX_SPATIAL_CELLS_PER_SHAPE: usize = 4_096;
+// Allows roughly 26 indexed cells per shape at the default 10,000-shape limit
+// while placing a hard ceiling on duplicated `(shape, cell)` entries.
+const MAX_SPATIAL_GRID_MEMBERSHIPS: usize = 262_144;
 
 #[derive(Debug, PartialEq, Eq)]
 enum CellMembership {
@@ -27,8 +30,12 @@ pub(super) struct SpatialGrid {
     /// Shapes spanning too many cells to index individually.
     ///
     /// These remain candidates for every query, bounding per-shape index work
-    /// and memory without introducing hit-test false negatives.
+    /// and total grid memory without introducing hit-test false negatives.
     global_shapes: HashSet<ShapeId>,
+    /// Number of `(shape, cell)` memberships currently stored in both maps.
+    indexed_memberships: usize,
+    /// Maximum number of memberships retained by this grid.
+    max_indexed_memberships: usize,
     /// Number of shapes when the grid was built (for validation).
     pub(super) shape_count: usize,
 }
@@ -289,6 +296,14 @@ impl InputState {
 
 impl SpatialGrid {
     fn build(frame: &Frame, cell_size: i32) -> Option<Self> {
+        Self::build_with_membership_limit(frame, cell_size, MAX_SPATIAL_GRID_MEMBERSHIPS)
+    }
+
+    fn build_with_membership_limit(
+        frame: &Frame,
+        cell_size: i32,
+        max_indexed_memberships: usize,
+    ) -> Option<Self> {
         let cell_size = cell_size.max(1);
         if frame.shapes.is_empty() {
             return None;
@@ -299,6 +314,8 @@ impl SpatialGrid {
             cells: HashMap::new(),
             shape_cells: HashMap::new(),
             global_shapes: HashSet::new(),
+            indexed_memberships: 0,
+            max_indexed_memberships,
             shape_count: frame.shapes.len(),
         };
 
@@ -359,6 +376,10 @@ impl SpatialGrid {
     fn remove_shape(&mut self, id: ShapeId) {
         self.global_shapes.remove(&id);
         if let Some(cell_keys) = self.shape_cells.remove(&id) {
+            self.indexed_memberships = self
+                .indexed_memberships
+                .checked_sub(cell_keys.len())
+                .expect("spatial index membership accounting underflow");
             for key in cell_keys {
                 if let Some(ids) = self.cells.get_mut(&key) {
                     ids.retain(|&existing_id| existing_id != id);
@@ -374,13 +395,19 @@ impl SpatialGrid {
     /// Adds a shape with known bounds to the grid.
     fn add_shape_with_bounds(&mut self, id: ShapeId, bounds: Rect) {
         match Self::compute_cell_membership(bounds, self.cell_size) {
-            CellMembership::Cells(cell_keys) => {
+            CellMembership::Cells(cell_keys)
+                if cell_keys.len()
+                    <= self
+                        .max_indexed_memberships
+                        .saturating_sub(self.indexed_memberships) =>
+            {
+                self.indexed_memberships += cell_keys.len();
                 for &key in &cell_keys {
                     self.cells.entry(key).or_default().push(id);
                 }
                 self.shape_cells.insert(id, cell_keys);
             }
-            CellMembership::Global => {
+            CellMembership::Cells(_) | CellMembership::Global => {
                 self.global_shapes.insert(id);
             }
         }
