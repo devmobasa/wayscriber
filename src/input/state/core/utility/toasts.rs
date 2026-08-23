@@ -270,6 +270,7 @@ impl InputState {
                         "capture.save",
                         Toast::info(match fallback.operation {
                             ImageOperationKind::Screenshot => "Screenshot saved",
+                            ImageOperationKind::Pin => "Region pinned",
                             ImageOperationKind::CanvasExport => "Canvas exported",
                             ImageOperationKind::BoardPdfExport => "Board exported",
                             ImageOperationKind::AllBoardsPdfExport => "Boards exported",

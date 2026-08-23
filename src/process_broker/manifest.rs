@@ -48,6 +48,7 @@ pub(super) fn validate(
         HelperKind::Overlay | HelperKind::InitialDetach | HelperKind::About => {
             basename == "wayscriber" || basename.starts_with("wayscriber-")
         }
+        HelperKind::PinHost => std::env::current_exe().is_ok_and(|current| current == program),
         HelperKind::CapabilityProbe => matches!(
             basename.as_str(),
             "grim" | "hyprctl" | "slurp" | "wl-copy" | "wl-paste" | "zenity" | "kdialog"
@@ -87,6 +88,9 @@ pub(super) fn validate(
     {
         bail!("window geometry helpers do not accept environment overrides or input");
     }
+    if matches!(kind, HelperKind::PinHost) && (!environment.is_empty() || !input.is_empty()) {
+        bail!("pin host does not accept environment overrides or input");
+    }
     validate_arguments(kind, &basename, arguments)?;
     for (name, _) in environment {
         let name = std::str::from_utf8(&name.0)?;
@@ -111,6 +115,11 @@ pub(super) fn validate(
 /// below retain their established indispensable-argument policy.
 fn validate_arguments(kind: HelperKind, basename: &str, arguments: &[OsWire]) -> Result<()> {
     match kind {
+        HelperKind::PinHost => {
+            if !arguments_equal(arguments, &[b"--pin-host"]) {
+                bail!("pin host helper requires exact internal argv");
+            }
+        }
         HelperKind::Hyprctl => {
             if !arguments_equal(arguments, &[b"clients", b"-j"])
                 && !arguments_equal(arguments, &[b"monitors", b"-j"])

@@ -743,7 +743,7 @@ Light passthrough (layer-shell compositors only) lets normal keyboard and pointe
 | <kbd>Ctrl+Shift+S</kbd> | Select region → save PNG |
 | <kbd>Ctrl+6</kbd> | Region → clipboard (explicit) |
 | <kbd>Ctrl+Alt+6</kbd> | Region → save PNG (explicit) |
-| Unbound | Capture region interactively, then choose Copy, Save, Both, or Board (`capture_region_interactive`) |
+| Unbound | Capture region interactively, then choose Copy, Save, Both, Board, or Pin (`capture_region_interactive`) |
 | Unbound | Measure a logical screen region without capturing it (`measure_mode`) |
 | <kbd>Ctrl+Alt+O</kbd> | Open last capture folder |
 
@@ -770,12 +770,24 @@ always uses the native picker so Review cannot be bypassed by an external
 selector. In Review, **Both** (or <kbd>Enter</kbd>) always copies the PNG and
 saves it to a file.
 
+When layer shell and a secure XDG runtime directory are available, Review
+also offers **Pin** (or <kbd>P</kbd>). Pin creates a flattened PNG using the
+current **Include drawings in exports** value and leaves it on the desktop in a
+separate pin-host process. Drag a pin with the pointer, touch, or stylus; use the
+pointer wheel to resize it without changing its aspect ratio; and hover it for
+Copy and Close controls. Pins remain when the overlay is hidden or its daemon
+session ends, but they are ephemeral: they are not restored after logout,
+compositor loss, host failure, or reboot. Compositors without layer-shell
+support omit Pin rather than opening a normal window.
+Pins are ordinary compositor surfaces, so they can appear in later screenshots;
+Wayscriber does not hide them across the separate pin-host process.
+
 Full-screen and region captures include the active board's committed drawings
 by default. Set `[capture].include_drawings = false` for raw desktop pixels.
 Provisional strokes, selection handles, previews, toolbars, and other
 Wayscriber UI are never included. In interactive Review, **Include drawings in
 exports** (or <kbd>D</kbd>) starts from the configured default and can override
-it for that one Copy, Save, or Both action. Board always inserts the original
+it for that one Copy, Save, Both, or Pin action. Board always inserts the original
 crop so existing annotations are not baked into a duplicate image on the same
 board.
 The native region picker shows those committed drawings over its frozen desktop

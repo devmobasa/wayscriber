@@ -179,6 +179,18 @@ following permission-gated evidence (these checks open or foreground the overlay
   visible at provider-query time, while output/layout mismatches still disable window mode.
 - On Plasma/KWin, Niri, and GNOME, the window-mode legend and `Space` control stay absent while area
   selection continues to work. Provider failure or an empty workspace must also fall back quietly.
+- In interactive Review, verify **Pin** and `P` on Hyprland, Sway, Niri, and Plasma/KWin at 1x,
+  2x, fractional, and mixed-DPI scales. GNOME or any XDG-only fallback must omit Pin without
+  breaking the other Review controls. Compare raw and annotated pin pixels with Copy/Save,
+  including blur, eraser, and spotlight edges.
+- After pin acknowledgement, hide/show the overlay, switch named sessions and workspaces, toggle
+  and quit the daemon, and confirm the pin remains. Exercise pointer, touch, and stylus dragging
+  where hardware exists; wheel-resize at every edge; hover Copy/Close; output scale/transform
+  changes; output removal and reconnection; and close during drag, copy, and resize.
+- Exercise the pin count, encoded-byte, decoded-pixel, surface-pixel, and total-memory refusals.
+  Record initial latency by render, IPC/decode, configure, and first commit, plus peak RSS for one
+  4K@2 crop and the admitted maximum. Fullscreen stacking is compositor policy, so record observed
+  behavior rather than claiming that every compositor keeps pins above every fullscreen surface.
 
 At 1080p@1, 4K@2, and a fractional-scale 4K setup, capture the debug-level `Region picker frame`
 timings during pointer motion. Also record the process peak-RSS delta while encoding a full-output

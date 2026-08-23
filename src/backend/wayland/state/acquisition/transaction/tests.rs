@@ -12,6 +12,7 @@ struct TransactionRuntime {
     region_legacy_handoffs: usize,
     ready_activation_succeeds: bool,
     cancelled_owners: Vec<ScreenAcquisitionOwner>,
+    region_capture_lifecycle_finishes: usize,
     cleared_zoom_waiters: Vec<ZoomWaiterOwner>,
     frozen_generation: u64,
     frozen_active: bool,
@@ -39,6 +40,7 @@ impl TransactionRuntime {
             region_legacy_handoffs: 0,
             ready_activation_succeeds: true,
             cancelled_owners: Vec::new(),
+            region_capture_lifecycle_finishes: 0,
             cleared_zoom_waiters: Vec::new(),
             frozen_generation: 7,
             frozen_active: true,
@@ -118,7 +120,10 @@ impl AcquisitionTransactionRuntime for TransactionRuntime {
                 let _ = self.input_state.cancel_eyedropper();
             }
             ScreenAcquisitionOwner::Ocr => self.input_state.cancel_region_ui_only(),
-            ScreenAcquisitionOwner::RegionCapture => self.input_state.cancel_region_ui_only(),
+            ScreenAcquisitionOwner::RegionCapture => {
+                self.input_state.cancel_region_ui_only();
+                self.region_capture_lifecycle_finishes += 1;
+            }
             ScreenAcquisitionOwner::UserFreeze => {}
         }
     }
@@ -833,4 +838,43 @@ fn armed_owner_cleanup_releases_generation_clears_waiter_and_cancels_ui_once() {
         assert_eq!(runtime.cleared_zoom_waiters, vec![zoom_owner, zoom_owner]);
         assert_eq!(runtime.cancelled_owners, vec![owner, owner]);
     }
+}
+
+#[test]
+fn pin_preparation_refusal_retires_interactive_review_and_owned_freeze_once() {
+    let mut runtime = TransactionRuntime::started(ScreenAcquisitionOwner::RegionCapture);
+    runtime.registry.take();
+    runtime.input_state.activate_region_review(
+        crate::input::state::RegionPurposeTag::CaptureInteractive,
+        11,
+        crate::input::state::RegionSelection {
+            start: (12.0, 18.0),
+            end: (80.0, 64.0),
+        },
+    );
+    assert!(runtime.input_state.region_state().is_review());
+
+    // This is the terminal effect used when Pin prevalidation refuses a
+    // Review crop: there is no pending acquisition, but the picker owns the
+    // installed frozen generation.
+    cancel_modal_owner_resources(
+        &mut runtime,
+        ScreenAcquisitionOwner::RegionCapture,
+        None,
+        Some(7),
+    );
+
+    assert!(!runtime.input_state.region_is_engaged());
+    assert!(!runtime.frozen_active);
+    assert_eq!(runtime.restore_count, 1);
+    assert_eq!(runtime.unfreeze_count, 1);
+    assert_eq!(
+        runtime.cleared_zoom_waiters,
+        vec![ZoomWaiterOwner::RegionCapture]
+    );
+    assert_eq!(
+        runtime.cancelled_owners,
+        vec![ScreenAcquisitionOwner::RegionCapture]
+    );
+    assert_eq!(runtime.region_capture_lifecycle_finishes, 1);
 }

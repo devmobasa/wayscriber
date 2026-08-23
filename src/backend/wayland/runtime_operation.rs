@@ -143,6 +143,11 @@ where
         self.active.is_some()
     }
 
+    /// Refuse future work after a caller detects a completion identity breach.
+    pub(in crate::backend::wayland) fn mark_unhealthy(&mut self) {
+        self.healthy = false;
+    }
+
     pub(in crate::backend::wayland) fn try_submit(
         &mut self,
         context: C,
@@ -589,6 +594,19 @@ mod tests {
         assert_eq!(
             failure.into_parts().0,
             RuntimeOperationSubmitError::Unhealthy
+        );
+    }
+
+    #[test]
+    fn caller_detected_identity_breach_disables_future_submissions() {
+        let (_wake, mut controller) = controller::<u64, u64>();
+        controller.mark_unhealthy();
+        let failure = controller
+            .try_submit(44, "test-caller-unhealthy", || 1)
+            .unwrap_err();
+        assert_eq!(
+            failure.into_parts(),
+            (RuntimeOperationSubmitError::Unhealthy, 44)
         );
     }
 

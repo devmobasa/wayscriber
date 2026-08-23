@@ -12,6 +12,94 @@ fn wire_arguments(arguments: &[&str]) -> Vec<super::wire::OsWire> {
         .collect()
 }
 
+#[test]
+fn pin_host_manifest_accepts_only_the_exact_internal_spawn_shape() {
+    assert_eq!(
+        serde_json::to_string(&HelperKind::PinHost).unwrap(),
+        r#""pin_host""#
+    );
+    let current = std::env::current_exe().unwrap();
+    let program = super::wire::OsWire::from_os(current.as_os_str()).unwrap();
+    super::manifest::validate(
+        HelperKind::PinHost,
+        &program,
+        &wire_arguments(&["--pin-host"]),
+        &[],
+        &[],
+    )
+    .unwrap();
+
+    for arguments in [&[][..], &["--pin-host", "extra"][..], &["--active"][..]] {
+        assert!(
+            super::manifest::validate(
+                HelperKind::PinHost,
+                &program,
+                &wire_arguments(arguments),
+                &[],
+                &[],
+            )
+            .is_err()
+        );
+    }
+    let other = super::wire::OsWire::from_os(OsStr::new("/usr/bin/wayscriber")).unwrap();
+    assert!(
+        super::manifest::validate(
+            HelperKind::PinHost,
+            &other,
+            &wire_arguments(&["--pin-host"]),
+            &[],
+            &[],
+        )
+        .is_err()
+    );
+    let environment = [(
+        super::wire::OsWire::from_os(OsStr::new("WAYSCRIBER_NO_DETACH")).unwrap(),
+        Some(super::wire::OsWire::from_os(OsStr::new("1")).unwrap()),
+    )];
+    assert!(
+        super::manifest::validate(
+            HelperKind::PinHost,
+            &program,
+            &wire_arguments(&["--pin-host"]),
+            &environment,
+            &[],
+        )
+        .is_err()
+    );
+    assert!(
+        super::manifest::validate(
+            HelperKind::PinHost,
+            &program,
+            &wire_arguments(&["--pin-host"]),
+            &[],
+            b"input",
+        )
+        .is_err()
+    );
+    super::server::validate_spawn_policy(
+        HelperKind::PinHost,
+        HelperLifetime::DetachedAfterExec,
+        false,
+        &[],
+    )
+    .unwrap();
+    for lifetime in [HelperLifetime::OperationBound, HelperLifetime::OwnedChild] {
+        assert!(
+            super::server::validate_spawn_policy(HelperKind::PinHost, lifetime, false, &[])
+                .is_err()
+        );
+    }
+    assert!(
+        super::server::validate_spawn_policy(
+            HelperKind::PinHost,
+            HelperLifetime::DetachedAfterExec,
+            true,
+            &[],
+        )
+        .is_err()
+    );
+}
+
 fn release_test_provider(
     release_path: &std::path::Path,
     proof_path: &std::path::Path,

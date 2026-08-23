@@ -31,6 +31,7 @@ mod ocr;
 mod onboarding;
 pub mod palette_recents;
 pub mod paths;
+pub(crate) mod pin;
 mod process_broker;
 pub mod render_profiles;
 pub mod runtime_capabilities;
@@ -55,6 +56,8 @@ pub mod ui;
 pub(crate) mod ui_text;
 #[cfg(unix)]
 mod unix_signals;
+#[cfg(unix)]
+pub(crate) mod unix_transport;
 mod update_check;
 pub mod util;
 #[cfg(feature = "portal")]
@@ -83,6 +86,13 @@ pub fn run_from_env() -> ExitCode {
     }
     match cli::Cli::parse() {
         Ok(CliOutcome::Run(cli)) => {
+            if cli.pin_host {
+                logger::init(false);
+                return exit_code_for_app_result((|| {
+                    let _broker = process_broker::start_for_runtime()?;
+                    pin::run_host()
+                })());
+            }
             logger::init(cli.daemon || cli.active);
             exit_code_for_app_result(app::run(cli))
         }

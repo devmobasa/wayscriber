@@ -506,3 +506,13 @@ fn check_update_rejects_valued_launch_flags() {
         "--check-update conflicts with the selected command"
     );
 }
+
+#[test]
+fn hidden_pin_host_mode_parses_only_by_itself() {
+    let cli = parse_cli(["wayscriber", "--pin-host"]);
+    assert!(cli.pin_host);
+
+    for public in ["--active", "--daemon", "--about", "--check-update"] {
+        assert!(Cli::try_parse_from(["wayscriber", "--pin-host", public]).is_err());
+    }
+}

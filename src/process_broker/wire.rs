@@ -17,8 +17,6 @@ pub(super) const MAX_OUTPUT_BYTES: usize = 256 * 1024 * 1024;
 pub(super) const MAX_STDERR_BYTES: usize = 64 * 1024;
 pub(super) const MAX_OWNED_CHILDREN: usize = 64;
 pub(super) const MAX_PACKET_DESCRIPTORS: usize = 2;
-pub(super) const REQUIRED_MEMFD_SEALS: i32 =
-    libc::F_SEAL_WRITE | libc::F_SEAL_GROW | libc::F_SEAL_SHRINK | libc::F_SEAL_SEAL;
 
 /// Failure text used when a `Complete`-mode helper writes past its stdout cap.
 ///
@@ -47,6 +45,7 @@ pub(crate) enum HelperKind {
     Systemctl,
     Configurator,
     About,
+    PinHost,
     DesktopOpen,
     UpdateFetcher,
     #[cfg(test)]

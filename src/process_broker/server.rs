@@ -414,9 +414,7 @@ fn spawn_helper(
         environment,
     } = request;
     super::manifest::validate(kind, &program, &arguments, &environment, &[])?;
-    if matches!(kind, HelperKind::InitialDetach) && lifetime != HelperLifetime::DetachedAfterExec {
-        bail!("initial detach helper must transfer ownership after exec");
-    }
+    validate_spawn_policy(kind, lifetime, watchdog, &environment)?;
     if children.len() >= MAX_OWNED_CHILDREN {
         bail!("broker child capacity exhausted");
     }
@@ -488,6 +486,23 @@ fn spawn_helper(
         }
     }
     Ok(wire_outcome(BrokerOutcome::Spawned { handle, pid }))
+}
+
+pub(super) fn validate_spawn_policy(
+    kind: HelperKind,
+    lifetime: HelperLifetime,
+    watchdog: bool,
+    environment: &[(super::wire::OsWire, Option<super::wire::OsWire>)],
+) -> Result<()> {
+    if matches!(kind, HelperKind::InitialDetach) && lifetime != HelperLifetime::DetachedAfterExec {
+        bail!("initial detach helper must transfer ownership after exec");
+    }
+    if matches!(kind, HelperKind::PinHost)
+        && (lifetime != HelperLifetime::DetachedAfterExec || watchdog || !environment.is_empty())
+    {
+        bail!("pin host requires detached lifetime without watchdog or environment overrides");
+    }
+    Ok(())
 }
 
 fn reject_descriptors(descriptors: &VecDeque<OwnedFd>) -> Result<()> {

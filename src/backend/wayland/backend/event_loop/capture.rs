@@ -111,6 +111,7 @@ pub(super) fn handle_pending_actions(
     state.poll_ocr_completion();
     state.poll_session_file_dialog_completion(qh);
     state.poll_desktop_open_completion();
+    state.poll_pin_publish_completion();
     state.drain_clipboard_requests();
     state.handle_pending_eyedropper_toggle();
     state.handle_pending_ocr_request();
@@ -326,6 +327,8 @@ fn handle_capture_results(state: &mut WaylandState) {
         } => {
             let pending_board =
                 active_id.and_then(|id| state.capture.take_pending_board_paste_for(id));
+            let pending_pin =
+                active_id.and_then(|id| state.capture.take_pending_pin_render_for(id));
             if let Some(id) = active_id {
                 let _ = state.capture.consume_accepted(id);
             }
@@ -340,6 +343,18 @@ fn handle_capture_results(state: &mut WaylandState) {
                     ToastPriority::Critical,
                     "capture",
                     Toast::error(message),
+                );
+                return;
+            }
+            if pending_pin.is_some() {
+                state.capture.finish_capture_lifecycle();
+                warn!("Pin region capture worker failed: {error}");
+                state.input_state.push_toast(
+                    ToastPriority::Critical,
+                    "capture.region.pin",
+                    Toast::error(
+                        "Region was not pinned because the capture worker stopped unexpectedly.",
+                    ),
                 );
                 return;
             }
@@ -362,8 +377,9 @@ fn handle_capture_results(state: &mut WaylandState) {
     info!("Capture completed");
 
     let pending_board = state.capture.take_pending_board_paste_for(id);
-    let outcome = match (outcome, pending_board) {
-        (CaptureOutcome::RenderedImageReady(image), Some(pending)) => {
+    let pending_pin = state.capture.take_pending_pin_render_for(id);
+    let outcome = match (outcome, pending_board, pending_pin) {
+        (CaptureOutcome::RenderedImageReady(image), Some(pending), None) => {
             state.capture.finish_capture_lifecycle();
             let embedded = crate::draw::EmbeddedImage {
                 mime_type: image.format.mime_type,
@@ -376,17 +392,24 @@ fn handle_capture_results(state: &mut WaylandState) {
                 .insert_captured_image(embedded, &pending.target);
             return;
         }
-        (CaptureOutcome::RenderedImageReady(_), None) => {
+        (CaptureOutcome::RenderedImageReady(image), None, Some(pending)) => {
             state.capture.finish_capture_lifecycle();
-            warn!("Rendered region {id} completed without a pending board target");
-            state.input_state.push_toast(
-                ToastPriority::Critical,
-                "capture.region.board",
-                Toast::error("Region was not added to the board."),
-            );
+            state.publish_rendered_pin(image, pending);
             return;
         }
-        (CaptureOutcome::Failed { operation, message }, Some(_)) => {
+        (CaptureOutcome::RenderedImageReady(_), None, None) => {
+            let (source, message) = orphan_render_failure(operation);
+            if operation == ImageOperationKind::Pin {
+                state.capture.manager_mut().mark_unhealthy();
+            }
+            state.capture.finish_capture_lifecycle();
+            warn!("Rendered region {id} completed without its pending {source} owner");
+            state
+                .input_state
+                .push_toast(ToastPriority::Critical, source, Toast::error(message));
+            return;
+        }
+        (CaptureOutcome::Failed { operation, message }, Some(_), None) => {
             state.capture.finish_capture_lifecycle();
             let friendly_error = if matches!(operation, ImageOperationKind::Screenshot) {
                 friendly_capture_error(&message)
@@ -401,12 +424,12 @@ fn handle_capture_results(state: &mut WaylandState) {
             );
             return;
         }
-        (CaptureOutcome::Cancelled { operation, reason }, Some(_)) => {
+        (CaptureOutcome::Cancelled { operation, reason }, Some(_), None) => {
             state.capture.finish_capture_lifecycle();
             info!("{} cancelled: {}", operation.saved_log_label(), reason);
             return;
         }
-        (unexpected, Some(_)) => {
+        (unexpected, Some(_), None) => {
             state.capture.finish_capture_lifecycle();
             warn!("Board region {id} completed with unexpected outcome: {unexpected:?}");
             state.input_state.push_toast(
@@ -416,7 +439,60 @@ fn handle_capture_results(state: &mut WaylandState) {
             );
             return;
         }
-        (outcome, None) => outcome,
+        (outcome @ CaptureOutcome::Failed { .. }, None, Some(_)) => {
+            state.capture.finish_capture_lifecycle();
+            let message = pin_render_terminal_failure(&outcome);
+            warn!("Pin region render failed: {outcome:?}");
+            state.input_state.push_toast(
+                ToastPriority::Critical,
+                "capture.region.pin",
+                Toast::error(message),
+            );
+            return;
+        }
+        (outcome @ CaptureOutcome::Cancelled { .. }, None, Some(_)) => {
+            state.capture.finish_capture_lifecycle();
+            let message = pin_render_terminal_failure(&outcome);
+            info!("Region pin render cancelled: {outcome:?}");
+            state.input_state.push_toast(
+                ToastPriority::Critical,
+                "capture.region.pin",
+                Toast::error(message),
+            );
+            return;
+        }
+        (unexpected, None, Some(_)) => {
+            state.capture.finish_capture_lifecycle();
+            warn!("Pin region {id} completed with unexpected outcome: {unexpected:?}");
+            state.input_state.push_toast(
+                ToastPriority::Critical,
+                "capture.region.pin",
+                Toast::error("Region was not pinned."),
+            );
+            return;
+        }
+        (unexpected, Some(_), Some(_)) => {
+            state.capture.manager_mut().mark_unhealthy();
+            state.capture.finish_capture_lifecycle();
+            warn!("Capture {id} had conflicting Board and Pin owners: {unexpected:?}");
+            state.input_state.push_toast(
+                ToastPriority::Critical,
+                "capture.region.pin",
+                Toast::error("Region was not pinned because capture state was inconsistent."),
+            );
+            return;
+        }
+        (outcome, None, None) if operation == ImageOperationKind::Pin => {
+            state.capture.manager_mut().mark_unhealthy();
+            state.capture.finish_capture_lifecycle();
+            let (source, message) = orphan_render_failure(operation);
+            warn!("Pin render {id} completed without its pending owner: {outcome:?}");
+            state
+                .input_state
+                .push_toast(ToastPriority::Critical, source, Toast::error(message));
+            return;
+        }
+        (outcome, None, None) => outcome,
     };
 
     // Restore overlay.
@@ -533,6 +609,7 @@ fn handle_capture_results(state: &mut WaylandState) {
                         crate::capture::ImageOperationKind::Screenshot => {
                             "Screenshot captured".to_string()
                         }
+                        crate::capture::ImageOperationKind::Pin => "Region pinned".to_string(),
                         crate::capture::ImageOperationKind::CanvasExport => {
                             "Canvas exported".to_string()
                         }
@@ -614,6 +691,27 @@ fn handle_capture_results(state: &mut WaylandState) {
     }
 }
 
+fn orphan_render_failure(operation: ImageOperationKind) -> (&'static str, &'static str) {
+    if operation == ImageOperationKind::Pin {
+        (
+            "capture.region.pin",
+            "Region was not pinned because capture state was inconsistent.",
+        )
+    } else {
+        ("capture.region.board", "Region was not added to the board.")
+    }
+}
+
+fn pin_render_terminal_failure(outcome: &CaptureOutcome) -> String {
+    match outcome {
+        CaptureOutcome::Failed { message, .. } => format!("Region was not pinned: {message}"),
+        CaptureOutcome::Cancelled { .. } => {
+            "Region was not pinned because rendering was cancelled.".to_string()
+        }
+        _ => "Region was not pinned.".to_string(),
+    }
+}
+
 fn handle_capture_manager_failure(
     state: &mut WaylandState,
     operation: Option<ImageOperationKind>,
@@ -623,35 +721,83 @@ fn handle_capture_manager_failure(
     state.show_overlay();
     state.capture.finish_capture_lifecycle();
 
-    let message = match operation {
-        Some(ImageOperationKind::Screenshot) => friendly_capture_error(error),
-        Some(operation) => format!(
-            "{} failed because the capture worker stopped.",
-            operation.saved_log_label()
+    let (source, message, notify) = match operation {
+        Some(ImageOperationKind::Screenshot) => ("capture", friendly_capture_error(error), true),
+        Some(ImageOperationKind::Pin) => (
+            "capture.region.pin",
+            "Region was not pinned because the capture worker stopped.".to_string(),
+            false,
         ),
-        None => "Capture services stopped unexpectedly.".to_string(),
+        Some(operation) => (
+            "capture",
+            format!(
+                "{} failed because the capture worker stopped.",
+                operation.saved_log_label()
+            ),
+            true,
+        ),
+        None => (
+            "capture",
+            "Capture services stopped unexpectedly.".to_string(),
+            true,
+        ),
     };
     warn!("Capture manager failure: {error}");
     state.input_state.push_toast(
         ToastPriority::Critical,
-        "capture",
+        source,
         Toast::error(message.clone()),
     );
-    notification::send_notification_async(
-        &state.tokio_handle,
-        operation
-            .map(ImageOperationKind::failure_title)
-            .unwrap_or("Capture failed")
-            .to_string(),
-        message,
-        Some("dialog-error".to_string()),
-    );
+    if notify {
+        notification::send_notification_async(
+            &state.tokio_handle,
+            operation
+                .map(ImageOperationKind::failure_title)
+                .unwrap_or("Capture failed")
+                .to_string(),
+            message,
+            Some("dialog-error".to_string()),
+        );
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::backend::wayland::acquisition::ScreenAcquisitionRegistry;
+
+    #[test]
+    fn orphan_pin_render_never_reports_a_board_failure() {
+        assert_eq!(
+            orphan_render_failure(ImageOperationKind::Pin),
+            (
+                "capture.region.pin",
+                "Region was not pinned because capture state was inconsistent."
+            )
+        );
+        assert_eq!(
+            orphan_render_failure(ImageOperationKind::Screenshot),
+            ("capture.region.board", "Region was not added to the board.")
+        );
+    }
+
+    #[test]
+    fn pin_render_failed_and_cancelled_have_one_exact_terminal_error() {
+        assert_eq!(
+            pin_render_terminal_failure(&CaptureOutcome::Failed {
+                operation: ImageOperationKind::Pin,
+                message: "PNG encoder stopped".to_string(),
+            }),
+            "Region was not pinned: PNG encoder stopped"
+        );
+        assert_eq!(
+            pin_render_terminal_failure(&CaptureOutcome::Cancelled {
+                operation: ImageOperationKind::Pin,
+                reason: "shutdown".to_string(),
+            }),
+            "Region was not pinned because rendering was cancelled."
+        );
+    }
 
     fn record(
         owner: ScreenAcquisitionOwner,

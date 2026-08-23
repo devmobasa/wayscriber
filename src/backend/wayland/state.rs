@@ -114,6 +114,7 @@ mod ocr;
 mod onboarding;
 mod pdf_export;
 mod perf;
+mod pin_publish;
 mod region_capture;
 pub(in crate::backend::wayland) use region_capture::RegionCaptureIntent;
 #[cfg(test)]
@@ -281,6 +282,16 @@ pub(super) struct WaylandState {
             crate::capture::window_geometry::WindowGeometryError,
         >,
     >,
+    /// Capacity-one host publication. The capture manager renders the image
+    /// first; only this worker may perform pin-host startup and IPC.
+    pub(super) pin_publish: RuntimeOperationController<
+        pin_publish::PendingPinPublish,
+        Result<crate::pin::PinCreateAck, crate::pin::PinCreateError>,
+    >,
+    /// Side-effect-free startup snapshot; avoids filesystem checks in render/input paths.
+    pub(super) pin_runtime_available: bool,
+    /// Overlay-authored correlation IDs are monotonic and never reused.
+    pub(super) next_pin_request_id: Option<u64>,
     /// Text paste requests waiting behind an active read. Repeated requests in
     /// the current edit generation remain distinct; a new generation replaces
     /// stale queued requests from the old edit session.

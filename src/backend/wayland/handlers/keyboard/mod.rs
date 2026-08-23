@@ -216,6 +216,7 @@ impl KeyboardHandler for WaylandState {
                     key,
                     self.input_state.modifiers.ctrl,
                     self.input_state.modifiers.shift,
+                    self.region_pin_eligible(),
                 )
             {
                 match review_action {
@@ -603,7 +604,12 @@ enum RegionReviewKeyAction {
     Submit(crate::ui::RegionAction),
 }
 
-fn region_review_key_action(key: Key, ctrl: bool, shift: bool) -> Option<RegionReviewKeyAction> {
+fn region_review_key_action(
+    key: Key,
+    ctrl: bool,
+    shift: bool,
+    pin_available: bool,
+) -> Option<RegionReviewKeyAction> {
     let step = if shift { 10 } else { 1 };
     match key {
         Key::Left => Some(RegionReviewKeyAction::Nudge(-step, 0)),
@@ -620,6 +626,9 @@ fn region_review_key_action(key: Key, ctrl: bool, shift: bool) -> Option<RegionR
         Key::Char('b' | 'B') if !ctrl => Some(RegionReviewKeyAction::Submit(
             crate::ui::RegionAction::Board,
         )),
+        Key::Char('p' | 'P') if !ctrl && pin_available => {
+            Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Pin))
+        }
         Key::Char('d' | 'D') if !ctrl => Some(RegionReviewKeyAction::Submit(
             crate::ui::RegionAction::ToggleIncludeDrawings,
         )),
@@ -720,39 +729,54 @@ mod tests {
     #[test]
     fn review_keys_map_to_one_shot_pixel_edits_and_typed_destinations() {
         assert_eq!(
-            region_review_key_action(Key::Left, false, false),
+            region_review_key_action(Key::Left, false, false, false),
             Some(RegionReviewKeyAction::Nudge(-1, 0))
         );
         assert_eq!(
-            region_review_key_action(Key::Down, false, true),
+            region_review_key_action(Key::Down, false, true, false),
             Some(RegionReviewKeyAction::Nudge(0, 10))
         );
         assert_eq!(
-            region_review_key_action(Key::Char('c'), true, false),
+            region_review_key_action(Key::Char('c'), true, false, false),
             Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Copy))
         );
         assert_eq!(
-            region_review_key_action(Key::Char('s'), true, false),
+            region_review_key_action(Key::Char('s'), true, false, false),
             Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Save))
         );
         assert_eq!(
-            region_review_key_action(Key::Return, false, false),
+            region_review_key_action(Key::Return, false, false, false),
             Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Both))
         );
         assert_eq!(
-            region_review_key_action(Key::Char('b'), false, false),
+            region_review_key_action(Key::Char('b'), false, false, false),
             Some(RegionReviewKeyAction::Submit(
                 crate::ui::RegionAction::Board
             ))
         );
-        assert_eq!(region_review_key_action(Key::Char('b'), true, false), None);
         assert_eq!(
-            region_review_key_action(Key::Char('d'), false, false),
+            region_review_key_action(Key::Char('b'), true, false, false),
+            None
+        );
+        assert_eq!(
+            region_review_key_action(Key::Char('d'), false, false, false),
             Some(RegionReviewKeyAction::Submit(
                 crate::ui::RegionAction::ToggleIncludeDrawings
             ))
         );
-        assert_eq!(region_review_key_action(Key::Char('d'), true, false), None);
+        assert_eq!(
+            region_review_key_action(Key::Char('d'), true, false, false),
+            None
+        );
+        assert_eq!(
+            region_review_key_action(Key::Char('p'), false, false, true),
+            Some(RegionReviewKeyAction::Submit(crate::ui::RegionAction::Pin))
+        );
+        assert_eq!(
+            region_review_key_action(Key::Char('p'), false, false, false),
+            None,
+            "Pin is not a Review key when the host prerequisites are unavailable"
+        );
     }
 
     #[test]

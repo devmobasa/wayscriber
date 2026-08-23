@@ -2,12 +2,18 @@ use crate::input::state::RegionSelection;
 use crate::util::Rect;
 
 use super::primitives::{draw_rounded_rect, text_extents_for};
-use super::region_action_bar::{RegionAction, RegionActionBar, render_region_action_bar};
+use super::region_action_bar::{
+    RegionAction, RegionActionBar, RegionActionRect, render_region_action_bar,
+};
 
 const SCRIM: (f64, f64, f64, f64) = (0.02, 0.03, 0.05, 0.48);
 const PANEL_FILL: (f64, f64, f64, f64) = (12.0 / 255.0, 12.0 / 255.0, 15.0 / 255.0, 0.92);
 const PANEL_BORDER: (f64, f64, f64, f64) = (1.0, 1.0, 1.0, 0.16);
 const POINTER_GAP: f64 = 15.0;
+/// Gap between the reviewed selection and its size badge. The badge is parked
+/// on the selection during Review instead of trailing the pointer, so a
+/// finished rectangle stops behaving like one that is still being dragged.
+const SELECTION_BADGE_GAP: f64 = 6.0;
 const PANEL_MARGIN: f64 = 6.0;
 const PANEL_PADDING_X: f64 = 8.0;
 const PANEL_HEIGHT: f64 = 22.0;
@@ -68,6 +74,10 @@ pub(crate) struct RegionCapturePickerVisual<'a> {
     pub measurement: Option<&'a str>,
     pub show_scrim: bool,
     pub show_legend: bool,
+    /// The selection is committed and awaiting a destination choice. Review
+    /// drops the targeting chrome: no crosshair, and the size badge anchors to
+    /// the rectangle rather than following the pointer.
+    pub review: bool,
     pub loupe: Option<RegionCaptureLoupeVisual>,
     pub action_bar: Option<RegionActionBar>,
     pub hovered_action: Option<RegionAction>,
@@ -241,16 +251,21 @@ pub(crate) fn render_region_capture_picker(
         let (x, y, w, h) = normalized_rect(selection);
         draw_selection_frame(ctx, x, y, w, h);
     }
-    if !visual.window.active {
+    if !visual.window.active && !visual.review {
         draw_crosshair(ctx, visual.pointer, (width, height));
     }
 
     if let Some(measurement) = visual.measurement {
-        draw_pointer_panel(
+        let anchor = effective_selection
+            .filter(|_| visual.review)
+            .map(normalized_rect);
+        draw_readout_panel(
             ctx,
             measurement,
             READOUT_FONT_SIZE,
             visual.pointer,
+            anchor,
+            visual.action_bar.map(RegionActionBar::bounds),
             (screen_width, screen_height),
             cairo::FontWeight::Bold,
         );
@@ -366,11 +381,80 @@ fn pointer_panel_layout(
     }
 }
 
-fn draw_pointer_panel(
+/// Park the size badge on the selection's top-left corner. The action bar is
+/// painted after the badge, and it flips above the selection when it does not
+/// fit below, so each placement is checked against the bar and skipped rather
+/// than drawn under it. Candidates run outside-above, inside-top-left,
+/// inside-top-right; inside-top-left is the fallback when a clamped bar covers
+/// all three.
+fn selection_badge_layout(
+    rect: (f64, f64, f64, f64),
+    text_width: f64,
+    action_bar: Option<RegionActionRect>,
+    screen: (u32, u32),
+) -> PointerPanelLayout {
+    let screen_width = f64::from(screen.0);
+    let screen_height = f64::from(screen.1);
+    let width =
+        (text_width + PANEL_PADDING_X * 2.0).min((screen_width - PANEL_MARGIN * 2.0).max(0.0));
+    let height = PANEL_HEIGHT.min((screen_height - PANEL_MARGIN * 2.0).max(0.0));
+    let (rect_x, rect_y, rect_width, ..) = rect;
+    let clamp_x = |x: f64| {
+        x.clamp(
+            PANEL_MARGIN,
+            (screen_width - width - PANEL_MARGIN).max(PANEL_MARGIN),
+        )
+    };
+    let clamp_y = |y: f64| {
+        y.clamp(
+            PANEL_MARGIN,
+            (screen_height - height - PANEL_MARGIN).max(PANEL_MARGIN),
+        )
+    };
+    let left = clamp_x(rect_x);
+    let right = clamp_x(rect_x + rect_width - width);
+    let inside = clamp_y(rect_y + SELECTION_BADGE_GAP);
+    let above = rect_y - SELECTION_BADGE_GAP - height;
+    let fallback = (left, inside);
+    let (x, y) = [
+        (above >= PANEL_MARGIN).then(|| (left, clamp_y(above))),
+        Some(fallback),
+        Some((right, inside)),
+    ]
+    .into_iter()
+    .flatten()
+    .find(|&(x, y)| !covered_by_action_bar(x, y, width, height, action_bar))
+    .unwrap_or(fallback);
+    PointerPanelLayout {
+        x,
+        y,
+        width,
+        height,
+    }
+}
+
+fn covered_by_action_bar(
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    action_bar: Option<RegionActionRect>,
+) -> bool {
+    action_bar.is_some_and(|bar| {
+        x < bar.x + bar.width && bar.x < x + width && y < bar.y + bar.height && bar.y < y + height
+    })
+}
+
+/// The measurement chip. `selection`, when present, anchors it to that
+/// rectangle; otherwise it trails the pointer.
+#[allow(clippy::too_many_arguments)]
+fn draw_readout_panel(
     ctx: &cairo::Context,
     text: &str,
     font_size: f64,
     pointer: (f64, f64),
+    selection: Option<(f64, f64, f64, f64)>,
+    action_bar: Option<RegionActionRect>,
     screen: (u32, u32),
     weight: cairo::FontWeight,
 ) {
@@ -382,7 +466,10 @@ fn draw_pointer_panel(
         font_size,
         text,
     );
-    let layout = pointer_panel_layout(pointer, extents.width(), screen);
+    let layout = match selection {
+        Some(rect) => selection_badge_layout(rect, extents.width(), action_bar, screen),
+        None => pointer_panel_layout(pointer, extents.width(), screen),
+    };
     if layout.width <= 0.0 || layout.height <= 0.0 {
         return;
     }
@@ -548,6 +635,7 @@ mod tests {
                 pointer: (30.0, 30.0),
                 measurement: None,
                 show_scrim: true,
+                review: false,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
@@ -589,6 +677,7 @@ mod tests {
                 pointer: (28.0, 28.0),
                 measurement: None,
                 show_scrim: true,
+                review: false,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
@@ -626,6 +715,7 @@ mod tests {
                 pointer: (20.0, 20.0),
                 measurement: None,
                 show_scrim: false,
+                review: false,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
@@ -670,6 +760,7 @@ mod tests {
                 pointer: (20.0, 18.0),
                 measurement: None,
                 show_scrim: false,
+                review: false,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
@@ -713,6 +804,7 @@ mod tests {
                 pointer: (20.0, 20.0),
                 measurement: Some("20, 20"),
                 show_scrim: false,
+                review: false,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
@@ -777,6 +869,7 @@ mod tests {
                 pointer: (20.0, 20.0),
                 measurement: None,
                 show_scrim: true,
+                review: false,
                 show_legend: false,
                 loupe: None,
                 action_bar: None,
@@ -802,7 +895,7 @@ mod tests {
             start: (100.0, 100.0),
             end: (300.0, 200.0),
         };
-        let bar = crate::ui::RegionActionBar::place(selection, (800, 600));
+        let bar = crate::ui::RegionActionBar::place(selection, (800, 600), true);
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_capture_picker(
@@ -814,6 +907,7 @@ mod tests {
                 pointer: (200.0, 150.0),
                 measurement: Some("200 × 100"),
                 show_scrim: true,
+                review: true,
                 show_legend: false,
                 loupe: None,
                 action_bar: Some(bar),
@@ -827,10 +921,172 @@ mod tests {
         surface.flush();
         let stride = surface.stride() as usize;
         let data = surface.data().unwrap();
-        assert!(data[212 * stride + 54 * 4 + 3] > 0, "action bar surface");
+        assert!(data[250 * stride + 40 * 4 + 3] > 0, "action bar surface");
+        assert_eq!(
+            data[150 * stride + 200 * 4 + 3],
+            0,
+            "review drops the targeting crosshair; the selection stays clear"
+        );
         assert!(
-            data[150 * stride + 200 * 4 + 3] > 0,
-            "review keeps the pointer crosshair with its size readout"
+            data[80 * stride + 110 * 4 + 3] > 0,
+            "the size badge parks above the selection's top-left corner"
+        );
+    }
+
+    #[test]
+    fn the_review_size_badge_drops_inside_a_selection_flush_with_the_top_edge() {
+        let above = selection_badge_layout((40.0, 120.0, 200.0, 100.0), 60.0, None, (400, 300));
+        assert_eq!(
+            above,
+            PointerPanelLayout {
+                x: 40.0,
+                y: 92.0,
+                width: 76.0,
+                height: 22.0,
+            }
+        );
+
+        let flush = selection_badge_layout((40.0, 4.0, 200.0, 100.0), 60.0, None, (400, 300));
+        assert_eq!(
+            flush,
+            PointerPanelLayout {
+                x: 40.0,
+                y: 10.0,
+                width: 76.0,
+                height: 22.0,
+            },
+            "no room above: the badge drops just inside the rectangle"
+        );
+
+        let clamped = selection_badge_layout((380.0, 200.0, 20.0, 20.0), 60.0, None, (400, 300));
+        assert_eq!(clamped.x, 318.0, "the badge stays on screen");
+    }
+
+    #[test]
+    fn a_bar_that_flipped_above_the_selection_pushes_the_badge_inside_it() {
+        // A selection low on the screen leaves no room for the bar below it,
+        // so the bar takes the space the badge would otherwise use.
+        let selection = RegionSelection {
+            start: (730.0, 560.0),
+            end: (790.0, 590.0),
+        };
+        let bar = RegionActionBar::place(selection, (800, 600), false);
+        let bounds = bar.bounds();
+        assert!(
+            bounds.y + bounds.height < 560.0,
+            "precondition: the bar flipped above the selection"
+        );
+
+        let rect = normalized_rect(selection);
+        let badge = selection_badge_layout(rect, 60.0, Some(bounds), (800, 600));
+        assert!(
+            !covered_by_action_bar(badge.x, badge.y, badge.width, badge.height, Some(bounds)),
+            "the badge must not be painted under the bar"
+        );
+        assert!(
+            badge.y >= 560.0,
+            "it drops inside the rectangle instead of above it"
+        );
+
+        // Without the bar the same selection keeps the outside-above spot.
+        let unobstructed = selection_badge_layout(rect, 60.0, None, (800, 600));
+        assert!(unobstructed.y < 560.0);
+    }
+
+    /// The layout choice above only helps if the composed frame agrees: the
+    /// bar is painted after the badge, so a badge under it would simply
+    /// disappear.
+    #[test]
+    fn the_flipped_above_review_bar_never_paints_over_the_size_badge() {
+        let selection = RegionSelection {
+            start: (730.0, 560.0),
+            end: (790.0, 590.0),
+        };
+        let bar = RegionActionBar::place(selection, (800, 600), false);
+        let render = |measurement: Option<&str>| {
+            let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
+            let ctx = cairo::Context::new(&surface).unwrap();
+            render_region_capture_picker(
+                &ctx,
+                800,
+                600,
+                RegionCapturePickerVisual {
+                    selection: Some(selection),
+                    pointer: (760.0, 575.0),
+                    measurement,
+                    show_scrim: true,
+                    review: true,
+                    show_legend: false,
+                    loupe: None,
+                    action_bar: Some(bar),
+                    hovered_action: None,
+                    include_drawings: false,
+                    window: RegionCaptureWindowVisual::disabled(),
+                },
+                |_x, _y| None,
+            );
+            drop(ctx);
+            surface.flush();
+            let stride = surface.stride() as usize;
+            let data = surface.data().unwrap().to_vec();
+            (data, stride)
+        };
+
+        let (with_badge, stride) = render(Some("60 × 30"));
+        let (without_badge, _) = render(None);
+        let bounds = bar.bounds();
+        let mut visible_badge_pixels = 0usize;
+        for y in 0..600 {
+            for x in 0..800 {
+                let offset = y * stride + x * 4;
+                if with_badge[offset..offset + 4] == without_badge[offset..offset + 4] {
+                    continue;
+                }
+                let inside_bar = (bounds.x..bounds.x + bounds.width).contains(&(x as f64))
+                    && (bounds.y..bounds.y + bounds.height).contains(&(y as f64));
+                if !inside_bar {
+                    visible_badge_pixels += 1;
+                }
+            }
+        }
+        // The badge box is 76 x 22; essentially all of it must survive.
+        assert!(
+            visible_badge_pixels > 1_000,
+            "only {visible_badge_pixels} badge pixels escaped the action bar"
+        );
+    }
+
+    #[test]
+    fn a_badge_blocked_on_the_left_slides_to_the_selections_right_edge() {
+        // A bar clamped over the top-left of a large selection: above and
+        // inside-left are both covered, inside-right is clear.
+        let bar = RegionActionRect::new(0.0, 0.0, 300.0, 90.0);
+        let badge = selection_badge_layout((20.0, 40.0, 600.0, 400.0), 60.0, Some(bar), (800, 600));
+        assert!(!covered_by_action_bar(
+            badge.x,
+            badge.y,
+            badge.width,
+            badge.height,
+            Some(bar)
+        ));
+        assert_eq!(badge.x, 544.0, "right-aligned inside the selection");
+    }
+
+    #[test]
+    fn a_badge_with_no_clear_placement_falls_back_inside_the_selection() {
+        // A full-width bar over the whole rectangle leaves nothing clear; the
+        // badge still lands on the selection rather than somewhere arbitrary.
+        let bar = RegionActionRect::new(0.0, 0.0, 800.0, 600.0);
+        let rect = (20.0, 40.0, 600.0, 400.0);
+        assert_eq!(
+            selection_badge_layout(rect, 60.0, Some(bar), (800, 600)),
+            PointerPanelLayout {
+                x: 20.0,
+                y: 46.0,
+                width: 76.0,
+                height: 22.0,
+            },
+            "inside the rectangle's top-left corner is the fallback"
         );
     }
 

@@ -1469,13 +1469,33 @@ window mode describe the new workspace while the frozen image still shows the
 old one; returning to area mode remains safe.
 
 `capture_region_interactive` opens the same picker, then keeps the selection in
-a review step where you can copy it, save it, do both, or add it to the active
-board. It is available from the command palette and has no default shortcut;
+a review step where you can copy it, save it, do both, add it to the active
+board, or pin it on the desktop. It is available from the command palette and has no default shortcut;
 bind it in the configurator or under `[keybindings]`. The interactive action
 always uses the native picker even when `picker = "slurp"`; if native capture
 is unavailable it reports that limitation instead of silently skipping Review.
 The **Both** button (and `Enter`) always copies the PNG and saves it to a file,
-independently of `[capture].copy_to_clipboard`.
+independently of `[capture].copy_to_clipboard`; it is the accented default in
+the Review bar for that reason.
+
+Review drops the targeting chrome once the rectangle is committed. The
+crosshair disappears, the size badge parks on the selection's corner instead of
+trailing the pointer — moving inside the rectangle when the action bar or a
+screen edge needs that space — and the cursor stops being a crosshair: a hand
+over an action-bar button, a grab hand over the rectangle you can still drag,
+and an arrow everywhere else.
+
+Review shows **Pin** (shortcut `P`) only when the active output has a connector
+name, layer shell is available, and Wayscriber can resolve a secure XDG runtime
+directory. A pin is a flattened PNG owned by a separate, on-demand pin host, so
+it remains visible when the overlay is hidden or a daemon overlay child exits.
+Drag it with pointer, touch, or stylus, use the pointer wheel to resize it while
+preserving its aspect ratio, and hover for Copy and Close controls. Pins are
+ephemeral and are not restored after logout, compositor loss, host failure, or
+reboot. Phase 7 intentionally has no pin settings: count, image, surface, and
+memory limits are fixed safety bounds rather than `config.toml` options.
+Pins are ordinary compositor surfaces and may appear in later screenshots;
+Wayscriber does not hide them across the separate pin-host process.
 
 `[capture].include_drawings` defaults to `true`, so full-screen and region
 screenshots include the active board's committed shapes. Provisional strokes,
@@ -1490,7 +1510,7 @@ handles, tool previews, toolbars, and other transient UI remain hidden.
 
 The Review bar's **Include drawings in exports** toggle (or `D`) starts from
 that configured default and can override it for one interactive region capture.
-Copy, Save, and Both honour the current toggle. Board always inserts the
+Copy, Save, Both, and Pin honour the current toggle. Board always inserts the
 original crop because compositing the current board first would permanently
 duplicate its existing annotations inside the new image.
 
@@ -1506,7 +1526,8 @@ unbound by default.
   option for selecting a region on a monitor other than Wayscriber's active
   output.
 - `show_size_readout` shows pointer coordinates before the drag and the
-  selected width and height in exported image pixels during it.
+  selected width and height in exported image pixels during it. In Review the
+  same readout is anchored to the selection instead of the pointer.
 - `show_legend` shows the short hotkey guide until the first drag.
 - `show_loupe` shows a magnified pixel grid beside the pointer while dragging
   or reviewing a selection.

@@ -79,6 +79,21 @@ Daemon mode therefore provides a persistent background service that reacts to us
 
 `WaylandState` centralizes everything the handlers need: current buffers, Cairo context, mouse positions, capture state, and tokio handle for async work.
 
+Interactive Review can also publish a flattened crop to `src/pin/`. The
+overlay-side interface is deliberately narrow: it builds one correlated
+`PinCreateRequest`, then calls `create_pin` on a capacity-one runtime worker so
+socket, process startup, decoding, and Wayland configuration never block the
+overlay event loop. The dedicated on-demand pin-host process owns its own
+Wayland connection, layer surfaces, inputs, buffers, clipboard worker, and
+global pin limits. PNG bytes cross the authenticated runtime socket through a
+sealed descriptor; a create acknowledgement is terminal only after the pin's
+first configured frame is committed.
+
+Pins are not `WaylandState` surfaces, board objects, session fields, or daemon
+children. Hiding or terminating an overlay child therefore cannot collect an
+acknowledged pin. The host is ephemeral and exits after its final pin and active
+transactions finish, or on compositor loss.
+
 Freeze capture waits for the overlay-suppression frame, then selects `wlr-screencopy`, `ext-image-copy-capture`, or the screenshot portal in that order. The two direct protocols capture the active output into shared memory; the portal captures the desktop and the client crops the selected output when needed. Direct capture and portal crop both require compositor-reported output pixels; a missing current mode fails instead of guessing from the overlay buffer.
 
 ---

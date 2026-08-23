@@ -5,6 +5,9 @@ use crate::tray_action::TrayAction;
 
 #[derive(Debug, Default)]
 pub struct Cli {
+    /// Run the private persistent pin host protocol endpoint.
+    pub(crate) pin_host: bool,
+
     /// Run as daemon (background service; bind a toggle like Super+D)
     pub daemon: bool,
 
@@ -154,6 +157,7 @@ impl Cli {
                 crate::runtime_capabilities::RUNTIME_CAPABILITIES_FLAG => {
                     cli.runtime_capabilities = true;
                 }
+                "--pin-host" => cli.pin_host = true,
                 _ if arg.starts_with("--daemon-action=") => {
                     cli.daemon_action = Some(value_from_equals(arg, "--daemon-action")?);
                 }
@@ -257,6 +261,14 @@ impl Cli {
     }
 
     fn validate(&self) -> Result<(), String> {
+        if self.pin_host
+            && (self.selects_a_launch_command()
+                || self.about
+                || self.check_update
+                || self.runtime_capabilities)
+        {
+            return Err("--pin-host conflicts with all public commands and options".to_string());
+        }
         if self.runtime_capabilities
             && (self.selects_a_launch_command() || self.about || self.check_update)
         {

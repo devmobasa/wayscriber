@@ -364,7 +364,11 @@ impl WaylandState {
         let region_state = self.input_state.region_state();
         let action_bar = if region_state.is_review() {
             geometry.map(|geometry| {
-                crate::ui::RegionActionBar::place(geometry.display_selection(), (width, height))
+                crate::ui::RegionActionBar::place(
+                    geometry.display_selection(),
+                    (width, height),
+                    self.region_pin_eligible(),
+                )
             })
         } else {
             None
@@ -424,6 +428,7 @@ impl WaylandState {
                 pointer,
                 measurement: measurement.as_deref(),
                 show_scrim: !measure_mode,
+                review: region_state.is_review(),
                 show_legend: options.is_some_and(|options| options.show_legend())
                     && !self.region_picker_legend_dismissed(),
                 loupe,

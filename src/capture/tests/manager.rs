@@ -748,6 +748,35 @@ async fn request_render_image_returns_the_rendered_image_without_delivery() {
 }
 
 #[tokio::test]
+async fn pin_render_keeps_its_distinct_operation_identity() {
+    let mut manager = CaptureManager::new(&tokio::runtime::Handle::current());
+
+    let id = manager
+        .request_render_image(RenderImageRequest {
+            render: Box::new(|| Ok(rendered_png(vec![1, 2, 3]))),
+            operation: ImageOperationKind::Pin,
+        })
+        .unwrap();
+
+    loop {
+        match manager.poll() {
+            CapturePoll::Idle | CapturePoll::Pending { .. } => tokio::task::yield_now().await,
+            CapturePoll::Ready {
+                id: completed,
+                operation,
+                outcome: CaptureOutcome::RenderedImageReady(image),
+            } => {
+                assert_eq!(completed, id);
+                assert_eq!(operation, ImageOperationKind::Pin);
+                assert_eq!(image.bytes, vec![1, 2, 3]);
+                break;
+            }
+            other => panic!("Expected Pin rendered-image completion, got {other:?}"),
+        }
+    }
+}
+
+#[tokio::test]
 async fn request_render_image_reports_render_failure_and_keeps_the_manager_healthy() {
     let mut manager = CaptureManager::new(&tokio::runtime::Handle::current());
 

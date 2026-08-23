@@ -69,6 +69,13 @@ About clipboard integration, and named test fixtures. The same check audits the 
 stub: before `execve` it may reach only the fixed `fcntl`, `dup3`, `setpgid`, `close_range`,
 `execve`, and `exit_group` syscall set over prebuilt buffers.
 
+The on-demand pin host has separate runtime identity, lock, socket, and Wayland
+ownership. The broker starts it detached after exec, but the daemon never owns
+it as an overlay child and never targets it during hide, child collection,
+restart, or shutdown. An acknowledged pin consequently outlives overlay and
+daemon sessions; only the pin host's own last-pin or compositor-loss lifecycle
+ends it.
+
 ## Compatibility and rollback
 
 - A v2 client against a v1 daemon uses the strict legacy parser and v1 request path.

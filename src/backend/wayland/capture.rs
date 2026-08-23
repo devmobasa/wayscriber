@@ -10,6 +10,7 @@ use crate::{
     },
     config::Action,
     input::state::BoardPasteTarget,
+    pin::{PinOutputHint, PinPlacementHint, PinRequestId},
 };
 
 use super::state::RegionCaptureIntent;
@@ -67,6 +68,15 @@ pub(in crate::backend::wayland) struct PendingBoardPaste {
     pub target: BoardPasteTarget,
 }
 
+#[derive(Clone, Debug)]
+pub(in crate::backend::wayland) struct PendingPinRender {
+    pub accepted_id: CaptureRequestId,
+    pub pin_request_id: PinRequestId,
+    pub output: PinOutputHint,
+    pub placement: PinPlacementHint,
+    pub picker_generation: u64,
+}
+
 impl CaptureLayoutContext {
     pub(in crate::backend::wayland) fn new(target_output_id: u32, layout_generation: u64) -> Self {
         Self {
@@ -100,6 +110,7 @@ pub struct CaptureState {
     pending_pdf_export: Option<PendingPdfExport>,
     region: RegionCapturePhase,
     pending_board_paste: Option<PendingBoardPaste>,
+    pending_pin_render: Option<PendingPinRender>,
 }
 
 impl CaptureState {
@@ -115,6 +126,7 @@ impl CaptureState {
             pending_pdf_export: None,
             region: RegionCapturePhase::Idle,
             pending_board_paste: None,
+            pending_pin_render: None,
         }
     }
 
@@ -262,6 +274,7 @@ impl CaptureState {
         self.clear_preflight();
         self.region = RegionCapturePhase::Idle;
         self.pending_board_paste = None;
+        self.pending_pin_render = None;
     }
 
     /// Records the manager identity accepted for the current lifecycle.
@@ -307,6 +320,7 @@ impl CaptureState {
         if self.accepted_id != Some(accepted_id)
             || !matches!(self.region, RegionCapturePhase::Accepted)
             || self.pending_board_paste.is_some()
+            || self.pending_pin_render.is_some()
         {
             return false;
         }
@@ -315,6 +329,36 @@ impl CaptureState {
             target,
         });
         true
+    }
+
+    pub(in crate::backend::wayland) fn set_pending_pin_render(
+        &mut self,
+        pending: PendingPinRender,
+    ) -> bool {
+        if self.accepted_id != Some(pending.accepted_id)
+            || !matches!(self.region, RegionCapturePhase::Accepted)
+            || self.pending_board_paste.is_some()
+            || self.pending_pin_render.is_some()
+        {
+            return false;
+        }
+        self.pending_pin_render = Some(pending);
+        true
+    }
+
+    pub(in crate::backend::wayland) fn take_pending_pin_render_for(
+        &mut self,
+        accepted_id: CaptureRequestId,
+    ) -> Option<PendingPinRender> {
+        if self
+            .pending_pin_render
+            .as_ref()
+            .is_some_and(|pending| pending.accepted_id == accepted_id)
+        {
+            self.pending_pin_render.take()
+        } else {
+            None
+        }
     }
 
     pub(in crate::backend::wayland) fn take_pending_board_paste_for(
@@ -382,6 +426,23 @@ mod tests {
         }
     }
 
+    fn pending_pin(id: CaptureRequestId) -> PendingPinRender {
+        PendingPinRender {
+            accepted_id: id,
+            pin_request_id: crate::pin::PinRequestId::new(7).unwrap(),
+            output: crate::pin::PinOutputHint::new(
+                "DP-1".to_string(),
+                1920,
+                1080,
+                1,
+                crate::pin::PinOutputTransform::Normal,
+            )
+            .unwrap(),
+            placement: crate::pin::PinPlacementHint::new(10.0, 20.0, 300.0, 200.0).unwrap(),
+            picker_generation: 11,
+        }
+    }
+
     #[test]
     fn preflight_waits_for_render_before_request() {
         let manager = CaptureManager::with_closed_channel_for_test();
@@ -445,6 +506,80 @@ mod tests {
 
         assert!(state.take_pending_board_paste_for(id).is_none());
         assert!(!state.is_in_progress());
+    }
+
+    #[test]
+    fn pin_render_is_correlated_mutually_exclusive_and_cleared_once() {
+        let manager = CaptureManager::with_closed_channel_for_test();
+        let mut state = CaptureState::new(manager);
+        let id = CaptureRequestId::for_test(31);
+        assert!(state.reserve_region(region_intent(Action::CaptureRegionInteractive)));
+        assert!(state.begin_region_submission().is_some());
+        assert!(state.record_accepted(id));
+        assert!(state.set_pending_pin_render(pending_pin(id)));
+        assert!(!state.set_pending_board_paste(id, board_target()));
+        assert!(
+            state
+                .take_pending_pin_render_for(CaptureRequestId::for_test(32))
+                .is_none()
+        );
+
+        let pending = state
+            .take_pending_pin_render_for(id)
+            .expect("matching pin render");
+        assert_eq!(pending.pin_request_id.get(), 7);
+        assert!(state.take_pending_pin_render_for(id).is_none());
+
+        assert!(state.set_pending_board_paste(id, board_target()));
+        assert!(!state.set_pending_pin_render(pending_pin(id)));
+        state.finish_capture_lifecycle();
+        assert!(state.take_pending_board_paste_for(id).is_none());
+        assert!(state.take_pending_pin_render_for(id).is_none());
+    }
+
+    #[test]
+    fn stale_pin_completion_cleanup_is_idempotent() {
+        let manager = CaptureManager::with_closed_channel_for_test();
+        let mut state = CaptureState::new(manager);
+        let accepted = CaptureRequestId::for_test(41);
+        let stale = CaptureRequestId::for_test(42);
+        assert!(state.reserve_region(region_intent(Action::CaptureRegionInteractive)));
+        assert!(state.begin_region_submission().is_some());
+        assert!(state.record_accepted(accepted));
+        assert!(state.set_pending_pin_render(pending_pin(accepted)));
+
+        assert!(!state.consume_accepted(stale));
+        assert!(state.take_pending_pin_render_for(stale).is_none());
+        state.finish_capture_lifecycle();
+        state.finish_capture_lifecycle();
+
+        assert!(state.take_pending_pin_render_for(accepted).is_none());
+        assert!(!state.is_in_progress());
+        assert_eq!(state.accepted_id(), None);
+        assert!(matches!(state.region_phase(), RegionCapturePhase::Idle));
+    }
+
+    #[test]
+    fn worker_failure_consumes_the_matching_pin_owner_and_finishes_once() {
+        let manager = CaptureManager::with_closed_channel_for_test();
+        let mut state = CaptureState::new(manager);
+        let accepted = CaptureRequestId::for_test(51);
+        assert!(state.reserve_region(region_intent(Action::CaptureRegionInteractive)));
+        assert!(state.begin_region_submission().is_some());
+        assert!(state.record_accepted(accepted));
+        assert!(state.set_pending_pin_render(pending_pin(accepted)));
+
+        let failed = state
+            .take_pending_pin_render_for(accepted)
+            .expect("worker failure takes its exact pin owner");
+        assert_eq!(failed.accepted_id, accepted);
+        assert!(state.consume_accepted(accepted));
+        state.finish_capture_lifecycle();
+        state.finish_capture_lifecycle();
+
+        assert!(state.take_pending_pin_render_for(accepted).is_none());
+        assert!(!state.is_in_progress());
+        assert_eq!(state.accepted_id(), None);
     }
 
     #[test]

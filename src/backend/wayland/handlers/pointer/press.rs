@@ -418,6 +418,7 @@ mod tests {
             RegionAction::Save,
             RegionAction::Both,
             RegionAction::Board,
+            RegionAction::Pin,
         ] {
             assert!(review_action_suppresses_next_release(terminal));
         }

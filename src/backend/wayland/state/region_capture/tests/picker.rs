@@ -1,17 +1,22 @@
 use super::*;
 use crate::backend::ExitAfterCaptureMode;
 use crate::backend::wayland::state::region_capture::delivery::{
-    RegionSubmit, include_drawings_for_submit, region_delivery_request, review_delivery_destination,
+    RegionSubmit, exit_on_success_for_submit, include_drawings_for_submit, region_delivery_request,
+    region_export_render_job, review_delivery_destination, submit_mutates_board,
 };
 use crate::backend::wayland::state::region_capture::picker::{
     RegionPickerEntry, legacy_region_request, region_destination, region_picker_entry,
+};
+use crate::canvas_export::{
+    CanvasExportRect, CanvasRegionExportSnapshot, CanvasRegionSource, SpotlightPassSnapshot,
 };
 use crate::capture::{
     CaptureDestination, CaptureType, ImageFormatMetadata, ImageOperationKind, file::FileSaveConfig,
 };
 use crate::config::{Action, RegionPicker};
+use crate::draw::{Frame, RED, Shape};
 use crate::input::state::{BoardPasteTarget, RegionPurposeTag};
-use crate::screen_pixels::PackedArgb32;
+use crate::screen_pixels::{ImagePixelRect, PackedArgb32, ScreenImage};
 use crate::ui::RegionAction;
 
 #[test]
@@ -59,6 +64,7 @@ fn review_destination_labels_match_the_delivery_they_request() {
         "Both must always match its label"
     );
     assert_eq!(review_delivery_destination(RegionAction::Board), None);
+    assert_eq!(review_delivery_destination(RegionAction::Pin), None);
     assert_eq!(
         review_delivery_destination(RegionAction::ToggleIncludeDrawings),
         None
@@ -84,6 +90,75 @@ fn include_drawings_applies_to_exports_but_board_keeps_the_raw_crop() {
             world_bounds: crate::util::Rect::new(0, 0, 1, 1).unwrap(),
         })
     ));
+    assert!(include_drawings_for_submit(true, &RegionSubmit::Pin));
+    assert!(!include_drawings_for_submit(false, &RegionSubmit::Pin));
+}
+
+#[test]
+fn pin_and_delivery_share_raw_composed_render_policy_without_board_or_exit_side_effects() {
+    let intent = RegionCaptureIntent::new(
+        Action::CaptureRegionInteractive,
+        RegionPurposeTag::CaptureInteractive,
+        CaptureDestination::ClipboardOnly,
+        None,
+        ExitAfterCaptureMode::Always,
+        RegionPickerOptions::new(true, false, true),
+        true,
+    );
+    let delivery = RegionSubmit::Deliver(CaptureDestination::ClipboardOnly);
+    let pin = RegionSubmit::Pin;
+
+    assert!(include_drawings_for_submit(true, &delivery));
+    assert!(include_drawings_for_submit(true, &pin));
+    assert!(!submit_mutates_board(&pin));
+    assert!(!exit_on_success_for_submit(&intent, &pin));
+    assert!(exit_on_success_for_submit(&intent, &delivery));
+
+    let raw = || {
+        PackedArgb32::new(1, 1, 4, 0xff33_2211_u32.to_ne_bytes().to_vec())
+            .expect("one native ARGB32 pixel")
+    };
+    let delivered = region_export_render_job(None, Some(raw()))().unwrap();
+    let pinned = region_export_render_job(None, Some(raw()))().unwrap();
+    assert_eq!(pinned.bytes, delivered.bytes);
+    assert_eq!(pinned.format, delivered.format);
+    assert_eq!(
+        (pinned.width, pinned.height),
+        (delivered.width, delivered.height)
+    );
+
+    let mut frame = Frame::new();
+    frame.add_shape(Shape::Rect {
+        x: 0,
+        y: 0,
+        w: 1,
+        h: 1,
+        fill: true,
+        color: RED,
+        thick: 1.0,
+    });
+    let composed = CanvasRegionExportSnapshot {
+        source: CanvasRegionSource {
+            image: std::sync::Arc::new(ScreenImage {
+                data: (0..4).flat_map(|_| 0xff33_2211_u32.to_ne_bytes()).collect(),
+                width: 2,
+                height: 2,
+                stride: 8,
+            }),
+            logical_bounds: CanvasExportRect::new(0.0, 0.0, 2.0, 2.0).unwrap(),
+        },
+        selection: ImagePixelRect::new(0, 0, 2, 2, (2, 2)).unwrap(),
+        frame,
+        spotlight: SpotlightPassSnapshot::default(),
+    };
+    let delivered = region_export_render_job(Some(composed.clone()), None)().unwrap();
+    let pinned = region_export_render_job(Some(composed), None)().unwrap();
+    assert_eq!(pinned.bytes, delivered.bytes);
+    assert_eq!(pinned.format, delivered.format);
+    assert_eq!(
+        (pinned.width, pinned.height),
+        (delivered.width, delivered.height)
+    );
 }
 
 #[test]

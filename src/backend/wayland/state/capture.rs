@@ -436,11 +436,24 @@ impl WaylandState {
                 self.capture.clear_pending_pdf_export();
                 self.show_overlay();
                 self.capture.finish_capture_lifecycle();
-                self.input_state.push_toast(
-                    ToastPriority::Info,
-                    "capture",
-                    Toast::warning("Another capture operation is still in progress."),
-                );
+                let message = if operation == ImageOperationKind::Pin {
+                    "Region was not pinned because another capture operation is still in progress."
+                } else {
+                    "Another capture operation is still in progress."
+                };
+                if operation == ImageOperationKind::Pin {
+                    self.input_state.push_toast(
+                        ToastPriority::Critical,
+                        "capture.region.pin",
+                        Toast::error(message),
+                    );
+                } else {
+                    self.input_state.push_toast(
+                        ToastPriority::Info,
+                        "capture",
+                        Toast::warning(message),
+                    );
+                }
                 false
             }
             Err(error) => {
@@ -455,11 +468,18 @@ impl WaylandState {
         self.capture.clear_pending_pdf_export();
         self.show_overlay();
         self.capture.finish_capture_lifecycle();
-        self.input_state.push_toast(
-            ToastPriority::Critical,
-            "capture",
-            Toast::error(format!("{} failed: {error}", operation.saved_log_label())),
-        );
+        let message = if operation == ImageOperationKind::Pin {
+            format!("Region was not pinned: {error}")
+        } else {
+            format!("{} failed: {error}", operation.saved_log_label())
+        };
+        let source = if operation == ImageOperationKind::Pin {
+            "capture.region.pin"
+        } else {
+            "capture"
+        };
+        self.input_state
+            .push_toast(ToastPriority::Critical, source, Toast::error(message));
     }
 }
 

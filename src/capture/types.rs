@@ -7,6 +7,7 @@ use std::{fmt, sync::Arc};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageOperationKind {
     Screenshot,
+    Pin,
     CanvasExport,
     BoardPdfExport,
     AllBoardsPdfExport,
@@ -16,6 +17,7 @@ impl ImageOperationKind {
     pub fn success_title(self) -> &'static str {
         match self {
             Self::Screenshot => "Screenshot Captured",
+            Self::Pin => "Region pinned",
             Self::CanvasExport => "Canvas exported",
             Self::BoardPdfExport => "Board exported",
             Self::AllBoardsPdfExport => "Boards exported",
@@ -25,6 +27,7 @@ impl ImageOperationKind {
     pub fn failure_title(self) -> &'static str {
         match self {
             Self::Screenshot => "Screenshot Failed",
+            Self::Pin => "Region was not pinned",
             Self::CanvasExport => "Canvas export failed",
             Self::BoardPdfExport => "Board PDF export failed",
             Self::AllBoardsPdfExport => "All boards PDF export failed",
@@ -34,6 +37,7 @@ impl ImageOperationKind {
     pub fn save_failure_title(self) -> &'static str {
         match self {
             Self::Screenshot => "Screenshot File Not Saved",
+            Self::Pin => "Region pin was not saved",
             Self::CanvasExport => "Canvas file not saved",
             Self::BoardPdfExport => "Board PDF not saved",
             Self::AllBoardsPdfExport => "All boards PDF not saved",
@@ -43,6 +47,7 @@ impl ImageOperationKind {
     pub fn clipboard_failure_title(self) -> &'static str {
         match self {
             Self::Screenshot => "Screenshot Clipboard Failed",
+            Self::Pin => "Region pin clipboard failed",
             Self::CanvasExport => "Canvas clipboard failed",
             Self::BoardPdfExport => "Board PDF clipboard failed",
             Self::AllBoardsPdfExport => "All boards PDF clipboard failed",
@@ -52,6 +57,7 @@ impl ImageOperationKind {
     pub fn fallback_toast(self) -> &'static str {
         match self {
             Self::Screenshot => "Clipboard failed",
+            Self::Pin => "Region was not pinned",
             Self::CanvasExport => "Canvas clipboard failed",
             Self::BoardPdfExport => "Board PDF clipboard failed",
             Self::AllBoardsPdfExport => "All boards PDF clipboard failed",
@@ -61,6 +67,7 @@ impl ImageOperationKind {
     pub fn saved_log_label(self) -> &'static str {
         match self {
             Self::Screenshot => "Screenshot",
+            Self::Pin => "Region pin",
             Self::CanvasExport => "Canvas export",
             Self::BoardPdfExport => "Board PDF export",
             Self::AllBoardsPdfExport => "All boards PDF export",
@@ -70,6 +77,10 @@ impl ImageOperationKind {
     pub fn format_error(self, err: &CaptureError) -> String {
         match self {
             Self::Screenshot => err.to_string(),
+            Self::Pin => match err {
+                CaptureError::Cancelled(reason) => format!("Region pin cancelled: {reason}"),
+                other => other.to_string(),
+            },
             Self::CanvasExport => match err {
                 CaptureError::SaveError(err) => {
                     format!("Failed to save canvas export: {err}")

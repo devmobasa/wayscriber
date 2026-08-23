@@ -42,13 +42,45 @@ pub(super) fn region_delivery_request(
 pub(super) enum RegionSubmit {
     Deliver(CaptureDestination),
     Board(BoardPasteTarget),
+    Pin,
 }
 
 pub(super) const fn include_drawings_for_submit(
     include_drawings: bool,
     submit: &RegionSubmit,
 ) -> bool {
-    include_drawings && matches!(submit, RegionSubmit::Deliver(_))
+    include_drawings && matches!(submit, RegionSubmit::Deliver(_) | RegionSubmit::Pin)
+}
+
+pub(super) fn exit_on_success_for_submit(
+    intent: &RegionCaptureIntent,
+    submit: &RegionSubmit,
+) -> bool {
+    match submit {
+        RegionSubmit::Deliver(destination) => {
+            should_exit_after_capture(intent.exit_mode(), *destination)
+        }
+        RegionSubmit::Board(_) | RegionSubmit::Pin => false,
+    }
+}
+
+pub(super) const fn submit_mutates_board(submit: &RegionSubmit) -> bool {
+    matches!(submit, RegionSubmit::Board(_))
+}
+
+pub(super) fn region_export_render_job(
+    drawing_snapshot: Option<CanvasRegionExportSnapshot>,
+    pixels: Option<crate::screen_pixels::PackedArgb32>,
+) -> crate::capture::ImageRenderJob {
+    match drawing_snapshot {
+        Some(snapshot) => {
+            Box::new(move || crate::canvas_export::render_canvas_region_png(snapshot))
+        }
+        None => {
+            let pixels = pixels.expect("raw export prepared its checked crop");
+            Box::new(move || crate::capture::png::encode_packed_argb32_png(&pixels))
+        }
+    }
 }
 
 pub(super) const fn review_delivery_destination(
@@ -58,7 +90,7 @@ pub(super) const fn review_delivery_destination(
         RegionAction::Copy => Some(CaptureDestination::ClipboardOnly),
         RegionAction::Save => Some(CaptureDestination::FileOnly),
         RegionAction::Both => Some(CaptureDestination::ClipboardAndFile),
-        RegionAction::Board | RegionAction::ToggleIncludeDrawings => None,
+        RegionAction::Board | RegionAction::Pin | RegionAction::ToggleIncludeDrawings => None,
     }
 }
 
@@ -71,8 +103,32 @@ impl WaylandState {
             return None;
         }
         let selection = self.region_selection_geometry()?.display_selection();
-        crate::ui::RegionActionBar::place(selection, (self.surface.width(), self.surface.height()))
-            .hit(point)
+        crate::ui::RegionActionBar::place(
+            selection,
+            (self.surface.width(), self.surface.height()),
+            self.region_pin_eligible(),
+        )
+        .hit(point)
+    }
+
+    /// Whether the pointer sits over the reviewed rectangle — the area a press
+    /// would start moving. Cursor feedback only; `begin_review_move` remains
+    /// the authoritative test in image space.
+    pub(in crate::backend::wayland) fn region_review_selection_contains(
+        &self,
+        point: (f64, f64),
+    ) -> bool {
+        if !self.input_state.region_state().is_review() {
+            return false;
+        }
+        self.region_selection_geometry().is_some_and(|geometry| {
+            let selection = geometry.display_selection();
+            let left = selection.start.0.min(selection.end.0);
+            let right = selection.start.0.max(selection.end.0);
+            let top = selection.start.1.min(selection.end.1);
+            let bottom = selection.start.1.max(selection.end.1);
+            point.0 >= left && point.0 < right && point.1 >= top && point.1 < bottom
+        })
     }
 
     pub(in crate::backend::wayland) fn region_review_bar_contains(
@@ -86,6 +142,7 @@ impl WaylandState {
             crate::ui::RegionActionBar::place(
                 geometry.display_selection(),
                 (self.surface.width(), self.surface.height()),
+                self.region_pin_eligible(),
             )
             .contains(point)
         })
@@ -103,6 +160,17 @@ impl WaylandState {
         };
         let submit = match review_delivery_destination(action) {
             Some(destination) => RegionSubmit::Deliver(destination),
+            None if action == RegionAction::Pin => {
+                if !self.region_pin_eligible() {
+                    self.input_state.push_toast(
+                        ToastPriority::Critical,
+                        "capture.region.pin",
+                        Toast::error("Pin is unavailable for the active output."),
+                    );
+                    return true;
+                }
+                RegionSubmit::Pin
+            }
             None => {
                 debug_assert_eq!(action, RegionAction::Board);
                 let limits = EmbeddedImageLimits::default();
@@ -170,6 +238,7 @@ impl WaylandState {
             source: token,
             freeze_ownership,
             purpose,
+            generation,
             include_drawings,
             ..
         }) = self.data.active_screen_region
@@ -198,6 +267,41 @@ impl WaylandState {
             self.cancel_region_capture_for_source_change();
             return;
         }
+        let prepared_pin = if matches!(submit, RegionSubmit::Pin) {
+            match self.prepare_pin_render(token, rect, generation) {
+                Ok(prepared) => Some(prepared),
+                Err(message) => {
+                    // Pin prevalidation is part of the capture transaction,
+                    // not a recoverable Review-bar validation hint. Retire the
+                    // picker before reporting the one intended failure so an
+                    // auto-freeze and the shared capture reservation cannot be
+                    // left ownerless.
+                    let cancelled = self.cancel_region_capture();
+                    debug_assert!(
+                        cancelled,
+                        "pin preparation ran only after matching an active capture region"
+                    );
+                    self.input_state.push_toast(
+                        ToastPriority::Critical,
+                        "capture.region.pin",
+                        Toast::error(message),
+                    );
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+        // `prepare_pin_render` mutates only overlay correlation state. Reacquire
+        // the immutable source handle before preparing raw/composed render data.
+        let Some(source) = displayed_screen_image(
+            &self.zoom,
+            &self.frozen,
+            self.input_state.board_is_transparent(),
+        ) else {
+            self.cancel_region_capture_for_source_change();
+            return;
+        };
         let include_drawings = include_drawings_for_submit(include_drawings, &submit);
         // The composed path validates and crops on the capture worker. The raw
         // path retains the existing checked event-loop crop, but never pays
@@ -279,22 +383,20 @@ impl WaylandState {
         if let FreezeOwnership::PickerOwned { image_generation } = freeze_ownership {
             self.release_owned_frozen_generation(image_generation);
         }
+        self.capture
+            .set_exit_on_success(exit_on_success_for_submit(&intent, &submit));
+        let (export_render, board_pixels) = if submit_mutates_board(&submit) {
+            (None, pixels)
+        } else {
+            (
+                Some(region_export_render_job(drawing_snapshot, pixels)),
+                None,
+            )
+        };
 
         match submit {
             RegionSubmit::Deliver(destination) => {
-                self.capture.set_exit_on_success(should_exit_after_capture(
-                    intent.exit_mode(),
-                    destination,
-                ));
-                let render: crate::capture::ImageRenderJob = match drawing_snapshot {
-                    Some(snapshot) => {
-                        Box::new(move || crate::canvas_export::render_canvas_region_png(snapshot))
-                    }
-                    None => {
-                        let pixels = pixels.expect("raw delivery prepared its checked crop");
-                        Box::new(move || crate::capture::png::encode_packed_argb32_png(&pixels))
-                    }
-                };
+                let render = export_render.expect("delivery prepared one shared export render");
                 let request = region_delivery_request(render, &intent, destination);
                 let submission = self
                     .capture
@@ -303,8 +405,7 @@ impl WaylandState {
                 self.accept_capture_submission(submission, ImageOperationKind::Screenshot);
             }
             RegionSubmit::Board(target) => {
-                self.capture.set_exit_on_success(false);
-                let pixels = pixels.expect("board submission always uses the raw checked crop");
+                let pixels = board_pixels.expect("board submission always keeps its raw crop");
                 let render =
                     Box::new(move || crate::capture::png::encode_packed_argb32_png(&pixels));
                 let submission =
@@ -326,6 +427,40 @@ impl WaylandState {
                             ToastPriority::Critical,
                             TOAST_SOURCE,
                             Toast::error("Region was not added to the board."),
+                        );
+                    }
+                }
+            }
+            RegionSubmit::Pin => {
+                let prepared = prepared_pin.expect("pin submission prepared its correlation");
+                let render = export_render.expect("pin prepared one shared export render");
+                let submission =
+                    self.capture
+                        .manager_mut()
+                        .request_render_image(RenderImageRequest {
+                            render,
+                            operation: ImageOperationKind::Pin,
+                        });
+                let accepted_id = submission.as_ref().ok().copied();
+                if self.accept_capture_submission(submission, ImageOperationKind::Pin) {
+                    let Some(accepted_id) = accepted_id else {
+                        unreachable!("an accepted submission has an id")
+                    };
+                    if !self.capture.set_pending_pin_render(
+                        crate::backend::wayland::capture::PendingPinRender {
+                            accepted_id,
+                            pin_request_id: prepared.pin_request_id,
+                            output: prepared.output,
+                            placement: prepared.placement,
+                            picker_generation: prepared.picker_generation,
+                        },
+                    ) {
+                        self.capture.manager_mut().mark_unhealthy();
+                        self.capture.finish_capture_lifecycle();
+                        self.input_state.push_toast(
+                            ToastPriority::Critical,
+                            "capture.region.pin",
+                            Toast::error("Region was not pinned."),
                         );
                     }
                 }

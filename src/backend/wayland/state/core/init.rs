@@ -115,6 +115,8 @@ impl WaylandState {
         let clipboard_text_paste =
             RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
         let window_query =
+            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
+        let pin_publish =
             RuntimeOperationController::new(runtime_operation_ids, runtime_wake.clone());
         let ocr = crate::ocr::OcrController::new(runtime_wake.clone());
 
@@ -151,6 +153,9 @@ impl WaylandState {
             clipboard_text_paste,
             pending_text_paste: Default::default(),
             window_query,
+            pin_publish,
+            pin_runtime_available: crate::pin::pin_available(),
+            next_pin_request_id: Some(1),
             ocr,
             gtk_toolbar: None,
             onboarding,
