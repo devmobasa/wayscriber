@@ -10,9 +10,24 @@ const MAX_SPATIAL_CELLS_PER_SHAPE: usize = 4_096;
 // while placing a hard ceiling on duplicated `(shape, cell)` entries.
 const MAX_SPATIAL_GRID_MEMBERSHIPS: usize = 262_144;
 
-#[derive(Debug, PartialEq, Eq)]
-enum CellMembership {
-    Cells(Vec<(i32, i32)>),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CellRange {
+    min_x: i32,
+    max_x: i32,
+    min_y: i32,
+    max_y: i32,
+    count: usize,
+}
+
+impl CellRange {
+    fn keys(self) -> impl Iterator<Item = (i32, i32)> {
+        (self.min_x..=self.max_x).flat_map(move |x| (self.min_y..=self.max_y).map(move |y| (x, y)))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CellCoverage {
+    Bounded(CellRange),
     Global,
 }
 
@@ -27,7 +42,8 @@ pub(super) struct SpatialGrid {
     pub(super) cells: HashMap<(i32, i32), Vec<ShapeId>>,
     /// Reverse mapping from ShapeId to the cells it occupies for efficient removal.
     pub(super) shape_cells: HashMap<ShapeId, Vec<(i32, i32)>>,
-    /// Shapes spanning too many cells to index individually.
+    /// Shapes kept as global candidates because their coverage is unsafe or
+    /// oversized, or because the aggregate membership budget is exhausted.
     ///
     /// These remain candidates for every query, bounding per-shape index work
     /// and total grid memory without introducing hit-test false negatives.
@@ -333,10 +349,10 @@ impl SpatialGrid {
         Some(grid)
     }
 
-    /// Computes bounded cell membership for a bounding box.
-    fn compute_cell_membership(bounds: Rect, cell_size: i32) -> CellMembership {
+    /// Computes bounded cell coverage without materializing its keys.
+    fn compute_cell_coverage(bounds: Rect, cell_size: i32) -> CellCoverage {
         if !bounds.is_valid() {
-            return CellMembership::Global;
+            return CellCoverage::Global;
         }
 
         let cell_size = i64::from(cell_size.max(1));
@@ -348,10 +364,10 @@ impl SpatialGrid {
         let columns = (max_cell_x - min_cell_x + 1) as u64;
         let rows = (max_cell_y - min_cell_y + 1) as u64;
         let Some(cell_count) = columns.checked_mul(rows) else {
-            return CellMembership::Global;
+            return CellCoverage::Global;
         };
         if cell_count > MAX_SPATIAL_CELLS_PER_SHAPE as u64 {
-            return CellMembership::Global;
+            return CellCoverage::Global;
         }
 
         let (Ok(min_cell_x), Ok(max_cell_x), Ok(min_cell_y), Ok(max_cell_y)) = (
@@ -360,16 +376,16 @@ impl SpatialGrid {
             i32::try_from(min_cell_y),
             i32::try_from(max_cell_y),
         ) else {
-            return CellMembership::Global;
+            return CellCoverage::Global;
         };
 
-        let mut keys = Vec::with_capacity(cell_count as usize);
-        for cx in min_cell_x..=max_cell_x {
-            for cy in min_cell_y..=max_cell_y {
-                keys.push((cx, cy));
-            }
-        }
-        CellMembership::Cells(keys)
+        CellCoverage::Bounded(CellRange {
+            min_x: min_cell_x,
+            max_x: max_cell_x,
+            min_y: min_cell_y,
+            max_y: max_cell_y,
+            count: cell_count as usize,
+        })
     }
 
     /// Removes a shape from all cells it occupies.
@@ -394,20 +410,23 @@ impl SpatialGrid {
 
     /// Adds a shape with known bounds to the grid.
     fn add_shape_with_bounds(&mut self, id: ShapeId, bounds: Rect) {
-        match Self::compute_cell_membership(bounds, self.cell_size) {
-            CellMembership::Cells(cell_keys)
-                if cell_keys.len()
+        match Self::compute_cell_coverage(bounds, self.cell_size) {
+            CellCoverage::Bounded(cell_range)
+                if cell_range.count
                     <= self
                         .max_indexed_memberships
                         .saturating_sub(self.indexed_memberships) =>
             {
-                self.indexed_memberships += cell_keys.len();
-                for &key in &cell_keys {
+                self.indexed_memberships += cell_range.count;
+                let mut cell_keys = Vec::with_capacity(cell_range.count);
+                for key in cell_range.keys() {
                     self.cells.entry(key).or_default().push(id);
+                    cell_keys.push(key);
                 }
+                debug_assert_eq!(cell_keys.len(), cell_range.count);
                 self.shape_cells.insert(id, cell_keys);
             }
-            CellMembership::Cells(_) | CellMembership::Global => {
+            CellCoverage::Bounded(_) | CellCoverage::Global => {
                 self.global_shapes.insert(id);
             }
         }

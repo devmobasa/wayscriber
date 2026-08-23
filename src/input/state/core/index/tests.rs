@@ -47,12 +47,12 @@ fn oversized_shape_is_queried_without_per_cell_index_entries() {
 }
 
 #[test]
-fn cell_membership_uses_wide_arithmetic_near_coordinate_limits() {
+fn cell_coverage_uses_wide_arithmetic_near_coordinate_limits() {
     let bounds = Rect::new(i32::MAX - 31, i32::MAX - 31, 64, 64).expect("valid bounds");
 
     assert_eq!(
-        SpatialGrid::compute_cell_membership(bounds, 1),
-        CellMembership::Global
+        SpatialGrid::compute_cell_coverage(bounds, 1),
+        CellCoverage::Global
     );
 }
 
@@ -66,8 +66,56 @@ fn invalid_bounds_remain_conservative_global_candidates() {
     };
 
     assert_eq!(
-        SpatialGrid::compute_cell_membership(bounds, SPATIAL_GRID_CELL_SIZE),
-        CellMembership::Global
+        SpatialGrid::compute_cell_coverage(bounds, SPATIAL_GRID_CELL_SIZE),
+        CellCoverage::Global
+    );
+}
+
+#[test]
+fn bounded_coverage_reports_count_before_key_materialization() {
+    let bounds = Rect::new(0, 0, 128, 128).expect("valid bounds");
+    let CellCoverage::Bounded(cell_range) =
+        SpatialGrid::compute_cell_coverage(bounds, SPATIAL_GRID_CELL_SIZE)
+    else {
+        panic!("expected bounded cell coverage");
+    };
+
+    assert_eq!(cell_range.count, 4);
+    assert_eq!(
+        cell_range.keys().collect::<Vec<_>>(),
+        vec![(0, 0), (0, 1), (1, 0), (1, 1)]
+    );
+}
+
+#[test]
+fn bounded_coverage_handles_negative_exact_cell_edges() {
+    let bounds = Rect::new(-64, -64, 128, 64).expect("valid bounds");
+    let CellCoverage::Bounded(cell_range) =
+        SpatialGrid::compute_cell_coverage(bounds, SPATIAL_GRID_CELL_SIZE)
+    else {
+        panic!("expected bounded cell coverage");
+    };
+
+    assert_eq!(cell_range.count, 2);
+    assert_eq!(
+        cell_range.keys().collect::<Vec<_>>(),
+        vec![(-1, -1), (0, -1)]
+    );
+}
+
+#[test]
+fn cell_coverage_enforces_per_shape_limit_boundary() {
+    let at_limit = Rect::new(0, 0, MAX_SPATIAL_CELLS_PER_SHAPE as i32, 1).expect("valid bounds");
+    let over_limit =
+        Rect::new(0, 0, MAX_SPATIAL_CELLS_PER_SHAPE as i32 + 1, 1).expect("valid bounds");
+
+    let CellCoverage::Bounded(cell_range) = SpatialGrid::compute_cell_coverage(at_limit, 1) else {
+        panic!("coverage at the limit should remain bounded");
+    };
+    assert_eq!(cell_range.count, MAX_SPATIAL_CELLS_PER_SHAPE);
+    assert_eq!(
+        SpatialGrid::compute_cell_coverage(over_limit, 1),
+        CellCoverage::Global
     );
 }
 
@@ -108,6 +156,31 @@ fn aggregate_membership_budget_routes_excess_shapes_to_global_candidates() {
     let candidates = grid.query_with_tolerance((15, 15), 1.0);
     assert!(candidates.contains(&first));
     assert!(candidates.contains(&third));
+}
+
+#[test]
+fn aggregate_rejection_keeps_membership_storage_available_for_later_small_shape() {
+    let mut frame = Frame::new();
+    let first = frame.add_shape(filled_rect(10, 10, 10, 10));
+    let mut grid = SpatialGrid::build_with_membership_limit(&frame, SPATIAL_GRID_CELL_SIZE, 1)
+        .expect("spatial grid");
+    let rejected = u64::MAX;
+    let later_small = u64::MAX - 1;
+
+    grid.add_shape_with_bounds(
+        rejected,
+        Rect::new(0, 0, SPATIAL_GRID_CELL_SIZE * 4_096, 1).expect("valid bounds"),
+    );
+    assert_eq!(grid.indexed_memberships, 1);
+    assert!(!grid.shape_cells.contains_key(&rejected));
+    assert!(grid.global_shapes.contains(&rejected));
+
+    grid.remove_shape(first);
+    grid.add_shape_with_bounds(later_small, Rect::new(0, 0, 1, 1).expect("valid bounds"));
+
+    assert_eq!(grid.indexed_memberships, 1);
+    assert!(grid.shape_cells.contains_key(&later_small));
+    assert_membership_accounting(&grid);
 }
 
 #[test]
