@@ -1567,7 +1567,9 @@ does not change the active tool, the drawing history, or the board.
 - On a solid whiteboard or blackboard with no visible screen capture, OCR
   refuses rather than reading the board.
 - <kbd>Ctrl+A</kbd> reads the whole displayed image, so a full screen of text
-  does not need a drag across the whole output.
+  does not need a drag across the whole output. The selector says so along the
+  top until your first drag, the same hint strip the region picker uses and
+  under the same `[capture.region] show_legend` setting.
 - While recognition runs, a band sweeps the region being read. When it finishes,
   a short card beside the region says what happened — copied and how many
   characters, no text found, or that recognition failed — and fades after a few

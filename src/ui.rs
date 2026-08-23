@@ -54,8 +54,9 @@ pub use properties_panel::render_properties_panel;
 pub use radial_menu::render_radial_menu;
 pub(crate) use region_action_bar::{RegionAction, RegionActionBar};
 pub(crate) use region_capture_picker::{
-    RegionCaptureLoupeVisual, RegionCapturePickerVisual, RegionCaptureWindowVisual,
-    capture_size_text, measure_picker_damage, render_region_capture_picker,
+    OCR_LEGEND_TEXT, RegionCaptureLoupeVisual, RegionCapturePickerVisual,
+    RegionCaptureWindowVisual, capture_size_text, measure_picker_damage,
+    render_region_capture_picker, render_region_legend,
 };
 pub(crate) use region_resize_handles::RegionResizeHandles;
 pub use status::{

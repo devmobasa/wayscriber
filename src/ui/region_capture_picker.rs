@@ -25,6 +25,10 @@ const LEGEND_FONT_SIZE: f64 = 12.0;
 const AREA_LEGEND_TEXT: &str = "Drag to select   Shift: square   Ctrl+A: all   Esc: cancel";
 const AREA_WITH_WINDOWS_LEGEND_TEXT: &str =
     "Drag to select   Shift: square   Ctrl+A: all   Space: window   Esc: cancel";
+/// Recognition offers no square modifier, and `Ctrl+A` reads everything rather
+/// than selecting everything, so it says what it does rather than borrowing
+/// the capture picker's wording.
+pub(crate) const OCR_LEGEND_TEXT: &str = "Drag to read text   Ctrl+A: whole screen   Esc: cancel";
 const WINDOW_LEGEND_TEXT: &str =
     "Click: select   Super+Arrows: choose   Enter: select   Space: area   Esc: cancel";
 
@@ -526,6 +530,12 @@ fn draw_readout_panel(
     let _ = ctx.restore();
 }
 
+/// The hint strip along the top of a region selector. Shared so every selector
+/// teaches its keys the same way and in the same place.
+pub(crate) fn render_region_legend(ctx: &cairo::Context, screen: (u32, u32), text: &str) {
+    draw_legend(ctx, screen, text);
+}
+
 fn draw_legend(ctx: &cairo::Context, screen: (u32, u32), text: &str) {
     let extents = text_extents_for(
         ctx,
@@ -600,6 +610,39 @@ mod tests {
             }),
             "Click: select   Super+Arrows: choose   Enter: select   Space: area   Esc: cancel"
         );
+    }
+
+    #[test]
+    fn every_selector_legend_names_the_keys_that_selector_actually_has() {
+        // Recognition has no square modifier, and its select-all reads rather
+        // than selects, so it must not borrow the capture wording.
+        assert!(OCR_LEGEND_TEXT.contains("Ctrl+A"));
+        assert!(
+            !OCR_LEGEND_TEXT.contains("Shift"),
+            "recognition offers no square modifier: {OCR_LEGEND_TEXT}"
+        );
+        for legend in [
+            AREA_LEGEND_TEXT,
+            AREA_WITH_WINDOWS_LEGEND_TEXT,
+            OCR_LEGEND_TEXT,
+        ] {
+            assert!(legend.contains("Esc"), "every selector says how to leave");
+        }
+    }
+
+    #[test]
+    fn the_shared_legend_paints_across_the_top_of_any_selector() {
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 400).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        render_region_legend(&ctx, (800, 400), OCR_LEGEND_TEXT);
+        drop(ctx);
+        surface.flush();
+        let stride = surface.stride() as usize;
+        let data = surface.data().unwrap();
+        let alpha = |x: usize, y: usize| data[y * stride + x * 4 + 3];
+
+        assert!(alpha(400, 24) > 0, "the strip sits along the top edge");
+        assert_eq!(alpha(400, 300), 0, "and nowhere else");
     }
 
     #[test]

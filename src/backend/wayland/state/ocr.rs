@@ -576,6 +576,17 @@ impl WaylandState {
             let _ = ctx.stroke();
             draw_scan_corners(ctx, x, y, w, h);
         }
+        // Whole-image recognition is a keystroke with nothing on screen to
+        // suggest it. The capture picker teaches its keys here; recognition
+        // reuses the same strip, honours the same `show_legend` setting, and
+        // dismisses on the first drag through the shared selector state.
+        if self.config.capture.region.show_legend && !self.region_picker_legend_dismissed() {
+            crate::ui::render_region_legend(
+                ctx,
+                (screen_width, screen_height),
+                crate::ui::OCR_LEGEND_TEXT,
+            );
+        }
         let _ = ctx.restore();
     }
 }
