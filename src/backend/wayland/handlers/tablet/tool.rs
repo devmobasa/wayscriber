@@ -243,6 +243,10 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 if state.stylus_contact_retired {
                     return;
                 }
+                // Before any surface-specific routing: a press on the Review
+                // bar, a toolbar or an eyedropper never reaches the frame
+                // commit, and the card has to go for all of them.
+                state.input_state.dismiss_ocr_scan_result();
                 if state.input_state.region_is_active() {
                     if state.stylus_on_toolbar {
                         state.cancel_region_for_toolbar_interaction();

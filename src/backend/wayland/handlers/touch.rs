@@ -194,6 +194,9 @@ impl WaylandState {
         surface: &wl_surface::WlSurface,
         position: (f64, f64),
     ) -> TouchTarget {
+        // A finished scan card is transient chrome: the next interaction of any
+        // kind takes it away rather than making the user wait it out.
+        self.input_state.dismiss_ocr_scan_result();
         let target = self.classify_touch_surface(surface);
         let Some(screen_position) = self.touch_screen_position(surface, position, target) else {
             return TouchTarget::Other;

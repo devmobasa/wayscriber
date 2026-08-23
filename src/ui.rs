@@ -10,6 +10,7 @@ mod eyedropper_loupe;
 mod help_overlay;
 mod input_hud;
 mod measure_badge;
+mod ocr_scan;
 mod onboarding_card;
 mod precision_entry;
 mod primitives;
@@ -41,6 +42,9 @@ pub use input_hud::{input_hud_geometry, render_input_hud};
 pub(crate) use measure_badge::{
     ShapeMeasureBadge, measure_shape_badge, shape_measure_badge_text_style,
 };
+pub(crate) use ocr_scan::{
+    ocr_scan_geometry, render_ocr_scan_result, render_ocr_scan_still, render_ocr_scan_sweep,
+};
 pub use onboarding_card::{OnboardingCard, OnboardingChecklistItem, render_onboarding_card};
 pub use precision_entry::render_precision_entry_popup;
 /// Shared measured-text trimming, also used by the standalone about dialog.
@@ -50,8 +54,9 @@ pub use properties_panel::render_properties_panel;
 pub use radial_menu::render_radial_menu;
 pub(crate) use region_action_bar::{RegionAction, RegionActionBar};
 pub(crate) use region_capture_picker::{
-    RegionCaptureLoupeVisual, RegionCapturePickerVisual, RegionCaptureWindowVisual,
-    capture_size_text, measure_picker_damage, render_region_capture_picker,
+    OCR_LEGEND_TEXT, RegionCaptureLoupeVisual, RegionCapturePickerVisual,
+    RegionCaptureWindowVisual, capture_size_text, measure_picker_damage,
+    render_region_capture_picker, render_region_legend,
 };
 pub(crate) use region_resize_handles::RegionResizeHandles;
 pub use status::{

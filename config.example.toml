@@ -293,8 +293,8 @@ export_all_boards_pdf_file = []
 open_capture_folder = ["Ctrl+Alt+O"]
 
 # Select a screen region and copy the text recognized in it (needs Tesseract).
-# Unbound by default: "O" is already the orange quick color.
-copy_text_from_screen = []
+# Ctrl+A inside the selector reads the whole screen instead.
+copy_text_from_screen = ["Ctrl+Shift+X"]
 
 # Toggle frozen mode
 toggle_frozen_mode = ["Ctrl+Shift+F"]

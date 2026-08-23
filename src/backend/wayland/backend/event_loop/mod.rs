@@ -119,10 +119,15 @@ pub(super) fn run_event_loop(
         // settled fade contributes nothing.
         let animation_timeout = min_timeout(
             min_timeout(
-                state.ui_animation_timeout(now),
-                state.top_strip_fade_timeout(now),
+                min_timeout(
+                    state.ui_animation_timeout(now),
+                    state.top_strip_fade_timeout(now),
+                ),
+                state.inline_toolbar_tooltip_timeout(now),
             ),
-            state.inline_toolbar_tooltip_timeout(now),
+            // A still OCR card under reduced motion asks for no frames, so it
+            // needs one deadline to be taken away on.
+            state.input_state.ocr_scan_wake_after(now),
         );
         let toolbar_handoff_timeout = state.toolbar_drag_handoff_timeout(now);
         let autosave_timeout = session_save::autosave_timeout(state, now);
@@ -258,6 +263,9 @@ pub(super) fn run_event_loop(
         }
 
         if !capture_active && state.ui_animation_due(std::time::Instant::now()) {
+            state.input_state.needs_redraw = true;
+        }
+        if state.input_state.ocr_scan_due(std::time::Instant::now()) {
             state.input_state.needs_redraw = true;
         }
 

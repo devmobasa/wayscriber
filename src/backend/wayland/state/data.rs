@@ -238,6 +238,8 @@ pub struct StateData {
     pub(super) prev_color_picker_damage: Option<crate::util::Rect>,
     pub(super) prev_tool_preview_damage: Option<crate::util::Rect>,
     pub(super) prev_shape_measure_badge_damage: Option<crate::util::Rect>,
+    /// Union the OCR scan overlay covered last frame, so its sweep is cleared.
+    pub(super) prev_ocr_scan_damage: Option<crate::util::Rect>,
     /// Previous-frame strips for Measure Mode's crosshair, frame, and readout.
     pub(super) prev_measure_picker_damage: Vec<crate::util::Rect>,
     /// Idle-fade engine for the top-strip islands; its value is published
@@ -334,6 +336,7 @@ impl StateData {
             prev_color_picker_damage: None,
             prev_tool_preview_damage: None,
             prev_shape_measure_badge_damage: None,
+            prev_ocr_scan_damage: None,
             prev_measure_picker_damage: Vec::new(),
             top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade::new(),
             shortcut_coach: super::onboarding::ShortcutCoachSession::default(),

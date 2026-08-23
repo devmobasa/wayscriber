@@ -259,6 +259,7 @@ impl InputState {
             show_preset_toasts: true,
             idle_fade: true,
             show_tool_preview: false,
+            ocr_scan: None,
             ui_toast: None,
             toast_queue: super::super::toast_queue::ToastQueue::default(),
             ui_toast_bounds: None,

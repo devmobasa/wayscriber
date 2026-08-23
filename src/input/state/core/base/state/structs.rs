@@ -502,6 +502,9 @@ pub struct InputState {
     pub idle_fade: bool,
     /// Whether to show the cursor tool preview bubble
     pub show_tool_preview: bool,
+    /// The scan-band overlay shown while screen text recognition runs, and the
+    /// outcome card that follows it.
+    pub(crate) ocr_scan: Option<crate::input::state::core::utility::ocr_scan::OcrScan>,
     /// Active (visible) UI toast (errors/warnings/info)
     pub(crate) ui_toast: Option<UiToastState>,
     /// Pending toasts waiting behind the active one, plus rate-limit memory

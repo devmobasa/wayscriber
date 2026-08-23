@@ -140,7 +140,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 - Full-screen saves, active-window grabs, region capture
 - Copy to clipboard or save to file
 - Uses `grim`, `slurp`, `wl-clipboard` (installed automatically by deb/rpm/AUR packages; fallback: xdg-desktop-portal)
-- Copy text from screen (OCR): drag a region of the shown desktop and get its text on the clipboard (needs `tesseract`; no default shortcut)
+- Copy text from screen (OCR): <kbd>Ctrl+Shift+X</kbd>, then drag a region of the shown desktop — or <kbd>Ctrl+A</kbd> for all of it — and get its text on the clipboard (needs `tesseract`)
 
 ### Sessions and persistence
 - Session persistence is enabled by default for boards, undo/redo history, and tool state
@@ -552,10 +552,13 @@ sudo dnf install wl-clipboard grim slurp       # Fedora
 
 ### Copy text from screen (OCR)
 
-`Copy text from screen` recognizes the text in a dragged screen region and copies
-it to the clipboard. It is optional: the action has no default shortcut and its
-toolbar button is hidden until you turn it on. Install Tesseract and the language
-data you configure in `[capture].ocr_languages` (default `eng`):
+`Copy text from screen` (<kbd>Ctrl+Shift+X</kbd>) recognizes the text in a
+dragged screen region and copies it to the clipboard; <kbd>Ctrl+A</kbd> inside
+the selector reads the whole screen instead. A band sweeps the region while
+Tesseract runs, and a card reports the outcome — never the recognized text,
+which goes only to the clipboard. Its toolbar button is hidden until you turn it
+on. Install Tesseract and the language data you configure in
+`[capture].ocr_languages` (default `eng`):
 
 An active OCR selection cancels if the displayed screen image changes, so the
 selected coordinates can never be applied to replacement freeze or zoom pixels.

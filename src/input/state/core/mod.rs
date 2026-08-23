@@ -24,7 +24,7 @@ mod session_preflight_exact;
 mod status_hud;
 mod tool_controls;
 mod tour;
-mod utility;
+pub(crate) mod utility;
 mod zoom_chip;
 
 pub use base::{

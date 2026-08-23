@@ -271,6 +271,25 @@ impl WaylandState {
         );
         self.data.prev_shape_measure_badge_damage = measure_badge_rect;
 
+        // The scan overlay spans its region and, once settled, the outcome card
+        // beside it. Both move only when the phase changes, so the previous
+        // union is re-emitted to clear the sweep it leaves behind.
+        // Visibility, not animation: a static overlay under reduced motion
+        // still has to be damaged and cleared even though it asks for no
+        // frames of its own, so this keys off the overlay itself.
+        let ocr_scan_rect = self.input_state.ocr_scan().and_then(|scan| {
+            let outcome = scan
+                .result(std::time::Instant::now())
+                .map(|(outcome, _)| outcome);
+            effect_rect(
+                crate::ui::ocr_scan_geometry(scan.region(), outcome, (width, height)),
+                width,
+                height,
+            )
+        });
+        push_effect_damage(&mut regions, self.data.prev_ocr_scan_damage, ocr_scan_rect);
+        self.data.prev_ocr_scan_damage = ocr_scan_rect;
+
         let measure_picker_damage = if self.input_state.region_state().purpose()
             == Some(crate::input::state::RegionPurposeTag::Measure)
         {

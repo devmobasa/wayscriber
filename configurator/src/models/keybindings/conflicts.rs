@@ -389,11 +389,20 @@ mod tests {
 
     #[test]
     fn conflict_lookup_returns_all_claimants() {
+        // This and the other generic multi-claimant fixtures use a chord no
+        // shipped default claims. Asserted rather than assumed: a future default
+        // taking `Ctrl+Shift+Q` should fail here saying why, not as an off-by-one
+        // somewhere else.
+        let binding = Shortcut::parse("Ctrl+Shift+Q").expect("parses");
+        assert!(
+            claimants_for(&draft(), &binding).is_empty(),
+            "the fixture chord must stay unbound by default"
+        );
+
         let mut draft = draft();
-        draft.set(KeybindingField::ClearCanvas, "Ctrl+Shift+X".to_string());
-        draft.set(KeybindingField::ToggleToolbar, "Ctrl+Shift+X".to_string());
-        draft.set(KeybindingField::Undo, "ctrl+shift+x".to_string());
-        let binding = Shortcut::parse("Ctrl+Shift+X").expect("parses");
+        draft.set(KeybindingField::ClearCanvas, "Ctrl+Shift+Q".to_string());
+        draft.set(KeybindingField::ToggleToolbar, "Ctrl+Shift+Q".to_string());
+        draft.set(KeybindingField::Undo, "ctrl+shift+q".to_string());
         let claimants = claimants_for(&draft, &binding);
         let fields: Vec<_> = claimants.iter().map(|claim| claim.field).collect();
         assert!(fields.contains(&Some(KeybindingField::ClearCanvas)));
@@ -431,10 +440,10 @@ mod tests {
         let mut draft = draft();
         draft.set(
             KeybindingField::ToggleHelp,
-            "F10, F1, Ctrl+Shift+X".to_string(),
+            "F10, F1, Ctrl+Shift+Q".to_string(),
         );
-        draft.set(KeybindingField::Undo, "Ctrl+Z, Ctrl+Shift+X".to_string());
-        let binding = Shortcut::parse("Ctrl+Shift+X").expect("parses");
+        draft.set(KeybindingField::Undo, "Ctrl+Z, Ctrl+Shift+Q".to_string());
+        let binding = Shortcut::parse("Ctrl+Shift+Q").expect("parses");
         let claimants = other_claimants(&draft, KeybindingField::ClearCanvas, &binding);
         apply_recorded_replace(
             &mut draft,
@@ -450,7 +459,7 @@ mod tests {
         assert_eq!(draft.value_for(KeybindingField::Undo), Some("Ctrl+Z"));
         assert_eq!(
             draft.value_for(KeybindingField::ClearCanvas),
-            Some("E, Ctrl+Shift+X")
+            Some("E, Ctrl+Shift+Q")
         );
     }
 

@@ -105,11 +105,14 @@ pub(super) fn selection_geometry(
     })
 }
 
+/// The whole displayed image, for the purposes that can submit one. Measure
+/// has nothing to submit; capture and recognition both do, and reading a full
+/// screen of text should not require dragging across the whole output.
 pub(super) fn whole_image_rect(
     purpose: RegionPurposeTag,
     bounds: (u32, u32),
 ) -> Option<ImagePixelRect> {
-    if !purpose.is_capture() {
+    if purpose == RegionPurposeTag::Measure {
         return None;
     }
     ImagePixelRect::whole(bounds)

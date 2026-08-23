@@ -61,8 +61,9 @@ pub struct CaptureKeybindingsConfig {
     #[serde(default = "default_open_capture_folder")]
     pub open_capture_folder: Vec<String>,
 
-    /// Screen text recognition. Unbound by default: `O` already selects the
-    /// orange quick color, so a default here would silently repurpose it.
+    /// Screen text recognition, on `Ctrl+Shift+X` — extract text. `O` selects
+    /// the orange quick color and every other mnemonic is taken, so it sits
+    /// with the rest of the capture family on a letter nothing else wants.
     #[serde(default = "default_copy_text_from_screen")]
     pub copy_text_from_screen: Vec<String>,
 }

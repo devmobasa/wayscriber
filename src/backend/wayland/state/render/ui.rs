@@ -310,6 +310,10 @@ impl WaylandState {
                 self.render_capture_picker(ctx, width, height);
             }
 
+            // The OCR scan overlay sits over the live view, above the toolbars
+            // it reports on but below the modal surfaces below.
+            self.render_ocr_scan(ctx, width, height);
+
             // Modal overlays render last (on top of everything including toolbars)
             if !capture_picker {
                 if let Some(card) = self.first_run_onboarding_card() {
@@ -320,6 +324,25 @@ impl WaylandState {
             }
         } else {
             self.input_state.clear_context_menu_layout();
+        }
+    }
+
+    /// The scan band while recognition runs, then the outcome card. The card
+    /// reports what happened, never the recognized text: keeping screen
+    /// contents out of application state is an invariant of `src/ocr`.
+    fn render_ocr_scan(&self, ctx: &cairo::Context, width: u32, height: u32) {
+        let Some(scan) = self.input_state.ocr_scan() else {
+            return;
+        };
+        let now = std::time::Instant::now();
+        if let Some((outcome, shown)) = scan.result(now) {
+            crate::ui::render_ocr_scan_result(ctx, scan.region(), outcome, shown, (width, height));
+        } else if let Some(progress) = scan.sweep_progress(now) {
+            crate::ui::render_ocr_scan_sweep(ctx, scan.region(), progress);
+        } else if scan.is_scanning() {
+            // Reduced motion: the region is still marked as being read, just
+            // without a band travelling across it.
+            crate::ui::render_ocr_scan_still(ctx, scan.region());
         }
     }
 

@@ -204,10 +204,14 @@ impl WaylandState {
         };
         self.clear_region_window_snap();
         self.retire_region_selection_owner(self.input_state.region_state().selection_owner());
-        if purpose == RegionPurposeTag::CaptureInteractive {
-            self.enter_region_review(rect);
-        } else {
-            self.submit_region_capture(rect);
+        match purpose {
+            RegionPurposeTag::CaptureInteractive => {
+                self.enter_region_review(rect);
+            }
+            RegionPurposeTag::Ocr => self.submit_whole_image_ocr(rect),
+            RegionPurposeTag::CaptureDeliver | RegionPurposeTag::Measure => {
+                self.submit_region_capture(rect);
+            }
         }
     }
 

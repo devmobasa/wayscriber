@@ -1554,8 +1554,9 @@ the result to the clipboard. It reads the underlying screen capture only —
 never your annotations, the toolbars, or any other wayscriber chrome — and it
 does not change the active tool, the drawing history, or the board.
 
-- The action is `copy_text_from_screen`. It has **no default shortcut**, because
-  `O` is already the orange quick color; bind one in the configurator or in
+- The action is `copy_text_from_screen`, bound to <kbd>Ctrl+Shift+X</kbd>
+  ("extract text"). `O` belongs to the orange quick color, so it takes a letter
+  the rest of the capture family had left; rebind it in the configurator or in
   `[keybindings.capture]`.
 - It is also in the command palette (search for "OCR"), and as an optional top
   toolbar button (`top.utility.ocr`), hidden by default like Screenshot.
@@ -1566,6 +1567,20 @@ does not change the active tool, the drawing history, or the board.
   does nothing.
 - On a solid whiteboard or blackboard with no visible screen capture, OCR
   refuses rather than reading the board.
+- <kbd>Ctrl+A</kbd> reads the whole displayed image, so a full screen of text
+  does not need a drag across the whole output. The selector says so along the
+  top until your first drag, the same hint strip the region picker uses and
+  under the same `[capture.region] show_legend` setting.
+- While recognition runs, a band sweeps the region being read. When it finishes,
+  a short card beside the region says what happened — copied and how many
+  characters, no text found, or that recognition failed — and fades after a few
+  seconds. Any click, touch, stylus press or key dismisses the card early; a
+  sweep still waiting on the recognizer is left alone, so a stray keystroke
+  cannot discard a result that is about to arrive. The card never shows the
+  recognized text: Wayscriber keeps screen contents out of its own UI, and the
+  text goes only to the clipboard. With `[ui] reduced_motion` set, the region is
+  marked with a static tint instead of a moving band and the card appears as
+  soon as the result does.
 - An active OCR selection cancels if the displayed screen image changes, the
   zoom level or pan changes, or freeze, output, scale, or display layout state
   is replaced.
@@ -2067,8 +2082,8 @@ export_all_boards_pdf_file = []
 open_capture_folder = ["Ctrl+Alt+O"]
 
 # Select a screen region and copy the text recognized in it (needs Tesseract).
-# Unbound by default: "O" is already the orange quick color.
-copy_text_from_screen = []
+# Ctrl+A inside the selector reads the whole screen instead.
+copy_text_from_screen = ["Ctrl+Shift+X"]
 
 # Toggle frozen mode
 toggle_frozen_mode = ["Ctrl+Shift+F"]
