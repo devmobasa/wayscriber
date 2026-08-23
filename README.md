@@ -775,9 +775,10 @@ by default. Set `[capture].include_drawings = false` for raw desktop pixels.
 Provisional strokes, selection handles, previews, toolbars, and other
 Wayscriber UI are never included. In interactive Review, **Include drawings in
 exports** (or <kbd>D</kbd>) starts from the configured default and can override
-it for that one Copy, Save, or Both action. Board always inserts the original
-crop so existing annotations are not baked into a duplicate image on the same
-board.
+it for that one capture. Copy, Save, Both, and Board all honour it. Adding an
+annotated crop to the board it came from bakes a second, flattened copy of
+those annotations into the image, so turn the toggle off first when you want
+the raw crop on the board.
 The native region picker shows those committed drawings over its frozen desktop
 while you select, so the visible preview matches the annotated export; toggling
 drawings off in Review immediately returns the preview to raw desktop pixels.

@@ -21,7 +21,7 @@ mod window_snap;
 
 pub(super) use active_state::{ActiveScreenRegion, FreezeOwnership};
 pub(in crate::backend::wayland) use board::{
-    world_rect_for_image_rect_exact, world_rect_for_screen_rect,
+    board_bounds_for_world_rect, world_rect_for_image_rect_exact,
 };
 pub(super) use events::finalize_region_selection_event;
 use events::*;

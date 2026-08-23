@@ -1508,9 +1508,14 @@ handles, tool previews, toolbars, and other transient UI remain hidden.
 
 The Review bar's **Include drawings in exports** toggle (or `D`) starts from
 that configured default and can override it for one interactive region capture.
-Copy, Save, and Both honour the current toggle. Board always inserts the
-original crop because compositing the current board first would permanently
-duplicate its existing annotations inside the new image.
+Copy, Save, Both, and Board all honour the current toggle. Note that adding an
+annotated crop to the board it was composited from bakes a second, flattened
+copy of those annotations into the image, sitting over the live shapes until
+you move the pasted image. A pasted image occupies whole board pixels, so at a
+fractional output scale the baked copy normally sits within half a board pixel
+of the live shapes; a crop only one or two source pixels wide has to be widened
+to a whole board pixel, and can sit up to one pixel out. Turn the toggle off
+before pressing **Board** when you want the raw crop instead.
 
 `measure_mode` opens a capture-free screen ruler over the live Wayscriber
 view. Drag to measure a rectangle in logical screen pixels; the completed

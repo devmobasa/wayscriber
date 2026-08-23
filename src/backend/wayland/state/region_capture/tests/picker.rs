@@ -1,16 +1,19 @@
 use super::*;
 use crate::backend::ExitAfterCaptureMode;
 use crate::backend::wayland::state::region_capture::delivery::{
-    RegionSubmit, include_drawings_for_submit, region_delivery_request, review_delivery_destination,
+    RegionRenderSource, region_delivery_request, region_render_job, review_delivery_destination,
 };
 use crate::backend::wayland::state::region_capture::picker::{
     RegionPickerEntry, legacy_region_request, region_destination, region_picker_entry,
+};
+use crate::canvas_export::{
+    CanvasExportRect, CanvasRegionExportSnapshot, CanvasRegionSource, SpotlightPassSnapshot,
 };
 use crate::capture::{
     CaptureDestination, CaptureType, ImageFormatMetadata, ImageOperationKind, file::FileSaveConfig,
 };
 use crate::config::{Action, RegionPicker};
-use crate::input::state::{BoardPasteTarget, RegionPurposeTag};
+use crate::input::state::RegionPurposeTag;
 use crate::screen_pixels::PackedArgb32;
 use crate::ui::RegionAction;
 
@@ -66,24 +69,109 @@ fn review_destination_labels_match_the_delivery_they_request() {
 }
 
 #[test]
-fn include_drawings_applies_to_exports_but_board_keeps_the_raw_crop() {
-    assert!(include_drawings_for_submit(
-        true,
-        &RegionSubmit::Deliver(CaptureDestination::ClipboardAndFile)
-    ));
-    assert!(!include_drawings_for_submit(
-        false,
-        &RegionSubmit::Deliver(CaptureDestination::ClipboardAndFile)
-    ));
-    assert!(!include_drawings_for_submit(
-        true,
-        &RegionSubmit::Board(BoardPasteTarget {
-            board_id: "board".to_string(),
-            page_index: 0,
-            page_generation: 1,
-            world_bounds: crate::util::Rect::new(0, 0, 1, 1).unwrap(),
-        })
-    ));
+fn the_render_job_composes_drawings_when_asked_and_stays_raw_otherwise() {
+    // Every destination — Copy, Save, Both and Board alike — takes its PNG
+    // from this one job, so what the toggle produces cannot differ between
+    // them. Board therefore honours the toggle by construction.
+    //
+    // A deliberately non-uniform 3x2 crop: a first-pixel check would pass on a
+    // flat image even if the encoder transposed or truncated it.
+    let swatch: [u32; 6] = [
+        0xFF11_2233,
+        0xFF44_5566,
+        0xFF77_8899,
+        0xFFAA_BBCC,
+        0xFFDD_EEFF,
+        0xFF01_0203,
+    ];
+    let bytes: Vec<u8> = swatch
+        .iter()
+        .flat_map(|pixel| pixel.to_ne_bytes())
+        .collect();
+    let raw = PackedArgb32::new(3, 2, 12, bytes.clone()).expect("a 3x2 crop");
+
+    let rendered = region_render_job(RegionRenderSource::Raw(raw))().expect("raw render");
+    let direct = crate::capture::png::encode_packed_argb32_png(
+        &PackedArgb32::new(3, 2, 12, bytes).expect("a 3x2 crop"),
+    )
+    .expect("direct encode");
+    assert_eq!(
+        rendered.bytes, direct.bytes,
+        "the raw path must hand the crop to the encoder untouched"
+    );
+    assert_eq!(
+        (rendered.width, rendered.height),
+        (direct.width, direct.height)
+    );
+    assert_eq!(rendered.format, direct.format);
+
+    let decoded = decode_png_pixels(&rendered.bytes);
+    assert_eq!(decoded, swatch.to_vec(), "every pixel survives in order");
+
+    // The composed path renders the same selection with the board's committed
+    // shapes over it, so the crop's pixels are no longer what comes back.
+    let mut frame = crate::draw::Frame::new();
+    frame.add_shape(crate::draw::Shape::Rect {
+        x: 10,
+        y: 20,
+        w: 3,
+        h: 2,
+        fill: true,
+        color: crate::draw::RED,
+        thick: 1.0,
+    });
+    let snapshot = CanvasRegionExportSnapshot {
+        source: CanvasRegionSource {
+            image: std::sync::Arc::new(crate::screen_pixels::ScreenImage {
+                data: swatch
+                    .iter()
+                    .flat_map(|pixel| pixel.to_ne_bytes())
+                    .collect(),
+                width: 3,
+                height: 2,
+                stride: 12,
+            }),
+            logical_bounds: CanvasExportRect::new(10.0, 20.0, 3.0, 2.0).expect("bounds"),
+        },
+        selection: ImagePixelRect::new(0, 0, 3, 2, (3, 2)).expect("selection"),
+        frame,
+        spotlight: SpotlightPassSnapshot {
+            dim_opacity: 0.0,
+            feather: 0.0,
+        },
+    };
+    let composed =
+        region_render_job(RegionRenderSource::Annotated(Box::new(snapshot)))().expect("composed");
+    assert_eq!(
+        (composed.width, composed.height),
+        (3, 2),
+        "composition keeps the selection's pixel dimensions"
+    );
+    assert_ne!(
+        decode_png_pixels(&composed.bytes),
+        swatch.to_vec(),
+        "the board's committed shapes are composited in"
+    );
+}
+
+fn decode_png_pixels(bytes: &[u8]) -> Vec<u32> {
+    let mut surface =
+        cairo::ImageSurface::create_from_png(&mut { bytes }).expect("the job produced a PNG");
+    surface.flush();
+    let width = surface.width() as usize;
+    let height = surface.height() as usize;
+    let stride = surface.stride() as usize;
+    let data = surface.data().expect("decoded pixels");
+    let mut pixels = Vec::with_capacity(width * height);
+    for y in 0..height {
+        for x in 0..width {
+            let offset = y * stride + x * 4;
+            pixels.push(u32::from_ne_bytes(
+                data[offset..offset + 4].try_into().expect("pixel"),
+            ));
+        }
+    }
+    pixels
 }
 
 #[test]
