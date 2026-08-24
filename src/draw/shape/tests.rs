@@ -290,6 +290,53 @@ fn image_bounding_box_and_kind_name_use_display_bounds() {
 }
 
 #[test]
+fn pressure_and_image_bounds_handle_extreme_coordinates() {
+    let pressure = Shape::FreehandPressure {
+        points: vec![(i32::MAX, i32::MAX, 2.0)],
+        color: WHITE,
+    };
+    let pressure_bounds = pressure
+        .bounding_box()
+        .expect("edge pressure point should retain visible bounds");
+    assert!(pressure_bounds.contains(i32::MAX, i32::MAX));
+
+    let image = Shape::Image {
+        x: i32::MAX,
+        y: i32::MAX,
+        w: i32::MAX,
+        h: i32::MAX,
+        data: EmbeddedImage {
+            mime_type: "image/png".to_string(),
+            width: 1,
+            height: 1,
+            bytes: vec![1],
+        },
+    };
+    let image_bounds = image
+        .bounding_box()
+        .expect("edge image should retain visible bounds");
+    assert!(image_bounds.contains(i32::MAX, i32::MAX));
+}
+
+#[test]
+fn arrow_label_layout_handles_full_span_endpoints() {
+    let font = FontDescriptor::default();
+    let layout = super::arrow_label_layout(
+        i32::MAX,
+        i32::MAX,
+        i32::MIN,
+        i32::MIN,
+        2.0,
+        "1",
+        12.0,
+        &font,
+    )
+    .expect("extreme arrow endpoints should not overflow label geometry");
+
+    assert!(layout.bounds.is_valid());
+}
+
+#[test]
 fn image_serialization_uses_base64_bytes() {
     let shape = Shape::Image {
         x: 1,

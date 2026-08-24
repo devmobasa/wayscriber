@@ -1,6 +1,8 @@
 use crate::util::Rect;
 use serde::{Deserialize, Serialize};
 
+use super::bounds::bounding_box_for_points;
+
 pub const REGULAR_POLYGON_MIN_SIDES: u8 = 3;
 pub const REGULAR_POLYGON_MAX_SIDES: u8 = 12;
 pub const REGULAR_POLYGON_DEFAULT_SIDES: u8 = 5;
@@ -89,19 +91,7 @@ pub(crate) fn bounding_box_for_polygon(points: &[(i32, i32)], thick: f64) -> Opt
         return None;
     }
 
-    let mut min_x = points[0].0;
-    let mut min_y = points[0].1;
-    let mut max_x = points[0].0;
-    let mut max_y = points[0].1;
-    for &(x, y) in &points[1..] {
-        min_x = min_x.min(x);
-        min_y = min_y.min(y);
-        max_x = max_x.max(x);
-        max_y = max_y.max(y);
-    }
-
-    let pad = ((thick / 2.0).ceil() as i32).max(1);
-    Rect::from_min_max(min_x - pad, min_y - pad, max_x + pad, max_y + pad)
+    bounding_box_for_points(points, thick)
 }
 
 fn triangle_points(start: (i32, i32), end: (i32, i32)) -> Vec<(i32, i32)> {

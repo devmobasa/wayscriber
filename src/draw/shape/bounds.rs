@@ -3,6 +3,9 @@ use crate::util::{self, Rect};
 use super::arrow_label::arrow_label_layout;
 use super::types::ArrowLabel;
 
+const MIN_COORDINATE: i64 = i32::MIN as i64;
+const MAX_COORDINATE_EXCLUSIVE: i64 = i32::MAX as i64 + 1;
+
 pub(crate) fn bounding_box_for_points(points: &[(i32, i32)], thick: f64) -> Option<Rect> {
     if points.is_empty() {
         return None;
@@ -19,13 +22,27 @@ pub(crate) fn bounding_box_for_points(points: &[(i32, i32)], thick: f64) -> Opti
         max_y = max_y.max(y);
     }
 
-    let padding = stroke_padding(thick);
-    min_x -= padding;
-    max_x += padding;
-    min_y -= padding;
-    max_y += padding;
+    padded_extrema_rect(min_x, min_y, max_x, max_y, stroke_padding(thick))
+}
 
-    ensure_positive_rect(min_x, min_y, max_x, max_y)
+pub(super) fn bounding_box_for_pressure_points(points: &[(i32, i32, f32)]) -> Option<Rect> {
+    let &(first_x, first_y, _) = points.first()?;
+    let mut min_x = first_x;
+    let mut max_x = first_x;
+    let mut min_y = first_y;
+    let mut max_y = first_y;
+    let mut max_thick = 0.0f32;
+
+    for &(x, y, thickness) in points {
+        min_x = min_x.min(x);
+        max_x = max_x.max(x);
+        min_y = min_y.min(y);
+        max_y = max_y.max(y);
+        max_thick = max_thick.max(thickness);
+    }
+
+    let padding = i64::from((max_thick as i32 / 2).max(1));
+    padded_extrema_rect(min_x, min_y, max_x, max_y, padding)
 }
 
 pub(crate) fn bounding_box_for_line(
@@ -35,35 +52,37 @@ pub(crate) fn bounding_box_for_line(
     y2: i32,
     thick: f64,
 ) -> Option<Rect> {
-    let padding = stroke_padding(thick);
-
-    let min_x = x1.min(x2) - padding;
-    let max_x = x1.max(x2) + padding;
-    let min_y = y1.min(y2) - padding;
-    let max_y = y1.max(y2) + padding;
-
-    ensure_positive_rect(min_x, min_y, max_x, max_y)
+    padded_extrema_rect(
+        x1.min(x2),
+        y1.min(y2),
+        x1.max(x2),
+        y1.max(y2),
+        stroke_padding(thick),
+    )
 }
 
 pub(crate) fn bounding_box_for_rect(x: i32, y: i32, w: i32, h: i32, thick: f64) -> Option<Rect> {
     let padding = stroke_padding(thick);
+    let x = i64::from(x);
+    let y = i64::from(y);
+    let x2 = x + i64::from(w);
+    let y2 = y + i64::from(h);
 
-    let x2 = x + w;
-    let y2 = y + h;
-
-    let min_x = x.min(x2) - padding;
-    let max_x = x.max(x2) + padding;
-    let min_y = y.min(y2) - padding;
-    let max_y = y.max(y2) + padding;
-
-    ensure_positive_rect(min_x, min_y, max_x, max_y)
+    ensure_positive_rect_i64(
+        x.min(x2) - padding,
+        y.min(y2) - padding,
+        x.max(x2) + padding,
+        y.max(y2) + padding,
+    )
 }
 
 pub(crate) fn bounding_box_for_blur(x: i32, y: i32, w: i32, h: i32) -> Option<Rect> {
-    let x2 = x + w;
-    let y2 = y + h;
-    let padding = 1;
-    ensure_positive_rect(
+    let x = i64::from(x);
+    let y = i64::from(y);
+    let x2 = x + i64::from(w);
+    let y2 = y + i64::from(h);
+    let padding = 1_i64;
+    ensure_positive_rect_i64(
         x.min(x2) - padding,
         y.min(y2) - padding,
         x.max(x2) + padding,
@@ -78,13 +97,22 @@ pub(crate) fn bounding_box_for_ellipse(
     ry: i32,
     thick: f64,
 ) -> Option<Rect> {
-    let padding = stroke_padding(thick);
-    let min_x = (cx - rx) - padding;
-    let max_x = (cx + rx) + padding;
-    let min_y = (cy - ry) - padding;
-    let max_y = (cy + ry) + padding;
+    if rx < 0 || ry < 0 {
+        return None;
+    }
 
-    ensure_positive_rect(min_x, min_y, max_x, max_y)
+    let padding = stroke_padding(thick);
+    let cx = i64::from(cx);
+    let cy = i64::from(cy);
+    let rx = i64::from(rx);
+    let ry = i64::from(ry);
+
+    ensure_positive_rect_i64(
+        cx - rx - padding,
+        cy - ry - padding,
+        cx + rx + padding,
+        cy + ry + padding,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -141,8 +169,9 @@ pub(crate) fn bounding_box_for_arrow(
         ) {
             min_x = min_x.min(layout.bounds.x as f64);
             min_y = min_y.min(layout.bounds.y as f64);
-            max_x = max_x.max((layout.bounds.x + layout.bounds.width) as f64);
-            max_y = max_y.max((layout.bounds.y + layout.bounds.height) as f64);
+            max_x = max_x.max((i64::from(layout.bounds.x) + i64::from(layout.bounds.width)) as f64);
+            max_y =
+                max_y.max((i64::from(layout.bounds.y) + i64::from(layout.bounds.height)) as f64);
         }
     }
 
@@ -171,31 +200,73 @@ pub(crate) fn bounding_box_for_eraser(points: &[(i32, i32)], diameter: f64) -> O
         max_y = max_y.max(y);
     }
 
-    min_x -= padding;
-    max_x += padding;
-    min_y -= padding;
-    max_y += padding;
-
-    ensure_positive_rect(min_x, min_y, max_x, max_y)
+    padded_extrema_rect(min_x, min_y, max_x, max_y, padding)
 }
 
-fn stroke_padding(thick: f64) -> i32 {
-    let padding = (thick / 2.0).ceil() as i32;
-    padding.max(1)
+fn stroke_padding(thick: f64) -> i64 {
+    ((thick / 2.0).ceil() as i64).clamp(1, i64::from(i32::MAX))
 }
 
+#[cfg(test)]
 fn ensure_positive_rect(min_x: i32, min_y: i32, max_x: i32, max_y: i32) -> Option<Rect> {
-    let (min_x, max_x) = if min_x == max_x {
-        (min_x, max_x + 1)
+    ensure_positive_rect_i64(
+        i64::from(min_x),
+        i64::from(min_y),
+        i64::from(max_x),
+        i64::from(max_y),
+    )
+}
+
+fn padded_extrema_rect(
+    min_x: i32,
+    min_y: i32,
+    max_x: i32,
+    max_y: i32,
+    padding: i64,
+) -> Option<Rect> {
+    ensure_positive_rect_i64(
+        i64::from(min_x) - padding,
+        i64::from(min_y) - padding,
+        i64::from(max_x) + padding,
+        i64::from(max_y) + padding,
+    )
+}
+
+pub(super) fn ensure_positive_rect_i64(
+    min_x: i64,
+    min_y: i64,
+    max_x: i64,
+    max_y: i64,
+) -> Option<Rect> {
+    if min_x > max_x || min_y > max_y {
+        return None;
+    }
+
+    let max_x = if min_x == max_x {
+        max_x.checked_add(1)?
     } else {
-        (min_x, max_x)
+        max_x
     };
-    let (min_y, max_y) = if min_y == max_y {
-        (min_y, max_y + 1)
+    let max_y = if min_y == max_y {
+        max_y.checked_add(1)?
     } else {
-        (min_y, max_y)
+        max_y
     };
-    Rect::from_min_max(min_x, min_y, max_x, max_y)
+
+    let min_x = min_x.clamp(MIN_COORDINATE, MAX_COORDINATE_EXCLUSIVE);
+    let min_y = min_y.clamp(MIN_COORDINATE, MAX_COORDINATE_EXCLUSIVE);
+    let max_x = max_x.clamp(MIN_COORDINATE, MAX_COORDINATE_EXCLUSIVE);
+    let max_y = max_y.clamp(MIN_COORDINATE, MAX_COORDINATE_EXCLUSIVE);
+    if min_x >= max_x || min_y >= max_y {
+        return None;
+    }
+
+    Rect::new(
+        i32::try_from(min_x).ok()?,
+        i32::try_from(min_y).ok()?,
+        i32::try_from(max_x - min_x).ok()?,
+        i32::try_from(max_y - min_y).ok()?,
+    )
 }
 
 pub(crate) fn ensure_positive_rect_f64(
@@ -204,11 +275,16 @@ pub(crate) fn ensure_positive_rect_f64(
     max_x: f64,
     max_y: f64,
 ) -> Option<Rect> {
-    let min_x = min_x.floor() as i32;
-    let min_y = min_y.floor() as i32;
-    let max_x = max_x.ceil() as i32;
-    let max_y = max_y.ceil() as i32;
-    ensure_positive_rect(min_x, min_y, max_x, max_y)
+    if ![min_x, min_y, max_x, max_y].into_iter().all(f64::is_finite) {
+        return None;
+    }
+
+    ensure_positive_rect_i64(
+        min_x.floor() as i64,
+        min_y.floor() as i64,
+        max_x.ceil() as i64,
+        max_y.ceil() as i64,
+    )
 }
 
 #[cfg(test)]
@@ -257,6 +333,65 @@ mod tests {
         assert_eq!(
             bounding_box_for_blur(10, 20, -4, -6),
             Rect::new(5, 13, 6, 8)
+        );
+    }
+
+    #[test]
+    fn point_bounds_clip_padding_at_coordinate_edges() {
+        let at_min = bounding_box_for_points(&[(i32::MIN, i32::MIN)], 2.0)
+            .expect("minimum coordinate should retain in-domain bounds");
+        assert!(at_min.contains(i32::MIN, i32::MIN));
+
+        let at_max = bounding_box_for_points(&[(i32::MAX, i32::MAX)], 2.0)
+            .expect("maximum coordinate should retain in-domain bounds");
+        assert!(at_max.contains(i32::MAX, i32::MAX));
+    }
+
+    #[test]
+    fn unrepresentable_full_span_bounds_fail_closed() {
+        assert_eq!(bounding_box_for_line(i32::MIN, 0, i32::MAX, 0, 1.0), None);
+        assert_eq!(
+            bounding_box_for_points(&[(i32::MIN, 0), (i32::MAX, 0)], 1.0),
+            None
+        );
+    }
+
+    #[test]
+    fn rectangle_like_bounds_use_checked_endpoint_arithmetic() {
+        let rect = bounding_box_for_rect(i32::MAX, i32::MAX, i32::MAX, i32::MAX, 1.0)
+            .expect("the visible clipped edge should remain representable");
+        assert!(rect.contains(i32::MAX, i32::MAX));
+
+        let blur = bounding_box_for_blur(i32::MAX, i32::MAX, i32::MAX, i32::MAX)
+            .expect("the visible clipped blur edge should remain representable");
+        assert!(blur.contains(i32::MAX, i32::MAX));
+    }
+
+    #[test]
+    fn ellipse_bounds_validate_radii_and_clip_coordinate_edges() {
+        assert_eq!(bounding_box_for_ellipse(0, 0, -1, 1, 1.0), None);
+
+        let bounds = bounding_box_for_ellipse(i32::MAX, i32::MAX, 1, 1, 1.0)
+            .expect("the visible clipped ellipse edge should remain representable");
+        assert!(bounds.contains(i32::MAX, i32::MAX));
+    }
+
+    #[test]
+    fn floating_bounds_reject_non_finite_values() {
+        assert_eq!(ensure_positive_rect_f64(f64::NAN, 0.0, 1.0, 1.0), None);
+        assert_eq!(ensure_positive_rect_f64(0.0, 0.0, f64::INFINITY, 1.0), None);
+    }
+
+    #[test]
+    fn degenerate_bounds_at_maximum_coordinate_remain_visible() {
+        assert_eq!(
+            ensure_positive_rect_i64(
+                i64::from(i32::MAX),
+                i64::from(i32::MAX),
+                i64::from(i32::MAX),
+                i64::from(i32::MAX),
+            ),
+            Rect::new(i32::MAX, i32::MAX, 1, 1)
         );
     }
 }

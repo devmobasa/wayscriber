@@ -31,8 +31,8 @@ pub(crate) fn arrow_label_layout(
         return None;
     }
 
-    let dx = (tip_x - tail_x) as f64;
-    let dy = (tip_y - tail_y) as f64;
+    let dx = f64::from(tip_x) - f64::from(tail_x);
+    let dy = f64::from(tip_y) - f64::from(tail_y);
     let len = (dx * dx + dy * dy).sqrt();
     if len <= f64::EPSILON {
         return None;
