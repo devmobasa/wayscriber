@@ -94,11 +94,19 @@ impl Rect {
 /// - `rx` = horizontal radius (half width)
 /// - `ry` = vertical radius (half height)
 pub fn ellipse_bounds(x1: i32, y1: i32, x2: i32, y2: i32) -> (i32, i32, i32, i32) {
-    let cx = (x1 + x2) / 2;
-    let cy = (y1 + y2) / 2;
-    let rx = ((x2 - x1).abs()) / 2;
-    let ry = ((y2 - y1).abs()) / 2;
+    let (cx, rx) = ellipse_axis_bounds(x1, x2);
+    let (cy, ry) = ellipse_axis_bounds(y1, y2);
     (cx, cy, rx, ry)
+}
+
+fn ellipse_axis_bounds(first: i32, second: i32) -> (i32, i32) {
+    let first = i64::from(first);
+    let second = i64::from(second);
+    let center = (first + second) / 2;
+    let radius = (second - first).abs() / 2;
+
+    // An average of two i32 values and half their distance always fit in i32.
+    (center as i32, radius as i32)
 }
 
 #[cfg(test)]
@@ -182,5 +190,19 @@ mod tests {
     #[test]
     fn ellipse_bounds_compute_center_and_radii_from_drag_corners() {
         assert_eq!(ellipse_bounds(4, 6, 14, 18), (9, 12, 5, 6));
+    }
+
+    #[test]
+    fn ellipse_bounds_handle_the_full_coordinate_span() {
+        let expected = (0, 0, i32::MAX, i32::MAX);
+
+        assert_eq!(
+            ellipse_bounds(i32::MIN, i32::MIN, i32::MAX, i32::MAX),
+            expected
+        );
+        assert_eq!(
+            ellipse_bounds(i32::MAX, i32::MAX, i32::MIN, i32::MIN),
+            expected
+        );
     }
 }
