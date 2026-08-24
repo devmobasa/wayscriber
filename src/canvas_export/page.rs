@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use crate::capture::CaptureError;
 use crate::draw::{
-    BlurRectParams, Color, EraserReplayContext, Frame, Shape, SpotlightPass, render_blur_rect,
-    render_eraser_stroke, render_shape, render_spotlight_pass, spotlight_regions_for_frame,
+    BlurRectParams, Color, EraserReplayContext, Frame, Shape, SpotlightMagnifierOutcome,
+    SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass, render_blur_rect,
+    render_eraser_stroke, render_shape, render_spotlight_magnification_pass, render_spotlight_pass,
+    spotlight_regions_for_frame,
 };
 use crate::screen_pixels::ScreenImage;
 
@@ -101,9 +103,14 @@ pub fn draw_canvas_page(
     if (output_scale - 1.0).abs() > f64::EPSILON {
         ctx.scale(output_scale, output_scale);
     }
-    draw_canvas_page_region(ctx, page, &backdrop, source, destination, true);
+    let target_size = (
+        (f64::from(page.viewport_width) * output_scale).ceil() as u32,
+        (f64::from(page.viewport_height) * output_scale).ceil() as u32,
+    );
+    let rendered =
+        draw_canvas_page_region(ctx, page, &backdrop, source, destination, true, target_size);
     let _ = ctx.restore();
-    Ok(())
+    rendered
 }
 
 pub(crate) fn draw_canvas_page_region(
@@ -113,7 +120,8 @@ pub(crate) fn draw_canvas_page_region(
     source: CanvasExportRect,
     destination: CanvasExportRect,
     paint_backdrop: bool,
-) {
+    target_size: (u32, u32),
+) -> Result<(), CaptureError> {
     let _ = ctx.save();
     ctx.rectangle(
         destination.x,
@@ -128,8 +136,9 @@ pub(crate) fn draw_canvas_page_region(
         destination.height / source.height,
     );
     ctx.translate(-source.x, -source.y);
-    draw_canvas_page_contents(ctx, page, backdrop, paint_backdrop);
+    let rendered = draw_canvas_page_contents(ctx, page, backdrop, paint_backdrop, target_size);
     let _ = ctx.restore();
+    rendered
 }
 
 pub(crate) fn paint_pdf_page_background(
@@ -321,6 +330,13 @@ impl ExportBackdrop {
             logical_image_origin_y: self.logical_image_origin_y,
         }
     }
+
+    fn magnifier_source(&self) -> SpotlightMagnifierSource {
+        SpotlightMagnifierSource::from_backdrop_presence(
+            self.surface.is_some(),
+            self.bg_color.is_some(),
+        )
+    }
 }
 
 fn draw_canvas_page_contents(
@@ -328,7 +344,8 @@ fn draw_canvas_page_contents(
     page: &CanvasPageExportSnapshot,
     backdrop: &ExportBackdrop,
     paint_backdrop: bool,
-) {
+    target_size: (u32, u32),
+) -> Result<(), CaptureError> {
     if paint_backdrop {
         backdrop.paint(ctx);
     }
@@ -367,14 +384,44 @@ fn draw_canvas_page_contents(
     // and replay the backdrop, so a dim layer painted earlier would be punched
     // away. Runs regardless of `paint_backdrop` — a PDF page with a solid
     // backdrop is already filled page-wide but still needs dimming.
+    let regions = spotlight_regions_for_frame(&page.frame);
+    let source = backdrop.magnifier_source();
+    let mut scratch = SpotlightMagnifierScratch::default();
+    match render_spotlight_magnification_pass(
+        ctx,
+        &regions,
+        page.spotlight.feather,
+        source,
+        target_size,
+        &mut scratch,
+    )
+    .map_err(|err| {
+        CaptureError::ImageError(format!("Failed to render Spotlight magnification: {err}"))
+    })? {
+        SpotlightMagnifierOutcome::SourceUnavailable => {
+            return Err(CaptureError::ImageError(
+                "Spotlight magnification needs complete backdrop pixels; Freeze screen to magnify before exporting"
+                    .to_string(),
+            ));
+        }
+        SpotlightMagnifierOutcome::NotNeeded | SpotlightMagnifierOutcome::Rendered(_) => {}
+    }
+
     render_spotlight_pass(
         ctx,
-        &spotlight_regions_for_frame(&page.frame),
+        &regions,
         SpotlightPass {
             dim_opacity: page.spotlight.dim_opacity,
             feather: page.spotlight.feather,
         },
     );
+    Ok(())
+}
+
+pub(crate) fn frame_has_magnified_spotlight(frame: &Frame) -> bool {
+    spotlight_regions_for_frame(frame)
+        .iter()
+        .any(|region| crate::draw::spotlight_magnification_is_active(region.magnification))
 }
 
 fn validate_persisted_image_backdrop(

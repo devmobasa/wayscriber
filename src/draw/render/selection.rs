@@ -83,7 +83,7 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
         } => {
             render_ellipse(ctx, *cx, *cy, *rx, *ry, *fill, glow, thick + outline_width);
         }
-        Shape::Spotlight { cx, cy, rx, ry } => {
+        Shape::Spotlight { cx, cy, rx, ry, .. } => {
             // The spotlight itself paints nothing, so the halo is the only way to
             // see what is selected.
             render_spotlight_outline(
@@ -93,6 +93,7 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
                     cy: f64::from(*cy),
                     rx: f64::from(*rx),
                     ry: f64::from(*ry),
+                    magnification: crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
                 },
                 glow,
                 outline_width,

@@ -21,6 +21,10 @@ fn format_pt(value: f64) -> String {
     format!("{value:.0}pt")
 }
 
+fn format_factor(value: f64) -> String {
+    crate::draw::format_spotlight_magnification(value)
+}
+
 /// Pill button on the shared `sized_button` chassis: non-focusable and
 /// releasing window keyboard focus on click, like every other top-bar
 /// control. The GTK bars must never retain keyboard focus — the popups the
@@ -122,38 +126,38 @@ impl TopBar {
                 }
                 model::StylePillControl::ThicknessSlider
                 | model::StylePillControl::OpacitySlider
+                | model::StylePillControl::SpotlightMagnificationSlider
                 | model::StylePillControl::FontSizeSlider => {
                     let (slider_spec, value) = control.slider_value(snapshot);
                     let format = match control {
                         model::StylePillControl::ThicknessSlider => format_px as fn(f64) -> String,
                         model::StylePillControl::OpacitySlider => format_percent,
+                        model::StylePillControl::SpotlightMagnificationSlider => format_factor,
                         _ => format_pt,
                     };
                     let sender = self.feedback.clone();
-                    let slider = SliderRow::new(
-                        scale,
-                        (slider_spec.min, slider_spec.max),
-                        value,
-                        format,
-                        move |value| {
-                            let event = match control {
-                                model::StylePillControl::ThicknessSlider => {
-                                    ToolbarEvent::SetThickness(value)
-                                }
-                                model::StylePillControl::OpacitySlider => {
-                                    ToolbarEvent::SetMarkerOpacity(value)
-                                }
-                                _ => ToolbarEvent::SetFontSize(value),
-                            };
-                            send_event(&sender, event);
-                        },
-                    );
+                    let slider = SliderRow::new(scale, slider_spec, value, format, move |value| {
+                        let event = match control {
+                            model::StylePillControl::ThicknessSlider => {
+                                ToolbarEvent::SetThickness(value)
+                            }
+                            model::StylePillControl::OpacitySlider => {
+                                ToolbarEvent::SetMarkerOpacity(value)
+                            }
+                            model::StylePillControl::SpotlightMagnificationSlider => {
+                                ToolbarEvent::SetSpotlightMagnification(value)
+                            }
+                            _ => ToolbarEvent::SetFontSize(value),
+                        };
+                        send_event(&sender, event);
+                    });
                     // The thickness/text-size readouts are distinct numeral
                     // controls; only the opacity slider keeps its built-in
                     // readout.
                     slider.set_value_label_visible(matches!(
                         control,
                         model::StylePillControl::OpacitySlider
+                            | model::StylePillControl::SpotlightMagnificationSlider
                     ));
                     set_semantic_widget_id(&slider.root, control.id().as_ref());
                     slider.root.set_size_request(px(STYLE_SLIDER_W), -1);
@@ -163,6 +167,9 @@ impl TopBar {
                         let value = match control {
                             model::StylePillControl::ThicknessSlider => snapshot.thickness,
                             model::StylePillControl::OpacitySlider => snapshot.marker_opacity,
+                            model::StylePillControl::SpotlightMagnificationSlider => {
+                                snapshot.spotlight_magnification
+                            }
                             _ => snapshot.font_size,
                         };
                         slider.set_value(value);

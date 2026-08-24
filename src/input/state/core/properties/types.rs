@@ -10,6 +10,7 @@ pub enum SelectionPropertyKind {
     ArrowLength,
     ArrowAngle,
     TextBackground,
+    SpotlightMagnification,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1298,6 +1298,10 @@ head_at_end = true
 # attention lands where you point. Select the tool from the toolbar or bind
 # `select_spotlight_tool`.
 [spotlight]
+# Starting magnification for newly drawn spotlights (1.0 - 4.0). Existing
+# spotlights keep their own saved value. The toolbar changes this in 0.25 steps.
+magnification = 1.0
+
 # How strongly the area outside every spotlight is dimmed (0.1 - 0.95)
 dim_opacity = 0.6
 

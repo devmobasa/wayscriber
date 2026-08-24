@@ -9,19 +9,36 @@ fn only_shape(state: &InputState) -> &Shape {
 #[test]
 fn dragging_the_spotlight_tool_commits_an_elliptical_region() {
     let mut state = create_test_input_state();
+    state.spotlight_magnification = 2.25;
     state.set_tool_override(Some(Tool::Spotlight));
+    assert!(
+        !state.take_pending_frozen_toggle(),
+        "selecting Spotlight must not capture the screen automatically"
+    );
 
     state.on_mouse_press(MouseButton::Left, 100, 100);
     state.on_mouse_motion(200, 160);
     state.on_mouse_release(MouseButton::Left, 200, 160);
+    assert!(
+        !state.take_pending_frozen_toggle(),
+        "committing a magnified Spotlight must not capture automatically"
+    );
 
     match only_shape(&state) {
-        Shape::Spotlight { cx, cy, rx, ry } => {
+        Shape::Spotlight {
+            cx,
+            cy,
+            rx,
+            ry,
+            magnification,
+        } => {
             assert_eq!((*cx, *cy), (150, 130), "centre is the drag box centre");
             assert_eq!((*rx, *ry), (50, 30));
+            assert_eq!(*magnification, 2.25);
         }
         other => panic!("expected a spotlight, got {other:?}"),
     }
+    assert_eq!(state.spotlight_regions((0, 0))[0].magnification, 2.25);
 }
 
 #[test]
@@ -128,6 +145,7 @@ fn spotlight_exposes_a_readable_kind_name() {
         cy: 0,
         rx: 10,
         ry: 10,
+        magnification: crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
     };
     assert_eq!(shape.kind_name(), "Spotlight");
 }
@@ -139,6 +157,7 @@ fn spotlight_bounds_cover_its_opening() {
         cy: 100,
         rx: 40,
         ry: 20,
+        magnification: crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
     };
     let bounds = shape.bounding_box().expect("spotlight has area");
     assert!(bounds.x <= 60 && bounds.y <= 80);

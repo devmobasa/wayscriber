@@ -97,7 +97,7 @@ pub(crate) fn hit_test_with_tolerance(
             thick,
             ..
         } => shapes::ellipse_outline_hit(*cx, *cy, *rx, *ry, *thick, point, tolerance),
-        Shape::Spotlight { cx, cy, rx, ry } => {
+        Shape::Spotlight { cx, cy, rx, ry, .. } => {
             // No stroke to aim at, so the whole opening is the target.
             shapes::ellipse_fill_hit(*cx, *cy, *rx, *ry, point)
         }

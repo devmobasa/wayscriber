@@ -250,6 +250,9 @@ pub enum Shape {
         rx: i32,
         /// Vertical radius in pixels
         ry: i32,
+        /// Per-shape loupe factor. 1.0 preserves the historical bright opening.
+        #[serde(default = "crate::draw::default_spotlight_magnification")]
+        magnification: f64,
     },
     /// Numbered step marker bubble.
     StepMarker {
@@ -360,7 +363,7 @@ impl Shape {
                 thick,
                 ..
             } => bounding_box_for_ellipse(*cx, *cy, *rx, *ry, *thick),
-            Shape::Spotlight { cx, cy, rx, ry } => {
+            Shape::Spotlight { cx, cy, rx, ry, .. } => {
                 bounding_box_for_ellipse(*cx, *cy, *rx, *ry, 0.0)
             }
             Shape::Polygon { points, thick, .. } => bounding_box_for_polygon(points, *thick),

@@ -147,6 +147,12 @@ fn event_for_hit(hit: &HitRegion, x: f64, y: f64, phase: HitPhase) -> Option<Too
             hit,
             x,
         ),
+        DragSetSpotlightMagnification => slider_event_for_hit(
+            ToolbarSliderTarget::SpotlightMagnification,
+            ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION,
+            hit,
+            x,
+        ),
         DragSetFontSize => slider_event_for_hit(
             ToolbarSliderTarget::FontSize,
             ToolbarSliderSpec::FONT_SIZE,

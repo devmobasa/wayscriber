@@ -4,6 +4,8 @@ mod text;
 
 use super::super::*;
 
+const SPOTLIGHT_MAGNIFIER_TOAST_SOURCE: &str = "spotlight-magnifier";
+
 impl WaylandState {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn render_canvas_layer(
@@ -232,6 +234,60 @@ impl WaylandState {
         } else {
             crate::draw::spotlight_regions_for_frame(self.input_state.boards.active_frame())
         };
+        let magnifier_source = eraser_ctx.magnifier_source();
+        match crate::draw::render_spotlight_magnification_pass(
+            ctx,
+            &spotlight_regions,
+            self.input_state.spotlight_feather,
+            magnifier_source,
+            (phys_width, phys_height),
+            &mut self.spotlight_magnifier_scratch,
+        ) {
+            Ok(crate::draw::SpotlightMagnifierOutcome::SourceUnavailable) => {
+                if !self.spotlight_magnifier_warning_active && render_transients {
+                    self.input_state.push_toast(
+                        crate::input::state::ToastPriority::Critical,
+                        SPOTLIGHT_MAGNIFIER_TOAST_SOURCE,
+                        crate::input::state::Toast::warning(
+                            "Freeze the screen to preview Spotlight magnification.",
+                        ),
+                    );
+                }
+                self.spotlight_magnifier_warning_active = true;
+            }
+            Err(error) => {
+                log::warn!("Spotlight magnifier render failed: {error}");
+                if !self.spotlight_magnifier_warning_active && render_transients {
+                    self.input_state.push_toast(
+                        crate::input::state::ToastPriority::Critical,
+                        SPOTLIGHT_MAGNIFIER_TOAST_SOURCE,
+                        crate::input::state::Toast::warning(
+                            "Spotlight magnification could not allocate its render buffer.",
+                        ),
+                    );
+                }
+                self.spotlight_magnifier_warning_active = true;
+            }
+            Ok(crate::draw::SpotlightMagnifierOutcome::Rendered(metrics)) => {
+                if let Some(perf) = perf.as_mut() {
+                    perf.stages.spotlight_snapshot = perf
+                        .stages
+                        .spotlight_snapshot
+                        .saturating_add(metrics.snapshot_time);
+                    perf.stages.spotlight_paint = perf
+                        .stages
+                        .spotlight_paint
+                        .saturating_add(metrics.paint_time);
+                    perf.spotlight_regions = metrics.regions;
+                    perf.spotlight_copied_pixels = metrics.copied_pixels;
+                    perf.spotlight_strategy = Some(metrics.strategy);
+                }
+                self.spotlight_magnifier_warning_active = false;
+            }
+            Ok(crate::draw::SpotlightMagnifierOutcome::NotNeeded) => {
+                self.spotlight_magnifier_warning_active = false;
+            }
+        }
         // Remember for the next frame's damage decision: once the last spotlight
         // is gone this buffer still carries its dim until a full repaint.
         self.spotlight_dimmed_last_frame = !spotlight_regions.is_empty();

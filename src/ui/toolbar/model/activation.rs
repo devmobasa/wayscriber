@@ -66,10 +66,13 @@ pub(crate) struct ToolbarSlider {
 
 impl ToolbarSlider {
     pub(crate) fn event_for_value(&self, value: f64) -> ToolbarEvent {
-        let value = self.spec.clamp(value);
+        let value = self.spec.normalize_value(value);
         match self.target {
             ToolbarSliderTarget::Thickness => ToolbarEvent::SetThickness(value),
             ToolbarSliderTarget::MarkerOpacity => ToolbarEvent::SetMarkerOpacity(value),
+            ToolbarSliderTarget::SpotlightMagnification => {
+                ToolbarEvent::SetSpotlightMagnification(value)
+            }
             ToolbarSliderTarget::FontSize => ToolbarEvent::SetFontSize(value),
             ToolbarSliderTarget::UndoDelay => ToolbarEvent::SetUndoDelay(value),
             ToolbarSliderTarget::RedoDelay => ToolbarEvent::SetRedoDelay(value),
@@ -92,6 +95,7 @@ impl ToolbarSlider {
 pub(crate) enum ToolbarSliderTarget {
     Thickness,
     MarkerOpacity,
+    SpotlightMagnification,
     FontSize,
     UndoDelay,
     RedoDelay,
@@ -122,6 +126,11 @@ impl ToolbarSliderSpec {
         max: 0.9,
         step: Some(0.05),
     };
+    pub(crate) const SPOTLIGHT_MAGNIFICATION: Self = Self {
+        min: crate::draw::MIN_SPOTLIGHT_MAGNIFICATION,
+        max: crate::draw::MAX_SPOTLIGHT_MAGNIFICATION,
+        step: Some(crate::draw::SPOTLIGHT_MAGNIFICATION_STEP),
+    };
     pub(crate) const THICKNESS: Self = Self {
         min: MIN_STROKE_THICKNESS,
         max: MAX_STROKE_THICKNESS,
@@ -132,8 +141,16 @@ impl ToolbarSliderSpec {
         value.clamp(self.min, self.max)
     }
 
+    pub(crate) fn normalize_value(self, value: f64) -> f64 {
+        let clamped = self.clamp(value);
+        let Some(step) = self.step.filter(|step| step.is_finite() && *step > 0.0) else {
+            return clamped;
+        };
+        (self.min + ((clamped - self.min) / step).round() * step).clamp(self.min, self.max)
+    }
+
     pub(crate) fn value_from_t(self, t: f64) -> f64 {
-        self.clamp(self.min + t.clamp(0.0, 1.0) * self.span())
+        self.normalize_value(self.min + t.clamp(0.0, 1.0) * self.span())
     }
 
     pub(crate) fn t_from_value(self, value: f64) -> f64 {
@@ -217,6 +234,25 @@ mod tests {
         assert_close(spec.value_from_t(0.5), 15.0);
         assert_close(spec.value_from_t(-1.0), 10.0);
         assert_close(spec.value_from_t(2.0), 20.0);
+    }
+
+    #[test]
+    fn spotlight_slider_snaps_to_quarter_steps() {
+        let spec = ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION;
+
+        assert_close(spec.normalize_value(2.13), 2.25);
+        assert_close(spec.normalize_value(0.5), 1.0);
+        assert_close(spec.normalize_value(5.0), 4.0);
+
+        let slider = ToolbarSlider {
+            target: ToolbarSliderTarget::SpotlightMagnification,
+            spec,
+            value: 1.0,
+        };
+        match slider.event_for_value(2.13) {
+            ToolbarEvent::SetSpotlightMagnification(value) => assert_close(value, 2.25),
+            other => panic!("unexpected event: {other:?}"),
+        }
     }
 
     #[test]

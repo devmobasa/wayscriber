@@ -120,6 +120,8 @@ pub struct InputState {
     pub spotlight_dim_opacity: f64,
     /// Fraction of each spotlight radius spent fading out at the edge
     pub spotlight_feather: f64,
+    /// Magnification copied into the next Spotlight shape.
+    pub spotlight_magnification: f64,
     /// Current font size for text mode (from config)
     pub current_font_size: f64,
     /// Font descriptor for text rendering (family, weight, style)

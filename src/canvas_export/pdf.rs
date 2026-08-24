@@ -3,7 +3,7 @@ use crate::config::{PdfExportConfig, PdfFitMode, PdfOrientation, PdfPageSize};
 
 use super::page::{
     CanvasExportBackdropSnapshot, CanvasExportRect, CanvasPageExportSnapshot, ExportBackdrop,
-    draw_canvas_page_region, paint_pdf_page_background,
+    draw_canvas_page_region, frame_has_magnified_spotlight, paint_pdf_page_background,
 };
 use super::pdf_labels::render_pdf_label;
 
@@ -126,18 +126,23 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
             })?;
         paint_pdf_page_background(&ctx, &page.page, layout.page_width, layout.page_height);
         let backdrop = ExportBackdrop::new(&page.page.backdrop)?;
-        let paint_content_backdrop = matches!(
-            page.page.backdrop,
-            CanvasExportBackdropSnapshot::PersistedImage { .. }
-        );
-        draw_canvas_page_region(
-            &ctx,
-            &page.page,
-            &backdrop,
-            layout.source_rect,
-            layout.destination_rect,
-            paint_content_backdrop,
-        );
+        if frame_has_magnified_spotlight(&page.page.frame) {
+            render_magnified_page_raster(&ctx, &page.page, &backdrop, layout)?;
+        } else {
+            let paint_content_backdrop = matches!(
+                page.page.backdrop,
+                CanvasExportBackdropSnapshot::PersistedImage { .. }
+            );
+            draw_canvas_page_region(
+                &ctx,
+                &page.page,
+                &backdrop,
+                layout.source_rect,
+                layout.destination_rect,
+                paint_content_backdrop,
+                (1, 1),
+            )?;
+        }
         render_pdf_label(
             &ctx,
             &snapshot.labels,
@@ -158,6 +163,94 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
         CaptureError::ImageError("PDF output stream had unexpected type".to_string())
     })?;
     Ok(*bytes)
+}
+
+fn render_magnified_page_raster(
+    pdf_ctx: &cairo::Context,
+    page: &CanvasPageExportSnapshot,
+    backdrop: &ExportBackdrop,
+    layout: PdfPageLayout,
+) -> Result<(), CaptureError> {
+    let (width, height) = checked_raster_dimensions(layout.source_rect)?;
+    let surface =
+        cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).map_err(|err| {
+            CaptureError::ImageError(format!("Failed to create magnified PDF page: {err}"))
+        })?;
+    let raster_ctx = cairo::Context::new(&surface).map_err(|err| {
+        CaptureError::ImageError(format!(
+            "Failed to create magnified PDF page context: {err}"
+        ))
+    })?;
+    draw_canvas_page_region(
+        &raster_ctx,
+        page,
+        backdrop,
+        layout.source_rect,
+        CanvasExportRect {
+            x: 0.0,
+            y: 0.0,
+            width: f64::from(width),
+            height: f64::from(height),
+        },
+        true,
+        (width as u32, height as u32),
+    )?;
+    drop(raster_ctx);
+
+    pdf_ctx.save().map_err(|err| {
+        CaptureError::ImageError(format!("Failed to prepare magnified PDF page: {err}"))
+    })?;
+    let painted = (|| {
+        pdf_ctx.rectangle(
+            layout.destination_rect.x,
+            layout.destination_rect.y,
+            layout.destination_rect.width,
+            layout.destination_rect.height,
+        );
+        pdf_ctx.clip();
+        pdf_ctx.translate(layout.destination_rect.x, layout.destination_rect.y);
+        pdf_ctx.scale(
+            layout.destination_rect.width / f64::from(width),
+            layout.destination_rect.height / f64::from(height),
+        );
+        pdf_ctx.set_source_surface(&surface, 0.0, 0.0)?;
+        pdf_ctx.paint()
+    })();
+    let restored = pdf_ctx.restore();
+    painted.and(restored).map_err(|err| {
+        CaptureError::ImageError(format!("Failed to paint magnified PDF page: {err}"))
+    })
+}
+
+fn checked_raster_dimensions(source: CanvasExportRect) -> Result<(i32, i32), CaptureError> {
+    const MAX_RASTER_BYTES: u64 = 512 * 1024 * 1024;
+    let width = source.width.ceil();
+    let height = source.height.ceil();
+    if !width.is_finite()
+        || !height.is_finite()
+        || width <= 0.0
+        || height <= 0.0
+        || width > f64::from(i32::MAX)
+        || height > f64::from(i32::MAX)
+    {
+        return Err(CaptureError::ImageError(
+            "Magnified PDF page dimensions are invalid or too large".to_string(),
+        ));
+    }
+    let width = width as i32;
+    let height = height as i32;
+    let bytes = (width as u64)
+        .checked_mul(height as u64)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| {
+            CaptureError::ImageError("Magnified PDF page allocation overflow".to_string())
+        })?;
+    if bytes > MAX_RASTER_BYTES {
+        return Err(CaptureError::ImageError(format!(
+            "Magnified PDF page requires {bytes} bytes, above the 512 MiB safety limit"
+        )));
+    }
+    Ok((width, height))
 }
 
 pub fn resolve_pdf_page_layout(

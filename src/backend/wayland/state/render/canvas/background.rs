@@ -1,5 +1,7 @@
 use super::super::super::*;
-use crate::backend::wayland::state::screen_image::{ScreenImageKind, displayed_screen_image};
+use crate::backend::wayland::state::screen_image::{
+    ScreenImageKind, current_screen_source_token, displayed_screen_image,
+};
 use crate::draw::Color;
 
 pub(super) struct CanvasEraserContext {
@@ -24,6 +26,13 @@ impl CanvasEraserContext {
             logical_image_origin_y: 0.0,
         }
     }
+
+    pub(super) fn magnifier_source(&self) -> crate::draw::SpotlightMagnifierSource {
+        crate::draw::SpotlightMagnifierSource::from_backdrop_presence(
+            self.surface.is_some(),
+            self.bg_color.is_some(),
+        )
+    }
 }
 
 impl WaylandState {
@@ -46,12 +55,18 @@ impl WaylandState {
             &self.frozen,
             self.input_state.board_is_transparent(),
         )
-        .map(|source| {
+        .and_then(|source| {
+            current_screen_source_token(
+                &source,
+                &self.zoom,
+                &self.frozen,
+                (self.surface.width(), self.surface.height()),
+            )?;
             let cache_key = match source.kind {
                 ScreenImageKind::Zoom => (self.zoom.image_generation() << 1) | 1,
                 ScreenImageKind::Frozen => self.frozen.image_generation() << 1,
             };
-            (source.image, cache_key, source.zoom_transformed)
+            Some((source.image, cache_key, source.zoom_transformed))
         });
 
         if let Some((image, cache_key, zoom_render_active)) = background_image {

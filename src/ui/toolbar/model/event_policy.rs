@@ -499,6 +499,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::NudgeThickness(_)
         | ToolbarEvent::SetMarkerOpacity(_)
         | ToolbarEvent::NudgeMarkerOpacity(_)
+        | ToolbarEvent::SetSpotlightMagnification(_)
         | ToolbarEvent::SetEraserMode(_)
         | ToolbarEvent::SetFont(_)
         | ToolbarEvent::SetFontSize(_)

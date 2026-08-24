@@ -52,6 +52,9 @@ impl InputState {
             ToolbarEvent::EditQuickColor { index } => self.apply_toolbar_edit_quick_color(index),
             ToolbarEvent::SetThickness(value) => self.apply_toolbar_set_thickness(value),
             ToolbarEvent::SetMarkerOpacity(value) => self.apply_toolbar_set_marker_opacity(value),
+            ToolbarEvent::SetSpotlightMagnification(value) => {
+                self.apply_toolbar_set_spotlight_magnification(value)
+            }
             ToolbarEvent::SetEraserMode(mode) => self.apply_toolbar_set_eraser_mode(mode),
             ToolbarEvent::SetFont(descriptor) => self.apply_toolbar_set_font(descriptor),
             ToolbarEvent::SetFontSize(size) => self.apply_toolbar_set_font_size(size),

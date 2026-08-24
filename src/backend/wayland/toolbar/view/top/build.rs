@@ -659,6 +659,7 @@ fn push_style_pill(
             }
             model::StylePillControl::ThicknessSlider
             | model::StylePillControl::OpacitySlider
+            | model::StylePillControl::SpotlightMagnificationSlider
             | model::StylePillControl::FontSizeSlider => {
                 let (slider_spec, value) = control.slider_value(snapshot);
                 let event = control.click_event(snapshot);
@@ -671,6 +672,9 @@ fn push_style_pill(
                         min: slider_spec.min,
                         max: slider_spec.max,
                     },
+                    model::StylePillControl::SpotlightMagnificationSlider => {
+                        HitKind::DragSetSpotlightMagnification
+                    }
                     _ => HitKind::DragSetFontSize,
                 };
                 let rect = (
@@ -694,7 +698,11 @@ fn push_style_pill(
                 x += ToolbarLayoutSpec::TOP_STYLE_SLIDER_W + gap;
                 // The opacity slider carries its readout as decoration; the
                 // thickness/text-size numerals are distinct value controls.
-                if control == model::StylePillControl::OpacitySlider {
+                if matches!(
+                    control,
+                    model::StylePillControl::OpacitySlider
+                        | model::StylePillControl::SpotlightMagnificationSlider
+                ) {
                     nodes.push(WidgetNode::decor(
                         format!("{}.readout", control.id()),
                         (

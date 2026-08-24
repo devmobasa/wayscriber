@@ -49,6 +49,7 @@ pub(crate) enum StylePillState {
     Shape,
     Arrow,
     StepMarker,
+    Spotlight,
     Text,
 }
 
@@ -64,6 +65,7 @@ impl StylePillState {
             Self::Shape => "shape",
             Self::Arrow => "arrow",
             Self::StepMarker => "step-marker",
+            Self::Spotlight => "spotlight",
             Self::Text => "text",
         }
     }
@@ -90,6 +92,8 @@ pub(crate) enum StylePillControl {
     ThicknessValue,
     /// Marker opacity slider.
     OpacitySlider,
+    /// Spotlight magnification slider.
+    SpotlightMagnificationSlider,
     /// Shape fill toggle.
     FillToggle,
     /// Arrow auto-number toggle.
@@ -162,6 +166,7 @@ pub(crate) const fn selection_kind_slug(kind: SelectionPropertyKind) -> &'static
         SelectionPropertyKind::ArrowLength => "arrow-length",
         SelectionPropertyKind::ArrowAngle => "arrow-angle",
         SelectionPropertyKind::TextBackground => "text-background",
+        SelectionPropertyKind::SpotlightMagnification => "spotlight-magnification",
     }
 }
 
@@ -176,7 +181,8 @@ pub(crate) const fn selection_control_for_kind(kind: SelectionPropertyKind) -> S
         SelectionPropertyKind::Thickness
         | SelectionPropertyKind::FontSize
         | SelectionPropertyKind::ArrowLength
-        | SelectionPropertyKind::ArrowAngle => StylePillControl::SelectionStepper(kind),
+        | SelectionPropertyKind::ArrowAngle
+        | SelectionPropertyKind::SpotlightMagnification => StylePillControl::SelectionStepper(kind),
     }
 }
 
@@ -249,6 +255,9 @@ impl StylePillSpec {
         if context.show_marker_opacity {
             controls.push(StylePillControl::OpacitySlider);
         }
+        if context.tool_options_kind == ToolOptionsKind::Spotlight {
+            controls.push(StylePillControl::SpotlightMagnificationSlider);
+        }
         if context.show_fill_toggle {
             controls.push(StylePillControl::FillToggle);
         }
@@ -314,6 +323,7 @@ impl StylePillSpec {
             ToolOptionsKind::Shape => StylePillState::Shape,
             ToolOptionsKind::Arrow => StylePillState::Arrow,
             ToolOptionsKind::StepMarker => StylePillState::StepMarker,
+            ToolOptionsKind::Spotlight => StylePillState::Spotlight,
             ToolOptionsKind::Text => StylePillState::Text,
         }
     }

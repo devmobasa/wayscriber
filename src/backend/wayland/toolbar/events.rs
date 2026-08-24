@@ -12,6 +12,7 @@ pub enum HitKind {
         min: f64,
         max: f64,
     },
+    DragSetSpotlightMagnification,
     DragSetFontSize,
     DragUndoDelay,
     DragRedoDelay,
@@ -47,6 +48,7 @@ impl HitKind {
             HitKind::Click => ToolbarCursorHint::Pointer,
             HitKind::DragSetThickness { .. }
             | HitKind::DragSetMarkerOpacity { .. }
+            | HitKind::DragSetSpotlightMagnification
             | HitKind::DragSetFontSize
             | HitKind::DragUndoDelay
             | HitKind::DragRedoDelay

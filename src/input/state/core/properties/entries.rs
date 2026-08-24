@@ -1,7 +1,8 @@
 use super::super::base::InputState;
 use super::summary::{
     shape_arrow_angle, shape_arrow_head, shape_arrow_length, shape_color, shape_fill,
-    shape_font_size, shape_text_background, shape_thickness, summarize_property,
+    shape_font_size, shape_spotlight_magnification, shape_text_background, shape_thickness,
+    summarize_property,
 };
 use super::types::{SelectionPropertyEntry, SelectionPropertyKind};
 use super::utils::{approx_eq, color_eq, color_label};
@@ -212,6 +213,27 @@ impl InputState {
                 value,
                 kind: SelectionPropertyKind::TextBackground,
                 disabled: !text_bg_summary.editable,
+            });
+        }
+
+        let spotlight_summary =
+            summarize_property(frame, ids, shape_spotlight_magnification, approx_eq);
+        if spotlight_summary.applicable {
+            let value = if !spotlight_summary.editable {
+                "Locked".to_string()
+            } else if spotlight_summary.mixed {
+                "Mixed".to_string()
+            } else {
+                spotlight_summary
+                    .value
+                    .map(crate::draw::format_spotlight_magnification)
+                    .unwrap_or_else(|| "Mixed".to_string())
+            };
+            entries.push(SelectionPropertyEntry {
+                label: "Magnification".to_string(),
+                value,
+                kind: SelectionPropertyKind::SpotlightMagnification,
+                disabled: !spotlight_summary.editable,
             });
         }
 

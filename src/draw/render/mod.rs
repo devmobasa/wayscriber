@@ -23,7 +23,9 @@ pub(crate) use primitives::render_polygon_preview;
 pub use selection::{render_selection_halo, render_selection_handles, selection_handle_rects};
 pub use shapes::render_shape;
 pub use spotlight::{
-    SpotlightPass, SpotlightRegion, render_spotlight_outline, render_spotlight_pass,
+    SpotlightMagnifierMetrics, SpotlightMagnifierOutcome, SpotlightMagnifierScratch,
+    SpotlightMagnifierSource, SpotlightPass, SpotlightRegion, SpotlightSnapshotStrategy,
+    render_spotlight_magnification_pass, render_spotlight_outline, render_spotlight_pass,
     spotlight_regions_for_frame,
 };
 pub(crate) use strokes::render_eraser_stroke;

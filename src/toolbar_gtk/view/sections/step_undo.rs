@@ -164,22 +164,16 @@ fn custom_row(ctx: &mut SectionCtx, body: &gtk4::Box, is_undo: bool) {
     let spec = model::ToolbarSliderSpec::DELAY_SECONDS;
     let initial_secs = row_delay_secs(snapshot, is_undo);
     let slider_sender = ctx.feedback.clone();
-    let slider = SliderRow::new(
-        ctx.scale,
-        (spec.min, spec.max),
-        initial_secs,
-        format_secs,
-        move |value| {
-            send_event(
-                &slider_sender,
-                if is_undo {
-                    ToolbarEvent::SetCustomUndoDelay(value)
-                } else {
-                    ToolbarEvent::SetCustomRedoDelay(value)
-                },
-            );
-        },
-    );
+    let slider = SliderRow::new(ctx.scale, spec, initial_secs, format_secs, move |value| {
+        send_event(
+            &slider_sender,
+            if is_undo {
+                ToolbarEvent::SetCustomUndoDelay(value)
+            } else {
+                ToolbarEvent::SetCustomRedoDelay(value)
+            },
+        );
+    });
     slider
         .root
         .set_tooltip_text(Some(&row_delay_tooltip(is_undo, initial_secs)));
@@ -247,7 +241,7 @@ fn global_delay_slider(ctx: &SectionCtx, is_undo: bool, delay_ms: u64) -> Slider
     let sender = ctx.feedback.clone();
     let slider = SliderRow::new(
         ctx.scale,
-        (spec.min, spec.max),
+        spec,
         delay_ms as f64 / 1000.0,
         format_secs,
         move |value| {

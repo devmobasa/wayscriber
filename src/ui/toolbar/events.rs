@@ -86,6 +86,7 @@ pub enum ToolbarEvent {
     NudgeThickness(f64),
     SetMarkerOpacity(f64),
     NudgeMarkerOpacity(f64),
+    SetSpotlightMagnification(f64),
     SetEraserMode(EraserMode),
     SetFont(FontDescriptor),
     SetFontSize(f64),

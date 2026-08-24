@@ -1,5 +1,6 @@
 use crate::draw::{
-    EraserReplayContext, SpotlightPass, render_eraser_stroke, render_shape, render_spotlight_pass,
+    EraserReplayContext, SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass,
+    render_eraser_stroke, render_shape, render_spotlight_magnification_pass, render_spotlight_pass,
     spotlight_regions_for_frame,
 };
 use crate::input::BoardBackground;
@@ -68,7 +69,7 @@ pub(super) fn render_page_content(args: PageContentArgs<'_>) {
     let _ = ctx.save();
     ctx.translate(x + inset + offset_x, y + inset + offset_y);
     ctx.scale(scale, scale);
-    render_frame_shapes(ctx, frame, background);
+    render_frame_shapes(ctx, frame, background, screen_width, screen_height);
     let _ = ctx.restore();
     let _ = ctx.restore();
 }
@@ -77,6 +78,8 @@ fn render_frame_shapes(
     ctx: &cairo::Context,
     frame: &crate::draw::Frame,
     background: &BoardBackground,
+    target_width: u32,
+    target_height: u32,
 ) {
     let eraser_ctx = EraserReplayContext {
         pattern: None,
@@ -110,14 +113,67 @@ fn render_frame_shapes(
     // The thumbnail chain carries no config, and a strong configured dim would
     // render a postage-stamp preview almost black, so previews use a fixed,
     // gentler appearance rather than the live values.
+    let regions = spotlight_regions_for_frame(frame);
+    if matches!(background, BoardBackground::Solid(_)) {
+        let mut scratch = SpotlightMagnifierScratch::default();
+        let _ = render_spotlight_magnification_pass(
+            ctx,
+            &regions,
+            THUMBNAIL_SPOTLIGHT_FEATHER,
+            SpotlightMagnifierSource::Complete,
+            (target_width, target_height),
+            &mut scratch,
+        );
+    }
     render_spotlight_pass(
         ctx,
-        &spotlight_regions_for_frame(frame),
+        &regions,
         SpotlightPass {
             dim_opacity: THUMBNAIL_SPOTLIGHT_DIM,
             feather: THUMBNAIL_SPOTLIGHT_FEATHER,
         },
     );
+    if matches!(background, BoardBackground::Transparent) {
+        render_unavailable_magnification_labels(ctx, &regions);
+    }
+}
+
+fn render_unavailable_magnification_labels(
+    ctx: &cairo::Context,
+    regions: &[crate::draw::SpotlightRegion],
+) {
+    for region in regions
+        .iter()
+        .filter(|region| crate::draw::spotlight_magnification_is_active(region.magnification))
+    {
+        let label = crate::draw::format_spotlight_magnification(region.magnification);
+        let font_size = (region.ry.abs() * 0.35).clamp(18.0, 56.0);
+        let _ = ctx.save();
+        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+        ctx.set_font_size(font_size);
+        if let Ok(extents) = ctx.text_extents(&label) {
+            let pad = font_size * 0.28;
+            let x = region.cx - extents.width() * 0.5 - pad;
+            let y = region.cy - extents.height() * 0.5 - pad;
+            draw_rounded_rect(
+                ctx,
+                x,
+                y,
+                extents.width() + pad * 2.0,
+                extents.height() + pad * 2.0,
+                font_size * 0.25,
+            );
+            ctx.set_source_rgba(0.0, 0.0, 0.0, 0.68);
+            let _ = ctx.fill();
+            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.92);
+            ctx.move_to(
+                region.cx - extents.width() * 0.5 - extents.x_bearing(),
+                region.cy - extents.height() * 0.5 - extents.y_bearing(),
+            );
+            let _ = ctx.show_text(&label);
+        }
+        let _ = ctx.restore();
+    }
 }
 
 pub(super) fn render_page_name_label(

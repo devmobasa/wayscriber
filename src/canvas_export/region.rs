@@ -74,21 +74,83 @@ impl CanvasRegionSource {
         PackedArgb32::new(selection.width(), selection.height(), target_stride, data)
             .ok_or_else(|| CaptureError::ImageError("Region pixels are invalid".to_string()))
     }
+
+    fn magnifier_working_selection(
+        &self,
+        selection: ImagePixelRect,
+        frame: &Frame,
+    ) -> Option<ImagePixelRect> {
+        let scale_x = f64::from(self.image.width) / self.logical_bounds.width;
+        let scale_y = f64::from(self.image.height) / self.logical_bounds.height;
+        let selection_left = selection.x();
+        let selection_top = selection.y();
+        let selection_right = selection.x().checked_add(selection.width())?;
+        let selection_bottom = selection.y().checked_add(selection.height())?;
+        let mut left = selection_left;
+        let mut top = selection_top;
+        let mut right = selection_right;
+        let mut bottom = selection_bottom;
+
+        for region in crate::draw::spotlight_regions_for_frame(frame) {
+            if !crate::draw::spotlight_magnification_is_active(region.magnification) {
+                continue;
+            }
+            let region_left = (((region.cx - region.rx.abs() - self.logical_bounds.x) * scale_x)
+                .floor() as i64
+                - 1)
+            .clamp(0, i64::from(self.image.width)) as u32;
+            let region_top = (((region.cy - region.ry.abs() - self.logical_bounds.y) * scale_y)
+                .floor() as i64
+                - 1)
+            .clamp(0, i64::from(self.image.height)) as u32;
+            let region_right = (((region.cx + region.rx.abs() - self.logical_bounds.x) * scale_x)
+                .ceil() as i64
+                + 1)
+            .clamp(0, i64::from(self.image.width)) as u32;
+            let region_bottom = (((region.cy + region.ry.abs() - self.logical_bounds.y) * scale_y)
+                .ceil() as i64
+                + 1)
+            .clamp(0, i64::from(self.image.height)) as u32;
+
+            if region_left < selection_right
+                && region_right > selection_left
+                && region_top < selection_bottom
+                && region_bottom > selection_top
+            {
+                left = left.min(region_left);
+                top = top.min(region_top);
+                right = right.max(region_right);
+                bottom = bottom.max(region_bottom);
+            }
+        }
+
+        ImagePixelRect::new(
+            left,
+            top,
+            right.checked_sub(left)?,
+            bottom.checked_sub(top)?,
+            (self.image.width, self.image.height),
+        )
+    }
 }
 
 pub(crate) fn render_canvas_region_png(
     snapshot: CanvasRegionExportSnapshot,
 ) -> Result<RenderedImage, CaptureError> {
-    let source_rect = snapshot
+    let working_selection = snapshot
         .source
-        .selection_source_rect(snapshot.selection)
+        .magnifier_working_selection(snapshot.selection, &snapshot.frame)
+        .ok_or_else(|| CaptureError::ImageError("Region working area is invalid".to_string()))?;
+    let working_source_rect = snapshot
+        .source
+        .selection_source_rect(working_selection)
         .ok_or_else(|| CaptureError::ImageError("Region source mapping is invalid".to_string()))?;
-    let pixels = snapshot.source.copy_selection(snapshot.selection)?;
-    let output_width = pixels.width();
-    let output_height = pixels.height();
-    let width = i32::try_from(output_width)
+    let pixels = snapshot.source.copy_selection(working_selection)?;
+    let working_width = pixels.width();
+    let working_height = pixels.height();
+    let width = i32::try_from(working_width)
         .map_err(|_| CaptureError::ImageError("Region width is too large".to_string()))?;
-    let height = i32::try_from(output_height)
+    let height = i32::try_from(working_height)
         .map_err(|_| CaptureError::ImageError("Region height is too large".to_string()))?;
     let stride = pixels.stride();
     let surface = cairo::ImageSurface::create_for_data(
@@ -109,19 +171,58 @@ pub(crate) fn render_canvas_region_png(
     let page = CanvasPageExportSnapshot {
         frame: snapshot.frame,
         backdrop: CanvasExportBackdropSnapshot::Transparent,
-        viewport_width: output_width,
-        viewport_height: output_height,
-        origin_x: source_rect.x.floor() as i32,
-        origin_y: source_rect.y.floor() as i32,
+        viewport_width: working_width,
+        viewport_height: working_height,
+        origin_x: working_source_rect.x.floor() as i32,
+        origin_y: working_source_rect.y.floor() as i32,
         spotlight: snapshot.spotlight,
     };
-    let destination =
-        CanvasExportRect::new(0.0, 0.0, f64::from(output_width), f64::from(output_height))
-            .expect("validated non-empty destination");
-    draw_canvas_page_region(&ctx, &page, &backdrop, source_rect, destination, false);
+    let destination = CanvasExportRect::new(
+        0.0,
+        0.0,
+        f64::from(working_width),
+        f64::from(working_height),
+    )
+    .expect("validated non-empty destination");
+    draw_canvas_page_region(
+        &ctx,
+        &page,
+        &backdrop,
+        working_source_rect,
+        destination,
+        false,
+        (working_width, working_height),
+    )?;
     drop(ctx);
 
-    encode_surface_png(&surface, "region")
+    if working_selection == snapshot.selection {
+        return encode_surface_png(&surface, "region");
+    }
+
+    let output_width = snapshot.selection.width();
+    let output_height = snapshot.selection.height();
+    let output = cairo::ImageSurface::create(
+        cairo::Format::ARgb32,
+        i32::try_from(output_width)
+            .map_err(|_| CaptureError::ImageError("Region width is too large".to_string()))?,
+        i32::try_from(output_height)
+            .map_err(|_| CaptureError::ImageError("Region height is too large".to_string()))?,
+    )
+    .map_err(|err| CaptureError::ImageError(format!("Failed to create region crop: {err}")))?;
+    let crop = cairo::Context::new(&output).map_err(|err| {
+        CaptureError::ImageError(format!("Failed to create region crop context: {err}"))
+    })?;
+    crop.set_source_surface(
+        &surface,
+        -f64::from(snapshot.selection.x() - working_selection.x()),
+        -f64::from(snapshot.selection.y() - working_selection.y()),
+    )
+    .map_err(|err| CaptureError::ImageError(format!("Failed to position region crop: {err}")))?;
+    crop.paint()
+        .map_err(|err| CaptureError::ImageError(format!("Failed to paint region crop: {err}")))?;
+    drop(crop);
+
+    encode_surface_png(&output, "region")
 }
 
 #[cfg(test)]
@@ -241,6 +342,89 @@ mod tests {
         assert_eq!(decoded_pixel(&rendered, 1, 0), 0xFF00_0006);
         assert_eq!(decoded_pixel(&rendered, 0, 1), 0xFF00_0009);
         assert_eq!(decoded_pixel(&rendered, 1, 1), 0xFF00_000A);
+    }
+
+    #[test]
+    fn region_capture_magnifies_its_immutable_screen_source() {
+        let black = 0xFF00_0000u32;
+        let red = 0xFFFF_0000u32;
+        let mut pixels = vec![black; 8 * 8];
+        for y in 0..8 {
+            pixels[y * 8 + 2] = red;
+            pixels[y * 8 + 3] = red;
+        }
+        let source = CanvasRegionSource {
+            image: Arc::new(ScreenImage {
+                data: pixels.into_iter().flat_map(u32::to_ne_bytes).collect(),
+                width: 8,
+                height: 8,
+                stride: 32,
+            }),
+            logical_bounds: CanvasExportRect::new(10.0, 20.0, 4.0, 4.0).unwrap(),
+        };
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Spotlight {
+            cx: 12,
+            cy: 22,
+            rx: 2,
+            ry: 2,
+            magnification: 2.0,
+        });
+
+        let rendered = render_canvas_region_png(CanvasRegionExportSnapshot {
+            source,
+            selection: ImagePixelRect::new(0, 0, 8, 8, (8, 8)).unwrap(),
+            frame,
+            spotlight: SpotlightPassSnapshot {
+                dim_opacity: 0.6,
+                feather: 0.0,
+            },
+        })
+        .expect("magnified region");
+
+        assert_eq!(decoded_pixel(&rendered, 1, 4), red);
+    }
+
+    #[test]
+    fn region_capture_samples_toward_a_spotlight_center_outside_the_crop() {
+        let black = 0xFF00_0000u32;
+        let red = 0xFFFF_0000u32;
+        let mut pixels = vec![black; 8 * 8];
+        for y in 0..8 {
+            pixels[y * 8 + 3] = red;
+        }
+        let source = CanvasRegionSource {
+            image: Arc::new(ScreenImage {
+                data: pixels.into_iter().flat_map(u32::to_ne_bytes).collect(),
+                width: 8,
+                height: 8,
+                stride: 32,
+            }),
+            logical_bounds: CanvasExportRect::new(10.0, 20.0, 4.0, 4.0).unwrap(),
+        };
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Spotlight {
+            cx: 11,
+            cy: 22,
+            rx: 2,
+            ry: 2,
+            magnification: 2.0,
+        });
+
+        let rendered = render_canvas_region_png(CanvasRegionExportSnapshot {
+            source,
+            selection: ImagePixelRect::new(4, 0, 4, 8, (8, 8)).unwrap(),
+            frame,
+            spotlight: SpotlightPassSnapshot {
+                dim_opacity: 0.6,
+                feather: 0.0,
+            },
+        })
+        .expect("magnified crop renders");
+
+        // The sampled coordinate lands three quarters across the red source
+        // texel, so Cairo's bilinear filter produces 75% red over black.
+        assert_eq!(decoded_pixel(&rendered, 0, 4), 0xFFBF_0000);
     }
 
     #[test]

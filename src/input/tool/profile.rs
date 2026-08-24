@@ -56,6 +56,7 @@ pub(crate) enum ToolControlGroup {
     Shape,
     Arrow,
     StepMarker,
+    Spotlight,
 }
 
 /// Catalog entry describing the settings and controls for one drawing tool.
@@ -70,7 +71,15 @@ pub(crate) struct ToolProfile {
 
 impl ToolProfile {
     pub(crate) fn needs_thickness_control(self) -> bool {
-        !matches!(self.control_group, ToolControlGroup::None)
+        matches!(
+            self.control_group,
+            ToolControlGroup::Stroke
+                | ToolControlGroup::Marker
+                | ToolControlGroup::Eraser
+                | ToolControlGroup::Shape
+                | ToolControlGroup::Arrow
+                | ToolControlGroup::StepMarker
+        )
     }
 
     pub(crate) fn show_fill_toggle(self) -> bool {

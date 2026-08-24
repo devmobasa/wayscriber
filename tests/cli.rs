@@ -257,6 +257,7 @@ fn saved_tool_state() -> wayscriber::session::ToolStateSnapshot {
         blur_style: Default::default(),
         recent_colors: Vec::new(),
         marker_opacity: Some(0.32),
+        spotlight_magnification: None,
         fill_enabled: Some(false),
         tool_override: None,
         current_font_size: 24.0,

@@ -215,6 +215,10 @@ pub(super) struct WaylandState {
     /// on screen still holds the full-screen dim. One more full-damage frame is
     /// needed to wash it out, so the decision looks at the previous frame too.
     pub(super) spotlight_dimmed_last_frame: bool,
+    /// Reused bounded Cairo snapshots for Spotlight loupe rendering.
+    pub(super) spotlight_magnifier_scratch: crate::draw::SpotlightMagnifierScratch,
+    /// Deduplicates the live missing-source/allocation warning.
+    pub(super) spotlight_magnifier_warning_active: bool,
 
     // Configuration
     pub(super) config: Config,

@@ -114,6 +114,10 @@ pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: Tool
     if let Some(opacity) = tool_state.marker_opacity {
         let _ = input.set_marker_opacity(opacity);
     }
+    if let Some(magnification) = tool_state.spotlight_magnification {
+        input.spotlight_magnification =
+            crate::draw::normalize_spotlight_magnification(magnification);
+    }
     if let Some(fill_enabled) = tool_state.fill_enabled {
         let _ = input.set_fill_enabled(fill_enabled);
     }

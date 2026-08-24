@@ -35,6 +35,7 @@ fn save_snapshot_errors_when_payload_exceeds_max_file_size() {
             blur_style: Default::default(),
             recent_colors: Vec::new(),
             marker_opacity: Some(0.32),
+            spotlight_magnification: None,
             fill_enabled: Some(false),
             tool_override: None,
             current_font_size: 24.0,

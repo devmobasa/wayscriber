@@ -25,6 +25,8 @@ pub enum ToolOptionsKind {
     Arrow,
     /// StepMarker tool: size + counter
     StepMarker,
+    /// Spotlight tool: magnification only
+    Spotlight,
     /// Text mode: font size + font family
     Text,
 }
@@ -38,6 +40,7 @@ fn tool_options_kind_from_group(group: ToolControlGroup) -> ToolOptionsKind {
         ToolControlGroup::Shape => ToolOptionsKind::Shape,
         ToolControlGroup::Arrow => ToolOptionsKind::Arrow,
         ToolControlGroup::StepMarker => ToolOptionsKind::StepMarker,
+        ToolControlGroup::Spotlight => ToolOptionsKind::Spotlight,
     }
 }
 
@@ -252,6 +255,7 @@ pub struct ToolbarSnapshot {
     pub eraser_kind: EraserKind,
     pub eraser_mode: EraserMode,
     pub marker_opacity: f64,
+    pub spotlight_magnification: f64,
     pub font: FontDescriptor,
     pub font_size: f64,
     pub text_active: bool,

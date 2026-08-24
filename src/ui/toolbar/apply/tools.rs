@@ -75,6 +75,10 @@ impl InputState {
         self.set_marker_opacity(value)
     }
 
+    pub(super) fn apply_toolbar_set_spotlight_magnification(&mut self, value: f64) -> bool {
+        self.set_spotlight_magnification(value)
+    }
+
     pub(super) fn apply_toolbar_set_eraser_mode(&mut self, mode: EraserMode) -> bool {
         self.set_eraser_mode(mode)
     }

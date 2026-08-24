@@ -77,6 +77,8 @@ pub struct ToolStateSnapshot {
     pub recent_colors: Vec<Color>,
     #[serde(default)]
     pub marker_opacity: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spotlight_magnification: Option<f64>,
     #[serde(default)]
     pub fill_enabled: Option<bool>,
     #[serde(default)]
@@ -110,6 +112,7 @@ impl ToolStateSnapshot {
             blur_style: input.blur_style,
             recent_colors: input.recent_colors().to_vec(),
             marker_opacity: Some(input.marker_opacity),
+            spotlight_magnification: Some(input.spotlight_magnification),
             fill_enabled: Some(input.fill_enabled),
             tool_override: input.session_tool_override(),
             current_font_size: input.current_font_size,
@@ -147,6 +150,7 @@ impl ToolStateSnapshot {
             blur_style: config.drawing.default_blur_style,
             recent_colors: Vec::new(),
             marker_opacity: Some(config.drawing.marker_opacity),
+            spotlight_magnification: Some(config.spotlight.magnification),
             fill_enabled: Some(config.drawing.default_fill_enabled),
             tool_override: None,
             current_font_size: config.drawing.default_font_size,

@@ -670,12 +670,28 @@ fn validate_and_clamp_resets_non_finite_spotlight_settings() {
         let mut config = Config::default();
         config.spotlight.dim_opacity = invalid;
         config.spotlight.feather = invalid;
+        config.spotlight.magnification = invalid;
 
         config.validate_and_clamp();
 
         assert_eq!(config.spotlight.dim_opacity, defaults.dim_opacity);
         assert_eq!(config.spotlight.feather, defaults.feather);
+        assert_eq!(config.spotlight.magnification, defaults.magnification);
     }
+}
+
+#[test]
+fn validate_and_clamp_limits_spotlight_magnification_to_one_through_four_x() {
+    let mut config = Config::default();
+    assert_eq!(config.spotlight.magnification, 1.0);
+
+    config.spotlight.magnification = 0.25;
+    config.validate_and_clamp();
+    assert_eq!(config.spotlight.magnification, 1.0);
+
+    config.spotlight.magnification = 9.0;
+    config.validate_and_clamp();
+    assert_eq!(config.spotlight.magnification, 4.0);
 }
 
 /// The migration recipes are no longer part of loading — they are the material

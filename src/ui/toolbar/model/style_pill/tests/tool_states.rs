@@ -12,6 +12,7 @@ fn state_derives_from_the_tool_options_kind() {
         (Tool::Ellipse, StylePillState::Shape),
         (Tool::Arrow, StylePillState::Arrow),
         (Tool::StepMarker, StylePillState::StepMarker),
+        (Tool::Spotlight, StylePillState::Spotlight),
     ];
     for (tool, expected) in cases {
         let snapshot = snapshot_for_tool(tool);
@@ -30,6 +31,27 @@ fn state_derives_from_the_tool_options_kind() {
         StylePillSpec::state_of(&text, &plan()),
         StylePillState::Text
     );
+}
+
+#[test]
+fn spotlight_state_is_a_magnification_slider_without_stroke_controls() {
+    let mut snapshot = snapshot_for_tool(Tool::Spotlight);
+    snapshot.spotlight_magnification = 2.25;
+
+    let spec = StylePillSpec::build(&snapshot, &plan());
+    assert_eq!(spec.state(), StylePillState::Spotlight);
+    assert_eq!(control_ids(&spec), ["top.style.spotlight-magnification"]);
+
+    let slider = StylePillControl::SpotlightMagnificationSlider;
+    assert_eq!(
+        slider.event(&snapshot),
+        Some(ToolbarEvent::SetSpotlightMagnification(2.25))
+    );
+    assert_eq!(
+        slider.slider(&snapshot),
+        Some((ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION, 2.25))
+    );
+    assert_eq!(slider.value_text(&snapshot).as_deref(), Some("2.25x"));
 }
 
 #[test]

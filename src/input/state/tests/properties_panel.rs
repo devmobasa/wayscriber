@@ -145,6 +145,45 @@ fn style_pill_selection_docking_routes_through_the_properties_apply_machinery() 
 }
 
 #[test]
+fn spotlight_magnification_property_steps_the_selected_shape_and_is_undoable() {
+    let mut state = create_test_input_state();
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Spotlight {
+        cx: 100,
+        cy: 80,
+        rx: 40,
+        ry: 25,
+        magnification: 1.5,
+    });
+    state.set_selection(vec![shape_id]);
+
+    let entries = state.selection_pill_entries();
+    let entry = entries
+        .iter()
+        .find(|entry| entry.kind == SelectionPropertyKind::SpotlightMagnification)
+        .expect("spotlight magnification property");
+    assert_eq!(entry.label, "Magnification");
+    assert_eq!(entry.value, "1.5x");
+
+    assert!(
+        state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, 1,)
+    );
+    let magnification = |state: &InputState| match &state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .expect("spotlight")
+        .shape
+    {
+        Shape::Spotlight { magnification, .. } => *magnification,
+        other => panic!("expected spotlight, got {other:?}"),
+    };
+    assert_eq!(magnification(&state), 1.75);
+
+    state.handle_action(Action::Undo);
+    assert_eq!(magnification(&state), 1.5);
+}
+
+#[test]
 fn close_properties_panel_clears_panel_and_requests_redraw() {
     let mut state = create_test_input_state();
     let shape_id = add_rect(&mut state, 5, 5, 10, 10);

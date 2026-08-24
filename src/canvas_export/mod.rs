@@ -150,6 +150,85 @@ mod tests {
     }
 
     #[test]
+    fn transparent_export_rejects_magnified_spotlight_without_source_pixels() {
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Spotlight {
+            cx: 8,
+            cy: 8,
+            rx: 6,
+            ry: 6,
+            magnification: 2.0,
+        });
+        let export = snapshot(
+            frame,
+            CanvasExportViewport {
+                logical_width: 20,
+                logical_height: 20,
+                scale: 1,
+                origin_x: 0,
+                origin_y: 0,
+            },
+        );
+
+        let error = render_canvas_surface(&export).expect_err("missing source must fail");
+        assert!(
+            error.to_string().contains("Freeze screen to magnify"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn solid_export_magnifies_the_completed_canvas_before_dimming() {
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Rect {
+            x: 5,
+            y: 8,
+            w: 2,
+            h: 4,
+            fill: true,
+            color: RED,
+            thick: 1.0,
+        });
+        frame.add_shape(Shape::Spotlight {
+            cx: 10,
+            cy: 10,
+            rx: 10,
+            ry: 10,
+            magnification: 2.0,
+        });
+        let mut export = snapshot(
+            frame,
+            CanvasExportViewport {
+                logical_width: 20,
+                logical_height: 20,
+                scale: 1,
+                origin_x: 0,
+                origin_y: 0,
+            },
+        );
+        export.backdrop = CanvasExportBackdropSnapshot::Solid(BLACK);
+
+        let mut surface = render_canvas_surface(&export).expect("magnified solid export");
+        assert_ne!(pixel(&mut surface, 2, 10), pixel(&mut surface, 0, 0));
+    }
+
+    #[test]
+    fn magnified_pdf_page_uses_the_raster_fallback() {
+        let mut page = page_snapshot(Frame::new());
+        page.backdrop = CanvasExportBackdropSnapshot::Solid(WHITE);
+        page.frame.add_shape(Shape::Spotlight {
+            cx: 10,
+            cy: 10,
+            rx: 8,
+            ry: 8,
+            magnification: 2.0,
+        });
+
+        let pdf = render_board_pdf(&pdf_snapshot(page)).expect("magnified PDF");
+        assert!(pdf.starts_with(b"%PDF-"));
+    }
+
+    #[test]
     fn render_board_pdf_returns_pdf_bytes() {
         let pdf = render_board_pdf(&pdf_snapshot(page_snapshot(Frame::new()))).expect("pdf");
 
@@ -302,6 +381,7 @@ mod tests {
             cy: 60,
             rx: 14,
             ry: 14,
+            magnification: crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
         });
         frame.add_shape(Shape::EraserStroke {
             points: vec![(40, 60), (110, 60)],

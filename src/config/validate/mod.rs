@@ -62,6 +62,7 @@ impl Config {
     /// - `arrow.angle_degrees`: 15.0 - 60.0
     /// - `spotlight.dim_opacity`: 0.1 - 0.95
     /// - `spotlight.feather`: 0.0 - 0.9
+    /// - `spotlight.magnification`: 1.0 - 4.0
     /// - `buffer_count`: 2 - 4
     ///
     /// Returns what the user should be told about: a clamp is a silent

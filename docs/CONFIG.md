@@ -424,12 +424,22 @@ says the save failed.
 # attention lands where you point. Select the tool from the toolbar or bind
 # `select_spotlight_tool`.
 [spotlight]
+# Starting magnification for newly drawn spotlights (1.0 - 4.0). Existing
+# spotlights keep their own saved value. The toolbar changes this in 0.25 steps.
+magnification = 1.0
+
 # How strongly the area outside every spotlight is dimmed (0.1 - 0.95)
 dim_opacity = 0.6
 
 # Fraction of each spotlight radius spent fading out at the edge (0.0 - 0.9).
 # 0.0 gives a hard-edged opening.
 feather = 0.35
+
+# Magnification needs complete pixels beneath the canvas. Solid boards, Freeze,
+# Zoom, captured regions, and persisted-image exports provide them. On a live
+# transparent board, Wayscriber keeps the dim opening and asks you to Freeze the
+# screen; transparent exports with magnified spotlights fail instead of silently
+# saving an unmagnified image.
 
 [presets]
 slot_count = 5
@@ -580,6 +590,10 @@ With `WAYSCRIBER_PERF_LOG=1`, the `perf.input_to_paint_latency proxy=input_to_wa
 line reports an input-to-Wayland-commit proxy metric. It measures from input sample receipt inside
 the app to Wayland surface commit. It is not photons-on-screen display latency; compositor
 scheduling, display scanout, and hardware can add more latency outside Wayscriber.
+The `perf.render_stage` line also reports Spotlight magnifier work separately as
+`spotlight_snapshot_ms` and `spotlight_paint_ms`, together with the region count,
+regional/full-surface snapshot strategy, and copied source-pixel count. At 1× these
+fields remain zero/`none`, because no source snapshot is created.
 
 In local continuous-drawing measurements, 120 FPS low-latency mode held p95 around 8-9 ms and
 p99 around 8-9 ms for this proxy metric. Isolated max spikes existed, but p99 stayed under 16 ms.
@@ -1700,7 +1714,7 @@ backup_retention = 1
 
 - `persist_*` — choose which boards survive restarts (`persist_transparent` for overlay, `persist_whiteboard`/`persist_blackboard` gate non-transparent boards for legacy compatibility)
 - `persist_history` — when `true`, persist undo/redo stacks so that history survives restarts; set to `false` to save only visible drawings
-- `restore_tool_state` — save pen colour, thickness, font size, and arrow settings (including head placement); when `true`, the last-used tool state overrides config defaults at startup. Chrome is not tool state: status bar and badge visibility come from `[ui]` on every start, and an overlay toggle of them applies to that run only. Sessions written by older releases still carry a `show_status_bar` value; it is ignored on load and no longer written
+- `restore_tool_state` — save pen colour, thickness, font size, arrow settings (including head placement), and the starting Spotlight magnification; when `true`, the last-used tool state overrides config defaults at startup. Chrome is not tool state: status bar and badge visibility come from `[ui]` on every start, and an overlay toggle of them applies to that run only. Sessions written by older releases still carry a `show_status_bar` value; it is ignored on load and no longer written
 - `storage` — `auto` (XDG data dir, e.g. `~/.local/share/wayscriber`), `config` (same directory as `config.toml`), or `custom`
 - `custom_directory` — absolute path used when `storage = "custom"`; supports `~`
 - `per_output` — when `true` (default) keep a separate session file for each monitor; set to `false` to share one file per Wayland display as in earlier releases

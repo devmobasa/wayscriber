@@ -82,6 +82,7 @@ impl InputState {
             marker_opacity: self.marker_opacity,
             fill_enabled: self.fill_enabled,
             blur_style: self.blur_style,
+            spotlight_magnification: self.spotlight_magnification,
             arrow_length: self.arrow_length,
             arrow_angle: self.arrow_angle,
             arrow_head_at_end: self.arrow_head_at_end,
