@@ -109,8 +109,8 @@ fn triangle_points(start: (i32, i32), end: (i32, i32)) -> Vec<(i32, i32)> {
 fn parallelogram_points(start: (i32, i32), end: (i32, i32)) -> Vec<(i32, i32)> {
     let (min_x, max_x) = sorted_pair(start.0, end.0);
     let (min_y, max_y) = sorted_pair(start.1, end.1);
-    let width = max_x - min_x;
-    let skew = (width.abs() / 4).max(1);
+    let width = i64::from(max_x) - i64::from(min_x);
+    let skew = (width / 4).clamp(1, i64::from(i32::MAX)) as i32;
 
     if end.0 >= start.0 {
         vec![
@@ -146,8 +146,8 @@ fn regular_polygon_points(start: (i32, i32), end: (i32, i32), sides: u8) -> Vec<
     let sides = clamp_regular_sides(sides);
     let center_x = (start.0 as f64 + end.0 as f64) / 2.0;
     let center_y = (start.1 as f64 + end.1 as f64) / 2.0;
-    let radius_x = (end.0 - start.0).abs() as f64 / 2.0;
-    let radius_y = (end.1 - start.1).abs() as f64 / 2.0;
+    let radius_x = f64::from(end.0.abs_diff(start.0)) / 2.0;
+    let radius_y = f64::from(end.1.abs_diff(start.1)) / 2.0;
     let radius = radius_x.min(radius_y);
     let start_angle = -std::f64::consts::FRAC_PI_2;
 
@@ -202,5 +202,42 @@ mod tests {
         assert_eq!(clamp_regular_sides(2), 3);
         assert_eq!(clamp_regular_sides(9), 9);
         assert_eq!(clamp_regular_sides(80), 12);
+    }
+
+    #[test]
+    fn polygon_templates_handle_full_coordinate_span_drags() {
+        let start = (i32::MIN, i32::MIN);
+        let end = (i32::MAX, i32::MAX);
+
+        for template in [
+            PolygonTemplate::Triangle,
+            PolygonTemplate::Parallelogram,
+            PolygonTemplate::Rhombus,
+            PolygonTemplate::Regular,
+        ] {
+            let points = generated_points(template, start, end, 5);
+            assert!(
+                has_minimum_distinct_points(&points),
+                "{template:?} should retain distinct points"
+            );
+        }
+    }
+
+    #[test]
+    fn regular_polygon_extreme_drag_is_order_independent() {
+        assert_eq!(
+            generated_points(
+                PolygonTemplate::Regular,
+                (i32::MIN, i32::MIN),
+                (i32::MAX, i32::MAX),
+                6,
+            ),
+            generated_points(
+                PolygonTemplate::Regular,
+                (i32::MAX, i32::MAX),
+                (i32::MIN, i32::MIN),
+                6,
+            )
+        );
     }
 }
