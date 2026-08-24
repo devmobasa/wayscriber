@@ -38,8 +38,8 @@ impl Rect {
 
     /// Builds a rectangle from min/max bounds (inclusive min, exclusive max).
     pub fn from_min_max(min_x: i32, min_y: i32, max_x: i32, max_y: i32) -> Option<Self> {
-        let width = max_x - min_x;
-        let height = max_y - min_y;
+        let width = i32::try_from(i64::from(max_x) - i64::from(min_x)).ok()?;
+        let height = i32::try_from(i64::from(max_y) - i64::from(min_y)).ok()?;
         Self::new(min_x, min_y, width, height)
     }
 
@@ -50,18 +50,29 @@ impl Rect {
 
     /// Returns true if the point lies within the rectangle (inclusive of min, exclusive of max).
     pub fn contains(&self, x: i32, y: i32) -> bool {
-        x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
+        let x = i64::from(x);
+        let y = i64::from(y);
+        let min_x = i64::from(self.x);
+        let min_y = i64::from(self.y);
+        let max_x = min_x + i64::from(self.width);
+        let max_y = min_y + i64::from(self.height);
+
+        self.is_valid() && x >= min_x && x < max_x && y >= min_y && y < max_y
     }
 
     /// Returns a new rectangle inflated by `amount` in all directions.
     pub fn inflated(&self, amount: i32) -> Option<Self> {
+        if !self.is_valid() {
+            return None;
+        }
         if amount == 0 {
             return Some(*self);
         }
-        let new_x = self.x - amount;
-        let new_y = self.y - amount;
-        let new_width = self.width + amount * 2;
-        let new_height = self.height + amount * 2;
+        let amount = i64::from(amount);
+        let new_x = i32::try_from(i64::from(self.x) - amount).ok()?;
+        let new_y = i32::try_from(i64::from(self.y) - amount).ok()?;
+        let new_width = i32::try_from(i64::from(self.width) + amount * 2).ok()?;
+        let new_height = i32::try_from(i64::from(self.height) + amount * 2).ok()?;
         Rect::new(new_x, new_y, new_width, new_height)
     }
 }
@@ -83,11 +94,19 @@ impl Rect {
 /// - `rx` = horizontal radius (half width)
 /// - `ry` = vertical radius (half height)
 pub fn ellipse_bounds(x1: i32, y1: i32, x2: i32, y2: i32) -> (i32, i32, i32, i32) {
-    let cx = (x1 + x2) / 2;
-    let cy = (y1 + y2) / 2;
-    let rx = ((x2 - x1).abs()) / 2;
-    let ry = ((y2 - y1).abs()) / 2;
+    let (cx, rx) = ellipse_axis_bounds(x1, x2);
+    let (cy, ry) = ellipse_axis_bounds(y1, y2);
     (cx, cy, rx, ry)
+}
+
+fn ellipse_axis_bounds(first: i32, second: i32) -> (i32, i32) {
+    let first = i64::from(first);
+    let second = i64::from(second);
+    let center = (first + second) / 2;
+    let radius = (second - first).abs() / 2;
+
+    // An average of two i32 values and half their distance always fit in i32.
+    (center as i32, radius as i32)
 }
 
 #[cfg(test)]
@@ -125,6 +144,45 @@ mod tests {
     }
 
     #[test]
+    fn rect_from_min_max_rejects_unrepresentable_dimensions() {
+        assert_eq!(
+            Rect::from_min_max(i32::MIN, 0, i32::MAX, 1),
+            None,
+            "the full i32 coordinate span cannot fit in an i32 width"
+        );
+        assert_eq!(Rect::from_min_max(0, i32::MIN, 1, i32::MAX), None);
+    }
+
+    #[test]
+    fn rect_contains_handles_endpoints_beyond_i32_range() {
+        let near_max = Rect::new(i32::MAX - 1, i32::MAX - 1, 2, 2).unwrap();
+        assert!(near_max.contains(i32::MAX, i32::MAX));
+
+        let near_min = Rect::new(i32::MIN, i32::MIN, 2, 2).unwrap();
+        assert!(near_min.contains(i32::MIN + 1, i32::MIN + 1));
+    }
+
+    #[test]
+    fn rect_inflated_rejects_coordinate_and_dimension_overflow() {
+        let at_min = Rect::new(i32::MIN, 0, 1, 1).unwrap();
+        assert_eq!(at_min.inflated(1), None);
+
+        let widest = Rect::new(0, 0, i32::MAX, 1).unwrap();
+        assert_eq!(widest.inflated(1), None);
+
+        let ordinary = Rect::new(0, 0, 10, 10).unwrap();
+        assert_eq!(ordinary.inflated(i32::MIN), None);
+
+        let invalid = Rect {
+            x: 0,
+            y: 0,
+            width: -1,
+            height: 10,
+        };
+        assert_eq!(invalid.inflated(0), None);
+    }
+
+    #[test]
     fn ellipse_bounds_are_order_independent() {
         assert_eq!(ellipse_bounds(0, 0, 10, 20), ellipse_bounds(10, 20, 0, 0));
     }
@@ -132,5 +190,19 @@ mod tests {
     #[test]
     fn ellipse_bounds_compute_center_and_radii_from_drag_corners() {
         assert_eq!(ellipse_bounds(4, 6, 14, 18), (9, 12, 5, 6));
+    }
+
+    #[test]
+    fn ellipse_bounds_handle_the_full_coordinate_span() {
+        let expected = (0, 0, i32::MAX, i32::MAX);
+
+        assert_eq!(
+            ellipse_bounds(i32::MIN, i32::MIN, i32::MAX, i32::MAX),
+            expected
+        );
+        assert_eq!(
+            ellipse_bounds(i32::MAX, i32::MAX, i32::MIN, i32::MIN),
+            expected
+        );
     }
 }

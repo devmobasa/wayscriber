@@ -1,6 +1,7 @@
 use super::bounds::{
     bounding_box_for_arrow, bounding_box_for_blur, bounding_box_for_ellipse,
-    bounding_box_for_eraser, bounding_box_for_line, bounding_box_for_points, bounding_box_for_rect,
+    bounding_box_for_eraser, bounding_box_for_line, bounding_box_for_points,
+    bounding_box_for_pressure_points, bounding_box_for_rect, ensure_positive_rect_i64,
 };
 use super::polygon::{PolygonKind, bounding_box_for_polygon};
 use super::step_marker::step_marker_bounds;
@@ -334,36 +335,12 @@ impl Shape {
     /// Returns the axis-aligned bounding box for this shape, expanded to cover stroke width.
     ///
     /// The returned rectangle is suitable for dirty region tracking and damage hints.
-    /// Returns `None` only when the shape has no drawable area (e.g., degenerate data).
+    /// Returns `None` when the shape has no drawable area or its full bounds cannot be
+    /// represented safely by [`Rect`].
     pub fn bounding_box(&self) -> Option<Rect> {
         match self {
             Shape::Freehand { points, thick, .. } => bounding_box_for_points(points, *thick),
-            Shape::FreehandPressure { points, .. } => {
-                if points.is_empty() {
-                    return None;
-                }
-                let mut min_x = points[0].0;
-                let mut min_y = points[0].1;
-                let mut max_x = points[0].0;
-                let mut max_y = points[0].1;
-                let mut max_thick = 0.0f32;
-
-                for &(x, y, t) in points {
-                    min_x = min_x.min(x);
-                    min_y = min_y.min(y);
-                    max_x = max_x.max(x);
-                    max_y = max_y.max(y);
-                    max_thick = max_thick.max(t);
-                }
-
-                let pad = (max_thick as i32 / 2).max(1);
-                Some(Rect {
-                    x: min_x - pad,
-                    y: min_y - pad,
-                    width: (max_x - min_x + 2 * pad).max(1),
-                    height: (max_y - min_y + 2 * pad).max(1),
-                })
-            }
+            Shape::FreehandPressure { points, .. } => bounding_box_for_pressure_points(points),
             Shape::Line {
                 x1,
                 y1,
@@ -475,14 +452,11 @@ const fn default_arrow_head_at_end() -> bool {
 }
 
 fn normalized_rect(x: i32, y: i32, w: i32, h: i32) -> Option<Rect> {
-    let min_x = if w < 0 { x.saturating_add(w) } else { x };
-    let min_y = if h < 0 { y.saturating_add(h) } else { y };
-    Rect::new(
-        min_x,
-        min_y,
-        w.saturating_abs().max(1),
-        h.saturating_abs().max(1),
-    )
+    let x = i64::from(x);
+    let y = i64::from(y);
+    let x2 = x + i64::from(w);
+    let y2 = y + i64::from(h);
+    ensure_positive_rect_i64(x.min(x2), y.min(y2), x.max(x2), y.max(y2))
 }
 
 mod base64_bytes {
