@@ -5,6 +5,26 @@ use crate::draw::{
 };
 
 #[test]
+fn rectangle_hit_testing_widens_extreme_persisted_extents() {
+    assert!(shapes::rect_outline_hit(
+        i32::MIN,
+        0,
+        i32::MIN,
+        20,
+        1.0,
+        (i32::MIN, 10),
+        1.0,
+    ));
+    assert!(shapes::rect_fill_hit(
+        i32::MAX,
+        0,
+        i32::MAX,
+        20,
+        (i32::MAX, 10),
+    ));
+}
+
+#[test]
 fn compute_hit_bounds_inflates_bounds_for_tolerance() {
     let drawn = DrawnShape::with_metadata(
         1,

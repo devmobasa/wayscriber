@@ -1,7 +1,40 @@
 use super::{
-    BackdropStyle, BlurCacheKey, BlurRenderCache, BlurSurfaceStats, CachedBlurRegion,
-    blur_overlay_palette, blur_recipe,
+    BackdropStyle, BlurCacheKey, BlurRectParams, BlurRenderCache, BlurStyle, BlurSurfaceStats,
+    CachedBlurRegion, EraserReplayContext, blur_overlay_palette, blur_recipe, render_blur_rect,
 };
+
+#[test]
+fn extreme_gaussian_rect_with_backdrop_saturates_source_padding() {
+    let backdrop = cairo::ImageSurface::create(cairo::Format::ARgb32, 8, 8).expect("backdrop");
+    let output = cairo::ImageSurface::create(cairo::Format::ARgb32, 8, 8).expect("output");
+    let ctx = cairo::Context::new(&output).expect("output context");
+    let replay = EraserReplayContext {
+        pattern: None,
+        surface: Some(&backdrop),
+        backdrop_cache_key: Some(1),
+        bg_color: None,
+        logical_to_image_scale_x: 1.0,
+        logical_to_image_scale_y: 1.0,
+        logical_image_origin_x: f64::from(i32::MAX),
+        logical_image_origin_y: f64::from(i32::MAX),
+    };
+
+    render_blur_rect(
+        &ctx,
+        BlurRectParams {
+            x: i32::MAX,
+            y: i32::MAX,
+            w: i32::MAX,
+            h: i32::MAX,
+            strength: 12.0,
+            style: BlurStyle::Gaussian,
+            cacheable: false,
+        },
+        &replay,
+    );
+
+    ctx.status().expect("extreme Gaussian render remains valid");
+}
 
 #[test]
 fn blur_recipe_keeps_default_strength_heavily_blurred_but_not_overwashed() {

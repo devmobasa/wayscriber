@@ -12,6 +12,15 @@ pub fn clamp(val: i32, min: i32, max: i32) -> i32 {
     }
 }
 
+/// Normalizes an integer origin and signed extents without overflowing at coordinate limits.
+pub(crate) fn normalize_i32_rect(x: i32, y: i32, width: i32, height: i32) -> (f64, f64, f64, f64) {
+    let x = f64::from(x);
+    let y = f64::from(y);
+    let x2 = x + f64::from(width);
+    let y2 = y + f64::from(height);
+    (x.min(x2), y.min(y2), (x2 - x).abs(), (y2 - y).abs())
+}
+
 /// Axis-aligned rectangle helper used for dirty region tracking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rect {
@@ -117,6 +126,14 @@ mod tests {
     fn rect_new_rejects_non_positive_dimensions() {
         assert_eq!(Rect::new(0, 0, 0, 4), None);
         assert_eq!(Rect::new(0, 0, 4, -1), None);
+    }
+
+    #[test]
+    fn normalize_i32_rect_widens_extreme_signed_extents() {
+        assert_eq!(
+            normalize_i32_rect(i32::MIN, i32::MAX, i32::MIN, i32::MIN),
+            (-4_294_967_296.0, -1.0, 2_147_483_648.0, 2_147_483_648.0)
+        );
     }
 
     #[test]

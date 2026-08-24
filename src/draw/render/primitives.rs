@@ -38,16 +38,7 @@ pub(super) fn render_rect(
 
     // Normalize rectangle to handle any legacy data with negative dimensions
     // (InputState already normalizes, but this ensures consistent rendering)
-    let (norm_x, norm_w) = if w >= 0 {
-        (x as f64, w as f64)
-    } else {
-        ((x + w) as f64, (-w) as f64)
-    };
-    let (norm_y, norm_h) = if h >= 0 {
-        (y as f64, h as f64)
-    } else {
-        ((y + h) as f64, (-h) as f64)
-    };
+    let (norm_x, norm_y, norm_w, norm_h) = util::normalize_i32_rect(x, y, w, h);
 
     ctx.rectangle(norm_x, norm_y, norm_w, norm_h);
     if fill {
@@ -358,6 +349,28 @@ mod tests {
         assert!(
             alpha_at(&mut surface, 100, 20) > 0,
             "ellipse stroke should still render"
+        );
+    }
+
+    #[test]
+    fn rectangle_rendering_handles_minimum_persisted_extents() {
+        let (_surface, ctx) = surface_with_context(16, 16);
+        let color = Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        };
+
+        render_rect(
+            &ctx,
+            i32::MIN,
+            i32::MIN,
+            i32::MIN,
+            i32::MIN,
+            true,
+            color,
+            1.0,
         );
     }
 }

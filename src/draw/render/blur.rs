@@ -1,5 +1,6 @@
 use super::types::EraserReplayContext;
 use crate::draw::shape::BlurStyle;
+use crate::util::normalize_i32_rect;
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
@@ -146,12 +147,9 @@ thread_local! {
     );
 }
 
-fn normalize_rect(x: i32, y: i32, w: i32, h: i32) -> Option<(f64, f64, f64, f64)> {
-    let left = x.min(x + w) as f64;
-    let top = y.min(y + h) as f64;
-    let width = w.abs().max(1) as f64;
-    let height = h.abs().max(1) as f64;
-    (width > 0.0 && height > 0.0).then_some((left, top, width, height))
+fn blur_rect_geometry(x: i32, y: i32, w: i32, h: i32) -> (f64, f64, f64, f64) {
+    let (left, top, width, height) = normalize_i32_rect(x, y, w, h);
+    (left, top, width.max(1.0), height.max(1.0))
 }
 
 fn blur_recipe(strength: f64, style: BackdropStyle) -> BlurRecipe {
@@ -228,9 +226,8 @@ fn paint_scrim(surface: &cairo::ImageSurface, scrim: Rgba) {
 /// Needs no captured backdrop, so it is also the honest rendering for a
 /// black-out region in contexts that have no replay surface.
 pub(super) fn render_black_out_rect(ctx: &cairo::Context, x: i32, y: i32, w: i32, h: i32) {
-    if let Some((left, top, width, height)) = normalize_rect(x, y, w, h) {
-        render_black_out(ctx, left, top, width, height);
-    }
+    let (left, top, width, height) = blur_rect_geometry(x, y, w, h);
+    render_black_out(ctx, left, top, width, height);
 }
 
 fn render_black_out(ctx: &cairo::Context, left: f64, top: f64, width: f64, height: f64) {
@@ -257,9 +254,7 @@ pub(super) fn render_blur_placeholder(
     h: i32,
     selected: bool,
 ) {
-    let Some((left, top, width, height)) = normalize_rect(x, y, w, h) else {
-        return;
-    };
+    let (left, top, width, height) = blur_rect_geometry(x, y, w, h);
 
     let _ = ctx.save();
     ctx.rectangle(left, top, width, height);
@@ -515,9 +510,7 @@ pub fn render_blur_rect(
         style,
         cacheable,
     } = params;
-    let Some((left, top, width, height)) = normalize_rect(x, y, w, h) else {
-        return;
-    };
+    let (left, top, width, height) = blur_rect_geometry(x, y, w, h);
 
     // Black out needs no backdrop, so it also works before any capture exists.
     let Some(style) = BackdropStyle::from_style(style) else {
@@ -538,8 +531,14 @@ pub fn render_blur_rect(
     let origin_y = replay_ctx.logical_image_origin_y;
     let src_x = (((left - origin_x) * scale_x).floor() as i32).saturating_sub(recipe.padding_px);
     let src_y = (((top - origin_y) * scale_y).floor() as i32).saturating_sub(recipe.padding_px);
-    let src_x2 = ((left + width - origin_x) * scale_x).ceil() as i32 + recipe.padding_px;
-    let src_y2 = ((top + height - origin_y) * scale_y).ceil() as i32 + recipe.padding_px;
+    let src_x2 = ((left + width - origin_x) * scale_x)
+        .ceil()
+        .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32;
+    let src_y2 = ((top + height - origin_y) * scale_y)
+        .ceil()
+        .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32;
+    let src_x2 = src_x2.saturating_add(recipe.padding_px);
+    let src_y2 = src_y2.saturating_add(recipe.padding_px);
 
     let src_x = src_x.clamp(0, surface.width().saturating_sub(1));
     let src_y = src_y.clamp(0, surface.height().saturating_sub(1));

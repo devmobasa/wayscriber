@@ -12,6 +12,7 @@ mod text;
 
 pub(crate) use arrow::{calculate_arrow_outline, calculate_arrowhead_triangle_custom};
 pub use colors::{ConfigHexColorError, color_to_name, name_to_color, parse_config_hex_color};
+pub(crate) use geometry::normalize_i32_rect;
 pub use geometry::{Rect, ellipse_bounds};
 pub use text::truncate_with_ellipsis;
 

@@ -82,16 +82,9 @@ pub(super) fn rect_outline_hit(
     // Normalized like `render_rect` and `rect_fill_hit`: a stored rectangle
     // can carry negative extents, and it paints normalized — hit testing it
     // as a bare point instead made such a shape visible but unselectable.
-    let (left, right) = if w >= 0 {
-        (x as f64, (x + w) as f64)
-    } else {
-        ((x + w) as f64, x as f64)
-    };
-    let (top, bottom) = if h >= 0 {
-        (y as f64, (y + h) as f64)
-    } else {
-        ((y + h) as f64, y as f64)
-    };
+    let (left, top, width, height) = util::normalize_i32_rect(x, y, w, h);
+    let right = left + width;
+    let bottom = top + height;
 
     // Only a rectangle with no extent at all is a point. One collapsed axis
     // still paints as a line, which the edge tests below handle.
@@ -124,9 +117,10 @@ pub(super) fn rect_fill_hit(x: i32, y: i32, w: i32, h: i32, point: (i32, i32)) -
         return false;
     }
 
-    let (left, right) = if w >= 0 { (x, x + w) } else { (x + w, x) };
-    let (top, bottom) = if h >= 0 { (y, y + h) } else { (y + h, y) };
-    point.0 >= left && point.0 <= right && point.1 >= top && point.1 <= bottom
+    let (left, top, width, height) = util::normalize_i32_rect(x, y, w, h);
+    let point_x = f64::from(point.0);
+    let point_y = f64::from(point.1);
+    point_x >= left && point_x <= left + width && point_y >= top && point_y <= top + height
 }
 
 pub(super) fn polygon_outline_hit(
