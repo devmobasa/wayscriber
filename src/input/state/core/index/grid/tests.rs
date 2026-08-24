@@ -35,7 +35,7 @@ fn oversized_shape_is_queried_without_per_cell_index_entries() {
     let mut frame = Frame::new();
     let shape_id = frame.add_shape(filled_rect(0, 0, 100_000, 100_000));
 
-    let grid = SpatialGrid::build(&frame, SPATIAL_GRID_CELL_SIZE).expect("spatial grid");
+    let grid = SpatialGrid::build(&frame).expect("spatial grid");
 
     assert!(grid.cells.is_empty());
     assert!(grid.shape_cells.is_empty());
@@ -123,7 +123,7 @@ fn cell_coverage_enforces_per_shape_limit_boundary() {
 fn oversized_shape_can_move_back_into_regular_cells() {
     let mut frame = Frame::new();
     let shape_id = frame.add_shape(filled_rect(0, 0, 100_000, 100_000));
-    let mut grid = SpatialGrid::build(&frame, SPATIAL_GRID_CELL_SIZE).expect("spatial grid");
+    let mut grid = SpatialGrid::build(&frame).expect("spatial grid");
 
     grid.remove_shape(shape_id);
     grid.add_shape_with_bounds(shape_id, Rect::new(128, 128, 32, 32).expect("valid bounds"));

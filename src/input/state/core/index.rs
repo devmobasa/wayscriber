@@ -1,60 +1,11 @@
+mod grid;
+
 use super::base::InputState;
-use crate::draw::{Frame, ShapeId};
+use crate::draw::ShapeId;
 use crate::input::hit_test;
-use crate::util::Rect;
 use std::collections::{HashMap, HashSet};
 
-pub(super) const SPATIAL_GRID_CELL_SIZE: i32 = 64;
-const MAX_SPATIAL_CELLS_PER_SHAPE: usize = 4_096;
-// Allows roughly 26 indexed cells per shape at the default 10,000-shape limit
-// while placing a hard ceiling on duplicated `(shape, cell)` entries.
-const MAX_SPATIAL_GRID_MEMBERSHIPS: usize = 262_144;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct CellRange {
-    min_x: i32,
-    max_x: i32,
-    min_y: i32,
-    max_y: i32,
-    count: usize,
-}
-
-impl CellRange {
-    fn keys(self) -> impl Iterator<Item = (i32, i32)> {
-        (self.min_x..=self.max_x).flat_map(move |x| (self.min_y..=self.max_y).map(move |y| (x, y)))
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CellCoverage {
-    Bounded(CellRange),
-    Global,
-}
-
-/// Spatial grid for efficient hit-testing using ShapeId instead of indices.
-///
-/// This allows incremental updates when shapes are added, removed, or modified
-/// without needing to rebuild the entire grid.
-#[derive(Debug, Clone)]
-pub(super) struct SpatialGrid {
-    pub(super) cell_size: i32,
-    /// Maps cell coordinates to the ShapeIds contained in that cell.
-    pub(super) cells: HashMap<(i32, i32), Vec<ShapeId>>,
-    /// Reverse mapping from ShapeId to the cells it occupies for efficient removal.
-    pub(super) shape_cells: HashMap<ShapeId, Vec<(i32, i32)>>,
-    /// Shapes kept as global candidates because their coverage is unsafe or
-    /// oversized, or because the aggregate membership budget is exhausted.
-    ///
-    /// These remain candidates for every query, bounding per-shape index work
-    /// and total grid memory without introducing hit-test false negatives.
-    global_shapes: HashSet<ShapeId>,
-    /// Number of `(shape, cell)` memberships currently stored in both maps.
-    indexed_memberships: usize,
-    /// Maximum number of memberships retained by this grid.
-    max_indexed_memberships: usize,
-    /// Number of shapes when the grid was built (for validation).
-    pub(super) shape_count: usize,
-}
+pub(super) use self::grid::SpatialGrid;
 
 impl InputState {
     /// Returns all shapes intersecting any of the provided points within tolerance.
@@ -191,14 +142,14 @@ impl InputState {
         let needs_rebuild = match &self.spatial_index {
             None => true,
             Some(grid) => {
-                let drift = (grid.shape_count as i64 - len as i64).unsigned_abs() as usize;
+                let drift = (grid.shape_count() as i64 - len as i64).unsigned_abs() as usize;
                 drift > len / 5 + 1
             }
         };
 
         if needs_rebuild {
             let frame = self.boards.active_frame();
-            self.spatial_index = SpatialGrid::build(frame, SPATIAL_GRID_CELL_SIZE);
+            self.spatial_index = SpatialGrid::build(frame);
         }
     }
 
@@ -309,156 +260,3 @@ impl InputState {
         self.hit_test_indices((0..len).rev(), x, y, tolerance)
     }
 }
-
-impl SpatialGrid {
-    fn build(frame: &Frame, cell_size: i32) -> Option<Self> {
-        Self::build_with_membership_limit(frame, cell_size, MAX_SPATIAL_GRID_MEMBERSHIPS)
-    }
-
-    fn build_with_membership_limit(
-        frame: &Frame,
-        cell_size: i32,
-        max_indexed_memberships: usize,
-    ) -> Option<Self> {
-        let cell_size = cell_size.max(1);
-        if frame.shapes.is_empty() {
-            return None;
-        }
-
-        let mut grid = Self {
-            cell_size,
-            cells: HashMap::new(),
-            shape_cells: HashMap::new(),
-            global_shapes: HashSet::new(),
-            indexed_memberships: 0,
-            max_indexed_memberships,
-            shape_count: frame.shapes.len(),
-        };
-
-        for drawn in &frame.shapes {
-            let Some(bounds) = drawn.bounding_box() else {
-                continue;
-            };
-            grid.add_shape_with_bounds(drawn.id, bounds);
-        }
-
-        if grid.cells.is_empty() && grid.global_shapes.is_empty() {
-            return None;
-        }
-
-        Some(grid)
-    }
-
-    /// Computes bounded cell coverage without materializing its keys.
-    fn compute_cell_coverage(bounds: Rect, cell_size: i32) -> CellCoverage {
-        if !bounds.is_valid() {
-            return CellCoverage::Global;
-        }
-
-        let cell_size = i64::from(cell_size.max(1));
-        let min_cell_x = i64::from(bounds.x).div_euclid(cell_size);
-        let max_cell_x = (i64::from(bounds.x) + i64::from(bounds.width) - 1).div_euclid(cell_size);
-        let min_cell_y = i64::from(bounds.y).div_euclid(cell_size);
-        let max_cell_y = (i64::from(bounds.y) + i64::from(bounds.height) - 1).div_euclid(cell_size);
-
-        let columns = (max_cell_x - min_cell_x + 1) as u64;
-        let rows = (max_cell_y - min_cell_y + 1) as u64;
-        let Some(cell_count) = columns.checked_mul(rows) else {
-            return CellCoverage::Global;
-        };
-        if cell_count > MAX_SPATIAL_CELLS_PER_SHAPE as u64 {
-            return CellCoverage::Global;
-        }
-
-        let (Ok(min_cell_x), Ok(max_cell_x), Ok(min_cell_y), Ok(max_cell_y)) = (
-            i32::try_from(min_cell_x),
-            i32::try_from(max_cell_x),
-            i32::try_from(min_cell_y),
-            i32::try_from(max_cell_y),
-        ) else {
-            return CellCoverage::Global;
-        };
-
-        CellCoverage::Bounded(CellRange {
-            min_x: min_cell_x,
-            max_x: max_cell_x,
-            min_y: min_cell_y,
-            max_y: max_cell_y,
-            count: cell_count as usize,
-        })
-    }
-
-    /// Removes a shape from all cells it occupies.
-    fn remove_shape(&mut self, id: ShapeId) {
-        self.global_shapes.remove(&id);
-        if let Some(cell_keys) = self.shape_cells.remove(&id) {
-            self.indexed_memberships = self
-                .indexed_memberships
-                .checked_sub(cell_keys.len())
-                .expect("spatial index membership accounting underflow");
-            for key in cell_keys {
-                if let Some(ids) = self.cells.get_mut(&key) {
-                    ids.retain(|&existing_id| existing_id != id);
-                    // Clean up empty cells
-                    if ids.is_empty() {
-                        self.cells.remove(&key);
-                    }
-                }
-            }
-        }
-    }
-
-    /// Adds a shape with known bounds to the grid.
-    fn add_shape_with_bounds(&mut self, id: ShapeId, bounds: Rect) {
-        match Self::compute_cell_coverage(bounds, self.cell_size) {
-            CellCoverage::Bounded(cell_range)
-                if cell_range.count
-                    <= self
-                        .max_indexed_memberships
-                        .saturating_sub(self.indexed_memberships) =>
-            {
-                self.indexed_memberships += cell_range.count;
-                let mut cell_keys = Vec::with_capacity(cell_range.count);
-                for key in cell_range.keys() {
-                    self.cells.entry(key).or_default().push(id);
-                    cell_keys.push(key);
-                }
-                debug_assert_eq!(cell_keys.len(), cell_range.count);
-                self.shape_cells.insert(id, cell_keys);
-            }
-            CellCoverage::Bounded(_) | CellCoverage::Global => {
-                self.global_shapes.insert(id);
-            }
-        }
-    }
-
-    /// Queries for all ShapeIds in cells near the given point with tolerance-aware radius.
-    ///
-    /// The search radius is expanded based on tolerance to ensure shapes that could
-    /// be hit within the tolerance distance are not missed.
-    fn query_with_tolerance(&self, point: (i32, i32), tolerance: f64) -> Vec<ShapeId> {
-        let cell_x = point.0.div_euclid(self.cell_size);
-        let cell_y = point.1.div_euclid(self.cell_size);
-
-        // Expand search radius based on tolerance: ceil(tolerance / cell_size) + 1
-        // The +1 ensures we always check at least the 3x3 neighborhood
-        let extra_cells = (tolerance / self.cell_size as f64).ceil() as i32;
-        let radius = 1 + extra_cells;
-
-        let mut unique = HashSet::with_capacity(self.global_shapes.len());
-        unique.extend(self.global_shapes.iter().copied());
-        for dx in -radius..=radius {
-            for dy in -radius..=radius {
-                let key = (cell_x + dx, cell_y + dy);
-                if let Some(ids) = self.cells.get(&key) {
-                    unique.extend(ids.iter().copied());
-                }
-            }
-        }
-
-        unique.into_iter().collect()
-    }
-}
-
-#[cfg(test)]
-mod tests;
