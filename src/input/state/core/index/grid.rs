@@ -4,6 +4,8 @@ use std::collections::{HashMap, HashSet};
 
 const SPATIAL_GRID_CELL_SIZE: i32 = 64;
 const MAX_SPATIAL_CELLS_PER_SHAPE: usize = 4_096;
+// The largest centered odd square within this budget is 63 x 63 cells.
+const MAX_SPATIAL_QUERY_CELLS: u64 = 4_096;
 // Allows roughly 26 indexed cells per shape at the default 10,000-shape limit
 // while placing a hard ceiling on duplicated `(shape, cell)` entries.
 const MAX_SPATIAL_GRID_MEMBERSHIPS: usize = 262_144;
@@ -188,26 +190,52 @@ impl SpatialGrid {
     /// The search radius is expanded based on tolerance to ensure shapes that could
     /// be hit within the tolerance distance are not missed.
     pub(super) fn query_with_tolerance(&self, point: (i32, i32), tolerance: f64) -> Vec<ShapeId> {
-        let cell_x = point.0.div_euclid(self.cell_size);
-        let cell_y = point.1.div_euclid(self.cell_size);
-
-        // Expand search radius based on tolerance: ceil(tolerance / cell_size) + 1
-        // The +1 ensures we always check at least the 3x3 neighborhood
-        let extra_cells = (tolerance / self.cell_size as f64).ceil() as i32;
-        let radius = 1 + extra_cells;
+        let Some(radius) = Self::query_radius_within_budget(tolerance, self.cell_size) else {
+            return self.all_candidates();
+        };
+        let cell_x = i64::from(point.0.div_euclid(self.cell_size));
+        let cell_y = i64::from(point.1.div_euclid(self.cell_size));
 
         let mut unique = HashSet::with_capacity(self.global_shapes.len());
         unique.extend(self.global_shapes.iter().copied());
         for dx in -radius..=radius {
+            let Ok(key_x) = i32::try_from(cell_x + dx) else {
+                continue;
+            };
             for dy in -radius..=radius {
-                let key = (cell_x + dx, cell_y + dy);
-                if let Some(ids) = self.cells.get(&key) {
+                let Ok(key_y) = i32::try_from(cell_y + dy) else {
+                    continue;
+                };
+                if let Some(ids) = self.cells.get(&(key_x, key_y)) {
                     unique.extend(ids.iter().copied());
                 }
             }
         }
 
         unique.into_iter().collect()
+    }
+
+    fn query_radius_within_budget(tolerance: f64, cell_size: i32) -> Option<i64> {
+        if !tolerance.is_finite() || tolerance < 0.0 {
+            return None;
+        }
+
+        let extra_cells = (tolerance / f64::from(cell_size.max(1))).ceil();
+        if extra_cells > (i64::MAX - 1) as f64 {
+            return None;
+        }
+        let radius = (extra_cells as i64).checked_add(1)?;
+        let diameter = radius.checked_mul(2)?.checked_add(1)?;
+        let diameter = u64::try_from(diameter).ok()?;
+        let query_cells = diameter.checked_mul(diameter)?;
+        (query_cells <= MAX_SPATIAL_QUERY_CELLS).then_some(radius)
+    }
+
+    fn all_candidates(&self) -> Vec<ShapeId> {
+        let mut candidates = Vec::with_capacity(self.shape_cells.len() + self.global_shapes.len());
+        candidates.extend(self.shape_cells.keys().copied());
+        candidates.extend(self.global_shapes.iter().copied());
+        candidates
     }
 }
 

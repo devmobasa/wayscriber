@@ -30,6 +30,20 @@ fn assert_membership_accounting(grid: &SpatialGrid) {
     }
 }
 
+fn mixed_candidate_grid() -> (SpatialGrid, [ShapeId; 3]) {
+    let mut frame = Frame::new();
+    let first = frame.add_shape(filled_rect(10, 10, 10, 10));
+    let second = frame.add_shape(filled_rect(74, 10, 10, 10));
+    let third = frame.add_shape(filled_rect(138, 10, 10, 10));
+    let grid = SpatialGrid::build_with_membership_limit(&frame, SPATIAL_GRID_CELL_SIZE, 2)
+        .expect("spatial grid");
+    (grid, [first, second, third])
+}
+
+fn candidate_set(candidates: Vec<ShapeId>) -> HashSet<ShapeId> {
+    candidates.into_iter().collect()
+}
+
 #[test]
 fn oversized_shape_is_queried_without_per_cell_index_entries() {
     let mut frame = Frame::new();
@@ -223,4 +237,65 @@ fn reindexing_shape_beyond_remaining_budget_clears_old_cells_and_stays_queryable
     assert!(!grid.shape_cells.contains_key(&first));
     assert!(grid.global_shapes.contains(&first));
     assert!(grid.query_with_tolerance((32, 16), 1.0).contains(&first));
+}
+
+#[test]
+fn invalid_query_tolerances_return_all_candidates() {
+    let (grid, shape_ids) = mixed_candidate_grid();
+    let expected = HashSet::from(shape_ids);
+
+    for tolerance in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -1.0, f64::MAX] {
+        assert_eq!(
+            candidate_set(grid.query_with_tolerance((6_400, 6_400), tolerance)),
+            expected,
+            "unexpected candidates for tolerance {tolerance:?}"
+        );
+    }
+}
+
+#[test]
+fn query_cell_budget_falls_back_before_radius_can_explode() {
+    let (grid, [first, second, global]) = mixed_candidate_grid();
+    let point = (6_400, 6_400);
+    let within_budget = 30.0 * f64::from(SPATIAL_GRID_CELL_SIZE);
+    let over_budget = 31.0 * f64::from(SPATIAL_GRID_CELL_SIZE);
+
+    assert_eq!(
+        candidate_set(grid.query_with_tolerance(point, within_budget)),
+        HashSet::from([global])
+    );
+    assert_eq!(
+        candidate_set(grid.query_with_tolerance(point, over_budget)),
+        HashSet::from([first, second, global])
+    );
+}
+
+#[test]
+fn query_at_coordinate_limits_skips_out_of_range_neighbor_cells() {
+    let min_id = 1;
+    let max_id = 2;
+    let grid = SpatialGrid {
+        cell_size: 1,
+        cells: HashMap::from([
+            ((i32::MIN, i32::MIN), vec![min_id]),
+            ((i32::MAX, i32::MAX), vec![max_id]),
+        ]),
+        shape_cells: HashMap::from([
+            (min_id, vec![(i32::MIN, i32::MIN)]),
+            (max_id, vec![(i32::MAX, i32::MAX)]),
+        ]),
+        global_shapes: HashSet::new(),
+        indexed_memberships: 2,
+        max_indexed_memberships: 2,
+        shape_count: 2,
+    };
+
+    assert_eq!(
+        candidate_set(grid.query_with_tolerance((i32::MIN, i32::MIN), 0.0)),
+        HashSet::from([min_id])
+    );
+    assert_eq!(
+        candidate_set(grid.query_with_tolerance((i32::MAX, i32::MAX), 0.0)),
+        HashSet::from([max_id])
+    );
 }
