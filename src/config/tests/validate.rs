@@ -649,6 +649,20 @@ fn validate_and_clamp_resets_non_finite_toolbar_scale() {
 }
 
 #[test]
+fn validate_and_clamp_resets_non_finite_hit_test_tolerance() {
+    let default = Config::default().drawing.hit_test_tolerance;
+
+    for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let mut config = Config::default();
+        config.drawing.hit_test_tolerance = invalid;
+
+        config.validate_and_clamp();
+
+        assert_eq!(config.drawing.hit_test_tolerance, default);
+    }
+}
+
+#[test]
 fn validate_and_clamp_resets_non_finite_spotlight_settings() {
     let defaults = Config::default().spotlight;
 

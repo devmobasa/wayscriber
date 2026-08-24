@@ -24,6 +24,10 @@ impl InputState {
         points: &[(i32, i32)],
         tolerance: f64,
     ) -> Vec<ShapeId> {
+        let Some(tolerance) = hit_test::validated_tolerance(tolerance) else {
+            return Vec::new();
+        };
+
         if points.is_empty() {
             return Vec::new();
         }
@@ -116,7 +120,9 @@ impl InputState {
 
     /// Updates the hit-test tolerance (in pixels).
     pub fn set_hit_test_tolerance(&mut self, tolerance: f64) {
-        self.hit_test_tolerance = tolerance.max(1.0);
+        self.hit_test_tolerance = hit_test::validated_tolerance(tolerance)
+            .map(|tolerance| tolerance.max(1.0))
+            .unwrap_or(1.0);
         self.invalidate_hit_cache();
     }
 

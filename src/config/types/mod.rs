@@ -34,6 +34,7 @@ pub use capture::{
 };
 pub use click_highlight::ClickHighlightConfig;
 pub use context_menu::ContextMenuUiConfig;
+pub(crate) use drawing::DEFAULT_HIT_TEST_TOLERANCE;
 pub use drawing::{
     DragButtonConfig, DrawingConfig, MouseDragToolsConfig, QUICK_COLOR_RENDER_LIMIT,
     QuickColorConfig, QuickColorPalette, QuickColorPaletteEntry, QuickColorSlot, QuickColorWrite,

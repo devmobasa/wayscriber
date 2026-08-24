@@ -56,6 +56,29 @@ fn compute_hit_bounds_ignores_eraser_strokes() {
 }
 
 #[test]
+fn invalid_tolerances_fail_closed() {
+    let drawn = DrawnShape::with_metadata(
+        3,
+        Shape::Line {
+            x1: 0,
+            y1: 0,
+            x2: 20,
+            y2: 0,
+            color: BLACK,
+            thick: 2.0,
+        },
+        0,
+        false,
+    );
+
+    for tolerance in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -1.0, f64::MAX] {
+        assert!(compute_hit_bounds(&drawn, tolerance).is_none());
+        assert!(!hit_test(&drawn, (10, 0), tolerance));
+        assert!(!hit_test_for_point_targeting(&drawn, (10, 0), tolerance));
+    }
+}
+
+#[test]
 fn rect_hit_handles_degenerate_dimensions() {
     let rect = DrawnShape::with_metadata(
         1,
