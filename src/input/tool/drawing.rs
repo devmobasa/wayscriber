@@ -128,10 +128,12 @@ impl Tool {
                 color: snapshot.color,
                 thick: snapshot.size,
             }),
-            ToolDrawingBehavior::Rect => finish_shape(snapshot, usage, |snapshot| {
-                let (x, w) = normalized_axis(snapshot.start.0, snapshot.end.0);
-                let (y, h) = normalized_axis(snapshot.start.1, snapshot.end.1);
-                Shape::Rect {
+            ToolDrawingBehavior::Rect => {
+                let Some((x, y, w, h)) = normalized_drag_bounds(snapshot.start, snapshot.end)
+                else {
+                    return FinishedToolStroke::Noop;
+                };
+                finish_shape(snapshot, usage, |snapshot| Shape::Rect {
                     x,
                     y,
                     w,
@@ -139,8 +141,8 @@ impl Tool {
                     fill: snapshot.fill_enabled,
                     color: snapshot.color,
                     thick: snapshot.size,
-                }
-            }),
+                })
+            }
             ToolDrawingBehavior::Ellipse => finish_shape(snapshot, usage, |snapshot| {
                 let (cx, cy, rx, ry) = util::ellipse_bounds(
                     snapshot.start.0,
@@ -180,18 +182,20 @@ impl Tool {
                     label: snapshot.arrow_label,
                 })
             }
-            ToolDrawingBehavior::BlurRect => finish_shape(snapshot, usage, |snapshot| {
-                let (x, w) = normalized_axis(snapshot.start.0, snapshot.end.0);
-                let (y, h) = normalized_axis(snapshot.start.1, snapshot.end.1);
-                Shape::BlurRect {
+            ToolDrawingBehavior::BlurRect => {
+                let Some((x, y, w, h)) = normalized_drag_bounds(snapshot.start, snapshot.end)
+                else {
+                    return FinishedToolStroke::Noop;
+                };
+                finish_shape(snapshot, usage, |snapshot| Shape::BlurRect {
                     x,
                     y,
                     w,
                     h,
                     strength: snapshot.size,
                     style: snapshot.blur_style,
-                }
-            }),
+                })
+            }
             ToolDrawingBehavior::Spotlight => finish_shape(snapshot, usage, |snapshot| {
                 let (cx, cy, rx, ry) = util::ellipse_bounds(
                     snapshot.start.0,
@@ -269,8 +273,10 @@ impl Tool {
                 thick: snapshot.size,
             }),
             ToolDrawingBehavior::Rect => {
-                let (x, w) = normalized_axis(snapshot.start.0, snapshot.current.0);
-                let (y, h) = normalized_axis(snapshot.start.1, snapshot.current.1);
+                let Some((x, y, w, h)) = normalized_drag_bounds(snapshot.start, snapshot.current)
+                else {
+                    return ProvisionalToolStroke::None;
+                };
                 ProvisionalToolStroke::Shape(Shape::Rect {
                     x,
                     y,
@@ -315,8 +321,10 @@ impl Tool {
                 label: snapshot.arrow_label,
             }),
             ToolDrawingBehavior::BlurRect => {
-                let (x, w) = normalized_axis(snapshot.start.0, snapshot.current.0);
-                let (y, h) = normalized_axis(snapshot.start.1, snapshot.current.1);
+                let Some((x, y, w, h)) = normalized_drag_bounds(snapshot.start, snapshot.current)
+                else {
+                    return ProvisionalToolStroke::None;
+                };
                 ProvisionalToolStroke::BlurReplayPreview(BlurRectParams {
                     x,
                     y,
@@ -486,10 +494,42 @@ fn pressure_data_varies(point_thicknesses: &[f32], point_count: usize, threshold
     (max_t - min_t).abs() > threshold as f32
 }
 
-fn normalized_axis(start: i32, end: i32) -> (i32, i32) {
-    if end >= start {
-        (start, end - start)
-    } else {
-        (end, start - end)
+fn normalized_axis(start: i32, end: i32) -> Option<(i32, i32)> {
+    let length = i32::try_from(start.abs_diff(end)).ok()?;
+    Some((start.min(end), length))
+}
+
+fn normalized_drag_bounds(start: (i32, i32), end: (i32, i32)) -> Option<(i32, i32, i32, i32)> {
+    let (x, width) = normalized_axis(start.0, end.0)?;
+    let (y, height) = normalized_axis(start.1, end.1)?;
+    Some((x, y, width, height))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalized_axis, normalized_drag_bounds};
+
+    #[test]
+    fn normalized_axis_is_order_independent() {
+        assert_eq!(normalized_axis(10, 25), Some((10, 15)));
+        assert_eq!(normalized_axis(25, 10), Some((10, 15)));
+    }
+
+    #[test]
+    fn normalized_axis_accepts_the_largest_representable_span() {
+        assert_eq!(normalized_axis(i32::MIN, -1), Some((i32::MIN, i32::MAX)));
+        assert_eq!(normalized_axis(-1, i32::MIN), Some((i32::MIN, i32::MAX)));
+    }
+
+    #[test]
+    fn normalized_axis_rejects_unrepresentable_spans() {
+        assert_eq!(normalized_axis(i32::MIN, i32::MAX), None);
+        assert_eq!(normalized_axis(i32::MAX, i32::MIN), None);
+    }
+
+    #[test]
+    fn normalized_drag_bounds_reject_either_unrepresentable_axis() {
+        assert_eq!(normalized_drag_bounds((i32::MIN, 0), (i32::MAX, 10)), None);
+        assert_eq!(normalized_drag_bounds((0, i32::MIN), (10, i32::MAX)), None);
     }
 }
