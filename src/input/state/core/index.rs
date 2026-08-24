@@ -1,25 +1,11 @@
+mod grid;
+
 use super::base::InputState;
-use crate::draw::{Frame, ShapeId};
+use crate::draw::ShapeId;
 use crate::input::hit_test;
-use crate::util::Rect;
 use std::collections::{HashMap, HashSet};
 
-pub(super) const SPATIAL_GRID_CELL_SIZE: i32 = 64;
-
-/// Spatial grid for efficient hit-testing using ShapeId instead of indices.
-///
-/// This allows incremental updates when shapes are added, removed, or modified
-/// without needing to rebuild the entire grid.
-#[derive(Debug, Clone)]
-pub(super) struct SpatialGrid {
-    pub(super) cell_size: i32,
-    /// Maps cell coordinates to the ShapeIds contained in that cell.
-    pub(super) cells: HashMap<(i32, i32), Vec<ShapeId>>,
-    /// Reverse mapping from ShapeId to the cells it occupies for efficient removal.
-    pub(super) shape_cells: HashMap<ShapeId, Vec<(i32, i32)>>,
-    /// Number of shapes when the grid was built (for validation).
-    pub(super) shape_count: usize,
-}
+pub(super) use self::grid::SpatialGrid;
 
 impl InputState {
     /// Returns all shapes intersecting any of the provided points within tolerance.
@@ -38,6 +24,10 @@ impl InputState {
         points: &[(i32, i32)],
         tolerance: f64,
     ) -> Vec<ShapeId> {
+        let Some(tolerance) = hit_test::validated_tolerance(tolerance) else {
+            return Vec::new();
+        };
+
         if points.is_empty() {
             return Vec::new();
         }
@@ -130,7 +120,9 @@ impl InputState {
 
     /// Updates the hit-test tolerance (in pixels).
     pub fn set_hit_test_tolerance(&mut self, tolerance: f64) {
-        self.hit_test_tolerance = tolerance.max(1.0);
+        self.hit_test_tolerance = hit_test::validated_tolerance(tolerance)
+            .map(|tolerance| tolerance.max(1.0))
+            .unwrap_or(1.0);
         self.invalidate_hit_cache();
     }
 
@@ -156,14 +148,14 @@ impl InputState {
         let needs_rebuild = match &self.spatial_index {
             None => true,
             Some(grid) => {
-                let drift = (grid.shape_count as i64 - len as i64).unsigned_abs() as usize;
+                let drift = (grid.shape_count() as i64 - len as i64).unsigned_abs() as usize;
                 drift > len / 5 + 1
             }
         };
 
         if needs_rebuild {
             let frame = self.boards.active_frame();
-            self.spatial_index = SpatialGrid::build(frame, SPATIAL_GRID_CELL_SIZE);
+            self.spatial_index = SpatialGrid::build(frame);
         }
     }
 
@@ -272,108 +264,5 @@ impl InputState {
         }
 
         self.hit_test_indices((0..len).rev(), x, y, tolerance)
-    }
-}
-
-impl SpatialGrid {
-    fn build(frame: &Frame, cell_size: i32) -> Option<Self> {
-        let cell_size = cell_size.max(1);
-        if frame.shapes.is_empty() {
-            return None;
-        }
-
-        let mut cells: HashMap<(i32, i32), Vec<ShapeId>> = HashMap::new();
-        let mut shape_cells: HashMap<ShapeId, Vec<(i32, i32)>> = HashMap::new();
-
-        for drawn in &frame.shapes {
-            let Some(bounds) = drawn.bounding_box() else {
-                continue;
-            };
-
-            let cell_keys = Self::compute_cell_keys(bounds, cell_size);
-            for &key in &cell_keys {
-                cells.entry(key).or_default().push(drawn.id);
-            }
-            shape_cells.insert(drawn.id, cell_keys);
-        }
-
-        if cells.is_empty() {
-            return None;
-        }
-
-        Some(Self {
-            cell_size,
-            cells,
-            shape_cells,
-            shape_count: frame.shapes.len(),
-        })
-    }
-
-    /// Computes the cell keys that a bounding box occupies.
-    fn compute_cell_keys(bounds: Rect, cell_size: i32) -> Vec<(i32, i32)> {
-        let min_cell_x = bounds.x.div_euclid(cell_size);
-        let max_cell_x = (bounds.x + bounds.width - 1).div_euclid(cell_size);
-        let min_cell_y = bounds.y.div_euclid(cell_size);
-        let max_cell_y = (bounds.y + bounds.height - 1).div_euclid(cell_size);
-
-        let mut keys = Vec::with_capacity(
-            ((max_cell_x - min_cell_x + 1) * (max_cell_y - min_cell_y + 1)) as usize,
-        );
-        for cx in min_cell_x..=max_cell_x {
-            for cy in min_cell_y..=max_cell_y {
-                keys.push((cx, cy));
-            }
-        }
-        keys
-    }
-
-    /// Removes a shape from all cells it occupies.
-    fn remove_shape(&mut self, id: ShapeId) {
-        if let Some(cell_keys) = self.shape_cells.remove(&id) {
-            for key in cell_keys {
-                if let Some(ids) = self.cells.get_mut(&key) {
-                    ids.retain(|&existing_id| existing_id != id);
-                    // Clean up empty cells
-                    if ids.is_empty() {
-                        self.cells.remove(&key);
-                    }
-                }
-            }
-        }
-    }
-
-    /// Adds a shape with known bounds to the grid.
-    fn add_shape_with_bounds(&mut self, id: ShapeId, bounds: Rect) {
-        let cell_keys = Self::compute_cell_keys(bounds, self.cell_size);
-        for &key in &cell_keys {
-            self.cells.entry(key).or_default().push(id);
-        }
-        self.shape_cells.insert(id, cell_keys);
-    }
-
-    /// Queries for all ShapeIds in cells near the given point with tolerance-aware radius.
-    ///
-    /// The search radius is expanded based on tolerance to ensure shapes that could
-    /// be hit within the tolerance distance are not missed.
-    fn query_with_tolerance(&self, point: (i32, i32), tolerance: f64) -> Vec<ShapeId> {
-        let cell_x = point.0.div_euclid(self.cell_size);
-        let cell_y = point.1.div_euclid(self.cell_size);
-
-        // Expand search radius based on tolerance: ceil(tolerance / cell_size) + 1
-        // The +1 ensures we always check at least the 3x3 neighborhood
-        let extra_cells = (tolerance / self.cell_size as f64).ceil() as i32;
-        let radius = 1 + extra_cells;
-
-        let mut unique = HashSet::new();
-        for dx in -radius..=radius {
-            for dy in -radius..=radius {
-                let key = (cell_x + dx, cell_y + dy);
-                if let Some(ids) = self.cells.get(&key) {
-                    unique.extend(ids.iter().copied());
-                }
-            }
-        }
-
-        unique.into_iter().collect()
     }
 }

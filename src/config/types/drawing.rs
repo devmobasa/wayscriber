@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 /// Maximum quick colors rendered by dense palette UIs.
 pub const QUICK_COLOR_RENDER_LIMIT: usize = 24;
 
+/// Default tolerance used when selecting or targeting drawn shapes.
+pub(crate) const DEFAULT_HIT_TEST_TOLERANCE: f64 = 6.0;
+
 /// Drawing-related settings.
 ///
 /// Controls the default appearance of drawing tools when the overlay first opens.
@@ -898,7 +901,7 @@ fn default_text_background() -> bool {
 }
 
 fn default_hit_test_tolerance() -> f64 {
-    6.0
+    DEFAULT_HIT_TEST_TOLERANCE
 }
 
 fn default_hit_test_threshold() -> usize {

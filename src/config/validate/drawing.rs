@@ -1,4 +1,5 @@
 use super::Config;
+use crate::config::types::DEFAULT_HIT_TEST_TOLERANCE;
 use crate::draw::shape::{REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
@@ -68,7 +69,13 @@ impl Config {
                 .clamp(REGULAR_POLYGON_MIN_SIDES, REGULAR_POLYGON_MAX_SIDES);
         }
 
-        if !(1.0..=20.0).contains(&self.drawing.hit_test_tolerance) {
+        if !self.drawing.hit_test_tolerance.is_finite() {
+            log::warn!(
+                "Invalid non-finite hit_test_tolerance; resetting to default {:.1}",
+                DEFAULT_HIT_TEST_TOLERANCE
+            );
+            self.drawing.hit_test_tolerance = DEFAULT_HIT_TEST_TOLERANCE;
+        } else if !(1.0..=20.0).contains(&self.drawing.hit_test_tolerance) {
             log::warn!(
                 "Invalid hit_test_tolerance {:.1}, clamping to 1.0-20.0 range",
                 self.drawing.hit_test_tolerance
