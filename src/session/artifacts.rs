@@ -1,4 +1,5 @@
 mod move_file;
+mod save_as_quarantine;
 
 use anyhow::{Context, Result, anyhow};
 use std::fs;
@@ -21,6 +22,36 @@ pub use move_file::{
     NamedSessionMoveOutcome, NamedSessionMovedArtifact, move_named_session_non_lock_artifacts,
     rollback_named_session_non_lock_artifacts_move,
 };
+#[cfg(test)]
+pub(crate) use save_as_quarantine::SAVE_AS_STAGING_PREFIX;
+pub(crate) use save_as_quarantine::{SaveAsSidecarQuarantine, quarantine_save_as_sidecars};
+
+pub(super) trait ArtifactMovePaths {
+    fn source(&self) -> &Path;
+    fn target(&self) -> &Path;
+}
+
+pub(super) fn rollback_artifact_moves<T: ArtifactMovePaths>(moved: &[T]) -> Result<()> {
+    let mut failures = Vec::new();
+    for artifact in moved.iter().rev() {
+        if let Err(err) = rename_artifact_no_replace(artifact.target(), artifact.source()) {
+            failures.push(format!(
+                "{} -> {}: {err}",
+                artifact.target().display(),
+                artifact.source().display()
+            ));
+        }
+    }
+
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "failed to roll back moved session artifacts: {}",
+            failures.join("; ")
+        ))
+    }
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]

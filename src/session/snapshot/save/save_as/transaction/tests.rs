@@ -1,5 +1,6 @@
 use super::*;
-use std::cell::RefCell;
+use anyhow::anyhow;
+use std::cell::{Cell, RefCell};
 use std::os::unix::fs::PermissionsExt;
 
 fn staging_directories(parent: &Path) -> Vec<PathBuf> {
@@ -12,24 +13,6 @@ fn staging_directories(parent: &Path) -> Vec<PathBuf> {
                 .is_some_and(|name| name.starts_with(SAVE_AS_STAGING_PREFIX))
         })
         .collect()
-}
-
-#[test]
-fn quarantine_validation_failure_preserves_every_sidecar() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
-    let session = temp.path().join("target.wayscriber-session");
-    let backup = temp.path().join("target.wayscriber-session.bak");
-    let recovery = temp.path().join("target.wayscriber-session.recovery");
-    fs::write(&backup, b"backup").expect("write backup");
-    fs::create_dir(&recovery).expect("create invalid recovery directory");
-
-    let err = quarantine_save_as_sidecars(&[backup.clone(), recovery.clone()], &session)
-        .expect_err("sidecar directory must fail validation");
-
-    assert!(format!("{err:#}").contains("refusing to replace"));
-    assert_eq!(fs::read(&backup).expect("backup preserved"), b"backup");
-    assert!(recovery.is_dir());
-    assert!(staging_directories(temp.path()).is_empty());
 }
 
 #[test]
@@ -91,6 +74,51 @@ fn successful_commit_removes_quarantined_sidecars() {
     assert!(!backup.exists());
     assert!(!recovery.exists());
     assert!(staging_directories(temp.path()).is_empty());
+}
+
+#[test]
+fn primary_sync_failure_retains_quarantine_and_skips_cleanup() {
+    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let session = temp.path().join("target.wayscriber-session");
+    let tmp = temp.path().join("target.tmp");
+    let recovery = temp.path().join("target.wayscriber-session.recovery");
+    fs::write(&session, b"old primary").expect("write primary");
+    fs::write(&tmp, b"new primary").expect("write temporary primary");
+    fs::write(&recovery, b"recovery").expect("write recovery");
+    let cleanup_called = Cell::new(false);
+
+    let err = commit_save_as_target_with(
+        &tmp,
+        &session,
+        std::slice::from_ref(&recovery),
+        |source, target| fs::rename(source, target),
+        || Err(anyhow!("injected primary sync failure")),
+        |_| {
+            cleanup_called.set(true);
+            Ok(())
+        },
+    )
+    .expect_err("primary sync failure must be reported");
+
+    assert!(
+        !cleanup_called.get(),
+        "cleanup must not run after sync failure"
+    );
+    assert!(format!("{err:#}").contains("was not durably synced"));
+    assert_eq!(
+        fs::read(&session).expect("new primary remains in place"),
+        b"new primary"
+    );
+    assert!(!recovery.exists());
+    let directories = staging_directories(temp.path());
+    assert_eq!(directories.len(), 1);
+    let staged = fs::read_dir(&directories[0])
+        .expect("retained quarantine")
+        .next()
+        .expect("retained entry")
+        .expect("retained entry path")
+        .path();
+    assert_eq!(fs::read(staged).expect("recovery retained"), b"recovery");
 }
 
 #[test]

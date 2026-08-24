@@ -122,7 +122,7 @@ pub fn sync_parent_dir(path: &Path) -> Result<(), DurableIoError> {
     let parent = path.parent().ok_or_else(|| DurableIoError::MissingParent {
         path: path.to_path_buf(),
     })?;
-    sync_dir(parent)
+    sync_directory(parent)
 }
 
 fn inspect_destination(
@@ -608,15 +608,15 @@ pub fn rename_no_replace(source: &Path, target: &Path) -> io::Result<()> {
 }
 
 #[cfg(unix)]
-fn sync_dir(parent: &Path) -> Result<(), DurableIoError> {
-    let dir = File::open(parent)
-        .map_err(|source| io_error(DurableIoOperation::SyncParent, parent, source))?;
+pub(crate) fn sync_directory(directory: &Path) -> Result<(), DurableIoError> {
+    let dir = File::open(directory)
+        .map_err(|source| io_error(DurableIoOperation::SyncParent, directory, source))?;
     dir.sync_all()
-        .map_err(|source| io_error(DurableIoOperation::SyncParent, parent, source))
+        .map_err(|source| io_error(DurableIoOperation::SyncParent, directory, source))
 }
 
 #[cfg(not(unix))]
-fn sync_dir(_parent: &Path) -> Result<(), DurableIoError> {
+pub(crate) fn sync_directory(_directory: &Path) -> Result<(), DurableIoError> {
     Ok(())
 }
 

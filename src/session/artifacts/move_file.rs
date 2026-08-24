@@ -9,8 +9,8 @@ use crate::session::lock::{lock_exclusive, open_runtime_lock_file, unlock};
 use crate::session::primary::open_session_artifact_for_read;
 
 use super::{
-    SessionArtifactPaths, named_session_artifact_paths, named_session_non_lock_artifact_paths,
-    preserved_newer_version_suffix,
+    ArtifactMovePaths, SessionArtifactPaths, named_session_artifact_paths,
+    named_session_non_lock_artifact_paths, preserved_newer_version_suffix, rollback_artifact_moves,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +32,16 @@ struct MoveArtifact {
     source: PathBuf,
     target: PathBuf,
     required: bool,
+}
+
+impl ArtifactMovePaths for MoveArtifact {
+    fn source(&self) -> &Path {
+        &self.source
+    }
+
+    fn target(&self) -> &Path {
+        &self.target
+    }
 }
 
 struct MoveLocks {
@@ -115,7 +125,7 @@ pub fn rollback_named_session_non_lock_artifacts_move(
         .iter()
         .map(MoveArtifact::from)
         .collect::<Vec<_>>();
-    rollback_moved_artifacts(&moved)?;
+    rollback_artifact_moves(&moved)?;
     sync_move_parent_dirs(&outcome.source, &outcome.target);
     Ok(())
 }
@@ -327,14 +337,14 @@ fn rename_artifacts_with_rollback(artifacts: &[MoveArtifact]) -> Result<()> {
         match rename_artifact_no_replace(&artifact.source, &artifact.target) {
             Ok(()) => moved.push(artifact.clone()),
             Err(err) if err.kind() == ErrorKind::AlreadyExists => {
-                rollback_moved_artifacts(&moved)?;
+                rollback_artifact_moves(&moved)?;
                 return Err(anyhow!(
                     "Move Session target appeared during move: {}",
                     artifact.target.display()
                 ));
             }
             Err(err) => {
-                let rollback = rollback_moved_artifacts(&moved);
+                let rollback = rollback_artifact_moves(&moved);
                 return match rollback {
                     Ok(()) => Err(err).with_context(|| {
                         format!(
@@ -353,19 +363,6 @@ fn rename_artifacts_with_rollback(artifacts: &[MoveArtifact]) -> Result<()> {
                 };
             }
         }
-    }
-    Ok(())
-}
-
-fn rollback_moved_artifacts(moved: &[MoveArtifact]) -> Result<()> {
-    for artifact in moved.iter().rev() {
-        rename_artifact_no_replace(&artifact.target, &artifact.source).with_context(|| {
-            format!(
-                "failed to roll back moved session artifact {} -> {}",
-                artifact.target.display(),
-                artifact.source.display()
-            )
-        })?;
     }
     Ok(())
 }
