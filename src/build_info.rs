@@ -1,5 +1,17 @@
+/// The version this binary reports.
+///
+/// Packaging-only hotfixes build with `WAYSCRIBER_RELEASE_VERSION=X.Y.Z.N` while
+/// the Cargo version stays `X.Y.Z` (see the hotfix policy in `tools/README.md`),
+/// so `CARGO_PKG_VERSION` alone is wrong for those artifacts. A `const` rather
+/// than only a function because the CLI spec needs it in a const position, and
+/// two ideas of the version is exactly the drift this avoids.
+pub const VERSION: &str = match option_env!("WAYSCRIBER_RELEASE_VERSION") {
+    Some(release_version) => release_version,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 pub fn version() -> &'static str {
-    option_env!("WAYSCRIBER_RELEASE_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
+    VERSION
 }
 
 /// Short git hash this binary was built from, or `"unknown"` outside a

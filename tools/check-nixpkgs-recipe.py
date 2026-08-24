@@ -67,6 +67,8 @@ SYSTEM_LIBRARIES: dict[str, tuple[str, ...]] = {
     "toml_edit": (),
     "udev": ("udev",),
     "unicode-segmentation": (),
+    # Pure Rust: the CLI parser, its argv runtime, and its derive.
+    "usage-rs": (),
     "wayland-client": ("wayland",),
     "wayland-protocols": (),
     "wayland-protocols-wlr": (),

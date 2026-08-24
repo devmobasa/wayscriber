@@ -34,6 +34,10 @@ pango = "0.22"
 pangocairo = "0.22"
 
 # Utils
+# CLI parsing. `spec` gives the derive + parser; `completions` generates the
+# shell scripts. `help`/`diagnostics` stay off: wayscriber renders its own help
+# synopsis and its own terse one-line errors, and those renderers are ~255 KB.
+usage-rs = { version = "=6.1.1", default-features = false, features = ["spec", "completions"] }
 log = { version = "0.4", features = ["std"] }
 anyhow = "1.0"
 toml = "1.1"

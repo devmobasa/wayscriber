@@ -198,6 +198,7 @@ pub(crate) fn print_usage() {
     println!("  wayscriber --no-tray         Skip system tray (headless daemon)");
     println!("  wayscriber --about           Show the About window");
     println!("  wayscriber --check-update    Check wayscriber.com for a newer release");
+    println!("  wayscriber --completions SHELL  Print a shell completion script");
     println!(
         "  wayscriber --resume-session  Force session resume on (all boards/history/tool state)"
     );

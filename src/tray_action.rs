@@ -42,20 +42,30 @@ impl TrayAction {
         }
     }
 
+    /// Every action `--daemon-action` accepts.
+    ///
+    /// The one list `parse` reads, so a variant cannot be dispatchable without
+    /// also being parseable. `src/cli.rs` declares the same spellings as
+    /// `--daemon-action`'s `choices(...)`, which a shell offers; the test
+    /// `the_daemon_action_choices_match_the_dispatch_table` pins the two lists
+    /// together, because an attribute can only hold literals.
+    pub(crate) const ALL: [TrayAction; 10] = [
+        TrayAction::ToggleFreeze,
+        TrayAction::CaptureFull,
+        TrayAction::CaptureWindow,
+        TrayAction::CaptureRegion,
+        TrayAction::ToggleHelp,
+        TrayAction::ToggleBoardPicker,
+        TrayAction::ToggleLightMode,
+        TrayAction::LightDrawToggle,
+        TrayAction::LightDrawOn,
+        TrayAction::LightDrawOff,
+    ];
+
     pub(crate) fn parse(action: &str) -> Option<Self> {
-        match action {
-            "toggle_freeze" => Some(TrayAction::ToggleFreeze),
-            "capture_full" => Some(TrayAction::CaptureFull),
-            "capture_window" => Some(TrayAction::CaptureWindow),
-            "capture_region" => Some(TrayAction::CaptureRegion),
-            "toggle_help" => Some(TrayAction::ToggleHelp),
-            "toggle_board_picker" => Some(TrayAction::ToggleBoardPicker),
-            "toggle_light_mode" => Some(TrayAction::ToggleLightMode),
-            "light_draw_toggle" => Some(TrayAction::LightDrawToggle),
-            "light_draw_on" => Some(TrayAction::LightDrawOn),
-            "light_draw_off" => Some(TrayAction::LightDrawOff),
-            _ => None,
-        }
+        TrayAction::ALL
+            .into_iter()
+            .find(|candidate| candidate.as_str() == action)
     }
 }
 

@@ -81,7 +81,7 @@ pub fn run_from_env() -> ExitCode {
     if let Some(exit_code) = process_broker::run_internal_broker_if_requested() {
         return exit_code;
     }
-    match cli::Cli::parse() {
+    match cli::Cli::from_env() {
         Ok(CliOutcome::Run(cli)) => {
             logger::init(cli.daemon || cli.active);
             exit_code_for_app_result(app::run(cli))
@@ -92,6 +92,10 @@ pub fn run_from_env() -> ExitCode {
         }
         Ok(CliOutcome::Version) => {
             cli::print_version();
+            ExitCode::SUCCESS
+        }
+        Ok(CliOutcome::PrintAndExit(text)) => {
+            print!("{text}");
             ExitCode::SUCCESS
         }
         Err(err) => {

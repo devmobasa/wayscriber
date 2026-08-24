@@ -821,6 +821,9 @@ Canvas export commands are available in the command palette and keybindings. `ex
   background check off with `[updates] check = false` or
   `WAYSCRIBER_DISABLE_UPDATE_CHECK=1` — see
   https://wayscriber.com/docs/getting-started/updating.html
+- **Shell completions:** `wayscriber --completions bash` (also `zsh`, `fish`, `nu`,
+  `powershell`). Write it where your shell looks for completions, for example
+  `wayscriber --completions bash > ~/.local/share/bash-completion/completions/wayscriber`.
 - **Full docs:** https://wayscriber.com/docs/
 
 ---

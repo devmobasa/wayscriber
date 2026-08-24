@@ -317,6 +317,52 @@ fn wayscriber_help_prints_usage() {
         .stdout_contains("--light-draw-off");
 }
 
+/// The generated shell scripts shell out to `wayscriber __complete_word__`. A
+/// unit test cannot prove the shipped binary answers it, and if it stops doing
+/// so every installed completion goes quiet rather than failing, so this is a
+/// process-level check.
+#[test]
+fn completions_emit_a_script_the_binary_answers() {
+    for shell in ["bash", "zsh", "fish"] {
+        run_command(wayscriber_cmd().arg("--completions").arg(shell))
+            .success()
+            .code(0)
+            .stdout_contains("wayscriber")
+            .stdout_contains("__complete_word__");
+    }
+
+    run_command(
+        wayscriber_cmd()
+            .arg("__complete_word__")
+            .arg("--shell")
+            .arg("bash")
+            .arg("--line")
+            .arg("wayscriber --sess"),
+    )
+    .success()
+    .code(0)
+    .stdout_contains("--session-file")
+    .stdout_contains("--session-info");
+}
+
+#[test]
+fn completions_are_advertised_in_help_and_the_usage_summary() {
+    run_command(wayscriber_cmd().arg("--help"))
+        .success()
+        .code(0)
+        .stdout_contains("--completions SHELL");
+
+    run_command(&mut wayscriber_cmd())
+        .success()
+        .code(0)
+        .stdout_contains("--completions");
+}
+
+#[test]
+fn completions_reject_an_unknown_shell() {
+    run_command(wayscriber_cmd().arg("--completions").arg("tcsh")).code(2);
+}
+
 #[test]
 fn wayscriber_version_prints_binary_name() {
     for arg in ["--version", "-V"] {

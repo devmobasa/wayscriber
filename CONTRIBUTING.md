@@ -49,7 +49,36 @@ cargo run -- --active
 cargo run -p wayscriber-configurator
 ```
 
-The CLI parser is implemented manually in `src/cli.rs`; keep parsing, help/version output, and CLI
+The CLI is declared with the `usage` derive on `Cli` in `src/cli.rs`; the token rules the
+hand-rolled parser had live in `src/cli/compat.rs` and completions in `src/cli/completion.rs`; flags, shorts and value
+placeholders come from those attributes, and the `Options:` help table, the shell completions and
+the spec are all generated from them. Semantic rules (conflicts, requires) stay hand-written in
+`Cli::validate` so their pedagogical wording survives.
+
+Completions run through `usage`'s own pipeline (`split` / `complete` / `render`), so shell quoting
+and each shell's record format stay upstream's concern. Two things sit on top of it, both in
+`src/cli/completion.rs`.
+
+`completion_answer` applies four narrow corrections to the *typed* answer, each for something the
+derived spec cannot express: it adds `-h`/`--help` and `-V`/`--version`, which `usage` answers itself
+and keeps out of the flag tables; it drops the path fallback wherever no flag asked for a path,
+because wayscriber accepts no positional arguments; it re-expresses an attached value (`--mode=whi`,
+`-amwhi`) as the separated spelling `complete` understands, restoring the prefix for every shell
+except bash, which breaks words at `=` and so replaces only the value; and it drops a candidate
+shorter than the bundle already typed, which would delete the rest of it.
+
+`adapt_completion_script` then patches the generated zsh, fish and PowerShell scripts so their native
+path completers see only the value of an attached `--flag=path` rather than the whole token. Nu's
+external-completer protocol cannot express that handoff, so it gets a direct-listing fallback in
+Rust instead; bash needs neither, because `=` is one of its word breaks.
+
+**If you bump `usage-rs`,** re-check those patches: they match one exact anchor in each generated
+script, and `replace_script_once` fails the `--completions` command with
+`usage-rs <shell> completion template changed` rather than silently emitting an unpatched script.
+Re-run `cargo test cli::` — `generated_scripts_isolate_attached_paths_before_native_completion` pins
+the patched text — and syntax-check what comes out (`zsh -n`, `bash -n`, `fish --no-execute`).
+
+Adding a flag still needs no change in either place. Keep parsing, help/version output, and CLI
 integration tests aligned when flags change.
 
 ## Architecture ownership
@@ -59,7 +88,7 @@ Use [the codebase overview](docs/codebase-overview.md) for the main runtime flow
 
 | Area | Owner |
 |---|---|
-| Entry and CLI | `src/main.rs`, `src/lib.rs`, `src/app/`, and `src/cli.rs` |
+| Entry and CLI | `src/main.rs`, `src/lib.rs`, `src/app/`, and `src/cli.rs` (with `src/cli/compat.rs` and `src/cli/completion.rs`) |
 | Stable values | `src/domain/` for dependency-light action, tool, color, and board identities |
 | Config | `src/config/`, `config.example.toml`, [docs/CONFIG.md](docs/CONFIG.md), and configurator mappings |
 | Input and boards | `src/input/`; `BoardManager` owns ordered `BoardState` values and their pages |

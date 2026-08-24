@@ -8,7 +8,7 @@ This document explains how the application boots, how user input travels through
 
 1. **Binary entry (`src/main.rs` and `src/lib.rs`)**
    - `src/main.rs` only returns `wayscriber::run_from_env()`.
-   - The library facade uses the manual parser in `src/cli.rs`, prints help/version or argument diagnostics, initializes logging for runtime commands, and maps application errors to process exit codes.
+   - The library facade uses the `usage`-derived parser in `src/cli.rs`, prints help/version or argument diagnostics, initializes logging for runtime commands, and maps application errors to process exit codes.
 
 2. **Mode selection (`src/app/`)**
    - `--daemon`: instantiate `daemon::Daemon` with the optional initial board mode and call `run()`.
