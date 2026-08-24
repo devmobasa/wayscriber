@@ -463,6 +463,12 @@ fn runtime_save_as_confirmed_overwrite_removes_stale_sidecars_but_keeps_lock() {
         .recovery_file_path()
         .with_extension("recovery.preserved");
     std::fs::write(&preserved_recovery, b"old preserved recovery").expect("old preserved recovery");
+    let preserved_newer = PathBuf::from(format!(
+        "{}.v99-preserved-0123456789abcdef",
+        target_options.session_file_path().display()
+    ));
+    std::fs::write(&preserved_newer, b"old newer-version session")
+        .expect("old newer-version session");
     std::fs::write(target_options.clear_marker_file_path(), b"old clear").expect("old clear");
     std::fs::write(target_options.lock_file_path(), b"lock").expect("old lock");
 
@@ -490,6 +496,7 @@ fn runtime_save_as_confirmed_overwrite_removes_stale_sidecars_but_keeps_lock() {
     assert!(!target_options.backup_file_path().exists());
     assert!(!target_options.recovery_file_path().exists());
     assert!(!preserved_recovery.exists());
+    assert!(!preserved_newer.exists());
     assert!(!target_options.clear_marker_file_path().exists());
     assert!(
         target_options.lock_file_path().exists(),

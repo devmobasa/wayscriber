@@ -1,6 +1,10 @@
 use super::*;
 use std::os::unix::fs::OpenOptionsExt;
 
+mod transaction;
+
+use transaction::commit_save_as_target;
+
 #[allow(dead_code)]
 pub(crate) fn save_snapshot_as_with_report(
     snapshot: &SessionSnapshot,
@@ -119,28 +123,10 @@ pub(crate) fn save_snapshot_as_with_report(
         crate::session::validate_named_session_file_for_foreground(&session_path)?;
         let lock_time_artifacts = collect_save_as_artifacts(options)?;
         ensure_save_as_overwrite_allowed(&lock_time_artifacts, overwrite, &session_path)?;
-        let removed_sidecars = matches!(overwrite, SaveAsOverwrite::ConfirmReplace)
-            && !lock_time_artifacts.sidecars.is_empty();
-        if matches!(overwrite, SaveAsOverwrite::ConfirmReplace) {
-            remove_save_as_sidecars(&lock_time_artifacts.sidecars)?;
-        }
-        if let Err(err) = fs::rename(&tmp_path, &session_path) {
-            let context = if removed_sidecars {
-                format!(
-                    "partial destructive Save Session As failure for {}: stale sidecars were removed but failed to move temporary file {} into place",
-                    session_path.display(),
-                    tmp_path.display()
-                )
-            } else {
-                format!(
-                    "failed to move temporary Save Session As file {} -> {}",
-                    tmp_path.display(),
-                    session_path.display()
-                )
-            };
-            return Err(err).with_context(|| context);
-        }
-        sync_session_parent_dir(&session_path, "Save Session As file")?;
+        let sidecars = matches!(overwrite, SaveAsOverwrite::ConfirmReplace)
+            .then_some(lock_time_artifacts.sidecars.as_slice())
+            .unwrap_or_default();
+        commit_save_as_target(&tmp_path, &session_path, sidecars)?;
         Ok::<(), anyhow::Error>(())
     })();
 
@@ -239,84 +225,8 @@ fn artifact_path_exists(path: &Path) -> Result<bool> {
 }
 
 fn save_as_non_lock_sidecar_paths(options: &SessionOptions) -> Result<Vec<PathBuf>> {
-    let mut paths = vec![
-        options.backup_file_path(),
-        options.backup_recovery_marker_file_path(),
-        options.recovery_file_path(),
-        options.recovery_recoverable_marker_file_path(),
-        options.clear_marker_file_path(),
-    ];
-
-    let recovery_path = options.recovery_file_path();
-    let Some(recovery_name) = recovery_path.file_name().and_then(|name| name.to_str()) else {
-        dedupe_paths(&mut paths);
-        return Ok(paths);
-    };
-    let Some(parent) = recovery_path.parent() else {
-        dedupe_paths(&mut paths);
-        return Ok(paths);
-    };
-    match fs::read_dir(parent) {
-        Ok(entries) => {
-            let preserved_prefix = format!("{recovery_name}.");
-            for entry in entries {
-                let entry = entry.with_context(|| {
-                    format!(
-                        "failed to inspect Save Session As sidecars under {}",
-                        parent.display()
-                    )
-                })?;
-                let path = entry.path();
-                let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-                    continue;
-                };
-                if name == recovery_name || name.starts_with(&preserved_prefix) {
-                    paths.push(path);
-                }
-            }
-        }
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-        Err(err) => {
-            return Err(err).with_context(|| {
-                format!(
-                    "failed to scan Save Session As sidecars under {}",
-                    parent.display()
-                )
-            });
-        }
-    }
-
-    dedupe_paths(&mut paths);
+    let session_path = options.session_file_path();
+    let mut paths = crate::session::named_session_non_lock_artifact_paths(&session_path)?;
+    paths.retain(|path| path != &session_path);
     Ok(paths)
-}
-
-fn dedupe_paths(paths: &mut Vec<PathBuf>) {
-    let mut deduped = Vec::with_capacity(paths.len());
-    for path in paths.drain(..) {
-        if !deduped.contains(&path) {
-            deduped.push(path);
-        }
-    }
-    *paths = deduped;
-}
-
-fn remove_save_as_sidecars(sidecars: &[PathBuf]) -> Result<()> {
-    for path in sidecars {
-        match fs::remove_file(path) {
-            Ok(()) => info!(
-                "Removed stale Save Session As sidecar before commit: {}",
-                path.display()
-            ),
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-            Err(err) => {
-                return Err(err).with_context(|| {
-                    format!(
-                        "failed to remove stale Save Session As sidecar {}",
-                        path.display()
-                    )
-                });
-            }
-        }
-    }
-    Ok(())
 }
