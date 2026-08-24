@@ -2,7 +2,7 @@ mod grid;
 
 use super::base::InputState;
 use crate::draw::ShapeId;
-use crate::input::hit_test;
+use crate::input::hit_test::{self, HitTestTolerance};
 use std::collections::{HashMap, HashSet};
 
 pub(super) use self::grid::SpatialGrid;
@@ -24,7 +24,7 @@ impl InputState {
         points: &[(i32, i32)],
         tolerance: f64,
     ) -> Vec<ShapeId> {
-        let Some(tolerance) = hit_test::validated_tolerance(tolerance) else {
+        let Some(tolerance) = HitTestTolerance::new(tolerance) else {
             return Vec::new();
         };
 
@@ -62,15 +62,11 @@ impl InputState {
             let Some(drawn) = shape_map.get(&id) else {
                 continue;
             };
-            let bounds = hit_test::compute_hit_bounds(drawn, tolerance);
-            let hit = bounds
-                .as_ref()
-                .map(|rect| {
-                    points.iter().any(|&(x, y)| {
-                        rect.contains(x, y) && hit_test::hit_test(drawn, (x, y), tolerance)
-                    })
-                })
-                .unwrap_or(false);
+            let bounds = hit_test::compute_hit_bounds_with_tolerance(drawn, tolerance);
+            let hit = points.iter().any(|&(x, y)| {
+                bounds.as_ref().is_none_or(|rect| rect.contains(x, y))
+                    && hit_test::hit_test_with_tolerance(drawn, (x, y), tolerance)
+            });
             if hit {
                 hits.push(id);
             }
@@ -104,15 +100,16 @@ impl InputState {
             .boards
             .active_frame()
             .shape(id)
-            .and_then(|drawn| drawn.bounding_box());
+            .map(|drawn| drawn.bounding_box());
 
         if let Some(grid) = &mut self.spatial_index {
             // Remove shape from its old cells
             grid.remove_shape(id);
 
-            // Add shape to its new cells if it still exists
+            // Add shape to its new cells, or retain it as a global candidate
+            // when its full bounds cannot be represented by Rect.
             if let Some(bounds) = new_bounds {
-                grid.add_shape_with_bounds(id, bounds);
+                grid.add_shape(id, bounds);
             }
         }
         // If no grid exists, it will be rebuilt on next query if needed
@@ -120,9 +117,10 @@ impl InputState {
 
     /// Updates the hit-test tolerance (in pixels).
     pub fn set_hit_test_tolerance(&mut self, tolerance: f64) {
-        self.hit_test_tolerance = hit_test::validated_tolerance(tolerance)
-            .map(|tolerance| tolerance.max(1.0))
-            .unwrap_or(1.0);
+        self.hit_test_tolerance = HitTestTolerance::new(tolerance)
+            .unwrap_or(HitTestTolerance::ONE_PIXEL)
+            .at_least(HitTestTolerance::ONE_PIXEL)
+            .value();
         self.invalidate_hit_cache();
     }
 
@@ -159,7 +157,13 @@ impl InputState {
         }
     }
 
-    fn hit_test_single(&mut self, index: usize, x: i32, y: i32, tolerance: f64) -> Option<ShapeId> {
+    fn hit_test_single(
+        &mut self,
+        index: usize,
+        x: i32,
+        y: i32,
+        tolerance: HitTestTolerance,
+    ) -> Option<ShapeId> {
         let frame = self.boards.active_frame();
         if index >= frame.shapes.len() {
             return None;
@@ -168,42 +172,34 @@ impl InputState {
         let (shape_id, bounds, hit) = {
             let drawn = &frame.shapes[index];
             let cached = self.hit_test_cache.get(&drawn.id).copied();
-            let bounds = cached.or_else(|| hit_test::compute_hit_bounds(drawn, tolerance));
-            let hit = bounds
-                .as_ref()
-                .map(|rect| {
-                    rect.contains(x, y)
-                        && hit_test::hit_test_for_point_targeting(drawn, (x, y), tolerance)
-                })
-                .unwrap_or(false);
+            let bounds =
+                cached.or_else(|| hit_test::compute_hit_bounds_with_tolerance(drawn, tolerance));
+            let hit = bounds.as_ref().is_none_or(|rect| rect.contains(x, y))
+                && hit_test::hit_test_for_point_targeting_with_tolerance(drawn, (x, y), tolerance);
             (drawn.id, bounds, hit)
         };
 
         if let Some(bounds) = bounds {
             self.hit_test_cache.entry(shape_id).or_insert(bounds);
-            if hit {
-                return Some(shape_id);
-            }
+        }
+        if hit {
+            return Some(shape_id);
         }
         None
     }
 
-    fn hit_test_by_id(&mut self, id: ShapeId, x: i32, y: i32, tolerance: f64) -> bool {
+    fn hit_test_by_id(&mut self, id: ShapeId, x: i32, y: i32, tolerance: HitTestTolerance) -> bool {
         let frame = self.boards.active_frame();
         let Some(drawn) = frame.shape(id) else {
             return false;
         };
 
         let cached = self.hit_test_cache.get(&id).copied();
-        let bounds = cached.or_else(|| hit_test::compute_hit_bounds(drawn, tolerance));
+        let bounds =
+            cached.or_else(|| hit_test::compute_hit_bounds_with_tolerance(drawn, tolerance));
 
-        let hit = bounds
-            .as_ref()
-            .map(|rect| {
-                rect.contains(x, y)
-                    && hit_test::hit_test_for_point_targeting(drawn, (x, y), tolerance)
-            })
-            .unwrap_or(false);
+        let hit = bounds.as_ref().is_none_or(|rect| rect.contains(x, y))
+            && hit_test::hit_test_for_point_targeting_with_tolerance(drawn, (x, y), tolerance);
 
         if let Some(bounds) = bounds {
             self.hit_test_cache.entry(id).or_insert(bounds);
@@ -212,7 +208,13 @@ impl InputState {
         hit
     }
 
-    fn hit_test_indices<I>(&mut self, indices: I, x: i32, y: i32, tolerance: f64) -> Option<ShapeId>
+    fn hit_test_indices<I>(
+        &mut self,
+        indices: I,
+        x: i32,
+        y: i32,
+        tolerance: HitTestTolerance,
+    ) -> Option<ShapeId>
     where
         I: IntoIterator<Item = usize>,
     {
@@ -226,7 +228,8 @@ impl InputState {
 
     /// Performs hit-testing against the active frame and returns the top-most shape id.
     pub fn hit_test_at(&mut self, x: i32, y: i32) -> Option<ShapeId> {
-        let tolerance = self.hit_test_tolerance;
+        let tolerance =
+            HitTestTolerance::new(self.hit_test_tolerance).unwrap_or(HitTestTolerance::ONE_PIXEL);
         let len = self.boards.active_frame().shapes.len();
         let threshold = self.max_linear_hit_test;
 

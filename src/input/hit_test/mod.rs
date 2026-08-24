@@ -12,20 +12,45 @@ use crate::util::Rect;
 
 const MAX_HIT_TEST_TOLERANCE: f64 = i32::MAX as f64;
 
-/// Validates a tolerance before it reaches floating-point geometry or integer inflation.
-pub(crate) fn validated_tolerance(tolerance: f64) -> Option<f64> {
-    (tolerance.is_finite() && (0.0..=MAX_HIT_TEST_TOLERANCE).contains(&tolerance))
-        .then_some(tolerance)
+/// A finite, non-negative tolerance that is safe to convert for integer inflation.
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+pub(crate) struct HitTestTolerance(f64);
+
+impl HitTestTolerance {
+    pub(crate) const ONE_PIXEL: Self = Self(1.0);
+
+    pub(crate) fn new(value: f64) -> Option<Self> {
+        (value.is_finite() && (0.0..=MAX_HIT_TEST_TOLERANCE).contains(&value))
+            .then_some(Self(value))
+    }
+
+    pub(crate) fn value(self) -> f64 {
+        self.0
+    }
+
+    fn ceil_i32(self) -> i32 {
+        self.0.ceil() as i32
+    }
+
+    pub(crate) fn at_least(self, minimum: Self) -> Self {
+        Self(self.0.max(minimum.0))
+    }
 }
 
 /// Computes a tolerance-aware bounding rectangle for the shape.
 pub fn compute_hit_bounds(shape: &DrawnShape, tolerance: f64) -> Option<Rect> {
-    let tolerance = validated_tolerance(tolerance)?;
+    compute_hit_bounds_with_tolerance(shape, HitTestTolerance::new(tolerance)?)
+}
+
+pub(crate) fn compute_hit_bounds_with_tolerance(
+    shape: &DrawnShape,
+    tolerance: HitTestTolerance,
+) -> Option<Rect> {
     let base = shape.bounding_box()?;
     if matches!(shape.shape, Shape::EraserStroke { .. }) {
         return None;
     }
-    let inflate = tolerance.ceil() as i32;
+    let inflate = tolerance.ceil_i32();
     if inflate == 0 {
         return Some(base);
     }
@@ -34,10 +59,18 @@ pub fn compute_hit_bounds(shape: &DrawnShape, tolerance: f64) -> Option<Rect> {
 
 /// Returns `true` if the point intersects the provided shape within tolerance.
 pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
-    let Some(tolerance) = validated_tolerance(tolerance) else {
+    let Some(tolerance) = HitTestTolerance::new(tolerance) else {
         return false;
     };
+    hit_test_with_tolerance(shape, point, tolerance)
+}
 
+pub(crate) fn hit_test_with_tolerance(
+    shape: &DrawnShape,
+    point: (i32, i32),
+    tolerance: HitTestTolerance,
+) -> bool {
+    let tolerance = tolerance.value();
     match &shape.shape {
         Shape::Freehand { points, thick, .. } => {
             shapes::freehand_hit(points, point, *thick, tolerance)
@@ -160,11 +193,18 @@ pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
 /// Stroke erasing intentionally keeps using `hit_test`, while direct point
 /// targeting includes filled interiors for closed fill-capable shapes.
 pub fn hit_test_for_point_targeting(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
-    let Some(tolerance) = validated_tolerance(tolerance) else {
+    let Some(tolerance) = HitTestTolerance::new(tolerance) else {
         return false;
     };
+    hit_test_for_point_targeting_with_tolerance(shape, point, tolerance)
+}
 
-    if hit_test(shape, point, tolerance) {
+pub(crate) fn hit_test_for_point_targeting_with_tolerance(
+    shape: &DrawnShape,
+    point: (i32, i32),
+    tolerance: HitTestTolerance,
+) -> bool {
+    if hit_test_with_tolerance(shape, point, tolerance) {
         return true;
     }
 

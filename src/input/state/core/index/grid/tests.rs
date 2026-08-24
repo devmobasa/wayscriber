@@ -1,5 +1,10 @@
 use super::*;
 use crate::draw::{Color, Shape};
+use crate::input::hit_test::HitTestTolerance;
+
+fn tolerance(value: f64) -> HitTestTolerance {
+    HitTestTolerance::new(value).expect("valid test tolerance")
+}
 
 fn filled_rect(x: i32, y: i32, width: i32, height: i32) -> Shape {
     Shape::Rect {
@@ -55,7 +60,38 @@ fn oversized_shape_is_queried_without_per_cell_index_entries() {
     assert!(grid.shape_cells.is_empty());
     assert_eq!(grid.global_shapes, HashSet::from([shape_id]));
     assert!(
-        grid.query_with_tolerance((50_000, 50_000), 1.0)
+        grid.query_with_tolerance((50_000, 50_000), tolerance(1.0))
+            .contains(&shape_id)
+    );
+}
+
+#[test]
+fn shape_without_bounds_remains_a_global_candidate() {
+    let mut frame = Frame::new();
+    let shape_id = frame.add_shape(Shape::Freehand {
+        points: Vec::new(),
+        color: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        },
+        thick: 1.0,
+    });
+    assert!(
+        frame
+            .shape(shape_id)
+            .and_then(|shape| shape.bounding_box())
+            .is_none()
+    );
+
+    let grid = SpatialGrid::build(&frame).expect("spatial grid");
+
+    assert!(grid.cells.is_empty());
+    assert!(grid.shape_cells.is_empty());
+    assert_eq!(grid.global_shapes, HashSet::from([shape_id]));
+    assert!(
+        grid.query_with_tolerance((i32::MIN, 10), tolerance(1.0))
             .contains(&shape_id)
     );
 }
@@ -145,7 +181,7 @@ fn oversized_shape_can_move_back_into_regular_cells() {
     assert!(!grid.global_shapes.contains(&shape_id));
     assert!(!grid.shape_cells[&shape_id].is_empty());
     assert!(
-        grid.query_with_tolerance((144, 144), 1.0)
+        grid.query_with_tolerance((144, 144), tolerance(1.0))
             .contains(&shape_id)
     );
 }
@@ -167,7 +203,7 @@ fn aggregate_membership_budget_routes_excess_shapes_to_global_candidates() {
     assert!(!grid.shape_cells.contains_key(&third));
     assert_eq!(grid.global_shapes, HashSet::from([third]));
 
-    let candidates = grid.query_with_tolerance((15, 15), 1.0);
+    let candidates = grid.query_with_tolerance((15, 15), tolerance(1.0));
     assert!(candidates.contains(&first));
     assert!(candidates.contains(&third));
 }
@@ -236,20 +272,16 @@ fn reindexing_shape_beyond_remaining_budget_clears_old_cells_and_stays_queryable
     assert!(!grid.cells.contains_key(&(0, 0)));
     assert!(!grid.shape_cells.contains_key(&first));
     assert!(grid.global_shapes.contains(&first));
-    assert!(grid.query_with_tolerance((32, 16), 1.0).contains(&first));
+    assert!(
+        grid.query_with_tolerance((32, 16), tolerance(1.0))
+            .contains(&first)
+    );
 }
 
 #[test]
-fn invalid_query_tolerances_return_all_candidates() {
-    let (grid, shape_ids) = mixed_candidate_grid();
-    let expected = HashSet::from(shape_ids);
-
+fn invalid_query_tolerances_cannot_enter_the_spatial_grid() {
     for tolerance in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -1.0, f64::MAX] {
-        assert_eq!(
-            candidate_set(grid.query_with_tolerance((6_400, 6_400), tolerance)),
-            expected,
-            "unexpected candidates for tolerance {tolerance:?}"
-        );
+        assert!(HitTestTolerance::new(tolerance).is_none());
     }
 }
 
@@ -261,11 +293,11 @@ fn query_cell_budget_falls_back_before_radius_can_explode() {
     let over_budget = 31.0 * f64::from(SPATIAL_GRID_CELL_SIZE);
 
     assert_eq!(
-        candidate_set(grid.query_with_tolerance(point, within_budget)),
+        candidate_set(grid.query_with_tolerance(point, tolerance(within_budget))),
         HashSet::from([global])
     );
     assert_eq!(
-        candidate_set(grid.query_with_tolerance(point, over_budget)),
+        candidate_set(grid.query_with_tolerance(point, tolerance(over_budget))),
         HashSet::from([first, second, global])
     );
 }
@@ -291,11 +323,11 @@ fn query_at_coordinate_limits_skips_out_of_range_neighbor_cells() {
     };
 
     assert_eq!(
-        candidate_set(grid.query_with_tolerance((i32::MIN, i32::MIN), 0.0)),
+        candidate_set(grid.query_with_tolerance((i32::MIN, i32::MIN), tolerance(0.0))),
         HashSet::from([min_id])
     );
     assert_eq!(
-        candidate_set(grid.query_with_tolerance((i32::MAX, i32::MAX), 0.0)),
+        candidate_set(grid.query_with_tolerance((i32::MAX, i32::MAX), tolerance(0.0))),
         HashSet::from([max_id])
     );
 }

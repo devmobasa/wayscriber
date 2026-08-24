@@ -1,4 +1,5 @@
 use crate::draw::{Frame, ShapeId};
+use crate::input::hit_test::HitTestTolerance;
 use crate::util::Rect;
 use std::collections::{HashMap, HashSet};
 
@@ -86,10 +87,7 @@ impl SpatialGrid {
         };
 
         for drawn in &frame.shapes {
-            let Some(bounds) = drawn.bounding_box() else {
-                continue;
-            };
-            grid.add_shape_with_bounds(drawn.id, bounds);
+            grid.add_shape(drawn.id, drawn.bounding_box());
         }
 
         if grid.cells.is_empty() && grid.global_shapes.is_empty() {
@@ -161,6 +159,16 @@ impl SpatialGrid {
         }
     }
 
+    /// Adds a shape to the grid, retaining shapes without representable bounds
+    /// as global candidates so the exact hit test can still decide them.
+    pub(super) fn add_shape(&mut self, id: ShapeId, bounds: Option<Rect>) {
+        if let Some(bounds) = bounds {
+            self.add_shape_with_bounds(id, bounds);
+        } else {
+            self.global_shapes.insert(id);
+        }
+    }
+
     /// Adds a shape with known bounds to the grid.
     pub(super) fn add_shape_with_bounds(&mut self, id: ShapeId, bounds: Rect) {
         match Self::compute_cell_coverage(bounds, self.cell_size) {
@@ -189,7 +197,11 @@ impl SpatialGrid {
     ///
     /// The search radius is expanded based on tolerance to ensure shapes that could
     /// be hit within the tolerance distance are not missed.
-    pub(super) fn query_with_tolerance(&self, point: (i32, i32), tolerance: f64) -> Vec<ShapeId> {
+    pub(super) fn query_with_tolerance(
+        &self,
+        point: (i32, i32),
+        tolerance: HitTestTolerance,
+    ) -> Vec<ShapeId> {
         let Some(radius) = Self::query_radius_within_budget(tolerance, self.cell_size) else {
             return self.all_candidates();
         };
@@ -215,12 +227,8 @@ impl SpatialGrid {
         unique.into_iter().collect()
     }
 
-    fn query_radius_within_budget(tolerance: f64, cell_size: i32) -> Option<i64> {
-        if !tolerance.is_finite() || tolerance < 0.0 {
-            return None;
-        }
-
-        let extra_cells = (tolerance / f64::from(cell_size.max(1))).ceil();
+    fn query_radius_within_budget(tolerance: HitTestTolerance, cell_size: i32) -> Option<i64> {
+        let extra_cells = (tolerance.value() / f64::from(cell_size.max(1))).ceil();
         if extra_cells > (i64::MAX - 1) as f64 {
             return None;
         }
