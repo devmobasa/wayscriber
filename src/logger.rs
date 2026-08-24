@@ -54,29 +54,46 @@ impl LoggerState {
     fn write_record(&mut self, record: &Record<'_>, include_timestamp: bool) {
         self.record_buffer.clear();
         if include_timestamp {
-            let _ = writeln!(
+            let _ = write!(
                 self.record_buffer,
-                "{} {} {}: {}",
+                "{} {} {}: ",
                 timestamp_millis(),
                 record.level(),
-                record.target(),
-                record.args()
+                record.target()
             );
         } else {
-            let _ = writeln!(
+            let _ = write!(
                 self.record_buffer,
-                "{} {}: {}",
+                "{} {}: ",
                 record.level(),
-                record.target(),
-                record.args()
+                record.target()
             );
         }
+        let _ = write!(self.record_buffer, "{}", record.args());
+        escape_record_line_breaks(&mut self.record_buffer);
+        self.record_buffer.push('\n');
 
         self.sink.write_record(self.record_buffer.as_bytes());
         if self.record_buffer.capacity() > MAX_RETAINED_RECORD_CAPACITY {
             self.record_buffer = String::with_capacity(INITIAL_RECORD_CAPACITY);
         }
     }
+}
+
+fn escape_record_line_breaks(record: &mut String) {
+    if !record.bytes().any(|byte| matches!(byte, b'\r' | b'\n')) {
+        return;
+    }
+
+    let mut escaped = String::with_capacity(record.len());
+    for character in record.chars() {
+        match character {
+            '\r' => escaped.push_str("\\r"),
+            '\n' => escaped.push_str("\\n"),
+            character => escaped.push(character),
+        }
+    }
+    *record = escaped;
 }
 
 impl Log for SimpleLogger {
@@ -111,44 +128,32 @@ fn timestamp_millis() -> u128 {
         .unwrap_or(0)
 }
 
-enum LogSink {
-    Single(Box<dyn IoWrite + Send>),
-    Tee {
-        primary: Box<dyn IoWrite + Send>,
-        secondary: Box<dyn IoWrite + Send>,
-    },
+struct LogSink {
+    writers: Vec<Box<dyn IoWrite + Send>>,
 }
 
 impl LogSink {
     fn single(writer: Box<dyn IoWrite + Send>) -> Self {
-        Self::Single(writer)
+        Self {
+            writers: vec![writer],
+        }
     }
 
     fn tee(primary: Box<dyn IoWrite + Send>, secondary: Box<dyn IoWrite + Send>) -> Self {
-        Self::Tee { primary, secondary }
+        Self {
+            writers: vec![primary, secondary],
+        }
     }
 
     fn write_record(&mut self, record: &[u8]) {
-        match self {
-            Self::Single(writer) => {
-                let _ = writer.write_all(record);
-            }
-            Self::Tee { primary, secondary } => {
-                let _ = primary.write_all(record);
-                let _ = secondary.write_all(record);
-            }
+        for writer in &mut self.writers {
+            let _ = writer.write_all(record);
         }
     }
 
     fn flush(&mut self) {
-        match self {
-            Self::Single(writer) => {
-                let _ = writer.flush();
-            }
-            Self::Tee { primary, secondary } => {
-                let _ = primary.flush();
-                let _ = secondary.flush();
-            }
+        for writer in &mut self.writers {
+            let _ = writer.flush();
         }
     }
 }
@@ -309,6 +314,26 @@ mod tests {
 
         assert!(timestamp.parse::<u128>().is_ok());
         assert_eq!(message, "WARN wayscriber::daemon: sink failure record\n");
+    }
+
+    #[test]
+    fn multiline_record_is_escaped_to_one_physical_line() {
+        let output = SharedWriter::default();
+        let mut state = LoggerState {
+            sink: LogSink::single(Box::new(output.clone())),
+            record_buffer: String::with_capacity(INITIAL_RECORD_CAPACITY),
+        };
+        let record = Record::builder()
+            .args(format_args!("first\r\nsecond\nthird\r"))
+            .level(Level::Error)
+            .target("wayscriber::ocr\nworker")
+            .build();
+
+        state.write_record(&record, true);
+
+        let line = String::from_utf8(output.bytes()).expect("valid log output");
+        assert_eq!(line.lines().count(), 1);
+        assert!(line.ends_with("ERROR wayscriber::ocr\\nworker: first\\r\\nsecond\\nthird\\r\n"));
     }
 
     #[test]
