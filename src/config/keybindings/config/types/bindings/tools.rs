@@ -40,6 +40,10 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_decrease_pen_smoothing")]
     pub decrease_pen_smoothing: Vec<String>,
 
+    /// Step the text font through `drawing.font_cycle`.
+    #[serde(default = "default_cycle_font_family")]
+    pub cycle_font_family: Vec<String>,
+
     #[serde(default = "default_cycle_blur_style")]
     pub cycle_blur_style: Vec<String>,
 
@@ -115,6 +119,7 @@ impl Default for ToolKeybindingsConfig {
             toggle_eraser_mode: default_toggle_eraser_mode(),
             increase_pen_smoothing: default_increase_pen_smoothing(),
             decrease_pen_smoothing: default_decrease_pen_smoothing(),
+            cycle_font_family: default_cycle_font_family(),
             cycle_blur_style: default_cycle_blur_style(),
             cycle_arrow_style: default_cycle_arrow_style(),
             select_pen_tool: default_select_pen_tool(),

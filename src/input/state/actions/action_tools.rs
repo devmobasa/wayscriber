@@ -56,6 +56,9 @@ impl InputState {
             Action::DecreaseMarkerOpacity => {
                 self.set_marker_opacity(self.marker_opacity - 0.05);
             }
+            Action::CycleFontFamily => {
+                self.cycle_font_family();
+            }
             Action::IncreasePenSmoothing => self.announce_pen_smoothing(1),
             Action::DecreasePenSmoothing => self.announce_pen_smoothing(-1),
             Action::ToggleEraserMode => {

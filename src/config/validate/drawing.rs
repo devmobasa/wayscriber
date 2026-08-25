@@ -37,6 +37,26 @@ impl Config {
         }
 
         // Marker opacity: 0.05 - 0.9
+        // Font cycle: drop blank entries and repeats, keeping the given order.
+        // A repeat would make the action appear to skip, and a blank name would
+        // resolve to whatever the font system falls back to.
+        let mut seen = std::collections::BTreeSet::new();
+        let before = self.drawing.font_cycle.len();
+        self.drawing.font_cycle.retain(|family| {
+            let trimmed = family.trim();
+            !trimmed.is_empty() && seen.insert(trimmed.to_string())
+        });
+        if self.drawing.font_cycle.len() != before {
+            log::warn!(
+                "Dropped {} blank or repeated entries from drawing.font_cycle",
+                before - self.drawing.font_cycle.len()
+            );
+        }
+        for family in &mut self.drawing.font_cycle {
+            let trimmed = family.trim().to_string();
+            *family = trimmed;
+        }
+
         // Pen smoothing: 0 - MAX_PEN_SMOOTHING passes
         if self.drawing.pen_smoothing > MAX_PEN_SMOOTHING {
             log::warn!(

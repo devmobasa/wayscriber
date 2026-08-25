@@ -741,6 +741,7 @@ const DEFAULT_BINDING_SNAPSHOT: &[(&str, &[&str])] = &[
     ("select_step_marker_tool", &[]),
     ("select_eraser_tool", &["D"]),
     ("toggle_eraser_mode", &["Ctrl+Shift+E"]),
+    ("cycle_font_family", &["Shift+T"]),
     ("increase_pen_smoothing", &[]),
     ("decrease_pen_smoothing", &[]),
     ("cycle_blur_style", &[]),

@@ -104,6 +104,7 @@ impl InputState {
             spotlight_magnification: crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
             current_font_size: font_size,
             font_descriptor,
+            font_cycle: Vec::new(),
             text_background_enabled,
             text_wrap_width: None,
             text_input_mode: TextInputMode::Plain,

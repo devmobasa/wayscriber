@@ -238,6 +238,9 @@ default_blur_style = "gaussian"
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
 
+# Font families that Shift+T steps through
+font_cycle = ["Sans", "Monospace", "Serif"]
+
 # Smoothing applied to a finished freehand or marker stroke (0 - 6)
 pen_smoothing = 3
 
@@ -374,6 +377,7 @@ drag_tool = "default"
 - **Arrow style**: Run **Cycle Arrow Style** from the command palette to step through standard → pointy → curved → double (unbound by default; bind `cycle_arrow_style`). With arrows selected it restyles those in one undo step; with nothing selected it sets the style for the next arrow
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
 - **Pen smoothing**: Run **Increase / Decrease Pen Smoothing** from the command palette, or bind `increase_pen_smoothing` / `decrease_pen_smoothing` (see [Pen smoothing](#pen-smoothing))
+- **Text font**: <kbd>Shift+T</kbd> steps through `font_cycle` (see [Font cycle](#font-cycle))
 - **Regular polygon sides**: Use the Shapes popover Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
 
@@ -383,6 +387,7 @@ drag_tool = "default"
 - Eraser size: 12.0px
 - Eraser mode: Brush
 - Marker opacity: 0.32
+- Font cycle: Sans, Monospace, Serif
 - Pen smoothing: 3 of 6
 - Fill enabled: false
 - Polygon sides: 5
@@ -392,6 +397,29 @@ drag_tool = "default"
 - Hit-test tolerance: 6.0px (linear threshold: 400)
 - Undo stack limit: 100
 - Drag mapping: Drag=Pen, Shift+Drag=Line, Ctrl+Drag=Rect, Ctrl+Shift+Drag=Arrow, Tab+Drag=Ellipse
+
+#### Font cycle
+
+`font_family` sets the font text is written in. `font_cycle` is the short list
+that <kbd>Shift+T</kbd> steps through, for changing it without leaving the
+overlay.
+
+```toml
+[drawing]
+font_cycle = ["Sans", "Monospace", "Serif"]
+```
+
+Any installed family name is valid. Blank and repeated entries are dropped when
+the configuration loads, because a repeat makes the key look like it skipped.
+An empty list turns the action off.
+
+With text or a sticky note selected, <kbd>Shift+T</kbd> restyles that text and
+leaves the tool setting alone. With nothing selected it sets what the next label
+will be written in. A family that is not in the list steps to the first entry,
+so the key always goes somewhere.
+
+The toolbar's Sans/Mono buttons are a separate two-way shortcut and are not
+affected by this list.
 
 #### Text halo
 
@@ -1997,6 +2025,7 @@ select_marker_tool = ["H"]
 select_step_marker_tool = []
 select_eraser_tool = ["D"]
 toggle_eraser_mode = ["Ctrl+Shift+E"]
+cycle_font_family = ["Shift+T"]    # step the text font through drawing.font_cycle
 increase_pen_smoothing = []        # clean up finished strokes more
 decrease_pen_smoothing = []        # keep more of the drawn path
 cycle_blur_style = []              # blur -> pixelate -> secure -> black out

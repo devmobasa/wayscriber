@@ -120,6 +120,8 @@ select_step_marker_tool = []
 select_eraser_tool = ["D"]
 # Toggle eraser behavior mode
 toggle_eraser_mode = ["Ctrl+Shift+E"]
+# Step the text font through drawing.font_cycle
+cycle_font_family = ["Shift+T"]
 # Step stroke smoothing up and down (unbound by default)
 increase_pen_smoothing = []
 decrease_pen_smoothing = []
@@ -1088,6 +1090,10 @@ default_blur_style = "gaussian"
 
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
+
+# Font families the "Cycle Font Family" action steps through (Shift+T).
+# Any installed family name works. An empty list turns the action off.
+font_cycle = ["Sans", "Monospace", "Serif"]
 
 # How much a finished freehand or marker stroke is smoothed (0 - 6).
 #

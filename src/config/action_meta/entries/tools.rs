@@ -225,6 +225,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        CycleFontFamily,
+        "Cycle Font Family",
+        None,
+        "Step the text font through the configured list",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
         IncreasePenSmoothing,
         "Increase Pen Smoothing",
         None,

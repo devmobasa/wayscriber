@@ -52,6 +52,14 @@ pub struct DrawingConfig {
     #[serde(default = "default_marker_opacity")]
     pub marker_opacity: f64,
 
+    /// Font families the **Cycle Font Family** action steps through.
+    ///
+    /// Any installed family name is valid. An empty list turns the action off.
+    /// This does not restrict the font a text shape can carry; it is the short
+    /// list worth reaching for from the keyboard mid-demo.
+    #[serde(default = "default_font_cycle")]
+    pub font_cycle: Vec<String>,
+
     /// Release-time smoothing passes for freehand and marker strokes (0 - 6).
     ///
     /// 0 keeps the exact path the pointer drew. Higher values clean up the
@@ -141,6 +149,7 @@ impl Default for DrawingConfig {
             default_eraser_mode: default_eraser_mode(),
             default_blur_style: default_blur_style(),
             marker_opacity: default_marker_opacity(),
+            font_cycle: default_font_cycle(),
             pen_smoothing: default_pen_smoothing(),
             default_fill_enabled: default_fill_enabled(),
             polygon_sides: default_polygon_sides(),
@@ -882,6 +891,16 @@ fn default_blur_style() -> BlurStyle {
 
 fn default_marker_opacity() -> f64 {
     0.32
+}
+
+/// The three families every desktop has, in the order most people want them:
+/// prose, code, then something with serifs for contrast on a slide.
+fn default_font_cycle() -> Vec<String> {
+    vec![
+        "Sans".to_string(),
+        "Monospace".to_string(),
+        "Serif".to_string(),
+    ]
 }
 
 /// A middle setting. Enough to take the shake out of a normal hand, little

@@ -41,6 +41,7 @@ pub struct ConfigDraft {
     pub drawing_polygon_sides: String,
     pub drawing_marker_opacity: String,
     pub drawing_pen_smoothing: String,
+    pub drawing_font_cycle: String,
     pub drawing_hit_test_tolerance: String,
     pub drawing_hit_test_linear_threshold: String,
     pub drawing_undo_stack_limit: String,

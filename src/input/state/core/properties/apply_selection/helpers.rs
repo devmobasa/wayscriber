@@ -4,7 +4,7 @@ use crate::draw::{Color, Shape};
 use crate::input::state::{Toast, ToastPriority};
 
 #[derive(Default)]
-pub(super) struct SelectionApplyResult {
+pub(in crate::input::state::core) struct SelectionApplyResult {
     pub(super) changed: usize,
     pub(super) locked: usize,
     pub(super) applicable: usize,
@@ -55,7 +55,7 @@ impl InputState {
         if mixed { Some(true) } else { Some(!first) }
     }
 
-    pub(super) fn apply_selection_change<A, F>(
+    pub(in crate::input::state::core) fn apply_selection_change<A, F>(
         &mut self,
         mut applicable: A,
         mut apply: F,
@@ -143,7 +143,7 @@ impl InputState {
         result
     }
 
-    pub(super) fn report_selection_apply_result(
+    pub(in crate::input::state::core) fn report_selection_apply_result(
         &mut self,
         result: SelectionApplyResult,
         label: &str,

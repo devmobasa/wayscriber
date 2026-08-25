@@ -158,6 +158,7 @@ pub(super) fn build_main_sections(
         rows: vec![
             action_row(bindings, Action::EnterTextMode, NOT_BOUND_LABEL),
             action_row(bindings, Action::EnterStickyNoteMode, NOT_BOUND_LABEL),
+            action_row(bindings, Action::CycleFontFamily, NOT_BOUND_LABEL),
             action_row(bindings, Action::IncreaseFontSize, NOT_BOUND_LABEL),
             action_row(bindings, Action::DecreaseFontSize, NOT_BOUND_LABEL),
             action_row(bindings, Action::ToggleFill, NOT_BOUND_LABEL),

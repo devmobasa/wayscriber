@@ -12,6 +12,11 @@ pub(super) fn build(page: &mut PageBuilder) {
             |app| app.draft.drawing_font_family.clone(),
             |value| Message::TextChanged(TextField::DrawingFontFamily, value),
         )
+        .entry_row(
+            "Font cycle list (comma separated)",
+            |app| app.draft.drawing_font_cycle.clone(),
+            |value| Message::TextChanged(TextField::DrawingFontCycle, value),
+        )
         .combo_row(
             "Font weight",
             "",

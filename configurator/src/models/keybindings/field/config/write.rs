@@ -44,6 +44,7 @@ impl KeybindingField {
             Self::SelectPenTool => config.tools.select_pen_tool = value,
             Self::SelectEraserTool => config.tools.select_eraser_tool = value,
             Self::ToggleEraserMode => config.tools.toggle_eraser_mode = value,
+            Self::CycleFontFamily => config.tools.cycle_font_family = value,
             Self::IncreasePenSmoothing => config.tools.increase_pen_smoothing = value,
             Self::DecreasePenSmoothing => config.tools.decrease_pen_smoothing = value,
             Self::SelectMarkerTool => config.tools.select_marker_tool = value,

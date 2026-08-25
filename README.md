@@ -126,6 +126,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 - Selection: <kbd>Alt</kbd>-drag, <kbd>V</kbd> tool, properties panel
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
 - Color picker, screen eyedropper with a magnified pixel loupe, palettes, size via hotkeys or scroll
+- Text font cycling with <kbd>Shift+T</kbd> over a configurable list (`[drawing] font_cycle`); with text selected it restyles that text
 - Render color profiles for print/projector/light-theme preview
 - Radial menu at cursor (<kbd>Middle-click</kbd>): quick tool/color selection with recent colors, press-flick-release tool commits, plus a draggable outer size ring and scroll size adjust
 

@@ -131,6 +131,8 @@ pub struct InputState {
     pub current_font_size: f64,
     /// Font descriptor for text rendering (family, weight, style)
     pub font_descriptor: FontDescriptor,
+    /// Families the font-cycle action steps through. Empty turns it off.
+    pub(crate) font_cycle: Vec<String>,
     /// Whether to draw background behind text
     pub text_background_enabled: bool,
     /// Optional wrap width for text input (None = auto)

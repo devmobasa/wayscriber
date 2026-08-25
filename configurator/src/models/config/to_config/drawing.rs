@@ -67,6 +67,13 @@ impl ConfigDraft {
             errors,
             |value| config.drawing.marker_opacity = value,
         );
+        config.drawing.font_cycle = self
+            .drawing_font_cycle
+            .split(',')
+            .map(str::trim)
+            .filter(|family| !family.is_empty())
+            .map(str::to_string)
+            .collect();
         config.drawing.font_family = self.drawing_font_family.clone();
         config.drawing.font_weight = self.drawing_font_weight.clone();
         config.drawing.font_style = self.drawing_font_style.clone();
