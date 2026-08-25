@@ -6,7 +6,11 @@ pub(crate) mod interaction;
 mod mouse;
 mod render;
 mod spotlight;
-pub(crate) use spotlight::SpotlightFrameRegions;
+pub(crate) use core::SpotlightMagnificationTrack;
+pub(crate) use spotlight::{
+    SpotlightFrameRegions, SpotlightMagnificationGesture, SpotlightWheelClaim,
+    SpotlightWheelOutcome,
+};
 #[cfg(test)]
 mod tests;
 

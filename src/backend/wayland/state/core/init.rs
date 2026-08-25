@@ -138,6 +138,7 @@ impl WaylandState {
             spotlight_magnifier_scratch: Default::default(),
             spotlight_magnifier_warning_active: false,
             spotlight_magnifier_page_warned_source: None,
+            spotlight_wheel_idle_deadline: None,
             config,
             runtime_ui,
             runtime_ui_unavailable,

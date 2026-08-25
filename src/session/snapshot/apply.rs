@@ -180,6 +180,10 @@ pub(crate) fn apply_snapshot_replacing_boards(
 
 fn clear_board_pages(input: &mut InputState) {
     input.cancel_active_interaction();
+    // Every page is about to be replaced. A wheel adjustment still in flight
+    // belongs to a frame that will not exist afterwards, so record it now
+    // rather than letting the identity guard drop it.
+    input.flush_spotlight_magnification_gesture();
     if input.is_board_picker_open() {
         input.close_board_picker();
     }

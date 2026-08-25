@@ -214,6 +214,8 @@ impl InputState {
             pending_sequence: None,
             consumed_pointer_buttons: HashSet::new(),
             pending_backend_action: None,
+            spotlight_magnification_gesture: None,
+            spotlight_wheel_value120_remainder: None,
             pending_spotlight_magnifier_feedback: false,
             pending_toolbar_persistence: Vec::new(),
             pending_keybinding_edits: Vec::new(),

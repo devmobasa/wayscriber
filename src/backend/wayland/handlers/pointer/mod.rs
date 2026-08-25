@@ -62,8 +62,10 @@ impl PointerHandler for WaylandState {
                     self.handle_pointer_release(event, on_toolbar, inline_active, button);
                     self.refresh_screen_modal_cursor(modal_before, on_toolbar, conn);
                 }
-                PointerEventKind::Axis { vertical, .. } => {
-                    self.handle_pointer_axis(event, on_toolbar, vertical);
+                PointerEventKind::Axis {
+                    vertical, source, ..
+                } => {
+                    self.handle_pointer_axis(event, on_toolbar, vertical, source);
                 }
             }
         }

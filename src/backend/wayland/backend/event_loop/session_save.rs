@@ -26,6 +26,10 @@ use notifications::{
 };
 
 pub(super) fn persist_session(state: &mut WaylandState) -> Result<(), anyhow::Error> {
+    finalize_spotlight_wheel_for_shutdown_persistence(
+        &mut state.input_state,
+        &mut state.spotlight_wheel_idle_deadline,
+    );
     if let Some(pending) = state.session.cancel_pending_output_transition() {
         log::info!(
             "Canceling staged output transition to {:?} during shutdown; persisting active epoch {}",
@@ -227,8 +231,8 @@ pub(super) fn autosave_if_due(state: &mut WaylandState, now: Instant) -> Result<
         return Ok(());
     };
 
-    if should_defer_for_interaction(state)
-        && defer_pending_autosave_for_interaction(&mut state.session, now, &options)
+    let interaction_active = should_defer_for_interaction(state);
+    if defer_autosave_for_active_interaction(&mut state.session, now, &options, interaction_active)
     {
         return Ok(());
     }
@@ -531,29 +535,33 @@ fn record_persistence_transport_failure(
 
 pub(in crate::backend::wayland) fn should_defer_for_interaction(state: &WaylandState) -> bool {
     persistence_interaction_active(
-        state.input_state.has_active_pointer_interaction(),
+        input_persistence_interaction_active(&state.input_state),
         state.toolbar_dragging(),
         state.is_move_dragging(),
         state.board_panning_active(),
         state.zoom_panning_active(),
         stylus_tip_down(state),
-        matches!(
-            state.input_state.state,
-            crate::input::DrawingState::TextInput { .. }
-        ),
     )
 }
 
 fn persistence_interaction_active(
-    pointer: bool,
+    input: bool,
     toolbar_drag: bool,
     move_drag: bool,
     board_pan: bool,
     zoom_pan: bool,
     stylus_tip: bool,
-    text_editing: bool,
 ) -> bool {
-    pointer || toolbar_drag || move_drag || board_pan || zoom_pan || stylus_tip || text_editing
+    input || toolbar_drag || move_drag || board_pan || zoom_pan || stylus_tip
+}
+
+fn input_persistence_interaction_active(input_state: &crate::input::InputState) -> bool {
+    input_state.has_active_pointer_interaction()
+        || matches!(
+            input_state.state,
+            crate::input::DrawingState::TextInput { .. }
+        )
+        || input_state.has_pending_spotlight_magnification_gesture()
 }
 
 pub(in crate::backend::wayland) fn interaction_defer_interval() -> Duration {
@@ -580,10 +588,27 @@ fn defer_pending_autosave_for_interaction(
     let delay = Duration::from_millis(AUTOSAVE_ACTIVE_INTERACTION_DEFER_MS);
     session.defer_autosave(now, delay);
     log::debug!(
-        "Deferring autosave for {:?} while pointer/stylus interaction is active",
+        "Deferring autosave for {:?} while an input interaction is active",
         delay
     );
     true
+}
+
+fn defer_autosave_for_active_interaction(
+    session: &mut SessionState,
+    now: Instant,
+    options: &session::SessionOptions,
+    interaction_active: bool,
+) -> bool {
+    interaction_active && defer_pending_autosave_for_interaction(session, now, options)
+}
+
+fn finalize_spotlight_wheel_for_shutdown_persistence(
+    input_state: &mut crate::input::InputState,
+    spotlight_wheel_idle_deadline: &mut Option<Instant>,
+) {
+    input_state.flush_spotlight_magnification_gesture();
+    *spotlight_wheel_idle_deadline = None;
 }
 
 #[cfg(feature = "tablet-input")]

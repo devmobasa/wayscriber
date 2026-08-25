@@ -857,7 +857,7 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Triangle / parallelogram / rhombus / regular polygon | **Shape picker** in the top strip (bindable) |
 | Freeform polygon | **Shape picker**, then click vertices; <kbd>Enter</kbd> or double-click to finish |
 | Blur | **Shape picker** (bindable) — drag a region; style via **Cycle Blur Style** |
-| Spotlight | **Shape picker** (bindable) — drag an ellipse; everything else dims; set 1×–4× magnification in the style pill |
+| Spotlight | **Shape picker** (bindable) — drag an ellipse; everything else dims; set 1×–4× magnification in the style pill, scroll over the loupe, or select an unlocked loupe and drag its on-canvas knob |
 | Step marker tool | Toolbar (bindable) |
 | Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |

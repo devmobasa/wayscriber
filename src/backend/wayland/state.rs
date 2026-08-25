@@ -219,6 +219,11 @@ pub(super) struct WaylandState {
     pub(super) spotlight_magnifier_scratch: crate::draw::SpotlightMagnifierScratch,
     /// Deduplicates the live render-failure warning.
     pub(super) spotlight_magnifier_warning_active: bool,
+    /// When an in-flight wheel adjustment of a loupe stops counting as one
+    /// burst. Discrete wheels send no end-of-gesture signal, so the boundary
+    /// is a quiet period: without it two visits minutes apart, at unchanged
+    /// coordinates, would merge into a single undo entry.
+    pub(super) spotlight_wheel_idle_deadline: Option<std::time::Instant>,
     /// Availability that the standing "this page cannot magnify" warning was
     /// last shown for, so loading or switching pages warns once rather than
     /// once per frame, and warns again once availability changes.

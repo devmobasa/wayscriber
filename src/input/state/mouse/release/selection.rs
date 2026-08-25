@@ -46,6 +46,27 @@ pub(super) fn finish_selection_drag(
     }
 }
 
+/// Commits one magnification drag as a single undo entry.
+///
+/// The live updates during the drag deliberately recorded nothing, so the
+/// whole gesture undoes in one step rather than per motion event. The wheel
+/// gesture ends the same way, through the same recorder, so the two cannot
+/// disagree about when a change is worth keeping.
+pub(super) fn finish_spotlight_magnification(
+    state: &mut InputState,
+    shape_id: ShapeId,
+    snapshot: ShapeSnapshot,
+) {
+    let Some(shape) = state.boards.active_frame().shape(shape_id) else {
+        return;
+    };
+    let after = ShapeSnapshot {
+        shape: shape.shape.clone(),
+        locked: shape.locked,
+    };
+    state.record_spotlight_magnification_change(shape_id, snapshot, after);
+}
+
 pub(super) fn finish_text_resize(
     state: &mut InputState,
     shape_id: ShapeId,

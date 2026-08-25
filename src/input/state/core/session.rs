@@ -175,6 +175,7 @@ impl InputState {
                     | DrawingState::Selecting { .. }
                     | DrawingState::ResizingText { .. }
                     | DrawingState::ResizingSelection { .. }
+                    | DrawingState::AdjustingSpotlightMagnification { .. }
             )
             || self.board_picker_is_dragging()
             || self.board_picker_is_page_dragging()

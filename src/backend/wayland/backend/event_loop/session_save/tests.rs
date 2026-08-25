@@ -1,5 +1,8 @@
 use super::*;
 use crate::backend::wayland::session::{PersistenceController, PersistenceOperation};
+use crate::config::Action;
+use crate::draw::Shape;
+use crate::input::state::{SpotlightWheelOutcome, test_support::make_test_input_state};
 use crate::session::SaveSnapshotOutcome;
 use std::path::PathBuf;
 
@@ -22,17 +25,90 @@ fn final_save_does_not_retry_through_an_unhealthy_worker() {
 #[test]
 fn pointer_and_stylus_both_gate_persistence_transitions() {
     assert!(persistence_interaction_active(
-        true, false, false, false, false, false, false
+        true, false, false, false, false, false
     ));
     assert!(persistence_interaction_active(
-        false, false, false, false, false, true, false
-    ));
-    assert!(persistence_interaction_active(
-        false, false, false, false, false, false, true
+        false, false, false, false, false, true
     ));
     assert!(!persistence_interaction_active(
-        false, false, false, false, false, false, false
+        false, false, false, false, false, false
     ));
+}
+
+#[test]
+fn a_due_autosave_is_deferred_while_spotlight_wheel_history_is_pending() {
+    let mut input = make_test_input_state();
+    input.boards.active_frame_mut().add_shape(Shape::Spotlight {
+        cx: 200,
+        cy: 200,
+        rx: 60,
+        ry: 40,
+        magnification: 2.0,
+    });
+    assert_eq!(
+        input.nudge_spotlight_magnification_at(200, 200, 1),
+        SpotlightWheelOutcome::Adjusted
+    );
+    assert!(input.has_pending_spotlight_magnification_gesture());
+
+    let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "wheel-autosave");
+    options.persist_transparent = true;
+    options.autosave_enabled = true;
+    options.autosave_idle = Duration::from_millis(1);
+    options.autosave_interval = Duration::from_millis(1);
+    let started = Instant::now();
+    let mut session = SessionState::new(Some(options.clone()));
+    session.record_input_dirty(started, true);
+    let due_at = started + Duration::from_millis(2);
+    assert!(session.autosave_due(due_at, &options));
+
+    assert!(defer_autosave_for_active_interaction(
+        &mut session,
+        due_at,
+        &options,
+        input_persistence_interaction_active(&input),
+    ));
+    assert!(!session.autosave_due(due_at, &options));
+}
+
+#[test]
+fn shutdown_persistence_records_wheel_history_before_capturing_the_snapshot() {
+    let mut input = make_test_input_state();
+    let shape_id = input.boards.active_frame_mut().add_shape(Shape::Spotlight {
+        cx: 200,
+        cy: 200,
+        rx: 60,
+        ry: 40,
+        magnification: 2.0,
+    });
+    assert_eq!(
+        input.nudge_spotlight_magnification_at(200, 200, 1),
+        SpotlightWheelOutcome::Adjusted
+    );
+    let mut deadline = Some(Instant::now() + Duration::from_millis(600));
+
+    finalize_spotlight_wheel_for_shutdown_persistence(&mut input, &mut deadline);
+    assert!(deadline.is_none());
+
+    let mut options = session::SessionOptions::new(PathBuf::from("/tmp"), "wheel-final-save");
+    options.persist_transparent = true;
+    options.persist_history = true;
+    let snapshot = input
+        .snapshot_for_persistence(&options)
+        .expect("changed loupe snapshot");
+    let mut restored = make_test_input_state();
+    crate::session::apply_snapshot(&mut restored, snapshot, &options);
+    restored.handle_action(Action::Undo);
+    let Shape::Spotlight { magnification, .. } = restored
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .expect("restored spotlight")
+        .shape
+    else {
+        panic!("expected restored spotlight");
+    };
+    assert_eq!(magnification, 2.0);
 }
 
 #[test]

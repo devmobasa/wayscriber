@@ -24,6 +24,19 @@ fn toolbar_event_blocked_by_modal(input_state: &InputState) -> bool {
     input_state.command_palette_is_engaged()
 }
 
+fn finalize_spotlight_wheel_gesture_before_toolbar_dispatch(
+    input_state: &mut InputState,
+    spotlight_wheel_idle_deadline: &mut Option<std::time::Instant>,
+) {
+    // Several backend-owned toolbar routes return before
+    // `InputState::apply_toolbar_event`, including session operations. Close
+    // the burst at the shared dispatch boundary so a save/open persistence
+    // barrier sees both the changed factor and its undo history, and so no
+    // already-finished gesture leaves an idle wake behind.
+    input_state.flush_spotlight_magnification_gesture();
+    *spotlight_wheel_idle_deadline = None;
+}
+
 /// Whether `event` dismisses `popover`.
 ///
 /// Every popover here is a flyout: anything that is not part of it closes it.
@@ -189,6 +202,10 @@ impl WaylandState {
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
         }
+        finalize_spotlight_wheel_gesture_before_toolbar_dispatch(
+            &mut self.input_state,
+            &mut self.spotlight_wheel_idle_deadline,
+        );
         if self.handle_toolbar_session_event(&event, conn, qh) {
             return;
         }

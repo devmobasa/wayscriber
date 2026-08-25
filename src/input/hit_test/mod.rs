@@ -38,6 +38,8 @@ impl HitTestTolerance {
 }
 
 /// Computes a tolerance-aware bounding rectangle for the shape.
+pub(crate) use shapes::ellipse_fill_hit;
+
 pub fn compute_hit_bounds(shape: &DrawnShape, tolerance: f64) -> Option<Rect> {
     compute_hit_bounds_with_tolerance(shape, HitTestTolerance::new(tolerance)?)
 }

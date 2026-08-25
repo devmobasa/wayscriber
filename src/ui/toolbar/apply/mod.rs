@@ -18,6 +18,10 @@ impl InputState {
         // so the shortcut coach can learn from toolbar use (the slow path the
         // palette also feeds).
         let coach_action = event.action();
+        // Toolbar page and board switches never reach `handle_action`, so the
+        // gesture is closed here as well. A wheel adjustment must not outlive
+        // the frame it started on: shape ids restart per frame.
+        self.flush_spotlight_magnification_gesture();
         let changed = self.apply_toolbar_event_inner(event);
         self.note_toolbar_shortcut_slow_path(coach_action, changed);
         changed

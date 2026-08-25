@@ -396,6 +396,17 @@ pub struct InputState {
     >,
     /// Pending backend output action (to be handled by WaylandState).
     pub(in crate::input::state::core) pending_backend_action: Option<PendingBackendAction>,
+    /// Shape and pre-gesture snapshot for an in-flight wheel adjustment of a
+    /// Spotlight's magnification.
+    ///
+    /// A wheel burst is one user action, so the snapshot is held here and a
+    /// single undo entry is pushed when the gesture ends rather than one per
+    /// tick.
+    pub(in crate::input::state) spotlight_magnification_gesture:
+        Option<crate::input::state::SpotlightMagnificationGesture>,
+    /// Unconsumed high-resolution wheel units and the Spotlight that owns
+    /// them. Wayland defines 120 units as one logical wheel step.
+    pub(in crate::input::state) spotlight_wheel_value120_remainder: Option<(ShapeId, i32)>,
     /// Coalesced request for the backend to explain an unavailable Spotlight
     /// magnifier source after a user-visible create/property action.
     pub(in crate::input::state::core) pending_spotlight_magnifier_feedback: bool,

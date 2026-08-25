@@ -20,6 +20,16 @@ pub(crate) fn handle_active_motion(
         return Some(RoutingOutcome::Continued(ActiveInteractionKind::TextInput));
     }
 
+    if matches!(
+        state.state,
+        DrawingState::AdjustingSpotlightMagnification { .. }
+    ) {
+        state.drag_spotlight_magnification_to(canvas.x());
+        return Some(RoutingOutcome::Continued(
+            ActiveInteractionKind::AdjustingSpotlightMagnification,
+        ));
+    }
+
     if let DrawingState::ResizingText {
         shape_id,
         base_x,
@@ -184,6 +194,9 @@ pub(crate) fn releasable_active_kind(state: &InputState) -> Option<ActiveInterac
         DrawingState::PendingTextClick { .. } => Some(ActiveInteractionKind::PendingTextClick),
         DrawingState::ResizingText { .. } => Some(ActiveInteractionKind::ResizingText),
         DrawingState::ResizingSelection { .. } => Some(ActiveInteractionKind::ResizingSelection),
+        DrawingState::AdjustingSpotlightMagnification { .. } => {
+            Some(ActiveInteractionKind::AdjustingSpotlightMagnification)
+        }
         // TextInput is passive except while an Alt+drag block move is in flight,
         // whose release must finish the drag.
         DrawingState::TextInput { .. } => state
