@@ -393,6 +393,20 @@ drag_tool = "default"
 - Undo stack limit: 100
 - Drag mapping: Drag=Pen, Shift+Drag=Line, Ctrl+Drag=Rect, Ctrl+Shift+Drag=Arrow, Tab+Drag=Ellipse
 
+#### Text halo
+
+Text is drawn with a contrasting outline so it stays readable over any
+background. Wayscriber picks that halo color from **what the label sits on**,
+sampled from the canvas just before the glyphs are painted.
+
+That means a whiteboard, a blackboard, a frozen screen, a zoomed screen, and a
+region already covered by a blur or a filled shape all give the right answer.
+
+On a transparent board with no frozen or zoomed capture there is nothing to
+sample — the desktop shows through the compositor and those pixels were never
+Wayscriber's to read. The halo then falls back to a rule based on the text color
+itself, which is what every case used before.
+
 #### Pen smoothing
 
 A pointer path carries the shake of the hand that drew it. `pen_smoothing`

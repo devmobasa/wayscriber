@@ -1,5 +1,7 @@
 //! Cairo-based rendering functions for shapes.
 
+mod backdrop_probe;
+pub use backdrop_probe::painted_luminance as painted_background_luminance;
 mod background;
 mod blur;
 mod highlight;

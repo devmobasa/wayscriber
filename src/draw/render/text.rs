@@ -1,3 +1,4 @@
+use super::backdrop_probe;
 use crate::draw::shape::{
     TextMeasurement, measure_text_with_context, sticky_note_layout, sticky_note_layout_text,
     sticky_note_text_layout,
@@ -80,11 +81,22 @@ pub fn render_text(
         });
     let content = measurement.content_extents(wrap_width);
 
-    // Calculate brightness to determine background/stroke color
-    let outline = text_outline_color(color);
-
     // Adjust y position (Pango measures from top-left, we want baseline)
     let adjusted_y = y as f64 - measurement.baseline;
+
+    // Read the background before anything is painted over it. The halo has to
+    // contrast with what the label sits on, and this is the last moment at
+    // which the surface still shows only that.
+    let background_luminance = backdrop_probe::painted_luminance(
+        ctx,
+        (
+            x as f64 + content.x,
+            adjusted_y + content.y,
+            content.width,
+            content.height,
+        ),
+    );
+    let outline = text_outline_color(color, background_luminance);
 
     // First pass: draw semi-transparent background rectangle (if enabled)
     if background_enabled && content.width > 0.0 && content.height > 0.0 {
@@ -142,8 +154,19 @@ pub fn caret_outline_width(size: f64) -> f64 {
 }
 
 /// Opaque contrasting color used to outline plain text and its separate caret.
-pub fn text_outline_color(color: Color) -> Color {
-    let brightness = color.r * 0.299 + color.g * 0.587 + color.b * 0.114;
+///
+/// `background_luminance` is what the label actually sits on, when that is
+/// known. It is the right input: a halo exists to separate the glyphs from the
+/// background, so the background is what it has to contrast with.
+///
+/// `None` falls back to deriving the halo from the text color, which is what
+/// this did for every case before. That rule is wrong whenever the two agree —
+/// red is dark by the weighted measure, so red text always took a white halo,
+/// including on a white page, which is the exact case a halo prevents. It stays
+/// as the fallback only because a transparent overlay over a live desktop has no
+/// background pixels to read, and a guess from the text color beats no halo.
+pub fn text_outline_color(color: Color, background_luminance: Option<f64>) -> Color {
+    let brightness = background_luminance.unwrap_or_else(|| backdrop_probe::color_luminance(color));
     if brightness > 0.5 {
         Color::new(0.0, 0.0, 0.0, 1.0)
     } else {
@@ -314,12 +337,92 @@ mod tests {
     }
 
     #[test]
-    fn text_outline_contrasts_with_light_and_dark_caret_colors() {
-        let light_outline = text_outline_color(Color::new(1.0, 1.0, 1.0, 1.0));
+    fn a_known_background_decides_the_halo_whatever_colour_the_text_is() {
+        let red = Color::new(0.96, 0.2, 0.25, 1.0);
+
+        let on_white = text_outline_color(red, Some(1.0));
+        assert!(on_white.r < 0.5, "red on a white page needs a dark halo");
+
+        let on_black = text_outline_color(red, Some(0.0));
+        assert!(
+            on_black.r > 0.5,
+            "the same red on a dark page needs a light one"
+        );
+    }
+
+    #[test]
+    fn rendered_red_text_takes_a_dark_halo_on_a_white_board_and_a_light_one_on_a_black_board() {
+        fn near_black_pixels(board: (f64, f64, f64)) -> usize {
+            let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 400, 120).unwrap();
+            {
+                let ctx = cairo::Context::new(&surface).unwrap();
+                ctx.set_source_rgb(board.0, board.1, board.2);
+                let _ = ctx.paint();
+                render_text(
+                    &ctx,
+                    20,
+                    80,
+                    "Read me",
+                    Color::new(0.96, 0.2, 0.25, 1.0),
+                    36.0,
+                    &FontDescriptor::default(),
+                    false,
+                    None,
+                );
+            }
+            surface.flush();
+            let stride = surface.stride() as usize;
+            let data = surface.data().unwrap();
+            let mut count = 0;
+            for row in 0..120usize {
+                for column in 0..400usize {
+                    let offset = row * stride + column * 4;
+                    let (b, g, r) = (data[offset], data[offset + 1], data[offset + 2]);
+                    if r < 40 && g < 40 && b < 40 {
+                        count += 1;
+                    }
+                }
+            }
+            count
+        }
+
+        let on_white = near_black_pixels((1.0, 1.0, 1.0));
+        assert!(
+            on_white > 200,
+            "a dark halo must appear around red glyphs on a whiteboard, found {on_white} dark pixels"
+        );
+
+        let on_black = near_black_pixels((0.0, 0.0, 0.0));
+        assert!(
+            on_black < 400 * 120,
+            "a light halo on a blackboard must leave some non-black pixels"
+        );
+    }
+
+    #[test]
+    fn an_unknown_background_falls_back_to_the_colour_of_the_text() {
+        let light_outline = text_outline_color(Color::new(1.0, 1.0, 1.0, 1.0), None);
         assert!(light_outline.r < 0.5);
 
-        let dark_outline = text_outline_color(Color::new(0.0, 0.0, 0.0, 1.0));
+        let dark_outline = text_outline_color(Color::new(0.0, 0.0, 0.0, 1.0), None);
         assert!(dark_outline.r > 0.5);
+    }
+
+    #[test]
+    fn red_text_on_a_white_page_no_longer_gets_a_white_halo() {
+        // The defect this replaced: the rule read the text colour, and red has
+        // a weighted brightness of 0.30, so red always took a white halo. On a
+        // whiteboard that is a white halo on a white page.
+        let red = Color::new(0.96, 0.2, 0.25, 1.0);
+
+        assert!(
+            text_outline_color(red, None).r > 0.5,
+            "the old rule is preserved as the fallback"
+        );
+        assert!(
+            text_outline_color(red, Some(0.95)).r < 0.5,
+            "but a known white background now wins"
+        );
     }
 
     #[test]
@@ -538,7 +641,7 @@ mod tests {
             let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 600, 420).unwrap();
             {
                 let ctx = cairo::Context::new(&surface).unwrap();
-                let outline = text_outline_color(color);
+                let outline = text_outline_color(color, None);
                 ctx.set_source_rgba(outline.r, outline.g, outline.b, outline.a);
                 ctx.set_line_width(caret_outline_width(size));
                 ctx.move_to(caret_x, top);

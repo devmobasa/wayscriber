@@ -122,7 +122,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 - Arrows in four styles - standard, pointy, curved (drag its handle to route around what is in the way), and double-ended - with optional auto-numbered labels; step markers for walkthroughs
 - Blur tool with four styles: soften, pixelate, secure (flattens the region to one color), and black out
 - Spotlight tool: dims everything except the regions you draw, with optional 1×–4× magnification
-- Multiline text and sticky notes with smoothing
+- Multiline text and sticky notes with smoothing; text halos take their contrast from the background the label sits on, so a label stays readable on any board or frozen screen
 - Selection: <kbd>Alt</kbd>-drag, <kbd>V</kbd> tool, properties panel
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
 - Color picker, screen eyedropper with a magnified pixel loupe, palettes, size via hotkeys or scroll

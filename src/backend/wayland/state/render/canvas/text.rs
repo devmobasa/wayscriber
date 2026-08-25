@@ -114,7 +114,18 @@ impl WaylandState {
         // Widths come from the draw layer so the damage tracker sizes the
         // caret's repaint rectangle from the exact same numbers.
         let line_width = crate::draw::caret_line_width(size);
-        let outline = crate::draw::text_outline_color(color);
+        // The caret stands where the glyphs will, so it asks the same
+        // question they do: what is behind this point on the canvas?
+        let background_luminance = crate::draw::painted_background_luminance(
+            ctx,
+            (
+                caret_x,
+                top,
+                crate::draw::caret_outline_width(size),
+                bottom - top,
+            ),
+        );
+        let outline = crate::draw::text_outline_color(color, background_luminance);
         ctx.set_source_rgba(outline.r, outline.g, outline.b, outline.a);
         ctx.set_line_width(crate::draw::caret_outline_width(size));
         ctx.move_to(caret_x, top);
