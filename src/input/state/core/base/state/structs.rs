@@ -120,6 +120,8 @@ pub struct InputState {
     pub spotlight_dim_opacity: f64,
     /// Fraction of each spotlight radius spent fading out at the edge
     pub spotlight_feather: f64,
+    /// Magnification copied into the next Spotlight shape.
+    pub spotlight_magnification: f64,
     /// Current font size for text mode (from config)
     pub current_font_size: f64,
     /// Font descriptor for text rendering (family, weight, style)
@@ -394,6 +396,20 @@ pub struct InputState {
     >,
     /// Pending backend output action (to be handled by WaylandState).
     pub(in crate::input::state::core) pending_backend_action: Option<PendingBackendAction>,
+    /// Shape and pre-gesture snapshot for an in-flight wheel adjustment of a
+    /// Spotlight's magnification.
+    ///
+    /// A wheel burst is one user action, so the snapshot is held here and a
+    /// single undo entry is pushed when the gesture ends rather than one per
+    /// tick.
+    pub(in crate::input::state) spotlight_magnification_gesture:
+        Option<crate::input::state::SpotlightMagnificationGesture>,
+    /// Unconsumed high-resolution wheel units and the Spotlight that owns
+    /// them. Wayland defines 120 units as one logical wheel step.
+    pub(in crate::input::state) spotlight_wheel_value120_remainder: Option<(ShapeId, i32)>,
+    /// Coalesced request for the backend to explain an unavailable Spotlight
+    /// magnifier source after a user-visible create/property action.
+    pub(in crate::input::state::core) pending_spotlight_magnifier_feedback: bool,
     /// Durable toolbar chrome changes awaiting their runtime-ui.toml write,
     /// oldest first.
     ///

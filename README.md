@@ -120,7 +120,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 - Shapes: lines, rectangles, ellipses, polygons (with fill toggle)
 - Arrows with optional auto-numbered labels; step markers for walkthroughs
 - Blur tool with four styles: soften, pixelate, secure (flattens the region to one color), and black out
-- Spotlight tool: dims everything except the regions you draw
+- Spotlight tool: dims everything except the regions you draw, with optional 1×–4× magnification
 - Multiline text and sticky notes with smoothing
 - Selection: <kbd>Alt</kbd>-drag, <kbd>V</kbd> tool, properties panel
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
@@ -177,7 +177,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 - Input HUD (<kbd>Ctrl+Shift+K</kbd>): on-screen keystroke and click chips for demos and screencasts (opt-in system-wide capture via the `input-monitor` build feature — see [docs/CONFIG.md](docs/CONFIG.md#uiinput_hud---input-hud-keystrokes-and-clicks))
 - Light passthrough (layer-shell): draw while input passes through to the app underneath — see [Light passthrough mode](#light-passthrough-mode)
 - Screen freeze (<kbd>Ctrl+Shift+F</kbd>): pause the display while apps keep running. Freeze prefers compositor-native `wlr-screencopy` or `ext-image-copy-capture` and falls back to the screenshot portal when available
-- Spotlight: drag an ellipse to dim everything around it; stack several to highlight multiple areas. Dim strength and edge softness are configurable under `[spotlight]`
+- Spotlight: drag an ellipse to dim everything around it; stack several to highlight multiple areas. Each Spotlight can magnify its opening from 1× to 4×, while dim strength and edge softness remain shared under `[spotlight]`. Magnification uses complete pixels from a solid board, Freeze, Zoom, or a captured/export backdrop; a live transparent board keeps the ordinary opening and prompts you to Freeze.
 
 ### Callouts and zoom
 - **Numbered callouts:** auto-numbered arrow labels and step markers; reset arrow labels with <kbd>Ctrl+Shift+R</kbd>
@@ -804,7 +804,7 @@ Use `--exit-after-capture` / `--no-exit-after-capture` to override whether the o
 <details>
 <summary>PDF export</summary>
 
-Canvas export commands are available in the command palette and keybindings. `export_board_pdf_file` saves the active board as a multi-page PDF, `export_all_boards_pdf_file` saves every board in board order, and both PDF actions are unbound by default. PDF exports keep transparent pages blank unless `[export.pdf] transparent_background = "desktop"` is set, which captures the live desktop behind the overlay for transparent pages only.
+Canvas export commands are available in the command palette and keybindings. `export_board_pdf_file` saves the active board as a multi-page PDF, `export_all_boards_pdf_file` saves every board in board order, and both PDF actions are unbound by default. PDF exports keep transparent pages blank unless `[export.pdf] transparent_background = "desktop"` is set, which captures the live desktop behind the overlay for transparent pages only. Pages with a magnified Spotlight are rasterized so the loupe can sample completed pixels; page labels are still written as vector content on top.
 
 </details>
 
@@ -857,7 +857,7 @@ Press <kbd>F1</kbd> for the complete in-app cheat sheet.
 | Triangle / parallelogram / rhombus / regular polygon | **Shape picker** in the top strip (bindable) |
 | Freeform polygon | **Shape picker**, then click vertices; <kbd>Enter</kbd> or double-click to finish |
 | Blur | **Shape picker** (bindable) — drag a region; style via **Cycle Blur Style** |
-| Spotlight | **Shape picker** (bindable) — drag an ellipse; everything else dims |
+| Spotlight | **Shape picker** (bindable) — drag an ellipse; everything else dims; set 1×–4× magnification in the style pill, scroll over the loupe, or select an unlocked loupe and drag its on-canvas knob |
 | Step marker tool | Toolbar (bindable) |
 | Highlight brush | <kbd>Ctrl+Alt+H</kbd> |
 | Text mode | <kbd>T</kbd>, <kbd>Click</kbd> to place, type, <kbd>Enter</kbd> to finish |
@@ -1175,7 +1175,7 @@ See [Session manager examples](examples/session-manager.md) for complete CLI, ov
 <details>
 <summary>Behavior notes</summary>
 
-- Config values seed startup defaults. When `restore_tool_state` is enabled (default), the last-used tool settings saved in the session (including arrow head placement) override those config defaults on startup. Run `wayscriber --clear-tool-state` to remove only that saved tool layer so config defaults apply next startup while saved boards/history remain. In a running overlay, use Command Palette → Reset Tool Defaults to clear the saved layer and immediately apply config defaults to the active tools.
+- Config values seed startup defaults. When `restore_tool_state` is enabled (default), the last-used tool settings saved in the session (including arrow head placement and the starting Spotlight magnification) override those config defaults on startup. Run `wayscriber --clear-tool-state` to remove only that saved tool layer so config defaults apply next startup while saved boards/history remain. In a running overlay, use Command Palette → Reset Tool Defaults to clear the saved layer and immediately apply config defaults to the active tools.
 - `--session-file` uses exactly the selected file, implies persistence for that overlay run, rejects directories/symlinks/special files, and does not create missing parent directories. A running daemon can launch a hidden overlay with a named target; if the overlay is already visible, hide it before switching to a different named session.
 - The overlay Session controls live in the top toolbar's Session popover (overflow menu → Session...). They can open an existing named session, save the current overlay as another named session, show session info, clear the active session, reopen recent named sessions, and jump to the configurator. The Open/Save As dialogs use `zenity` or `kdialog`; Save As appends `.wayscriber-session` when no extension is supplied and asks before replacing existing session artifacts.
 - The configurator Session tab manages recent named sessions recorded when named-session targets are opened or saved from the CLI, daemon, or overlay. It can rename catalog labels, reveal files, and forget metadata without touching files. Clear Tool State removes only the saved tool layer; Clear Saved Data removes session files. Duplicate, Move, Clear Tool State, and Clear are disabled while an overlay, manually started daemon, or background service is active.

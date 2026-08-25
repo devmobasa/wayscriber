@@ -388,6 +388,7 @@ fn render_breakdown_summary_reports_stage_culling_and_cache_use() {
         provisional_points: 42,
         render_profile: PerfRenderProfileKind::Canvas,
         canvas_layer_cache_used: true,
+        ..PerfRenderBreakdown::default()
     });
     let _ = metrics.commit_frame(
         frame_context(Some(Duration::from_millis(1)), 1.0, false, 2, None),

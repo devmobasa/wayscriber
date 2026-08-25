@@ -26,6 +26,10 @@ impl InputState {
         canvas_x: i32,
         canvas_y: i32,
     ) {
+        // Moving off the loupe ends a wheel adjustment of it. Nothing else runs
+        // between two wheel bursts over one shape, so without this a visit
+        // minutes later would merge into the same undo entry.
+        self.end_spotlight_magnification_gesture_if_pointer_left(canvas_x, canvas_y);
         let points = PointerPoints::new(
             ScreenPoint::new(screen_x, screen_y),
             CanvasPoint::new(canvas_x, canvas_y),

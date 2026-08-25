@@ -16,6 +16,11 @@ pub struct SpotlightConfig {
     /// (valid range: 0.0 - 0.9). 0.0 gives a hard edge.
     #[serde(default = "default_spotlight_feather")]
     pub feather: f64,
+
+    /// Magnification copied into newly drawn Spotlight shapes
+    /// (valid range: 1.0 - 4.0). Existing shapes keep their own value.
+    #[serde(default = "crate::draw::default_spotlight_magnification")]
+    pub magnification: f64,
 }
 
 impl Default for SpotlightConfig {
@@ -23,6 +28,7 @@ impl Default for SpotlightConfig {
         Self {
             dim_opacity: default_spotlight_dim(),
             feather: default_spotlight_feather(),
+            magnification: crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
         }
     }
 }

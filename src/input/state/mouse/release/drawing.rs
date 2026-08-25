@@ -48,6 +48,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             marker_opacity: state.marker_opacity,
             fill_enabled: state.fill_enabled,
             blur_style: state.blur_style,
+            spotlight_magnification: state.spotlight_magnification,
             arrow_length: state.arrow_length,
             arrow_angle: state.arrow_angle,
             arrow_head_at_end: state.arrow_head_at_end,
@@ -77,6 +78,11 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
     };
 
     let bounds = shape.bounding_box();
+    let magnified_spotlight = matches!(
+        shape,
+        Shape::Spotlight { magnification, .. }
+            if crate::draw::spotlight_magnification_is_active(magnification)
+    );
     let path_damage = finished_path_damage_regions(&shape, bounds);
     let preserve_provisional_cleanup =
         matches!(shape, Shape::Freehand { .. }) && pressure_preview_exceeds_final_width;
@@ -128,6 +134,9 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
         state.needs_redraw = true;
         state.mark_session_dirty();
         state.record_first_stroke_done_for_onboarding();
+        if magnified_spotlight {
+            state.request_spotlight_magnifier_feedback();
+        }
         if usage.bump_arrow_label {
             state.bump_arrow_label();
         }

@@ -33,6 +33,37 @@ fn pill_button(label: &str, width: f64, height: f64) -> gtk4::Button {
 }
 
 impl TopBar {
+    /// Appends the inline unavailable-state label for a control that can carry
+    /// one, and registers its updater.
+    ///
+    /// The label is built even while the status is empty, and hidden instead of
+    /// omitted: the bar only rebuilds when the pill's control list changes, so a
+    /// slot that appears later has to already exist.
+    fn append_style_status_label(
+        &mut self,
+        pill: &gtk4::Box,
+        control: model::StylePillControl,
+        snapshot: &ToolbarSnapshot,
+        gap_px: i32,
+    ) {
+        if !control.has_status_slot() {
+            return;
+        }
+        let initial = control.status_text(snapshot);
+        let status = gtk4::Label::new(initial);
+        status.add_css_class("hint");
+        status.set_valign(gtk4::Align::Center);
+        status.set_visible(initial.is_some());
+        set_semantic_widget_id(&status, &format!("{}.status", control.id()));
+        status.set_margin_end(gap_px.max(0));
+        pill.append(&status);
+        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+            let text = control.status_text(snapshot);
+            status.set_label(text.unwrap_or_default());
+            status.set_visible(text.is_some());
+        }));
+    }
+
     pub(super) fn build_style_pill(&mut self, snapshot: &ToolbarSnapshot, plan: &TopStripPlan) {
         let spec = model::StylePillSpec::build(snapshot, plan);
         if spec.controls().is_empty() {
@@ -122,38 +153,40 @@ impl TopBar {
                 }
                 model::StylePillControl::ThicknessSlider
                 | model::StylePillControl::OpacitySlider
+                | model::StylePillControl::SpotlightMagnificationSlider
                 | model::StylePillControl::FontSizeSlider => {
                     let (slider_spec, value) = control.slider_value(snapshot);
                     let format = match control {
                         model::StylePillControl::ThicknessSlider => format_px as fn(f64) -> String,
                         model::StylePillControl::OpacitySlider => format_percent,
+                        model::StylePillControl::SpotlightMagnificationSlider => {
+                            crate::draw::format_spotlight_magnification
+                        }
                         _ => format_pt,
                     };
                     let sender = self.feedback.clone();
-                    let slider = SliderRow::new(
-                        scale,
-                        (slider_spec.min, slider_spec.max),
-                        value,
-                        format,
-                        move |value| {
-                            let event = match control {
-                                model::StylePillControl::ThicknessSlider => {
-                                    ToolbarEvent::SetThickness(value)
-                                }
-                                model::StylePillControl::OpacitySlider => {
-                                    ToolbarEvent::SetMarkerOpacity(value)
-                                }
-                                _ => ToolbarEvent::SetFontSize(value),
-                            };
-                            send_event(&sender, event);
-                        },
-                    );
+                    let slider = SliderRow::new(scale, slider_spec, value, format, move |value| {
+                        let event = match control {
+                            model::StylePillControl::ThicknessSlider => {
+                                ToolbarEvent::SetThickness(value)
+                            }
+                            model::StylePillControl::OpacitySlider => {
+                                ToolbarEvent::SetMarkerOpacity(value)
+                            }
+                            model::StylePillControl::SpotlightMagnificationSlider => {
+                                ToolbarEvent::SetSpotlightMagnification(value)
+                            }
+                            _ => ToolbarEvent::SetFontSize(value),
+                        };
+                        send_event(&sender, event);
+                    });
                     // The thickness/text-size readouts are distinct numeral
                     // controls; only the opacity slider keeps its built-in
                     // readout.
                     slider.set_value_label_visible(matches!(
                         control,
                         model::StylePillControl::OpacitySlider
+                            | model::StylePillControl::SpotlightMagnificationSlider
                     ));
                     set_semantic_widget_id(&slider.root, control.id().as_ref());
                     slider.root.set_size_request(px(STYLE_SLIDER_W), -1);
@@ -163,10 +196,14 @@ impl TopBar {
                         let value = match control {
                             model::StylePillControl::ThicknessSlider => snapshot.thickness,
                             model::StylePillControl::OpacitySlider => snapshot.marker_opacity,
+                            model::StylePillControl::SpotlightMagnificationSlider => {
+                                snapshot.spotlight_magnification
+                            }
                             _ => snapshot.font_size,
                         };
                         slider.set_value(value);
                     }));
+                    self.append_style_status_label(&pill, control, snapshot, px(gap));
                 }
                 model::StylePillControl::ThicknessValue
                 | model::StylePillControl::FontSizeValue => {
@@ -312,6 +349,10 @@ impl TopBar {
                             button.set_sensitive(enabled);
                         }
                     }));
+                    // The docked control reports on the selected shape's own
+                    // factor, so it needs the same unavailable state the
+                    // slider has.
+                    self.append_style_status_label(&pill, control, snapshot, px(gap));
                 }
                 model::StylePillControl::FontFamilySegment
                 | model::StylePillControl::EraserModeSegment => {

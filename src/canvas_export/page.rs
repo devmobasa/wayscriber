@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use crate::capture::CaptureError;
 use crate::draw::{
-    BlurRectParams, Color, EraserReplayContext, Frame, Shape, SpotlightPass, render_blur_rect,
-    render_eraser_stroke, render_shape, render_spotlight_pass, spotlight_regions_for_frame,
+    BlurRectParams, Color, EraserReplayContext, Frame, Shape, SpotlightMagnifierOutcome,
+    SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass, render_blur_rect,
+    render_eraser_stroke, render_shape, render_spotlight_magnification_pass, render_spotlight_pass,
+    spotlight_regions_for_frame,
 };
 use crate::screen_pixels::ScreenImage;
 
@@ -48,6 +50,21 @@ pub enum CanvasExportBackdropSnapshot {
         logical_to_image_scale_x: f64,
         logical_to_image_scale_y: f64,
     },
+}
+
+impl CanvasExportBackdropSnapshot {
+    /// Loupe availability for this backdrop, answered without decoding it.
+    ///
+    /// Mirrors what [`ExportBackdrop::new`] will produce for the same variant,
+    /// which is what lets the main-thread preflight refuse a page before a
+    /// render worker is ever submitted.
+    pub(crate) fn magnifier_source(&self) -> SpotlightMagnifierSource {
+        match self {
+            Self::Transparent => SpotlightMagnifierSource::from_backdrop(None, false),
+            Self::Solid(_) => SpotlightMagnifierSource::from_backdrop(None, true),
+            Self::PersistedImage { .. } => SpotlightMagnifierSource::immutable_raster(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -101,9 +118,21 @@ pub fn draw_canvas_page(
     if (output_scale - 1.0).abs() > f64::EPSILON {
         ctx.scale(output_scale, output_scale);
     }
-    draw_canvas_page_region(ctx, page, &backdrop, source, destination, true);
+    let target_size = (
+        (f64::from(page.viewport_width) * output_scale).ceil() as u32,
+        (f64::from(page.viewport_height) * output_scale).ceil() as u32,
+    );
+    let rendered = draw_canvas_page_region(
+        ctx,
+        page,
+        &backdrop,
+        source,
+        destination,
+        true,
+        Some(target_size),
+    );
     let _ = ctx.restore();
-    Ok(())
+    rendered
 }
 
 pub(crate) fn draw_canvas_page_region(
@@ -113,7 +142,8 @@ pub(crate) fn draw_canvas_page_region(
     source: CanvasExportRect,
     destination: CanvasExportRect,
     paint_backdrop: bool,
-) {
+    fallback_target_size: Option<(u32, u32)>,
+) -> Result<(), CaptureError> {
     let _ = ctx.save();
     ctx.rectangle(
         destination.x,
@@ -128,8 +158,10 @@ pub(crate) fn draw_canvas_page_region(
         destination.height / source.height,
     );
     ctx.translate(-source.x, -source.y);
-    draw_canvas_page_contents(ctx, page, backdrop, paint_backdrop);
+    let rendered =
+        draw_canvas_page_contents(ctx, page, backdrop, paint_backdrop, fallback_target_size);
     let _ = ctx.restore();
+    rendered
 }
 
 pub(crate) fn paint_pdf_page_background(
@@ -321,6 +353,18 @@ impl ExportBackdrop {
             logical_image_origin_y: self.logical_image_origin_y,
         }
     }
+
+    /// An export backdrop is an immutable snapshot: its pixels cannot be
+    /// recaptured or invalidated part-way through the render, so a present
+    /// raster surface needs no generation of its own.
+    fn magnifier_source(&self) -> SpotlightMagnifierSource {
+        SpotlightMagnifierSource::from_backdrop(
+            self.surface
+                .is_some()
+                .then_some(crate::draw::IMMUTABLE_RASTER_SOURCE_TOKEN),
+            self.bg_color.is_some(),
+        )
+    }
 }
 
 fn draw_canvas_page_contents(
@@ -328,7 +372,8 @@ fn draw_canvas_page_contents(
     page: &CanvasPageExportSnapshot,
     backdrop: &ExportBackdrop,
     paint_backdrop: bool,
-) {
+    fallback_target_size: Option<(u32, u32)>,
+) -> Result<(), CaptureError> {
     if paint_backdrop {
         backdrop.paint(ctx);
     }
@@ -367,14 +412,80 @@ fn draw_canvas_page_contents(
     // and replay the backdrop, so a dim layer painted earlier would be punched
     // away. Runs regardless of `paint_backdrop` — a PDF page with a solid
     // backdrop is already filled page-wide but still needs dimming.
+    let regions = spotlight_regions_for_frame(&page.frame);
+    let source = backdrop.magnifier_source();
+    let mut scratch = SpotlightMagnifierScratch::default();
+    match render_spotlight_magnification_pass(
+        ctx,
+        &regions,
+        page.spotlight.feather,
+        source,
+        fallback_target_size,
+        &mut scratch,
+    )
+    .map_err(|err| {
+        CaptureError::ImageError(format!("Failed to render Spotlight magnification: {err}"))
+    })? {
+        SpotlightMagnifierOutcome::SourceUnavailable => {
+            return Err(CaptureError::ImageError(
+                "Spotlight magnification needs complete backdrop pixels; Freeze screen to magnify before exporting"
+                    .to_string(),
+            ));
+        }
+        // An export must never silently save a 1x result, so a refused
+        // allocation fails the render instead of degrading like the live canvas.
+        SpotlightMagnifierOutcome::AllocationFailed => {
+            return Err(CaptureError::ImageError(
+                "Spotlight magnification could not allocate its render buffer".to_string(),
+            ));
+        }
+        SpotlightMagnifierOutcome::NotNeeded | SpotlightMagnifierOutcome::Rendered(_) => {}
+    }
+
     render_spotlight_pass(
         ctx,
-        &spotlight_regions_for_frame(&page.frame),
+        &regions,
         SpotlightPass {
             dim_opacity: page.spotlight.dim_opacity,
             feather: page.spotlight.feather,
         },
     );
+    Ok(())
+}
+
+pub(crate) fn frame_has_magnified_spotlight(frame: &Frame) -> bool {
+    spotlight_regions_for_frame(frame)
+        .iter()
+        .any(|region| crate::draw::spotlight_magnification_is_active(region.magnification))
+}
+
+/// Refuses an export whose own backdrop cannot feed the loupes on its frame.
+///
+/// Availability comes from [`CanvasExportBackdropSnapshot::magnifier_source`],
+/// the same rule the renderer applies, so the preflight and the render cannot
+/// disagree about which page is exportable.
+///
+/// This asks the *snapshot's* backdrop. Region export deliberately renders a
+/// `Transparent` snapshot against a backdrop built from the captured region
+/// (see [`ExportBackdrop::from_region_source`]), so it has a complete source
+/// this function cannot see and must not call it.
+///
+/// `recovery` is the caller's own way out, because the two export paths do not
+/// share one. Freezing does not help a canvas PNG — that export excludes
+/// frozen and zoom desktop pixels by design — so each caller states the step
+/// that actually works for it rather than offering generic advice.
+pub(crate) fn validate_spotlight_magnifier_source(
+    frame: &Frame,
+    backdrop: &CanvasExportBackdropSnapshot,
+    subject: &str,
+    recovery: &str,
+) -> Result<(), CaptureError> {
+    if frame_has_magnified_spotlight(frame) && !backdrop.magnifier_source().is_complete() {
+        return Err(CaptureError::ImageError(format!(
+            "{subject} contains a magnified Spotlight but has no complete pixel source; {recovery}"
+        )));
+    }
+    Ok(())
 }
 
 fn validate_persisted_image_backdrop(

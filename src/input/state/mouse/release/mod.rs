@@ -105,6 +105,9 @@ impl InputState {
             DrawingState::ResizingSelection { snapshots, .. } => {
                 selection::finish_selection_resize(self, snapshots.as_ref());
             }
+            DrawingState::AdjustingSpotlightMagnification { shape_id, snapshot } => {
+                selection::finish_spotlight_magnification(self, shape_id, snapshot);
+            }
             DrawingState::Drawing {
                 tool,
                 start_x,

@@ -131,6 +131,9 @@ impl InputState {
         canvas_x: i32,
         canvas_y: i32,
     ) {
+        // Any press ends a wheel adjustment of a loupe, so the burst lands in
+        // history as its own entry rather than merging with what follows.
+        self.flush_spotlight_magnification_gesture();
         let points = PointerPoints::new(
             ScreenPoint::new(screen_x, screen_y),
             CanvasPoint::new(canvas_x, canvas_y),
@@ -207,7 +210,8 @@ impl InputState {
             | DrawingState::Selecting { .. }
             | DrawingState::PendingTextClick { .. }
             | DrawingState::ResizingText { .. }
-            | DrawingState::ResizingSelection { .. } => {}
+            | DrawingState::ResizingSelection { .. }
+            | DrawingState::AdjustingSpotlightMagnification { .. } => {}
         }
     }
 
@@ -380,6 +384,30 @@ impl InputState {
         let selection_click =
             self.modifiers.alt || matches!(tool.press_behavior(), ToolPressBehavior::Selection);
         let hit_id = self.hit_test_at(x, y);
+
+        // The magnification knob is checked before the resize handles and
+        // before tool dispatch: it sits outside the loupe's bounding box, so
+        // nothing else claims those pixels, and with the Spotlight tool active
+        // a press would otherwise start drawing a new loupe on top of it.
+        if let Some(control) = self.hit_spotlight_magnification_track(x, y) {
+            let shape_id = control.shape_id;
+            let snapshot = {
+                let frame = self.boards.active_frame();
+                frame.shape(shape_id).map(|shape| ShapeSnapshot {
+                    shape: shape.shape.clone(),
+                    locked: shape.locked,
+                })
+            };
+            if let Some(snapshot) = snapshot {
+                self.last_text_click = None;
+                self.begin_pointer_drag(button, color);
+                self.state = DrawingState::AdjustingSpotlightMagnification { shape_id, snapshot };
+                // Jump to where the user pressed, so a click anywhere on the
+                // track is itself an adjustment rather than dead travel.
+                self.drag_spotlight_magnification_to(x);
+                return;
+            }
+        }
 
         if let Some(shape_id) = self.hit_text_resize_handle(x, y) {
             let snapshot = {

@@ -143,6 +143,13 @@ pub(super) fn shape_text_background(shape: &Shape) -> Option<bool> {
     }
 }
 
+pub(super) fn shape_spotlight_magnification(shape: &Shape) -> Option<f64> {
+    match shape {
+        Shape::Spotlight { magnification, .. } => Some(*magnification),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

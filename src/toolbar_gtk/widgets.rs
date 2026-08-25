@@ -12,7 +12,7 @@ use super::icons::{IconPainter, IconWidget};
 use crate::config::ToolbarRebindModifier;
 use crate::draw::Color;
 use crate::ui::theme::{ACCENT_RGB, Rgba, rgba, set_color};
-use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::{ToolbarEvent, model::ToolbarSliderSpec};
 
 pub(super) use crate::ui::theme::toolbar::COLOR_SWATCH_HAIRLINE;
 /// Filled (dragged) portion of the slider track: the accent at reduced
@@ -523,8 +523,7 @@ pub(super) struct SliderRow {
 }
 
 pub(super) struct SliderState {
-    min: f64,
-    max: f64,
+    spec: ToolbarSliderSpec,
     value: Cell<f64>,
     dragging: Cell<bool>,
 }
@@ -533,16 +532,19 @@ impl SliderRow {
     /// `on_change` fires continuously during a drag with the new value.
     pub(super) fn new(
         scale: f64,
-        (min, max): (f64, f64),
+        spec: ToolbarSliderSpec,
         initial: f64,
         format: fn(f64) -> String,
         on_change: impl Fn(f64) + 'static,
     ) -> Self {
         let root = gtk4::Box::new(gtk4::Orientation::Horizontal, (6.0 * scale).round() as i32);
+        // Backend/config values are valid throughout the continuous range and
+        // stay visible exactly as stored. Snapping begins only when the user
+        // interacts with the slider.
+        let initial = spec.clamp(initial);
         let state = Rc::new(SliderState {
-            min,
-            max,
-            value: Cell::new(initial.clamp(min, max)),
+            spec,
+            value: Cell::new(initial),
             dragging: Cell::new(false),
         });
 
@@ -557,8 +559,7 @@ impl SliderRow {
             let track_h = (h * 0.5).min(8.0);
             let track_y = (h - track_h) / 2.0;
             let radius = track_h / 2.0;
-            let t = ((draw_state.value.get() - draw_state.min) / (draw_state.max - draw_state.min))
-                .clamp(0.0, 1.0);
+            let t = draw_state.spec.t_from_value(draw_state.value.get());
             // Track
             rounded_rect_path(ctx, 0.0, track_y, w, track_h, radius);
             set_color(ctx, super::css::TRACK_BACKGROUND);
@@ -590,7 +591,7 @@ impl SliderRow {
             // Jump the knob to the pressed position, like the built-in track.
             let width = gesture.widget().map(|w| w.width()).unwrap_or(1).max(1) as f64;
             let t = (x / width).clamp(0.0, 1.0);
-            let value = drag_state.min + t * (drag_state.max - drag_state.min);
+            let value = drag_state.spec.value_from_t(t);
             drag_state.value.set(value);
             begin_label.set_text(&format(value));
             begin_start.set((x, value));
@@ -606,7 +607,7 @@ impl SliderRow {
             let width = gesture.widget().map(|w| w.width()).unwrap_or(1).max(1) as f64;
             let (sx, _) = update_start.get();
             let t = ((sx + dx) / width).clamp(0.0, 1.0);
-            let value = update_state.min + t * (update_state.max - update_state.min);
+            let value = update_state.spec.value_from_t(t);
             update_state.value.set(value);
             update_label.set_text(&format(value));
             update_area.queue_draw();
@@ -642,7 +643,7 @@ impl SliderRow {
         if self.state.dragging.get() {
             return;
         }
-        let clamped = value.clamp(self.state.min, self.state.max);
+        let clamped = self.state.spec.clamp(value);
         if (self.state.value.get() - clamped).abs() > f64::EPSILON {
             self.state.value.set(clamped);
             self.area.queue_draw();

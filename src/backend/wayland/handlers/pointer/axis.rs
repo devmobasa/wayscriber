@@ -1,10 +1,88 @@
 use log::debug;
 use smithay_client_toolkit::seat::pointer::{AxisScroll, PointerEvent};
-
-use crate::input::Tool;
-use crate::input::state::InputState;
+use std::time::Instant;
+use wayland_client::protocol::wl_pointer;
 
 use super::*;
+use crate::input::Tool;
+use crate::input::state::{InputState, SpotlightWheelClaim, SpotlightWheelOutcome};
+
+/// Quiet period after which a discrete wheel burst over a loupe is finished.
+///
+/// Long enough that a pause mid-scroll does not split one adjustment in two,
+/// short enough that a later visit is separately undoable.
+pub(super) const SPOTLIGHT_WHEEL_IDLE: std::time::Duration = std::time::Duration::from_millis(600);
+
+fn scroll_direction(vertical: AxisScroll) -> i32 {
+    if vertical.value120 != 0 {
+        vertical.value120.signum()
+    } else if vertical.discrete != 0 {
+        vertical.discrete
+    } else if vertical.absolute.abs() > 0.1 {
+        if vertical.absolute > 0.0 { 1 } else { -1 }
+    } else {
+        0
+    }
+}
+
+fn finalize_spotlight_wheel_if_axis_stopped(
+    input_state: &mut InputState,
+    spotlight_wheel_idle_deadline: &mut Option<Instant>,
+    stop: bool,
+) {
+    if stop {
+        input_state.flush_spotlight_magnification_gesture();
+        *spotlight_wheel_idle_deadline = None;
+    }
+}
+
+/// Applies the Spotlight-owned part of an axis frame.
+///
+/// Stop finalization is deliberately owned by the outer axis handler after
+/// routing: SCTK may aggregate a final movement and stop in one frame.
+fn try_handle_spotlight_axis(
+    input_state: &mut InputState,
+    spotlight_wheel_idle_deadline: &mut Option<Instant>,
+    canvas_position: (i32, i32),
+    vertical: AxisScroll,
+    source: Option<wl_pointer::AxisSource>,
+    now: Instant,
+) -> bool {
+    let direction = scroll_direction(vertical);
+    if direction == 0 {
+        return false;
+    }
+    let (canvas_x, canvas_y) = canvas_position;
+    let claim = input_state.claim_spotlight_wheel_axis_at(
+        canvas_x,
+        canvas_y,
+        vertical.value120,
+        vertical.discrete,
+        vertical.absolute,
+    );
+    match claim {
+        SpotlightWheelClaim::NotOverLoupe => return false,
+        SpotlightWheelClaim::Locked => {
+            debug!("Spotlight wheel at ({canvas_x}, {canvas_y}): locked");
+        }
+        SpotlightWheelClaim::Adjustable(steps) => {
+            if steps != 0 {
+                let outcome =
+                    input_state.nudge_spotlight_magnification_at(canvas_x, canvas_y, steps);
+                debug_assert_ne!(outcome, SpotlightWheelOutcome::NotOverLoupe);
+                debug!("Spotlight wheel at ({canvas_x}, {canvas_y}): {outcome:?}");
+            }
+        }
+    }
+    *spotlight_wheel_idle_deadline = if input_state.has_pending_spotlight_wheel_axis_sequence()
+        && !matches!(source, Some(wl_pointer::AxisSource::Finger))
+    {
+        Some(now + SPOTLIGHT_WHEEL_IDLE)
+    } else {
+        None
+    };
+    true
+}
 
 impl WaylandState {
     pub(super) fn handle_pointer_axis(
@@ -12,14 +90,25 @@ impl WaylandState {
         event: &PointerEvent,
         on_toolbar: bool,
         vertical: AxisScroll,
+        source: Option<wl_pointer::AxisSource>,
     ) {
-        let scroll_direction = if vertical.discrete != 0 {
-            vertical.discrete
-        } else if vertical.absolute.abs() > 0.1 {
-            if vertical.absolute > 0.0 { 1 } else { -1 }
-        } else {
-            0
-        };
+        let stopped = vertical.stop;
+        self.handle_pointer_axis_inner(event, on_toolbar, vertical, source);
+        finalize_spotlight_wheel_if_axis_stopped(
+            &mut self.input_state,
+            &mut self.spotlight_wheel_idle_deadline,
+            stopped,
+        );
+    }
+
+    fn handle_pointer_axis_inner(
+        &mut self,
+        event: &PointerEvent,
+        on_toolbar: bool,
+        vertical: AxisScroll,
+        source: Option<wl_pointer::AxisSource>,
+    ) {
+        let scroll_direction = scroll_direction(vertical);
         // Report the physical wheel tick to the input HUD before any surface
         // claims it. Positive axis values scroll the content down, so a
         // negative direction is the "scroll up" the user performed.
@@ -87,6 +176,22 @@ impl WaylandState {
                 let zoom_in = scroll_direction < 0;
                 self.handle_zoom_scroll(zoom_in, event.position.0, event.position.1);
             }
+            return;
+        }
+
+        // A wheel over a loupe adjusts that loupe, before the wheel's usual
+        // meaning applies. It is the cheapest route to the property: no
+        // selection, no toolbar trip, and the magnification follows the ticks
+        // live. Off a loupe, nothing here claims the event.
+        let canvas_position = self.input_state.canvas_pointer_position();
+        if try_handle_spotlight_axis(
+            &mut self.input_state,
+            &mut self.spotlight_wheel_idle_deadline,
+            canvas_position,
+            vertical,
+            source,
+            Instant::now(),
+        ) {
             return;
         }
 
@@ -178,8 +283,10 @@ fn try_handle_board_picker_page_panel_axis(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::draw::Frame;
+    use crate::config::Action;
+    use crate::draw::{Frame, Shape};
     use crate::input::state::{BoardPickerFocus, test_support::make_test_input_state};
+    use std::time::Duration;
 
     fn update_picker_layout(input_state: &mut InputState) {
         let surface =
@@ -221,5 +328,266 @@ mod tests {
 
         let layout = *input_state.board_picker_layout().expect("layout");
         assert_eq!(layout.page_scroll_row, 1);
+    }
+
+    #[test]
+    fn value120_keeps_shared_axis_routing_in_direction_space() {
+        assert_eq!(
+            scroll_direction(AxisScroll {
+                value120: -240,
+                ..AxisScroll::default()
+            }),
+            -1
+        );
+    }
+
+    #[test]
+    fn a_final_axis_delta_and_stop_complete_one_spotlight_gesture() {
+        let mut input_state = make_test_input_state();
+        let shape_id = input_state
+            .boards
+            .active_frame_mut()
+            .add_shape(Shape::Spotlight {
+                cx: 200,
+                cy: 200,
+                rx: 60,
+                ry: 40,
+                magnification: 2.0,
+            });
+        let mut deadline = None;
+        let now = Instant::now();
+
+        assert!(try_handle_spotlight_axis(
+            &mut input_state,
+            &mut deadline,
+            (200, 200),
+            AxisScroll {
+                absolute: -1.0,
+                discrete: 0,
+                stop: false,
+                ..AxisScroll::default()
+            },
+            Some(wl_pointer::AxisSource::Wheel),
+            now,
+        ));
+        assert!(deadline.is_some());
+        assert!(try_handle_spotlight_axis(
+            &mut input_state,
+            &mut deadline,
+            (200, 200),
+            AxisScroll {
+                absolute: -1.0,
+                discrete: 0,
+                stop: true,
+                ..AxisScroll::default()
+            },
+            Some(wl_pointer::AxisSource::Wheel),
+            now + Duration::from_millis(10),
+        ));
+        finalize_spotlight_wheel_if_axis_stopped(&mut input_state, &mut deadline, true);
+        assert!(
+            deadline.is_none(),
+            "axis stop owns the final deadline clear"
+        );
+
+        input_state.handle_action(Action::Undo);
+        let magnification = match input_state
+            .boards
+            .active_frame()
+            .shape(shape_id)
+            .expect("spotlight")
+            .shape
+        {
+            Shape::Spotlight { magnification, .. } => magnification,
+            ref other => panic!("expected a spotlight, got {other:?}"),
+        };
+        assert_eq!(
+            magnification, 2.0,
+            "the final movement must be part of the gesture completed by stop"
+        );
+    }
+
+    #[test]
+    fn a_coalesced_value120_frame_applies_every_logical_step() {
+        let mut input_state = make_test_input_state();
+        let shape_id = input_state
+            .boards
+            .active_frame_mut()
+            .add_shape(Shape::Spotlight {
+                cx: 200,
+                cy: 200,
+                rx: 60,
+                ry: 40,
+                magnification: 2.0,
+            });
+        let mut deadline = None;
+
+        assert!(try_handle_spotlight_axis(
+            &mut input_state,
+            &mut deadline,
+            (200, 200),
+            AxisScroll {
+                value120: -240,
+                stop: true,
+                ..AxisScroll::default()
+            },
+            Some(wl_pointer::AxisSource::Wheel),
+            Instant::now(),
+        ));
+        finalize_spotlight_wheel_if_axis_stopped(&mut input_state, &mut deadline, true);
+
+        let Shape::Spotlight { magnification, .. } = input_state
+            .boards
+            .active_frame()
+            .shape(shape_id)
+            .expect("spotlight")
+            .shape
+        else {
+            panic!("expected a spotlight");
+        };
+        assert_eq!(magnification, 2.5);
+
+        input_state.handle_action(Action::Undo);
+        let Shape::Spotlight { magnification, .. } = input_state
+            .boards
+            .active_frame()
+            .shape(shape_id)
+            .expect("spotlight")
+            .shape
+        else {
+            panic!("expected a spotlight");
+        };
+        assert_eq!(magnification, 2.0);
+    }
+
+    #[test]
+    fn partial_value120_frames_accumulate_before_applying_a_logical_step() {
+        let mut input_state = make_test_input_state();
+        let shape_id = input_state
+            .boards
+            .active_frame_mut()
+            .add_shape(Shape::Spotlight {
+                cx: 200,
+                cy: 200,
+                rx: 60,
+                ry: 40,
+                magnification: 2.0,
+            });
+        let mut deadline = None;
+        let now = Instant::now();
+        let partial_tick = AxisScroll {
+            value120: -60,
+            ..AxisScroll::default()
+        };
+
+        assert!(try_handle_spotlight_axis(
+            &mut input_state,
+            &mut deadline,
+            (200, 200),
+            partial_tick,
+            Some(wl_pointer::AxisSource::Wheel),
+            now,
+        ));
+        assert!(deadline.is_some(), "the partial unit must remain live");
+        let Shape::Spotlight { magnification, .. } = input_state
+            .boards
+            .active_frame()
+            .shape(shape_id)
+            .expect("spotlight")
+            .shape
+        else {
+            panic!("expected a spotlight");
+        };
+        assert_eq!(magnification, 2.0, "a partial unit must not move the loupe");
+
+        assert!(try_handle_spotlight_axis(
+            &mut input_state,
+            &mut deadline,
+            (200, 200),
+            AxisScroll {
+                stop: true,
+                ..partial_tick
+            },
+            Some(wl_pointer::AxisSource::Wheel),
+            now + Duration::from_millis(10),
+        ));
+        finalize_spotlight_wheel_if_axis_stopped(&mut input_state, &mut deadline, true);
+        let Shape::Spotlight { magnification, .. } = input_state
+            .boards
+            .active_frame()
+            .shape(shape_id)
+            .expect("spotlight")
+            .shape
+        else {
+            panic!("expected a spotlight");
+        };
+        assert_eq!(magnification, 2.25);
+
+        input_state.handle_action(Action::Undo);
+        let Shape::Spotlight { magnification, .. } = input_state
+            .boards
+            .active_frame()
+            .shape(shape_id)
+            .expect("spotlight")
+            .shape
+        else {
+            panic!("expected a spotlight");
+        };
+        assert_eq!(magnification, 2.0);
+    }
+
+    #[test]
+    fn a_finger_axis_pause_longer_than_the_wheel_timeout_stays_one_gesture() {
+        let mut input_state = make_test_input_state();
+        let shape_id = input_state
+            .boards
+            .active_frame_mut()
+            .add_shape(Shape::Spotlight {
+                cx: 200,
+                cy: 200,
+                rx: 60,
+                ry: 40,
+                magnification: 2.0,
+            });
+        let mut deadline = None;
+        let now = Instant::now();
+        let finger_delta = AxisScroll {
+            absolute: -1.0,
+            discrete: 0,
+            stop: false,
+            ..AxisScroll::default()
+        };
+
+        assert!(try_handle_spotlight_axis(
+            &mut input_state,
+            &mut deadline,
+            (200, 200),
+            finger_delta,
+            Some(wl_pointer::AxisSource::Finger),
+            now,
+        ));
+        assert!(deadline.is_none(), "axis_stop owns finger completion");
+
+        assert!(try_handle_spotlight_axis(
+            &mut input_state,
+            &mut deadline,
+            (200, 200),
+            finger_delta,
+            Some(wl_pointer::AxisSource::Finger),
+            now + SPOTLIGHT_WHEEL_IDLE + Duration::from_millis(1),
+        ));
+        finalize_spotlight_wheel_if_axis_stopped(&mut input_state, &mut deadline, true);
+
+        input_state.handle_action(Action::Undo);
+        let Shape::Spotlight { magnification, .. } = input_state
+            .boards
+            .active_frame()
+            .shape(shape_id)
+            .expect("spotlight")
+            .shape
+        else {
+            panic!("expected a spotlight");
+        };
+        assert_eq!(magnification, 2.0);
     }
 }

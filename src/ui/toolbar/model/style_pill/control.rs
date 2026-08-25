@@ -8,6 +8,9 @@ impl StylePillControl {
             Self::ThicknessSlider => Cow::Borrowed("top.style.thickness"),
             Self::ThicknessValue => Cow::Borrowed("top.style.thickness-value"),
             Self::OpacitySlider => Cow::Borrowed("top.style.opacity"),
+            Self::SpotlightMagnificationSlider => {
+                Cow::Borrowed("top.style.spotlight-magnification")
+            }
             Self::FillToggle => Cow::Borrowed("top.style.fill"),
             Self::AutoNumberToggle => Cow::Borrowed("top.style.auto-number"),
             // Distinct per counter: classic mode (context_aware_ui = false)
@@ -32,9 +35,10 @@ impl StylePillControl {
     pub(crate) fn role(self) -> StylePillRole {
         match self {
             Self::ColorChip | Self::QuickSwatch(_) => StylePillRole::Swatch,
-            Self::ThicknessSlider | Self::OpacitySlider | Self::FontSizeSlider => {
-                StylePillRole::Slider
-            }
+            Self::ThicknessSlider
+            | Self::OpacitySlider
+            | Self::SpotlightMagnificationSlider
+            | Self::FontSizeSlider => StylePillRole::Slider,
             Self::ThicknessValue | Self::FontSizeValue => StylePillRole::Value,
             Self::FillToggle | Self::AutoNumberToggle => StylePillRole::Toggle,
             Self::CounterReset(_) => StylePillRole::Button,
@@ -59,6 +63,9 @@ impl StylePillControl {
             }
             Self::ThicknessSlider => ToolbarEvent::SetThickness(snapshot.thickness),
             Self::OpacitySlider => ToolbarEvent::SetMarkerOpacity(snapshot.marker_opacity),
+            Self::SpotlightMagnificationSlider => {
+                ToolbarEvent::SetSpotlightMagnification(snapshot.spotlight_magnification)
+            }
             Self::FontSizeSlider => ToolbarEvent::SetFontSize(snapshot.font_size),
             Self::FillToggle => ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
             Self::AutoNumberToggle => {
@@ -121,6 +128,10 @@ impl StylePillControl {
             Self::OpacitySlider => {
                 Some((ToolbarSliderSpec::MARKER_OPACITY, snapshot.marker_opacity))
             }
+            Self::SpotlightMagnificationSlider => Some((
+                ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION,
+                snapshot.spotlight_magnification,
+            )),
             Self::FontSizeSlider => Some((ToolbarSliderSpec::FONT_SIZE, snapshot.font_size)),
             _ => None,
         }
@@ -143,6 +154,9 @@ impl StylePillControl {
                 Some(format!("{:.0}px", snapshot.thickness))
             }
             Self::OpacitySlider => Some(format!("{:.0}%", snapshot.marker_opacity * 100.0)),
+            Self::SpotlightMagnificationSlider => Some(
+                crate::draw::format_spotlight_magnification(snapshot.spotlight_magnification),
+            ),
             Self::FontSizeSlider | Self::FontSizeValue => {
                 Some(format!("{:.0}pt", snapshot.font_size))
             }
@@ -160,6 +174,41 @@ impl StylePillControl {
             .expect("this style-pill control has a live value")
     }
 
+    /// Whether this control can ever carry an inline status, and so needs a
+    /// slot reserved for one even while the status is empty. Frontends that
+    /// build widgets once and update them later key on this.
+    pub(crate) fn has_status_slot(self) -> bool {
+        matches!(
+            self,
+            Self::SpotlightMagnificationSlider
+                | Self::SelectionCycle(SelectionPropertyKind::SpotlightMagnification)
+                | Self::SelectionStepper(SelectionPropertyKind::SpotlightMagnification)
+        )
+    }
+
+    /// Short inline status shown next to a value when the current canvas
+    /// cannot preview that value faithfully.
+    ///
+    /// Each control reports on the value it actually displays: the slider on
+    /// the next-shape default, the docked selection control on the selected
+    /// Spotlight's own factor. Those are different numbers whenever the user
+    /// selects an existing shape, so gating both on the tool default would
+    /// leave a magnified selection with no explanation.
+    pub(crate) fn status_text(self, snapshot: &ToolbarSnapshot) -> Option<&'static str> {
+        let displayed_magnification = match self {
+            Self::SpotlightMagnificationSlider => Some(snapshot.spotlight_magnification),
+            Self::SelectionCycle(SelectionPropertyKind::SpotlightMagnification)
+            | Self::SelectionStepper(SelectionPropertyKind::SpotlightMagnification) => {
+                snapshot.selection_spotlight_magnification
+            }
+            _ => None,
+        }?;
+        if !crate::draw::spotlight_magnification_is_active(displayed_magnification) {
+            return None;
+        }
+        snapshot.spotlight_magnifier_source?.unavailable_reason()
+    }
+
     pub(crate) fn label(self, snapshot: &ToolbarSnapshot) -> Cow<'static, str> {
         match self {
             Self::ColorChip => Cow::Borrowed("Color picker"),
@@ -172,6 +221,7 @@ impl StylePillControl {
                 Cow::Borrowed(ToolContext::from_snapshot(snapshot).thickness_label)
             }
             Self::OpacitySlider => Cow::Borrowed("Marker opacity"),
+            Self::SpotlightMagnificationSlider => Cow::Borrowed("Spotlight magnification"),
             Self::FontSizeSlider => Cow::Borrowed("Text size"),
             Self::ThicknessValue => Cow::Owned(format!("{:.0}px", snapshot.thickness)),
             Self::FontSizeValue => Cow::Owned(format!("{:.0}pt", snapshot.font_size)),
@@ -203,6 +253,9 @@ impl StylePillControl {
                     .to_string(),
             ),
             Self::FontSizeValue => Some("Text size".to_string()),
+            Self::SpotlightMagnificationSlider => {
+                Some("Magnification; Freeze first when using a transparent board.".to_string())
+            }
             Self::FillToggle => Some(format_binding_label(
                 action_label(Action::ToggleFill),
                 snapshot
@@ -303,6 +356,10 @@ impl StylePillControl {
             SelectionPropertyKind::ArrowAngle => (
                 "top.style.sel.arrow-angle.minus",
                 "top.style.sel.arrow-angle.plus",
+            ),
+            SelectionPropertyKind::SpotlightMagnification => (
+                "top.style.sel.spotlight-magnification.minus",
+                "top.style.sel.spotlight-magnification.plus",
             ),
             _ => return None,
         };

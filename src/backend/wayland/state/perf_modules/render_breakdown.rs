@@ -40,6 +40,8 @@ pub(in crate::backend::wayland) struct PerfRenderStageDurations {
     pub(in crate::backend::wayland) clear_clip: Duration,
     pub(in crate::backend::wayland) background: Duration,
     pub(in crate::backend::wayland) completed_shapes: Duration,
+    pub(in crate::backend::wayland) spotlight_snapshot: Duration,
+    pub(in crate::backend::wayland) spotlight_paint: Duration,
     pub(in crate::backend::wayland) provisional: Duration,
     pub(in crate::backend::wayland) ui: Duration,
     pub(in crate::backend::wayland) render_profile: Duration,
@@ -57,6 +59,10 @@ pub(in crate::backend::wayland) struct PerfRenderBreakdown {
     pub(in crate::backend::wayland) provisional_points: usize,
     pub(in crate::backend::wayland) render_profile: PerfRenderProfileKind,
     pub(in crate::backend::wayland) canvas_layer_cache_used: bool,
+    pub(in crate::backend::wayland) spotlight_regions: usize,
+    pub(in crate::backend::wayland) spotlight_copied_pixels: u64,
+    pub(in crate::backend::wayland) spotlight_strategy:
+        Option<crate::draw::SpotlightSnapshotStrategy>,
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -75,6 +81,8 @@ pub(super) struct PerfRenderBreakdownSummary {
     pub(super) provisional_points_max: usize,
     pub(super) render_profile_frames: u64,
     pub(super) canvas_layer_cache_used_frames: u64,
+    pub(super) spotlight_regions_max: usize,
+    pub(super) spotlight_copied_pixels_max: u64,
 }
 
 #[derive(Debug, Default)]
@@ -88,6 +96,8 @@ pub(super) struct PerfRenderBreakdownAccumulator {
     provisional_points_max: usize,
     render_profile_frames: u64,
     canvas_layer_cache_used_frames: u64,
+    spotlight_regions_max: usize,
+    spotlight_copied_pixels_max: u64,
 }
 
 impl PerfRenderBreakdownAccumulator {
@@ -111,6 +121,10 @@ impl PerfRenderBreakdownAccumulator {
         if breakdown.canvas_layer_cache_used {
             self.canvas_layer_cache_used_frames += 1;
         }
+        self.spotlight_regions_max = self.spotlight_regions_max.max(breakdown.spotlight_regions);
+        self.spotlight_copied_pixels_max = self
+            .spotlight_copied_pixels_max
+            .max(breakdown.spotlight_copied_pixels);
     }
 
     pub(super) fn build_summary(&self, frames: u64) -> Option<PerfRenderBreakdownSummary> {
@@ -138,6 +152,8 @@ impl PerfRenderBreakdownAccumulator {
             provisional_points_max: self.provisional_points_max,
             render_profile_frames: self.render_profile_frames,
             canvas_layer_cache_used_frames: self.canvas_layer_cache_used_frames,
+            spotlight_regions_max: self.spotlight_regions_max,
+            spotlight_copied_pixels_max: self.spotlight_copied_pixels_max,
         })
     }
 
@@ -149,7 +165,7 @@ impl PerfRenderBreakdownAccumulator {
 pub(super) fn log_render_stage_frame(frame: u64, render_ms: u64, breakdown: &PerfRenderBreakdown) {
     let dominant = dominant_render_stage(&breakdown.stages);
     info!(
-        "perf.render_stage frame={} render_ms={} dominant_stage={} dominant_stage_ms={} advance_animations_ms={} dirty_collect_ms={} buffer_acquire_ms={} cairo_surface_ms={} clear_clip_ms={} background_ms={} completed_shapes_ms={} provisional_ms={} ui_ms={} render_profile_ms={} damage_commit_ms={} toolbar_ms={} surface_px={} shapes_total={} shapes_tested={} shapes_rendered={} shape_cull_pct={} provisional_points={} render_profile_active={} canvas_layer_cache_used={}",
+        "perf.render_stage frame={} render_ms={} dominant_stage={} dominant_stage_ms={} advance_animations_ms={} dirty_collect_ms={} buffer_acquire_ms={} cairo_surface_ms={} clear_clip_ms={} background_ms={} completed_shapes_ms={} spotlight_snapshot_ms={} spotlight_paint_ms={} provisional_ms={} ui_ms={} render_profile_ms={} damage_commit_ms={} toolbar_ms={} surface_px={} shapes_total={} shapes_tested={} shapes_rendered={} shape_cull_pct={} provisional_points={} render_profile_active={} canvas_layer_cache_used={} spotlight_regions={} spotlight_strategy={} spotlight_copied_pixels={}",
         frame,
         render_ms,
         dominant.0,
@@ -161,6 +177,8 @@ pub(super) fn log_render_stage_frame(frame: u64, render_ms: u64, breakdown: &Per
         format_duration_ms(breakdown.stages.clear_clip),
         format_duration_ms(breakdown.stages.background),
         format_duration_ms(breakdown.stages.completed_shapes),
+        format_duration_ms(breakdown.stages.spotlight_snapshot),
+        format_duration_ms(breakdown.stages.spotlight_paint),
         format_duration_ms(breakdown.stages.provisional),
         format_duration_ms(breakdown.stages.ui),
         format_duration_ms(breakdown.stages.render_profile),
@@ -176,13 +194,16 @@ pub(super) fn log_render_stage_frame(frame: u64, render_ms: u64, breakdown: &Per
         ),
         breakdown.provisional_points,
         breakdown.render_profile.as_str(),
-        breakdown.canvas_layer_cache_used
+        breakdown.canvas_layer_cache_used,
+        breakdown.spotlight_regions,
+        spotlight_strategy_label(breakdown.spotlight_strategy),
+        breakdown.spotlight_copied_pixels
     );
 }
 
 pub(super) fn log_render_stage_summary(summary: &PerfRenderBreakdownSummary, final_summary: bool) {
     info!(
-        "perf.render_stage_summary frames={} samples={} dominant_stage={} dominant_stage_avg_ms={} advance_animations_avg_ms={} dirty_collect_avg_ms={} buffer_acquire_avg_ms={} cairo_surface_avg_ms={} clear_clip_avg_ms={} background_avg_ms={} completed_shapes_avg_ms={} provisional_avg_ms={} ui_avg_ms={} render_profile_avg_ms={} damage_commit_avg_ms={} toolbar_avg_ms={} surface_px_max={} shapes_total_max={} shapes_tested_avg={} shapes_rendered_avg={} shape_cull_pct={} provisional_points_max={} render_profile_frames={} canvas_layer_cache_used_frames={} final={}",
+        "perf.render_stage_summary frames={} samples={} dominant_stage={} dominant_stage_avg_ms={} advance_animations_avg_ms={} dirty_collect_avg_ms={} buffer_acquire_avg_ms={} cairo_surface_avg_ms={} clear_clip_avg_ms={} background_avg_ms={} completed_shapes_avg_ms={} spotlight_snapshot_avg_ms={} spotlight_paint_avg_ms={} provisional_avg_ms={} ui_avg_ms={} render_profile_avg_ms={} damage_commit_avg_ms={} toolbar_avg_ms={} surface_px_max={} shapes_total_max={} shapes_tested_avg={} shapes_rendered_avg={} shape_cull_pct={} provisional_points_max={} render_profile_frames={} canvas_layer_cache_used_frames={} spotlight_regions_max={} spotlight_copied_pixels_max={} final={}",
         summary.frames,
         summary.samples,
         summary.dominant_stage,
@@ -194,6 +215,8 @@ pub(super) fn log_render_stage_summary(summary: &PerfRenderBreakdownSummary, fin
         format_duration_ms(summary.stage_avg.clear_clip),
         format_duration_ms(summary.stage_avg.background),
         format_duration_ms(summary.stage_avg.completed_shapes),
+        format_duration_ms(summary.stage_avg.spotlight_snapshot),
+        format_duration_ms(summary.stage_avg.spotlight_paint),
         format_duration_ms(summary.stage_avg.provisional),
         format_duration_ms(summary.stage_avg.ui),
         format_duration_ms(summary.stage_avg.render_profile),
@@ -207,6 +230,8 @@ pub(super) fn log_render_stage_summary(summary: &PerfRenderBreakdownSummary, fin
         summary.provisional_points_max,
         summary.render_profile_frames,
         summary.canvas_layer_cache_used_frames,
+        summary.spotlight_regions_max,
+        summary.spotlight_copied_pixels_max,
         final_summary
     );
 }
@@ -223,6 +248,10 @@ fn add_stage_totals(total: &mut PerfRenderStageDurations, frame: &PerfRenderStag
     total.completed_shapes = total
         .completed_shapes
         .saturating_add(frame.completed_shapes);
+    total.spotlight_snapshot = total
+        .spotlight_snapshot
+        .saturating_add(frame.spotlight_snapshot);
+    total.spotlight_paint = total.spotlight_paint.saturating_add(frame.spotlight_paint);
     total.provisional = total.provisional.saturating_add(frame.provisional);
     total.ui = total.ui.saturating_add(frame.ui);
     total.render_profile = total.render_profile.saturating_add(frame.render_profile);
@@ -242,6 +271,8 @@ fn average_stage_durations(
         clear_clip: average_duration(total.clear_clip, samples),
         background: average_duration(total.background, samples),
         completed_shapes: average_duration(total.completed_shapes, samples),
+        spotlight_snapshot: average_duration(total.spotlight_snapshot, samples),
+        spotlight_paint: average_duration(total.spotlight_paint, samples),
         provisional: average_duration(total.provisional, samples),
         ui: average_duration(total.ui, samples),
         render_profile: average_duration(total.render_profile, samples),
@@ -271,6 +302,8 @@ fn dominant_render_stage(stages: &PerfRenderStageDurations) -> (&'static str, Du
         ("clear_clip", stages.clear_clip),
         ("background", stages.background),
         ("completed_shapes", stages.completed_shapes),
+        ("spotlight_snapshot", stages.spotlight_snapshot),
+        ("spotlight_paint", stages.spotlight_paint),
         ("provisional", stages.provisional),
         ("ui", stages.ui),
         ("render_profile", stages.render_profile),
@@ -280,6 +313,16 @@ fn dominant_render_stage(stages: &PerfRenderStageDurations) -> (&'static str, Du
     .into_iter()
     .max_by_key(|(_, duration)| *duration)
     .unwrap_or(("none", Duration::ZERO))
+}
+
+fn spotlight_strategy_label(
+    strategy: Option<crate::draw::SpotlightSnapshotStrategy>,
+) -> &'static str {
+    match strategy {
+        Some(crate::draw::SpotlightSnapshotStrategy::Regional) => "regional",
+        Some(crate::draw::SpotlightSnapshotStrategy::FullSurface) => "full_surface",
+        None => "none",
+    }
 }
 
 fn shape_cull_pct_from_counts(tested: u64, rendered: u64) -> String {

@@ -114,6 +114,10 @@ pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: Tool
     if let Some(opacity) = tool_state.marker_opacity {
         let _ = input.set_marker_opacity(opacity);
     }
+    if let Some(magnification) = tool_state.spotlight_magnification {
+        input.spotlight_magnification =
+            crate::draw::normalize_spotlight_magnification(magnification);
+    }
     if let Some(fill_enabled) = tool_state.fill_enabled {
         let _ = input.set_fill_enabled(fill_enabled);
     }
@@ -176,6 +180,10 @@ pub(crate) fn apply_snapshot_replacing_boards(
 
 fn clear_board_pages(input: &mut InputState) {
     input.cancel_active_interaction();
+    // Every page is about to be replaced. A wheel adjustment still in flight
+    // belongs to a frame that will not exist afterwards, so record it now
+    // rather than letting the identity guard drop it.
+    input.flush_spotlight_magnification_gesture();
     if input.is_board_picker_open() {
         input.close_board_picker();
     }

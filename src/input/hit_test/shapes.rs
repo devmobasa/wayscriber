@@ -188,7 +188,12 @@ pub(super) fn ellipse_outline_hit(
     outer && !inner
 }
 
-pub(super) fn ellipse_fill_hit(cx: i32, cy: i32, rx: i32, ry: i32, point: (i32, i32)) -> bool {
+/// Whether a point lies inside a filled ellipse.
+///
+/// Shared with the Spotlight wheel target so on-canvas hit answers and
+/// ordinary hit testing cannot drift apart on degenerate radii or on the
+/// boundary epsilon.
+pub(crate) fn ellipse_fill_hit(cx: i32, cy: i32, rx: i32, ry: i32, point: (i32, i32)) -> bool {
     if rx <= 0 || ry <= 0 {
         return false;
     }

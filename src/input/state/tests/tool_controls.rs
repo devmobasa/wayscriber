@@ -267,6 +267,18 @@ fn toolbar_context_matches_tool_profiles_for_each_tool() {
             true,
             false,
         ),
+        (
+            Tool::Spotlight,
+            false,
+            false,
+            ToolOptionsKind::Spotlight,
+            "Spotlight",
+            false,
+            false,
+            false,
+            false,
+            false,
+        ),
     ];
 
     for (
@@ -315,6 +327,40 @@ fn toolbar_context_matches_tool_profiles_for_each_tool() {
         );
         assert!(!context.show_font_controls, "{tool:?} font controls");
     }
+}
+
+#[test]
+fn toolbar_spotlight_magnification_clamps_and_updates_the_snapshot() {
+    let mut state = create_test_input_state();
+    state.clear_session_dirty();
+
+    assert!(state.apply_toolbar_event(ToolbarEvent::SetSpotlightMagnification(2.13)));
+    assert_eq!(state.spotlight_magnification, 2.25);
+    assert!(state.apply_toolbar_event(ToolbarEvent::SetSpotlightMagnification(9.0)));
+    assert_eq!(state.spotlight_magnification, 4.0);
+    assert_eq!(
+        ToolbarSnapshot::from_input(&state).spotlight_magnification,
+        4.0
+    );
+    assert!(state.is_session_dirty());
+    assert!(state.apply_toolbar_event(ToolbarEvent::SetSpotlightMagnification(f64::NAN)));
+    assert_eq!(state.spotlight_magnification, 1.0);
+}
+
+#[test]
+fn changing_the_next_shape_default_does_not_warn_about_sources() {
+    let mut state = create_test_input_state();
+    state.spotlight_magnification = 1.0;
+
+    // The slider changes what the *next* Spotlight will use. No Spotlight has
+    // been created or edited, so there is no action to warn about; the style
+    // control's inline unavailable state carries this case, and a toast here
+    // would fire on every step of a slider drag.
+    assert!(state.set_spotlight_magnification(2.0));
+    assert!(!state.take_pending_spotlight_magnifier_feedback());
+
+    assert!(state.set_spotlight_magnification(1.0));
+    assert!(!state.take_pending_spotlight_magnifier_feedback());
 }
 
 #[test]

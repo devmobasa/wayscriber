@@ -7,6 +7,22 @@ use crate::input::boards::PendingBoardRuntimeUiAction;
 
 #[allow(dead_code)]
 impl InputState {
+    /// Records that a user action created or changed a magnified Spotlight, so
+    /// the backend can resolve source availability and warn once for it.
+    ///
+    /// This deliberately does not travel through [`PendingBackendAction`]:
+    /// that slot has last-action semantics, so an export or screenshot queued
+    /// in the same batch of input events would silently cost this request its
+    /// warning — the same reason durable toolbar chrome has its own queue.
+    pub(crate) fn request_spotlight_magnifier_feedback(&mut self) {
+        self.pending_spotlight_magnifier_feedback = true;
+    }
+
+    /// Takes the coalesced request to resolve Spotlight source availability.
+    pub fn take_pending_spotlight_magnifier_feedback(&mut self) -> bool {
+        std::mem::take(&mut self.pending_spotlight_magnifier_feedback)
+    }
+
     /// Takes and clears any pending backend output action.
     pub fn take_pending_backend_action(&mut self) -> Option<PendingBackendAction> {
         self.pending_backend_action.take()

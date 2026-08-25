@@ -25,6 +25,8 @@ pub enum ToolOptionsKind {
     Arrow,
     /// StepMarker tool: size + counter
     StepMarker,
+    /// Spotlight tool: magnification only
+    Spotlight,
     /// Text mode: font size + font family
     Text,
 }
@@ -38,6 +40,7 @@ fn tool_options_kind_from_group(group: ToolControlGroup) -> ToolOptionsKind {
         ToolControlGroup::Shape => ToolOptionsKind::Shape,
         ToolControlGroup::Arrow => ToolOptionsKind::Arrow,
         ToolControlGroup::StepMarker => ToolOptionsKind::StepMarker,
+        ToolControlGroup::Spotlight => ToolOptionsKind::Spotlight,
     }
 }
 
@@ -252,6 +255,18 @@ pub struct ToolbarSnapshot {
     pub eraser_kind: EraserKind,
     pub eraser_mode: EraserMode,
     pub marker_opacity: f64,
+    pub spotlight_magnification: f64,
+    /// Whether the active canvas has complete pixels for magnifying a Spotlight,
+    /// or `None` when no backend has answered yet.
+    ///
+    /// Only the backend that owns the canvas can decide this, so a snapshot
+    /// built from `InputState` alone leaves it unset rather than guessing; an
+    /// unset source simply shows no inline status.
+    pub spotlight_magnifier_source: Option<crate::draw::SpotlightMagnifierSource>,
+    /// Highest magnification among selected Spotlights, when the selection
+    /// holds any. Drives the docked selection control's inline status,
+    /// which reports on the selected shape rather than the tool default.
+    pub selection_spotlight_magnification: Option<f64>,
     pub font: FontDescriptor,
     pub font_size: f64,
     pub text_active: bool,

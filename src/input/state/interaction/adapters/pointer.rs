@@ -219,7 +219,8 @@ pub(crate) fn handle_unbound_left_press(
         | DrawingState::Selecting { .. }
         | DrawingState::PendingTextClick { .. }
         | DrawingState::ResizingText { .. }
-        | DrawingState::ResizingSelection { .. } => {
+        | DrawingState::ResizingSelection { .. }
+        | DrawingState::AdjustingSpotlightMagnification { .. } => {
             RoutingOutcome::NoRoute(NoRouteReason::NoPointerBinding)
         }
     }

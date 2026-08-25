@@ -308,10 +308,11 @@ const DESCRIPTORS: [ToolDescriptor; 17] = [
         profile: profile(
             // A spotlight's geometry comes entirely from the drag and it has no
             // stroke, so it borrows the blur slot rather than adding a settings
-            // slot with nothing in it, and shows no colour/thickness controls.
+            // slot with nothing in it. Its dedicated controls expose only
+            // magnification.
             ToolSettingsSlot::Blur,
             ToolSizeSource::DrawingThickness,
-            ToolControlGroup::None,
+            ToolControlGroup::Spotlight,
             false,
             "Spotlight",
         ),

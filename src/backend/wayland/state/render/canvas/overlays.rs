@@ -27,6 +27,8 @@ impl WaylandState {
             crate::draw::render_selection_handles(ctx, &bounds);
         }
 
+        self.render_spotlight_magnification_control(ctx);
+
         if matches!(
             self.input_state.state,
             DrawingState::Idle | DrawingState::ResizingText { .. }
@@ -46,6 +48,41 @@ impl WaylandState {
             let _ = ctx.stroke();
             let _ = ctx.restore();
         }
+    }
+
+    /// Draws the magnification slider above a selected loupe.
+    ///
+    /// Shown while idle and while the knob is being dragged, matching the text
+    /// resize handle. The reason a surface cannot preview is passed down so the
+    /// readout says so instead of showing a factor the canvas cannot deliver —
+    /// the control still works, it just cannot preview yet.
+    fn render_spotlight_magnification_control(&mut self, ctx: &cairo::Context) {
+        if !matches!(
+            self.input_state.state,
+            DrawingState::Idle | DrawingState::AdjustingSpotlightMagnification { .. }
+        ) {
+            return;
+        }
+        let Some(control) = self.input_state.selected_spotlight_control() else {
+            return;
+        };
+        // Gated on the factor the control displays, exactly as the toolbar's
+        // inline status is: a 1x loupe is an ordinary bright opening that needs
+        // no pixel source, so "1x - Freeze screen to preview" would be advice
+        // about a problem the user does not have.
+        let unavailable = crate::draw::spotlight_magnification_is_active(control.magnification)
+            .then(|| {
+                self.current_spotlight_magnifier_source()
+                    .unavailable_reason()
+            })
+            .flatten();
+        crate::ui::render_spotlight_magnification_control(
+            ctx,
+            control.track,
+            control.magnification,
+            unavailable,
+            self.input_state.visible_canvas_rect(),
+        );
     }
 
     pub(super) fn render_eraser_hover_halos(&mut self, ctx: &cairo::Context, mx: i32, my: i32) {

@@ -294,6 +294,10 @@ impl WaylandState {
             DrawingState::ResizingSelection { handle, .. } => {
                 return resize_cursor(*handle);
             }
+            // Dragging the loupe's magnification knob - horizontal travel only
+            DrawingState::AdjustingSpotlightMagnification { .. } => {
+                return CursorIcon::EwResize;
+            }
             // Idle - check for hover contexts
             DrawingState::Idle => {}
         }
@@ -326,6 +330,16 @@ impl WaylandState {
             .is_some()
         {
             return CursorIcon::SeResize;
+        }
+
+        // Hovering the loupe's magnification track. Checked here as well as
+        // during the drag, or the control would look inert until it is grabbed.
+        if self
+            .input_state
+            .hit_spotlight_magnification_track(canvas_x, canvas_y)
+            .is_some()
+        {
+            return CursorIcon::EwResize;
         }
 
         // Check if hovering over a selected shape (for move)

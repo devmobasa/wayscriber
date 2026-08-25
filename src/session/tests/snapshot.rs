@@ -212,6 +212,7 @@ fn apply_snapshot_restores_tool_state() {
     let _ = input.set_eraser_size(22.0);
     let _ = input.set_eraser_mode(EraserMode::Stroke);
     let _ = input.set_marker_opacity(0.55);
+    let _ = input.set_spotlight_magnification(2.25);
     let _ = input.set_fill_enabled(true);
     let desired_font = FontDescriptor::new(
         "Monospace".to_string(),
@@ -252,6 +253,7 @@ fn apply_snapshot_restores_tool_state() {
     assert_eq!(restored.eraser_size, 22.0);
     assert_eq!(restored.eraser_mode, EraserMode::Stroke);
     assert_eq!(restored.marker_opacity, 0.55);
+    assert_eq!(restored.spotlight_magnification, 2.25);
     assert!(restored.fill_enabled);
     assert_eq!(restored.font_descriptor, desired_font);
     assert_eq!(restored.current_font_size, 48.0);
@@ -319,6 +321,7 @@ fn apply_legacy_snapshot_preserves_config_initialized_font_descriptor() {
             blur_style: Default::default(),
             recent_colors: Vec::new(),
             marker_opacity: Some(0.32),
+            spotlight_magnification: None,
             fill_enabled: Some(false),
             tool_override: None,
             current_font_size: 40.0,
@@ -336,11 +339,13 @@ fn apply_legacy_snapshot_preserves_config_initialized_font_descriptor() {
 
     let mut restored = dummy_input_state();
     let _ = restored.set_font_descriptor(config_font.clone());
+    restored.spotlight_magnification = 2.1;
 
     apply_snapshot(&mut restored, snapshot, &options);
 
     assert_eq!(restored.font_descriptor, config_font);
     assert_eq!(restored.current_font_size, 40.0);
+    assert_eq!(restored.spotlight_magnification, 2.1);
 }
 
 #[test]
@@ -370,6 +375,7 @@ fn apply_snapshot_clamps_restored_per_tool_thicknesses() {
             blur_style: Default::default(),
             recent_colors: Vec::new(),
             marker_opacity: Some(0.32),
+            spotlight_magnification: None,
             fill_enabled: Some(false),
             tool_override: Some(Tool::Pen),
             current_font_size: 32.0,
@@ -418,6 +424,7 @@ fn apply_legacy_snapshot_uses_font_derived_step_marker_size() {
             blur_style: Default::default(),
             recent_colors: Vec::new(),
             marker_opacity: Some(0.32),
+            spotlight_magnification: None,
             fill_enabled: Some(false),
             tool_override: Some(Tool::StepMarker),
             current_font_size: 48.0,

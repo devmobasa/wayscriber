@@ -167,6 +167,45 @@ fn runtime_toolbar_events_do_not_directly_save_config() {
 }
 
 #[test]
+fn backend_session_dispatch_finalizes_spotlight_history_and_its_deadline() {
+    let mut input_state = make_test_input_state();
+    let shape_id = input_state
+        .boards
+        .active_frame_mut()
+        .add_shape(crate::draw::Shape::Spotlight {
+            cx: 200,
+            cy: 200,
+            rx: 60,
+            ry: 40,
+            magnification: 2.0,
+        });
+    assert_eq!(
+        input_state.nudge_spotlight_magnification_at(200, 200, 1),
+        crate::input::state::SpotlightWheelOutcome::Adjusted
+    );
+    let mut deadline = Some(std::time::Instant::now() + std::time::Duration::from_secs(1));
+
+    finalize_spotlight_wheel_gesture_before_toolbar_dispatch(&mut input_state, &mut deadline);
+
+    assert!(deadline.is_none());
+    input_state.handle_action(Action::Undo);
+    let magnification = match input_state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .expect("spotlight")
+        .shape
+    {
+        crate::draw::Shape::Spotlight { magnification, .. } => magnification,
+        ref other => panic!("expected a spotlight, got {other:?}"),
+    };
+    assert_eq!(
+        magnification, 2.0,
+        "the session persistence barrier must see the gesture's undo entry"
+    );
+}
+
+#[test]
 fn toolbar_runtime_preferences_have_exact_runtime_state_targets() {
     use crate::config::{
         ToolbarItemOrderGroup, ToolbarItemVisibilitySetting, toolbar_item_ids as ids,

@@ -21,6 +21,7 @@ pub(crate) struct ToolStrokeSnapshot {
     pub(crate) marker_opacity: f64,
     pub(crate) fill_enabled: bool,
     pub(crate) blur_style: BlurStyle,
+    pub(crate) spotlight_magnification: f64,
     pub(crate) arrow_length: f64,
     pub(crate) arrow_angle: f64,
     pub(crate) arrow_head_at_end: bool,
@@ -68,6 +69,7 @@ pub(crate) struct ProvisionalToolSnapshot<'a> {
     pub(crate) marker_opacity: f64,
     pub(crate) fill_enabled: bool,
     pub(crate) blur_style: BlurStyle,
+    pub(crate) spotlight_magnification: f64,
     pub(crate) arrow_length: f64,
     pub(crate) arrow_angle: f64,
     pub(crate) arrow_head_at_end: bool,
@@ -203,7 +205,15 @@ impl Tool {
                     snapshot.end.0,
                     snapshot.end.1,
                 );
-                Shape::Spotlight { cx, cy, rx, ry }
+                Shape::Spotlight {
+                    cx,
+                    cy,
+                    rx,
+                    ry,
+                    magnification: crate::draw::normalize_spotlight_magnification(
+                        snapshot.spotlight_magnification,
+                    ),
+                }
             }),
             ToolDrawingBehavior::StepMarker => {
                 let usage = ToolUsage {
@@ -342,7 +352,15 @@ impl Tool {
                     snapshot.current.0,
                     snapshot.current.1,
                 );
-                ProvisionalToolStroke::Shape(Shape::Spotlight { cx, cy, rx, ry })
+                ProvisionalToolStroke::Shape(Shape::Spotlight {
+                    cx,
+                    cy,
+                    rx,
+                    ry,
+                    magnification: crate::draw::normalize_spotlight_magnification(
+                        snapshot.spotlight_magnification,
+                    ),
+                })
             }
             ToolDrawingBehavior::StepMarker => ProvisionalToolStroke::Shape(Shape::StepMarker {
                 x: snapshot.current.0,

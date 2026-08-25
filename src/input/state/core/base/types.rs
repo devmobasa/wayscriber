@@ -117,6 +117,13 @@ pub enum DrawingState {
         /// Font size used to set minimum width
         size: f64,
     },
+    /// Drag the on-canvas magnification knob of a selected Spotlight.
+    AdjustingSpotlightMagnification {
+        /// Spotlight whose factor is being dragged.
+        shape_id: ShapeId,
+        /// Snapshot before the drag, for one undo entry and for Escape.
+        snapshot: ShapeSnapshot,
+    },
     /// Resize selection by dragging a handle
     ResizingSelection {
         /// Which handle is being dragged

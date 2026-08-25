@@ -220,6 +220,7 @@ fn sample_tool_state() -> stored_session::ToolStateSnapshot {
         blur_style: Default::default(),
         recent_colors: Vec::new(),
         marker_opacity: Some(0.32),
+        spotlight_magnification: None,
         fill_enabled: Some(false),
         tool_override: None,
         current_font_size: 24.0,
@@ -673,6 +674,7 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
 
     let mut input = test_input_state();
     let _ = input.set_thickness(11.0);
+    let _ = input.set_spotlight_magnification(3.5);
     input.arrow_head_at_end = false;
     input.show_status_bar = false;
     let mut session_state = SessionState::new(Some(current_options.clone()));
@@ -680,6 +682,7 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
 
     let mut config = Config::default();
     config.drawing.default_thickness = 7.0;
+    config.spotlight.magnification = 2.1;
     config.arrow.head_at_end = true;
     config.ui.show_status_bar = true;
     let report = clear_saved_tool_state_runtime(
@@ -701,6 +704,7 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
         })
     );
     assert_eq!(input.thickness_for_active_tool(), 7.0);
+    assert_eq!(input.spotlight_magnification, 2.1);
     assert!(input.arrow_head_at_end);
     assert!(
         !input.show_status_bar,

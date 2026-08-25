@@ -722,6 +722,31 @@ fn style_pill_sliders_reuse_the_shared_drag_hit_kinds() {
 }
 
 #[test]
+fn spotlight_style_pill_shows_missing_source_status_inline() {
+    let mut snapshot = snapshot_for_tool(crate::input::Tool::Spotlight);
+    snapshot.spotlight_magnification = 2.25;
+    snapshot.spotlight_magnifier_source =
+        Some(crate::draw::SpotlightMagnifierSource::IncompleteTransparent);
+
+    let tree = build(&snapshot);
+    let status = tree
+        .node_by_id(&"top.style.spotlight-magnification.status".into())
+        .expect("inline Spotlight source status");
+    assert!(matches!(
+        &status.kind,
+        WidgetKind::Label(label) if label.text == "Freeze screen to preview"
+    ));
+
+    snapshot.spotlight_magnifier_source =
+        Some(crate::draw::SpotlightMagnifierSource::CompleteSolid);
+    assert!(
+        build(&snapshot)
+            .node_by_id(&"top.style.spotlight-magnification.status".into())
+            .is_none()
+    );
+}
+
+#[test]
 fn style_pill_morphs_per_tool() {
     use crate::backend::wayland::toolbar::events::HitKind;
     use crate::input::{EraserMode, Tool};

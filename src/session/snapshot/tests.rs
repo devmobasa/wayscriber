@@ -73,6 +73,7 @@ fn sample_tool_state() -> ToolStateSnapshot {
         blur_style: Default::default(),
         recent_colors: Vec::new(),
         marker_opacity: Some(0.32),
+        spotlight_magnification: None,
         fill_enabled: Some(false),
         tool_override: None,
         current_font_size: 24.0,
@@ -249,6 +250,33 @@ fn a_saved_session_no_longer_records_status_bar_visibility() {
     assert!(
         !written.contains("show_status_bar"),
         "chrome visibility must not reach the session file: {written}"
+    );
+}
+
+#[test]
+fn saved_session_round_trips_the_starting_spotlight_magnification() {
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "spotlight-tool-state");
+    options.persist_transparent = true;
+    options.restore_tool_state = true;
+    options.compression = CompressionMode::Off;
+    let mut tool_state = sample_tool_state();
+    tool_state.spotlight_magnification = Some(2.25);
+    let snapshot = SessionSnapshot {
+        tool_state: Some(tool_state),
+        ..sample_snapshot()
+    };
+
+    save_snapshot(&snapshot, &options).expect("save Spotlight tool state");
+    let restored = load_snapshot(&options)
+        .expect("load Spotlight tool state")
+        .expect("saved session exists");
+
+    assert_eq!(
+        restored
+            .tool_state
+            .and_then(|state| state.spotlight_magnification),
+        Some(2.25)
     );
 }
 

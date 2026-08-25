@@ -145,6 +145,46 @@ fn style_pill_selection_docking_routes_through_the_properties_apply_machinery() 
 }
 
 #[test]
+fn spotlight_magnification_property_steps_the_selected_shape_and_is_undoable() {
+    let mut state = create_test_input_state();
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Spotlight {
+        cx: 100,
+        cy: 80,
+        rx: 40,
+        ry: 25,
+        magnification: 1.5,
+    });
+    state.set_selection(vec![shape_id]);
+
+    let entries = state.selection_pill_entries();
+    let entry = entries
+        .iter()
+        .find(|entry| entry.kind == SelectionPropertyKind::SpotlightMagnification)
+        .expect("spotlight magnification property");
+    assert_eq!(entry.label, "Magnification");
+    assert_eq!(entry.value, "1.5x");
+
+    assert!(
+        state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, 1,)
+    );
+    let magnification = |state: &InputState| match &state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .expect("spotlight")
+        .shape
+    {
+        Shape::Spotlight { magnification, .. } => *magnification,
+        other => panic!("expected spotlight, got {other:?}"),
+    };
+    assert_eq!(magnification(&state), 1.75);
+    assert!(state.take_pending_spotlight_magnifier_feedback());
+
+    state.handle_action(Action::Undo);
+    assert_eq!(magnification(&state), 1.5);
+}
+
+#[test]
 fn close_properties_panel_clears_panel_and_requests_redraw() {
     let mut state = create_test_input_state();
     let shape_id = add_rect(&mut state, 5, 5, 10, 10);
@@ -324,4 +364,166 @@ fn adjust_arrow_length_entry_clamps_to_max_and_refreshes_panel_value() {
         state.properties_panel().expect("panel").entries[length_index].value,
         "50px"
     );
+}
+
+fn add_spotlight(state: &mut InputState, magnification: f64) -> crate::draw::ShapeId {
+    state.boards.active_frame_mut().add_shape(Shape::Spotlight {
+        cx: 100,
+        cy: 80,
+        rx: 40,
+        ry: 25,
+        magnification,
+    })
+}
+
+fn spotlight_magnification(state: &InputState, id: crate::draw::ShapeId) -> f64 {
+    match &state
+        .boards
+        .active_frame()
+        .shape(id)
+        .expect("spotlight")
+        .shape
+    {
+        Shape::Spotlight { magnification, .. } => *magnification,
+        other => panic!("expected spotlight, got {other:?}"),
+    }
+}
+
+fn magnification_entry(state: &InputState) -> Option<crate::input::SelectionPropertyEntry> {
+    state
+        .selection_pill_entries()
+        .into_iter()
+        .find(|entry| entry.kind == SelectionPropertyKind::SpotlightMagnification)
+}
+
+#[test]
+fn a_mixed_magnification_selection_reads_mixed_and_still_steps_every_shape() {
+    let mut state = create_test_input_state();
+    let low = add_spotlight(&mut state, 1.5);
+    let high = add_spotlight(&mut state, 3.0);
+    state.set_selection(vec![low, high]);
+
+    let entry = magnification_entry(&state).expect("magnification property");
+    assert_eq!(entry.value, "Mixed");
+    assert!(!entry.disabled, "a mixed selection is still editable");
+
+    assert!(state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, 1));
+    assert_eq!(spotlight_magnification(&state, low), 1.75);
+    assert_eq!(spotlight_magnification(&state, high), 3.25);
+
+    // One step, one undo entry, for the whole selection.
+    state.handle_action(Action::Undo);
+    assert_eq!(spotlight_magnification(&state, low), 1.5);
+    assert_eq!(spotlight_magnification(&state, high), 3.0);
+}
+
+#[test]
+fn a_locked_spotlight_reports_locked_and_refuses_magnification_changes() {
+    let mut state = create_test_input_state();
+    let shape_id = add_spotlight(&mut state, 2.0);
+    state.set_selection(vec![shape_id]);
+    let index = state
+        .boards
+        .active_frame()
+        .find_index(shape_id)
+        .expect("shape index");
+    state.boards.active_frame_mut().shapes[index].locked = true;
+
+    let entry = magnification_entry(&state).expect("magnification property");
+    assert_eq!(entry.value, "Locked");
+    assert!(entry.disabled);
+
+    assert!(
+        !state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, 1)
+    );
+    assert_eq!(spotlight_magnification(&state, shape_id), 2.0);
+}
+
+#[test]
+fn magnification_steps_stop_at_both_ends_of_the_supported_range() {
+    let mut state = create_test_input_state();
+    let lowest = add_spotlight(&mut state, crate::draw::MIN_SPOTLIGHT_MAGNIFICATION);
+    state.set_selection(vec![lowest]);
+    assert!(
+        !state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, -1),
+        "stepping below 1x must be a no-op, not a silent clamp with an undo entry"
+    );
+    assert_eq!(
+        spotlight_magnification(&state, lowest),
+        crate::draw::MIN_SPOTLIGHT_MAGNIFICATION
+    );
+
+    let highest = add_spotlight(&mut state, crate::draw::MAX_SPOTLIGHT_MAGNIFICATION);
+    state.set_selection(vec![highest]);
+    assert!(
+        !state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, 1)
+    );
+    assert_eq!(
+        spotlight_magnification(&state, highest),
+        crate::draw::MAX_SPOTLIGHT_MAGNIFICATION
+    );
+}
+
+#[test]
+fn magnification_only_touches_the_spotlights_in_a_multi_kind_selection() {
+    let mut state = create_test_input_state();
+    let spotlight = add_spotlight(&mut state, 2.0);
+    let rect = add_rect(&mut state, 5, 5, 10, 10);
+    state.set_selection(vec![spotlight, rect]);
+
+    let entry = magnification_entry(&state).expect("magnification property");
+    assert_eq!(
+        entry.value, "2x",
+        "the one spotlight still reports its factor"
+    );
+
+    let rect_before = format!(
+        "{:?}",
+        state.boards.active_frame().shape(rect).expect("rect").shape
+    );
+    assert!(state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, 1));
+    assert_eq!(spotlight_magnification(&state, spotlight), 2.25);
+    assert_eq!(
+        format!(
+            "{:?}",
+            state.boards.active_frame().shape(rect).expect("rect").shape
+        ),
+        rect_before,
+        "a shape with no magnification must be left alone"
+    );
+}
+
+#[test]
+fn editing_a_selected_spotlight_leaves_the_next_shape_default_alone() {
+    let mut state = create_test_input_state();
+    let default_before = state.spotlight_magnification;
+    let shape_id = add_spotlight(&mut state, 2.0);
+    state.set_selection(vec![shape_id]);
+
+    assert!(state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, 1));
+
+    assert_eq!(spotlight_magnification(&state, shape_id), 2.25);
+    assert_eq!(
+        state.spotlight_magnification, default_before,
+        "editing one shape must not rewrite what the next Spotlight will use"
+    );
+}
+
+#[test]
+fn the_selection_reports_its_own_highest_magnification() {
+    let mut state = create_test_input_state();
+    assert_eq!(state.selection_spotlight_magnification(), None);
+
+    let rect = add_rect(&mut state, 5, 5, 10, 10);
+    state.set_selection(vec![rect]);
+    assert_eq!(
+        state.selection_spotlight_magnification(),
+        None,
+        "a selection with no spotlight has no magnification to report"
+    );
+
+    let low = add_spotlight(&mut state, 1.5);
+    let high = add_spotlight(&mut state, 3.0);
+    state.set_selection(vec![rect, low, high]);
+    assert_eq!(state.selection_spotlight_magnification(), Some(3.0));
 }

@@ -38,6 +38,8 @@ impl HitTestTolerance {
 }
 
 /// Computes a tolerance-aware bounding rectangle for the shape.
+pub(crate) use shapes::ellipse_fill_hit;
+
 pub fn compute_hit_bounds(shape: &DrawnShape, tolerance: f64) -> Option<Rect> {
     compute_hit_bounds_with_tolerance(shape, HitTestTolerance::new(tolerance)?)
 }
@@ -97,7 +99,7 @@ pub(crate) fn hit_test_with_tolerance(
             thick,
             ..
         } => shapes::ellipse_outline_hit(*cx, *cy, *rx, *ry, *thick, point, tolerance),
-        Shape::Spotlight { cx, cy, rx, ry } => {
+        Shape::Spotlight { cx, cy, rx, ry, .. } => {
             // No stroke to aim at, so the whole opening is the target.
             shapes::ellipse_fill_hit(*cx, *cy, *rx, *ry, point)
         }

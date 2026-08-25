@@ -18,6 +18,10 @@ impl InputState {
         // so the shortcut coach can learn from toolbar use (the slow path the
         // palette also feeds).
         let coach_action = event.action();
+        // Toolbar page and board switches never reach `handle_action`, so the
+        // gesture is closed here as well. A wheel adjustment must not outlive
+        // the frame it started on: shape ids restart per frame.
+        self.flush_spotlight_magnification_gesture();
         let changed = self.apply_toolbar_event_inner(event);
         self.note_toolbar_shortcut_slow_path(coach_action, changed);
         changed
@@ -52,6 +56,9 @@ impl InputState {
             ToolbarEvent::EditQuickColor { index } => self.apply_toolbar_edit_quick_color(index),
             ToolbarEvent::SetThickness(value) => self.apply_toolbar_set_thickness(value),
             ToolbarEvent::SetMarkerOpacity(value) => self.apply_toolbar_set_marker_opacity(value),
+            ToolbarEvent::SetSpotlightMagnification(value) => {
+                self.apply_toolbar_set_spotlight_magnification(value)
+            }
             ToolbarEvent::SetEraserMode(mode) => self.apply_toolbar_set_eraser_mode(mode),
             ToolbarEvent::SetFont(descriptor) => self.apply_toolbar_set_font(descriptor),
             ToolbarEvent::SetFontSize(size) => self.apply_toolbar_set_font_size(size),

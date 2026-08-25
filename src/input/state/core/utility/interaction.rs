@@ -87,6 +87,8 @@ impl InputState {
         }
     }
 
+    /// Returns the visible canvas area, or a 1x1 fallback at its minimum corner
+    /// when the transformed extent cannot be represented by [`Rect`].
     pub(crate) fn visible_canvas_rect(&self) -> Rect {
         let (x1, y1) = self.canvas_coords_for_screen(0, 0);
         let (x2, y2) = self.canvas_coords_for_screen(
@@ -95,14 +97,21 @@ impl InputState {
         );
         let min_x = x1.min(x2);
         let min_y = y1.min(y2);
-        let max_x = x1.max(x2).max(min_x + 1);
-        let max_y = y1.max(y2).max(min_y + 1);
-        Rect::from_min_max(min_x, min_y, max_x, max_y).unwrap_or(Rect {
+        let fallback = Rect {
             x: min_x,
             y: min_y,
             width: 1,
             height: 1,
-        })
+        };
+        // Widen before adding the non-empty minimum. Persisted view offsets
+        // can saturate both transformed corners at i32::MAX, where `min + 1`
+        // would overflow in debug builds.
+        let max_x = i64::from(x1.max(x2)).max(i64::from(min_x) + 1);
+        let max_y = i64::from(y1.max(y2)).max(i64::from(min_y) + 1);
+        let (Ok(max_x), Ok(max_y)) = (i32::try_from(max_x), i32::try_from(max_y)) else {
+            return fallback;
+        };
+        Rect::from_min_max(min_x, min_y, max_x, max_y).unwrap_or(fallback)
     }
 
     fn visible_canvas_center(&self) -> (i32, i32) {
@@ -235,6 +244,10 @@ impl InputState {
             DrawingState::ResizingText {
                 shape_id, snapshot, ..
             } => {
+                self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
+                self.state = DrawingState::Idle;
+            }
+            DrawingState::AdjustingSpotlightMagnification { shape_id, snapshot } => {
                 self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
                 self.state = DrawingState::Idle;
             }

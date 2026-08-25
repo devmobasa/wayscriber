@@ -95,7 +95,8 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
 2. **Mouse events (`handlers/pointer.rs`)**
    - Update `current_mouse_x/y`.
    - Call `InputState::on_mouse_press`, `on_mouse_motion`, `on_mouse_release`.
-   - Adjust pen thickness or font size via scroll wheel + modifiers.
+   - Adjust pen thickness or font size via scroll wheel + modifiers; scrolling over a Spotlight loupe adjusts its magnification instead.
+   - Keep touchpad-finger Spotlight adjustments in one undo gesture until Wayland reports `axis_stop`; wheel-like sources use a quiet-period fallback when no stop arrives.
 
 3. **`InputState` responsibilities**
    - Holds `input::BoardManager`, whose ordered `BoardState` entries each own `draw::BoardPages`,

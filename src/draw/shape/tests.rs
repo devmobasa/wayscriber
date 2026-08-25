@@ -108,6 +108,37 @@ fn ellipse_bounding_box_handles_radii_and_stroke() {
 }
 
 #[test]
+fn historical_spotlight_without_magnification_loads_as_one_x() {
+    let shape: Shape = serde_json::from_str(r#"{"Spotlight":{"cx":120,"cy":80,"rx":40,"ry":20}}"#)
+        .expect("historical spotlight should deserialize");
+
+    match shape {
+        Shape::Spotlight { magnification, .. } => assert_eq!(magnification, 1.0),
+        other => panic!("expected spotlight shape, got {other:?}"),
+    }
+}
+
+#[test]
+fn persisted_spotlight_magnification_is_normalized_on_load() {
+    for (json, expected) in [
+        (
+            r#"{"Spotlight":{"cx":120,"cy":80,"rx":40,"ry":20,"magnification":9.0}}"#,
+            4.0,
+        ),
+        (
+            r#"{"Spotlight":{"cx":120,"cy":80,"rx":40,"ry":20,"magnification":0.5}}"#,
+            1.0,
+        ),
+    ] {
+        let shape: Shape = serde_json::from_str(json).expect("spotlight should deserialize");
+        match shape {
+            Shape::Spotlight { magnification, .. } => assert_eq!(magnification, expected),
+            other => panic!("expected spotlight shape, got {other:?}"),
+        }
+    }
+}
+
+#[test]
 fn polygon_bounding_box_covers_vertices_and_stroke() {
     let shape = Shape::Polygon {
         kind: PolygonKind::Triangle,

@@ -12,5 +12,8 @@ pub(crate) fn active_interaction_kind(state: &InputState) -> Option<ActiveIntera
         DrawingState::Selecting { .. } => Some(ActiveInteractionKind::BoxSelecting),
         DrawingState::ResizingText { .. } => Some(ActiveInteractionKind::ResizingText),
         DrawingState::ResizingSelection { .. } => Some(ActiveInteractionKind::ResizingSelection),
+        DrawingState::AdjustingSpotlightMagnification { .. } => {
+            Some(ActiveInteractionKind::AdjustingSpotlightMagnification)
+        }
     }
 }

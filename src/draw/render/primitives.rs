@@ -199,6 +199,21 @@ pub(super) fn render_arrow(
     ctx.restore().ok();
 }
 
+/// Runs `paint` between a Cairo `save`/`restore` pair, returning the first
+/// error of either.
+///
+/// The `restore` has to run even when painting failed, or the clip and
+/// transform established inside `paint` leak into the rest of the frame.
+pub(crate) fn with_saved_state<F>(ctx: &cairo::Context, paint: F) -> Result<(), cairo::Error>
+where
+    F: FnOnce() -> Result<(), cairo::Error>,
+{
+    ctx.save()?;
+    let painted = paint();
+    let restored = ctx.restore();
+    painted.and(restored)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

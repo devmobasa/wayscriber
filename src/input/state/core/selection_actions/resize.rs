@@ -147,7 +147,13 @@ impl InputState {
                     thick: *thick,
                 }
             }
-            Shape::Spotlight { cx, cy, rx, ry } => {
+            Shape::Spotlight {
+                cx,
+                cy,
+                rx,
+                ry,
+                magnification,
+            } => {
                 let (ncx, ncy) =
                     Self::scale_point_i32(*cx, *cy, anchor_x, anchor_y, scale_x, scale_y);
                 Shape::Spotlight {
@@ -155,6 +161,7 @@ impl InputState {
                     cy: ncy,
                     rx: Self::scale_size(*rx, scale_x).max(1),
                     ry: Self::scale_size(*ry, scale_y).max(1),
+                    magnification: *magnification,
                 }
             }
             Shape::Line {

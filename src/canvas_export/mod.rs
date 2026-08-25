@@ -150,6 +150,223 @@ mod tests {
     }
 
     #[test]
+    fn transparent_export_rejects_magnified_spotlight_without_source_pixels() {
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Spotlight {
+            cx: 8,
+            cy: 8,
+            rx: 6,
+            ry: 6,
+            magnification: 2.0,
+        });
+        let export = snapshot(
+            frame,
+            CanvasExportViewport {
+                logical_width: 20,
+                logical_height: 20,
+                scale: 1,
+                origin_x: 0,
+                origin_y: 0,
+            },
+        );
+
+        let error = render_canvas_surface(&export).expect_err("missing source must fail");
+        assert!(
+            error.to_string().contains("Freeze screen to magnify"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn canvas_preflight_rejects_missing_spotlight_source_before_rendering() {
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Spotlight {
+            cx: 8,
+            cy: 8,
+            rx: 6,
+            ry: 6,
+            magnification: 2.0,
+        });
+        let export = snapshot(
+            frame,
+            CanvasExportViewport {
+                logical_width: 20,
+                logical_height: 20,
+                scale: 1,
+                origin_x: 0,
+                origin_y: 0,
+            },
+        );
+
+        let error = export
+            .validate_spotlight_source("Canvas 'Demo'")
+            .expect_err("preflight must reject an incomplete source");
+        let message = error.to_string();
+        assert!(message.contains("Canvas 'Demo'"), "unexpected: {message}");
+        // Freezing cannot rescue this export, so the message must not say to.
+        assert!(
+            !message.to_lowercase().contains("freeze screen"),
+            "canvas PNG excludes frozen pixels, so advising Freeze is a dead end: {message}"
+        );
+        assert!(
+            message.contains("solid background"),
+            "unexpected: {message}"
+        );
+    }
+
+    #[test]
+    fn the_export_preflight_accepts_every_backdrop_that_can_feed_a_loupe() {
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Spotlight {
+            cx: 8,
+            cy: 8,
+            rx: 6,
+            ry: 6,
+            magnification: 2.0,
+        });
+        let viewport = CanvasExportViewport {
+            logical_width: 20,
+            logical_height: 20,
+            scale: 1,
+            origin_x: 0,
+            origin_y: 0,
+        };
+
+        // A solid board fills every pixel itself, and a persisted image is a
+        // frozen raster: both are complete sources, so neither may be refused.
+        for backdrop in [
+            CanvasExportBackdropSnapshot::Solid(WHITE),
+            CanvasExportBackdropSnapshot::PersistedImage {
+                data: Arc::from(vec![0u8; 20 * 20 * 4].into_boxed_slice()),
+                width: 20,
+                height: 20,
+                stride: 20 * 4,
+                logical_to_image_scale_x: 1.0,
+                logical_to_image_scale_y: 1.0,
+            },
+        ] {
+            let mut export = snapshot(frame.clone(), viewport);
+            export.backdrop = backdrop;
+            assert!(
+                export.validate_spotlight_source("Canvas 'Demo'").is_ok(),
+                "a complete backdrop must not be refused"
+            );
+        }
+    }
+
+    #[test]
+    fn pdf_preflight_names_the_failing_board_and_page() {
+        let mut page = page_snapshot(Frame::new());
+        page.frame.add_shape(Shape::Spotlight {
+            cx: 8,
+            cy: 8,
+            rx: 6,
+            ry: 6,
+            magnification: 2.0,
+        });
+        let export = pdf_snapshot(page);
+
+        let error = export
+            .validate_spotlight_sources()
+            .expect_err("preflight must reject an incomplete source");
+        let message = error.to_string();
+        assert!(
+            message.contains("Board 'Board'"),
+            "unexpected error: {message}"
+        );
+        assert!(message.contains("Page 1"), "unexpected error: {message}");
+        // A PDF page does have a real way to gain a source; name it.
+        assert!(
+            message.contains("transparent_background = \"desktop\""),
+            "unexpected error: {message}"
+        );
+    }
+
+    #[test]
+    fn solid_export_magnifies_the_completed_canvas_before_dimming() {
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Rect {
+            x: 5,
+            y: 8,
+            w: 2,
+            h: 4,
+            fill: true,
+            color: RED,
+            thick: 1.0,
+        });
+        frame.add_shape(Shape::Spotlight {
+            cx: 10,
+            cy: 10,
+            rx: 10,
+            ry: 10,
+            magnification: 2.0,
+        });
+        let mut export = snapshot(
+            frame,
+            CanvasExportViewport {
+                logical_width: 20,
+                logical_height: 20,
+                scale: 1,
+                origin_x: 0,
+                origin_y: 0,
+            },
+        );
+        export.backdrop = CanvasExportBackdropSnapshot::Solid(BLACK);
+
+        let mut surface = render_canvas_surface(&export).expect("magnified solid export");
+        assert_ne!(pixel(&mut surface, 2, 10), pixel(&mut surface, 0, 0));
+    }
+
+    #[test]
+    fn magnified_pdf_page_uses_the_raster_fallback() {
+        let mut page = page_snapshot(Frame::new());
+        page.backdrop = CanvasExportBackdropSnapshot::Solid(WHITE);
+        page.frame.add_shape(Shape::Spotlight {
+            cx: 10,
+            cy: 10,
+            rx: 8,
+            ry: 8,
+            magnification: 2.0,
+        });
+
+        let pdf = render_board_pdf(&pdf_snapshot(page)).expect("magnified PDF");
+        assert!(pdf.starts_with(b"%PDF-"));
+    }
+
+    #[test]
+    fn a_magnified_page_still_draws_its_label_over_the_raster() {
+        fn pdf_with_labels(magnification: f64, labels_enabled: bool) -> Vec<u8> {
+            let mut page = page_snapshot(Frame::new());
+            page.backdrop = CanvasExportBackdropSnapshot::Solid(WHITE);
+            page.frame.add_shape(Shape::Spotlight {
+                cx: 10,
+                cy: 10,
+                rx: 8,
+                ry: 8,
+                magnification,
+            });
+            let mut snapshot = pdf_snapshot(page);
+            snapshot.labels.enabled = labels_enabled;
+            render_board_pdf(&snapshot).expect("pdf")
+        }
+
+        // The magnified page takes the raster fallback, which replaces the
+        // whole page's vector content. The label is emitted after that content
+        // and before `show_page`, so it must still reach the document rather
+        // than being covered by — or dropped with — the raster.
+        let magnified_plain = pdf_with_labels(2.0, false);
+        let magnified_labelled = pdf_with_labels(2.0, true);
+        assert!(magnified_labelled.starts_with(b"%PDF-"));
+        assert_ne!(
+            magnified_plain, magnified_labelled,
+            "a raster page must still carry its label"
+        );
+
+        // And the vector path is unaffected by the same switch.
+        assert_ne!(pdf_with_labels(1.0, false), pdf_with_labels(1.0, true));
+    }
+
+    #[test]
     fn render_board_pdf_returns_pdf_bytes() {
         let pdf = render_board_pdf(&pdf_snapshot(page_snapshot(Frame::new()))).expect("pdf");
 
@@ -302,6 +519,7 @@ mod tests {
             cy: 60,
             rx: 14,
             ry: 14,
+            magnification: crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
         });
         frame.add_shape(Shape::EraserStroke {
             points: vec![(40, 60), (110, 60)],

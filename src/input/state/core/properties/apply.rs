@@ -88,6 +88,9 @@ impl InputState {
             SelectionPropertyKind::TextBackground => {
                 self.apply_selection_text_background(direction)
             }
+            SelectionPropertyKind::SpotlightMagnification => {
+                self.apply_selection_spotlight_magnification(direction_or_default(direction))
+            }
         }
     }
 }

@@ -10,6 +10,7 @@ use super::tray::{durable_action_retry_due, durable_action_retry_timeout, proces
 
 mod capture;
 mod dispatch;
+mod interaction;
 mod render;
 pub(in crate::backend::wayland) mod session_save;
 
@@ -134,6 +135,8 @@ pub(super) fn run_event_loop(
         let focus_exit_timeout = state.focus_exit_timeout(now);
         let command_palette_repeat_timeout = state.input_state.command_palette_repeat_timeout(now);
         let capture_timeout = capture::capture_timeout(state, now);
+        let interaction_timeout =
+            interaction::interaction_timeout(state.spotlight_wheel_idle_deadline, now);
         let durable_action_timeout = durable_action_retry_timeout(state, now);
         // Backend output actions are drained one at a time, and the toolbar
         // persistence queue drains on the same pass. If either holds
@@ -169,6 +172,7 @@ pub(super) fn run_event_loop(
         let timeout = min_timeout(timeout, toolbar_handoff_timeout);
         let timeout = min_timeout(timeout, command_palette_repeat_timeout);
         let timeout = min_timeout(timeout, capture_timeout);
+        let timeout = min_timeout(timeout, interaction_timeout);
         let timeout = min_timeout(timeout, durable_action_timeout);
         let timeout = min_timeout(timeout, pending_backend_action_timeout);
         // A radial menu waiting out its paint delay must appear without
@@ -189,6 +193,11 @@ pub(super) fn run_event_loop(
         // recovery before this iteration reaches toolbar synchronization and
         // rendering so the restored frame is not delayed by another block.
         capture::poll_capture_deadlines(state, qh, Instant::now());
+        interaction::poll_interaction_deadlines(
+            &mut state.input_state,
+            &mut state.spotlight_wheel_idle_deadline,
+            Instant::now(),
+        );
 
         if !state.input_state.should_exit {
             state.reconcile_live_source_interaction_if_idle(

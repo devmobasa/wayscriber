@@ -207,6 +207,11 @@ impl WaylandState {
         {
             return Err(anyhow::anyhow!("stale output transition source epoch"));
         }
+        // The session is about to be written and then replaced. Close any wheel
+        // adjustment first, so its undo entry is part of what gets persisted
+        // instead of being dropped with the frame it belonged to.
+        self.input_state.flush_spotlight_magnification_gesture();
+        self.spotlight_wheel_idle_deadline = None;
         session_save::persistence_barrier(self)?;
         let current_options = self
             .session_options()

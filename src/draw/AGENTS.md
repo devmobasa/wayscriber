@@ -8,6 +8,7 @@
 - `frame/` owns frame storage, serialization, and undo/redo history.
 - `shape/` owns shape types, bounds, text cache, polygons, step markers, and labels.
 - `render/` owns Cairo/Pango rendering helpers.
+- `spotlight.rs` owns shared Spotlight magnification defaults, normalization, formatting, and Serde boundaries.
 
 ## Invariants
 - Keep this area mostly pure; rendering helpers should not mutate application state except intentional caches or Cairo surface/path operations.

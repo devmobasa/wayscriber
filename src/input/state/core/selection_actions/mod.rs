@@ -3,6 +3,8 @@ mod delete;
 mod geometry;
 mod reorder;
 mod resize;
+mod spotlight;
+pub(crate) use spotlight::SpotlightMagnificationTrack;
 mod state;
 mod text;
 mod translation;

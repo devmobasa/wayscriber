@@ -14,11 +14,13 @@ mod ocr_scan;
 mod onboarding_card;
 mod precision_entry;
 mod primitives;
+pub(crate) use primitives::{draw_rounded_rect, text_extents_for};
 mod properties_panel;
 mod radial_menu;
 mod region_action_bar;
 mod region_capture_picker;
 mod region_resize_handles;
+mod spotlight_control;
 mod status;
 mod text_highlight;
 pub mod theme;
@@ -59,6 +61,7 @@ pub(crate) use region_capture_picker::{
     render_region_capture_picker, render_region_legend,
 };
 pub(crate) use region_resize_handles::RegionResizeHandles;
+pub(crate) use spotlight_control::render_spotlight_magnification_control;
 pub use status::{
     StatusHudLayout, StatusHudSegmentKind, ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress,
     compute_status_hud_layout, compute_zoom_chip_layout, render_editing_badge, render_frozen_badge,

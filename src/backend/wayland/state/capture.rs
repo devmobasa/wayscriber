@@ -70,6 +70,23 @@ mod include_drawings_tests {
 }
 
 impl WaylandState {
+    /// Reports an export preflight failure and drops the request.
+    ///
+    /// Both export paths refuse the same way — log, toast, submit nothing —
+    /// because the point of the preflight is that a file is never silently
+    /// saved without the magnification it was asked for.
+    fn report_export_preflight_failure(
+        &mut self,
+        error: &crate::capture::CaptureError,
+        operation: ImageOperationKind,
+        toast_source: &'static str,
+    ) {
+        let message = operation.format_error(error);
+        log::error!("{message}");
+        self.input_state
+            .push_toast(ToastPriority::Critical, toast_source, Toast::error(message));
+    }
+
     pub(in crate::backend::wayland) fn continue_frozen_capture_after_failure(
         &mut self,
         failed_backend: FrozenCaptureBackend,
@@ -312,6 +329,15 @@ impl WaylandState {
         // physical resolution plus PNG encoding froze event dispatch for the
         // whole export on large surfaces.
         let snapshot = self.canvas_export_snapshot();
+        let subject = format!("Canvas '{}'", self.input_state.board_name());
+        if let Err(error) = snapshot.validate_spotlight_source(&subject) {
+            self.report_export_preflight_failure(
+                &error,
+                ImageOperationKind::CanvasExport,
+                "capture.canvas-export",
+            );
+            return;
+        }
         let render: crate::capture::ImageRenderJob = Box::new(move || render_canvas_png(&snapshot));
 
         let save_config = if matches!(destination, CaptureDestination::ClipboardOnly) {

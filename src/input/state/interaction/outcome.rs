@@ -40,6 +40,7 @@ pub(crate) enum ActiveInteractionKind {
     BoxSelecting,
     ResizingText,
     ResizingSelection,
+    AdjustingSpotlightMagnification,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
