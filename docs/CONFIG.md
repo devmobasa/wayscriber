@@ -238,6 +238,9 @@ default_blur_style = "gaussian"
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
 
+# Whether the marker starts in snap-to-text mode (see below)
+marker_snap_to_text = false
+
 # Default fill state for fill-capable shape tools
 default_fill_enabled = false
 
@@ -369,6 +372,7 @@ drag_tool = "default"
 - **Eraser mode**: Use <kbd>Ctrl+Shift+E</kbd> to toggle brush vs stroke erasing
 - **Blur style**: Run **Cycle Blur Style** from the command palette to step through blur → pixelate → secure → black out (unbound by default; bind `cycle_blur_style`)
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
+- **Marker snap to text**: Use <kbd>Ctrl+Shift+U</kbd>, or press <kbd>H</kbd> again while the marker is already active (see [Marker snap to text](#marker-snap-to-text))
 - **Regular polygon sides**: Use the Shapes popover Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
 
@@ -378,6 +382,7 @@ drag_tool = "default"
 - Eraser size: 12.0px
 - Eraser mode: Brush
 - Marker opacity: 0.32
+- Marker snap to text: false
 - Fill enabled: false
 - Polygon sides: 5
 - Font size: 32.0px
@@ -386,6 +391,48 @@ drag_tool = "default"
 - Hit-test tolerance: 6.0px (linear threshold: 400)
 - Undo stack limit: 100
 - Drag mapping: Drag=Pen, Shift+Drag=Line, Ctrl+Drag=Rect, Ctrl+Shift+Drag=Arrow, Tab+Drag=Ellipse
+
+#### Marker snap to text
+
+`marker_snap_to_text` makes the marker behave like a highlighter used on paper:
+instead of following the pointer exactly, each stroke locks to a row of text
+detected on screen and is drawn straight along it.
+
+```toml
+[drawing]
+marker_snap_to_text = true
+```
+
+With the marker in hand, hovering shows an I-beam on the row a press would take
+and a faint band across the reach of that row. Pressing locks that row for the
+whole stroke; dragging sets how much of it is covered, clamped to the text.
+Thickness comes from the detected line height rather than from the tool size.
+
+**What it needs.** The rows come from a Tesseract scan of the screen image
+Wayscriber is displaying, so snapping needs all of:
+
+- the `tesseract` binary on `PATH` (the same dependency as
+  [Copy text from screen](#copy-text-from-screen-ocr), and it uses
+  `capture.ocr_languages` too);
+- `capture.enabled = true`;
+- a transparent board — text under a solid board is text you cannot see;
+- a frozen or zoomed screen to read. Picking the marker with snapping on
+  freezes the screen once to get one, the same way picking the blur tool does.
+
+**When it cannot snap, it draws freehand.** Every missing piece above, a scan
+that is still running, and a screen with no text all leave the marker behaving
+exactly as it does with the mode off. The status line says which one applies:
+`Snap: on`, `Snap: reading screen text...`, `Snap: freeze the screen to find
+text`, `Snap: no text found`, or the blocker.
+
+**One scan per capture.** A scan reads the whole screen image once and its rows
+are reused until that image is replaced. Re-freezing, zooming, or changing
+output drops the rows and scans again, because rows from one capture describe
+pixels that are no longer on screen.
+
+**Privacy.** The scan reads text to find out where it is, not what it says. Only
+row rectangles leave the worker; the recognized words are dropped inside it and
+never reach application state, a session file, or a log line.
 
 ### `[arrow]` - Arrow Geometry
 
@@ -1931,6 +1978,7 @@ select_marker_tool = ["H"]
 select_step_marker_tool = []
 select_eraser_tool = ["D"]
 toggle_eraser_mode = ["Ctrl+Shift+E"]
+toggle_marker_snap_to_text = ["Ctrl+Shift+U"]  # marker snaps to a screen text row
 cycle_blur_style = []              # blur -> pixelate -> secure -> black out
 select_spotlight_tool = []         # dim everything except a region
 select_line_tool = []

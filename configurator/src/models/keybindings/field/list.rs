@@ -38,6 +38,7 @@ impl KeybindingField {
             Self::SelectPenTool,
             Self::SelectEraserTool,
             Self::ToggleEraserMode,
+            Self::ToggleMarkerSnapToText,
             Self::SelectMarkerTool,
             Self::SelectStepMarkerTool,
             Self::SelectLineTool,

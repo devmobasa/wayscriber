@@ -85,6 +85,28 @@ impl WaylandState {
         );
     }
 
+    /// The marker's snap-to-text hover preview: the row a press would take.
+    ///
+    /// Idle only. Once a drag is under way the provisional stroke itself shows
+    /// the same row, and drawing both would put an I-beam in the middle of the
+    /// highlight it is describing.
+    pub(super) fn render_marker_snap_hover(&self, ctx: &cairo::Context, mx: i32, my: i32) {
+        if !matches!(self.input_state.state, DrawingState::Idle)
+            || !self.has_cursor_focus()
+            || self.cursor_blocked_by_toolbar()
+        {
+            return;
+        }
+        let Some(preview) = self.input_state.marker_snap_hover_preview(mx, my) else {
+            return;
+        };
+        let color = crate::input::tool::marker_color_with_opacity(
+            self.input_state.color_for_tool(crate::input::Tool::Marker),
+            self.input_state.marker_opacity,
+        );
+        crate::ui::render_marker_snap_preview(ctx, preview, color);
+    }
+
     pub(super) fn render_eraser_hover_halos(&mut self, ctx: &cairo::Context, mx: i32, my: i32) {
         let eraser_drawing = matches!(
             self.input_state.state,

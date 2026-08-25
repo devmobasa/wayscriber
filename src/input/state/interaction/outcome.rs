@@ -62,6 +62,8 @@ pub(crate) enum InteractionSideEffect {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PointerSideEffect {
     IdleEraserHover,
+    /// The marker's snap-to-text preview moved to a different row.
+    IdleMarkerSnapHover,
     RightClickSuppressedByZoom,
     RightClickContextMenuDisabled,
 }

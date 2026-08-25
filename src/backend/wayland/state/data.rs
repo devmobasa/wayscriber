@@ -188,6 +188,14 @@ pub struct StateData {
     pub(super) screen_acquisition: ScreenAcquisitionRegistry,
     pub(super) zoom_waiter: ZoomWaiterRegistry,
     pub(super) active_eyedropper_source: Option<ScreenSourceToken>,
+    /// The screen image the marker's snap rows were read from. Rows outlive
+    /// their source only until this stops matching, at which point they are
+    /// dropped rather than mapped onto a different capture.
+    pub(super) marker_snap_scan_token: Option<ScreenSourceToken>,
+    /// Whether snap mode has already asked for the freeze that produces an
+    /// image to scan. One ask per enable: a user who unfreezes while holding
+    /// the marker means it, and re-freezing under them would be a fight.
+    pub(super) marker_snap_freeze_requested: bool,
     pub(super) active_screen_region: Option<ActiveScreenRegion>,
     pub(super) window_snap: Option<WindowSnapSession>,
     pub(super) next_screen_region_generation: u64,
@@ -302,6 +310,8 @@ impl StateData {
             screen_acquisition: ScreenAcquisitionRegistry::default(),
             zoom_waiter: ZoomWaiterRegistry::default(),
             active_eyedropper_source: None,
+            marker_snap_scan_token: None,
+            marker_snap_freeze_requested: false,
             active_screen_region: None,
             window_snap: None,
             next_screen_region_generation: 1,

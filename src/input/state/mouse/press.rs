@@ -529,6 +529,11 @@ impl InputState {
                     self.request_frozen_toggle();
                 }
                 self.sync_current_settings_for_tool(tool);
+                // The snap row is decided once, here. Re-deciding it per motion
+                // event would let a stroke jump between rows mid-drag, and a
+                // stroke that started off text would straighten the moment the
+                // pointer crossed some.
+                self.begin_marker_snap_drag(tool, x, y);
                 let drawing_thickness = self.thickness_for_tool(tool);
                 self.begin_pointer_drag(button, color);
                 self.state = DrawingState::Drawing {

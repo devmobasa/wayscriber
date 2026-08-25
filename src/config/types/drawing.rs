@@ -49,6 +49,15 @@ pub struct DrawingConfig {
     #[serde(default = "default_marker_opacity")]
     pub marker_opacity: f64,
 
+    /// Whether the marker starts in snap-to-text mode.
+    ///
+    /// Snapping reads the displayed screen image with Tesseract to find text
+    /// rows, so it needs `capture.enabled`, a transparent board, and a frozen
+    /// or zoomed screen. Wherever any of those is missing the marker simply
+    /// draws freehand.
+    #[serde(default = "default_marker_snap_to_text")]
+    pub marker_snap_to_text: bool,
+
     /// Whether shapes start filled when applicable
     #[serde(default = "default_fill_enabled")]
     pub default_fill_enabled: bool,
@@ -130,6 +139,7 @@ impl Default for DrawingConfig {
             default_eraser_mode: default_eraser_mode(),
             default_blur_style: default_blur_style(),
             marker_opacity: default_marker_opacity(),
+            marker_snap_to_text: default_marker_snap_to_text(),
             default_fill_enabled: default_fill_enabled(),
             polygon_sides: default_polygon_sides(),
             default_font_size: default_font_size(),
@@ -870,6 +880,12 @@ fn default_blur_style() -> BlurStyle {
 
 fn default_marker_opacity() -> f64 {
     0.32
+}
+
+/// Off by default: turning it on freezes the screen to read it, which is not
+/// something a fresh install should do the first time someone picks the marker.
+fn default_marker_snap_to_text() -> bool {
+    false
 }
 
 fn default_fill_enabled() -> bool {

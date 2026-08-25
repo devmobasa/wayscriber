@@ -41,6 +41,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::SelectStepMarkerTool
         | Action::SelectEraserTool
         | Action::ToggleEraserMode
+        | Action::ToggleMarkerSnapToText
         | Action::CycleBlurStyle
         | Action::SelectPenTool
         | Action::SelectLineTool

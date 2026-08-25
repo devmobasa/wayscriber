@@ -12,7 +12,7 @@ impl InputState {
         }
     }
 
-    fn current_canvas_scale(&self) -> f64 {
+    pub(crate) fn current_canvas_scale(&self) -> f64 {
         if self.zoom_active {
             self.zoom_scale.max(f64::MIN_POSITIVE)
         } else {
@@ -211,6 +211,8 @@ impl InputState {
     pub(crate) fn cancel_active_interaction(&mut self) {
         // A canceled interaction never leaves a dangling block-move drag.
         self.text_block_drag = None;
+        // Nor a snap row locked by a stroke that is being thrown away.
+        self.active_marker_snap_row = None;
         match &self.state {
             DrawingState::TextInput { .. } => {
                 self.cancel_text_input();

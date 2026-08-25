@@ -181,6 +181,15 @@ pub(crate) fn handle_drawing_or_idle_motion(
         RoutingOutcome::SideEffect(InteractionSideEffect::Pointer(
             PointerSideEffect::IdleEraserHover,
         ))
+    } else if matches!(state.state, DrawingState::Idle)
+        && state.update_marker_snap_hover_damage(canvas.x(), canvas.y())
+    {
+        // The snap I-beam follows the pointer, so an idle marker still repaints
+        // — but only over the rows the preview entered and left.
+        state.needs_redraw = true;
+        RoutingOutcome::SideEffect(InteractionSideEffect::Pointer(
+            PointerSideEffect::IdleMarkerSnapHover,
+        ))
     } else {
         RoutingOutcome::NoRoute(NoRouteReason::NoActiveInteraction)
     }

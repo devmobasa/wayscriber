@@ -55,6 +55,7 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
     input_state.polygon_sides = clamp_regular_sides(config.drawing.polygon_sides);
     input_state.blur_style = config.drawing.default_blur_style;
+    input_state.set_marker_snap_to_text(config.drawing.marker_snap_to_text);
     input_state.spotlight_dim_opacity = config.spotlight.dim_opacity;
     input_state.spotlight_feather = config.spotlight.feather;
     input_state.spotlight_magnification = config.spotlight.magnification;

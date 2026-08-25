@@ -11,6 +11,7 @@ pub mod modifiers;
 pub mod state;
 #[cfg(feature = "tablet-input")]
 pub mod tablet;
+pub mod text_snap;
 pub mod tool;
 
 // Re-export commonly used types at module level
@@ -32,6 +33,7 @@ pub use state::{
 #[cfg(feature = "tablet-input")]
 #[allow(unused_imports)]
 pub use tablet::TabletSettings;
+pub use text_snap::{SnappedTextRow, TextSnapLine, TextSnapMap};
 pub use tool::{DragBindableTool, DragTool, EraserMode, PerToolDrawingSettings, Tool};
 
 // Re-export for public API (unused internally but part of public interface)

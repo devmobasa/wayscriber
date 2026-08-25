@@ -11,6 +11,7 @@ mod history;
 mod ime;
 mod index;
 mod input_hud_controls;
+mod marker_snap;
 mod menus;
 pub(crate) mod modal;
 mod properties;
@@ -72,6 +73,7 @@ pub use eyedropper::{EyedropperCaptureSource, EyedropperUiState};
 pub(crate) use ime::build_text_input_preview;
 pub use ime::{ImeCompositionState, ImePreedit};
 #[allow(unused_imports)]
+pub use marker_snap::{MarkerSnapBlocker, MarkerSnapState};
 pub use menus::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,
 };

@@ -32,6 +32,10 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_toggle_eraser_mode")]
     pub toggle_eraser_mode: Vec<String>,
 
+    /// Toggle whether the marker snaps its stroke to a row of screen text.
+    #[serde(default = "default_toggle_marker_snap_to_text")]
+    pub toggle_marker_snap_to_text: Vec<String>,
+
     #[serde(default = "default_cycle_blur_style")]
     pub cycle_blur_style: Vec<String>,
 
@@ -102,6 +106,7 @@ impl Default for ToolKeybindingsConfig {
             select_step_marker_tool: default_select_step_marker_tool(),
             select_eraser_tool: default_select_eraser_tool(),
             toggle_eraser_mode: default_toggle_eraser_mode(),
+            toggle_marker_snap_to_text: default_toggle_marker_snap_to_text(),
             cycle_blur_style: default_cycle_blur_style(),
             select_pen_tool: default_select_pen_tool(),
             select_line_tool: default_select_line_tool(),

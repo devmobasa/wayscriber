@@ -85,6 +85,7 @@ fn action_serialization_matches_established_contract() {
         (Action::SelectStepMarkerTool, "select_step_marker_tool"),
         (Action::SelectEraserTool, "select_eraser_tool"),
         (Action::ToggleEraserMode, "toggle_eraser_mode"),
+        (Action::ToggleMarkerSnapToText, "toggle_marker_snap_to_text",),
         (Action::CycleBlurStyle, "cycle_blur_style"),
         (Action::SelectPenTool, "select_pen_tool"),
         (Action::SelectLineTool, "select_line_tool"),

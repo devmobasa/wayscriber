@@ -110,6 +110,7 @@ mod input_actions;
 mod input_hud;
 mod keybindings;
 pub(in crate::backend::wayland) use keybindings::queue_keybinding_edit;
+mod marker_snap;
 mod ocr;
 mod onboarding;
 mod pdf_export;
@@ -302,6 +303,10 @@ pub(super) struct WaylandState {
     /// Capacity-one screen text recognition. A busy controller reports
     /// busy rather than queuing a region the user has moved on from.
     pub(super) ocr: crate::ocr::OcrController,
+    /// Capacity-one text-row layout scans for the marker's snap mode. Separate
+    /// from `ocr` so a scan the user did not ask for can never make
+    /// `Copy text from screen` wait behind it.
+    pub(super) text_layout: crate::ocr::TextLayoutController,
     /// GTK toolbar frontend; `None` means the built-in bars are in charge.
     pub(super) gtk_toolbar: Option<crate::toolbar_gtk::GtkToolbarBridge>,
     pub(super) onboarding: crate::onboarding::OnboardingStore,

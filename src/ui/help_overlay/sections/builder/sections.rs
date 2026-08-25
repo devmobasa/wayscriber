@@ -111,6 +111,7 @@ pub(super) fn build_main_sections(
             action_row(bindings, Action::SelectBlurTool, NOT_BOUND_LABEL),
             action_row(bindings, Action::ToggleHighlightTool, NOT_BOUND_LABEL),
             action_row(bindings, Action::SelectMarkerTool, NOT_BOUND_LABEL),
+            action_row(bindings, Action::ToggleMarkerSnapToText, NOT_BOUND_LABEL),
             action_row(bindings, Action::SelectStepMarkerTool, NOT_BOUND_LABEL),
             action_row(bindings, Action::SelectEraserTool, NOT_BOUND_LABEL),
             row(

@@ -114,6 +114,13 @@ impl InputState {
             return None;
         };
 
+        // A snapped marker stroke is not append-only: its far end moves with
+        // the pointer and its near end moves too when the drag reverses, so
+        // damaging only the newest segment would leave the rest on screen.
+        if self.active_marker_snap_row.is_some() {
+            return None;
+        }
+
         let stroke_width = match tool.motion_behavior() {
             ToolMotionBehavior::NoPathAccumulation => return None,
             ToolMotionBehavior::AccumulatePath {

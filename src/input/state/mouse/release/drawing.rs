@@ -20,12 +20,22 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
     state.mark_draw_activity();
     let drawing_color = state.active_drag_color_or_tool(tool);
     let drawing_thickness = state.thickness_for_tool(tool);
+    // Releasing always drops the lock, including on the paths below that
+    // discard the stroke, so the next press decides its row from scratch.
+    let snap_row = state.end_marker_snap_drag();
     let pressure_preview_exceeds_final_width = pressure_preview_exceeds_final_freehand_width(
         release.points.len(),
         &release.point_thicknesses,
         drawing_thickness,
     );
-    let finished = if tool.polygon_template().is_some() {
+    let finished = if let Some(shape) = snap_row
+        .and_then(|row| snapped_marker_shape(state, row, release.start, release.end, drawing_color))
+    {
+        FinishedToolStroke::Shape {
+            shape,
+            usage: crate::input::tool::ToolUsage::default(),
+        }
+    } else if tool.polygon_template().is_some() {
         let snapshot = PolygonStrokeSnapshot {
             tool,
             start: release.start,
@@ -152,6 +162,27 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             );
         }
     }
+}
+
+/// The straight highlight a snapped drag commits, or `None` when the geometry
+/// could not be built and the caller should fall back to the freehand path.
+///
+/// A drag that never left its press point still produces a stroke: tapping a
+/// word to highlight it is the gesture people reach for first, and a zero-length
+/// segment with a round cap draws as a dot rather than as nothing.
+fn snapped_marker_shape(
+    state: &InputState,
+    row: crate::input::text_snap::SnappedTextRow,
+    start: (i32, i32),
+    end: (i32, i32),
+    color: crate::draw::Color,
+) -> Option<Shape> {
+    let (points, thick) = state.marker_snap_stroke_canvas(row, start, end)?;
+    Some(Shape::MarkerStroke {
+        points,
+        color: crate::input::tool::marker_color_with_opacity(color, state.marker_opacity),
+        thick,
+    })
 }
 
 fn pressure_preview_exceeds_final_freehand_width(

@@ -225,6 +225,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        ToggleMarkerSnapToText,
+        "Marker Snap To Text",
+        None,
+        "Lock marker strokes to a row of screen text",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
         CycleBlurStyle,
         "Cycle Blur Style",
         None,

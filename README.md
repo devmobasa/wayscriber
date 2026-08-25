@@ -117,6 +117,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 
 ### Drawing and editing
 - Freehand pen, highlighter, eraser (circle/rect)
+- Highlighter snap-to-text: locks each marker stroke to a row of screen text so highlights come out straight (<kbd>Ctrl+Shift+U</kbd>, or <kbd>H</kbd> again with the marker active; needs `tesseract` and a frozen screen, falls back to freehand)
 - Shapes: lines, rectangles, ellipses, polygons (with fill toggle)
 - Arrows with optional auto-numbered labels; step markers for walkthroughs
 - Blur tool with four styles: soften, pixelate, secure (flattens the region to one color), and black out

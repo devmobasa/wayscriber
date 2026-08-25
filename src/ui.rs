@@ -9,6 +9,7 @@ mod context_menu;
 mod eyedropper_loupe;
 mod help_overlay;
 mod input_hud;
+mod marker_snap_preview;
 mod measure_badge;
 mod ocr_scan;
 mod onboarding_card;
@@ -41,6 +42,8 @@ pub use help_overlay::{
     HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at, render_help_overlay,
 };
 pub use input_hud::{input_hud_geometry, render_input_hud};
+pub use marker_snap_preview::MarkerSnapPreview;
+pub(crate) use marker_snap_preview::{marker_snap_preview_bounds, render_marker_snap_preview};
 pub(crate) use measure_badge::{
     ShapeMeasureBadge, measure_shape_badge, shape_measure_badge_text_style,
 };

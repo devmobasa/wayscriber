@@ -120,6 +120,9 @@ select_step_marker_tool = []
 select_eraser_tool = ["D"]
 # Toggle eraser behavior mode
 toggle_eraser_mode = ["Ctrl+Shift+E"]
+# Toggle whether the marker snaps its stroke to a row of screen text.
+# Pressing select_marker_tool while the marker is already active does the same.
+toggle_marker_snap_to_text = ["Ctrl+Shift+U"]
 # Select the spotlight tool (unbound by default)
 select_spotlight_tool = []
 # Step the blur tool through blur/pixelate/secure/black-out (unbound by default)
@@ -1082,6 +1085,16 @@ default_blur_style = "gaussian"
 
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
+
+# Whether the marker starts in snap-to-text mode.
+#
+# Snapping runs Tesseract over the displayed screen image to find text rows,
+# then locks each marker stroke to the row under the pointer. It needs
+# `capture.enabled = true`, the `tesseract` binary, a transparent board, and a
+# frozen or zoomed screen to read; picking the marker with this on will freeze
+# the screen once to get one. Wherever any of that is missing the marker just
+# draws freehand.
+marker_snap_to_text = false
 
 # Default fill state for fill-capable shapes
 default_fill_enabled = false

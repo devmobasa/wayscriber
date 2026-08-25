@@ -98,6 +98,7 @@ define_action_binding_accessors! {
     SelectStepMarkerTool => tools.select_step_marker_tool,
     SelectEraserTool => tools.select_eraser_tool,
     ToggleEraserMode => tools.toggle_eraser_mode,
+    ToggleMarkerSnapToText => tools.toggle_marker_snap_to_text,
     CycleBlurStyle => tools.cycle_blur_style,
     SelectPenTool => tools.select_pen_tool,
     SelectLineTool => tools.select_line_tool,

@@ -406,6 +406,7 @@ impl WaylandState {
             .unwrap_or((mx, my));
 
         self.render_eraser_hover_halos(ctx, hover_mx, hover_my);
+        self.render_marker_snap_hover(ctx, hover_mx, hover_my);
 
         let provisional = self.input_state.provisional_tool_stroke(mx, my);
         let provisional_points = provisional_point_count(&provisional);

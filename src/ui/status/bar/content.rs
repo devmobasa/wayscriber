@@ -343,6 +343,14 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
                 true,
             ));
         }
+        // Marker snap says what it is currently able to do, not just that it is
+        // on: "waiting for a screen to read" and "snapping" both look like an
+        // enabled mode from the outside, and only one of them draws straight.
+        if tool == Tool::Marker
+            && let Some(label) = input_state.marker_snap_state().status_text()
+        {
+            pieces.push(StatusHudPiece::text(label.to_string(), None, true));
+        }
     }
 
     // Hidden-toolbar hint: when every toolbar surface is gone (F9 toggle or

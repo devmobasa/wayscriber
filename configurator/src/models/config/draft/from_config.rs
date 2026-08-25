@@ -80,6 +80,7 @@ impl ConfigDraft {
             drawing_font_style: style_value,
             drawing_text_background_enabled: config.drawing.text_background_enabled,
             drawing_default_fill_enabled: config.drawing.default_fill_enabled,
+            drawing_marker_snap_to_text: config.drawing.marker_snap_to_text,
             drawing_drag_tool: ToolOption::from_drag_bindable_tool(config.drawing.drag_tool),
             drawing_shift_drag_tool: ToolOption::from_drag_bindable_tool(
                 config.drawing.shift_drag_tool,

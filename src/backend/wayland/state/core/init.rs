@@ -117,6 +117,7 @@ impl WaylandState {
         let window_query =
             RuntimeOperationController::new(runtime_operation_ids, runtime_wake.clone());
         let ocr = crate::ocr::OcrController::new(runtime_wake.clone());
+        let text_layout = crate::ocr::TextLayoutController::new(runtime_wake.clone());
 
         Self {
             registry_state,
@@ -156,6 +157,7 @@ impl WaylandState {
             pending_text_paste: Default::default(),
             window_query,
             ocr,
+            text_layout,
             gtk_toolbar: None,
             onboarding,
             config_edits: super::super::super::config_edits::ConfigEditWorker::new(

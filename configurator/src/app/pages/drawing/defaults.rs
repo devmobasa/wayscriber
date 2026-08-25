@@ -77,5 +77,13 @@ pub(super) fn build(page: &mut PageBuilder) {
             "",
             |app| app.draft.drawing_default_fill_enabled,
             |value| Message::ToggleChanged(ToggleField::DrawingFillEnabled, value),
+        )
+        .switch_row(
+            "Marker snaps to screen text",
+            "Locks marker strokes to a detected text row. Needs Tesseract, \
+             screen capture, a transparent board, and a frozen or zoomed screen; \
+             falls back to freehand everywhere else.",
+            |app| app.draft.drawing_marker_snap_to_text,
+            |value| Message::ToggleChanged(ToggleField::DrawingMarkerSnapToText, value),
         );
 }

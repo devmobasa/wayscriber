@@ -114,6 +114,21 @@ pub struct InputState {
     pub eraser_mode: EraserMode,
     /// Opacity multiplier for marker tool strokes
     pub marker_opacity: f64,
+    /// What the marker's snap-to-text mode is currently able to do.
+    pub(crate) marker_snap_state: crate::input::state::MarkerSnapState,
+    /// Detected rows of screen text, in logical screen coordinates. Empty
+    /// whenever the marker draws freehand, for any of the reasons in
+    /// `MarkerSnapState`.
+    pub(crate) marker_text_snap: crate::input::text_snap::TextSnapMap,
+    /// Set when the backend should run a text layout scan.
+    pub(crate) pending_marker_snap_scan: bool,
+    /// The row the in-flight marker drag locked onto at press time. A drag that
+    /// started away from text holds `None` for its whole life so the stroke
+    /// cannot straighten halfway through.
+    pub(crate) active_marker_snap_row: Option<crate::input::text_snap::SnappedTextRow>,
+    /// Canvas bounds the snap hover preview last occupied, so moving to another
+    /// row damages the one it left instead of trailing across the screen.
+    pub(crate) last_marker_snap_preview_bounds: Option<crate::util::Rect>,
     /// How the blur tool obscures the region it covers
     pub blur_style: BlurStyle,
     /// Alpha of the dim layer outside every spotlight

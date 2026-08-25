@@ -11,11 +11,11 @@ use super::{
     OcrFailure, OcrLanguages, OcrTextPublisher, RecognizedOutput, RecognizedText, TextRecognizer,
 };
 
-const TESSERACT_PROGRAM: &str = "tesseract";
+pub(super) const TESSERACT_PROGRAM: &str = "tesseract";
 const TESSERACT_TIMEOUT: Duration = Duration::from_secs(30);
 /// Recognized text is plain UTF-8; 4 MiB is far past any plausible screen
 /// region and keeps a runaway engine from filling memory.
-const TESSERACT_STDOUT_CAP: usize = 4 * 1024 * 1024;
+pub(super) const TESSERACT_STDOUT_CAP: usize = 4 * 1024 * 1024;
 
 pub(crate) struct TesseractRecognizer;
 
@@ -35,7 +35,7 @@ impl TextRecognizer for TesseractRecognizer {
 
 /// Run one OCR operation with a securely created PNG that cannot outlive the
 /// stack frame, including while unwinding from a panic.
-fn with_temporary_png<T>(
+pub(super) fn with_temporary_png<T>(
     png: &[u8],
     operation: impl FnOnce(&Path) -> Result<T, OcrFailure>,
 ) -> Result<T, OcrFailure> {
@@ -136,7 +136,7 @@ fn tesseract_arguments<'a>(input: &'a Path, languages: &'a OcrLanguages) -> Vec<
 /// A run that outgrows the stdout cap is rejected by the broker rather than
 /// truncated, so "too much text" arrives as a transport error and has to be
 /// separated from a broker that is simply unavailable.
-fn classify_broker_error(error: &anyhow::Error) -> OcrFailure {
+pub(super) fn classify_broker_error(error: &anyhow::Error) -> OcrFailure {
     if format!("{error:#}").contains(STDOUT_CAP_EXCEEDED) {
         OcrFailure::OutputTooLarge
     } else {
@@ -144,7 +144,7 @@ fn classify_broker_error(error: &anyhow::Error) -> OcrFailure {
     }
 }
 
-fn classify_stderr(stderr: &str, languages: &OcrLanguages) -> OcrFailure {
+pub(super) fn classify_stderr(stderr: &str, languages: &OcrLanguages) -> OcrFailure {
     let lowered = stderr.to_ascii_lowercase();
     if lowered.contains("failed loading language")
         || lowered.contains("could not load any languages")
@@ -163,7 +163,7 @@ fn classify_stderr(stderr: &str, languages: &OcrLanguages) -> OcrFailure {
 ///
 /// Checked before invoking so "not installed" is its own actionable message
 /// rather than a generic spawn failure.
-fn program_on_path(program: &str) -> bool {
+pub(super) fn program_on_path(program: &str) -> bool {
     std::env::var_os("PATH").is_some_and(|path| program_in_search_path(program, &path))
 }
 

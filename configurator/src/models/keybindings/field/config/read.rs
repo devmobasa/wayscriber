@@ -43,6 +43,7 @@ impl KeybindingField {
             Self::SelectPenTool => &config.tools.select_pen_tool,
             Self::SelectEraserTool => &config.tools.select_eraser_tool,
             Self::ToggleEraserMode => &config.tools.toggle_eraser_mode,
+            Self::ToggleMarkerSnapToText => &config.tools.toggle_marker_snap_to_text,
             Self::SelectMarkerTool => &config.tools.select_marker_tool,
             Self::SelectStepMarkerTool => &config.tools.select_step_marker_tool,
             Self::SelectLineTool => &config.tools.select_line_tool,

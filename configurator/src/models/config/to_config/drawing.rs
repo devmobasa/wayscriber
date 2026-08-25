@@ -64,6 +64,7 @@ impl ConfigDraft {
         config.drawing.font_style = self.drawing_font_style.clone();
         config.drawing.text_background_enabled = self.drawing_text_background_enabled;
         config.drawing.default_fill_enabled = self.drawing_default_fill_enabled;
+        config.drawing.marker_snap_to_text = self.drawing_marker_snap_to_text;
         config.drawing.drag_tool = legacy_tool(
             self.drawing_drag_tools.left.drag_tool,
             DragBindableTool::Pen,

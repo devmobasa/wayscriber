@@ -110,6 +110,7 @@ pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSecti
         | Action::SelectPenTool
         | Action::SelectEraserTool
         | Action::ToggleEraserMode
+        | Action::ToggleMarkerSnapToText
         | Action::SelectMarkerTool
         | Action::SelectStepMarkerTool
         | Action::SelectLineTool

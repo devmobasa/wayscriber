@@ -154,6 +154,9 @@ impl ConfigDraft {
             ToggleField::DrawingFillEnabled => {
                 self.drawing_default_fill_enabled = value;
             }
+            ToggleField::DrawingMarkerSnapToText => {
+                self.drawing_marker_snap_to_text = value;
+            }
             ToggleField::PerformanceVsync => {
                 self.set_performance_bool(PerformanceFieldId::EnableVsync, value);
             }

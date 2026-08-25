@@ -57,6 +57,23 @@ impl InputState {
             return ProvisionalToolStroke::None;
         };
 
+        // A locked snap row replaces the accumulated path entirely: the preview
+        // has to be the stroke that will be committed, or the highlight jumps
+        // into place on release.
+        if let Some(row) = self.active_marker_snap_row
+            && let Some((points, thick)) =
+                self.marker_snap_stroke_canvas(row, (*start_x, *start_y), (current_x, current_y))
+        {
+            return ProvisionalToolStroke::Shape(Shape::MarkerStroke {
+                points,
+                color: crate::input::tool::marker_color_with_opacity(
+                    self.active_drag_color_or_current(),
+                    self.marker_opacity,
+                ),
+                thick,
+            });
+        }
+
         if tool.polygon_template().is_some() {
             let snapshot = PolygonProvisionalSnapshot {
                 tool: *tool,

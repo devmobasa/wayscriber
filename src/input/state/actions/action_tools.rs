@@ -8,6 +8,14 @@ use super::super::{InputState, PendingToolbarPersistence};
 impl InputState {
     pub(in crate::input::state) fn handle_tool_action(&mut self, action: Action) -> bool {
         if let Some(tool) = Tool::from_select_action(action) {
+            // Pressing the marker's own key while it is already in hand flips
+            // snap mode, the way pressing a shape tool again flips its variant.
+            // Re-selecting the tool you are already holding has no other
+            // meaning, so the second press is free to carry this one.
+            if tool == Tool::Marker && self.active_tool() == Tool::Marker {
+                self.announce_marker_snap_toggle();
+                return true;
+            }
             if tool == Tool::Highlight {
                 // Picking the highlight tool switches the click highlight on
                 // as a side effect, which is the same durable choice the
@@ -44,6 +52,9 @@ impl InputState {
             }
             Action::SelectSpotlightTool => {
                 self.set_tool_override(Some(Tool::Spotlight));
+            }
+            Action::ToggleMarkerSnapToText => {
+                self.announce_marker_snap_toggle_with_tool();
             }
             Action::CycleBlurStyle => {
                 if self.cycle_blur_style() {
