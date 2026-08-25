@@ -4,7 +4,8 @@ use crate::render_profiles::RenderColorProfile;
 use crate::util::Rect;
 
 use super::page::{
-    CanvasExportBackdropSnapshot, CanvasPageExportSnapshot, SpotlightPassSnapshot, draw_canvas_page,
+    CanvasExportBackdropSnapshot, CanvasPageExportSnapshot, SpotlightPassSnapshot,
+    draw_canvas_page, validate_spotlight_magnifier_source,
 };
 
 #[derive(Debug, Clone)]
@@ -31,7 +32,25 @@ pub struct BoardExportSnapshot {
     pub frame: Frame,
 }
 
+impl CanvasExportSnapshot {
+    /// Cheap main-thread preflight for a source requirement that would
+    /// otherwise fail only after the render worker starts.
+    ///
+    /// Canvas PNG export deliberately excludes frozen and zoom desktop pixels,
+    /// so a transparent board can never gain a source here: the only way out is
+    /// an opaque board background, and the message must not suggest otherwise.
+    pub fn validate_spotlight_source(&self, subject: &str) -> Result<(), CaptureError> {
+        validate_spotlight_magnifier_source(
+            &self.board.frame,
+            &self.backdrop,
+            subject,
+            "give the board a solid background first, because canvas PNG export never includes frozen or zoom desktop pixels",
+        )
+    }
+}
+
 pub fn render_canvas_png(snapshot: &CanvasExportSnapshot) -> Result<RenderedImage, CaptureError> {
+    snapshot.validate_spotlight_source("Canvas")?;
     let surface = render_canvas_surface(snapshot)?;
     encode_surface_png(&surface, "canvas")
 }

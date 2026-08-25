@@ -108,6 +108,7 @@ pub(crate) struct ToolbarSliderSpec {
     pub(crate) min: f64,
     pub(crate) max: f64,
     pub(crate) step: Option<f64>,
+    pub(crate) snap_to_step: bool,
 }
 
 impl ToolbarSliderSpec {
@@ -115,26 +116,31 @@ impl ToolbarSliderSpec {
         min: 8.0,
         max: 72.0,
         step: Some(2.0),
+        snap_to_step: false,
     };
     pub(crate) const DELAY_SECONDS: Self = Self {
         min: 0.05,
         max: 5.0,
         step: None,
+        snap_to_step: false,
     };
     pub(crate) const MARKER_OPACITY: Self = Self {
         min: 0.05,
         max: 0.9,
         step: Some(0.05),
+        snap_to_step: false,
     };
     pub(crate) const SPOTLIGHT_MAGNIFICATION: Self = Self {
         min: crate::draw::MIN_SPOTLIGHT_MAGNIFICATION,
         max: crate::draw::MAX_SPOTLIGHT_MAGNIFICATION,
         step: Some(crate::draw::SPOTLIGHT_MAGNIFICATION_STEP),
+        snap_to_step: true,
     };
     pub(crate) const THICKNESS: Self = Self {
         min: MIN_STROKE_THICKNESS,
         max: MAX_STROKE_THICKNESS,
         step: Some(1.0),
+        snap_to_step: false,
     };
 
     pub(crate) fn clamp(self, value: f64) -> f64 {
@@ -143,6 +149,9 @@ impl ToolbarSliderSpec {
 
     pub(crate) fn normalize_value(self, value: f64) -> f64 {
         let clamped = self.clamp(value);
+        if !self.snap_to_step {
+            return clamped;
+        }
         let Some(step) = self.step.filter(|step| step.is_finite() && *step > 0.0) else {
             return clamped;
         };
@@ -212,6 +221,7 @@ mod tests {
             min: 10.0,
             max: 20.0,
             step: None,
+            snap_to_step: false,
         };
 
         assert_close(spec.t_from_value(10.0), 0.0);
@@ -227,6 +237,7 @@ mod tests {
             min: 10.0,
             max: 20.0,
             step: None,
+            snap_to_step: false,
         };
 
         assert_close(spec.value_from_t(0.0), 10.0);
@@ -256,11 +267,28 @@ mod tests {
     }
 
     #[test]
+    fn existing_sliders_remain_continuous() {
+        let slider = ToolbarSlider {
+            target: ToolbarSliderTarget::Thickness,
+            spec: ToolbarSliderSpec::THICKNESS,
+            value: 1.0,
+        };
+
+        match slider.event_for_value(2.13) {
+            ToolbarEvent::SetThickness(value) => assert_close(value, 2.13),
+            other => panic!("unexpected event: {other:?}"),
+        }
+        let t = ToolbarSliderSpec::THICKNESS.t_from_value(2.13);
+        assert_close(ToolbarSliderSpec::THICKNESS.value_from_t(t), 2.13);
+    }
+
+    #[test]
     fn pointer_mapping_uses_hit_rect_not_visual_knob_travel() {
         let spec = ToolbarSliderSpec {
             min: 10.0,
             max: 20.0,
             step: None,
+            snap_to_step: false,
         };
 
         assert_close(spec.value_from_pointer_x(100.0, 100.0, 200.0), 10.0);
@@ -276,6 +304,7 @@ mod tests {
             min: 10.0,
             max: 20.0,
             step: None,
+            snap_to_step: false,
         };
 
         assert_close(spec.knob_center_x(100.0, 200.0, 8.0, 10.0), 108.0);
@@ -306,6 +335,7 @@ mod tests {
                 min: 10.0,
                 max: 20.0,
                 step: None,
+                snap_to_step: false,
             },
             value: 10.0,
         };

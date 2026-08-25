@@ -149,6 +149,12 @@ pub(super) fn handle_pending_actions(
     }
     handle_frozen_toggle(state);
     state.drain_pending_board_runtime_ui_actions();
+    if state
+        .input_state
+        .take_pending_spotlight_magnifier_feedback()
+    {
+        state.show_spotlight_magnifier_feedback_if_unavailable();
+    }
 
     if let Some(action) = state.input_state.take_pending_backend_action() {
         match action {

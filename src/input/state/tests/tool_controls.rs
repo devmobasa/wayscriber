@@ -348,6 +348,22 @@ fn toolbar_spotlight_magnification_clamps_and_updates_the_snapshot() {
 }
 
 #[test]
+fn changing_the_next_shape_default_does_not_warn_about_sources() {
+    let mut state = create_test_input_state();
+    state.spotlight_magnification = 1.0;
+
+    // The slider changes what the *next* Spotlight will use. No Spotlight has
+    // been created or edited, so there is no action to warn about; the style
+    // control's inline unavailable state carries this case, and a toast here
+    // would fire on every step of a slider drag.
+    assert!(state.set_spotlight_magnification(2.0));
+    assert!(!state.take_pending_spotlight_magnifier_feedback());
+
+    assert!(state.set_spotlight_magnification(1.0));
+    assert!(!state.take_pending_spotlight_magnifier_feedback());
+}
+
+#[test]
 fn toolbar_context_exposes_polygon_shape_controls() {
     let mut state = create_test_input_state();
 

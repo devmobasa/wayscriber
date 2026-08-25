@@ -137,6 +137,7 @@ impl WaylandState {
             spotlight_dimmed_last_frame: false,
             spotlight_magnifier_scratch: Default::default(),
             spotlight_magnifier_warning_active: false,
+            spotlight_magnifier_page_warned_source: None,
             config,
             runtime_ui,
             runtime_ui_unavailable,

@@ -4,6 +4,7 @@ use crate::config::{PdfExportConfig, PdfFitMode, PdfOrientation, PdfPageSize};
 use super::page::{
     CanvasExportBackdropSnapshot, CanvasExportRect, CanvasPageExportSnapshot, ExportBackdrop,
     draw_canvas_page_region, frame_has_magnified_spotlight, paint_pdf_page_background,
+    validate_spotlight_magnifier_source,
 };
 use super::pdf_labels::render_pdf_label;
 
@@ -23,6 +24,30 @@ pub struct PdfPageExportSnapshot {
     pub page: CanvasPageExportSnapshot,
     pub metadata: PdfPageMetadata,
     pub layout: PdfPageLayout,
+}
+
+impl BoardPdfExportSnapshot {
+    /// Validates every page before a document worker is submitted and names
+    /// the exact board/page whose retained source is incomplete.
+    ///
+    /// A transparent PDF page does have a way to gain a source, unlike a canvas
+    /// PNG: `[export.pdf] transparent_background = "desktop"` captures the
+    /// desktop behind the overlay for exactly these pages.
+    pub fn validate_spotlight_sources(&self) -> Result<(), CaptureError> {
+        for page in &self.pages {
+            let subject = format!(
+                "Board '{}', {}",
+                page.metadata.board_name, page.metadata.page_name_label
+            );
+            validate_spotlight_magnifier_source(
+                &page.page.frame,
+                &page.page.backdrop,
+                &subject,
+                "give the page a solid board background, or set [export.pdf] transparent_background = \"desktop\" to capture one",
+            )?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,6 +130,7 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
             "Board PDF export requires at least one page".to_string(),
         ));
     }
+    snapshot.validate_spotlight_sources()?;
 
     let first = snapshot.pages[0].layout;
     validate_page_size(first.page_width, first.page_height)?;
@@ -140,7 +166,9 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
                 layout.source_rect,
                 layout.destination_rect,
                 paint_content_backdrop,
-                (1, 1),
+                // A vector page has no raster size to fall back on, and it is
+                // only taken when the page holds no magnified Spotlight.
+                None,
             )?;
         }
         render_pdf_label(
@@ -193,14 +221,11 @@ fn render_magnified_page_raster(
             height: f64::from(height),
         },
         true,
-        (width as u32, height as u32),
+        Some((width as u32, height as u32)),
     )?;
     drop(raster_ctx);
 
-    pdf_ctx.save().map_err(|err| {
-        CaptureError::ImageError(format!("Failed to prepare magnified PDF page: {err}"))
-    })?;
-    let painted = (|| {
+    crate::draw::with_saved_state(pdf_ctx, || {
         pdf_ctx.rectangle(
             layout.destination_rect.x,
             layout.destination_rect.y,
@@ -215,11 +240,8 @@ fn render_magnified_page_raster(
         );
         pdf_ctx.set_source_surface(&surface, 0.0, 0.0)?;
         pdf_ctx.paint()
-    })();
-    let restored = pdf_ctx.restore();
-    painted.and(restored).map_err(|err| {
-        CaptureError::ImageError(format!("Failed to paint magnified PDF page: {err}"))
     })
+    .map_err(|err| CaptureError::ImageError(format!("Failed to paint magnified PDF page: {err}")))
 }
 
 fn checked_raster_dimensions(source: CanvasExportRect) -> Result<(i32, i32), CaptureError> {

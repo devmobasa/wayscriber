@@ -25,12 +25,13 @@ pub use frame::{DrawnShape, Frame, ShapeId};
 #[allow(unused_imports)]
 pub(crate) use render::render_eraser_stroke;
 pub(crate) use render::render_sticky_note_preview;
+pub(crate) use render::with_saved_state;
 #[allow(unused_imports)]
 pub use render::{
-    BlurRectParams, EraserReplayContext, SpotlightMagnifierMetrics, SpotlightMagnifierOutcome,
-    SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass, SpotlightRegion,
-    SpotlightSnapshotStrategy, caret_line_width, caret_outline_width, render_blur_rect,
-    render_board_background, render_click_highlight, render_freehand_borrowed,
+    BlurRectParams, EraserReplayContext, IMMUTABLE_RASTER_SOURCE_TOKEN, SpotlightMagnifierMetrics,
+    SpotlightMagnifierOutcome, SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass,
+    SpotlightRegion, SpotlightSnapshotStrategy, caret_line_width, caret_outline_width,
+    render_blur_rect, render_board_background, render_click_highlight, render_freehand_borrowed,
     render_marker_stroke_borrowed, render_selection_halo, render_selection_handles, render_shape,
     render_spotlight_magnification_pass, render_spotlight_pass, render_sticky_note, render_text,
     selection_handle_rects, spotlight_regions_for_frame, sticky_note_foreground,
@@ -44,7 +45,8 @@ pub use shape::{
 };
 pub use spotlight::{
     DEFAULT_SPOTLIGHT_MAGNIFICATION, MAX_SPOTLIGHT_MAGNIFICATION, MIN_SPOTLIGHT_MAGNIFICATION,
-    SPOTLIGHT_MAGNIFICATION_STEP, default_spotlight_magnification, format_spotlight_magnification,
+    SPOTLIGHT_MAGNIFICATION_STEP, default_spotlight_magnification,
+    deserialize_spotlight_magnification, format_spotlight_magnification,
     normalize_spotlight_magnification, spotlight_magnification_is_active,
 };
 

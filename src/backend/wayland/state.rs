@@ -217,8 +217,13 @@ pub(super) struct WaylandState {
     pub(super) spotlight_dimmed_last_frame: bool,
     /// Reused bounded Cairo snapshots for Spotlight loupe rendering.
     pub(super) spotlight_magnifier_scratch: crate::draw::SpotlightMagnifierScratch,
-    /// Deduplicates the live missing-source/allocation warning.
+    /// Deduplicates the live render-failure warning.
     pub(super) spotlight_magnifier_warning_active: bool,
+    /// Availability that the standing "this page cannot magnify" warning was
+    /// last shown for, so loading or switching pages warns once rather than
+    /// once per frame, and warns again once availability changes.
+    pub(super) spotlight_magnifier_page_warned_source:
+        Option<crate::draw::SpotlightMagnifierSource>,
 
     // Configuration
     pub(super) config: Config,

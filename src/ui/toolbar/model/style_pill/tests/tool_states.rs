@@ -55,6 +55,54 @@ fn spotlight_state_is_a_magnification_slider_without_stroke_controls() {
 }
 
 #[test]
+fn spotlight_state_exposes_an_inline_missing_source_hint() {
+    let mut snapshot = snapshot_for_tool(Tool::Spotlight);
+    snapshot.spotlight_magnification = 2.25;
+    snapshot.spotlight_magnifier_source =
+        Some(crate::draw::SpotlightMagnifierSource::IncompleteTransparent);
+
+    let slider = StylePillControl::SpotlightMagnificationSlider;
+    assert_eq!(
+        slider.status_text(&snapshot),
+        Some("Freeze screen to preview")
+    );
+
+    snapshot.spotlight_magnifier_source =
+        Some(crate::draw::SpotlightMagnifierSource::CompleteSolid);
+    assert_eq!(slider.status_text(&snapshot), None);
+
+    // No backend has answered, so the control says nothing rather than
+    // guessing that the canvas is or is not magnifiable.
+    snapshot.spotlight_magnifier_source = None;
+    assert_eq!(slider.status_text(&snapshot), None);
+}
+
+#[test]
+fn a_compact_strip_drops_the_pill_and_with_it_the_unavailable_status() {
+    // The status label has no compact presentation of its own, and needs none:
+    // under that width pressure the whole pill yields, so nothing downstream
+    // has to decide what to do with a hint it cannot fit.
+    let mut snapshot = snapshot_for_tool(Tool::Spotlight);
+    snapshot.spotlight_magnification = 2.25;
+    snapshot.spotlight_magnifier_source =
+        Some(crate::draw::SpotlightMagnifierSource::IncompleteTransparent);
+
+    let mut compact = plan();
+    compact.compact = true;
+
+    assert_eq!(
+        StylePillSpec::state_of(&snapshot, &compact),
+        StylePillState::Hidden
+    );
+    assert!(
+        StylePillSpec::build(&snapshot, &compact)
+            .controls()
+            .is_empty(),
+        "a hidden pill materializes no control that could carry a status"
+    );
+}
+
+#[test]
 fn minimized_and_micro_strips_hide_the_pill() {
     let mut minimized = snapshot();
     minimized.top_minimized = true;
@@ -431,4 +479,56 @@ fn settings_overrides_extend_the_stroke_state() {
     assert!(ids.contains(&"top.style.opacity".to_string()));
     assert!(ids.contains(&"top.style.font-size".to_string()));
     assert!(ids.contains(&"top.style.font-family".to_string()));
+}
+
+#[test]
+fn the_docked_selection_control_reports_on_the_selected_shape_not_the_tool_default() {
+    let mut snapshot = snapshot_for_tool(Tool::Select);
+    // The next Spotlight the user draws would be unmagnified...
+    snapshot.spotlight_magnification = crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION;
+    // ...but the shape they have selected is not.
+    snapshot.selection_spotlight_magnification = Some(3.0);
+    snapshot.spotlight_magnifier_source =
+        Some(crate::draw::SpotlightMagnifierSource::IncompleteTransparent);
+    snapshot
+        .selection_properties
+        .push(crate::input::SelectionPropertyEntry {
+            label: "Magnification".to_string(),
+            value: "3x".to_string(),
+            kind: crate::input::SelectionPropertyKind::SpotlightMagnification,
+            disabled: false,
+        });
+
+    let stepper = StylePillControl::SelectionStepper(
+        crate::input::SelectionPropertyKind::SpotlightMagnification,
+    );
+    assert!(stepper.has_status_slot());
+    assert_eq!(
+        stepper.status_text(&snapshot),
+        Some("Freeze screen to preview"),
+        "a magnified selection needs the hint even when the tool default is 1x"
+    );
+
+    // The slider tracks the tool default, which is not magnified, so it stays quiet.
+    assert_eq!(
+        StylePillControl::SpotlightMagnificationSlider.status_text(&snapshot),
+        None
+    );
+
+    // An unmagnified selection has nothing to warn about either.
+    snapshot.selection_spotlight_magnification = Some(crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION);
+    assert_eq!(stepper.status_text(&snapshot), None);
+}
+
+#[test]
+fn controls_without_a_magnification_readout_have_no_status_slot() {
+    for control in [
+        StylePillControl::ThicknessSlider,
+        StylePillControl::OpacitySlider,
+        StylePillControl::FontSizeSlider,
+        StylePillControl::ColorChip,
+    ] {
+        assert!(!control.has_status_slot(), "{control:?}");
+        assert_eq!(control.status_text(&snapshot()), None, "{control:?}");
+    }
 }

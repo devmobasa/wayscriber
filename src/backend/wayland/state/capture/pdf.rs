@@ -170,6 +170,10 @@ impl WaylandState {
         operation: ImageOperationKind,
         exit_on_success: bool,
     ) {
+        if let Err(error) = snapshot.validate_spotlight_sources() {
+            self.report_export_preflight_failure(&error, operation, "capture.pdf");
+            return;
+        }
         // Render on the capture worker, not here: an all-boards export
         // renders every page of every board plus PDF encoding, which stalled
         // event dispatch for seconds on multi-board sessions.

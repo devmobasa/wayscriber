@@ -191,7 +191,7 @@ pub(crate) fn render_canvas_region_png(
         working_source_rect,
         destination,
         false,
-        (working_width, working_height),
+        Some((working_width, working_height)),
     )?;
     drop(ctx);
 

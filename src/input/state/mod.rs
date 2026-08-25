@@ -6,6 +6,7 @@ pub(crate) mod interaction;
 mod mouse;
 mod render;
 mod spotlight;
+pub(crate) use spotlight::SpotlightFrameRegions;
 #[cfg(test)]
 mod tests;
 

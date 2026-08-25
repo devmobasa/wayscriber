@@ -44,6 +44,10 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn toolbar_snapshot(&self) -> ToolbarSnapshot {
         let hints = ToolbarBindingHints::from_input_state(&self.input_state);
         let mut snapshot = ToolbarSnapshot::from_input_with_bindings(&self.input_state, hints);
+        // Resolved here rather than read from the last rendered frame: a
+        // toolbar snapshot is built between canvas renders, and before the
+        // first one, so a published value would lag or not exist yet.
+        snapshot.spotlight_magnifier_source = Some(self.current_spotlight_magnifier_source());
         populate_session_snapshot(&mut snapshot, self.session.options());
         snapshot.runtime_ui_persistence = self
             .runtime_ui

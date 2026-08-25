@@ -70,15 +70,14 @@ pub(crate) struct ToolProfile {
 }
 
 impl ToolProfile {
+    /// Named as an exclusion, not an allowlist: a tool group added later
+    /// should inherit the thickness control by default, the way every group
+    /// but these two does. Spotlight sizes itself by drag, so a thickness
+    /// slider would control nothing.
     pub(crate) fn needs_thickness_control(self) -> bool {
-        matches!(
+        !matches!(
             self.control_group,
-            ToolControlGroup::Stroke
-                | ToolControlGroup::Marker
-                | ToolControlGroup::Eraser
-                | ToolControlGroup::Shape
-                | ToolControlGroup::Arrow
-                | ToolControlGroup::StepMarker
+            ToolControlGroup::None | ToolControlGroup::Spotlight
         )
     }
 

@@ -219,6 +219,12 @@ impl InputState {
     }
 
     /// Sets the magnification stored on newly drawn spotlights.
+    ///
+    /// Deliberately requests no warning feedback: this changes what the *next*
+    /// Spotlight will use, and no Spotlight has been created or edited yet.
+    /// The style control's inline unavailable state already reports the
+    /// default against the current surface, and toasting here would fire
+    /// repeatedly while the user drags the slider.
     pub fn set_spotlight_magnification(&mut self, magnification: f64) -> bool {
         let normalized = ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION.normalize_value(
             crate::draw::normalize_spotlight_magnification(magnification),

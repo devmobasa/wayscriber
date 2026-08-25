@@ -21,10 +21,6 @@ fn format_pt(value: f64) -> String {
     format!("{value:.0}pt")
 }
 
-fn format_factor(value: f64) -> String {
-    crate::draw::format_spotlight_magnification(value)
-}
-
 /// Pill button on the shared `sized_button` chassis: non-focusable and
 /// releasing window keyboard focus on click, like every other top-bar
 /// control. The GTK bars must never retain keyboard focus — the popups the
@@ -37,6 +33,37 @@ fn pill_button(label: &str, width: f64, height: f64) -> gtk4::Button {
 }
 
 impl TopBar {
+    /// Appends the inline unavailable-state label for a control that can carry
+    /// one, and registers its updater.
+    ///
+    /// The label is built even while the status is empty, and hidden instead of
+    /// omitted: the bar only rebuilds when the pill's control list changes, so a
+    /// slot that appears later has to already exist.
+    fn append_style_status_label(
+        &mut self,
+        pill: &gtk4::Box,
+        control: model::StylePillControl,
+        snapshot: &ToolbarSnapshot,
+        gap_px: i32,
+    ) {
+        if !control.has_status_slot() {
+            return;
+        }
+        let initial = control.status_text(snapshot);
+        let status = gtk4::Label::new(initial);
+        status.add_css_class("hint");
+        status.set_valign(gtk4::Align::Center);
+        status.set_visible(initial.is_some());
+        set_semantic_widget_id(&status, &format!("{}.status", control.id()));
+        status.set_margin_end(gap_px.max(0));
+        pill.append(&status);
+        self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+            let text = control.status_text(snapshot);
+            status.set_label(text.unwrap_or_default());
+            status.set_visible(text.is_some());
+        }));
+    }
+
     pub(super) fn build_style_pill(&mut self, snapshot: &ToolbarSnapshot, plan: &TopStripPlan) {
         let spec = model::StylePillSpec::build(snapshot, plan);
         if spec.controls().is_empty() {
@@ -132,7 +159,9 @@ impl TopBar {
                     let format = match control {
                         model::StylePillControl::ThicknessSlider => format_px as fn(f64) -> String,
                         model::StylePillControl::OpacitySlider => format_percent,
-                        model::StylePillControl::SpotlightMagnificationSlider => format_factor,
+                        model::StylePillControl::SpotlightMagnificationSlider => {
+                            crate::draw::format_spotlight_magnification
+                        }
                         _ => format_pt,
                     };
                     let sender = self.feedback.clone();
@@ -174,6 +203,7 @@ impl TopBar {
                         };
                         slider.set_value(value);
                     }));
+                    self.append_style_status_label(&pill, control, snapshot, px(gap));
                 }
                 model::StylePillControl::ThicknessValue
                 | model::StylePillControl::FontSizeValue => {
@@ -319,6 +349,10 @@ impl TopBar {
                             button.set_sensitive(enabled);
                         }
                     }));
+                    // The docked control reports on the selected shape's own
+                    // factor, so it needs the same unavailable state the
+                    // slider has.
+                    self.append_style_status_label(&pill, control, snapshot, px(gap));
                 }
                 model::StylePillControl::FontFamilySegment
                 | model::StylePillControl::EraserModeSegment => {

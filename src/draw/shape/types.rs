@@ -251,7 +251,10 @@ pub enum Shape {
         /// Vertical radius in pixels
         ry: i32,
         /// Per-shape loupe factor. 1.0 preserves the historical bright opening.
-        #[serde(default = "crate::draw::default_spotlight_magnification")]
+        #[serde(
+            default = "crate::draw::default_spotlight_magnification",
+            deserialize_with = "crate::draw::deserialize_spotlight_magnification"
+        )]
         magnification: f64,
     },
     /// Numbered step marker bubble.

@@ -1370,7 +1370,7 @@ mappings = [
 - Set `apply_to_ui = false` to preview remapped canvas content while keeping screen-space UI text and controls in the normal theme.
 - Profiles do not recolor the compositor-owned live desktop seen through a transparent overlay.
 - Explicit canvas PNG export applies its resolved export profile to persisted Wayscriber canvas content only, uses the current panned board viewport, respects output scale, and excludes frozen/zoom desktop pixels.
-- Board PDF export writes the active board or every board to a file with one PDF page per Wayscriber page. PDF export preserves board/page order and solid board backgrounds, but does not apply export render profiles.
+- Board PDF export writes the active board or every board to a file with one PDF page per Wayscriber page. PDF export preserves board/page order and solid board backgrounds, but does not apply export render profiles. A page with a magnified Spotlight is rasterized for correct pixel sampling; its optional PDF labels remain vector content drawn afterward.
 - `[export.pdf]` controls PDF filename fallback, page size, orientation, fit mode, and optional page labels.
 - Explicit canvas export and its clipboard-failure fallback save PNG data as `.png`; screenshot clipboard fallback still uses `[capture].format`.
 - `[capture].enabled` disables compositor screenshot capture actions, not explicit export actions.

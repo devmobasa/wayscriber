@@ -1,6 +1,8 @@
+use std::hash::{Hash, Hasher};
+
 use super::super::super::*;
 use crate::backend::wayland::state::screen_image::{
-    ScreenImageKind, current_screen_source_token, displayed_screen_image,
+    ScreenImageKind, ScreenSourceToken, current_screen_source_token, displayed_screen_image,
 };
 use crate::draw::Color;
 
@@ -11,6 +13,11 @@ pub(super) struct CanvasEraserContext {
     bg_color: Option<Color>,
     logical_to_image_scale_x: f64,
     logical_to_image_scale_y: f64,
+    /// Resolved once for the frame by [`resolve_backdrop_provenance`], in the
+    /// same call that decided whether the capture below could be painted at
+    /// all, and carried here so the pixels on the surface and the availability
+    /// the loupe and the toolbar report cannot come from different facts.
+    magnifier_source: crate::draw::SpotlightMagnifierSource,
 }
 
 impl CanvasEraserContext {
@@ -28,14 +35,91 @@ impl CanvasEraserContext {
     }
 
     pub(super) fn magnifier_source(&self) -> crate::draw::SpotlightMagnifierSource {
-        crate::draw::SpotlightMagnifierSource::from_backdrop_presence(
-            self.surface.is_some(),
-            self.bg_color.is_some(),
-        )
+        self.magnifier_source
     }
 }
 
+/// Opaque provenance identity for the captured pixels behind the canvas.
+///
+/// Built from the capture's output, layout generation, kind, and image
+/// generation, so a recapture, a Freeze/Zoom swap, or an output-layout change
+/// all yield a different id. It is what makes the availability descriptor name
+/// a specific capture rather than merely "some raster".
+fn raster_source_id(token: &ScreenSourceToken) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    token.output_id.hash(&mut hasher);
+    token.output_layout_generation.hash(&mut hasher);
+    match token.kind {
+        ScreenImageKind::Zoom => 1u8,
+        ScreenImageKind::Frozen => 0u8,
+    }
+    .hash(&mut hasher);
+    token.image_generation.hash(&mut hasher);
+    token.image_size.hash(&mut hasher);
+    token.stride.hash(&mut hasher);
+    token.surface.hash(&mut hasher);
+    token.output_scale.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// The one decision behind both the painted backdrop and the loupe's source.
+///
+/// A capture whose provenance no longer validates is dropped, not stretched:
+/// CONTRIBUTING.md requires captured pixels to stay exact or fail visibly,
+/// never shift, stretch, or reuse another output's image. Painting it anyway
+/// and merely disabling magnification would leave the two describing different
+/// sources, which the spec forbids — the descriptor must be derived from the
+/// background actually rendered.
+///
+/// Returns whether the displayed capture may be painted, and the availability
+/// that follows from what will be on the surface.
+fn resolve_backdrop_provenance(
+    raster_token: Option<&ScreenSourceToken>,
+    board_is_transparent: bool,
+) -> (bool, crate::draw::SpotlightMagnifierSource) {
+    let source = crate::draw::SpotlightMagnifierSource::from_backdrop(
+        raster_token.map(raster_source_id),
+        !board_is_transparent,
+    );
+    (raster_token.is_some(), source)
+}
+
 impl WaylandState {
+    /// Provenance token for the capture currently displayed, if it still
+    /// validates against the active output and surface.
+    fn current_screen_source_token(&self) -> Option<ScreenSourceToken> {
+        displayed_screen_image(
+            &self.zoom,
+            &self.frozen,
+            self.input_state.board_is_transparent(),
+        )
+        .and_then(|source| {
+            current_screen_source_token(
+                &source,
+                &self.zoom,
+                &self.frozen,
+                (self.surface.width(), self.surface.height()),
+            )
+        })
+    }
+
+    /// Live Spotlight source availability for callers outside the render pass:
+    /// the toolbar snapshot and the action-time warning.
+    ///
+    /// The render pass does not go through here — it calls
+    /// [`resolve_backdrop_provenance`] directly, because it needs the paint
+    /// decision from the same answer. Both end at that one resolver, so no
+    /// caller can disagree about whether a loupe can preview.
+    pub(in crate::backend::wayland::state) fn current_spotlight_magnifier_source(
+        &self,
+    ) -> crate::draw::SpotlightMagnifierSource {
+        resolve_backdrop_provenance(
+            self.current_screen_source_token().as_ref(),
+            self.input_state.board_is_transparent(),
+        )
+        .1
+    }
+
     pub(super) fn render_canvas_background(
         &mut self,
         ctx: &cairo::Context,
@@ -50,23 +134,26 @@ impl WaylandState {
         let mut logical_to_image_scale_x = 1.0;
         let mut logical_to_image_scale_y = 1.0;
 
+        // One provenance answer decides both what is painted and what the loupe
+        // may sample, so the pixels on screen and the availability reported can
+        // never describe different sources.
+        let (backdrop_is_paintable, magnifier_source) = resolve_backdrop_provenance(
+            self.current_screen_source_token().as_ref(),
+            self.input_state.board_is_transparent(),
+        );
+
         let background_image = displayed_screen_image(
             &self.zoom,
             &self.frozen,
             self.input_state.board_is_transparent(),
         )
-        .and_then(|source| {
-            current_screen_source_token(
-                &source,
-                &self.zoom,
-                &self.frozen,
-                (self.surface.width(), self.surface.height()),
-            )?;
+        .filter(|_| backdrop_is_paintable)
+        .map(|source| {
             let cache_key = match source.kind {
                 ScreenImageKind::Zoom => (self.zoom.image_generation() << 1) | 1,
                 ScreenImageKind::Frozen => self.frozen.image_generation() << 1,
             };
-            Some((source.image, cache_key, source.zoom_transformed))
+            (source.image, cache_key, source.zoom_transformed)
         });
 
         if let Some((image, cache_key, zoom_render_active)) = background_image {
@@ -145,6 +232,104 @@ impl WaylandState {
             bg_color: eraser_bg_color,
             logical_to_image_scale_x,
             logical_to_image_scale_y,
+            magnifier_source,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wayland_client::protocol::wl_output;
+
+    fn token(
+        kind: ScreenImageKind,
+        layout_generation: u64,
+        image_generation: u64,
+    ) -> ScreenSourceToken {
+        ScreenSourceToken {
+            output_id: 1,
+            output_layout_generation: layout_generation,
+            kind,
+            image_generation,
+            image_size: (1920, 1080),
+            stride: 1920 * 4,
+            surface: (1920, 1080),
+            output_scale: 1,
+            output_transform: wl_output::Transform::Normal,
+            zoom_transformed: false,
+            zoom_scale: 1.0,
+            zoom_view_offset: (0.0, 0.0),
+        }
+    }
+
+    #[test]
+    fn the_same_capture_keeps_the_same_source_id() {
+        let frozen = token(ScreenImageKind::Frozen, 4, 9);
+        assert_eq!(raster_source_id(&frozen), raster_source_id(&frozen));
+    }
+
+    #[test]
+    fn a_recapture_or_layout_change_is_a_new_source_id() {
+        let base = token(ScreenImageKind::Frozen, 4, 9);
+        // Freeze taken again on the same output.
+        assert_ne!(
+            raster_source_id(&base),
+            raster_source_id(&token(ScreenImageKind::Frozen, 4, 10))
+        );
+        // Outputs rearranged under the same capture generation.
+        assert_ne!(
+            raster_source_id(&base),
+            raster_source_id(&token(ScreenImageKind::Frozen, 5, 9))
+        );
+        // Zoom pixels are not Freeze pixels, even at matching generations.
+        assert_ne!(
+            raster_source_id(&base),
+            raster_source_id(&token(ScreenImageKind::Zoom, 4, 9))
+        );
+    }
+
+    #[test]
+    fn a_capture_that_fails_provenance_is_not_painted_at_all() {
+        // The layout moved under a Freeze: `current_screen_source_token`
+        // returns `None`, and the stale image must be dropped rather than
+        // stretched onto the new geometry. Failing visibly is the contract;
+        // painting it while merely disabling the loupe is not.
+        let (paint, source) = resolve_backdrop_provenance(None, true);
+        assert!(!paint, "a stale capture must not reach the surface");
+        assert_eq!(
+            source,
+            crate::draw::SpotlightMagnifierSource::IncompleteTransparent
+        );
+
+        // A valid token paints and magnifies, and the descriptor names that
+        // exact capture rather than merely reporting "some raster".
+        let live = token(ScreenImageKind::Frozen, 3, 7);
+        let (paint, source) = resolve_backdrop_provenance(Some(&live), true);
+        assert!(paint);
+        assert_eq!(source.raster_token(), Some(raster_source_id(&live)));
+    }
+
+    #[test]
+    fn an_opaque_board_still_magnifies_when_its_capture_is_dropped() {
+        // Nothing captured is paintable, but the board colour fills every
+        // pixel itself, so the loupe keeps a complete source.
+        let (paint, source) = resolve_backdrop_provenance(None, false);
+        assert!(!paint);
+        assert_eq!(source, crate::draw::SpotlightMagnifierSource::CompleteSolid);
+    }
+
+    #[test]
+    fn a_transparent_board_without_valid_pixels_is_incomplete() {
+        assert_eq!(
+            crate::draw::SpotlightMagnifierSource::from_backdrop(None, false),
+            crate::draw::SpotlightMagnifierSource::IncompleteTransparent
+        );
+        // Same board, valid capture: the loupe has a source again without the
+        // shape's requested factor ever being rewritten.
+        let live = raster_source_id(&token(ScreenImageKind::Frozen, 1, 1));
+        assert!(
+            crate::draw::SpotlightMagnifierSource::from_backdrop(Some(live), false).is_complete()
+        );
     }
 }

@@ -396,6 +396,9 @@ pub struct InputState {
     >,
     /// Pending backend output action (to be handled by WaylandState).
     pub(in crate::input::state::core) pending_backend_action: Option<PendingBackendAction>,
+    /// Coalesced request for the backend to explain an unavailable Spotlight
+    /// magnifier source after a user-visible create/property action.
+    pub(in crate::input::state::core) pending_spotlight_magnifier_feedback: bool,
     /// Durable toolbar chrome changes awaiting their runtime-ui.toml write,
     /// oldest first.
     ///

@@ -718,6 +718,15 @@ fn push_style_pill(
                         )),
                     ));
                     x += ToolbarLayoutSpec::TOP_STYLE_VALUE_W + gap;
+                    x += push_style_status_label(
+                        &mut nodes,
+                        control,
+                        snapshot,
+                        x,
+                        center(row_h),
+                        row_h,
+                        gap,
+                    );
                 }
             }
             model::StylePillControl::ThicknessValue | model::StylePillControl::FontSizeValue => {
@@ -857,6 +866,17 @@ fn push_style_pill(
                     }),
                 ));
                 x += step_w * 2.0 + value_w + gap;
+                // The docked control reports on the selected shape's own
+                // factor, so it needs the same unavailable state the slider has.
+                x += push_style_status_label(
+                    &mut nodes,
+                    control,
+                    snapshot,
+                    x,
+                    center(row_h),
+                    row_h,
+                    gap,
+                );
             }
             model::StylePillControl::FontFamilySegment
             | model::StylePillControl::EraserModeSegment => {
@@ -905,6 +925,33 @@ fn push_style_pill(
     for node in nodes {
         tree.push(node);
     }
+}
+
+/// Inline unavailable-state label for a control that has one, returning the
+/// horizontal advance it consumed (zero when nothing was drawn).
+///
+/// Shared by the magnification slider and the docked selection control so the
+/// two cannot drift apart. Compact strips need no special case: the pill
+/// yields entirely under that width pressure, so this is never reached with
+/// `plan.compact` set (see `StylePillSpec::state_of`).
+fn push_style_status_label(
+    nodes: &mut Vec<WidgetNode>,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    x: f64,
+    y: f64,
+    row_h: f64,
+    gap: f64,
+) -> f64 {
+    let Some(status) = control.status_text(snapshot) else {
+        return 0.0;
+    };
+    nodes.push(WidgetNode::decor(
+        format!("{}.status", control.id()),
+        (x, y, ToolbarLayoutSpec::TOP_STYLE_STATUS_W, row_h),
+        WidgetKind::Label(LabelSpec::new(status, TOP_LABEL_FONT_SIZE - 1.0, false)),
+    ));
+    ToolbarLayoutSpec::TOP_STYLE_STATUS_W + gap
 }
 
 /// Height the style pill adds under the island band (gap plus pill).

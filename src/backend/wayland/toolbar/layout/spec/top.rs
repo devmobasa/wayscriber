@@ -49,6 +49,8 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_ROW_H: f64 = 24.0;
     /// Live numeral button width.
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_VALUE_W: f64 = 44.0;
+    /// Inline unavailable-state hint beside Spotlight magnification.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_STATUS_W: f64 = 166.0;
     /// Mini-toggle height (Fill, Auto-number).
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_TOGGLE_H: f64 = 18.0;
     /// Fill toggle width.

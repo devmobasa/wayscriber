@@ -174,6 +174,41 @@ impl StylePillControl {
             .expect("this style-pill control has a live value")
     }
 
+    /// Whether this control can ever carry an inline status, and so needs a
+    /// slot reserved for one even while the status is empty. Frontends that
+    /// build widgets once and update them later key on this.
+    pub(crate) fn has_status_slot(self) -> bool {
+        matches!(
+            self,
+            Self::SpotlightMagnificationSlider
+                | Self::SelectionCycle(SelectionPropertyKind::SpotlightMagnification)
+                | Self::SelectionStepper(SelectionPropertyKind::SpotlightMagnification)
+        )
+    }
+
+    /// Short inline status shown next to a value when the current canvas
+    /// cannot preview that value faithfully.
+    ///
+    /// Each control reports on the value it actually displays: the slider on
+    /// the next-shape default, the docked selection control on the selected
+    /// Spotlight's own factor. Those are different numbers whenever the user
+    /// selects an existing shape, so gating both on the tool default would
+    /// leave a magnified selection with no explanation.
+    pub(crate) fn status_text(self, snapshot: &ToolbarSnapshot) -> Option<&'static str> {
+        let displayed_magnification = match self {
+            Self::SpotlightMagnificationSlider => Some(snapshot.spotlight_magnification),
+            Self::SelectionCycle(SelectionPropertyKind::SpotlightMagnification)
+            | Self::SelectionStepper(SelectionPropertyKind::SpotlightMagnification) => {
+                snapshot.selection_spotlight_magnification
+            }
+            _ => None,
+        }?;
+        if !crate::draw::spotlight_magnification_is_active(displayed_magnification) {
+            return None;
+        }
+        snapshot.spotlight_magnifier_source?.unavailable_reason()
+    }
+
     pub(crate) fn label(self, snapshot: &ToolbarSnapshot) -> Cow<'static, str> {
         match self {
             Self::ColorChip => Cow::Borrowed("Color picker"),

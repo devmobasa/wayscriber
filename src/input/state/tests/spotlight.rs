@@ -19,6 +19,7 @@ fn dragging_the_spotlight_tool_commits_an_elliptical_region() {
     state.on_mouse_press(MouseButton::Left, 100, 100);
     state.on_mouse_motion(200, 160);
     state.on_mouse_release(MouseButton::Left, 200, 160);
+    assert!(state.take_pending_spotlight_magnifier_feedback());
     assert!(
         !state.take_pending_frozen_toggle(),
         "committing a magnified Spotlight must not capture automatically"
@@ -38,7 +39,10 @@ fn dragging_the_spotlight_tool_commits_an_elliptical_region() {
         }
         other => panic!("expected a spotlight, got {other:?}"),
     }
-    assert_eq!(state.spotlight_regions((0, 0))[0].magnification, 2.25);
+    assert_eq!(
+        state.spotlight_frame_regions(Some((0, 0))).regions[0].magnification,
+        2.25
+    );
 }
 
 #[test]
@@ -52,7 +56,7 @@ fn committed_spotlights_are_collected_for_the_render_pass() {
     state.on_mouse_press(MouseButton::Left, 300, 300);
     state.on_mouse_release(MouseButton::Left, 400, 380);
 
-    let regions = state.spotlight_regions((0, 0));
+    let regions = state.spotlight_frame_regions(Some((0, 0))).regions;
     assert_eq!(regions.len(), 2, "both spotlights must reach the pass");
     assert!(regions.iter().any(|r| (r.cx - 50.0).abs() < 0.5));
     assert!(regions.iter().any(|r| (r.cx - 350.0).abs() < 0.5));
@@ -66,10 +70,55 @@ fn the_in_progress_drag_is_included_so_dimming_follows_the_cursor() {
     state.on_mouse_press(MouseButton::Left, 40, 40);
     state.on_mouse_motion(140, 120);
 
-    let regions = state.spotlight_regions((140, 120));
+    let regions = state.spotlight_frame_regions(Some((140, 120))).regions;
     assert_eq!(regions.len(), 1, "the live drag should already dim");
     assert!((regions[0].cx - 90.0).abs() < 0.5);
     assert!((regions[0].rx - 50.0).abs() < 0.5);
+}
+
+#[test]
+fn an_in_progress_drag_dims_but_does_not_count_as_something_the_page_holds() {
+    let mut state = create_test_input_state();
+    state.set_tool_override(Some(Tool::Spotlight));
+    assert!(state.set_spotlight_magnification(2.5));
+
+    state.on_mouse_press(MouseButton::Left, 40, 40);
+    state.on_mouse_motion(140, 120);
+
+    // The drag dims immediately, but nothing is committed yet: a warning that
+    // describes the page must not fire for an ellipse that cancelling erases.
+    let collected = state.spotlight_frame_regions(Some((140, 120)));
+    assert_eq!(
+        collected.regions.len(),
+        1,
+        "the live drag should already dim"
+    );
+    assert!(
+        !collected.committed_magnified,
+        "a drag under the pointer is not yet something the page holds"
+    );
+
+    state.on_mouse_release(MouseButton::Left, 140, 120);
+    let collected = state.spotlight_frame_regions(None);
+    assert_eq!(collected.regions.len(), 1);
+    assert!(
+        collected.committed_magnified,
+        "once committed, the page does hold a magnified Spotlight"
+    );
+}
+
+#[test]
+fn suppressing_transients_collects_committed_regions_only() {
+    let mut state = create_test_input_state();
+    state.set_tool_override(Some(Tool::Spotlight));
+
+    state.on_mouse_press(MouseButton::Left, 40, 40);
+    state.on_mouse_motion(140, 120);
+
+    assert!(
+        state.spotlight_frame_regions(None).regions.is_empty(),
+        "a frame that shows no transients draws no in-progress drag"
+    );
 }
 
 #[test]
@@ -80,7 +129,12 @@ fn a_live_drag_of_another_tool_contributes_no_region() {
     state.on_mouse_press(MouseButton::Left, 40, 40);
     state.on_mouse_motion(140, 120);
 
-    assert!(state.spotlight_regions((140, 120)).is_empty());
+    assert!(
+        state
+            .spotlight_frame_regions(Some((140, 120)))
+            .regions
+            .is_empty()
+    );
     assert!(!state.has_spotlight());
 }
 
@@ -113,7 +167,12 @@ fn deleting_the_spotlight_stops_the_dimming() {
 
     state.boards.active_frame_mut().shapes.clear();
     assert!(!state.has_spotlight());
-    assert!(state.spotlight_regions((0, 0)).is_empty());
+    assert!(
+        state
+            .spotlight_frame_regions(Some((0, 0)))
+            .regions
+            .is_empty()
+    );
 }
 
 #[test]

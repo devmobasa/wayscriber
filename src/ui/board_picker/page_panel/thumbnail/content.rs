@@ -5,8 +5,10 @@ use crate::draw::{
 };
 use crate::input::BoardBackground;
 use crate::input::state::{PAGE_NAME_HEIGHT, PAGE_NAME_PADDING};
-use crate::ui::constants::{self, RADIUS_STD, TEXT_HINT, TEXT_TERTIARY};
-use crate::ui::primitives::draw_rounded_rect;
+use crate::ui::constants::{
+    self, PANEL_BG_CONTEXT_MENU, RADIUS_STD, TEXT_HINT, TEXT_PRIMARY, TEXT_TERTIARY,
+};
+use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 use crate::ui::theme::Rgba;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 
@@ -114,14 +116,20 @@ fn render_frame_shapes(
     // render a postage-stamp preview almost black, so previews use a fixed,
     // gentler appearance rather than the live values.
     let regions = spotlight_regions_for_frame(frame);
-    if matches!(background, BoardBackground::Solid(_)) {
+    // A thumbnail has no captured desktop behind it, so an opaque board colour
+    // is the only complete source it can offer. Which of those counts as
+    // complete is decided by the shared rule, not restated here, so the preview
+    // and the canvas can never disagree about when a loupe is possible.
+    let magnifier_source =
+        SpotlightMagnifierSource::from_backdrop(None, eraser_ctx.bg_color.is_some());
+    if magnifier_source.is_complete() {
         let mut scratch = SpotlightMagnifierScratch::default();
         let _ = render_spotlight_magnification_pass(
             ctx,
             &regions,
             THUMBNAIL_SPOTLIGHT_FEATHER,
-            SpotlightMagnifierSource::Complete,
-            (target_width, target_height),
+            magnifier_source,
+            Some((target_width, target_height)),
             &mut scratch,
         );
     }
@@ -133,7 +141,7 @@ fn render_frame_shapes(
             feather: THUMBNAIL_SPOTLIGHT_FEATHER,
         },
     );
-    if matches!(background, BoardBackground::Transparent) {
+    if !magnifier_source.is_complete() {
         render_unavailable_magnification_labels(ctx, &regions);
     }
 }
@@ -148,30 +156,43 @@ fn render_unavailable_magnification_labels(
     {
         let label = crate::draw::format_spotlight_magnification(region.magnification);
         let font_size = (region.ry.abs() * 0.35).clamp(18.0, 56.0);
+        let style = UiTextStyle {
+            family: "Sans",
+            slant: cairo::FontSlant::Normal,
+            weight: cairo::FontWeight::Bold,
+            size: font_size,
+        };
         let _ = ctx.save();
-        ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-        ctx.set_font_size(font_size);
-        if let Ok(extents) = ctx.text_extents(&label) {
-            let pad = font_size * 0.28;
-            let x = region.cx - extents.width() * 0.5 - pad;
-            let y = region.cy - extents.height() * 0.5 - pad;
-            draw_rounded_rect(
-                ctx,
-                x,
-                y,
-                extents.width() + pad * 2.0,
-                extents.height() + pad * 2.0,
-                font_size * 0.25,
-            );
-            ctx.set_source_rgba(0.0, 0.0, 0.0, 0.68);
-            let _ = ctx.fill();
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.92);
-            ctx.move_to(
-                region.cx - extents.width() * 0.5 - extents.x_bearing(),
-                region.cy - extents.height() * 0.5 - extents.y_bearing(),
-            );
-            let _ = ctx.show_text(&label);
-        }
+        let extents = text_extents_for(
+            ctx,
+            style.family,
+            style.slant,
+            style.weight,
+            style.size,
+            &label,
+        );
+        let pad = font_size * 0.28;
+        let x = region.cx - extents.width() * 0.5 - pad;
+        let y = region.cy - extents.height() * 0.5 - pad;
+        draw_rounded_rect(
+            ctx,
+            x,
+            y,
+            extents.width() + pad * 2.0,
+            extents.height() + pad * 2.0,
+            font_size * 0.25,
+        );
+        constants::set_color(ctx, PANEL_BG_CONTEXT_MENU);
+        let _ = ctx.fill();
+        constants::set_color(ctx, TEXT_PRIMARY);
+        draw_text_baseline(
+            ctx,
+            style,
+            &label,
+            region.cx - extents.width() * 0.5 - extents.x_bearing(),
+            region.cy - extents.height() * 0.5 - extents.y_bearing(),
+            None,
+        );
         let _ = ctx.restore();
     }
 }
@@ -215,4 +236,83 @@ pub(super) fn render_page_name_label(
     ctx.clip();
     draw_text_baseline(ctx, label_style, label, label_x, label_y, None);
     let _ = ctx.restore();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::draw::{Color, Frame, Shape};
+
+    fn thumbnail_pixels(background: &BoardBackground, magnification: f64) -> Vec<u8> {
+        let surface =
+            cairo::ImageSurface::create(cairo::Format::ARgb32, 120, 90).expect("thumbnail surface");
+        {
+            let ctx = cairo::Context::new(&surface).expect("thumbnail context");
+            let mut frame = Frame::new();
+            // Something for the loupe to magnify: a bare solid board is
+            // uniform, so magnifying it could not change a single pixel.
+            frame.add_shape(Shape::Rect {
+                x: 180,
+                y: 140,
+                w: 40,
+                h: 20,
+                fill: true,
+                color: Color {
+                    r: 1.0,
+                    g: 1.0,
+                    b: 0.0,
+                    a: 1.0,
+                },
+                thick: 2.0,
+            });
+            frame.add_shape(Shape::Spotlight {
+                cx: 200,
+                cy: 150,
+                rx: 90,
+                ry: 70,
+                magnification,
+            });
+            render_page_content(PageContentArgs {
+                ctx: &ctx,
+                frame: &frame,
+                background,
+                x: 0.0,
+                y: 0.0,
+                width: 120.0,
+                height: 90.0,
+                screen_width: 400,
+                screen_height: 300,
+            });
+        }
+        let mut surface = surface;
+        surface.flush();
+        surface.data().expect("thumbnail pixels").to_vec()
+    }
+
+    #[test]
+    fn a_solid_board_thumbnail_magnifies_its_spotlight() {
+        let background = BoardBackground::Solid(Color {
+            r: 0.2,
+            g: 0.4,
+            b: 0.8,
+            a: 1.0,
+        });
+        assert_ne!(
+            thumbnail_pixels(&background, 1.0),
+            thumbnail_pixels(&background, 3.0),
+            "a magnified spotlight must change what the preview shows"
+        );
+    }
+
+    #[test]
+    fn a_transparent_board_thumbnail_marks_the_factor_instead_of_faking_a_loupe() {
+        // No captured desktop backs a transparent thumbnail, so the preview
+        // shows the requested factor as a readout rather than magnifying an
+        // incomplete source.
+        assert_ne!(
+            thumbnail_pixels(&BoardBackground::Transparent, 1.0),
+            thumbnail_pixels(&BoardBackground::Transparent, 3.0),
+            "an unavailable loupe must still say what it was asked for"
+        );
+    }
 }

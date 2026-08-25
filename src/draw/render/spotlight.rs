@@ -29,18 +29,74 @@ pub struct SpotlightPass {
     pub feather: f64,
 }
 
+/// Token for a raster backdrop that cannot go stale: an export snapshot, a
+/// region capture, or a persisted session image. Those pixels are immutable
+/// for the lifetime of the render, so they need no generation of their own.
+pub const IMMUTABLE_RASTER_SOURCE_TOKEN: u64 = 0;
+
+/// Whether the canvas under a loupe is a complete set of pixels, and where
+/// those pixels came from.
+///
+/// A raster source carries the provenance identity of the capture the backend
+/// validated, so a stale Frozen/Zoom generation is a *different* value rather
+/// than one silently reused. That identity is what lets the backend decide in
+/// one place what may be painted and what the loupe may sample, and lets the
+/// toolbar report a reason drawn from the same answer.
+///
+/// It has no role in scratch storage: retained snapshot surfaces are rewritten
+/// in full before every use, so they cannot carry a previous capture's pixels
+/// (see [`SpotlightMagnifierScratch`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpotlightMagnifierSource {
-    Complete,
+    /// An opaque board fills every pixel itself; nothing else is needed.
+    CompleteSolid,
+    /// Captured desktop pixels with a current, provenance-valid token.
+    CompleteRaster { source_token: u64 },
+    /// A transparent board with no usable captured pixels underneath.
     IncompleteTransparent,
 }
 
 impl SpotlightMagnifierSource {
-    pub fn from_backdrop_presence(has_pixel_surface: bool, has_solid_color: bool) -> Self {
-        if has_pixel_surface || has_solid_color {
-            Self::Complete
-        } else {
-            Self::IncompleteTransparent
+    /// Resolves availability from the two facts every surface can answer: the
+    /// provenance token of its raster backdrop *if that backdrop is currently
+    /// valid*, and whether an opaque board colour fills the rest.
+    ///
+    /// A raster backdrop whose provenance has gone stale passes `None` here and
+    /// degrades to the solid/transparent answer, which is what keeps a stale
+    /// capture from being magnified as though it were live.
+    pub const fn from_backdrop(raster_token: Option<u64>, has_solid_color: bool) -> Self {
+        match raster_token {
+            Some(source_token) => Self::CompleteRaster { source_token },
+            None if has_solid_color => Self::CompleteSolid,
+            None => Self::IncompleteTransparent,
+        }
+    }
+
+    /// Availability for a backdrop whose pixels cannot change under it.
+    pub const fn immutable_raster() -> Self {
+        Self::CompleteRaster {
+            source_token: IMMUTABLE_RASTER_SOURCE_TOKEN,
+        }
+    }
+
+    /// Whether the loupe has every pixel it needs to magnify faithfully.
+    pub const fn is_complete(self) -> bool {
+        !matches!(self, Self::IncompleteTransparent)
+    }
+
+    /// Provenance identity of the raster backdrop, when there is one.
+    pub const fn raster_token(self) -> Option<u64> {
+        match self {
+            Self::CompleteRaster { source_token } => Some(source_token),
+            Self::CompleteSolid | Self::IncompleteTransparent => None,
+        }
+    }
+
+    /// Stable, user-facing reason a loupe cannot preview right now.
+    pub const fn unavailable_reason(self) -> Option<&'static str> {
+        match self {
+            Self::IncompleteTransparent => Some("Freeze screen to preview"),
+            Self::CompleteSolid | Self::CompleteRaster { .. } => None,
         }
     }
 }
@@ -62,11 +118,24 @@ pub struct SpotlightMagnifierMetrics {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpotlightMagnifierOutcome {
+    /// No region asked for magnification, so no snapshot was taken.
     NotNeeded,
+    /// The surface underneath has no complete pixel source to sample.
     SourceUnavailable,
+    /// Scratch storage for the snapshot could not be allocated.
+    AllocationFailed,
     Rendered(SpotlightMagnifierMetrics),
 }
 
+/// Retained snapshot surfaces, reused across frames whenever their size still
+/// fits.
+///
+/// Deliberately not keyed on which capture the pixels came from: every
+/// retained surface is rewritten in full by [`copy_target_rect`], which paints
+/// the whole destination with [`cairo::Operator::Source`], so a surface can
+/// never serve pixels from the capture that filled it last. Size checks are
+/// the only reuse condition that has to hold, and invalidating on capture
+/// identity would only force reallocation on every Freeze, Zoom, or recapture.
 #[derive(Default)]
 pub struct SpotlightMagnifierScratch {
     regional: Vec<cairo::ImageSurface>,
@@ -95,24 +164,29 @@ struct SpotlightSnapshot {
 /// regions cannot recursively sample one another. Small sets copy only their
 /// clipped bounds; larger sets switch to one full-target copy, bounding retained
 /// scratch storage to at most one target-sized ARGB image.
+///
+/// `fallback_target_size` is the pixel size to assume when the Cairo target is
+/// not an image surface — a vector PDF page, say. `None` when the caller has no
+/// raster size to offer, which skips the pass rather than guessing one.
 pub fn render_spotlight_magnification_pass(
     ctx: &cairo::Context,
     regions: &[SpotlightRegion],
     feather: f64,
     source: SpotlightMagnifierSource,
-    target_size: (u32, u32),
+    fallback_target_size: Option<(u32, u32)>,
     scratch: &mut SpotlightMagnifierScratch,
 ) -> Result<SpotlightMagnifierOutcome, cairo::Error> {
     let target = ctx.target();
     let image_dimensions = cairo::ImageSurface::try_from(target.clone())
         .ok()
-        .map(|surface| (surface.width(), surface.height()));
-    let target_width = image_dimensions
-        .map(|dimensions| dimensions.0)
-        .unwrap_or_else(|| i32::try_from(target_size.0).unwrap_or(i32::MAX));
-    let target_height = image_dimensions
-        .map(|dimensions| dimensions.1)
-        .unwrap_or_else(|| i32::try_from(target_size.1).unwrap_or(i32::MAX));
+        .map(|surface| (surface.width(), surface.height()))
+        .or_else(|| {
+            let (width, height) = fallback_target_size?;
+            Some((i32::try_from(width).ok()?, i32::try_from(height).ok()?))
+        });
+    let Some((target_width, target_height)) = image_dimensions else {
+        return Ok(SpotlightMagnifierOutcome::NotNeeded);
+    };
     if target_width <= 0 || target_height <= 0 {
         return Ok(SpotlightMagnifierOutcome::NotNeeded);
     }
@@ -123,7 +197,7 @@ pub fn render_spotlight_magnification_pass(
     if !has_magnification {
         return Ok(SpotlightMagnifierOutcome::NotNeeded);
     }
-    if source == SpotlightMagnifierSource::IncompleteTransparent {
+    if !source.is_complete() {
         return Ok(SpotlightMagnifierOutcome::SourceUnavailable);
     }
 
@@ -147,6 +221,12 @@ pub fn render_spotlight_magnification_pass(
     let regional_pixels = active.iter().fold(0u64, |total, (_, rect)| {
         total.saturating_add((rect.width as u64).saturating_mul(rect.height as u64))
     });
+    // Regional copies win while their combined area is at most half of the
+    // target. Above that point one full copy bounds allocation count and copy
+    // bookkeeping without retaining both strategies at once. The crossover is
+    // pinned by `the_snapshot_strategy_crosses_over_at_half_the_target_area`;
+    // it is a bookkeeping bound, not a measured one — see the perf note in
+    // `docs/temp/spotlight-magnifier.md`.
     let strategy = if regional_pixels <= target_pixels / 2 {
         SpotlightSnapshotStrategy::Regional
     } else {
@@ -161,7 +241,11 @@ pub fn render_spotlight_magnification_pass(
             scratch.regional.truncate(active.len());
             let mut snapshots = Vec::with_capacity(active.len());
             for (index, (region, rect)) in active.iter().copied().enumerate() {
-                let surface = ensure_regional_surface(scratch, index, rect.width, rect.height)?;
+                let Some(surface) =
+                    ensure_regional_surface(scratch, index, rect.width, rect.height)
+                else {
+                    return Ok(SpotlightMagnifierOutcome::AllocationFailed);
+                };
                 copy_target_rect(&target, &surface, rect)?;
                 snapshots.push(SpotlightSnapshot {
                     surface,
@@ -174,7 +258,9 @@ pub fn render_spotlight_magnification_pass(
         }
         SpotlightSnapshotStrategy::FullSurface => {
             scratch.regional.clear();
-            let surface = ensure_full_surface(scratch, target_width, target_height)?;
+            let Some(surface) = ensure_full_surface(scratch, target_width, target_height) else {
+                return Ok(SpotlightMagnifierOutcome::AllocationFailed);
+            };
             copy_target_rect(
                 &target,
                 &surface,
@@ -276,12 +362,15 @@ fn device_rect_for_region(
     })
 }
 
+/// `None` means the allocation was refused, which the pass reports as
+/// [`SpotlightMagnifierOutcome::AllocationFailed`] rather than an error: a
+/// loupe that cannot allocate degrades to the ordinary bright opening.
 fn ensure_regional_surface(
     scratch: &mut SpotlightMagnifierScratch,
     index: usize,
     width: i32,
     height: i32,
-) -> Result<cairo::ImageSurface, cairo::Error> {
+) -> Option<cairo::ImageSurface> {
     let reusable = scratch
         .regional
         .get(index)
@@ -289,31 +378,31 @@ fn ensure_regional_surface(
         .cloned();
     let surface = match reusable {
         Some(surface) => surface,
-        None => cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)?,
+        None => cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).ok()?,
     };
     if index < scratch.regional.len() {
         scratch.regional[index] = surface.clone();
     } else {
         scratch.regional.push(surface.clone());
     }
-    Ok(surface)
+    Some(surface)
 }
 
 fn ensure_full_surface(
     scratch: &mut SpotlightMagnifierScratch,
     width: i32,
     height: i32,
-) -> Result<cairo::ImageSurface, cairo::Error> {
+) -> Option<cairo::ImageSurface> {
     if let Some(surface) = scratch
         .full
         .as_ref()
         .filter(|surface| surface.width() == width && surface.height() == height)
     {
-        return Ok(surface.clone());
+        return Some(surface.clone());
     }
-    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)?;
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).ok()?;
     scratch.full = Some(surface.clone());
-    Ok(surface)
+    Some(surface)
 }
 
 fn copy_target_rect(
@@ -347,8 +436,7 @@ fn paint_snapshot(
         return Ok(());
     }
 
-    ctx.save()?;
-    let painted = (|| {
+    crate::draw::with_saved_state(ctx, || {
         // Establish the ellipse under the caller's transform. Cairo stores the
         // resulting clip in device space, so sampling can then use an identity CTM.
         ctx.new_path();
@@ -398,9 +486,7 @@ fn paint_snapshot(
             -(inv_yx * center.0 + inv_yy * center.1),
         ));
         ctx.mask(&mask)
-    })();
-    let restored = ctx.restore();
-    painted.and(restored)
+    })
 }
 
 /// Every spotlight opening on a frame, in the order the shapes were added.
@@ -553,19 +639,53 @@ mod tests {
     };
 
     #[test]
-    fn magnifier_source_requires_pixels_or_a_solid_color() {
+    fn magnifier_source_requires_valid_pixels_or_a_solid_color() {
         assert_eq!(
-            SpotlightMagnifierSource::from_backdrop_presence(false, false),
+            SpotlightMagnifierSource::from_backdrop(None, false),
             SpotlightMagnifierSource::IncompleteTransparent
         );
         assert_eq!(
-            SpotlightMagnifierSource::from_backdrop_presence(true, false),
-            SpotlightMagnifierSource::Complete
+            SpotlightMagnifierSource::from_backdrop(Some(9), false),
+            SpotlightMagnifierSource::CompleteRaster { source_token: 9 }
         );
         assert_eq!(
-            SpotlightMagnifierSource::from_backdrop_presence(false, true),
-            SpotlightMagnifierSource::Complete
+            SpotlightMagnifierSource::from_backdrop(None, true),
+            SpotlightMagnifierSource::CompleteSolid
         );
+        // A raster backdrop wins over the board colour: it is the layer the
+        // loupe actually samples.
+        assert_eq!(
+            SpotlightMagnifierSource::from_backdrop(Some(3), true),
+            SpotlightMagnifierSource::CompleteRaster { source_token: 3 }
+        );
+    }
+
+    #[test]
+    fn stale_raster_provenance_degrades_instead_of_magnifying_old_pixels() {
+        // A transparent board whose capture went stale passes `None` here.
+        // Reporting it complete would magnify pixels that no longer match the
+        // desktop underneath.
+        let stale_transparent = SpotlightMagnifierSource::from_backdrop(None, false);
+        assert!(!stale_transparent.is_complete());
+        assert_eq!(
+            stale_transparent.unavailable_reason(),
+            Some("Freeze screen to preview")
+        );
+
+        // The same staleness on a solid board still has every pixel it needs.
+        let stale_solid = SpotlightMagnifierSource::from_backdrop(None, true);
+        assert!(stale_solid.is_complete());
+        assert_eq!(stale_solid.unavailable_reason(), None);
+        assert_eq!(stale_solid.raster_token(), None);
+    }
+
+    #[test]
+    fn a_recapture_is_a_different_source_than_the_capture_it_replaced() {
+        let before = SpotlightMagnifierSource::from_backdrop(Some(1), false);
+        let after = SpotlightMagnifierSource::from_backdrop(Some(2), false);
+        assert_ne!(before, after, "a new capture must not compare equal");
+        assert_eq!(before.raster_token(), Some(1));
+        assert!(SpotlightMagnifierSource::immutable_raster().is_complete());
     }
 
     #[test]
@@ -850,8 +970,8 @@ mod tests {
                 magnification: 2.0,
             }],
             0.0,
-            SpotlightMagnifierSource::Complete,
-            (100, 100),
+            SpotlightMagnifierSource::CompleteSolid,
+            Some((100, 100)),
             &mut SpotlightMagnifierScratch::default(),
         )
         .expect("loupe should render");
@@ -879,7 +999,7 @@ mod tests {
             }],
             0.35,
             SpotlightMagnifierSource::IncompleteTransparent,
-            (32, 32),
+            Some((32, 32)),
             &mut SpotlightMagnifierScratch::default(),
         )
         .expect("1x pass");
@@ -906,7 +1026,7 @@ mod tests {
             }],
             0.35,
             SpotlightMagnifierSource::IncompleteTransparent,
-            (32, 32),
+            Some((32, 32)),
             &mut SpotlightMagnifierScratch::default(),
         )
         .expect("unavailable pass");
@@ -914,6 +1034,257 @@ mod tests {
 
         assert_eq!(outcome, SpotlightMagnifierOutcome::SourceUnavailable);
         assert_eq!(rgb_at(&mut surface, 16, 16), (255, 0, 0));
+    }
+
+    /// Red field with a 20x20 yellow square centred at (50, 50).
+    ///
+    /// At 4x that square covers 80x80, which is wider than the 60px loupe — so
+    /// every pixel inside the opening samples yellow while every pixel outside
+    /// it must stay red. That separates "sampled at 4x" from "clipped to the
+    /// ellipse" in one image.
+    fn marked_surface() -> (ImageSurface, Context) {
+        let (surface, ctx) = surface_with_context(100, 100);
+        ctx.set_source_rgb(1.0, 0.0, 0.0);
+        ctx.paint().unwrap();
+        ctx.set_source_rgb(1.0, 1.0, 0.0);
+        ctx.rectangle(40.0, 40.0, 20.0, 20.0);
+        ctx.fill().unwrap();
+        (surface, ctx)
+    }
+
+    const FOUR_X: SpotlightRegion = SpotlightRegion {
+        cx: 50.0,
+        cy: 50.0,
+        rx: 30.0,
+        ry: 30.0,
+        magnification: 4.0,
+    };
+
+    #[test]
+    fn four_x_samples_a_quarter_of_the_distance_from_its_center() {
+        let (mut surface, ctx) = marked_surface();
+        let outcome = render_spotlight_magnification_pass(
+            &ctx,
+            &[FOUR_X],
+            0.0,
+            SpotlightMagnifierSource::CompleteSolid,
+            Some((100, 100)),
+            &mut SpotlightMagnifierScratch::default(),
+        )
+        .expect("4x loupe renders");
+        drop(ctx);
+
+        assert!(matches!(outcome, SpotlightMagnifierOutcome::Rendered(_)));
+        assert_eq!(rgb_at(&mut surface, 50, 50), (255, 255, 0), "center");
+        // source = 50 + 25/4 = 56.25, inside the square. At 1x or 2x this
+        // pixel would still be red, so the assertion is specific to 4x.
+        assert_eq!(rgb_at(&mut surface, 75, 50), (255, 255, 0), "near the rim");
+    }
+
+    #[test]
+    fn magnified_pixels_stay_inside_the_elliptical_opening() {
+        let (mut surface, ctx) = marked_surface();
+        render_spotlight_magnification_pass(
+            &ctx,
+            &[FOUR_X],
+            0.0,
+            SpotlightMagnifierSource::CompleteSolid,
+            Some((100, 100)),
+            &mut SpotlightMagnifierScratch::default(),
+        )
+        .expect("4x loupe renders");
+        drop(ctx);
+
+        // The magnified square would reach x = 90 unclipped; the opening ends
+        // at x = 80, so everything past it must still be the original red.
+        assert_eq!(rgb_at(&mut surface, 85, 50), (255, 0, 0), "outside on x");
+        assert_eq!(rgb_at(&mut surface, 50, 85), (255, 0, 0), "outside on y");
+    }
+
+    #[test]
+    fn feather_cross_fades_the_magnified_image_back_to_the_canvas() {
+        let sample_green_near_the_rim = |feather: f64| {
+            let (mut surface, ctx) = marked_surface();
+            render_spotlight_magnification_pass(
+                &ctx,
+                &[FOUR_X],
+                feather,
+                SpotlightMagnifierSource::CompleteSolid,
+                Some((100, 100)),
+                &mut SpotlightMagnifierScratch::default(),
+            )
+            .expect("loupe renders");
+            drop(ctx);
+            rgb_at(&mut surface, 78, 50).1
+        };
+
+        // Yellow has full green, the underlying red none. A hard edge keeps the
+        // magnified yellow right up to the rim; a wide feather has faded most
+        // of it back into the canvas by the same point.
+        assert_eq!(sample_green_near_the_rim(0.0), 255, "hard edge");
+        assert!(
+            sample_green_near_the_rim(0.6) < 128,
+            "a feathered rim must blend back toward the unmagnified canvas"
+        );
+    }
+
+    #[test]
+    fn a_loupe_clipped_by_the_surface_edge_still_renders() {
+        let (mut surface, ctx) = marked_surface();
+        let outcome = render_spotlight_magnification_pass(
+            &ctx,
+            &[SpotlightRegion {
+                cx: 5.0,
+                cy: 5.0,
+                rx: 20.0,
+                ry: 20.0,
+                magnification: 3.0,
+            }],
+            0.0,
+            SpotlightMagnifierSource::CompleteSolid,
+            Some((100, 100)),
+            &mut SpotlightMagnifierScratch::default(),
+        )
+        .expect("edge loupe renders");
+        drop(ctx);
+
+        assert!(matches!(outcome, SpotlightMagnifierOutcome::Rendered(_)));
+        // The centre samples itself at any magnification, so a snapshot padded
+        // against the clamped edge must still land the centre pixel on red.
+        assert_eq!(rgb_at(&mut surface, 5, 5), (255, 0, 0));
+    }
+
+    #[test]
+    fn a_fully_offscreen_loupe_needs_no_snapshot() {
+        let (mut surface, ctx) = marked_surface();
+        let outcome = render_spotlight_magnification_pass(
+            &ctx,
+            &[SpotlightRegion {
+                cx: -400.0,
+                cy: -400.0,
+                rx: 30.0,
+                ry: 30.0,
+                magnification: 4.0,
+            }],
+            0.0,
+            SpotlightMagnifierSource::CompleteSolid,
+            Some((100, 100)),
+            &mut SpotlightMagnifierScratch::default(),
+        )
+        .expect("offscreen loupe");
+        drop(ctx);
+
+        assert_eq!(outcome, SpotlightMagnifierOutcome::NotNeeded);
+        assert_eq!(rgb_at(&mut surface, 50, 50), (255, 255, 0), "canvas intact");
+    }
+
+    #[test]
+    fn degenerate_radii_under_magnification_do_not_panic() {
+        let (mut surface, ctx) = marked_surface();
+        let outcome = render_spotlight_magnification_pass(
+            &ctx,
+            &[SpotlightRegion {
+                cx: 50.0,
+                cy: 50.0,
+                rx: 0.0,
+                ry: 0.0,
+                magnification: 4.0,
+            }],
+            0.35,
+            SpotlightMagnifierSource::CompleteSolid,
+            Some((100, 100)),
+            &mut SpotlightMagnifierScratch::default(),
+        )
+        .expect("degenerate loupe");
+        drop(ctx);
+
+        assert!(matches!(outcome, SpotlightMagnifierOutcome::Rendered(_)));
+        // A collapsed ellipse magnifies a pixel onto itself; the rest of the
+        // canvas is untouched.
+        assert_eq!(rgb_at(&mut surface, 90, 90), (255, 0, 0));
+    }
+
+    #[test]
+    fn a_refused_allocation_reports_itself_instead_of_erroring() {
+        // A recording surface is not an image surface, so the pass falls back
+        // to the caller's size — here one Cairo will refuse to allocate.
+        let recording = cairo::RecordingSurface::create(cairo::Content::ColorAlpha, None)
+            .expect("recording surface");
+        let ctx = Context::new(&recording).expect("recording context");
+
+        let outcome = render_spotlight_magnification_pass(
+            &ctx,
+            &[SpotlightRegion {
+                cx: 20_000.0,
+                cy: 20_000.0,
+                rx: 19_000.0,
+                ry: 19_000.0,
+                magnification: 2.0,
+            }],
+            0.0,
+            SpotlightMagnifierSource::CompleteSolid,
+            Some((40_000, 40_000)),
+            &mut SpotlightMagnifierScratch::default(),
+        )
+        .expect("an oversized loupe must not surface a Cairo error");
+
+        assert_eq!(outcome, SpotlightMagnifierOutcome::AllocationFailed);
+    }
+
+    #[test]
+    fn a_target_with_no_known_size_skips_the_pass() {
+        let recording = cairo::RecordingSurface::create(cairo::Content::ColorAlpha, None)
+            .expect("recording surface");
+        let ctx = Context::new(&recording).expect("recording context");
+
+        let outcome = render_spotlight_magnification_pass(
+            &ctx,
+            &[FOUR_X],
+            0.0,
+            SpotlightMagnifierSource::CompleteSolid,
+            None,
+            &mut SpotlightMagnifierScratch::default(),
+        )
+        .expect("sizeless target");
+
+        assert_eq!(outcome, SpotlightMagnifierOutcome::NotNeeded);
+    }
+
+    #[test]
+    fn the_snapshot_strategy_crosses_over_at_half_the_target_area() {
+        let strategy_for = |rx: f64, ry: f64| {
+            let (_surface, ctx) = marked_surface();
+            let outcome = render_spotlight_magnification_pass(
+                &ctx,
+                &[SpotlightRegion {
+                    cx: 50.0,
+                    cy: 50.0,
+                    rx,
+                    ry,
+                    magnification: 2.0,
+                }],
+                0.0,
+                SpotlightMagnifierSource::CompleteSolid,
+                Some((100, 100)),
+                &mut SpotlightMagnifierScratch::default(),
+            )
+            .expect("loupe renders");
+            match outcome {
+                SpotlightMagnifierOutcome::Rendered(metrics) => metrics.strategy,
+                other => panic!("expected a rendered loupe, got {other:?}"),
+            }
+        };
+
+        // Well under half of the 100x100 target: copy only the clipped bounds.
+        assert_eq!(
+            strategy_for(15.0, 15.0),
+            SpotlightSnapshotStrategy::Regional
+        );
+        // Past the crossover documented above `strategy`: one full copy instead.
+        assert_eq!(
+            strategy_for(45.0, 45.0),
+            SpotlightSnapshotStrategy::FullSurface
+        );
     }
 
     #[test]
@@ -941,8 +1312,8 @@ mod tests {
             &expected_ctx,
             &[second],
             0.0,
-            SpotlightMagnifierSource::Complete,
-            (100, 100),
+            SpotlightMagnifierSource::CompleteSolid,
+            Some((100, 100)),
             &mut SpotlightMagnifierScratch::default(),
         )
         .unwrap();
@@ -963,8 +1334,8 @@ mod tests {
                 second,
             ],
             0.0,
-            SpotlightMagnifierSource::Complete,
-            (100, 100),
+            SpotlightMagnifierSource::CompleteSolid,
+            Some((100, 100)),
             &mut SpotlightMagnifierScratch::default(),
         )
         .unwrap();
@@ -994,8 +1365,8 @@ mod tests {
                 magnification: 2.0,
             }],
             0.0,
-            SpotlightMagnifierSource::Complete,
-            (200, 200),
+            SpotlightMagnifierSource::CompleteSolid,
+            Some((200, 200)),
             &mut SpotlightMagnifierScratch::default(),
         )
         .unwrap();

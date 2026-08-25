@@ -804,7 +804,7 @@ Use `--exit-after-capture` / `--no-exit-after-capture` to override whether the o
 <details>
 <summary>PDF export</summary>
 
-Canvas export commands are available in the command palette and keybindings. `export_board_pdf_file` saves the active board as a multi-page PDF, `export_all_boards_pdf_file` saves every board in board order, and both PDF actions are unbound by default. PDF exports keep transparent pages blank unless `[export.pdf] transparent_background = "desktop"` is set, which captures the live desktop behind the overlay for transparent pages only.
+Canvas export commands are available in the command palette and keybindings. `export_board_pdf_file` saves the active board as a multi-page PDF, `export_all_boards_pdf_file` saves every board in board order, and both PDF actions are unbound by default. PDF exports keep transparent pages blank unless `[export.pdf] transparent_background = "desktop"` is set, which captures the live desktop behind the overlay for transparent pages only. Pages with a magnified Spotlight are rasterized so the loupe can sample completed pixels; page labels are still written as vector content on top.
 
 </details>
 
