@@ -238,6 +238,9 @@ default_blur_style = "gaussian"
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
 
+# Smoothing applied to a finished freehand or marker stroke (0 - 6)
+pen_smoothing = 3
+
 # Default fill state for fill-capable shape tools
 default_fill_enabled = false
 
@@ -370,6 +373,7 @@ drag_tool = "default"
 - **Blur style**: Run **Cycle Blur Style** from the command palette to step through blur → pixelate → secure → black out (unbound by default; bind `cycle_blur_style`)
 - **Arrow style**: Run **Cycle Arrow Style** from the command palette to step through standard → pointy → curved → double (unbound by default; bind `cycle_arrow_style`). With arrows selected it restyles those in one undo step; with nothing selected it sets the style for the next arrow
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
+- **Pen smoothing**: Run **Increase / Decrease Pen Smoothing** from the command palette, or bind `increase_pen_smoothing` / `decrease_pen_smoothing` (see [Pen smoothing](#pen-smoothing))
 - **Regular polygon sides**: Use the Shapes popover Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
 
@@ -379,6 +383,7 @@ drag_tool = "default"
 - Eraser size: 12.0px
 - Eraser mode: Brush
 - Marker opacity: 0.32
+- Pen smoothing: 3 of 6
 - Fill enabled: false
 - Polygon sides: 5
 - Font size: 32.0px
@@ -387,6 +392,39 @@ drag_tool = "default"
 - Hit-test tolerance: 6.0px (linear threshold: 400)
 - Undo stack limit: 100
 - Drag mapping: Drag=Pen, Shift+Drag=Line, Ctrl+Drag=Rect, Ctrl+Shift+Drag=Arrow, Tab+Drag=Ellipse
+
+#### Pen smoothing
+
+A pointer path carries the shake of the hand that drew it. `pen_smoothing`
+removes that shake from freehand and marker strokes.
+
+```toml
+[drawing]
+pen_smoothing = 3   # 0 - 6, where 0 keeps the exact drawn path
+```
+
+**Smoothing runs when you lift the pen, not while you draw.** Smoothing a point
+needs the points on either side of it, so a live smoother cannot draw the newest
+sample until the next one arrives, and the line trails the cursor. On a projector
+that lag is visible to the room. Running on release keeps the live stroke exactly
+on the pointer and pays for the smoothing once, on a finished path.
+
+Both endpoints are pinned. A stroke starts and stops where you started and
+stopped it, at every level.
+
+| Level | Result |
+|-------|--------|
+| 0 | The exact path you drew |
+| 3 | The default. Clean, and still your line |
+| 6 | Very smooth |
+
+The level applies to the Pen and the Marker. The Eraser is not smoothed: its path
+decides what gets erased, so moving it would change the result rather than the
+look. Tablet pressure is left alone — it is real detail, not shake.
+
+Nothing new is written to a session file. The level is a tool setting, so a
+stroke is stored as the points it ended up with, and existing sessions are
+unaffected.
 
 ### `[arrow]` - Arrow Geometry
 
@@ -1945,6 +1983,8 @@ select_marker_tool = ["H"]
 select_step_marker_tool = []
 select_eraser_tool = ["D"]
 toggle_eraser_mode = ["Ctrl+Shift+E"]
+increase_pen_smoothing = []        # clean up finished strokes more
+decrease_pen_smoothing = []        # keep more of the drawn path
 cycle_blur_style = []              # blur -> pixelate -> secure -> black out
 cycle_arrow_style = []             # standard -> pointy -> curved -> double
 select_spotlight_tool = []         # dim everything except a region

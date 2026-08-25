@@ -120,6 +120,9 @@ select_step_marker_tool = []
 select_eraser_tool = ["D"]
 # Toggle eraser behavior mode
 toggle_eraser_mode = ["Ctrl+Shift+E"]
+# Step stroke smoothing up and down (unbound by default)
+increase_pen_smoothing = []
+decrease_pen_smoothing = []
 # Select the spotlight tool (unbound by default)
 select_spotlight_tool = []
 # Step the blur tool through blur/pixelate/secure/black-out (unbound by default)
@@ -1085,6 +1088,13 @@ default_blur_style = "gaussian"
 
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
+
+# How much a finished freehand or marker stroke is smoothed (0 - 6).
+#
+# 0 keeps the exact path the pointer drew. Higher values clean up the shake of
+# the hand. Smoothing runs when you lift the pen, never while you draw, so the
+# live stroke always sits exactly on the pointer. Neither endpoint ever moves.
+pen_smoothing = 3
 
 # Default fill state for fill-capable shapes
 default_fill_enabled = false

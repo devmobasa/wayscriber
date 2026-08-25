@@ -49,6 +49,12 @@ pub(super) fn build(page: &mut PageBuilder) {
             |app| validate_f64_range(&app.draft.drawing_marker_opacity, 0.05, 0.9),
         )
         .entry_row_validated(
+            "Pen smoothing (0-6)",
+            |app| app.draft.drawing_pen_smoothing.clone(),
+            |value| Message::TextChanged(TextField::DrawingPenSmoothing, value),
+            |app| validate_usize_range(&app.draft.drawing_pen_smoothing, 0, 6),
+        )
+        .entry_row_validated(
             "Undo stack limit",
             |app| app.draft.drawing_undo_stack_limit.clone(),
             |value| Message::TextChanged(TextField::DrawingUndoStackLimit, value),

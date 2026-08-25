@@ -40,6 +40,8 @@ pub enum KeybindingField {
     SelectPenTool,
     SelectEraserTool,
     ToggleEraserMode,
+    IncreasePenSmoothing,
+    DecreasePenSmoothing,
     SelectMarkerTool,
     SelectStepMarkerTool,
     SelectLineTool,

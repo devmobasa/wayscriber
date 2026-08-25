@@ -117,6 +117,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 
 ### Drawing and editing
 - Freehand pen, highlighter, eraser (circle/rect)
+- Pen smoothing: finished strokes are cleaned up on release, so the live line never lags the cursor (`[drawing] pen_smoothing`, 0-6)
 - Shapes: lines, rectangles, ellipses, polygons (with fill toggle)
 - Arrows in four styles - standard, pointy, curved (drag its handle to route around what is in the way), and double-ended - with optional auto-numbered labels; step markers for walkthroughs
 - Blur tool with four styles: soften, pixelate, secure (flattens the region to one color), and black out

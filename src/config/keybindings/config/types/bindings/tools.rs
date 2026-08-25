@@ -32,6 +32,14 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_toggle_eraser_mode")]
     pub toggle_eraser_mode: Vec<String>,
 
+    /// Raise the release-time smoothing applied to finished strokes.
+    #[serde(default = "default_increase_pen_smoothing")]
+    pub increase_pen_smoothing: Vec<String>,
+
+    /// Lower it. At 0 a stroke keeps the exact path the pointer drew.
+    #[serde(default = "default_decrease_pen_smoothing")]
+    pub decrease_pen_smoothing: Vec<String>,
+
     #[serde(default = "default_cycle_blur_style")]
     pub cycle_blur_style: Vec<String>,
 
@@ -105,6 +113,8 @@ impl Default for ToolKeybindingsConfig {
             select_step_marker_tool: default_select_step_marker_tool(),
             select_eraser_tool: default_select_eraser_tool(),
             toggle_eraser_mode: default_toggle_eraser_mode(),
+            increase_pen_smoothing: default_increase_pen_smoothing(),
+            decrease_pen_smoothing: default_decrease_pen_smoothing(),
             cycle_blur_style: default_cycle_blur_style(),
             cycle_arrow_style: default_cycle_arrow_style(),
             select_pen_tool: default_select_pen_tool(),

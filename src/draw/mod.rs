@@ -39,7 +39,8 @@ pub use render::{
 };
 #[allow(unused_imports)]
 pub use shape::{
-    ArrowLabel, ArrowStyle, BlurStyle, EmbeddedImage, EraserBrush, EraserKind, PolygonKind,
+    ArrowLabel, ArrowStyle, BlurStyle, EmbeddedImage, EraserBrush, EraserKind, MAX_PEN_SMOOTHING,
+    PolygonKind,
     REGULAR_POLYGON_DEFAULT_SIDES, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES, Shape,
     StepMarkerLabel, clamp_regular_sides,
 };

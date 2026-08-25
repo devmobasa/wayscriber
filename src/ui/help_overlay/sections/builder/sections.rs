@@ -122,6 +122,14 @@ pub(super) fn build_main_sections(
                 ),
                 "Adjust thickness",
             ),
+            row(
+                bindings_or_fallback(
+                    bindings,
+                    &[Action::IncreasePenSmoothing, Action::DecreasePenSmoothing],
+                    NOT_BOUND_LABEL,
+                ),
+                "Adjust stroke smoothing",
+            ),
         ],
         badges: color_badges.clone(),
         icon: Some(toolbar_icons::draw_icon_pen),

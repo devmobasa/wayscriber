@@ -116,6 +116,9 @@ pub struct InputState {
     pub eraser_mode: EraserMode,
     /// Opacity multiplier for marker tool strokes
     pub marker_opacity: f64,
+    /// Release-time smoothing passes applied to finished freehand and marker
+    /// strokes. 0 keeps the exact drawn path.
+    pub pen_smoothing: u8,
     /// How the blur tool obscures the region it covers
     pub blur_style: BlurStyle,
     /// Alpha of the dim layer outside every spotlight

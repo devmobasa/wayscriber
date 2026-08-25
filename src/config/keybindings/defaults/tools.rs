@@ -36,6 +36,16 @@ pub(crate) fn default_toggle_eraser_mode() -> Vec<String> {
 
 /// Unbound by default, like the blur tool itself; reachable from the command
 /// palette until the user binds a chord.
+/// Unbound by default, like `cycle_blur_style`. Every free chord near the
+/// drawing keys already means something, and smoothing is set once and left.
+pub(crate) fn default_increase_pen_smoothing() -> Vec<String> {
+    Vec::new()
+}
+
+pub(crate) fn default_decrease_pen_smoothing() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_cycle_blur_style() -> Vec<String> {
     Vec::new()
 }

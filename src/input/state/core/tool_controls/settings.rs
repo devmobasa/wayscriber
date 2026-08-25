@@ -218,6 +218,36 @@ impl InputState {
         true
     }
 
+    /// Steps the release-time smoothing level. Returns true if it changed.
+    ///
+    /// Clamped at both ends rather than wrapped: 0 and the maximum are both
+    /// settings someone deliberately sits on, and wrapping from one to the
+    /// other on a stray keypress would change every later stroke.
+    pub fn nudge_pen_smoothing(&mut self, delta: i32) -> bool {
+        let next = crate::draw::shape::clamp_pen_smoothing(
+            i32::from(self.pen_smoothing)
+                .saturating_add(delta)
+                .clamp(0, i32::from(crate::draw::shape::MAX_PEN_SMOOTHING)) as u8,
+        );
+        if next == self.pen_smoothing {
+            return false;
+        }
+        self.pen_smoothing = next;
+        self.mark_session_dirty();
+        true
+    }
+
+    /// Sets the level directly, for config load and session restore.
+    pub fn set_pen_smoothing(&mut self, level: u8) -> bool {
+        let level = crate::draw::shape::clamp_pen_smoothing(level);
+        if level == self.pen_smoothing {
+            return false;
+        }
+        self.pen_smoothing = level;
+        self.mark_session_dirty();
+        true
+    }
+
     /// Sets the magnification stored on newly drawn spotlights.
     ///
     /// Deliberately requests no warning feedback: this changes what the *next*

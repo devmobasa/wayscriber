@@ -95,6 +95,9 @@ impl InputState {
             eraser_kind: EraserKind::Circle,
             eraser_mode,
             marker_opacity,
+            pen_smoothing: crate::draw::shape::clamp_pen_smoothing(
+                crate::config::DEFAULT_PEN_SMOOTHING,
+            ),
             blur_style: BlurStyle::default(),
             spotlight_dim_opacity: 0.6,
             spotlight_feather: 0.35,

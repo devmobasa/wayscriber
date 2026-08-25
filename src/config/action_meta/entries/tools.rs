@@ -225,6 +225,26 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        IncreasePenSmoothing,
+        "Increase Pen Smoothing",
+        None,
+        "Clean up finished strokes more",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
+        DecreasePenSmoothing,
+        "Decrease Pen Smoothing",
+        None,
+        "Keep more of the drawn path",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
         CycleBlurStyle,
         "Cycle Blur Style",
         None,

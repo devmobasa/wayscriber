@@ -9,6 +9,9 @@ pub const QUICK_COLOR_RENDER_LIMIT: usize = 24;
 /// Default tolerance used when selecting or targeting drawn shapes.
 pub(crate) const DEFAULT_HIT_TEST_TOLERANCE: f64 = 6.0;
 
+/// Default release-time smoothing level for freehand and marker strokes.
+pub const DEFAULT_PEN_SMOOTHING: u8 = 3;
+
 /// Drawing-related settings.
 ///
 /// Controls the default appearance of drawing tools when the overlay first opens.
@@ -48,6 +51,14 @@ pub struct DrawingConfig {
     /// Default marker opacity multiplier (0.05 - 0.9), applied to the current color alpha
     #[serde(default = "default_marker_opacity")]
     pub marker_opacity: f64,
+
+    /// Release-time smoothing passes for freehand and marker strokes (0 - 6).
+    ///
+    /// 0 keeps the exact path the pointer drew. Higher values clean up the
+    /// finished stroke without moving either of its endpoints. The live stroke
+    /// always follows the raw pointer, whatever this is set to.
+    #[serde(default = "default_pen_smoothing")]
+    pub pen_smoothing: u8,
 
     /// Whether shapes start filled when applicable
     #[serde(default = "default_fill_enabled")]
@@ -130,6 +141,7 @@ impl Default for DrawingConfig {
             default_eraser_mode: default_eraser_mode(),
             default_blur_style: default_blur_style(),
             marker_opacity: default_marker_opacity(),
+            pen_smoothing: default_pen_smoothing(),
             default_fill_enabled: default_fill_enabled(),
             polygon_sides: default_polygon_sides(),
             default_font_size: default_font_size(),
@@ -870,6 +882,12 @@ fn default_blur_style() -> BlurStyle {
 
 fn default_marker_opacity() -> f64 {
     0.32
+}
+
+/// A middle setting. Enough to take the shake out of a normal hand, little
+/// enough that a deliberate corner is still a corner.
+fn default_pen_smoothing() -> u8 {
+    DEFAULT_PEN_SMOOTHING
 }
 
 fn default_fill_enabled() -> bool {

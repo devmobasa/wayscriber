@@ -6,6 +6,25 @@ use log::info;
 use super::super::{InputState, PendingToolbarPersistence};
 
 impl InputState {
+    /// Step the smoothing level and say where it landed.
+    ///
+    /// The toast names the level because smoothing has no visible effect until
+    /// the next stroke is finished: without it the key would appear dead.
+    fn announce_pen_smoothing(&mut self, delta: i32) {
+        if !self.nudge_pen_smoothing(delta) {
+            return;
+        }
+        let level = self.pen_smoothing;
+        let max = crate::draw::shape::MAX_PEN_SMOOTHING;
+        info!("Pen smoothing set to {level}/{max}");
+        let message = if level == 0 {
+            "Pen smoothing off".to_string()
+        } else {
+            format!("Pen smoothing {level}/{max}")
+        };
+        self.push_toast(ToastPriority::Info, "pen-smoothing", Toast::info(message));
+    }
+
     pub(in crate::input::state) fn handle_tool_action(&mut self, action: Action) -> bool {
         if let Some(tool) = Tool::from_select_action(action) {
             if tool == Tool::Highlight {
@@ -37,6 +56,8 @@ impl InputState {
             Action::DecreaseMarkerOpacity => {
                 self.set_marker_opacity(self.marker_opacity - 0.05);
             }
+            Action::IncreasePenSmoothing => self.announce_pen_smoothing(1),
+            Action::DecreasePenSmoothing => self.announce_pen_smoothing(-1),
             Action::ToggleEraserMode => {
                 if self.toggle_eraser_mode() {
                     info!("Eraser mode set to {:?}", self.eraser_mode);

@@ -59,6 +59,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             eraser_size: state.eraser_size,
             eraser_kind: state.eraser_kind,
             pressure_variation_threshold: state.pressure_variation_threshold,
+            pen_smoothing: state.pen_smoothing,
         };
         tool.finish_stroke(snapshot)
     };
@@ -244,5 +245,86 @@ fn append_segment_damage_regions(
         if let Some(region) = bounding_box_for_points(&[p0, p1], stroke_width) {
             regions.push(region);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::draw::Shape;
+    use crate::input::Tool;
+    use crate::input::state::test_support::make_test_input_state;
+
+    /// A straight run with one sample knocked sideways, as a shaky hand makes.
+    fn shaky_path() -> Vec<(i32, i32)> {
+        vec![(0, 0), (10, 0), (20, 12), (30, 0), (40, 0)]
+    }
+
+    /// Draw `path` with `tool` at the state's current smoothing level and return
+    /// the points the committed shape ended up with.
+    fn drawn_points(level: u8, tool: Tool) -> Vec<(i32, i32)> {
+        let mut state = make_test_input_state();
+        state.set_pen_smoothing(level);
+        state.set_tool_override(Some(tool));
+
+        let path = shaky_path();
+        let first = path[0];
+        let last = *path.last().unwrap();
+        state.on_mouse_press(crate::input::MouseButton::Left, first.0, first.1);
+        for &(x, y) in &path[1..] {
+            state.on_mouse_motion(x, y);
+        }
+        state.on_mouse_release(crate::input::MouseButton::Left, last.0, last.1);
+
+        let shape = state
+            .boards
+            .active_frame()
+            .shapes
+            .last()
+            .expect("the release committed a shape")
+            .shape
+            .clone();
+        match shape {
+            Shape::Freehand { points, .. } | Shape::MarkerStroke { points, .. } => points,
+            other => panic!("expected a path stroke, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_committed_pen_stroke_is_smoothed_at_the_configured_level() {
+        let raw = drawn_points(0, Tool::Pen);
+        let smoothed = drawn_points(4, Tool::Pen);
+
+        let raw_spike = raw.iter().map(|&(_, y)| y).max().unwrap();
+        let smoothed_spike = smoothed.iter().map(|&(_, y)| y).max().unwrap();
+        assert!(
+            smoothed_spike < raw_spike,
+            "level 4 must pull the spike down from {raw_spike}, got {smoothed_spike}"
+        );
+    }
+
+    #[test]
+    fn level_zero_commits_the_exact_path_the_pointer_drew() {
+        assert_eq!(drawn_points(0, Tool::Pen), shaky_path());
+    }
+
+    #[test]
+    fn a_smoothed_stroke_still_starts_and_ends_where_the_pointer_did() {
+        let path = shaky_path();
+        let smoothed = drawn_points(6, Tool::Pen);
+
+        assert_eq!(smoothed.first(), path.first());
+        assert_eq!(smoothed.last(), path.last());
+    }
+
+    #[test]
+    fn the_marker_is_smoothed_on_the_same_setting_as_the_pen() {
+        let raw = drawn_points(0, Tool::Marker);
+        let smoothed = drawn_points(4, Tool::Marker);
+
+        assert_ne!(
+            raw, smoothed,
+            "a highlighter is drawn by hand too and shakes the same way"
+        );
+        assert_eq!(smoothed.first(), raw.first());
     }
 }

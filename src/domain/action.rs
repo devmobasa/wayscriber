@@ -41,6 +41,8 @@ pub enum Action {
     DecreaseThickness,
     IncreaseMarkerOpacity,
     DecreaseMarkerOpacity,
+    IncreasePenSmoothing,
+    DecreasePenSmoothing,
     SelectSelectionTool,
     SelectMarkerTool,
     SelectStepMarkerTool,

@@ -1,6 +1,6 @@
 use super::Config;
 use crate::config::types::DEFAULT_HIT_TEST_TOLERANCE;
-use crate::draw::shape::{REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
+use crate::draw::shape::{MAX_PEN_SMOOTHING, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
 impl Config {
@@ -37,6 +37,15 @@ impl Config {
         }
 
         // Marker opacity: 0.05 - 0.9
+        // Pen smoothing: 0 - MAX_PEN_SMOOTHING passes
+        if self.drawing.pen_smoothing > MAX_PEN_SMOOTHING {
+            log::warn!(
+                "Invalid pen_smoothing {}, clamping to 0-{MAX_PEN_SMOOTHING} range",
+                self.drawing.pen_smoothing
+            );
+            self.drawing.pen_smoothing = MAX_PEN_SMOOTHING;
+        }
+
         if !(0.05..=0.9).contains(&self.drawing.marker_opacity) {
             log::warn!(
                 "Invalid marker_opacity {:.2}, clamping to 0.05-0.90 range",

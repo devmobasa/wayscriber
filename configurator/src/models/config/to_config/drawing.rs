@@ -4,7 +4,7 @@ use super::super::parse::{
 };
 use crate::models::error::FormError;
 use wayscriber::config::Config;
-use wayscriber::draw::{REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
+use wayscriber::draw::{MAX_PEN_SMOOTHING, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
 use wayscriber::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use wayscriber::input::{DragBindableTool, DragTool};
 
@@ -50,6 +50,14 @@ impl ConfigDraft {
             REGULAR_POLYGON_MAX_SIDES,
             errors,
             |value| config.drawing.polygon_sides = value,
+        );
+        parse_u8_in_range(
+            &self.drawing_pen_smoothing,
+            "drawing.pen_smoothing",
+            0,
+            MAX_PEN_SMOOTHING,
+            errors,
+            |value| config.drawing.pen_smoothing = value,
         );
         parse_field_in_range(
             &self.drawing_marker_opacity,
