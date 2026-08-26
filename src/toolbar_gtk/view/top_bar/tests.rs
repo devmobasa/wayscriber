@@ -1388,8 +1388,6 @@ fn expected_style_pill_nodes(
 
 #[test]
 fn style_pill_spec_matches_builtin_tree_across_morph_states() {
-    use crate::backend::wayland::TopToolbarWidgetKind as W;
-
     let state = make_test_input_state();
     let regular = ToolbarSnapshot::from_input_with_bindings(
         &state,
@@ -1422,206 +1420,346 @@ fn style_pill_spec_matches_builtin_tree_across_morph_states() {
         ("minimized", minimized),
         ("micro", micro),
     ] {
-        let plan = plan_top_strip(&snapshot);
-        let expected = expected_style_pill_nodes(&snapshot, &plan);
-        let (width, height) = top_toolbar_size(&snapshot);
-        let tree =
-            crate::backend::wayland::build_top_toolbar_view(&snapshot, width as f64, height as f64);
+        assert_builtin_style_pill_scenario(name, &snapshot);
+    }
+}
 
-        assert_eq!(
-            tree.node_by_id(&"top.island.style".into()).is_some(),
-            !expected.is_empty(),
-            "{name}: the pill card exists exactly when the spec has controls"
-        );
+fn assert_builtin_style_pill_scenario(name: &str, snapshot: &ToolbarSnapshot) {
+    let plan = plan_top_strip(snapshot);
+    let expected = expected_style_pill_nodes(snapshot, &plan);
+    let (width, height) = top_toolbar_size(snapshot);
+    let tree =
+        crate::backend::wayland::build_top_toolbar_view(snapshot, width as f64, height as f64);
 
-        let actual: Vec<_> = tree
-            .nodes()
+    assert_eq!(
+        tree.node_by_id(&"top.island.style".into()).is_some(),
+        !expected.is_empty(),
+        "{name}: the pill card exists exactly when the spec has controls"
+    );
+
+    let actual: Vec<_> = tree
+        .nodes()
+        .iter()
+        .filter(|node| node.id.as_str().starts_with("top.style."))
+        .collect();
+    assert_eq!(
+        actual
             .iter()
-            .filter(|node| node.id.as_str().starts_with("top.style."))
-            .collect();
-        assert_eq!(
-            actual
-                .iter()
-                .map(|node| node.id.as_str().to_string())
-                .collect::<Vec<_>>(),
-            expected
-                .iter()
-                .map(|(id, _)| id.clone())
-                .collect::<Vec<_>>(),
-            "{name}: builtin pill node order"
-        );
+            .map(|node| node.id.as_str().to_string())
+            .collect::<Vec<_>>(),
+        expected
+            .iter()
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>(),
+        "{name}: builtin pill node order"
+    );
 
-        for (node, (id, expectation)) in actual.iter().zip(&expected) {
-            let interaction_event = node.interact.as_ref().map(|interaction| &interaction.event);
-            let interaction_tooltip = node
-                .interact
+    for (node, (id, expectation)) in actual.iter().zip(&expected) {
+        assert_builtin_style_pill_node(
+            name,
+            snapshot,
+            &node.kind,
+            node.interact.as_ref().map(|interaction| &interaction.event),
+            node.interact
                 .as_ref()
-                .and_then(|interaction| interaction.tooltip.clone());
-            match expectation {
-                StylePillNodeExpectation::Control(control) => {
-                    let expected_event = control
-                        .enabled(&snapshot)
-                        .then(|| control.event(&snapshot))
-                        .flatten();
-                    assert_eq!(
-                        interaction_event,
-                        expected_event.as_ref(),
-                        "{name}: {id} event"
-                    );
-                    if node.interact.is_some() {
-                        assert_eq!(
-                            interaction_tooltip,
-                            control.tooltip(&snapshot),
-                            "{name}: {id} tooltip"
-                        );
-                    }
-                    match (control.role(), &node.kind) {
-                        (model::StylePillRole::Swatch, W::Swatch { color, selected }) => {
-                            let expected_color = match control {
-                                model::StylePillControl::QuickSwatch(index) => {
-                                    snapshot.quick_colors.rendered_entries()[*index].color
-                                }
-                                _ => snapshot.color,
-                            };
-                            assert_eq!(
-                                *color,
-                                (
-                                    expected_color.r,
-                                    expected_color.g,
-                                    expected_color.b,
-                                    expected_color.a
-                                ),
-                                "{name}: {id} color"
-                            );
-                            assert_eq!(*selected, control.active(&snapshot), "{name}: {id}");
-                        }
-                        (model::StylePillRole::Slider, W::Slider { t }) => {
-                            let (spec, value) = control.slider(&snapshot).expect("slider spec");
-                            assert!(
-                                (*t - spec.t_from_value(value)).abs() < 1e-9,
-                                "{name}: {id} slider position"
-                            );
-                        }
-                        (model::StylePillRole::Value, W::TextButton { label, .. }) => {
-                            assert_eq!(
-                                Some(label.text.clone()),
-                                control.value_text(&snapshot),
-                                "{name}: {id} live numeral"
-                            );
-                            // Covered by the generic event assertion above:
-                            // the numeral opens the precise-entry popup.
-                            assert!(
-                                matches!(
-                                    interaction_event,
-                                    Some(crate::ui::toolbar::ToolbarEvent::OpenPrecisionEntry(_))
-                                ),
-                                "{name}: {id} opens the precise entry"
-                            );
-                        }
-                        (model::StylePillRole::Toggle, W::MiniCheckbox { checked, label }) => {
-                            assert_eq!(*checked, control.active(&snapshot), "{name}: {id}");
-                            assert_eq!(
-                                label.text,
-                                control.label(&snapshot).as_ref(),
-                                "{name}: {id} label"
-                            );
-                        }
-                        (model::StylePillRole::Button, W::TextButton { label, style }) => {
-                            // Cycle buttons show the live value they step;
-                            // plain buttons show their label.
-                            let expected_text = match control {
-                                model::StylePillControl::SelectionCycle(_)
-                                | model::StylePillControl::ArrowStyleCycle => {
-                                    control.value_text(&snapshot).expect("cycle value text")
-                                }
-                                _ => control.label(&snapshot).into_owned(),
-                            };
-                            assert_eq!(label.text, expected_text, "{name}: {id} text");
-                            assert_eq!(
-                                style.disabled,
-                                !control.enabled(&snapshot),
-                                "{name}: {id} disabled style"
-                            );
-                        }
-                        (
-                            model::StylePillRole::Segmented,
-                            W::SegmentedControl {
-                                left,
-                                right,
-                                active_right,
-                            },
-                        ) => {
-                            let segments = control.segments(&snapshot).expect("segments");
-                            assert_eq!(left.text, segments[0].label, "{name}: {id}");
-                            assert_eq!(right.text, segments[1].label, "{name}: {id}");
-                            assert_eq!(*active_right, segments[1].active, "{name}: {id}");
-                            assert!(node.interact.is_none(), "halves carry the interactions");
-                        }
-                        (role, kind) => panic!("{name}: {id} role {role:?} painted as {kind:?}"),
-                    }
-                }
-                StylePillNodeExpectation::Readout(control) => {
-                    assert!(node.interact.is_none(), "{name}: {id} readout is decor");
-                    match &node.kind {
-                        W::Label(label) => assert_eq!(
-                            Some(label.text.clone()),
-                            control.value_text(&snapshot),
-                            "{name}: {id} readout"
-                        ),
-                        other => panic!("{name}: {id} readout kind {other:?}"),
-                    }
-                }
-                StylePillNodeExpectation::StepHalf(control, index) => {
-                    let steps = control.steps(&snapshot).expect("stepper halves");
-                    let step = &steps[*index];
-                    let enabled = control.enabled(&snapshot);
-                    match &node.kind {
-                        W::TextButton { label, style } => {
-                            assert_eq!(label.text, step.label, "{name}: {id} step label");
-                            assert_eq!(style.disabled, !enabled, "{name}: {id} step style");
-                        }
-                        other => panic!("{name}: {id} step kind {other:?}"),
-                    }
-                    assert_eq!(
-                        interaction_event,
-                        enabled.then_some(&step.event),
-                        "{name}: {id} step event"
-                    );
-                    assert_eq!(
-                        interaction_tooltip.as_deref(),
-                        enabled.then_some(step.tooltip.as_str()),
-                        "{name}: {id} step tooltip"
-                    );
-                }
-                StylePillNodeExpectation::StepValue(control) => {
-                    assert!(node.interact.is_none(), "{name}: {id} readout is decor");
-                    match &node.kind {
-                        W::Label(label) => assert_eq!(
-                            Some(label.text.clone()),
-                            control.value_text(&snapshot),
-                            "{name}: {id} stepper readout"
-                        ),
-                        other => panic!("{name}: {id} stepper readout kind {other:?}"),
-                    }
-                }
-                StylePillNodeExpectation::SegmentHalf(control, index) => {
-                    let segments = control.segments(&snapshot).expect("segments");
-                    let segment = &segments[*index];
-                    assert!(matches!(node.kind, W::HitArea), "{name}: {id}");
-                    assert_eq!(
-                        interaction_event,
-                        Some(&segment.event),
-                        "{name}: {id} segment event"
-                    );
-                    assert_eq!(
-                        interaction_tooltip.as_deref(),
-                        Some(segment.tooltip.as_str()),
-                        "{name}: {id} segment tooltip"
-                    );
-                }
-            }
+                .and_then(|interaction| interaction.tooltip.as_deref()),
+            node.interact.is_some(),
+            id,
+            expectation,
+        );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assert_builtin_style_pill_node(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    interaction_event: Option<&ToolbarEvent>,
+    interaction_tooltip: Option<&str>,
+    has_interaction: bool,
+    id: &str,
+    expectation: &StylePillNodeExpectation,
+) {
+    match expectation {
+        StylePillNodeExpectation::Control(control) => assert_builtin_style_pill_control(
+            name,
+            snapshot,
+            kind,
+            interaction_event,
+            interaction_tooltip,
+            has_interaction,
+            id,
+            *control,
+        ),
+        StylePillNodeExpectation::Readout(control) => {
+            assert_builtin_style_pill_readout(name, snapshot, kind, has_interaction, id, *control)
+        }
+        StylePillNodeExpectation::StepHalf(control, index) => assert_builtin_style_pill_step_half(
+            name,
+            snapshot,
+            kind,
+            interaction_event,
+            interaction_tooltip,
+            id,
+            *control,
+            *index,
+        ),
+        StylePillNodeExpectation::StepValue(control) => assert_builtin_style_pill_step_value(
+            name,
+            snapshot,
+            kind,
+            has_interaction,
+            id,
+            *control,
+        ),
+        StylePillNodeExpectation::SegmentHalf(control, index) => {
+            assert_builtin_style_pill_segment_half(
+                name,
+                snapshot,
+                kind,
+                interaction_event,
+                interaction_tooltip,
+                id,
+                *control,
+                *index,
+            )
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assert_builtin_style_pill_control(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    interaction_event: Option<&ToolbarEvent>,
+    interaction_tooltip: Option<&str>,
+    has_interaction: bool,
+    id: &str,
+    control: model::StylePillControl,
+) {
+    let expected_event = control
+        .enabled(snapshot)
+        .then(|| control.event(snapshot))
+        .flatten();
+    assert_eq!(
+        interaction_event,
+        expected_event.as_ref(),
+        "{name}: {id} event"
+    );
+    if has_interaction {
+        assert_eq!(
+            interaction_tooltip,
+            control.tooltip(snapshot).as_deref(),
+            "{name}: {id} tooltip"
+        );
+    }
+    assert_builtin_style_pill_control_kind(
+        name,
+        snapshot,
+        kind,
+        interaction_event,
+        has_interaction,
+        id,
+        control,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assert_builtin_style_pill_control_kind(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    interaction_event: Option<&ToolbarEvent>,
+    has_interaction: bool,
+    id: &str,
+    control: model::StylePillControl,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
+    match (control.role(), kind) {
+        (model::StylePillRole::Swatch, W::Swatch { color, selected }) => {
+            let expected_color = match control {
+                model::StylePillControl::QuickSwatch(index) => {
+                    snapshot.quick_colors.rendered_entries()[index].color
+                }
+                _ => snapshot.color,
+            };
+            assert_eq!(
+                *color,
+                (
+                    expected_color.r,
+                    expected_color.g,
+                    expected_color.b,
+                    expected_color.a
+                ),
+                "{name}: {id} color"
+            );
+            assert_eq!(*selected, control.active(snapshot), "{name}: {id}");
+        }
+        (model::StylePillRole::Slider, W::Slider { t }) => {
+            let (spec, value) = control.slider(snapshot).expect("slider spec");
+            assert!(
+                (*t - spec.t_from_value(value)).abs() < 1e-9,
+                "{name}: {id} slider position"
+            );
+        }
+        (model::StylePillRole::Value, W::TextButton { label, .. }) => {
+            assert_eq!(
+                Some(label.text.clone()),
+                control.value_text(snapshot),
+                "{name}: {id} live numeral"
+            );
+            assert!(
+                matches!(interaction_event, Some(ToolbarEvent::OpenPrecisionEntry(_))),
+                "{name}: {id} opens the precise entry"
+            );
+        }
+        (model::StylePillRole::Toggle, W::MiniCheckbox { checked, label }) => {
+            assert_eq!(*checked, control.active(snapshot), "{name}: {id}");
+            assert_eq!(
+                label.text,
+                control.label(snapshot).as_ref(),
+                "{name}: {id} label"
+            );
+        }
+        (model::StylePillRole::Button, W::TextButton { label, style }) => {
+            let expected_text = match control {
+                model::StylePillControl::SelectionCycle(_)
+                | model::StylePillControl::ArrowStyleCycle => {
+                    control.value_text(snapshot).expect("cycle value text")
+                }
+                _ => control.label(snapshot).into_owned(),
+            };
+            assert_eq!(label.text, expected_text, "{name}: {id} text");
+            assert_eq!(
+                style.disabled,
+                !control.enabled(snapshot),
+                "{name}: {id} disabled style"
+            );
+        }
+        (
+            model::StylePillRole::Segmented,
+            W::SegmentedControl {
+                left,
+                right,
+                active_right,
+            },
+        ) => {
+            let segments = control.segments(snapshot).expect("segments");
+            assert_eq!(left.text, segments[0].label, "{name}: {id}");
+            assert_eq!(right.text, segments[1].label, "{name}: {id}");
+            assert_eq!(*active_right, segments[1].active, "{name}: {id}");
+            assert!(!has_interaction, "halves carry the interactions");
+        }
+        (role, kind) => panic!("{name}: {id} role {role:?} painted as {kind:?}"),
+    }
+}
+
+fn assert_builtin_style_pill_readout(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    has_interaction: bool,
+    id: &str,
+    control: model::StylePillControl,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
+    assert!(!has_interaction, "{name}: {id} readout is decor");
+    match kind {
+        W::Label(label) => assert_eq!(
+            Some(label.text.clone()),
+            control.value_text(snapshot),
+            "{name}: {id} readout"
+        ),
+        other => panic!("{name}: {id} readout kind {other:?}"),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assert_builtin_style_pill_step_half(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    interaction_event: Option<&ToolbarEvent>,
+    interaction_tooltip: Option<&str>,
+    id: &str,
+    control: model::StylePillControl,
+    index: usize,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
+    let steps = control.steps(snapshot).expect("stepper halves");
+    let step = &steps[index];
+    let enabled = control.enabled(snapshot);
+    match kind {
+        W::TextButton { label, style } => {
+            assert_eq!(label.text, step.label, "{name}: {id} step label");
+            assert_eq!(style.disabled, !enabled, "{name}: {id} step style");
+        }
+        other => panic!("{name}: {id} step kind {other:?}"),
+    }
+    assert_eq!(
+        interaction_event,
+        enabled.then_some(&step.event),
+        "{name}: {id} step event"
+    );
+    assert_eq!(
+        interaction_tooltip,
+        enabled.then_some(step.tooltip.as_str()),
+        "{name}: {id} step tooltip"
+    );
+}
+
+fn assert_builtin_style_pill_step_value(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    has_interaction: bool,
+    id: &str,
+    control: model::StylePillControl,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
+    assert!(!has_interaction, "{name}: {id} readout is decor");
+    match kind {
+        W::Label(label) => assert_eq!(
+            Some(label.text.clone()),
+            control.value_text(snapshot),
+            "{name}: {id} stepper readout"
+        ),
+        other => panic!("{name}: {id} stepper readout kind {other:?}"),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assert_builtin_style_pill_segment_half(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    interaction_event: Option<&ToolbarEvent>,
+    interaction_tooltip: Option<&str>,
+    id: &str,
+    control: model::StylePillControl,
+    index: usize,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
+    let segments = control.segments(snapshot).expect("segments");
+    let segment = &segments[index];
+    assert!(matches!(kind, W::HitArea), "{name}: {id}");
+    assert_eq!(
+        interaction_event,
+        Some(&segment.event),
+        "{name}: {id} segment event"
+    );
+    assert_eq!(
+        interaction_tooltip,
+        Some(segment.tooltip.as_str()),
+        "{name}: {id} segment tooltip"
+    );
 }
 
 #[test]
