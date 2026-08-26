@@ -67,6 +67,12 @@ impl Config {
             );
         }
 
+        self.validate_click_highlight_colors();
+
+        self.validate_input_hud();
+    }
+
+    fn validate_click_highlight_colors(&mut self) {
         for i in 0..4 {
             if !(0.0..=1.0).contains(&self.ui.click_highlight.fill_color[i]) {
                 log::warn!(
@@ -87,8 +93,6 @@ impl Config {
                     self.ui.click_highlight.outline_color[i].clamp(0.0, 1.0);
             }
         }
-
-        self.validate_input_hud();
     }
 
     fn validate_input_hud(&mut self) {
