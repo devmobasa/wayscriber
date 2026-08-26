@@ -216,29 +216,13 @@ async fn run_listener(
     )
     .await?
     .context("org.freedesktop.portal.GlobalShortcuts unavailable")?;
-    match await_portal_operation(
+    let version = await_portal_operation(
         proxy.version(),
         &mut shutdown,
         "GlobalShortcuts version lookup",
     )
-    .await?
-    {
-        Ok(version) => {
-            debug!("GlobalShortcuts portal interface version {}", version);
-            if version < 2 {
-                warn!(
-                    "GlobalShortcuts portal version {} lacks reliable activation token support; overlay focus may require notification click",
-                    version
-                );
-            }
-        }
-        Err(err) => {
-            warn!(
-                "Failed to read GlobalShortcuts portal interface version: {}",
-                err
-            );
-        }
-    }
+    .await?;
+    log_global_shortcuts_version(version);
 
     let session_handle =
         create_global_shortcuts_session(&connection, &proxy, &portal_app_id, &mut shutdown).await?;
@@ -294,6 +278,27 @@ async fn run_listener(
                 debug!("Global shortcuts listener received shutdown");
                 return Ok(());
             }
+        }
+    }
+}
+
+#[cfg(feature = "portal")]
+fn log_global_shortcuts_version(version: zbus::Result<u32>) {
+    match version {
+        Ok(version) => {
+            debug!("GlobalShortcuts portal interface version {}", version);
+            if version < 2 {
+                warn!(
+                    "GlobalShortcuts portal version {} lacks reliable activation token support; overlay focus may require notification click",
+                    version
+                );
+            }
+        }
+        Err(err) => {
+            warn!(
+                "Failed to read GlobalShortcuts portal interface version: {}",
+                err
+            );
         }
     }
 }
