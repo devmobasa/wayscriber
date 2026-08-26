@@ -12,7 +12,8 @@ default-run = "wayscriber"
 members = ["configurator"]
 default-members = ["."]
 
-[workspace.lints]
+[workspace.lints.clippy]
+cognitive_complexity = "warn"
 
 [lints]
 workspace = true

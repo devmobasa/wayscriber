@@ -1,0 +1,3 @@
+# Keep functions within the agreed cognitive-complexity budget. Clippy emits a
+# warning above this value, and CI promotes warnings to errors.
+cognitive-complexity-threshold = 20
