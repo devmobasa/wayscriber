@@ -103,86 +103,7 @@ pub(super) fn run_event_loop(
             || state.frozen.is_in_progress()
             || state.zoom.is_in_progress()
             || state.overlay_blocks_event_loop();
-        let frame_callback_pending = state.surface.frame_callback_pending();
-        let vsync_enabled = state.config.performance.enable_vsync;
-
-        // Calculate timeout for dispatch:
-        // - If capture active, not configured, or waiting for VSync: block until a
-        //   producer wakes us or a real operation deadline expires
-        // - If VSync disabled and needs_redraw: use frame rate cap timeout
-        // - Otherwise: use animation timeout
-        let should_block = capture_active
-            || !state.surface.is_configured()
-            || (vsync_enabled && frame_callback_pending);
-        let now = Instant::now();
-        // Transient toolbar-fade animation shares the animation timeout slot:
-        // a fade in flight (or a pending 4s idle dim) wakes the loop, and a
-        // settled fade contributes nothing.
-        let animation_timeout = min_timeout(
-            min_timeout(
-                min_timeout(
-                    state.ui_animation_timeout(now),
-                    state.top_strip_fade_timeout(now),
-                ),
-                state.inline_toolbar_tooltip_timeout(now),
-            ),
-            // A still OCR card under reduced motion asks for no frames, so it
-            // needs one deadline to be taken away on.
-            state.input_state.ocr_scan_wake_after(now),
-        );
-        let toolbar_handoff_timeout = state.toolbar_drag_handoff_timeout(now);
-        let autosave_timeout = session_save::autosave_timeout(state, now);
-        let focus_exit_timeout = state.focus_exit_timeout(now);
-        let command_palette_repeat_timeout = state.input_state.command_palette_repeat_timeout(now);
-        let font_picker_repeat_timeout = state.input_state.font_picker_repeat_timeout(now);
-        let capture_timeout = capture::capture_timeout(state, now);
-        let interaction_timeout =
-            interaction::interaction_timeout(state.spotlight_wheel_idle_deadline, now);
-        let durable_action_timeout = durable_action_retry_timeout(state, now);
-        // Backend output actions are drained one at a time, and the toolbar
-        // persistence queue drains on the same pass. If either holds
-        // drainable work, loop immediately even when VSync is disabled and
-        // the preceding action's redraw cleared `needs_redraw`. Entries
-        // deferred behind a runtime-state barrier are not drainable — the
-        // writer completion that resolves the barrier wakes the loop.
-        let pending_backend_action_timeout = (state.input_state.has_pending_backend_actions()
-            || state.toolbar_persistence_drain_ready())
-        .then_some(Duration::ZERO);
-        let timeout = if should_block {
-            min_timeout(autosave_timeout, focus_exit_timeout)
-        } else if !vsync_enabled && state.input_state.needs_redraw {
-            // When VSync is off and we need to redraw, wake up when frame budget allows
-            let frame_cap_timeout = render::frame_rate_cap_timeout(
-                state.config.performance.max_fps_no_vsync,
-                last_render_time,
-            );
-            // Use the shorter of frame cap timeout and animation timeout.
-            // If unlimited FPS (None) and no animation, use zero to avoid blocking.
-            let merged = match (frame_cap_timeout, animation_timeout) {
-                (Some(fc), Some(anim)) => Some(fc.min(anim)),
-                (Some(fc), None) => Some(fc),
-                (None, _) => Some(Duration::ZERO),
-            };
-            min_timeout(merged, min_timeout(autosave_timeout, focus_exit_timeout))
-        } else {
-            min_timeout(
-                animation_timeout,
-                min_timeout(autosave_timeout, focus_exit_timeout),
-            )
-        };
-        let timeout = min_timeout(timeout, toolbar_handoff_timeout);
-        let timeout = min_timeout(timeout, command_palette_repeat_timeout);
-        let timeout = min_timeout(timeout, font_picker_repeat_timeout);
-        let timeout = min_timeout(timeout, capture_timeout);
-        let timeout = min_timeout(timeout, interaction_timeout);
-        let timeout = min_timeout(timeout, durable_action_timeout);
-        let timeout = min_timeout(timeout, pending_backend_action_timeout);
-        // A radial menu waiting out its paint delay must appear without
-        // further input events.
-        let timeout = min_timeout(timeout, state.input_state.radial_menu_paint_timeout(now));
-        // A held key must wake the loop to fire its next auto-repeat.
-        let timeout = min_timeout(timeout, state.key_repeat_timeout(now));
-        let timeout = min_timeout(timeout, state.input_state.sequence_timeout(now));
+        let timeout = event_loop_timeout(state, capture_active, last_render_time);
         if let Err(e) =
             dispatch::dispatch_events(event_queue, state, runtime_wake, signal_state, timeout)
         {
@@ -213,124 +134,11 @@ pub(super) fn run_event_loop(
         if break_on_requested_exit(state) {
             break;
         }
-        if state.surface.is_xdg_window()
-            && !state.input_state.should_exit
-            && !state.has_keyboard_focus()
-            && !state.desktop_open_in_progress()
-            && state.focus_exit_suppression_expired(Instant::now())
-        {
-            if state.xdg_focus_loss_exits_overlay() {
-                warn!("Keyboard focus not restored after clipboard action; exiting overlay");
-                state.clear_focus_exit_suppression();
-                notification::send_notification_async(
-                    &state.tokio_handle,
-                    "Wayscriber lost focus".to_string(),
-                    "The desktop could not keep the overlay focused, so Wayscriber closed it."
-                        .to_string(),
-                    Some("dialog-warning".to_string()),
-                );
-                state.input_state.should_exit = true;
-            } else {
-                warn!(
-                    "Keyboard focus not restored after clipboard action; keeping overlay open (ui.xdg_focus_loss_behavior=stay)"
-                );
-                state.clear_focus_exit_suppression();
-                state.set_xdg_close_guard_for(Duration::from_millis(2500));
-                state.request_xdg_activation(qh);
-            }
-        }
+        handle_xdg_focus_loss(state, qh);
         // Adjust keyboard interactivity if toolbar visibility changed.
-        state.sync_toolbar_visibility(qh);
-
-        if state.finish_toolbar_drag_handoff_if_due(Instant::now()) {
-            let _ = conn.flush();
-        }
-
-        // Advance any delayed history playback (undo/redo with delay).
-        if state
-            .input_state
-            .tick_delayed_history(std::time::Instant::now())
-        {
-            state.toolbar.mark_dirty();
-            state.input_state.needs_redraw = true;
-        }
-        if state.input_state.has_pending_history() {
-            state.input_state.needs_redraw = true;
-        }
-
-        if state
-            .input_state
-            .tick_command_palette_repeat(Instant::now())
-        {
-            state.input_state.needs_redraw = true;
-        }
-
-        if state.input_state.tick_font_picker_repeat(Instant::now()) {
-            state.input_state.needs_redraw = true;
-        }
-
-        // Synthesize auto-repeat for a held key (sctk's calloop repeat is not
-        // wired to this manual loop). `dispatch_key_repeat` sets needs_redraw
-        // as its routed action requires.
-        state.tick_key_repeat(Instant::now(), conn, qh);
-        if state.input_state.expire_pending_sequence(Instant::now()) {
-            state.input_state.needs_redraw = true;
-        }
-
-        if !capture_active && state.ui_animation_due(std::time::Instant::now()) {
-            state.input_state.needs_redraw = true;
-        }
-        if state.input_state.ocr_scan_due(std::time::Instant::now()) {
-            state.input_state.needs_redraw = true;
-        }
-
-        // When the radial paint deadline passes, this requests the redraw
-        // that paints the menu (no-op before the deadline and after paint).
-        state
-            .input_state
-            .tick_radial_menu_paint(std::time::Instant::now());
-
-        capture::handle_pending_actions(state, qh);
-        // Desktop-open handoff (and other pending-action completions) can set
-        // should_exit after the post-dispatch check. Break here so exit does not
-        // wait on another compositor wake under a blocking dispatch timeout.
-        if break_on_requested_exit(state) {
+        if advance_post_dispatch_state(state, conn, qh, capture_active) {
             break;
         }
-        state.sync_overlay_interactivity();
-        state.apply_onboarding_hints();
-
-        // Hand changed palette recents to the dedicated persistence worker.
-        // The event loop only replaces a bounded in-memory snapshot and wakes
-        // the worker; directory creation, atomic replacement, and fsync happen
-        // off-dispatch. Retain the dirty flag if the worker is unavailable.
-        if state.input_state.command_palette_recents_dirty() {
-            let recents = state.input_state.command_palette_recent.clone();
-            if state.palette_recents.request(&recents) {
-                state.input_state.clear_command_palette_recents_dirty();
-            }
-        }
-
-        if let Err(err) = session_save::autosave_if_due(state, Instant::now()) {
-            warn!("Failed to autosave session state: {}", err);
-        }
-
-        // Reconcile after every input mutation in this pass, including GTK
-        // toolbar actions and synthesized repeats, so a newly opened modal or
-        // completed text edit cannot leave the canvas IME enabled until a
-        // later event-loop iteration.
-        if !state.input_state.should_exit {
-            state.reconcile_text_input();
-        }
-
-        // Advance the top-strip idle fade before the snapshot consumers
-        // (GTK bridge below, layer/inline toolbar rendering inside
-        // maybe_render) read `top_fade` for this pass.
-        let now = Instant::now();
-        state.update_top_strip_fade(now);
-        state.update_inline_toolbar_tooltip(now);
-
-        state.push_gtk_toolbar_update();
 
         if let Some(err) = render::maybe_render(
             state,
@@ -376,6 +184,164 @@ pub(super) fn run_event_loop(
     );
 
     EventLoopOutcome { loop_error }
+}
+
+fn advance_post_dispatch_state(
+    state: &mut WaylandState,
+    conn: &Connection,
+    qh: &wayland_client::QueueHandle<WaylandState>,
+    capture_active: bool,
+) -> bool {
+    state.sync_toolbar_visibility(qh);
+    if state.finish_toolbar_drag_handoff_if_due(Instant::now()) {
+        let _ = conn.flush();
+    }
+    if state.input_state.tick_delayed_history(Instant::now()) {
+        state.toolbar.mark_dirty();
+        state.input_state.needs_redraw = true;
+    }
+    if state.input_state.has_pending_history() {
+        state.input_state.needs_redraw = true;
+    }
+    if state
+        .input_state
+        .tick_command_palette_repeat(Instant::now())
+    {
+        state.input_state.needs_redraw = true;
+    }
+    if state.input_state.tick_font_picker_repeat(Instant::now()) {
+        state.input_state.needs_redraw = true;
+    }
+    state.tick_key_repeat(Instant::now(), conn, qh);
+    if state.input_state.expire_pending_sequence(Instant::now()) {
+        state.input_state.needs_redraw = true;
+    }
+    if !capture_active && state.ui_animation_due(Instant::now()) {
+        state.input_state.needs_redraw = true;
+    }
+    if state.input_state.ocr_scan_due(Instant::now()) {
+        state.input_state.needs_redraw = true;
+    }
+    state.input_state.tick_radial_menu_paint(Instant::now());
+    capture::handle_pending_actions(state, qh);
+    if break_on_requested_exit(state) {
+        return true;
+    }
+    state.sync_overlay_interactivity();
+    state.apply_onboarding_hints();
+    persist_post_dispatch_state(state);
+    state.push_gtk_toolbar_update();
+    false
+}
+
+fn persist_post_dispatch_state(state: &mut WaylandState) {
+    if state.input_state.command_palette_recents_dirty() {
+        let recents = state.input_state.command_palette_recent.clone();
+        if state.palette_recents.request(&recents) {
+            state.input_state.clear_command_palette_recents_dirty();
+        }
+    }
+    if let Err(err) = session_save::autosave_if_due(state, Instant::now()) {
+        warn!("Failed to autosave session state: {}", err);
+    }
+    if !state.input_state.should_exit {
+        state.reconcile_text_input();
+    }
+    let now = Instant::now();
+    state.update_top_strip_fade(now);
+    state.update_inline_toolbar_tooltip(now);
+}
+
+fn event_loop_timeout(
+    state: &WaylandState,
+    capture_active: bool,
+    last_render_time: Option<Instant>,
+) -> Option<Duration> {
+    let vsync_enabled = state.config.performance.enable_vsync;
+    let should_block = capture_active
+        || !state.surface.is_configured()
+        || (vsync_enabled && state.surface.frame_callback_pending());
+    let now = Instant::now();
+    let animation_timeout = min_timeout(
+        min_timeout(
+            min_timeout(
+                state.ui_animation_timeout(now),
+                state.top_strip_fade_timeout(now),
+            ),
+            state.inline_toolbar_tooltip_timeout(now),
+        ),
+        state.input_state.ocr_scan_wake_after(now),
+    );
+    let autosave_timeout = session_save::autosave_timeout(state, now);
+    let focus_exit_timeout = state.focus_exit_timeout(now);
+    let base_timeout = if should_block {
+        min_timeout(autosave_timeout, focus_exit_timeout)
+    } else if !vsync_enabled && state.input_state.needs_redraw {
+        let frame_cap_timeout = render::frame_rate_cap_timeout(
+            state.config.performance.max_fps_no_vsync,
+            last_render_time,
+        );
+        let frame_timeout = match (frame_cap_timeout, animation_timeout) {
+            (Some(frame), Some(animation)) => Some(frame.min(animation)),
+            (Some(frame), None) => Some(frame),
+            (None, _) => Some(Duration::ZERO),
+        };
+        min_timeout(
+            frame_timeout,
+            min_timeout(autosave_timeout, focus_exit_timeout),
+        )
+    } else {
+        min_timeout(
+            animation_timeout,
+            min_timeout(autosave_timeout, focus_exit_timeout),
+        )
+    };
+    let pending_backend_action_timeout = (state.input_state.has_pending_backend_actions()
+        || state.toolbar_persistence_drain_ready())
+    .then_some(Duration::ZERO);
+    [
+        state.toolbar_drag_handoff_timeout(now),
+        state.input_state.command_palette_repeat_timeout(now),
+        state.input_state.font_picker_repeat_timeout(now),
+        capture::capture_timeout(state, now),
+        interaction::interaction_timeout(state.spotlight_wheel_idle_deadline, now),
+        durable_action_retry_timeout(state, now),
+        pending_backend_action_timeout,
+        state.input_state.radial_menu_paint_timeout(now),
+        state.key_repeat_timeout(now),
+        state.input_state.sequence_timeout(now),
+    ]
+    .into_iter()
+    .fold(base_timeout, min_timeout)
+}
+
+fn handle_xdg_focus_loss(state: &mut WaylandState, qh: &wayland_client::QueueHandle<WaylandState>) {
+    if !state.surface.is_xdg_window()
+        || state.input_state.should_exit
+        || state.has_keyboard_focus()
+        || state.desktop_open_in_progress()
+        || !state.focus_exit_suppression_expired(Instant::now())
+    {
+        return;
+    }
+    if state.xdg_focus_loss_exits_overlay() {
+        warn!("Keyboard focus not restored after clipboard action; exiting overlay");
+        state.clear_focus_exit_suppression();
+        notification::send_notification_async(
+            &state.tokio_handle,
+            "Wayscriber lost focus".to_string(),
+            "The desktop could not keep the overlay focused, so Wayscriber closed it.".to_string(),
+            Some("dialog-warning".to_string()),
+        );
+        state.input_state.should_exit = true;
+    } else {
+        warn!(
+            "Keyboard focus not restored after clipboard action; keeping overlay open (ui.xdg_focus_loss_behavior=stay)"
+        );
+        state.clear_focus_exit_suppression();
+        state.set_xdg_close_guard_for(Duration::from_millis(2500));
+        state.request_xdg_activation(qh);
+    }
 }
 
 fn install_then_scan<T>(
