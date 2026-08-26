@@ -42,6 +42,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
         | Action::SelectEraserTool
         | Action::ToggleEraserMode
         | Action::CycleBlurStyle
+        | Action::CycleArrowStyle
         | Action::SelectPenTool
         | Action::SelectLineTool
         | Action::SelectRectTool
@@ -170,7 +171,35 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
     }
 }
 
+/// Dispatches one action, whatever raised it.
+///
+/// Both entry points land here — `InputState::handle_action` for the command
+/// palette and the toolbar's action equivalents, and a matched keybinding
+/// straight from `keyboard.rs` — so this is where an action-wide preflight
+/// belongs. Hanging one off `handle_action` alone leaves the ordinary key
+/// press, which is most of them, going around it.
 pub(crate) fn route_action(state: &mut InputState, action: Action) -> RoutingOutcome {
+    // A wheel burst owns a snapshot from the frame where it started. Every
+    // action route closes it before dispatch because page and board actions can
+    // replace that frame, whose shape ids may alias the old one. Bound keys
+    // enter here directly and do not pass through `handle_action`.
+    state.flush_spotlight_magnification_gesture();
+
+    // A held bend handle ends before the action runs. Keys still reach the
+    // overlay while the pointer button is down, and any action that mutates the
+    // arrow — Nudge, Delete, Duplicate, a property change — would record an
+    // entry against the already-bent shape while the gesture still holds a
+    // pre-bend snapshot. The release would then record a second entry from that
+    // stale snapshot, so undoing twice would put the bend back instead of
+    // taking it away.
+    //
+    // `Exit` is the exception: cancelling that gesture is precisely its job, and
+    // committing first would leave Escape nothing to cancel and quietly keep the
+    // arc the user was backing out of.
+    if !matches!(action, Action::Exit) {
+        state.finish_active_arrow_bend();
+    }
+
     if !matches!(
         action,
         Action::OpenContextMenu | Action::ToggleSelectionProperties

@@ -1,7 +1,7 @@
 use crate::util::{self, Rect};
 
-use super::arrow_label::arrow_label_layout;
-use super::types::ArrowLabel;
+use super::arrow_label::{arrow_label_ends, arrow_label_layout};
+use super::types::{ArrowLabel, ArrowStyle};
 
 const MIN_COORDINATE: i64 = i32::MIN as i64;
 const MAX_COORDINATE_EXCLUSIVE: i64 = i32::MAX as i64 + 1;
@@ -115,6 +115,12 @@ pub(crate) fn bounding_box_for_ellipse(
     )
 }
 
+/// Dirty-region bounds for one arrow.
+///
+/// The endpoints alone are not enough once a style bends: a curved arrow's arc
+/// bulges outside the chord's box, and an under-sized box leaves repaint trails
+/// behind the shaft. The arc is unioned from the same sampler the renderer
+/// walks, so the box cannot be tighter than what was drawn.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn bounding_box_for_arrow(
     x1: i32,
@@ -125,6 +131,8 @@ pub(crate) fn bounding_box_for_arrow(
     arrow_length: f64,
     arrow_angle: f64,
     head_at_end: bool,
+    style: ArrowStyle,
+    bend: f64,
     label: Option<&ArrowLabel>,
 ) -> Option<Rect> {
     let (tip_x, tip_y, tail_x, tail_y) = if head_at_end {
@@ -132,13 +140,18 @@ pub(crate) fn bounding_box_for_arrow(
     } else {
         (x1, y1, x2, y2)
     };
+    // The label does not always share the head's reading of the endpoints:
+    // `Double` has a head at each end, so `head_at_end` must not decide which
+    // side of the shaft the number sits on.
+    let (label_tip_x, label_tip_y, label_tail_x, label_tail_y) =
+        arrow_label_ends(x1, y1, x2, y2, head_at_end, style);
 
     let mut min_x = tip_x.min(tail_x) as f64;
     let mut max_x = tip_x.max(tail_x) as f64;
     let mut min_y = tip_y.min(tail_y) as f64;
     let mut max_y = tip_y.max(tail_y) as f64;
 
-    if let Some(geometry) = util::calculate_arrowhead_triangle_custom(
+    if let Some(skeleton) = util::calculate_arrow_skeleton(
         tip_x,
         tip_y,
         tail_x,
@@ -146,11 +159,21 @@ pub(crate) fn bounding_box_for_arrow(
         thick,
         arrow_length,
         arrow_angle,
+        style,
+        bend,
     ) {
-        min_x = min_x.min(geometry.left.0).min(geometry.right.0);
-        max_x = max_x.max(geometry.left.0).max(geometry.right.0);
-        min_y = min_y.min(geometry.left.1).min(geometry.right.1);
-        max_y = max_y.max(geometry.left.1).max(geometry.right.1);
+        let heads = [Some(skeleton.head), skeleton.tail_head];
+        for corner in heads
+            .iter()
+            .flatten()
+            .flat_map(|head| [head.tip, head.left, head.right])
+            .chain(skeleton.spine.points().iter().copied())
+        {
+            min_x = min_x.min(corner.0);
+            max_x = max_x.max(corner.0);
+            min_y = min_y.min(corner.1);
+            max_y = max_y.max(corner.1);
+        }
     }
 
     let padding = stroke_padding(thick) as f64;
@@ -158,11 +181,12 @@ pub(crate) fn bounding_box_for_arrow(
     if let Some(label) = label {
         let label_text = label.value.to_string();
         if let Some(layout) = arrow_label_layout(
-            tip_x,
-            tip_y,
-            tail_x,
-            tail_y,
+            label_tip_x,
+            label_tip_y,
+            label_tail_x,
+            label_tail_y,
             thick,
+            style.effective_bend(bend),
             &label_text,
             label.size,
             &label.font_descriptor,

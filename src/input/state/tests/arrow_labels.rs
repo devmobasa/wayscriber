@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::draw::ArrowLabel;
+use crate::draw::{ArrowLabel, ArrowStyle};
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_WHITEBOARD};
 
 fn arrow_with_label(value: u32, font_descriptor: &FontDescriptor) -> Shape {
@@ -19,6 +19,8 @@ fn arrow_with_label(value: u32, font_descriptor: &FontDescriptor) -> Shape {
         arrow_length: 10.0,
         arrow_angle: 30.0,
         head_at_end: true,
+        style: ArrowStyle::Standard,
+        bend: 0.0,
         label: Some(ArrowLabel {
             value,
             size: 12.0,

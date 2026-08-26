@@ -56,6 +56,22 @@ impl InputState {
                     );
                 }
             }
+            Action::CycleArrowStyle => {
+                // Selected arrows are the target when there are any, so one
+                // key both restyles what is on screen and sets what the next
+                // arrow will be, without a modifier to remember.
+                if self.selection_contains_arrow() {
+                    self.cycle_selected_arrow_style_from_action();
+                } else if self.cycle_arrow_style() {
+                    let label = self.arrow_style.label();
+                    info!("Arrow style set to {label}");
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "arrow-style",
+                        Toast::info(format!("Arrow style: {label}")),
+                    );
+                }
+            }
             Action::IncreaseFontSize => {
                 self.adjust_font_size(2.0);
             }

@@ -22,6 +22,11 @@ impl InputState {
         // gesture is closed here as well. A wheel adjustment must not outlive
         // the frame it started on: shape ids restart per frame.
         self.flush_spotlight_magnification_gesture();
+        // Same barrier for a held bend. Touch, tablet, and the GTK toolbar all
+        // deliver events while a pointer-held gesture is running, and Undo All
+        // can delete the arrow outright — after which the release finds no
+        // shape and drops the bend without a trace.
+        self.finish_active_arrow_bend();
         let changed = self.apply_toolbar_event_inner(event);
         self.note_toolbar_shortcut_slow_path(coach_action, changed);
         changed
@@ -71,6 +76,7 @@ impl InputState {
             ToolbarEvent::ToggleArrowLabels(enable) => {
                 self.apply_toolbar_toggle_arrow_labels(enable)
             }
+            ToolbarEvent::CycleArrowStyle => self.apply_toolbar_cycle_arrow_style(),
             ToolbarEvent::ResetArrowLabelCounter => self.apply_toolbar_reset_arrow_label_counter(),
             ToolbarEvent::ResetStepMarkerCounter => self.apply_toolbar_reset_step_marker_counter(),
             ToolbarEvent::SetUndoDelay(delay_secs) => self.apply_toolbar_set_undo_delay(delay_secs),

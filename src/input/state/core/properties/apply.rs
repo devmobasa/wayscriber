@@ -1,5 +1,6 @@
 use super::super::base::InputState;
 use super::types::SelectionPropertyKind;
+use crate::draw::Shape;
 
 impl InputState {
     pub(crate) fn activate_properties_panel_entry(&mut self) -> bool {
@@ -38,6 +39,19 @@ impl InputState {
         changed
     }
 
+    /// Whether the current selection holds at least one arrow.
+    ///
+    /// The arrow-style cycle needs this before it routes: a selection with no
+    /// arrows in it should step the next-arrow default rather than silently do
+    /// nothing.
+    pub(crate) fn selection_contains_arrow(&self) -> bool {
+        let frame = self.boards.active_frame();
+        self.selected_shape_ids()
+            .iter()
+            .filter_map(|id| frame.shape(*id))
+            .any(|drawn| matches!(drawn.shape, Shape::Arrow { .. }))
+    }
+
     /// Style-pill path into the same apply machinery as the properties
     /// popup: adjusts the selection property of `kind` when the current
     /// selection exposes it and the entry is editable. Refreshes the
@@ -68,7 +82,31 @@ impl InputState {
         changed
     }
 
+    /// Arrow-style action path, whose command remains meaningful when every
+    /// selected arrow is locked. Visible property controls stay disabled, while
+    /// the action still reaches the shared apply reporter so it can explain why
+    /// nothing changed.
+    pub(crate) fn cycle_selected_arrow_style_from_action(&mut self) -> bool {
+        let changed = self.dispatch_selection_property(SelectionPropertyKind::ArrowStyle, 1);
+
+        if changed && self.is_properties_panel_open() {
+            self.refresh_properties_panel();
+        }
+
+        changed
+    }
+
     fn dispatch_selection_property(&mut self, kind: SelectionPropertyKind, direction: i32) -> bool {
+        // Every property route lands here — the keyboard action, the toolbar's
+        // AdjustSelectionProperty, and the shape properties panel — so this is
+        // the one place that has to end a live bend drag first. That drag holds
+        // a snapshot from before it started; a property change pushed on top of
+        // it records one undo entry now, and the eventual release records a
+        // second measured from the same stale snapshot, so undoing walks back
+        // through a shape that was never on screen (and reverts the property
+        // change along the way). Restyling is the case that bites hardest,
+        // because leaving Curved hides the arc the drag is editing.
+        self.finish_active_arrow_bend();
         match kind {
             SelectionPropertyKind::Color => self.apply_selection_color(direction),
             SelectionPropertyKind::Thickness => {
@@ -79,6 +117,7 @@ impl InputState {
                 self.apply_selection_font_size(direction_or_default(direction))
             }
             SelectionPropertyKind::ArrowHead => self.apply_selection_arrow_head(direction),
+            SelectionPropertyKind::ArrowStyle => self.apply_selection_arrow_style(direction),
             SelectionPropertyKind::ArrowLength => {
                 self.apply_selection_arrow_length(direction_or_default(direction))
             }

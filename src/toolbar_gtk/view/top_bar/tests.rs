@@ -879,10 +879,11 @@ fn assert_gtk_style_widget(
                 .clone()
                 .downcast::<gtk4::Button>()
                 .unwrap_or_else(|_| panic!("{id} is a button"));
-            // Docked selection cycle buttons show the live value; plain
-            // buttons show their label.
+            // Cycle buttons show the live value they step; plain buttons show
+            // their label.
             let expected_text = match control {
-                model::StylePillControl::SelectionCycle(_) => {
+                model::StylePillControl::SelectionCycle(_)
+                | model::StylePillControl::ArrowStyleCycle => {
                     control.value_text(snapshot).expect("cycle value text")
                 }
                 _ => control.label(snapshot).into_owned(),
@@ -1405,10 +1406,11 @@ fn style_pill_spec_matches_builtin_tree_across_morph_states() {
                             );
                         }
                         (model::StylePillRole::Button, W::TextButton { label, style }) => {
-                            // Docked selection cycle buttons show the live
-                            // value; plain buttons show their label.
+                            // Cycle buttons show the live value they step;
+                            // plain buttons show their label.
                             let expected_text = match control {
-                                model::StylePillControl::SelectionCycle(_) => {
+                                model::StylePillControl::SelectionCycle(_)
+                                | model::StylePillControl::ArrowStyleCycle => {
                                     control.value_text(&snapshot).expect("cycle value text")
                                 }
                                 _ => control.label(&snapshot).into_owned(),

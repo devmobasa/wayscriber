@@ -117,6 +117,13 @@ pub enum DrawingState {
         /// Font size used to set minimum width
         size: f64,
     },
+    /// Drag the bend handle of a selected curved arrow.
+    BendingArrow {
+        /// Arrow whose arc is being reshaped.
+        shape_id: ShapeId,
+        /// Snapshot before the drag, for one undo entry and for Escape.
+        snapshot: ShapeSnapshot,
+    },
     /// Drag the on-canvas magnification knob of a selected Spotlight.
     AdjustingSpotlightMagnification {
         /// Spotlight whose factor is being dragged.

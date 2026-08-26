@@ -1,11 +1,11 @@
 use super::super::color::ColorInput;
 use super::super::fields::{
-    DragMouseButton, DragToolField, DragToolOption, FontWeightOption, InputHudModeOption,
-    InputHudPositionOption, OverrideOption, PdfFitModeOption, PdfLabelContentModeOption,
-    PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption, QuadField,
-    ReducedMotionOption, RegionPickerOption, SessionStorageModeOption, TextField, ToggleField,
-    ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField, ToolbarRebindModifierOption,
-    UiThemeOption,
+    ArrowStyleOption, DragMouseButton, DragToolField, DragToolOption, FontWeightOption,
+    InputHudModeOption, InputHudPositionOption, OverrideOption, PdfFitModeOption,
+    PdfLabelContentModeOption, PdfOrientationOption, PdfPageSizeOption,
+    PdfTransparentBackgroundOption, QuadField, ReducedMotionOption, RegionPickerOption,
+    SessionStorageModeOption, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
+    ToolbarOverrideField, ToolbarRebindModifierOption, UiThemeOption,
 };
 
 #[test]
@@ -26,6 +26,40 @@ fn config_draft_round_trips_toolbar_rebind_modifier() {
         round_trip.ui.toolbar.rebind_modifier,
         wayscriber::config::ToolbarRebindModifier::ShiftAlt
     );
+}
+
+#[test]
+fn config_draft_round_trips_arrow_style() {
+    // Without this the configurator is a one-way door for the key: a config
+    // that sets a style loads as Standard in the UI, and saving anything from
+    // any tab writes that Standard back over the user's choice.
+    let mut config = Config::default();
+    config.arrow.style = wayscriber::draw::ArrowStyle::Curved;
+    let mut draft = ConfigDraft::from_config(&config);
+    assert_eq!(draft.arrow_style, ArrowStyleOption::Curved);
+
+    draft.arrow_style = ArrowStyleOption::Double;
+    let round_trip = draft.to_config(&config).expect("arrow style round trip");
+    assert_eq!(round_trip.arrow.style, wayscriber::draw::ArrowStyle::Double);
+}
+
+#[test]
+fn every_arrow_style_survives_the_configurator() {
+    // The combo row lists these by index, so a variant missing from either
+    // conversion arm silently maps to the wrong style rather than failing.
+    for option in ArrowStyleOption::list() {
+        let config = Config::default();
+        let mut draft = ConfigDraft::from_config(&config);
+        draft.arrow_style = option;
+        let round_trip = draft.to_config(&config).expect("arrow style round trip");
+        assert_eq!(round_trip.arrow.style, option.to_style());
+        assert_eq!(
+            ArrowStyleOption::from_style(round_trip.arrow.style),
+            option,
+            "{} did not survive the round trip",
+            option.label()
+        );
+    }
 }
 
 #[test]

@@ -1,6 +1,7 @@
 use super::super::*;
 use super::save_through_document;
 use crate::config::test_helpers::with_temp_config_home;
+use crate::draw::ArrowStyle;
 use std::fs;
 
 #[test]
@@ -36,6 +37,32 @@ fn load_parses_xdg_focus_loss_behavior_stay() {
             XdgFocusLossBehavior::Stay
         );
     });
+}
+
+#[test]
+fn arrow_style_defaults_to_standard_and_parses_every_variant() {
+    // The style is a per-shape property, so this key only seeds the *next*
+    // arrow. Defaulting to anything but Standard would restyle nobody's
+    // existing drawings but would still surprise every existing user.
+    let defaults: Config = toml::from_str("").expect("empty config should use defaults");
+    assert_eq!(defaults.arrow.style, ArrowStyle::Standard);
+
+    for (key, expected) in [
+        ("standard", ArrowStyle::Standard),
+        ("pointy", ArrowStyle::Pointy),
+        ("curved", ArrowStyle::Curved),
+        ("double", ArrowStyle::Double),
+    ] {
+        let config: Config = toml::from_str(&format!("[arrow]\nstyle = '{key}'\n"))
+            .unwrap_or_else(|err| panic!("arrow style {key} should parse: {err}"));
+        assert_eq!(config.arrow.style, expected, "parsed {key} wrong");
+    }
+
+    // A config written by a newer build must not take the whole file down.
+    assert!(
+        toml::from_str::<Config>("[arrow]\nstyle = 'squiggly'\n").is_err(),
+        "an unknown style should be a parse error, not a silent default"
+    );
 }
 
 #[test]

@@ -1,10 +1,9 @@
 use crate::draw::Shape;
-use crate::draw::frame::ShapeSnapshot;
 use crate::input::tool::ToolPressBehavior;
 use crate::input::{DragTool, Tool, events::MouseButton};
 use std::sync::Arc;
 
-use super::super::core::MenuCommand;
+use super::super::core::{IdleHandle, MenuCommand};
 use super::super::{
     ContextMenuKind, DrawingState, InputState,
     interaction::{CanvasPoint, PointerPoints, PointerPress, ScreenPoint, route_pointer_press},
@@ -211,6 +210,7 @@ impl InputState {
             | DrawingState::PendingTextClick { .. }
             | DrawingState::ResizingText { .. }
             | DrawingState::ResizingSelection { .. }
+            | DrawingState::BendingArrow { .. }
             | DrawingState::AdjustingSpotlightMagnification { .. } => {}
         }
     }
@@ -385,72 +385,69 @@ impl InputState {
             self.modifiers.alt || matches!(tool.press_behavior(), ToolPressBehavior::Selection);
         let hit_id = self.hit_test_at(x, y);
 
-        // The magnification knob is checked before the resize handles and
-        // before tool dispatch: it sits outside the loupe's bounding box, so
-        // nothing else claims those pixels, and with the Spotlight tool active
-        // a press would otherwise start drawing a new loupe on top of it.
-        if let Some(control) = self.hit_spotlight_magnification_track(x, y) {
-            let shape_id = control.shape_id;
-            let snapshot = {
-                let frame = self.boards.active_frame();
-                frame.shape(shape_id).map(|shape| ShapeSnapshot {
-                    shape: shape.shape.clone(),
-                    locked: shape.locked,
-                })
-            };
-            if let Some(snapshot) = snapshot {
-                self.last_text_click = None;
-                self.begin_pointer_drag(button, color);
-                self.state = DrawingState::AdjustingSpotlightMagnification { shape_id, snapshot };
-                // Jump to where the user pressed, so a click anywhere on the
-                // track is itself an adjustment rather than dead travel.
-                self.drag_spotlight_magnification_to(x);
-                return;
+        // Handles are claimed before tool dispatch, in the order
+        // `hit_idle_handle` fixes — the same order the pointer cursor previews,
+        // so what the user sees is what the press does.
+        match self.hit_idle_handle(x, y) {
+            Some(IdleHandle::SpotlightMagnification(shape_id)) => {
+                if let Some(snapshot) = self.shape_snapshot(shape_id) {
+                    self.last_text_click = None;
+                    self.begin_pointer_drag(button, color);
+                    self.state =
+                        DrawingState::AdjustingSpotlightMagnification { shape_id, snapshot };
+                    // Jump to where the user pressed, so a click anywhere on
+                    // the track is itself an adjustment rather than dead travel.
+                    self.drag_spotlight_magnification_to(x);
+                    return;
+                }
             }
-        }
-
-        if let Some(shape_id) = self.hit_text_resize_handle(x, y) {
-            let snapshot = {
-                let frame = self.boards.active_frame();
-                frame.shape(shape_id).map(|shape| ShapeSnapshot {
-                    shape: shape.shape.clone(),
-                    locked: shape.locked,
-                })
-            };
-            if let Some(snapshot) = snapshot {
-                let (base_x, size) = match &snapshot.shape {
-                    Shape::Text { x, size, .. } => (*x, *size),
-                    Shape::StickyNote { x, size, .. } => (*x, *size),
-                    _ => return,
-                };
-                self.last_text_click = None;
-                self.begin_pointer_drag(button, color);
-                self.state = DrawingState::ResizingText {
-                    shape_id,
-                    snapshot,
-                    base_x,
-                    size,
-                };
-                return;
+            Some(IdleHandle::ArrowBend(shape_id)) => {
+                if let Some(snapshot) = self.shape_snapshot(shape_id) {
+                    self.last_text_click = None;
+                    self.begin_pointer_drag(button, color);
+                    self.state = DrawingState::BendingArrow { shape_id, snapshot };
+                    // Jump the arc to where the user pressed, so a click beside
+                    // the handle is itself an adjustment rather than dead travel.
+                    self.drag_arrow_bend_to(x, y, self.modifiers.shift);
+                    return;
+                }
             }
-        }
-
-        if let Some(handle) = self.hit_selection_handle(x, y)
-            && let Some(original_bounds) = self.selection_bounds()
-        {
-            let snapshots = self.capture_resize_selection_snapshots();
-            if !snapshots.is_empty() {
-                self.last_text_click = None;
-                self.begin_pointer_drag(button, color);
-                self.state = DrawingState::ResizingSelection {
-                    handle,
-                    original_bounds,
-                    start_x: x,
-                    start_y: y,
-                    snapshots: Arc::new(snapshots),
-                };
-                return;
+            Some(IdleHandle::TextResize(shape_id)) => {
+                if let Some(snapshot) = self.shape_snapshot(shape_id) {
+                    let (base_x, size) = match &snapshot.shape {
+                        Shape::Text { x, size, .. } => (*x, *size),
+                        Shape::StickyNote { x, size, .. } => (*x, *size),
+                        _ => return,
+                    };
+                    self.last_text_click = None;
+                    self.begin_pointer_drag(button, color);
+                    self.state = DrawingState::ResizingText {
+                        shape_id,
+                        snapshot,
+                        base_x,
+                        size,
+                    };
+                    return;
+                }
             }
+            Some(IdleHandle::SelectionResize(handle)) => {
+                if let Some(original_bounds) = self.selection_bounds() {
+                    let snapshots = self.capture_resize_selection_snapshots();
+                    if !snapshots.is_empty() {
+                        self.last_text_click = None;
+                        self.begin_pointer_drag(button, color);
+                        self.state = DrawingState::ResizingSelection {
+                            handle,
+                            original_bounds,
+                            start_x: x,
+                            start_y: y,
+                            snapshots: Arc::new(snapshots),
+                        };
+                        return;
+                    }
+                }
+            }
+            None => {}
         }
 
         if !selection_click && let Some(hit_id) = hit_id {

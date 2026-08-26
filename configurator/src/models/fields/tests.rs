@@ -1,6 +1,23 @@
 use super::*;
 
 #[test]
+fn arrow_style_options_cover_the_core_enum() {
+    // `ArrowStyle::ALL` is what the runtime cycle steps through. If the two
+    // lists ever disagree, a style is reachable from the overlay but not from
+    // the configurator — or worse, the combo row offers one that no longer
+    // exists and picks the wrong index for everything after it.
+    let core = wayscriber::draw::ArrowStyle::ALL;
+    let options = ArrowStyleOption::list();
+    assert_eq!(options.len(), core.len());
+    for (option, style) in options.iter().zip(core.iter()) {
+        assert_eq!(option.to_style(), *style);
+        assert_eq!(ArrowStyleOption::from_style(*style), *option);
+        // The combo row and the overlay's style pill name the same thing.
+        assert_eq!(option.label(), style.label());
+    }
+}
+
+#[test]
 fn region_picker_options_cover_the_core_enum() {
     assert_eq!(
         RegionPickerOption::from_picker(wayscriber::config::RegionPicker::Native),

@@ -290,6 +290,36 @@ fn arrow_state_gates_the_reset_button_on_the_toggle() {
 }
 
 #[test]
+fn next_arrow_style_control_does_not_advertise_the_selection_aware_shortcut() {
+    use crate::config::{Action, Shortcut};
+    use crate::input::state::test_support::make_test_input_state_with_action_bindings;
+    use std::collections::HashMap;
+
+    let state = make_test_input_state_with_action_bindings(HashMap::from([(
+        Action::CycleArrowStyle,
+        vec![Shortcut::parse("Ctrl+J").expect("binding")],
+    )]));
+    let hints = ToolbarBindingHints::from_input_state(&state);
+    assert_eq!(
+        hints.binding_for_action(Action::CycleArrowStyle),
+        Some("Ctrl+J"),
+        "the regression needs a real selection-aware shortcut to suppress"
+    );
+    let mut snapshot = ToolbarSnapshot::from_input_with_bindings(&state, hints);
+    snapshot.active_tool = Tool::Arrow;
+    snapshot.tool_override = None;
+    snapshot.show_text_controls = false;
+    snapshot.show_marker_opacity_section = false;
+
+    assert_eq!(
+        StylePillControl::ArrowStyleCycle
+            .tooltip(&snapshot)
+            .as_deref(),
+        Some("Next arrow style: Standard")
+    );
+}
+
+#[test]
 fn step_marker_state_carries_the_step_reset() {
     let mut snapshot = snapshot_for_tool(Tool::StepMarker);
     snapshot.step_marker_next = 4;

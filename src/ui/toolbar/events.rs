@@ -95,6 +95,8 @@ pub enum ToolbarEvent {
     SetPolygonSides(u8),
     NudgePolygonSides(i8),
     ToggleArrowLabels(bool),
+    /// Step the next arrow's style through the four arrow styles.
+    CycleArrowStyle,
     ResetArrowLabelCounter,
     ResetStepMarkerCounter,
     SetUndoDelay(f64),

@@ -58,6 +58,7 @@ impl KeybindingField {
             Self::SelectBlurTool => config.tools.select_blur_tool = value,
             Self::SelectSpotlightTool => config.tools.select_spotlight_tool = value,
             Self::CycleBlurStyle => config.tools.cycle_blur_style = value,
+            Self::CycleArrowStyle => config.tools.cycle_arrow_style = value,
             Self::SelectHighlightTool => config.tools.select_highlight_tool = value,
             Self::IncreaseFontSize => config.tools.increase_font_size = value,
             Self::DecreaseFontSize => config.tools.decrease_font_size = value,

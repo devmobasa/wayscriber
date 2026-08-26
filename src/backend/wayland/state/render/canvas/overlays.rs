@@ -28,6 +28,7 @@ impl WaylandState {
         }
 
         self.render_spotlight_magnification_control(ctx);
+        self.render_arrow_bend_handle(ctx);
 
         if matches!(
             self.input_state.state,
@@ -48,6 +49,24 @@ impl WaylandState {
             let _ = ctx.stroke();
             let _ = ctx.restore();
         }
+    }
+
+    /// Draws the bend handle on a selected curved arrow's arc midpoint.
+    ///
+    /// Shown while idle and while it is being dragged, matching the text resize
+    /// handle: hiding it mid-drag would take the grab target out from under the
+    /// pointer that is holding it.
+    fn render_arrow_bend_handle(&mut self, ctx: &cairo::Context) {
+        if !matches!(
+            self.input_state.state,
+            DrawingState::Idle | DrawingState::BendingArrow { .. }
+        ) {
+            return;
+        }
+        let Some(handle) = self.input_state.selected_arrow_bend_handle() else {
+            return;
+        };
+        crate::ui::render_arrow_bend_handle(ctx, handle.rect);
     }
 
     /// Draws the magnification slider above a selected loupe.

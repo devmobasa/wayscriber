@@ -222,6 +222,11 @@ fn exact_static_section_labels_match_their_sections() {
             TabId::Arrow,
             SearchArea::Arrow,
         ),
+        ("arrow style", TabId::Arrow, SearchArea::Arrow),
+        // Searching for the style you want, rather than for the control that
+        // sets it, is the likelier way in — nobody knows the row is called
+        // "Arrow style" until they have already found it.
+        ("curved", TabId::Arrow, SearchArea::Arrow),
     ];
 
     for (query, expected_tab, expected_area) in cases {

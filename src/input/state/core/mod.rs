@@ -18,7 +18,7 @@ pub(crate) mod radial_menu;
 mod region_select;
 mod selection;
 mod selection_actions;
-pub(crate) use selection_actions::SpotlightMagnificationTrack;
+pub(crate) use selection_actions::{IdleHandle, SpotlightMagnificationTrack};
 mod session;
 mod session_preflight;
 mod session_preflight_exact;

@@ -1,11 +1,28 @@
 use crate::draw::shape::{bounding_box_for_blur, bounding_box_for_eraser, bounding_box_for_points};
-use crate::draw::{ArrowLabel, BlurRectParams, BlurStyle, Color, EraserBrush, EraserKind, Shape};
+use crate::draw::{
+    ArrowLabel, ArrowStyle, BlurRectParams, BlurStyle, Color, EraserBrush, EraserKind, Shape,
+};
 use crate::input::tool::{
     EraserMode, Tool, ToolDrawingBehavior, ToolPathKind, ToolPressureBehavior,
 };
 use crate::util::{self, Rect};
 
 pub(crate) const PROVISIONAL_POLYGON_DAMAGE_PADDING: i32 = 2;
+
+/// Bend a freshly drawn arrow starts with.
+///
+/// Only `Curved` gets one: a curved arrow created dead straight would look
+/// exactly like a standard one, so choosing the style would appear to do
+/// nothing until the bend handle was found. Every other style ignores the
+/// field, and storing zero there keeps a later switch to `Curved` from
+/// inheriting a bend the user never asked for.
+fn initial_arrow_bend(style: ArrowStyle) -> f64 {
+    if style.is_curved() {
+        util::DEFAULT_ARROW_BEND
+    } else {
+        0.0
+    }
+}
 
 mod polygon;
 
@@ -25,6 +42,7 @@ pub(crate) struct ToolStrokeSnapshot {
     pub(crate) arrow_length: f64,
     pub(crate) arrow_angle: f64,
     pub(crate) arrow_head_at_end: bool,
+    pub(crate) arrow_style: ArrowStyle,
     pub(crate) arrow_label: Option<ArrowLabel>,
     pub(crate) step_marker_label: crate::draw::StepMarkerLabel,
     pub(crate) eraser_mode: EraserMode,
@@ -73,6 +91,7 @@ pub(crate) struct ProvisionalToolSnapshot<'a> {
     pub(crate) arrow_length: f64,
     pub(crate) arrow_angle: f64,
     pub(crate) arrow_head_at_end: bool,
+    pub(crate) arrow_style: ArrowStyle,
     pub(crate) arrow_label: Option<ArrowLabel>,
     pub(crate) step_marker_label: Option<crate::draw::StepMarkerLabel>,
 }
@@ -181,6 +200,8 @@ impl Tool {
                     arrow_length: snapshot.arrow_length,
                     arrow_angle: snapshot.arrow_angle,
                     head_at_end: snapshot.arrow_head_at_end,
+                    style: snapshot.arrow_style,
+                    bend: initial_arrow_bend(snapshot.arrow_style),
                     label: snapshot.arrow_label,
                 })
             }
@@ -328,6 +349,8 @@ impl Tool {
                 arrow_length: snapshot.arrow_length,
                 arrow_angle: snapshot.arrow_angle,
                 head_at_end: snapshot.arrow_head_at_end,
+                style: snapshot.arrow_style,
+                bend: initial_arrow_bend(snapshot.arrow_style),
                 label: snapshot.arrow_label,
             }),
             ToolDrawingBehavior::BlurRect => {

@@ -67,6 +67,19 @@ pub(super) fn finish_spotlight_magnification(
     state.record_spotlight_magnification_change(shape_id, snapshot, after);
 }
 
+/// Commits one bend drag as a single undo entry.
+///
+/// Shares the commit with `finish_active_arrow_bend`, which anything that
+/// mutates the arrow mid-gesture has to run first — a release and an
+/// interrupted gesture must record the drag the same way.
+pub(super) fn finish_arrow_bend(
+    state: &mut InputState,
+    shape_id: ShapeId,
+    snapshot: ShapeSnapshot,
+) {
+    state.commit_arrow_bend(shape_id, snapshot);
+}
+
 pub(super) fn finish_text_resize(
     state: &mut InputState,
     shape_id: ShapeId,

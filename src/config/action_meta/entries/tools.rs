@@ -234,4 +234,14 @@ pub const ENTRIES: &[ActionMeta] = &[
         true,
         true
     ),
+    meta!(
+        CycleArrowStyle,
+        "Cycle Arrow Style",
+        None,
+        "Standard, pointy, curved, double",
+        Tools,
+        true,
+        true,
+        true
+    ),
 ];

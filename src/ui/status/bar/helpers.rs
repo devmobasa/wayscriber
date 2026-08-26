@@ -40,6 +40,7 @@ pub(super) fn tool_display_name(input_state: &InputState, tool: Tool) -> &'stati
         DrawingState::MovingSelection { .. } => "Move",
         DrawingState::Selecting { .. } => "Select",
         DrawingState::ResizingText { .. } | DrawingState::ResizingSelection { .. } => "Resize",
+        DrawingState::BendingArrow { .. } => "Bend",
         DrawingState::AdjustingSpotlightMagnification { .. } => "Magnify",
         DrawingState::PendingTextClick { .. } | DrawingState::Idle => tool_action_label(tool),
     }

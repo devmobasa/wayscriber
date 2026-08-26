@@ -108,6 +108,7 @@ pub(super) fn build_main_sections(
             action_row(bindings, Action::SelectRectTool, "Ctrl+Drag"),
             action_row(bindings, Action::SelectEllipseTool, "Tab+Drag"),
             action_row(bindings, Action::SelectArrowTool, "Ctrl+Shift+Drag"),
+            action_row(bindings, Action::CycleArrowStyle, NOT_BOUND_LABEL),
             action_row(bindings, Action::SelectBlurTool, NOT_BOUND_LABEL),
             action_row(bindings, Action::ToggleHighlightTool, NOT_BOUND_LABEL),
             action_row(bindings, Action::SelectMarkerTool, NOT_BOUND_LABEL),

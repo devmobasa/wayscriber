@@ -29,7 +29,9 @@ use crate::config::{
     Shortcut, ToolPresetConfig, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemsConfig,
 };
 use crate::draw::frame::ShapeSnapshot;
-use crate::draw::{BlurStyle, Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId};
+use crate::draw::{
+    ArrowStyle, BlurStyle, Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId,
+};
 use crate::input::BoardManager;
 use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest, PendingBoardRuntimeUiAction};
 use crate::input::state::highlight::ClickHighlightState;
@@ -138,6 +140,8 @@ pub struct InputState {
     pub arrow_angle: f64,
     /// Whether the arrowhead is placed at the end of the line
     pub arrow_head_at_end: bool,
+    /// Style copied into the next arrow drawn
+    pub arrow_style: ArrowStyle,
     /// Whether auto-numbered arrow labels are enabled
     pub arrow_label_enabled: bool,
     /// Next label value for auto-numbered arrows

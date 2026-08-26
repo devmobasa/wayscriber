@@ -368,6 +368,7 @@ drag_tool = "default"
 - **Eraser size**: Use <kbd>+</kbd>/<kbd>-</kbd> keys or scroll wheel when eraser tool is active (range: 1-50px)
 - **Eraser mode**: Use <kbd>Ctrl+Shift+E</kbd> to toggle brush vs stroke erasing
 - **Blur style**: Run **Cycle Blur Style** from the command palette to step through blur → pixelate → secure → black out (unbound by default; bind `cycle_blur_style`)
+- **Arrow style**: Run **Cycle Arrow Style** from the command palette to step through standard → pointy → curved → double (unbound by default; bind `cycle_arrow_style`). With arrows selected it restyles those in one undo step; with nothing selected it sets the style for the next arrow
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
 - **Regular polygon sides**: Use the Shapes popover Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
@@ -402,12 +403,25 @@ angle_degrees = 26.0
 
 # Place the arrowhead at the end of the line instead of the start
 head_at_end = true
+
+# Shape of the next arrow drawn: "standard", "pointy", "curved", or "double"
+style = "standard"
 ```
 
 **Defaults:**
 - Length: 20.0px
 - Angle: 26.0°
 - Head at end: true
+- Style: standard
+
+**Arrow styles.** Every arrow stores its own style, so it keeps that style through save/load, undo, duplicate, and resize. `style` seeds new arrows only — changing it never restyles anything already drawn. Set the startup style here or on the configurator's Arrow tab; pick one at runtime from the arrow tool's style pill or the **Cycle Arrow Style** action; the choice persists with the rest of the tool state, which takes precedence over this key (see [`[session]`](#session---session-persistence)).
+
+| Style | What it draws |
+|---|---|
+| Standard | Tapered shaft fused into one head. What arrows looked like before styles existed, and what a session written before them loads as. |
+| Pointy | The same head with its rear notched forward into a concave V, for a dart silhouette. |
+| Curved | Shaft follows an arc instead of a straight line, so an arrow can route around whatever sits between the pointer and its target. Drag the round handle at the arc's midpoint to reshape it; hold <kbd>Shift</kbd> to snap the bend to tenths. |
+| Double | Parallel-sided shaft with a head at both ends. `head_at_end` has no effect on it. |
 
 ### `[presets]` - Quick Tool Slots
 
@@ -1932,6 +1946,7 @@ select_step_marker_tool = []
 select_eraser_tool = ["D"]
 toggle_eraser_mode = ["Ctrl+Shift+E"]
 cycle_blur_style = []              # blur -> pixelate -> secure -> black out
+cycle_arrow_style = []             # standard -> pointy -> curved -> double
 select_spotlight_tool = []         # dim everything except a region
 select_line_tool = []
 select_rect_tool = []

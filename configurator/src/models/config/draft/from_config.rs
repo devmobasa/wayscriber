@@ -1,7 +1,7 @@
 use super::super::super::color::{ColorInput, ColorQuadInput};
 use super::super::super::fields::ZoomChipDisplayOption;
 use super::super::super::fields::{
-    EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
+    ArrowStyleOption, EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
     InputHudPositionOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
     PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
@@ -100,6 +100,7 @@ impl ConfigDraft {
             arrow_length: format_float(config.arrow.length),
             arrow_angle: format_float(config.arrow.angle_degrees),
             arrow_head_at_end: config.arrow.head_at_end,
+            arrow_style: ArrowStyleOption::from_style(config.arrow.style),
 
             history_undo_all_delay_ms: config.history.undo_all_delay_ms.to_string(),
             history_redo_all_delay_ms: config.history.redo_all_delay_ms.to_string(),

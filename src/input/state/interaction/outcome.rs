@@ -40,6 +40,7 @@ pub(crate) enum ActiveInteractionKind {
     BoxSelecting,
     ResizingText,
     ResizingSelection,
+    BendingArrow,
     AdjustingSpotlightMagnification,
 }
 

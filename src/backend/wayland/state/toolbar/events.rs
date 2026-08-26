@@ -24,7 +24,7 @@ fn toolbar_event_blocked_by_modal(input_state: &InputState) -> bool {
     input_state.command_palette_is_engaged()
 }
 
-fn finalize_spotlight_wheel_gesture_before_toolbar_dispatch(
+fn finalize_pointer_gestures_before_toolbar_dispatch(
     input_state: &mut InputState,
     spotlight_wheel_idle_deadline: &mut Option<std::time::Instant>,
 ) {
@@ -35,6 +35,37 @@ fn finalize_spotlight_wheel_gesture_before_toolbar_dispatch(
     // already-finished gesture leaves an idle wake behind.
     input_state.flush_spotlight_magnification_gesture();
     *spotlight_wheel_idle_deadline = None;
+    // A held bend handle closes here too, and for the sharper version of the
+    // same reason: a session open or clear replaces the frame the gesture's
+    // snapshot belongs to, and shape ids restart per frame, so a bend flushed
+    // afterwards would attach to an unrelated shape on the new page.
+    input_state.finish_active_arrow_bend();
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ToolbarEventPreflight {
+    Continue,
+    RebindCaptured,
+}
+
+fn handle_toolbar_event_preflight(
+    input_state: &mut InputState,
+    spotlight_wheel_idle_deadline: &mut Option<std::time::Instant>,
+    event: &ToolbarEvent,
+    rebind_requested: bool,
+) -> ToolbarEventPreflight {
+    // Rebind capture returns before every later backend and InputState route,
+    // so gesture finalization belongs ahead of that branch. This also covers
+    // GTK and secondary-device clicks, which enter with the rebind decision
+    // already resolved.
+    finalize_pointer_gestures_before_toolbar_dispatch(input_state, spotlight_wheel_idle_deadline);
+
+    if rebind_requested && let Some(action) = crate::ui::toolbar::model::action_for_event(event) {
+        input_state.begin_keybinding_capture(action);
+        return ToolbarEventPreflight::RebindCaptured;
+    }
+
+    ToolbarEventPreflight::Continue
 }
 
 /// Whether `event` dismisses `popover`.
@@ -152,10 +183,13 @@ impl WaylandState {
         // shortcut capture so the capture modal owns subsequent keys.
         self.cancel_eyedropper();
         self.cancel_region_for_toolbar_interaction();
-        if rebind_requested
-            && let Some(action) = crate::ui::toolbar::model::action_for_event(&event)
+        if handle_toolbar_event_preflight(
+            &mut self.input_state,
+            &mut self.spotlight_wheel_idle_deadline,
+            &event,
+            rebind_requested,
+        ) == ToolbarEventPreflight::RebindCaptured
         {
-            self.input_state.begin_keybinding_capture(action);
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
             return;
@@ -202,10 +236,6 @@ impl WaylandState {
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
         }
-        finalize_spotlight_wheel_gesture_before_toolbar_dispatch(
-            &mut self.input_state,
-            &mut self.spotlight_wheel_idle_deadline,
-        );
         if self.handle_toolbar_session_event(&event, conn, qh) {
             return;
         }

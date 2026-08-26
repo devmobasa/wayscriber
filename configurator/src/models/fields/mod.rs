@@ -1,3 +1,4 @@
+mod arrow;
 mod capture;
 mod eraser;
 mod export;
@@ -13,6 +14,7 @@ mod toggles;
 mod tool;
 mod toolbar;
 
+pub use arrow::ArrowStyleOption;
 pub use capture::RegionPickerOption;
 pub use eraser::{EraserModeOption, PresetEraserKindOption, PresetEraserModeOption};
 pub use export::{

@@ -13,7 +13,7 @@ use super::types::{
 };
 use super::{load_snapshot, save_snapshot};
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
-use crate::draw::{Color, FontDescriptor, Frame, Shape};
+use crate::draw::{ArrowStyle, Color, FontDescriptor, Frame, Shape};
 use crate::input::EraserMode;
 use crate::session::options::{CompressionMode, SessionOptions};
 use crate::test_temp::tempdir;
@@ -82,6 +82,7 @@ fn sample_tool_state() -> ToolStateSnapshot {
         arrow_length: 20.0,
         arrow_angle: 30.0,
         arrow_head_at_end: Some(false),
+        arrow_style: None,
         arrow_label_enabled: Some(false),
         polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
         board_previous_color: None,
@@ -278,6 +279,51 @@ fn saved_session_round_trips_the_starting_spotlight_magnification() {
             .and_then(|state| state.spotlight_magnification),
         Some(2.25)
     );
+}
+
+#[test]
+fn saved_session_round_trips_the_arrow_style() {
+    // `restore_tool_state` defaults on, so a style picked for the next arrow is
+    // expected to still be picked after a restart. Leaving it out of the
+    // snapshot silently resets it to Standard on every launch.
+    let temp = tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "arrow-style-tool-state");
+    options.persist_transparent = true;
+    options.restore_tool_state = true;
+    options.compression = CompressionMode::Off;
+    let mut tool_state = sample_tool_state();
+    tool_state.arrow_style = Some(ArrowStyle::Curved);
+    let snapshot = SessionSnapshot {
+        tool_state: Some(tool_state),
+        ..sample_snapshot()
+    };
+
+    save_snapshot(&snapshot, &options).expect("save arrow tool state");
+    let restored = load_snapshot(&options)
+        .expect("load arrow tool state")
+        .expect("saved session exists");
+
+    assert_eq!(
+        restored.tool_state.and_then(|state| state.arrow_style),
+        Some(ArrowStyle::Curved)
+    );
+}
+
+#[test]
+fn a_session_written_before_arrow_styles_restores_the_configured_default() {
+    // Sessions on disk predate the field. They must not deserialize as an error
+    // and must not pin Standard over a configured default either — an absent
+    // style has to stay absent so `apply_tool_state_snapshot` leaves whatever
+    // the config seeded in place.
+    let payload = serde_json::to_value(sample_tool_state()).expect("serialize tool state");
+    assert!(
+        payload.get("arrow_style").is_none(),
+        "a None style should not be written at all, got {payload:#}"
+    );
+
+    let restored: ToolStateSnapshot =
+        serde_json::from_value(payload).expect("legacy tool state should still load");
+    assert_eq!(restored.arrow_style, None);
 }
 
 #[test]

@@ -6,7 +6,9 @@ mod shapes;
 #[cfg(test)]
 mod tests;
 
-use crate::draw::shape::{arrow_label_layout, step_marker_outline_thickness, step_marker_radius};
+use crate::draw::shape::{
+    arrow_label_ends, arrow_label_layout, step_marker_outline_thickness, step_marker_radius,
+};
 use crate::draw::{DrawnShape, Shape};
 use crate::util::Rect;
 
@@ -115,6 +117,8 @@ pub(crate) fn hit_test_with_tolerance(
             arrow_length,
             arrow_angle,
             head_at_end,
+            style,
+            bend,
             label,
             ..
         } => {
@@ -123,27 +127,46 @@ pub(crate) fn hit_test_with_tolerance(
             } else {
                 (*x1, *y1, *x2, *y2)
             };
+            // `Double` reads its endpoints differently for the label than for
+            // the heads, so the grabbable area follows the number rather than
+            // the flag that does not move it.
+            let (label_tip_x, label_tip_y, label_tail_x, label_tail_y) =
+                arrow_label_ends(*x1, *y1, *x2, *y2, *head_at_end, *style);
 
-            let mut hit = shapes::segment_hit(*x1, *y1, *x2, *y2, *thick, point, tolerance)
-                || shapes::arrowhead_hit(
-                    tip_x,
-                    tip_y,
-                    tail_x,
-                    tail_y,
-                    *thick,
-                    *arrow_length,
-                    *arrow_angle,
-                    point,
-                    tolerance,
-                );
+            // Shaft and heads both come from the shared skeleton, so a curved
+            // arrow is grabbed along its arc and a double-ended one is grabbed
+            // by either head.
+            let skeleton = crate::util::calculate_arrow_skeleton(
+                tip_x,
+                tip_y,
+                tail_x,
+                tail_y,
+                *thick,
+                *arrow_length,
+                *arrow_angle,
+                *style,
+                *bend,
+            );
+            let mut hit = match &skeleton {
+                Some(skeleton) => {
+                    shapes::spine_hit(skeleton.spine.points(), *thick, point, tolerance)
+                        || shapes::arrowhead_triangle_hit(&skeleton.head, point, tolerance)
+                        || skeleton.tail_head.as_ref().is_some_and(|tail_head| {
+                            shapes::arrowhead_triangle_hit(tail_head, point, tolerance)
+                        })
+                }
+                // Too short for a head: the chord is all there is to grab.
+                None => shapes::segment_hit(*x1, *y1, *x2, *y2, *thick, point, tolerance),
+            };
             if !hit && let Some(label) = label {
                 let label_text = label.value.to_string();
                 if let Some(layout) = arrow_label_layout(
-                    tip_x,
-                    tip_y,
-                    tail_x,
-                    tail_y,
+                    label_tip_x,
+                    label_tip_y,
+                    label_tail_x,
+                    label_tail_y,
                     *thick,
+                    style.effective_bend(*bend),
                     &label_text,
                     label.size,
                     &label.font_descriptor,

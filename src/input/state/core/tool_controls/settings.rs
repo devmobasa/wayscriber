@@ -1,5 +1,5 @@
 use super::super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
-use crate::draw::{BlurStyle, Color, FontDescriptor, clamp_regular_sides};
+use crate::draw::{ArrowStyle, BlurStyle, Color, FontDescriptor, clamp_regular_sides};
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{
     DragBinding, MouseButton,
@@ -424,6 +424,23 @@ impl InputState {
         }
 
         true
+    }
+
+    /// Sets the style copied into the next arrow. Returns true if changed.
+    pub fn set_arrow_style(&mut self, style: ArrowStyle) -> bool {
+        if self.arrow_style == style {
+            return false;
+        }
+        self.arrow_style = style;
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        self.mark_session_dirty();
+        true
+    }
+
+    /// Steps to the next arrow style, wrapping around.
+    pub fn cycle_arrow_style(&mut self) -> bool {
+        self.set_arrow_style(self.arrow_style.next())
     }
 
     /// Sets the font descriptor used for text rendering. Returns true if changed.

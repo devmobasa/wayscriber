@@ -195,6 +195,8 @@ impl InputState {
                 arrow_length,
                 arrow_angle,
                 head_at_end,
+                style,
+                bend,
                 label,
             } => {
                 let (nx1, ny1) =
@@ -211,6 +213,20 @@ impl InputState {
                     arrow_length: *arrow_length,
                     arrow_angle: *arrow_angle,
                     head_at_end: *head_at_end,
+                    style: *style,
+                    // `bend` is a fraction of the chord, so a uniform scale
+                    // carries the arc for free — but a non-uniform one has to
+                    // scale the arc itself, or the bulge (the only part of a
+                    // flat curved arrow with any height) ignores the drag.
+                    bend: crate::util::scaled_arrow_bend(
+                        (*x1 as f64, *y1 as f64),
+                        (*x2 as f64, *y2 as f64),
+                        (nx1 as f64, ny1 as f64),
+                        (nx2 as f64, ny2 as f64),
+                        *bend,
+                        scale_x,
+                        scale_y,
+                    ),
                     label: label.clone(),
                 }
             }

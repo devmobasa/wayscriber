@@ -126,6 +126,7 @@ impl ToolbarSnapshot {
             fill_enabled: state.fill_enabled,
             polygon_sides: state.polygon_sides,
             arrow_label_enabled: state.arrow_label_enabled,
+            arrow_style: state.arrow_style,
             arrow_label_next: state.arrow_label_counter.max(1),
             step_marker_next: state.step_marker_counter.max(1),
             undo_available: frame.undo_stack_len() > 0,

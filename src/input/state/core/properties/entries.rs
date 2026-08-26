@@ -1,7 +1,7 @@
 use super::super::base::InputState;
 use super::summary::{
-    PropertySummary, shape_arrow_angle, shape_arrow_head, shape_arrow_length, shape_color,
-    shape_fill, shape_font_size, shape_spotlight_magnification, shape_text_background,
+    PropertySummary, shape_arrow_angle, shape_arrow_head, shape_arrow_length, shape_arrow_style,
+    shape_color, shape_fill, shape_font_size, shape_spotlight_magnification, shape_text_background,
     shape_thickness, summarize_property,
 };
 use super::types::{SelectionPropertyEntry, SelectionPropertyKind};
@@ -136,6 +136,17 @@ impl InputState {
             });
         }
 
+        let style_summary = summarize_property(frame, ids, shape_arrow_style, |a, b| a == b);
+        if style_summary.applicable {
+            let value = summary_value(&style_summary, |v| v.label().to_string());
+            entries.push(SelectionPropertyEntry {
+                label: "Arrow style".to_string(),
+                value,
+                kind: SelectionPropertyKind::ArrowStyle,
+                disabled: !style_summary.editable,
+            });
+        }
+
         let length_summary = summarize_property(frame, ids, shape_arrow_length, approx_eq);
         if length_summary.applicable {
             let value = summary_value(&length_summary, |v| format!("{v:.0}px"));
@@ -194,7 +205,7 @@ impl InputState {
 mod tests {
     use super::*;
     use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
-    use crate::draw::{Color, FontDescriptor};
+    use crate::draw::{ArrowStyle, Color, FontDescriptor};
     use crate::input::{ClickHighlightSettings, EraserMode};
 
     fn make_state() -> InputState {
@@ -326,6 +337,8 @@ mod tests {
             arrow_length: 24.0,
             arrow_angle: 35.0,
             head_at_end: true,
+            style: ArrowStyle::Standard,
+            bend: 0.0,
             label: None,
         });
 
@@ -349,6 +362,8 @@ mod tests {
             arrow_length: 24.0,
             arrow_angle: 35.0,
             head_at_end: true,
+            style: ArrowStyle::Standard,
+            bend: 0.0,
             label: None,
         });
         let second = state.boards.active_frame_mut().add_shape(Shape::Arrow {
@@ -361,6 +376,8 @@ mod tests {
             arrow_length: 24.0,
             arrow_angle: 35.0,
             head_at_end: false,
+            style: ArrowStyle::Standard,
+            bend: 0.0,
             label: None,
         });
 

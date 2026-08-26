@@ -247,7 +247,8 @@ impl InputState {
                 self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
                 self.state = DrawingState::Idle;
             }
-            DrawingState::AdjustingSpotlightMagnification { shape_id, snapshot } => {
+            DrawingState::BendingArrow { shape_id, snapshot }
+            | DrawingState::AdjustingSpotlightMagnification { shape_id, snapshot } => {
                 self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
                 self.state = DrawingState::Idle;
             }

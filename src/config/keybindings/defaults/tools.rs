@@ -40,6 +40,12 @@ pub(crate) fn default_cycle_blur_style() -> Vec<String> {
     Vec::new()
 }
 
+/// Unbound by default, like the blur-style cycle it mirrors; reachable from the
+/// command palette until the user binds a chord.
+pub(crate) fn default_cycle_arrow_style() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_select_pen_tool() -> Vec<String> {
     vec!["F".to_string()]
 }

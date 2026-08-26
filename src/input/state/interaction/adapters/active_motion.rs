@@ -30,6 +30,15 @@ pub(crate) fn handle_active_motion(
         ));
     }
 
+    if matches!(state.state, DrawingState::BendingArrow { .. }) {
+        // Shift snaps the magnitude; the arc is symmetric either way.
+        let snap = state.modifiers.shift;
+        state.drag_arrow_bend_to(canvas.x(), canvas.y(), snap);
+        return Some(RoutingOutcome::Continued(
+            ActiveInteractionKind::BendingArrow,
+        ));
+    }
+
     if let DrawingState::ResizingText {
         shape_id,
         base_x,
@@ -194,6 +203,7 @@ pub(crate) fn releasable_active_kind(state: &InputState) -> Option<ActiveInterac
         DrawingState::PendingTextClick { .. } => Some(ActiveInteractionKind::PendingTextClick),
         DrawingState::ResizingText { .. } => Some(ActiveInteractionKind::ResizingText),
         DrawingState::ResizingSelection { .. } => Some(ActiveInteractionKind::ResizingSelection),
+        DrawingState::BendingArrow { .. } => Some(ActiveInteractionKind::BendingArrow),
         DrawingState::AdjustingSpotlightMagnification { .. } => {
             Some(ActiveInteractionKind::AdjustingSpotlightMagnification)
         }

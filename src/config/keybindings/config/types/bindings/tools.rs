@@ -35,6 +35,9 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_cycle_blur_style")]
     pub cycle_blur_style: Vec<String>,
 
+    #[serde(default = "default_cycle_arrow_style")]
+    pub cycle_arrow_style: Vec<String>,
+
     #[serde(default = "default_select_pen_tool")]
     pub select_pen_tool: Vec<String>,
 
@@ -103,6 +106,7 @@ impl Default for ToolKeybindingsConfig {
             select_eraser_tool: default_select_eraser_tool(),
             toggle_eraser_mode: default_toggle_eraser_mode(),
             cycle_blur_style: default_cycle_blur_style(),
+            cycle_arrow_style: default_cycle_arrow_style(),
             select_pen_tool: default_select_pen_tool(),
             select_line_tool: default_select_line_tool(),
             select_rect_tool: default_select_rect_tool(),

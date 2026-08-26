@@ -44,6 +44,7 @@ fn save_snapshot_errors_when_payload_exceeds_max_file_size() {
             arrow_length: 20.0,
             arrow_angle: 30.0,
             arrow_head_at_end: Some(false),
+            arrow_style: None,
             arrow_label_enabled: Some(false),
             polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
             board_previous_color: None,

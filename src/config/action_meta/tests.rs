@@ -178,6 +178,7 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::ToggleEraserMode,
     Action::SelectSpotlightTool,
     Action::CycleBlurStyle,
+    Action::CycleArrowStyle,
     Action::IncreaseThickness,
     Action::DecreaseThickness,
     Action::IncreaseMarkerOpacity,

@@ -7,6 +7,7 @@ pub enum SelectionPropertyKind {
     Fill,
     FontSize,
     ArrowHead,
+    ArrowStyle,
     ArrowLength,
     ArrowAngle,
     TextBackground,

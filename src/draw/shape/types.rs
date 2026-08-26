@@ -89,6 +89,82 @@ impl BlurStyle {
     }
 }
 
+/// How an arrow's shaft and head are shaped.
+///
+/// The variants are drawing styles, not different shapes: every one of them
+/// still stores the same two endpoints and the same head sizing, so switching
+/// styles never loses geometry. `Standard` is what arrows looked like before
+/// styles existed, which is what makes it the serde default.
+#[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "kebab-case")]
+pub enum ArrowStyle {
+    /// Tapered shaft fused into one head. The historical arrow.
+    #[default]
+    Standard,
+    /// Dart head: the rear edge is notched forward into a concave V.
+    Pointy,
+    /// Shaft follows a quadratic Bezier arc so it can route around whatever
+    /// sits between the pointer and its target.
+    Curved,
+    /// Parallel-sided shaft with a head at both ends.
+    Double,
+}
+
+impl ArrowStyle {
+    /// Every style, in the order the toolbar and cycling action step through them.
+    pub const ALL: [Self; 4] = [Self::Standard, Self::Pointy, Self::Curved, Self::Double];
+
+    /// Short human-readable name for toolbars, menus, and toasts.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Standard => "Standard",
+            Self::Pointy => "Pointy",
+            Self::Curved => "Curved",
+            Self::Double => "Double",
+        }
+    }
+
+    /// Next style in [`Self::ALL`] order, wrapping at the end.
+    pub fn next(self) -> Self {
+        match self {
+            Self::Standard => Self::Pointy,
+            Self::Pointy => Self::Curved,
+            Self::Curved => Self::Double,
+            Self::Double => Self::Standard,
+        }
+    }
+
+    /// Previous style in [`Self::ALL`] order, wrapping at the start.
+    ///
+    /// The properties panel steps entries in both directions, so a four-way
+    /// cycle needs a way back that is not three presses forward.
+    pub fn previous(self) -> Self {
+        match self {
+            Self::Standard => Self::Double,
+            Self::Pointy => Self::Standard,
+            Self::Curved => Self::Pointy,
+            Self::Double => Self::Curved,
+        }
+    }
+
+    /// Whether this style bends its shaft, and so needs the `bend` field and
+    /// the curve sampler rather than the straight-line fast paths.
+    pub fn is_curved(self) -> bool {
+        matches!(self, Self::Curved)
+    }
+
+    /// The bend this style actually draws.
+    ///
+    /// Every arrow carries a `bend` so a trip round the style cycle does not
+    /// lose the arc the user shaped, which means readers have to ask the style
+    /// whether that stored value is on screen before they position anything
+    /// against it.
+    pub fn effective_bend(self, bend: f64) -> f64 {
+        if self.is_curved() { bend } else { 0.0 }
+    }
+}
+
 /// Label metadata for numbered arrows.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ArrowLabel {
@@ -216,6 +292,19 @@ pub enum Shape {
         /// Whether the arrowhead sits at the end of the line
         #[serde(default = "default_arrow_head_at_end")]
         head_at_end: bool,
+        /// How the shaft and head are drawn. Absent in sessions written before
+        /// styles existed, which deserialize as the historical straight arrow.
+        #[serde(default)]
+        style: ArrowStyle,
+        /// Signed bend as a fraction of the tail-to-tip chord length. `0.0` is
+        /// straight; positive bulges toward the left of the tail-to-tip
+        /// direction (screen coordinates, y down), negative toward the right.
+        ///
+        /// Only [`ArrowStyle::Curved`] draws it, but every arrow carries it so
+        /// switching a curved arrow to another style and back keeps the arc the
+        /// user shaped.
+        #[serde(default)]
+        bend: f64,
         /// Optional label rendered near the arrow.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         label: Option<ArrowLabel>,
@@ -379,6 +468,8 @@ impl Shape {
                 arrow_length,
                 arrow_angle,
                 head_at_end,
+                style,
+                bend,
                 label,
                 color: _,
             } => bounding_box_for_arrow(
@@ -390,6 +481,8 @@ impl Shape {
                 *arrow_length,
                 *arrow_angle,
                 *head_at_end,
+                *style,
+                *bend,
                 label.as_ref(),
             ),
             Shape::BlurRect { x, y, w, h, .. } => bounding_box_for_blur(*x, *y, *w, *h),

@@ -99,6 +99,7 @@ define_action_binding_accessors! {
     SelectEraserTool => tools.select_eraser_tool,
     ToggleEraserMode => tools.toggle_eraser_mode,
     CycleBlurStyle => tools.cycle_blur_style,
+    CycleArrowStyle => tools.cycle_arrow_style,
     SelectPenTool => tools.select_pen_tool,
     SelectLineTool => tools.select_line_tool,
     SelectRectTool => tools.select_rect_tool,

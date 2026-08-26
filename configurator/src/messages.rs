@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use wayscriber::config::{ConfigDocument, Shortcut, ToolbarItemId, ToolbarItemOrderGroup};
 
 use crate::models::{
-    BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode, ColorPickerId,
-    DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DragColorOption, DragMouseButton,
-    DragToolField, DragToolOption, EraserModeOption, FontStyleOption, FontWeightOption,
-    InputHudModeOption, InputHudPositionOption, KeybindingField, KeybindingsTabId,
-    KeyboardModifiers, NamedColorOption, OverrideOption, PdfFitModeOption,
+    ArrowStyleOption, BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode,
+    ColorPickerId, DaemonAction, DaemonActionResult, DaemonRuntimeStatus, DragColorOption,
+    DragMouseButton, DragToolField, DragToolOption, EraserModeOption, FontStyleOption,
+    FontWeightOption, InputHudModeOption, InputHudPositionOption, KeybindingField,
+    KeybindingsTabId, KeyboardModifiers, NamedColorOption, OverrideOption, PdfFitModeOption,
     PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
     PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
     PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField,
@@ -112,6 +112,7 @@ pub enum Message {
     QuickColorModeChanged(usize, ColorMode),
     QuickNamedColorSelected(usize, NamedColorOption),
     EraserModeChanged(EraserModeOption),
+    ArrowStyleChanged(ArrowStyleOption),
     DrawingDragMappingSectionToggled(DragMouseButton),
     DrawingMouseDragToolChanged(DragMouseButton, DragToolField, DragToolOption),
     DrawingMouseDragColorChanged(DragMouseButton, DragToolField, DragColorOption),
