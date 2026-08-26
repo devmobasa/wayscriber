@@ -1,4 +1,5 @@
 use crate::draw::Color;
+use crate::input::state::{BoardPickerEditMode, BoardPickerLayout};
 use crate::input::{BoardBackground, InputState};
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
 use crate::ui::theme::Rgba;
@@ -12,386 +13,473 @@ use super::helpers::{
     SWATCH_EDGE, board_slot_hint, draw_drag_handle, draw_open_icon, draw_pin_icon,
 };
 
-/// Outline + cross for the transparent-board swatch (no matching theme token;
-/// kept from the pre-theme literal).
 const SWATCH_TRANSPARENT_OUTLINE: Rgba = (0.62, 0.68, 0.76, 0.85);
 
 pub(super) fn render_board_rows(
     ctx: &cairo::Context,
     input_state: &InputState,
-    layout: crate::input::state::BoardPickerLayout,
+    layout: BoardPickerLayout,
     board_count: usize,
     max_count: usize,
 ) {
-    let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
-    let name_x = layout.origin_x + layout.padding_x + layout.swatch_size + layout.swatch_padding;
-    let list_right = layout.origin_x + layout.list_width;
-    let handle_x = if layout.handle_width > 0.0 {
-        Some(list_right - layout.padding_x - layout.handle_width)
-    } else {
-        None
-    };
-    let open_icon_x = if layout.open_icon_size > 0.0 {
-        handle_x.map(|x| x - layout.open_icon_gap - layout.open_icon_size)
-    } else {
-        None
-    };
-    let hint_right_edge = if let Some(open_icon_x) = open_icon_x {
-        open_icon_x - layout.handle_gap
-    } else if let Some(handle_x) = handle_x {
-        handle_x - layout.handle_gap
-    } else {
-        list_right - layout.padding_x
-    };
-    let hint_x = if layout.hint_width > 0.0 {
-        Some(hint_right_edge - layout.hint_width)
-    } else {
-        None
-    };
+    BoardRowsRenderer::new(ctx, input_state, layout, board_count, max_count).render();
+}
 
-    let highlight_index = input_state.board_picker_active_index();
-    let selected_index = input_state.board_picker_selected_index();
-    let active_board_index = input_state.boards.active_index();
-    let edit_state = input_state.board_picker_edit_state();
-    let pinned_count = input_state.board_picker_pinned_count();
+struct BoardRowsRenderer<'a> {
+    ctx: &'a cairo::Context,
+    input: &'a InputState,
+    layout: BoardPickerLayout,
+    board_count: usize,
+    max_count: usize,
+    rows_top: f64,
+    name_x: f64,
+    list_right: f64,
+    handle_x: Option<f64>,
+    open_icon_x: Option<f64>,
+    hint_x: Option<f64>,
+    highlight_index: Option<usize>,
+    selected_index: Option<usize>,
+    active_board_index: usize,
+    edit_state: Option<(BoardPickerEditMode, usize, &'a str)>,
+    pinned_count: usize,
+    body_style: UiTextStyle<'static>,
+}
 
-    let body_style = UiTextStyle {
-        family: "Sans",
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Normal,
-        size: layout.body_font_size,
-    };
-
-    // Draw "Pinned" section label.
-    if pinned_count > 0 && !input_state.board_picker_is_quick() {
-        let pinned_style = UiTextStyle {
-            size: layout.footer_font_size * 0.9,
-            ..body_style
-        };
-        constants::set_color(ctx, constants::with_alpha(TEXT_HINT, 0.6));
-        let pinned_label_y = rows_top - layout.footer_font_size * 0.4;
-        draw_text_baseline(
+impl<'a> BoardRowsRenderer<'a> {
+    fn new(
+        ctx: &'a cairo::Context,
+        input: &'a InputState,
+        layout: BoardPickerLayout,
+        board_count: usize,
+        max_count: usize,
+    ) -> Self {
+        let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
+        let name_x =
+            layout.origin_x + layout.padding_x + layout.swatch_size + layout.swatch_padding;
+        let list_right = layout.origin_x + layout.list_width;
+        let handle_x = (layout.handle_width > 0.0)
+            .then_some(list_right - layout.padding_x - layout.handle_width);
+        let open_icon_x = (layout.open_icon_size > 0.0)
+            .then(|| handle_x.map(|x| x - layout.open_icon_gap - layout.open_icon_size))
+            .flatten();
+        let hint_right_edge = open_icon_x
+            .map(|x| x - layout.handle_gap)
+            .or_else(|| handle_x.map(|x| x - layout.handle_gap))
+            .unwrap_or(list_right - layout.padding_x);
+        let hint_x = (layout.hint_width > 0.0).then_some(hint_right_edge - layout.hint_width);
+        Self {
             ctx,
-            pinned_style,
-            "Pinned",
-            layout.origin_x + layout.padding_x,
-            pinned_label_y,
+            input,
+            layout,
+            board_count,
+            max_count,
+            rows_top,
+            name_x,
+            list_right,
+            handle_x,
+            open_icon_x,
+            hint_x,
+            highlight_index: input.board_picker_active_index(),
+            selected_index: input.board_picker_selected_index(),
+            active_board_index: input.boards.active_index(),
+            edit_state: input.board_picker_edit_state(),
+            pinned_count: input.board_picker_pinned_count(),
+            body_style: UiTextStyle {
+                family: "Sans",
+                slant: cairo::FontSlant::Normal,
+                weight: cairo::FontWeight::Normal,
+                size: layout.body_font_size,
+            },
+        }
+    }
+
+    fn render(&self) {
+        self.render_section_header();
+        for row in 0..self.layout.row_count {
+            self.render_row(row);
+        }
+    }
+
+    fn render_section_header(&self) {
+        if self.pinned_count > 0 && !self.input.board_picker_is_quick() {
+            let style = UiTextStyle {
+                size: self.layout.footer_font_size * 0.9,
+                ..self.body_style
+            };
+            constants::set_color(self.ctx, constants::with_alpha(TEXT_HINT, 0.6));
+            draw_text_baseline(
+                self.ctx,
+                style,
+                "Pinned",
+                self.layout.origin_x + self.layout.padding_x,
+                self.rows_top - self.layout.footer_font_size * 0.4,
+                None,
+            );
+        }
+        if self.pinned_count > 0 && self.pinned_count < self.board_count {
+            let y = self.rows_top + self.layout.row_height * self.pinned_count as f64;
+            constants::set_color(self.ctx, DIVIDER_LIGHT);
+            self.ctx.set_line_width(1.0);
+            self.ctx
+                .move_to(self.layout.origin_x + self.layout.padding_x, y);
+            self.ctx.line_to(self.list_right - self.layout.padding_x, y);
+            let _ = self.ctx.stroke();
+        }
+    }
+
+    fn render_row(&self, row: usize) {
+        let row_top = self.rows_top + self.layout.row_height * row as f64;
+        let row_center = row_top + self.layout.row_height * 0.5;
+        let highlighted = self.highlight_index == Some(row);
+        let selected = self.selected_index == Some(row);
+        self.render_row_selection(row_top, highlighted, selected);
+
+        let is_new = row >= self.board_count;
+        if is_new && row > 0 {
+            self.render_new_row_divider(row_top);
+        }
+        let swatch_x = self.layout.origin_x + self.layout.padding_x;
+        let swatch_y = row_center - self.layout.swatch_size * 0.5;
+        if is_new {
+            self.render_new_row(swatch_x, swatch_y, row_center);
+            return;
+        }
+        let board_index = self
+            .input
+            .board_picker_board_index_for_row(row)
+            .unwrap_or(row);
+        let active = board_index == self.active_board_index;
+        self.render_board_swatch(board_index, swatch_x, swatch_y, active);
+        self.render_existing_row(
+            row,
+            board_index,
+            row_center,
+            swatch_x,
+            highlighted,
+            selected,
+            active,
+        );
+    }
+
+    fn render_row_selection(&self, row_top: f64, highlighted: bool, selected: bool) {
+        if highlighted {
+            constants::set_color(self.ctx, BG_SELECTION);
+            self.ctx.rectangle(
+                self.layout.origin_x + 6.0,
+                row_top,
+                self.layout.list_width - 12.0,
+                self.layout.row_height,
+            );
+            let _ = self.ctx.fill();
+        }
+        if selected {
+            constants::set_color(self.ctx, BG_SELECTED_INDICATOR);
+            self.ctx.rectangle(
+                self.layout.origin_x + 6.0,
+                row_top,
+                3.0,
+                self.layout.row_height,
+            );
+            let _ = self.ctx.fill();
+        }
+    }
+
+    fn render_new_row_divider(&self, row_top: f64) {
+        constants::set_color(self.ctx, DIVIDER_LIGHT);
+        self.ctx.set_line_width(0.5);
+        self.ctx
+            .move_to(self.layout.origin_x + self.layout.padding_x, row_top);
+        self.ctx
+            .line_to(self.list_right - self.layout.padding_x, row_top);
+        let _ = self.ctx.stroke();
+    }
+
+    fn render_new_row(&self, swatch_x: f64, swatch_y: f64, row_center: f64) {
+        constants::set_color(self.ctx, TEXT_HINT);
+        draw_rounded_rect(
+            self.ctx,
+            swatch_x,
+            swatch_y,
+            self.layout.swatch_size,
+            self.layout.swatch_size,
+            3.5,
+        );
+        let _ = self.ctx.stroke();
+        self.ctx.set_line_width(1.5);
+        let mid_x = swatch_x + self.layout.swatch_size * 0.5;
+        let mid_y = swatch_y + self.layout.swatch_size * 0.5;
+        self.ctx.move_to(mid_x - 4.0, mid_y);
+        self.ctx.line_to(mid_x + 4.0, mid_y);
+        self.ctx.move_to(mid_x, mid_y - 4.0);
+        self.ctx.line_to(mid_x, mid_y + 4.0);
+        let _ = self.ctx.stroke();
+        let label = if self.board_count >= self.max_count {
+            "New board (max reached)"
+        } else {
+            "New board"
+        };
+        constants::set_color(self.ctx, TEXT_HINT);
+        draw_text_baseline(
+            self.ctx,
+            self.body_style,
+            label,
+            self.name_x,
+            self.text_baseline(row_center),
             None,
         );
     }
 
-    // Draw pinned/unpinned section divider.
-    if pinned_count > 0 && pinned_count < board_count {
-        let divider_y = rows_top + layout.row_height * pinned_count as f64;
-        constants::set_color(ctx, DIVIDER_LIGHT);
-        ctx.set_line_width(1.0);
-        ctx.move_to(layout.origin_x + layout.padding_x, divider_y);
-        ctx.line_to(list_right - layout.padding_x, divider_y);
-        let _ = ctx.stroke();
+    fn render_board_swatch(&self, board_index: usize, x: f64, y: f64, active: bool) {
+        let board = &self.input.boards.board_states()[board_index];
+        match board.spec.background {
+            BoardBackground::Transparent => {
+                constants::set_color(self.ctx, SWATCH_TRANSPARENT_OUTLINE);
+                draw_rounded_rect(
+                    self.ctx,
+                    x,
+                    y,
+                    self.layout.swatch_size,
+                    self.layout.swatch_size,
+                    3.5,
+                );
+                let _ = self.ctx.stroke();
+                self.ctx.move_to(x, y);
+                self.ctx
+                    .line_to(x + self.layout.swatch_size, y + self.layout.swatch_size);
+                self.ctx.move_to(x + self.layout.swatch_size, y);
+                self.ctx.line_to(x, y + self.layout.swatch_size);
+                let _ = self.ctx.stroke();
+            }
+            BoardBackground::Solid(color) => {
+                self.ctx.set_source_rgba(color.r, color.g, color.b, 1.0);
+                draw_rounded_rect(
+                    self.ctx,
+                    x,
+                    y,
+                    self.layout.swatch_size,
+                    self.layout.swatch_size,
+                    3.5,
+                );
+                let _ = self.ctx.fill();
+                constants::set_color(self.ctx, SWATCH_EDGE);
+                draw_rounded_rect(
+                    self.ctx,
+                    x,
+                    y,
+                    self.layout.swatch_size,
+                    self.layout.swatch_size,
+                    3.5,
+                );
+                let _ = self.ctx.stroke();
+            }
+        }
+        if active {
+            constants::set_color(self.ctx, ACCENT_PRIMARY);
+            draw_rounded_rect(
+                self.ctx,
+                x - 2.0,
+                y - 2.0,
+                self.layout.swatch_size + 4.0,
+                self.layout.swatch_size + 4.0,
+                4.0,
+            );
+            let _ = self.ctx.stroke();
+        }
     }
 
-    for row in 0..layout.row_count {
-        let row_top = rows_top + layout.row_height * row as f64;
-        let row_center = row_top + layout.row_height * 0.5;
-        let is_highlighted = highlight_index == Some(row);
-        let is_selected = selected_index == Some(row);
-        let board_index = if row < board_count {
-            input_state
-                .board_picker_board_index_for_row(row)
-                .unwrap_or(row)
+    #[allow(clippy::too_many_arguments)]
+    fn render_existing_row(
+        &self,
+        row: usize,
+        board_index: usize,
+        row_center: f64,
+        swatch_x: f64,
+        highlighted: bool,
+        selected: bool,
+        active: bool,
+    ) {
+        self.render_pin(board_index, row_center, swatch_x, highlighted, selected);
+        let (name, hint_override) = self.edited_board_text(row, board_index);
+        self.render_board_name(board_index, row_center, active, &name);
+        self.render_edit_caret(
+            row,
+            BoardPickerEditMode::Name,
+            &name,
+            self.name_x,
+            row_center,
+        );
+        self.render_board_hint(row, board_index, row_center, hint_override);
+        self.render_row_controls(row_center, highlighted, selected);
+    }
+
+    fn render_pin(
+        &self,
+        board_index: usize,
+        row_center: f64,
+        swatch_x: f64,
+        highlighted: bool,
+        selected: bool,
+    ) {
+        let pinned = self.input.boards.board_states()[board_index].spec.pinned;
+        if !pinned && !highlighted && !selected {
+            return;
+        }
+        let rgba = if pinned {
+            ICON_PIN_ACTIVE
         } else {
-            0
+            ICON_PIN_INACTIVE
         };
-        let is_active_board = row < board_count && board_index == active_board_index;
+        draw_pin_icon(
+            self.ctx,
+            swatch_x - self.layout.swatch_padding * 0.6,
+            row_center,
+            self.layout.body_font_size,
+            Color {
+                r: rgba.0,
+                g: rgba.1,
+                b: rgba.2,
+                a: rgba.3,
+            },
+            pinned,
+        );
+    }
 
-        if is_highlighted {
-            constants::set_color(ctx, BG_SELECTION);
-            ctx.rectangle(
-                layout.origin_x + 6.0,
-                row_top,
-                layout.list_width - 12.0,
-                layout.row_height,
-            );
-            let _ = ctx.fill();
-        }
-
-        if is_selected {
-            constants::set_color(ctx, BG_SELECTED_INDICATOR);
-            ctx.rectangle(layout.origin_x + 6.0, row_top, 3.0, layout.row_height);
-            let _ = ctx.fill();
-        }
-
-        let swatch_x = layout.origin_x + layout.padding_x;
-        let swatch_y = row_center - layout.swatch_size * 0.5;
-
-        let is_new_row = row >= board_count;
-        if is_new_row && row > 0 {
-            constants::set_color(ctx, DIVIDER_LIGHT);
-            ctx.set_line_width(0.5);
-            ctx.move_to(layout.origin_x + layout.padding_x, row_top);
-            ctx.line_to(list_right - layout.padding_x, row_top);
-            let _ = ctx.stroke();
-        }
-        if is_new_row {
-            constants::set_color(ctx, TEXT_HINT);
-            draw_rounded_rect(
-                ctx,
-                swatch_x,
-                swatch_y,
-                layout.swatch_size,
-                layout.swatch_size,
-                3.5,
-            );
-            let _ = ctx.stroke();
-            ctx.set_line_width(1.5);
-            let mid_x = swatch_x + layout.swatch_size * 0.5;
-            let mid_y = swatch_y + layout.swatch_size * 0.5;
-            ctx.move_to(mid_x - 4.0, mid_y);
-            ctx.line_to(mid_x + 4.0, mid_y);
-            ctx.move_to(mid_x, mid_y - 4.0);
-            ctx.line_to(mid_x, mid_y + 4.0);
-            let _ = ctx.stroke();
-        } else {
-            let board = &input_state.boards.board_states()[board_index];
-            match board.spec.background {
-                BoardBackground::Transparent => {
-                    constants::set_color(ctx, SWATCH_TRANSPARENT_OUTLINE);
-                    draw_rounded_rect(
-                        ctx,
-                        swatch_x,
-                        swatch_y,
-                        layout.swatch_size,
-                        layout.swatch_size,
-                        3.5,
-                    );
-                    let _ = ctx.stroke();
-                    ctx.move_to(swatch_x, swatch_y);
-                    ctx.line_to(swatch_x + layout.swatch_size, swatch_y + layout.swatch_size);
-                    ctx.move_to(swatch_x + layout.swatch_size, swatch_y);
-                    ctx.line_to(swatch_x, swatch_y + layout.swatch_size);
-                    let _ = ctx.stroke();
-                }
-                BoardBackground::Solid(color) => {
-                    ctx.set_source_rgba(color.r, color.g, color.b, 1.0);
-                    draw_rounded_rect(
-                        ctx,
-                        swatch_x,
-                        swatch_y,
-                        layout.swatch_size,
-                        layout.swatch_size,
-                        3.5,
-                    );
-                    let _ = ctx.fill();
-                    constants::set_color(ctx, SWATCH_EDGE);
-                    draw_rounded_rect(
-                        ctx,
-                        swatch_x,
-                        swatch_y,
-                        layout.swatch_size,
-                        layout.swatch_size,
-                        3.5,
-                    );
-                    let _ = ctx.stroke();
-                }
-            }
-            if is_active_board {
-                constants::set_color(ctx, ACCENT_PRIMARY);
-                draw_rounded_rect(
-                    ctx,
-                    swatch_x - 2.0,
-                    swatch_y - 2.0,
-                    layout.swatch_size + 4.0,
-                    layout.swatch_size + 4.0,
-                    4.0,
-                );
-                let _ = ctx.stroke();
-            }
-        }
-
-        if is_new_row {
-            let label = if board_count >= max_count {
-                "New board (max reached)"
-            } else {
-                "New board"
-            };
-            constants::set_color(ctx, TEXT_HINT);
-            draw_text_baseline(
-                ctx,
-                body_style,
-                label,
-                name_x,
-                row_center + layout.body_font_size * 0.35,
-                None,
-            );
-            continue;
-        }
-
-        let board = &input_state.boards.board_states()[board_index];
-        let show_pin = board.spec.pinned || is_highlighted || is_selected;
-        if show_pin {
-            let pin_x = swatch_x - (layout.swatch_padding * 0.6);
-            let (color, filled) = if board.spec.pinned {
-                (
-                    Color {
-                        r: ICON_PIN_ACTIVE.0,
-                        g: ICON_PIN_ACTIVE.1,
-                        b: ICON_PIN_ACTIVE.2,
-                        a: ICON_PIN_ACTIVE.3,
-                    },
-                    true,
-                )
-            } else {
-                (
-                    Color {
-                        r: ICON_PIN_INACTIVE.0,
-                        g: ICON_PIN_INACTIVE.1,
-                        b: ICON_PIN_INACTIVE.2,
-                        a: ICON_PIN_INACTIVE.3,
-                    },
-                    false,
-                )
-            };
-            draw_pin_icon(ctx, pin_x, row_center, layout.body_font_size, color, filled);
-        }
-        let (mut name, mut hint_override) = (board.spec.name.clone(), None);
-        if let Some((mode, edit_index, buffer)) = edit_state
+    fn edited_board_text(&self, row: usize, board_index: usize) -> (String, Option<String>) {
+        let mut name = self.input.boards.board_states()[board_index]
+            .spec
+            .name
+            .clone();
+        let mut hint = None;
+        if let Some((mode, edit_index, buffer)) = self.edit_state
             && edit_index == row
         {
             match mode {
-                crate::input::state::BoardPickerEditMode::Name => {
-                    name = buffer.to_string();
-                }
-                crate::input::state::BoardPickerEditMode::Color => {
-                    hint_override = Some(buffer.to_string());
-                }
+                BoardPickerEditMode::Name => name = buffer.to_string(),
+                BoardPickerEditMode::Color => hint = Some(buffer.to_string()),
             }
         }
+        (name, hint)
+    }
 
-        let name_color = if is_active_board {
-            TEXT_ACTIVE
-        } else {
-            TEXT_SECONDARY
-        };
-        constants::set_color(ctx, name_color);
+    fn render_board_name(&self, board_index: usize, row_center: f64, active: bool, name: &str) {
+        constants::set_color(self.ctx, if active { TEXT_ACTIVE } else { TEXT_SECONDARY });
         draw_text_baseline(
-            ctx,
-            body_style,
-            &name,
-            name_x,
-            row_center + layout.body_font_size * 0.35,
+            self.ctx,
+            self.body_style,
+            name,
+            self.name_x,
+            self.text_baseline(row_center),
             None,
         );
-
-        // Show page count badge after board name (skip when page panel is visible).
-        let page_count = board.pages.page_count();
-        if page_count > 1 && !layout.page_panel_enabled {
-            let name_extents = text_extents_for(
-                ctx,
-                "Sans",
-                cairo::FontSlant::Normal,
-                cairo::FontWeight::Normal,
-                layout.body_font_size,
-                &name,
-            );
-            let page_label = format!(" ({} pages)", page_count);
-            constants::set_color(ctx, constants::with_alpha(TEXT_HINT, 0.85));
-            draw_text_baseline(
-                ctx,
-                body_style,
-                &page_label,
-                name_x + name_extents.width(),
-                row_center + layout.body_font_size * 0.35,
-                None,
-            );
+        let page_count = self.input.boards.board_states()[board_index]
+            .pages
+            .page_count();
+        if page_count <= 1 || self.layout.page_panel_enabled {
+            return;
         }
+        let extents = self.text_extents(name);
+        constants::set_color(self.ctx, constants::with_alpha(TEXT_HINT, 0.85));
+        draw_text_baseline(
+            self.ctx,
+            self.body_style,
+            &format!(" ({page_count} pages)"),
+            self.name_x + extents.width(),
+            self.text_baseline(row_center),
+            None,
+        );
+    }
 
-        if let Some((mode, edit_index, _buffer)) = edit_state
-            && edit_index == row
-            && mode == crate::input::state::BoardPickerEditMode::Name
+    fn render_board_hint(
+        &self,
+        row: usize,
+        board_index: usize,
+        row_center: f64,
+        hint_override: Option<String>,
+    ) {
+        let Some(hint_x) = self.hint_x else {
+            return;
+        };
+        let Some(hint) = hint_override.or_else(|| board_slot_hint(self.input, board_index)) else {
+            return;
+        };
+        constants::set_color(self.ctx, TEXT_HINT);
+        draw_text_baseline(
+            self.ctx,
+            self.body_style,
+            &hint,
+            hint_x,
+            self.text_baseline(row_center),
+            None,
+        );
+        self.render_edit_caret(row, BoardPickerEditMode::Color, &hint, hint_x, row_center);
+    }
+
+    fn render_edit_caret(
+        &self,
+        row: usize,
+        mode: BoardPickerEditMode,
+        text: &str,
+        x: f64,
+        row_center: f64,
+    ) {
+        if !self
+            .edit_state
+            .is_some_and(|(edit_mode, edit_index, _)| edit_mode == mode && edit_index == row)
         {
-            let extents = text_extents_for(
-                ctx,
-                "Sans",
-                cairo::FontSlant::Normal,
-                cairo::FontWeight::Normal,
-                layout.body_font_size,
-                &name,
+            return;
+        }
+        let advance = self.text_extents(text).x_advance();
+        constants::set_color(self.ctx, INPUT_CARET);
+        self.ctx.set_line_width(1.0);
+        self.ctx.move_to(
+            x + advance + 2.0,
+            row_center - self.layout.body_font_size * 0.5,
+        );
+        self.ctx.line_to(
+            x + advance + 2.0,
+            row_center + self.layout.body_font_size * 0.5,
+        );
+        let _ = self.ctx.stroke();
+        self.ctx
+            .move_to(x, row_center + self.layout.body_font_size * 0.55);
+        self.ctx.line_to(
+            x + advance + 6.0,
+            row_center + self.layout.body_font_size * 0.55,
+        );
+        let _ = self.ctx.stroke();
+    }
+
+    fn render_row_controls(&self, row_center: f64, highlighted: bool, selected: bool) {
+        if self.input.board_picker_is_quick() {
+            return;
+        }
+        if let Some(x) = self.open_icon_x {
+            let alpha = if highlighted || selected { 0.95 } else { 0.6 };
+            draw_open_icon(
+                self.ctx,
+                x + self.layout.open_icon_size * 0.5,
+                row_center,
+                self.layout.open_icon_size,
+                alpha,
             );
-            let advance = extents.x_advance();
-            let caret_x = name_x + advance + 2.0;
-            constants::set_color(ctx, INPUT_CARET);
-            ctx.set_line_width(1.0);
-            ctx.move_to(caret_x, row_center - layout.body_font_size * 0.5);
-            ctx.line_to(caret_x, row_center + layout.body_font_size * 0.5);
-            let _ = ctx.stroke();
-            ctx.move_to(name_x, row_center + layout.body_font_size * 0.55);
-            ctx.line_to(
-                name_x + advance + 6.0,
-                row_center + layout.body_font_size * 0.55,
-            );
-            let _ = ctx.stroke();
         }
-
-        if let Some(hint_x) = hint_x {
-            let hint = hint_override.or_else(|| board_slot_hint(input_state, board_index));
-            if let Some(hint) = hint {
-                constants::set_color(ctx, TEXT_HINT);
-                draw_text_baseline(
-                    ctx,
-                    body_style,
-                    &hint,
-                    hint_x,
-                    row_center + layout.body_font_size * 0.35,
-                    None,
-                );
-
-                if let Some((mode, edit_index, _)) = edit_state
-                    && edit_index == row
-                    && mode == crate::input::state::BoardPickerEditMode::Color
-                {
-                    let extents = text_extents_for(
-                        ctx,
-                        "Sans",
-                        cairo::FontSlant::Normal,
-                        cairo::FontWeight::Normal,
-                        layout.body_font_size,
-                        &hint,
-                    );
-                    let advance = extents.x_advance();
-                    let caret_x = hint_x + advance + 2.0;
-                    constants::set_color(ctx, INPUT_CARET);
-                    ctx.set_line_width(1.0);
-                    ctx.move_to(caret_x, row_center - layout.body_font_size * 0.5);
-                    ctx.line_to(caret_x, row_center + layout.body_font_size * 0.5);
-                    let _ = ctx.stroke();
-                    ctx.move_to(hint_x, row_center + layout.body_font_size * 0.55);
-                    ctx.line_to(
-                        hint_x + advance + 6.0,
-                        row_center + layout.body_font_size * 0.55,
-                    );
-                    let _ = ctx.stroke();
-                }
-            }
+        if let Some(x) = self.handle_x {
+            draw_drag_handle(self.ctx, x, row_center, self.layout.handle_width);
         }
+    }
 
-        if let Some(open_icon_x) = open_icon_x
-            && !is_new_row
-            && !input_state.board_picker_is_quick()
-        {
-            let alpha = if is_highlighted || is_selected {
-                0.95
-            } else {
-                0.6
-            };
-            let center_x = open_icon_x + layout.open_icon_size * 0.5;
-            draw_open_icon(ctx, center_x, row_center, layout.open_icon_size, alpha);
-        }
+    fn text_extents(&self, text: &str) -> cairo::TextExtents {
+        text_extents_for(
+            self.ctx,
+            "Sans",
+            cairo::FontSlant::Normal,
+            cairo::FontWeight::Normal,
+            self.layout.body_font_size,
+            text,
+        )
+    }
 
-        if let Some(handle_x) = handle_x
-            && !is_new_row
-            && !input_state.board_picker_is_quick()
-        {
-            draw_drag_handle(ctx, handle_x, row_center, layout.handle_width);
-        }
+    fn text_baseline(&self, row_center: f64) -> f64 {
+        row_center + self.layout.body_font_size * 0.35
     }
 }
