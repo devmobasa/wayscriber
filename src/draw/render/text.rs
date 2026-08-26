@@ -37,7 +37,35 @@ pub fn render_text(
     background_enabled: bool,
     wrap_width: Option<i32>,
 ) {
-    render_text_over(
+    render_text_with_halo(
+        ctx,
+        x,
+        y,
+        text,
+        color,
+        size,
+        font_descriptor,
+        background_enabled,
+        wrap_width,
+        true,
+    );
+}
+
+/// [`render_text`], with explicit control over its contrasting outline.
+#[allow(clippy::too_many_arguments)]
+pub fn render_text_with_halo(
+    ctx: &cairo::Context,
+    x: i32,
+    y: i32,
+    text: &str,
+    color: Color,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    background_enabled: bool,
+    wrap_width: Option<i32>,
+    halo_enabled: bool,
+) {
+    render_text_over_with_halo(
         ctx,
         x,
         y,
@@ -48,6 +76,7 @@ pub fn render_text(
         background_enabled,
         wrap_width,
         None,
+        halo_enabled,
     );
 }
 
@@ -70,6 +99,36 @@ pub fn render_text_over(
     background_enabled: bool,
     wrap_width: Option<i32>,
     known_background_luminance: Option<f64>,
+) {
+    render_text_over_with_halo(
+        ctx,
+        x,
+        y,
+        text,
+        color,
+        size,
+        font_descriptor,
+        background_enabled,
+        wrap_width,
+        known_background_luminance,
+        true,
+    );
+}
+
+/// [`render_text_over`], with explicit control over its contrasting outline.
+#[allow(clippy::too_many_arguments)]
+pub fn render_text_over_with_halo(
+    ctx: &cairo::Context,
+    x: i32,
+    y: i32,
+    text: &str,
+    color: Color,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    background_enabled: bool,
+    wrap_width: Option<i32>,
+    known_background_luminance: Option<f64>,
+    halo_enabled: bool,
 ) {
     // Save context state to prevent settings from leaking to other drawing operations
     ctx.save().ok();
@@ -121,20 +180,23 @@ pub fn render_text_over(
     // Read the background before anything is painted over it. The halo has to
     // contrast with what the label sits on, and this is the last moment at
     // which the surface still shows only that.
-    let background_luminance = backdrop_probe::painted_luminance(
-        ctx,
-        (
-            x as f64 + content.x,
-            adjusted_y + content.y,
-            content.width,
-            content.height,
-        ),
-    )
-    .or(known_background_luminance);
-    let outline = text_outline_color(color, background_luminance);
+    let contrast = (halo_enabled || background_enabled).then(|| {
+        let background_luminance = backdrop_probe::painted_luminance(
+            ctx,
+            (
+                x as f64 + content.x,
+                adjusted_y + content.y,
+                content.width,
+                content.height,
+            ),
+        )
+        .or(known_background_luminance);
+        text_outline_color(color, background_luminance)
+    });
 
     // First pass: draw semi-transparent background rectangle (if enabled)
     if background_enabled && content.width > 0.0 && content.height > 0.0 {
+        let contrast = contrast.expect("text background requests a contrast color");
         let padding = size * 0.15;
         // Union ink and logical extents: ink preserves italic overhangs while
         // logical cells retain leading/trailing whitespace advances.
@@ -144,7 +206,7 @@ pub fn render_text_over(
             content.width + padding * 2.0,
             content.height + padding * 2.0,
         );
-        ctx.set_source_rgba(outline.r, outline.g, outline.b, 0.3);
+        ctx.set_source_rgba(contrast.r, contrast.g, contrast.b, 0.3);
         let _ = ctx.fill();
     }
 
@@ -160,11 +222,13 @@ pub fn render_text_over(
     // Create path from layout for stroking
     pangocairo::functions::layout_path(ctx, &layout);
 
-    // Fully opaque stroke for maximum contrast and crispness
-    ctx.set_source_rgba(outline.r, outline.g, outline.b, outline.a);
-    ctx.set_line_width(size * 0.06);
-    ctx.set_line_join(cairo::LineJoin::Round);
-    let _ = ctx.stroke_preserve();
+    if let Some(outline) = contrast.filter(|_| halo_enabled) {
+        // Fully opaque stroke for maximum contrast and crispness.
+        ctx.set_source_rgba(outline.r, outline.g, outline.b, outline.a);
+        ctx.set_line_width(size * 0.06);
+        ctx.set_line_join(cairo::LineJoin::Round);
+        let _ = ctx.stroke_preserve();
+    }
 
     // Fill with bright, full-intensity color
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);
@@ -361,7 +425,7 @@ fn draw_round_rect(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64)
 mod tests {
     use super::{
         Color, FontDescriptor, caret_outline_width, render_sticky_note, render_sticky_note_preview,
-        render_text, sticky_note_foreground, text_outline_color,
+        render_text, render_text_with_halo, sticky_note_foreground, text_outline_color,
     };
 
     fn alpha_at(surface: &mut cairo::ImageSurface, x: i32, y: i32) -> u8 {
@@ -431,6 +495,85 @@ mod tests {
         assert!(
             on_black < 400 * 120,
             "a light halo on a blackboard must leave some non-black pixels"
+        );
+    }
+
+    #[test]
+    fn disabled_text_halo_paints_no_dark_outline_pixels() {
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 400, 120).unwrap();
+        {
+            let ctx = cairo::Context::new(&surface).unwrap();
+            ctx.set_source_rgb(1.0, 1.0, 1.0);
+            let _ = ctx.paint();
+            render_text_with_halo(
+                &ctx,
+                20,
+                80,
+                "Read me",
+                Color::new(0.96, 0.2, 0.25, 1.0),
+                36.0,
+                &FontDescriptor::default(),
+                false,
+                None,
+                false,
+            );
+        }
+        surface.flush();
+        let stride = surface.stride() as usize;
+        let data = surface.data().unwrap();
+        let mut near_black = 0;
+        let mut red = 0;
+        for row in 0..120usize {
+            for column in 0..400usize {
+                let offset = row * stride + column * 4;
+                let (b, g, r) = (data[offset], data[offset + 1], data[offset + 2]);
+                near_black += usize::from(r < 40 && g < 40 && b < 40);
+                red += usize::from(r > 180 && g < 120 && b < 120);
+            }
+        }
+        assert_eq!(near_black, 0, "the disabled halo must not paint an outline");
+        assert!(
+            red > 200,
+            "disabling the halo must leave the text itself visible"
+        );
+    }
+
+    #[test]
+    fn disabled_halo_keeps_the_optional_text_background() {
+        let text = "A                    ";
+        let font = FontDescriptor::default();
+        let size = 20.0;
+        let origin = (20, 60);
+        let caret = crate::draw::shape::caret_geometry_text(
+            text,
+            &font.to_pango_string(size),
+            None,
+            text.len(),
+        )
+        .expect("trailing-space caret geometry");
+        let sample_x = origin.0 + caret.x.round() as i32;
+        let sample_y = origin.1 + (caret.y_from_baseline + caret.height / 2.0).round() as i32;
+        let mut surface =
+            cairo::ImageSurface::create(cairo::Format::ARgb32, 400, 120).expect("text surface");
+        {
+            let ctx = cairo::Context::new(&surface).expect("text context");
+            render_text_with_halo(
+                &ctx,
+                origin.0,
+                origin.1,
+                text,
+                Color::new(1.0, 1.0, 1.0, 1.0),
+                size,
+                &font,
+                true,
+                None,
+                false,
+            );
+        }
+
+        assert!(
+            alpha_at(&mut surface, sample_x, sample_y) > 0,
+            "disabling the halo must not remove the independent background box",
         );
     }
 

@@ -259,6 +259,7 @@ font_family = "Sans"
 font_weight = "bold"
 font_style = "normal"
 text_background_enabled = false
+text_halo_enabled = true
 
 # Hit-test tuning + undo retention
 hit_test_tolerance = 6.0
@@ -413,6 +414,17 @@ Any installed family name is valid. Blank and repeated entries are dropped when
 the configuration loads, because a repeat makes the key look like it skipped.
 An empty list turns the action off.
 
+The toolbar's style pill carries a **Bold** toggle and a button showing the
+family in use; the button opens the font picker. Bold applies to selected text,
+or to the next label you type. Under width pressure, Bold leaves with the
+smoothing stepper; the family button remains until the whole style pill is
+hidden in the most compact layout.
+
+Bold is a literal two-state control: it is checked for `font_weight = "bold"`
+and writes `"bold"` or `"normal"`. Numeric weights such as `700` still render at
+that Pango weight, but leave the toggle unchecked because the toggle cannot
+represent every numeric value.
+
 In the configurator this is a row per font under **Font cycle**, each row a
 searchable dropdown over everything installed — every family drawn in its own
 face, so you pick one by looking at it. Rows move up and down, and the order
@@ -425,9 +437,8 @@ leaves the tool setting alone. With nothing selected it sets what the next label
 will be written in. A family that is not in the list steps to the first entry,
 so the key always goes somewhere.
 
-The toolbar's Sans/Mono buttons are a separate two-way shortcut and are not
-affected by this list. Beside them is a button showing the family in use, which
-opens the font picker below.
+The toolbar family button is independent of this list: it shows the current
+family and opens the full picker below.
 
 Family names are matched without regard to case, the way fontconfig resolves
 them: `sans` and `Sans` are one font, so `["Sans", "sans"]` loads as one entry.
@@ -446,8 +457,7 @@ the configurator. Use the picker to find out what a family looks like, then put
 its name in the list if you want it a keystroke away.
 
 Run **Font Picker** from the command palette, bind `open_font_picker`, or click
-the font button in the toolbar's style pill — the one showing the family in use,
-next to Sans/Mono.
+the font button in the toolbar's style pill — the one showing the family in use.
 
 | Key | Does |
 |-----|------|
@@ -485,6 +495,17 @@ keybind toggle, so anything on that path is paid every time you reach for it.
 Text is drawn with a contrasting outline so it stays readable over any
 background. Wayscriber picks that halo color from **what the label sits on**,
 sampled from the canvas just before the glyphs are painted.
+
+The halo is enabled by default. Disable it globally for the overlay, text-entry
+caret, page thumbnails, and canvas exports with:
+
+```toml
+[drawing]
+text_halo_enabled = false
+```
+
+This removes the contrasting outline. `text_background_enabled` is separate,
+so its optional box still appears when enabled.
 
 That means a whiteboard, a blackboard, a frozen screen, a zoomed screen, and a
 region already covered by a blur or a filled shape all give the right answer.
@@ -543,8 +564,8 @@ the tool settings, so a session restores at the level it was saved at. A session
 written before this existed has no level recorded and restores at whatever
 `pen_smoothing` your config says.
 
-The level is also on the toolbar, as a **Smoothing** slider in the style pill
-whenever the Pen or Marker is up. It reads `Off` at zero. The slider is one of
+The level is also on the toolbar, as a **Smoothing** stepper in the style pill
+whenever the Pen or Marker is up. It reads `Off` at zero. The stepper is one of
 the first things the pill drops on a narrow output; the actions below still
 reach it there.
 

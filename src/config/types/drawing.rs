@@ -137,6 +137,10 @@ pub struct DrawingConfig {
     /// Enable semi-transparent background box behind text for better contrast
     #[serde(default = "default_text_background")]
     pub text_background_enabled: bool,
+
+    /// Draw a contrasting outline around text for readability.
+    #[serde(default = "default_text_halo")]
+    pub text_halo_enabled: bool,
 }
 
 impl Default for DrawingConfig {
@@ -167,6 +171,7 @@ impl Default for DrawingConfig {
             font_weight: default_font_weight(),
             font_style: default_font_style(),
             text_background_enabled: default_text_background(),
+            text_halo_enabled: default_text_halo(),
         }
     }
 }
@@ -935,6 +940,10 @@ fn default_font_style() -> String {
 
 fn default_text_background() -> bool {
     false
+}
+
+fn default_text_halo() -> bool {
+    true
 }
 
 fn default_hit_test_tolerance() -> f64 {

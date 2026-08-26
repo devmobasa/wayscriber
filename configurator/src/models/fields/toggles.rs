@@ -1,6 +1,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToggleField {
     DrawingTextBackground,
+    DrawingTextHalo,
     DrawingFillEnabled,
     PerformanceVsync,
     UiShowStatusBar,

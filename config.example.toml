@@ -1107,7 +1107,7 @@ font_cycle = ["Sans", "Monospace", "Serif"]
 # the hand. Smoothing runs when you lift the pen, never while you draw, so the
 # live stroke always sits exactly on the pointer. Neither endpoint ever moves.
 #
-# Also on the toolbar as the "Smoothing" slider while the Pen or Marker is up.
+# Also on the toolbar as the "Smoothing" stepper while the Pen or Marker is up.
 # A session remembers the level it was saved at; this is the starting value.
 pen_smoothing = 3
 
@@ -1177,7 +1177,9 @@ tab_drag_tool = "ellipse"
 font_family = "Sans"
 
 # Font weight: "normal", "bold", "light", "ultralight", "heavy", "ultrabold"
-# Or numeric: 100-900 (400=normal, 700=bold)
+# Or numeric: 100-900 (400 is regular; 700 renders at a bold weight).
+# The toolbar Bold toggle is checked only for the literal word "bold" and writes
+# "bold" or "normal"; numeric weights such as 700 therefore leave it unchecked.
 # Try different weights:
 #   font_weight = "normal"    # Regular weight
 #   font_weight = "bold"      # Bold (default, best visibility)
@@ -1196,6 +1198,11 @@ font_style = "normal"
 # Set to true if you find text hard to read against complex backgrounds
 # Default: false (no background, cleaner look with just stroke outline)
 text_background_enabled = false
+
+# Draw a contrasting outline around text and text-entry carets.
+# Set to false for plain glyphs without the light/dark halo.
+# Default: true
+text_halo_enabled = true
 
 # Ordered quick colors used by shortcuts, toolbar swatches, and radial menu.
 # The first eight entries map to R/G/B/Y/O/P/W/K; if fewer are configured by

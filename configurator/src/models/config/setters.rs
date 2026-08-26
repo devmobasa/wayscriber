@@ -151,6 +151,9 @@ impl ConfigDraft {
             ToggleField::DrawingTextBackground => {
                 self.drawing_text_background_enabled = value;
             }
+            ToggleField::DrawingTextHalo => {
+                self.drawing_text_halo_enabled = value;
+            }
             ToggleField::DrawingFillEnabled => {
                 self.drawing_default_fill_enabled = value;
             }

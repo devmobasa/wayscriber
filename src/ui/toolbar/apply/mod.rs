@@ -68,6 +68,7 @@ impl InputState {
             ToolbarEvent::OpenFontPicker => self.apply_toolbar_open_font_picker(),
             ToolbarEvent::SetEraserMode(mode) => self.apply_toolbar_set_eraser_mode(mode),
             ToolbarEvent::SetFont(descriptor) => self.apply_toolbar_set_font(descriptor),
+            ToolbarEvent::SetFontBold(bold) => self.apply_toolbar_set_font_bold(bold),
             ToolbarEvent::SetFontSize(size) => self.apply_toolbar_set_font_size(size),
             ToolbarEvent::NudgeFontSize(delta) => {
                 self.apply_toolbar_set_font_size(self.current_font_size + delta)

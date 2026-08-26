@@ -21,16 +21,6 @@ fn format_pt(value: f64) -> String {
     format!("{value:.0}pt")
 }
 
-/// Smoothing readout. Matches `StylePillControl::value_text`: zero passes is a
-/// state worth naming, not a quantity.
-fn format_smoothing(value: f64) -> String {
-    if value.round() <= 0.0 {
-        "Off".to_string()
-    } else {
-        format!("{value:.0}")
-    }
-}
-
 /// Pill button on the shared `sized_button` chassis: non-focusable and
 /// releasing window keyboard focus on click, like every other top-bar
 /// control. The GTK bars must never retain keyboard focus — the popups the
@@ -183,7 +173,6 @@ impl TopBar {
                 model::StylePillControl::ThicknessSlider
                 | model::StylePillControl::OpacitySlider
                 | model::StylePillControl::SpotlightMagnificationSlider
-                | model::StylePillControl::PenSmoothingSlider
                 | model::StylePillControl::FontSizeSlider => {
                     let (slider_spec, value) = control.slider_value(snapshot);
                     let format = match control {
@@ -192,7 +181,6 @@ impl TopBar {
                         model::StylePillControl::SpotlightMagnificationSlider => {
                             crate::draw::format_spotlight_magnification
                         }
-                        model::StylePillControl::PenSmoothingSlider => format_smoothing,
                         _ => format_pt,
                     };
                     let sender = self.feedback.clone();
@@ -207,9 +195,6 @@ impl TopBar {
                             model::StylePillControl::SpotlightMagnificationSlider => {
                                 ToolbarEvent::SetSpotlightMagnification(value)
                             }
-                            model::StylePillControl::PenSmoothingSlider => {
-                                ToolbarEvent::SetPenSmoothing(value.round().clamp(0.0, 255.0) as u8)
-                            }
                             _ => ToolbarEvent::SetFontSize(value),
                         };
                         send_event(&sender, event);
@@ -220,6 +205,12 @@ impl TopBar {
                     let carries_readout = control.carries_inline_readout();
                     slider.configure_inline_readout(carries_readout, px(STYLE_VALUE_W));
                     set_semantic_widget_id(&slider.root, control.id().as_ref());
+                    // A bare track with a numeral beside it has no visible
+                    // name, so the accessible one is all a screen reader has.
+                    let accessible_label = control.label(snapshot);
+                    slider
+                        .root
+                        .update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
                     if let Some(tooltip) = control.tooltip(snapshot) {
                         slider.root.set_tooltip_text(Some(&tooltip));
                     }
@@ -238,9 +229,6 @@ impl TopBar {
                             model::StylePillControl::OpacitySlider => snapshot.marker_opacity,
                             model::StylePillControl::SpotlightMagnificationSlider => {
                                 snapshot.spotlight_magnification
-                            }
-                            model::StylePillControl::PenSmoothingSlider => {
-                                f64::from(snapshot.pen_smoothing)
                             }
                             _ => snapshot.font_size,
                         };
@@ -274,7 +262,9 @@ impl TopBar {
                         button.set_label(&control.required_value_text(snapshot));
                     }));
                 }
-                model::StylePillControl::FillToggle | model::StylePillControl::AutoNumberToggle => {
+                model::StylePillControl::FillToggle
+                | model::StylePillControl::AutoNumberToggle
+                | model::StylePillControl::FontWeightToggle => {
                     let check = gtk4::CheckButton::with_label(control.label(snapshot).as_ref());
                     check.add_css_class("mini");
                     set_semantic_widget_id(&check, control.id().as_ref());
@@ -291,6 +281,9 @@ impl TopBar {
                             let event = match control {
                                 model::StylePillControl::FillToggle => {
                                     ToolbarEvent::ToggleFill(check.is_active())
+                                }
+                                model::StylePillControl::FontWeightToggle => {
+                                    ToolbarEvent::SetFontBold(check.is_active())
                                 }
                                 _ => ToolbarEvent::ToggleArrowLabels(check.is_active()),
                             };
@@ -342,6 +335,10 @@ impl TopBar {
                     );
                     bound_button_label(&button);
                     set_semantic_widget_id(&button, control.id().as_ref());
+                    // The same clear gap the builtin puts before this button,
+                    // so the family name does not crowd the "72pt" numeral on
+                    // one toolbar and not the other.
+                    button.set_margin_start(px(STYLE_SEGMENT_LEAD));
                     if let Some(tooltip) = control.tooltip(snapshot) {
                         button.set_tooltip_text(Some(&tooltip));
                     }
@@ -385,15 +382,25 @@ impl TopBar {
                         button.set_tooltip_text(control.tooltip(snapshot).as_deref());
                     }));
                 }
-                model::StylePillControl::SelectionStepper(_) => {
-                    let row = gtk4::Box::new(gtk4::Orientation::Horizontal, px(2.0));
+                model::StylePillControl::PenSmoothingStepper
+                | model::StylePillControl::SelectionStepper(_) => {
+                    // No spacing between the halves: the builtin lays the three
+                    // parts out abutting, at step + value + step exactly, and
+                    // the width planner budgets that. Two 2px child gaps here
+                    // would make this widget 4px wider than the arrangement the
+                    // planner declared fits.
+                    let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
                     set_semantic_widget_id(&row, control.id().as_ref());
+                    // A row of "−  3  +" says nothing about what it steps.
+                    let accessible_label = control.label(snapshot);
+                    row.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
                     row.set_valign(gtk4::Align::Center);
                     let steps = control.required_steps(snapshot);
                     let mut handles: Vec<gtk4::Button> = Vec::new();
                     let minus = pill_button(steps[0].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));
                     set_semantic_widget_id(&minus, steps[0].id);
                     minus.set_tooltip_text(Some(&steps[0].tooltip));
+                    minus.update_property(&[gtk4::accessible::Property::Label(&steps[0].tooltip)]);
                     row.append(&minus);
                     handles.push(minus.clone());
                     let value = gtk4::Label::new(Some(&control.required_value_text(snapshot)));
@@ -403,6 +410,7 @@ impl TopBar {
                     let plus = pill_button(steps[1].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));
                     set_semantic_widget_id(&plus, steps[1].id);
                     plus.set_tooltip_text(Some(&steps[1].tooltip));
+                    plus.update_property(&[gtk4::accessible::Property::Label(&steps[1].tooltip)]);
                     row.append(&plus);
                     handles.push(plus.clone());
                     for (button, step) in handles.iter().zip(steps.iter()) {
@@ -426,13 +434,12 @@ impl TopBar {
                     // slider has.
                     self.append_style_status_label(&pill, control, snapshot, px(gap));
                 }
-                model::StylePillControl::FontFamilySegment
-                | model::StylePillControl::EraserModeSegment => {
+                model::StylePillControl::EraserModeSegment => {
                     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, px(2.0));
                     set_semantic_widget_id(&row, control.id().as_ref());
                     row.set_valign(gtk4::Align::Center);
-                    // A clear gap before the segment so Sans│Mono never crowd
-                    // the preceding numeral ("72pt") to its left (M7-C3).
+                    // Keep the mode segments visually separate from the
+                    // preceding eraser-size controls.
                     row.set_margin_start(px(STYLE_SEGMENT_LEAD));
                     let segments = control.required_segments(snapshot);
                     let mut handles: Vec<(gtk4::Button, &'static str)> = Vec::new();

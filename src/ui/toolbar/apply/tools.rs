@@ -100,6 +100,10 @@ impl InputState {
         self.set_font_descriptor(descriptor)
     }
 
+    pub(super) fn apply_toolbar_set_font_bold(&mut self, bold: bool) -> bool {
+        self.set_font_bold(bold)
+    }
+
     pub(super) fn apply_toolbar_set_font_size(&mut self, size: f64) -> bool {
         self.set_font_size(size)
     }

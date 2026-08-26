@@ -72,11 +72,11 @@ pub struct ToolContext {
     pub show_polygon_sides_control: bool,
     /// Whether font controls should be shown
     pub show_font_controls: bool,
-    /// Whether the pen-smoothing slider should be shown.
+    /// Whether the pen-smoothing stepper should be shown.
     ///
     /// Follows the tool rather than the setting: smoothing is one number for
     /// the whole program, but it only reaches strokes the pen and marker
-    /// accumulate, so a Line or Blur tool has nothing for the slider to do.
+    /// accumulate, so a Line or Blur tool has nothing for the stepper to do.
     pub show_pen_smoothing: bool,
 }
 
@@ -281,6 +281,13 @@ pub struct ToolbarSnapshot {
     /// which reports on the selected shape rather than the tool default.
     pub selection_spotlight_magnification: Option<f64>,
     pub font: FontDescriptor,
+    /// Whether the selection contains any text or sticky note, including locked shapes.
+    pub selection_has_text: bool,
+    /// Bold state of the first editable selected text or sticky note, when present.
+    /// The Bold control prefers this over the tool default because its event
+    /// mutates editable selected text first. A text selection with `None` here
+    /// has no editable Bold target.
+    pub selected_text_bold: Option<bool>,
     pub font_size: f64,
     pub text_active: bool,
     pub note_active: bool,
@@ -441,6 +448,15 @@ pub struct ToolbarSnapshot {
 }
 
 impl ToolbarSnapshot {
+    /// Checked state of the same target a Bold event will mutate.
+    pub(crate) fn font_bold_target_is_bold(&self) -> bool {
+        match self.selected_text_bold {
+            Some(bold) => bold,
+            None if self.selection_has_text => false,
+            None => self.font.is_bold(),
+        }
+    }
+
     pub fn status_bar_item_visible(&self, item: crate::config::StatusBarItem) -> bool {
         match item {
             crate::config::StatusBarItem::ActiveOutput => self.show_active_output_badge,

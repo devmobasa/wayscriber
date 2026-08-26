@@ -401,6 +401,7 @@ impl WaylandState {
                     .clone_without_history(),
             },
             render_profile: self.input_state.export_render_profile(),
+            text_halo_enabled: self.config.drawing.text_halo_enabled,
         }
     }
 

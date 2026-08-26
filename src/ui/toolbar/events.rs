@@ -91,8 +91,9 @@ pub enum ToolbarEvent {
     SetPenSmoothing(u8),
     SetEraserMode(EraserMode),
     SetFont(FontDescriptor),
-    /// Open the overlay's system font picker. The toolbar's own font control
-    /// offers two families; every installed one lives behind this.
+    /// Turn bold on or off for selected text, or for the next label typed.
+    SetFontBold(bool),
+    /// Open the overlay's system font picker from the current-family button.
     OpenFontPicker,
     SetFontSize(f64),
     NudgeFontSize(f64),

@@ -74,6 +74,7 @@ impl ConfigDraft {
         config.drawing.font_weight = self.drawing_font_weight.clone();
         config.drawing.font_style = self.drawing_font_style.clone();
         config.drawing.text_background_enabled = self.drawing_text_background_enabled;
+        config.drawing.text_halo_enabled = self.drawing_text_halo_enabled;
         config.drawing.default_fill_enabled = self.drawing_default_fill_enabled;
         config.drawing.drag_tool = legacy_tool(
             self.drawing_drag_tools.left.drag_tool,

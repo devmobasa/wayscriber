@@ -112,7 +112,12 @@ fn field_level_terms_do_not_force_whole_tab_visible() {
 
 #[test]
 fn exact_drawing_default_labels_match_defaults_section() {
-    for query in ["font size pt", "eraser size px", "enable text background"] {
+    for query in [
+        "font size pt",
+        "eraser size px",
+        "enable text background",
+        "enable text halo",
+    ] {
         let (mut app, _effects) = ConfiguratorApp::new_app();
         app.search_query = SearchQuery::new(query);
 
@@ -124,6 +129,17 @@ fn exact_drawing_default_labels_match_defaults_section() {
             "query should show Drawing Defaults: {query}",
         );
     }
+}
+
+#[test]
+fn halo_search_reveals_the_drawing_defaults_section() {
+    let (mut app, _effects) = ConfiguratorApp::new_app();
+    app.search_query = SearchQuery::new("halo");
+
+    let summary = app.search_summary();
+    let drawing = summary.tab(TabId::Drawing).expect("drawing match");
+
+    assert!(drawing.area_matches(SearchArea::DrawingDefaults));
 }
 
 #[test]

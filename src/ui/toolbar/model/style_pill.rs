@@ -25,7 +25,6 @@ use std::borrow::Cow;
 use crate::config::{
     Action, QuickColorPalette, action_label, action_short_label, toolbar_item_ids as ids,
 };
-use crate::draw::{FontDescriptor, families_match};
 use crate::input::{EraserMode, SelectionPropertyEntry, SelectionPropertyKind};
 use crate::label_format::{format_binding_label, format_quick_color_tooltip};
 use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
@@ -92,8 +91,12 @@ pub(crate) enum StylePillControl {
     ThicknessValue,
     /// Marker opacity slider.
     OpacitySlider,
-    /// Pen/marker smoothing slider, in whole passes.
-    PenSmoothingSlider,
+    /// Pen/marker smoothing, as a −/value/+ stepper.
+    ///
+    /// A stepper rather than a slider: the range is seven whole passes, which
+    /// on a 110px track is 18px of travel per step and fiddly to land on. It
+    /// also keeps the pill from reading as a row of near-identical bars.
+    PenSmoothingStepper,
     /// Spotlight magnification slider.
     SpotlightMagnificationSlider,
     /// Shape fill toggle.
@@ -111,11 +114,11 @@ pub(crate) enum StylePillControl {
     FontSizeSlider,
     /// Live text-size numeral; clicking opens the precise-entry popup.
     FontSizeValue,
-    /// Sans/Mono font family segmented control.
-    FontFamilySegment,
+    /// Bold on/off for selected text, or for the next label when no text is
+    /// selected. Font family and weight remain independent choices.
+    FontWeightToggle,
     /// Button showing the family in use; opens the overlay's font picker over
-    /// every installed family. The segment beside it covers the two the
-    /// toolbar has always offered; this is how the rest are reachable.
+    /// every installed family.
     FontFamilyPicker,
     /// Brush/Stroke eraser mode segmented control (the old checkbox
     /// semantics as a two-segment control emitting `SetEraserMode`).
@@ -232,11 +235,14 @@ impl StylePillSpec {
         }
 
         if state == StylePillState::Selection {
-            let controls = snapshot
+            let mut controls: Vec<_> = snapshot
                 .selection_properties
                 .iter()
                 .map(|entry| selection_control_for_kind(entry.kind))
                 .collect();
+            if snapshot.selection_has_text && !plan.drop_style_extras {
+                controls.push(StylePillControl::FontWeightToggle);
+            }
             return Self { state, controls };
         }
 
@@ -269,7 +275,7 @@ impl StylePillSpec {
             controls.push(StylePillControl::OpacitySlider);
         }
         if context.show_pen_smoothing && !plan.drop_style_extras {
-            controls.push(StylePillControl::PenSmoothingSlider);
+            controls.push(StylePillControl::PenSmoothingStepper);
         }
         if context.tool_options_kind == ToolOptionsKind::Spotlight {
             controls.push(StylePillControl::SpotlightMagnificationSlider);
@@ -292,10 +298,10 @@ impl StylePillSpec {
         if context.show_font_controls {
             controls.push(StylePillControl::FontSizeSlider);
             controls.push(StylePillControl::FontSizeValue);
-            controls.push(StylePillControl::FontFamilySegment);
             if !plan.drop_style_extras {
-                controls.push(StylePillControl::FontFamilyPicker);
+                controls.push(StylePillControl::FontWeightToggle);
             }
+            controls.push(StylePillControl::FontFamilyPicker);
         }
         if context.show_eraser_mode {
             controls.push(StylePillControl::EraserModeSegment);
@@ -333,7 +339,7 @@ impl StylePillSpec {
             // Select: docks the selection properties while a selection
             // exists; hidden otherwise.
             ToolOptionsKind::None => {
-                if snapshot.selection_properties.is_empty() {
+                if snapshot.selection_properties.is_empty() && !snapshot.selection_has_text {
                     StylePillState::Hidden
                 } else {
                     StylePillState::Selection

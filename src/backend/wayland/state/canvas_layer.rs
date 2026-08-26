@@ -36,6 +36,7 @@ pub(in crate::backend::wayland) struct CanvasLayerCache {
     shapes_len: usize,
     last_shape_id: Option<ShapeId>,
     background: Option<Color>,
+    text_halo_enabled: bool,
     board_key: (usize, usize),
     valid: bool,
 }
@@ -53,6 +54,7 @@ impl CanvasLayerCache {
             shapes_len: 0,
             last_shape_id: None,
             background: None,
+            text_halo_enabled: true,
             board_key: (0, 0),
             valid: false,
         }
@@ -93,6 +95,7 @@ pub(in crate::backend::wayland) fn render_committed_shape(
     ctx: &cairo::Context,
     drawn_shape: &crate::draw::DrawnShape,
     replay_ctx: &crate::draw::EraserReplayContext<'_>,
+    text_halo_enabled: bool,
 ) {
     match &drawn_shape.shape {
         crate::draw::Shape::EraserStroke { points, brush } => {
@@ -121,7 +124,7 @@ pub(in crate::backend::wayland) fn render_committed_shape(
             );
         }
         other => {
-            crate::draw::render_shape(ctx, other);
+            crate::draw::render_shape_with_halo(ctx, other, text_halo_enabled);
         }
     }
 }
@@ -165,6 +168,7 @@ impl WaylandState {
             crate::input::BoardBackground::Solid(color) => Some(*color),
             crate::input::BoardBackground::Transparent => None,
         };
+        let text_halo_enabled = self.config.drawing.text_halo_enabled;
         let board_key = (
             self.input_state.boards.active_index(),
             self.input_state.boards.active_page_index(),
@@ -182,6 +186,7 @@ impl WaylandState {
             && cache.shapes_len == shapes_len
             && cache.last_shape_id == last_shape_id
             && cache.background == background
+            && cache.text_halo_enabled == text_halo_enabled
             && cache.board_key == board_key;
         let covers_view = view_x >= cache.world_x
             && view_y >= cache.world_y
@@ -266,7 +271,7 @@ impl WaylandState {
                 if let Some(bbox) = drawn_shape.bounding_box()
                     && rects_intersect(bbox, bake_bounds)
                 {
-                    render_committed_shape(&bake_ctx, drawn_shape, &replay_ctx);
+                    render_committed_shape(&bake_ctx, drawn_shape, &replay_ctx, text_halo_enabled);
                 }
             }
         }
@@ -284,6 +289,7 @@ impl WaylandState {
         cache.shapes_len = shapes_len;
         cache.last_shape_id = last_shape_id;
         cache.background = background;
+        cache.text_halo_enabled = text_halo_enabled;
         cache.board_key = board_key;
         cache.valid = true;
         debug!(

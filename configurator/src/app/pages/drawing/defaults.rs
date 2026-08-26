@@ -79,6 +79,12 @@ pub(super) fn build(page: &mut PageBuilder) {
             |value| Message::ToggleChanged(ToggleField::DrawingTextBackground, value),
         )
         .switch_row(
+            "Enable text halo",
+            "Draw a contrasting outline around text",
+            |app| app.draft.drawing_text_halo_enabled,
+            |value| Message::ToggleChanged(ToggleField::DrawingTextHalo, value),
+        )
+        .switch_row(
             "Start shapes filled",
             "",
             |app| app.draft.drawing_default_fill_enabled,

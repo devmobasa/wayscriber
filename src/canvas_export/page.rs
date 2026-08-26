@@ -4,7 +4,7 @@ use crate::capture::CaptureError;
 use crate::draw::{
     BlurRectParams, Color, EraserReplayContext, Frame, Shape, SpotlightMagnifierOutcome,
     SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass, render_blur_rect,
-    render_eraser_stroke, render_shape_over, render_spotlight_magnification_pass,
+    render_eraser_stroke, render_shape_over_with_halo, render_spotlight_magnification_pass,
     render_spotlight_pass, spotlight_regions_for_frame,
 };
 use crate::screen_pixels::ScreenImage;
@@ -17,6 +17,8 @@ pub struct CanvasPageExportSnapshot {
     pub viewport_height: u32,
     pub origin_x: i32,
     pub origin_y: i32,
+    /// Whether text shapes and labels receive a contrasting outline.
+    pub text_halo_enabled: bool,
     /// Dim/feather settings for the spotlight pass, mirroring the live overlay.
     pub spotlight: SpotlightPassSnapshot,
 }
@@ -419,7 +421,12 @@ fn draw_canvas_page_contents(
                 },
                 &replay_ctx,
             ),
-            other => render_shape_over(ctx, other, known_background_luminance),
+            other => render_shape_over_with_halo(
+                ctx,
+                other,
+                known_background_luminance,
+                page.text_halo_enabled,
+            ),
         }
     }
 

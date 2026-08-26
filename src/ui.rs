@@ -31,6 +31,7 @@ mod tour;
 
 pub(crate) use arrow_bend_handle::render_arrow_bend_handle;
 pub use board_picker::render_board_picker;
+pub(crate) use board_picker::render_board_picker_with_halo;
 pub use color_picker_popup::{color_picker_popup_visual_geometry, render_color_picker_popup};
 pub use command_palette::{command_palette_visual_geometry, render_command_palette};
 pub use context_menu::render_context_menu;

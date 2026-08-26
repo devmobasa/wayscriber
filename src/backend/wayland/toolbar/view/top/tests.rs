@@ -884,7 +884,7 @@ fn style_pill_morphs_per_tool() {
         Some("Reset numbering to 1 (next: 4)")
     );
 
-    // Text: pt-labelled size slider plus the Sans/Mono segment.
+    // Text: pt-labelled size slider plus independent weight/family controls.
     let mut text = snapshot();
     text.text_active = true;
     let tree = build(&text);
@@ -905,24 +905,16 @@ fn style_pill_morphs_per_tool() {
         }
         other => panic!("numeral kind, got {other:?}"),
     }
-    assert!(matches!(
-        &tree
-            .node_by_id(&"top.style.font-family".into())
-            .expect("font family segment")
-            .kind,
-        WidgetKind::SegmentedControl { left, right, .. }
-            if left.text == "Sans" && right.text == "Mono"
-    ));
-    for (id, family) in [
-        ("top.style.font-family.sans", "Sans"),
-        ("top.style.font-family.mono", "Monospace"),
-    ] {
-        let half = tree.node_by_id(&id.into()).expect("family half");
-        assert!(matches!(
-            &half.interact.as_ref().unwrap().event,
-            ToolbarEvent::SetFont(font) if font.family == family
-        ));
-    }
+    // The family control shows the family in use and opens the full picker.
+    let picker = tree
+        .node_by_id(&"top.style.font-family-picker".into())
+        .expect("font button");
+    assert!(matches!(&picker.kind, WidgetKind::TextButton { .. }));
+    assert_eq!(
+        picker.interact.as_ref().unwrap().event,
+        ToolbarEvent::OpenFontPicker
+    );
+    assert!(!style_ids(&tree).contains(&"top.style.font-family".to_string()));
     assert!(!style_ids(&tree).contains(&"top.style.thickness".to_string()));
 }
 
@@ -961,6 +953,8 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
             disabled: false,
         },
     ];
+    selection.selection_has_text = true;
+    selection.selected_text_bold = Some(false);
     let (w, h) = top_size(&selection);
     let tree = build_top_view(&selection, w as f64, h as f64);
     let style = tree
@@ -978,6 +972,7 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
             "top.style.sel.thickness.minus",
             "top.style.sel.thickness.value",
             "top.style.sel.thickness.plus",
+            "top.style.font-bold",
         ]
     );
     let rects = top_input_rects(&selection, w as f64, h as f64).expect("island input rects");

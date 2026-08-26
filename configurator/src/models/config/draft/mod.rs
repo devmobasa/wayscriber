@@ -53,6 +53,7 @@ pub struct ConfigDraft {
     pub drawing_font_weight: String,
     pub drawing_font_style: String,
     pub drawing_text_background_enabled: bool,
+    pub drawing_text_halo_enabled: bool,
     pub drawing_default_fill_enabled: bool,
     pub drawing_drag_tool: ToolOption,
     pub drawing_shift_drag_tool: ToolOption,

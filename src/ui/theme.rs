@@ -425,7 +425,7 @@ pub mod toolbar {
     /// filling the whole half.
     pub const SEGMENT_PADDING: f64 = SPACING_SM;
     /// Horizontal breathing room between a segment label and its edge (the
-    /// GTK `.tab` horizontal padding), so "Sans│Mono" never crowd the seam.
+    /// GTK `.tab` horizontal padding), so short labels never crowd the seam.
     pub const SEGMENT_LABEL_PAD_H: f64 = SPACING_STD;
     /// Extra clear gap before a segmented control in the style pill, on top of
     /// the standard control gap, so the segment does not crowd the numeral

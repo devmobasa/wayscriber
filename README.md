@@ -117,17 +117,17 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 
 ### Drawing and editing
 - Freehand pen, highlighter, eraser (circle/rect)
-- Pen smoothing: finished pen and marker strokes are cleaned up on release, so the live line never lags the cursor (`[drawing] pen_smoothing`, 0-6, or the toolbar's **Smoothing** slider); tablet pressure values are preserved, and the level is remembered with the session
+- Pen smoothing: finished pen and marker strokes are cleaned up on release, so the live line never lags the cursor (`[drawing] pen_smoothing`, 0-6, or the toolbar's **Smoothing** stepper); tablet pressure values are preserved, and the level is remembered with the session
 - Shapes: lines, rectangles, ellipses, polygons (with fill toggle)
 - Arrows in four styles - standard, pointy, curved (drag its handle to route around what is in the way), and double-ended - with optional auto-numbered labels; step markers for walkthroughs
 - Blur tool with four styles: soften, pixelate, secure (flattens the region to one color), and black out
 - Spotlight tool: dims everything except the regions you draw, with optional 1×–4× magnification
-- Multiline text and sticky notes with smoothing; text halos take their contrast from the background the label sits on, so a label stays readable over a board, a filled shape, or a frozen screen (a live transparent board has no pixels to sample and falls back to the text color)
+- Multiline text and sticky notes with smoothing; optional text halos take their contrast from the background the label sits on, so a label stays readable over a board, a filled shape, or a frozen screen (disable with `[drawing] text_halo_enabled = false`; a live transparent board has no pixels to sample and falls back to the text color)
 - Selection: <kbd>Alt</kbd>-drag, <kbd>V</kbd> tool, properties panel
 - Duplicate (<kbd>Ctrl+D</kbd>), delete (<kbd>Delete</kbd>), undo/redo
 - Color picker, screen eyedropper with a magnified pixel loupe, palettes, size via hotkeys or scroll
 - Text font cycling with <kbd>Shift+T</kbd> over a configurable list (`[drawing] font_cycle`); with text selected it restyles that text
-- Font picker over every installed family (**Font Picker** in the command palette, or the toolbar's font button beside Sans/Mono), with search, a monospace filter, wheel scrolling, accelerating arrow-key repeat, and each row drawn in its own font
+- Font picker over every installed family (**Font Picker** in the command palette, or the toolbar's current-family button), with search, a monospace filter, wheel scrolling, accelerating arrow-key repeat, and each row drawn in its own font
 - Render color profiles for print/projector/light-theme preview
 - Radial menu at cursor (<kbd>Middle-click</kbd>): quick tool/color selection with recent colors, press-flick-release tool commits, plus a draggable outer size ring and scroll size adjust
 

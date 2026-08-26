@@ -118,6 +118,8 @@ impl ToolbarSnapshot {
             spotlight_magnifier_source: None,
             selection_spotlight_magnification: state.selection_spotlight_magnification(),
             font: state.font_descriptor.clone(),
+            selection_has_text: state.selection_has_text(),
+            selected_text_bold: state.first_editable_selected_text_is_bold(),
             font_size: state.current_font_size,
             text_active,
             note_active,

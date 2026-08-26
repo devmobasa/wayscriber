@@ -106,6 +106,20 @@ fn config_draft_round_trips_shape_size_readout_preference() {
 }
 
 #[test]
+fn config_draft_round_trips_text_halo_preference() {
+    let mut config = Config::default();
+    config.drawing.text_halo_enabled = false;
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(!draft.drawing_text_halo_enabled);
+
+    draft.set_toggle(ToggleField::DrawingTextHalo, true);
+    let round_trip = draft
+        .to_config(&config)
+        .expect("text halo preference should round trip");
+    assert!(round_trip.drawing.text_halo_enabled);
+}
+
+#[test]
 fn config_draft_round_trips_region_capture_settings() {
     let config = Config::default();
     let mut draft = ConfigDraft::from_config(&config);

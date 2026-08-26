@@ -4,7 +4,7 @@ use super::image::render_image_shape;
 use super::pressure_strokes::render_freehand_pressure_borrowed;
 use super::primitives::{render_arrow, render_ellipse, render_line, render_polygon, render_rect};
 use super::strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};
-use super::text::{render_sticky_note, render_text_over};
+use super::text::{render_sticky_note, render_text_over_with_halo};
 use crate::draw::Color;
 use crate::draw::shape::Shape;
 use crate::draw::shape::{
@@ -21,7 +21,12 @@ use crate::draw::shape::{
 /// * `ctx` - Cairo drawing context to render to
 /// * `shape` - The shape to render
 pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
-    render_shape_over(ctx, shape, None);
+    render_shape_with_halo(ctx, shape, true);
+}
+
+/// [`render_shape`], with explicit control over text outlines within the shape.
+pub fn render_shape_with_halo(ctx: &cairo::Context, shape: &Shape, text_halo_enabled: bool) {
+    render_shape_over_with_halo(ctx, shape, None, text_halo_enabled);
 }
 
 /// `render_shape`, plus what the caller knows about the background behind it.
@@ -32,6 +37,16 @@ pub fn render_shape_over(
     ctx: &cairo::Context,
     shape: &Shape,
     known_background_luminance: Option<f64>,
+) {
+    render_shape_over_with_halo(ctx, shape, known_background_luminance, true);
+}
+
+/// [`render_shape_over`], with explicit control over text outlines.
+pub fn render_shape_over_with_halo(
+    ctx: &cairo::Context,
+    shape: &Shape,
+    known_background_luminance: Option<f64>,
+    text_halo_enabled: bool,
 ) {
     match shape {
         Shape::Freehand {
@@ -133,7 +148,7 @@ pub fn render_shape_over(
                     label.size,
                     &label.font_descriptor,
                 ) {
-                    render_text_over(
+                    render_text_over_with_halo(
                         ctx,
                         layout.x,
                         layout.y,
@@ -144,6 +159,7 @@ pub fn render_shape_over(
                         ARROW_LABEL_BACKGROUND,
                         None,
                         known_background_luminance,
+                        text_halo_enabled,
                     );
                 }
             }
@@ -178,7 +194,7 @@ pub fn render_shape_over(
             background_enabled,
             wrap_width,
         } => {
-            render_text_over(
+            render_text_over_with_halo(
                 ctx,
                 *x,
                 *y,
@@ -189,6 +205,7 @@ pub fn render_shape_over(
                 *background_enabled,
                 *wrap_width,
                 known_background_luminance,
+                text_halo_enabled,
             );
         }
         Shape::StepMarker { x, y, color, label } => {
@@ -250,7 +267,7 @@ pub fn render_shape_over(
                 let center_offset_y = metrics.ink_y + metrics.ink_height / 2.0;
                 let baseline_x = (*x as f64 - center_offset_x).round() as i32;
                 let baseline_y = (*y as f64 - center_offset_y + metrics.baseline).round() as i32;
-                render_text_over(
+                render_text_over_with_halo(
                     ctx,
                     baseline_x,
                     baseline_y,
@@ -261,6 +278,7 @@ pub fn render_shape_over(
                     false,
                     None,
                     known_background_luminance,
+                    text_halo_enabled,
                 );
             }
         }
@@ -296,6 +314,74 @@ pub fn render_shape_over(
         }
         Shape::Image { x, y, w, h, data } => {
             render_image_shape(ctx, *x, *y, *w, *h, data);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::render_shape_with_halo;
+    use crate::draw::{ArrowLabel, ArrowStyle, Color, FontDescriptor, Shape, StepMarkerLabel};
+
+    fn rendered_pixels(shape: &Shape, text_halo_enabled: bool) -> Vec<u8> {
+        let mut surface =
+            cairo::ImageSurface::create(cairo::Format::ARgb32, 500, 220).expect("shape surface");
+        {
+            let ctx = cairo::Context::new(&surface).expect("shape context");
+            ctx.set_source_rgb(1.0, 1.0, 1.0);
+            ctx.paint().expect("white backdrop");
+            render_shape_with_halo(&ctx, shape, text_halo_enabled);
+        }
+        surface.flush();
+        surface.data().expect("shape pixels").to_vec()
+    }
+
+    #[test]
+    fn labelled_shapes_honour_the_text_halo_setting() {
+        let red = Color::new(0.96, 0.2, 0.25, 1.0);
+        let font_descriptor = FontDescriptor::default();
+        let cases = [
+            (
+                "arrow label",
+                Shape::Arrow {
+                    x1: 60,
+                    y1: 110,
+                    x2: 440,
+                    y2: 110,
+                    color: red,
+                    thick: 4.0,
+                    arrow_length: 20.0,
+                    arrow_angle: 30.0,
+                    head_at_end: true,
+                    style: ArrowStyle::Standard,
+                    bend: 0.0,
+                    label: Some(ArrowLabel {
+                        value: 7,
+                        size: 36.0,
+                        font_descriptor: font_descriptor.clone(),
+                    }),
+                },
+            ),
+            (
+                "step-marker label",
+                Shape::StepMarker {
+                    x: 250,
+                    y: 110,
+                    color: red,
+                    label: StepMarkerLabel {
+                        value: 8,
+                        size: 36.0,
+                        font_descriptor,
+                    },
+                },
+            ),
+        ];
+
+        for (name, shape) in cases {
+            assert!(
+                rendered_pixels(&shape, true) != rendered_pixels(&shape, false),
+                "{name} must forward the halo setting to its text renderer",
+            );
         }
     }
 }

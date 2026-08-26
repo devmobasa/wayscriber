@@ -41,9 +41,10 @@ pub use render::{
     painted_background_luminance, perceived_luminance, render_blur_rect, render_board_background,
     render_click_highlight, render_freehand_borrowed, render_marker_stroke_borrowed,
     render_selection_halo, render_selection_handles, render_shape, render_shape_over,
-    render_spotlight_magnification_pass, render_spotlight_pass, render_sticky_note, render_text,
-    selection_handle_rects, spotlight_regions_for_frame, sticky_note_foreground,
-    text_outline_color,
+    render_shape_over_with_halo, render_shape_with_halo, render_spotlight_magnification_pass,
+    render_spotlight_pass, render_sticky_note, render_text, render_text_over_with_halo,
+    render_text_with_halo, selection_handle_rects, spotlight_regions_for_frame,
+    sticky_note_foreground, text_outline_color,
 };
 #[allow(unused_imports)]
 pub use shape::{

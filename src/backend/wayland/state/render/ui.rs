@@ -208,7 +208,13 @@ impl WaylandState {
             if !capture_picker && self.input_state.is_board_picker_open() {
                 self.input_state
                     .update_board_picker_layout(ctx, width, height);
-                crate::ui::render_board_picker(ctx, &self.input_state, width, height);
+                crate::ui::render_board_picker_with_halo(
+                    ctx,
+                    &self.input_state,
+                    width,
+                    height,
+                    self.config.drawing.text_halo_enabled,
+                );
             } else {
                 self.input_state.clear_board_picker_layout();
             }

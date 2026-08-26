@@ -660,7 +660,6 @@ fn push_style_pill(
             model::StylePillControl::ThicknessSlider
             | model::StylePillControl::OpacitySlider
             | model::StylePillControl::SpotlightMagnificationSlider
-            | model::StylePillControl::PenSmoothingSlider
             | model::StylePillControl::FontSizeSlider => {
                 let (slider_spec, value) = control.slider_value(snapshot);
                 let event = control.click_event(snapshot);
@@ -676,7 +675,6 @@ fn push_style_pill(
                     model::StylePillControl::SpotlightMagnificationSlider => {
                         HitKind::DragSetSpotlightMagnification
                     }
-                    model::StylePillControl::PenSmoothingSlider => HitKind::DragSetPenSmoothing,
                     _ => HitKind::DragSetFontSize,
                 };
                 let rect = (
@@ -755,11 +753,14 @@ fn push_style_pill(
                 ));
                 x += ToolbarLayoutSpec::TOP_STYLE_VALUE_W + gap;
             }
-            model::StylePillControl::FillToggle | model::StylePillControl::AutoNumberToggle => {
-                let w = if control == model::StylePillControl::FillToggle {
-                    ToolbarLayoutSpec::TOP_STYLE_FILL_W
-                } else {
-                    ToolbarLayoutSpec::TOP_STYLE_AUTO_NUMBER_W
+            model::StylePillControl::FillToggle
+            | model::StylePillControl::AutoNumberToggle
+            | model::StylePillControl::FontWeightToggle => {
+                let w = match control {
+                    model::StylePillControl::AutoNumberToggle => {
+                        ToolbarLayoutSpec::TOP_STYLE_AUTO_NUMBER_W
+                    }
+                    _ => ToolbarLayoutSpec::TOP_STYLE_FILL_W,
                 };
                 let toggle_h = ToolbarLayoutSpec::TOP_STYLE_TOGGLE_H;
                 nodes.push(WidgetNode::new(
@@ -797,6 +798,8 @@ fn push_style_pill(
                 x += ToolbarLayoutSpec::TOP_STYLE_RESET_W + gap;
             }
             model::StylePillControl::FontFamilyPicker => {
+                // Keep the family button clear of the size numeral to its left.
+                x += ToolbarLayoutSpec::TOP_STYLE_SEGMENT_LEAD;
                 // The family in use, as a button onto the overlay's picker.
                 // Same shape as the counter reset, wider because the label is
                 // a name rather than a fixed word.
@@ -848,7 +851,8 @@ fn push_style_pill(
                 ));
                 x += ToolbarLayoutSpec::TOP_STYLE_SEL_VALUE_W + gap;
             }
-            model::StylePillControl::SelectionStepper(_) => {
+            model::StylePillControl::PenSmoothingStepper
+            | model::StylePillControl::SelectionStepper(_) => {
                 let enabled = control.enabled(snapshot);
                 let steps = control.required_steps(snapshot);
                 let step_w = ToolbarLayoutSpec::TOP_STYLE_STEP_W;
@@ -902,11 +906,10 @@ fn push_style_pill(
                     gap,
                 );
             }
-            model::StylePillControl::FontFamilySegment
-            | model::StylePillControl::EraserModeSegment => {
+            model::StylePillControl::EraserModeSegment => {
                 let segments = control.required_segments(snapshot);
-                // A clear gap before the segment so Sans│Mono never crowd the
-                // preceding numeral ("72pt") to its left (M7-C3).
+                // Keep the mode segments visually separate from the preceding
+                // eraser-size controls.
                 x += ToolbarLayoutSpec::TOP_STYLE_SEGMENT_LEAD;
                 let rect = (
                     x,

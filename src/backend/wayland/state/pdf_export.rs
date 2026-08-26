@@ -41,6 +41,7 @@ impl WaylandState {
             scope,
             config: &self.config.export.pdf,
             desktop_backdrop,
+            text_halo_enabled: self.config.drawing.text_halo_enabled,
             spotlight: SpotlightPassSnapshot {
                 dim_opacity: self.input_state.spotlight_dim_opacity,
                 feather: self.input_state.spotlight_feather,
@@ -75,6 +76,7 @@ struct BoardPdfExportBuildContext<'a> {
     scope: PdfExportScope,
     config: &'a crate::config::PdfExportConfig,
     desktop_backdrop: Option<CanvasExportBackdropSnapshot>,
+    text_halo_enabled: bool,
     spotlight: SpotlightPassSnapshot,
 }
 
@@ -90,6 +92,7 @@ fn build_board_pdf_export_snapshot(
         scope,
         config,
         desktop_backdrop,
+        text_halo_enabled,
         spotlight,
     } = context;
 
@@ -138,6 +141,7 @@ fn build_board_pdf_export_snapshot(
                     viewport_height: logical_height,
                     origin_x,
                     origin_y,
+                    text_halo_enabled,
                     spotlight,
                 },
                 metadata: PdfPageMetadata::new(
@@ -168,6 +172,7 @@ fn build_board_pdf_export_snapshot(
                 viewport_height: logical_height,
                 origin_x: 0,
                 origin_y: 0,
+                text_halo_enabled,
                 spotlight,
             },
             metadata: PdfPageMetadata::new(

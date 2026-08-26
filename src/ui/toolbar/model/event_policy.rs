@@ -504,6 +504,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::SetPenSmoothing(_)
         | ToolbarEvent::SetEraserMode(_)
         | ToolbarEvent::SetFont(_)
+        | ToolbarEvent::SetFontBold(_)
         | ToolbarEvent::SetFontSize(_)
         | ToolbarEvent::NudgeFontSize(_)
         | ToolbarEvent::ToggleFill(_)

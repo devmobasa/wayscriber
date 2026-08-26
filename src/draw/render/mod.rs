@@ -25,7 +25,9 @@ pub use pressure_strokes::render_freehand_pressure_borrowed;
 pub(crate) use pressure_strokes::render_freehand_pressure_preview_borrowed;
 pub(crate) use primitives::{render_polygon_preview, with_saved_state};
 pub use selection::{render_selection_halo, render_selection_handles, selection_handle_rects};
-pub use shapes::{render_shape, render_shape_over};
+pub use shapes::{
+    render_shape, render_shape_over, render_shape_over_with_halo, render_shape_with_halo,
+};
 pub use spotlight::{
     IMMUTABLE_RASTER_SOURCE_TOKEN, SpotlightMagnifierMetrics, SpotlightMagnifierOutcome,
     SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass, SpotlightRegion,
@@ -37,6 +39,6 @@ pub use strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};
 pub(crate) use text::render_sticky_note_preview;
 pub use text::{
     caret_line_width, caret_outline_width, render_sticky_note, render_text, render_text_over,
-    sticky_note_foreground, text_outline_color,
+    render_text_over_with_halo, render_text_with_halo, sticky_note_foreground, text_outline_color,
 };
 pub use types::EraserReplayContext;

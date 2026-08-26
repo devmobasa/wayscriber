@@ -1,7 +1,7 @@
 use crate::draw::{
     EraserReplayContext, SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass,
-    render_eraser_stroke, render_shape, render_spotlight_magnification_pass, render_spotlight_pass,
-    spotlight_regions_for_frame,
+    render_eraser_stroke, render_shape_with_halo, render_spotlight_magnification_pass,
+    render_spotlight_pass, spotlight_regions_for_frame,
 };
 use crate::input::BoardBackground;
 use crate::input::state::{PAGE_NAME_HEIGHT, PAGE_NAME_PADDING};
@@ -35,6 +35,7 @@ pub(super) fn render_page_content(args: PageContentArgs<'_>) {
         height,
         screen_width,
         screen_height,
+        text_halo_enabled,
     } = args;
     let radius = RADIUS_STD;
     let _ = ctx.save();
@@ -71,7 +72,14 @@ pub(super) fn render_page_content(args: PageContentArgs<'_>) {
     let _ = ctx.save();
     ctx.translate(x + inset + offset_x, y + inset + offset_y);
     ctx.scale(scale, scale);
-    render_frame_shapes(ctx, frame, background, screen_width, screen_height);
+    render_frame_shapes(
+        ctx,
+        frame,
+        background,
+        screen_width,
+        screen_height,
+        text_halo_enabled,
+    );
     let _ = ctx.restore();
     let _ = ctx.restore();
 }
@@ -82,6 +90,7 @@ fn render_frame_shapes(
     background: &BoardBackground,
     target_width: u32,
     target_height: u32,
+    text_halo_enabled: bool,
 ) {
     let eraser_ctx = EraserReplayContext {
         pattern: None,
@@ -103,7 +112,7 @@ fn render_frame_shapes(
                 render_eraser_stroke(ctx, points, brush, &eraser_ctx);
             }
             _ => {
-                render_shape(ctx, &drawn.shape);
+                render_shape_with_halo(ctx, &drawn.shape, text_halo_enabled);
             }
         }
     }
@@ -241,7 +250,7 @@ pub(super) fn render_page_name_label(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::draw::{Color, Frame, Shape};
+    use crate::draw::{Color, FontDescriptor, Frame, Shape};
 
     fn thumbnail_pixels(background: &BoardBackground, magnification: f64) -> Vec<u8> {
         let surface =
@@ -282,11 +291,53 @@ mod tests {
                 height: 90.0,
                 screen_width: 400,
                 screen_height: 300,
+                text_halo_enabled: true,
             });
         }
         let mut surface = surface;
         surface.flush();
         surface.data().expect("thumbnail pixels").to_vec()
+    }
+
+    fn text_thumbnail_pixels(text_halo_enabled: bool) -> Vec<u8> {
+        let mut surface =
+            cairo::ImageSurface::create(cairo::Format::ARgb32, 120, 90).expect("thumbnail surface");
+        {
+            let ctx = cairo::Context::new(&surface).expect("thumbnail context");
+            let mut frame = Frame::new();
+            frame.add_shape(Shape::Text {
+                x: 60,
+                y: 160,
+                text: "Read me".to_string(),
+                color: Color::new(0.96, 0.2, 0.25, 1.0),
+                size: 48.0,
+                font_descriptor: FontDescriptor::default(),
+                background_enabled: false,
+                wrap_width: None,
+            });
+            render_page_content(PageContentArgs {
+                ctx: &ctx,
+                frame: &frame,
+                background: &BoardBackground::Solid(Color::new(1.0, 1.0, 1.0, 1.0)),
+                x: 0.0,
+                y: 0.0,
+                width: 120.0,
+                height: 90.0,
+                screen_width: 400,
+                screen_height: 300,
+                text_halo_enabled,
+            });
+        }
+        surface.flush();
+        surface.data().expect("thumbnail pixels").to_vec()
+    }
+
+    #[test]
+    fn a_page_thumbnail_honours_the_text_halo_setting() {
+        assert!(
+            text_thumbnail_pixels(true) != text_thumbnail_pixels(false),
+            "thumbnail text must forward the halo setting to the shape renderer",
+        );
     }
 
     #[test]

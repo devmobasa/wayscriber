@@ -104,6 +104,7 @@ pub(super) const DRAWING_DEFAULT_TERMS: &[&str] = &[
     "fill",
     "start shapes filled",
     "enable text background",
+    "enable text halo",
     "hit test",
     "hit-test tolerance px",
     "hit-test threshold",

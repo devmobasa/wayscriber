@@ -72,6 +72,55 @@ fn select_with_a_selection_docks_the_property_entries_in_order() {
 }
 
 #[test]
+fn selected_text_adds_a_bold_toggle_driven_by_the_selection() {
+    let mut snapshot = selection_snapshot();
+    snapshot.selection_has_text = true;
+    snapshot.selected_text_bold = Some(false);
+
+    let spec = StylePillSpec::build(&snapshot, &plan());
+    assert_eq!(
+        spec.controls().last(),
+        Some(&StylePillControl::FontWeightToggle)
+    );
+    assert!(!StylePillControl::FontWeightToggle.active(&snapshot));
+    assert_eq!(
+        StylePillControl::FontWeightToggle.event(&snapshot),
+        Some(ToolbarEvent::SetFontBold(true))
+    );
+
+    snapshot.font.weight = "normal".to_string();
+    snapshot.selected_text_bold = Some(true);
+    assert!(StylePillControl::FontWeightToggle.active(&snapshot));
+    assert_eq!(
+        StylePillControl::FontWeightToggle.event(&snapshot),
+        Some(ToolbarEvent::SetFontBold(false))
+    );
+
+    let mut narrow = plan();
+    narrow.drop_style_extras = true;
+    assert!(
+        !StylePillSpec::build(&snapshot, &narrow)
+            .controls()
+            .contains(&StylePillControl::FontWeightToggle)
+    );
+}
+
+#[test]
+fn an_all_locked_text_selection_disables_bold() {
+    let mut snapshot = selection_snapshot();
+    snapshot.selection_has_text = true;
+    snapshot.selected_text_bold = None;
+
+    let spec = StylePillSpec::build(&snapshot, &plan());
+    assert!(
+        spec.controls()
+            .contains(&StylePillControl::FontWeightToggle)
+    );
+    assert!(!StylePillControl::FontWeightToggle.enabled(&snapshot));
+    assert!(!StylePillControl::FontWeightToggle.active(&snapshot));
+}
+
+#[test]
 fn selection_cycles_step_forward_through_the_apply_machinery() {
     let snapshot = selection_snapshot();
     let cycle = StylePillControl::SelectionCycle(SelectionPropertyKind::Color);

@@ -55,30 +55,156 @@ fn spotlight_state_is_a_magnification_slider_without_stroke_controls() {
 }
 
 #[test]
-fn the_smoothing_slider_reads_and_writes_whole_passes() {
+fn the_smoothing_stepper_moves_one_whole_pass_at_a_time() {
+    // A stepper rather than a slider: seven whole passes across a 110px track
+    // is 18px per step, and the row of near-identical bars was the thing that
+    // made the pill hard to read.
     let mut snapshot = snapshot_for_tool(Tool::Pen);
     snapshot.pen_smoothing = 3;
 
-    let slider = StylePillControl::PenSmoothingSlider;
+    let stepper = StylePillControl::PenSmoothingStepper;
+    assert_eq!(stepper.role(), StylePillRole::Stepper);
     assert_eq!(
-        slider.event(&snapshot),
-        Some(ToolbarEvent::SetPenSmoothing(3))
+        stepper.event(&snapshot),
+        None,
+        "a stepper keeps its events on its halves"
     );
-    assert_eq!(
-        slider.slider(&snapshot),
-        Some((ToolbarSliderSpec::PEN_SMOOTHING, 3.0))
-    );
-    assert_eq!(slider.value_text(&snapshot).as_deref(), Some("3"));
+    assert_eq!(stepper.value_text(&snapshot).as_deref(), Some("3"));
+
+    let steps = stepper.required_steps(&snapshot);
+    assert_eq!(steps[0].event, ToolbarEvent::SetPenSmoothing(2));
+    assert_eq!(steps[1].event, ToolbarEvent::SetPenSmoothing(4));
 
     // Zero passes is a state, not a quantity.
     snapshot.pen_smoothing = 0;
-    assert_eq!(slider.value_text(&snapshot).as_deref(), Some("Off"));
+    assert_eq!(stepper.value_text(&snapshot).as_deref(), Some("Off"));
 }
 
 #[test]
-fn the_smoothing_slider_follows_the_tool_it_can_change() {
+fn every_slider_says_what_it_does_and_carries_a_name() {
+    // The pill draws sliders as bare tracks with a numeral beside them, so a
+    // hover is the only place they can say which is which. `label` is what both
+    // frontends hand to the accessibility layer; a slider with neither is three
+    // anonymous bars to anyone not looking at the numerals.
+    let mut snapshot = snapshot_for_tool(Tool::Pen);
+    snapshot.show_marker_opacity_section = true;
+    snapshot.show_text_controls = true;
+
+    for control in [
+        StylePillControl::ThicknessSlider,
+        StylePillControl::OpacitySlider,
+        StylePillControl::FontSizeSlider,
+        StylePillControl::SpotlightMagnificationSlider,
+    ] {
+        assert_eq!(control.role(), StylePillRole::Slider);
+        assert!(
+            control
+                .tooltip(&snapshot)
+                .is_some_and(|text| !text.is_empty()),
+            "{control:?} has nothing to say on hover"
+        );
+        assert!(
+            !control.label(&snapshot).is_empty(),
+            "{control:?} has no accessible name"
+        );
+    }
+}
+
+#[test]
+fn the_thickness_tooltip_follows_what_the_slider_is_actually_sizing() {
+    // One slider targets the pen, the marker, or the eraser depending on what
+    // is active, so a fixed wording would be wrong two thirds of the time.
+    let mut snapshot = snapshot_for_tool(Tool::Eraser);
+    snapshot.thickness_targets_eraser = true;
+    let eraser = StylePillControl::ThicknessSlider
+        .tooltip(&snapshot)
+        .expect("a tooltip");
+    assert!(eraser.to_lowercase().contains("eraser"), "got {eraser:?}");
+
+    let pen = StylePillControl::ThicknessSlider
+        .tooltip(&snapshot_for_tool(Tool::Pen))
+        .expect("a tooltip");
+    assert!(!pen.to_lowercase().contains("eraser"), "got {pen:?}");
+}
+
+#[test]
+fn bold_has_a_control_of_its_own() {
+    // Family selection must not decide weight, so Bold has an independent
+    // control with an independent event.
+    let mut snapshot = snapshot();
+    snapshot.text_active = true;
+
+    let toggle = StylePillControl::FontWeightToggle;
+    assert_eq!(toggle.role(), StylePillRole::Toggle);
+    assert_eq!(toggle.label(&snapshot), "Bold");
+
+    snapshot.font = crate::draw::FontDescriptor::new(
+        "Sans".to_string(),
+        "normal".to_string(),
+        "normal".to_string(),
+    );
+    assert!(!toggle.active(&snapshot));
+    assert_eq!(
+        toggle.event(&snapshot),
+        Some(ToolbarEvent::SetFontBold(true))
+    );
+
+    snapshot.font = crate::draw::FontDescriptor::new(
+        "Sans".to_string(),
+        "Bold".to_string(),
+        "normal".to_string(),
+    );
+    assert!(
+        toggle.active(&snapshot),
+        "the weight is compared without case, like every other font identity"
+    );
+    assert_eq!(
+        toggle.event(&snapshot),
+        Some(ToolbarEvent::SetFontBold(false))
+    );
+
+    let ids = control_ids(&StylePillSpec::build(&snapshot, &plan()));
+    assert!(ids.contains(&"top.style.font-bold".to_string()));
+}
+
+#[test]
+fn a_numeric_weight_does_not_read_as_bold() {
+    // The toggle writes words. A config asking for 700 is asking for something
+    // a two-state control cannot say, so it must not claim to be showing it.
+    let mut snapshot = snapshot();
+    snapshot.font = crate::draw::FontDescriptor::new(
+        "Sans".to_string(),
+        "700".to_string(),
+        "normal".to_string(),
+    );
+
+    assert!(!StylePillControl::FontWeightToggle.active(&snapshot));
+}
+
+#[test]
+fn the_smoothing_stepper_stops_at_both_ends_of_the_range() {
+    let mut snapshot = snapshot_for_tool(Tool::Pen);
+
+    snapshot.pen_smoothing = 0;
+    let steps = StylePillControl::PenSmoothingStepper.required_steps(&snapshot);
+    assert_eq!(
+        steps[0].event,
+        ToolbarEvent::SetPenSmoothing(0),
+        "there is nothing below off"
+    );
+
+    snapshot.pen_smoothing = crate::draw::MAX_PEN_SMOOTHING;
+    let steps = StylePillControl::PenSmoothingStepper.required_steps(&snapshot);
+    assert_eq!(
+        steps[1].event,
+        ToolbarEvent::SetPenSmoothing(crate::draw::MAX_PEN_SMOOTHING)
+    );
+}
+
+#[test]
+fn the_smoothing_stepper_follows_the_tool_it_can_change() {
     // Pen and Marker accumulate the paths smoothing runs on. Line and Blur
-    // share the Stroke control group but draw no path, so a slider there
+    // share the Stroke control group but draw no path, so a stepper there
     // would be a control that does nothing to what is about to be drawn.
     for tool in [Tool::Pen, Tool::Marker] {
         let spec = StylePillSpec::build(&snapshot_for_tool(tool), &plan());
@@ -131,11 +257,13 @@ fn a_squeezed_pill_sheds_its_extras_before_it_sheds_the_color_chip() {
     let ids = control_ids(&StylePillSpec::build(&snapshot, &squeezed));
 
     assert!(!ids.contains(&"top.style.pen-smoothing".to_string()));
-    assert!(!ids.contains(&"top.style.font-family-picker".to_string()));
+    assert!(!ids.contains(&"top.style.font-bold".to_string()));
     assert!(
         ids.contains(&"top.style.color-chip".to_string())
             && ids.contains(&"top.style.thickness".to_string())
-            && ids.contains(&"top.style.font-family".to_string()),
+            // The only font control there is now, so it stays: dropping it
+            // would leave no way to change the family from the toolbar at all.
+            && ids.contains(&"top.style.font-family-picker".to_string()),
         "the pill's core stays: {ids:?}"
     );
 }
@@ -506,7 +634,7 @@ fn eraser_state_is_size_slider_plus_mode_segment_without_color() {
 }
 
 #[test]
-fn text_state_is_swatches_size_and_font_segment() {
+fn text_state_is_swatches_size_and_one_font_control() {
     let mut snapshot = snapshot();
     snapshot.text_active = true;
     let spec = StylePillSpec::build(&snapshot, &plan());
@@ -519,8 +647,8 @@ fn text_state_is_swatches_size_and_font_segment() {
         [
             "top.style.font-size",
             "top.style.font-size-value",
-            "top.style.font-family",
-            // Sans/Mono are the two the segment offers; this reaches the rest.
+            // Weight and family are independent controls.
+            "top.style.font-bold",
             "top.style.font-family-picker",
         ]
     );
@@ -547,39 +675,13 @@ fn text_state_is_swatches_size_and_font_segment() {
         Some(format!("{:.0}pt", snapshot.font_size))
     );
 
-    let segments = StylePillControl::FontFamilySegment
-        .segments(&snapshot)
-        .expect("font segments");
-    assert_eq!(segments[0].label, "Sans");
-    assert_eq!(segments[1].label, "Mono");
-    assert!(matches!(
-        &segments[0].event,
-        ToolbarEvent::SetFont(font) if font.family == "Sans"
-    ));
-    assert!(matches!(
-        &segments[1].event,
-        ToolbarEvent::SetFont(font) if font.family == "Monospace"
-    ));
-    assert!(segments[0].active);
-    assert!(!segments[1].active);
-}
-
-#[test]
-fn font_family_segments_use_the_shared_trimmed_case_insensitive_identity() {
-    let mut snapshot = snapshot();
-    snapshot.font.family = "  sAnS  ".to_string();
-    let segments = StylePillControl::FontFamilySegment
-        .segments(&snapshot)
-        .expect("font segments");
-    assert!(segments[0].active);
-    assert!(!segments[1].active);
-
-    snapshot.font.family = "  MONOSPACE  ".to_string();
-    let segments = StylePillControl::FontFamilySegment
-        .segments(&snapshot)
-        .expect("font segments");
-    assert!(!segments[0].active);
-    assert!(segments[1].active);
+    // There is one family control: the current-family picker.
+    let ids = control_ids(&StylePillSpec::build(&snapshot, &plan()));
+    assert!(
+        !ids.contains(&"top.style.font-family".to_string()),
+        "no duplicate family control: {ids:?}"
+    );
+    assert!(ids.contains(&"top.style.font-family-picker".to_string()));
 }
 
 #[test]
@@ -621,7 +723,7 @@ fn settings_overrides_extend_the_stroke_state() {
     let ids = control_ids(&StylePillSpec::build(&snapshot, &plan()));
     assert!(ids.contains(&"top.style.opacity".to_string()));
     assert!(ids.contains(&"top.style.font-size".to_string()));
-    assert!(ids.contains(&"top.style.font-family".to_string()));
+    assert!(ids.contains(&"top.style.font-family-picker".to_string()));
 }
 
 #[test]

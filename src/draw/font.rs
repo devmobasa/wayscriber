@@ -30,6 +30,16 @@ impl FontDescriptor {
         }
     }
 
+    /// Whether this descriptor asks for bold.
+    ///
+    /// One rule, because two places decide on it: the toolbar's toggle shows
+    /// its state from this and `to_pango_string` renders from the same field.
+    /// A numeric weight is not bold — the toggle writes the word, and a config
+    /// that asks for `700` is asking for something the toggle cannot express.
+    pub fn is_bold(&self) -> bool {
+        self.weight.trim().eq_ignore_ascii_case("bold")
+    }
+
     /// Converts this font descriptor to a Pango font description string.
     ///
     /// Format: "Family Style Weight Size"

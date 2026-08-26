@@ -106,6 +106,7 @@ impl WaylandState {
         let canvas_transform_active = self.canvas_transform_active();
         let (canvas_origin_x, canvas_origin_y) = self.canvas_view_origin();
         let shapes_total = self.input_state.boards.active_frame().shapes.len();
+        let text_halo_enabled = self.config.drawing.text_halo_enabled;
 
         // For pure pan transforms, serve the board background and committed
         // shapes from the baked layer cache: pan frames force full damage, so
@@ -188,7 +189,12 @@ impl WaylandState {
             // thousands of shapes to Cairo still incurs overhead for geometry processing.
             // A simple bounding box check here eliminates that overhead.
             let render_drawn_shape = |drawn_shape: &crate::draw::DrawnShape| {
-                super::super::canvas_layer::render_committed_shape(ctx, drawn_shape, &replay_ctx)
+                super::super::canvas_layer::render_committed_shape(
+                    ctx,
+                    drawn_shape,
+                    &replay_ctx,
+                    text_halo_enabled,
+                )
             };
 
             // Compute bounding box of all damage regions for fast rejection
@@ -415,9 +421,13 @@ impl WaylandState {
                 crate::draw::render_blur_rect(ctx, params, &replay_ctx);
                 true
             }
-            _ => self
-                .input_state
-                .render_provisional_shape_for_damage(ctx, mx, my, damage_world),
+            _ => self.input_state.render_provisional_shape_for_damage(
+                ctx,
+                mx,
+                my,
+                damage_world,
+                text_halo_enabled,
+            ),
         };
         if let (Some(perf), Some(provisional_start)) = (perf.as_mut(), provisional_start) {
             perf.provisional_points = provisional_points;

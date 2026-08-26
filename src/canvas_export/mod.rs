@@ -23,7 +23,7 @@ mod tests {
     use crate::canvas_export::page::draw_canvas_page;
     use crate::canvas_export::png::render_canvas_surface;
     use crate::config::{PdfExportConfig, RenderColorMappingConfig, RenderProfileConfig};
-    use crate::draw::{BLACK, BlurStyle, Frame, RED, Shape, WHITE};
+    use crate::draw::{BLACK, BlurStyle, FontDescriptor, Frame, RED, Shape, WHITE};
     use crate::render_profiles::RenderColorProfile;
 
     fn snapshot(frame: Frame, viewport: CanvasExportViewport) -> CanvasExportSnapshot {
@@ -32,6 +32,7 @@ mod tests {
             backdrop: CanvasExportBackdropSnapshot::Transparent,
             board: BoardExportSnapshot { frame },
             render_profile: None,
+            text_halo_enabled: true,
             spotlight: Default::default(),
         }
     }
@@ -44,6 +45,7 @@ mod tests {
             viewport_height: 20,
             origin_x: 0,
             origin_y: 0,
+            text_halo_enabled: true,
             spotlight: Default::default(),
         }
     }
@@ -124,6 +126,50 @@ mod tests {
         assert_eq!(surface.height(), 20);
         assert_ne!(pixel(&mut surface, 4, 4), 0);
         assert_eq!(pixel(&mut surface, 0, 0), 0);
+    }
+
+    #[test]
+    fn canvas_export_honours_disabled_text_halo() {
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Text {
+            x: 20,
+            y: 80,
+            text: "Read me".to_string(),
+            color: RED,
+            size: 36.0,
+            font_descriptor: FontDescriptor::default(),
+            background_enabled: false,
+            wrap_width: None,
+        });
+        let mut export = snapshot(
+            frame,
+            CanvasExportViewport {
+                logical_width: 400,
+                logical_height: 120,
+                scale: 1,
+                origin_x: 0,
+                origin_y: 0,
+            },
+        );
+        export.backdrop = CanvasExportBackdropSnapshot::Solid(WHITE);
+        export.text_halo_enabled = false;
+
+        let mut surface = render_canvas_surface(&export).expect("surface");
+        surface.flush();
+        let stride = surface.stride() as usize;
+        let data = surface.data().expect("surface pixels");
+        let mut near_black = 0;
+        let mut red = 0;
+        for row in 0..120usize {
+            for column in 0..400usize {
+                let offset = row * stride + column * 4;
+                let (b, g, r) = (data[offset], data[offset + 1], data[offset + 2]);
+                near_black += usize::from(r < 40 && g < 40 && b < 40);
+                red += usize::from(r > 180 && g < 120 && b < 120);
+            }
+        }
+        assert_eq!(near_black, 0, "export must not add a disabled halo");
+        assert!(red > 200, "export must keep the text itself visible");
     }
 
     #[test]

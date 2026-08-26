@@ -73,11 +73,6 @@ impl ToolbarSlider {
             ToolbarSliderTarget::SpotlightMagnification => {
                 ToolbarEvent::SetSpotlightMagnification(value)
             }
-            // Whole passes only: the spec snaps to a step of one, so the cast
-            // is the value the slider already settled on.
-            ToolbarSliderTarget::PenSmoothing => {
-                ToolbarEvent::SetPenSmoothing(value.round().clamp(0.0, 255.0) as u8)
-            }
             ToolbarSliderTarget::FontSize => ToolbarEvent::SetFontSize(value),
             ToolbarSliderTarget::UndoDelay => ToolbarEvent::SetUndoDelay(value),
             ToolbarSliderTarget::RedoDelay => ToolbarEvent::SetRedoDelay(value),
@@ -101,7 +96,6 @@ pub(crate) enum ToolbarSliderTarget {
     Thickness,
     MarkerOpacity,
     SpotlightMagnification,
-    PenSmoothing,
     FontSize,
     UndoDelay,
     RedoDelay,
@@ -140,12 +134,6 @@ impl ToolbarSliderSpec {
         min: crate::draw::MIN_SPOTLIGHT_MAGNIFICATION,
         max: crate::draw::MAX_SPOTLIGHT_MAGNIFICATION,
         step: Some(crate::draw::SPOTLIGHT_MAGNIFICATION_STEP),
-        snap_to_step: true,
-    };
-    pub(crate) const PEN_SMOOTHING: Self = Self {
-        min: 0.0,
-        max: crate::draw::MAX_PEN_SMOOTHING as f64,
-        step: Some(1.0),
         snap_to_step: true,
     };
     pub(crate) const THICKNESS: Self = Self {

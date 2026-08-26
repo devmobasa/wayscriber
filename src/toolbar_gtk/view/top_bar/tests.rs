@@ -566,6 +566,8 @@ fn style_pill_selection_snapshot(base: &ToolbarSnapshot) -> ToolbarSnapshot {
         selection_property_entry("Thickness", "3.0px", K::Thickness, false),
         selection_property_entry("Fill", "Locked", K::Fill, true),
     ];
+    snapshot.selection_has_text = true;
+    snapshot.selected_text_bold = Some(false);
     snapshot
 }
 
@@ -947,10 +949,29 @@ fn assert_gtk_style_widget(
                 control.tooltip(snapshot).as_deref(),
                 "{id} tooltip"
             );
+            if control == model::StylePillControl::FontFamilyPicker {
+                // The builtin puts a clear gap before this button so the family
+                // name does not crowd the "72pt" numeral to its left. Without
+                // the matching margin here the two toolbars space it
+                // differently.
+                assert!(
+                    button.margin_start() > 0,
+                    "{id} lost the leading gap the builtin gives it"
+                );
+            }
         }
         model::StylePillRole::Stepper => {
             let steps = control.steps(snapshot).expect("stepper halves");
-            assert!(widget.is::<gtk4::Box>(), "{id} stepper row");
+            let row = widget
+                .clone()
+                .downcast::<gtk4::Box>()
+                .unwrap_or_else(|_| panic!("{id} is a stepper row"));
+            // The builtin lays the three parts out abutting and the width
+            // planner budgets step + value + step exactly. Child spacing here
+            // would make the widget wider than the plan says it is.
+            assert_eq!(row.spacing(), 0, "{id} stepper spacing");
+            // "− 3 +" says nothing about what it steps.
+            assert_accessible_label(widget, &control.label(snapshot), &id);
             let minus = widget.first_child().expect("stepper minus half");
             let value = minus.next_sibling().expect("stepper value readout");
             let plus = value.next_sibling().expect("stepper plus half");
@@ -973,6 +994,9 @@ fn assert_gtk_style_widget(
                     "{} tooltip",
                     step.id
                 );
+                // A tooltip is not an accessible name: a screen reader on
+                // these halves would otherwise announce "−" and "+".
+                assert_accessible_label(button.upcast_ref(), &step.tooltip, step.id);
                 assert_eq!(
                     button.is_sensitive(),
                     control.enabled(snapshot),

@@ -105,6 +105,20 @@ fn capture_drawings_default_on_and_explicit_false_round_trips() {
 }
 
 #[test]
+fn text_halo_defaults_on_and_explicit_false_round_trips() {
+    let defaults: Config = toml::from_str("").expect("empty config should use defaults");
+    assert!(defaults.drawing.text_halo_enabled);
+
+    let disabled: Config = toml::from_str("[drawing]\ntext_halo_enabled = false\n")
+        .expect("text halo preference should parse");
+    assert!(!disabled.drawing.text_halo_enabled);
+
+    let serialized = toml::to_string(&disabled).expect("text halo preference serializes");
+    let reloaded: Config = toml::from_str(&serialized).expect("serialized preference reloads");
+    assert!(!reloaded.drawing.text_halo_enabled);
+}
+
+#[test]
 fn region_capture_rejects_unknown_picker_values() {
     let error = toml::from_str::<Config>("[capture.region]\npicker = 'automatic'\n")
         .expect_err("unknown region picker should fail");

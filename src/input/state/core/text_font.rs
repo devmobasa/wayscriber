@@ -7,17 +7,63 @@
 //! applied change reports.
 
 use super::InputState;
-use crate::draw::{Shape, families_match};
+use crate::draw::{FontDescriptor, Shape, families_match};
+
+fn text_font_descriptor(shape: &Shape) -> Option<&FontDescriptor> {
+    match shape {
+        Shape::Text {
+            font_descriptor, ..
+        }
+        | Shape::StickyNote {
+            font_descriptor, ..
+        } => Some(font_descriptor),
+        _ => None,
+    }
+}
+
+fn text_font_descriptor_mut(shape: &mut Shape) -> Option<&mut FontDescriptor> {
+    match shape {
+        Shape::Text {
+            font_descriptor, ..
+        }
+        | Shape::StickyNote {
+            font_descriptor, ..
+        } => Some(font_descriptor),
+        _ => None,
+    }
+}
 
 impl InputState {
     /// Whether the selection holds anything a font applies to.
-    pub(in crate::input::state::core) fn selection_has_text(&self) -> bool {
+    pub(crate) fn selection_has_text(&self) -> bool {
         let frame = self.boards.active_frame();
         self.selected_shape_ids().iter().any(|id| {
-            matches!(
-                frame.shape(*id).map(|drawn| &drawn.shape),
-                Some(Shape::Text { .. } | Shape::StickyNote { .. })
-            )
+            frame
+                .shape(*id)
+                .and_then(|drawn| text_font_descriptor(&drawn.shape))
+                .is_some()
+        })
+    }
+
+    fn first_selected_text_descriptor(&self) -> Option<&FontDescriptor> {
+        let frame = self.boards.active_frame();
+        self.selected_shape_ids().iter().find_map(|id| {
+            frame
+                .shape(*id)
+                .and_then(|drawn| text_font_descriptor(&drawn.shape))
+        })
+    }
+
+    fn first_editable_selected_text_descriptor(&self) -> Option<&FontDescriptor> {
+        let frame = self.boards.active_frame();
+        self.selected_shape_ids().iter().find_map(|id| {
+            frame.shape(*id).and_then(|drawn| {
+                if drawn.locked {
+                    None
+                } else {
+                    text_font_descriptor(&drawn.shape)
+                }
+            })
         })
     }
 
@@ -27,19 +73,48 @@ impl InputState {
     /// converges on a single family rather than each shape stepping away from
     /// wherever it happened to be.
     pub(in crate::input::state::core) fn first_selected_text_family(&self) -> Option<String> {
-        let frame = self.boards.active_frame();
-        self.selected_shape_ids().iter().find_map(|id| {
-            match frame.shape(*id).map(|drawn| &drawn.shape) {
-                Some(
-                    Shape::Text {
-                        font_descriptor, ..
-                    }
-                    | Shape::StickyNote {
-                        font_descriptor, ..
-                    },
-                ) => Some(font_descriptor.family.clone()),
-                _ => None,
+        self.first_selected_text_descriptor()
+            .map(|descriptor| descriptor.family.clone())
+    }
+
+    /// Bold state of the first editable selected text target, if there is one.
+    ///
+    /// A mixed selection converges when the user clicks rather than borrowing
+    /// state from either a locked shape or the unrelated tool default.
+    pub(crate) fn first_editable_selected_text_is_bold(&self) -> Option<bool> {
+        self.first_editable_selected_text_descriptor()
+            .map(FontDescriptor::is_bold)
+    }
+
+    /// Turn bold on or off, on selected text when there is any and on the tool
+    /// otherwise — the same target rule the font picker uses for a family.
+    ///
+    /// Writes the words `bold` and `normal`. A configuration asking for a
+    /// numeric weight is asking for something a two-state control cannot say,
+    /// so turning bold off from here lands on `normal` rather than restoring
+    /// whatever number was there.
+    pub(crate) fn set_font_bold(&mut self, bold: bool) -> bool {
+        let weight = if bold { "bold" } else { "normal" };
+        if self.selection_has_text() {
+            return self.apply_weight_to_selected_text(weight);
+        }
+        let descriptor = crate::draw::FontDescriptor::new(
+            self.font_descriptor.family.clone(),
+            weight.to_string(),
+            self.font_descriptor.style.clone(),
+        );
+        self.set_font_descriptor(descriptor)
+    }
+
+    /// Restyle every selected text shape to `weight`.
+    fn apply_weight_to_selected_text(&mut self, weight: &str) -> bool {
+        let target = weight.to_string();
+        self.apply_descriptor_to_selected_text("weight", move |descriptor| {
+            if descriptor.weight.eq_ignore_ascii_case(&target) {
+                return false;
             }
+            descriptor.weight = target.clone();
+            true
         })
     }
 
@@ -54,21 +129,26 @@ impl InputState {
         family: &str,
     ) -> bool {
         let target = family.to_string();
+        self.apply_descriptor_to_selected_text("font", move |descriptor| {
+            if families_match(&descriptor.family, &target) {
+                return false;
+            }
+            descriptor.family = target.clone();
+            true
+        })
+    }
+
+    /// Apply one font-descriptor mutation to every editable selected text
+    /// shape, preserving shared lock, undo, damage, and partial-result reporting.
+    fn apply_descriptor_to_selected_text(
+        &mut self,
+        property: &'static str,
+        mut apply: impl FnMut(&mut FontDescriptor) -> bool,
+    ) -> bool {
         let result = self.apply_selection_change(
-            |shape| matches!(shape, Shape::Text { .. } | Shape::StickyNote { .. }),
-            move |shape| match shape {
-                Shape::Text {
-                    font_descriptor, ..
-                }
-                | Shape::StickyNote {
-                    font_descriptor, ..
-                } if !families_match(&font_descriptor.family, &target) => {
-                    font_descriptor.family = target.clone();
-                    true
-                }
-                _ => false,
-            },
+            |shape| text_font_descriptor(shape).is_some(),
+            move |shape| text_font_descriptor_mut(shape).is_some_and(&mut apply),
         );
-        self.report_selection_apply_result(result, "font")
+        self.report_selection_apply_result(result, property)
     }
 }
