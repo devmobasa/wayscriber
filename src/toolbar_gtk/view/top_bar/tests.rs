@@ -838,223 +838,263 @@ fn assert_gtk_style_widget(
 ) {
     let id = widget.widget_name().to_string();
     match control.role() {
-        model::StylePillRole::Swatch => {
-            let button = widget
-                .clone()
-                .downcast::<gtk4::Button>()
-                .unwrap_or_else(|_| panic!("{id} is a swatch button"));
-            assert!(button.has_css_class("swatch"), "{id} swatch class");
-            assert_eq!(
-                button.tooltip_text().as_deref(),
-                control.tooltip(snapshot).as_deref(),
-                "{id} tooltip"
-            );
-            assert_accessible_label(widget, &control.label(snapshot), &id);
-        }
-        model::StylePillRole::Slider => {
-            // SliderRow: a box hosting the hand-drawn track DrawingArea.
-            let row = widget
-                .clone()
-                .downcast::<gtk4::Box>()
-                .unwrap_or_else(|_| panic!("{id} is a slider row"));
-            let track = row.first_child().expect("slider track");
-            assert!(track.is::<gtk4::DrawingArea>(), "{id} slider track");
-            let value = track.next_sibling().expect("slider value readout");
-            let value = value
-                .downcast::<gtk4::Label>()
-                .unwrap_or_else(|_| panic!("{id} value readout is a label"));
-            let carries_readout = control.carries_inline_readout();
-            assert_eq!(
-                value.property::<bool>("visible"),
-                carries_readout,
-                "{id} readout visibility"
-            );
-            let expected_width = if carries_readout {
-                STYLE_SLIDER_W + STYLE_PILL_GAP + STYLE_VALUE_W
-            } else {
-                STYLE_SLIDER_W
-            };
-            assert_eq!(
-                row.width_request(),
-                expected_width.round() as i32,
-                "{id} keeps the shared track width when its readout is visible"
-            );
-            if carries_readout {
-                assert_eq!(
-                    value.xalign(),
-                    0.0,
-                    "{id} places its readout next to the track"
-                );
-            }
-        }
-        model::StylePillRole::Value => {
-            let button = widget
-                .clone()
-                .downcast::<gtk4::Button>()
-                .unwrap_or_else(|_| panic!("{id} is a numeral button"));
-            assert_eq!(
-                button.label().as_deref(),
-                control.value_text(snapshot).as_deref(),
-                "{id} live numeral"
-            );
-            assert_eq!(
-                button.tooltip_text().as_deref(),
-                control.tooltip(snapshot).as_deref(),
-                "{id} tooltip"
-            );
-        }
-        model::StylePillRole::Toggle => {
-            let check = widget
-                .clone()
-                .downcast::<gtk4::CheckButton>()
-                .unwrap_or_else(|_| panic!("{id} is a check button"));
-            assert_eq!(check.is_active(), control.active(snapshot), "{id} state");
-            assert_eq!(
-                check.label().as_deref(),
-                Some(control.label(snapshot).as_ref()),
-                "{id} label"
-            );
-            assert_eq!(
-                check.tooltip_text().as_deref(),
-                control.tooltip(snapshot).as_deref(),
-                "{id} tooltip"
-            );
-        }
-        model::StylePillRole::Button => {
-            let button = widget
-                .clone()
-                .downcast::<gtk4::Button>()
-                .unwrap_or_else(|_| panic!("{id} is a button"));
-            // Cycle buttons show the live value they step; plain buttons show
-            // their label.
-            let expected_text = match control {
-                model::StylePillControl::SelectionCycle(_)
-                | model::StylePillControl::ArrowStyleCycle => {
-                    control.value_text(snapshot).expect("cycle value text")
-                }
-                _ => control.label(snapshot).into_owned(),
-            };
-            assert_eq!(
-                button.label().as_deref(),
-                Some(expected_text.as_str()),
-                "{id} text"
-            );
-            assert_eq!(
-                button.is_sensitive(),
-                control.enabled(snapshot),
-                "{id} enabled"
-            );
-            assert_eq!(
-                button.tooltip_text().as_deref(),
-                control.tooltip(snapshot).as_deref(),
-                "{id} tooltip"
-            );
-            if control == model::StylePillControl::FontFamilyPicker {
-                // The builtin puts a clear gap before this button so the family
-                // name does not crowd the "72pt" numeral to its left. Without
-                // the matching margin here the two toolbars space it
-                // differently.
-                assert!(
-                    button.margin_start() > 0,
-                    "{id} lost the leading gap the builtin gives it"
-                );
-            }
-        }
-        model::StylePillRole::Stepper => {
-            let steps = control.steps(snapshot).expect("stepper halves");
-            let row = widget
-                .clone()
-                .downcast::<gtk4::Box>()
-                .unwrap_or_else(|_| panic!("{id} is a stepper row"));
-            // The builtin lays the three parts out abutting and the width
-            // planner budgets step + value + step exactly. Child spacing here
-            // would make the widget wider than the plan says it is.
-            assert_eq!(row.spacing(), 0, "{id} stepper spacing");
-            // "− 3 +" says nothing about what it steps.
-            assert_accessible_label(widget, &control.label(snapshot), &id);
-            let minus = widget.first_child().expect("stepper minus half");
-            let value = minus.next_sibling().expect("stepper value readout");
-            let plus = value.next_sibling().expect("stepper plus half");
-            assert!(plus.next_sibling().is_none(), "{id} has three children");
-            for (half, step) in [(&minus, &steps[0]), (&plus, &steps[1])] {
-                let button = half
-                    .clone()
-                    .downcast::<gtk4::Button>()
-                    .unwrap_or_else(|_| panic!("{} is a button", step.id));
-                assert_eq!(half.widget_name().as_str(), step.id, "{id} half id");
-                assert_eq!(
-                    button.label().as_deref(),
-                    Some(step.label),
-                    "{} label",
-                    step.id
-                );
-                assert_eq!(
-                    button.tooltip_text().as_deref(),
-                    Some(step.tooltip.as_str()),
-                    "{} tooltip",
-                    step.id
-                );
-                // A tooltip is not an accessible name: a screen reader on
-                // these halves would otherwise announce "−" and "+".
-                assert_accessible_label(button.upcast_ref(), &step.tooltip, step.id);
-                assert_eq!(
-                    button.is_sensitive(),
-                    control.enabled(snapshot),
-                    "{} enabled",
-                    step.id
-                );
-            }
-            let value_label = value
-                .downcast::<gtk4::Label>()
-                .unwrap_or_else(|_| panic!("{id} value readout is a label"));
-            assert_eq!(
-                value_label.widget_name().as_str(),
-                format!("{}.value", control.id()),
-                "{id} value id"
-            );
-            assert_eq!(
-                Some(value_label.text().to_string()),
-                control.value_text(snapshot),
-                "{id} live value"
-            );
-        }
+        model::StylePillRole::Swatch => assert_gtk_style_swatch(widget, control, snapshot, &id),
+        model::StylePillRole::Slider => assert_gtk_style_slider(widget, control, &id),
+        model::StylePillRole::Value => assert_gtk_style_value(widget, control, snapshot, &id),
+        model::StylePillRole::Toggle => assert_gtk_style_toggle(widget, control, snapshot, &id),
+        model::StylePillRole::Button => assert_gtk_style_button(widget, control, snapshot, &id),
+        model::StylePillRole::Stepper => assert_gtk_style_stepper(widget, control, snapshot, &id),
         model::StylePillRole::Segmented => {
-            let segments = control.segments(snapshot).expect("segment halves");
-            let mut buttons = Vec::new();
-            let mut child = widget.first_child();
-            while let Some(current) = child {
-                child = current.next_sibling();
-                buttons.push(
-                    current
-                        .downcast::<gtk4::Button>()
-                        .unwrap_or_else(|_| panic!("{id} segment half is a button")),
-                );
-            }
-            assert_eq!(buttons.len(), segments.len(), "{id} segment count");
-            for (button, segment) in buttons.iter().zip(&segments) {
-                // Contract-id parity with the builtin tree's HitArea halves.
-                assert_eq!(button.widget_name().as_str(), segment.id, "{id} half id");
-                assert!(button.has_css_class("tab"), "{id} tab class");
-                assert_eq!(
-                    button.label().as_deref(),
-                    Some(segment.label),
-                    "{} label",
-                    segment.id
-                );
-                assert_eq!(
-                    button.has_css_class("active"),
-                    segment.active,
-                    "{} active state",
-                    segment.id
-                );
-                assert_eq!(
-                    button.tooltip_text().as_deref(),
-                    Some(segment.tooltip.as_str()),
-                    "{} tooltip",
-                    segment.id
-                );
-            }
+            assert_gtk_style_segmented(widget, control, snapshot, &id)
         }
+    }
+}
+
+fn assert_gtk_style_swatch(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let button = widget
+        .clone()
+        .downcast::<gtk4::Button>()
+        .unwrap_or_else(|_| panic!("{id} is a swatch button"));
+    assert!(button.has_css_class("swatch"), "{id} swatch class");
+    assert_eq!(
+        button.tooltip_text().as_deref(),
+        control.tooltip(snapshot).as_deref(),
+        "{id} tooltip"
+    );
+    assert_accessible_label(widget, &control.label(snapshot), id);
+}
+
+fn assert_gtk_style_slider(widget: &gtk4::Widget, control: model::StylePillControl, id: &str) {
+    // SliderRow: a box hosting the hand-drawn track DrawingArea.
+    let row = widget
+        .clone()
+        .downcast::<gtk4::Box>()
+        .unwrap_or_else(|_| panic!("{id} is a slider row"));
+    let track = row.first_child().expect("slider track");
+    assert!(track.is::<gtk4::DrawingArea>(), "{id} slider track");
+    let value = track.next_sibling().expect("slider value readout");
+    let value = value
+        .downcast::<gtk4::Label>()
+        .unwrap_or_else(|_| panic!("{id} value readout is a label"));
+    let carries_readout = control.carries_inline_readout();
+    assert_eq!(
+        value.property::<bool>("visible"),
+        carries_readout,
+        "{id} readout visibility"
+    );
+    let expected_width = if carries_readout {
+        STYLE_SLIDER_W + STYLE_PILL_GAP + STYLE_VALUE_W
+    } else {
+        STYLE_SLIDER_W
+    };
+    assert_eq!(
+        row.width_request(),
+        expected_width.round() as i32,
+        "{id} keeps the shared track width when its readout is visible"
+    );
+    if carries_readout {
+        assert_eq!(
+            value.xalign(),
+            0.0,
+            "{id} places its readout next to the track"
+        );
+    }
+}
+
+fn assert_gtk_style_value(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let button = widget
+        .clone()
+        .downcast::<gtk4::Button>()
+        .unwrap_or_else(|_| panic!("{id} is a numeral button"));
+    assert_eq!(
+        button.label().as_deref(),
+        control.value_text(snapshot).as_deref(),
+        "{id} live numeral"
+    );
+    assert_eq!(
+        button.tooltip_text().as_deref(),
+        control.tooltip(snapshot).as_deref(),
+        "{id} tooltip"
+    );
+}
+
+fn assert_gtk_style_toggle(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let check = widget
+        .clone()
+        .downcast::<gtk4::CheckButton>()
+        .unwrap_or_else(|_| panic!("{id} is a check button"));
+    assert_eq!(check.is_active(), control.active(snapshot), "{id} state");
+    assert_eq!(
+        check.label().as_deref(),
+        Some(control.label(snapshot).as_ref()),
+        "{id} label"
+    );
+    assert_eq!(
+        check.tooltip_text().as_deref(),
+        control.tooltip(snapshot).as_deref(),
+        "{id} tooltip"
+    );
+}
+
+fn assert_gtk_style_button(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let button = widget
+        .clone()
+        .downcast::<gtk4::Button>()
+        .unwrap_or_else(|_| panic!("{id} is a button"));
+    // Cycle buttons show the live value they step; plain buttons show their
+    // label.
+    let expected_text = match control {
+        model::StylePillControl::SelectionCycle(_) | model::StylePillControl::ArrowStyleCycle => {
+            control.value_text(snapshot).expect("cycle value text")
+        }
+        _ => control.label(snapshot).into_owned(),
+    };
+    assert_eq!(
+        button.label().as_deref(),
+        Some(expected_text.as_str()),
+        "{id} text"
+    );
+    assert_eq!(
+        button.is_sensitive(),
+        control.enabled(snapshot),
+        "{id} enabled"
+    );
+    assert_eq!(
+        button.tooltip_text().as_deref(),
+        control.tooltip(snapshot).as_deref(),
+        "{id} tooltip"
+    );
+    if control == model::StylePillControl::FontFamilyPicker {
+        // The builtin leaves a gap before the family picker so it does not
+        // crowd the point-size numeral.
+        assert!(
+            button.margin_start() > 0,
+            "{id} lost the leading gap the builtin gives it"
+        );
+    }
+}
+
+fn assert_gtk_style_stepper(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let steps = control.steps(snapshot).expect("stepper halves");
+    let row = widget
+        .clone()
+        .downcast::<gtk4::Box>()
+        .unwrap_or_else(|_| panic!("{id} is a stepper row"));
+    // The builtin lays the three parts out abutting and the width planner
+    // budgets step + value + step exactly.
+    assert_eq!(row.spacing(), 0, "{id} stepper spacing");
+    assert_accessible_label(widget, &control.label(snapshot), id);
+    let minus = widget.first_child().expect("stepper minus half");
+    let value = minus.next_sibling().expect("stepper value readout");
+    let plus = value.next_sibling().expect("stepper plus half");
+    assert!(plus.next_sibling().is_none(), "{id} has three children");
+    for (half, step) in [(&minus, &steps[0]), (&plus, &steps[1])] {
+        let button = half
+            .clone()
+            .downcast::<gtk4::Button>()
+            .unwrap_or_else(|_| panic!("{} is a button", step.id));
+        assert_eq!(half.widget_name().as_str(), step.id, "{id} half id");
+        assert_eq!(
+            button.label().as_deref(),
+            Some(step.label),
+            "{} label",
+            step.id
+        );
+        assert_eq!(
+            button.tooltip_text().as_deref(),
+            Some(step.tooltip.as_str()),
+            "{} tooltip",
+            step.id
+        );
+        // A tooltip is not an accessible name: a screen reader on these halves
+        // would otherwise announce only "−" and "+".
+        assert_accessible_label(button.upcast_ref(), &step.tooltip, step.id);
+        assert_eq!(
+            button.is_sensitive(),
+            control.enabled(snapshot),
+            "{} enabled",
+            step.id
+        );
+    }
+    let value_label = value
+        .downcast::<gtk4::Label>()
+        .unwrap_or_else(|_| panic!("{id} value readout is a label"));
+    assert_eq!(
+        value_label.widget_name().as_str(),
+        format!("{}.value", control.id()),
+        "{id} value id"
+    );
+    assert_eq!(
+        Some(value_label.text().to_string()),
+        control.value_text(snapshot),
+        "{id} live value"
+    );
+}
+
+fn assert_gtk_style_segmented(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let segments = control.segments(snapshot).expect("segment halves");
+    let mut buttons = Vec::new();
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        child = current.next_sibling();
+        buttons.push(
+            current
+                .downcast::<gtk4::Button>()
+                .unwrap_or_else(|_| panic!("{id} segment half is a button")),
+        );
+    }
+    assert_eq!(buttons.len(), segments.len(), "{id} segment count");
+    for (button, segment) in buttons.iter().zip(&segments) {
+        assert_eq!(button.widget_name().as_str(), segment.id, "{id} half id");
+        assert!(button.has_css_class("tab"), "{id} tab class");
+        assert_eq!(
+            button.label().as_deref(),
+            Some(segment.label),
+            "{} label",
+            segment.id
+        );
+        assert_eq!(
+            button.has_css_class("active"),
+            segment.active,
+            "{} active state",
+            segment.id
+        );
+        assert_eq!(
+            button.tooltip_text().as_deref(),
+            Some(segment.tooltip.as_str()),
+            "{} tooltip",
+            segment.id
+        );
     }
 }
 
