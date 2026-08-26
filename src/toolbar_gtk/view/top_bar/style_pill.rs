@@ -21,6 +21,16 @@ fn format_pt(value: f64) -> String {
     format!("{value:.0}pt")
 }
 
+/// Smoothing readout. Matches `StylePillControl::value_text`: zero passes is a
+/// state worth naming, not a quantity.
+fn format_smoothing(value: f64) -> String {
+    if value.round() <= 0.0 {
+        "Off".to_string()
+    } else {
+        format!("{value:.0}")
+    }
+}
+
 /// Pill button on the shared `sized_button` chassis: non-focusable and
 /// releasing window keyboard focus on click, like every other top-bar
 /// control. The GTK bars must never retain keyboard focus — the popups the
@@ -30,6 +40,25 @@ fn pill_button(label: &str, width: f64, height: f64) -> gtk4::Button {
     let button = sized_button(width, height);
     button.set_label(label);
     button
+}
+
+/// Hold a button's label inside the slot the layout planned for it.
+///
+/// `set_size_request` is a *minimum* in GTK: a label wider than the request
+/// grows the button and pushes the rest of the pill off the plan. Shortening
+/// the string by character count is not enough, because a display face draws
+/// twelve wide characters wider than twelve narrow ones — and a family name is
+/// drawn by the toolbar's own font at whatever width that font gives it.
+///
+/// Applied only where the label is a name the system supplied rather than a
+/// word this program chose, which today is the font button alone.
+fn bound_button_label(button: &gtk4::Button) {
+    if let Some(label) = button.child().and_downcast::<gtk4::Label>() {
+        label.set_ellipsize(pango::EllipsizeMode::End);
+        // Natural width stops asking for the whole string, so the size request
+        // is what decides the slot. The label still fills it when drawn.
+        label.set_max_width_chars(1);
+    }
 }
 
 impl TopBar {
@@ -154,6 +183,7 @@ impl TopBar {
                 model::StylePillControl::ThicknessSlider
                 | model::StylePillControl::OpacitySlider
                 | model::StylePillControl::SpotlightMagnificationSlider
+                | model::StylePillControl::PenSmoothingSlider
                 | model::StylePillControl::FontSizeSlider => {
                     let (slider_spec, value) = control.slider_value(snapshot);
                     let format = match control {
@@ -162,6 +192,7 @@ impl TopBar {
                         model::StylePillControl::SpotlightMagnificationSlider => {
                             crate::draw::format_spotlight_magnification
                         }
+                        model::StylePillControl::PenSmoothingSlider => format_smoothing,
                         _ => format_pt,
                     };
                     let sender = self.feedback.clone();
@@ -176,6 +207,9 @@ impl TopBar {
                             model::StylePillControl::SpotlightMagnificationSlider => {
                                 ToolbarEvent::SetSpotlightMagnification(value)
                             }
+                            model::StylePillControl::PenSmoothingSlider => {
+                                ToolbarEvent::SetPenSmoothing(value.round().clamp(0.0, 255.0) as u8)
+                            }
                             _ => ToolbarEvent::SetFontSize(value),
                         };
                         send_event(&sender, event);
@@ -183,12 +217,11 @@ impl TopBar {
                     // The thickness/text-size readouts are distinct numeral
                     // controls; only the opacity slider keeps its built-in
                     // readout.
-                    slider.set_value_label_visible(matches!(
-                        control,
-                        model::StylePillControl::OpacitySlider
-                            | model::StylePillControl::SpotlightMagnificationSlider
-                    ));
+                    slider.set_value_label_visible(control.carries_inline_readout());
                     set_semantic_widget_id(&slider.root, control.id().as_ref());
+                    if let Some(tooltip) = control.tooltip(snapshot) {
+                        slider.root.set_tooltip_text(Some(&tooltip));
+                    }
                     slider.root.set_size_request(px(STYLE_SLIDER_W), -1);
                     slider.root.set_valign(gtk4::Align::Center);
                     append_gap(&pill, slider.root.upcast_ref(), gap);
@@ -198,6 +231,9 @@ impl TopBar {
                             model::StylePillControl::OpacitySlider => snapshot.marker_opacity,
                             model::StylePillControl::SpotlightMagnificationSlider => {
                                 snapshot.spotlight_magnification
+                            }
+                            model::StylePillControl::PenSmoothingSlider => {
+                                f64::from(snapshot.pen_smoothing)
                             }
                             _ => snapshot.font_size,
                         };
@@ -286,6 +322,34 @@ impl TopBar {
                         if let Some(tooltip) = control.tooltip(snapshot) {
                             handle.set_tooltip_text(Some(&tooltip));
                         }
+                    }));
+                }
+                model::StylePillControl::FontFamilyPicker => {
+                    // The family in use, as a button onto the overlay's font
+                    // picker — the same route the color chip takes to the
+                    // gradient picker.
+                    let button = pill_button(
+                        control.label(snapshot).as_ref(),
+                        sz(STYLE_FONT_PICK_W),
+                        sz(STYLE_ROW_H),
+                    );
+                    bound_button_label(&button);
+                    set_semantic_widget_id(&button, control.id().as_ref());
+                    if let Some(tooltip) = control.tooltip(snapshot) {
+                        button.set_tooltip_text(Some(&tooltip));
+                    }
+                    let sender = self.feedback.clone();
+                    let event = control.click_event(snapshot);
+                    button.connect_clicked(move |_| {
+                        send_event(&sender, event.clone());
+                    });
+                    append_gap(&pill, button.upcast_ref(), gap);
+                    self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+                        button.set_label(control.label(snapshot).as_ref());
+                        // `set_label` can replace the child, taking the bound
+                        // with it.
+                        bound_button_label(&button);
+                        button.set_tooltip_text(control.tooltip(snapshot).as_deref());
                     }));
                 }
                 model::StylePillControl::SelectionCycle(_)

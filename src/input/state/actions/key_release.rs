@@ -8,6 +8,7 @@ impl InputState {
     /// Currently only tracks modifier key releases to update the modifier state.
     pub fn on_key_release(&mut self, key: Key) {
         self.release_command_palette_repeat_key(key);
+        self.release_font_picker_repeat_key(key);
         let was_modifier = matches!(
             key,
             Key::Shift | Key::Ctrl | Key::Alt | Key::Super | Key::Tab

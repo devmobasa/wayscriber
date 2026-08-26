@@ -660,6 +660,7 @@ fn push_style_pill(
             model::StylePillControl::ThicknessSlider
             | model::StylePillControl::OpacitySlider
             | model::StylePillControl::SpotlightMagnificationSlider
+            | model::StylePillControl::PenSmoothingSlider
             | model::StylePillControl::FontSizeSlider => {
                 let (slider_spec, value) = control.slider_value(snapshot);
                 let event = control.click_event(snapshot);
@@ -675,6 +676,7 @@ fn push_style_pill(
                     model::StylePillControl::SpotlightMagnificationSlider => {
                         HitKind::DragSetSpotlightMagnification
                     }
+                    model::StylePillControl::PenSmoothingSlider => HitKind::DragSetPenSmoothing,
                     _ => HitKind::DragSetFontSize,
                 };
                 let rect = (
@@ -692,17 +694,15 @@ fn push_style_pill(
                     Some(Interaction {
                         event,
                         kind,
-                        tooltip: None,
+                        // Most sliders are self-explanatory and carry none;
+                        // the model decides, so both frontends agree.
+                        tooltip: control.tooltip(snapshot),
                     }),
                 ));
                 x += ToolbarLayoutSpec::TOP_STYLE_SLIDER_W + gap;
                 // The opacity slider carries its readout as decoration; the
                 // thickness/text-size numerals are distinct value controls.
-                if matches!(
-                    control,
-                    model::StylePillControl::OpacitySlider
-                        | model::StylePillControl::SpotlightMagnificationSlider
-                ) {
+                if control.carries_inline_readout() {
                     nodes.push(WidgetNode::decor(
                         format!("{}.readout", control.id()),
                         (
@@ -795,6 +795,29 @@ fn push_style_pill(
                     )),
                 ));
                 x += ToolbarLayoutSpec::TOP_STYLE_RESET_W + gap;
+            }
+            model::StylePillControl::FontFamilyPicker => {
+                // The family in use, as a button onto the overlay's picker.
+                // Same shape as the counter reset, wider because the label is
+                // a name rather than a fixed word.
+                nodes.push(WidgetNode::new(
+                    id,
+                    (
+                        x,
+                        center(row_h),
+                        ToolbarLayoutSpec::TOP_STYLE_FONT_PICK_W,
+                        row_h,
+                    ),
+                    WidgetKind::TextButton {
+                        label: LabelSpec::new(control.label(snapshot), TOP_LABEL_FONT_SIZE, true),
+                        style: ButtonStyle::plain(),
+                    },
+                    Some(Interaction::click(
+                        control.click_event(snapshot),
+                        control.tooltip(snapshot),
+                    )),
+                ));
+                x += ToolbarLayoutSpec::TOP_STYLE_FONT_PICK_W + gap;
             }
             model::StylePillControl::SelectionCycle(_)
             | model::StylePillControl::ArrowStyleCycle => {

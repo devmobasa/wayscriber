@@ -25,7 +25,7 @@ use std::borrow::Cow;
 use crate::config::{
     Action, QuickColorPalette, action_label, action_short_label, toolbar_item_ids as ids,
 };
-use crate::draw::FontDescriptor;
+use crate::draw::{FontDescriptor, families_match};
 use crate::input::{EraserMode, SelectionPropertyEntry, SelectionPropertyKind};
 use crate::label_format::{format_binding_label, format_quick_color_tooltip};
 use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
@@ -92,6 +92,8 @@ pub(crate) enum StylePillControl {
     ThicknessValue,
     /// Marker opacity slider.
     OpacitySlider,
+    /// Pen/marker smoothing slider, in whole passes.
+    PenSmoothingSlider,
     /// Spotlight magnification slider.
     SpotlightMagnificationSlider,
     /// Shape fill toggle.
@@ -111,6 +113,10 @@ pub(crate) enum StylePillControl {
     FontSizeValue,
     /// Sans/Mono font family segmented control.
     FontFamilySegment,
+    /// Button showing the family in use; opens the overlay's font picker over
+    /// every installed family. The segment beside it covers the two the
+    /// toolbar has always offered; this is how the rest are reachable.
+    FontFamilyPicker,
     /// Brush/Stroke eraser mode segmented control (the old checkbox
     /// semantics as a two-segment control emitting `SetEraserMode`).
     EraserModeSegment,
@@ -262,6 +268,9 @@ impl StylePillSpec {
         if context.show_marker_opacity {
             controls.push(StylePillControl::OpacitySlider);
         }
+        if context.show_pen_smoothing && !plan.drop_style_extras {
+            controls.push(StylePillControl::PenSmoothingSlider);
+        }
         if context.tool_options_kind == ToolOptionsKind::Spotlight {
             controls.push(StylePillControl::SpotlightMagnificationSlider);
         }
@@ -284,6 +293,9 @@ impl StylePillSpec {
             controls.push(StylePillControl::FontSizeSlider);
             controls.push(StylePillControl::FontSizeValue);
             controls.push(StylePillControl::FontFamilySegment);
+            if !plan.drop_style_extras {
+                controls.push(StylePillControl::FontFamilyPicker);
+            }
         }
         if context.show_eraser_mode {
             controls.push(StylePillControl::EraserModeSegment);

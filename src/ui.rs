@@ -8,6 +8,7 @@ mod command_palette;
 pub mod constants;
 mod context_menu;
 mod eyedropper_loupe;
+mod font_picker;
 mod help_overlay;
 mod input_hud;
 mod measure_badge;
@@ -34,6 +35,7 @@ pub use color_picker_popup::{color_picker_popup_visual_geometry, render_color_pi
 pub use command_palette::{command_palette_visual_geometry, render_command_palette};
 pub use context_menu::render_context_menu;
 pub(crate) use eyedropper_loupe::{compute_eyedropper_loupe_layout, render_eyedropper_loupe};
+pub use font_picker::render_font_picker;
 #[allow(unused_imports)]
 pub use help_overlay::HelpOverlayBindings;
 #[cfg(test)]

@@ -104,6 +104,7 @@ mod core;
 mod data;
 mod desktop_open;
 mod eyedropper;
+mod font_catalog;
 mod gtk_toolbar;
 mod helpers;
 mod input_actions;
@@ -242,6 +243,10 @@ pub(super) struct WaylandState {
 
     // Input state
     pub(super) input_state: InputState,
+    /// One-shot worker that enumerates the system font catalog after the first
+    /// committed frame instead of inside a picker-opening input callback.
+    pub(super) font_catalog_prewarm: RuntimeOperationController<(), Duration>,
+    pub(super) font_catalog_prewarm_started: bool,
     /// Wake handle the input HUD's system reader pokes after sending chips.
     /// Cloned from the shared runtime source at startup so the reader can be
     /// started and stopped whenever the HUD toggles.

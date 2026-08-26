@@ -102,7 +102,7 @@ fn paint_preset_color_swatch(
     ctx.set_source_rgba(color.0, color.1, color.2, color.3);
     swatch_path(ctx);
     let _ = ctx.fill();
-    let luminance = 0.299 * color.0 + 0.587 * color.1 + 0.114 * color.2;
+    let luminance = crate::draw::perceived_luminance(color.0, color.1, color.2);
     set_color(
         ctx,
         if luminance < 0.3 {

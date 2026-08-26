@@ -37,6 +37,40 @@ pub fn render_text(
     background_enabled: bool,
     wrap_width: Option<i32>,
 ) {
+    render_text_over(
+        ctx,
+        x,
+        y,
+        text,
+        color,
+        size,
+        font_descriptor,
+        background_enabled,
+        wrap_width,
+        None,
+    );
+}
+
+/// `render_text`, plus what the caller knows about the background.
+///
+/// `known_background_luminance` is used only when the render target cannot be
+/// read back. A vector target — a PDF page — has no pixels to probe, so without
+/// it a board exported to PDF would pick a different halo from the same board on
+/// screen. Raster targets ignore it and probe, which is strictly better: the
+/// probe sees the shapes painted under the label as well as the backdrop.
+#[allow(clippy::too_many_arguments)]
+pub fn render_text_over(
+    ctx: &cairo::Context,
+    x: i32,
+    y: i32,
+    text: &str,
+    color: Color,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    background_enabled: bool,
+    wrap_width: Option<i32>,
+    known_background_luminance: Option<f64>,
+) {
     // Save context state to prevent settings from leaking to other drawing operations
     ctx.save().ok();
 
@@ -95,7 +129,8 @@ pub fn render_text(
             content.width,
             content.height,
         ),
-    );
+    )
+    .or(known_background_luminance);
     let outline = text_outline_color(color, background_luminance);
 
     // First pass: draw semi-transparent background rectangle (if enabled)
@@ -294,7 +329,7 @@ fn render_sticky_note_layout(
 /// live caret matches the committed note text instead of vanishing into the
 /// background fill.
 pub fn sticky_note_foreground(background: Color) -> Color {
-    let brightness = background.r * 0.299 + background.g * 0.587 + background.b * 0.114;
+    let brightness = super::color_luminance(background);
     if brightness > 0.6 {
         Color {
             r: 0.12,

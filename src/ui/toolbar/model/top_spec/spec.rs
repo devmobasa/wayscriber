@@ -13,6 +13,14 @@ pub(crate) struct TopStripPlan {
     /// non-essential island and yield first under width pressure, before any
     /// tool or utility leaves the strip.
     pub(crate) drop_presets: bool,
+    /// Whether the style pill has shed its secondary controls for width.
+    ///
+    /// The rung directly above `compact`, which hides the pill outright. The
+    /// smoothing slider and the font-family picker button are the two controls
+    /// with somewhere else to be — a keybinding and the command palette — so
+    /// they leave before the color chip, the size slider, and the rest of the
+    /// pill do.
+    pub(crate) drop_style_extras: bool,
     pub(crate) compact: bool,
 }
 
@@ -25,6 +33,7 @@ impl TopStripPlan {
             dropped_tools: Vec::new(),
             dropped_utilities: Vec::new(),
             drop_presets: false,
+            drop_style_extras: false,
             compact: false,
         }
     }

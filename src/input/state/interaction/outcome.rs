@@ -17,6 +17,7 @@ pub(crate) enum ConsumedBy {
     HelpOverlay,
     RadialMenu,
     ColorPickerPopup,
+    FontPicker,
     PrecisionEntry,
     ContextMenu,
     BoardPicker,

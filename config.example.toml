@@ -122,6 +122,9 @@ select_eraser_tool = ["D"]
 toggle_eraser_mode = ["Ctrl+Shift+E"]
 # Step the text font through drawing.font_cycle
 cycle_font_family = ["Shift+T"]
+# Open the font picker over every installed family (unbound by default;
+# also on the command palette as "Font Picker")
+open_font_picker = []
 # Step stroke smoothing up and down (unbound by default)
 increase_pen_smoothing = []
 decrease_pen_smoothing = []
@@ -1093,6 +1096,7 @@ marker_opacity = 0.32
 
 # Font families the "Cycle Font Family" action steps through (Shift+T).
 # Any installed family name works. An empty list turns the action off.
+# Names are matched without case, so ["Sans", "sans"] loads as one entry.
 font_cycle = ["Sans", "Monospace", "Serif"]
 
 # How much a finished freehand or marker stroke is smoothed (0 - 6).
@@ -1100,6 +1104,9 @@ font_cycle = ["Sans", "Monospace", "Serif"]
 # 0 keeps the exact path the pointer drew. Higher values clean up the shake of
 # the hand. Smoothing runs when you lift the pen, never while you draw, so the
 # live stroke always sits exactly on the pointer. Neither endpoint ever moves.
+#
+# Also on the toolbar as the "Smoothing" slider while the Pen or Marker is up.
+# A session remembers the level it was saved at; this is the starting value.
 pen_smoothing = 3
 
 # Default fill state for fill-capable shapes

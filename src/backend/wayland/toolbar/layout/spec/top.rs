@@ -59,6 +59,10 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_AUTO_NUMBER_W: f64 = 108.0;
     /// Counter reset button width.
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_RESET_W: f64 = 56.0;
+    /// Font-family picker button width. Wider than the counter reset because
+    /// it carries a family name rather than a fixed word; the model already
+    /// shortens names to fit.
+    pub(in crate::backend::wayland::toolbar) const TOP_STYLE_FONT_PICK_W: f64 = 96.0;
     /// Two-segment control width.
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SEGMENT_W: f64 = 120.0;
     /// Extra clear gap before a segmented control in the pill, on top of the

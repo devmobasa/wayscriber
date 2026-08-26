@@ -10,7 +10,7 @@
 //! blur tools already use for their variants.
 
 use super::InputState;
-use crate::draw::{FontDescriptor, Shape};
+use crate::draw::{FontDescriptor, families_match};
 
 impl InputState {
     /// Install the configured list. Blank and repeated names are the config
@@ -25,15 +25,23 @@ impl InputState {
     /// A family that is not in the list steps to the first entry rather than
     /// nowhere: the list is where the action can go, not a claim about where the
     /// font has been.
+    ///
+    /// Names are matched without case, because fontconfig resolves them that
+    /// way. Comparing exactly would make `sans` a family the list does not hold,
+    /// and the first step would restyle nothing but the spelling.
     pub(crate) fn next_font_family(&self, current: &str) -> Option<String> {
         if self.font_cycle.is_empty() {
             return None;
         }
-        let next = match self.font_cycle.iter().position(|family| family == current) {
+        let next = match self
+            .font_cycle
+            .iter()
+            .position(|family| families_match(family, current))
+        {
             Some(index) => &self.font_cycle[(index + 1) % self.font_cycle.len()],
             None => &self.font_cycle[0],
         };
-        (next != current).then(|| next.clone())
+        (!families_match(next, current)).then(|| next.clone())
     }
 
     /// Step the font and say what it landed on.
@@ -77,60 +85,19 @@ impl InputState {
         true
     }
 
-    /// Whether the selection holds anything a font applies to.
-    fn selection_has_text(&self) -> bool {
-        let frame = self.boards.active_frame();
-        self.selected_shape_ids().iter().any(|id| {
-            matches!(
-                frame.shape(*id).map(|drawn| &drawn.shape),
-                Some(Shape::Text { .. } | Shape::StickyNote { .. })
-            )
-        })
-    }
-
     /// Step every selected text shape to the next family in the list.
     ///
     /// The step is decided once, from the first selected text shape, so a mixed
     /// selection converges on one family instead of fanning out further.
     fn cycle_selected_font_family(&mut self) -> bool {
-        let current = {
-            let frame = self.boards.active_frame();
-            self.selected_shape_ids().iter().find_map(|id| {
-                match frame.shape(*id).map(|drawn| &drawn.shape) {
-                    Some(
-                        Shape::Text {
-                            font_descriptor, ..
-                        }
-                        | Shape::StickyNote {
-                            font_descriptor, ..
-                        },
-                    ) => Some(font_descriptor.family.clone()),
-                    _ => None,
-                }
-            })
-        };
-        let Some(next) = current.and_then(|family| self.next_font_family(&family)) else {
+        let Some(next) = self
+            .first_selected_text_family()
+            .and_then(|family| self.next_font_family(&family))
+        else {
             return false;
         };
 
-        let target = next.clone();
-        let result = self.apply_selection_change(
-            |shape| matches!(shape, Shape::Text { .. } | Shape::StickyNote { .. }),
-            move |shape| match shape {
-                Shape::Text {
-                    font_descriptor, ..
-                }
-                | Shape::StickyNote {
-                    font_descriptor, ..
-                } if font_descriptor.family != target => {
-                    font_descriptor.family = target.clone();
-                    true
-                }
-                _ => false,
-            },
-        );
-
-        let changed = self.report_selection_apply_result(result, "font");
+        let changed = self.apply_family_to_selected_text(&next);
         if changed {
             log::info!("Selected text font family set to {next}");
         }
@@ -143,6 +110,7 @@ const FONT_CYCLE_TOAST_SOURCE: &str = "font-cycle";
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::draw::Shape;
     use crate::input::state::test_support::make_test_input_state;
 
     fn state_with_cycle() -> InputState {
@@ -176,6 +144,16 @@ mod tests {
             Some("Sans"),
             "the list says where the action can go, not where the font has been"
         );
+    }
+
+    #[test]
+    fn a_family_spelled_in_another_case_is_the_same_family() {
+        let state = state_with_cycle();
+
+        // Fontconfig resolves `sans` and `Sans` to one font. A step from the
+        // first to the second would change the spelling and nothing else.
+        assert_eq!(state.next_font_family("sans").as_deref(), Some("Monospace"));
+        assert_eq!(state.next_font_family("SERIF").as_deref(), Some("Sans"));
     }
 
     #[test]

@@ -547,7 +547,7 @@ fn draw_preview_swatch(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: C
     let _ = ctx.fill();
 
     // Border
-    let luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
+    let luminance = crate::draw::perceived_luminance(color.r, color.g, color.b);
     if luminance < 0.3 {
         constants::set_color(ctx, SWATCH_BORDER_ON_DARK);
     } else {

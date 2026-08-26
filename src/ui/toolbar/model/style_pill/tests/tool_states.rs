@@ -55,6 +55,92 @@ fn spotlight_state_is_a_magnification_slider_without_stroke_controls() {
 }
 
 #[test]
+fn the_smoothing_slider_reads_and_writes_whole_passes() {
+    let mut snapshot = snapshot_for_tool(Tool::Pen);
+    snapshot.pen_smoothing = 3;
+
+    let slider = StylePillControl::PenSmoothingSlider;
+    assert_eq!(
+        slider.event(&snapshot),
+        Some(ToolbarEvent::SetPenSmoothing(3))
+    );
+    assert_eq!(
+        slider.slider(&snapshot),
+        Some((ToolbarSliderSpec::PEN_SMOOTHING, 3.0))
+    );
+    assert_eq!(slider.value_text(&snapshot).as_deref(), Some("3"));
+
+    // Zero passes is a state, not a quantity.
+    snapshot.pen_smoothing = 0;
+    assert_eq!(slider.value_text(&snapshot).as_deref(), Some("Off"));
+}
+
+#[test]
+fn the_smoothing_slider_follows_the_tool_it_can_change() {
+    // Pen and Marker accumulate the paths smoothing runs on. Line and Blur
+    // share the Stroke control group but draw no path, so a slider there
+    // would be a control that does nothing to what is about to be drawn.
+    for tool in [Tool::Pen, Tool::Marker] {
+        let spec = StylePillSpec::build(&snapshot_for_tool(tool), &plan());
+        assert!(
+            control_ids(&spec).contains(&"top.style.pen-smoothing".to_string()),
+            "{tool:?} draws a smoothed stroke"
+        );
+    }
+    for tool in [Tool::Line, Tool::Blur, Tool::Rect, Tool::Eraser] {
+        let spec = StylePillSpec::build(&snapshot_for_tool(tool), &plan());
+        assert!(
+            !control_ids(&spec).contains(&"top.style.pen-smoothing".to_string()),
+            "{tool:?} draws nothing smoothing reaches"
+        );
+    }
+}
+
+#[test]
+fn the_font_button_shows_the_family_in_use_and_opens_the_picker() {
+    let mut snapshot = snapshot();
+    snapshot.text_active = true;
+    snapshot.font = crate::draw::FontDescriptor::new(
+        "Noto Sans CJK JP Black".to_string(),
+        "normal".to_string(),
+        "normal".to_string(),
+    );
+
+    let button = StylePillControl::FontFamilyPicker;
+    assert_eq!(button.event(&snapshot), Some(ToolbarEvent::OpenFontPicker));
+    assert_eq!(button.role(), StylePillRole::Button);
+    assert!(
+        button.label(&snapshot).chars().count() <= 13,
+        "the pill is width-planned; got {:?}",
+        button.label(&snapshot)
+    );
+    assert_eq!(
+        button.tooltip(&snapshot).as_deref(),
+        Some("Noto Sans CJK JP Black - choose from every installed font"),
+        "the full name has to be readable somewhere"
+    );
+}
+
+#[test]
+fn a_squeezed_pill_sheds_its_extras_before_it_sheds_the_color_chip() {
+    let mut snapshot = snapshot_for_tool(Tool::Pen);
+    snapshot.show_text_controls = true;
+    let mut squeezed = plan();
+    squeezed.drop_style_extras = true;
+
+    let ids = control_ids(&StylePillSpec::build(&snapshot, &squeezed));
+
+    assert!(!ids.contains(&"top.style.pen-smoothing".to_string()));
+    assert!(!ids.contains(&"top.style.font-family-picker".to_string()));
+    assert!(
+        ids.contains(&"top.style.color-chip".to_string())
+            && ids.contains(&"top.style.thickness".to_string())
+            && ids.contains(&"top.style.font-family".to_string()),
+        "the pill's core stays: {ids:?}"
+    );
+}
+
+#[test]
 fn spotlight_state_exposes_an_inline_missing_source_hint() {
     let mut snapshot = snapshot_for_tool(Tool::Spotlight);
     snapshot.spotlight_magnification = 2.25;
@@ -141,6 +227,8 @@ fn stroke_state_orders_chip_swatches_slider_and_numeral() {
     expected.extend((0..swatch_count).map(|index| format!("top.style.swatch.{index}")));
     expected.push("top.style.thickness".to_string());
     expected.push("top.style.thickness-value".to_string());
+    // The pen draws the strokes smoothing applies to, so the pill offers it.
+    expected.push("top.style.pen-smoothing".to_string());
     assert_eq!(control_ids(&spec), expected);
 
     let chip = spec.controls()[0];
@@ -425,16 +513,22 @@ fn text_state_is_swatches_size_and_font_segment() {
     assert_eq!(spec.state(), StylePillState::Text);
     let ids = control_ids(&spec);
     assert!(ids.contains(&"top.style.color-chip".to_string()));
-    let tail: Vec<_> = ids.iter().rev().take(3).rev().cloned().collect();
+    let tail: Vec<_> = ids.iter().rev().take(4).rev().cloned().collect();
     assert_eq!(
         tail,
         [
             "top.style.font-size",
             "top.style.font-size-value",
             "top.style.font-family",
+            // Sans/Mono are the two the segment offers; this reaches the rest.
+            "top.style.font-family-picker",
         ]
     );
     assert!(!ids.contains(&"top.style.thickness".to_string()));
+    assert!(
+        !ids.contains(&"top.style.pen-smoothing".to_string()),
+        "typing text draws no stroke for smoothing to reach"
+    );
 
     let slider = StylePillControl::FontSizeSlider;
     assert_eq!(
@@ -466,7 +560,26 @@ fn text_state_is_swatches_size_and_font_segment() {
         &segments[1].event,
         ToolbarEvent::SetFont(font) if font.family == "Monospace"
     ));
-    assert_eq!(segments[0].active, snapshot.font.family == "Sans");
+    assert!(segments[0].active);
+    assert!(!segments[1].active);
+}
+
+#[test]
+fn font_family_segments_use_the_shared_trimmed_case_insensitive_identity() {
+    let mut snapshot = snapshot();
+    snapshot.font.family = "  sAnS  ".to_string();
+    let segments = StylePillControl::FontFamilySegment
+        .segments(&snapshot)
+        .expect("font segments");
+    assert!(segments[0].active);
+    assert!(!segments[1].active);
+
+    snapshot.font.family = "  MONOSPACE  ".to_string();
+    let segments = StylePillControl::FontFamilySegment
+        .segments(&snapshot)
+        .expect("font segments");
+    assert!(!segments[0].active);
+    assert!(segments[1].active);
 }
 
 #[test]

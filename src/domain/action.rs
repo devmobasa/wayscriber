@@ -44,6 +44,7 @@ pub enum Action {
     IncreasePenSmoothing,
     DecreasePenSmoothing,
     CycleFontFamily,
+    OpenFontPicker,
     SelectSelectionTool,
     SelectMarkerTool,
     SelectStepMarkerTool,

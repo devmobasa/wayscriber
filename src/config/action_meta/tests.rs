@@ -177,6 +177,7 @@ const EXPECTED_COMMAND_PALETTE_ACTIONS: &[Action] = &[
     Action::SelectEraserTool,
     Action::ToggleEraserMode,
     Action::CycleFontFamily,
+    Action::OpenFontPicker,
     Action::IncreasePenSmoothing,
     Action::DecreasePenSmoothing,
     Action::SelectSpotlightTool,

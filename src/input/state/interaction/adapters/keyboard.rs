@@ -71,6 +71,17 @@ pub(crate) fn handle_color_picker_key(state: &mut InputState, key: Key) -> Optio
         .then_some(RoutingOutcome::Consumed(ConsumedBy::ColorPickerPopup))
 }
 
+/// The picker types into its own query, so it needs the character the key
+/// produced rather than only the key itself.
+pub(crate) fn handle_font_picker_key(
+    state: &mut InputState,
+    key: Key,
+    text: Option<&str>,
+) -> Option<RoutingOutcome> {
+    (state.is_font_picker_open() && state.handle_font_picker_key(key, text))
+        .then_some(RoutingOutcome::Consumed(ConsumedBy::FontPicker))
+}
+
 pub(crate) fn handle_context_menu_key(state: &mut InputState, key: Key) -> Option<RoutingOutcome> {
     (state.is_context_menu_open() && state.handle_context_menu_key(key))
         .then_some(RoutingOutcome::Consumed(ConsumedBy::ContextMenu))

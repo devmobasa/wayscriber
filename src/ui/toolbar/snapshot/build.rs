@@ -112,6 +112,7 @@ impl ToolbarSnapshot {
             eraser_kind,
             eraser_mode,
             marker_opacity: state.marker_opacity,
+            pen_smoothing: state.pen_smoothing,
             spotlight_magnification: state.spotlight_magnification,
             // Filled in by the backend that renders the canvas; see the field.
             spotlight_magnifier_source: None,

@@ -59,6 +59,9 @@ impl InputState {
             Action::CycleFontFamily => {
                 self.cycle_font_family();
             }
+            Action::OpenFontPicker => {
+                self.open_font_picker();
+            }
             Action::IncreasePenSmoothing => self.announce_pen_smoothing(1),
             Action::DecreasePenSmoothing => self.announce_pen_smoothing(-1),
             Action::ToggleEraserMode => {

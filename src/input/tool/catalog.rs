@@ -479,6 +479,17 @@ impl Tool {
         self.descriptor().drawing
     }
 
+    /// Whether `[drawing] pen_smoothing` changes what this tool commits.
+    ///
+    /// The setting is one number for the whole program, but the control for it
+    /// is not: offering a smoothing slider while the Line or Blur tool is up
+    /// would be a control that does nothing to the shape about to be drawn.
+    /// Accumulated paths — freehand and marker — are the ones smoothed on
+    /// release.
+    pub(crate) fn smooths_strokes(self) -> bool {
+        matches!(self.drawing_behavior(), ToolDrawingBehavior::Path { .. })
+    }
+
     pub(crate) fn settings_slot(self) -> ToolSettingsSlot {
         self.profile().settings_slot
     }

@@ -52,6 +52,48 @@ fn snapshot_includes_frames_and_tool_state() {
 }
 
 #[test]
+fn non_default_pen_smoothing_survives_snapshot_serialization_and_restore() {
+    let mut source = dummy_input_state();
+    let _ = source.set_pen_smoothing(5);
+    assert_eq!(source.pen_smoothing, 5, "the fixture must be non-default");
+
+    let captured = ToolStateSnapshot::from_input_state(&source);
+    let encoded = serde_json::to_vec(&captured).expect("serialize tool snapshot");
+    let decoded: ToolStateSnapshot =
+        serde_json::from_slice(&encoded).expect("deserialize tool snapshot");
+
+    let mut restored = dummy_input_state();
+    let _ = restored.set_pen_smoothing(1);
+    apply_tool_state_snapshot(&mut restored, decoded);
+
+    assert_eq!(restored.pen_smoothing, 5);
+}
+
+#[test]
+fn legacy_snapshot_without_pen_smoothing_preserves_the_configured_level() {
+    let source = dummy_input_state();
+    let mut legacy =
+        serde_json::to_value(ToolStateSnapshot::from_input_state(&source)).expect("tool snapshot");
+    let object = legacy.as_object_mut().expect("tool snapshot is an object");
+    assert!(
+        object.remove("pen_smoothing").is_some(),
+        "the fixture must remove a field current sessions write"
+    );
+    let decoded: ToolStateSnapshot =
+        serde_json::from_value(legacy).expect("legacy tool snapshot still loads");
+    assert_eq!(decoded.pen_smoothing, None);
+
+    let mut restored = dummy_input_state();
+    let _ = restored.set_pen_smoothing(4);
+    apply_tool_state_snapshot(&mut restored, decoded);
+
+    assert_eq!(
+        restored.pen_smoothing, 4,
+        "a missing legacy field must leave the config-seeded value alone"
+    );
+}
+
+#[test]
 fn snapshot_uses_pre_light_mode_tool_state() {
     let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-light");
     options.restore_tool_state = true;
@@ -320,6 +362,7 @@ fn apply_legacy_snapshot_preserves_config_initialized_font_descriptor() {
             eraser_mode: EraserMode::Brush,
             blur_style: Default::default(),
             recent_colors: Vec::new(),
+            pen_smoothing: None,
             marker_opacity: Some(0.32),
             spotlight_magnification: None,
             fill_enabled: Some(false),
@@ -375,6 +418,7 @@ fn apply_snapshot_clamps_restored_per_tool_thicknesses() {
             eraser_mode: EraserMode::Brush,
             blur_style: Default::default(),
             recent_colors: Vec::new(),
+            pen_smoothing: None,
             marker_opacity: Some(0.32),
             spotlight_magnification: None,
             fill_enabled: Some(false),
@@ -425,6 +469,7 @@ fn apply_legacy_snapshot_uses_font_derived_step_marker_size() {
             eraser_mode: EraserMode::Brush,
             blur_style: Default::default(),
             recent_colors: Vec::new(),
+            pen_smoothing: None,
             marker_opacity: Some(0.32),
             spotlight_magnification: None,
             fill_enabled: Some(false),

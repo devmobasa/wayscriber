@@ -37,6 +37,7 @@ impl KeybindingsConfig {
             Action::DecreasePenSmoothing,
         )?;
         inserter.insert_all(&self.tools.cycle_font_family, Action::CycleFontFamily)?;
+        inserter.insert_all(&self.tools.open_font_picker, Action::OpenFontPicker)?;
         inserter.insert_all(&self.tools.cycle_blur_style, Action::CycleBlurStyle)?;
         inserter.insert_all(&self.tools.cycle_arrow_style, Action::CycleArrowStyle)?;
         inserter.insert_all(&self.tools.select_pen_tool, Action::SelectPenTool)?;

@@ -34,6 +34,7 @@ fn save_snapshot_errors_when_payload_exceeds_max_file_size() {
             eraser_mode: EraserMode::Brush,
             blur_style: Default::default(),
             recent_colors: Vec::new(),
+            pen_smoothing: None,
             marker_opacity: Some(0.32),
             spotlight_magnification: None,
             fill_enabled: Some(false),

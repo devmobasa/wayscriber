@@ -176,6 +176,7 @@ pub(crate) fn action_for_event(event: &ToolbarEvent) -> Option<Action> {
         ToolbarEvent::OpenAbout => Some(Action::OpenAbout),
         ToolbarEvent::OpenCommandPalette => Some(Action::ToggleCommandPalette),
         ToolbarEvent::PickScreenColor => Some(Action::PickScreenColor),
+        ToolbarEvent::OpenFontPicker => Some(Action::OpenFontPicker),
         _ => None,
     }
 }
@@ -500,6 +501,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::SetMarkerOpacity(_)
         | ToolbarEvent::NudgeMarkerOpacity(_)
         | ToolbarEvent::SetSpotlightMagnification(_)
+        | ToolbarEvent::SetPenSmoothing(_)
         | ToolbarEvent::SetEraserMode(_)
         | ToolbarEvent::SetFont(_)
         | ToolbarEvent::SetFontSize(_)
@@ -580,6 +582,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::PasteHexColor
         | ToolbarEvent::EditHexColor
         | ToolbarEvent::OpenColorPickerPopup
+        | ToolbarEvent::OpenFontPicker
         | ToolbarEvent::OpenPrecisionEntry(_)
         | ToolbarEvent::CommitPrecisionEntry { .. }
         | ToolbarEvent::CancelPrecisionEntry

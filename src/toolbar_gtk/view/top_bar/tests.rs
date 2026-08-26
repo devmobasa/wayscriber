@@ -812,6 +812,23 @@ fn assert_gtk_control_widget(widget: &gtk4::Widget, expected: &SemanticControlRe
 /// Assert one GTK style-pill widget against its shared-spec control: widget
 /// class per role, live label/value text, tooltip, active state, and the
 /// segment halves' labels/actives for segmented controls.
+/// Width the font button asks for, or `None` when this widget is not it.
+///
+/// The only pill label the system supplies rather than this program, so it is
+/// the only one whose width is not known in advance. `set_size_request` is a
+/// *minimum* in GTK: an unbounded label grows the button past the slot the
+/// layout planned and pushes the rest of the pill off the arrangement the
+/// builtin toolbar drew from the same plan.
+fn font_button_natural_width(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+) -> Option<i32> {
+    if control != model::StylePillControl::FontFamilyPicker {
+        return None;
+    }
+    Some(widget.measure(gtk4::Orientation::Horizontal, -1).1)
+}
+
 fn assert_gtk_style_widget(
     widget: &gtk4::Widget,
     control: model::StylePillControl,
@@ -1247,7 +1264,7 @@ fn expected_style_pill_nodes(
             continue;
         }
         nodes.push((id.clone(), StylePillNodeExpectation::Control(control)));
-        if control == model::StylePillControl::OpacitySlider {
+        if control.carries_inline_readout() {
             nodes.push((
                 format!("{id}.readout"),
                 StylePillNodeExpectation::Readout(control),
@@ -1611,8 +1628,21 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     );
     let mut text_mode = style_pill_tool_snapshot(&regular, Tool::Pen);
     text_mode.text_active = true;
-    scenarios.push(("text-mode", text_mode));
+    scenarios.push(("text-mode", text_mode.clone()));
+    // A family name far wider than the font button's planned slot.
+    let mut long_font = text_mode;
+    long_font.font = crate::draw::FontDescriptor::new(
+        "Noto Sans Mono CJK JP ExtraCondensed Black".to_string(),
+        "normal".to_string(),
+        "normal".to_string(),
+    );
+    scenarios.push(("long-font-name", long_font));
     scenarios.push(("selection", style_pill_selection_snapshot(&regular)));
+
+    // Font-button widths by scenario, checked against each other after the
+    // loop: the slot is theme-dependent, but it must not depend on the name.
+    let mut font_button_widths: std::collections::BTreeMap<&str, i32> =
+        std::collections::BTreeMap::new();
 
     for (name, snapshot) in scenarios {
         let plan = plan_top_strip(&snapshot);
@@ -1663,6 +1693,9 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
                 .find(|(control_id, _)| *control_id == id)
             {
                 assert_gtk_style_widget(&widget, *control, &snapshot);
+                if let Some(width) = font_button_natural_width(&widget, *control) {
+                    font_button_widths.insert(name, width);
+                }
                 continue;
             }
             let Some(control) = expected.iter().find_map(|record| match record {
@@ -1681,6 +1714,23 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         }
         detach_test_popovers(&mut top);
     }
+
+    // The font button's width must come from the layout plan, not from the
+    // family it happens to name. Shortening the string by character count is
+    // not enough on its own: a display face draws twelve wide characters wider
+    // than twelve narrow ones.
+    let short = font_button_widths
+        .get("text-mode")
+        .copied()
+        .expect("the text-mode pill has a font button");
+    let long = font_button_widths
+        .get("long-font-name")
+        .copied()
+        .expect("the long-font-name pill has a font button");
+    assert_eq!(
+        long, short,
+        "the font button grew from {short}px to {long}px for a longer family name"
+    );
 
     // Compact plans normally drop quick colors before reaching the last
     // degradation step. Keep a direct adapter case so the presentation

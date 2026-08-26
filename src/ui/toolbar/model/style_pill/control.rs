@@ -8,6 +8,7 @@ impl StylePillControl {
             Self::ThicknessSlider => Cow::Borrowed("top.style.thickness"),
             Self::ThicknessValue => Cow::Borrowed("top.style.thickness-value"),
             Self::OpacitySlider => Cow::Borrowed("top.style.opacity"),
+            Self::PenSmoothingSlider => Cow::Borrowed("top.style.pen-smoothing"),
             Self::SpotlightMagnificationSlider => {
                 Cow::Borrowed("top.style.spotlight-magnification")
             }
@@ -26,6 +27,7 @@ impl StylePillControl {
             Self::FontSizeSlider => Cow::Borrowed("top.style.font-size"),
             Self::FontSizeValue => Cow::Borrowed("top.style.font-size-value"),
             Self::FontFamilySegment => Cow::Borrowed("top.style.font-family"),
+            Self::FontFamilyPicker => Cow::Borrowed("top.style.font-family-picker"),
             Self::EraserModeSegment => Cow::Borrowed("top.style.eraser-mode"),
             Self::SelectionCycle(kind) | Self::SelectionStepper(kind) => {
                 Cow::Owned(format!("top.style.sel.{}", selection_kind_slug(kind)))
@@ -39,10 +41,13 @@ impl StylePillControl {
             Self::ThicknessSlider
             | Self::OpacitySlider
             | Self::SpotlightMagnificationSlider
+            | Self::PenSmoothingSlider
             | Self::FontSizeSlider => StylePillRole::Slider,
             Self::ThicknessValue | Self::FontSizeValue => StylePillRole::Value,
             Self::FillToggle | Self::AutoNumberToggle => StylePillRole::Toggle,
-            Self::CounterReset(_) | Self::ArrowStyleCycle => StylePillRole::Button,
+            Self::CounterReset(_) | Self::ArrowStyleCycle | Self::FontFamilyPicker => {
+                StylePillRole::Button
+            }
             Self::FontFamilySegment | Self::EraserModeSegment => StylePillRole::Segmented,
             Self::SelectionCycle(_) => StylePillRole::Button,
             Self::SelectionStepper(_) => StylePillRole::Stepper,
@@ -67,6 +72,8 @@ impl StylePillControl {
             Self::SpotlightMagnificationSlider => {
                 ToolbarEvent::SetSpotlightMagnification(snapshot.spotlight_magnification)
             }
+            Self::PenSmoothingSlider => ToolbarEvent::SetPenSmoothing(snapshot.pen_smoothing),
+            Self::FontFamilyPicker => ToolbarEvent::OpenFontPicker,
             Self::FontSizeSlider => ToolbarEvent::SetFontSize(snapshot.font_size),
             Self::FillToggle => ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
             Self::AutoNumberToggle => {
@@ -134,6 +141,10 @@ impl StylePillControl {
                 ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION,
                 snapshot.spotlight_magnification,
             )),
+            Self::PenSmoothingSlider => Some((
+                ToolbarSliderSpec::PEN_SMOOTHING,
+                f64::from(snapshot.pen_smoothing),
+            )),
             Self::FontSizeSlider => Some((ToolbarSliderSpec::FONT_SIZE, snapshot.font_size)),
             _ => None,
         }
@@ -159,10 +170,18 @@ impl StylePillControl {
             Self::SpotlightMagnificationSlider => Some(
                 crate::draw::format_spotlight_magnification(snapshot.spotlight_magnification),
             ),
+            // "Off" rather than "0": the number is a count of passes, and zero
+            // of them is a state worth naming rather than a quantity.
+            Self::PenSmoothingSlider => Some(if snapshot.pen_smoothing == 0 {
+                "Off".to_string()
+            } else {
+                snapshot.pen_smoothing.to_string()
+            }),
             Self::FontSizeSlider | Self::FontSizeValue => {
                 Some(format!("{:.0}pt", snapshot.font_size))
             }
             Self::ArrowStyleCycle => Some(snapshot.arrow_style.label().to_string()),
+            Self::FontFamilyPicker => Some(short_family_label(&snapshot.font.family)),
             Self::SelectionCycle(kind) | Self::SelectionStepper(kind) => {
                 selection_entry(snapshot, kind).map(|entry| entry.value.clone())
             }
@@ -175,6 +194,20 @@ impl StylePillControl {
     pub(crate) fn required_value_text(self, snapshot: &ToolbarSnapshot) -> String {
         self.value_text(snapshot)
             .expect("this style-pill control has a live value")
+    }
+
+    /// Whether this slider shows its value on its own rather than beside a
+    /// separate numeral button.
+    ///
+    /// Thickness and text size have numeral buttons of their own (which open
+    /// the precise-entry popup); the rest carry the readout inline. Both
+    /// frontends and the contract test key on this so they cannot disagree
+    /// about which sliders draw a value.
+    pub(crate) fn carries_inline_readout(self) -> bool {
+        matches!(
+            self,
+            Self::OpacitySlider | Self::SpotlightMagnificationSlider | Self::PenSmoothingSlider
+        )
     }
 
     /// Whether this control can ever carry an inline status, and so needs a
@@ -224,6 +257,7 @@ impl StylePillControl {
                 Cow::Borrowed(ToolContext::from_snapshot(snapshot).thickness_label)
             }
             Self::OpacitySlider => Cow::Borrowed("Marker opacity"),
+            Self::PenSmoothingSlider => Cow::Borrowed("Smoothing"),
             Self::SpotlightMagnificationSlider => Cow::Borrowed("Spotlight magnification"),
             Self::FontSizeSlider => Cow::Borrowed("Text size"),
             Self::ThicknessValue => Cow::Owned(format!("{:.0}px", snapshot.thickness)),
@@ -233,6 +267,9 @@ impl StylePillControl {
             Self::AutoNumberToggle => Cow::Borrowed("Auto-number"),
             Self::CounterReset(_) => Cow::Borrowed("Reset"),
             Self::FontFamilySegment => Cow::Borrowed("Font"),
+            // The family in use, shortened: the pill is width-planned, and a
+            // display face can be named at any length.
+            Self::FontFamilyPicker => Cow::Owned(short_family_label(&snapshot.font.family)),
             Self::EraserModeSegment => Cow::Borrowed("Eraser mode"),
             Self::SelectionCycle(kind) | Self::SelectionStepper(kind) => Cow::Owned(
                 selection_entry(snapshot, kind)
@@ -281,6 +318,14 @@ impl StylePillControl {
             )),
             Self::SelectionCycle(kind) => selection_entry(snapshot, kind)
                 .map(|entry| format!("{}: {}", entry.label, entry.value)),
+            Self::PenSmoothingSlider => Some(
+                "Smooth freehand and marker strokes when the pen lifts. Off keeps the exact path."
+                    .to_string(),
+            ),
+            Self::FontFamilyPicker => Some(format!(
+                "{} - choose from every installed font",
+                snapshot.font.family
+            )),
             Self::ThicknessSlider
             | Self::OpacitySlider
             | Self::FontSizeSlider
@@ -302,7 +347,7 @@ impl StylePillControl {
                         "bold".to_string(),
                         "normal".to_string(),
                     )),
-                    active: snapshot.font.family == "Sans",
+                    active: families_match(&snapshot.font.family, "Sans"),
                     tooltip: "Sans font".to_string(),
                 },
                 StylePillSegment {
@@ -313,7 +358,7 @@ impl StylePillControl {
                         "normal".to_string(),
                         "normal".to_string(),
                     )),
-                    active: snapshot.font.family == "Monospace",
+                    active: families_match(&snapshot.font.family, "Monospace"),
                     tooltip: "Monospace font".to_string(),
                 },
             ]),
@@ -400,5 +445,50 @@ impl StylePillControl {
     pub(crate) fn required_steps(self, snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
         self.steps(snapshot)
             .expect("this style-pill stepper has minus/plus halves")
+    }
+}
+
+/// A family name cut to something a width-planned pill can hold.
+///
+/// The full name is in the tooltip. Truncating here rather than in the
+/// frontends keeps both toolbars showing the same string, which is what the
+/// shared model is for.
+fn short_family_label(family: &str) -> String {
+    const MAX_CHARS: usize = 12;
+    let mut chars = family.chars();
+    let head: String = chars.by_ref().take(MAX_CHARS).collect();
+    if chars.next().is_some() {
+        format!("{}\u{2026}", head.trim_end())
+    } else {
+        head
+    }
+}
+
+#[cfg(test)]
+mod family_label_tests {
+    use super::short_family_label;
+
+    #[test]
+    fn a_short_family_name_is_shown_whole() {
+        assert_eq!(short_family_label("Sans"), "Sans");
+        assert_eq!(short_family_label("JetBrains M"), "JetBrains M");
+    }
+
+    #[test]
+    fn a_long_family_name_is_cut_rather_than_widening_the_pill() {
+        let label = short_family_label("Noto Sans CJK JP Black");
+
+        assert!(label.chars().count() <= 13, "got {label:?}");
+        assert!(label.ends_with('\u{2026}'), "got {label:?}");
+    }
+
+    #[test]
+    fn cutting_counts_characters_not_bytes() {
+        // A name that is not Latin still gets a readable head rather than a
+        // slice through the middle of a code point.
+        let label = short_family_label("\u{6e90}\u{754c}\u{9ed1}\u{4f53} CN Regular Extra");
+
+        assert!(label.ends_with('\u{2026}'), "got {label:?}");
+        assert!(label.starts_with('\u{6e90}'), "got {label:?}");
     }
 }

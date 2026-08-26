@@ -235,6 +235,16 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        OpenFontPicker,
+        "Font Picker",
+        None,
+        "Pick a text font from every one installed",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
         IncreasePenSmoothing,
         "Increase Pen Smoothing",
         None,

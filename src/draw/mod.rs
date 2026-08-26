@@ -20,7 +20,14 @@ pub mod spotlight;
 pub use canvas_set::{BoardPages, PageDeleteOutcome};
 pub use color::Color;
 pub use dirty::{DirtyFullReason, DirtyRegionReport, DirtyTracker};
-pub use font::FontDescriptor;
+pub use font::{
+    FontDescriptor, families_match, family_is_installed, monospace_font_families,
+    system_font_families,
+};
+pub(crate) use font::{
+    prewarm_system_font_catalog, system_font_catalog_is_ready, try_monospace_font_families,
+    try_system_font_families,
+};
 pub use frame::{DrawnShape, Frame, ShapeId};
 #[allow(unused_imports)]
 pub(crate) use render::render_eraser_stroke;
@@ -31,9 +38,9 @@ pub use render::{
     BlurRectParams, EraserReplayContext, IMMUTABLE_RASTER_SOURCE_TOKEN, SpotlightMagnifierMetrics,
     SpotlightMagnifierOutcome, SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass,
     SpotlightRegion, SpotlightSnapshotStrategy, caret_line_width, caret_outline_width,
-    painted_background_luminance, render_blur_rect, render_board_background,
+    painted_background_luminance, perceived_luminance, render_blur_rect, render_board_background,
     render_click_highlight, render_freehand_borrowed, render_marker_stroke_borrowed,
-    render_selection_halo, render_selection_handles, render_shape,
+    render_selection_halo, render_selection_handles, render_shape, render_shape_over,
     render_spotlight_magnification_pass, render_spotlight_pass, render_sticky_note, render_text,
     selection_handle_rects, spotlight_regions_for_frame, sticky_note_foreground,
     text_outline_color,
@@ -41,9 +48,8 @@ pub use render::{
 #[allow(unused_imports)]
 pub use shape::{
     ArrowLabel, ArrowStyle, BlurStyle, EmbeddedImage, EraserBrush, EraserKind, MAX_PEN_SMOOTHING,
-    PolygonKind,
-    REGULAR_POLYGON_DEFAULT_SIDES, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES, Shape,
-    StepMarkerLabel, clamp_regular_sides,
+    PolygonKind, REGULAR_POLYGON_DEFAULT_SIDES, REGULAR_POLYGON_MAX_SIDES,
+    REGULAR_POLYGON_MIN_SIDES, Shape, StepMarkerLabel, clamp_regular_sides,
 };
 pub use spotlight::{
     DEFAULT_SPOTLIGHT_MAGNIFICATION, MAX_SPOTLIGHT_MAGNIFICATION, MIN_SPOTLIGHT_MAGNIFICATION,

@@ -21,19 +21,21 @@ pub(crate) enum ModalSurface {
     RadialMenu,
     PrecisionEntry,
     ColorPicker,
+    FontPicker,
     ContextMenu,
     BoardPicker,
     PropertiesPanel,
 }
 
 impl ModalSurface {
-    pub(crate) const ALL: [ModalSurface; 9] = [
+    pub(crate) const ALL: [ModalSurface; 10] = [
         ModalSurface::Tour,
         ModalSurface::CommandPalette,
         ModalSurface::HelpOverlay,
         ModalSurface::RadialMenu,
         ModalSurface::PrecisionEntry,
         ModalSurface::ColorPicker,
+        ModalSurface::FontPicker,
         ModalSurface::ContextMenu,
         ModalSurface::BoardPicker,
         ModalSurface::PropertiesPanel,
@@ -63,8 +65,28 @@ impl ModalSurface {
     fn blocks_canvas_key_repeat(self) -> bool {
         matches!(
             self,
-            ModalSurface::CommandPalette | ModalSurface::ColorPicker | ModalSurface::PrecisionEntry
+            ModalSurface::CommandPalette
+                | ModalSurface::ColorPicker
+                | ModalSurface::FontPicker
+                | ModalSurface::PrecisionEntry
         )
+    }
+
+    /// Whether a wheel tick belongs to this surface rather than the canvas.
+    ///
+    /// The axis handler ends in a fall-through that adjusts stroke thickness
+    /// (or text size with Shift). Every surface that covers the canvas has to
+    /// stop the wheel before it gets there, or scrolling over a modal silently
+    /// edits the tool behind it. That was a per-surface `if` in the handler and
+    /// three surfaces had been forgotten, so the rule lives here: a surface
+    /// that covers the canvas owns the wheel, whether or not it has anything to
+    /// scroll.
+    ///
+    /// The properties panel is deliberately out. It docks beside the canvas
+    /// rather than over it, and the canvas stays drawable underneath — so the
+    /// wheel still means what it means everywhere else.
+    fn owns_wheel(self) -> bool {
+        !matches!(self, ModalSurface::PropertiesPanel)
     }
 }
 
@@ -78,6 +100,7 @@ impl InputState {
             ModalSurface::RadialMenu => self.is_radial_menu_open(),
             ModalSurface::PrecisionEntry => self.is_precision_entry_open(),
             ModalSurface::ColorPicker => self.is_color_picker_popup_open(),
+            ModalSurface::FontPicker => self.is_font_picker_open(),
             ModalSurface::ContextMenu => self.is_context_menu_open(),
             ModalSurface::BoardPicker => self.is_board_picker_open(),
             ModalSurface::PropertiesPanel => self.is_properties_panel_open(),
@@ -121,6 +144,7 @@ impl InputState {
                 self.cancel_precision_entry();
             }
             ModalSurface::ColorPicker => self.close_color_picker_popup(true),
+            ModalSurface::FontPicker => self.close_font_picker(),
             ModalSurface::ContextMenu => self.close_context_menu(),
             ModalSurface::BoardPicker => self.close_board_picker(),
             ModalSurface::PropertiesPanel => self.close_properties_panel(),
@@ -134,6 +158,25 @@ impl InputState {
         for other in ModalSurface::ALL {
             if other != opening && !opening.keeps_open(other) && self.modal_is_open(other) {
                 self.close_modal(other);
+            }
+        }
+    }
+
+    /// Close everything a screen-region modal must not compete with, and
+    /// cancel any unfinished gesture. Shared by the eyedropper and OCR: both
+    /// take over pointer input entirely while they are up.
+    ///
+    /// Every registered surface, rather than a list kept by hand. The hand list
+    /// had drifted: the font picker and the precise-entry popup were both
+    /// missing, so a selector opened over one of them hid it and left it to
+    /// reappear when the selector closed. Going through the registry also means
+    /// each surface is dismissed by its own closer — the tour used to be a bare
+    /// flag clear here, which left the toolbar chrome it hides still hidden.
+    pub(crate) fn prepare_for_screen_modal(&mut self) {
+        self.cancel_active_interaction();
+        for surface in ModalSurface::ALL {
+            if self.modal_is_open(surface) {
+                self.close_modal(surface);
             }
         }
     }
@@ -165,6 +208,23 @@ impl InputState {
                 .any(|surface| surface.blocks_canvas_key_repeat() && self.modal_is_open(surface))
     }
 
+    /// Whether an open surface claims the wheel, so an axis frame must not
+    /// fall through to the canvas tool behind it.
+    ///
+    /// Surfaces with something to scroll handle their own frames before this is
+    /// consulted; this is what swallows the rest.
+    pub fn modal_owns_wheel(&self) -> bool {
+        // The eyedropper and the region selectors are not registry surfaces but
+        // cover the screen just as completely. `is_active` rather than
+        // `is_engaged`, matching the press/motion/release boundary: while a
+        // capture is still pending nothing is drawn over the canvas and the
+        // pointer still belongs to it.
+        self.screen_modal_is_active()
+            || ModalSurface::ALL
+                .into_iter()
+                .any(|surface| surface.owns_wheel() && self.modal_is_open(surface))
+    }
+
     /// Whether either screen-region modal — the eyedropper or the generalized
     /// OCR/capture/measure region selector — has been asked for, including
     /// while a capture-backed purpose still waits on its screen image.
@@ -189,5 +249,86 @@ impl InputState {
     /// cancelled first leaves it intact.
     pub(crate) fn screen_modal_is_active(&self) -> bool {
         self.eyedropper_is_active() || self.region_is_active()
+    }
+}
+
+#[cfg(test)]
+mod wheel_tests {
+    use super::ModalSurface;
+    use crate::input::state::test_support::make_test_input_state;
+
+    #[test]
+    fn a_surface_covering_the_canvas_claims_the_wheel() {
+        // Without this the axis handler falls through to the tool behind the
+        // panel, and scrolling over a modal quietly changes the pen.
+        let mut state = make_test_input_state();
+        assert!(!state.modal_owns_wheel(), "nothing is open");
+
+        state.open_font_picker();
+        assert!(state.modal_owns_wheel(), "font picker");
+        state.close_font_picker();
+
+        state.open_color_picker_popup();
+        assert!(state.modal_owns_wheel(), "colour picker");
+        state.close_color_picker_popup(false);
+
+        state.open_precision_entry(crate::ui::toolbar::PrecisionEntryTarget::Thickness);
+        assert!(state.modal_owns_wheel(), "precision entry");
+    }
+
+    #[test]
+    fn a_screen_selector_claims_the_wheel_the_way_it_claims_the_pointer() {
+        // The eyedropper and the region selectors are not registry surfaces but
+        // cover the screen just as completely. Press, motion, and release all
+        // stop at them; the wheel used to carry on to zoom, Spotlight, and
+        // stroke thickness behind them.
+        let mut state = make_test_input_state();
+        state.activate_eyedropper(None);
+
+        assert!(state.eyedropper_is_active());
+        assert!(state.modal_owns_wheel());
+    }
+
+    #[test]
+    fn a_screen_selector_closes_every_registered_surface_it_covers() {
+        // Not a list kept by hand: one that drifts leaves a surface hidden
+        // under the selector, to reappear when it closes.
+        let mut state = make_test_input_state();
+        state.open_font_picker();
+        assert!(state.is_font_picker_open());
+
+        state.prepare_for_screen_modal();
+
+        assert!(!state.is_font_picker_open());
+        assert!(
+            ModalSurface::ALL
+                .into_iter()
+                .all(|surface| !state.modal_is_open(surface)),
+            "a screen selector leaves nothing open behind it"
+        );
+    }
+
+    #[test]
+    fn the_properties_panel_leaves_the_wheel_to_the_canvas() {
+        // It docks beside the canvas rather than over it, and the canvas stays
+        // drawable underneath, so the wheel still means what it means elsewhere.
+        let mut state = make_test_input_state();
+        let id = state
+            .boards
+            .active_frame_mut()
+            .add_shape(crate::draw::Shape::Rect {
+                x: 0,
+                y: 0,
+                w: 10,
+                h: 10,
+                fill: false,
+                color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
+                thick: 2.0,
+            });
+        state.set_selection(vec![id]);
+        assert!(state.show_properties_panel());
+
+        assert!(state.is_properties_panel_open());
+        assert!(!state.modal_owns_wheel());
     }
 }

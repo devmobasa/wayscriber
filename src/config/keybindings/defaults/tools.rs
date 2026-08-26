@@ -52,6 +52,12 @@ pub(crate) fn default_cycle_font_family() -> Vec<String> {
     vec!["Shift+T".to_string()]
 }
 
+/// Unbound by default. `Shift+T` already covers the mid-demo case, and the
+/// picker is a setup gesture reached from the command palette.
+pub(crate) fn default_open_font_picker() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_cycle_blur_style() -> Vec<String> {
     Vec::new()
 }

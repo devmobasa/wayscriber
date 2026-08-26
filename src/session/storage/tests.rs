@@ -53,6 +53,7 @@ fn sample_tool_state() -> ToolStateSnapshot {
         eraser_mode: crate::input::EraserMode::Brush,
         blur_style: Default::default(),
         recent_colors: Vec::new(),
+        pen_smoothing: None,
         marker_opacity: Some(0.32),
         spotlight_magnification: None,
         fill_enabled: Some(false),

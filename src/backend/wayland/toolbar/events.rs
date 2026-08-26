@@ -13,6 +13,7 @@ pub enum HitKind {
         max: f64,
     },
     DragSetSpotlightMagnification,
+    DragSetPenSmoothing,
     DragSetFontSize,
     DragUndoDelay,
     DragRedoDelay,
@@ -49,6 +50,7 @@ impl HitKind {
             HitKind::DragSetThickness { .. }
             | HitKind::DragSetMarkerOpacity { .. }
             | HitKind::DragSetSpotlightMagnification
+            | HitKind::DragSetPenSmoothing
             | HitKind::DragSetFontSize
             | HitKind::DragUndoDelay
             | HitKind::DragRedoDelay

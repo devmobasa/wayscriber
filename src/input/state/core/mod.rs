@@ -7,6 +7,7 @@ mod command_palette;
 mod dirty;
 mod eyedropper;
 mod font_cycle;
+pub(crate) mod font_picker;
 mod highlight_controls;
 mod history;
 mod ime;
@@ -24,6 +25,7 @@ mod session;
 mod session_preflight;
 mod session_preflight_exact;
 mod status_hud;
+mod text_font;
 mod tool_controls;
 mod tour;
 pub(crate) mod utility;
@@ -69,10 +71,14 @@ pub use command_palette::{
     COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint, CommandPaletteListRow,
 };
 pub use eyedropper::{EyedropperCaptureSource, EyedropperUiState};
+#[allow(unused_imports)]
+pub use font_picker::{
+    FontPickerFilter, FontPickerLayout, FontPickerResults, FontPickerRow, FontPickerTarget,
+    font_picker_layout, font_picker_rows,
+};
 #[cfg(test)]
 pub(crate) use ime::build_text_input_preview;
 pub use ime::{ImeCompositionState, ImePreedit};
-#[allow(unused_imports)]
 pub use menus::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,
 };

@@ -44,6 +44,10 @@ pub struct ToolKeybindingsConfig {
     #[serde(default = "default_cycle_font_family")]
     pub cycle_font_family: Vec<String>,
 
+    /// Open the system font picker.
+    #[serde(default = "default_open_font_picker")]
+    pub open_font_picker: Vec<String>,
+
     #[serde(default = "default_cycle_blur_style")]
     pub cycle_blur_style: Vec<String>,
 
@@ -120,6 +124,7 @@ impl Default for ToolKeybindingsConfig {
             increase_pen_smoothing: default_increase_pen_smoothing(),
             decrease_pen_smoothing: default_decrease_pen_smoothing(),
             cycle_font_family: default_cycle_font_family(),
+            open_font_picker: default_open_font_picker(),
             cycle_blur_style: default_cycle_blur_style(),
             cycle_arrow_style: default_cycle_arrow_style(),
             select_pen_tool: default_select_pen_tool(),

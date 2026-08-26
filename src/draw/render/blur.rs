@@ -368,7 +368,7 @@ fn average_surface_stats(surface: &mut cairo::ImageSurface) -> Option<BlurSurfac
             total_red += red;
             total_green += green;
             total_blue += blue;
-            total += red * 0.299 + green * 0.587 + blue * 0.114;
+            total += super::perceived_luminance(red, green, blue);
             count += 1;
         }
     }

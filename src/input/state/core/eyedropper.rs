@@ -92,27 +92,6 @@ impl InputState {
             .flatten()
     }
 
-    /// Close everything a screen-region modal must not compete with, and
-    /// cancel any unfinished gesture. Shared by the eyedropper and OCR: both
-    /// take over pointer input entirely while they are up.
-    pub(crate) fn prepare_for_screen_modal(&mut self) {
-        self.cancel_active_interaction();
-        if self.show_help {
-            self.toggle_help_overlay();
-        }
-        if self.command_palette_open {
-            self.toggle_command_palette();
-        }
-        self.tour_active = false;
-        self.close_radial_menu();
-        self.close_context_menu();
-        self.close_properties_panel();
-        self.close_board_picker();
-        if self.is_color_picker_popup_open() {
-            self.close_color_picker_popup(true);
-        }
-    }
-
     pub(crate) fn set_eyedropper_pending_capture(&mut self, source: EyedropperCaptureSource) {
         self.eyedropper_ui_state = EyedropperUiState::PendingCapture {
             source,

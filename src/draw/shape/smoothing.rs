@@ -52,10 +52,13 @@ pub fn smooth_path(points: &[(i32, i32)], level: u8) -> Vec<(i32, i32)> {
         .collect()
 }
 
-/// Smooth the position of a pressure path, leaving every thickness alone.
+/// Smooth the positions of a pressure path, leaving every thickness alone.
 ///
-/// Thickness came from the tablet, not from the hand's aim, so smoothing it
-/// would erase real pressure detail while fixing nothing.
+/// The path of a pressure stroke shakes exactly like any other, so it is
+/// smoothed like any other. The *pressure values* are not: they came from the
+/// tablet rather than from the hand's aim, and averaging them would erase real
+/// detail while fixing nothing. Each smoothed position keeps the thickness that
+/// was sampled with it.
 pub fn smooth_pressure_path(points: &[(i32, i32, f32)], level: u8) -> Vec<(i32, i32, f32)> {
     let Some(smoothed) = smooth_points(points, level, |&(x, y, _)| (f64::from(x), f64::from(y)))
     else {

@@ -107,7 +107,7 @@ fn average_luminance(probe: &mut cairo::ImageSurface) -> Option<f64> {
             let blue = f64::from(pixel[0]) / 255.0 / scale;
             let green = f64::from(pixel[1]) / 255.0 / scale;
             let red = f64::from(pixel[2]) / 255.0 / scale;
-            total += relative_luminance(red, green, blue);
+            total += perceived_luminance(red, green, blue);
             opaque += 1;
         }
     }
@@ -119,14 +119,21 @@ fn average_luminance(probe: &mut cairo::ImageSurface) -> Option<f64> {
     Some(total / opaque as f64)
 }
 
-/// Weighted luminance, the same formula the board pen-contrast helper uses.
-pub(super) fn relative_luminance(red: f64, green: f64, blue: f64) -> f64 {
+/// Rec. 601 luma — the "is this light or dark?" metric every contrast decision
+/// on the canvas uses: the text halo, the step-marker outline, the sticky-note
+/// foreground, and the board pen-contrast helper.
+///
+/// Deliberately not [`crate::ui::theme::relative_luminance`], which is Rec. 709
+/// and answers a different question for the overlay chrome. The two disagree
+/// most on green, so a shared name for both would be a bug waiting to be
+/// written: keep the names apart and pick by what is being contrasted.
+pub fn perceived_luminance(red: f64, green: f64, blue: f64) -> f64 {
     red * 0.299 + green * 0.587 + blue * 0.114
 }
 
-/// Relative luminance of a colour, ignoring its alpha.
-pub(super) fn color_luminance(color: Color) -> f64 {
-    relative_luminance(color.r, color.g, color.b)
+/// [`perceived_luminance`] of a colour, ignoring its alpha.
+pub(crate) fn color_luminance(color: Color) -> f64 {
+    perceived_luminance(color.r, color.g, color.b)
 }
 
 #[cfg(test)]
@@ -192,6 +199,19 @@ mod tests {
             sampled > 0.9,
             "the probe must map user space through the transform, got {sampled}"
         );
+    }
+
+    #[test]
+    fn a_vector_target_declines_rather_than_guessing() {
+        // A PDF page has no pixels to read back. The probe says so, and the
+        // caller's known page colour takes over; see `render_text_over`.
+        let surface =
+            cairo::PdfSurface::for_stream(200.0, 100.0, Vec::<u8>::new()).expect("pdf surface");
+        let ctx = cairo::Context::new(&surface).unwrap();
+        ctx.set_source_rgb(1.0, 1.0, 1.0);
+        let _ = ctx.paint();
+
+        assert!(painted_luminance(&ctx, (10.0, 10.0, 40.0, 20.0)).is_none());
     }
 
     #[test]

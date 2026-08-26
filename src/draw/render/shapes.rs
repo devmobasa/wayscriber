@@ -4,7 +4,7 @@ use super::image::render_image_shape;
 use super::pressure_strokes::render_freehand_pressure_borrowed;
 use super::primitives::{render_arrow, render_ellipse, render_line, render_polygon, render_rect};
 use super::strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};
-use super::text::{render_sticky_note, render_text};
+use super::text::{render_sticky_note, render_text_over};
 use crate::draw::Color;
 use crate::draw::shape::Shape;
 use crate::draw::shape::{
@@ -21,6 +21,18 @@ use crate::draw::shape::{
 /// * `ctx` - Cairo drawing context to render to
 /// * `shape` - The shape to render
 pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
+    render_shape_over(ctx, shape, None);
+}
+
+/// `render_shape`, plus what the caller knows about the background behind it.
+///
+/// Only text reads it, and only when the target cannot be probed. See
+/// [`crate::draw::render_text_over`].
+pub fn render_shape_over(
+    ctx: &cairo::Context,
+    shape: &Shape,
+    known_background_luminance: Option<f64>,
+) {
     match shape {
         Shape::Freehand {
             points,
@@ -121,7 +133,7 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                     label.size,
                     &label.font_descriptor,
                 ) {
-                    render_text(
+                    render_text_over(
                         ctx,
                         layout.x,
                         layout.y,
@@ -131,6 +143,7 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                         &label.font_descriptor,
                         ARROW_LABEL_BACKGROUND,
                         None,
+                        known_background_luminance,
                     );
                 }
             }
@@ -165,7 +178,7 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
             background_enabled,
             wrap_width,
         } => {
-            render_text(
+            render_text_over(
                 ctx,
                 *x,
                 *y,
@@ -175,6 +188,7 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                 font_descriptor,
                 *background_enabled,
                 *wrap_width,
+                known_background_luminance,
             );
         }
         Shape::StepMarker { x, y, color, label } => {
@@ -186,7 +200,7 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                 a: (alpha * 0.9).clamp(0.0, 1.0),
                 ..*color
             };
-            let brightness = color.r * 0.299 + color.g * 0.587 + color.b * 0.114;
+            let brightness = super::color_luminance(*color);
             let (outline_color, text_color) = if brightness > 0.6 {
                 (
                     Color {
@@ -236,7 +250,7 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                 let center_offset_y = metrics.ink_y + metrics.ink_height / 2.0;
                 let baseline_x = (*x as f64 - center_offset_x).round() as i32;
                 let baseline_y = (*y as f64 - center_offset_y + metrics.baseline).round() as i32;
-                render_text(
+                render_text_over(
                     ctx,
                     baseline_x,
                     baseline_y,
@@ -246,6 +260,7 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                     &label.font_descriptor,
                     false,
                     None,
+                    known_background_luminance,
                 );
             }
         }

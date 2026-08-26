@@ -83,6 +83,7 @@ fn action_serialization_matches_established_contract() {
         (Action::IncreasePenSmoothing, "increase_pen_smoothing"),
         (Action::DecreasePenSmoothing, "decrease_pen_smoothing"),
         (Action::CycleFontFamily, "cycle_font_family"),
+        (Action::OpenFontPicker, "open_font_picker"),
         (Action::SelectSelectionTool, "select_selection_tool"),
         (Action::SelectMarkerTool, "select_marker_tool"),
         (Action::SelectStepMarkerTool, "select_step_marker_tool"),

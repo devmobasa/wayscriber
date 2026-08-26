@@ -40,11 +40,15 @@ impl Config {
         // Font cycle: drop blank entries and repeats, keeping the given order.
         // A repeat would make the action appear to skip, and a blank name would
         // resolve to whatever the font system falls back to.
+        //
+        // Repeats are judged without case, the way fontconfig resolves a family
+        // name. `["Sans", "sans"]` is one font written twice, and keeping both
+        // would leave a step that changes only the spelling.
         let mut seen = std::collections::BTreeSet::new();
         let before = self.drawing.font_cycle.len();
         self.drawing.font_cycle.retain(|family| {
             let trimmed = family.trim();
-            !trimmed.is_empty() && seen.insert(trimmed.to_string())
+            !trimmed.is_empty() && seen.insert(trimmed.to_lowercase())
         });
         if self.drawing.font_cycle.len() != before {
             log::warn!(

@@ -377,7 +377,7 @@ drag_tool = "default"
 - **Arrow style**: Run **Cycle Arrow Style** from the command palette to step through standard → pointy → curved → double (unbound by default; bind `cycle_arrow_style`). With arrows selected it restyles those in one undo step; with nothing selected it sets the style for the next arrow
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
 - **Pen smoothing**: Run **Increase / Decrease Pen Smoothing** from the command palette, or bind `increase_pen_smoothing` / `decrease_pen_smoothing` (see [Pen smoothing](#pen-smoothing))
-- **Text font**: <kbd>Shift+T</kbd> steps through `font_cycle` (see [Font cycle](#font-cycle))
+- **Text font**: <kbd>Shift+T</kbd> steps through `font_cycle`; **Font Picker** in the command palette opens the full list (see [Font cycle](#font-cycle) and [Font picker](#font-picker))
 - **Regular polygon sides**: Use the Shapes popover Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
 
@@ -419,7 +419,57 @@ will be written in. A family that is not in the list steps to the first entry,
 so the key always goes somewhere.
 
 The toolbar's Sans/Mono buttons are a separate two-way shortcut and are not
-affected by this list.
+affected by this list. Beside them is a button showing the family in use, which
+opens the font picker below.
+
+Family names are matched without regard to case, the way fontconfig resolves
+them: `sans` and `Sans` are one font, so `["Sans", "sans"]` loads as one entry.
+
+#### Font picker
+
+`font_cycle` is the short list you reach for mid-demo. The **Font Picker** is
+the long way round: a modal over every font installed on the system, for the
+times the list does not have what you want.
+
+It applies a font the same way <kbd>Shift+T</kbd> does — to selected text, or to
+the tool. It does not edit `font_cycle`; that list is set in the config file or
+the configurator. Use the picker to find out what a family looks like, then put
+its name in the list if you want it a keystroke away.
+
+Run **Font Picker** from the command palette, bind `open_font_picker`, or click
+the font button in the toolbar's style pill — the one showing the family in use,
+next to Sans/Mono.
+
+| Key | Does |
+|-----|------|
+| Type | Filter by name |
+| <kbd>↑</kbd> <kbd>↓</kbd> <kbd>PgUp</kbd> <kbd>PgDn</kbd> <kbd>Home</kbd> <kbd>End</kbd> | Move the highlight |
+| Wheel | Scroll three rows a tick |
+| <kbd>Tab</kbd> | Switch between all fonts and monospace only |
+| <kbd>Enter</kbd> | Apply |
+| <kbd>Esc</kbd> | Cancel |
+
+Holding an arrow or a page key keeps moving, and speeds up the longer you hold
+it — a list of every installed font is too long to cross at one flat rate. Let
+go and it starts over at the slow rate, so a short press is still one row.
+
+The wheel belongs to the picker while it is open. It does not reach the pen
+behind the panel — which is also true of the colour picker, the precise-entry
+popup, the board picker, a context menu, and the eyedropper and region
+selectors.
+
+Every row is drawn in the font it names, because nobody picks a typeface by
+reading its name. The picker opens on the font already in use, and fonts chosen
+here come back to the top of the list next time.
+
+The panel sizes itself to the output it comes up on: a short screen shows fewer
+rows rather than a panel running off the bottom edge. Long family names are
+shortened with an ellipsis rather than written over what is next to them.
+
+The font list is read once, the first time the picker opens — one enumeration
+covering both the full list and the monospace filter, so <kbd>Tab</kbd> costs
+nothing. It is deliberately not read at startup: the overlay is spawned per
+keybind toggle, so anything on that path is paid every time you reach for it.
 
 #### Text halo
 
@@ -429,9 +479,19 @@ sampled from the canvas just before the glyphs are painted.
 
 That means a whiteboard, a blackboard, a frozen screen, a zoomed screen, and a
 region already covered by a blur or a filled shape all give the right answer.
+PNG export samples the same way, so an exported image matches the screen.
 
-On a transparent board with no frozen or zoomed capture there is nothing to
-sample — the desktop shows through the compositor and those pixels were never
+PDF export cannot be sampled — a PDF page is vector, with no pixels to read
+back. There the page's own background color is used instead. A board on a plain
+background therefore picks the same halo in PDF as it does on screen; a label
+sitting on top of a filled shape or a blur does not, because in PDF nothing can
+see what was painted underneath it. A page whose backdrop is an image falls back
+further still, because one brightness for a whole photograph would be a guess.
+
+Export to PNG when a label sits over other drawing and the halo has to match.
+
+On a transparent board with no frozen or zoomed capture there is also nothing to
+sample: the desktop shows through the compositor and those pixels were never
 Wayscriber's to read. The halo then falls back to a rule based on the text color
 itself, which is what every case used before.
 
@@ -462,11 +522,22 @@ stopped it, at every level.
 
 The level applies to the Pen and the Marker. The Eraser is not smoothed: its path
 decides what gets erased, so moving it would change the result rather than the
-look. Tablet pressure is left alone — it is real detail, not shake.
+look.
 
-Nothing new is written to a session file. The level is a tool setting, so a
-stroke is stored as the points it ended up with, and existing sessions are
-unaffected.
+A tablet stroke is smoothed too, because its path shakes like any other. Its
+**pressure values** are not touched — each smoothed point keeps the thickness
+that was sampled with it, so pen dynamics survive.
+
+A stroke is stored as the points it ended up with, so nothing about smoothing
+changes how a shape is written. The level itself is remembered with the rest of
+the tool settings, so a session restores at the level it was saved at. A session
+written before this existed has no level recorded and restores at whatever
+`pen_smoothing` your config says.
+
+The level is also on the toolbar, as a **Smoothing** slider in the style pill
+whenever the Pen or Marker is up. It reads `Off` at zero. The slider is one of
+the first things the pill drops on a narrow output; the actions below still
+reach it there.
 
 ### `[arrow]` - Arrow Geometry
 
@@ -2026,6 +2097,7 @@ select_step_marker_tool = []
 select_eraser_tool = ["D"]
 toggle_eraser_mode = ["Ctrl+Shift+E"]
 cycle_font_family = ["Shift+T"]    # step the text font through drawing.font_cycle
+open_font_picker = []              # pick from every installed family
 increase_pen_smoothing = []        # clean up finished strokes more
 decrease_pen_smoothing = []        # keep more of the drawn path
 cycle_blur_style = []              # blur -> pixelate -> secure -> black out

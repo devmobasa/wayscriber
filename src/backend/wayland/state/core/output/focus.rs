@@ -100,13 +100,12 @@ impl WaylandState {
         }
 
         info!("Switching layer overlay to {}", target_label);
+        self.teardown_keyboard_focus();
         self.recreate_layer_surface_for_output(qh, &target_output);
         self.surface.set_current_output(target_output);
         self.set_has_seen_surface_enter(false);
         self.refresh_active_output_label();
         self.begin_session_output_transition(target_identity, "output switch");
-        self.set_keyboard_focus(false);
-        self.set_overlay_ready(false);
         self.input_state.needs_redraw = true;
         self.sync_toolbar_visibility(qh);
     }

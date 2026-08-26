@@ -101,6 +101,7 @@ define_action_binding_accessors! {
     IncreasePenSmoothing => tools.increase_pen_smoothing,
     DecreasePenSmoothing => tools.decrease_pen_smoothing,
     CycleFontFamily => tools.cycle_font_family,
+    OpenFontPicker => tools.open_font_picker,
     CycleBlurStyle => tools.cycle_blur_style,
     CycleArrowStyle => tools.cycle_arrow_style,
     SelectPenTool => tools.select_pen_tool,

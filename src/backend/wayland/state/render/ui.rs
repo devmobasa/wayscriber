@@ -221,6 +221,10 @@ impl WaylandState {
                 self.input_state.clear_color_picker_popup_layout();
             }
 
+            if !capture_picker && self.input_state.is_font_picker_open() {
+                crate::ui::render_font_picker(ctx, &self.input_state, width, height);
+            }
+
             if !capture_picker && self.input_state.is_precision_entry_open() {
                 // Anchor under the top strip (the pill is its bottom row):
                 // the same base position both the inline fallback and the

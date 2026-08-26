@@ -41,6 +41,7 @@ pub enum KeybindingField {
     SelectEraserTool,
     ToggleEraserMode,
     CycleFontFamily,
+    OpenFontPicker,
     IncreasePenSmoothing,
     DecreasePenSmoothing,
     SelectMarkerTool,

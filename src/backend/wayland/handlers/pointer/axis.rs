@@ -25,6 +25,35 @@ fn scroll_direction(vertical: AxisScroll) -> i32 {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AxisSurfaceRoute {
+    Consumed,
+    ScrollTopPopover,
+    Canvas,
+}
+
+/// Resolves screen-modal and toolbar ownership together, so toolbar's early
+/// return cannot be moved ahead of selector ownership without changing this
+/// tested decision.
+fn axis_surface_route(
+    input_state: &InputState,
+    over_toolbar: bool,
+    over_top_toolbar: bool,
+    scroll_direction: i32,
+) -> AxisSurfaceRoute {
+    if input_state.screen_modal_is_active() {
+        AxisSurfaceRoute::Consumed
+    } else if over_toolbar {
+        if scroll_direction != 0 && over_top_toolbar {
+            AxisSurfaceRoute::ScrollTopPopover
+        } else {
+            AxisSurfaceRoute::Consumed
+        }
+    } else {
+        AxisSurfaceRoute::Canvas
+    }
+}
+
 fn finalize_spotlight_wheel_if_axis_stopped(
     input_state: &mut InputState,
     spotlight_wheel_idle_deadline: &mut Option<Instant>,
@@ -135,6 +164,15 @@ impl WaylandState {
             return;
         }
 
+        // The font picker's own list. Three rows per tick, and the selection
+        // rides along so Enter still applies the highlighted row.
+        if self.input_state.is_font_picker_open() {
+            if scroll_direction != 0 {
+                self.input_state.font_picker_wheel_scroll(scroll_direction);
+            }
+            return;
+        }
+
         if self.input_state.show_help {
             if scroll_direction != 0 {
                 let delta = if scroll_direction > 0 { 1.0 } else { -1.0 };
@@ -161,16 +199,36 @@ impl WaylandState {
         ) {
             return;
         }
-        if on_toolbar || self.pointer_over_toolbar() {
-            if scroll_direction != 0 && self.wheel_over_top_toolbar(&event.surface, event.position)
-            {
-                // With a Canvas/Session/Settings popover open, the wheel scrolls
-                // its capped viewport; otherwise a top-strip wheel stays a
-                // no-op (it never falls through to thickness/zoom).
+        let over_toolbar = on_toolbar || self.pointer_over_toolbar();
+        let over_top_toolbar =
+            over_toolbar && self.wheel_over_top_toolbar(&event.surface, event.position);
+        match axis_surface_route(
+            &self.input_state,
+            over_toolbar,
+            over_top_toolbar,
+            scroll_direction,
+        ) {
+            // Screen selectors own pointer input across every Wayscriber
+            // surface, including toolbar popovers left open beneath them. A
+            // top-strip wheel without a scrollable popover is also consumed.
+            AxisSurfaceRoute::Consumed => return,
+            // Canvas/Session/Settings popovers scroll their capped viewport.
+            AxisSurfaceRoute::ScrollTopPopover => {
                 self.scroll_top_popover_by_wheel(scroll_direction);
+                return;
             }
+            AxisSurfaceRoute::Canvas => {}
+        }
+        // Everything below this line acts on the canvas or the active tool.
+        // A surface covering the canvas has to stop here even when it has
+        // nothing to scroll, or a wheel tick over it edits the tool behind it —
+        // which is what a colour picker, a precise-entry popup, and the font
+        // picker all used to do. The registry says which surfaces those are, so
+        // the next one added is covered without touching this file.
+        if self.input_state.modal_owns_wheel() {
             return;
         }
+
         if self.input_state.modifiers.ctrl && self.input_state.modifiers.alt {
             if scroll_direction != 0 {
                 let zoom_in = scroll_direction < 0;
@@ -270,6 +328,11 @@ fn try_handle_board_picker_page_panel_axis(
     if !input_state.is_board_picker_open() || scroll_direction == 0 {
         return false;
     }
+    // A page context menu is the one surface that deliberately stays open over
+    // the picker, so it is also the one that can be scrolled out from under.
+    if input_state.is_context_menu_open() {
+        return false;
+    }
     let x = position.0.round() as i32;
     let y = position.1.round() as i32;
     if !input_state.board_picker_page_panel_content_at(x, y) {
@@ -328,6 +391,64 @@ mod tests {
 
         let layout = *input_state.board_picker_layout().expect("layout");
         assert_eq!(layout.page_scroll_row, 1);
+    }
+
+    #[test]
+    fn an_active_screen_modal_prevents_the_toolbar_scroll_route() {
+        let mut input_state = make_test_input_state();
+        input_state.activate_eyedropper(None);
+
+        assert_eq!(
+            axis_surface_route(&input_state, true, true, 1),
+            AxisSurfaceRoute::Consumed
+        );
+
+        input_state.cancel_eyedropper();
+        assert_eq!(
+            axis_surface_route(&input_state, true, true, 1),
+            AxisSurfaceRoute::ScrollTopPopover,
+            "without the selector the same wheel reaches the toolbar popover"
+        );
+    }
+
+    #[test]
+    fn a_page_context_menu_takes_the_wheel_from_the_picker_under_it() {
+        // The page context menu is the one surface that deliberately stays open
+        // over the board picker, which makes it the one that can have the list
+        // scrolled out from under it.
+        let mut input_state = make_test_input_state();
+        input_state.open_board_picker();
+        let board_index = input_state
+            .board_picker_page_panel_board_index()
+            .expect("page panel board index");
+        set_board_page_count(&mut input_state, board_index, 80);
+        update_picker_layout(&mut input_state);
+        let layout = *input_state.board_picker_layout().expect("layout");
+        let position = (layout.page_viewport_x + 1.0, layout.page_viewport_y + 1.0);
+        input_state.board_picker_set_focus(BoardPickerFocus::PagePanel);
+
+        input_state.open_page_context_menu((10, 10), board_index, 0);
+        assert!(input_state.is_context_menu_open());
+        assert!(
+            input_state.is_board_picker_open(),
+            "this pair deliberately coexists; without that there is no defect"
+        );
+
+        assert!(
+            !try_handle_board_picker_page_panel_axis(&mut input_state, position, 1),
+            "the menu on top owns the wheel"
+        );
+        update_picker_layout(&mut input_state);
+        let layout = *input_state.board_picker_layout().expect("layout");
+        assert_eq!(layout.page_scroll_row, 0, "the list behind must not move");
+
+        // And with the menu dismissed the picker takes it back.
+        input_state.close_context_menu();
+        assert!(try_handle_board_picker_page_panel_axis(
+            &mut input_state,
+            position,
+            1
+        ));
     }
 
     #[test]

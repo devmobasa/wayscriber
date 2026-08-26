@@ -155,6 +155,12 @@ fn event_for_hit(hit: &HitRegion, x: f64, y: f64, phase: HitPhase) -> Option<Too
             hit,
             x,
         ),
+        DragSetPenSmoothing => slider_event_for_hit(
+            ToolbarSliderTarget::PenSmoothing,
+            ToolbarSliderSpec::PEN_SMOOTHING,
+            hit,
+            x,
+        ),
         DragSetFontSize => slider_event_for_hit(
             ToolbarSliderTarget::FontSize,
             ToolbarSliderSpec::FONT_SIZE,
