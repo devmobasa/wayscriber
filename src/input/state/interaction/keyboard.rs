@@ -44,6 +44,11 @@ fn route_key_event(state: &mut InputState, key: Key, is_repeat: bool) -> Routing
     if let Some(outcome) = adapters::handle_color_picker_key(state, key) {
         return outcome;
     }
+    if let Some(outcome) =
+        adapters::handle_font_picker_key(state, key, font_picker_text(key).as_deref())
+    {
+        return outcome;
+    }
     if let Some(outcome) = adapters::handle_context_menu_key(state, key) {
         return outcome;
     }
@@ -111,4 +116,16 @@ fn match_action_for_key_binding(
     }
 
     Ok(state.match_keyboard_chord(&key_str, is_repeat, now))
+}
+
+/// The character a key contributes to the font picker's query.
+///
+/// The router carries `Key`, not the compositor's text, so a printable key is
+/// reconstructed from `Key::Char`. Everything else contributes nothing and the
+/// picker's own match arms decide what it means.
+fn font_picker_text(key: Key) -> Option<String> {
+    match key {
+        Key::Char(ch) if !ch.is_control() => Some(ch.to_string()),
+        _ => None,
+    }
 }

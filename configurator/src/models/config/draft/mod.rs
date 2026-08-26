@@ -14,6 +14,7 @@ use super::super::fields::{
 use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};
 use super::super::keybindings::KeybindingsDraft;
 use super::boards::BoardsDraft;
+use super::font_cycle::FontCycleDraft;
 use super::presets::PresetsDraft;
 use super::quick_colors::QuickColorsDraft;
 use super::render_profiles::RenderProfilesDraft;
@@ -40,6 +41,11 @@ pub struct ConfigDraft {
     pub drawing_default_font_size: String,
     pub drawing_polygon_sides: String,
     pub drawing_marker_opacity: String,
+    pub drawing_pen_smoothing: String,
+    /// Families `Shift+T` steps through, in order. A list rather than a
+    /// comma-separated line: a family name can contain a comma, and the row
+    /// editor picks from what is installed instead of asking for exact text.
+    pub drawing_font_cycle: FontCycleDraft,
     pub drawing_hit_test_tolerance: String,
     pub drawing_hit_test_linear_threshold: String,
     pub drawing_undo_stack_limit: String,
@@ -47,6 +53,7 @@ pub struct ConfigDraft {
     pub drawing_font_weight: String,
     pub drawing_font_style: String,
     pub drawing_text_background_enabled: bool,
+    pub drawing_text_halo_enabled: bool,
     pub drawing_default_fill_enabled: bool,
     pub drawing_drag_tool: ToolOption,
     pub drawing_shift_drag_tool: ToolOption,

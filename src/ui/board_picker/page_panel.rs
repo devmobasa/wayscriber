@@ -32,6 +32,7 @@ pub(super) fn render_page_panel(
     layout: BoardPickerLayout,
     screen_width: u32,
     screen_height: u32,
+    text_halo_enabled: bool,
 ) {
     if !layout.page_panel_enabled {
         return;
@@ -145,6 +146,7 @@ pub(super) fn render_page_panel(
             height: layout.page_thumb_height,
             screen_width,
             screen_height,
+            text_halo_enabled,
             page_number: index + 1,
             page_name: page.page_name(),
             is_active,
@@ -179,6 +181,7 @@ pub(super) fn render_page_panel(
             thumb_h: layout.page_thumb_height,
             screen_width,
             screen_height,
+            text_halo_enabled,
             page_number: hover_index + 1,
         });
     }

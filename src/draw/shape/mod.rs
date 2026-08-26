@@ -3,6 +3,7 @@
 mod arrow_label;
 mod bounds;
 mod polygon;
+mod smoothing;
 mod step_marker;
 mod text;
 mod text_cache;
@@ -12,6 +13,7 @@ pub use polygon::{
     PolygonKind, REGULAR_POLYGON_DEFAULT_SIDES, REGULAR_POLYGON_MAX_SIDES,
     REGULAR_POLYGON_MIN_SIDES, clamp_regular_sides,
 };
+pub use smoothing::{MAX_PEN_SMOOTHING, clamp_pen_smoothing, smooth_path, smooth_pressure_path};
 pub use types::{
     ArrowLabel, ArrowStyle, BlurStyle, EmbeddedImage, EraserBrush, EraserKind, Shape,
     StepMarkerLabel,

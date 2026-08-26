@@ -28,6 +28,16 @@ impl KeybindingsConfig {
         )?;
         inserter.insert_all(&self.tools.select_eraser_tool, Action::SelectEraserTool)?;
         inserter.insert_all(&self.tools.toggle_eraser_mode, Action::ToggleEraserMode)?;
+        inserter.insert_all(
+            &self.tools.increase_pen_smoothing,
+            Action::IncreasePenSmoothing,
+        )?;
+        inserter.insert_all(
+            &self.tools.decrease_pen_smoothing,
+            Action::DecreasePenSmoothing,
+        )?;
+        inserter.insert_all(&self.tools.cycle_font_family, Action::CycleFontFamily)?;
+        inserter.insert_all(&self.tools.open_font_picker, Action::OpenFontPicker)?;
         inserter.insert_all(&self.tools.cycle_blur_style, Action::CycleBlurStyle)?;
         inserter.insert_all(&self.tools.cycle_arrow_style, Action::CycleArrowStyle)?;
         inserter.insert_all(&self.tools.select_pen_tool, Action::SelectPenTool)?;

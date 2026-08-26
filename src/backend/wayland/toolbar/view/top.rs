@@ -110,6 +110,16 @@ pub fn plan_top_strip(snapshot: &ToolbarSnapshot) -> TopStripPlan {
         return plan;
     }
 
+    // Before the pill yields entirely, it sheds its two secondary controls.
+    // Both are reachable elsewhere (a keybinding, the command palette), and
+    // losing them costs less than losing the color chip and size slider with
+    // the rest of the pill.
+    plan.drop_style_extras = true;
+    if fits(&plan) {
+        sort_dropped_items(&mut plan, &visible_tools, &visible_utilities);
+        return plan;
+    }
+
     // Last-resort compact presentation keeps the protected core available
     // while switching text buttons to icons and tightening spacing.
     plan.compact = true;

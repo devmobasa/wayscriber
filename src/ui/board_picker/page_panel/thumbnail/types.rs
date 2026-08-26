@@ -12,6 +12,7 @@ pub(in crate::ui::board_picker::page_panel) struct PageThumbnailArgs<'a> {
     pub(in crate::ui::board_picker::page_panel) height: f64,
     pub(in crate::ui::board_picker::page_panel) screen_width: u32,
     pub(in crate::ui::board_picker::page_panel) screen_height: u32,
+    pub(in crate::ui::board_picker::page_panel) text_halo_enabled: bool,
     pub(in crate::ui::board_picker::page_panel) page_number: usize,
     pub(in crate::ui::board_picker::page_panel) page_name: Option<&'a str>,
     pub(in crate::ui::board_picker::page_panel) is_active: bool,
@@ -34,6 +35,7 @@ pub(in crate::ui::board_picker::page_panel) struct PagePreviewArgs<'a> {
     pub(in crate::ui::board_picker::page_panel) thumb_h: f64,
     pub(in crate::ui::board_picker::page_panel) screen_width: u32,
     pub(in crate::ui::board_picker::page_panel) screen_height: u32,
+    pub(in crate::ui::board_picker::page_panel) text_halo_enabled: bool,
     pub(in crate::ui::board_picker::page_panel) page_number: usize,
 }
 
@@ -47,4 +49,5 @@ pub(in crate::ui::board_picker::page_panel) struct PageContentArgs<'a> {
     pub(in crate::ui::board_picker::page_panel) height: f64,
     pub(in crate::ui::board_picker::page_panel) screen_width: u32,
     pub(in crate::ui::board_picker::page_panel) screen_height: u32,
+    pub(in crate::ui::board_picker::page_panel) text_halo_enabled: bool,
 }

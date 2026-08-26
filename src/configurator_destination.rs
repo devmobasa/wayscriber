@@ -110,6 +110,10 @@ pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSecti
         | Action::SelectPenTool
         | Action::SelectEraserTool
         | Action::ToggleEraserMode
+        | Action::IncreasePenSmoothing
+        | Action::DecreasePenSmoothing
+        | Action::CycleFontFamily
+        | Action::OpenFontPicker
         | Action::SelectMarkerTool
         | Action::SelectStepMarkerTool
         | Action::SelectLineTool

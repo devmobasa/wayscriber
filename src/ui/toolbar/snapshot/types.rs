@@ -72,6 +72,12 @@ pub struct ToolContext {
     pub show_polygon_sides_control: bool,
     /// Whether font controls should be shown
     pub show_font_controls: bool,
+    /// Whether the pen-smoothing stepper should be shown.
+    ///
+    /// Follows the tool rather than the setting: smoothing is one number for
+    /// the whole program, but it only reaches strokes the pen and marker
+    /// accumulate, so a Line or Blur tool has nothing for the stepper to do.
+    pub show_pen_smoothing: bool,
 }
 
 impl ToolContext {
@@ -100,6 +106,7 @@ impl ToolContext {
                 show_marker_opacity: snapshot.show_marker_opacity_section,
                 show_polygon_sides_control: false,
                 show_font_controls: true,
+                show_pen_smoothing: false,
             };
         }
 
@@ -130,6 +137,7 @@ impl ToolContext {
         if effective_tool == Tool::RegularPolygon {
             ctx.show_polygon_sides_control = true;
         }
+        ctx.show_pen_smoothing = effective_tool.smooths_strokes();
 
         ctx
     }
@@ -147,6 +155,8 @@ impl ToolContext {
             show_marker_opacity: profile.show_marker_opacity(),
             show_polygon_sides_control: false,
             show_font_controls: false,
+            // Set from the tool by `from_snapshot`; a profile alone cannot say.
+            show_pen_smoothing: false,
         }
     }
 
@@ -178,6 +188,7 @@ impl ToolContext {
             show_marker_opacity,
             show_polygon_sides_control,
             show_font_controls,
+            show_pen_smoothing: true,
         }
     }
 }
@@ -255,6 +266,8 @@ pub struct ToolbarSnapshot {
     pub eraser_kind: EraserKind,
     pub eraser_mode: EraserMode,
     pub marker_opacity: f64,
+    /// Smoothing passes applied to freehand and marker strokes on release.
+    pub pen_smoothing: u8,
     pub spotlight_magnification: f64,
     /// Whether the active canvas has complete pixels for magnifying a Spotlight,
     /// or `None` when no backend has answered yet.
@@ -268,6 +281,13 @@ pub struct ToolbarSnapshot {
     /// which reports on the selected shape rather than the tool default.
     pub selection_spotlight_magnification: Option<f64>,
     pub font: FontDescriptor,
+    /// Whether the selection contains any text or sticky note, including locked shapes.
+    pub selection_has_text: bool,
+    /// Bold state of the first editable selected text or sticky note, when present.
+    /// The Bold control prefers this over the tool default because its event
+    /// mutates editable selected text first. A text selection with `None` here
+    /// has no editable Bold target.
+    pub selected_text_bold: Option<bool>,
     pub font_size: f64,
     pub text_active: bool,
     pub note_active: bool,
@@ -428,6 +448,15 @@ pub struct ToolbarSnapshot {
 }
 
 impl ToolbarSnapshot {
+    /// Checked state of the same target a Bold event will mutate.
+    pub(crate) fn font_bold_target_is_bold(&self) -> bool {
+        match self.selected_text_bold {
+            Some(bold) => bold,
+            None if self.selection_has_text => false,
+            None => self.font.is_bold(),
+        }
+    }
+
     pub fn status_bar_item_visible(&self, item: crate::config::StatusBarItem) -> bool {
         match item {
             crate::config::StatusBarItem::ActiveOutput => self.show_active_output_badge,

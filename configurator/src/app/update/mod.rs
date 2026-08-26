@@ -134,6 +134,12 @@ impl ConfiguratorApp {
             Message::QuickColorAdded => self.handle_quick_color_added(),
             Message::QuickColorRemoved(index) => self.handle_quick_color_removed(index),
             Message::QuickColorMoved(index, delta) => self.handle_quick_color_moved(index, delta),
+            Message::FontCycleAdded => self.handle_font_cycle_added(),
+            Message::FontCycleRemoved(index) => self.handle_font_cycle_removed(index),
+            Message::FontCycleMoved(index, delta) => self.handle_font_cycle_moved(index, delta),
+            Message::FontCycleChanged(index, family) => {
+                self.handle_font_cycle_changed(index, family)
+            }
             Message::QuickColorModeChanged(index, mode) => {
                 self.handle_quick_color_mode_changed(index, mode)
             }

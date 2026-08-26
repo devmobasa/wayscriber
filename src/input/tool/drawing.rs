@@ -1,4 +1,7 @@
-use crate::draw::shape::{bounding_box_for_blur, bounding_box_for_eraser, bounding_box_for_points};
+use crate::draw::shape::{
+    bounding_box_for_blur, bounding_box_for_eraser, bounding_box_for_points, smooth_path,
+    smooth_pressure_path,
+};
 use crate::draw::{
     ArrowLabel, ArrowStyle, BlurRectParams, BlurStyle, Color, EraserBrush, EraserKind, Shape,
 };
@@ -49,6 +52,8 @@ pub(crate) struct ToolStrokeSnapshot {
     pub(crate) eraser_size: f64,
     pub(crate) eraser_kind: EraserKind,
     pub(crate) pressure_variation_threshold: f64,
+    /// Release-time smoothing passes for path tools. 0 keeps the exact path.
+    pub(crate) pen_smoothing: u8,
 }
 
 /// Immutable inputs needed to turn one completed polygon drag into a shape.
@@ -455,7 +460,7 @@ fn finish_path_stroke(
                     snapshot.pressure_variation_threshold,
                 )
             {
-                let points = snapshot
+                let points: Vec<_> = snapshot
                     .points
                     .into_iter()
                     .zip(snapshot.point_thicknesses)
@@ -463,7 +468,7 @@ fn finish_path_stroke(
                     .collect();
                 return FinishedToolStroke::Shape {
                     shape: Shape::FreehandPressure {
-                        points,
+                        points: smooth_pressure_path(&points, snapshot.pen_smoothing),
                         color: snapshot.color,
                     },
                     usage,
@@ -472,7 +477,7 @@ fn finish_path_stroke(
 
             FinishedToolStroke::Shape {
                 shape: Shape::Freehand {
-                    points: snapshot.points,
+                    points: smooth_path(&snapshot.points, snapshot.pen_smoothing),
                     color: snapshot.color,
                     thick: snapshot.size,
                 },
@@ -481,7 +486,7 @@ fn finish_path_stroke(
         }
         ToolPathKind::Marker => FinishedToolStroke::Shape {
             shape: Shape::MarkerStroke {
-                points: snapshot.points,
+                points: smooth_path(&snapshot.points, snapshot.pen_smoothing),
                 color: marker_color_with_opacity(snapshot.color, snapshot.marker_opacity),
                 thick: snapshot.size,
             },

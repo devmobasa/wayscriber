@@ -114,6 +114,11 @@ pub(super) fn maybe_render(
                 *last_render_time = Some(render_end);
                 state.input_state.needs_redraw =
                     keep_rendering || state.input_state.has_pending_history();
+                // Font enumeration is slow enough to miss a frame budget, but
+                // starting it before this point would move that cost onto
+                // startup. The worker wakes the event loop when the cache is
+                // ready so an already-open picker can replace its loading row.
+                state.start_font_catalog_prewarm();
                 let chrome_hover_after = (
                     state.input_state.status_hud_hover,
                     state.input_state.zoom_chip_hover,

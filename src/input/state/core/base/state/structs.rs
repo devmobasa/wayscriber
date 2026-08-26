@@ -116,6 +116,9 @@ pub struct InputState {
     pub eraser_mode: EraserMode,
     /// Opacity multiplier for marker tool strokes
     pub marker_opacity: f64,
+    /// Release-time smoothing passes applied to finished freehand and marker
+    /// strokes. 0 keeps the exact drawn path.
+    pub pen_smoothing: u8,
     /// How the blur tool obscures the region it covers
     pub blur_style: BlurStyle,
     /// Alpha of the dim layer outside every spotlight
@@ -128,6 +131,38 @@ pub struct InputState {
     pub current_font_size: f64,
     /// Font descriptor for text rendering (family, weight, style)
     pub font_descriptor: FontDescriptor,
+    /// Families the font-cycle action steps through. Empty turns it off.
+    pub(crate) font_cycle: Vec<String>,
+    /// Whether the system font picker owns input.
+    pub(crate) font_picker_open: bool,
+    /// The picker opened before the worker-built system catalog was ready.
+    pub(crate) font_picker_loading: bool,
+    /// The latest catalog worker failed while this picker was open.
+    pub(crate) font_picker_load_failed: bool,
+    pub(crate) font_picker_query: String,
+    pub(crate) font_picker_selected: usize,
+    pub(crate) font_picker_scroll: usize,
+    pub(crate) font_picker_filter: crate::input::state::FontPickerFilter,
+    /// What a chosen row changes, decided when the picker opens so its caption
+    /// cannot disagree with what Enter does.
+    pub(crate) font_picker_target: crate::input::state::FontPickerTarget,
+    /// Families chosen here, most recent first.
+    pub(crate) font_picker_recents: Vec<String>,
+    /// Ranked results memoized on the query and filter, because scoring walks
+    /// every installed family and the renderer asks more than once per frame.
+    pub(crate) font_picker_results: std::cell::RefCell<crate::input::state::FontPickerResults>,
+    /// Navigation key held in the font picker, and when its next repeat is due.
+    ///
+    /// The picker blocks the backend's canvas repeat timer (a held key must not
+    /// reach the drawing behind a modal), so it runs its own — the same
+    /// arrangement the command palette uses.
+    pub(crate) font_picker_repeat_key: Option<Key>,
+    pub(crate) font_picker_repeat_next_tick: Option<Instant>,
+    /// When the held key went down, which is what the repeat ramps from.
+    pub(crate) font_picker_repeat_started: Option<Instant>,
+    /// Panel rectangle the last frame drew, so a move can repaint the panel it
+    /// is leaving as well as the one it is arriving at.
+    pub(crate) font_picker_last_panel: Option<crate::util::Rect>,
     /// Whether to draw background behind text
     pub text_background_enabled: bool,
     /// Optional wrap width for text input (None = auto)

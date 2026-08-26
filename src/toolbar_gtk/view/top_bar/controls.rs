@@ -284,7 +284,7 @@ impl TopBar {
                 ctx.set_source_rgba(r, g, b, a);
                 swatch_path(ctx);
                 let _ = ctx.fill();
-                let luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+                let luminance = crate::draw::perceived_luminance(r, g, b);
                 set_color(
                     ctx,
                     if luminance < 0.3 {

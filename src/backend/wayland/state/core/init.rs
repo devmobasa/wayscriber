@@ -102,6 +102,8 @@ impl WaylandState {
 
         let buffer_count = config.performance.buffer_count as usize;
         let runtime_operation_ids = RuntimeOperationIdSource::new();
+        let font_catalog_prewarm =
+            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
         let clipboard_publish =
             RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
         let clipboard_paste =
@@ -144,6 +146,8 @@ impl WaylandState {
             runtime_ui_unavailable,
             runtime_ui_unavailable_previews: Default::default(),
             input_state,
+            font_catalog_prewarm,
+            font_catalog_prewarm_started: false,
             palette_recents,
             clipboard_publish,
             clipboard_paste,

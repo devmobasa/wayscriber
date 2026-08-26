@@ -80,21 +80,7 @@ impl KeyboardHandler for WaylandState {
         _serial: u32,
     ) {
         debug!("Keyboard focus left");
-        self.set_keyboard_focus(false);
-        self.set_overlay_ready(false);
-        self.clear_toolbar_focus();
-
-        // When the compositor moves focus away from our surface (e.g. to a portal
-        // dialog, another layer surface, or a different window), it's possible for
-        // us to miss some key release events. To avoid leaving modifiers "stuck"
-        // and breaking shortcuts/tools, aggressively reset our modifier state on
-        // focus loss.
-        self.input_state.reset_modifiers();
-        self.sync_region_square_modifier(false);
-        self.input_state.clear_command_palette_repeat();
-        self.clear_key_repeat();
-        self.set_board_pan_key_held(false);
-        self.stop_board_pan();
+        self.teardown_keyboard_focus();
 
         match xdg_focus_leave_action(
             self.surface.is_xdg_window(),

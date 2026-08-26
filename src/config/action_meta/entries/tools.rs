@@ -225,6 +225,46 @@ pub const ENTRIES: &[ActionMeta] = &[
         true
     ),
     meta!(
+        CycleFontFamily,
+        "Cycle Font Family",
+        None,
+        "Step the text font through the configured list",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
+        OpenFontPicker,
+        "Font Picker",
+        None,
+        "Pick a text font from every one installed",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
+        IncreasePenSmoothing,
+        "Increase Pen Smoothing",
+        None,
+        "Clean up finished strokes more",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
+        DecreasePenSmoothing,
+        "Decrease Pen Smoothing",
+        None,
+        "Keep more of the drawn path",
+        Tools,
+        true,
+        true,
+        true
+    ),
+    meta!(
         CycleBlurStyle,
         "Cycle Blur Style",
         None,

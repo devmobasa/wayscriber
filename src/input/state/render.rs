@@ -2,6 +2,7 @@ use crate::draw::render::{render_freehand_pressure_preview_borrowed, render_poly
 use crate::draw::shape::bounding_box_for_points;
 use crate::draw::{
     Color, Shape, render_freehand_borrowed, render_marker_stroke_borrowed, render_shape,
+    render_shape_with_halo,
 };
 use crate::input::Tool;
 use crate::input::tool::{
@@ -101,6 +102,7 @@ impl InputState {
         &self,
         ctx: &cairo::Context,
         stroke: ProvisionalToolStroke<'_>,
+        text_halo_enabled: bool,
     ) -> bool {
         match stroke {
             ProvisionalToolStroke::BorrowedFreehand {
@@ -138,7 +140,7 @@ impl InputState {
                 true
             }
             ProvisionalToolStroke::Shape(shape) => {
-                render_shape(ctx, &shape);
+                render_shape_with_halo(ctx, &shape, text_halo_enabled);
                 true
             }
             ProvisionalToolStroke::BlurReplayPreview(params) => {
@@ -164,6 +166,7 @@ impl InputState {
         ctx: &cairo::Context,
         stroke: ProvisionalToolStroke<'_>,
         damage_regions: &[Rect],
+        text_halo_enabled: bool,
     ) -> bool {
         match stroke {
             ProvisionalToolStroke::BorrowedFreehand {
@@ -249,7 +252,7 @@ impl InputState {
                 }
                 true
             }
-            other => self.render_provisional_tool_stroke(ctx, other),
+            other => self.render_provisional_tool_stroke(ctx, other, text_halo_enabled),
         }
     }
 
@@ -271,10 +274,20 @@ impl InputState {
         current_x: i32,
         current_y: i32,
     ) -> bool {
+        self.render_provisional_shape_with_halo(ctx, current_x, current_y, true)
+    }
+
+    pub(crate) fn render_provisional_shape_with_halo(
+        &self,
+        ctx: &cairo::Context,
+        current_x: i32,
+        current_y: i32,
+        text_halo_enabled: bool,
+    ) -> bool {
         match &self.state {
             DrawingState::Drawing { .. } => {
                 let stroke = self.provisional_tool_stroke(current_x, current_y);
-                self.render_provisional_tool_stroke(ctx, stroke)
+                self.render_provisional_tool_stroke(ctx, stroke, text_halo_enabled)
             }
             DrawingState::Selecting {
                 start_x,
@@ -330,13 +343,19 @@ impl InputState {
         current_x: i32,
         current_y: i32,
         damage_regions: &[Rect],
+        text_halo_enabled: bool,
     ) -> bool {
         if matches!(self.state, DrawingState::Drawing { .. }) {
             let stroke = self.provisional_tool_stroke(current_x, current_y);
-            return self.render_provisional_tool_stroke_for_damage(ctx, stroke, damage_regions);
+            return self.render_provisional_tool_stroke_for_damage(
+                ctx,
+                stroke,
+                damage_regions,
+                text_halo_enabled,
+            );
         }
 
-        self.render_provisional_shape(ctx, current_x, current_y)
+        self.render_provisional_shape_with_halo(ctx, current_x, current_y, text_halo_enabled)
     }
 }
 

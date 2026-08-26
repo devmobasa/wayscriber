@@ -238,6 +238,12 @@ default_blur_style = "gaussian"
 # Default marker opacity multiplier (0.05 - 0.90). Multiplies the current color alpha.
 marker_opacity = 0.32
 
+# Font families that Shift+T steps through
+font_cycle = ["Sans", "Monospace", "Serif"]
+
+# Smoothing applied to a finished freehand or marker stroke (0 - 6)
+pen_smoothing = 3
+
 # Default fill state for fill-capable shape tools
 default_fill_enabled = false
 
@@ -253,6 +259,7 @@ font_family = "Sans"
 font_weight = "bold"
 font_style = "normal"
 text_background_enabled = false
+text_halo_enabled = true
 
 # Hit-test tuning + undo retention
 hit_test_tolerance = 6.0
@@ -370,6 +377,8 @@ drag_tool = "default"
 - **Blur style**: Run **Cycle Blur Style** from the command palette to step through blur → pixelate → secure → black out (unbound by default; bind `cycle_blur_style`)
 - **Arrow style**: Run **Cycle Arrow Style** from the command palette to step through standard → pointy → curved → double (unbound by default; bind `cycle_arrow_style`). With arrows selected it restyles those in one undo step; with nothing selected it sets the style for the next arrow
 - **Marker opacity**: Use <kbd>Ctrl+Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
+- **Pen smoothing**: Run **Increase / Decrease Pen Smoothing** from the command palette, or bind `increase_pen_smoothing` / `decrease_pen_smoothing` (see [Pen smoothing](#pen-smoothing))
+- **Text font**: <kbd>Shift+T</kbd> steps through `font_cycle`; **Font Picker** in the command palette opens the full list (see [Font cycle](#font-cycle) and [Font picker](#font-picker))
 - **Regular polygon sides**: Use the Shapes popover Sides control (range: 3-12)
 - **Font size**: Use <kbd>Ctrl+Shift++</kbd>/<kbd>Ctrl+Shift+-</kbd> or <kbd>Shift</kbd> + scroll (range: 8-72px)
 
@@ -379,6 +388,8 @@ drag_tool = "default"
 - Eraser size: 12.0px
 - Eraser mode: Brush
 - Marker opacity: 0.32
+- Font cycle: Sans, Monospace, Serif
+- Pen smoothing: 3 of 6
 - Fill enabled: false
 - Polygon sides: 5
 - Font size: 32.0px
@@ -387,6 +398,176 @@ drag_tool = "default"
 - Hit-test tolerance: 6.0px (linear threshold: 400)
 - Undo stack limit: 100
 - Drag mapping: Drag=Pen, Shift+Drag=Line, Ctrl+Drag=Rect, Ctrl+Shift+Drag=Arrow, Tab+Drag=Ellipse
+
+#### Font cycle
+
+`font_family` sets the font text is written in. `font_cycle` is the short list
+that <kbd>Shift+T</kbd> steps through, for changing it without leaving the
+overlay.
+
+```toml
+[drawing]
+font_cycle = ["Sans", "Monospace", "Serif"]
+```
+
+Any installed family name is valid. Blank and repeated entries are dropped when
+the configuration loads, because a repeat makes the key look like it skipped.
+An empty list turns the action off.
+
+The toolbar's style pill carries a **Bold** toggle and a button showing the
+family in use; the button opens the font picker. Bold applies to selected text,
+or to the next label you type. Under width pressure, Bold leaves with the
+smoothing stepper; the family button remains until the whole style pill is
+hidden in the most compact layout.
+
+Bold is a literal two-state control: it is checked for `font_weight = "bold"`
+and writes `"bold"` or `"normal"`. Numeric weights such as `700` still render at
+that Pango weight, but leave the toggle unchecked because the toggle cannot
+represent every numeric value.
+
+In the configurator this is a row per font under **Font cycle**, each row a
+searchable dropdown over everything installed — every family drawn in its own
+face, so you pick one by looking at it. Rows move up and down, and the order
+they are in is the order <kbd>Shift+T</kbd> walks. A family your config names
+that this machine does not have says so under the row rather than quietly
+showing a different one.
+
+With text or a sticky note selected, <kbd>Shift+T</kbd> restyles that text and
+leaves the tool setting alone. With nothing selected it sets what the next label
+will be written in. A family that is not in the list steps to the first entry,
+so the key always goes somewhere.
+
+The toolbar family button is independent of this list: it shows the current
+family and opens the full picker below.
+
+Family names are matched without regard to case, the way fontconfig resolves
+them: `sans` and `Sans` are one font, so `["Sans", "sans"]` loads as one entry.
+A family name containing a comma is fine — the list is a TOML array, and the
+configurator edits it as a list rather than as one line of text.
+
+#### Font picker
+
+`font_cycle` is the short list you reach for mid-demo. The **Font Picker** is
+the long way round: a modal over every font installed on the system, for the
+times the list does not have what you want.
+
+It applies a font the same way <kbd>Shift+T</kbd> does — to selected text, or to
+the tool. It does not edit `font_cycle`; that list is set in the config file or
+the configurator. Use the picker to find out what a family looks like, then put
+its name in the list if you want it a keystroke away.
+
+Run **Font Picker** from the command palette, bind `open_font_picker`, or click
+the font button in the toolbar's style pill — the one showing the family in use.
+
+| Key | Does |
+|-----|------|
+| Type | Filter by name |
+| <kbd>↑</kbd> <kbd>↓</kbd> <kbd>PgUp</kbd> <kbd>PgDn</kbd> <kbd>Home</kbd> <kbd>End</kbd> | Move the highlight |
+| Wheel | Scroll three rows a tick |
+| <kbd>Tab</kbd> | Switch between all fonts and monospace only |
+| <kbd>Enter</kbd> | Apply |
+| <kbd>Esc</kbd> | Cancel |
+
+Holding an arrow or a page key keeps moving, and speeds up the longer you hold
+it — a list of every installed font is too long to cross at one flat rate. Let
+go and it starts over at the slow rate, so a short press is still one row.
+
+The wheel belongs to the picker while it is open. It does not reach the pen
+behind the panel — which is also true of the colour picker, the precise-entry
+popup, the board picker, a context menu, and the eyedropper and region
+selectors.
+
+Every row is drawn in the font it names, because nobody picks a typeface by
+reading its name. The picker opens on the font already in use, and fonts chosen
+here come back to the top of the list next time.
+
+The panel sizes itself to the output it comes up on: a short screen shows fewer
+rows rather than a panel running off the bottom edge. Long family names are
+shortened with an ellipsis rather than written over what is next to them.
+
+The font list is read once, the first time the picker opens — one enumeration
+covering both the full list and the monospace filter, so <kbd>Tab</kbd> costs
+nothing. It is deliberately not read at startup: the overlay is spawned per
+keybind toggle, so anything on that path is paid every time you reach for it.
+
+#### Text halo
+
+Text is drawn with a contrasting outline so it stays readable over any
+background. Wayscriber picks that halo color from **what the label sits on**,
+sampled from the canvas just before the glyphs are painted.
+
+The halo is enabled by default. Disable it globally for the overlay, text-entry
+caret, page thumbnails, and canvas exports with:
+
+```toml
+[drawing]
+text_halo_enabled = false
+```
+
+This removes the contrasting outline. `text_background_enabled` is separate,
+so its optional box still appears when enabled.
+
+That means a whiteboard, a blackboard, a frozen screen, a zoomed screen, and a
+region already covered by a blur or a filled shape all give the right answer.
+PNG export samples the same way, so an exported image matches the screen.
+
+PDF export cannot be sampled — a PDF page is vector, with no pixels to read
+back. There the page's own background color is used instead. A board on a plain
+background therefore picks the same halo in PDF as it does on screen; a label
+sitting on top of a filled shape or a blur does not, because in PDF nothing can
+see what was painted underneath it. A page whose backdrop is an image falls back
+further still, because one brightness for a whole photograph would be a guess.
+
+Export to PNG when a label sits over other drawing and the halo has to match.
+
+On a transparent board with no frozen or zoomed capture there is also nothing to
+sample: the desktop shows through the compositor and those pixels were never
+Wayscriber's to read. The halo then falls back to a rule based on the text color
+itself, which is what every case used before.
+
+#### Pen smoothing
+
+A pointer path carries the shake of the hand that drew it. `pen_smoothing`
+removes that shake from freehand and marker strokes.
+
+```toml
+[drawing]
+pen_smoothing = 3   # 0 - 6, where 0 keeps the exact drawn path
+```
+
+**Smoothing runs when you lift the pen, not while you draw.** Smoothing a point
+needs the points on either side of it, so a live smoother cannot draw the newest
+sample until the next one arrives, and the line trails the cursor. On a projector
+that lag is visible to the room. Running on release keeps the live stroke exactly
+on the pointer and pays for the smoothing once, on a finished path.
+
+Both endpoints are pinned. A stroke starts and stops where you started and
+stopped it, at every level.
+
+| Level | Result |
+|-------|--------|
+| 0 | The exact path you drew |
+| 3 | The default. Clean, and still your line |
+| 6 | Very smooth |
+
+The level applies to the Pen and the Marker. The Eraser is not smoothed: its path
+decides what gets erased, so moving it would change the result rather than the
+look.
+
+A tablet stroke is smoothed too, because its path shakes like any other. Its
+**pressure values** are not touched — each smoothed point keeps the thickness
+that was sampled with it, so pen dynamics survive.
+
+A stroke is stored as the points it ended up with, so nothing about smoothing
+changes how a shape is written. The level itself is remembered with the rest of
+the tool settings, so a session restores at the level it was saved at. A session
+written before this existed has no level recorded and restores at whatever
+`pen_smoothing` your config says.
+
+The level is also on the toolbar, as a **Smoothing** stepper in the style pill
+whenever the Pen or Marker is up. It reads `Off` at zero. The stepper is one of
+the first things the pill drops on a narrow output; the actions below still
+reach it there.
 
 ### `[arrow]` - Arrow Geometry
 
@@ -1945,6 +2126,10 @@ select_marker_tool = ["H"]
 select_step_marker_tool = []
 select_eraser_tool = ["D"]
 toggle_eraser_mode = ["Ctrl+Shift+E"]
+cycle_font_family = ["Shift+T"]    # step the text font through drawing.font_cycle
+open_font_picker = []              # pick from every installed family
+increase_pen_smoothing = []        # clean up finished strokes more
+decrease_pen_smoothing = []        # keep more of the drawn path
 cycle_blur_style = []              # blur -> pixelate -> secure -> black out
 cycle_arrow_style = []             # standard -> pointy -> curved -> double
 select_spotlight_tool = []         # dim everything except a region

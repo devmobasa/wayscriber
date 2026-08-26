@@ -32,6 +32,25 @@ fn pill_button(label: &str, width: f64, height: f64) -> gtk4::Button {
     button
 }
 
+/// Hold a button's label inside the slot the layout planned for it.
+///
+/// `set_size_request` is a *minimum* in GTK: a label wider than the request
+/// grows the button and pushes the rest of the pill off the plan. Shortening
+/// the string by character count is not enough, because a display face draws
+/// twelve wide characters wider than twelve narrow ones — and a family name is
+/// drawn by the toolbar's own font at whatever width that font gives it.
+///
+/// Applied only where the label is a name the system supplied rather than a
+/// word this program chose, which today is the font button alone.
+fn bound_button_label(button: &gtk4::Button) {
+    if let Some(label) = button.child().and_downcast::<gtk4::Label>() {
+        label.set_ellipsize(pango::EllipsizeMode::End);
+        // Natural width stops asking for the whole string, so the size request
+        // is what decides the slot. The label still fills it when drawn.
+        label.set_max_width_chars(1);
+    }
+}
+
 impl TopBar {
     /// Appends the inline unavailable-state label for a control that can carry
     /// one, and registers its updater.
@@ -180,16 +199,28 @@ impl TopBar {
                         };
                         send_event(&sender, event);
                     });
-                    // The thickness/text-size readouts are distinct numeral
-                    // controls; only the opacity slider keeps its built-in
-                    // readout.
-                    slider.set_value_label_visible(matches!(
-                        control,
-                        model::StylePillControl::OpacitySlider
-                            | model::StylePillControl::SpotlightMagnificationSlider
-                    ));
+                    // Thickness/text-size use distinct numeral controls. The
+                    // other readouts sit beside a full-width track, matching
+                    // the built-in toolbar instead of borrowing track space.
+                    let carries_readout = control.carries_inline_readout();
+                    slider.configure_inline_readout(carries_readout, px(STYLE_VALUE_W));
                     set_semantic_widget_id(&slider.root, control.id().as_ref());
-                    slider.root.set_size_request(px(STYLE_SLIDER_W), -1);
+                    // A bare track with a numeral beside it has no visible
+                    // name, so the accessible one is all a screen reader has.
+                    let accessible_label = control.label(snapshot);
+                    slider
+                        .root
+                        .update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+                    if let Some(tooltip) = control.tooltip(snapshot) {
+                        slider.root.set_tooltip_text(Some(&tooltip));
+                    }
+                    let slider_width = STYLE_SLIDER_W
+                        + if carries_readout {
+                            STYLE_PILL_GAP + STYLE_VALUE_W
+                        } else {
+                            0.0
+                        };
+                    slider.root.set_size_request(px(slider_width), -1);
                     slider.root.set_valign(gtk4::Align::Center);
                     append_gap(&pill, slider.root.upcast_ref(), gap);
                     self.updaters.borrow_mut().push(Box::new(move |snapshot| {
@@ -231,7 +262,9 @@ impl TopBar {
                         button.set_label(&control.required_value_text(snapshot));
                     }));
                 }
-                model::StylePillControl::FillToggle | model::StylePillControl::AutoNumberToggle => {
+                model::StylePillControl::FillToggle
+                | model::StylePillControl::AutoNumberToggle
+                | model::StylePillControl::FontWeightToggle => {
                     let check = gtk4::CheckButton::with_label(control.label(snapshot).as_ref());
                     check.add_css_class("mini");
                     set_semantic_widget_id(&check, control.id().as_ref());
@@ -248,6 +281,9 @@ impl TopBar {
                             let event = match control {
                                 model::StylePillControl::FillToggle => {
                                     ToolbarEvent::ToggleFill(check.is_active())
+                                }
+                                model::StylePillControl::FontWeightToggle => {
+                                    ToolbarEvent::SetFontBold(check.is_active())
                                 }
                                 _ => ToolbarEvent::ToggleArrowLabels(check.is_active()),
                             };
@@ -288,6 +324,38 @@ impl TopBar {
                         }
                     }));
                 }
+                model::StylePillControl::FontFamilyPicker => {
+                    // The family in use, as a button onto the overlay's font
+                    // picker — the same route the color chip takes to the
+                    // gradient picker.
+                    let button = pill_button(
+                        control.label(snapshot).as_ref(),
+                        sz(STYLE_FONT_PICK_W),
+                        sz(STYLE_ROW_H),
+                    );
+                    bound_button_label(&button);
+                    set_semantic_widget_id(&button, control.id().as_ref());
+                    // The same clear gap the builtin puts before this button,
+                    // so the family name does not crowd the "72pt" numeral on
+                    // one toolbar and not the other.
+                    button.set_margin_start(px(STYLE_SEGMENT_LEAD));
+                    if let Some(tooltip) = control.tooltip(snapshot) {
+                        button.set_tooltip_text(Some(&tooltip));
+                    }
+                    let sender = self.feedback.clone();
+                    let event = control.click_event(snapshot);
+                    button.connect_clicked(move |_| {
+                        send_event(&sender, event.clone());
+                    });
+                    append_gap(&pill, button.upcast_ref(), gap);
+                    self.updaters.borrow_mut().push(Box::new(move |snapshot| {
+                        button.set_label(control.label(snapshot).as_ref());
+                        // `set_label` can replace the child, taking the bound
+                        // with it.
+                        bound_button_label(&button);
+                        button.set_tooltip_text(control.tooltip(snapshot).as_deref());
+                    }));
+                }
                 model::StylePillControl::SelectionCycle(_)
                 | model::StylePillControl::ArrowStyleCycle => {
                     let button = pill_button(
@@ -314,15 +382,25 @@ impl TopBar {
                         button.set_tooltip_text(control.tooltip(snapshot).as_deref());
                     }));
                 }
-                model::StylePillControl::SelectionStepper(_) => {
-                    let row = gtk4::Box::new(gtk4::Orientation::Horizontal, px(2.0));
+                model::StylePillControl::PenSmoothingStepper
+                | model::StylePillControl::SelectionStepper(_) => {
+                    // No spacing between the halves: the builtin lays the three
+                    // parts out abutting, at step + value + step exactly, and
+                    // the width planner budgets that. Two 2px child gaps here
+                    // would make this widget 4px wider than the arrangement the
+                    // planner declared fits.
+                    let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
                     set_semantic_widget_id(&row, control.id().as_ref());
+                    // A row of "−  3  +" says nothing about what it steps.
+                    let accessible_label = control.label(snapshot);
+                    row.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
                     row.set_valign(gtk4::Align::Center);
                     let steps = control.required_steps(snapshot);
                     let mut handles: Vec<gtk4::Button> = Vec::new();
                     let minus = pill_button(steps[0].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));
                     set_semantic_widget_id(&minus, steps[0].id);
                     minus.set_tooltip_text(Some(&steps[0].tooltip));
+                    minus.update_property(&[gtk4::accessible::Property::Label(&steps[0].tooltip)]);
                     row.append(&minus);
                     handles.push(minus.clone());
                     let value = gtk4::Label::new(Some(&control.required_value_text(snapshot)));
@@ -332,6 +410,7 @@ impl TopBar {
                     let plus = pill_button(steps[1].label, sz(STYLE_STEP_W), sz(STYLE_ROW_H));
                     set_semantic_widget_id(&plus, steps[1].id);
                     plus.set_tooltip_text(Some(&steps[1].tooltip));
+                    plus.update_property(&[gtk4::accessible::Property::Label(&steps[1].tooltip)]);
                     row.append(&plus);
                     handles.push(plus.clone());
                     for (button, step) in handles.iter().zip(steps.iter()) {
@@ -355,13 +434,12 @@ impl TopBar {
                     // slider has.
                     self.append_style_status_label(&pill, control, snapshot, px(gap));
                 }
-                model::StylePillControl::FontFamilySegment
-                | model::StylePillControl::EraserModeSegment => {
+                model::StylePillControl::EraserModeSegment => {
                     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, px(2.0));
                     set_semantic_widget_id(&row, control.id().as_ref());
                     row.set_valign(gtk4::Align::Center);
-                    // A clear gap before the segment so Sans│Mono never crowd
-                    // the preceding numeral ("72pt") to its left (M7-C3).
+                    // Keep the mode segments visually separate from the
+                    // preceding eraser-size controls.
                     row.set_margin_start(px(STYLE_SEGMENT_LEAD));
                     let segments = control.required_segments(snapshot);
                     let mut handles: Vec<(gtk4::Button, &'static str)> = Vec::new();

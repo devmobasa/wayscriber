@@ -245,9 +245,9 @@ window.wayscriber-toolbar {{
     background-color: {segment_active};
     box-shadow: none;
 }}
-/* The style pill's Sans│Mono segment gets horizontal breathing room and a
-   rounded pill. Scoped to `.pill` so Settings layout-mode tabs keep their
-   flush styling and the builtin segmented-control metrics stay matched. */
+/* Style-pill mode segments get horizontal breathing room and a rounded pill.
+   Scoped to `.pill` so Settings layout-mode tabs keep their flush styling and
+   the builtin segmented-control metrics stay matched. */
 .wayscriber-toolbar .pill button.tab {{
     padding: {spacing_xs}px {segment_pad_h}px;
     border-radius: {radius_button}px;

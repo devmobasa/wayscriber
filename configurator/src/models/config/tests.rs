@@ -106,6 +106,20 @@ fn config_draft_round_trips_shape_size_readout_preference() {
 }
 
 #[test]
+fn config_draft_round_trips_text_halo_preference() {
+    let mut config = Config::default();
+    config.drawing.text_halo_enabled = false;
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(!draft.drawing_text_halo_enabled);
+
+    draft.set_toggle(ToggleField::DrawingTextHalo, true);
+    let round_trip = draft
+        .to_config(&config)
+        .expect("text halo preference should round trip");
+    assert!(round_trip.drawing.text_halo_enabled);
+}
+
+#[test]
 fn config_draft_round_trips_region_capture_settings() {
     let config = Config::default();
     let mut draft = ConfigDraft::from_config(&config);
@@ -129,6 +143,76 @@ fn config_draft_round_trips_region_capture_settings() {
     assert!(!round_trip.capture.region.show_size_readout);
     assert!(round_trip.capture.region.show_loupe);
     assert!(!round_trip.capture.region.show_legend);
+}
+
+#[test]
+fn config_draft_round_trips_the_font_cycle_list() {
+    let mut config = Config::default();
+    config.drawing.font_cycle = vec![
+        "Sans".to_string(),
+        "JetBrains Mono".to_string(),
+        "Noto Serif".to_string(),
+    ];
+
+    let draft = ConfigDraft::from_config(&config);
+    assert_eq!(
+        draft.drawing_font_cycle.entries(),
+        config.drawing.font_cycle
+    );
+
+    let round_trip = draft
+        .to_config(&config)
+        .expect("font cycle should round trip");
+    assert_eq!(round_trip.drawing.font_cycle, config.drawing.font_cycle);
+}
+
+#[test]
+fn an_emptied_font_cycle_turns_the_action_off_rather_than_restoring_defaults() {
+    let config = Config::default();
+    let mut draft = ConfigDraft::from_config(&config);
+
+    draft.drawing_font_cycle.clear();
+
+    let round_trip = draft.to_config(&config).expect("config");
+    assert!(round_trip.drawing.font_cycle.is_empty());
+}
+
+#[test]
+fn a_family_name_containing_a_comma_now_round_trips() {
+    // The editor used to hold this list as one comma-separated line, so a
+    // family whose own name contained a comma could not survive being edited.
+    // The list is a list now; there is nothing left to parse.
+    let mut config = Config::default();
+    config.drawing.font_cycle = vec!["Weird, Font".to_string(), "Sans".to_string()];
+
+    let mut draft = ConfigDraft::from_config(&config);
+    assert_eq!(
+        draft.drawing_font_cycle.entries(),
+        config.drawing.font_cycle
+    );
+
+    // An unrelated edit elsewhere still saves the list untouched.
+    draft.set_text(TextField::DrawingThickness, "5".to_string());
+    let round_trip = draft.to_config(&config).expect("config");
+    assert_eq!(round_trip.drawing.font_cycle, config.drawing.font_cycle);
+}
+
+#[test]
+fn blank_font_cycle_entries_are_dropped_on_save() {
+    // A row can only be set from the installed list, so this is belt and
+    // braces against a config file that carried one.
+    let mut config = Config::default();
+    config.drawing.font_cycle = vec![
+        "  Sans  ".to_string(),
+        String::new(),
+        "   ".to_string(),
+        "Serif".to_string(),
+    ];
+
+    let draft = ConfigDraft::from_config(&config);
+    let round_trip = draft.to_config(&config).expect("config");
+
+    assert_eq!(round_trip.drawing.font_cycle, ["Sans", "Serif"]);
 }
 
 #[test]

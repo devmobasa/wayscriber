@@ -632,10 +632,17 @@ impl SliderRow {
         }
     }
 
-    /// Hide the built-in readout when a separate numeral control shows the
-    /// value (the style pill pairs its sliders with distinct value buttons).
-    pub(super) fn set_value_label_visible(&self, visible: bool) {
+    /// Show an inline readout in a fixed slot immediately after the track.
+    /// Other slider rows keep their natural five-character, right-aligned
+    /// readout; the style pill instead mirrors the built-in toolbar's track +
+    /// readout geometry.
+    pub(super) fn configure_inline_readout(&self, visible: bool, width: i32) {
         self.value_label.set_visible(visible);
+        if visible {
+            self.value_label.set_width_chars(-1);
+            self.value_label.set_size_request(width, -1);
+            self.value_label.set_xalign(0.0);
+        }
     }
 
     /// Applies a backend value unless the user is mid-drag.

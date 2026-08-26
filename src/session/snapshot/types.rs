@@ -77,6 +77,10 @@ pub struct ToolStateSnapshot {
     pub recent_colors: Vec<Color>,
     #[serde(default)]
     pub marker_opacity: Option<f64>,
+    /// Release-time stroke smoothing. Absent in sessions written before it
+    /// existed, which restore the configured level instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pen_smoothing: Option<u8>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spotlight_magnification: Option<f64>,
     #[serde(default)]
@@ -116,6 +120,7 @@ impl ToolStateSnapshot {
             blur_style: input.blur_style,
             recent_colors: input.recent_colors().to_vec(),
             marker_opacity: Some(input.marker_opacity),
+            pen_smoothing: Some(input.pen_smoothing),
             spotlight_magnification: Some(input.spotlight_magnification),
             fill_enabled: Some(input.fill_enabled),
             tool_override: input.session_tool_override(),
@@ -155,6 +160,7 @@ impl ToolStateSnapshot {
             blur_style: config.drawing.default_blur_style,
             recent_colors: Vec::new(),
             marker_opacity: Some(config.drawing.marker_opacity),
+            pen_smoothing: Some(config.drawing.pen_smoothing),
             spotlight_magnification: Some(config.spotlight.magnification),
             fill_enabled: Some(config.drawing.default_fill_enabled),
             tool_override: None,

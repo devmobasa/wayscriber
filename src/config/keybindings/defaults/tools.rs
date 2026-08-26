@@ -36,6 +36,28 @@ pub(crate) fn default_toggle_eraser_mode() -> Vec<String> {
 
 /// Unbound by default, like the blur tool itself; reachable from the command
 /// palette until the user binds a chord.
+/// Unbound by default, like `cycle_blur_style`. Every free chord near the
+/// drawing keys already means something, and smoothing is set once and left.
+pub(crate) fn default_increase_pen_smoothing() -> Vec<String> {
+    Vec::new()
+}
+
+pub(crate) fn default_decrease_pen_smoothing() -> Vec<String> {
+    Vec::new()
+}
+
+/// `T` enters text mode, so `Shift+T` is the natural neighbour for the font
+/// that text will be written in. Omasnap uses the same chord for the same job.
+pub(crate) fn default_cycle_font_family() -> Vec<String> {
+    vec!["Shift+T".to_string()]
+}
+
+/// Unbound by default. `Shift+T` already covers the mid-demo case, and the
+/// picker is a setup gesture reached from the command palette.
+pub(crate) fn default_open_font_picker() -> Vec<String> {
+    Vec::new()
+}
+
 pub(crate) fn default_cycle_blur_style() -> Vec<String> {
     Vec::new()
 }

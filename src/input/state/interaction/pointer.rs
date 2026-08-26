@@ -23,6 +23,9 @@ pub(crate) fn route_pointer_press(state: &mut InputState, event: PointerPress) -
     // The precise-entry popup is keyboard-only: any overlay press cancels
     // it and the press then routes normally.
     let _ = state.cancel_precision_entry();
+    if let Some(outcome) = adapters::handle_font_picker_press(state, event.button(), points) {
+        return outcome;
+    }
     if let Some(outcome) = adapters::handle_color_picker_press(state, event.button(), points) {
         return outcome;
     }
@@ -72,6 +75,9 @@ pub(crate) fn route_pointer_motion(state: &mut InputState, event: PointerMotion)
         state.update_zoom_chip_hover_from_pointer(screen.x(), screen.y());
     }
     if let Some(outcome) = adapters::handle_radial_menu_motion(state, points) {
+        return outcome;
+    }
+    if let Some(outcome) = adapters::handle_font_picker_motion(state, points) {
         return outcome;
     }
     if let Some(outcome) = adapters::handle_color_picker_motion(state, points) {

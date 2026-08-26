@@ -32,6 +32,7 @@ fn snapshot_context<'a>(
         scope: PdfExportScope::ActiveBoard,
         config,
         desktop_backdrop: None,
+        text_halo_enabled: true,
         spotlight: Default::default(),
     }
 }

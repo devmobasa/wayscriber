@@ -1560,3 +1560,32 @@ fn an_unparseable_binding_does_not_disturb_conflict_resolution() {
         Action::SelectPenTool
     );
 }
+
+#[test]
+fn validate_and_clamp_drops_blank_and_repeated_font_cycle_entries() {
+    let mut config = Config::default();
+    config.drawing.font_cycle = vec![
+        "  Sans  ".to_string(),
+        String::new(),
+        "Serif".to_string(),
+        "   ".to_string(),
+        "Sans".to_string(),
+    ];
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.drawing.font_cycle, ["Sans", "Serif"]);
+}
+
+#[test]
+fn a_font_cycle_repeat_in_another_case_is_still_a_repeat() {
+    // Fontconfig resolves a family name without regard to case, so these two
+    // entries are one font. Keeping both would leave a step that changes the
+    // spelling and nothing a viewer can see.
+    let mut config = Config::default();
+    config.drawing.font_cycle = vec!["Sans".to_string(), "sans".to_string()];
+
+    config.validate_and_clamp();
+
+    assert_eq!(config.drawing.font_cycle, ["Sans"]);
+}

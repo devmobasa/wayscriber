@@ -22,6 +22,16 @@ pub fn render_board_picker(
     screen_width: u32,
     screen_height: u32,
 ) {
+    render_board_picker_with_halo(ctx, input_state, screen_width, screen_height, true);
+}
+
+pub(crate) fn render_board_picker_with_halo(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+    text_halo_enabled: bool,
+) {
     if !input_state.is_board_picker_open() {
         return;
     }
@@ -136,7 +146,14 @@ pub fn render_board_picker(
     render_board_rows(ctx, input_state, layout, board_count, max_count);
     render_board_palette(ctx, input_state, layout);
 
-    render_page_panel(ctx, input_state, layout, screen_width, screen_height);
+    render_page_panel(
+        ctx,
+        input_state,
+        layout,
+        screen_width,
+        screen_height,
+        text_halo_enabled,
+    );
 
     let _ = ctx.restore();
 }

@@ -1,5 +1,6 @@
 mod boards;
 mod draft;
+mod font_cycle;
 mod parse;
 mod performance_fields;
 mod presets;

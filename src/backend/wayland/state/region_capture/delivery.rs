@@ -313,6 +313,7 @@ impl WaylandState {
                         .boards
                         .active_frame()
                         .clone_without_history(),
+                    text_halo_enabled: self.config.drawing.text_halo_enabled,
                     spotlight: crate::canvas_export::SpotlightPassSnapshot {
                         dim_opacity: self.input_state.spotlight_dim_opacity,
                         feather: self.input_state.spotlight_feather,

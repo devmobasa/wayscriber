@@ -15,6 +15,7 @@ use super::super::super::fields::{
 use super::super::super::keybindings::KeybindingsDraft;
 use super::super::super::util::format_float;
 use super::super::boards::BoardsDraft;
+use super::super::font_cycle::FontCycleDraft;
 use super::super::presets::PresetsDraft;
 use super::super::quick_colors::QuickColorsDraft;
 use super::super::render_profiles::RenderProfilesDraft;
@@ -72,6 +73,8 @@ impl ConfigDraft {
             drawing_default_font_size: format_float(config.drawing.default_font_size),
             drawing_polygon_sides: config.drawing.polygon_sides.to_string(),
             drawing_marker_opacity: format_float(config.drawing.marker_opacity),
+            drawing_pen_smoothing: config.drawing.pen_smoothing.to_string(),
+            drawing_font_cycle: FontCycleDraft::from_entries(config.drawing.font_cycle.clone()),
             drawing_hit_test_tolerance: format_float(config.drawing.hit_test_tolerance),
             drawing_hit_test_linear_threshold: config.drawing.hit_test_linear_threshold.to_string(),
             drawing_undo_stack_limit: config.drawing.undo_stack_limit.to_string(),
@@ -79,6 +82,7 @@ impl ConfigDraft {
             drawing_font_weight: weight_value,
             drawing_font_style: style_value,
             drawing_text_background_enabled: config.drawing.text_background_enabled,
+            drawing_text_halo_enabled: config.drawing.text_halo_enabled,
             drawing_default_fill_enabled: config.drawing.default_fill_enabled,
             drawing_drag_tool: ToolOption::from_drag_bindable_tool(config.drawing.drag_tool),
             drawing_shift_drag_tool: ToolOption::from_drag_bindable_tool(

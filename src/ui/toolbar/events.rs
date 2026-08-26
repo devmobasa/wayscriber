@@ -87,8 +87,14 @@ pub enum ToolbarEvent {
     SetMarkerOpacity(f64),
     NudgeMarkerOpacity(f64),
     SetSpotlightMagnification(f64),
+    /// Smoothing passes applied to freehand and marker strokes on release.
+    SetPenSmoothing(u8),
     SetEraserMode(EraserMode),
     SetFont(FontDescriptor),
+    /// Turn bold on or off for selected text, or for the next label typed.
+    SetFontBold(bool),
+    /// Open the overlay's system font picker from the current-family button.
+    OpenFontPicker,
     SetFontSize(f64),
     NudgeFontSize(f64),
     ToggleFill(bool),

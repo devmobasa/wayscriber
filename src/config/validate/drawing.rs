@@ -1,6 +1,6 @@
 use super::Config;
 use crate::config::types::DEFAULT_HIT_TEST_TOLERANCE;
-use crate::draw::shape::{REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
+use crate::draw::shape::{MAX_PEN_SMOOTHING, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
 impl Config {
@@ -37,6 +37,39 @@ impl Config {
         }
 
         // Marker opacity: 0.05 - 0.9
+        // Font cycle: drop blank entries and repeats, keeping the given order.
+        // A repeat would make the action appear to skip, and a blank name would
+        // resolve to whatever the font system falls back to.
+        //
+        // Repeats are judged without case, the way fontconfig resolves a family
+        // name. `["Sans", "sans"]` is one font written twice, and keeping both
+        // would leave a step that changes only the spelling.
+        let mut seen = std::collections::BTreeSet::new();
+        let before = self.drawing.font_cycle.len();
+        self.drawing.font_cycle.retain(|family| {
+            let trimmed = family.trim();
+            !trimmed.is_empty() && seen.insert(trimmed.to_lowercase())
+        });
+        if self.drawing.font_cycle.len() != before {
+            log::warn!(
+                "Dropped {} blank or repeated entries from drawing.font_cycle",
+                before - self.drawing.font_cycle.len()
+            );
+        }
+        for family in &mut self.drawing.font_cycle {
+            let trimmed = family.trim().to_string();
+            *family = trimmed;
+        }
+
+        // Pen smoothing: 0 - MAX_PEN_SMOOTHING passes
+        if self.drawing.pen_smoothing > MAX_PEN_SMOOTHING {
+            log::warn!(
+                "Invalid pen_smoothing {}, clamping to 0-{MAX_PEN_SMOOTHING} range",
+                self.drawing.pen_smoothing
+            );
+            self.drawing.pen_smoothing = MAX_PEN_SMOOTHING;
+        }
+
         if !(0.05..=0.9).contains(&self.drawing.marker_opacity) {
             log::warn!(
                 "Invalid marker_opacity {:.2}, clamping to 0.05-0.90 range",

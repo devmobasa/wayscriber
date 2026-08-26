@@ -43,7 +43,7 @@ impl WaylandState {
             );
             match self.input_state.text_input_mode {
                 crate::input::TextInputMode::Plain => {
-                    crate::draw::render_text(
+                    crate::draw::render_text_with_halo(
                         ctx,
                         *x,
                         *y,
@@ -53,6 +53,7 @@ impl WaylandState {
                         &self.input_state.font_descriptor,
                         self.input_state.text_background_enabled,
                         self.input_state.text_wrap_width,
+                        self.config.drawing.text_halo_enabled,
                     );
                 }
                 crate::input::TextInputMode::StickyNote => {
@@ -110,22 +111,7 @@ impl WaylandState {
         let caret_x = x as f64 + geom.x;
         let top = y as f64 + geom.y_from_baseline;
         let bottom = top + geom.height;
-        ctx.save().ok();
-        // Widths come from the draw layer so the damage tracker sizes the
-        // caret's repaint rectangle from the exact same numbers.
-        let line_width = crate::draw::caret_line_width(size);
-        let outline = crate::draw::text_outline_color(color);
-        ctx.set_source_rgba(outline.r, outline.g, outline.b, outline.a);
-        ctx.set_line_width(crate::draw::caret_outline_width(size));
-        ctx.move_to(caret_x, top);
-        ctx.line_to(caret_x, bottom);
-        let _ = ctx.stroke();
-        ctx.set_source_rgba(color.r, color.g, color.b, color.a);
-        ctx.set_line_width(line_width);
-        ctx.move_to(caret_x, top);
-        ctx.line_to(caret_x, bottom);
-        let _ = ctx.stroke();
-        ctx.restore().ok();
+        render_caret_stroke(ctx, caret_x, top, bottom, color, size, &self.config.drawing);
     }
 
     /// Underline the IME preedit span (a byte range into `preview_text`) so
@@ -215,7 +201,7 @@ impl WaylandState {
                 background_enabled,
                 wrap_width,
             } if !text.is_empty() => {
-                crate::draw::render_text(
+                crate::draw::render_text_with_halo(
                     ctx,
                     *x,
                     *y,
@@ -225,6 +211,7 @@ impl WaylandState {
                     font_descriptor,
                     *background_enabled,
                     *wrap_width,
+                    self.config.drawing.text_halo_enabled,
                 );
             }
             Shape::StickyNote {
@@ -318,6 +305,46 @@ impl WaylandState {
     }
 }
 
+fn render_caret_stroke(
+    ctx: &cairo::Context,
+    caret_x: f64,
+    top: f64,
+    bottom: f64,
+    color: crate::draw::Color,
+    size: f64,
+    drawing: &crate::config::DrawingConfig,
+) {
+    ctx.save().ok();
+    // Widths come from the draw layer so the damage tracker sizes the caret's
+    // repaint rectangle from the exact same numbers.
+    let line_width = crate::draw::caret_line_width(size);
+    if drawing.text_halo_enabled {
+        // The caret stands where the glyphs will, so it asks the same question
+        // they do: what is behind this point on the canvas?
+        let background_luminance = crate::draw::painted_background_luminance(
+            ctx,
+            (
+                caret_x,
+                top,
+                crate::draw::caret_outline_width(size),
+                bottom - top,
+            ),
+        );
+        let outline = crate::draw::text_outline_color(color, background_luminance);
+        ctx.set_source_rgba(outline.r, outline.g, outline.b, outline.a);
+        ctx.set_line_width(crate::draw::caret_outline_width(size));
+        ctx.move_to(caret_x, top);
+        ctx.line_to(caret_x, bottom);
+        let _ = ctx.stroke();
+    }
+    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
+    ctx.set_line_width(line_width);
+    ctx.move_to(caret_x, top);
+    ctx.line_to(caret_x, bottom);
+    let _ = ctx.stroke();
+    ctx.restore().ok();
+}
+
 fn text_preview_decoration_color(
     mode: crate::input::TextInputMode,
     current_color: crate::draw::Color,
@@ -332,7 +359,8 @@ fn text_preview_decoration_color(
 
 #[cfg(test)]
 mod tests {
-    use super::text_preview_decoration_color;
+    use super::{render_caret_stroke, text_preview_decoration_color};
+    use crate::config::DrawingConfig;
     use crate::draw::Color;
     use crate::input::TextInputMode;
 
@@ -352,6 +380,39 @@ mod tests {
         assert_eq!(
             text_preview_decoration_color(TextInputMode::Plain, background),
             background
+        );
+    }
+
+    fn caret_pixels(text_halo_enabled: bool) -> Vec<u8> {
+        let mut surface =
+            cairo::ImageSurface::create(cairo::Format::ARgb32, 80, 100).expect("caret surface");
+        {
+            let ctx = cairo::Context::new(&surface).expect("caret context");
+            ctx.set_source_rgb(1.0, 1.0, 1.0);
+            ctx.paint().expect("white backdrop");
+            let drawing = DrawingConfig {
+                text_halo_enabled,
+                ..DrawingConfig::default()
+            };
+            render_caret_stroke(
+                &ctx,
+                40.0,
+                20.0,
+                80.0,
+                Color::new(0.96, 0.2, 0.25, 1.0),
+                36.0,
+                &drawing,
+            );
+        }
+        surface.flush();
+        surface.data().expect("caret pixels").to_vec()
+    }
+
+    #[test]
+    fn text_entry_caret_honours_the_configured_halo_setting() {
+        assert!(
+            caret_pixels(true) != caret_pixels(false),
+            "caret rendering must read DrawingConfig::text_halo_enabled",
         );
     }
 }

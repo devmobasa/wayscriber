@@ -14,6 +14,8 @@ pub struct CanvasExportSnapshot {
     pub backdrop: CanvasExportBackdropSnapshot,
     pub board: BoardExportSnapshot,
     pub render_profile: Option<RenderColorProfile>,
+    /// Whether exported text receives a contrasting outline.
+    pub text_halo_enabled: bool,
     /// Spotlight appearance, mirrored from the live overlay.
     pub spotlight: SpotlightPassSnapshot,
 }
@@ -136,6 +138,7 @@ fn canvas_page_from_snapshot(snapshot: &CanvasExportSnapshot) -> CanvasPageExpor
         viewport_height: snapshot.viewport.logical_height,
         origin_x: snapshot.viewport.origin_x,
         origin_y: snapshot.viewport.origin_y,
+        text_halo_enabled: snapshot.text_halo_enabled,
         spotlight: snapshot.spotlight,
     }
 }

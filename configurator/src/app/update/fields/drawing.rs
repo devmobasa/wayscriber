@@ -141,6 +141,57 @@ impl ConfiguratorApp {
         Vec::new()
     }
 
+    pub(in crate::app::update) fn handle_font_cycle_added(&mut self) -> Vec<Effect> {
+        match self.draft.drawing_font_cycle.add() {
+            Ok(()) => {
+                self.status = StatusMessage::idle();
+                self.refresh_dirty_flag();
+            }
+            Err(error) => self.status = StatusMessage::warning(error.to_string()),
+        }
+        Vec::new()
+    }
+
+    pub(in crate::app::update) fn handle_font_cycle_removed(
+        &mut self,
+        index: usize,
+    ) -> Vec<Effect> {
+        self.status = StatusMessage::idle();
+        if self.draft.drawing_font_cycle.remove(index) {
+            self.refresh_dirty_flag();
+        }
+        Vec::new()
+    }
+
+    pub(in crate::app::update) fn handle_font_cycle_moved(
+        &mut self,
+        index: usize,
+        delta: isize,
+    ) -> Vec<Effect> {
+        self.status = StatusMessage::idle();
+        if self.draft.drawing_font_cycle.move_entry(index, delta) {
+            self.refresh_dirty_flag();
+        }
+        Vec::new()
+    }
+
+    pub(in crate::app::update) fn handle_font_cycle_changed(
+        &mut self,
+        index: usize,
+        family: String,
+    ) -> Vec<Effect> {
+        match self.draft.drawing_font_cycle.set(index, family) {
+            Ok(changed) => {
+                self.status = StatusMessage::idle();
+                if changed {
+                    self.refresh_dirty_flag();
+                }
+            }
+            Err(error) => self.status = StatusMessage::warning(error.to_string()),
+        }
+        Vec::new()
+    }
+
     /// Carries each surviving quick-color edit buffer to its row's new index.
     ///
     /// The buffer can be half-typed and therefore absent from the draft. Add,

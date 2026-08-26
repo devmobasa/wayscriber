@@ -33,6 +33,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
         height,
         screen_width,
         screen_height,
+        text_halo_enabled,
         page_number,
         page_name,
         is_active,
@@ -66,6 +67,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
         height,
         screen_width,
         screen_height,
+        text_halo_enabled,
     });
 
     if is_active {
@@ -293,6 +295,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(args: PagePre
         thumb_h,
         screen_width,
         screen_height,
+        text_halo_enabled,
         page_number,
     } = args;
     let base_w = thumb_w * PREVIEW_SCALE;
@@ -338,6 +341,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(args: PagePre
         height: preview_h,
         screen_width,
         screen_height,
+        text_halo_enabled,
     });
 
     let label = frame

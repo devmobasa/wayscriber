@@ -9,6 +9,9 @@ pub const QUICK_COLOR_RENDER_LIMIT: usize = 24;
 /// Default tolerance used when selecting or targeting drawn shapes.
 pub(crate) const DEFAULT_HIT_TEST_TOLERANCE: f64 = 6.0;
 
+/// Default release-time smoothing level for freehand and marker strokes.
+pub const DEFAULT_PEN_SMOOTHING: u8 = 3;
+
 /// Drawing-related settings.
 ///
 /// Controls the default appearance of drawing tools when the overlay first opens.
@@ -48,6 +51,22 @@ pub struct DrawingConfig {
     /// Default marker opacity multiplier (0.05 - 0.9), applied to the current color alpha
     #[serde(default = "default_marker_opacity")]
     pub marker_opacity: f64,
+
+    /// Font families the **Cycle Font Family** action steps through.
+    ///
+    /// Any installed family name is valid. An empty list turns the action off.
+    /// This does not restrict the font a text shape can carry; it is the short
+    /// list worth reaching for from the keyboard mid-demo.
+    #[serde(default = "default_font_cycle")]
+    pub font_cycle: Vec<String>,
+
+    /// Release-time smoothing passes for freehand and marker strokes (0 - 6).
+    ///
+    /// 0 keeps the exact path the pointer drew. Higher values clean up the
+    /// finished stroke without moving either of its endpoints. The live stroke
+    /// always follows the raw pointer, whatever this is set to.
+    #[serde(default = "default_pen_smoothing")]
+    pub pen_smoothing: u8,
 
     /// Whether shapes start filled when applicable
     #[serde(default = "default_fill_enabled")]
@@ -118,6 +137,10 @@ pub struct DrawingConfig {
     /// Enable semi-transparent background box behind text for better contrast
     #[serde(default = "default_text_background")]
     pub text_background_enabled: bool,
+
+    /// Draw a contrasting outline around text for readability.
+    #[serde(default = "default_text_halo")]
+    pub text_halo_enabled: bool,
 }
 
 impl Default for DrawingConfig {
@@ -130,6 +153,8 @@ impl Default for DrawingConfig {
             default_eraser_mode: default_eraser_mode(),
             default_blur_style: default_blur_style(),
             marker_opacity: default_marker_opacity(),
+            font_cycle: default_font_cycle(),
+            pen_smoothing: default_pen_smoothing(),
             default_fill_enabled: default_fill_enabled(),
             polygon_sides: default_polygon_sides(),
             default_font_size: default_font_size(),
@@ -146,6 +171,7 @@ impl Default for DrawingConfig {
             font_weight: default_font_weight(),
             font_style: default_font_style(),
             text_background_enabled: default_text_background(),
+            text_halo_enabled: default_text_halo(),
         }
     }
 }
@@ -872,6 +898,22 @@ fn default_marker_opacity() -> f64 {
     0.32
 }
 
+/// The three families every desktop has, in the order most people want them:
+/// prose, code, then something with serifs for contrast on a slide.
+fn default_font_cycle() -> Vec<String> {
+    vec![
+        "Sans".to_string(),
+        "Monospace".to_string(),
+        "Serif".to_string(),
+    ]
+}
+
+/// A middle setting. Enough to take the shake out of a normal hand, little
+/// enough that a deliberate corner is still a corner.
+fn default_pen_smoothing() -> u8 {
+    DEFAULT_PEN_SMOOTHING
+}
+
 fn default_fill_enabled() -> bool {
     false
 }
@@ -898,6 +940,10 @@ fn default_font_style() -> String {
 
 fn default_text_background() -> bool {
     false
+}
+
+fn default_text_halo() -> bool {
+    true
 }
 
 fn default_hit_test_tolerance() -> f64 {

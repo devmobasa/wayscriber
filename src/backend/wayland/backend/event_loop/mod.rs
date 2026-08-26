@@ -134,6 +134,7 @@ pub(super) fn run_event_loop(
         let autosave_timeout = session_save::autosave_timeout(state, now);
         let focus_exit_timeout = state.focus_exit_timeout(now);
         let command_palette_repeat_timeout = state.input_state.command_palette_repeat_timeout(now);
+        let font_picker_repeat_timeout = state.input_state.font_picker_repeat_timeout(now);
         let capture_timeout = capture::capture_timeout(state, now);
         let interaction_timeout =
             interaction::interaction_timeout(state.spotlight_wheel_idle_deadline, now);
@@ -171,6 +172,7 @@ pub(super) fn run_event_loop(
         };
         let timeout = min_timeout(timeout, toolbar_handoff_timeout);
         let timeout = min_timeout(timeout, command_palette_repeat_timeout);
+        let timeout = min_timeout(timeout, font_picker_repeat_timeout);
         let timeout = min_timeout(timeout, capture_timeout);
         let timeout = min_timeout(timeout, interaction_timeout);
         let timeout = min_timeout(timeout, durable_action_timeout);
@@ -260,6 +262,10 @@ pub(super) fn run_event_loop(
             .input_state
             .tick_command_palette_repeat(Instant::now())
         {
+            state.input_state.needs_redraw = true;
+        }
+
+        if state.input_state.tick_font_picker_repeat(Instant::now()) {
             state.input_state.needs_redraw = true;
         }
 

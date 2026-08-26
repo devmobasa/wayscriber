@@ -356,6 +356,39 @@ pub(crate) fn handle_color_picker_motion(
     Some(RoutingOutcome::Consumed(ConsumedBy::ColorPickerPopup))
 }
 
+pub(crate) fn handle_font_picker_motion(
+    state: &mut InputState,
+    points: PointerPoints,
+) -> Option<RoutingOutcome> {
+    if !state.is_font_picker_open() {
+        return None;
+    }
+    let screen = points.screen();
+    state.font_picker_hover(f64::from(screen.x()), f64::from(screen.y()));
+    // Consumed whether or not a row was hit: the modal owns the pointer while
+    // it is up, or a hover would reach the canvas behind it.
+    Some(RoutingOutcome::Consumed(ConsumedBy::FontPicker))
+}
+
+pub(crate) fn handle_font_picker_press(
+    state: &mut InputState,
+    button: MouseButton,
+    points: PointerPoints,
+) -> Option<RoutingOutcome> {
+    if !state.is_font_picker_open() {
+        return None;
+    }
+    if button != MouseButton::Left {
+        // Any other button dismisses, the way right-click leaves the other
+        // pickers rather than doing something surprising inside them.
+        state.close_font_picker();
+        return Some(RoutingOutcome::Consumed(ConsumedBy::FontPicker));
+    }
+    let screen = points.screen();
+    state.font_picker_press(f64::from(screen.x()), f64::from(screen.y()));
+    Some(RoutingOutcome::Consumed(ConsumedBy::FontPicker))
+}
+
 pub(crate) fn handle_board_picker_motion(
     state: &mut InputState,
     points: PointerPoints,

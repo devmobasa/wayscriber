@@ -122,6 +122,14 @@ pub(super) fn build_main_sections(
                 ),
                 "Adjust thickness",
             ),
+            row(
+                bindings_or_fallback(
+                    bindings,
+                    &[Action::IncreasePenSmoothing, Action::DecreasePenSmoothing],
+                    NOT_BOUND_LABEL,
+                ),
+                "Adjust stroke smoothing",
+            ),
         ],
         badges: color_badges.clone(),
         icon: Some(toolbar_icons::draw_icon_pen),
@@ -150,6 +158,8 @@ pub(super) fn build_main_sections(
         rows: vec![
             action_row(bindings, Action::EnterTextMode, NOT_BOUND_LABEL),
             action_row(bindings, Action::EnterStickyNoteMode, NOT_BOUND_LABEL),
+            action_row(bindings, Action::CycleFontFamily, NOT_BOUND_LABEL),
+            action_row(bindings, Action::OpenFontPicker, NOT_BOUND_LABEL),
             action_row(bindings, Action::IncreaseFontSize, NOT_BOUND_LABEL),
             action_row(bindings, Action::DecreaseFontSize, NOT_BOUND_LABEL),
             action_row(bindings, Action::ToggleFill, NOT_BOUND_LABEL),

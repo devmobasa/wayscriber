@@ -2,6 +2,7 @@ use super::*;
 use crate::config::{PresenterToolBehavior, PresetToolStatesConfig, ToolPresetConfig};
 use crate::draw::{ArrowStyle, BlurStyle};
 use crate::input::{DragBinding, DragToolBindings, PerToolDrawingSettings};
+use crate::ui::toolbar::model::{StylePillControl, StylePillSpec, TopStripPlan};
 use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
 
 #[test]
@@ -2432,4 +2433,198 @@ fn cycling_arrow_style_with_a_non_arrow_selected_falls_back_to_the_default() {
     state.handle_action(Action::CycleArrowStyle);
 
     assert_eq!(state.arrow_style, ArrowStyle::Pointy);
+}
+
+#[test]
+fn bold_reaches_selected_text_and_otherwise_sets_what_the_next_label_uses() {
+    // The same target rule the font picker uses for a family: edit what the
+    // user is looking at, or set the tool when they are looking at nothing.
+    let mut state = create_test_input_state();
+    let tool_weight = state.font_descriptor.weight.clone();
+    let id = state.boards.active_frame_mut().add_shape(Shape::Text {
+        x: 10,
+        y: 10,
+        text: "hello".to_string(),
+        color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
+        size: 24.0,
+        font_descriptor: crate::draw::FontDescriptor::new(
+            "Sans".to_string(),
+            "normal".to_string(),
+            "normal".to_string(),
+        ),
+        background_enabled: false,
+        wrap_width: None,
+    });
+    state.set_selection(vec![id]);
+
+    assert!(state.apply_toolbar_event(ToolbarEvent::SetFontBold(true)));
+
+    let frame = state.boards.active_frame();
+    let Some(Shape::Text {
+        font_descriptor, ..
+    }) = frame.shape(id).map(|drawn| &drawn.shape)
+    else {
+        panic!("the text shape is still there");
+    };
+    assert!(font_descriptor.is_bold());
+    assert_eq!(
+        state.font_descriptor.weight, tool_weight,
+        "restyling a selection must not also change what the next label uses"
+    );
+
+    // Nothing selected: the tool takes it instead. The built-in default weight
+    // is already bold, so this starts by turning it off — which is the state a
+    // user had no way back out of once the Sans/Mono segment was removed.
+    state.clear_selection();
+    assert!(state.apply_toolbar_event(ToolbarEvent::SetFontBold(false)));
+    assert!(!state.font_descriptor.is_bold());
+    assert!(state.apply_toolbar_event(ToolbarEvent::SetFontBold(true)));
+    assert!(state.font_descriptor.is_bold());
+}
+
+#[test]
+fn rendered_bold_control_reads_and_mutates_the_selected_text_target() {
+    // Regression: the tool default is bold while the selected text is normal.
+    // Building the shared rendered-control spec must produce an unchecked
+    // toggle whose click bolds the selection, not a checked toggle whose click
+    // sends the no-op "turn normal" event.
+    let mut state = create_test_input_state();
+    state.set_font_descriptor(crate::draw::FontDescriptor::new(
+        "Sans".to_string(),
+        "bold".to_string(),
+        "normal".to_string(),
+    ));
+    let id = state.boards.active_frame_mut().add_shape(Shape::Text {
+        x: 10,
+        y: 10,
+        text: "selected".to_string(),
+        color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
+        size: 24.0,
+        font_descriptor: crate::draw::FontDescriptor::new(
+            "Serif".to_string(),
+            "normal".to_string(),
+            "normal".to_string(),
+        ),
+        background_enabled: false,
+        wrap_width: None,
+    });
+    state.set_selection(vec![id]);
+    state.set_tool_override(Some(Tool::Select));
+
+    let snapshot = ToolbarSnapshot::from_input(&state);
+    let spec = StylePillSpec::build(&snapshot, &TopStripPlan::unconstrained());
+    let bold = spec
+        .controls()
+        .iter()
+        .copied()
+        .find(|control| *control == StylePillControl::FontWeightToggle)
+        .expect("selected text renders a Bold control");
+    assert!(!bold.active(&snapshot));
+    let event = bold.click_event(&snapshot);
+    assert_eq!(event, ToolbarEvent::SetFontBold(true));
+
+    assert!(state.apply_toolbar_event(event));
+    let frame = state.boards.active_frame();
+    let Some(Shape::Text {
+        font_descriptor, ..
+    }) = frame.shape(id).map(|drawn| &drawn.shape)
+    else {
+        panic!("the selected text is still there");
+    };
+    assert!(font_descriptor.is_bold());
+    assert!(
+        state.font_descriptor.is_bold(),
+        "selected-text mutation leaves the tool default alone"
+    );
+}
+
+#[test]
+fn rendered_bold_control_skips_locked_text_and_disables_without_an_editable_target() {
+    let mut state = create_test_input_state();
+    let locked = state.boards.active_frame_mut().add_shape(Shape::Text {
+        x: 10,
+        y: 10,
+        text: "locked bold".to_string(),
+        color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
+        size: 24.0,
+        font_descriptor: crate::draw::FontDescriptor::new(
+            "Sans".to_string(),
+            "bold".to_string(),
+            "normal".to_string(),
+        ),
+        background_enabled: false,
+        wrap_width: None,
+    });
+    state
+        .boards
+        .active_frame_mut()
+        .shape_mut(locked)
+        .expect("locked text")
+        .locked = true;
+    let editable = state.boards.active_frame_mut().add_shape(Shape::Text {
+        x: 20,
+        y: 20,
+        text: "editable normal".to_string(),
+        color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
+        size: 24.0,
+        font_descriptor: crate::draw::FontDescriptor::new(
+            "Sans".to_string(),
+            "normal".to_string(),
+            "normal".to_string(),
+        ),
+        background_enabled: false,
+        wrap_width: None,
+    });
+    state.set_selection(vec![locked, editable]);
+    state.set_tool_override(Some(Tool::Select));
+
+    let snapshot = ToolbarSnapshot::from_input(&state);
+    let spec = StylePillSpec::build(&snapshot, &TopStripPlan::unconstrained());
+    let bold = spec
+        .controls()
+        .iter()
+        .copied()
+        .find(|control| *control == StylePillControl::FontWeightToggle)
+        .expect("selected text renders a Bold control");
+    assert!(bold.enabled(&snapshot));
+    assert!(!bold.active(&snapshot), "editable normal text owns state");
+    assert_eq!(bold.click_event(&snapshot), ToolbarEvent::SetFontBold(true));
+    assert!(state.apply_toolbar_event(bold.click_event(&snapshot)));
+
+    let frame = state.boards.active_frame();
+    let is_bold = |id| match &frame.shape(id).expect("selected text").shape {
+        Shape::Text {
+            font_descriptor, ..
+        } => font_descriptor.is_bold(),
+        other => panic!("expected text, got {other:?}"),
+    };
+    assert!(is_bold(locked), "the locked bold shape stays bold");
+    assert!(is_bold(editable), "the editable normal shape becomes bold");
+
+    state
+        .boards
+        .active_frame_mut()
+        .shape_mut(editable)
+        .expect("editable text")
+        .locked = true;
+    let snapshot = ToolbarSnapshot::from_input(&state);
+    assert!(snapshot.selection_has_text);
+    assert_eq!(snapshot.selected_text_bold, None);
+    assert!(!bold.enabled(&snapshot));
+}
+
+#[test]
+fn turning_bold_off_leaves_the_family_and_style_alone() {
+    let mut state = create_test_input_state();
+    state.set_font_descriptor(crate::draw::FontDescriptor::new(
+        "Serif".to_string(),
+        "bold".to_string(),
+        "italic".to_string(),
+    ));
+
+    assert!(state.apply_toolbar_event(ToolbarEvent::SetFontBold(false)));
+
+    assert_eq!(state.font_descriptor.family, "Serif");
+    assert_eq!(state.font_descriptor.style, "italic");
+    assert!(!state.font_descriptor.is_bold());
 }

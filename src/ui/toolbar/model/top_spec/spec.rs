@@ -13,6 +13,18 @@ pub(crate) struct TopStripPlan {
     /// non-essential island and yield first under width pressure, before any
     /// tool or utility leaves the strip.
     pub(crate) drop_presets: bool,
+    /// Whether the style pill has shed its secondary controls for width.
+    ///
+    /// The rung directly above `compact`, which hides the pill outright.
+    ///
+    /// The smoothing stepper and the bold toggle leave first. Both are choices
+    /// made once for a session rather than adjusted mid-demo, unlike the color,
+    /// the thickness, and the size beside them — and the rung below this one
+    /// takes the whole pill, so shedding two controls is strictly better than
+    /// losing all of them.
+    ///
+    /// The font button stays because it is the toolbar's family chooser.
+    pub(crate) drop_style_extras: bool,
     pub(crate) compact: bool,
 }
 
@@ -25,6 +37,7 @@ impl TopStripPlan {
             dropped_tools: Vec::new(),
             dropped_utilities: Vec::new(),
             drop_presets: false,
+            drop_style_extras: false,
             compact: false,
         }
     }

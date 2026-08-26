@@ -151,6 +151,9 @@ impl ConfigDraft {
             ToggleField::DrawingTextBackground => {
                 self.drawing_text_background_enabled = value;
             }
+            ToggleField::DrawingTextHalo => {
+                self.drawing_text_halo_enabled = value;
+            }
             ToggleField::DrawingFillEnabled => {
                 self.drawing_default_fill_enabled = value;
             }
@@ -327,6 +330,7 @@ impl ConfigDraft {
             TextField::DrawingFontSize => self.drawing_default_font_size = value,
             TextField::DrawingPolygonSides => self.drawing_polygon_sides = value,
             TextField::DrawingMarkerOpacity => self.drawing_marker_opacity = value,
+            TextField::DrawingPenSmoothing => self.drawing_pen_smoothing = value,
             TextField::DrawingFontFamily => self.drawing_font_family = value,
             TextField::DrawingFontWeight => {
                 self.drawing_font_weight = value;

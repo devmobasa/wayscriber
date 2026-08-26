@@ -79,12 +79,29 @@ impl InputState {
         self.set_spotlight_magnification(value)
     }
 
+    pub(super) fn apply_toolbar_set_pen_smoothing(&mut self, level: u8) -> bool {
+        self.set_pen_smoothing(level)
+    }
+
+    /// Open the overlay's system font picker from the toolbar.
+    ///
+    /// The same route the color chip takes to the gradient picker: the toolbar
+    /// asks, the overlay owns the modal.
+    pub(super) fn apply_toolbar_open_font_picker(&mut self) -> bool {
+        self.open_font_picker();
+        true
+    }
+
     pub(super) fn apply_toolbar_set_eraser_mode(&mut self, mode: EraserMode) -> bool {
         self.set_eraser_mode(mode)
     }
 
     pub(super) fn apply_toolbar_set_font(&mut self, descriptor: FontDescriptor) -> bool {
         self.set_font_descriptor(descriptor)
+    }
+
+    pub(super) fn apply_toolbar_set_font_bold(&mut self, bold: bool) -> bool {
+        self.set_font_bold(bold)
     }
 
     pub(super) fn apply_toolbar_set_font_size(&mut self, size: f64) -> bool {

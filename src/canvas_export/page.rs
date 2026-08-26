@@ -4,8 +4,8 @@ use crate::capture::CaptureError;
 use crate::draw::{
     BlurRectParams, Color, EraserReplayContext, Frame, Shape, SpotlightMagnifierOutcome,
     SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass, render_blur_rect,
-    render_eraser_stroke, render_shape, render_spotlight_magnification_pass, render_spotlight_pass,
-    spotlight_regions_for_frame,
+    render_eraser_stroke, render_shape_over_with_halo, render_spotlight_magnification_pass,
+    render_spotlight_pass, spotlight_regions_for_frame,
 };
 use crate::screen_pixels::ScreenImage;
 
@@ -17,6 +17,8 @@ pub struct CanvasPageExportSnapshot {
     pub viewport_height: u32,
     pub origin_x: i32,
     pub origin_y: i32,
+    /// Whether text shapes and labels receive a contrasting outline.
+    pub text_halo_enabled: bool,
     /// Dim/feather settings for the spotlight pass, mirroring the live overlay.
     pub spotlight: SpotlightPassSnapshot,
 }
@@ -194,6 +196,16 @@ pub(crate) struct ExportBackdrop {
 }
 
 impl ExportBackdrop {
+    /// Relative luminance of a solid page colour, when the backdrop is one.
+    ///
+    /// `None` for transparent and image backdrops: a transparent page has no
+    /// colour to report, and an image's brightness varies across the page, so
+    /// one number for the whole of it would be a guess.
+    pub(crate) fn solid_luminance(&self) -> Option<f64> {
+        self.bg_color
+            .map(|color| crate::draw::perceived_luminance(color.r, color.g, color.b))
+    }
+
     pub(crate) fn new(snapshot: &CanvasExportBackdropSnapshot) -> Result<Self, CaptureError> {
         match snapshot {
             CanvasExportBackdropSnapshot::Transparent => Ok(Self {
@@ -378,6 +390,11 @@ fn draw_canvas_page_contents(
         backdrop.paint(ctx);
     }
     let replay_ctx = backdrop.replay_context();
+    // What text should contrast with when the target cannot be read back. A PDF
+    // page is a vector surface with no pixels to probe, so without this a board
+    // exported to PDF would pick a different halo from the same board on screen.
+    // Raster exports ignore it and probe, which also sees the shapes underneath.
+    let known_background_luminance = backdrop.solid_luminance();
 
     for drawn_shape in &page.frame.shapes {
         match &drawn_shape.shape {
@@ -404,7 +421,12 @@ fn draw_canvas_page_contents(
                 },
                 &replay_ctx,
             ),
-            other => render_shape(ctx, other),
+            other => render_shape_over_with_halo(
+                ctx,
+                other,
+                known_background_luminance,
+                page.text_halo_enabled,
+            ),
         }
     }
 
@@ -554,5 +576,51 @@ mod tests {
             .expect("region source is retained");
         assert!(Arc::ptr_eq(retained, &image));
         assert_eq!(retained.data.as_ptr(), pixels);
+    }
+}
+
+#[cfg(test)]
+mod backdrop_luminance_tests {
+    use super::*;
+
+    #[test]
+    fn a_solid_page_reports_its_own_brightness_for_text_to_contrast_with() {
+        let white = ExportBackdrop::new(&CanvasExportBackdropSnapshot::Solid(Color::new(
+            1.0, 1.0, 1.0, 1.0,
+        )))
+        .expect("backdrop");
+        let black = ExportBackdrop::new(&CanvasExportBackdropSnapshot::Solid(Color::new(
+            0.0, 0.0, 0.0, 1.0,
+        )))
+        .expect("backdrop");
+
+        assert!(white.solid_luminance().expect("known") > 0.9);
+        assert!(black.solid_luminance().expect("known") < 0.1);
+    }
+
+    #[test]
+    fn a_transparent_page_has_no_colour_to_report() {
+        let backdrop =
+            ExportBackdrop::new(&CanvasExportBackdropSnapshot::Transparent).expect("backdrop");
+
+        assert_eq!(backdrop.solid_luminance(), None);
+    }
+
+    #[test]
+    fn a_whiteboard_pdf_and_a_whiteboard_on_screen_choose_the_same_halo() {
+        // The screen probes and gets ~1.0; the PDF page cannot be probed and
+        // falls back to this. Both must reach the same decision, or an exported
+        // board looks different from the board it was exported from.
+        let whiteboard = ExportBackdrop::new(&CanvasExportBackdropSnapshot::Solid(Color::new(
+            1.0, 1.0, 1.0, 1.0,
+        )))
+        .expect("backdrop");
+        let red = Color::new(0.96, 0.2, 0.25, 1.0);
+
+        let on_screen = crate::draw::text_outline_color(red, Some(1.0));
+        let in_pdf = crate::draw::text_outline_color(red, whiteboard.solid_luminance());
+
+        assert_eq!(on_screen, in_pdf);
+        assert!(in_pdf.r < 0.5, "and it is the dark halo");
     }
 }

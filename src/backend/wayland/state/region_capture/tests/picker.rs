@@ -135,6 +135,7 @@ fn the_render_job_composes_drawings_when_asked_and_stays_raw_otherwise() {
         },
         selection: ImagePixelRect::new(0, 0, 3, 2, (3, 2)).expect("selection"),
         frame,
+        text_halo_enabled: true,
         spotlight: SpotlightPassSnapshot {
             dim_opacity: 0.0,
             feather: 0.0,

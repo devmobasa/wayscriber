@@ -21,6 +21,7 @@ pub(crate) struct CanvasRegionExportSnapshot {
     pub source: CanvasRegionSource,
     pub selection: ImagePixelRect,
     pub frame: Frame,
+    pub text_halo_enabled: bool,
     pub spotlight: SpotlightPassSnapshot,
 }
 
@@ -175,6 +176,7 @@ pub(crate) fn render_canvas_region_png(
         viewport_height: working_height,
         origin_x: working_source_rect.x.floor() as i32,
         origin_y: working_source_rect.y.floor() as i32,
+        text_halo_enabled: snapshot.text_halo_enabled,
         spotlight: snapshot.spotlight,
     };
     let destination = CanvasExportRect::new(
@@ -228,7 +230,7 @@ pub(crate) fn render_canvas_region_png(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::draw::{BlurStyle, EraserBrush, EraserKind, Frame, RED, Shape};
+    use crate::draw::{BlurStyle, EraserBrush, EraserKind, FontDescriptor, Frame, RED, Shape};
 
     fn solid_source(width: u32, height: u32, pixel: u32) -> CanvasRegionSource {
         CanvasRegionSource {
@@ -252,6 +254,61 @@ mod tests {
         let data = surface.data().expect("decoded pixels");
         let offset = y as usize * stride + x as usize * 4;
         u32::from_ne_bytes(data[offset..offset + 4].try_into().expect("pixel"))
+    }
+
+    #[test]
+    fn region_export_honours_the_disabled_text_halo() {
+        let width = 400_u32;
+        let height = 120_u32;
+        let source = CanvasRegionSource {
+            image: Arc::new(ScreenImage {
+                data: (0..width.saturating_mul(height))
+                    .flat_map(|_| 0xFFFF_FFFF_u32.to_ne_bytes())
+                    .collect(),
+                width,
+                height,
+                stride: (width * 4) as i32,
+            }),
+            logical_bounds: CanvasExportRect::new(0.0, 0.0, f64::from(width), f64::from(height))
+                .unwrap(),
+        };
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Text {
+            x: 20,
+            y: 80,
+            text: "Read me".to_string(),
+            color: RED,
+            size: 36.0,
+            font_descriptor: FontDescriptor::default(),
+            background_enabled: false,
+            wrap_width: None,
+        });
+        let rendered = render_canvas_region_png(CanvasRegionExportSnapshot {
+            source,
+            selection: ImagePixelRect::new(0, 0, width, height, (width, height)).unwrap(),
+            frame,
+            text_halo_enabled: false,
+            spotlight: SpotlightPassSnapshot::default(),
+        })
+        .expect("region text renders");
+
+        let mut surface = cairo::ImageSurface::create_from_png(&mut rendered.bytes.as_slice())
+            .expect("region PNG decodes");
+        surface.flush();
+        let stride = surface.stride() as usize;
+        let data = surface.data().expect("decoded pixels");
+        let mut near_black = 0;
+        let mut red = 0;
+        for row in 0..height as usize {
+            for column in 0..width as usize {
+                let offset = row * stride + column * 4;
+                let (b, g, r) = (data[offset], data[offset + 1], data[offset + 2]);
+                near_black += usize::from(r < 40 && g < 40 && b < 40);
+                red += usize::from(r > 180 && g < 120 && b < 120);
+            }
+        }
+        assert_eq!(near_black, 0, "region export must not add a disabled halo");
+        assert!(red > 200, "region export must keep the text visible");
     }
 
     #[test]
@@ -280,6 +337,7 @@ mod tests {
             source: solid_source(8, 8, backdrop),
             selection: ImagePixelRect::new(0, 0, 8, 8, (8, 8)).unwrap(),
             frame,
+            text_halo_enabled: true,
             spotlight: SpotlightPassSnapshot::default(),
         })
         .expect("region renders");
@@ -307,6 +365,7 @@ mod tests {
             source: solid_source(8, 8, backdrop),
             selection: ImagePixelRect::new(2, 2, 4, 4, (8, 8)).unwrap(),
             frame,
+            text_halo_enabled: true,
             spotlight: SpotlightPassSnapshot::default(),
         })
         .expect("region renders");
@@ -334,6 +393,7 @@ mod tests {
             source,
             selection,
             frame: Frame::new(),
+            text_halo_enabled: true,
             spotlight: SpotlightPassSnapshot::default(),
         })
         .expect("raw crop renders");
@@ -375,6 +435,7 @@ mod tests {
             source,
             selection: ImagePixelRect::new(0, 0, 8, 8, (8, 8)).unwrap(),
             frame,
+            text_halo_enabled: true,
             spotlight: SpotlightPassSnapshot {
                 dim_opacity: 0.6,
                 feather: 0.0,
@@ -415,6 +476,7 @@ mod tests {
             source,
             selection: ImagePixelRect::new(4, 0, 4, 8, (8, 8)).unwrap(),
             frame,
+            text_halo_enabled: true,
             spotlight: SpotlightPassSnapshot {
                 dim_opacity: 0.6,
                 feather: 0.0,
@@ -438,6 +500,7 @@ mod tests {
             source,
             selection: ImagePixelRect::new(0, 0, 1, 1, (8, 8)).unwrap(),
             frame: Frame::new(),
+            text_halo_enabled: true,
             spotlight: SpotlightPassSnapshot::default(),
         });
         assert!(matches!(result, Err(CaptureError::ImageError(_))));
@@ -467,6 +530,7 @@ mod tests {
             source: solid_source(8, 8, backdrop),
             selection: ImagePixelRect::new(0, 0, 8, 8, (8, 8)).unwrap(),
             frame,
+            text_halo_enabled: true,
             spotlight: SpotlightPassSnapshot::default(),
         })
         .expect("region renders");
@@ -517,6 +581,7 @@ mod tests {
             )
             .unwrap(),
             frame: frame.clone_without_history(),
+            text_halo_enabled: true,
             spotlight: SpotlightPassSnapshot::default(),
         })
         .expect("full region renders");
@@ -525,6 +590,7 @@ mod tests {
             source,
             selection,
             frame,
+            text_halo_enabled: true,
             spotlight: SpotlightPassSnapshot::default(),
         })
         .expect("cropped region renders");

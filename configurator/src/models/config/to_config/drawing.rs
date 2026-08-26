@@ -4,7 +4,7 @@ use super::super::parse::{
 };
 use crate::models::error::FormError;
 use wayscriber::config::Config;
-use wayscriber::draw::{REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
+use wayscriber::draw::{MAX_PEN_SMOOTHING, REGULAR_POLYGON_MAX_SIDES, REGULAR_POLYGON_MIN_SIDES};
 use wayscriber::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use wayscriber::input::{DragBindableTool, DragTool};
 
@@ -51,6 +51,14 @@ impl ConfigDraft {
             errors,
             |value| config.drawing.polygon_sides = value,
         );
+        parse_u8_in_range(
+            &self.drawing_pen_smoothing,
+            "drawing.pen_smoothing",
+            0,
+            MAX_PEN_SMOOTHING,
+            errors,
+            |value| config.drawing.pen_smoothing = value,
+        );
         parse_field_in_range(
             &self.drawing_marker_opacity,
             "drawing.marker_opacity",
@@ -59,10 +67,14 @@ impl ConfigDraft {
             errors,
             |value| config.drawing.marker_opacity = value,
         );
+        // A list in, a list out. Nothing to parse and nothing a family name can
+        // contain that would break the round trip.
+        config.drawing.font_cycle = self.drawing_font_cycle.entries().to_vec();
         config.drawing.font_family = self.drawing_font_family.clone();
         config.drawing.font_weight = self.drawing_font_weight.clone();
         config.drawing.font_style = self.drawing_font_style.clone();
         config.drawing.text_background_enabled = self.drawing_text_background_enabled;
+        config.drawing.text_halo_enabled = self.drawing_text_halo_enabled;
         config.drawing.default_fill_enabled = self.drawing_default_fill_enabled;
         config.drawing.drag_tool = legacy_tool(
             self.drawing_drag_tools.left.drag_tool,

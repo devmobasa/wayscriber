@@ -425,7 +425,7 @@ pub mod toolbar {
     /// filling the whole half.
     pub const SEGMENT_PADDING: f64 = SPACING_SM;
     /// Horizontal breathing room between a segment label and its edge (the
-    /// GTK `.tab` horizontal padding), so "Sans│Mono" never crowd the seam.
+    /// GTK `.tab` horizontal padding), so short labels never crowd the seam.
     pub const SEGMENT_LABEL_PAD_H: f64 = SPACING_STD;
     /// Extra clear gap before a segmented control in the style pill, on top of
     /// the standard control gap, so the segment does not crowd the numeral
@@ -850,6 +850,11 @@ const STATUS_PALETTE_LUMINANCE_THRESHOLD: f64 = 0.5;
 const CURSOR_PREVIEW_OUTLINE_LUMINANCE_THRESHOLD: f64 = 0.6;
 
 /// Rec. 709 relative luminance of an RGB color (0.0–1.0 channels).
+///
+/// For overlay chrome. The canvas contrast decisions — text halo, step-marker
+/// outline, sticky-note foreground, swatch hairlines — use Rec. 601 luma
+/// instead, as [`crate::draw::perceived_luminance`]. Two names because they are
+/// two metrics; they disagree most on green.
 #[inline]
 pub fn relative_luminance(r: f64, g: f64, b: f64) -> f64 {
     0.2126 * r + 0.7152 * g + 0.0722 * b

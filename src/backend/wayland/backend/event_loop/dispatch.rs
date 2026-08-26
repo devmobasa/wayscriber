@@ -29,6 +29,7 @@ fn route_woken_sources(
     signals: &mut OverlaySignalState,
 ) -> Result<(), anyhow::Error> {
     route_woken_persistence(state);
+    state.drain_font_catalog_prewarm();
     state.drain_runtime_ui_completions();
     state.drain_system_input_events();
 

@@ -175,6 +175,13 @@ impl InputState {
     pub fn update_screen_dimensions(&mut self, width: u32, height: u32) {
         self.screen_width = width;
         self.screen_height = height;
+        // A surface resize is painted with full damage by the backend. Make
+        // that newly painted geometry the picker's damage baseline, or the
+        // next narrowing query clears the panel from before the resize instead
+        // of the tall panel now visible at its new position.
+        if self.font_picker_open {
+            self.font_picker_last_panel = self.font_picker_panel_bounds();
+        }
     }
 
     /// Cancels the current text input session and restores any edited shape.

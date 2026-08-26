@@ -8,6 +8,7 @@ impl StylePillControl {
             Self::ThicknessSlider => Cow::Borrowed("top.style.thickness"),
             Self::ThicknessValue => Cow::Borrowed("top.style.thickness-value"),
             Self::OpacitySlider => Cow::Borrowed("top.style.opacity"),
+            Self::PenSmoothingStepper => Cow::Borrowed("top.style.pen-smoothing"),
             Self::SpotlightMagnificationSlider => {
                 Cow::Borrowed("top.style.spotlight-magnification")
             }
@@ -25,7 +26,8 @@ impl StylePillControl {
             }
             Self::FontSizeSlider => Cow::Borrowed("top.style.font-size"),
             Self::FontSizeValue => Cow::Borrowed("top.style.font-size-value"),
-            Self::FontFamilySegment => Cow::Borrowed("top.style.font-family"),
+            Self::FontWeightToggle => Cow::Borrowed("top.style.font-bold"),
+            Self::FontFamilyPicker => Cow::Borrowed("top.style.font-family-picker"),
             Self::EraserModeSegment => Cow::Borrowed("top.style.eraser-mode"),
             Self::SelectionCycle(kind) | Self::SelectionStepper(kind) => {
                 Cow::Owned(format!("top.style.sel.{}", selection_kind_slug(kind)))
@@ -41,11 +43,15 @@ impl StylePillControl {
             | Self::SpotlightMagnificationSlider
             | Self::FontSizeSlider => StylePillRole::Slider,
             Self::ThicknessValue | Self::FontSizeValue => StylePillRole::Value,
-            Self::FillToggle | Self::AutoNumberToggle => StylePillRole::Toggle,
-            Self::CounterReset(_) | Self::ArrowStyleCycle => StylePillRole::Button,
-            Self::FontFamilySegment | Self::EraserModeSegment => StylePillRole::Segmented,
+            Self::FillToggle | Self::AutoNumberToggle | Self::FontWeightToggle => {
+                StylePillRole::Toggle
+            }
+            Self::CounterReset(_) | Self::ArrowStyleCycle | Self::FontFamilyPicker => {
+                StylePillRole::Button
+            }
+            Self::EraserModeSegment => StylePillRole::Segmented,
             Self::SelectionCycle(_) => StylePillRole::Button,
-            Self::SelectionStepper(_) => StylePillRole::Stepper,
+            Self::PenSmoothingStepper | Self::SelectionStepper(_) => StylePillRole::Stepper,
         }
     }
 
@@ -67,8 +73,12 @@ impl StylePillControl {
             Self::SpotlightMagnificationSlider => {
                 ToolbarEvent::SetSpotlightMagnification(snapshot.spotlight_magnification)
             }
+            Self::FontFamilyPicker => ToolbarEvent::OpenFontPicker,
             Self::FontSizeSlider => ToolbarEvent::SetFontSize(snapshot.font_size),
             Self::FillToggle => ToolbarEvent::ToggleFill(!snapshot.fill_enabled),
+            Self::FontWeightToggle => {
+                ToolbarEvent::SetFontBold(!snapshot.font_bold_target_is_bold())
+            }
             Self::AutoNumberToggle => {
                 ToolbarEvent::ToggleArrowLabels(!snapshot.arrow_label_enabled)
             }
@@ -87,7 +97,7 @@ impl StylePillControl {
             Self::SelectionCycle(kind) => {
                 ToolbarEvent::AdjustSelectionProperty { kind, direction: 1 }
             }
-            Self::FontFamilySegment | Self::EraserModeSegment | Self::SelectionStepper(_) => {
+            Self::EraserModeSegment | Self::PenSmoothingStepper | Self::SelectionStepper(_) => {
                 return None;
             }
         })
@@ -102,6 +112,11 @@ impl StylePillControl {
 
     pub(crate) fn enabled(self, snapshot: &ToolbarSnapshot) -> bool {
         match self {
+            // A text selection owns Bold even when every selected text shape
+            // is locked. In that case there is no editable mutation target.
+            Self::FontWeightToggle => {
+                !snapshot.selection_has_text || snapshot.selected_text_bold.is_some()
+            }
             // Locked/mixed-locked entries surface as disabled controls,
             // exactly like the greyed rows of the properties popup.
             Self::SelectionCycle(kind) | Self::SelectionStepper(kind) => {
@@ -118,6 +133,7 @@ impl StylePillControl {
                 snapshot.quick_colors.rendered_entries()[index].color == snapshot.color
             }
             Self::FillToggle => snapshot.fill_enabled,
+            Self::FontWeightToggle => snapshot.font_bold_target_is_bold(),
             Self::AutoNumberToggle => snapshot.arrow_label_enabled,
             _ => false,
         }
@@ -159,10 +175,18 @@ impl StylePillControl {
             Self::SpotlightMagnificationSlider => Some(
                 crate::draw::format_spotlight_magnification(snapshot.spotlight_magnification),
             ),
+            // "Off" rather than "0": the number is a count of passes, and zero
+            // of them is a state worth naming rather than a quantity.
+            Self::PenSmoothingStepper => Some(if snapshot.pen_smoothing == 0 {
+                "Off".to_string()
+            } else {
+                snapshot.pen_smoothing.to_string()
+            }),
             Self::FontSizeSlider | Self::FontSizeValue => {
                 Some(format!("{:.0}pt", snapshot.font_size))
             }
             Self::ArrowStyleCycle => Some(snapshot.arrow_style.label().to_string()),
+            Self::FontFamilyPicker => Some(short_family_label(&snapshot.font.family)),
             Self::SelectionCycle(kind) | Self::SelectionStepper(kind) => {
                 selection_entry(snapshot, kind).map(|entry| entry.value.clone())
             }
@@ -175,6 +199,20 @@ impl StylePillControl {
     pub(crate) fn required_value_text(self, snapshot: &ToolbarSnapshot) -> String {
         self.value_text(snapshot)
             .expect("this style-pill control has a live value")
+    }
+
+    /// Whether this slider shows its value on its own rather than beside a
+    /// separate numeral button.
+    ///
+    /// Thickness and text size have numeral buttons of their own (which open
+    /// the precise-entry popup); the rest carry the readout inline. Both
+    /// frontends and the contract test key on this so they cannot disagree
+    /// about which sliders draw a value.
+    pub(crate) fn carries_inline_readout(self) -> bool {
+        matches!(
+            self,
+            Self::OpacitySlider | Self::SpotlightMagnificationSlider
+        )
     }
 
     /// Whether this control can ever carry an inline status, and so needs a
@@ -224,6 +262,7 @@ impl StylePillControl {
                 Cow::Borrowed(ToolContext::from_snapshot(snapshot).thickness_label)
             }
             Self::OpacitySlider => Cow::Borrowed("Marker opacity"),
+            Self::PenSmoothingStepper => Cow::Borrowed("Smoothing"),
             Self::SpotlightMagnificationSlider => Cow::Borrowed("Spotlight magnification"),
             Self::FontSizeSlider => Cow::Borrowed("Text size"),
             Self::ThicknessValue => Cow::Owned(format!("{:.0}px", snapshot.thickness)),
@@ -232,7 +271,10 @@ impl StylePillControl {
             Self::ArrowStyleCycle => Cow::Borrowed("Arrow style"),
             Self::AutoNumberToggle => Cow::Borrowed("Auto-number"),
             Self::CounterReset(_) => Cow::Borrowed("Reset"),
-            Self::FontFamilySegment => Cow::Borrowed("Font"),
+            // The family in use, shortened: the pill is width-planned, and a
+            // display face can be named at any length.
+            Self::FontWeightToggle => Cow::Borrowed("Bold"),
+            Self::FontFamilyPicker => Cow::Owned(short_family_label(&snapshot.font.family)),
             Self::EraserModeSegment => Cow::Borrowed("Eraser mode"),
             Self::SelectionCycle(kind) | Self::SelectionStepper(kind) => Cow::Owned(
                 selection_entry(snapshot, kind)
@@ -281,42 +323,39 @@ impl StylePillControl {
             )),
             Self::SelectionCycle(kind) => selection_entry(snapshot, kind)
                 .map(|entry| format!("{}: {}", entry.label, entry.value)),
-            Self::ThicknessSlider
-            | Self::OpacitySlider
-            | Self::FontSizeSlider
-            | Self::FontFamilySegment
-            | Self::EraserModeSegment
-            | Self::SelectionStepper(_) => None,
+            Self::PenSmoothingStepper => Some(
+                "Smooth freehand and marker strokes when the pen lifts. Off keeps the exact path."
+                    .to_string(),
+            ),
+            Self::FontWeightToggle => {
+                Some("Bold. Applies to selected text, or to the next label you type.".to_string())
+            }
+            Self::FontFamilyPicker => Some(format!(
+                "{} - choose from every installed font",
+                snapshot.font.family
+            )),
+            // The pill shows sliders as bare tracks with a numeral beside
+            // them, so a hover is the only place they can say which is which.
+            // The context decides the thickness wording because one slider
+            // targets the pen, the marker, or the eraser depending on what is
+            // active.
+            Self::ThicknessSlider => {
+                Some(match ToolContext::from_snapshot(snapshot).thickness_label {
+                    "Eraser size" => "How wide the eraser rubs out.".to_string(),
+                    label => format!("{label} of the next stroke you draw."),
+                })
+            }
+            Self::OpacitySlider => {
+                Some("How much of the page shows through a highlighter stroke.".to_string())
+            }
+            Self::FontSizeSlider => Some("Point size of the next label you type.".to_string()),
+            Self::EraserModeSegment | Self::SelectionStepper(_) => None,
         }
     }
 
     /// Segment halves of the segmented controls, in reading order.
     pub(crate) fn segments(self, snapshot: &ToolbarSnapshot) -> Option<[StylePillSegment; 2]> {
         match self {
-            Self::FontFamilySegment => Some([
-                StylePillSegment {
-                    id: "top.style.font-family.sans",
-                    label: "Sans",
-                    event: ToolbarEvent::SetFont(FontDescriptor::new(
-                        "Sans".to_string(),
-                        "bold".to_string(),
-                        "normal".to_string(),
-                    )),
-                    active: snapshot.font.family == "Sans",
-                    tooltip: "Sans font".to_string(),
-                },
-                StylePillSegment {
-                    id: "top.style.font-family.mono",
-                    label: "Mono",
-                    event: ToolbarEvent::SetFont(FontDescriptor::new(
-                        "Monospace".to_string(),
-                        "normal".to_string(),
-                        "normal".to_string(),
-                    )),
-                    active: snapshot.font.family == "Monospace",
-                    tooltip: "Monospace font".to_string(),
-                },
-            ]),
             Self::EraserModeSegment => Some([
                 StylePillSegment {
                     id: "top.style.eraser-mode.brush",
@@ -344,6 +383,9 @@ impl StylePillControl {
 
     /// The −/+ halves of a selection stepper, in reading order.
     pub(crate) fn steps(self, snapshot: &ToolbarSnapshot) -> Option<[StylePillStep; 2]> {
+        if self == Self::PenSmoothingStepper {
+            return Some(pen_smoothing_steps(snapshot));
+        }
         let Self::SelectionStepper(kind) = self else {
             return None;
         };
@@ -400,5 +442,75 @@ impl StylePillControl {
     pub(crate) fn required_steps(self, snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
         self.steps(snapshot)
             .expect("this style-pill stepper has minus/plus halves")
+    }
+}
+
+/// The smoothing stepper's halves, clamped to the range the setting accepts.
+///
+/// Each half carries the level it would land on rather than a direction: the
+/// pill's events are absolute, and computing the target here keeps the clamp in
+/// one place instead of in both frontends.
+fn pen_smoothing_steps(snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
+    let level = snapshot.pen_smoothing;
+    [
+        StylePillStep {
+            id: "top.style.pen-smoothing.minus",
+            label: "\u{2212}",
+            event: ToolbarEvent::SetPenSmoothing(level.saturating_sub(1)),
+            tooltip: "Less smoothing".to_string(),
+        },
+        StylePillStep {
+            id: "top.style.pen-smoothing.plus",
+            label: "+",
+            event: ToolbarEvent::SetPenSmoothing(
+                level.saturating_add(1).min(crate::draw::MAX_PEN_SMOOTHING),
+            ),
+            tooltip: "More smoothing".to_string(),
+        },
+    ]
+}
+
+/// A family name cut to something a width-planned pill can hold.
+///
+/// The full name is in the tooltip. Truncating here rather than in the
+/// frontends keeps both toolbars showing the same string, which is what the
+/// shared model is for.
+fn short_family_label(family: &str) -> String {
+    const MAX_CHARS: usize = 12;
+    let mut chars = family.chars();
+    let head: String = chars.by_ref().take(MAX_CHARS).collect();
+    if chars.next().is_some() {
+        format!("{}\u{2026}", head.trim_end())
+    } else {
+        head
+    }
+}
+
+#[cfg(test)]
+mod family_label_tests {
+    use super::short_family_label;
+
+    #[test]
+    fn a_short_family_name_is_shown_whole() {
+        assert_eq!(short_family_label("Sans"), "Sans");
+        assert_eq!(short_family_label("JetBrains M"), "JetBrains M");
+    }
+
+    #[test]
+    fn a_long_family_name_is_cut_rather_than_widening_the_pill() {
+        let label = short_family_label("Noto Sans CJK JP Black");
+
+        assert!(label.chars().count() <= 13, "got {label:?}");
+        assert!(label.ends_with('\u{2026}'), "got {label:?}");
+    }
+
+    #[test]
+    fn cutting_counts_characters_not_bytes() {
+        // A name that is not Latin still gets a readable head rather than a
+        // slice through the middle of a code point.
+        let label = short_family_label("\u{6e90}\u{754c}\u{9ed1}\u{4f53} CN Regular Extra");
+
+        assert!(label.ends_with('\u{2026}'), "got {label:?}");
+        assert!(label.starts_with('\u{6e90}'), "got {label:?}");
     }
 }

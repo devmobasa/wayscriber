@@ -1,6 +1,6 @@
 use super::*;
 use crate::config::{PdfExportConfig, PdfFitMode, PdfOrientation, PdfPageSize};
-use crate::draw::Frame;
+use crate::draw::{FontDescriptor, Frame, RED, Shape, WHITE};
 use std::process::Command;
 
 #[test]
@@ -160,6 +160,39 @@ fn rendered_pdf_reports_page_count_and_sizes_when_pdfinfo_is_available() {
     assert!(text.contains("300 x 200") || text.contains("200 x 300"));
 }
 
+fn text_pdf(text_halo_enabled: bool) -> Vec<u8> {
+    let source = CanvasExportRect::new(0.0, 0.0, 400.0, 120.0).expect("source");
+    let mut page = pdf_page(400.0, 120.0, source, 0, 1);
+    page.page.backdrop = CanvasExportBackdropSnapshot::Solid(WHITE);
+    page.page.text_halo_enabled = text_halo_enabled;
+    page.page.frame.add_shape(Shape::Text {
+        x: 20,
+        y: 80,
+        text: "Read me".to_string(),
+        color: RED,
+        size: 36.0,
+        font_descriptor: FontDescriptor::default(),
+        background_enabled: false,
+        wrap_width: None,
+    });
+    render_board_pdf(&BoardPdfExportSnapshot {
+        pages: vec![page],
+        labels: Default::default(),
+    })
+    .expect("text PDF renders")
+}
+
+#[test]
+fn pdf_export_honours_the_text_halo_setting() {
+    let disabled = text_pdf(false);
+    let enabled = text_pdf(true);
+    assert_ne!(
+        disabled.len(),
+        enabled.len(),
+        "vector PDF output must contain the configured text rendering",
+    );
+}
+
 fn pdf_page(
     width: f64,
     height: f64,
@@ -175,6 +208,7 @@ fn pdf_page(
             viewport_height: 100,
             origin_x: 0,
             origin_y: 0,
+            text_halo_enabled: true,
             spotlight: Default::default(),
         },
         metadata: PdfPageMetadata::new(
