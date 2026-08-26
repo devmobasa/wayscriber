@@ -677,6 +677,13 @@ mod tests {
     fn canvas_popover_is_mutually_exclusive_with_the_other_top_menus() {
         let mut state = make_test_input_state();
 
+        assert_canvas_open_closes_top_menus(&mut state);
+        assert_canvas_is_exclusive_with_session_and_settings(&mut state);
+        assert_overflow_and_shapes_close_canvas(&mut state);
+        assert_minimize_and_close_handle_canvas(&mut state);
+    }
+
+    fn assert_canvas_open_closes_top_menus(state: &mut crate::input::InputState) {
         // Opening Canvas closes the overflow, the shapes picker, and resets
         // the shared internal scroll.
         state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true));
@@ -690,7 +697,9 @@ mod tests {
         assert!(!state.toolbar_top_overflow_open);
         assert!(!state.toolbar_shapes_expanded);
         assert_eq!(state.toolbar_top_popover_scroll, 0.0);
+    }
 
+    fn assert_canvas_is_exclusive_with_session_and_settings(state: &mut crate::input::InputState) {
         // Opening Session or Settings closes Canvas, and Canvas closes them.
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSessionPopover(true)));
         assert!(!state.toolbar_canvas_popover_open);
@@ -700,14 +709,18 @@ mod tests {
         assert!(!state.toolbar_canvas_popover_open);
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleCanvasPopover(true)));
         assert!(!state.toolbar_settings_popover_open);
+    }
 
+    fn assert_overflow_and_shapes_close_canvas(state: &mut crate::input::InputState) {
         // Re-opening the overflow (or the shapes picker) closes Canvas.
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true)));
         assert!(!state.toolbar_canvas_popover_open);
         state.apply_toolbar_event(ToolbarEvent::ToggleCanvasPopover(true));
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleShapePicker(true)));
         assert!(!state.toolbar_canvas_popover_open);
+    }
 
+    fn assert_minimize_and_close_handle_canvas(state: &mut crate::input::InputState) {
         // Minimizing the strip closes an open Canvas popover.
         state.apply_toolbar_event(ToolbarEvent::ToggleCanvasPopover(true));
         state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(true));
