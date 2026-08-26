@@ -185,7 +185,15 @@ fn backend_session_dispatch_finalizes_spotlight_history_and_its_deadline() {
     );
     let mut deadline = Some(std::time::Instant::now() + std::time::Duration::from_secs(1));
 
-    finalize_spotlight_wheel_gesture_before_toolbar_dispatch(&mut input_state, &mut deadline);
+    assert_eq!(
+        handle_toolbar_event_preflight(
+            &mut input_state,
+            &mut deadline,
+            &ToolbarEvent::ClearSession,
+            false,
+        ),
+        ToolbarEventPreflight::Continue
+    );
 
     assert!(deadline.is_none());
     input_state.handle_action(Action::Undo);
@@ -456,7 +464,11 @@ fn the_toolbar_rebind_gesture_opens_capture_for_the_controls_action() {
             .unwrap_or_else(|| panic!("{event:?} should name an action"));
         assert_eq!(action, expected, "{event:?} names the wrong action");
 
-        assert!(input_state.begin_keybinding_capture(action));
+        let mut deadline = None;
+        assert_eq!(
+            handle_toolbar_event_preflight(&mut input_state, &mut deadline, &event, true),
+            ToolbarEventPreflight::RebindCaptured
+        );
         assert_eq!(
             input_state.keybinding_capture_action,
             Some(expected),
@@ -467,6 +479,72 @@ fn the_toolbar_rebind_gesture_opens_capture_for_the_controls_action() {
             "arming capture must not queue an edit on its own"
         );
         input_state.keybinding_capture_action = None;
+    }
+}
+
+#[test]
+fn toolbar_rebind_capture_finalizes_a_held_arrow_bend_before_its_early_return() {
+    let mut input_state = make_test_input_state();
+    let shape_id = input_state
+        .boards
+        .active_frame_mut()
+        .add_shape(crate::draw::Shape::Arrow {
+            x1: 0,
+            y1: 100,
+            x2: 400,
+            y2: 100,
+            color: input_state.current_color,
+            thick: 4.0,
+            arrow_length: 20.0,
+            arrow_angle: 30.0,
+            head_at_end: true,
+            style: crate::draw::ArrowStyle::Curved,
+            bend: 0.0,
+            label: None,
+        });
+    input_state.set_selection(vec![shape_id]);
+    input_state.state = crate::input::state::DrawingState::BendingArrow {
+        shape_id,
+        snapshot: crate::draw::frame::ShapeSnapshot {
+            shape: input_state
+                .boards
+                .active_frame()
+                .shape(shape_id)
+                .expect("arrow")
+                .shape
+                .clone(),
+            locked: false,
+        },
+    };
+    assert!(input_state.drag_arrow_bend_to(200, 20, false));
+    let mut deadline = None;
+    let event = ToolbarEvent::Undo;
+
+    assert_eq!(
+        handle_toolbar_event_preflight(&mut input_state, &mut deadline, &event, true),
+        ToolbarEventPreflight::RebindCaptured
+    );
+    assert_eq!(input_state.keybinding_capture_action, Some(Action::Undo));
+    assert!(
+        matches!(input_state.state, crate::input::state::DrawingState::Idle),
+        "rebind capture returned while the bend gesture was still active"
+    );
+
+    // Escape belongs to the newly-opened capture modal, and the later pointer
+    // release must not revive or recommit the already-finalized bend.
+    input_state.on_key_press(crate::input::Key::Escape);
+    assert!(input_state.keybinding_capture_action.is_none());
+    input_state.on_mouse_release(crate::input::MouseButton::Left, 200, 20);
+    input_state.handle_action(Action::Undo);
+    match input_state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .expect("arrow")
+        .shape
+    {
+        crate::draw::Shape::Arrow { bend, .. } => assert_eq!(bend, 0.0),
+        ref other => panic!("expected an arrow, got {other:?}"),
     }
 }
 
@@ -944,5 +1022,74 @@ fn section_toggle_event(flag: ToolbarSectionFlag, show: bool) -> ToolbarEvent {
         ToolbarSectionFlag::Presets => ToolbarEvent::TogglePresets(show),
         ToolbarSectionFlag::StepSection => ToolbarEvent::ToggleStepSection(show),
         ToolbarSectionFlag::TextControls => ToolbarEvent::ToggleTextControls(show),
+    }
+}
+
+#[test]
+fn backend_session_dispatch_finalizes_a_held_arrow_bend() {
+    // Session routes return before `apply_toolbar_event`, and an open or clear
+    // replaces the frame the gesture's snapshot belongs to. Shape ids restart
+    // per frame, so a bend flushed after that would attach to an unrelated
+    // shape on the new page.
+    let mut input_state = make_test_input_state();
+    let shape_id = input_state
+        .boards
+        .active_frame_mut()
+        .add_shape(crate::draw::Shape::Arrow {
+            x1: 0,
+            y1: 100,
+            x2: 400,
+            y2: 100,
+            color: input_state.current_color,
+            thick: 4.0,
+            arrow_length: 20.0,
+            arrow_angle: 30.0,
+            head_at_end: true,
+            style: crate::draw::ArrowStyle::Curved,
+            bend: 0.0,
+            label: None,
+        });
+    input_state.set_selection(vec![shape_id]);
+    input_state.state = crate::input::state::DrawingState::BendingArrow {
+        shape_id,
+        snapshot: crate::draw::frame::ShapeSnapshot {
+            shape: input_state
+                .boards
+                .active_frame()
+                .shape(shape_id)
+                .expect("arrow")
+                .shape
+                .clone(),
+            locked: false,
+        },
+    };
+    assert!(input_state.drag_arrow_bend_to(200, 20, false));
+    let mut deadline = None;
+
+    assert_eq!(
+        handle_toolbar_event_preflight(
+            &mut input_state,
+            &mut deadline,
+            &ToolbarEvent::ClearSession,
+            false,
+        ),
+        ToolbarEventPreflight::Continue
+    );
+
+    assert!(
+        matches!(input_state.state, crate::input::state::DrawingState::Idle),
+        "the backend barrier left the bend gesture running"
+    );
+    // Committed rather than discarded, so the undo stack can take it back.
+    input_state.handle_action(Action::Undo);
+    match input_state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .expect("arrow")
+        .shape
+    {
+        crate::draw::Shape::Arrow { bend, .. } => assert_eq!(bend, 0.0),
+        ref other => panic!("expected an arrow, got {other:?}"),
     }
 }

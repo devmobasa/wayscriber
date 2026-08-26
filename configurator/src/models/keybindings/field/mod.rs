@@ -54,6 +54,7 @@ pub enum KeybindingField {
     SelectBlurTool,
     SelectSpotlightTool,
     CycleBlurStyle,
+    CycleArrowStyle,
     SelectHighlightTool,
     IncreaseFontSize,
     DecreaseFontSize,

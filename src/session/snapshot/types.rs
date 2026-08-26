@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::draw::{
-    BlurStyle, Color, EraserKind, FontDescriptor, Frame, REGULAR_POLYGON_DEFAULT_SIDES,
+    ArrowStyle, BlurStyle, Color, EraserKind, FontDescriptor, Frame, REGULAR_POLYGON_DEFAULT_SIDES,
     clamp_regular_sides,
 };
 use crate::input::{EraserMode, InputState, PerToolDrawingSettings, Tool};
@@ -91,6 +91,10 @@ pub struct ToolStateSnapshot {
     pub arrow_angle: f64,
     #[serde(default)]
     pub arrow_head_at_end: Option<bool>,
+    /// Style copied into the next arrow drawn. Absent in sessions written
+    /// before arrow styles existed, which restore the configured default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arrow_style: Option<ArrowStyle>,
     #[serde(default)]
     pub arrow_label_enabled: Option<bool>,
     #[serde(default = "default_polygon_sides_for_snapshot")]
@@ -121,6 +125,7 @@ impl ToolStateSnapshot {
             arrow_length: input.arrow_length,
             arrow_angle: input.arrow_angle,
             arrow_head_at_end: Some(input.arrow_head_at_end),
+            arrow_style: Some(input.arrow_style),
             arrow_label_enabled: Some(input.arrow_label_enabled),
             polygon_sides: input.polygon_sides,
             board_previous_color: input.board_previous_color,
@@ -159,6 +164,7 @@ impl ToolStateSnapshot {
             arrow_length: config.arrow.length,
             arrow_angle: config.arrow.angle_degrees,
             arrow_head_at_end: Some(config.arrow.head_at_end),
+            arrow_style: Some(config.arrow.style),
             arrow_label_enabled: Some(false),
             polygon_sides: clamp_regular_sides(config.drawing.polygon_sides),
             board_previous_color: None,

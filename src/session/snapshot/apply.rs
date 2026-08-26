@@ -132,6 +132,9 @@ pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: Tool
     if let Some(head_at_end) = tool_state.arrow_head_at_end {
         input.arrow_head_at_end = head_at_end;
     }
+    if let Some(style) = tool_state.arrow_style {
+        let _ = input.set_arrow_style(style);
+    }
     if let Some(label_enabled) = tool_state.arrow_label_enabled {
         input.arrow_label_enabled = label_enabled;
     }

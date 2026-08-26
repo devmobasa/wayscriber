@@ -42,6 +42,7 @@ impl KeybindingField {
             | Self::SelectBlurTool
             | Self::SelectSpotlightTool
             | Self::CycleBlurStyle
+            | Self::CycleArrowStyle
             | Self::SelectHighlightTool
             | Self::ToggleHighlightTool
             | Self::ResetArrowLabels

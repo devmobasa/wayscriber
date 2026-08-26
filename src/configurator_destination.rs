@@ -124,6 +124,7 @@ pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSecti
         | Action::SelectBlurTool
         | Action::SelectSpotlightTool
         | Action::CycleBlurStyle
+        | Action::CycleArrowStyle
         | Action::SelectHighlightTool
         | Action::ToggleHighlightTool
         | Action::ResetArrowLabelCounter

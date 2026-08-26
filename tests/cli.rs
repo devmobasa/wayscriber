@@ -266,6 +266,7 @@ fn saved_tool_state() -> wayscriber::session::ToolStateSnapshot {
         arrow_length: 20.0,
         arrow_angle: 30.0,
         arrow_head_at_end: Some(false),
+        arrow_style: None,
         arrow_label_enabled: Some(false),
         polygon_sides: wayscriber::draw::REGULAR_POLYGON_DEFAULT_SIDES,
         board_previous_color: None,

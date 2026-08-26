@@ -458,9 +458,14 @@ fn a_wheel_gesture_never_commits_against_a_different_page() {
     );
     assert_eq!(magnification_of(&state, id), 2.25);
 
-    // The page switch goes through a real action, which flushes first, so the
-    // entry lands on the page it belongs to.
-    state.handle_action(Action::PageNew);
+    // The page switch goes through the ordinary configured-key route. Bound
+    // keys enter `route_action` directly rather than calling `handle_action`,
+    // so the shared action preflight has to flush the wheel gesture there.
+    state.modifiers.ctrl = true;
+    state.modifiers.alt = true;
+    state.on_key_press(Key::Char('n'));
+    state.modifiers.ctrl = false;
+    state.modifiers.alt = false;
     assert_ne!(
         state.boards.active_page_index(),
         0,

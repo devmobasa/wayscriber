@@ -1,4 +1,4 @@
-use crate::draw::{Color, Frame, Shape, ShapeId};
+use crate::draw::{ArrowStyle, Color, Frame, Shape, ShapeId};
 
 #[derive(Debug)]
 pub(super) struct PropertySummary<T> {
@@ -116,6 +116,13 @@ pub(super) fn shape_font_size(shape: &Shape) -> Option<f64> {
 pub(super) fn shape_arrow_head(shape: &Shape) -> Option<bool> {
     match shape {
         Shape::Arrow { head_at_end, .. } => Some(*head_at_end),
+        _ => None,
+    }
+}
+
+pub(super) fn shape_arrow_style(shape: &Shape) -> Option<ArrowStyle> {
+    match shape {
+        Shape::Arrow { style, .. } => Some(*style),
         _ => None,
     }
 }

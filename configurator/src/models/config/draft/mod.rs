@@ -3,7 +3,7 @@ mod from_config;
 use super::super::color::{ColorInput, ColorQuadInput};
 use super::super::fields::ZoomChipDisplayOption;
 use super::super::fields::{
-    EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
+    ArrowStyleOption, EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
     InputHudPositionOption, PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption,
     PdfOrientationOption, PdfPageSizeOption, PdfTransparentBackgroundOption,
     PresenterToolBehaviorOption, PresenterToolbarModeOption, ReducedMotionOption,
@@ -60,6 +60,7 @@ pub struct ConfigDraft {
     pub arrow_length: String,
     pub arrow_angle: String,
     pub arrow_head_at_end: bool,
+    pub arrow_style: ArrowStyleOption,
 
     pub history_undo_all_delay_ms: String,
     pub history_redo_all_delay_ms: String,

@@ -107,6 +107,13 @@ impl InputState {
         self.set_arrow_label_enabled(enable)
     }
 
+    /// The pill button targets the next arrow only. Restyling a selection is
+    /// the keyboard action's job, which routes on what is selected; a pill
+    /// that silently retargeted itself would make the label it shows a lie.
+    pub(super) fn apply_toolbar_cycle_arrow_style(&mut self) -> bool {
+        self.cycle_arrow_style()
+    }
+
     pub(super) fn apply_toolbar_reset_arrow_label_counter(&mut self) -> bool {
         self.reset_arrow_label_counter()
     }

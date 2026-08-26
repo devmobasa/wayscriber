@@ -126,6 +126,7 @@ impl ConfigDraft {
             |value| config.arrow.angle_degrees = value,
         );
         config.arrow.head_at_end = self.arrow_head_at_end;
+        config.arrow.style = self.arrow_style.to_style();
     }
 }
 

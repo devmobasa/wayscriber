@@ -23,15 +23,15 @@ pub use daemon::{
     LightShortcutApplyCapability, ShortcutApplyCapability, ShortcutBackend,
 };
 pub use fields::{
-    DragColorOption, DragMouseButton, DragToolField, DragToolOption, EraserModeOption,
-    FontStyleOption, FontWeightOption, InputHudModeOption, InputHudPositionOption, OverrideOption,
-    PdfFitModeOption, PdfLabelContentModeOption, PdfLabelPositionOption, PdfOrientationOption,
-    PdfPageSizeOption, PdfTransparentBackgroundOption, PresenterToolBehaviorOption,
-    PresenterToolbarModeOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,
-    PresetToggleField, QuadField, ReducedMotionOption, RegionPickerOption,
-    SessionCompressionOption, SessionStorageModeOption, StatusPositionOption, TextField,
-    ToggleField, ToolOption, ToolbarLayoutModeOption, ToolbarOverrideField,
-    ToolbarRebindModifierOption, UiThemeOption, ZoomChipDisplayOption,
+    ArrowStyleOption, DragColorOption, DragMouseButton, DragToolField, DragToolOption,
+    EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
+    InputHudPositionOption, OverrideOption, PdfFitModeOption, PdfLabelContentModeOption,
+    PdfLabelPositionOption, PdfOrientationOption, PdfPageSizeOption,
+    PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
+    PresetEraserKindOption, PresetEraserModeOption, PresetTextField, PresetToggleField, QuadField,
+    ReducedMotionOption, RegionPickerOption, SessionCompressionOption, SessionStorageModeOption,
+    StatusPositionOption, TextField, ToggleField, ToolOption, ToolbarLayoutModeOption,
+    ToolbarOverrideField, ToolbarRebindModifierOption, UiThemeOption, ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 pub use fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};

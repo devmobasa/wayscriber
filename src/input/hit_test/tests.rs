@@ -1,7 +1,7 @@
 use super::*;
 use crate::draw::{
-    ArrowLabel, BLACK, DrawnShape, EmbeddedImage, EraserBrush, EraserKind, FontDescriptor,
-    PolygonKind, Shape, StepMarkerLabel,
+    ArrowLabel, ArrowStyle, BLACK, DrawnShape, EmbeddedImage, EraserBrush, EraserKind,
+    FontDescriptor, PolygonKind, Shape, StepMarkerLabel,
 };
 
 #[test]
@@ -243,15 +243,88 @@ fn arrowhead_hit_detects_point_near_tip_and_rejects_distant_point() {
     // Arrow pointing upwards from tail at (0, -20) to tip at (0, 0).
     let tip = (0, 0);
     let tail = (0, -20);
+    let skeleton = crate::util::calculate_arrow_skeleton(
+        tip.0,
+        tip.1,
+        tail.0,
+        tail.1,
+        2.0,
+        10.0,
+        30.0,
+        ArrowStyle::Standard,
+        0.0,
+    )
+    .expect("non-degenerate arrow should yield geometry");
 
     assert!(
-        shapes::arrowhead_hit(tip.0, tip.1, tail.0, tail.1, 2.0, 10.0, 30.0, tip, 0.5),
+        shapes::arrowhead_triangle_hit(&skeleton.head, tip, 0.5),
         "tip point should be inside arrowhead"
     );
 
     assert!(
-        !shapes::arrowhead_hit(tip.0, tip.1, tail.0, tail.1, 2.0, 10.0, 30.0, (50, 50), 0.5),
+        !shapes::arrowhead_triangle_hit(&skeleton.head, (50, 50), 0.5),
         "faraway point should not be inside arrowhead even with tolerance"
+    );
+}
+
+fn arrow_shape(style: ArrowStyle, bend: f64) -> DrawnShape {
+    // Runs right along y = 100 with the head at (400, 100).
+    DrawnShape::with_metadata(
+        7,
+        Shape::Arrow {
+            x1: 0,
+            y1: 100,
+            x2: 400,
+            y2: 100,
+            color: BLACK,
+            thick: 4.0,
+            arrow_length: 20.0,
+            arrow_angle: 30.0,
+            head_at_end: true,
+            style,
+            bend,
+            label: None,
+        },
+        0,
+        false,
+    )
+}
+
+#[test]
+fn curved_arrow_is_grabbed_on_its_arc_and_not_on_the_chord_it_bypasses() {
+    // The point of a curved arrow is that it routes around whatever sits on the
+    // chord. Testing the chord instead would select it by clicking the thing it
+    // was drawn to avoid.
+    let curved = arrow_shape(ArrowStyle::Curved, 0.5);
+
+    // Bend 0.5 over a 400px chord puts the arc's midpoint 100px above it.
+    assert!(
+        hit_test(&curved, (200, 0), 2.0),
+        "the arc's bulge should be grabbable"
+    );
+    assert!(
+        !hit_test(&curved, (200, 100), 2.0),
+        "the chord the arrow routes around should not be a hit target"
+    );
+}
+
+#[test]
+fn double_arrow_is_grabbed_by_either_head() {
+    let double = arrow_shape(ArrowStyle::Double, 0.0);
+    let standard = arrow_shape(ArrowStyle::Standard, 0.0);
+
+    // The head is 20px long with a half-base of 20*tan(30 deg) ~ 11.5, so at
+    // 10px in from the tail it spans 5.8px either side of the chord. A point
+    // 5px off the chord there is inside the tail head and well outside the
+    // 2px-radius shaft a standard arrow tapers to.
+    let on_tail_barb = (10, 95);
+    assert!(
+        hit_test(&double, on_tail_barb, 0.5),
+        "the second head should be a hit target"
+    );
+    assert!(
+        !hit_test(&standard, on_tail_barb, 0.5),
+        "test setup: a standard arrow has no barb there to hit"
     );
 }
 
@@ -275,6 +348,8 @@ fn arrow_label_hit_detects_label_bounds() {
             arrow_length: 10.0,
             arrow_angle: 30.0,
             head_at_end: true,
+            style: ArrowStyle::Standard,
+            bend: 0.0,
             label: Some(label),
         },
         0,
@@ -282,8 +357,9 @@ fn arrow_label_hit_detects_label_bounds() {
     );
 
     let label_text = "12";
-    let layout = crate::draw::shape::arrow_label_layout(100, 0, 0, 0, 2.0, label_text, 12.0, &font)
-        .expect("label layout should exist");
+    let layout =
+        crate::draw::shape::arrow_label_layout(100, 0, 0, 0, 2.0, 0.0, label_text, 12.0, &font)
+            .expect("label layout should exist");
     let hit_point = (
         layout.bounds.x + layout.bounds.width / 2,
         layout.bounds.y + layout.bounds.height / 2,
@@ -430,4 +506,58 @@ fn pressure_stroke_hit_includes_one_point_stylus_dots() {
     );
     assert!(hit_test(&dot, (55, 50), 1.0));
     assert!(!hit_test(&dot, (80, 80), 1.0));
+}
+
+/// A labelled arrow along y = 100 from (0, 100) to (400, 100).
+fn labelled_arrow_shape(style: ArrowStyle, head_at_end: bool) -> DrawnShape {
+    DrawnShape::with_metadata(
+        1,
+        Shape::Arrow {
+            x1: 0,
+            y1: 100,
+            x2: 400,
+            y2: 100,
+            color: BLACK,
+            thick: 4.0,
+            arrow_length: 20.0,
+            arrow_angle: 30.0,
+            head_at_end,
+            style,
+            bend: 0.0,
+            label: Some(ArrowLabel {
+                value: 7,
+                size: 12.0,
+                font_descriptor: FontDescriptor::default(),
+            }),
+        },
+        0,
+        false,
+    )
+}
+
+#[test]
+fn a_double_arrow_label_is_grabbable_from_the_same_place_either_way() {
+    // head_at_end has no effect on a Double arrow — the outline is the same
+    // polygon either way, and docs/CONFIG.md says so. The hit area has to
+    // follow, or the number is grabbable where it is not painted on exactly
+    // one of the two readings.
+    let font = FontDescriptor::default();
+    let layout =
+        crate::draw::shape::arrow_label_layout(400, 100, 0, 100, 4.0, 0.0, "7", 12.0, &font)
+            .expect("label layout should exist");
+    let center = (
+        layout.bounds.x + layout.bounds.width / 2,
+        layout.bounds.y + layout.bounds.height / 2,
+    );
+
+    for head_at_end in [true, false] {
+        assert!(
+            hit_test(
+                &labelled_arrow_shape(ArrowStyle::Double, head_at_end),
+                center,
+                0.1
+            ),
+            "double arrow label was not grabbable with head_at_end = {head_at_end}"
+        );
+    }
 }

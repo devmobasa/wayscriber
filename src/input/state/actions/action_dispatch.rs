@@ -3,15 +3,11 @@ use crate::domain::Action;
 use super::super::{InputState, interaction};
 
 impl InputState {
-    /// Handle an action triggered by a keybinding.
+    /// Handle an action that a non-key caller has already resolved.
     ///
-    /// Any action closes an in-flight wheel adjustment of a loupe first. This
-    /// is the one place every page switch, board switch, session load, undo,
-    /// and redo passes through, and a gesture must never outlive the frame it
-    /// started on: shape ids restart per frame, so a snapshot flushed after a
-    /// page change would attach to an unrelated shape.
+    /// Bound keys enter [`interaction::route_action`] directly, so action-wide
+    /// gesture preflights live at that shared boundary rather than here.
     pub(crate) fn handle_action(&mut self, action: Action) {
-        self.flush_spotlight_magnification_gesture();
         let _ = interaction::route_action(self, action);
     }
 }

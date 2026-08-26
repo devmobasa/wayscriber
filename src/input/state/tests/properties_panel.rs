@@ -1,4 +1,5 @@
 use super::*;
+use crate::draw::ArrowStyle;
 use crate::input::BOARD_ID_WHITEBOARD;
 use crate::util::Rect;
 
@@ -340,6 +341,8 @@ fn adjust_arrow_length_entry_clamps_to_max_and_refreshes_panel_value() {
         arrow_length: 49.0,
         arrow_angle: 30.0,
         head_at_end: true,
+        style: ArrowStyle::Standard,
+        bend: 0.0,
         label: None,
     });
     state.set_selection(vec![shape_id]);

@@ -12,6 +12,7 @@ impl StylePillControl {
                 Cow::Borrowed("top.style.spotlight-magnification")
             }
             Self::FillToggle => Cow::Borrowed("top.style.fill"),
+            Self::ArrowStyleCycle => Cow::Borrowed("top.style.arrow-style"),
             Self::AutoNumberToggle => Cow::Borrowed("top.style.auto-number"),
             // Distinct per counter: classic mode (context_aware_ui = false)
             // can materialize both resets in one spec, and the frontends
@@ -41,7 +42,7 @@ impl StylePillControl {
             | Self::FontSizeSlider => StylePillRole::Slider,
             Self::ThicknessValue | Self::FontSizeValue => StylePillRole::Value,
             Self::FillToggle | Self::AutoNumberToggle => StylePillRole::Toggle,
-            Self::CounterReset(_) => StylePillRole::Button,
+            Self::CounterReset(_) | Self::ArrowStyleCycle => StylePillRole::Button,
             Self::FontFamilySegment | Self::EraserModeSegment => StylePillRole::Segmented,
             Self::SelectionCycle(_) => StylePillRole::Button,
             Self::SelectionStepper(_) => StylePillRole::Stepper,
@@ -71,6 +72,7 @@ impl StylePillControl {
             Self::AutoNumberToggle => {
                 ToolbarEvent::ToggleArrowLabels(!snapshot.arrow_label_enabled)
             }
+            Self::ArrowStyleCycle => ToolbarEvent::CycleArrowStyle,
             Self::CounterReset(StylePillCounter::Arrow) => ToolbarEvent::ResetArrowLabelCounter,
             Self::CounterReset(StylePillCounter::Step) => ToolbarEvent::ResetStepMarkerCounter,
             // The numerals open the precise-entry popup on the overlay.
@@ -160,6 +162,7 @@ impl StylePillControl {
             Self::FontSizeSlider | Self::FontSizeValue => {
                 Some(format!("{:.0}pt", snapshot.font_size))
             }
+            Self::ArrowStyleCycle => Some(snapshot.arrow_style.label().to_string()),
             Self::SelectionCycle(kind) | Self::SelectionStepper(kind) => {
                 selection_entry(snapshot, kind).map(|entry| entry.value.clone())
             }
@@ -226,6 +229,7 @@ impl StylePillControl {
             Self::ThicknessValue => Cow::Owned(format!("{:.0}px", snapshot.thickness)),
             Self::FontSizeValue => Cow::Owned(format!("{:.0}pt", snapshot.font_size)),
             Self::FillToggle => Cow::Borrowed(action_short_label(Action::ToggleFill)),
+            Self::ArrowStyleCycle => Cow::Borrowed("Arrow style"),
             Self::AutoNumberToggle => Cow::Borrowed("Auto-number"),
             Self::CounterReset(_) => Cow::Borrowed("Reset"),
             Self::FontFamilySegment => Cow::Borrowed("Font"),
@@ -261,6 +265,10 @@ impl StylePillControl {
                 snapshot
                     .binding_hints
                     .binding_for_action(Action::ToggleFill),
+            )),
+            Self::ArrowStyleCycle => Some(format!(
+                "Next arrow style: {}",
+                snapshot.arrow_style.label()
             )),
             Self::AutoNumberToggle => Some("Auto-number arrows 1, 2, 3.".to_string()),
             Self::CounterReset(StylePillCounter::Arrow) => Some(format!(

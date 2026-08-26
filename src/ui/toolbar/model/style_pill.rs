@@ -96,6 +96,11 @@ pub(crate) enum StylePillControl {
     SpotlightMagnificationSlider,
     /// Shape fill toggle.
     FillToggle,
+    /// Arrow style cycle button, showing the style the next arrow will use.
+    /// Clicking steps through [`ArrowStyle::ALL`]. A four-way choice does not
+    /// fit the two-half segmented control, and cycling is already how the
+    /// keyboard action and the docked selection entry step it.
+    ArrowStyleCycle,
     /// Arrow auto-number toggle.
     AutoNumberToggle,
     /// Reset the arrow/step counter; tooltip carries the next number.
@@ -163,6 +168,7 @@ pub(crate) const fn selection_kind_slug(kind: SelectionPropertyKind) -> &'static
         SelectionPropertyKind::Fill => "fill",
         SelectionPropertyKind::FontSize => "font-size",
         SelectionPropertyKind::ArrowHead => "arrow-head",
+        SelectionPropertyKind::ArrowStyle => "arrow-style",
         SelectionPropertyKind::ArrowLength => "arrow-length",
         SelectionPropertyKind::ArrowAngle => "arrow-angle",
         SelectionPropertyKind::TextBackground => "text-background",
@@ -177,6 +183,7 @@ pub(crate) const fn selection_control_for_kind(kind: SelectionPropertyKind) -> S
         SelectionPropertyKind::Color
         | SelectionPropertyKind::Fill
         | SelectionPropertyKind::ArrowHead
+        | SelectionPropertyKind::ArrowStyle
         | SelectionPropertyKind::TextBackground => StylePillControl::SelectionCycle(kind),
         SelectionPropertyKind::Thickness
         | SelectionPropertyKind::FontSize
@@ -260,6 +267,9 @@ impl StylePillSpec {
         }
         if context.show_fill_toggle {
             controls.push(StylePillControl::FillToggle);
+        }
+        if context.tool_options_kind == ToolOptionsKind::Arrow {
+            controls.push(StylePillControl::ArrowStyleCycle);
         }
         if context.show_arrow_labels {
             controls.push(StylePillControl::AutoNumberToggle);

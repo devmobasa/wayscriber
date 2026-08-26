@@ -220,6 +220,7 @@ pub(crate) fn handle_unbound_left_press(
         | DrawingState::PendingTextClick { .. }
         | DrawingState::ResizingText { .. }
         | DrawingState::ResizingSelection { .. }
+        | DrawingState::BendingArrow { .. }
         | DrawingState::AdjustingSpotlightMagnification { .. } => {
             RoutingOutcome::NoRoute(NoRouteReason::NoPointerBinding)
         }

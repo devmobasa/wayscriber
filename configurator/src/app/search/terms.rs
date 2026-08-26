@@ -131,8 +131,14 @@ pub(super) const ARROW_TERMS: &[&str] = &[
     "arrow length px",
     "arrow angle deg",
     "place arrowhead at end of line",
+    "arrow style",
     "length",
     "angle",
+    "style",
+    "standard",
+    "pointy",
+    "curved",
+    "double",
 ];
 pub(super) const HISTORY_MAIN_TERMS: &[&str] = &[
     "history",

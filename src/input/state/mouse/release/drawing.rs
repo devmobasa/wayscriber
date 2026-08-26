@@ -52,6 +52,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             arrow_length: state.arrow_length,
             arrow_angle: state.arrow_angle,
             arrow_head_at_end: state.arrow_head_at_end,
+            arrow_style: state.arrow_style,
             arrow_label: state.next_arrow_label(),
             step_marker_label: state.next_step_marker_label(),
             eraser_mode: state.eraser_mode,

@@ -288,7 +288,8 @@ impl TopBar {
                         }
                     }));
                 }
-                model::StylePillControl::SelectionCycle(_) => {
+                model::StylePillControl::SelectionCycle(_)
+                | model::StylePillControl::ArrowStyleCycle => {
                     let button = pill_button(
                         &control.required_value_text(snapshot),
                         sz(STYLE_SEL_VALUE_W),

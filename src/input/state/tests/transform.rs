@@ -366,3 +366,133 @@ fn restore_selection_snapshots_reverts_translation() {
         _ => panic!("Expected text shape"),
     }
 }
+
+#[test]
+fn resizing_a_curved_arrow_keeps_its_style_and_curvature() {
+    // `scale_shape` rebuilds `Shape::Arrow` field by field, so a field left out
+    // there silently resets on every resize. `style` has to survive untouched;
+    // `bend` has to survive as an *arc*, which a non-uniform scale means is not
+    // the same as surviving as a number.
+    let mut state = create_test_input_state();
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Arrow {
+        x1: 0,
+        y1: 0,
+        x2: 100,
+        y2: 0,
+        color: state.current_color,
+        thick: 4.0,
+        arrow_length: 20.0,
+        arrow_angle: 30.0,
+        head_at_end: true,
+        style: crate::draw::ArrowStyle::Curved,
+        bend: 0.4,
+        label: None,
+    });
+
+    state.set_selection(vec![shape_id]);
+    let original_bounds = state
+        .selection_bounds()
+        .expect("selection should have bounds");
+    let snapshots = state.capture_resize_selection_snapshots();
+
+    state.apply_selection_resize(
+        SelectionHandle::BottomRight,
+        &original_bounds,
+        100,
+        60,
+        &snapshots,
+    );
+
+    let frame = state.boards.active_frame();
+    match &frame.shape(shape_id).expect("arrow").shape {
+        Shape::Arrow {
+            style,
+            bend,
+            x1,
+            x2,
+            ..
+        } => {
+            assert_eq!(
+                *style,
+                crate::draw::ArrowStyle::Curved,
+                "resize reset the style"
+            );
+            assert!(*bend > 0.0, "resize reset the bend");
+            assert!(x2 - x1 > 100, "test setup should have widened the arrow");
+        }
+        other => panic!("expected arrow, got {other:?}"),
+    }
+}
+
+#[test]
+fn stretching_a_flat_curved_arrow_downward_grows_its_arc() {
+    // A horizontal curved arrow's height is almost entirely its arc. Dragging
+    // the bottom handle does not lengthen the chord, so a bend copied through
+    // unchanged keeps exactly the bulge it had and the selection refuses to
+    // follow the pointer — the arrow is the one shape a vertical resize cannot
+    // move. Scaling the arc itself is what makes the handle mean something.
+    let mut state = create_test_input_state();
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Arrow {
+        x1: 0,
+        y1: 200,
+        x2: 300,
+        y2: 200,
+        color: state.current_color,
+        thick: 4.0,
+        arrow_length: 20.0,
+        arrow_angle: 30.0,
+        head_at_end: true,
+        style: crate::draw::ArrowStyle::Curved,
+        bend: 0.3,
+        label: None,
+    });
+
+    state.set_selection(vec![shape_id]);
+    let original_bounds = state
+        .selection_bounds()
+        .expect("selection should have bounds");
+    let snapshots = state.capture_resize_selection_snapshots();
+
+    state.apply_selection_resize(
+        SelectionHandle::Bottom,
+        &original_bounds,
+        0,
+        original_bounds.height,
+        &snapshots,
+    );
+
+    let resized = state
+        .selection_bounds()
+        .expect("selection should still have bounds");
+    // Doubling the drag height should roughly double the box. Exactness is not
+    // the claim — the endpoints round to whole pixels and the arrowhead adds a
+    // few of its own — but "grew by most of the drag" separates a working
+    // handle from one that does nothing.
+    assert!(
+        resized.height >= original_bounds.height * 2 - 4,
+        "vertical resize did not carry the arc: {} -> {}",
+        original_bounds.height,
+        resized.height
+    );
+
+    match &state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .expect("arrow")
+        .shape
+    {
+        Shape::Arrow { bend, x1, x2, .. } => {
+            assert!(
+                *bend > 0.3,
+                "bend should have grown with the height, got {bend}"
+            );
+            assert_eq!(
+                x2 - x1,
+                300,
+                "a vertical resize must not have moved the endpoints"
+            );
+        }
+        other => panic!("expected arrow, got {other:?}"),
+    }
+}

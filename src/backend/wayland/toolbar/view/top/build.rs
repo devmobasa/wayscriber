@@ -796,7 +796,8 @@ fn push_style_pill(
                 ));
                 x += ToolbarLayoutSpec::TOP_STYLE_RESET_W + gap;
             }
-            model::StylePillControl::SelectionCycle(_) => {
+            model::StylePillControl::SelectionCycle(_)
+            | model::StylePillControl::ArrowStyleCycle => {
                 let enabled = control.enabled(snapshot);
                 nodes.push(WidgetNode::new(
                     id,

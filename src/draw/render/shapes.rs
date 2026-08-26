@@ -8,7 +8,7 @@ use super::text::{render_sticky_note, render_text};
 use crate::draw::Color;
 use crate::draw::shape::Shape;
 use crate::draw::shape::{
-    ARROW_LABEL_BACKGROUND, arrow_label_layout, measure_text_with_context,
+    ARROW_LABEL_BACKGROUND, arrow_label_ends, arrow_label_layout, measure_text_with_context,
     step_marker_outline_thickness, step_marker_radius,
 };
 
@@ -85,13 +85,15 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
             arrow_length,
             arrow_angle,
             head_at_end,
+            style,
+            bend,
             label,
         } => {
-            let (tip_x, tip_y, tail_x, tail_y) = if *head_at_end {
-                (*x2, *y2, *x1, *y1)
-            } else {
-                (*x1, *y1, *x2, *y2)
-            };
+            // Only the label needs these: `render_arrow` reads `head_at_end`
+            // itself. `Double` deliberately ignores the flag here, matching the
+            // outline it draws either way.
+            let (tip_x, tip_y, tail_x, tail_y) =
+                arrow_label_ends(*x1, *y1, *x2, *y2, *head_at_end, *style);
             render_arrow(
                 ctx,
                 *x1,
@@ -103,6 +105,8 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                 *arrow_length,
                 *arrow_angle,
                 *head_at_end,
+                *style,
+                *bend,
             );
             if let Some(label) = label {
                 let label_text = label.value.to_string();
@@ -112,6 +116,7 @@ pub fn render_shape(ctx: &cairo::Context, shape: &Shape) {
                     tail_x,
                     tail_y,
                     *thick,
+                    style.effective_bend(*bend),
                     &label_text,
                     label.size,
                     &label.font_descriptor,

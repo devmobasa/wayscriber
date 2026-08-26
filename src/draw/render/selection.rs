@@ -111,6 +111,8 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
             arrow_length,
             arrow_angle,
             head_at_end,
+            style,
+            bend,
             ..
         } => {
             render_arrow(
@@ -124,6 +126,8 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
                 *arrow_length,
                 *arrow_angle,
                 *head_at_end,
+                *style,
+                *bend,
             );
         }
         Shape::BlurRect { .. } => {

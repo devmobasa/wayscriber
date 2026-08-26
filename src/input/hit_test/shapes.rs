@@ -1,4 +1,4 @@
-use crate::util;
+use crate::util::{self, ArrowheadTriangle};
 
 use super::geometry::{
     EPS, distance_point_to_point, distance_point_to_segment, p_as_i32, point_in_polygon,
@@ -213,28 +213,16 @@ pub(super) fn circle_hit(cx: i32, cy: i32, radius: f64, point: (i32, i32), toler
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn arrowhead_hit(
-    tip_x: i32,
-    tip_y: i32,
-    tail_x: i32,
-    tail_y: i32,
-    thick: f64,
-    arrow_length: f64,
-    arrow_angle: f64,
+/// Whether `point` lands on an already-computed arrowhead triangle.
+///
+/// Arrow hit-testing takes its triangles from the shared skeleton so a curved
+/// head, whose triangle is aimed along the curve's end tangent rather than the
+/// chord, is tested where it was actually drawn.
+pub(super) fn arrowhead_triangle_hit(
+    geometry: &ArrowheadTriangle,
     point: (i32, i32),
     tolerance: f64,
 ) -> bool {
-    let Some(geometry) = util::calculate_arrowhead_triangle_custom(
-        tip_x,
-        tip_y,
-        tail_x,
-        tail_y,
-        thick,
-        arrow_length,
-        arrow_angle,
-    ) else {
-        return false;
-    };
     let tip = geometry.tip;
     let (left_x, left_y) = geometry.left;
     let (right_x, right_y) = geometry.right;
@@ -251,5 +239,22 @@ pub(super) fn arrowhead_hit(
     ];
     edges.iter().any(|&(a, b)| {
         distance_point_to_segment(p_as_i32(p), to_i32_pair(a), to_i32_pair(b)) <= padded
+    })
+}
+
+/// Whether `point` lands on any segment of a shaft centre line.
+///
+/// A straight spine is a single segment and this reduces to [`segment_hit`]; a
+/// curved one walks the sampled arc, so grabbing a curved arrow means grabbing
+/// where its shaft actually runs rather than the chord it bypasses.
+pub(super) fn spine_hit(
+    spine: &[(f64, f64)],
+    thickness: f64,
+    point: (i32, i32),
+    tolerance: f64,
+) -> bool {
+    let padded = tolerance.max(thickness / 2.0);
+    spine.windows(2).any(|pair| {
+        distance_point_to_segment(point, to_i32_pair(pair[0]), to_i32_pair(pair[1])) <= padded
     })
 }

@@ -21,6 +21,7 @@ pub use boards::{
 };
 pub use events::{Key, MouseButton};
 #[allow(unused_imports)]
+pub(crate) use state::IdleHandle;
 pub use state::{
     BoardPickerCursorHint, ClickHighlightSettings, ColorPickerCursorHint, CommandPaletteCursorHint,
     ContextMenuCursorHint, DrawingState, EyedropperUiState, HelpOverlayClick,

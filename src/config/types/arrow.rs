@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::draw::ArrowStyle;
+
 /// Arrow drawing settings.
 ///
 /// Controls the appearance of arrowheads when using the arrow tool.
@@ -18,6 +20,13 @@ pub struct ArrowConfig {
     /// Place the arrowhead at the end of the line instead of the start
     #[serde(default = "default_arrow_head_at_end")]
     pub head_at_end: bool,
+
+    /// Shape of the arrow drawn by the arrow tool: `"standard"`, `"pointy"`,
+    /// `"curved"`, or `"double"`. This is the startup default only — the style
+    /// is a per-shape property, so cycling it at runtime restyles the selection
+    /// or the next arrow without rewriting anything already drawn.
+    #[serde(default)]
+    pub style: ArrowStyle,
 }
 
 impl Default for ArrowConfig {
@@ -26,6 +35,7 @@ impl Default for ArrowConfig {
             length: default_arrow_length(),
             angle_degrees: default_arrow_angle(),
             head_at_end: default_arrow_head_at_end(),
+            style: ArrowStyle::default(),
         }
     }
 }

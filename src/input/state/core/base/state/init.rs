@@ -11,7 +11,7 @@ use crate::config::{
     Action, BoardsConfig, PRESET_SLOTS_MAX, QuickColorPalette, RadialMenuMouseBinding, Shortcut,
 };
 use crate::draw::{
-    BlurStyle, DirtyTracker, EraserKind, FontDescriptor, REGULAR_POLYGON_DEFAULT_SIDES,
+    ArrowStyle, BlurStyle, DirtyTracker, EraserKind, FontDescriptor, REGULAR_POLYGON_DEFAULT_SIDES,
 };
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::state::input_hud::{InputHudSettings, InputHudState};
@@ -107,6 +107,7 @@ impl InputState {
             arrow_length,
             arrow_angle,
             arrow_head_at_end,
+            arrow_style: ArrowStyle::default(),
             arrow_label_enabled: false,
             arrow_label_counter: 1,
             step_marker_counter: 1,

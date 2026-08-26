@@ -124,6 +124,9 @@ toggle_eraser_mode = ["Ctrl+Shift+E"]
 select_spotlight_tool = []
 # Step the blur tool through blur/pixelate/secure/black-out (unbound by default)
 cycle_blur_style = []
+# Step the arrow style through standard/pointy/curved/double (unbound by default).
+# With arrows selected it restyles those instead of the next arrow.
+cycle_arrow_style = []
 select_line_tool = []
 select_rect_tool = []
 select_ellipse_tool = []
@@ -1289,6 +1292,13 @@ angle_degrees = 26.0
 
 # Place the arrowhead at the end of the line instead of the start
 head_at_end = true
+
+# Shape of the next arrow drawn: "standard", "pointy", "curved", or "double".
+# Every arrow stores its own style, so this only seeds new ones — nothing
+# already drawn is restyled, and the Cycle Arrow Style action changes it at
+# runtime. "double" ignores head_at_end; "curved" starts with a gentle arc you
+# can reshape by dragging the round handle at its midpoint.
+style = "standard"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PERFORMANCE SETTINGS

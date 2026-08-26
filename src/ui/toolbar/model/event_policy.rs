@@ -508,6 +508,7 @@ fn persistence_for_event(event: &ToolbarEvent) -> ToolbarPersistence {
         | ToolbarEvent::SetPolygonSides(_)
         | ToolbarEvent::NudgePolygonSides(_)
         | ToolbarEvent::ToggleArrowLabels(_)
+        | ToolbarEvent::CycleArrowStyle
         | ToolbarEvent::ResetArrowLabelCounter
         | ToolbarEvent::ResetStepMarkerCounter
         | ToolbarEvent::SetUndoDelay(_)
@@ -604,6 +605,11 @@ fn backend_route_for_event(event: &ToolbarEvent) -> ToolbarBackendRoute {
 mod tests {
     use super::*;
     use crate::draw::color::RED;
+
+    #[test]
+    fn next_arrow_style_event_has_no_selection_aware_action_equivalent() {
+        assert_eq!(action_for_event(&ToolbarEvent::CycleArrowStyle), None);
+    }
 
     #[test]
     fn duplicate_quick_colors_keep_the_clicked_binding_identity() {

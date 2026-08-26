@@ -1,6 +1,6 @@
 use super::*;
 use crate::config::{PresenterToolBehavior, PresetToolStatesConfig, ToolPresetConfig};
-use crate::draw::BlurStyle;
+use crate::draw::{ArrowStyle, BlurStyle};
 use crate::input::{DragBinding, DragToolBindings, PerToolDrawingSettings};
 use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnapshot};
 
@@ -2338,4 +2338,98 @@ fn a_quick_color_recolor_queues_the_write_without_touching_the_file_itself() {
             "nothing was written, because the backend has not drained the edit"
         );
     });
+}
+
+#[test]
+fn cycling_arrow_style_with_nothing_selected_only_moves_the_next_arrow() {
+    let mut state = create_test_input_state();
+    let existing = state.boards.active_frame_mut().add_shape(Shape::Arrow {
+        x1: 0,
+        y1: 0,
+        x2: 100,
+        y2: 0,
+        color: state.current_color,
+        thick: 4.0,
+        arrow_length: 20.0,
+        arrow_angle: 30.0,
+        head_at_end: true,
+        style: ArrowStyle::Standard,
+        bend: 0.0,
+        label: None,
+    });
+
+    state.handle_action(Action::CycleArrowStyle);
+
+    assert_eq!(state.arrow_style, ArrowStyle::Pointy);
+    match &state
+        .boards
+        .active_frame()
+        .shape(existing)
+        .expect("arrow")
+        .shape
+    {
+        Shape::Arrow { style, .. } => assert_eq!(
+            *style,
+            ArrowStyle::Standard,
+            "an unselected arrow must not be restyled"
+        ),
+        other => panic!("expected arrow, got {other:?}"),
+    }
+}
+
+#[test]
+fn cycling_arrow_style_with_arrows_selected_restyles_them_instead() {
+    let mut state = create_test_input_state();
+    let arrow = state.boards.active_frame_mut().add_shape(Shape::Arrow {
+        x1: 0,
+        y1: 0,
+        x2: 100,
+        y2: 0,
+        color: state.current_color,
+        thick: 4.0,
+        arrow_length: 20.0,
+        arrow_angle: 30.0,
+        head_at_end: true,
+        style: ArrowStyle::Standard,
+        bend: 0.0,
+        label: None,
+    });
+    state.set_selection(vec![arrow]);
+
+    state.handle_action(Action::CycleArrowStyle);
+
+    match &state
+        .boards
+        .active_frame()
+        .shape(arrow)
+        .expect("arrow")
+        .shape
+    {
+        Shape::Arrow { style, .. } => assert_eq!(*style, ArrowStyle::Pointy),
+        other => panic!("expected arrow, got {other:?}"),
+    }
+    assert_eq!(
+        state.arrow_style,
+        ArrowStyle::Standard,
+        "restyling a selection must not also move the next-arrow default"
+    );
+}
+
+#[test]
+fn cycling_arrow_style_with_a_non_arrow_selected_falls_back_to_the_default() {
+    let mut state = create_test_input_state();
+    let rect = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 0,
+        y: 0,
+        w: 20,
+        h: 20,
+        fill: false,
+        color: state.current_color,
+        thick: 2.0,
+    });
+    state.set_selection(vec![rect]);
+
+    state.handle_action(Action::CycleArrowStyle);
+
+    assert_eq!(state.arrow_style, ArrowStyle::Pointy);
 }

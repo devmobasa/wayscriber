@@ -86,6 +86,7 @@ impl InputState {
             arrow_length: self.arrow_length,
             arrow_angle: self.arrow_angle,
             arrow_head_at_end: self.arrow_head_at_end,
+            arrow_style: self.arrow_style,
             arrow_label: if *tool == Tool::Arrow {
                 self.next_arrow_label()
             } else {

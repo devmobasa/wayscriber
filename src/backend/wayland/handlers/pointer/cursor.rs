@@ -6,7 +6,7 @@ use super::*;
 use crate::backend::wayland::toolbar::ToolbarCursorHint;
 use crate::input::{
     BoardPickerCursorHint, ColorPickerCursorHint, CommandPaletteCursorHint, ContextMenuCursorHint,
-    DrawingState, HelpOverlayCursorHint, SelectionHandle,
+    DrawingState, HelpOverlayCursorHint, IdleHandle, SelectionHandle,
 };
 
 /// What the pointer is over on the screen-modal surfaces (the eyedropper and
@@ -298,6 +298,11 @@ impl WaylandState {
             DrawingState::AdjustingSpotlightMagnification { .. } => {
                 return CursorIcon::EwResize;
             }
+            // Dragging a curved arrow's bend handle - free travel, the
+            // perpendicular component of which is what the arc follows
+            DrawingState::BendingArrow { .. } => {
+                return CursorIcon::Grabbing;
+            }
             // Idle - check for hover contexts
             DrawingState::Idle => {}
         }
@@ -317,29 +322,19 @@ impl WaylandState {
             return CursorIcon::Default;
         }
 
-        // Check if hovering over selection handles
+        // Hovering an on-canvas handle. Resolved through the same routing a
+        // press uses, so the cursor cannot promise one operation where a click
+        // would start another — these handles overlap, and a bend grip on a
+        // shallow arc lands within a few pixels of the selection box's edge
+        // handle. Checked on hover as well as during the drag, or a grip would
+        // look inert until it was already grabbed.
         let (canvas_x, canvas_y) = self.input_state.canvas_pointer_position();
-        if let Some(handle) = self.input_state.hit_selection_handle(canvas_x, canvas_y) {
-            return resize_cursor(handle);
-        }
-
-        // Check if hovering over text resize handle
-        if self
-            .input_state
-            .hit_text_resize_handle(canvas_x, canvas_y)
-            .is_some()
-        {
-            return CursorIcon::SeResize;
-        }
-
-        // Hovering the loupe's magnification track. Checked here as well as
-        // during the drag, or the control would look inert until it is grabbed.
-        if self
-            .input_state
-            .hit_spotlight_magnification_track(canvas_x, canvas_y)
-            .is_some()
-        {
-            return CursorIcon::EwResize;
+        match self.input_state.hit_idle_handle(canvas_x, canvas_y) {
+            Some(IdleHandle::SpotlightMagnification(_)) => return CursorIcon::EwResize,
+            Some(IdleHandle::ArrowBend(_)) => return CursorIcon::Grab,
+            Some(IdleHandle::TextResize(_)) => return CursorIcon::SeResize,
+            Some(IdleHandle::SelectionResize(handle)) => return resize_cursor(handle),
+            None => {}
         }
 
         // Check if hovering over a selected shape (for move)

@@ -1,6 +1,6 @@
 use crate::config::QuickColorPalette;
 use crate::config::{ResolvedToolbarItems, ToolbarItemId, ToolbarLayoutMode, TopDisplayMode};
-use crate::draw::{Color, EraserKind, FontDescriptor};
+use crate::draw::{ArrowStyle, Color, EraserKind, FontDescriptor};
 use crate::input::state::PresetFeedbackKind;
 use crate::input::tool::{ToolControlGroup, ToolProfile};
 use crate::input::{EraserMode, Tool};
@@ -277,6 +277,8 @@ pub struct ToolbarSnapshot {
     pub fill_enabled: bool,
     pub polygon_sides: u8,
     pub arrow_label_enabled: bool,
+    /// Style copied into the next arrow drawn.
+    pub arrow_style: ArrowStyle,
     pub arrow_label_next: u32,
     pub step_marker_next: u32,
     pub undo_available: bool,

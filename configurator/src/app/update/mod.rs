@@ -141,6 +141,7 @@ impl ConfiguratorApp {
                 self.handle_quick_named_color_selected(index, option)
             }
             Message::EraserModeChanged(option) => self.handle_eraser_mode_changed(option),
+            Message::ArrowStyleChanged(option) => self.handle_arrow_style_changed(option),
             Message::DrawingDragMappingSectionToggled(button) => {
                 self.handle_drawing_drag_mapping_section_toggled(button)
             }

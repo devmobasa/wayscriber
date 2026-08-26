@@ -1,4 +1,4 @@
-use crate::draw::Color;
+use crate::draw::{ArrowStyle, Color};
 use crate::util;
 
 /// Render a straight line
@@ -151,8 +151,11 @@ pub(crate) fn render_polygon_preview(
 
 /// Render an arrow: a tapered shaft fused into an arrowhead pointing at the tip.
 ///
-/// Shaft and head are one filled path, so there is no shoulder step where they
-/// meet and a semi-transparent color paints at an even opacity throughout.
+/// Shaft and head are one filled path for every style, so there is no shoulder
+/// step where they meet and a semi-transparent color paints at an even opacity
+/// throughout. `Double` fuses its second head into that same path rather than
+/// filling a separate triangle, which is what keeps the overlap from painting
+/// twice.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_arrow(
     ctx: &cairo::Context,
@@ -165,15 +168,18 @@ pub(super) fn render_arrow(
     arrow_length: f64,
     arrow_angle: f64,
     head_at_end: bool,
+    style: ArrowStyle,
+    bend: f64,
 ) {
-    // Determine which end gets the arrowhead
+    // Determine which end gets the arrowhead. `Double` has one at each end, so
+    // the flag picks nothing for it; the geometry is symmetric either way.
     let (tip_x, tip_y, tail_x, tail_y) = if head_at_end {
         (x2, y2, x1, y1)
     } else {
         (x1, y1, x2, y2)
     };
 
-    let Some(outline) = util::calculate_arrow_outline(
+    let Some(points) = util::calculate_arrow_outline_styled(
         tip_x,
         tip_y,
         tail_x,
@@ -181,7 +187,13 @@ pub(super) fn render_arrow(
         thick,
         arrow_length,
         arrow_angle,
+        style,
+        bend,
     ) else {
+        return;
+    };
+
+    let [first, rest @ ..] = points.as_slice() else {
         return;
     };
 
@@ -189,7 +201,6 @@ pub(super) fn render_arrow(
     ctx.new_path();
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);
 
-    let [first, rest @ ..] = &outline.points;
     ctx.move_to(first.0, first.1);
     for &(x, y) in rest {
         ctx.line_to(x, y);
@@ -255,6 +266,19 @@ mod tests {
         );
     }
 
+    /// Whether any pixel within `radius` of `(x, y)` carries paint.
+    fn painted_near(surface: &mut ImageSurface, x: i32, y: i32, radius: i32) -> bool {
+        (y - radius..=y + radius).any(|py| {
+            (x - radius..=x + radius).any(|px| {
+                px >= 0
+                    && py >= 0
+                    && px < surface.width()
+                    && py < surface.height()
+                    && alpha_at(surface, px, py) > 0
+            })
+        })
+    }
+
     fn painted_column_height(surface: &mut ImageSurface, x: i32, height: i32) -> i32 {
         (0..height)
             .filter(|&y| alpha_at(surface, x, y) > 0)
@@ -277,7 +301,20 @@ mod tests {
         // stroke (30px), so the head base sits at x = 390 and the bevelled
         // shoulder at x = 393. The samples below land on the tail, on the bare
         // shaft behind the head, and across the head itself.
-        render_arrow(&ctx, 20, 60, 420, 60, red, 10.0, 20.0, 24.0, true);
+        render_arrow(
+            &ctx,
+            20,
+            60,
+            420,
+            60,
+            red,
+            10.0,
+            20.0,
+            24.0,
+            true,
+            ArrowStyle::Standard,
+            0.0,
+        );
 
         drop(ctx);
         let near_tail = painted_column_height(&mut surface, 25, 120);
@@ -305,7 +342,20 @@ mod tests {
             a: 1.0,
         };
 
-        render_arrow(&ctx, 20, 60, 180, 60, red, 20.0, 30.0, 30.0, true);
+        render_arrow(
+            &ctx,
+            20,
+            60,
+            180,
+            60,
+            red,
+            20.0,
+            30.0,
+            30.0,
+            true,
+            ArrowStyle::Standard,
+            0.0,
+        );
 
         drop(ctx);
         // Every column between tail and tip must carry paint on the centre line.
@@ -315,6 +365,105 @@ mod tests {
                 "arrow centre line has a gap at x = {x}"
             );
         }
+    }
+
+    #[test]
+    fn curved_arrow_paints_off_the_chord_and_leaves_it_bare() {
+        let (mut surface, ctx) = surface_with_context(440, 240);
+        let red = Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        };
+
+        // Tail at (20, 200), tip at (420, 200): a 400px chord bent by 0.5,
+        // which puts the arc's midpoint 100px above it at y = 100.
+        render_arrow(
+            &ctx,
+            20,
+            200,
+            420,
+            200,
+            red,
+            8.0,
+            20.0,
+            30.0,
+            true,
+            ArrowStyle::Curved,
+            0.5,
+        );
+
+        drop(ctx);
+        assert!(
+            alpha_at(&mut surface, 220, 100) > 0,
+            "the arc should paint at its midpoint"
+        );
+        assert_eq!(
+            alpha_at(&mut surface, 220, 200),
+            0,
+            "the chord the arrow routes around should stay bare"
+        );
+        // Both ends still land where the arrow was drawn from and to. The
+        // shaft leaves the tail at 45 degrees here, so scan a small box rather
+        // than guess which pixel a 1px-wide tail rounds onto.
+        assert!(
+            painted_near(&mut surface, 20, 200, 6),
+            "the tail should still paint"
+        );
+        assert!(
+            painted_near(&mut surface, 420, 200, 6),
+            "the head should still reach the tip"
+        );
+    }
+
+    #[test]
+    fn double_arrow_paints_a_head_at_both_ends() {
+        let (mut surface, ctx) = surface_with_context(240, 140);
+        let red = Color {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        };
+
+        // 200px shaft at 8px thick: the head is 24px long with a half-base of
+        // 24 * tan(30 deg) ~ 13.9, so 8px in from each end the silhouette is
+        // far wider than the 8px shaft between them.
+        render_arrow(
+            &ctx,
+            20,
+            70,
+            220,
+            70,
+            red,
+            8.0,
+            20.0,
+            30.0,
+            true,
+            ArrowStyle::Double,
+            0.0,
+        );
+
+        drop(ctx);
+        let at_tail = painted_column_height(&mut surface, 28, 140);
+        let mid_shaft = painted_column_height(&mut surface, 120, 140);
+        let at_head = painted_column_height(&mut surface, 212, 140);
+
+        assert!(
+            at_tail > mid_shaft,
+            "no head at the tail: {at_tail} vs shaft {mid_shaft}"
+        );
+        assert!(
+            at_head > mid_shaft,
+            "no head at the tip: {at_head} vs shaft {mid_shaft}"
+        );
+        // Both heads are the same triangle mirrored, so their silhouettes at
+        // equal distances from each end match to within rasterization noise.
+        assert!(
+            at_tail.abs_diff(at_head) <= 2,
+            "the two heads should match: {at_tail} vs {at_head}"
+        );
     }
 
     #[test]
@@ -328,7 +477,20 @@ mod tests {
         };
 
         ctx.move_to(10.0, 130.0);
-        render_arrow(&ctx, 120, 40, 200, 40, red, 8.0, 20.0, 30.0, true);
+        render_arrow(
+            &ctx,
+            120,
+            40,
+            200,
+            40,
+            red,
+            8.0,
+            20.0,
+            30.0,
+            true,
+            ArrowStyle::Standard,
+            0.0,
+        );
 
         drop(ctx);
         assert_eq!(

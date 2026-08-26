@@ -1,6 +1,6 @@
 use crate::models::{
-    ColorMode, ColorPickerId, DragColorOption, DragMouseButton, DragToolField, DragToolOption,
-    EraserModeOption, NamedColorOption,
+    ArrowStyleOption, ColorMode, ColorPickerId, DragColorOption, DragMouseButton, DragToolField,
+    DragToolOption, EraserModeOption, NamedColorOption,
 };
 
 use super::super::super::effects::Effect;
@@ -176,6 +176,20 @@ impl ConfiguratorApp {
     ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         self.draft.drawing_default_eraser_mode = option;
+        self.refresh_dirty_flag();
+        Vec::new()
+    }
+
+    /// `[arrow] style`: which shape the next arrow is drawn in.
+    ///
+    /// Seeds new arrows only. Nothing already drawn is restyled, because every
+    /// arrow stores its own style.
+    pub(in crate::app::update) fn handle_arrow_style_changed(
+        &mut self,
+        option: ArrowStyleOption,
+    ) -> Vec<Effect> {
+        self.status = StatusMessage::idle();
+        self.draft.arrow_style = option;
         self.refresh_dirty_flag();
         Vec::new()
     }

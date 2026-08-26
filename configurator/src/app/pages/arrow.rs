@@ -9,7 +9,7 @@ use relm4::prelude::*;
 
 use crate::messages::Message;
 use crate::models::util::format_float;
-use crate::models::{TabId, TextField, ToggleField};
+use crate::models::{ArrowStyleOption, TabId, TextField, ToggleField};
 
 use super::super::search::SearchArea;
 use super::super::state::ConfiguratorApp;
@@ -41,6 +41,18 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             "Off draws the head at the start of the line instead.",
             |app| app.draft.arrow_head_at_end,
             |value| Message::ToggleChanged(ToggleField::ArrowHeadAtEnd, value),
+        )
+        .combo_row(
+            "Arrow style",
+            "Shape of the next arrow drawn. Every arrow keeps its own style, so \
+             changing this never restyles existing drawings.",
+            ArrowStyleOption::list(),
+            ArrowStyleOption::list()
+                .iter()
+                .map(|option| option.label().to_string())
+                .collect(),
+            |app| app.draft.arrow_style,
+            Message::ArrowStyleChanged,
         );
 
     page.finish()

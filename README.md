@@ -118,7 +118,7 @@ The v0.9.23+ prebuilt `wayscriber` packages require glibc 2.39 and GTK 4.12 — 
 ### Drawing and editing
 - Freehand pen, highlighter, eraser (circle/rect)
 - Shapes: lines, rectangles, ellipses, polygons (with fill toggle)
-- Arrows with optional auto-numbered labels; step markers for walkthroughs
+- Arrows in four styles - standard, pointy, curved (drag its handle to route around what is in the way), and double-ended - with optional auto-numbered labels; step markers for walkthroughs
 - Blur tool with four styles: soften, pixelate, secure (flattens the region to one color), and black out
 - Spotlight tool: dims everything except the regions you draw, with optional 1×–4× magnification
 - Multiline text and sticky notes with smoothing
@@ -1023,6 +1023,7 @@ pick_screen_color = ["I"]
 Notes:
 
 - Arrow labels can auto-number when enabled in the arrow toolbar; reset with <kbd>Ctrl+Shift+R</kbd>.
+- Arrow style (standard, pointy, curved, double) is set from the arrow toolbar's style button, or by the **Cycle Arrow Style** command - which restyles selected arrows when there are any, and otherwise sets the style for the next arrow. It has no default shortcut; bind `cycle_arrow_style` in `config.toml` for direct keyboard access, and set `[arrow] style` there to pick which style new arrows start with. A selected curved arrow shows a round handle at the middle of its arc: drag it to reshape the curve, holding <kbd>Shift</kbd> to snap.
 - Step markers auto-increment and reset from the toolbar (or bind `reset_step_markers` in `config.toml`).
 - Preset slots can be saved/cleared from the toolbar; the slot changes right away and is written back to `config.toml` on a background worker, with the toast confirming it once the file has it. Edit names and advanced fields in the configurator's Presets tab.
 - The blur tool has no default keyboard shortcut; bind `select_blur_tool` in `config.toml` if you want direct keyboard access.
