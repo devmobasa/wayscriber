@@ -1819,75 +1819,28 @@ fn save_preset_without_override_uses_unmodified_drag_tool() {
 fn apply_full_preset_restores_all_tool_settings() {
     let mut state = create_test_input_state();
     state.preset_slot_count = 3;
-    let pen_color = Color {
-        r: 0.1,
-        g: 0.2,
-        b: 0.3,
-        a: 1.0,
-    };
-    let line_color = Color {
-        r: 0.4,
-        g: 0.5,
-        b: 0.6,
-        a: 1.0,
-    };
-    let rect_color = Color {
-        r: 0.9,
-        g: 0.1,
-        b: 0.2,
-        a: 1.0,
-    };
-    let ellipse_color = Color {
-        r: 0.2,
-        g: 0.9,
-        b: 0.4,
-        a: 1.0,
-    };
-    let arrow_color = Color {
-        r: 0.8,
-        g: 0.3,
-        b: 0.7,
-        a: 1.0,
-    };
-    let blur_color = Color {
-        r: 0.3,
-        g: 0.3,
-        b: 0.3,
-        a: 1.0,
-    };
-    let marker_color = Color {
-        r: 0.7,
-        g: 0.8,
-        b: 0.1,
-        a: 1.0,
-    };
-    let step_color = Color {
-        r: 0.2,
-        g: 0.7,
-        b: 0.9,
-        a: 1.0,
-    };
-    let mut settings = PerToolDrawingSettings::new(pen_color, 4.0);
-    settings.line.color = line_color;
-    settings.line.thickness = 14.0;
-    settings.rect.color = rect_color;
-    settings.rect.thickness = 16.0;
-    settings.ellipse.color = ellipse_color;
-    settings.ellipse.thickness = 18.0;
-    settings.arrow.color = arrow_color;
-    settings.arrow.thickness = 20.0;
-    settings.blur.color = blur_color;
-    settings.blur.thickness = 22.0;
-    settings.marker.color = marker_color;
-    settings.marker.thickness = 24.0;
-    settings.step_marker.color = step_color;
-    settings.step_marker.thickness = 30.0;
+    let styles = [
+        (Tool::Pen, Color::new(0.1, 0.2, 0.3, 1.0), 4.0),
+        (Tool::Line, Color::new(0.4, 0.5, 0.6, 1.0), 14.0),
+        (Tool::Rect, Color::new(0.9, 0.1, 0.2, 1.0), 16.0),
+        (Tool::Ellipse, Color::new(0.2, 0.9, 0.4, 1.0), 18.0),
+        (Tool::Arrow, Color::new(0.8, 0.3, 0.7, 1.0), 20.0),
+        (Tool::Blur, Color::new(0.3, 0.3, 0.3, 1.0), 22.0),
+        (Tool::Marker, Color::new(0.7, 0.8, 0.1, 1.0), 24.0),
+        (Tool::StepMarker, Color::new(0.2, 0.7, 0.9, 1.0), 30.0),
+    ];
+    let mut settings = PerToolDrawingSettings::new(styles[0].1, styles[0].2);
+    for &(tool, color, thickness) in &styles[1..] {
+        let setting = settings.get_mut(tool);
+        setting.color = color;
+        setting.thickness = thickness;
+    }
     let tool_settings = PresetToolStatesConfig::from_runtime(&settings, 33.0);
 
     state.presets[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::Marker,
-        color: ColorSpec::from(marker_color),
+        color: ColorSpec::from(styles[6].1),
         size: 24.0,
         tool_settings: Some(tool_settings),
         eraser_kind: None,
@@ -1907,51 +1860,15 @@ fn apply_full_preset_restores_all_tool_settings() {
     assert!(state.apply_preset(1));
 
     assert_eq!(state.active_tool(), Tool::Marker);
-    assert_eq!(
-        state.color_for_tool(Tool::Pen),
-        ColorSpec::from(pen_color).to_color()
-    );
-    assert_eq!(state.thickness_for_tool(Tool::Pen), 4.0);
-    assert_eq!(
-        state.color_for_tool(Tool::Line),
-        ColorSpec::from(line_color).to_color()
-    );
-    assert_eq!(state.thickness_for_tool(Tool::Line), 14.0);
-    assert_eq!(
-        state.color_for_tool(Tool::Rect),
-        ColorSpec::from(rect_color).to_color()
-    );
-    assert_eq!(state.thickness_for_tool(Tool::Rect), 16.0);
-    assert_eq!(
-        state.color_for_tool(Tool::Ellipse),
-        ColorSpec::from(ellipse_color).to_color()
-    );
-    assert_eq!(state.thickness_for_tool(Tool::Ellipse), 18.0);
-    assert_eq!(
-        state.color_for_tool(Tool::Arrow),
-        ColorSpec::from(arrow_color).to_color()
-    );
-    assert_eq!(state.thickness_for_tool(Tool::Arrow), 20.0);
-    assert_eq!(
-        state.color_for_tool(Tool::Blur),
-        ColorSpec::from(blur_color).to_color()
-    );
-    assert_eq!(state.thickness_for_tool(Tool::Blur), 22.0);
-    assert_eq!(
-        state.color_for_tool(Tool::Marker),
-        ColorSpec::from(marker_color).to_color()
-    );
-    assert_eq!(state.thickness_for_tool(Tool::Marker), 24.0);
-    assert_eq!(
-        state.color_for_tool(Tool::StepMarker),
-        ColorSpec::from(step_color).to_color()
-    );
-    assert_eq!(state.thickness_for_tool(Tool::StepMarker), 30.0);
+    for (tool, color, thickness) in styles {
+        assert_eq!(
+            state.color_for_tool(tool),
+            ColorSpec::from(color).to_color()
+        );
+        assert_eq!(state.thickness_for_tool(tool), thickness);
+    }
     assert_eq!(state.eraser_size, 33.0);
-    assert_eq!(
-        state.current_color,
-        ColorSpec::from(marker_color).to_color()
-    );
+    assert_eq!(state.current_color, ColorSpec::from(styles[6].1).to_color());
     assert_eq!(state.current_thickness, 24.0);
 }
 
