@@ -14,52 +14,61 @@ use crate::input::tool::Tool;
 
 impl InputState {
     pub(crate) fn toggle_presenter_mode(&mut self) -> bool {
-        let config = self.presenter_mode_config.clone();
         if self.presenter_mode {
-            self.presenter_mode = false;
-            if let Some(restore) = self.presenter_restore.take() {
-                if let Some(value) = restore.show_status_bar {
-                    self.show_status_bar = value;
-                }
-                if let Some(value) = restore.show_tool_preview {
-                    self.show_tool_preview = value;
-                }
-                if let Some(value) = restore.toolbar_visible {
-                    self.toolbar_visible = value;
-                }
-                if let Some(value) = restore.toolbar_top_visible {
-                    self.toolbar_top_visible = value;
-                }
-                if let Some(value) = restore.toolbar_top_display_mode {
-                    self.toolbar_top_display_mode = value;
-                }
-                if let Some(value) = restore.toolbar_top_minimized {
-                    self.toolbar_top_minimized = value;
-                }
-                if let Some(value) = restore.tool_override {
-                    self.set_tool_override(value);
-                }
-                if let Some(value) = restore.click_highlight_enabled
-                    && self.click_highlight_enabled() != value
-                {
-                    self.toggle_click_highlight();
-                }
-                if let Some(value) = restore.input_hud_enabled {
-                    self.set_input_hud_enabled(value);
-                }
-            }
-            if config.show_toast {
-                self.push_toast(
-                    ToastPriority::Info,
-                    "presenter",
-                    Toast::info("Stopping Presenter Mode"),
-                );
-            }
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
-            return self.presenter_mode;
+            self.stop_presenter_mode()
+        } else {
+            self.start_presenter_mode()
         }
+    }
 
+    fn stop_presenter_mode(&mut self) -> bool {
+        let config = self.presenter_mode_config.clone();
+        self.presenter_mode = false;
+        if let Some(restore) = self.presenter_restore.take() {
+            if let Some(value) = restore.show_status_bar {
+                self.show_status_bar = value;
+            }
+            if let Some(value) = restore.show_tool_preview {
+                self.show_tool_preview = value;
+            }
+            if let Some(value) = restore.toolbar_visible {
+                self.toolbar_visible = value;
+            }
+            if let Some(value) = restore.toolbar_top_visible {
+                self.toolbar_top_visible = value;
+            }
+            if let Some(value) = restore.toolbar_top_display_mode {
+                self.toolbar_top_display_mode = value;
+            }
+            if let Some(value) = restore.toolbar_top_minimized {
+                self.toolbar_top_minimized = value;
+            }
+            if let Some(value) = restore.tool_override {
+                self.set_tool_override(value);
+            }
+            if let Some(value) = restore.click_highlight_enabled
+                && self.click_highlight_enabled() != value
+            {
+                self.toggle_click_highlight();
+            }
+            if let Some(value) = restore.input_hud_enabled {
+                self.set_input_hud_enabled(value);
+            }
+        }
+        if config.show_toast {
+            self.push_toast(
+                ToastPriority::Info,
+                "presenter",
+                Toast::info("Stopping Presenter Mode"),
+            );
+        }
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        self.presenter_mode
+    }
+
+    fn start_presenter_mode(&mut self) -> bool {
+        let config = self.presenter_mode_config.clone();
         if self.light_mode {
             self.exit_light_mode();
         }
