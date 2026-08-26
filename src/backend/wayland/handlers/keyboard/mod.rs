@@ -149,107 +149,10 @@ impl KeyboardHandler for WaylandState {
         // A finished scan card is transient chrome: the next interaction of any
         // kind takes it away rather than making the user wait it out.
         self.input_state.dismiss_ocr_scan_result();
-        if self.input_state.region_is_engaged() {
-            if matches!(key, Key::Space) && self.toggle_region_window_snap() {
-                self.update_pointer_cursor(false, conn);
-                return;
-            }
-            if let Some(direction) =
-                region_window_snap_direction(key, self.input_state.modifiers.logo)
-                && self.navigate_region_window_snap(direction)
-            {
-                return;
-            }
-            if matches!(key, Key::Return) && self.choose_hovered_region_window() {
-                return;
-            }
-            let action = self.input_state.action_for_key(key);
-            if let Some(action) = action {
-                if self
-                    .input_state
-                    .refuse_region_capture_while_screen_modal_engaged(action)
-                {
-                    return;
-                }
-                if self
-                    .input_state
-                    .refuse_measure_mode_while_screen_modal_engaged(action)
-                {
-                    return;
-                }
-                if action == Action::MeasureMode {
-                    self.handle_measure_mode_action();
-                    return;
-                }
-                if self
-                    .input_state
-                    .capture_region_action_reaches_backend(action)
-                {
-                    // Route the opening action directly while its picker owns
-                    // the modal. Going through InputState would clear held
-                    // modifiers before the backend can distinguish same-action
-                    // cancellation from a different-action refusal.
-                    self.handle_capture_action(action);
-                    return;
-                }
-                if action == Action::CopyTextFromScreen
-                    && self.input_state.region_state().purpose()
-                        == Some(crate::input::state::RegionPurposeTag::Ocr)
-                {
-                    self.cancel_ocr();
-                    return;
-                }
-            }
-            if self.input_state.region_state().is_review()
-                && let Some(review_action) = region_review_key_action(
-                    key,
-                    self.input_state.modifiers.ctrl,
-                    self.input_state.modifiers.shift,
-                )
-            {
-                match review_action {
-                    RegionReviewKeyAction::Nudge(dx, dy) => {
-                        self.nudge_region_review(dx, dy);
-                    }
-                    RegionReviewKeyAction::Submit(action) => {
-                        self.submit_region_review_action(action);
-                    }
-                }
-                return;
-            }
-            if region_select_all_pressed(
-                self.input_state.region_is_active(),
-                self.input_state.region_state().purpose(),
-                self.input_state.modifiers.ctrl,
-                key,
-            ) {
-                self.submit_whole_region_capture();
-                return;
-            }
-            // Every other shortcut is swallowed while the selector is up so a
-            // key cannot change the active tool mid-drag.
-            if matches!(key, Key::Escape) {
-                self.cancel_active_region_selector();
-            }
+        if self.try_handle_region_key(conn, key) {
             return;
         }
-        if self.input_state.eyedropper_is_engaged() {
-            let action = self.input_state.action_for_key(key);
-            if action.is_some_and(|action| {
-                self.input_state
-                    .refuse_region_capture_while_screen_modal_engaged(action)
-            }) {
-                return;
-            }
-            if action.is_some_and(|action| {
-                self.input_state
-                    .refuse_measure_mode_while_screen_modal_engaged(action)
-            }) {
-                return;
-            }
-            if matches!(key, Key::Escape) || action == Some(Action::PickScreenColor) {
-                self.cancel_eyedropper();
-            }
+        if self.try_handle_eyedropper_key(key) {
             return;
         }
         if matches!(key, Key::Escape)
@@ -434,6 +337,110 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn clear_key_repeat(&mut self) {
         self.key_repeat_key = None;
         self.key_repeat_next_tick = None;
+    }
+
+    fn try_handle_region_key(&mut self, conn: &Connection, key: Key) -> bool {
+        if !self.input_state.region_is_engaged() {
+            return false;
+        }
+        if matches!(key, Key::Space) && self.toggle_region_window_snap() {
+            self.update_pointer_cursor(false, conn);
+            return true;
+        }
+        if let Some(direction) = region_window_snap_direction(key, self.input_state.modifiers.logo)
+            && self.navigate_region_window_snap(direction)
+        {
+            return true;
+        }
+        if matches!(key, Key::Return) && self.choose_hovered_region_window() {
+            return true;
+        }
+        let action = self.input_state.action_for_key(key);
+        if let Some(action) = action {
+            if self
+                .input_state
+                .refuse_region_capture_while_screen_modal_engaged(action)
+            {
+                return true;
+            }
+            if self
+                .input_state
+                .refuse_measure_mode_while_screen_modal_engaged(action)
+            {
+                return true;
+            }
+            if action == Action::MeasureMode {
+                self.handle_measure_mode_action();
+                return true;
+            }
+            if self
+                .input_state
+                .capture_region_action_reaches_backend(action)
+            {
+                self.handle_capture_action(action);
+                return true;
+            }
+            if action == Action::CopyTextFromScreen
+                && self.input_state.region_state().purpose()
+                    == Some(crate::input::state::RegionPurposeTag::Ocr)
+            {
+                self.cancel_ocr();
+                return true;
+            }
+        }
+        if self.input_state.region_state().is_review()
+            && let Some(review_action) = region_review_key_action(
+                key,
+                self.input_state.modifiers.ctrl,
+                self.input_state.modifiers.shift,
+            )
+        {
+            match review_action {
+                RegionReviewKeyAction::Nudge(dx, dy) => {
+                    self.nudge_region_review(dx, dy);
+                }
+                RegionReviewKeyAction::Submit(action) => {
+                    self.submit_region_review_action(action);
+                }
+            }
+            return true;
+        }
+        if region_select_all_pressed(
+            self.input_state.region_is_active(),
+            self.input_state.region_state().purpose(),
+            self.input_state.modifiers.ctrl,
+            key,
+        ) {
+            self.submit_whole_region_capture();
+            return true;
+        }
+        if matches!(key, Key::Escape) {
+            self.cancel_active_region_selector();
+        }
+        true
+    }
+
+    fn try_handle_eyedropper_key(&mut self, key: Key) -> bool {
+        if !self.input_state.eyedropper_is_engaged() {
+            return false;
+        }
+        let action = self.input_state.action_for_key(key);
+        if action.is_some_and(|action| {
+            self.input_state
+                .refuse_region_capture_while_screen_modal_engaged(action)
+        }) {
+            return true;
+        }
+        if action.is_some_and(|action| {
+            self.input_state
+                .refuse_measure_mode_while_screen_modal_engaged(action)
+        }) {
+            return true;
+        }
+        if matches!(key, Key::Escape) || action == Some(Action::PickScreenColor) {
+            self.cancel_eyedropper();
+        }
+        true
     }
 
     /// Duration until the next repeat fires, for the event-loop timeout. The

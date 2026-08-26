@@ -533,6 +533,39 @@ mod tests {
             return;
         }
 
+        let fixture = gtk_popup_fixture();
+        let (capture, tooltip, popover_content) = suppress_gtk_popup_fixture(&fixture);
+
+        // Exercise GtkPopoverMenu's class map/unmap hooks under
+        // G_DEBUG=fatal-criticals. The reused native must also submit a fresh
+        // proof after the remap.
+        assert_context_popover_remap(&capture, &fixture);
+
+        // A popup discovered by the final post-input rescan must receive its
+        // own proof and remain non-interactive after input admission closes.
+        let (late_popover, replacement_late_child) =
+            assert_late_popover_reuse(&capture, &fixture, &tooltip);
+        assert_capture_restored(
+            &capture,
+            &fixture,
+            &popover_content,
+            &late_popover,
+            replacement_late_child,
+        );
+        assert_withdrawn_popover_rejected(&capture, &fixture.root);
+        assert_asynchronous_popover_discovery();
+    }
+
+    struct GtkPopupFixture {
+        root: gtk4::Box,
+        button: gtk4::Button,
+        context_popover: gtk4::Popover,
+        context_menu: gtk4::PopoverMenu,
+        original_context_child: gtk4::Widget,
+        original_context_model: gtk4::gio::MenuModel,
+    }
+
+    fn gtk_popup_fixture() -> GtkPopupFixture {
         let root = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         let window = gtk4::Window::new();
         window.set_child(Some(&root));
@@ -560,32 +593,50 @@ mod tests {
             .expect("GtkText context popup is a GtkPopoverMenu");
         let original_context_child = context_popover.child().expect("GtkText popup child");
         let original_context_model = context_menu.menu_model().expect("GtkText menu model");
+        GtkPopupFixture {
+            root,
+            button,
+            context_popover,
+            context_menu,
+            original_context_child,
+            original_context_model,
+        }
+    }
 
+    fn suppress_gtk_popup_fixture(
+        fixture: &GtkPopupFixture,
+    ) -> (TooltipCapture, gtk4::Tooltip, CaptureSurfaceContent) {
         let capture = TooltipCapture::new();
-        capture.install_tree(root.upcast_ref());
-        capture.install_tree(root.upcast_ref());
+        capture.install_tree(fixture.root.upcast_ref());
+        capture.install_tree(fixture.root.upcast_ref());
         assert_eq!(capture.installed_source_count(), 1);
 
         let tooltip = gtk4::glib::Object::builder::<gtk4::Tooltip>().build();
-        assert!(button.emit_by_name::<bool>("query-tooltip", &[&0i32, &0i32, &false, &tooltip]));
+        assert!(
+            fixture
+                .button
+                .emit_by_name::<bool>("query-tooltip", &[&0i32, &0i32, &false, &tooltip])
+        );
         assert_eq!(capture.inner.label.text().as_str(), "Zoom");
         assert_eq!(capture.transparent_content_state(), (Some(1.0), false));
 
         capture.set_suppressed(true);
-        capture.install_tree(root.upcast_ref());
+        capture.install_tree(fixture.root.upcast_ref());
         // A hidden realized toplevel cannot map its popup, so explicitly mark
         // and map the real GtkText-owned surface for this structural test. The
         // parent window remains hidden throughout.
-        capture.enroll_native_popover(&context_popover, true);
-        gtk4::prelude::WidgetExt::map(&context_popover);
+        capture.enroll_native_popover(&fixture.context_popover, true);
+        gtk4::prelude::WidgetExt::map(&fixture.context_popover);
         assert_eq!(
-            context_popover.child().as_ref(),
-            Some(&original_context_child),
+            fixture.context_popover.child().as_ref(),
+            Some(&fixture.original_context_child),
             "capture suppression must preserve GtkPopoverMenu's class-owned child"
         );
         assert_eq!(capture.transparent_content_state(), (Some(0.0), true));
         assert!(
-            context_popover.has_css_class(CAPTURE_TRANSPARENT_CLASS),
+            fixture
+                .context_popover
+                .has_css_class(CAPTURE_TRANSPARENT_CLASS),
             "GTK-owned entry popovers must join capture suppression"
         );
         let popover_targets = capture.capture_popover_targets();
@@ -596,24 +647,28 @@ mod tests {
         assert_eq!(capture.pending_capture_popover_targets().len(), 1);
         capture.mark_capture_popovers_proven();
         assert!(capture.pending_capture_popover_targets().is_empty());
+        (capture, tooltip, popover_content)
+    }
 
-        // Exercise GtkPopoverMenu's class map/unmap hooks under
-        // G_DEBUG=fatal-criticals. The reused native must also submit a fresh
-        // proof after the remap.
-        gtk4::prelude::WidgetExt::unmap(&context_popover);
+    fn assert_context_popover_remap(capture: &TooltipCapture, fixture: &GtkPopupFixture) {
+        gtk4::prelude::WidgetExt::unmap(&fixture.context_popover);
         assert!(capture.capture_popover_targets().is_empty());
-        gtk4::prelude::WidgetExt::map(&context_popover);
+        gtk4::prelude::WidgetExt::map(&fixture.context_popover);
         assert_eq!(capture.pending_capture_popover_targets().len(), 1);
         assert_eq!(
-            context_popover.child().as_ref(),
-            Some(&original_context_child)
+            fixture.context_popover.child().as_ref(),
+            Some(&fixture.original_context_child)
         );
         capture.mark_capture_popovers_proven();
         assert!(capture.pending_capture_popover_targets().is_empty());
-        assert!(!context_popover.can_target());
+        assert!(!fixture.context_popover.can_target());
+    }
 
-        // A popup discovered by the final post-input rescan must receive its
-        // own proof and remain non-interactive after input admission closes.
+    fn assert_late_popover_reuse(
+        capture: &TooltipCapture,
+        fixture: &GtkPopupFixture,
+        tooltip: &gtk4::Tooltip,
+    ) -> (gtk4::Popover, gtk4::Label) {
         let late_popover = gtk4::Popover::new();
         let late_child = gtk4::Label::new(Some("Late popup"));
         late_popover.set_child(Some(&late_child));
@@ -635,39 +690,60 @@ mod tests {
         );
         let proof_before = capture.inner.content.proof.paintable();
         let serial_before = capture.inner.content.proof_serial();
-        CaptureProofTarget::new("tooltip", &root, &capture.inner.content)
+        CaptureProofTarget::new("tooltip", &fixture.root, &capture.inner.content)
             .refresh_transparent_proof();
         assert_ne!(capture.inner.content.proof_serial(), serial_before);
         assert_ne!(capture.inner.content.proof.paintable(), proof_before);
         assert!(
-            !capture.query_tooltip(button.upcast_ref(), &tooltip),
+            !capture.query_tooltip(fixture.button.upcast_ref(), tooltip),
             "an unmapped tooltip must not appear after suppression starts"
         );
 
         // The mapped case uses the same query path but remains admitted so its
         // existing native popup can submit the transparent proof.
         capture.inner.mapped_before_capture.set(true);
-        assert!(capture.query_tooltip(button.upcast_ref(), &tooltip));
+        assert!(capture.query_tooltip(fixture.button.upcast_ref(), tooltip));
+        (late_popover, replacement_late_child)
+    }
 
+    fn assert_capture_restored(
+        capture: &TooltipCapture,
+        fixture: &GtkPopupFixture,
+        popover_content: &CaptureSurfaceContent,
+        late_popover: &gtk4::Popover,
+        replacement_late_child: gtk4::Label,
+    ) {
         capture.set_suppressed(false);
         assert_eq!(capture.transparent_content_state(), (Some(1.0), false));
-        assert!(!context_popover.has_css_class(CAPTURE_TRANSPARENT_CLASS));
+        assert!(
+            !fixture
+                .context_popover
+                .has_css_class(CAPTURE_TRANSPARENT_CLASS)
+        );
         assert_eq!(popover_content.content_opacity(), None);
         assert!(!popover_content.proof_visible());
-        assert!(context_popover.can_target());
-        assert_eq!(context_popover.child(), Some(original_context_child));
-        assert_eq!(context_menu.menu_model(), Some(original_context_model));
+        assert!(fixture.context_popover.can_target());
+        assert_eq!(
+            fixture.context_popover.child().as_ref(),
+            Some(&fixture.original_context_child)
+        );
+        assert_eq!(
+            fixture.context_menu.menu_model().as_ref(),
+            Some(&fixture.original_context_model)
+        );
         assert_eq!(
             late_popover.child(),
             Some(replacement_late_child.upcast::<gtk4::Widget>())
         );
         assert!(capture.capture_popover_targets().is_empty());
+    }
 
+    fn assert_withdrawn_popover_rejected(capture: &TooltipCapture, root: &gtk4::Box) {
         let withdrawn = Rc::new(Cell::new(false));
         let withdrawn_callback = Rc::clone(&withdrawn);
         let closed_target = CaptureProofTarget::new_withdrawable_with_callback(
             "closed-native-popover",
-            &root,
+            root,
             &capture.inner.content,
             move || withdrawn_callback.set(true),
         );
@@ -683,7 +759,9 @@ mod tests {
             "unexpected withdrawal error: {error}"
         );
         assert!(withdrawn.get());
+    }
 
+    fn assert_asynchronous_popover_discovery() {
         // Exercise the production discovery path across a main-context yield.
         // The GtkText-owned popover does not exist during the first scan and
         // must join the barrier without a direct enroll_native_popover() call.

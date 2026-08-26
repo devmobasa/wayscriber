@@ -20,194 +20,35 @@ impl InputState {
                 true
             }
             Action::ToggleFocusMode => {
-                // Presenter mode already owns chrome visibility and restores
-                // it on exit; a second snapshot layer would fight it.
-                if self.presenter_mode {
-                    return true;
-                }
-                self.toggle_focus_mode();
-                info!(
-                    "Focus mode {}",
-                    if self.focus_mode_active() {
-                        "on"
-                    } else {
-                        "off"
-                    }
-                );
+                self.handle_toggle_focus_mode();
                 true
             }
             Action::ToggleStatusBar => {
-                if self.presenter_mode && self.presenter_mode_config.hide_status_bar {
-                    return true;
-                }
-                self.break_focus_mode();
-                self.queue_toolbar_persistence(PendingToolbarPersistence::StatusBar {
-                    previous: self.show_status_bar,
-                });
-                self.show_status_bar = !self.show_status_bar;
-                // Redraw only. Status-bar visibility is a this-run preference
-                // that no longer enters `ToolStateSnapshot`, so marking the
-                // session dirty here would claim a change the save cannot
-                // carry — and that false claim is what lets an oversized
-                // session that failed to restore be replaced, since its
-                // protection is exactly "nothing persisted changed".
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                if !self.show_status_bar {
-                    self.warn_if_all_chrome_hidden();
-                }
+                self.handle_toggle_status_bar();
                 true
             }
             Action::ToggleFloatingBadge => {
-                self.break_focus_mode();
-                self.queue_toolbar_persistence(PendingToolbarPersistence::FloatingBadge {
-                    previous: self.show_floating_badge,
-                });
-                self.show_floating_badge = !self.show_floating_badge;
-                info!(
-                    "Floating board/page badge {}",
-                    if self.show_floating_badge {
-                        "shown"
-                    } else {
-                        "hidden"
-                    }
-                );
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
+                self.handle_toggle_floating_badge();
                 true
             }
             Action::ToggleZoomChip => {
-                self.break_focus_mode();
-                self.queue_toolbar_persistence(PendingToolbarPersistence::ZoomChip {
-                    previous: self.show_zoom_chip,
-                });
-                self.show_zoom_chip = !self.show_zoom_chip;
-                info!(
-                    "Zoom chip {}",
-                    if self.show_zoom_chip {
-                        "shown"
-                    } else {
-                        "hidden"
-                    }
-                );
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
+                self.handle_toggle_zoom_chip();
                 true
             }
             Action::ToggleClickHighlight => {
-                if self.presenter_mode && self.presenter_mode_config.enable_click_highlight {
-                    return true;
-                }
-                let previous_enabled = self.click_highlight_enabled();
-                let previous_tool_ring = self.highlight_tool_ring_enabled();
-                let enabled = self.toggle_click_highlight();
-                self.queue_toolbar_persistence(PendingToolbarPersistence::ClickHighlight {
-                    previous_enabled,
-                    previous_tool_ring,
-                });
-                let message = if enabled {
-                    "Click highlight enabled"
-                } else {
-                    "Click highlight disabled"
-                };
-                info!("{}", message);
+                self.handle_toggle_click_highlight();
                 true
             }
             Action::ToggleInputHud => {
-                // Presenter mode owns the HUD while it forces it on; a manual
-                // toggle must not fight it (same gate as ToggleClickHighlight).
-                if self.presenter_mode && self.presenter_mode_config.enable_input_hud {
-                    return true;
-                }
-                let previous = self.input_hud_enabled();
-                let enabled = self.toggle_input_hud();
-                self.queue_toolbar_persistence(PendingToolbarPersistence::InputHud { previous });
-                if enabled {
-                    // The effective source is only known after the backend
-                    // reconciles the reader thread; the enable announcement is
-                    // pushed there (`sync_input_monitor`), so it can never
-                    // claim "overlay input only" right before system-wide
-                    // capture starts.
-                    info!("Input HUD enabled");
-                } else {
-                    let message = "Input HUD disabled";
-                    self.push_toast(ToastPriority::Info, "ui", Toast::info(message));
-                    info!("{}", message);
-                }
+                self.handle_toggle_input_hud();
                 true
             }
             Action::ToggleToolbar => {
-                if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
-                    return true;
-                }
-                self.break_focus_mode();
-                let now_visible = !self.toolbar_visible();
-                let changed = self.set_toolbar_visible(now_visible);
-                if changed {
-                    // The toggle is durable by driving the pin overrides — the
-                    // startup source of visibility — so a restart shows
-                    // exactly what this press left on screen. Implicit hides
-                    // (focus mode, presenter mode) bypass this path on purpose
-                    // and stay run-only.
-                    let previous_top_pinned = self.toolbar_top_pinned;
-                    self.toolbar_top_pinned = now_visible;
-                    // Persist only when the pin actually moves. A show from a
-                    // cycle-hidden strip changes no pin: the write would be
-                    // byte-identical, and its only observable effect would be
-                    // a rollback that re-derives pin-true visibility for a
-                    // screen that was effectively hidden before the press. The
-                    // unfold itself stays runtime-only, exactly like F2's
-                    // hidden rung.
-                    if previous_top_pinned != now_visible {
-                        self.queue_toolbar_persistence(PendingToolbarPersistence::Visibility {
-                            previous_top_pinned,
-                        });
-                    }
-                    self.pending_onboarding_usage.used_toolbar_toggle = true;
-                    info!(
-                        "Toolbar visibility {}",
-                        if now_visible { "enabled" } else { "disabled" }
-                    );
-                    if !now_visible {
-                        self.warn_if_all_chrome_hidden();
-                    }
-                }
+                self.handle_toggle_toolbar();
                 true
             }
             Action::CycleToolbarDisplay => {
-                // Same presenter gate as ToggleToolbar: while presenter mode
-                // owns toolbar visibility, the cycle must not fight it.
-                if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
-                    return true;
-                }
-                self.break_focus_mode();
-                let previous_mode = self.toolbar_top_display_mode;
-                let mode = self.cycle_top_toolbar_display();
-                self.pending_onboarding_usage.used_toolbar_toggle = true;
-                let toast = match mode {
-                    crate::config::TopDisplayMode::Full => Toast::info("Toolbar: full"),
-                    crate::config::TopDisplayMode::Micro => Toast::info("Toolbar: micro"),
-                    crate::config::TopDisplayMode::Hidden => {
-                        // The hidden rung teaches its own way back: another
-                        // cycle press always lands on Full.
-                        let label =
-                            match self.action_binding_primary_label(Action::CycleToolbarDisplay) {
-                                Some(binding) => format!("Show ({binding})"),
-                                None => "Show".to_string(),
-                            };
-                        Toast::info("Toolbar: hidden").action(label, Action::CycleToolbarDisplay)
-                    }
-                };
-                self.push_toast(ToastPriority::Info, "ui", toast);
-                if mode == crate::config::TopDisplayMode::Hidden {
-                    self.warn_if_all_chrome_hidden();
-                }
-                self.queue_toolbar_persistence(PendingToolbarPersistence::DisplayMode {
-                    previous: previous_mode,
-                });
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                info!("Toolbar display mode cycled to {mode:?}");
+                self.handle_cycle_toolbar_display();
                 true
             }
             Action::TogglePresenterMode => {
@@ -266,12 +107,7 @@ impl InputState {
                 true
             }
             Action::ToggleRadialMenu => {
-                if self.is_radial_menu_open() {
-                    self.close_radial_menu();
-                } else if !self.zoom_active() && matches!(self.state, DrawingState::Idle) {
-                    let (x, y) = self.pointer_position();
-                    self.open_radial_menu(x as f64, y as f64);
-                }
+                self.handle_toggle_radial_menu();
                 true
             }
             Action::OpenContextMenu => {
@@ -281,19 +117,7 @@ impl InputState {
                 true
             }
             Action::ToggleSelectionProperties => {
-                if matches!(self.state, DrawingState::Idle) {
-                    if self.properties_panel().is_some() {
-                        self.close_properties_panel();
-                    } else if self.show_properties_panel() {
-                        self.close_context_menu();
-                    } else {
-                        self.push_toast(
-                            ToastPriority::Info,
-                            "ui",
-                            Toast::warning("No selection to edit."),
-                        );
-                    }
-                }
+                self.handle_toggle_selection_properties();
                 true
             }
             Action::OpenConfigurator => {
@@ -347,6 +171,196 @@ impl InputState {
                 true
             }
             _ => false,
+        }
+    }
+
+    fn handle_toggle_focus_mode(&mut self) {
+        // Presenter mode already owns chrome visibility and restores it on
+        // exit; a second snapshot layer would fight it.
+        if self.presenter_mode {
+            return;
+        }
+        self.toggle_focus_mode();
+        info!(
+            "Focus mode {}",
+            if self.focus_mode_active() {
+                "on"
+            } else {
+                "off"
+            }
+        );
+    }
+
+    fn handle_toggle_status_bar(&mut self) {
+        if self.presenter_mode && self.presenter_mode_config.hide_status_bar {
+            return;
+        }
+        self.break_focus_mode();
+        self.queue_toolbar_persistence(PendingToolbarPersistence::StatusBar {
+            previous: self.show_status_bar,
+        });
+        self.show_status_bar = !self.show_status_bar;
+        // This run-only preference redraws without claiming persisted changes.
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        if !self.show_status_bar {
+            self.warn_if_all_chrome_hidden();
+        }
+    }
+
+    fn handle_toggle_floating_badge(&mut self) {
+        self.break_focus_mode();
+        self.queue_toolbar_persistence(PendingToolbarPersistence::FloatingBadge {
+            previous: self.show_floating_badge,
+        });
+        self.show_floating_badge = !self.show_floating_badge;
+        info!(
+            "Floating board/page badge {}",
+            if self.show_floating_badge {
+                "shown"
+            } else {
+                "hidden"
+            }
+        );
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+    }
+
+    fn handle_toggle_zoom_chip(&mut self) {
+        self.break_focus_mode();
+        self.queue_toolbar_persistence(PendingToolbarPersistence::ZoomChip {
+            previous: self.show_zoom_chip,
+        });
+        self.show_zoom_chip = !self.show_zoom_chip;
+        info!(
+            "Zoom chip {}",
+            if self.show_zoom_chip {
+                "shown"
+            } else {
+                "hidden"
+            }
+        );
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+    }
+
+    fn handle_toggle_click_highlight(&mut self) {
+        if self.presenter_mode && self.presenter_mode_config.enable_click_highlight {
+            return;
+        }
+        let previous_enabled = self.click_highlight_enabled();
+        let previous_tool_ring = self.highlight_tool_ring_enabled();
+        let enabled = self.toggle_click_highlight();
+        self.queue_toolbar_persistence(PendingToolbarPersistence::ClickHighlight {
+            previous_enabled,
+            previous_tool_ring,
+        });
+        info!(
+            "Click highlight {}",
+            if enabled { "enabled" } else { "disabled" }
+        );
+    }
+
+    fn handle_toggle_input_hud(&mut self) {
+        if self.presenter_mode && self.presenter_mode_config.enable_input_hud {
+            return;
+        }
+        let previous = self.input_hud_enabled();
+        let enabled = self.toggle_input_hud();
+        self.queue_toolbar_persistence(PendingToolbarPersistence::InputHud { previous });
+        if enabled {
+            info!("Input HUD enabled");
+        } else {
+            let message = "Input HUD disabled";
+            self.push_toast(ToastPriority::Info, "ui", Toast::info(message));
+            info!("{}", message);
+        }
+    }
+
+    fn handle_toggle_toolbar(&mut self) {
+        if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
+            return;
+        }
+        self.break_focus_mode();
+        let now_visible = !self.toolbar_visible();
+        if !self.set_toolbar_visible(now_visible) {
+            return;
+        }
+        let previous_top_pinned = self.toolbar_top_pinned;
+        self.toolbar_top_pinned = now_visible;
+        if previous_top_pinned != now_visible {
+            self.queue_toolbar_persistence(PendingToolbarPersistence::Visibility {
+                previous_top_pinned,
+            });
+        }
+        self.pending_onboarding_usage.used_toolbar_toggle = true;
+        info!(
+            "Toolbar visibility {}",
+            if now_visible { "enabled" } else { "disabled" }
+        );
+        if !now_visible {
+            self.warn_if_all_chrome_hidden();
+        }
+    }
+
+    fn handle_cycle_toolbar_display(&mut self) {
+        if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
+            return;
+        }
+        self.break_focus_mode();
+        let previous_mode = self.toolbar_top_display_mode;
+        let mode = self.cycle_top_toolbar_display();
+        self.pending_onboarding_usage.used_toolbar_toggle = true;
+        let toast = self.toolbar_display_toast(mode);
+        self.push_toast(ToastPriority::Info, "ui", toast);
+        if mode == crate::config::TopDisplayMode::Hidden {
+            self.warn_if_all_chrome_hidden();
+        }
+        self.queue_toolbar_persistence(PendingToolbarPersistence::DisplayMode {
+            previous: previous_mode,
+        });
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
+        info!("Toolbar display mode cycled to {mode:?}");
+    }
+
+    fn toolbar_display_toast(&self, mode: crate::config::TopDisplayMode) -> Toast {
+        match mode {
+            crate::config::TopDisplayMode::Full => Toast::info("Toolbar: full"),
+            crate::config::TopDisplayMode::Micro => Toast::info("Toolbar: micro"),
+            crate::config::TopDisplayMode::Hidden => {
+                let label = match self.action_binding_primary_label(Action::CycleToolbarDisplay) {
+                    Some(binding) => format!("Show ({binding})"),
+                    None => "Show".to_string(),
+                };
+                Toast::info("Toolbar: hidden").action(label, Action::CycleToolbarDisplay)
+            }
+        }
+    }
+
+    fn handle_toggle_radial_menu(&mut self) {
+        if self.is_radial_menu_open() {
+            self.close_radial_menu();
+        } else if !self.zoom_active() && matches!(self.state, DrawingState::Idle) {
+            let (x, y) = self.pointer_position();
+            self.open_radial_menu(x as f64, y as f64);
+        }
+    }
+
+    fn handle_toggle_selection_properties(&mut self) {
+        if !matches!(self.state, DrawingState::Idle) {
+            return;
+        }
+        if self.properties_panel().is_some() {
+            self.close_properties_panel();
+        } else if self.show_properties_panel() {
+            self.close_context_menu();
+        } else {
+            self.push_toast(
+                ToastPriority::Info,
+                "ui",
+                Toast::warning("No selection to edit."),
+            );
         }
     }
 }

@@ -169,131 +169,17 @@ impl WaylandState {
         let replay_ctx = eraser_ctx.replay_context();
 
         let completed_shapes_start = perf.as_ref().map(|_| Instant::now());
-        if layer_cache_ready && self.canvas_layer_cache.blit(ctx) {
-            // Board background and committed shapes came from the baked layer.
-            debug!("Rendered committed shapes from layer cache");
-            if let Some(perf) = perf.as_mut() {
-                perf.shapes_total = shapes_total;
-                perf.canvas_layer_cache_used = true;
-            }
-        } else {
-            // Render all completed shapes from active frame
-            debug!("Rendering {} completed shapes", shapes_total);
-            let shapes = &self.input_state.boards.active_frame().shapes;
-            if let Some(perf) = perf.as_mut() {
-                perf.shapes_total = shapes.len();
-            }
-
-            // Manual Culling: Only render shapes that intersect with the damage regions.
-            // Cairo's internal clipping is efficient for rasterization, but sending
-            // thousands of shapes to Cairo still incurs overhead for geometry processing.
-            // A simple bounding box check here eliminates that overhead.
-            let render_drawn_shape = |drawn_shape: &crate::draw::DrawnShape| {
-                super::super::canvas_layer::render_committed_shape(
-                    ctx,
-                    drawn_shape,
-                    &replay_ctx,
-                    text_halo_enabled,
-                )
-            };
-
-            // Compute bounding box of all damage regions for fast rejection
-            // (Union of all dirty rects). These bounds are in world coordinates.
-            let damage_bounds =
-                damage_world
-                    .iter()
-                    .fold(None, |acc: Option<crate::util::Rect>, r| match acc {
-                        None => Some(*r),
-                        Some(u) => {
-                            // Manual union to avoid extra allocations.
-                            let min_x = u.x.min(r.x);
-                            let min_y = u.y.min(r.y);
-                            let max_x =
-                                u.x.saturating_add(u.width).max(r.x.saturating_add(r.width));
-                            let max_y =
-                                u.y.saturating_add(u.height)
-                                    .max(r.y.saturating_add(r.height));
-                            Some(crate::util::Rect {
-                                x: min_x,
-                                y: min_y,
-                                width: max_x - min_x,
-                                height: max_y - min_y,
-                            })
-                        }
-                    });
-
-            if let Some(bounds) = damage_bounds {
-                // Expand bounds slightly to account for line width/glow that might extend outside
-                // the logical shape bounds (though Shape::bounding_box should theoretically cover it,
-                // safety margin is good).
-                let margin = 2;
-                let safe_x = bounds.x.saturating_sub(margin);
-                let safe_y = bounds.y.saturating_sub(margin);
-                let safe_width = bounds.width.saturating_add(margin * 2);
-                let safe_height = bounds.height.saturating_add(margin * 2);
-                let safe_bounds = if canvas_transform_active {
-                    crate::util::Rect::new(safe_x, safe_y, safe_width, safe_height)
-                } else {
-                    // Clamp to logical surface bounds to avoid negative coords or overflow.
-                    let logical_width = width as i32;
-                    let logical_height = height as i32;
-                    let clamped_x = safe_x.max(0);
-                    let clamped_y = safe_y.max(0);
-                    let max_width = logical_width.saturating_sub(clamped_x);
-                    let max_height = logical_height.saturating_sub(clamped_y);
-                    crate::util::Rect::new(
-                        clamped_x,
-                        clamped_y,
-                        safe_width.min(max_width),
-                        safe_height.min(max_height),
-                    )
-                };
-
-                if let Some(safe_bounds) = safe_bounds {
-                    let mut shapes_tested = 0usize;
-                    let mut shapes_rendered = 0usize;
-                    for drawn_shape in shapes {
-                        shapes_tested += 1;
-                        // If shape has no bounding box (e.g. empty freehand), skip it.
-                        // If it has one, check intersection. Uses the per-shape
-                        // memoized bounds to avoid O(points) recomputation per frame.
-                        if let Some(bbox) = drawn_shape.bounding_box() {
-                            // Check intersection:
-                            // !(bbox.left > safe.right || bbox.right < safe.left || ...)
-                            let bbox_right = bbox.x.saturating_add(bbox.width);
-                            let bbox_bottom = bbox.y.saturating_add(bbox.height);
-                            let safe_right = safe_bounds.x.saturating_add(safe_bounds.width);
-                            let safe_bottom = safe_bounds.y.saturating_add(safe_bounds.height);
-
-                            let intersects = !(bbox.x >= safe_right
-                                || bbox_right <= safe_bounds.x
-                                || bbox.y >= safe_bottom
-                                || bbox_bottom <= safe_bounds.y);
-
-                            if intersects {
-                                render_drawn_shape(drawn_shape);
-                                shapes_rendered += 1;
-                            }
-                        }
-                    }
-                    if let Some(perf) = perf.as_mut() {
-                        perf.shapes_tested = shapes_tested;
-                        perf.shapes_rendered = shapes_rendered;
-                    }
-                }
-            } else {
-                // If we don't have damage bounds, render everything to stay correct.
-                let mut shapes_rendered = 0usize;
-                for drawn_shape in shapes {
-                    render_drawn_shape(drawn_shape);
-                    shapes_rendered += 1;
-                }
-                if let Some(perf) = perf.as_mut() {
-                    perf.shapes_tested = shapes.len();
-                    perf.shapes_rendered = shapes_rendered;
-                }
-            }
-        }
+        self.render_committed_canvas_shapes(
+            ctx,
+            width,
+            height,
+            damage_world,
+            canvas_transform_active,
+            layer_cache_ready,
+            &replay_ctx,
+            text_halo_enabled,
+            perf.as_deref_mut(),
+        );
         if let (Some(perf), Some(completed_shapes_start)) = (perf.as_mut(), completed_shapes_start)
         {
             perf.stages.completed_shapes = perf
@@ -456,6 +342,124 @@ impl WaylandState {
 
         Ok(())
     }
+
+    #[allow(clippy::too_many_arguments)]
+    fn render_committed_canvas_shapes(
+        &mut self,
+        ctx: &cairo::Context,
+        width: u32,
+        height: u32,
+        damage_world: &[crate::util::Rect],
+        canvas_transform_active: bool,
+        layer_cache_ready: bool,
+        replay_ctx: &crate::draw::EraserReplayContext<'_>,
+        text_halo_enabled: bool,
+        mut perf: Option<&mut PerfRenderBreakdown>,
+    ) {
+        let shapes = &self.input_state.boards.active_frame().shapes;
+        if layer_cache_ready && self.canvas_layer_cache.blit(ctx) {
+            debug!("Rendered committed shapes from layer cache");
+            if let Some(perf) = perf.as_mut() {
+                perf.shapes_total = shapes.len();
+                perf.canvas_layer_cache_used = true;
+            }
+            return;
+        }
+        debug!("Rendering {} completed shapes", shapes.len());
+        if let Some(perf) = perf.as_mut() {
+            perf.shapes_total = shapes.len();
+        }
+        let render_shape = |shape: &crate::draw::DrawnShape| {
+            super::super::canvas_layer::render_committed_shape(
+                ctx,
+                shape,
+                replay_ctx,
+                text_halo_enabled,
+            )
+        };
+        let Some(bounds) = union_damage_bounds(damage_world) else {
+            for shape in shapes {
+                render_shape(shape);
+            }
+            if let Some(perf) = perf.as_mut() {
+                perf.shapes_tested = shapes.len();
+                perf.shapes_rendered = shapes.len();
+            }
+            return;
+        };
+        let Some(safe_bounds) =
+            safe_shape_damage_bounds(bounds, width, height, canvas_transform_active)
+        else {
+            return;
+        };
+        let mut shapes_rendered = 0usize;
+        for shape in shapes {
+            if shape
+                .bounding_box()
+                .is_some_and(|bounds| rects_intersect(bounds, safe_bounds))
+            {
+                render_shape(shape);
+                shapes_rendered += 1;
+            }
+        }
+        if let Some(perf) = perf.as_mut() {
+            perf.shapes_tested = shapes.len();
+            perf.shapes_rendered = shapes_rendered;
+        }
+    }
+}
+
+fn union_damage_bounds(regions: &[crate::util::Rect]) -> Option<crate::util::Rect> {
+    regions.iter().copied().reduce(|union, region| {
+        let min_x = union.x.min(region.x);
+        let min_y = union.y.min(region.y);
+        let max_x = union
+            .x
+            .saturating_add(union.width)
+            .max(region.x.saturating_add(region.width));
+        let max_y = union
+            .y
+            .saturating_add(union.height)
+            .max(region.y.saturating_add(region.height));
+        crate::util::Rect {
+            x: min_x,
+            y: min_y,
+            width: max_x - min_x,
+            height: max_y - min_y,
+        }
+    })
+}
+
+fn safe_shape_damage_bounds(
+    bounds: crate::util::Rect,
+    width: u32,
+    height: u32,
+    canvas_transform_active: bool,
+) -> Option<crate::util::Rect> {
+    let margin = 2;
+    let x = bounds.x.saturating_sub(margin);
+    let y = bounds.y.saturating_sub(margin);
+    let width_with_margin = bounds.width.saturating_add(margin * 2);
+    let height_with_margin = bounds.height.saturating_add(margin * 2);
+    if canvas_transform_active {
+        return crate::util::Rect::new(x, y, width_with_margin, height_with_margin);
+    }
+    let x = x.max(0);
+    let y = y.max(0);
+    crate::util::Rect::new(
+        x,
+        y,
+        width_with_margin.min((width as i32).saturating_sub(x)),
+        height_with_margin.min((height as i32).saturating_sub(y)),
+    )
+}
+
+fn rects_intersect(a: crate::util::Rect, b: crate::util::Rect) -> bool {
+    let a_right = a.x.saturating_add(a.width);
+    let a_bottom = a.y.saturating_add(a.height);
+    let b_right = b.x.saturating_add(b.width);
+    let b_bottom = b.y.saturating_add(b.height);
+    !(a.x >= b_right || a_right <= b.x || a.y >= b_bottom || a_bottom <= b.y)
 }
 
 fn provisional_point_count(stroke: &crate::input::tool::ProvisionalToolStroke<'_>) -> usize {
@@ -534,9 +538,42 @@ const fn capture_picker_draws_committed(
 mod tests {
     use super::{
         ArrivedMagnificationWarning, arrived_magnification_warning, capture_picker_draws_committed,
-        spotlight_magnifier_warning_is_due,
+        rects_intersect, safe_shape_damage_bounds, spotlight_magnifier_warning_is_due,
+        union_damage_bounds,
     };
     use crate::draw::SpotlightMagnifierSource;
+    use crate::util::Rect;
+
+    #[test]
+    fn damage_union_covers_every_region() {
+        assert_eq!(
+            union_damage_bounds(&[
+                Rect::new(10, 20, 30, 40).unwrap(),
+                Rect::new(-5, 50, 20, 10).unwrap(),
+            ]),
+            Rect::new(-5, 20, 45, 40)
+        );
+    }
+
+    #[test]
+    fn shape_damage_margin_clamps_only_in_screen_space() {
+        let bounds = Rect::new(0, 0, 10, 10).unwrap();
+        assert_eq!(
+            safe_shape_damage_bounds(bounds, 100, 100, false),
+            Rect::new(0, 0, 14, 14)
+        );
+        assert_eq!(
+            safe_shape_damage_bounds(bounds, 100, 100, true),
+            Rect::new(-2, -2, 14, 14)
+        );
+    }
+
+    #[test]
+    fn edge_touching_shape_is_outside_damage() {
+        let damage = Rect::new(10, 10, 20, 20).unwrap();
+        assert!(!rects_intersect(Rect::new(0, 10, 10, 5).unwrap(), damage));
+        assert!(rects_intersect(Rect::new(9, 10, 2, 5).unwrap(), damage));
+    }
 
     #[test]
     fn arriving_at_a_page_of_unavailable_loupes_warns_once_not_every_frame() {

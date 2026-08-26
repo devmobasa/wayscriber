@@ -36,8 +36,8 @@ use super::tray::start_system_tray;
 #[cfg(feature = "tray")]
 use super::types::TrayStatusShared;
 use super::types::{
-    AlreadyRunningError, BackendRunner, DaemonControlEvent, OverlayActionIntents, OverlayState,
-    VisibilityIntents,
+    AlreadyRunningError, BackendRunner, DaemonControlEvent, OverlayActionIntents,
+    OverlayActionPublisher, OverlayState, VisibilityIntents, VisibilityPublisher,
 };
 use super::update_watch::start_update_watch;
 
@@ -242,6 +242,106 @@ impl Daemon {
         }
     }
 
+    fn clear_stale_runtime_files() {
+        if let Err(err) = crate::daemon::clear_daemon_pid_file() {
+            warn!("Failed to clear stale daemon pid file on startup: {}", err);
+        }
+        if let Err(err) = crate::daemon::clear_daemon_toggle_request_file() {
+            warn!(
+                "Failed to clear stale daemon toggle request on startup: {}",
+                err
+            );
+        }
+    }
+
+    fn start_tray(
+        &mut self,
+        visibility: VisibilityPublisher,
+        action: OverlayActionPublisher,
+        quit_event: DaemonControlEvent,
+    ) {
+        if !self.tray_enabled {
+            info!("System tray disabled; running daemon without tray");
+            return;
+        }
+
+        let tray_overlay_active = self.overlay_active.clone();
+        #[cfg(feature = "tray")]
+        let tray_status = self.tray_status.clone();
+        #[cfg(not(feature = "tray"))]
+        let tray_status = ();
+        match start_system_tray(
+            visibility,
+            action,
+            quit_event,
+            tray_overlay_active,
+            tray_status,
+        ) {
+            Ok(tray_handle) => self.tray_thread = Some(tray_handle),
+            Err(err) => {
+                warn!("System tray unavailable: {}", err);
+                warn!(
+                    "Continuing without system tray; use --no-tray or {NO_TRAY_ENV}=1 to silence this warning"
+                );
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn install_signal_listener(
+        &mut self,
+        daemon_wake: &RuntimeWakeSource,
+        visibility: &VisibilityPublisher,
+        quit_event: &DaemonControlEvent,
+    ) -> Result<()> {
+        let listener_wake = daemon_wake.handle();
+        let signal_visibility = visibility.clone();
+        let signal_quit = quit_event.clone();
+        self.signal_listener = Some(
+            crate::unix_signals::spawn_listener(
+                &DAEMON_SIGNALS,
+                move |sig| {
+                    if signal_quit.is_raised() {
+                        return;
+                    }
+                    match sig {
+                        libc::SIGUSR1 => {
+                            info!("Received SIGUSR1 - toggling overlay");
+                            if let Err(error) = signal_visibility.publish(
+                                None,
+                                true,
+                                "SIGUSR1 visibility publication",
+                            ) {
+                                warn!("Failed to wake daemon after SIGUSR1: {error}");
+                            }
+                        }
+                        libc::SIGTERM | libc::SIGINT => {
+                            info!(
+                                "Received {} - initiating graceful shutdown",
+                                if sig == libc::SIGTERM {
+                                    "SIGTERM"
+                                } else {
+                                    "SIGINT"
+                                }
+                            );
+                            if let Err(error) = signal_quit.raise("daemon shutdown signal") {
+                                warn!("Failed to wake daemon after shutdown signal: {error}");
+                            }
+                        }
+                        _ => warn!("Received unexpected signal: {sig}"),
+                    }
+                },
+                move || {
+                    if let Err(err) = listener_wake.wake() {
+                        warn!("Failed to wake daemon after signal publication: {err}");
+                    }
+                },
+            )
+            .context("Failed to register signal handler")?,
+        );
+        Ok(())
+    }
+
     /// Run daemon with signal handling
     pub fn run(&mut self) -> Result<()> {
         info!("Starting wayscriber daemon");
@@ -254,15 +354,7 @@ impl Daemon {
         info!("Legacy raw SIGUSR1 toggle still works, but cannot carry launch args");
 
         self.acquire_daemon_lock()?;
-        if let Err(err) = crate::daemon::clear_daemon_pid_file() {
-            warn!("Failed to clear stale daemon pid file on startup: {}", err);
-        }
-        if let Err(err) = crate::daemon::clear_daemon_toggle_request_file() {
-            warn!(
-                "Failed to clear stale daemon toggle request on startup: {}",
-                err
-            );
-        }
+        Self::clear_stale_runtime_files();
 
         let daemon_wake =
             RuntimeWakeSource::new().context("Failed to create daemon control wake descriptor")?;
@@ -271,53 +363,7 @@ impl Daemon {
         let quit_event = DaemonControlEvent::new(self.should_quit.clone(), daemon_wake.handle());
 
         #[cfg(unix)]
-        {
-            let listener_wake = daemon_wake.handle();
-            let signal_visibility = visibility.clone();
-            let signal_quit = quit_event.clone();
-            self.signal_listener = Some(
-                crate::unix_signals::spawn_listener(
-                    &DAEMON_SIGNALS,
-                    move |sig| {
-                        if signal_quit.is_raised() {
-                            return;
-                        }
-                        match sig {
-                            libc::SIGUSR1 => {
-                                info!("Received SIGUSR1 - toggling overlay");
-                                if let Err(error) = signal_visibility.publish(
-                                    None,
-                                    true,
-                                    "SIGUSR1 visibility publication",
-                                ) {
-                                    warn!("Failed to wake daemon after SIGUSR1: {error}");
-                                }
-                            }
-                            libc::SIGTERM | libc::SIGINT => {
-                                info!(
-                                    "Received {} - initiating graceful shutdown",
-                                    if sig == libc::SIGTERM {
-                                        "SIGTERM"
-                                    } else {
-                                        "SIGINT"
-                                    }
-                                );
-                                if let Err(error) = signal_quit.raise("daemon shutdown signal") {
-                                    warn!("Failed to wake daemon after shutdown signal: {error}");
-                                }
-                            }
-                            _ => warn!("Received unexpected signal: {sig}"),
-                        }
-                    },
-                    move || {
-                        if let Err(err) = listener_wake.wake() {
-                            warn!("Failed to wake daemon after signal publication: {err}");
-                        }
-                    },
-                )
-                .context("Failed to register signal handler")?,
-            );
-        }
+        self.install_signal_listener(&daemon_wake, &visibility, &quit_event)?;
 
         // Only publish the pid after SIGUSR1 is handled. A racing
         // `--daemon-toggle` sends SIGUSR1 to this pid, and the default action
@@ -367,33 +413,7 @@ impl Daemon {
             return Err(err);
         }
 
-        // Start system tray (optional)
-        if self.tray_enabled {
-            let tray_overlay_active = self.overlay_active.clone();
-            #[cfg(feature = "tray")]
-            let tray_status = self.tray_status.clone();
-            #[cfg(not(feature = "tray"))]
-            let tray_status = ();
-            match start_system_tray(
-                visibility.clone(),
-                action,
-                quit_event.clone(),
-                tray_overlay_active,
-                tray_status,
-            ) {
-                Ok(tray_handle) => {
-                    self.tray_thread = Some(tray_handle);
-                }
-                Err(err) => {
-                    warn!("System tray unavailable: {}", err);
-                    warn!(
-                        "Continuing without system tray; use --no-tray or {NO_TRAY_ENV}=1 to silence this warning"
-                    );
-                }
-            }
-        } else {
-            info!("System tray disabled; running daemon without tray");
-        }
+        self.start_tray(visibility.clone(), action, quit_event.clone());
 
         // Update notices are independent of the tray: without it the answer
         // still reaches the desktop notification and the About window.
@@ -803,18 +823,8 @@ impl Daemon {
         if let Some(listener) = self.global_shortcuts_listener.as_mut() {
             listener.request_shutdown();
         }
-        if let Some(handle) = self.tray_thread.take() {
-            match handle.join() {
-                Ok(()) => info!("System tray thread joined"),
-                Err(err) => warn!("System tray thread panicked: {:?}", err),
-            }
-        }
-        if let Some(handle) = self.update_watch_thread.take() {
-            match handle.join() {
-                Ok(()) => info!("Update watcher thread joined"),
-                Err(err) => warn!("Update watcher thread panicked: {:?}", err),
-            }
-        }
+        join_daemon_thread(self.tray_thread.take(), "System tray thread");
+        join_daemon_thread(self.update_watch_thread.take(), "Update watcher thread");
         if let Some(listener) = self.global_shortcuts_listener.take() {
             match listener.join() {
                 Ok(()) => info!("Global shortcuts listener thread joined"),
@@ -871,6 +881,15 @@ impl Daemon {
             }
         }
         Ok(())
+    }
+}
+
+fn join_daemon_thread(handle: Option<JoinHandle<()>>, label: &str) {
+    if let Some(handle) = handle {
+        match handle.join() {
+            Ok(()) => info!("{label} joined"),
+            Err(err) => warn!("{label} panicked: {err:?}"),
+        }
     }
 }
 

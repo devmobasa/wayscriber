@@ -212,73 +212,17 @@ pub(super) fn build_top_view_planned(
         tree.push(node);
     }
 
-    // --- Shapes popover: the grid plus per-tool options ------------------------
-    if snapshot.shape_picker_open
-        && let Some(anchor) = picker_anchor
-    {
-        let rows = model::visible_shape_picker_rows(snapshot, is_simple);
-        let option_rows = shape_option_rows(snapshot);
-        let max_row_len = rows.iter().map(Vec::len).max().unwrap_or(0);
-        if max_row_len > 0 || !option_rows.is_empty() {
-            let pad = ToolbarLayoutSpec::TOP_POPOVER_PAD;
-            let option_h = ToolbarLayoutSpec::TOP_OPTION_ROW_H;
-            let grid_w = max_row_len as f64 * (btn_w + gap) - gap;
-            let content_w = grid_w.max(160.0) + pad * 2.0;
-            let grid_h = rows.len() as f64 * (btn_h + gap) - gap;
-            let content_h = pad * 2.0
-                + grid_h.max(0.0)
-                + option_rows.len() as f64 * (option_h + gap)
-                + if rows.is_empty() { -gap } else { 0.0 };
-            let popover_anchor = popover_anchor_below_contextual_rows(anchor, snapshot, plan);
-            let placement =
-                super::super::popover::place_popover(super::super::popover::PopoverSpec {
-                    anchor: popover_anchor,
-                    content: (content_w, content_h),
-                    bounds: (width, height),
-                    gap: ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP,
-                    margin: 4.0,
-                });
-            let (px, py, pw, _ph) = placement.rect;
-            tree.push(WidgetNode::decor(
-                "top.shapes.panel",
-                placement.rect,
-                WidgetKind::Popover {
-                    caret_x: placement.caret_x,
-                    caret_up: placement.side == super::super::popover::PopoverSide::Below,
-                },
-            ));
-            let mut row_y = py + pad;
-            for row in rows {
-                let mut shape_x = px + pad;
-                for tool in row {
-                    if !model::tool_visible(snapshot, tool) {
-                        continue;
-                    }
-                    tree.push(tool_button_node(
-                        snapshot,
-                        tool,
-                        format!(
-                            "top.picker.{}",
-                            model::toolbar_item_id_for_tool(tool).as_str()
-                        ),
-                        (shape_x, row_y, btn_w, btn_h),
-                        use_icons,
-                    ));
-                    shape_x += btn_w + gap;
-                }
-                row_y += btn_h + gap;
-            }
-            for option_row in option_rows {
-                push_option_row(
-                    &mut tree,
-                    snapshot,
-                    option_row,
-                    (px + pad, row_y, pw - pad * 2.0, option_h),
-                );
-                row_y += option_h + gap;
-            }
-        }
-    }
+    push_shape_popover(
+        &mut tree,
+        snapshot,
+        plan,
+        picker_anchor,
+        (width, height),
+        (btn_w, btn_h),
+        gap,
+        use_icons,
+        is_simple,
+    );
 
     // --- Right-aligned chrome island --------------------------------------------
     let chrome_metrics = super::ChromeMetrics::for_plan(plan);
@@ -335,58 +279,17 @@ pub(super) fn build_top_view_planned(
     // --- Style pill (island D): contextual tool properties -------------------
     push_style_pill(&mut tree, snapshot, plan, band_h);
 
-    // --- Overflow popover: the width-dropped items ---------------------------
-    if snapshot.top_overflow_open
-        && let Some(anchor) = overflow_anchor
-    {
-        let dropped_count = spec.overflow().len();
-        if dropped_count > 0 {
-            let cols = dropped_count.min(5);
-            let rows = dropped_count.div_ceil(cols);
-            let pad = 8.0;
-            let content_w = cols as f64 * btn_w + (cols as f64 - 1.0) * gap + pad * 2.0;
-            let content_h = rows as f64 * btn_h + (rows as f64 - 1.0) * gap + pad * 2.0;
-            let popover_anchor = overflow_family_anchor(anchor, snapshot, plan);
-            let placement =
-                super::super::popover::place_popover(super::super::popover::PopoverSpec {
-                    anchor: popover_anchor,
-                    content: (content_w, content_h),
-                    bounds: (width, height),
-                    gap: OVERFLOW_ANCHOR_GAP,
-                    margin: OVERFLOW_BOTTOM_MARGIN,
-                });
-            let (px, py, _pw, _ph) = placement.rect;
-            tree.suppress_interactions_covered_by(placement.rect);
-            tree.push(WidgetNode::decor(
-                "top.overflow.panel",
-                placement.rect,
-                WidgetKind::Popover {
-                    caret_x: placement.caret_x,
-                    caret_up: placement.side == super::super::popover::PopoverSide::Below,
-                },
-            ));
-            let item_rect = |index: usize| {
-                let col = index % cols;
-                let row = index / cols;
-                (
-                    px + pad + col as f64 * (btn_w + gap),
-                    py + pad + row as f64 * (btn_h + gap),
-                    btn_w,
-                    btn_h,
-                )
-            };
-            for (index, control) in spec.overflow().iter().copied().enumerate() {
-                let id = format!("top.overflow.{}", control.id().render_id());
-                tree.push(overflow_control_button_node(
-                    snapshot,
-                    control,
-                    id,
-                    item_rect(index),
-                    use_icons,
-                ));
-            }
-        }
-    }
+    push_overflow_popover(
+        &mut tree,
+        snapshot,
+        plan,
+        &spec,
+        overflow_anchor,
+        (width, height),
+        (btn_w, btn_h),
+        gap,
+        use_icons,
+    );
 
     // --- Canvas/Session/Settings popovers -----------------------------------
     if let Some(anchor) = overflow_anchor {
@@ -399,6 +302,149 @@ pub(super) fn build_top_view_planned(
     }
 
     tree
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_shape_popover(
+    tree: &mut WidgetTree,
+    snapshot: &ToolbarSnapshot,
+    plan: &TopStripPlan,
+    anchor: Option<(f64, f64, f64, f64)>,
+    bounds: (f64, f64),
+    button_size: (f64, f64),
+    gap: f64,
+    use_icons: bool,
+    is_simple: bool,
+) {
+    let Some(anchor) = anchor.filter(|_| snapshot.shape_picker_open) else {
+        return;
+    };
+    let rows = model::visible_shape_picker_rows(snapshot, is_simple);
+    let option_rows = shape_option_rows(snapshot);
+    let max_row_len = rows.iter().map(Vec::len).max().unwrap_or(0);
+    if max_row_len == 0 && option_rows.is_empty() {
+        return;
+    }
+    let (btn_w, btn_h) = button_size;
+    let pad = ToolbarLayoutSpec::TOP_POPOVER_PAD;
+    let option_h = ToolbarLayoutSpec::TOP_OPTION_ROW_H;
+    let grid_w = max_row_len as f64 * (btn_w + gap) - gap;
+    let content_w = grid_w.max(160.0) + pad * 2.0;
+    let grid_h = rows.len() as f64 * (btn_h + gap) - gap;
+    let content_h = pad * 2.0
+        + grid_h.max(0.0)
+        + option_rows.len() as f64 * (option_h + gap)
+        + if rows.is_empty() { -gap } else { 0.0 };
+    let placement = super::super::popover::place_popover(super::super::popover::PopoverSpec {
+        anchor: popover_anchor_below_contextual_rows(anchor, snapshot, plan),
+        content: (content_w, content_h),
+        bounds,
+        gap: ToolbarLayoutSpec::TOP_SHAPE_ROW_GAP,
+        margin: 4.0,
+    });
+    let (px, py, pw, _ph) = placement.rect;
+    tree.push(WidgetNode::decor(
+        "top.shapes.panel",
+        placement.rect,
+        WidgetKind::Popover {
+            caret_x: placement.caret_x,
+            caret_up: placement.side == super::super::popover::PopoverSide::Below,
+        },
+    ));
+    let mut row_y = py + pad;
+    for row in rows {
+        let mut shape_x = px + pad;
+        for tool in row {
+            if !model::tool_visible(snapshot, tool) {
+                continue;
+            }
+            tree.push(tool_button_node(
+                snapshot,
+                tool,
+                format!(
+                    "top.picker.{}",
+                    model::toolbar_item_id_for_tool(tool).as_str()
+                ),
+                (shape_x, row_y, btn_w, btn_h),
+                use_icons,
+            ));
+            shape_x += btn_w + gap;
+        }
+        row_y += btn_h + gap;
+    }
+    for option_row in option_rows {
+        push_option_row(
+            tree,
+            snapshot,
+            option_row,
+            (px + pad, row_y, pw - pad * 2.0, option_h),
+        );
+        row_y += option_h + gap;
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_overflow_popover(
+    tree: &mut WidgetTree,
+    snapshot: &ToolbarSnapshot,
+    plan: &TopStripPlan,
+    spec: &model::TopToolbarSpec,
+    anchor: Option<(f64, f64, f64, f64)>,
+    bounds: (f64, f64),
+    button_size: (f64, f64),
+    gap: f64,
+    use_icons: bool,
+) {
+    let Some(anchor) = anchor.filter(|_| snapshot.top_overflow_open) else {
+        return;
+    };
+    let dropped_count = spec.overflow().len();
+    if dropped_count == 0 {
+        return;
+    }
+    let (btn_w, btn_h) = button_size;
+    let cols = dropped_count.min(5);
+    let rows = dropped_count.div_ceil(cols);
+    let pad = 8.0;
+    let content_w = cols as f64 * btn_w + (cols as f64 - 1.0) * gap + pad * 2.0;
+    let content_h = rows as f64 * btn_h + (rows as f64 - 1.0) * gap + pad * 2.0;
+    let placement = super::super::popover::place_popover(super::super::popover::PopoverSpec {
+        anchor: overflow_family_anchor(anchor, snapshot, plan),
+        content: (content_w, content_h),
+        bounds,
+        gap: OVERFLOW_ANCHOR_GAP,
+        margin: OVERFLOW_BOTTOM_MARGIN,
+    });
+    let (px, py, _pw, _ph) = placement.rect;
+    tree.suppress_interactions_covered_by(placement.rect);
+    tree.push(WidgetNode::decor(
+        "top.overflow.panel",
+        placement.rect,
+        WidgetKind::Popover {
+            caret_x: placement.caret_x,
+            caret_up: placement.side == super::super::popover::PopoverSide::Below,
+        },
+    ));
+    let item_rect = |index: usize| {
+        let col = index % cols;
+        let row = index / cols;
+        (
+            px + pad + col as f64 * (btn_w + gap),
+            py + pad + row as f64 * (btn_h + gap),
+            btn_w,
+            btn_h,
+        )
+    };
+    for (index, control) in spec.overflow().iter().copied().enumerate() {
+        let id = format!("top.overflow.{}", control.id().render_id());
+        tree.push(overflow_control_button_node(
+            snapshot,
+            control,
+            id,
+            item_rect(index),
+            use_icons,
+        ));
+    }
 }
 
 /// Minimized top strip: the whole tab is one restore button. It is not an

@@ -271,101 +271,110 @@ fn narrow_spec_moves_dropped_controls_to_one_ordered_overflow() {
 
 #[test]
 fn overflow_hosts_canvas_session_and_settings_entries_in_every_layout() {
-    // The three popover entries are unconditional and not hideable items;
-    // they are the only surface hosting Canvas/Session/Settings.
     for layout_mode in [ToolbarLayoutMode::Regular, ToolbarLayoutMode::Simple] {
-        let mut snapshot = snapshot();
-        snapshot.layout_mode = layout_mode;
-        let spec = TopToolbarSpec::build(&snapshot, &TopStripPlan::unconstrained());
-        let tail: Vec<_> = spec
-            .overflow()
-            .iter()
-            .rev()
-            .take(3)
-            .rev()
-            .copied()
-            .collect();
-        assert_eq!(
-            tail,
-            [
-                TopToolbarControl::CanvasMenu,
-                TopToolbarControl::SessionMenu,
-                TopToolbarControl::SettingsMenu,
-            ],
-            "{layout_mode:?}: the menu entries close the overflow, Canvas first"
-        );
-        assert!(
-            !spec.overflow().is_empty(),
-            "the overflow toggle always has content"
-        );
-        assert!(
-            spec.strip()
-                .contains(&TopToolbarNode::Control(TopToolbarControl::Overflow))
-        );
+        assert_overflow_menu_entries(layout_mode);
     }
 
     let mut snapshot = snapshot();
+    assert_overflow_menu_metadata(&snapshot);
+    assert_overflow_menu_toggle_behavior(&mut snapshot);
+    assert_collapsed_strips_have_no_overflow();
+}
+
+fn assert_overflow_menu_entries(layout_mode: ToolbarLayoutMode) {
+    let mut snapshot = snapshot();
+    snapshot.layout_mode = layout_mode;
+    let spec = TopToolbarSpec::build(&snapshot, &TopStripPlan::unconstrained());
+    let tail: Vec<_> = spec
+        .overflow()
+        .iter()
+        .rev()
+        .take(3)
+        .rev()
+        .copied()
+        .collect();
+    assert_eq!(
+        tail,
+        [
+            TopToolbarControl::CanvasMenu,
+            TopToolbarControl::SessionMenu,
+            TopToolbarControl::SettingsMenu,
+        ],
+        "{layout_mode:?}: the menu entries close the overflow, Canvas first"
+    );
+    assert!(!spec.overflow().is_empty());
+    assert!(
+        spec.strip()
+            .contains(&TopToolbarNode::Control(TopToolbarControl::Overflow))
+    );
+}
+
+fn assert_overflow_menu_metadata(snapshot: &ToolbarSnapshot) {
     let canvas = TopToolbarControl::CanvasMenu;
     let session = TopToolbarControl::SessionMenu;
     let settings = TopToolbarControl::SettingsMenu;
-
     assert_eq!(canvas.id().render_id(), "top.menu.canvas");
     assert_eq!(session.id().render_id(), "top.menu.session");
     assert_eq!(settings.id().render_id(), "top.menu.settings");
-    assert_eq!(canvas.label(&snapshot), "Canvas...");
-    assert_eq!(session.label(&snapshot), "Session...");
-    assert_eq!(settings.label(&snapshot), "Settings...");
-    assert_eq!(canvas.icon(&snapshot), Some(TopToolbarIcon::Canvas));
-    assert_eq!(session.icon(&snapshot), Some(TopToolbarIcon::Session));
-    assert_eq!(settings.icon(&snapshot), Some(TopToolbarIcon::Settings));
+    assert_eq!(canvas.label(snapshot), "Canvas...");
+    assert_eq!(session.label(snapshot), "Session...");
+    assert_eq!(settings.label(snapshot), "Settings...");
+    assert_eq!(canvas.icon(snapshot), Some(TopToolbarIcon::Canvas));
+    assert_eq!(session.icon(snapshot), Some(TopToolbarIcon::Session));
+    assert_eq!(settings.icon(snapshot), Some(TopToolbarIcon::Settings));
     // The three entries carry distinct icons.
-    assert_ne!(canvas.icon(&snapshot), session.icon(&snapshot));
-    assert_ne!(canvas.icon(&snapshot), settings.icon(&snapshot));
-    assert_ne!(session.icon(&snapshot), settings.icon(&snapshot));
+    assert_ne!(canvas.icon(snapshot), session.icon(snapshot));
+    assert_ne!(canvas.icon(snapshot), settings.icon(snapshot));
+    assert_ne!(session.icon(snapshot), settings.icon(snapshot));
     assert_eq!(canvas.role(), TopToolbarControlRole::Toggle);
     assert_eq!(session.role(), TopToolbarControlRole::Toggle);
     assert_eq!(settings.role(), TopToolbarControlRole::Toggle);
     assert_eq!(canvas.island(), TopToolbarIsland::History);
     assert_eq!(session.island(), TopToolbarIsland::History);
     assert_eq!(settings.island(), TopToolbarIsland::History);
-    assert!(canvas.enabled(&snapshot) && session.enabled(&snapshot) && settings.enabled(&snapshot));
+    assert!(canvas.enabled(snapshot) && session.enabled(snapshot) && settings.enabled(snapshot));
+}
 
-    // Entries toggle their popover open state and report it as active.
+fn assert_overflow_menu_toggle_behavior(snapshot: &mut ToolbarSnapshot) {
+    let canvas = TopToolbarControl::CanvasMenu;
+    let session = TopToolbarControl::SessionMenu;
+    let settings = TopToolbarControl::SettingsMenu;
     assert_eq!(
-        canvas.event(&snapshot),
+        canvas.event(snapshot),
         ToolbarEvent::ToggleCanvasPopover(true)
     );
     assert_eq!(
-        session.event(&snapshot),
+        session.event(snapshot),
         ToolbarEvent::ToggleSessionPopover(true)
     );
     assert_eq!(
-        settings.event(&snapshot),
+        settings.event(snapshot),
         ToolbarEvent::ToggleSettingsPopover(true)
     );
-    assert!(!canvas.active(&snapshot) && !session.active(&snapshot) && !settings.active(&snapshot));
+    assert!(!canvas.active(snapshot) && !session.active(snapshot) && !settings.active(snapshot));
     snapshot.canvas_popover_open = true;
-    assert!(canvas.active(&snapshot));
+    assert!(canvas.active(snapshot));
     assert_eq!(
-        canvas.event(&snapshot),
+        canvas.event(snapshot),
         ToolbarEvent::ToggleCanvasPopover(false)
     );
     snapshot.canvas_popover_open = false;
     snapshot.session_popover_open = true;
-    assert!(session.active(&snapshot));
+    assert!(session.active(snapshot));
     assert_eq!(
-        session.event(&snapshot),
+        session.event(snapshot),
         ToolbarEvent::ToggleSessionPopover(false)
     );
     snapshot.session_popover_open = false;
     snapshot.settings_popover_open = true;
-    assert!(settings.active(&snapshot));
+    assert!(settings.active(snapshot));
     assert_eq!(
-        settings.event(&snapshot),
+        settings.event(snapshot),
         ToolbarEvent::ToggleSettingsPopover(false)
     );
+}
 
-    // Minimized and micro strips carry no overflow (and so no entries).
+fn assert_collapsed_strips_have_no_overflow() {
     let mut minimized = self::snapshot();
     minimized.top_minimized = true;
     assert!(

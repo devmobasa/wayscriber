@@ -367,35 +367,14 @@ fn load_snapshot_path_with_outcome(
         options.per_output,
         options.output_identity()
     );
-    if enforce_configured_file_size && metadata.len() > options.max_file_size_bytes {
-        warn!(
-            "Session file {} is {} bytes which exceeds the configured limit ({} bytes); refusing to load",
-            session_path.display(),
-            metadata.len(),
-            options.max_file_size_bytes
-        );
-        return Ok(LoadSnapshotOutcome::Empty);
-    } else if !enforce_configured_file_size {
-        if metadata.len() > max_expanded_size {
-            warn!(
-                "Session recovery file {} is {} bytes which exceeds the expanded load safety limit ({} bytes); refusing to read",
-                session_path.display(),
-                metadata.len(),
-                max_expanded_size
-            );
-            return Ok(LoadSnapshotOutcome::ExpandedTooLarge {
-                path: session_path.to_path_buf(),
-                max_expanded_size,
-            });
-        }
-        if metadata.len() > options.max_file_size_bytes {
-            info!(
-                "Session recovery file {} is {} bytes, above configured normal session limit {}; loading with expanded safety cap only",
-                session_path.display(),
-                metadata.len(),
-                options.max_file_size_bytes
-            );
-        }
+    if let Some(outcome) = reject_oversized_snapshot(
+        session_path,
+        metadata.len(),
+        options,
+        max_expanded_size,
+        enforce_configured_file_size,
+    ) {
+        return Ok(outcome);
     }
 
     let lock_path = options.lock_file_path();
@@ -499,6 +478,48 @@ fn load_snapshot_path_with_outcome(
             Ok(LoadSnapshotOutcome::Empty)
         }
     }
+}
+
+fn reject_oversized_snapshot(
+    session_path: &Path,
+    file_size: u64,
+    options: &SessionOptions,
+    max_expanded_size: u64,
+    enforce_configured_file_size: bool,
+) -> Option<LoadSnapshotOutcome> {
+    if enforce_configured_file_size && file_size > options.max_file_size_bytes {
+        warn!(
+            "Session file {} is {} bytes which exceeds the configured limit ({} bytes); refusing to load",
+            session_path.display(),
+            file_size,
+            options.max_file_size_bytes
+        );
+        return Some(LoadSnapshotOutcome::Empty);
+    }
+    if enforce_configured_file_size {
+        return None;
+    }
+    if file_size > max_expanded_size {
+        warn!(
+            "Session recovery file {} is {} bytes which exceeds the expanded load safety limit ({} bytes); refusing to read",
+            session_path.display(),
+            file_size,
+            max_expanded_size
+        );
+        return Some(LoadSnapshotOutcome::ExpandedTooLarge {
+            path: session_path.to_path_buf(),
+            max_expanded_size,
+        });
+    }
+    if file_size > options.max_file_size_bytes {
+        info!(
+            "Session recovery file {} is {} bytes, above configured normal session limit {}; loading with expanded safety cap only",
+            session_path.display(),
+            file_size,
+            options.max_file_size_bytes
+        );
+    }
+    None
 }
 
 fn record_named_session_opened_for_outcome(

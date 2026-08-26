@@ -23,318 +23,320 @@ impl WaylandState {
     }
 
     fn render_ui_layers(&mut self, ctx: &cairo::Context, width: u32, height: u32, render_ui: bool) {
-        if render_ui {
-            let capture_picker = self.capture_picker_chrome_suppressed();
-            if capture_picker {
-                self.render_capture_picker(ctx, width, height);
-            }
+        if !render_ui {
+            self.input_state.clear_context_menu_layout();
+            return;
+        }
+        let capture_picker = self.capture_picker_chrome_suppressed();
+        if capture_picker {
+            self.render_capture_picker(ctx, width, height);
+        }
+        self.render_cursor_chrome(ctx, width, height, capture_picker);
+        self.render_mode_badges(ctx, width, height, capture_picker);
+        self.render_status_surfaces(ctx, width, height, capture_picker);
+        self.render_help_and_pickers(ctx, width, height, capture_picker);
+        self.render_radial_menu_and_feedback(ctx, width, height, capture_picker);
+        self.render_properties_and_context(ctx, width, height, capture_picker);
+        self.render_inline_and_modal_ui(ctx, width, height, capture_picker);
+    }
 
-            if !capture_picker && self.mouse_tool_preview_eligible() {
-                let (cursor_x, cursor_y) =
-                    self.stylus_hover_cursor_position().unwrap_or_else(|| {
-                        let (x, y) = self.current_mouse();
-                        (x as f64, y as f64)
-                    });
-                draw_tool_preview(
-                    ctx,
-                    self.input_state.active_tool(),
-                    self.input_state
-                        .color_for_tool(self.input_state.active_tool()),
-                    self.input_state.thickness_for_active_tool(),
-                    cursor_x,
-                    cursor_y,
-                    width as f64,
-                    height as f64,
-                );
-            }
-            if !capture_picker {
-                self.render_shape_measure_badge(ctx, width, height);
-            }
-            if let Some((cursor_x, cursor_y)) = self.stylus_hover_cursor_position()
-                && !capture_picker
-                && !self.cursor_blocked_by_toolbar()
-            {
-                draw_stylus_hover_cursor(
-                    ctx,
-                    self.input_state.active_tool(),
-                    self.input_state
-                        .color_for_tool(self.input_state.active_tool()),
-                    cursor_x,
-                    cursor_y,
-                );
-            }
-            // Mode badges: when the status HUD is visible they render as
-            // pills stacked on the HUD (see render_status_bar); the floating
-            // top-corner badges below cover the hidden-status-bar case only.
-            // Focus Mode suppresses the whole fallback family; otherwise its
-            // intentional status/chip hide would make these badges reappear.
-            let fallback_mode_badges_visible =
-                !capture_picker && self.input_state.fallback_mode_badges_visible();
-            let status_hud_visible = self.input_state.status_hud_effectively_visible();
-            if self.input_state.frozen_active()
-                && !self.zoom.active
-                && self.config.ui.show_frozen_badge
-                && !status_hud_visible
-                && fallback_mode_badges_visible
-            {
-                crate::ui::render_frozen_badge(ctx, width, height);
-            }
-            // Render a zoom badge when the status bar is hidden.
-            // Badge renderers return the vertical space they consume (measured
-            // height plus stacking gap) so stacked badges never overlap.
-            //
-            // Reconciliation (M8): the bottom-right zoom chip is the canonical
-            // zoom indicator/control whenever it is effectively visible, so the
-            // passive top-corner zoom badge is suppressed then — otherwise the
-            // chip and this badge would both show the zoom percentage. When the
-            // chip is absent (zoom actions off or master-hidden), this passive
-            // badge remains the hidden-status-bar zoom indicator.
-            let mut top_badge_offset = 0.0;
-            if self.input_state.zoom_active()
-                && !status_hud_visible
-                && !self.zoom_chip_visible()
-                && fallback_mode_badges_visible
-            {
-                top_badge_offset += crate::ui::render_zoom_badge(
-                    ctx,
-                    width,
-                    height,
-                    self.input_state.zoom_scale(),
-                    self.input_state.zoom_locked(),
-                );
-            }
-            if self.input_state.boards.pan_enabled()
-                && self.input_state.boards.show_pan_badge()
-                && !self.input_state.board_is_transparent()
-                && !status_hud_visible
-                && fallback_mode_badges_visible
-            {
-                top_badge_offset += crate::ui::render_pan_badge(
-                    ctx,
-                    width,
-                    height,
-                    self.input_state.boards.active_frame().view_offset() != (0, 0),
-                    top_badge_offset,
-                );
-            }
-            // Render editing badge when in text edit mode
-            if matches!(self.input_state.state, DrawingState::TextInput { .. })
-                && self.input_state.text_edit_target.is_some()
-                && !status_hud_visible
-                && fallback_mode_badges_visible
-            {
-                crate::ui::render_editing_badge(ctx, width, height, top_badge_offset);
-            }
-            if !capture_picker && self.input_state.floating_badge_visible() {
-                let board_count = self.input_state.boards.board_count();
-                let page_count = self.input_state.boards.page_count();
-                let board_index = self.input_state.boards.active_index();
-                let board_name = self.input_state.board_name();
-                let page_index = self.input_state.boards.active_page_index();
-                crate::ui::render_page_badge(
-                    ctx,
-                    width,
-                    height,
-                    board_index,
-                    board_count,
-                    board_name,
-                    page_index,
-                    page_count,
-                );
-            }
-
-            // Render the status HUD if enabled (layout was cached for this
-            // frame by collect_ui_effect_damage).
-            if self.input_state.show_status_bar {
-                crate::ui::render_status_bar(
-                    ctx,
-                    &self.input_state,
-                    &self.config.ui.status_bar_style,
-                    width,
-                    height,
-                );
-            }
-
-            // Render the interactive bottom-right zoom chip (layout cached for
-            // this frame by collect_ui_effect_damage). Reuses the status-bar
-            // style tokens so it reads as the same chrome family.
-            if !capture_picker && self.zoom_chip_visible() {
-                crate::ui::render_zoom_chip(
-                    ctx,
-                    &self.input_state,
-                    &self.config.ui.status_bar_style,
-                    width,
-                    height,
-                );
-            }
-
-            // Render the input HUD's chip row (keystrokes and clicks). Like
-            // the status pills it uses the status-bar style tokens, and it
-            // lives behind the same `render_ui` gate so overlay suppression
-            // hides it with the rest of the chrome.
-            if !capture_picker && self.input_state.input_hud_visible() {
-                crate::ui::render_input_hud(
-                    ctx,
-                    &self.input_state,
-                    &self.config.ui.status_bar_style,
-                    width,
-                    height,
-                );
-            }
-
-            // Render help overlay if toggled
-            if !capture_picker && self.input_state.show_help {
-                let bindings = crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);
-                let scroll_max = crate::ui::render_help_overlay(
-                    ctx,
-                    &self.config.ui.help_overlay_style,
-                    width,
-                    height,
-                    self.frozen_enabled(),
-                    self.input_state.help_overlay_page,
-                    &bindings,
-                    self.input_state.help_overlay_search.as_str(),
-                    self.config.ui.help_overlay_context_filter,
-                    self.input_state.boards.board_count() > 1,
-                    self.config.capture.enabled,
-                    self.input_state.help_overlay_scroll,
-                    self.input_state.help_overlay_quick_mode,
-                );
-                self.input_state.help_overlay_scroll_max = scroll_max;
-                self.input_state.help_overlay_scroll =
-                    self.input_state.help_overlay_scroll.clamp(0.0, scroll_max);
-            }
-
-            if !capture_picker && self.input_state.is_board_picker_open() {
+    fn render_cursor_chrome(
+        &mut self,
+        ctx: &cairo::Context,
+        width: u32,
+        height: u32,
+        capture_picker: bool,
+    ) {
+        if !capture_picker && self.mouse_tool_preview_eligible() {
+            let (cursor_x, cursor_y) = self.stylus_hover_cursor_position().unwrap_or_else(|| {
+                let (x, y) = self.current_mouse();
+                (x as f64, y as f64)
+            });
+            draw_tool_preview(
+                ctx,
+                self.input_state.active_tool(),
                 self.input_state
-                    .update_board_picker_layout(ctx, width, height);
-                crate::ui::render_board_picker_with_halo(
-                    ctx,
-                    &self.input_state,
-                    width,
-                    height,
-                    self.config.drawing.text_halo_enabled,
-                );
-            } else {
-                self.input_state.clear_board_picker_layout();
-            }
-
-            if !capture_picker && self.input_state.is_color_picker_popup_open() {
+                    .color_for_tool(self.input_state.active_tool()),
+                self.input_state.thickness_for_active_tool(),
+                cursor_x,
+                cursor_y,
+                width as f64,
+                height as f64,
+            );
+        }
+        if !capture_picker {
+            self.render_shape_measure_badge(ctx, width, height);
+        }
+        if let Some((cursor_x, cursor_y)) = self.stylus_hover_cursor_position()
+            && !capture_picker
+            && !self.cursor_blocked_by_toolbar()
+        {
+            draw_stylus_hover_cursor(
+                ctx,
+                self.input_state.active_tool(),
                 self.input_state
-                    .update_color_picker_popup_layout(width, height);
-                crate::ui::render_color_picker_popup(ctx, &self.input_state, width, height);
-            } else {
-                self.input_state.clear_color_picker_popup_layout();
-            }
+                    .color_for_tool(self.input_state.active_tool()),
+                cursor_x,
+                cursor_y,
+            );
+        }
+    }
 
-            if !capture_picker && self.input_state.is_font_picker_open() {
-                crate::ui::render_font_picker(ctx, &self.input_state, width, height);
-            }
+    fn render_mode_badges(
+        &self,
+        ctx: &cairo::Context,
+        width: u32,
+        height: u32,
+        capture_picker: bool,
+    ) {
+        let fallback_visible = !capture_picker && self.input_state.fallback_mode_badges_visible();
+        let status_visible = self.input_state.status_hud_effectively_visible();
+        if self.input_state.frozen_active()
+            && !self.zoom.active
+            && self.config.ui.show_frozen_badge
+            && !status_visible
+            && fallback_visible
+        {
+            crate::ui::render_frozen_badge(ctx, width, height);
+        }
+        let mut offset = 0.0;
+        if self.input_state.zoom_active()
+            && !status_visible
+            && !self.zoom_chip_visible()
+            && fallback_visible
+        {
+            offset += crate::ui::render_zoom_badge(
+                ctx,
+                width,
+                height,
+                self.input_state.zoom_scale(),
+                self.input_state.zoom_locked(),
+            );
+        }
+        if self.input_state.boards.pan_enabled()
+            && self.input_state.boards.show_pan_badge()
+            && !self.input_state.board_is_transparent()
+            && !status_visible
+            && fallback_visible
+        {
+            offset += crate::ui::render_pan_badge(
+                ctx,
+                width,
+                height,
+                self.input_state.boards.active_frame().view_offset() != (0, 0),
+                offset,
+            );
+        }
+        if matches!(self.input_state.state, DrawingState::TextInput { .. })
+            && self.input_state.text_edit_target.is_some()
+            && !status_visible
+            && fallback_visible
+        {
+            crate::ui::render_editing_badge(ctx, width, height, offset);
+        }
+    }
 
-            if !capture_picker && self.input_state.is_precision_entry_open() {
-                // Anchor under the top strip (the pill is its bottom row):
-                // the same base position both the inline fallback and the
-                // layer-shell margins derive from.
-                let snapshot = self.toolbar_snapshot();
-                let (_, top_h) = crate::backend::wayland::toolbar::top_size(&snapshot);
-                let anchor = (
-                    self.inline_top_base_x() + self.data.toolbar_top_offset,
-                    self.inline_top_base_y() + self.data.toolbar_top_offset_y + top_h as f64 + 8.0,
-                );
-                crate::ui::render_precision_entry_popup(
-                    ctx,
-                    &self.input_state,
-                    width,
-                    height,
-                    anchor,
-                );
-            }
+    fn render_status_surfaces(
+        &self,
+        ctx: &cairo::Context,
+        width: u32,
+        height: u32,
+        capture_picker: bool,
+    ) {
+        if !capture_picker && self.input_state.floating_badge_visible() {
+            crate::ui::render_page_badge(
+                ctx,
+                width,
+                height,
+                self.input_state.boards.active_index(),
+                self.input_state.boards.board_count(),
+                self.input_state.board_name(),
+                self.input_state.boards.active_page_index(),
+                self.input_state.boards.page_count(),
+            );
+        }
+        if self.input_state.show_status_bar {
+            crate::ui::render_status_bar(
+                ctx,
+                &self.input_state,
+                &self.config.ui.status_bar_style,
+                width,
+                height,
+            );
+        }
+        if !capture_picker && self.zoom_chip_visible() {
+            crate::ui::render_zoom_chip(
+                ctx,
+                &self.input_state,
+                &self.config.ui.status_bar_style,
+                width,
+                height,
+            );
+        }
+        if !capture_picker && self.input_state.input_hud_visible() {
+            crate::ui::render_input_hud(
+                ctx,
+                &self.input_state,
+                &self.config.ui.status_bar_style,
+                width,
+                height,
+            );
+        }
+    }
 
-            if !capture_picker {
-                self.render_eyedropper_loupe(ctx, width, height);
-            }
-            self.render_ocr_selection(ctx, width, height);
+    fn render_help_and_pickers(
+        &mut self,
+        ctx: &cairo::Context,
+        width: u32,
+        height: u32,
+        capture_picker: bool,
+    ) {
+        if !capture_picker && self.input_state.show_help {
+            let bindings = crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);
+            let scroll_max = crate::ui::render_help_overlay(
+                ctx,
+                &self.config.ui.help_overlay_style,
+                width,
+                height,
+                self.frozen_enabled(),
+                self.input_state.help_overlay_page,
+                &bindings,
+                self.input_state.help_overlay_search.as_str(),
+                self.config.ui.help_overlay_context_filter,
+                self.input_state.boards.board_count() > 1,
+                self.config.capture.enabled,
+                self.input_state.help_overlay_scroll,
+                self.input_state.help_overlay_quick_mode,
+            );
+            self.input_state.help_overlay_scroll_max = scroll_max;
+            self.input_state.help_overlay_scroll =
+                self.input_state.help_overlay_scroll.clamp(0.0, scroll_max);
+        }
+        if !capture_picker && self.input_state.is_board_picker_open() {
+            self.input_state
+                .update_board_picker_layout(ctx, width, height);
+            crate::ui::render_board_picker_with_halo(
+                ctx,
+                &self.input_state,
+                width,
+                height,
+                self.config.drawing.text_halo_enabled,
+            );
+        } else {
+            self.input_state.clear_board_picker_layout();
+        }
+        if !capture_picker && self.input_state.is_color_picker_popup_open() {
+            self.input_state
+                .update_color_picker_popup_layout(width, height);
+            crate::ui::render_color_picker_popup(ctx, &self.input_state, width, height);
+        } else {
+            self.input_state.clear_color_picker_popup_layout();
+        }
+        if !capture_picker && self.input_state.is_font_picker_open() {
+            crate::ui::render_font_picker(ctx, &self.input_state, width, height);
+        }
+        if !capture_picker && self.input_state.is_precision_entry_open() {
+            self.render_precision_entry(ctx, width, height);
+        }
+        if !capture_picker {
+            self.render_eyedropper_loupe(ctx, width, height);
+        }
+        self.render_ocr_selection(ctx, width, height);
+    }
 
-            if !capture_picker && self.input_state.is_radial_menu_open() {
-                // Layout (and with it hit-testing) is live from the moment
-                // of opening so pre-paint flicks resolve correctly; painting
-                // waits out the flick window (RADIAL_PAINT_DELAY).
-                self.input_state.update_radial_menu_layout(width, height);
-                if self
-                    .input_state
-                    .radial_menu_mark_painted_if_due(std::time::Instant::now())
-                {
-                    crate::ui::render_radial_menu(ctx, &self.input_state, width, height);
-                }
-            } else {
-                self.input_state.clear_radial_menu_layout();
-            }
+    fn render_precision_entry(&mut self, ctx: &cairo::Context, width: u32, height: u32) {
+        let snapshot = self.toolbar_snapshot();
+        let (_, top_h) = crate::backend::wayland::toolbar::top_size(&snapshot);
+        let anchor = (
+            self.inline_top_base_x() + self.data.toolbar_top_offset,
+            self.inline_top_base_y() + self.data.toolbar_top_offset_y + top_h as f64 + 8.0,
+        );
+        crate::ui::render_precision_entry_popup(ctx, &self.input_state, width, height, anchor);
+    }
 
-            let toast_geometry = crate::ui::render_ui_toast(ctx, &self.input_state, width, height);
-            self.input_state.ui_toast_bounds = toast_geometry.map(|geometry| geometry.0);
-            self.input_state.ui_toast_action_bounds = toast_geometry
-                .map(|geometry| geometry.1)
-                .unwrap_or([None, None]);
-            crate::ui::render_preset_toast(ctx, &self.input_state, width, height);
-            crate::ui::render_blocked_feedback(ctx, &self.input_state, width, height);
-
-            if !capture_picker && !self.zoom.active && !self.input_state.is_board_picker_open() {
-                if self.input_state.is_properties_panel_open() {
-                    self.input_state
-                        .update_properties_panel_layout(ctx, width, height);
-                } else {
-                    self.input_state.clear_properties_panel_layout();
-                }
-                crate::ui::render_properties_panel(ctx, &self.input_state, width, height);
-
-                if self.input_state.is_context_menu_open() {
-                    self.input_state
-                        .update_context_menu_layout(ctx, width, height);
-                } else {
-                    self.input_state.clear_context_menu_layout();
-                }
-
-                // Render context menu if open
-                crate::ui::render_context_menu(ctx, &self.input_state, width, height);
-            } else {
-                self.input_state.clear_context_menu_layout();
-                self.input_state.clear_properties_panel_layout();
-            }
-
-            // Inline toolbars (xdg fallback or drag preview) render directly into main surface.
-            if !capture_picker && self.toolbar.is_visible() && self.inline_toolbars_render_active()
+    fn render_radial_menu_and_feedback(
+        &mut self,
+        ctx: &cairo::Context,
+        width: u32,
+        height: u32,
+        capture_picker: bool,
+    ) {
+        if !capture_picker && self.input_state.is_radial_menu_open() {
+            self.input_state.update_radial_menu_layout(width, height);
+            if self
+                .input_state
+                .radial_menu_mark_painted_if_due(std::time::Instant::now())
             {
-                let snapshot = self.toolbar_snapshot();
-                if self.toolbar.update_snapshot(&snapshot) {
-                    self.toolbar.mark_dirty();
-                }
-                self.render_inline_toolbars(ctx, &snapshot);
+                crate::ui::render_radial_menu(ctx, &self.input_state, width, height);
             }
+        } else {
+            self.input_state.clear_radial_menu_layout();
+        }
+        let toast_geometry = crate::ui::render_ui_toast(ctx, &self.input_state, width, height);
+        self.input_state.ui_toast_bounds = toast_geometry.map(|geometry| geometry.0);
+        self.input_state.ui_toast_action_bounds = toast_geometry
+            .map(|geometry| geometry.1)
+            .unwrap_or([None, None]);
+        crate::ui::render_preset_toast(ctx, &self.input_state, width, height);
+        crate::ui::render_blocked_feedback(ctx, &self.input_state, width, height);
+    }
 
-            if self.input_state.region_state().purpose()
-                == Some(crate::input::state::RegionPurposeTag::Measure)
-            {
-                // Measure mode is screen chrome over the live annotated
-                // canvas, not capture suppression. Paint it once, above the
-                // ordinary Wayscriber UI.
-                self.render_capture_picker(ctx, width, height);
-            }
-
-            // The OCR scan overlay sits over the live view, above the toolbars
-            // it reports on but below the modal surfaces below.
-            self.render_ocr_scan(ctx, width, height);
-
-            // Modal overlays render last (on top of everything including toolbars)
-            if !capture_picker {
-                if let Some(card) = self.first_run_onboarding_card() {
-                    crate::ui::render_onboarding_card(ctx, width, height, &card);
-                }
-                crate::ui::render_command_palette(ctx, &self.input_state, width, height);
-                crate::ui::render_tour(ctx, &self.input_state, width, height);
-            }
+    fn render_properties_and_context(
+        &mut self,
+        ctx: &cairo::Context,
+        width: u32,
+        height: u32,
+        capture_picker: bool,
+    ) {
+        if capture_picker || self.zoom.active || self.input_state.is_board_picker_open() {
+            self.input_state.clear_context_menu_layout();
+            self.input_state.clear_properties_panel_layout();
+            return;
+        }
+        if self.input_state.is_properties_panel_open() {
+            self.input_state
+                .update_properties_panel_layout(ctx, width, height);
+        } else {
+            self.input_state.clear_properties_panel_layout();
+        }
+        crate::ui::render_properties_panel(ctx, &self.input_state, width, height);
+        if self.input_state.is_context_menu_open() {
+            self.input_state
+                .update_context_menu_layout(ctx, width, height);
         } else {
             self.input_state.clear_context_menu_layout();
         }
+        crate::ui::render_context_menu(ctx, &self.input_state, width, height);
+    }
+
+    fn render_inline_and_modal_ui(
+        &mut self,
+        ctx: &cairo::Context,
+        width: u32,
+        height: u32,
+        capture_picker: bool,
+    ) {
+        if !capture_picker && self.toolbar.is_visible() && self.inline_toolbars_render_active() {
+            let snapshot = self.toolbar_snapshot();
+            if self.toolbar.update_snapshot(&snapshot) {
+                self.toolbar.mark_dirty();
+            }
+            self.render_inline_toolbars(ctx, &snapshot);
+        }
+        if self.input_state.region_state().purpose()
+            == Some(crate::input::state::RegionPurposeTag::Measure)
+        {
+            self.render_capture_picker(ctx, width, height);
+        }
+        self.render_ocr_scan(ctx, width, height);
+        if capture_picker {
+            return;
+        }
+        if let Some(card) = self.first_run_onboarding_card() {
+            crate::ui::render_onboarding_card(ctx, width, height, &card);
+        }
+        crate::ui::render_command_palette(ctx, &self.input_state, width, height);
+        crate::ui::render_tour(ctx, &self.input_state, width, height);
     }
 
     /// The scan band while recognition runs, then the outcome card. The card

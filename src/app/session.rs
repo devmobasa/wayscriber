@@ -2,23 +2,7 @@ use crate::cli::Cli;
 use crate::env_vars::WAYLAND_DISPLAY_ENV;
 
 pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
-    if let Some(display_name) = cli.rename_session.as_deref() {
-        let raw_path = cli
-            .session_file
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("--rename-session requires --session-file"))?;
-        let raw = raw_path
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("--session-file path must be valid UTF-8"))?;
-        let path = crate::session::normalize_named_session_file_arg(raw);
-        match crate::session::catalog::rename_session_display_name_by_path(&path, display_name)? {
-            Some(entry) => {
-                println!("Renamed session to {}.", entry.display_name);
-            }
-            None => {
-                anyhow::bail!("session is not in the named-session catalog");
-            }
-        }
+    if rename_session(cli)? {
         return Ok(());
     }
 
@@ -62,29 +46,7 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
     };
 
     if cli.clear_session {
-        let outcome = crate::session::clear_session(&options)?;
-        println!("Session file: {}", options.session_file_path().display());
-        if outcome.removed_session {
-            println!("  Removed session file");
-        } else {
-            println!("  No session file present");
-        }
-        if outcome.removed_backup {
-            println!("  Removed backup file");
-        }
-        if outcome.removed_recovery {
-            println!("  Removed recovery file");
-        }
-        if outcome.removed_lock {
-            println!("  Removed lock file");
-        }
-        if !outcome.removed_session
-            && !outcome.removed_backup
-            && !outcome.removed_recovery
-            && !outcome.removed_lock
-        {
-            println!("  No session artefacts found");
-        }
+        clear_session(&options)?;
         return Ok(());
     }
 
@@ -187,5 +149,50 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
         return Ok(());
     }
 
+    Ok(())
+}
+
+fn rename_session(cli: &Cli) -> anyhow::Result<bool> {
+    let Some(display_name) = cli.rename_session.as_deref() else {
+        return Ok(false);
+    };
+    let raw_path = cli
+        .session_file
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("--rename-session requires --session-file"))?;
+    let raw = raw_path
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("--session-file path must be valid UTF-8"))?;
+    let path = crate::session::normalize_named_session_file_arg(raw);
+    let entry = crate::session::catalog::rename_session_display_name_by_path(&path, display_name)?
+        .ok_or_else(|| anyhow::anyhow!("session is not in the named-session catalog"))?;
+    println!("Renamed session to {}.", entry.display_name);
+    Ok(true)
+}
+
+fn clear_session(options: &crate::session::SessionOptions) -> anyhow::Result<()> {
+    let outcome = crate::session::clear_session(options)?;
+    println!("Session file: {}", options.session_file_path().display());
+    if outcome.removed_session {
+        println!("  Removed session file");
+    } else {
+        println!("  No session file present");
+    }
+    if outcome.removed_backup {
+        println!("  Removed backup file");
+    }
+    if outcome.removed_recovery {
+        println!("  Removed recovery file");
+    }
+    if outcome.removed_lock {
+        println!("  Removed lock file");
+    }
+    if !outcome.removed_session
+        && !outcome.removed_backup
+        && !outcome.removed_recovery
+        && !outcome.removed_lock
+    {
+        println!("  No session artefacts found");
+    }
     Ok(())
 }

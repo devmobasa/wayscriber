@@ -390,34 +390,7 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
     let mut nodes = Vec::new();
     let mut y = 0.0;
 
-    if !customizing {
-        let control = model::layout_mode_control(snapshot.layout_mode);
-        if let model::ToolbarControlKind::Segmented(segmented) = &control.kind {
-            let segments = segmented.segments();
-            if !segments.is_empty() {
-                let active = segmented.active_segment();
-                let segment_w = row_item_width(MENU_CONTENT_W, segments.len(), MENU_ITEM_GAP);
-                for (index, segment) in segments.iter().enumerate() {
-                    nodes.push(text_button(
-                        format!("top.menu.settings.mode.{index}"),
-                        (
-                            index as f64 * (segment_w + MENU_ITEM_GAP),
-                            y,
-                            segment_w,
-                            MENU_SEGMENT_H,
-                        ),
-                        LabelSpec::new(segment.label.as_ref(), MENU_LABEL_FONT, true),
-                        ButtonStyle::active(active == Some(segment.id)),
-                        Some(Interaction::click(
-                            segment.activation.clone(),
-                            segment.tooltip.as_string(),
-                        )),
-                    ));
-                }
-                y += MENU_SEGMENT_H + MENU_TOGGLE_GAP;
-            }
-        }
-    }
+    append_layout_mode_control(snapshot, customizing, &mut nodes, &mut y);
 
     let toggle_w = row_item_width(MENU_CONTENT_W, 2, MENU_TOGGLE_GAP);
     let mut toggle_index = 0usize;
@@ -446,20 +419,7 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
         y += MENU_TOGGLE_H + MENU_TOGGLE_GAP;
     }
 
-    for (index, notice) in model.notices().iter().enumerate() {
-        let bold = matches!(
-            notice.severity,
-            model::ToolbarSettingsNoticeSeverity::Warning
-                | model::ToolbarSettingsNoticeSeverity::Error
-        );
-        let notice_h = settings_notice_height(notice.text.as_ref(), bold);
-        nodes.push(WidgetNode::decor(
-            format!("top.menu.settings.notice.{index}"),
-            (0.0, y, MENU_CONTENT_W, notice_h),
-            WidgetKind::Label(LabelSpec::new(notice.text.as_ref(), MENU_META_FONT, bold).wrapped()),
-        ));
-        y += notice_h + MENU_TOGGLE_GAP;
-    }
+    append_settings_notices(&model, &mut nodes, &mut y);
 
     let buttons = model.buttons();
     if !buttons.is_empty() {
@@ -641,6 +601,66 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
     }
 
     Some(nodes)
+}
+
+fn append_layout_mode_control(
+    snapshot: &ToolbarSnapshot,
+    customizing: bool,
+    nodes: &mut Vec<WidgetNode>,
+    y: &mut f64,
+) {
+    if customizing {
+        return;
+    }
+    let control = model::layout_mode_control(snapshot.layout_mode);
+    let model::ToolbarControlKind::Segmented(segmented) = &control.kind else {
+        return;
+    };
+    let segments = segmented.segments();
+    if segments.is_empty() {
+        return;
+    }
+    let active = segmented.active_segment();
+    let segment_w = row_item_width(MENU_CONTENT_W, segments.len(), MENU_ITEM_GAP);
+    for (index, segment) in segments.iter().enumerate() {
+        nodes.push(text_button(
+            format!("top.menu.settings.mode.{index}"),
+            (
+                index as f64 * (segment_w + MENU_ITEM_GAP),
+                *y,
+                segment_w,
+                MENU_SEGMENT_H,
+            ),
+            LabelSpec::new(segment.label.as_ref(), MENU_LABEL_FONT, true),
+            ButtonStyle::active(active == Some(segment.id)),
+            Some(Interaction::click(
+                segment.activation.clone(),
+                segment.tooltip.as_string(),
+            )),
+        ));
+    }
+    *y += MENU_SEGMENT_H + MENU_TOGGLE_GAP;
+}
+
+fn append_settings_notices(
+    model: &model::ToolbarSettingsModel,
+    nodes: &mut Vec<WidgetNode>,
+    y: &mut f64,
+) {
+    for (index, notice) in model.notices().iter().enumerate() {
+        let bold = matches!(
+            notice.severity,
+            model::ToolbarSettingsNoticeSeverity::Warning
+                | model::ToolbarSettingsNoticeSeverity::Error
+        );
+        let notice_h = settings_notice_height(notice.text.as_ref(), bold);
+        nodes.push(WidgetNode::decor(
+            format!("top.menu.settings.notice.{index}"),
+            (0.0, *y, MENU_CONTENT_W, notice_h),
+            WidgetKind::Label(LabelSpec::new(notice.text.as_ref(), MENU_META_FONT, bold).wrapped()),
+        ));
+        *y += notice_h + MENU_TOGGLE_GAP;
+    }
 }
 
 fn settings_notice_height(text: &str, bold: bool) -> f64 {

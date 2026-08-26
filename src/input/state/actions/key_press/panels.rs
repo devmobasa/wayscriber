@@ -237,22 +237,7 @@ impl InputState {
     }
 
     fn handle_board_picker_page_panel_key(&mut self, key: Key) -> bool {
-        let layout = self.board_picker_layout;
-        let page_cols = layout.map(|l| l.page_cols.max(1)).unwrap_or(1);
-        let page_count = self
-            .board_picker_page_panel_board_index()
-            .and_then(|bi| self.boards.board_states().get(bi))
-            .map(|b| b.pages.page_count())
-            .unwrap_or(0);
-        let current = self
-            .board_picker_page_focus_page_index()
-            .unwrap_or_else(|| {
-                self.board_picker_page_panel_board_index()
-                    .and_then(|bi| self.boards.board_states().get(bi))
-                    .map_or(0, |board| board.pages.active_index())
-            })
-            .min(page_count.saturating_sub(1));
-
+        let (page_count, current) = self.board_picker_page_panel_position();
         match key {
             Key::Escape => {
                 if !self.board_picker_clear_search() {
@@ -264,68 +249,15 @@ impl InputState {
                 self.board_picker_set_focus(BoardPickerFocus::BoardList);
                 true
             }
-            Key::Left => {
-                if current == 0 {
-                    self.board_picker_set_focus(BoardPickerFocus::BoardList);
-                } else if page_count > 0 {
-                    self.board_picker_set_page_focus_page_index(current.saturating_sub(1));
-                }
-                true
-            }
-            Key::Right => {
-                if page_count > 0 {
-                    let next = current.saturating_add(1).min(page_count.saturating_sub(1));
-                    self.board_picker_set_page_focus_page_index(next);
-                }
-                true
-            }
-            Key::Up => {
-                if page_count > 0 {
-                    let next = current.saturating_sub(page_cols);
-                    self.board_picker_set_page_focus_page_index(next);
-                }
-                true
-            }
-            Key::Down => {
-                if page_count > 0 {
-                    let next = current
-                        .saturating_add(page_cols)
-                        .min(page_count.saturating_sub(1));
-                    self.board_picker_set_page_focus_page_index(next);
-                }
-                true
-            }
-            Key::Home => {
-                if page_count > 0 {
-                    self.board_picker_set_page_focus_page_index(0);
-                }
-                true
-            }
-            Key::End => {
-                if page_count > 0 {
-                    self.board_picker_set_page_focus_page_index(page_count.saturating_sub(1));
-                }
-                true
-            }
-            Key::PageUp => {
-                if page_count > 0 {
-                    let step = layout
-                        .map(|l| l.page_visible_slots.max(page_cols))
-                        .unwrap_or(page_cols);
-                    self.board_picker_set_page_focus_page_index(current.saturating_sub(step));
-                }
-                true
-            }
-            Key::PageDown => {
-                if page_count > 0 {
-                    let step = layout
-                        .map(|l| l.page_visible_slots.max(page_cols))
-                        .unwrap_or(page_cols);
-                    let next = current
-                        .saturating_add(step)
-                        .min(page_count.saturating_sub(1));
-                    self.board_picker_set_page_focus_page_index(next);
-                }
+            Key::Left
+            | Key::Right
+            | Key::Up
+            | Key::Down
+            | Key::Home
+            | Key::End
+            | Key::PageUp
+            | Key::PageDown => {
+                self.navigate_board_picker_page_panel(key, page_count, current);
                 true
             }
             Key::Return | Key::Space => {
@@ -390,6 +322,70 @@ impl InputState {
                 true
             }
             _ => true,
+        }
+    }
+
+    fn board_picker_page_panel_position(&self) -> (usize, usize) {
+        let page_count = self
+            .board_picker_page_panel_board_index()
+            .and_then(|bi| self.boards.board_states().get(bi))
+            .map(|b| b.pages.page_count())
+            .unwrap_or(0);
+        let current = self
+            .board_picker_page_focus_page_index()
+            .unwrap_or_else(|| {
+                self.board_picker_page_panel_board_index()
+                    .and_then(|bi| self.boards.board_states().get(bi))
+                    .map_or(0, |board| board.pages.active_index())
+            })
+            .min(page_count.saturating_sub(1));
+        (page_count, current)
+    }
+
+    fn navigate_board_picker_page_panel(&mut self, key: Key, page_count: usize, current: usize) {
+        let layout = self.board_picker_layout;
+        let page_cols = layout.map(|l| l.page_cols.max(1)).unwrap_or(1);
+
+        match key {
+            Key::Left if current == 0 => {
+                self.board_picker_set_focus(BoardPickerFocus::BoardList);
+            }
+            Key::Left if page_count > 0 => {
+                self.board_picker_set_page_focus_page_index(current.saturating_sub(1));
+            }
+            Key::Right if page_count > 0 => {
+                let next = current.saturating_add(1).min(page_count.saturating_sub(1));
+                self.board_picker_set_page_focus_page_index(next);
+            }
+            Key::Up if page_count > 0 => {
+                self.board_picker_set_page_focus_page_index(current.saturating_sub(page_cols));
+            }
+            Key::Down if page_count > 0 => {
+                let next = current
+                    .saturating_add(page_cols)
+                    .min(page_count.saturating_sub(1));
+                self.board_picker_set_page_focus_page_index(next);
+            }
+            Key::Home if page_count > 0 => self.board_picker_set_page_focus_page_index(0),
+            Key::End if page_count > 0 => {
+                self.board_picker_set_page_focus_page_index(page_count.saturating_sub(1));
+            }
+            Key::PageUp if page_count > 0 => {
+                let step = layout
+                    .map(|l| l.page_visible_slots.max(page_cols))
+                    .unwrap_or(page_cols);
+                self.board_picker_set_page_focus_page_index(current.saturating_sub(step));
+            }
+            Key::PageDown if page_count > 0 => {
+                let step = layout
+                    .map(|l| l.page_visible_slots.max(page_cols))
+                    .unwrap_or(page_cols);
+                let next = current
+                    .saturating_add(step)
+                    .min(page_count.saturating_sub(1));
+                self.board_picker_set_page_focus_page_index(next);
+            }
+            _ => {}
         }
     }
 

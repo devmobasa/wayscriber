@@ -838,223 +838,263 @@ fn assert_gtk_style_widget(
 ) {
     let id = widget.widget_name().to_string();
     match control.role() {
-        model::StylePillRole::Swatch => {
-            let button = widget
-                .clone()
-                .downcast::<gtk4::Button>()
-                .unwrap_or_else(|_| panic!("{id} is a swatch button"));
-            assert!(button.has_css_class("swatch"), "{id} swatch class");
-            assert_eq!(
-                button.tooltip_text().as_deref(),
-                control.tooltip(snapshot).as_deref(),
-                "{id} tooltip"
-            );
-            assert_accessible_label(widget, &control.label(snapshot), &id);
-        }
-        model::StylePillRole::Slider => {
-            // SliderRow: a box hosting the hand-drawn track DrawingArea.
-            let row = widget
-                .clone()
-                .downcast::<gtk4::Box>()
-                .unwrap_or_else(|_| panic!("{id} is a slider row"));
-            let track = row.first_child().expect("slider track");
-            assert!(track.is::<gtk4::DrawingArea>(), "{id} slider track");
-            let value = track.next_sibling().expect("slider value readout");
-            let value = value
-                .downcast::<gtk4::Label>()
-                .unwrap_or_else(|_| panic!("{id} value readout is a label"));
-            let carries_readout = control.carries_inline_readout();
-            assert_eq!(
-                value.property::<bool>("visible"),
-                carries_readout,
-                "{id} readout visibility"
-            );
-            let expected_width = if carries_readout {
-                STYLE_SLIDER_W + STYLE_PILL_GAP + STYLE_VALUE_W
-            } else {
-                STYLE_SLIDER_W
-            };
-            assert_eq!(
-                row.width_request(),
-                expected_width.round() as i32,
-                "{id} keeps the shared track width when its readout is visible"
-            );
-            if carries_readout {
-                assert_eq!(
-                    value.xalign(),
-                    0.0,
-                    "{id} places its readout next to the track"
-                );
-            }
-        }
-        model::StylePillRole::Value => {
-            let button = widget
-                .clone()
-                .downcast::<gtk4::Button>()
-                .unwrap_or_else(|_| panic!("{id} is a numeral button"));
-            assert_eq!(
-                button.label().as_deref(),
-                control.value_text(snapshot).as_deref(),
-                "{id} live numeral"
-            );
-            assert_eq!(
-                button.tooltip_text().as_deref(),
-                control.tooltip(snapshot).as_deref(),
-                "{id} tooltip"
-            );
-        }
-        model::StylePillRole::Toggle => {
-            let check = widget
-                .clone()
-                .downcast::<gtk4::CheckButton>()
-                .unwrap_or_else(|_| panic!("{id} is a check button"));
-            assert_eq!(check.is_active(), control.active(snapshot), "{id} state");
-            assert_eq!(
-                check.label().as_deref(),
-                Some(control.label(snapshot).as_ref()),
-                "{id} label"
-            );
-            assert_eq!(
-                check.tooltip_text().as_deref(),
-                control.tooltip(snapshot).as_deref(),
-                "{id} tooltip"
-            );
-        }
-        model::StylePillRole::Button => {
-            let button = widget
-                .clone()
-                .downcast::<gtk4::Button>()
-                .unwrap_or_else(|_| panic!("{id} is a button"));
-            // Cycle buttons show the live value they step; plain buttons show
-            // their label.
-            let expected_text = match control {
-                model::StylePillControl::SelectionCycle(_)
-                | model::StylePillControl::ArrowStyleCycle => {
-                    control.value_text(snapshot).expect("cycle value text")
-                }
-                _ => control.label(snapshot).into_owned(),
-            };
-            assert_eq!(
-                button.label().as_deref(),
-                Some(expected_text.as_str()),
-                "{id} text"
-            );
-            assert_eq!(
-                button.is_sensitive(),
-                control.enabled(snapshot),
-                "{id} enabled"
-            );
-            assert_eq!(
-                button.tooltip_text().as_deref(),
-                control.tooltip(snapshot).as_deref(),
-                "{id} tooltip"
-            );
-            if control == model::StylePillControl::FontFamilyPicker {
-                // The builtin puts a clear gap before this button so the family
-                // name does not crowd the "72pt" numeral to its left. Without
-                // the matching margin here the two toolbars space it
-                // differently.
-                assert!(
-                    button.margin_start() > 0,
-                    "{id} lost the leading gap the builtin gives it"
-                );
-            }
-        }
-        model::StylePillRole::Stepper => {
-            let steps = control.steps(snapshot).expect("stepper halves");
-            let row = widget
-                .clone()
-                .downcast::<gtk4::Box>()
-                .unwrap_or_else(|_| panic!("{id} is a stepper row"));
-            // The builtin lays the three parts out abutting and the width
-            // planner budgets step + value + step exactly. Child spacing here
-            // would make the widget wider than the plan says it is.
-            assert_eq!(row.spacing(), 0, "{id} stepper spacing");
-            // "− 3 +" says nothing about what it steps.
-            assert_accessible_label(widget, &control.label(snapshot), &id);
-            let minus = widget.first_child().expect("stepper minus half");
-            let value = minus.next_sibling().expect("stepper value readout");
-            let plus = value.next_sibling().expect("stepper plus half");
-            assert!(plus.next_sibling().is_none(), "{id} has three children");
-            for (half, step) in [(&minus, &steps[0]), (&plus, &steps[1])] {
-                let button = half
-                    .clone()
-                    .downcast::<gtk4::Button>()
-                    .unwrap_or_else(|_| panic!("{} is a button", step.id));
-                assert_eq!(half.widget_name().as_str(), step.id, "{id} half id");
-                assert_eq!(
-                    button.label().as_deref(),
-                    Some(step.label),
-                    "{} label",
-                    step.id
-                );
-                assert_eq!(
-                    button.tooltip_text().as_deref(),
-                    Some(step.tooltip.as_str()),
-                    "{} tooltip",
-                    step.id
-                );
-                // A tooltip is not an accessible name: a screen reader on
-                // these halves would otherwise announce "−" and "+".
-                assert_accessible_label(button.upcast_ref(), &step.tooltip, step.id);
-                assert_eq!(
-                    button.is_sensitive(),
-                    control.enabled(snapshot),
-                    "{} enabled",
-                    step.id
-                );
-            }
-            let value_label = value
-                .downcast::<gtk4::Label>()
-                .unwrap_or_else(|_| panic!("{id} value readout is a label"));
-            assert_eq!(
-                value_label.widget_name().as_str(),
-                format!("{}.value", control.id()),
-                "{id} value id"
-            );
-            assert_eq!(
-                Some(value_label.text().to_string()),
-                control.value_text(snapshot),
-                "{id} live value"
-            );
-        }
+        model::StylePillRole::Swatch => assert_gtk_style_swatch(widget, control, snapshot, &id),
+        model::StylePillRole::Slider => assert_gtk_style_slider(widget, control, &id),
+        model::StylePillRole::Value => assert_gtk_style_value(widget, control, snapshot, &id),
+        model::StylePillRole::Toggle => assert_gtk_style_toggle(widget, control, snapshot, &id),
+        model::StylePillRole::Button => assert_gtk_style_button(widget, control, snapshot, &id),
+        model::StylePillRole::Stepper => assert_gtk_style_stepper(widget, control, snapshot, &id),
         model::StylePillRole::Segmented => {
-            let segments = control.segments(snapshot).expect("segment halves");
-            let mut buttons = Vec::new();
-            let mut child = widget.first_child();
-            while let Some(current) = child {
-                child = current.next_sibling();
-                buttons.push(
-                    current
-                        .downcast::<gtk4::Button>()
-                        .unwrap_or_else(|_| panic!("{id} segment half is a button")),
-                );
-            }
-            assert_eq!(buttons.len(), segments.len(), "{id} segment count");
-            for (button, segment) in buttons.iter().zip(&segments) {
-                // Contract-id parity with the builtin tree's HitArea halves.
-                assert_eq!(button.widget_name().as_str(), segment.id, "{id} half id");
-                assert!(button.has_css_class("tab"), "{id} tab class");
-                assert_eq!(
-                    button.label().as_deref(),
-                    Some(segment.label),
-                    "{} label",
-                    segment.id
-                );
-                assert_eq!(
-                    button.has_css_class("active"),
-                    segment.active,
-                    "{} active state",
-                    segment.id
-                );
-                assert_eq!(
-                    button.tooltip_text().as_deref(),
-                    Some(segment.tooltip.as_str()),
-                    "{} tooltip",
-                    segment.id
-                );
-            }
+            assert_gtk_style_segmented(widget, control, snapshot, &id)
         }
+    }
+}
+
+fn assert_gtk_style_swatch(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let button = widget
+        .clone()
+        .downcast::<gtk4::Button>()
+        .unwrap_or_else(|_| panic!("{id} is a swatch button"));
+    assert!(button.has_css_class("swatch"), "{id} swatch class");
+    assert_eq!(
+        button.tooltip_text().as_deref(),
+        control.tooltip(snapshot).as_deref(),
+        "{id} tooltip"
+    );
+    assert_accessible_label(widget, &control.label(snapshot), id);
+}
+
+fn assert_gtk_style_slider(widget: &gtk4::Widget, control: model::StylePillControl, id: &str) {
+    // SliderRow: a box hosting the hand-drawn track DrawingArea.
+    let row = widget
+        .clone()
+        .downcast::<gtk4::Box>()
+        .unwrap_or_else(|_| panic!("{id} is a slider row"));
+    let track = row.first_child().expect("slider track");
+    assert!(track.is::<gtk4::DrawingArea>(), "{id} slider track");
+    let value = track.next_sibling().expect("slider value readout");
+    let value = value
+        .downcast::<gtk4::Label>()
+        .unwrap_or_else(|_| panic!("{id} value readout is a label"));
+    let carries_readout = control.carries_inline_readout();
+    assert_eq!(
+        value.property::<bool>("visible"),
+        carries_readout,
+        "{id} readout visibility"
+    );
+    let expected_width = if carries_readout {
+        STYLE_SLIDER_W + STYLE_PILL_GAP + STYLE_VALUE_W
+    } else {
+        STYLE_SLIDER_W
+    };
+    assert_eq!(
+        row.width_request(),
+        expected_width.round() as i32,
+        "{id} keeps the shared track width when its readout is visible"
+    );
+    if carries_readout {
+        assert_eq!(
+            value.xalign(),
+            0.0,
+            "{id} places its readout next to the track"
+        );
+    }
+}
+
+fn assert_gtk_style_value(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let button = widget
+        .clone()
+        .downcast::<gtk4::Button>()
+        .unwrap_or_else(|_| panic!("{id} is a numeral button"));
+    assert_eq!(
+        button.label().as_deref(),
+        control.value_text(snapshot).as_deref(),
+        "{id} live numeral"
+    );
+    assert_eq!(
+        button.tooltip_text().as_deref(),
+        control.tooltip(snapshot).as_deref(),
+        "{id} tooltip"
+    );
+}
+
+fn assert_gtk_style_toggle(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let check = widget
+        .clone()
+        .downcast::<gtk4::CheckButton>()
+        .unwrap_or_else(|_| panic!("{id} is a check button"));
+    assert_eq!(check.is_active(), control.active(snapshot), "{id} state");
+    assert_eq!(
+        check.label().as_deref(),
+        Some(control.label(snapshot).as_ref()),
+        "{id} label"
+    );
+    assert_eq!(
+        check.tooltip_text().as_deref(),
+        control.tooltip(snapshot).as_deref(),
+        "{id} tooltip"
+    );
+}
+
+fn assert_gtk_style_button(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let button = widget
+        .clone()
+        .downcast::<gtk4::Button>()
+        .unwrap_or_else(|_| panic!("{id} is a button"));
+    // Cycle buttons show the live value they step; plain buttons show their
+    // label.
+    let expected_text = match control {
+        model::StylePillControl::SelectionCycle(_) | model::StylePillControl::ArrowStyleCycle => {
+            control.value_text(snapshot).expect("cycle value text")
+        }
+        _ => control.label(snapshot).into_owned(),
+    };
+    assert_eq!(
+        button.label().as_deref(),
+        Some(expected_text.as_str()),
+        "{id} text"
+    );
+    assert_eq!(
+        button.is_sensitive(),
+        control.enabled(snapshot),
+        "{id} enabled"
+    );
+    assert_eq!(
+        button.tooltip_text().as_deref(),
+        control.tooltip(snapshot).as_deref(),
+        "{id} tooltip"
+    );
+    if control == model::StylePillControl::FontFamilyPicker {
+        // The builtin leaves a gap before the family picker so it does not
+        // crowd the point-size numeral.
+        assert!(
+            button.margin_start() > 0,
+            "{id} lost the leading gap the builtin gives it"
+        );
+    }
+}
+
+fn assert_gtk_style_stepper(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let steps = control.steps(snapshot).expect("stepper halves");
+    let row = widget
+        .clone()
+        .downcast::<gtk4::Box>()
+        .unwrap_or_else(|_| panic!("{id} is a stepper row"));
+    // The builtin lays the three parts out abutting and the width planner
+    // budgets step + value + step exactly.
+    assert_eq!(row.spacing(), 0, "{id} stepper spacing");
+    assert_accessible_label(widget, &control.label(snapshot), id);
+    let minus = widget.first_child().expect("stepper minus half");
+    let value = minus.next_sibling().expect("stepper value readout");
+    let plus = value.next_sibling().expect("stepper plus half");
+    assert!(plus.next_sibling().is_none(), "{id} has three children");
+    for (half, step) in [(&minus, &steps[0]), (&plus, &steps[1])] {
+        let button = half
+            .clone()
+            .downcast::<gtk4::Button>()
+            .unwrap_or_else(|_| panic!("{} is a button", step.id));
+        assert_eq!(half.widget_name().as_str(), step.id, "{id} half id");
+        assert_eq!(
+            button.label().as_deref(),
+            Some(step.label),
+            "{} label",
+            step.id
+        );
+        assert_eq!(
+            button.tooltip_text().as_deref(),
+            Some(step.tooltip.as_str()),
+            "{} tooltip",
+            step.id
+        );
+        // A tooltip is not an accessible name: a screen reader on these halves
+        // would otherwise announce only "−" and "+".
+        assert_accessible_label(button.upcast_ref(), &step.tooltip, step.id);
+        assert_eq!(
+            button.is_sensitive(),
+            control.enabled(snapshot),
+            "{} enabled",
+            step.id
+        );
+    }
+    let value_label = value
+        .downcast::<gtk4::Label>()
+        .unwrap_or_else(|_| panic!("{id} value readout is a label"));
+    assert_eq!(
+        value_label.widget_name().as_str(),
+        format!("{}.value", control.id()),
+        "{id} value id"
+    );
+    assert_eq!(
+        Some(value_label.text().to_string()),
+        control.value_text(snapshot),
+        "{id} live value"
+    );
+}
+
+fn assert_gtk_style_segmented(
+    widget: &gtk4::Widget,
+    control: model::StylePillControl,
+    snapshot: &ToolbarSnapshot,
+    id: &str,
+) {
+    let segments = control.segments(snapshot).expect("segment halves");
+    let mut buttons = Vec::new();
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        child = current.next_sibling();
+        buttons.push(
+            current
+                .downcast::<gtk4::Button>()
+                .unwrap_or_else(|_| panic!("{id} segment half is a button")),
+        );
+    }
+    assert_eq!(buttons.len(), segments.len(), "{id} segment count");
+    for (button, segment) in buttons.iter().zip(&segments) {
+        assert_eq!(button.widget_name().as_str(), segment.id, "{id} half id");
+        assert!(button.has_css_class("tab"), "{id} tab class");
+        assert_eq!(
+            button.label().as_deref(),
+            Some(segment.label),
+            "{} label",
+            segment.id
+        );
+        assert_eq!(
+            button.has_css_class("active"),
+            segment.active,
+            "{} active state",
+            segment.id
+        );
+        assert_eq!(
+            button.tooltip_text().as_deref(),
+            Some(segment.tooltip.as_str()),
+            "{} tooltip",
+            segment.id
+        );
     }
 }
 
@@ -1115,6 +1155,15 @@ fn assert_builtin_node(
     );
     assert_eq!(shortcut_badge, expected.shortcut_badge.as_deref());
 
+    assert_builtin_node_kind(node, expected);
+}
+
+fn assert_builtin_node_kind(
+    node: &crate::backend::wayland::TopToolbarWidgetKind,
+    expected: &SemanticControlRecord,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
     match node {
         W::IconButton {
             glyph,
@@ -1126,21 +1175,11 @@ fn assert_builtin_node(
                 glyph.0,
                 crate::toolbar_icons::top_toolbar_icon_painter(icon)
             ));
-            assert_eq!(style.active, expected.active);
-            assert_eq!(style.disabled, !expected.enabled);
-            assert_eq!(
-                style.destructive,
-                expected.role == model::TopToolbarControlRole::Destructive
-            );
+            assert_builtin_button_style(style.active, style.disabled, style.destructive, expected);
         }
         W::TextButton { label, style } => {
             assert_eq!(label.text, expected.label);
-            assert_eq!(style.active, expected.active);
-            assert_eq!(style.disabled, !expected.enabled);
-            assert_eq!(
-                style.destructive,
-                expected.role == model::TopToolbarControlRole::Destructive
-            );
+            assert_builtin_button_style(style.active, style.disabled, style.destructive, expected);
         }
         W::Swatch { selected, .. } => assert_eq!(*selected, expected.active),
         W::PresetSlot {
@@ -1182,6 +1221,20 @@ fn assert_builtin_node(
         W::DragHandle | W::MinimizeButton => {}
         other => panic!("unexpected semantic control kind: {other:?}"),
     }
+}
+
+fn assert_builtin_button_style(
+    active: bool,
+    disabled: bool,
+    destructive: bool,
+    expected: &SemanticControlRecord,
+) {
+    assert_eq!(active, expected.active);
+    assert_eq!(disabled, !expected.enabled);
+    assert_eq!(
+        destructive,
+        expected.role == model::TopToolbarControlRole::Destructive
+    );
 }
 
 fn builtin_semantic_records(
@@ -1335,8 +1388,6 @@ fn expected_style_pill_nodes(
 
 #[test]
 fn style_pill_spec_matches_builtin_tree_across_morph_states() {
-    use crate::backend::wayland::TopToolbarWidgetKind as W;
-
     let state = make_test_input_state();
     let regular = ToolbarSnapshot::from_input_with_bindings(
         &state,
@@ -1369,206 +1420,346 @@ fn style_pill_spec_matches_builtin_tree_across_morph_states() {
         ("minimized", minimized),
         ("micro", micro),
     ] {
-        let plan = plan_top_strip(&snapshot);
-        let expected = expected_style_pill_nodes(&snapshot, &plan);
-        let (width, height) = top_toolbar_size(&snapshot);
-        let tree =
-            crate::backend::wayland::build_top_toolbar_view(&snapshot, width as f64, height as f64);
+        assert_builtin_style_pill_scenario(name, &snapshot);
+    }
+}
 
-        assert_eq!(
-            tree.node_by_id(&"top.island.style".into()).is_some(),
-            !expected.is_empty(),
-            "{name}: the pill card exists exactly when the spec has controls"
-        );
+fn assert_builtin_style_pill_scenario(name: &str, snapshot: &ToolbarSnapshot) {
+    let plan = plan_top_strip(snapshot);
+    let expected = expected_style_pill_nodes(snapshot, &plan);
+    let (width, height) = top_toolbar_size(snapshot);
+    let tree =
+        crate::backend::wayland::build_top_toolbar_view(snapshot, width as f64, height as f64);
 
-        let actual: Vec<_> = tree
-            .nodes()
+    assert_eq!(
+        tree.node_by_id(&"top.island.style".into()).is_some(),
+        !expected.is_empty(),
+        "{name}: the pill card exists exactly when the spec has controls"
+    );
+
+    let actual: Vec<_> = tree
+        .nodes()
+        .iter()
+        .filter(|node| node.id.as_str().starts_with("top.style."))
+        .collect();
+    assert_eq!(
+        actual
             .iter()
-            .filter(|node| node.id.as_str().starts_with("top.style."))
-            .collect();
-        assert_eq!(
-            actual
-                .iter()
-                .map(|node| node.id.as_str().to_string())
-                .collect::<Vec<_>>(),
-            expected
-                .iter()
-                .map(|(id, _)| id.clone())
-                .collect::<Vec<_>>(),
-            "{name}: builtin pill node order"
-        );
+            .map(|node| node.id.as_str().to_string())
+            .collect::<Vec<_>>(),
+        expected
+            .iter()
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>(),
+        "{name}: builtin pill node order"
+    );
 
-        for (node, (id, expectation)) in actual.iter().zip(&expected) {
-            let interaction_event = node.interact.as_ref().map(|interaction| &interaction.event);
-            let interaction_tooltip = node
-                .interact
+    for (node, (id, expectation)) in actual.iter().zip(&expected) {
+        assert_builtin_style_pill_node(
+            name,
+            snapshot,
+            &node.kind,
+            node.interact.as_ref().map(|interaction| &interaction.event),
+            node.interact
                 .as_ref()
-                .and_then(|interaction| interaction.tooltip.clone());
-            match expectation {
-                StylePillNodeExpectation::Control(control) => {
-                    let expected_event = control
-                        .enabled(&snapshot)
-                        .then(|| control.event(&snapshot))
-                        .flatten();
-                    assert_eq!(
-                        interaction_event,
-                        expected_event.as_ref(),
-                        "{name}: {id} event"
-                    );
-                    if node.interact.is_some() {
-                        assert_eq!(
-                            interaction_tooltip,
-                            control.tooltip(&snapshot),
-                            "{name}: {id} tooltip"
-                        );
-                    }
-                    match (control.role(), &node.kind) {
-                        (model::StylePillRole::Swatch, W::Swatch { color, selected }) => {
-                            let expected_color = match control {
-                                model::StylePillControl::QuickSwatch(index) => {
-                                    snapshot.quick_colors.rendered_entries()[*index].color
-                                }
-                                _ => snapshot.color,
-                            };
-                            assert_eq!(
-                                *color,
-                                (
-                                    expected_color.r,
-                                    expected_color.g,
-                                    expected_color.b,
-                                    expected_color.a
-                                ),
-                                "{name}: {id} color"
-                            );
-                            assert_eq!(*selected, control.active(&snapshot), "{name}: {id}");
-                        }
-                        (model::StylePillRole::Slider, W::Slider { t }) => {
-                            let (spec, value) = control.slider(&snapshot).expect("slider spec");
-                            assert!(
-                                (*t - spec.t_from_value(value)).abs() < 1e-9,
-                                "{name}: {id} slider position"
-                            );
-                        }
-                        (model::StylePillRole::Value, W::TextButton { label, .. }) => {
-                            assert_eq!(
-                                Some(label.text.clone()),
-                                control.value_text(&snapshot),
-                                "{name}: {id} live numeral"
-                            );
-                            // Covered by the generic event assertion above:
-                            // the numeral opens the precise-entry popup.
-                            assert!(
-                                matches!(
-                                    interaction_event,
-                                    Some(crate::ui::toolbar::ToolbarEvent::OpenPrecisionEntry(_))
-                                ),
-                                "{name}: {id} opens the precise entry"
-                            );
-                        }
-                        (model::StylePillRole::Toggle, W::MiniCheckbox { checked, label }) => {
-                            assert_eq!(*checked, control.active(&snapshot), "{name}: {id}");
-                            assert_eq!(
-                                label.text,
-                                control.label(&snapshot).as_ref(),
-                                "{name}: {id} label"
-                            );
-                        }
-                        (model::StylePillRole::Button, W::TextButton { label, style }) => {
-                            // Cycle buttons show the live value they step;
-                            // plain buttons show their label.
-                            let expected_text = match control {
-                                model::StylePillControl::SelectionCycle(_)
-                                | model::StylePillControl::ArrowStyleCycle => {
-                                    control.value_text(&snapshot).expect("cycle value text")
-                                }
-                                _ => control.label(&snapshot).into_owned(),
-                            };
-                            assert_eq!(label.text, expected_text, "{name}: {id} text");
-                            assert_eq!(
-                                style.disabled,
-                                !control.enabled(&snapshot),
-                                "{name}: {id} disabled style"
-                            );
-                        }
-                        (
-                            model::StylePillRole::Segmented,
-                            W::SegmentedControl {
-                                left,
-                                right,
-                                active_right,
-                            },
-                        ) => {
-                            let segments = control.segments(&snapshot).expect("segments");
-                            assert_eq!(left.text, segments[0].label, "{name}: {id}");
-                            assert_eq!(right.text, segments[1].label, "{name}: {id}");
-                            assert_eq!(*active_right, segments[1].active, "{name}: {id}");
-                            assert!(node.interact.is_none(), "halves carry the interactions");
-                        }
-                        (role, kind) => panic!("{name}: {id} role {role:?} painted as {kind:?}"),
-                    }
-                }
-                StylePillNodeExpectation::Readout(control) => {
-                    assert!(node.interact.is_none(), "{name}: {id} readout is decor");
-                    match &node.kind {
-                        W::Label(label) => assert_eq!(
-                            Some(label.text.clone()),
-                            control.value_text(&snapshot),
-                            "{name}: {id} readout"
-                        ),
-                        other => panic!("{name}: {id} readout kind {other:?}"),
-                    }
-                }
-                StylePillNodeExpectation::StepHalf(control, index) => {
-                    let steps = control.steps(&snapshot).expect("stepper halves");
-                    let step = &steps[*index];
-                    let enabled = control.enabled(&snapshot);
-                    match &node.kind {
-                        W::TextButton { label, style } => {
-                            assert_eq!(label.text, step.label, "{name}: {id} step label");
-                            assert_eq!(style.disabled, !enabled, "{name}: {id} step style");
-                        }
-                        other => panic!("{name}: {id} step kind {other:?}"),
-                    }
-                    assert_eq!(
-                        interaction_event,
-                        enabled.then_some(&step.event),
-                        "{name}: {id} step event"
-                    );
-                    assert_eq!(
-                        interaction_tooltip.as_deref(),
-                        enabled.then_some(step.tooltip.as_str()),
-                        "{name}: {id} step tooltip"
-                    );
-                }
-                StylePillNodeExpectation::StepValue(control) => {
-                    assert!(node.interact.is_none(), "{name}: {id} readout is decor");
-                    match &node.kind {
-                        W::Label(label) => assert_eq!(
-                            Some(label.text.clone()),
-                            control.value_text(&snapshot),
-                            "{name}: {id} stepper readout"
-                        ),
-                        other => panic!("{name}: {id} stepper readout kind {other:?}"),
-                    }
-                }
-                StylePillNodeExpectation::SegmentHalf(control, index) => {
-                    let segments = control.segments(&snapshot).expect("segments");
-                    let segment = &segments[*index];
-                    assert!(matches!(node.kind, W::HitArea), "{name}: {id}");
-                    assert_eq!(
-                        interaction_event,
-                        Some(&segment.event),
-                        "{name}: {id} segment event"
-                    );
-                    assert_eq!(
-                        interaction_tooltip.as_deref(),
-                        Some(segment.tooltip.as_str()),
-                        "{name}: {id} segment tooltip"
-                    );
-                }
-            }
+                .and_then(|interaction| interaction.tooltip.as_deref()),
+            node.interact.is_some(),
+            id,
+            expectation,
+        );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assert_builtin_style_pill_node(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    interaction_event: Option<&ToolbarEvent>,
+    interaction_tooltip: Option<&str>,
+    has_interaction: bool,
+    id: &str,
+    expectation: &StylePillNodeExpectation,
+) {
+    match expectation {
+        StylePillNodeExpectation::Control(control) => assert_builtin_style_pill_control(
+            name,
+            snapshot,
+            kind,
+            interaction_event,
+            interaction_tooltip,
+            has_interaction,
+            id,
+            *control,
+        ),
+        StylePillNodeExpectation::Readout(control) => {
+            assert_builtin_style_pill_readout(name, snapshot, kind, has_interaction, id, *control)
+        }
+        StylePillNodeExpectation::StepHalf(control, index) => assert_builtin_style_pill_step_half(
+            name,
+            snapshot,
+            kind,
+            interaction_event,
+            interaction_tooltip,
+            id,
+            *control,
+            *index,
+        ),
+        StylePillNodeExpectation::StepValue(control) => assert_builtin_style_pill_step_value(
+            name,
+            snapshot,
+            kind,
+            has_interaction,
+            id,
+            *control,
+        ),
+        StylePillNodeExpectation::SegmentHalf(control, index) => {
+            assert_builtin_style_pill_segment_half(
+                name,
+                snapshot,
+                kind,
+                interaction_event,
+                interaction_tooltip,
+                id,
+                *control,
+                *index,
+            )
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assert_builtin_style_pill_control(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    interaction_event: Option<&ToolbarEvent>,
+    interaction_tooltip: Option<&str>,
+    has_interaction: bool,
+    id: &str,
+    control: model::StylePillControl,
+) {
+    let expected_event = control
+        .enabled(snapshot)
+        .then(|| control.event(snapshot))
+        .flatten();
+    assert_eq!(
+        interaction_event,
+        expected_event.as_ref(),
+        "{name}: {id} event"
+    );
+    if has_interaction {
+        assert_eq!(
+            interaction_tooltip,
+            control.tooltip(snapshot).as_deref(),
+            "{name}: {id} tooltip"
+        );
+    }
+    assert_builtin_style_pill_control_kind(
+        name,
+        snapshot,
+        kind,
+        interaction_event,
+        has_interaction,
+        id,
+        control,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assert_builtin_style_pill_control_kind(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    interaction_event: Option<&ToolbarEvent>,
+    has_interaction: bool,
+    id: &str,
+    control: model::StylePillControl,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
+    match (control.role(), kind) {
+        (model::StylePillRole::Swatch, W::Swatch { color, selected }) => {
+            let expected_color = match control {
+                model::StylePillControl::QuickSwatch(index) => {
+                    snapshot.quick_colors.rendered_entries()[index].color
+                }
+                _ => snapshot.color,
+            };
+            assert_eq!(
+                *color,
+                (
+                    expected_color.r,
+                    expected_color.g,
+                    expected_color.b,
+                    expected_color.a
+                ),
+                "{name}: {id} color"
+            );
+            assert_eq!(*selected, control.active(snapshot), "{name}: {id}");
+        }
+        (model::StylePillRole::Slider, W::Slider { t }) => {
+            let (spec, value) = control.slider(snapshot).expect("slider spec");
+            assert!(
+                (*t - spec.t_from_value(value)).abs() < 1e-9,
+                "{name}: {id} slider position"
+            );
+        }
+        (model::StylePillRole::Value, W::TextButton { label, .. }) => {
+            assert_eq!(
+                Some(label.text.clone()),
+                control.value_text(snapshot),
+                "{name}: {id} live numeral"
+            );
+            assert!(
+                matches!(interaction_event, Some(ToolbarEvent::OpenPrecisionEntry(_))),
+                "{name}: {id} opens the precise entry"
+            );
+        }
+        (model::StylePillRole::Toggle, W::MiniCheckbox { checked, label }) => {
+            assert_eq!(*checked, control.active(snapshot), "{name}: {id}");
+            assert_eq!(
+                label.text,
+                control.label(snapshot).as_ref(),
+                "{name}: {id} label"
+            );
+        }
+        (model::StylePillRole::Button, W::TextButton { label, style }) => {
+            let expected_text = match control {
+                model::StylePillControl::SelectionCycle(_)
+                | model::StylePillControl::ArrowStyleCycle => {
+                    control.value_text(snapshot).expect("cycle value text")
+                }
+                _ => control.label(snapshot).into_owned(),
+            };
+            assert_eq!(label.text, expected_text, "{name}: {id} text");
+            assert_eq!(
+                style.disabled,
+                !control.enabled(snapshot),
+                "{name}: {id} disabled style"
+            );
+        }
+        (
+            model::StylePillRole::Segmented,
+            W::SegmentedControl {
+                left,
+                right,
+                active_right,
+            },
+        ) => {
+            let segments = control.segments(snapshot).expect("segments");
+            assert_eq!(left.text, segments[0].label, "{name}: {id}");
+            assert_eq!(right.text, segments[1].label, "{name}: {id}");
+            assert_eq!(*active_right, segments[1].active, "{name}: {id}");
+            assert!(!has_interaction, "halves carry the interactions");
+        }
+        (role, kind) => panic!("{name}: {id} role {role:?} painted as {kind:?}"),
+    }
+}
+
+fn assert_builtin_style_pill_readout(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    has_interaction: bool,
+    id: &str,
+    control: model::StylePillControl,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
+    assert!(!has_interaction, "{name}: {id} readout is decor");
+    match kind {
+        W::Label(label) => assert_eq!(
+            Some(label.text.clone()),
+            control.value_text(snapshot),
+            "{name}: {id} readout"
+        ),
+        other => panic!("{name}: {id} readout kind {other:?}"),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assert_builtin_style_pill_step_half(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    interaction_event: Option<&ToolbarEvent>,
+    interaction_tooltip: Option<&str>,
+    id: &str,
+    control: model::StylePillControl,
+    index: usize,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
+    let steps = control.steps(snapshot).expect("stepper halves");
+    let step = &steps[index];
+    let enabled = control.enabled(snapshot);
+    match kind {
+        W::TextButton { label, style } => {
+            assert_eq!(label.text, step.label, "{name}: {id} step label");
+            assert_eq!(style.disabled, !enabled, "{name}: {id} step style");
+        }
+        other => panic!("{name}: {id} step kind {other:?}"),
+    }
+    assert_eq!(
+        interaction_event,
+        enabled.then_some(&step.event),
+        "{name}: {id} step event"
+    );
+    assert_eq!(
+        interaction_tooltip,
+        enabled.then_some(step.tooltip.as_str()),
+        "{name}: {id} step tooltip"
+    );
+}
+
+fn assert_builtin_style_pill_step_value(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    has_interaction: bool,
+    id: &str,
+    control: model::StylePillControl,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
+    assert!(!has_interaction, "{name}: {id} readout is decor");
+    match kind {
+        W::Label(label) => assert_eq!(
+            Some(label.text.clone()),
+            control.value_text(snapshot),
+            "{name}: {id} stepper readout"
+        ),
+        other => panic!("{name}: {id} stepper readout kind {other:?}"),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assert_builtin_style_pill_segment_half(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    kind: &crate::backend::wayland::TopToolbarWidgetKind,
+    interaction_event: Option<&ToolbarEvent>,
+    interaction_tooltip: Option<&str>,
+    id: &str,
+    control: model::StylePillControl,
+    index: usize,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
+    let segments = control.segments(snapshot).expect("segments");
+    let segment = &segments[index];
+    assert!(matches!(kind, W::HitArea), "{name}: {id}");
+    assert_eq!(
+        interaction_event,
+        Some(&segment.event),
+        "{name}: {id} segment event"
+    );
+    assert_eq!(
+        interaction_tooltip,
+        Some(segment.tooltip.as_str()),
+        "{name}: {id} segment tooltip"
+    );
 }
 
 #[test]
@@ -1596,33 +1787,32 @@ fn top_structure_rebuilds_when_the_style_pill_morphs() {
     assert!(pen_key == thicker_key, "value churn must not rebuild");
 }
 
-#[test]
-fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
-    const CHILD_ENV: &str = "WAYSCRIBER_GTK_WIDGET_CONTRACT_CHILD";
-    const TEST_NAME: &str = "toolbar_gtk::view::top_bar::tests::actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window";
-
-    if std::env::var_os(CHILD_ENV).is_none() {
-        let status = std::process::Command::new(std::env::current_exe().expect("test binary"))
-            .arg(TEST_NAME)
-            .arg("--exact")
-            .arg("--test-threads=1")
-            .env(CHILD_ENV, "1")
-            .status()
-            .expect("run isolated GTK widget contract test");
-        assert!(status.success(), "isolated GTK widget contract test failed");
-        return;
+fn find_widget_named(root: &gtk4::Widget, name: &str) -> Option<gtk4::Widget> {
+    if root.widget_name() == name {
+        return Some(root.clone());
     }
-
-    if let Err(error) = gtk4::init() {
-        eprintln!("skipping GTK widget contract test: {error}");
-        return;
+    let mut child = root.first_child();
+    while let Some(current) = child {
+        child = current.next_sibling();
+        if let Some(found) = find_widget_named(&current, name) {
+            return Some(found);
+        }
     }
+    None
+}
 
-    // The size budgets below are in spec pixels, so the widgets must be
-    // measured with the shipped metrics. Production installs this stylesheet
-    // in `Windows::new`; without it — and without a neutral font DPI — GTK
-    // sizes everything from the tester's desktop theme, and a text-scaling
-    // factor alone inflates the rows past the budgets' headroom.
+fn collect_descendants<W: IsA<gtk4::Widget>>(root: &gtk4::Widget, out: &mut Vec<W>) {
+    if let Ok(widget) = root.clone().downcast::<W>() {
+        out.push(widget);
+    }
+    let mut child = root.first_child();
+    while let Some(current) = child {
+        child = current.next_sibling();
+        collect_descendants(&current, out);
+    }
+}
+
+fn install_gtk_contract_metrics() {
     let css_provider = gtk4::CssProvider::new();
     css_provider.load_from_string(&crate::toolbar_gtk::css::stylesheet(1.0));
     if let Some(display) = gtk4::gdk::Display::default() {
@@ -1636,7 +1826,13 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         settings.set_gtk_font_name(Some("Sans 11"));
         settings.set_gtk_xft_dpi(96 * 1024);
     }
+}
 
+fn gtk_widget_contract_scenarios() -> (
+    ToolbarSnapshot,
+    ToolbarSnapshot,
+    Vec<(&'static str, ToolbarSnapshot)>,
+) {
     let state = make_test_input_state();
     let regular = ToolbarSnapshot::from_input_with_bindings(
         &state,
@@ -1654,7 +1850,6 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     highlighted.highlight_tool_active = true;
     let mut narrow = regular.clone();
     narrow.top_viewport_max = Some(520.0);
-
     let mut scenarios = vec![
         ("regular", regular.clone()),
         ("simple", simple),
@@ -1664,8 +1859,6 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         ("highlighted", highlighted.clone()),
         ("narrow", narrow),
     ];
-    // One scenario per style-pill morph state, so every pill shape passes
-    // the full order/island/semantics contract.
     scenarios.extend(
         [
             ("marker-tool", Tool::Marker),
@@ -1680,7 +1873,6 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     let mut text_mode = style_pill_tool_snapshot(&regular, Tool::Pen);
     text_mode.text_active = true;
     scenarios.push(("text-mode", text_mode.clone()));
-    // A family name far wider than the font button's planned slot.
     let mut long_font = text_mode;
     long_font.font = crate::draw::FontDescriptor::new(
         "Noto Sans Mono CJK JP ExtraCondensed Black".to_string(),
@@ -1689,92 +1881,122 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     );
     scenarios.push(("long-font-name", long_font));
     scenarios.push(("selection", style_pill_selection_snapshot(&regular)));
+    (regular, highlighted, scenarios)
+}
 
-    // Font-button widths by scenario, checked against each other after the
-    // loop: the slot is theme-dependent, but it must not depend on the name.
-    let mut font_button_widths: std::collections::BTreeMap<&str, i32> =
-        std::collections::BTreeMap::new();
-
+fn assert_gtk_widget_scenarios(
+    scenarios: Vec<(&'static str, ToolbarSnapshot)>,
+) -> std::collections::BTreeMap<&'static str, i32> {
+    let mut widths = std::collections::BTreeMap::new();
     for (name, snapshot) in scenarios {
-        let plan = plan_top_strip(&snapshot);
-        let spec = super::strip::top_toolbar_spec(&snapshot, &plan);
-        let expected = expected_semantic_records(&snapshot, &spec, &plan);
-        let style_controls = style_pill_controls(&snapshot, &plan);
-        let (tx, _rx) = std::sync::mpsc::channel();
-        let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
-        if snapshot.top_minimized {
-            top.build_minimized(&snapshot, &plan);
-        } else if snapshot.top_micro_active() {
-            top.build_micro(&snapshot, &plan);
-        } else {
-            top.build_strip(&snapshot, &plan);
-        }
-        for updater in top.updaters.borrow().iter() {
-            updater(&snapshot);
-        }
-
-        let widgets = collect_semantic_widgets(top.root.upcast_ref());
-        assert_eq!(
-            widgets
-                .iter()
-                .map(|widget| widget.widget_name().to_string())
-                .collect::<Vec<_>>(),
-            expected_main_widget_ids(&spec, &snapshot, &plan),
-            "{name} GTK widget order"
-        );
-        // Ordered ids alone cannot catch a control appended to the wrong
-        // pill: also assert every widget's ancestor chain reaches the
-        // island container the shared spec assigns it.
-        let expected_islands = expected_island_keys(&snapshot, &spec, &plan);
-        for widget in &widgets {
-            let id = widget.widget_name().to_string();
-            let expected_island = expected_islands
-                .get(&id)
-                .unwrap_or_else(|| panic!("{name}: no island expectation for {id}"));
-            assert_eq!(
-                nearest_island_key(widget).as_deref(),
-                *expected_island,
-                "{name}: {id} island membership"
-            );
-        }
-        for widget in widgets {
-            let id = widget.widget_name();
-            if let Some((_, control)) = style_controls
-                .iter()
-                .find(|(control_id, _)| *control_id == id)
-            {
-                assert_gtk_style_widget(&widget, *control, &snapshot);
-                if let Some(width) = font_button_natural_width(&widget, *control) {
-                    font_button_widths.insert(name, width);
-                }
-                continue;
-            }
-            let Some(control) = expected.iter().find_map(|record| match record {
-                SemanticAdapterRecord::Control(control) if control.id == id => Some(control),
-                _ => None,
-            }) else {
-                assert!(
-                    expected.iter().any(
-                        |record| matches!(record, SemanticAdapterRecord::Divider(divider) if *divider == id)
-                    ),
-                    "{name}: unexpected GTK widget {id}"
-                );
-                continue;
-            };
-            assert_gtk_control_widget(&widget, control);
-        }
-        detach_test_popovers(&mut top);
+        assert_gtk_widget_scenario(name, &snapshot, &mut widths);
     }
+    widths
+}
 
-    // The font button's width must come from the layout plan, not from the
-    // family it happens to name. Shortening the string by character count is
-    // not enough on its own: a display face draws twelve wide characters wider
-    // than twelve narrow ones.
-    let short = font_button_widths
+fn build_contract_top(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> TopBar {
+    let (tx, _rx) = std::sync::mpsc::channel();
+    let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
+    if snapshot.top_minimized {
+        top.build_minimized(snapshot, plan);
+    } else if snapshot.top_micro_active() {
+        top.build_micro(snapshot, plan);
+    } else {
+        top.build_strip(snapshot, plan);
+    }
+    for updater in top.updaters.borrow().iter() {
+        updater(snapshot);
+    }
+    top
+}
+
+fn assert_gtk_widget_scenario(
+    name: &'static str,
+    snapshot: &ToolbarSnapshot,
+    widths: &mut std::collections::BTreeMap<&'static str, i32>,
+) {
+    let plan = plan_top_strip(snapshot);
+    let spec = super::strip::top_toolbar_spec(snapshot, &plan);
+    let expected = expected_semantic_records(snapshot, &spec, &plan);
+    let style_controls = style_pill_controls(snapshot, &plan);
+    let mut top = build_contract_top(snapshot, &plan);
+    let widgets = collect_semantic_widgets(top.root.upcast_ref());
+    assert_eq!(
+        widgets
+            .iter()
+            .map(|widget| widget.widget_name().to_string())
+            .collect::<Vec<_>>(),
+        expected_main_widget_ids(&spec, snapshot, &plan),
+        "{name} GTK widget order"
+    );
+    assert_scenario_widget_islands(name, snapshot, &spec, &plan, &widgets);
+    assert_scenario_widget_semantics(name, snapshot, &expected, &style_controls, widgets, widths);
+    detach_test_popovers(&mut top);
+}
+
+fn assert_scenario_widget_islands(
+    name: &str,
+    snapshot: &ToolbarSnapshot,
+    spec: &model::TopToolbarSpec,
+    plan: &TopStripPlan,
+    widgets: &[gtk4::Widget],
+) {
+    let expected_islands = expected_island_keys(snapshot, spec, plan);
+    for widget in widgets {
+        let id = widget.widget_name().to_string();
+        let expected_island = expected_islands
+            .get(&id)
+            .unwrap_or_else(|| panic!("{name}: no island expectation for {id}"));
+        assert_eq!(
+            nearest_island_key(widget).as_deref(),
+            *expected_island,
+            "{name}: {id} island membership"
+        );
+    }
+}
+
+fn assert_scenario_widget_semantics(
+    name: &'static str,
+    snapshot: &ToolbarSnapshot,
+    expected: &[SemanticAdapterRecord],
+    style_controls: &[(String, model::StylePillControl)],
+    widgets: Vec<gtk4::Widget>,
+    widths: &mut std::collections::BTreeMap<&'static str, i32>,
+) {
+    for widget in widgets {
+        let id = widget.widget_name();
+        if let Some((_, control)) = style_controls
+            .iter()
+            .find(|(control_id, _)| *control_id == id)
+        {
+            assert_gtk_style_widget(&widget, *control, snapshot);
+            if let Some(width) = font_button_natural_width(&widget, *control) {
+                widths.insert(name, width);
+            }
+            continue;
+        }
+        let Some(control) = expected.iter().find_map(|record| match record {
+            SemanticAdapterRecord::Control(control) if control.id == id => Some(control),
+            _ => None,
+        }) else {
+            assert!(
+                expected.iter().any(
+                    |record| matches!(record, SemanticAdapterRecord::Divider(divider) if *divider == id)
+                ),
+                "{name}: unexpected GTK widget {id}"
+            );
+            continue;
+        };
+        assert_gtk_control_widget(&widget, control);
+    }
+}
+
+fn assert_font_button_width_stable(widths: &std::collections::BTreeMap<&str, i32>) {
+    let short = widths
         .get("text-mode")
         .copied()
         .expect("the text-mode pill has a font button");
-    let long = font_button_widths
+    let long = widths
         .get("long-font-name")
         .copied()
         .expect("the long-font-name pill has a font button");
@@ -1782,27 +2004,20 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         long, short,
         "the font button grew from {short}px to {long}px for a longer family name"
     );
+}
 
-    // Compact plans normally drop quick colors before reaching the last
-    // degradation step. Keep a direct adapter case so the presentation
-    // contract cannot silently diverge if that planner policy changes.
-    // Colors left the strip (M7-C1) and the presets island yields under the
-    // compact plan (M7-C2): assert neither renders in a compact build.
+fn assert_compact_gtk_widget_contract(regular: &ToolbarSnapshot) {
     let mut compact_plan = TopStripPlan::unconstrained();
     compact_plan.compact = true;
     let (tx, _rx) = std::sync::mpsc::channel();
     let mut compact_top = TopBar::new_for_test(FeedbackSender::new(tx));
-    compact_top.build_strip(&regular, &compact_plan);
-    let compact_widgets = collect_semantic_widgets(compact_top.root.upcast_ref());
-    let compact_ids = compact_widgets
+    compact_top.build_strip(regular, &compact_plan);
+    let compact_ids = collect_semantic_widgets(compact_top.root.upcast_ref())
         .iter()
         .map(|widget| widget.widget_name().to_string())
         .collect::<Vec<_>>();
-    // Positive presence first, so the absence check below can never pass
-    // vacuously on an empty strip: the compact build must materialize exactly
-    // the shared spec's protected widget set (tools/history/chrome).
-    let compact_spec = super::strip::top_toolbar_spec(&regular, &compact_plan);
-    let expected_compact_ids = expected_main_widget_ids(&compact_spec, &regular, &compact_plan);
+    let compact_spec = super::strip::top_toolbar_spec(regular, &compact_plan);
+    let expected_compact_ids = expected_main_widget_ids(&compact_spec, regular, &compact_plan);
     assert!(
         !expected_compact_ids.is_empty(),
         "the compact strip still builds its protected core"
@@ -1811,7 +2026,6 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         compact_ids, expected_compact_ids,
         "the compact strip builds exactly the shared spec's widget set"
     );
-    // Then the contract of this case: no colors or presets survive compaction.
     assert!(
         compact_ids.iter().all(|name| {
             !name.starts_with("top.quick-color.")
@@ -1821,30 +2035,31 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         "the compact strip carries no colors or presets: {compact_ids:?}"
     );
     detach_test_popovers(&mut compact_top);
+}
 
+fn assert_shapes_and_overflow_contract(regular: &ToolbarSnapshot) {
+    assert_shapes_popover_contract(regular);
+    assert_overflow_popover_contract(regular);
+}
+
+fn assert_shapes_popover_contract(regular: &ToolbarSnapshot) {
     let mut shapes = regular.clone();
     shapes.shape_picker_open = true;
     shapes.active_tool = Tool::RegularPolygon;
-    let (tx, shape_rx) = std::sync::mpsc::channel();
-    let shape_top = TopBar::new_for_test(FeedbackSender::new(tx));
-    let shape_content = shape_top.build_shapes_popover_content(
-        &shapes,
-        (ICON_BUTTON, ICON_BUTTON),
-        ICON_SIZE,
-        true,
-        1.0,
-    );
+    let (tx, rx) = std::sync::mpsc::channel();
+    let top = TopBar::new_for_test(FeedbackSender::new(tx));
+    let content =
+        top.build_shapes_popover_content(&shapes, (ICON_BUTTON, ICON_BUTTON), ICON_SIZE, true, 1.0);
     assert!(
-        has_capture_phase_click_gesture(shape_content.upcast_ref()),
-        "the shapes popover must capture click modifiers, or Ctrl+Shift+click \
-         cannot rebind any tool inside the picker"
+        has_capture_phase_click_gesture(content.upcast_ref()),
+        "the shapes popover must capture click modifiers"
     );
-    let shape_tools = model::visible_shape_picker_rows(&shapes, false)
+    let tools = model::visible_shape_picker_rows(&shapes, false)
         .into_iter()
         .flatten()
         .filter(|tool| model::tool_visible(&shapes, *tool))
         .collect::<Vec<_>>();
-    let mut expected_shape_ids = shape_tools
+    let mut expected_ids = tools
         .iter()
         .map(|tool| {
             format!(
@@ -1854,26 +2069,22 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         })
         .collect::<Vec<_>>();
     if model::top_fill_visible(&shapes) {
-        expected_shape_ids.push(
-            crate::config::toolbar_item_ids::TOP_UTILITY_FILL
-                .as_str()
-                .to_string(),
-        );
+        expected_ids.push(ids::TOP_UTILITY_FILL.as_str().to_string());
     }
-    expected_shape_ids.extend([
+    expected_ids.extend([
         "top.options.sides-minus".to_string(),
         "top.options.sides-plus".to_string(),
     ]);
-    let shape_widgets = collect_semantic_widgets(shape_content.upcast_ref());
+    let widgets = collect_semantic_widgets(content.upcast_ref());
     assert_eq!(
-        shape_widgets
+        widgets
             .iter()
             .map(|widget| widget.widget_name().to_string())
             .collect::<Vec<_>>(),
-        expected_shape_ids,
+        expected_ids,
         "GTK shapes-popover order"
     );
-    for (widget, tool) in shape_widgets.iter().zip(&shape_tools) {
+    for (widget, tool) in widgets.iter().zip(&tools) {
         let expected = control_record(
             &shapes,
             SemanticLane::Strip,
@@ -1882,24 +2093,23 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         );
         assert_gtk_control_widget(widget, &expected);
     }
-    let first_shape = first_control_surface(&shape_widgets[0])
+    first_control_surface(&widgets[0])
         .downcast::<gtk4::Button>()
-        .expect("shape-picker tool button");
-    first_shape.emit_clicked();
+        .expect("shape-picker tool button")
+        .emit_clicked();
     assert_eq!(
-        shape_rx
-            .recv_timeout(Duration::from_secs(1))
+        rx.recv_timeout(Duration::from_secs(1))
             .expect("GTK shape event"),
         GtkToolbarFeedback::Event {
-            event: ToolbarEvent::SelectTool(shape_tools[0]),
+            event: ToolbarEvent::SelectTool(tools[0]),
             rebind_requested: false,
         }
     );
 
-    let mut line_shapes = shapes.clone();
+    let mut line_shapes = shapes;
     line_shapes.active_tool = Tool::Line;
     line_shapes.tool_override = None;
-    let line_shape_content = shape_top.build_shapes_popover_content(
+    let line_content = top.build_shapes_popover_content(
         &line_shapes,
         (ICON_BUTTON, ICON_BUTTON),
         ICON_SIZE,
@@ -1907,178 +2117,182 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         1.0,
     );
     assert!(
-        collect_semantic_widgets(line_shape_content.upcast_ref())
+        collect_semantic_widgets(line_content.upcast_ref())
             .iter()
-            .any(|widget| {
-                widget.widget_name() == crate::config::toolbar_item_ids::TOP_UTILITY_FILL.as_str()
-            }),
+            .any(|widget| widget.widget_name() == ids::TOP_UTILITY_FILL.as_str()),
         "GTK Shapes must expose Fill before a fill-capable shape is selected"
     );
+}
 
-    let mut overflow_plan = TopStripPlan::unconstrained();
-    overflow_plan.dropped_tools = vec![Tool::Line, Tool::Arrow];
-    overflow_plan.dropped_utilities = vec![
+fn assert_overflow_popover_contract(regular: &ToolbarSnapshot) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let top = TopBar::new_for_test(FeedbackSender::new(tx));
+    let mut plan = TopStripPlan::unconstrained();
+    plan.dropped_tools = vec![Tool::Line, Tool::Arrow];
+    plan.dropped_utilities = vec![
         model::TopUtilityButton::Screenshot,
         model::TopUtilityButton::Highlight,
     ];
-    let overflow_spec = super::strip::top_toolbar_spec(&regular, &overflow_plan);
-    let overflow_content = shape_top.build_overflow_popover_content(
-        &regular,
-        &overflow_spec,
+    let spec = super::strip::top_toolbar_spec(regular, &plan);
+    let content = top.build_overflow_popover_content(
+        regular,
+        &spec,
         (ICON_BUTTON, ICON_BUTTON),
         ICON_SIZE,
         true,
         1.0,
     );
-    let overflow_widgets = collect_semantic_widgets(overflow_content.upcast_ref());
+    let widgets = collect_semantic_widgets(content.upcast_ref());
     assert_eq!(
-        overflow_widgets
+        widgets
             .iter()
             .map(|widget| widget.widget_name().to_string())
             .collect::<Vec<_>>(),
-        overflow_spec
-            .overflow()
+        spec.overflow()
             .iter()
             .map(|control| format!("top.overflow.{}", control.id().render_id()))
             .collect::<Vec<_>>(),
         "GTK overflow order"
     );
-    for (widget, control) in overflow_widgets.iter().zip(overflow_spec.overflow()) {
-        let expected = control_record(&regular, SemanticLane::Overflow, *control, true);
+    for (widget, control) in widgets.iter().zip(spec.overflow()) {
+        let expected = control_record(regular, SemanticLane::Overflow, *control, true);
         assert_gtk_control_widget(widget, &expected);
     }
-    let first_overflow = first_control_surface(&overflow_widgets[0])
+    first_control_surface(&widgets[0])
         .downcast::<gtk4::Button>()
-        .expect("overflow tool button");
-    first_overflow.emit_clicked();
+        .expect("overflow tool button")
+        .emit_clicked();
     assert_eq!(
-        shape_rx
-            .recv_timeout(Duration::from_secs(1))
+        rx.recv_timeout(Duration::from_secs(1))
             .expect("GTK overflow event"),
         GtkToolbarFeedback::Event {
-            event: overflow_spec.overflow()[0].event(&regular),
+            event: spec.overflow()[0].event(regular),
             rebind_requested: false,
         }
     );
+}
 
+fn assert_gtk_toggle_events(regular: &ToolbarSnapshot, highlighted: &ToolbarSnapshot) {
     let (tx, rx) = std::sync::mpsc::channel();
-    let mut event_top = TopBar::new_for_test(FeedbackSender::new(tx));
-    let shape = event_top.shapes_picker_button(
-        &regular,
+    let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
+    let shape = top.shapes_picker_button(
+        regular,
         model::TopToolbarControl::ShapePicker,
         (ICON_BUTTON, ICON_BUTTON),
         ICON_SIZE,
         true,
     );
-    let highlight = event_top.action_button(
-        &regular,
+    let highlight = top.action_button(
+        regular,
         model::TopToolbarControl::Utility(model::TopToolbarUtility::Highlight),
         (ICON_BUTTON, ICON_BUTTON),
         ICON_SIZE,
         true,
         true,
     );
-    let pin = event_top.pin_button(&regular, model::TopToolbarControl::Pin, PIN_BUTTON_SIZE);
-    let overflow = event_top.overflow_button(
-        &regular,
+    let pin = top.pin_button(regular, model::TopToolbarControl::Pin, PIN_BUTTON_SIZE);
+    let overflow = top.overflow_button(
+        regular,
         model::TopToolbarControl::Overflow,
         (ICON_BUTTON, ICON_BUTTON),
         ICON_SIZE,
     );
-    for (popover, capture_surface) in [
-        (
-            event_top.shapes_popover.as_ref().unwrap(),
-            event_top.shapes_capture_surface.as_ref().unwrap(),
-        ),
-        (
-            event_top.overflow_popover.as_ref().unwrap(),
-            event_top.overflow_capture_surface.as_ref().unwrap(),
-        ),
-    ] {
-        let content = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        capture_surface.set_content(&content);
-        super::popovers::set_popover_capture_transparent(popover, capture_surface, true, false);
-        assert!(
-            popover.has_css_class(crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS),
-            "capture suppression must clear native popover chrome"
-        );
-        assert!(
-            !popover.can_target(),
-            "capture suppression must stop invisible popovers from accepting input immediately"
-        );
-        assert_eq!(capture_surface.content_opacity(), Some(0.0));
-        assert!(capture_surface.proof_visible());
-
-        super::popovers::set_popover_capture_transparent(popover, capture_surface, false, true);
-        assert!(!popover.has_css_class(crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS));
-        assert!(popover.can_target());
-        assert_eq!(capture_surface.content_opacity(), Some(1.0));
-        assert!(!capture_surface.proof_visible());
-    }
-    for (button, expected) in [
-        (
-            &shape,
-            ToolbarEvent::ToggleShapePicker(!regular.shape_picker_open),
-        ),
-        (
-            &highlight,
-            ToolbarEvent::ToggleAllHighlight(!regular.any_highlight_active),
-        ),
-        (&pin, ToolbarEvent::PinTopToolbar(!regular.top_pinned)),
-        (
-            &overflow,
-            ToolbarEvent::ToggleTopOverflow(!regular.top_overflow_open),
-        ),
-    ] {
-        button.emit_clicked();
-        assert_eq!(
-            rx.recv_timeout(Duration::from_secs(1)).expect("GTK event"),
-            GtkToolbarFeedback::Event {
-                event: expected,
-                rebind_requested: false,
-            }
-        );
-    }
+    assert_test_popover_capture_surfaces(&top);
+    assert_gtk_button_events(
+        &rx,
+        [
+            (
+                &shape,
+                ToolbarEvent::ToggleShapePicker(!regular.shape_picker_open),
+            ),
+            (
+                &highlight,
+                ToolbarEvent::ToggleAllHighlight(!regular.any_highlight_active),
+            ),
+            (&pin, ToolbarEvent::PinTopToolbar(!regular.top_pinned)),
+            (
+                &overflow,
+                ToolbarEvent::ToggleTopOverflow(!regular.top_overflow_open),
+            ),
+        ],
+    );
 
     let mut active = regular.clone();
     active.shape_picker_open = true;
     active.any_highlight_active = true;
     active.top_pinned = true;
     active.top_overflow_open = true;
-    event_top.shapes_expected_open.set(true);
-    event_top.overflow_expected_open.set(true);
-    for updater in event_top.updaters.borrow().iter() {
+    top.shapes_expected_open.set(true);
+    top.overflow_expected_open.set(true);
+    for updater in top.updaters.borrow().iter() {
         updater(&active);
     }
-    for (button, expected) in [
-        (&shape, ToolbarEvent::ToggleShapePicker(false)),
-        (&highlight, ToolbarEvent::ToggleAllHighlight(false)),
-        (&pin, ToolbarEvent::PinTopToolbar(false)),
-        (&overflow, ToolbarEvent::ToggleTopOverflow(false)),
+    assert_gtk_button_events(
+        &rx,
+        [
+            (&shape, ToolbarEvent::ToggleShapePicker(false)),
+            (&highlight, ToolbarEvent::ToggleAllHighlight(false)),
+            (&pin, ToolbarEvent::PinTopToolbar(false)),
+            (&overflow, ToolbarEvent::ToggleTopOverflow(false)),
+        ],
+    );
+    top.shapes_expected_open.set(false);
+    top.overflow_expected_open.set(false);
+    detach_test_popovers(&mut top);
+    assert_highlight_ring_event(&mut top, highlighted, &rx);
+}
+
+fn assert_test_popover_capture_surfaces(top: &TopBar) {
+    for (popover, capture_surface) in [
+        (
+            top.shapes_popover.as_ref().unwrap(),
+            top.shapes_capture_surface.as_ref().unwrap(),
+        ),
+        (
+            top.overflow_popover.as_ref().unwrap(),
+            top.overflow_capture_surface.as_ref().unwrap(),
+        ),
     ] {
+        let content = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        capture_surface.set_content(&content);
+        super::popovers::set_popover_capture_transparent(popover, capture_surface, true, false);
+        assert!(popover.has_css_class(crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS));
+        assert!(!popover.can_target());
+        assert_eq!(capture_surface.content_opacity(), Some(0.0));
+        assert!(capture_surface.proof_visible());
+        super::popovers::set_popover_capture_transparent(popover, capture_surface, false, true);
+        assert!(!popover.has_css_class(crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS));
+        assert!(popover.can_target());
+        assert_eq!(capture_surface.content_opacity(), Some(1.0));
+        assert!(!capture_surface.proof_visible());
+    }
+}
+
+fn assert_gtk_button_events(
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    cases: [(&gtk4::Button, ToolbarEvent); 4],
+) {
+    for (button, event) in cases {
         button.emit_clicked();
         assert_eq!(
             rx.recv_timeout(Duration::from_secs(1)).expect("GTK event"),
             GtkToolbarFeedback::Event {
-                event: expected,
+                event,
                 rebind_requested: false,
             }
         );
     }
-    event_top.shapes_expected_open.set(false);
-    event_top.overflow_expected_open.set(false);
+}
 
-    // The direct factories parent popovers to their buttons. Detach those
-    // before rebuilding the test bar, matching the production rebuild path.
-    detach_test_popovers(&mut event_top);
-
-    event_top.build_strip(&highlighted, &plan_top_strip(&highlighted));
-    let ring = collect_semantic_widgets(event_top.root.upcast_ref())
+fn assert_highlight_ring_event(
+    top: &mut TopBar,
+    highlighted: &ToolbarSnapshot,
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+) {
+    top.build_strip(highlighted, &plan_top_strip(highlighted));
+    let ring = collect_semantic_widgets(top.root.upcast_ref())
         .into_iter()
-        .find(|widget| {
-            widget.widget_name()
-                == crate::config::toolbar_item_ids::TOP_UTILITY_HIGHLIGHT_RING.as_str()
-        })
+        .find(|widget| widget.widget_name() == ids::TOP_UTILITY_HIGHLIGHT_RING.as_str())
         .expect("GTK highlight-ring widget")
         .downcast::<gtk4::CheckButton>()
         .expect("highlight ring check button");
@@ -2091,32 +2305,29 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             rebind_requested: false,
         }
     );
-    detach_test_popovers(&mut event_top);
+    detach_test_popovers(top);
+}
 
-    // --- Style pill interactions --------------------------------------------
-    fn find_widget_named(root: &gtk4::Widget, name: &str) -> Option<gtk4::Widget> {
-        if root.widget_name() == name {
-            return Some(root.clone());
-        }
-        let mut child = root.first_child();
-        while let Some(current) = child {
-            child = current.next_sibling();
-            if let Some(found) = find_widget_named(&current, name) {
-                return Some(found);
-            }
-        }
-        None
-    }
-    let pill_widget = |top: &TopBar, id: &str| {
-        find_widget_named(top.root.upcast_ref(), id)
-            .unwrap_or_else(|| panic!("style pill widget {id}"))
-    };
+fn pill_widget(top: &TopBar, id: &str) -> gtk4::Widget {
+    find_widget_named(top.root.upcast_ref(), id).unwrap_or_else(|| panic!("style pill widget {id}"))
+}
 
-    // Eraser morph: the Brush/Stroke segment emits SetEraserMode per half;
-    // the size numeral opens the overlay precise-entry popup.
-    let eraser = style_pill_tool_snapshot(&regular, Tool::Eraser);
-    event_top.build_strip(&eraser, &plan_top_strip(&eraser));
-    let segment_row = pill_widget(&event_top, "top.style.eraser-mode");
+fn assert_style_pill_interactions(regular: &ToolbarSnapshot) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
+    assert_eraser_pill_interactions(&mut top, regular, &rx);
+    assert_pen_pill_interactions(&mut top, regular, &rx);
+    assert_shape_pill_interaction(&mut top, regular, &rx);
+}
+
+fn assert_eraser_pill_interactions(
+    top: &mut TopBar,
+    regular: &ToolbarSnapshot,
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+) {
+    let eraser = style_pill_tool_snapshot(regular, Tool::Eraser);
+    top.build_strip(&eraser, &plan_top_strip(&eraser));
+    let segment_row = pill_widget(top, "top.style.eraser-mode");
     let mut halves = Vec::new();
     let mut child = segment_row.first_child();
     while let Some(current) = child {
@@ -2142,10 +2353,10 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             }
         );
     }
-    let numeral = pill_widget(&event_top, "top.style.thickness-value")
+    pill_widget(top, "top.style.thickness-value")
         .downcast::<gtk4::Button>()
-        .expect("numeral button");
-    numeral.emit_clicked();
+        .expect("numeral button")
+        .emit_clicked();
     assert_eq!(
         rx.recv_timeout(Duration::from_secs(1))
             .expect("GTK numeral event"),
@@ -2154,16 +2365,19 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
                 crate::ui::toolbar::PrecisionEntryTarget::Thickness
             ),
             rebind_requested: false,
-        },
-        "the numeral opens the overlay precise-entry popup"
+        }
     );
-    detach_test_popovers(&mut event_top);
+    detach_test_popovers(top);
+}
 
-    // Stroke morph: the chip opens the one true picker popup, swatches set
-    // quick colors, and the updaters drive the live numeral and idle fade.
-    let pen = style_pill_tool_snapshot(&regular, Tool::Pen);
-    event_top.build_strip(&pen, &plan_top_strip(&pen));
-    pill_widget(&event_top, "top.style.color-chip")
+fn assert_pen_pill_interactions(
+    top: &mut TopBar,
+    regular: &ToolbarSnapshot,
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+) {
+    let pen = style_pill_tool_snapshot(regular, Tool::Pen);
+    top.build_strip(&pen, &plan_top_strip(&pen));
+    pill_widget(top, "top.style.color-chip")
         .downcast::<gtk4::Button>()
         .expect("chip button")
         .emit_clicked();
@@ -2175,7 +2389,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             rebind_requested: false,
         }
     );
-    let swatch = pill_widget(&event_top, "top.style.swatch.1")
+    let swatch = pill_widget(top, "top.style.swatch.1")
         .downcast::<gtk4::Button>()
         .expect("swatch button");
     swatch.emit_clicked();
@@ -2191,8 +2405,6 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             rebind_requested: false,
         }
     );
-    // A GTK Button activates on the primary button only, so the recolor
-    // gesture is a controller of its own; it must target the same slot.
     emit_secondary_press(swatch.upcast_ref());
     assert_eq!(
         rx.recv_timeout(Duration::from_secs(1))
@@ -2202,18 +2414,16 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             rebind_requested: false,
         }
     );
-    // The chip is not a palette slot, so it has nothing to recolor.
     assert!(
-        secondary_click_gesture(pill_widget(&event_top, "top.style.color-chip").upcast_ref())
-            .is_none()
+        secondary_click_gesture(pill_widget(top, "top.style.color-chip").upcast_ref()).is_none()
     );
-    let mut churned = pen.clone();
+    let mut churned = pen;
     churned.thickness += 3.0;
     churned.top_fade = 0.4;
-    for updater in event_top.updaters.borrow().iter() {
+    for updater in top.updaters.borrow().iter() {
         updater(&churned);
     }
-    let numeral = pill_widget(&event_top, "top.style.thickness-value")
+    let numeral = pill_widget(top, "top.style.thickness-value")
         .downcast::<gtk4::Button>()
         .expect("numeral button");
     assert_eq!(
@@ -2221,21 +2431,23 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         Some(format!("{:.0}px", churned.thickness).as_str()),
         "the numeral tracks the live thickness"
     );
-    let pill_box = find_widget_named(event_top.root.upcast_ref(), "island.style")
-        .expect("style pill container");
-    assert!(
-        (pill_box.opacity() - 0.4).abs() < 1e-6,
-        "the pill fades with the strip"
-    );
-    detach_test_popovers(&mut event_top);
+    let pill_box =
+        find_widget_named(top.root.upcast_ref(), "island.style").expect("style pill container");
+    assert!((pill_box.opacity() - 0.4).abs() < 1e-6);
+    detach_test_popovers(top);
+}
 
-    // Shape morph: the Fill mini-toggle emits the requested state.
-    let shape = style_pill_tool_snapshot(&regular, Tool::Rect);
-    event_top.build_strip(&shape, &plan_top_strip(&shape));
-    let fill = pill_widget(&event_top, "top.style.fill")
+fn assert_shape_pill_interaction(
+    top: &mut TopBar,
+    regular: &ToolbarSnapshot,
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+) {
+    let shape = style_pill_tool_snapshot(regular, Tool::Rect);
+    top.build_strip(&shape, &plan_top_strip(&shape));
+    pill_widget(top, "top.style.fill")
         .downcast::<gtk4::CheckButton>()
-        .expect("fill check button");
-    fill.set_active(!shape.fill_enabled);
+        .expect("fill check button")
+        .set_active(!shape.fill_enabled);
     assert_eq!(
         rx.recv_timeout(Duration::from_secs(1))
             .expect("GTK fill event"),
@@ -2244,20 +2456,55 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
             rebind_requested: false,
         }
     );
-    detach_test_popovers(&mut event_top);
+    detach_test_popovers(top);
+}
 
-    // --- Session/Settings popovers: the re-hosted pane content ---------------
-    fn collect_descendants<W: IsA<gtk4::Widget>>(root: &gtk4::Widget, out: &mut Vec<W>) {
-        if let Ok(widget) = root.clone().downcast::<W>() {
-            out.push(widget);
-        }
-        let mut child = root.first_child();
-        while let Some(current) = child {
-            child = current.next_sibling();
-            collect_descendants(&current, out);
-        }
+#[test]
+fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
+    const CHILD_ENV: &str = "WAYSCRIBER_GTK_WIDGET_CONTRACT_CHILD";
+    const TEST_NAME: &str = "toolbar_gtk::view::top_bar::tests::actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window";
+
+    if std::env::var_os(CHILD_ENV).is_none() {
+        let status = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .arg(TEST_NAME)
+            .arg("--exact")
+            .arg("--test-threads=1")
+            .env(CHILD_ENV, "1")
+            .status()
+            .expect("run isolated GTK widget contract test");
+        assert!(status.success(), "isolated GTK widget contract test failed");
+        return;
     }
 
+    if let Err(error) = gtk4::init() {
+        eprintln!("skipping GTK widget contract test: {error}");
+        return;
+    }
+
+    install_gtk_contract_metrics();
+    let (regular, highlighted, scenarios) = gtk_widget_contract_scenarios();
+    let font_button_widths = assert_gtk_widget_scenarios(scenarios);
+
+    assert_font_button_width_stable(&font_button_widths);
+
+    // Compact plans normally drop quick colors before reaching the last
+    // degradation step. Keep a direct adapter case so the presentation
+    // contract cannot silently diverge if that planner policy changes.
+    // Colors left the strip (M7-C1) and the presets island yields under the
+    // compact plan (M7-C2): assert neither renders in a compact build.
+    assert_compact_gtk_widget_contract(&regular);
+
+    assert_shapes_and_overflow_contract(&regular);
+
+    assert_gtk_toggle_events(&regular, &highlighted);
+
+    assert_style_pill_interactions(&regular);
+
+    assert_menu_popover_contracts(&regular);
+}
+
+fn assert_menu_popover_contracts(regular: &ToolbarSnapshot) {
+    // --- Session/Settings popovers: the re-hosted pane content ---------------
     let mut session_snapshot = regular.clone();
     session_snapshot.session_popover_open = true;
     session_snapshot.active_session_name = Some("lecture.wayscriber-session".to_string());
@@ -2277,84 +2524,92 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
         "settings popover exists"
     );
 
-    let session_model =
-        model::ToolbarSessionModel::for_popover(&session_snapshot).expect("session model");
-    let session_content = menu_top.build_session_popover_content(&session_snapshot, 1.0);
-    let session_panel = find_widget_named(&session_content, "top.menu.session.panel")
-        .expect("session popover panel box");
-    let mut session_buttons: Vec<gtk4::Button> = Vec::new();
-    collect_descendants(&session_panel, &mut session_buttons);
+    assert_session_popover_contract(&menu_top, &session_snapshot, &menu_rx);
+    assert_settings_popover_contract(&menu_top, regular, &menu_rx);
+    assert_canvas_popover_contract(&menu_top, regular, &menu_rx);
+
+    detach_test_popovers(&mut menu_top);
+}
+
+fn assert_session_popover_contract(
+    top: &TopBar,
+    snapshot: &ToolbarSnapshot,
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+) {
+    let model = model::ToolbarSessionModel::for_popover(snapshot).expect("session model");
+    let content = top.build_session_popover_content(snapshot, 1.0);
+    let panel =
+        find_widget_named(&content, "top.menu.session.panel").expect("session popover panel box");
+    let mut buttons: Vec<gtk4::Button> = Vec::new();
+    collect_descendants(&panel, &mut buttons);
     assert_eq!(
-        session_buttons.len(),
-        session_model.buttons.len() + session_model.recents.len(),
+        buttons.len(),
+        model.buttons.len() + model.recents.len(),
         "the popover exposes exactly the pane's controls"
     );
-    for (button, button_model) in session_buttons.iter().zip(session_model.buttons.iter()) {
-        assert_eq!(
-            button.tooltip_text().as_deref(),
-            Some(button_model.label),
-            "session button tooltip"
-        );
+    for (button, button_model) in buttons.iter().zip(model.buttons.iter()) {
+        assert_eq!(button.tooltip_text().as_deref(), Some(button_model.label));
         assert_eq!(button.is_sensitive(), button_model.enabled);
     }
-    session_buttons[0].emit_clicked();
+    buttons[0].emit_clicked();
     assert_eq!(
-        menu_rx
-            .recv_timeout(Duration::from_secs(1))
+        rx.recv_timeout(Duration::from_secs(1))
             .expect("GTK session open event"),
         GtkToolbarFeedback::Event {
-            event: session_model.buttons[0].event.clone(),
+            event: model.buttons[0].event.clone(),
             rebind_requested: false,
         }
     );
-    session_buttons
-        .last()
-        .expect("recent row button")
-        .emit_clicked();
+    buttons.last().expect("recent row button").emit_clicked();
     assert_eq!(
-        menu_rx
-            .recv_timeout(Duration::from_secs(1))
+        rx.recv_timeout(Duration::from_secs(1))
             .expect("GTK recent event"),
         GtkToolbarFeedback::Event {
-            event: session_model.recents[0].event(),
+            event: model.recents[0].event(),
             rebind_requested: false,
         }
     );
+}
 
-    let mut settings_snapshot = regular.clone();
-    settings_snapshot.layout_mode = ToolbarLayoutMode::Advanced;
-    settings_snapshot.settings_popover_open = true;
-    settings_snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
+fn assert_settings_popover_contract(
+    top: &TopBar,
+    regular: &ToolbarSnapshot,
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+) {
+    let mut snapshot = regular.clone();
+    snapshot.layout_mode = ToolbarLayoutMode::Advanced;
+    snapshot.settings_popover_open = true;
+    snapshot.runtime_ui_persistence = Some(RuntimeUiPersistenceSnapshot {
         path: "/home/user/.local/share/wayscriber/runtime-ui.toml".into(),
         mode: RuntimeUiPersistenceMode::Supported,
         detail: None,
         recovery_artifacts: Vec::new(),
     });
-    let settings_model =
-        model::ToolbarSettingsModel::for_popover(&settings_snapshot).expect("settings model");
-    let (settings_content, settings_updaters) =
-        menu_top.build_settings_popover_content(&settings_snapshot, 1.0);
-    // Production parents popover content under the classed bar; measured
-    // standalone, the scoped stylesheet would never reach it.
-    settings_content.add_css_class("wayscriber-toolbar");
-    let settings_scroller = settings_content
+    let model = model::ToolbarSettingsModel::for_popover(&snapshot).expect("settings model");
+    let (content, updaters) = top.build_settings_popover_content(&snapshot, 1.0);
+    content.add_css_class("wayscriber-toolbar");
+    let scroller = content
         .clone()
         .downcast::<gtk4::ScrolledWindow>()
         .expect("settings popover scroll viewport");
-    let settings_panel = find_widget_named(&settings_content, "top.menu.settings.panel")
-        .expect("settings popover panel box");
-    let (_, settings_natural_height, _, _) =
-        settings_panel.measure(gtk4::Orientation::Vertical, -1);
-    assert!(
-        settings_natural_height <= settings_scroller.max_content_height(),
-        "Advanced settings runtime footer should fit without clipping: natural={settings_natural_height}, cap={}",
-        settings_scroller.max_content_height()
-    );
+    let panel =
+        find_widget_named(&content, "top.menu.settings.panel").expect("settings popover panel box");
+    let (_, natural_height, _, _) = panel.measure(gtk4::Orientation::Vertical, -1);
+    assert!(natural_height <= scroller.max_content_height());
+    assert_settings_toggle_contract(&mut snapshot, &model, &panel, &updaters, rx);
+    assert_settings_button_contract(&snapshot, &model, &panel, rx);
+}
 
-    // Toggle parity: one check button per pane toggle, same order/state.
+fn assert_settings_toggle_contract(
+    snapshot: &mut ToolbarSnapshot,
+    model: &model::ToolbarSettingsModel,
+    panel: &gtk4::Widget,
+    updaters: &[Updater],
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+) {
     let mut checks: Vec<gtk4::CheckButton> = Vec::new();
-    collect_descendants(&settings_panel, &mut checks);
-    let toggles: Vec<_> = settings_model.toggle_rows().into_iter().flatten().collect();
+    collect_descendants(panel, &mut checks);
+    let toggles: Vec<_> = model.toggle_rows().into_iter().flatten().collect();
     assert_eq!(checks.len(), toggles.len(), "settings toggle parity");
     for (check, toggle) in checks.iter().zip(&toggles) {
         assert_eq!(check.label().as_deref(), Some(toggle.label.as_ref()));
@@ -2362,245 +2617,211 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     }
     checks[0].set_active(!toggles[0].checked);
     assert_eq!(
-        menu_rx
-            .recv_timeout(Duration::from_secs(1))
+        rx.recv_timeout(Duration::from_secs(1))
             .expect("GTK settings toggle event"),
         GtkToolbarFeedback::Event {
             event: toggles[0].activation.clone(),
             rebind_requested: false,
         }
     );
-
-    // Backend echoes update the existing checkbox and replace its next event;
-    // the top popover must depend only on unified-top snapshot state.
-    let updated_context_aware = !toggles[0].checked;
-    settings_snapshot.context_aware_ui = updated_context_aware;
-    for updater in &settings_updaters {
-        updater(&settings_snapshot);
+    let updated = !toggles[0].checked;
+    snapshot.context_aware_ui = updated;
+    for updater in updaters {
+        updater(snapshot);
     }
-    assert_eq!(checks[0].is_active(), updated_context_aware);
-    checks[0].set_active(!updated_context_aware);
+    assert_eq!(checks[0].is_active(), updated);
+    checks[0].set_active(!updated);
     assert_eq!(
-        menu_rx
-            .recv_timeout(Duration::from_secs(1))
+        rx.recv_timeout(Duration::from_secs(1))
             .expect("updated GTK settings toggle event"),
         GtkToolbarFeedback::Event {
-            event: ToolbarEvent::ToggleContextAwareUi(!updated_context_aware),
+            event: ToolbarEvent::ToggleContextAwareUi(!updated),
             rebind_requested: false,
         }
     );
+}
 
-    // Layout-mode segments and the settings button grid carry the pane's
-    // events.
+fn assert_settings_button_contract(
+    snapshot: &ToolbarSnapshot,
+    model: &model::ToolbarSettingsModel,
+    panel: &gtk4::Widget,
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+) {
     let mut buttons: Vec<gtk4::Button> = Vec::new();
-    collect_descendants(&settings_panel, &mut buttons);
+    collect_descendants(panel, &mut buttons);
     let tabs: Vec<_> = buttons
         .iter()
         .filter(|button| button.has_css_class("tab"))
         .collect();
-    let control = model::layout_mode_control(settings_snapshot.layout_mode);
+    let control = model::layout_mode_control(snapshot.layout_mode);
     let model::ToolbarControlKind::Segmented(segmented) = &control.kind else {
         panic!("layout mode control is segmented");
     };
     assert_eq!(tabs.len(), segmented.segments().len());
     tabs[0].emit_clicked();
     assert_eq!(
-        menu_rx
-            .recv_timeout(Duration::from_secs(1))
+        rx.recv_timeout(Duration::from_secs(1))
             .expect("GTK layout mode event"),
         GtkToolbarFeedback::Event {
             event: segmented.segments()[0].activation.clone(),
             rebind_requested: false,
         }
     );
-    let plain_buttons: Vec<_> = buttons
+    let plain: Vec<_> = buttons
         .iter()
         .filter(|button| !button.has_css_class("tab"))
         .collect();
+    assert_eq!(plain.len(), model.buttons().len(), "settings button parity");
+    plain[0].emit_clicked();
     assert_eq!(
-        plain_buttons.len(),
-        settings_model.buttons().len(),
-        "settings button parity"
-    );
-    plain_buttons[0].emit_clicked();
-    assert_eq!(
-        menu_rx
-            .recv_timeout(Duration::from_secs(1))
+        rx.recv_timeout(Duration::from_secs(1))
             .expect("GTK settings button event"),
         GtkToolbarFeedback::Event {
-            event: settings_model.buttons()[0].event.clone(),
+            event: model.buttons()[0].event.clone(),
             rebind_requested: false,
         }
     );
+}
 
-    // Canvas popover parity: the command sections render buttons, the Step
-    // config renders its two toggles, and toggling every section off leaves
-    // the popover empty.
-    assert!(menu_top.canvas_popover.is_some(), "canvas popover exists");
-    let mut canvas_snapshot = regular.clone();
-    canvas_snapshot.canvas_popover_open = true;
-    canvas_snapshot.show_actions_section = true;
-    canvas_snapshot.show_boards_section = true;
-    canvas_snapshot.show_pages_section = true;
-    canvas_snapshot.show_zoom_actions = true;
-    canvas_snapshot.show_actions_advanced = true;
-    canvas_snapshot.show_step_section = true;
-    let (canvas_content, _canvas_updaters) =
-        menu_top.build_canvas_popover_content(&canvas_snapshot, 1.0);
-    let canvas_panel = find_widget_named(&canvas_content, "top.menu.canvas.panel")
-        .expect("canvas popover panel box");
+fn assert_canvas_popover_contract(
+    top: &TopBar,
+    regular: &ToolbarSnapshot,
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+) {
+    assert!(top.canvas_popover.is_some(), "canvas popover exists");
+    assert_canvas_command_sections(top, regular, rx);
+    assert_canvas_delay_updates(top, regular);
+    assert_empty_canvas_popover(top, regular);
+}
+
+fn assert_canvas_command_sections(
+    top: &TopBar,
+    regular: &ToolbarSnapshot,
+    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+) {
+    let mut snapshot = regular.clone();
+    snapshot.canvas_popover_open = true;
+    snapshot.show_actions_section = true;
+    snapshot.show_boards_section = true;
+    snapshot.show_pages_section = true;
+    snapshot.show_zoom_actions = true;
+    snapshot.show_actions_advanced = true;
+    snapshot.show_step_section = true;
+    let (content, _) = top.build_canvas_popover_content(&snapshot, 1.0);
+    let panel =
+        find_widget_named(&content, "top.menu.canvas.panel").expect("canvas popover panel box");
     assert_eq!(
-        canvas_panel.width_request(),
-        crate::ui::theme::toolbar::CANVAS_MENU_CONTENT_W as i32,
-        "GTK Canvas popover uses the shared roomy content width"
+        panel.width_request(),
+        crate::ui::theme::toolbar::CANVAS_MENU_CONTENT_W as i32
     );
-    assert_eq!(canvas_panel.margin_start(), 10, "Canvas left content inset");
-    assert_eq!(canvas_panel.margin_end(), 10, "Canvas right content inset");
-    let mut canvas_buttons: Vec<gtk4::Button> = Vec::new();
-    collect_descendants(&canvas_panel, &mut canvas_buttons);
-    assert!(
-        canvas_buttons.len() >= 4,
-        "the canvas popover exposes the command-section buttons"
-    );
+    assert_eq!(panel.margin_start(), 10);
+    assert_eq!(panel.margin_end(), 10);
+    let mut buttons: Vec<gtk4::Button> = Vec::new();
+    collect_descendants(&panel, &mut buttons);
+    assert!(buttons.len() >= 4);
     for noun in ["Board", "Page"] {
-        let button_with_tooltip = |prefix: &str| {
-            canvas_buttons
-                .iter()
-                .find(|button| {
-                    button
-                        .tooltip_text()
-                        .is_some_and(|tooltip| tooltip.starts_with(prefix))
-                })
-                .unwrap_or_else(|| panic!("{prefix} Canvas button"))
-        };
-        let duplicate = button_with_tooltip(&format!("Duplicate {noun}"));
-        let delete = button_with_tooltip(&format!("Delete {noun}"));
-        for button in [duplicate, delete] {
-            assert_eq!(
-                button.width_request(),
-                32,
-                "{noun} icon buttons stay compact instead of filling their slots"
-            );
-            assert_eq!(
-                button.halign(),
-                gtk4::Align::Center,
-                "{noun} icon buttons are centered in their allocated slots"
-            );
-            assert!(!button.hexpands(), "{noun} icon buttons do not stretch");
-        }
-        assert_eq!(
-            delete.margin_end(),
-            6,
-            "{noun} delete stays clear of the overlay scrollbar"
-        );
-        let safe_parent = duplicate.parent().expect("safe-action group");
-        let destructive_parent = delete.parent().expect("destructive-action row");
-        assert_ne!(
-            safe_parent, destructive_parent,
-            "{noun} delete stays outside the homogeneous safe-action group"
-        );
-        let safe_group = safe_parent
-            .downcast::<gtk4::Box>()
-            .expect("homogeneous safe-action box");
-        assert!(safe_group.is_homogeneous());
-        let command_row = destructive_parent
-            .downcast::<gtk4::Box>()
-            .expect("guarded command row");
-        assert_eq!(
-            command_row.spacing(),
-            12,
-            "{noun} delete keeps the explicit safety gap"
-        );
+        assert_canvas_command_button_layout(&buttons, noun);
     }
-    // The Step config exposes exactly its two toggles; toggling the first
-    // emits ToggleCustomSection with the live state.
-    let mut canvas_checks: Vec<gtk4::CheckButton> = Vec::new();
-    collect_descendants(&canvas_panel, &mut canvas_checks);
+    let mut checks: Vec<gtk4::CheckButton> = Vec::new();
+    collect_descendants(&panel, &mut checks);
+    assert_eq!(checks.len(), 2, "Step buttons + Delay sliders toggles");
+    checks[0].set_active(!snapshot.custom_section_enabled);
     assert_eq!(
-        canvas_checks.len(),
-        2,
-        "Step buttons + Delay sliders toggles"
-    );
-    canvas_checks[0].set_active(!canvas_snapshot.custom_section_enabled);
-    assert_eq!(
-        menu_rx
-            .recv_timeout(Duration::from_secs(1))
+        rx.recv_timeout(Duration::from_secs(1))
             .expect("GTK canvas step toggle event"),
         GtkToolbarFeedback::Event {
-            event: ToolbarEvent::ToggleCustomSection(!canvas_snapshot.custom_section_enabled),
+            event: ToolbarEvent::ToggleCustomSection(!snapshot.custom_section_enabled),
             rebind_requested: false,
         }
     );
+}
 
-    // Delay-slider live update WITHOUT a subtree rebuild: the Canvas popover's
-    // delay sliders ride the persistent value-updaters this builder returns
-    // (the content key omits their values), so an external delay change flows
-    // through an updater, not a rebuild. Build with the delay sliders shown,
-    // then run the returned updaters with a bumped delay and confirm the slider
-    // reflects it in place.
-    let mut delay_snapshot = regular.clone();
-    delay_snapshot.canvas_popover_open = true;
-    delay_snapshot.show_step_section = true;
-    delay_snapshot.show_delay_sliders = true;
-    delay_snapshot.custom_section_enabled = false;
-    delay_snapshot.undo_all_delay_ms = 1000;
-    let (delay_content, delay_updaters) =
-        menu_top.build_canvas_popover_content(&delay_snapshot, 1.0);
-    assert!(
-        !delay_updaters.is_empty(),
-        "the delay sliders register persistent value-updaters"
-    );
-    let delay_panel = find_widget_named(&delay_content, "top.menu.canvas.panel")
-        .expect("delay canvas popover panel box");
-    let mut delay_boxes: Vec<gtk4::Box> = Vec::new();
-    collect_descendants(&delay_panel, &mut delay_boxes);
-    let undo_all_slider_tooltip = |boxes: &[gtk4::Box]| -> String {
-        boxes
+fn assert_canvas_command_button_layout(buttons: &[gtk4::Button], noun: &str) {
+    let button_with_tooltip = |prefix: &str| {
+        buttons
             .iter()
-            .find_map(|widget| {
-                widget
+            .find(|button| {
+                button
                     .tooltip_text()
-                    .filter(|tooltip| tooltip.contains("Undo-all delay"))
-                    .map(|tooltip| tooltip.to_string())
+                    .is_some_and(|tooltip| tooltip.starts_with(prefix))
             })
-            .expect("undo-all delay slider tooltip")
+            .unwrap_or_else(|| panic!("{prefix} Canvas button"))
     };
-    assert!(
-        undo_all_slider_tooltip(&delay_boxes).contains("1.0s"),
-        "the delay slider starts at the built value"
-    );
-    // A backend echo of a new delay flows through the persistent updater —
-    // never a rebuild — and the same slider widget updates in place.
-    let mut bumped_delay = delay_snapshot.clone();
-    bumped_delay.undo_all_delay_ms = 2500;
-    for updater in &delay_updaters {
-        updater(&bumped_delay);
+    let duplicate = button_with_tooltip(&format!("Duplicate {noun}"));
+    let delete = button_with_tooltip(&format!("Delete {noun}"));
+    for button in [duplicate, delete] {
+        assert_eq!(button.width_request(), 32);
+        assert_eq!(button.halign(), gtk4::Align::Center);
+        assert!(!button.hexpands());
     }
+    assert_eq!(delete.margin_end(), 6);
+    let safe_parent = duplicate.parent().expect("safe-action group");
+    let destructive_parent = delete.parent().expect("destructive-action row");
+    assert_ne!(safe_parent, destructive_parent);
     assert!(
-        undo_all_slider_tooltip(&delay_boxes).contains("2.5s"),
-        "the persistent updater sets the new delay in place (no subtree rebuild)"
+        safe_parent
+            .downcast::<gtk4::Box>()
+            .expect("homogeneous safe-action box")
+            .is_homogeneous()
     );
+    assert_eq!(
+        destructive_parent
+            .downcast::<gtk4::Box>()
+            .expect("guarded command row")
+            .spacing(),
+        12
+    );
+}
 
-    let mut empty_canvas = regular.clone();
-    empty_canvas.canvas_popover_open = true;
-    empty_canvas.show_actions_section = false;
-    empty_canvas.show_boards_section = false;
-    empty_canvas.show_pages_section = false;
-    empty_canvas.show_zoom_actions = false;
-    empty_canvas.show_actions_advanced = false;
-    empty_canvas.show_step_section = false;
-    let (empty_content, _empty_updaters) =
-        menu_top.build_canvas_popover_content(&empty_canvas, 1.0);
-    let empty_panel = find_widget_named(&empty_content, "top.menu.canvas.panel")
+fn undo_all_slider_tooltip(boxes: &[gtk4::Box]) -> String {
+    boxes
+        .iter()
+        .find_map(|widget| {
+            widget
+                .tooltip_text()
+                .filter(|tooltip| tooltip.contains("Undo-all delay"))
+                .map(|tooltip| tooltip.to_string())
+        })
+        .expect("undo-all delay slider tooltip")
+}
+
+fn assert_canvas_delay_updates(top: &TopBar, regular: &ToolbarSnapshot) {
+    let mut snapshot = regular.clone();
+    snapshot.canvas_popover_open = true;
+    snapshot.show_step_section = true;
+    snapshot.show_delay_sliders = true;
+    snapshot.custom_section_enabled = false;
+    snapshot.undo_all_delay_ms = 1000;
+    let (content, updaters) = top.build_canvas_popover_content(&snapshot, 1.0);
+    assert!(!updaters.is_empty());
+    let panel = find_widget_named(&content, "top.menu.canvas.panel")
+        .expect("delay canvas popover panel box");
+    let mut boxes: Vec<gtk4::Box> = Vec::new();
+    collect_descendants(&panel, &mut boxes);
+    assert!(undo_all_slider_tooltip(&boxes).contains("1.0s"));
+    let mut bumped = snapshot;
+    bumped.undo_all_delay_ms = 2500;
+    for updater in &updaters {
+        updater(&bumped);
+    }
+    assert!(undo_all_slider_tooltip(&boxes).contains("2.5s"));
+}
+
+fn assert_empty_canvas_popover(top: &TopBar, regular: &ToolbarSnapshot) {
+    let mut snapshot = regular.clone();
+    snapshot.canvas_popover_open = true;
+    snapshot.show_actions_section = false;
+    snapshot.show_boards_section = false;
+    snapshot.show_pages_section = false;
+    snapshot.show_zoom_actions = false;
+    snapshot.show_actions_advanced = false;
+    snapshot.show_step_section = false;
+    let (content, _) = top.build_canvas_popover_content(&snapshot, 1.0);
+    let panel = find_widget_named(&content, "top.menu.canvas.panel")
         .expect("empty canvas popover panel box");
-    let mut empty_buttons: Vec<gtk4::Button> = Vec::new();
-    collect_descendants(&empty_panel, &mut empty_buttons);
-    assert!(
-        empty_buttons.is_empty(),
-        "every section toggled off leaves no canvas command buttons"
-    );
-
-    detach_test_popovers(&mut menu_top);
+    let mut buttons: Vec<gtk4::Button> = Vec::new();
+    collect_descendants(&panel, &mut buttons);
+    assert!(buttons.is_empty());
 }
 
 #[test]

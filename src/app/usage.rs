@@ -62,6 +62,16 @@ pub(crate) fn log_overlay_controls(freeze: bool) {
     log::info!("Starting annotation overlay...");
     log::info!("Controls:");
     let bindings = default_action_bindings();
+    log_drawing_controls(&bindings);
+    log_canvas_controls(&bindings);
+    log_ui_controls(&bindings);
+    if freeze {
+        log::info!("Starting frozen mode (freeze-on-start requested)");
+    }
+    log::info!("");
+}
+
+fn log_drawing_controls(bindings: &HashMap<Action, Vec<Shortcut>>) {
     log::info!(
         "  - {}: Just drag",
         action_display_label(Action::SelectPenTool)
@@ -85,77 +95,79 @@ pub(crate) fn log_overlay_controls(freeze: bool) {
     log::info!(
         "  - {}: {}, click to position, type, press Enter",
         action_display_label(Action::EnterTextMode),
-        action_binding_label(&bindings, Action::EnterTextMode)
+        action_binding_label(bindings, Action::EnterTextMode)
     );
-    log::info!("  - Colors: {}", color_binding_labels(&bindings));
+    log::info!("  - Colors: {}", color_binding_labels(bindings));
+}
+
+fn log_canvas_controls(bindings: &HashMap<Action, Vec<Shortcut>>) {
     log::info!(
         "  - {} / {}: {} / {}",
         action_display_label(Action::Undo),
         action_display_label(Action::Redo),
-        action_binding_label(&bindings, Action::Undo),
-        action_binding_label(&bindings, Action::Redo)
+        action_binding_label(bindings, Action::Undo),
+        action_binding_label(bindings, Action::Redo)
     );
     log::info!(
         "  - {}: {}",
         action_display_label(Action::ClearCanvas),
-        action_binding_label(&bindings, Action::ClearCanvas)
+        action_binding_label(bindings, Action::ClearCanvas)
     );
     log::info!(
         "  - {}: {} or scroll down",
         action_display_label(Action::IncreaseThickness),
-        action_binding_label(&bindings, Action::IncreaseThickness)
+        action_binding_label(bindings, Action::IncreaseThickness)
     );
     log::info!(
         "  - {}: {} or scroll up",
         action_display_label(Action::DecreaseThickness),
-        action_binding_label(&bindings, Action::DecreaseThickness)
+        action_binding_label(bindings, Action::DecreaseThickness)
     );
     log::info!(
         "  - {}: {} (toggle frozen background)",
         action_display_label(Action::ToggleFrozenMode),
-        action_binding_label(&bindings, Action::ToggleFrozenMode)
+        action_binding_label(bindings, Action::ToggleFrozenMode)
     );
     log::info!(
         "  - {} / {}: {} / {} (Ctrl+Alt + scroll)",
         action_display_label(Action::ZoomIn),
         action_display_label(Action::ZoomOut),
-        action_binding_label(&bindings, Action::ZoomIn),
-        action_binding_label(&bindings, Action::ZoomOut)
+        action_binding_label(bindings, Action::ZoomIn),
+        action_binding_label(bindings, Action::ZoomOut)
     );
     log::info!(
         "  - {}: {}   •   {}: {}   •   Pan view: middle drag/arrow keys",
         action_display_label(Action::ResetZoom),
-        action_binding_label(&bindings, Action::ResetZoom),
+        action_binding_label(bindings, Action::ResetZoom),
         action_display_label(Action::ToggleZoomLock),
-        action_binding_label(&bindings, Action::ToggleZoomLock)
+        action_binding_label(bindings, Action::ToggleZoomLock)
     );
+}
+
+fn log_ui_controls(bindings: &HashMap<Action, Vec<Shortcut>>) {
     log::info!(
         "  - {}: Right Click or {}",
         action_display_label(Action::OpenContextMenu),
-        action_binding_label(&bindings, Action::OpenContextMenu)
+        action_binding_label(bindings, Action::OpenContextMenu)
     );
     log::info!(
         "  - {}: {}   •   {}: {}   •   {}: {}   •   {}: {}   •   {}: {}",
         action_display_label(Action::ToggleHelp),
-        action_binding_label(&bindings, Action::ToggleHelp),
+        action_binding_label(bindings, Action::ToggleHelp),
         action_display_label(Action::ToggleToolbar),
-        action_binding_label(&bindings, Action::ToggleToolbar),
+        action_binding_label(bindings, Action::ToggleToolbar),
         action_display_label(Action::TogglePresenterMode),
-        action_binding_label(&bindings, Action::TogglePresenterMode),
+        action_binding_label(bindings, Action::TogglePresenterMode),
         action_display_label(Action::OpenConfigurator),
-        action_binding_label(&bindings, Action::OpenConfigurator),
+        action_binding_label(bindings, Action::OpenConfigurator),
         action_display_label(Action::ToggleStatusBar),
-        action_binding_label(&bindings, Action::ToggleStatusBar)
+        action_binding_label(bindings, Action::ToggleStatusBar)
     );
     log::info!(
         "  - {}: {}",
         action_display_label(Action::Exit),
-        action_binding_label(&bindings, Action::Exit)
+        action_binding_label(bindings, Action::Exit)
     );
-    if freeze {
-        log::info!("Starting frozen mode (freeze-on-start requested)");
-    }
-    log::info!("");
 }
 
 pub(crate) fn print_usage() {

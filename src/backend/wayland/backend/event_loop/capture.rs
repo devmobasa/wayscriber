@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use super::super::super::state::{OverlaySuppression, WaylandState};
 use super::super::helpers::friendly_capture_error;
 use crate::capture::file::{FileSaveConfig, expand_tilde};
-use crate::capture::{CaptureOutcome, CapturePoll, ImageOperationKind};
+use crate::capture::{CaptureOutcome, CapturePoll, CaptureRequestId, ImageOperationKind};
 use crate::config::Action;
 use crate::input::state::PendingBackendAction;
 use crate::notification;
@@ -317,58 +317,38 @@ fn handle_frozen_toggle(state: &mut WaylandState) {
     }
 }
 
-fn handle_capture_results(state: &mut WaylandState) {
-    let (id, operation, outcome) = match state.capture.manager_mut().poll() {
-        CapturePoll::Idle | CapturePoll::Pending { .. } => return,
-        CapturePoll::Ready {
-            id,
-            operation,
-            outcome,
-        } => (id, operation, outcome),
-        CapturePoll::WorkerFailed {
-            active_id,
-            operation,
-            error,
-        } => {
-            let pending_board =
-                active_id.and_then(|id| state.capture.take_pending_board_paste_for(id));
-            if let Some(id) = active_id {
-                let _ = state.capture.consume_accepted(id);
-            }
-            if pending_board.is_some() {
-                state.capture.finish_capture_lifecycle();
-                let message = operation
-                    .filter(|operation| *operation == ImageOperationKind::Screenshot)
-                    .map(|_| friendly_capture_error(&error))
-                    .unwrap_or_else(|| "Capture services stopped unexpectedly.".to_string());
-                warn!("Board region capture worker failed: {error}");
-                state.input_state.push_toast(
-                    ToastPriority::Critical,
-                    "capture",
-                    Toast::error(message),
-                );
-                return;
-            }
-            handle_capture_manager_failure(state, operation, &error);
-            return;
-        }
-    };
-
-    if !state.capture.consume_accepted(id) {
-        let expected = state.capture.accepted_id();
-        state.capture.manager_mut().mark_unhealthy();
-        handle_capture_manager_failure(
-            state,
-            Some(operation),
-            &format!("capture completion {id} did not match accepted identity {expected:?}"),
-        );
+fn handle_capture_worker_failure(
+    state: &mut WaylandState,
+    active_id: Option<CaptureRequestId>,
+    operation: Option<ImageOperationKind>,
+    error: &str,
+) {
+    let pending_board = active_id.and_then(|id| state.capture.take_pending_board_paste_for(id));
+    if let Some(id) = active_id {
+        let _ = state.capture.consume_accepted(id);
+    }
+    if pending_board.is_some() {
+        state.capture.finish_capture_lifecycle();
+        let message = operation
+            .filter(|operation| *operation == ImageOperationKind::Screenshot)
+            .map(|_| friendly_capture_error(error))
+            .unwrap_or_else(|| "Capture services stopped unexpectedly.".to_string());
+        warn!("Board region capture worker failed: {error}");
+        state
+            .input_state
+            .push_toast(ToastPriority::Critical, "capture", Toast::error(message));
         return;
     }
+    handle_capture_manager_failure(state, operation, error);
+}
 
-    info!("Capture completed");
-
+fn resolve_board_capture_outcome(
+    state: &mut WaylandState,
+    id: CaptureRequestId,
+    outcome: CaptureOutcome,
+) -> Option<CaptureOutcome> {
     let pending_board = state.capture.take_pending_board_paste_for(id);
-    let outcome = match (outcome, pending_board) {
+    match (outcome, pending_board) {
         (CaptureOutcome::RenderedImageReady(image), Some(pending)) => {
             state.capture.finish_capture_lifecycle();
             let embedded = crate::draw::EmbeddedImage {
@@ -380,7 +360,7 @@ fn handle_capture_results(state: &mut WaylandState) {
             state
                 .input_state
                 .insert_captured_image(embedded, &pending.target);
-            return;
+            None
         }
         (CaptureOutcome::RenderedImageReady(_), None) => {
             state.capture.finish_capture_lifecycle();
@@ -390,7 +370,7 @@ fn handle_capture_results(state: &mut WaylandState) {
                 "capture.region.board",
                 Toast::error("Region was not added to the board."),
             );
-            return;
+            None
         }
         (CaptureOutcome::Failed { operation, message }, Some(_)) => {
             state.capture.finish_capture_lifecycle();
@@ -405,12 +385,12 @@ fn handle_capture_results(state: &mut WaylandState) {
                 "capture",
                 Toast::error(friendly_error),
             );
-            return;
+            None
         }
         (CaptureOutcome::Cancelled { operation, reason }, Some(_)) => {
             state.capture.finish_capture_lifecycle();
             info!("{} cancelled: {}", operation.saved_log_label(), reason);
-            return;
+            None
         }
         (unexpected, Some(_)) => {
             state.capture.finish_capture_lifecycle();
@@ -420,9 +400,21 @@ fn handle_capture_results(state: &mut WaylandState) {
                 "capture.region.board",
                 Toast::error("Region was not added to the board."),
             );
-            return;
+            None
         }
-        (outcome, None) => outcome,
+        (outcome, None) => Some(outcome),
+    }
+}
+
+fn handle_capture_results(state: &mut WaylandState) {
+    let Some((id, outcome)) = poll_accepted_capture(state) else {
+        return;
+    };
+
+    info!("Capture completed");
+
+    let Some(outcome) = resolve_board_capture_outcome(state, id, outcome) else {
+        return;
     };
 
     // Restore overlay.
@@ -618,6 +610,37 @@ fn handle_capture_results(state: &mut WaylandState) {
         state.mark_xdg_explicit_close_requested();
         state.input_state.should_exit = true;
     }
+}
+
+fn poll_accepted_capture(state: &mut WaylandState) -> Option<(CaptureRequestId, CaptureOutcome)> {
+    let (id, operation, outcome) = match state.capture.manager_mut().poll() {
+        CapturePoll::Idle | CapturePoll::Pending { .. } => return None,
+        CapturePoll::Ready {
+            id,
+            operation,
+            outcome,
+        } => (id, operation, outcome),
+        CapturePoll::WorkerFailed {
+            active_id,
+            operation,
+            error,
+        } => {
+            handle_capture_worker_failure(state, active_id, operation, &error);
+            return None;
+        }
+    };
+    if state.capture.consume_accepted(id) {
+        return Some((id, outcome));
+    }
+
+    let expected = state.capture.accepted_id();
+    state.capture.manager_mut().mark_unhealthy();
+    handle_capture_manager_failure(
+        state,
+        Some(operation),
+        &format!("capture completion {id} did not match accepted identity {expected:?}"),
+    );
+    None
 }
 
 fn handle_capture_manager_failure(

@@ -748,8 +748,17 @@ fn spotlight_style_pill_shows_missing_source_status_inline() {
 
 #[test]
 fn style_pill_morphs_per_tool() {
+    assert_marker_style_pill();
+    assert_eraser_style_pill();
+    assert_shape_style_pill();
+    assert_arrow_style_pill();
+    assert_step_marker_style_pill();
+    assert_text_style_pill();
+}
+
+fn assert_marker_style_pill() {
     use crate::backend::wayland::toolbar::events::HitKind;
-    use crate::input::{EraserMode, Tool};
+    use crate::input::Tool;
 
     // Marker: thickness (targeting the marker size) plus the opacity slider
     // with its inline readout decoration.
@@ -776,6 +785,10 @@ fn style_pill_morphs_per_tool() {
         other => panic!("readout kind, got {other:?}"),
     }
     assert!(readout.interact.is_none());
+}
+
+fn assert_eraser_style_pill() {
+    use crate::input::{EraserMode, Tool};
 
     // Eraser: colorless; the old checkbox became a Brush/Stroke segment
     // emitting SetEraserMode, painted by the activated SegmentedControl.
@@ -825,6 +838,10 @@ fn style_pill_morphs_per_tool() {
         )) => {}
         other => panic!("numeral opens the precise entry, got {other:?}"),
     }
+}
+
+fn assert_shape_style_pill() {
+    use crate::input::Tool;
 
     // Shapes: the Fill mini-toggle joins the stroke controls.
     let rect = snapshot_for_tool(Tool::Rect);
@@ -840,6 +857,10 @@ fn style_pill_morphs_per_tool() {
         fill.interact.as_ref().unwrap().event,
         ToolbarEvent::ToggleFill(value) if value != rect.fill_enabled
     ));
+}
+
+fn assert_arrow_style_pill() {
+    use crate::input::Tool;
 
     // Arrow: auto-number toggle, and the reset button (with the next-N
     // tooltip) only while numbering is enabled.
@@ -866,6 +887,10 @@ fn style_pill_morphs_per_tool() {
         interaction.tooltip.as_deref(),
         Some("Reset numbering to 1 (next: 7)")
     );
+}
+
+fn assert_step_marker_style_pill() {
+    use crate::input::Tool;
 
     // Step marker: the reset targets the step counter.
     let mut step = snapshot_for_tool(Tool::StepMarker);
@@ -883,6 +908,10 @@ fn style_pill_morphs_per_tool() {
         interaction.tooltip.as_deref(),
         Some("Reset numbering to 1 (next: 4)")
     );
+}
+
+fn assert_text_style_pill() {
+    use crate::backend::wayland::toolbar::events::HitKind;
 
     // Text: pt-labelled size slider plus independent weight/family controls.
     let mut text = snapshot();
@@ -1480,9 +1509,21 @@ fn session_popover_re_hosts_the_session_pane_content() {
         .expect("session popover panel");
     assert!(matches!(panel.kind, WidgetKind::Popover { .. }));
 
+    assert_session_popover_model(&tree, &snapshot);
+    assert_session_nodes_inside_panel(&tree);
+    assert_session_popover_input_rect(&snapshot, &tree, w, h);
+
+    // A pending Save-As overwrite swaps the button grid for the
+    // confirmation, exactly like the pane.
+    snapshot.pending_save_as_overwrite_path =
+        Some(PathBuf::from("/tmp/existing.wayscriber-session"));
+    assert_session_overwrite_confirmation(&snapshot);
+}
+
+fn assert_session_popover_model(tree: &WidgetTree, snapshot: &ToolbarSnapshot) {
     // Content parity with the Session pane: the same model drives both, so
     // every model control appears exactly once with the same event.
-    let model = crate::ui::toolbar::model::ToolbarSessionModel::for_popover(&snapshot)
+    let model = crate::ui::toolbar::model::ToolbarSessionModel::for_popover(snapshot)
         .expect("session model");
     assert_eq!(model.buttons.len(), 5);
     for button in &model.buttons {
@@ -1518,7 +1559,12 @@ fn session_popover_re_hosts_the_session_pane_content() {
     // Meta labels are decor; this popover has no collapsible header.
     assert!(tree.node_by_id(&"top.menu.session.name".into()).is_some());
     assert!(tree.node_by_id(&"top.menu.session.path".into()).is_some());
+}
 
+fn assert_session_nodes_inside_panel(tree: &WidgetTree) {
+    let panel = tree
+        .node_by_id(&"top.menu.session.panel".into())
+        .expect("session popover panel");
     // Every content node paints inside the panel.
     for node in tree.nodes() {
         if node.id.as_str().starts_with("top.menu.session.")
@@ -1534,9 +1580,19 @@ fn session_popover_re_hosts_the_session_pane_content() {
             );
         }
     }
+}
 
+fn assert_session_popover_input_rect(
+    snapshot: &ToolbarSnapshot,
+    tree: &WidgetTree,
+    w: u32,
+    h: u32,
+) {
+    let panel = tree
+        .node_by_id(&"top.menu.session.panel".into())
+        .expect("session popover panel");
     // The popover joins the input region as an extra rect below the band.
-    let rects = top_input_rects(&snapshot, w as f64, h as f64).expect("input rects");
+    let rects = top_input_rects(snapshot, w as f64, h as f64).expect("input rects");
     assert!(
         rects
             .iter()
@@ -1545,12 +1601,10 @@ fn session_popover_re_hosts_the_session_pane_content() {
                 && rect.0 + rect.2 >= panel.rect.0 + panel.rect.2),
         "popover rect missing from {rects:?}"
     );
+}
 
-    // A pending Save-As overwrite swaps the button grid for the
-    // confirmation, exactly like the pane.
-    snapshot.pending_save_as_overwrite_path =
-        Some(PathBuf::from("/tmp/existing.wayscriber-session"));
-    let tree = build(&snapshot);
+fn assert_session_overwrite_confirmation(snapshot: &ToolbarSnapshot) {
+    let tree = build(snapshot);
     let replace = tree
         .node_by_id(&"top.menu.session.confirm-replace".into())
         .expect("replace button");

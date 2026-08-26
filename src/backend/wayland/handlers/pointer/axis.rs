@@ -173,23 +173,7 @@ impl WaylandState {
             return;
         }
 
-        if self.input_state.show_help {
-            if scroll_direction != 0 {
-                let delta = if scroll_direction > 0 { 1.0 } else { -1.0 };
-                let scroll_step = 48.0;
-                let max_scroll = self.input_state.help_overlay_scroll_max;
-                let mut next = self.input_state.help_overlay_scroll + delta * scroll_step;
-                if max_scroll > 0.0 {
-                    next = next.clamp(0.0, max_scroll);
-                } else {
-                    next = next.max(0.0);
-                }
-                if (next - self.input_state.help_overlay_scroll).abs() > f64::EPSILON {
-                    self.input_state.help_overlay_scroll = next;
-                    self.input_state.dirty_tracker.mark_full();
-                    self.input_state.needs_redraw = true;
-                }
-            }
+        if self.try_handle_help_axis(scroll_direction) {
             return;
         }
         if try_handle_board_picker_page_panel_axis(
@@ -274,6 +258,31 @@ impl WaylandState {
             }
             std::cmp::Ordering::Equal => {}
         }
+    }
+
+    fn try_handle_help_axis(&mut self, scroll_direction: i32) -> bool {
+        if !self.input_state.show_help {
+            return false;
+        }
+        if scroll_direction == 0 {
+            return true;
+        }
+
+        let delta = if scroll_direction > 0 { 1.0 } else { -1.0 };
+        let scroll_step = 48.0;
+        let max_scroll = self.input_state.help_overlay_scroll_max;
+        let mut next = self.input_state.help_overlay_scroll + delta * scroll_step;
+        if max_scroll > 0.0 {
+            next = next.clamp(0.0, max_scroll);
+        } else {
+            next = next.max(0.0);
+        }
+        if (next - self.input_state.help_overlay_scroll).abs() > f64::EPSILON {
+            self.input_state.help_overlay_scroll = next;
+            self.input_state.dirty_tracker.mark_full();
+            self.input_state.needs_redraw = true;
+        }
+        true
     }
 
     fn adjust_active_tool_thickness(&mut self, delta: f64, radial_menu_path: bool) {

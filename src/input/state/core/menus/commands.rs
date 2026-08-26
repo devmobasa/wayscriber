@@ -32,6 +32,19 @@ impl InputState {
         self.board_picker_page_panel_board_index() == Some(board_index)
     }
 
+    fn context_submenu_anchor(&self) -> (i32, i32) {
+        if let Some(layout) = self.context_menu_layout {
+            (
+                (layout.origin_x + layout.width + 8.0).round() as i32,
+                layout.origin_y.round() as i32,
+            )
+        } else if let ContextMenuState::Open { anchor, .. } = &self.context_menu_state {
+            *anchor
+        } else {
+            self.last_pointer_position
+        }
+    }
+
     pub fn execute_menu_command(&mut self, command: MenuCommand) {
         match command {
             MenuCommand::Copy => {
@@ -118,16 +131,7 @@ impl InputState {
                 self.close_context_menu();
             }
             MenuCommand::OpenZoomMenu => {
-                let anchor = if let Some(layout) = self.context_menu_layout {
-                    (
-                        (layout.origin_x + layout.width + 8.0).round() as i32,
-                        layout.origin_y.round() as i32,
-                    )
-                } else if let ContextMenuState::Open { anchor, .. } = &self.context_menu_state {
-                    *anchor
-                } else {
-                    self.last_pointer_position
-                };
+                let anchor = self.context_submenu_anchor();
                 self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Zoom, None);
                 self.pending_menu_hover_recalc = false;
                 self.set_context_menu_focus(None);
@@ -155,16 +159,7 @@ impl InputState {
                 self.close_context_menu();
             }
             MenuCommand::OpenPagesMenu => {
-                let anchor = if let Some(layout) = self.context_menu_layout {
-                    (
-                        (layout.origin_x + layout.width + 8.0).round() as i32,
-                        layout.origin_y.round() as i32,
-                    )
-                } else if let ContextMenuState::Open { anchor, .. } = &self.context_menu_state {
-                    *anchor
-                } else {
-                    self.last_pointer_position
-                };
+                let anchor = self.context_submenu_anchor();
                 self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Pages, None);
                 self.pending_menu_hover_recalc = false;
                 self.set_context_menu_focus(None);
@@ -174,16 +169,7 @@ impl InputState {
                 self.needs_redraw = true;
             }
             MenuCommand::OpenBoardsMenu => {
-                let anchor = if let Some(layout) = self.context_menu_layout {
-                    (
-                        (layout.origin_x + layout.width + 8.0).round() as i32,
-                        layout.origin_y.round() as i32,
-                    )
-                } else if let ContextMenuState::Open { anchor, .. } = &self.context_menu_state {
-                    *anchor
-                } else {
-                    self.last_pointer_position
-                };
+                let anchor = self.context_submenu_anchor();
                 self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Boards, None);
                 self.pending_menu_hover_recalc = false;
                 self.set_context_menu_focus(None);
@@ -193,16 +179,7 @@ impl InputState {
                 self.needs_redraw = true;
             }
             MenuCommand::OpenPageMoveMenu => {
-                let anchor = if let Some(layout) = self.context_menu_layout {
-                    (
-                        (layout.origin_x + layout.width + 8.0).round() as i32,
-                        layout.origin_y.round() as i32,
-                    )
-                } else if let ContextMenuState::Open { anchor, .. } = &self.context_menu_state {
-                    *anchor
-                } else {
-                    self.last_pointer_position
-                };
+                let anchor = self.context_submenu_anchor();
                 let target = self.context_menu_page_target;
                 self.open_context_menu(anchor, Vec::new(), ContextMenuKind::PageMove, None);
                 self.context_menu_page_target = target;

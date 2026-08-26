@@ -54,24 +54,7 @@ impl Config {
 
         boards.items.retain(|item| !item.id.is_empty());
 
-        let transparent_in_range = boards
-            .items
-            .iter()
-            .take(boards.max_count)
-            .any(|item| item.background.is_transparent());
-        if !transparent_in_range {
-            if let Some(index) = boards
-                .items
-                .iter()
-                .position(|item| item.background.is_transparent())
-            {
-                let item = boards.items.remove(index);
-                boards.items.insert(0, item);
-            } else {
-                warn!("No transparent board defined; adding default overlay board");
-                boards.items.insert(0, BoardsConfig::default_overlay_item());
-            }
-        }
+        ensure_transparent_board_in_range(boards);
 
         if boards.items.len() > boards.max_count {
             warn!(
@@ -98,6 +81,29 @@ impl Config {
             );
             boards.default_board = fallback;
         }
+    }
+}
+
+fn ensure_transparent_board_in_range(boards: &mut BoardsConfig) {
+    let transparent_in_range = boards
+        .items
+        .iter()
+        .take(boards.max_count)
+        .any(|item| item.background.is_transparent());
+    if transparent_in_range {
+        return;
+    }
+
+    if let Some(index) = boards
+        .items
+        .iter()
+        .position(|item| item.background.is_transparent())
+    {
+        let item = boards.items.remove(index);
+        boards.items.insert(0, item);
+    } else {
+        warn!("No transparent board defined; adding default overlay board");
+        boards.items.insert(0, BoardsConfig::default_overlay_item());
     }
 }
 

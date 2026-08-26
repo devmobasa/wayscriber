@@ -46,110 +46,15 @@ impl WaylandState {
                 .clear_help_overlay_press_for(help_press_source);
         }
 
-        if self.input_state.region_is_active() {
-            if on_toolbar || self.pointer_over_toolbar() {
-                // A toolbar interaction ends the region first, then runs
-                // normally; the click never lands on the selector.
-                self.cancel_region_for_toolbar_interaction();
-            } else {
-                match button {
-                    BTN_LEFT => {
-                        if let Some(action) = self.region_review_action_at(event.position) {
-                            self.submit_region_review_action(action);
-                            // The toggle keeps Review active, so its release is
-                            // consumed by the active-region branch. Arming the
-                            // generic post-modal latch here would swallow an
-                            // unrelated canvas release after a keyboard exit.
-                            if review_action_suppresses_next_release(action) {
-                                self.suppress_next_release_from(RegionInputSource::Pointer);
-                            }
-                            return;
-                        }
-                        if self.region_review_bar_contains(event.position) {
-                            return;
-                        }
-                        self.begin_region_selection(
-                            RegionInputSource::Pointer,
-                            event.position.0,
-                            event.position.1,
-                        );
-                    }
-                    BTN_RIGHT => {
-                        self.cancel_active_region_selector();
-                        self.suppress_next_release_from(RegionInputSource::Pointer);
-                    }
-                    _ => {}
-                }
-                return;
-            }
-        }
-
-        if self.input_state.eyedropper_is_active() {
-            if on_toolbar || self.pointer_over_toolbar() {
-                self.cancel_eyedropper();
-            } else {
-                match button {
-                    BTN_LEFT => {
-                        self.sample_eyedropper(event.position.0, event.position.1);
-                        self.suppress_next_release_from(RegionInputSource::Pointer);
-                    }
-                    BTN_RIGHT => {
-                        self.cancel_eyedropper();
-                        self.suppress_next_release_from(RegionInputSource::Pointer);
-                    }
-                    _ => {}
-                }
-                return;
-            }
-        }
-
-        // Block pointer input when tour is active
-        if self.input_state.tour_active {
+        if self.handle_region_pointer_press(event, on_toolbar, button) {
             return;
         }
 
-        // The help overlay is modal for pointer input: swallow the press so a
-        // click never starts a stroke on the canvas beneath it, but record the
-        // help target under the press. The release enforces a same-target
-        // contract before it runs a row (or dismisses), so a press that starts
-        // on bare chrome (or outside) and drags onto a clickable row — notably
-        // the destructive Clear row — never executes it. Toolbar surfaces report
-        // toolbar-local coordinates, so convert to screen space just like the
-        // toast/status-HUD press guards below.
-        if self.input_state.show_help {
-            let screen_position = if on_toolbar {
-                self.toolbar_surface_screen_coords(&event.surface, event.position)
-            } else {
-                Some(event.position)
-            };
-            match screen_position {
-                Some((sx, sy)) => self.input_state.note_help_overlay_press(
-                    help_press_source,
-                    sx.round() as i32,
-                    sy.round() as i32,
-                ),
-                None => {
-                    self.input_state
-                        .clear_help_overlay_press_for(help_press_source);
-                }
-            }
+        if self.handle_eyedropper_pointer_press(event, on_toolbar, button) {
             return;
         }
 
-        // Handle command palette clicks
-        if self.input_state.command_palette_is_engaged() {
-            if button == BTN_LEFT {
-                let screen_width = self.surface.width();
-                let screen_height = self.surface.height();
-                if self.input_state.handle_command_palette_click(
-                    event.position.0 as i32,
-                    event.position.1 as i32,
-                    screen_width,
-                    screen_height,
-                ) {
-                    self.suppress_next_release_from(RegionInputSource::Pointer);
-                }
-            }
+        if self.handle_modal_pointer_press(event, on_toolbar, button, help_press_source) {
             return;
         }
 
@@ -168,83 +73,11 @@ impl WaylandState {
                 self.is_move_dragging()
             );
         }
-        if inline_active {
-            // Inline bars share the canvas surface, so their swatch recolor
-            // gesture is resolved here rather than in the `on_toolbar` branch.
-            if button == BTN_RIGHT
-                && self.inline_toolbar_secondary_press(event.position, Some(conn), Some(qh))
-            {
-                self.refresh_keyboard_interactivity();
-                return;
-            }
-            if button == BTN_LEFT && self.inline_toolbar_press(event.position, Some(conn), Some(qh))
-            {
-                drag_log(|| {
-                    format!(
-                        "pointer press: inline handled, drag_active={}, pos=({:.3}, {:.3}), surface={}",
-                        self.toolbar_dragging(),
-                        event.position.0,
-                        event.position.1,
-                        surface_id(&event.surface)
-                    )
-                });
-                if self.is_move_dragging() {
-                    self.lock_pointer_for_drag(qh, &event.surface);
-                }
-                return;
-            }
-            if self.pointer_over_toolbar() {
-                if button == BTN_LEFT {
-                    self.dismiss_top_toolbar_menus();
-                }
-                return;
-            }
+        if inline_active && self.handle_inline_pointer_press(conn, qh, event, button) {
+            return;
         }
         if on_toolbar {
-            // Secondary click on a quick-color swatch opens the picker bound to
-            // that palette slot. Every other toolbar control ignores the button,
-            // so the press is consumed only when it lands on a swatch.
-            if button == BTN_RIGHT
-                && let Some(index) = self
-                    .toolbar
-                    .quick_color_slot_at(&event.surface, event.position)
-            {
-                self.handle_toolbar_event(
-                    ToolbarEvent::EditQuickColor { index },
-                    Some(conn),
-                    Some(qh),
-                );
-                self.toolbar.mark_dirty();
-                self.input_state.needs_redraw = true;
-                self.refresh_keyboard_interactivity();
-                return;
-            }
-            let mut handled = false;
-            if button == BTN_LEFT
-                && let Some((intent, drag)) =
-                    self.toolbar.pointer_press(&event.surface, event.position)
-            {
-                handled = true;
-                let toolbar_event = intent_to_event(intent, self.toolbar.last_snapshot());
-                if matches!(toolbar_event, ToolbarEvent::MoveTopToolbar { .. }) && drag {
-                    self.lock_pointer_for_drag(qh, &event.surface);
-                }
-                log::info!(
-                    "toolbar press: drag_start={}, surface={}, seat={:?}, inline_active={}",
-                    drag,
-                    surface_id(&event.surface),
-                    self.current_seat_id(),
-                    self.inline_toolbars_active()
-                );
-                self.set_toolbar_dragging(drag);
-                self.handle_toolbar_event(toolbar_event, Some(conn), Some(qh));
-                self.toolbar.mark_dirty();
-                self.input_state.needs_redraw = true;
-                self.refresh_keyboard_interactivity();
-            }
-            if button == BTN_LEFT && !handled {
-                self.dismiss_top_toolbar_menus();
-            }
+            self.handle_toolbar_pointer_press(conn, qh, event, button);
             return;
         } else if self.pointer_over_toolbar() {
             self.finish_toolbar_item_drag(false);
@@ -256,34 +89,8 @@ impl WaylandState {
             return;
         }
 
-        if button == BTN_LEFT {
-            let screen_x = event.position.0.round() as i32;
-            let screen_y = event.position.1.round() as i32;
-            self.set_pending_toast_press(None);
-            if let Some(pressed) = self.input_state.toast_press_at(screen_x, screen_y) {
-                self.set_pending_toast_press(Some(pressed));
-                return;
-            }
-            // Interactive status HUD: report the hit on press without side
-            // effects; the matching surface opens on release-inside.
-            self.set_pending_status_hud_press(false);
-            if self.input_state.status_hud_contains(screen_x, screen_y) {
-                self.set_pending_status_hud_press(true);
-                return;
-            }
-            // Interactive zoom chip: same press→release contract. Any press
-            // inside the pill is swallowed here and recorded as `Passive` (the
-            // `NN%` readout / inter-piece gap) or `Button(kind)`, so its release
-            // stays consumed either way; a `Button` release dispatches its zoom
-            // action only when it lands on the SAME button. The cached layout
-            // only exists while the chip is visible, so `zoom_chip_contains` is
-            // false when it is hidden and the press falls through.
-            self.set_pending_zoom_chip_press(ZoomChipPress::None);
-            if self.input_state.zoom_chip_contains(screen_x, screen_y) {
-                let pressed = self.input_state.zoom_chip_press_at(screen_x, screen_y);
-                self.set_pending_zoom_chip_press(pressed);
-                return;
-            }
+        if button == BTN_LEFT && self.handle_overlay_pointer_press(event.position) {
+            return;
         }
 
         debug!(
@@ -315,6 +122,238 @@ impl WaylandState {
         self.input_state
             .on_mouse_press_with_canvas(mb, screen_x, screen_y, wx, wy);
         self.input_state.needs_redraw = true;
+    }
+
+    fn handle_region_pointer_press(
+        &mut self,
+        event: &PointerEvent,
+        on_toolbar: bool,
+        button: u32,
+    ) -> bool {
+        if !self.input_state.region_is_active() {
+            return false;
+        }
+        if on_toolbar || self.pointer_over_toolbar() {
+            // A toolbar interaction ends the region first, then runs normally;
+            // the click never lands on the selector.
+            self.cancel_region_for_toolbar_interaction();
+            return false;
+        }
+        match button {
+            BTN_LEFT => {
+                if let Some(action) = self.region_review_action_at(event.position) {
+                    self.submit_region_review_action(action);
+                    // The toggle keeps Review active, so its release is consumed
+                    // by the active-region branch. Arming the generic post-modal
+                    // latch would swallow an unrelated canvas release later.
+                    if review_action_suppresses_next_release(action) {
+                        self.suppress_next_release_from(RegionInputSource::Pointer);
+                    }
+                } else if !self.region_review_bar_contains(event.position) {
+                    self.begin_region_selection(
+                        RegionInputSource::Pointer,
+                        event.position.0,
+                        event.position.1,
+                    );
+                }
+            }
+            BTN_RIGHT => {
+                self.cancel_active_region_selector();
+                self.suppress_next_release_from(RegionInputSource::Pointer);
+            }
+            _ => {}
+        }
+        true
+    }
+
+    fn handle_eyedropper_pointer_press(
+        &mut self,
+        event: &PointerEvent,
+        on_toolbar: bool,
+        button: u32,
+    ) -> bool {
+        if !self.input_state.eyedropper_is_active() {
+            return false;
+        }
+        if on_toolbar || self.pointer_over_toolbar() {
+            self.cancel_eyedropper();
+            return false;
+        }
+        match button {
+            BTN_LEFT => {
+                self.sample_eyedropper(event.position.0, event.position.1);
+                self.suppress_next_release_from(RegionInputSource::Pointer);
+            }
+            BTN_RIGHT => {
+                self.cancel_eyedropper();
+                self.suppress_next_release_from(RegionInputSource::Pointer);
+            }
+            _ => {}
+        }
+        true
+    }
+
+    fn handle_modal_pointer_press(
+        &mut self,
+        event: &PointerEvent,
+        on_toolbar: bool,
+        button: u32,
+        help_press_source: HelpOverlayPressSource,
+    ) -> bool {
+        if self.input_state.tour_active {
+            return true;
+        }
+        // Help is modal: remember the target so release can require the same row.
+        if self.input_state.show_help {
+            let screen_position = if on_toolbar {
+                self.toolbar_surface_screen_coords(&event.surface, event.position)
+            } else {
+                Some(event.position)
+            };
+            match screen_position {
+                Some((sx, sy)) => self.input_state.note_help_overlay_press(
+                    help_press_source,
+                    sx.round() as i32,
+                    sy.round() as i32,
+                ),
+                None => {
+                    self.input_state
+                        .clear_help_overlay_press_for(help_press_source);
+                }
+            }
+            return true;
+        }
+        if !self.input_state.command_palette_is_engaged() {
+            return false;
+        }
+        if button == BTN_LEFT {
+            let handled = self.input_state.handle_command_palette_click(
+                event.position.0 as i32,
+                event.position.1 as i32,
+                self.surface.width(),
+                self.surface.height(),
+            );
+            if handled {
+                self.suppress_next_release_from(RegionInputSource::Pointer);
+            }
+        }
+        true
+    }
+
+    fn handle_inline_pointer_press(
+        &mut self,
+        conn: &wayland_client::Connection,
+        qh: &QueueHandle<Self>,
+        event: &PointerEvent,
+        button: u32,
+    ) -> bool {
+        if button == BTN_RIGHT
+            && self.inline_toolbar_secondary_press(event.position, Some(conn), Some(qh))
+        {
+            self.refresh_keyboard_interactivity();
+            return true;
+        }
+        if button == BTN_LEFT && self.inline_toolbar_press(event.position, Some(conn), Some(qh)) {
+            drag_log(|| {
+                format!(
+                    "pointer press: inline handled, drag_active={}, pos=({:.3}, {:.3}), surface={}",
+                    self.toolbar_dragging(),
+                    event.position.0,
+                    event.position.1,
+                    surface_id(&event.surface)
+                )
+            });
+            if self.is_move_dragging() {
+                self.lock_pointer_for_drag(qh, &event.surface);
+            }
+            return true;
+        }
+        if !self.pointer_over_toolbar() {
+            return false;
+        }
+        if button == BTN_LEFT {
+            self.dismiss_top_toolbar_menus();
+        }
+        true
+    }
+
+    fn handle_toolbar_pointer_press(
+        &mut self,
+        conn: &wayland_client::Connection,
+        qh: &QueueHandle<Self>,
+        event: &PointerEvent,
+        button: u32,
+    ) {
+        if button == BTN_RIGHT
+            && let Some(index) = self
+                .toolbar
+                .quick_color_slot_at(&event.surface, event.position)
+        {
+            self.handle_toolbar_event(ToolbarEvent::EditQuickColor { index }, Some(conn), Some(qh));
+            self.toolbar.mark_dirty();
+            self.input_state.needs_redraw = true;
+            self.refresh_keyboard_interactivity();
+            return;
+        }
+        let handled = if button == BTN_LEFT {
+            self.handle_primary_toolbar_pointer_press(conn, qh, event)
+        } else {
+            false
+        };
+        if button == BTN_LEFT && !handled {
+            self.dismiss_top_toolbar_menus();
+        }
+    }
+
+    fn handle_primary_toolbar_pointer_press(
+        &mut self,
+        conn: &wayland_client::Connection,
+        qh: &QueueHandle<Self>,
+        event: &PointerEvent,
+    ) -> bool {
+        let Some((intent, drag)) = self.toolbar.pointer_press(&event.surface, event.position)
+        else {
+            return false;
+        };
+        let toolbar_event = intent_to_event(intent, self.toolbar.last_snapshot());
+        if matches!(toolbar_event, ToolbarEvent::MoveTopToolbar { .. }) && drag {
+            self.lock_pointer_for_drag(qh, &event.surface);
+        }
+        log::info!(
+            "toolbar press: drag_start={}, surface={}, seat={:?}, inline_active={}",
+            drag,
+            surface_id(&event.surface),
+            self.current_seat_id(),
+            self.inline_toolbars_active()
+        );
+        self.set_toolbar_dragging(drag);
+        self.handle_toolbar_event(toolbar_event, Some(conn), Some(qh));
+        self.toolbar.mark_dirty();
+        self.input_state.needs_redraw = true;
+        self.refresh_keyboard_interactivity();
+        true
+    }
+
+    fn handle_overlay_pointer_press(&mut self, position: (f64, f64)) -> bool {
+        let screen_x = position.0.round() as i32;
+        let screen_y = position.1.round() as i32;
+        self.set_pending_toast_press(None);
+        if let Some(pressed) = self.input_state.toast_press_at(screen_x, screen_y) {
+            self.set_pending_toast_press(Some(pressed));
+            return true;
+        }
+        self.set_pending_status_hud_press(false);
+        if self.input_state.status_hud_contains(screen_x, screen_y) {
+            self.set_pending_status_hud_press(true);
+            return true;
+        }
+        self.set_pending_zoom_chip_press(ZoomChipPress::None);
+        if !self.input_state.zoom_chip_contains(screen_x, screen_y) {
+            return false;
+        }
+        let pressed = self.input_state.zoom_chip_press_at(screen_x, screen_y);
+        self.set_pending_zoom_chip_press(pressed);
+        true
     }
 
     fn try_dispatch_pointer_shortcut(&mut self, button: u32) -> bool {

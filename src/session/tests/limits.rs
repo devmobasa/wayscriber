@@ -2,7 +2,7 @@ use super::super::*;
 use super::helpers::dummy_input_state;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::{Color, EmbeddedImage, FontDescriptor, Shape};
-use crate::input::{BOARD_ID_WHITEBOARD, EraserMode};
+use crate::input::{BOARD_ID_WHITEBOARD, EraserMode, InputState};
 use std::fs;
 use std::path::Path;
 
@@ -237,6 +237,42 @@ fn pseudo_random_bytes(len: usize) -> Vec<u8> {
         .collect()
 }
 
+fn populate_compressed_limit_pages(input: &mut InputState, page_count: usize, image_bytes: usize) {
+    for page_index in 0..page_count {
+        if page_index > 0 {
+            input.page_new();
+        }
+        add_image_and_annotations(input.boards.active_frame_mut(), page_index, image_bytes);
+    }
+}
+
+fn assert_restored_limit_page(page: &crate::draw::Frame, page_index: usize, image_bytes: usize) {
+    assert_eq!(page.shapes.len(), 3, "page {page_index} shape count");
+    assert_eq!(page.undo_stack_len(), 1, "page {page_index} undo depth");
+    match &page.shapes[0].shape {
+        Shape::Image { data, .. } => {
+            assert_eq!(data.bytes.len(), image_bytes);
+            assert_eq!(data.width, 640);
+            assert_eq!(data.height, 360);
+        }
+        other => panic!("expected image on page {page_index}, got {other:?}"),
+    }
+    match &page.shapes[1].shape {
+        Shape::Freehand { points, .. } => {
+            assert_eq!(points.len(), 3);
+            assert_eq!(
+                points[0],
+                (i32::try_from(page_index).expect("page index fits i32"), 20)
+            );
+        }
+        other => panic!("expected annotation stroke on page {page_index}, got {other:?}"),
+    }
+    match &page.shapes[2].shape {
+        Shape::Text { text, .. } => assert_eq!(text, &format!("note-{page_index}")),
+        other => panic!("expected text annotation on page {page_index}, got {other:?}"),
+    }
+}
+
 #[test]
 fn save_snapshot_allows_compressed_payload_that_fits_limit() {
     const PAGE_COUNT: usize = 12;
@@ -254,12 +290,7 @@ fn save_snapshot_allows_compressed_payload_that_fits_limit() {
 
     let mut input = dummy_input_state();
     input.switch_board(BOARD_ID_WHITEBOARD);
-    for page_index in 0..PAGE_COUNT {
-        if page_index > 0 {
-            input.page_new();
-        }
-        add_image_and_annotations(input.boards.active_frame_mut(), page_index, IMAGE_BYTES);
-    }
+    populate_compressed_limit_pages(&mut input, PAGE_COUNT, IMAGE_BYTES);
     assert!(input.switch_to_page(ACTIVE_PAGE));
 
     let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
@@ -297,32 +328,7 @@ fn save_snapshot_allows_compressed_payload_that_fits_limit() {
     assert_eq!(pages.page_count(), PAGE_COUNT);
     assert_eq!(pages.active_index(), ACTIVE_PAGE);
     for (page_index, page) in pages.pages().iter().enumerate() {
-        assert_eq!(page.shapes.len(), 3, "page {page_index} shape count");
-        assert_eq!(page.undo_stack_len(), 1, "page {page_index} undo depth");
-        match &page.shapes[0].shape {
-            Shape::Image { data, .. } => {
-                assert_eq!(data.bytes.len(), IMAGE_BYTES);
-                assert_eq!(data.width, 640);
-                assert_eq!(data.height, 360);
-            }
-            other => panic!("expected image on page {page_index}, got {other:?}"),
-        }
-        match &page.shapes[1].shape {
-            Shape::Freehand { points, .. } => {
-                assert_eq!(points.len(), 3);
-                assert_eq!(
-                    points[0],
-                    (i32::try_from(page_index).expect("page index fits i32"), 20)
-                );
-            }
-            other => panic!("expected annotation stroke on page {page_index}, got {other:?}"),
-        }
-        match &page.shapes[2].shape {
-            Shape::Text { text, .. } => {
-                assert_eq!(text, &format!("note-{page_index}"));
-            }
-            other => panic!("expected text annotation on page {page_index}, got {other:?}"),
-        }
+        assert_restored_limit_page(page, page_index, IMAGE_BYTES);
     }
 }
 
