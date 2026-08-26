@@ -19,6 +19,47 @@ pub(in crate::backend::wayland) enum RenderOutcome {
     BuffersInFlight,
 }
 
+#[derive(Clone, Copy)]
+struct RenderAnimationState {
+    highlight: bool,
+    preset_feedback: bool,
+    ui_toast: bool,
+    blocked_feedback: bool,
+    text_edit_entry: bool,
+    input_hud: bool,
+    ocr_scan: bool,
+}
+
+impl RenderAnimationState {
+    fn any_active(self) -> bool {
+        [
+            self.highlight,
+            self.preset_feedback,
+            self.ui_toast,
+            self.blocked_feedback,
+            self.text_edit_entry,
+            self.input_hud,
+            self.ocr_scan,
+        ]
+        .into_iter()
+        .any(|active| active)
+    }
+}
+
+fn record_render_stage<T>(
+    enabled: bool,
+    breakdown: Option<&mut PerfRenderBreakdown>,
+    record: impl FnOnce(&mut PerfRenderBreakdown, Duration),
+    body: impl FnOnce() -> T,
+) -> T {
+    let started = enabled.then(Instant::now);
+    let result = body();
+    if let (Some(breakdown), Some(started)) = (breakdown, started) {
+        record(breakdown, Instant::now().saturating_duration_since(started));
+    }
+    result
+}
+
 impl WaylandState {
     pub(in crate::backend::wayland) fn render(
         &mut self,
@@ -48,17 +89,14 @@ impl WaylandState {
         });
         macro_rules! record_stage {
             ($field:ident, $body:expr) => {{
-                let stage_start = perf_enabled.then(Instant::now);
-                let result = $body;
-                if let (Some(breakdown), Some(stage_start)) =
-                    (render_breakdown.as_mut(), stage_start)
-                {
-                    breakdown.stages.$field = breakdown
-                        .stages
-                        .$field
-                        .saturating_add(Instant::now().saturating_duration_since(stage_start));
-                }
-                result
+                record_render_stage(
+                    perf_enabled,
+                    render_breakdown.as_mut(),
+                    |breakdown, duration| {
+                        breakdown.stages.$field = breakdown.stages.$field.saturating_add(duration);
+                    },
+                    || $body,
+                )
             }};
         }
 
@@ -74,8 +112,8 @@ impl WaylandState {
                 phys_width as i32,
                 phys_height as i32,
                 (phys_width * 4) as i32,
-            )?
-        });
+            )
+        })?;
         let Some(acquired) = acquired else {
             // Every slot is still owned by the compositor. Keep the redraw
             // pending and retry on the next pass rather than painting over a
@@ -97,32 +135,9 @@ impl WaylandState {
         self.surface.update_pool_size(pool_size);
 
         let now = Instant::now();
-        let (
-            highlight_active,
-            preset_feedback_active,
-            ui_toast_active,
-            blocked_feedback_active,
-            text_edit_entry_active,
-            input_hud_animating,
-            ocr_scan_animating,
-        ) = record_stage!(advance_animations, {
-            (
-                self.input_state.advance_click_highlights(now),
-                self.input_state.advance_preset_feedback(now),
-                self.input_state.advance_ui_toast(now),
-                self.input_state.advance_blocked_feedback(now),
-                self.input_state.advance_text_edit_entry_feedback(now),
-                self.input_state.advance_input_hud(now),
-                self.input_state.advance_ocr_scan(now),
-            )
-        });
-        let ui_animation_active = highlight_active
-            || preset_feedback_active
-            || ui_toast_active
-            || blocked_feedback_active
-            || text_edit_entry_active
-            || input_hud_animating
-            || ocr_scan_animating;
+        let animation_state =
+            record_stage!(advance_animations, { self.advance_render_animations(now) });
+        let ui_animation_active = animation_state.any_active();
         self.update_ui_animation_tick(now, ui_animation_active);
         let keep_rendering = ui_animation_active && self.ui_animation_interval.is_none();
 
@@ -132,51 +147,15 @@ impl WaylandState {
         // damage reported for this slot.
         let logical_width = width.min(i32::MAX as u32) as i32;
         let logical_height = height.min(i32::MAX as u32) as i32;
-        let mut damage_diagnostics = PerfDamageDiagnostics::default();
-        record_stage!(dirty_collect, {
-            let input_damage_report = self.input_state.take_dirty_region_report();
-            let input_damage = input_damage_report.regions;
-            let input_full_reason = input_full_damage_reason(input_damage_report.full_reason);
-            damage_diagnostics.input_regions = input_damage.len();
-            damage_diagnostics.input_full_reason = input_full_reason;
-            damage_diagnostics.input_covers_surface =
-                damage_covers_logical_surface(&input_damage, logical_width, logical_height);
-            let force_full_damage_reason = self.render_force_full_damage_reason();
-            // Transient UI effects (toasts, feedback flashes) emit targeted damage
-            // instead of forcing full-surface redraws. Collect on every frame so the
-            // previous-bounds tracking stays in sync even when full damage is forced
-            // for other reasons.
-            let tool_preview_active = render_ui && self.mouse_tool_preview_eligible();
-            let zoom_chip_active = render_ui && self.zoom_chip_visible();
-            let command_palette_active = render_ui && self.input_state.command_palette_is_engaged();
-            let color_picker_active = render_ui && self.input_state.is_color_picker_popup_open();
-            let input_hud_active = render_ui && self.input_state.input_hud_visible();
-            let shape_measure_badge_active = render_ui && !self.capture_picker_chrome_suppressed();
-            let ui_effect_damage = self.collect_ui_effect_damage(
-                ui_toast_active,
-                preset_feedback_active,
-                blocked_feedback_active,
-                text_edit_entry_active,
-                render_ui && self.input_state.show_status_bar,
-                zoom_chip_active,
-                input_hud_active,
-                command_palette_active,
-                color_picker_active,
-                tool_preview_active,
-                shape_measure_badge_active,
+        let mut damage_diagnostics = record_stage!(dirty_collect, {
+            self.collect_frame_damage(
+                render_ui,
+                animation_state,
                 width,
                 height,
-            );
-            if let Some(reason) = force_full_damage_reason {
-                // Zoom and board pan use a world transform; full damage avoids
-                // mismatched coordinate spaces.
-                self.buffer_damage.mark_all_full(reason);
-            } else if let Some(reason) = input_full_reason {
-                self.buffer_damage.mark_all_full(reason);
-            } else {
-                self.buffer_damage.add_regions(input_damage);
-                self.buffer_damage.add_regions(ui_effect_damage);
-            }
+                logical_width,
+                logical_height,
+            )
         });
 
         // Take damage for this buffer slot (identified by canvas memory address).
@@ -255,13 +234,14 @@ impl WaylandState {
                     phys_height as i32,
                     (phys_width * 4) as i32,
                 )
-                .context("Failed to create Cairo surface")?
+                .context("Failed to create Cairo surface")
             };
-
-            let ctx =
-                cairo::Context::new(&cairo_surface).context("Failed to create Cairo context")?;
-            (cairo_surface, ctx)
-        });
+            cairo_surface.and_then(|cairo_surface| {
+                let ctx = cairo::Context::new(&cairo_surface)
+                    .context("Failed to create Cairo context")?;
+                Ok((cairo_surface, ctx))
+            })
+        })?;
 
         record_stage!(clear_clip, {
             // Optimization: Clip drawing to the damage regions.
@@ -478,6 +458,65 @@ impl WaylandState {
             self.capture.mark_preflight_rendered();
         }
         Ok(RenderOutcome::Committed { keep_rendering })
+    }
+
+    fn advance_render_animations(&mut self, now: Instant) -> RenderAnimationState {
+        RenderAnimationState {
+            highlight: self.input_state.advance_click_highlights(now),
+            preset_feedback: self.input_state.advance_preset_feedback(now),
+            ui_toast: self.input_state.advance_ui_toast(now),
+            blocked_feedback: self.input_state.advance_blocked_feedback(now),
+            text_edit_entry: self.input_state.advance_text_edit_entry_feedback(now),
+            input_hud: self.input_state.advance_input_hud(now),
+            ocr_scan: self.input_state.advance_ocr_scan(now),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn collect_frame_damage(
+        &mut self,
+        render_ui: bool,
+        animation: RenderAnimationState,
+        width: u32,
+        height: u32,
+        logical_width: i32,
+        logical_height: i32,
+    ) -> PerfDamageDiagnostics {
+        let input_damage_report = self.input_state.take_dirty_region_report();
+        let input_damage = input_damage_report.regions;
+        let input_full_reason = input_full_damage_reason(input_damage_report.full_reason);
+        let diagnostics = PerfDamageDiagnostics {
+            input_regions: input_damage.len(),
+            input_full_reason,
+            input_covers_surface: damage_covers_logical_surface(
+                &input_damage,
+                logical_width,
+                logical_height,
+            ),
+            ..PerfDamageDiagnostics::default()
+        };
+        let ui_effect_damage = self.collect_ui_effect_damage(
+            animation.ui_toast,
+            animation.preset_feedback,
+            animation.blocked_feedback,
+            animation.text_edit_entry,
+            render_ui && self.input_state.show_status_bar,
+            render_ui && self.zoom_chip_visible(),
+            render_ui && self.input_state.input_hud_visible(),
+            render_ui && self.input_state.command_palette_is_engaged(),
+            render_ui && self.input_state.is_color_picker_popup_open(),
+            render_ui && self.mouse_tool_preview_eligible(),
+            render_ui && !self.capture_picker_chrome_suppressed(),
+            width,
+            height,
+        );
+        if let Some(reason) = self.render_force_full_damage_reason().or(input_full_reason) {
+            self.buffer_damage.mark_all_full(reason);
+        } else {
+            self.buffer_damage.add_regions(input_damage);
+            self.buffer_damage.add_regions(ui_effect_damage);
+        }
+        diagnostics
     }
 
     fn render_force_full_damage_reason(&self) -> Option<FullDamageReason> {
