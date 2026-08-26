@@ -535,6 +535,23 @@ fn save_snapshot_inner(
         compressed,
     };
     log_near_limit(&report);
+    cleanup_snapshot_artifacts_after_save(
+        options,
+        snapshot_has_board_data,
+        contentless_clear_boundary,
+        had_session_file,
+        preserves_recoverable_recovery,
+    );
+    Ok(Some(report))
+}
+
+fn cleanup_snapshot_artifacts_after_save(
+    options: &SessionOptions,
+    snapshot_has_board_data: bool,
+    contentless_clear_boundary: bool,
+    had_session_file: bool,
+    preserves_recoverable_recovery: bool,
+) {
     if snapshot_has_board_data {
         if remove_recoverable_artifacts_suppressed_by_clear_marker(options) {
             remove_clear_marker_file(options);
@@ -556,5 +573,4 @@ fn save_snapshot_inner(
         remove_recovery_file(options);
         remove_recovery_recoverable_marker_file(options);
     }
-    Ok(Some(report))
 }
