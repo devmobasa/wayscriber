@@ -46,22 +46,17 @@ pub(super) struct WaylandSetup {
     pub(super) layer_shell_available: bool,
 }
 
-pub(super) fn setup_wayland() -> Result<WaylandSetup> {
-    // Connect to Wayland compositor
-    let conn = Connection::connect_to_env().context("Failed to connect to Wayland compositor")?;
-    debug!("Connected to Wayland display");
+type ShellGlobals = (
+    Option<LayerShell>,
+    Option<XdgShell>,
+    Option<ActivationState>,
+);
 
-    // Initialize registry and event queue
-    let (globals, event_queue) =
-        registry_queue_init(&conn).context("Failed to initialize Wayland registry")?;
-    let qh = event_queue.handle();
-
-    // Bind global interfaces
-    let compositor_state =
-        CompositorState::bind(&globals, &qh).context("wl_compositor not available")?;
-    debug!("Bound compositor");
-
-    let layer_shell = match LayerShell::bind(&globals, &qh) {
+fn bind_shell_globals(
+    globals: &wayland_client::globals::GlobalList,
+    qh: &wayland_client::QueueHandle<WaylandState>,
+) -> Result<ShellGlobals> {
+    let layer_shell = match LayerShell::bind(globals, qh) {
         Ok(shell) => {
             debug!("Bound layer shell");
             Some(shell)
@@ -78,8 +73,7 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
             None
         }
     };
-
-    let xdg_shell = match XdgShell::bind(&globals, &qh) {
+    let xdg_shell = match XdgShell::bind(globals, qh) {
         Ok(shell) => {
             debug!("Bound xdg-shell");
             Some(shell)
@@ -89,8 +83,7 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
             None
         }
     };
-
-    let activation = match ActivationState::bind(&globals, &qh) {
+    let activation = match ActivationState::bind(globals, qh) {
         Ok(state) => {
             debug!("Bound xdg-activation");
             Some(state)
@@ -100,12 +93,96 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
             None
         }
     };
-
     if layer_shell.is_none() && xdg_shell.is_none() {
         return Err(anyhow::anyhow!(
             "Wayland compositor does not expose layer-shell or xdg-shell protocols"
         ));
     }
+    Ok((layer_shell, xdg_shell, activation))
+}
+
+fn bind_capture_globals(
+    globals: &wayland_client::globals::GlobalList,
+    qh: &wayland_client::QueueHandle<WaylandState>,
+) -> (
+    Option<ZwlrScreencopyManagerV1>,
+    Option<ExtImageCopyManagers>,
+) {
+    let screencopy_manager = match globals.bind::<ZwlrScreencopyManagerV1, _, _>(
+        qh,
+        1..=MAX_SHM_SCREENCOPY_VERSION,
+        (),
+    ) {
+        Ok(manager) => {
+            debug!("Bound zwlr_screencopy_manager_v1");
+            Some(manager)
+        }
+        Err(err) => {
+            warn!(
+                "zwlr_screencopy_manager_v1 not available; frozen mode may use portal fallback: {}",
+                err
+            );
+            None
+        }
+    };
+    let ext_image_copy_manager = globals
+        .bind::<ExtImageCopyCaptureManagerV1, _, _>(qh, 1..=1, ())
+        .ok();
+    let ext_output_source_manager = globals
+        .bind::<ExtOutputImageCaptureSourceManagerV1, _, _>(qh, 1..=1, ())
+        .ok();
+    let ext_image_copy_managers = match (ext_image_copy_manager, ext_output_source_manager) {
+        (Some(capture), Some(output_source)) => {
+            debug!("Bound ext-image-copy-capture output backend");
+            Some(ExtImageCopyManagers::new(capture, output_source))
+        }
+        (capture, output_source) => {
+            debug!(
+                "ext-image-copy-capture output backend unavailable: capture_manager={}, output_source_manager={}",
+                capture.is_some(),
+                output_source.is_some()
+            );
+            None
+        }
+    };
+    (screencopy_manager, ext_image_copy_managers)
+}
+
+fn bind_text_input_manager(
+    globals: &wayland_client::globals::GlobalList,
+    qh: &wayland_client::QueueHandle<WaylandState>,
+) -> Option<ZwpTextInputManagerV3> {
+    match globals.bind::<ZwpTextInputManagerV3, _, _>(qh, 1..=1, ()) {
+        Ok(manager) => {
+            debug!("Bound zwp_text_input_manager_v3");
+            Some(manager)
+        }
+        Err(err) => {
+            debug!(
+                "zwp_text_input_manager_v3 not available; IME disabled: {}",
+                err
+            );
+            None
+        }
+    }
+}
+
+pub(super) fn setup_wayland() -> Result<WaylandSetup> {
+    // Connect to Wayland compositor
+    let conn = Connection::connect_to_env().context("Failed to connect to Wayland compositor")?;
+    debug!("Connected to Wayland display");
+
+    // Initialize registry and event queue
+    let (globals, event_queue) =
+        registry_queue_init(&conn).context("Failed to initialize Wayland registry")?;
+    let qh = event_queue.handle();
+
+    // Bind global interfaces
+    let compositor_state =
+        CompositorState::bind(&globals, &qh).context("wl_compositor not available")?;
+    debug!("Bound compositor");
+
+    let (layer_shell, xdg_shell, activation) = bind_shell_globals(&globals, &qh)?;
 
     let shm = Shm::bind(&globals, &qh).context("wl_shm not available")?;
     debug!("Bound shared memory");
@@ -125,61 +202,12 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
         debug!("Pointer constraints global not available");
     }
 
-    let screencopy_manager = match globals.bind::<ZwlrScreencopyManagerV1, _, _>(
-        &qh,
-        1..=MAX_SHM_SCREENCOPY_VERSION,
-        (),
-    ) {
-        Ok(manager) => {
-            debug!("Bound zwlr_screencopy_manager_v1");
-            Some(manager)
-        }
-        Err(err) => {
-            warn!(
-                "zwlr_screencopy_manager_v1 not available; frozen mode may use portal fallback: {}",
-                err
-            );
-            None
-        }
-    };
-
-    let ext_image_copy_manager = globals
-        .bind::<ExtImageCopyCaptureManagerV1, _, _>(&qh, 1..=1, ())
-        .ok();
-    let ext_output_source_manager = globals
-        .bind::<ExtOutputImageCaptureSourceManagerV1, _, _>(&qh, 1..=1, ())
-        .ok();
-    let ext_image_copy_managers = match (ext_image_copy_manager, ext_output_source_manager) {
-        (Some(capture), Some(output_source)) => {
-            debug!("Bound ext-image-copy-capture output backend");
-            Some(ExtImageCopyManagers::new(capture, output_source))
-        }
-        (capture, output_source) => {
-            debug!(
-                "ext-image-copy-capture output backend unavailable: capture_manager={}, output_source_manager={}",
-                capture.is_some(),
-                output_source.is_some()
-            );
-            None
-        }
-    };
+    let (screencopy_manager, ext_image_copy_managers) = bind_capture_globals(&globals, &qh);
 
     // IME / text-input-v3 for the text and sticky-note tools. Optional: when
     // the compositor lacks it, editing falls back to the raw keysym path
     // (single-key characters only).
-    let text_input_manager = match globals.bind::<ZwpTextInputManagerV3, _, _>(&qh, 1..=1, ()) {
-        Ok(manager) => {
-            debug!("Bound zwp_text_input_manager_v3");
-            Some(manager)
-        }
-        Err(err) => {
-            debug!(
-                "zwp_text_input_manager_v3 not available; IME disabled: {}",
-                err
-            );
-            None
-        }
-    };
+    let text_input_manager = bind_text_input_manager(&globals, &qh);
 
     let layer_shell_available = layer_shell.is_some();
 
