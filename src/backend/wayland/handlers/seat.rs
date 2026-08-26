@@ -22,65 +22,66 @@ impl SeatHandler for WaylandState {
         seat: wl_seat::WlSeat,
         capability: Capability,
     ) {
-        if capability == Capability::Keyboard {
-            info!("Keyboard capability available");
-            self.set_current_seat(Some(seat.clone()));
-            if self.seat_state.get_keyboard(qh, &seat, None).is_ok() {
-                debug!("Keyboard initialized");
-            }
-            // IME: create the single supported text-input object alongside the
-            // first physical keyboard seat. Driven by enable()/disable()
-            // reconcile; see the explicit single-seat scope in text_input.rs.
-            if self.text_input.is_none()
-                && let Some(manager) = &self.text_input_manager
-            {
-                self.text_input = Some(manager.get_text_input(&seat, qh, ()));
-                self.text_input_seat = Some(seat.clone());
-                self.text_input_focused = false;
-                self.text_input_enabled = false;
-                self.text_input_serial = 0;
-                self.text_input_cursor_update_pending = false;
-                self.text_input_external_change_pending = false;
-                self.text_input_cursor_update_blocked_until = None;
-                debug!("text-input-v3 object created for seat");
-            }
-        }
-
-        if capability == Capability::Pointer {
-            info!("Pointer capability available");
-            match self.seat_state.get_pointer_with_theme(
-                qh,
-                &seat,
-                self.shm.wl_shm(),
-                self.compositor_state.create_surface(qh),
-                ThemeSpec::default(),
-            ) {
-                Ok(pointer) => {
-                    debug!("Pointer initialized with theme");
-                    self.themed_pointer = Some(pointer);
-                    self.current_pointer_shape = None;
-                    self.cursor_hidden = false;
+        match capability {
+            Capability::Keyboard => {
+                info!("Keyboard capability available");
+                self.set_current_seat(Some(seat.clone()));
+                if self.seat_state.get_keyboard(qh, &seat, None).is_ok() {
+                    debug!("Keyboard initialized");
                 }
-                Err(err) => {
-                    warn!("Pointer initialized without theme: {}", err);
-                    if self.seat_state.get_pointer(qh, &seat).is_ok() {
-                        debug!("Pointer initialized without theme fallback");
+                // IME: create the single supported text-input object alongside the
+                // first physical keyboard seat. Driven by enable()/disable()
+                // reconcile; see the explicit single-seat scope in text_input.rs.
+                if self.text_input.is_none()
+                    && let Some(manager) = &self.text_input_manager
+                {
+                    self.text_input = Some(manager.get_text_input(&seat, qh, ()));
+                    self.text_input_seat = Some(seat.clone());
+                    self.text_input_focused = false;
+                    self.text_input_enabled = false;
+                    self.text_input_serial = 0;
+                    self.text_input_cursor_update_pending = false;
+                    self.text_input_external_change_pending = false;
+                    self.text_input_cursor_update_blocked_until = None;
+                    debug!("text-input-v3 object created for seat");
+                }
+            }
+            Capability::Pointer => {
+                info!("Pointer capability available");
+                match self.seat_state.get_pointer_with_theme(
+                    qh,
+                    &seat,
+                    self.shm.wl_shm(),
+                    self.compositor_state.create_surface(qh),
+                    ThemeSpec::default(),
+                ) {
+                    Ok(pointer) => {
+                        debug!("Pointer initialized with theme");
+                        self.themed_pointer = Some(pointer);
+                        self.current_pointer_shape = None;
+                        self.cursor_hidden = false;
+                    }
+                    Err(err) => {
+                        warn!("Pointer initialized without theme: {}", err);
+                        if self.seat_state.get_pointer(qh, &seat).is_ok() {
+                            debug!("Pointer initialized without theme fallback");
+                        }
                     }
                 }
             }
-        }
-
-        if capability == Capability::Touch {
-            info!("Touch capability available");
-            match self.seat_state.get_touch(qh, &seat) {
-                Ok(touch) => {
-                    debug!("Touch initialized");
-                    self.touch = Some(touch);
-                }
-                Err(err) => {
-                    warn!("Touch initialization failed: {}", err);
+            Capability::Touch => {
+                info!("Touch capability available");
+                match self.seat_state.get_touch(qh, &seat) {
+                    Ok(touch) => {
+                        debug!("Touch initialized");
+                        self.touch = Some(touch);
+                    }
+                    Err(err) => {
+                        warn!("Touch initialization failed: {}", err);
+                    }
                 }
             }
+            _ => {}
         }
 
         #[cfg(feature = "tablet-input")]
