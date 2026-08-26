@@ -748,8 +748,17 @@ fn spotlight_style_pill_shows_missing_source_status_inline() {
 
 #[test]
 fn style_pill_morphs_per_tool() {
+    assert_marker_style_pill();
+    assert_eraser_style_pill();
+    assert_shape_style_pill();
+    assert_arrow_style_pill();
+    assert_step_marker_style_pill();
+    assert_text_style_pill();
+}
+
+fn assert_marker_style_pill() {
     use crate::backend::wayland::toolbar::events::HitKind;
-    use crate::input::{EraserMode, Tool};
+    use crate::input::Tool;
 
     // Marker: thickness (targeting the marker size) plus the opacity slider
     // with its inline readout decoration.
@@ -776,6 +785,10 @@ fn style_pill_morphs_per_tool() {
         other => panic!("readout kind, got {other:?}"),
     }
     assert!(readout.interact.is_none());
+}
+
+fn assert_eraser_style_pill() {
+    use crate::input::{EraserMode, Tool};
 
     // Eraser: colorless; the old checkbox became a Brush/Stroke segment
     // emitting SetEraserMode, painted by the activated SegmentedControl.
@@ -825,6 +838,10 @@ fn style_pill_morphs_per_tool() {
         )) => {}
         other => panic!("numeral opens the precise entry, got {other:?}"),
     }
+}
+
+fn assert_shape_style_pill() {
+    use crate::input::Tool;
 
     // Shapes: the Fill mini-toggle joins the stroke controls.
     let rect = snapshot_for_tool(Tool::Rect);
@@ -840,6 +857,10 @@ fn style_pill_morphs_per_tool() {
         fill.interact.as_ref().unwrap().event,
         ToolbarEvent::ToggleFill(value) if value != rect.fill_enabled
     ));
+}
+
+fn assert_arrow_style_pill() {
+    use crate::input::Tool;
 
     // Arrow: auto-number toggle, and the reset button (with the next-N
     // tooltip) only while numbering is enabled.
@@ -866,6 +887,10 @@ fn style_pill_morphs_per_tool() {
         interaction.tooltip.as_deref(),
         Some("Reset numbering to 1 (next: 7)")
     );
+}
+
+fn assert_step_marker_style_pill() {
+    use crate::input::Tool;
 
     // Step marker: the reset targets the step counter.
     let mut step = snapshot_for_tool(Tool::StepMarker);
@@ -883,6 +908,10 @@ fn style_pill_morphs_per_tool() {
         interaction.tooltip.as_deref(),
         Some("Reset numbering to 1 (next: 4)")
     );
+}
+
+fn assert_text_style_pill() {
+    use crate::backend::wayland::toolbar::events::HitKind;
 
     // Text: pt-labelled size slider plus independent weight/family controls.
     let mut text = snapshot();
