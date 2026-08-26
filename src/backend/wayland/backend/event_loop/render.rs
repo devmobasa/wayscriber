@@ -160,34 +160,38 @@ pub(super) fn maybe_render(
             }
         }
     } else {
-        let skip_reason = if !state.surface.is_configured() {
-            Some(PerfRenderSkipReason::SurfaceUnconfigured)
-        } else if !state.input_state.needs_redraw {
-            Some(PerfRenderSkipReason::NoRedraw)
-        } else if vsync_enabled && state.surface.frame_callback_pending() {
-            Some(PerfRenderSkipReason::FrameCallbackPending)
-        } else if !vsync_enabled && !frame_time_ok {
-            Some(PerfRenderSkipReason::FpsCap)
-        } else {
-            None
-        };
-        if let Some(reason) = skip_reason {
-            state.record_perf_render_skip(reason);
-        }
-        state.render_layer_toolbars_if_needed();
-        if state.input_state.needs_redraw {
-            if vsync_enabled && state.surface.frame_callback_pending() {
-                debug!("Main loop: Skipping render - frame callback already pending");
-            } else if !vsync_enabled && !frame_time_ok {
-                debug!(
-                    "Main loop: Skipping render - frame rate cap ({} FPS)",
-                    state.config.performance.max_fps_no_vsync
-                );
-            }
-        }
+        record_skipped_render(state, vsync_enabled, frame_time_ok);
     }
 
     None
+}
+
+fn record_skipped_render(state: &mut WaylandState, vsync_enabled: bool, frame_time_ok: bool) {
+    let skip_reason = if !state.surface.is_configured() {
+        Some(PerfRenderSkipReason::SurfaceUnconfigured)
+    } else if !state.input_state.needs_redraw {
+        Some(PerfRenderSkipReason::NoRedraw)
+    } else if vsync_enabled && state.surface.frame_callback_pending() {
+        Some(PerfRenderSkipReason::FrameCallbackPending)
+    } else if !vsync_enabled && !frame_time_ok {
+        Some(PerfRenderSkipReason::FpsCap)
+    } else {
+        None
+    };
+    if let Some(reason) = skip_reason {
+        state.record_perf_render_skip(reason);
+    }
+    state.render_layer_toolbars_if_needed();
+    if state.input_state.needs_redraw {
+        if vsync_enabled && state.surface.frame_callback_pending() {
+            debug!("Main loop: Skipping render - frame callback already pending");
+        } else if !vsync_enabled && !frame_time_ok {
+            debug!(
+                "Main loop: Skipping render - frame rate cap ({} FPS)",
+                state.config.performance.max_fps_no_vsync
+            );
+        }
+    }
 }
 
 #[cfg(test)]
