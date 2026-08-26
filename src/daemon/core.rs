@@ -823,18 +823,8 @@ impl Daemon {
         if let Some(listener) = self.global_shortcuts_listener.as_mut() {
             listener.request_shutdown();
         }
-        if let Some(handle) = self.tray_thread.take() {
-            match handle.join() {
-                Ok(()) => info!("System tray thread joined"),
-                Err(err) => warn!("System tray thread panicked: {:?}", err),
-            }
-        }
-        if let Some(handle) = self.update_watch_thread.take() {
-            match handle.join() {
-                Ok(()) => info!("Update watcher thread joined"),
-                Err(err) => warn!("Update watcher thread panicked: {:?}", err),
-            }
-        }
+        join_daemon_thread(self.tray_thread.take(), "System tray thread");
+        join_daemon_thread(self.update_watch_thread.take(), "Update watcher thread");
         if let Some(listener) = self.global_shortcuts_listener.take() {
             match listener.join() {
                 Ok(()) => info!("Global shortcuts listener thread joined"),
@@ -891,6 +881,15 @@ impl Daemon {
             }
         }
         Ok(())
+    }
+}
+
+fn join_daemon_thread(handle: Option<JoinHandle<()>>, label: &str) {
+    if let Some(handle) = handle {
+        match handle.join() {
+            Ok(()) => info!("{label} joined"),
+            Err(err) => warn!("{label} panicked: {err:?}"),
+        }
     }
 }
 
