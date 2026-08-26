@@ -1,5 +1,52 @@
 use super::*;
-use crate::session::named_session_artifact_paths;
+use crate::session::{SessionArtifactPaths, named_session_artifact_paths};
+
+fn assert_moved_target_artifacts(
+    artifacts: &SessionArtifactPaths,
+    rotated_recovery: &Path,
+    preserved: &Path,
+    preserved_moved: &Path,
+) {
+    assert_eq!(std::fs::read(&artifacts.primary).unwrap(), b"primary");
+    assert_eq!(std::fs::read(&artifacts.backup).unwrap(), b"backup");
+    assert_eq!(std::fs::read(&artifacts.recovery).unwrap(), b"recovery");
+    assert_eq!(std::fs::read(&artifacts.clear_marker).unwrap(), b"cleared");
+    assert_eq!(std::fs::read(rotated_recovery).unwrap(), b"rotated");
+    assert_eq!(std::fs::read(preserved).unwrap(), b"newer");
+    assert_eq!(std::fs::read(preserved_moved).unwrap(), b"newer moved");
+}
+
+fn assert_moved_sources_removed(
+    artifacts: &SessionArtifactPaths,
+    rotated_recovery: &Path,
+    preserved: &Path,
+    preserved_moved: &Path,
+) {
+    assert!(!artifacts.primary.exists());
+    assert!(!artifacts.backup.exists());
+    assert!(!artifacts.recovery.exists());
+    assert!(!artifacts.clear_marker.exists());
+    assert!(!rotated_recovery.exists());
+    assert!(!preserved.exists());
+    assert!(!preserved_moved.exists());
+}
+
+fn assert_source_lock_was_not_moved(
+    source_artifacts: &SessionArtifactPaths,
+    target_artifacts: &SessionArtifactPaths,
+) {
+    assert_eq!(
+        std::fs::read(&source_artifacts.lock).unwrap(),
+        b"source lock",
+        "source lock must not be moved as session data"
+    );
+    if target_artifacts.lock.exists() {
+        assert_ne!(
+            std::fs::read(&target_artifacts.lock).unwrap(),
+            b"source lock"
+        );
+    }
+}
 
 #[test]
 fn move_named_session_non_lock_artifacts_moves_primary_and_sidecars_without_lock() {
@@ -34,43 +81,19 @@ fn move_named_session_non_lock_artifacts_moves_primary_and_sidecars_without_lock
     assert_eq!(outcome.target, target);
     assert_eq!(outcome.moved_artifacts, 7);
     assert_eq!(outcome.moved_artifact_paths.len(), 7);
-    assert_eq!(
-        std::fs::read(&target_artifacts.primary).unwrap(),
-        b"primary"
+    assert_moved_target_artifacts(
+        &target_artifacts,
+        &target_rotated_recovery,
+        &target_preserved,
+        &target_preserved_moved,
     );
-    assert_eq!(std::fs::read(&target_artifacts.backup).unwrap(), b"backup");
-    assert_eq!(
-        std::fs::read(&target_artifacts.recovery).unwrap(),
-        b"recovery"
+    assert_moved_sources_removed(
+        &source_artifacts,
+        &rotated_recovery,
+        &preserved,
+        &preserved_moved,
     );
-    assert_eq!(
-        std::fs::read(&target_artifacts.clear_marker).unwrap(),
-        b"cleared"
-    );
-    assert_eq!(std::fs::read(&target_rotated_recovery).unwrap(), b"rotated");
-    assert_eq!(std::fs::read(&target_preserved).unwrap(), b"newer");
-    assert_eq!(
-        std::fs::read(&target_preserved_moved).unwrap(),
-        b"newer moved"
-    );
-    assert!(!source_artifacts.primary.exists());
-    assert!(!source_artifacts.backup.exists());
-    assert!(!source_artifacts.recovery.exists());
-    assert!(!source_artifacts.clear_marker.exists());
-    assert!(!rotated_recovery.exists());
-    assert!(!preserved.exists());
-    assert!(!preserved_moved.exists());
-    assert_eq!(
-        std::fs::read(&source_artifacts.lock).unwrap(),
-        b"source lock",
-        "source lock must not be moved as session data"
-    );
-    if target_artifacts.lock.exists() {
-        assert_ne!(
-            std::fs::read(&target_artifacts.lock).unwrap(),
-            b"source lock"
-        );
-    }
+    assert_source_lock_was_not_moved(&source_artifacts, &target_artifacts);
 }
 
 #[test]
