@@ -1712,79 +1712,22 @@ fn color_picker_apply_updates_opening_modifier_tool_after_modifier_release() {
 fn save_preset_captures_all_tool_settings() {
     let mut state = create_test_input_state();
     state.preset_slot_count = 3;
-    let pen_color = Color {
-        r: 0.1,
-        g: 0.2,
-        b: 0.3,
-        a: 1.0,
-    };
-    let line_color = Color {
-        r: 0.4,
-        g: 0.5,
-        b: 0.6,
-        a: 1.0,
-    };
-    let rect_color = Color {
-        r: 0.9,
-        g: 0.1,
-        b: 0.2,
-        a: 1.0,
-    };
-    let ellipse_color = Color {
-        r: 0.2,
-        g: 0.9,
-        b: 0.4,
-        a: 1.0,
-    };
-    let arrow_color = Color {
-        r: 0.8,
-        g: 0.3,
-        b: 0.7,
-        a: 1.0,
-    };
-    let blur_color = Color {
-        r: 0.3,
-        g: 0.3,
-        b: 0.3,
-        a: 1.0,
-    };
-    let marker_color = Color {
-        r: 0.7,
-        g: 0.8,
-        b: 0.1,
-        a: 1.0,
-    };
-    let step_color = Color {
-        r: 0.2,
-        g: 0.7,
-        b: 0.9,
-        a: 1.0,
-    };
+    let styles = [
+        (Tool::Pen, Color::new(0.1, 0.2, 0.3, 1.0), 4.0),
+        (Tool::Line, Color::new(0.4, 0.5, 0.6, 1.0), 14.0),
+        (Tool::Rect, Color::new(0.9, 0.1, 0.2, 1.0), 16.0),
+        (Tool::Ellipse, Color::new(0.2, 0.9, 0.4, 1.0), 18.0),
+        (Tool::Arrow, Color::new(0.8, 0.3, 0.7, 1.0), 20.0),
+        (Tool::Blur, Color::new(0.3, 0.3, 0.3, 1.0), 22.0),
+        (Tool::Marker, Color::new(0.7, 0.8, 0.1, 1.0), 24.0),
+        (Tool::StepMarker, Color::new(0.2, 0.7, 0.9, 1.0), 30.0),
+    ];
 
-    assert!(state.set_tool_override(Some(Tool::Pen)));
-    assert!(state.set_color(pen_color));
-    assert!(state.set_thickness(4.0));
-    assert!(state.set_tool_override(Some(Tool::Line)));
-    assert!(state.set_color(line_color));
-    assert!(state.set_thickness(14.0));
-    assert!(state.set_tool_override(Some(Tool::Rect)));
-    assert!(state.set_color(rect_color));
-    assert!(state.set_thickness(16.0));
-    assert!(state.set_tool_override(Some(Tool::Ellipse)));
-    assert!(state.set_color(ellipse_color));
-    assert!(state.set_thickness(18.0));
-    assert!(state.set_tool_override(Some(Tool::Arrow)));
-    assert!(state.set_color(arrow_color));
-    assert!(state.set_thickness(20.0));
-    assert!(state.set_tool_override(Some(Tool::Blur)));
-    assert!(state.set_color(blur_color));
-    assert!(state.set_thickness(22.0));
-    assert!(state.set_tool_override(Some(Tool::Marker)));
-    assert!(state.set_color(marker_color));
-    assert!(state.set_thickness(24.0));
-    assert!(state.set_tool_override(Some(Tool::StepMarker)));
-    assert!(state.set_color(step_color));
-    assert!(state.set_thickness(30.0));
+    for &(tool, color, size) in &styles {
+        assert!(state.set_tool_override(Some(tool)));
+        assert!(state.set_color(color));
+        assert!(state.set_thickness(size));
+    }
     assert!(state.set_tool_override(Some(Tool::Eraser)));
     assert!(state.set_eraser_size(33.0));
     assert!(state.set_tool_override(Some(Tool::Line)));
@@ -1794,24 +1737,15 @@ fn save_preset_captures_all_tool_settings() {
     let tool_settings = preset.tool_settings.as_ref().expect("tool settings");
 
     assert_eq!(preset.tool, Tool::Line);
-    assert_eq!(preset.color, ColorSpec::from(line_color));
+    assert_eq!(preset.color, ColorSpec::from(styles[1].1));
     assert_eq!(preset.size, 14.0);
-    assert_eq!(tool_settings.pen.color, ColorSpec::from(pen_color));
-    assert_eq!(tool_settings.pen.size, 4.0);
-    assert_eq!(tool_settings.line.color, ColorSpec::from(line_color));
-    assert_eq!(tool_settings.line.size, 14.0);
-    assert_eq!(tool_settings.rect.color, ColorSpec::from(rect_color));
-    assert_eq!(tool_settings.rect.size, 16.0);
-    assert_eq!(tool_settings.ellipse.color, ColorSpec::from(ellipse_color));
-    assert_eq!(tool_settings.ellipse.size, 18.0);
-    assert_eq!(tool_settings.arrow.color, ColorSpec::from(arrow_color));
-    assert_eq!(tool_settings.arrow.size, 20.0);
-    assert_eq!(tool_settings.blur.color, ColorSpec::from(blur_color));
-    assert_eq!(tool_settings.blur.size, 22.0);
-    assert_eq!(tool_settings.marker.color, ColorSpec::from(marker_color));
-    assert_eq!(tool_settings.marker.size, 24.0);
-    assert_eq!(tool_settings.step_marker.color, ColorSpec::from(step_color));
-    assert_eq!(tool_settings.step_marker.size, 30.0);
+    for (tool, color, size) in styles {
+        assert_eq!(
+            tool_settings.color_spec_for_tool(tool),
+            ColorSpec::from(color)
+        );
+        assert_eq!(tool_settings.size_for_tool(tool), size);
+    }
     assert_eq!(tool_settings.eraser_size, 33.0);
 }
 
