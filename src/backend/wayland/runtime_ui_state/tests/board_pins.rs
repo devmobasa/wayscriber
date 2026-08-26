@@ -1,5 +1,79 @@
 use super::*;
 
+fn force_board_pin_test_persistence_failure(
+    runtime: &mut ToolbarRuntimeState,
+) -> PersistenceIncidentId {
+    let target = InteractionSeedTarget::TopPinned;
+    let permit = runtime
+        .controller
+        .begin_mutation(RuntimeUiMutationScope::one(target.clone()))
+        .unwrap();
+    assert!(matches!(
+        runtime.controller.commit(
+            permit,
+            RuntimeUiMutationValues::one(target, InteractionSeedValue::Bool(false)).unwrap(),
+        ),
+        CommitResult::Accepted { .. }
+    ));
+    let failed = runtime
+        .controller
+        .take_source_mutation()
+        .expect("replacement to fail");
+    let active = RuntimeStateSourceObservation::missing(failed.expected_source.clone());
+    match runtime
+        .controller
+        .submit_source_mutation(SourceMutationResult::Failed {
+            id: failed.id,
+            error: RuntimeStateIoError::new("temporary board-pin test failure"),
+            active: Some(active),
+            recovery_artifacts: Vec::new(),
+            path_effect: RuntimeStateFailurePathEffect::Known(
+                RuntimeStateObservedPathEffect::Untouched,
+            ),
+        }) {
+        SubmitSourceMutationResult::PersistenceUnhealthy { incident, .. } => incident,
+        result => panic!("unexpected persistence result: {result:?}"),
+    }
+}
+
+fn recover_board_pin_test_persistence(
+    runtime: &mut ToolbarRuntimeState,
+    incident: PersistenceIncidentId,
+) -> bool {
+    let recovery = match runtime
+        .controller
+        .checkout_persistence_recovery_handle(incident)
+    {
+        CheckoutPersistenceRecoveryHandleResult::CheckedOut(handle) => handle,
+        result => panic!("recovery checkout failed: {result:?}"),
+    };
+    let client = match runtime
+        .controller
+        .begin_persistence_recovery(PersistenceRecoveryRequest {
+            recovery,
+            action: PersistenceRecoveryAction::RetryPending,
+        }) {
+        BeginPersistenceRecoveryResult::Started { client, .. } => client,
+        result => panic!("recovery start failed: {result:?}"),
+    };
+    runtime.dispatch_writer_command();
+    let mut rebuild_live = false;
+    for _ in 0..400 {
+        let drain = runtime.drain_writer_completions();
+        rebuild_live |= drain.rebuild_live;
+        if runtime.controller.active_barrier().is_none() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert!(runtime.controller.active_barrier().is_none());
+    assert!(matches!(
+        client.completion.try_recv(),
+        Some(PersistenceRecoveryResult::Recovered { .. })
+    ));
+    rebuild_live
+}
+
 #[test]
 fn board_pin_is_runtime_owned_and_survives_restart_without_touching_config() {
     const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
@@ -151,37 +225,7 @@ fn restored_board_pin_is_replayed_after_same_authority_recovery() {
     let mut input = input_from_config(&config);
     let mut runtime = test_runtime(&config, &runtime_path);
 
-    let target = InteractionSeedTarget::TopPinned;
-    let permit = runtime
-        .controller
-        .begin_mutation(RuntimeUiMutationScope::one(target.clone()))
-        .unwrap();
-    assert!(matches!(
-        runtime.controller.commit(
-            permit,
-            RuntimeUiMutationValues::one(target, InteractionSeedValue::Bool(false)).unwrap(),
-        ),
-        CommitResult::Accepted { .. }
-    ));
-    let failed = runtime
-        .controller
-        .take_source_mutation()
-        .expect("replacement to fail");
-    let active = RuntimeStateSourceObservation::missing(failed.expected_source.clone());
-    let incident = match runtime
-        .controller
-        .submit_source_mutation(SourceMutationResult::Failed {
-            id: failed.id,
-            error: RuntimeStateIoError::new("temporary board-pin test failure"),
-            active: Some(active),
-            recovery_artifacts: Vec::new(),
-            path_effect: RuntimeStateFailurePathEffect::Known(
-                RuntimeStateObservedPathEffect::Untouched,
-            ),
-        }) {
-        SubmitSourceMutationResult::PersistenceUnhealthy { incident, .. } => incident,
-        result => panic!("unexpected persistence result: {result:?}"),
-    };
+    let incident = force_board_pin_test_persistence_failure(&mut runtime);
 
     assert!(input.create_board());
     let board_id = input.board_id().to_string();
@@ -196,37 +240,7 @@ fn restored_board_pin_is_replayed_after_same_authority_recovery() {
     assert!(board_pinned(&input, &board_id));
     assert_eq!(runtime.deferred_board_pin_restores.len(), 1);
 
-    let recovery = match runtime
-        .controller
-        .checkout_persistence_recovery_handle(incident)
-    {
-        CheckoutPersistenceRecoveryHandleResult::CheckedOut(handle) => handle,
-        result => panic!("recovery checkout failed: {result:?}"),
-    };
-    let client = match runtime
-        .controller
-        .begin_persistence_recovery(PersistenceRecoveryRequest {
-            recovery,
-            action: PersistenceRecoveryAction::RetryPending,
-        }) {
-        BeginPersistenceRecoveryResult::Started { client, .. } => client,
-        result => panic!("recovery start failed: {result:?}"),
-    };
-    runtime.dispatch_writer_command();
-    let mut rebuild_live = false;
-    for _ in 0..400 {
-        let drain = runtime.drain_writer_completions();
-        rebuild_live |= drain.rebuild_live;
-        if runtime.controller.active_barrier().is_none() {
-            break;
-        }
-        thread::sleep(Duration::from_millis(5));
-    }
-    assert!(runtime.controller.active_barrier().is_none());
-    assert!(matches!(
-        client.completion.try_recv(),
-        Some(PersistenceRecoveryResult::Recovered { .. })
-    ));
+    let rebuild_live = recover_board_pin_test_persistence(&mut runtime, incident);
     assert!(rebuild_live);
     runtime.apply_live_state(&mut input, &mut ToolbarPositionSnapshot { top: (0.0, 0.0) });
     assert!(!board_pinned(&input, &board_id));
