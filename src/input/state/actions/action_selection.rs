@@ -10,52 +10,12 @@ const KEYBOARD_NUDGE_LARGE: i32 = 32;
 impl InputState {
     pub(in crate::input::state) fn handle_selection_action(&mut self, action: Action) -> bool {
         match action {
-            Action::CopySelection => {
-                let copied = self.copy_selection();
-                if copied > 0 {
-                    info!("Copied selection ({} shape(s))", copied);
-                } else if self.has_selection() {
-                    self.push_toast(
-                        ToastPriority::Info,
-                        "selection",
-                        Toast::warning("No unlocked shapes to copy; clipboard unchanged."),
-                    );
-                } else {
-                    self.push_toast(
-                        ToastPriority::Info,
-                        "selection",
-                        Toast::warning("No selection to copy; clipboard unchanged."),
-                    );
-                }
-                true
+            Action::CopySelection | Action::SelectAll => {
+                self.handle_selection_content_action(action)
             }
             Action::PasteSelection => {
                 self.request_clipboard_paste();
                 info!("Requested clipboard paste");
-                true
-            }
-            Action::SelectAll => {
-                let previous_bounds = self.selection_bounding_box(self.selected_shape_ids());
-                let ids: Vec<_> = self
-                    .boards
-                    .active_frame()
-                    .shapes
-                    .iter()
-                    .map(|shape| shape.id)
-                    .collect();
-                if ids.is_empty() {
-                    self.push_toast(
-                        ToastPriority::Info,
-                        "selection",
-                        Toast::warning("No shapes to select."),
-                    );
-                } else {
-                    self.set_selection(ids);
-                    self.mark_selection_dirty_region(previous_bounds);
-                    let new_bounds = self.selection_bounding_box(self.selected_shape_ids());
-                    self.mark_selection_dirty_region(new_bounds);
-                    self.needs_redraw = true;
-                }
                 true
             }
             Action::DuplicateSelection => {
@@ -76,80 +36,12 @@ impl InputState {
                 }
                 true
             }
-            Action::NudgeSelectionUp => {
-                let step = if self.modifiers.shift {
-                    KEYBOARD_NUDGE_LARGE
-                } else {
-                    KEYBOARD_NUDGE_SMALL
-                };
-                if self.translate_selection_with_undo(0, -step) {
-                    self.last_selection_axis = Some(SelectionAxis::Vertical);
-                    info!("Moved selection up by {} px", step);
-                } else if self.has_selection() {
-                    self.last_selection_axis = Some(SelectionAxis::Vertical);
-                }
-                true
-            }
-            Action::NudgeSelectionDown => {
-                let step = if self.modifiers.shift {
-                    KEYBOARD_NUDGE_LARGE
-                } else {
-                    KEYBOARD_NUDGE_SMALL
-                };
-                if self.translate_selection_with_undo(0, step) {
-                    self.last_selection_axis = Some(SelectionAxis::Vertical);
-                    info!("Moved selection down by {} px", step);
-                } else if self.has_selection() {
-                    self.last_selection_axis = Some(SelectionAxis::Vertical);
-                }
-                true
-            }
-            Action::NudgeSelectionLeft => {
-                let step = if self.modifiers.shift {
-                    KEYBOARD_NUDGE_LARGE
-                } else {
-                    KEYBOARD_NUDGE_SMALL
-                };
-                if self.translate_selection_with_undo(-step, 0) {
-                    self.last_selection_axis = Some(SelectionAxis::Horizontal);
-                    info!("Moved selection left by {} px", step);
-                } else if self.has_selection() {
-                    self.last_selection_axis = Some(SelectionAxis::Horizontal);
-                }
-                true
-            }
-            Action::NudgeSelectionRight => {
-                let step = if self.modifiers.shift {
-                    KEYBOARD_NUDGE_LARGE
-                } else {
-                    KEYBOARD_NUDGE_SMALL
-                };
-                if self.translate_selection_with_undo(step, 0) {
-                    self.last_selection_axis = Some(SelectionAxis::Horizontal);
-                    info!("Moved selection right by {} px", step);
-                } else if self.has_selection() {
-                    self.last_selection_axis = Some(SelectionAxis::Horizontal);
-                }
-                true
-            }
-            Action::NudgeSelectionUpLarge => {
-                if self.translate_selection_with_undo(0, -KEYBOARD_NUDGE_LARGE) {
-                    self.last_selection_axis = Some(SelectionAxis::Vertical);
-                    info!("Moved selection up by {} px", KEYBOARD_NUDGE_LARGE);
-                } else if self.has_selection() {
-                    self.last_selection_axis = Some(SelectionAxis::Vertical);
-                }
-                true
-            }
-            Action::NudgeSelectionDownLarge => {
-                if self.translate_selection_with_undo(0, KEYBOARD_NUDGE_LARGE) {
-                    self.last_selection_axis = Some(SelectionAxis::Vertical);
-                    info!("Moved selection down by {} px", KEYBOARD_NUDGE_LARGE);
-                } else if self.has_selection() {
-                    self.last_selection_axis = Some(SelectionAxis::Vertical);
-                }
-                true
-            }
+            Action::NudgeSelectionUp
+            | Action::NudgeSelectionDown
+            | Action::NudgeSelectionLeft
+            | Action::NudgeSelectionRight
+            | Action::NudgeSelectionUpLarge
+            | Action::NudgeSelectionDownLarge => self.handle_selection_nudge_action(action),
             Action::MoveSelectionToStart => {
                 if self.move_selection_to_horizontal_edge(true) {
                     info!("Moved selection to start");
@@ -182,5 +74,113 @@ impl InputState {
             }
             _ => false,
         }
+    }
+
+    fn handle_selection_content_action(&mut self, action: Action) -> bool {
+        match action {
+            Action::CopySelection => {
+                let copied = self.copy_selection();
+                if copied > 0 {
+                    info!("Copied selection ({} shape(s))", copied);
+                } else if self.has_selection() {
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "selection",
+                        Toast::warning("No unlocked shapes to copy; clipboard unchanged."),
+                    );
+                } else {
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "selection",
+                        Toast::warning("No selection to copy; clipboard unchanged."),
+                    );
+                }
+            }
+            Action::SelectAll => {
+                let previous_bounds = self.selection_bounding_box(self.selected_shape_ids());
+                let ids: Vec<_> = self
+                    .boards
+                    .active_frame()
+                    .shapes
+                    .iter()
+                    .map(|shape| shape.id)
+                    .collect();
+                if ids.is_empty() {
+                    self.push_toast(
+                        ToastPriority::Info,
+                        "selection",
+                        Toast::warning("No shapes to select."),
+                    );
+                } else {
+                    self.set_selection(ids);
+                    self.mark_selection_dirty_region(previous_bounds);
+                    let new_bounds = self.selection_bounding_box(self.selected_shape_ids());
+                    self.mark_selection_dirty_region(new_bounds);
+                    self.needs_redraw = true;
+                }
+            }
+            _ => unreachable!("selection content dispatcher called with {action:?}"),
+        }
+        true
+    }
+
+    fn handle_selection_nudge_action(&mut self, action: Action) -> bool {
+        let shifted_step = if self.modifiers.shift {
+            KEYBOARD_NUDGE_LARGE
+        } else {
+            KEYBOARD_NUDGE_SMALL
+        };
+        let (dx, dy, axis, direction, step) = match action {
+            Action::NudgeSelectionUp => (
+                0,
+                -shifted_step,
+                SelectionAxis::Vertical,
+                "up",
+                shifted_step,
+            ),
+            Action::NudgeSelectionDown => (
+                0,
+                shifted_step,
+                SelectionAxis::Vertical,
+                "down",
+                shifted_step,
+            ),
+            Action::NudgeSelectionLeft => (
+                -shifted_step,
+                0,
+                SelectionAxis::Horizontal,
+                "left",
+                shifted_step,
+            ),
+            Action::NudgeSelectionRight => (
+                shifted_step,
+                0,
+                SelectionAxis::Horizontal,
+                "right",
+                shifted_step,
+            ),
+            Action::NudgeSelectionUpLarge => (
+                0,
+                -KEYBOARD_NUDGE_LARGE,
+                SelectionAxis::Vertical,
+                "up",
+                KEYBOARD_NUDGE_LARGE,
+            ),
+            Action::NudgeSelectionDownLarge => (
+                0,
+                KEYBOARD_NUDGE_LARGE,
+                SelectionAxis::Vertical,
+                "down",
+                KEYBOARD_NUDGE_LARGE,
+            ),
+            _ => unreachable!("selection nudge dispatcher called with {action:?}"),
+        };
+        if self.translate_selection_with_undo(dx, dy) {
+            self.last_selection_axis = Some(axis);
+            info!("Moved selection {} by {} px", direction, step);
+        } else if self.has_selection() {
+            self.last_selection_axis = Some(axis);
+        }
+        true
     }
 }
