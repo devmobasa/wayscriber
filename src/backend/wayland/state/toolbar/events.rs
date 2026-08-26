@@ -194,48 +194,7 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
             return;
         }
-        // Toolbar actions win over the modal sampler: cancel without sampling,
-        // then apply the requested toolbar event normally.
-        if self.input_state.is_precision_entry_open()
-            && event_dismisses_popover(&event, ToolbarPopover::PrecisionEntry)
-            && self.input_state.cancel_precision_entry()
-        {
-            self.toolbar.mark_dirty();
-        }
-        let dismiss_overflow = self.input_state.toolbar_top_overflow_open
-            && event_dismisses_popover(&event, ToolbarPopover::TopOverflow);
-        let dismiss_shapes = self.input_state.toolbar_shapes_expanded
-            && event_dismisses_popover(&event, ToolbarPopover::ShapePicker);
-        let dismiss_session = self.input_state.toolbar_session_popover_open
-            && event_dismisses_popover(&event, ToolbarPopover::Session);
-        let dismiss_settings = self.input_state.toolbar_settings_popover_open
-            && event_dismisses_popover(&event, ToolbarPopover::Settings);
-        let dismiss_canvas = self.input_state.toolbar_canvas_popover_open
-            && event_dismisses_popover(&event, ToolbarPopover::Canvas);
-        if dismiss_overflow
-            || dismiss_shapes
-            || dismiss_session
-            || dismiss_settings
-            || dismiss_canvas
-        {
-            if dismiss_overflow {
-                self.input_state.toolbar_top_overflow_open = false;
-            }
-            if dismiss_shapes {
-                self.input_state.toolbar_shapes_expanded = false;
-            }
-            if dismiss_session {
-                self.input_state.toolbar_session_popover_open = false;
-            }
-            if dismiss_settings {
-                self.input_state.toolbar_settings_popover_open = false;
-            }
-            if dismiss_canvas {
-                self.input_state.toolbar_canvas_popover_open = false;
-            }
-            self.toolbar.mark_dirty();
-            self.input_state.needs_redraw = true;
-        }
+        self.dismiss_popovers_for_toolbar_event(&event);
         if self.handle_toolbar_session_event(&event, conn, qh) {
             return;
         }
@@ -256,27 +215,8 @@ impl WaylandState {
 
         let policy = ToolbarEventPolicy::for_event(&event);
 
-        match (&policy.backend_route, &event) {
-            (ToolbarBackendRoute::MoveTopToolbar, ToolbarEvent::MoveTopToolbar { x, y }) => {
-                let inline_active = self.inline_toolbars_active();
-                let coord_is_screen = inline_active;
-                drag_log(|| {
-                    format!(
-                        "toolbar move event: kind=Top, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
-                        *x, *y, coord_is_screen, inline_active
-                    )
-                });
-                if !self.begin_toolbar_move_drag(MoveDragKind::Top, (*x, *y), coord_is_screen) {
-                    return;
-                }
-                if coord_is_screen {
-                    self.handle_toolbar_move_screen(MoveDragKind::Top, (*x, *y));
-                } else {
-                    self.handle_toolbar_move(MoveDragKind::Top, (*x, *y));
-                }
-                return;
-            }
-            (ToolbarBackendRoute::ApplyToInput, _) | (ToolbarBackendRoute::MoveTopToolbar, _) => {}
+        if self.handle_toolbar_move_event(&policy, &event) {
+            return;
         }
 
         #[cfg(feature = "tablet-input")]
@@ -299,21 +239,8 @@ impl WaylandState {
         };
         // Classified before the apply consumes the event; the effective config
         // is updated from the runtime state the apply leaves behind.
-        if starts_item_drag {
-            // The pairing lives in `persistence_for_event`, so a drag-start
-            // whose policy stopped naming an order group is metadata drift,
-            // not an impossible state. Refusing the drag keeps the toolbar
-            // usable; panicking here took the whole overlay down with it.
-            let Some(ToolbarRuntimeUiPersistenceTarget::ItemOrder(group)) = runtime_target else {
-                log::error!(
-                    "Ignoring a toolbar item drag: {event:?} starts one but its policy names no \
-                     order group to persist it under"
-                );
-                return;
-            };
-            if !self.begin_toolbar_item_drag_preview(group) {
-                return;
-            }
+        if starts_item_drag && !self.prepare_toolbar_item_drag(&event, runtime_target) {
+            return;
         }
         let pin_change = ToolbarPinChange::from_event(&event);
         let prepared_runtime = if starts_item_drag {
@@ -365,6 +292,30 @@ impl WaylandState {
         if pin_confirmation_allowed && let Some(pin_change) = pin_change {
             pin_change.notify(&mut self.input_state, pin_durability);
         }
+        self.drain_pending_toolbar_actions();
+        self.drain_clipboard_requests();
+        self.refresh_keyboard_interactivity();
+    }
+
+    fn prepare_toolbar_item_drag(
+        &mut self,
+        event: &ToolbarEvent,
+        runtime_target: Option<ToolbarRuntimeUiPersistenceTarget>,
+    ) -> bool {
+        // The pairing lives in `persistence_for_event`, so a drag-start whose
+        // policy stopped naming an order group is metadata drift. Refusing the
+        // drag keeps the toolbar usable instead of taking down the overlay.
+        let Some(ToolbarRuntimeUiPersistenceTarget::ItemOrder(group)) = runtime_target else {
+            log::error!(
+                "Ignoring a toolbar item drag: {event:?} starts one but its policy names no order \
+                 group to persist it under"
+            );
+            return false;
+        };
+        self.begin_toolbar_item_drag_preview(group)
+    }
+
+    fn drain_pending_toolbar_actions(&mut self) {
         if let Some(action) = self.input_state.take_pending_preset_action() {
             self.handle_preset_action(action);
         }
@@ -377,8 +328,81 @@ impl WaylandState {
         if let Some(target) = self.input_state.take_pending_paste_hex_request() {
             self.handle_paste_hex_color(target);
         }
-        self.drain_clipboard_requests();
-        self.refresh_keyboard_interactivity();
+    }
+
+    fn dismiss_popovers_for_toolbar_event(&mut self, event: &ToolbarEvent) {
+        // Toolbar actions win over the modal sampler: cancel without sampling,
+        // then apply the requested toolbar event normally.
+        if self.input_state.is_precision_entry_open()
+            && event_dismisses_popover(event, ToolbarPopover::PrecisionEntry)
+            && self.input_state.cancel_precision_entry()
+        {
+            self.toolbar.mark_dirty();
+        }
+        let dismiss_overflow = self.input_state.toolbar_top_overflow_open
+            && event_dismisses_popover(event, ToolbarPopover::TopOverflow);
+        let dismiss_shapes = self.input_state.toolbar_shapes_expanded
+            && event_dismisses_popover(event, ToolbarPopover::ShapePicker);
+        let dismiss_session = self.input_state.toolbar_session_popover_open
+            && event_dismisses_popover(event, ToolbarPopover::Session);
+        let dismiss_settings = self.input_state.toolbar_settings_popover_open
+            && event_dismisses_popover(event, ToolbarPopover::Settings);
+        let dismiss_canvas = self.input_state.toolbar_canvas_popover_open
+            && event_dismisses_popover(event, ToolbarPopover::Canvas);
+        if !(dismiss_overflow
+            || dismiss_shapes
+            || dismiss_session
+            || dismiss_settings
+            || dismiss_canvas)
+        {
+            return;
+        }
+        if dismiss_overflow {
+            self.input_state.toolbar_top_overflow_open = false;
+        }
+        if dismiss_shapes {
+            self.input_state.toolbar_shapes_expanded = false;
+        }
+        if dismiss_session {
+            self.input_state.toolbar_session_popover_open = false;
+        }
+        if dismiss_settings {
+            self.input_state.toolbar_settings_popover_open = false;
+        }
+        if dismiss_canvas {
+            self.input_state.toolbar_canvas_popover_open = false;
+        }
+        self.toolbar.mark_dirty();
+        self.input_state.needs_redraw = true;
+    }
+
+    fn handle_toolbar_move_event(
+        &mut self,
+        policy: &ToolbarEventPolicy,
+        event: &ToolbarEvent,
+    ) -> bool {
+        let (ToolbarBackendRoute::MoveTopToolbar, ToolbarEvent::MoveTopToolbar { x, y }) =
+            (&policy.backend_route, event)
+        else {
+            return false;
+        };
+        let inline_active = self.inline_toolbars_active();
+        let coord_is_screen = inline_active;
+        drag_log(|| {
+            format!(
+                "toolbar move event: kind=Top, coord=({:.3}, {:.3}), coord_is_screen={}, inline_active={}",
+                *x, *y, coord_is_screen, inline_active
+            )
+        });
+        if !self.begin_toolbar_move_drag(MoveDragKind::Top, (*x, *y), coord_is_screen) {
+            return true;
+        }
+        if coord_is_screen {
+            self.handle_toolbar_move_screen(MoveDragKind::Top, (*x, *y));
+        } else {
+            self.handle_toolbar_move(MoveDragKind::Top, (*x, *y));
+        }
+        true
     }
 
     #[cfg(feature = "tablet-input")]
