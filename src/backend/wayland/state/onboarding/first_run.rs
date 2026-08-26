@@ -356,6 +356,15 @@ impl WaylandState {
             }
         }
 
+        self.finish_first_run_progress(changed, first_run_ui_changed, completed_now);
+    }
+
+    fn finish_first_run_progress(
+        &mut self,
+        changed: bool,
+        first_run_ui_changed: bool,
+        completed_now: bool,
+    ) {
         if changed {
             self.save_onboarding_state();
         }
