@@ -1155,6 +1155,15 @@ fn assert_builtin_node(
     );
     assert_eq!(shortcut_badge, expected.shortcut_badge.as_deref());
 
+    assert_builtin_node_kind(node, expected);
+}
+
+fn assert_builtin_node_kind(
+    node: &crate::backend::wayland::TopToolbarWidgetKind,
+    expected: &SemanticControlRecord,
+) {
+    use crate::backend::wayland::TopToolbarWidgetKind as W;
+
     match node {
         W::IconButton {
             glyph,
@@ -1166,21 +1175,11 @@ fn assert_builtin_node(
                 glyph.0,
                 crate::toolbar_icons::top_toolbar_icon_painter(icon)
             ));
-            assert_eq!(style.active, expected.active);
-            assert_eq!(style.disabled, !expected.enabled);
-            assert_eq!(
-                style.destructive,
-                expected.role == model::TopToolbarControlRole::Destructive
-            );
+            assert_builtin_button_style(style.active, style.disabled, style.destructive, expected);
         }
         W::TextButton { label, style } => {
             assert_eq!(label.text, expected.label);
-            assert_eq!(style.active, expected.active);
-            assert_eq!(style.disabled, !expected.enabled);
-            assert_eq!(
-                style.destructive,
-                expected.role == model::TopToolbarControlRole::Destructive
-            );
+            assert_builtin_button_style(style.active, style.disabled, style.destructive, expected);
         }
         W::Swatch { selected, .. } => assert_eq!(*selected, expected.active),
         W::PresetSlot {
@@ -1222,6 +1221,20 @@ fn assert_builtin_node(
         W::DragHandle | W::MinimizeButton => {}
         other => panic!("unexpected semantic control kind: {other:?}"),
     }
+}
+
+fn assert_builtin_button_style(
+    active: bool,
+    disabled: bool,
+    destructive: bool,
+    expected: &SemanticControlRecord,
+) {
+    assert_eq!(active, expected.active);
+    assert_eq!(disabled, !expected.enabled);
+    assert_eq!(
+        destructive,
+        expected.role == model::TopToolbarControlRole::Destructive
+    );
 }
 
 fn builtin_semantic_records(
