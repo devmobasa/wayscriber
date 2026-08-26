@@ -566,6 +566,15 @@ fn validate_and_clamp_clamps_input_hud_fields() {
 #[test]
 fn validate_and_clamp_clamps_ui_and_session_fields() {
     let mut config = Config::default();
+    configure_invalid_ui_and_session_fields(&mut config);
+
+    config.validate_and_clamp();
+
+    assert_ui_fields_clamped(&config);
+    assert_session_fields_clamped(&config);
+}
+
+fn configure_invalid_ui_and_session_fields(config: &mut Config) {
     config.drawing.marker_opacity = 2.0;
     config.drawing.hit_test_tolerance = 0.5;
     config.drawing.hit_test_linear_threshold = 0;
@@ -586,9 +595,9 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
     config.session.storage = SessionStorageMode::Custom;
     config.session.custom_directory = Some("  ".to_string());
     config.keybindings.core.exit = vec!["Ctrl+Shift".to_string()];
+}
 
-    config.validate_and_clamp();
-
+fn assert_ui_fields_clamped(config: &Config) {
     assert_eq!(config.drawing.marker_opacity, 0.9);
     assert_eq!(config.drawing.hit_test_tolerance, 1.0);
     assert_eq!(config.drawing.hit_test_linear_threshold, 400);
@@ -614,6 +623,9 @@ fn validate_and_clamp_clamps_ui_and_session_fields() {
             .all(|c| (0.0..=1.0).contains(c))
     );
     assert_eq!(config.ui.toolbar.scale, 3.0);
+}
+
+fn assert_session_fields_clamped(config: &Config) {
     assert_eq!(config.session.max_shapes_per_frame, 1);
     assert_eq!(config.session.max_file_size_mb, 1024);
     assert_eq!(config.session.auto_compress_threshold_kb, 1);
