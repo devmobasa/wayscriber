@@ -16,38 +16,11 @@ impl WaylandState {
         on_toolbar: bool,
         inline_active: bool,
     ) {
-        if self.input_state.region_is_active() {
-            let screen_position = if on_toolbar {
-                self.toolbar_surface_screen_coords(&event.surface, event.position)
-            } else {
-                Some(event.position)
-            };
-            if let Some((x, y)) = screen_position {
-                self.set_current_mouse(x.round() as i32, y.round() as i32);
-                self.update_region_selection(RegionInputSource::Pointer, x, y);
-            }
-            self.update_pointer_cursor(on_toolbar || self.pointer_over_toolbar(), conn);
+        if self.try_handle_region_pointer_motion(conn, event, on_toolbar) {
             return;
         }
 
-        if self.input_state.eyedropper_is_active() {
-            let inline_hover = !on_toolbar
-                && self.inline_toolbars_active()
-                && self.toolbar.is_visible()
-                && self.inline_toolbar_motion(event.position);
-            let screen_position = if on_toolbar {
-                self.toolbar_surface_screen_coords(&event.surface, event.position)
-            } else {
-                Some(event.position)
-            };
-            if let Some((x, y)) = screen_position {
-                self.set_current_mouse(x.round() as i32, y.round() as i32);
-                self.update_eyedropper_hover(x, y);
-            }
-            self.update_pointer_cursor(
-                on_toolbar || inline_hover || self.pointer_over_toolbar(),
-                conn,
-            );
+        if self.try_handle_eyedropper_pointer_motion(conn, event, on_toolbar) {
             return;
         }
 
@@ -276,5 +249,56 @@ impl WaylandState {
             wy,
             false,
         );
+    }
+
+    fn try_handle_region_pointer_motion(
+        &mut self,
+        conn: &Connection,
+        event: &PointerEvent,
+        on_toolbar: bool,
+    ) -> bool {
+        if !self.input_state.region_is_active() {
+            return false;
+        }
+        let screen_position = if on_toolbar {
+            self.toolbar_surface_screen_coords(&event.surface, event.position)
+        } else {
+            Some(event.position)
+        };
+        if let Some((x, y)) = screen_position {
+            self.set_current_mouse(x.round() as i32, y.round() as i32);
+            self.update_region_selection(RegionInputSource::Pointer, x, y);
+        }
+        self.update_pointer_cursor(on_toolbar || self.pointer_over_toolbar(), conn);
+        true
+    }
+
+    fn try_handle_eyedropper_pointer_motion(
+        &mut self,
+        conn: &Connection,
+        event: &PointerEvent,
+        on_toolbar: bool,
+    ) -> bool {
+        if !self.input_state.eyedropper_is_active() {
+            return false;
+        }
+        let inline_hover = !on_toolbar
+            && self.inline_toolbars_active()
+            && self.toolbar.is_visible()
+            && self.inline_toolbar_motion(event.position);
+        let screen_position = if on_toolbar {
+            self.toolbar_surface_screen_coords(&event.surface, event.position)
+        } else {
+            Some(event.position)
+        };
+        if let Some((x, y)) = screen_position {
+            self.set_current_mouse(x.round() as i32, y.round() as i32);
+            self.update_eyedropper_hover(x, y);
+        }
+        self.update_pointer_cursor(
+            on_toolbar || inline_hover || self.pointer_over_toolbar(),
+            conn,
+        );
+        true
     }
 }
