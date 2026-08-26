@@ -141,7 +141,10 @@ fn config_draft_round_trips_the_font_cycle_list() {
     ];
 
     let draft = ConfigDraft::from_config(&config);
-    assert_eq!(draft.drawing_font_cycle, "Sans, JetBrains Mono, Noto Serif");
+    assert_eq!(
+        draft.drawing_font_cycle.entries(),
+        config.drawing.font_cycle
+    );
 
     let round_trip = draft
         .to_config(&config)
@@ -150,64 +153,52 @@ fn config_draft_round_trips_the_font_cycle_list() {
 }
 
 #[test]
-fn font_cycle_editing_tolerates_spacing_and_trailing_separators() {
+fn an_emptied_font_cycle_turns_the_action_off_rather_than_restoring_defaults() {
     let config = Config::default();
     let mut draft = ConfigDraft::from_config(&config);
 
-    draft.set_text(
-        TextField::DrawingFontCycle,
-        "  Sans ,, Serif ,  ".to_string(),
-    );
-
-    let round_trip = draft.to_config(&config).expect("config");
-    assert_eq!(round_trip.drawing.font_cycle, vec!["Sans", "Serif"]);
-}
-
-#[test]
-fn an_emptied_font_cycle_field_turns_the_action_off_rather_than_restoring_defaults() {
-    let config = Config::default();
-    let mut draft = ConfigDraft::from_config(&config);
-
-    draft.set_text(TextField::DrawingFontCycle, String::new());
+    draft.drawing_font_cycle.clear();
 
     let round_trip = draft.to_config(&config).expect("config");
     assert!(round_trip.drawing.font_cycle.is_empty());
 }
 
 #[test]
-fn a_save_that_never_touched_the_font_cycle_field_keeps_a_family_with_a_comma_in_it() {
-    // The field is one comma-separated line, so a family whose own name has a
-    // comma cannot be recovered from the text. That is a limit on editing it,
-    // not a licence to rewrite it: saving an unrelated page must not corrupt a
-    // list the user never opened.
+fn a_family_name_containing_a_comma_now_round_trips() {
+    // The editor used to hold this list as one comma-separated line, so a
+    // family whose own name contained a comma could not survive being edited.
+    // The list is a list now; there is nothing left to parse.
     let mut config = Config::default();
     config.drawing.font_cycle = vec!["Weird, Font".to_string(), "Sans".to_string()];
 
     let mut draft = ConfigDraft::from_config(&config);
+    assert_eq!(
+        draft.drawing_font_cycle.entries(),
+        config.drawing.font_cycle
+    );
+
+    // An unrelated edit elsewhere still saves the list untouched.
     draft.set_text(TextField::DrawingThickness, "5".to_string());
     let round_trip = draft.to_config(&config).expect("config");
-
     assert_eq!(round_trip.drawing.font_cycle, config.drawing.font_cycle);
 }
 
 #[test]
-fn editing_the_font_cycle_field_re_reads_it_and_cannot_express_a_comma() {
-    // Documented limitation, pinned so the day it matters this test says so.
-    // The config file itself is a TOML array and can still express one.
+fn blank_font_cycle_entries_are_dropped_on_save() {
+    // A row can only be set from the installed list, so this is belt and
+    // braces against a config file that carried one.
     let mut config = Config::default();
-    config.drawing.font_cycle = vec!["Weird, Font".to_string()];
+    config.drawing.font_cycle = vec![
+        "  Sans  ".to_string(),
+        String::new(),
+        "   ".to_string(),
+        "Serif".to_string(),
+    ];
 
-    let mut draft = ConfigDraft::from_config(&config);
-    draft.set_text(
-        TextField::DrawingFontCycle,
-        "Weird, Font, Serif".to_string(),
-    );
+    let draft = ConfigDraft::from_config(&config);
     let round_trip = draft.to_config(&config).expect("config");
 
-    assert_eq!(
-        round_trip.drawing.font_cycle,
-        vec!["Weird", "Font", "Serif"]
-    );
+    assert_eq!(round_trip.drawing.font_cycle, ["Sans", "Serif"]);
 }
 
 #[test]

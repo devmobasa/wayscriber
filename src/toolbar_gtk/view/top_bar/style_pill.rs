@@ -214,15 +214,22 @@ impl TopBar {
                         };
                         send_event(&sender, event);
                     });
-                    // The thickness/text-size readouts are distinct numeral
-                    // controls; only the opacity slider keeps its built-in
-                    // readout.
-                    slider.set_value_label_visible(control.carries_inline_readout());
+                    // Thickness/text-size use distinct numeral controls. The
+                    // other readouts sit beside a full-width track, matching
+                    // the built-in toolbar instead of borrowing track space.
+                    let carries_readout = control.carries_inline_readout();
+                    slider.configure_inline_readout(carries_readout, px(STYLE_VALUE_W));
                     set_semantic_widget_id(&slider.root, control.id().as_ref());
                     if let Some(tooltip) = control.tooltip(snapshot) {
                         slider.root.set_tooltip_text(Some(&tooltip));
                     }
-                    slider.root.set_size_request(px(STYLE_SLIDER_W), -1);
+                    let slider_width = STYLE_SLIDER_W
+                        + if carries_readout {
+                            STYLE_PILL_GAP + STYLE_VALUE_W
+                        } else {
+                            0.0
+                        };
+                    slider.root.set_size_request(px(slider_width), -1);
                     slider.root.set_valign(gtk4::Align::Center);
                     append_gap(&pill, slider.root.upcast_ref(), gap);
                     self.updaters.borrow_mut().push(Box::new(move |snapshot| {

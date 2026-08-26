@@ -1097,6 +1097,8 @@ marker_opacity = 0.32
 # Font families the "Cycle Font Family" action steps through (Shift+T).
 # Any installed family name works. An empty list turns the action off.
 # Names are matched without case, so ["Sans", "sans"] loads as one entry.
+# The configurator edits this as a row per font, each picking from the
+# families installed on the machine.
 font_cycle = ["Sans", "Monospace", "Serif"]
 
 # How much a finished freehand or marker stroke is smoothed (0 - 6).

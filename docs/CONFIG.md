@@ -413,6 +413,13 @@ Any installed family name is valid. Blank and repeated entries are dropped when
 the configuration loads, because a repeat makes the key look like it skipped.
 An empty list turns the action off.
 
+In the configurator this is a row per font under **Font cycle**, each row a
+searchable dropdown over everything installed — every family drawn in its own
+face, so you pick one by looking at it. Rows move up and down, and the order
+they are in is the order <kbd>Shift+T</kbd> walks. A family your config names
+that this machine does not have says so under the row rather than quietly
+showing a different one.
+
 With text or a sticky note selected, <kbd>Shift+T</kbd> restyles that text and
 leaves the tool setting alone. With nothing selected it sets what the next label
 will be written in. A family that is not in the list steps to the first entry,
@@ -424,6 +431,8 @@ opens the font picker below.
 
 Family names are matched without regard to case, the way fontconfig resolves
 them: `sans` and `Sans` are one font, so `["Sans", "sans"]` loads as one entry.
+A family name containing a comma is fine — the list is a TOML array, and the
+configurator edits it as a list rather than as one line of text.
 
 #### Font picker
 

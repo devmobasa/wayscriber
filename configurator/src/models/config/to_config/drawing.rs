@@ -67,19 +67,9 @@ impl ConfigDraft {
             errors,
             |value| config.drawing.marker_opacity = value,
         );
-        // The field is one comma-separated line, so a family whose own name
-        // contains a comma cannot be recovered from it. An untouched field must
-        // still save the list it was shown: only re-parse once the text stops
-        // matching what the document rendered into it.
-        if self.drawing_font_cycle != config.drawing.font_cycle.join(", ") {
-            config.drawing.font_cycle = self
-                .drawing_font_cycle
-                .split(',')
-                .map(str::trim)
-                .filter(|family| !family.is_empty())
-                .map(str::to_string)
-                .collect();
-        }
+        // A list in, a list out. Nothing to parse and nothing a family name can
+        // contain that would break the round trip.
+        config.drawing.font_cycle = self.drawing_font_cycle.entries().to_vec();
         config.drawing.font_family = self.drawing_font_family.clone();
         config.drawing.font_weight = self.drawing_font_weight.clone();
         config.drawing.font_style = self.drawing_font_style.clone();

@@ -108,7 +108,6 @@ pub enum TextField {
     DrawingPolygonSides,
     DrawingMarkerOpacity,
     DrawingPenSmoothing,
-    DrawingFontCycle,
     DrawingFontFamily,
     DrawingFontWeight,
     DrawingFontStyle,

@@ -851,12 +851,39 @@ fn assert_gtk_style_widget(
         }
         model::StylePillRole::Slider => {
             // SliderRow: a box hosting the hand-drawn track DrawingArea.
-            assert!(widget.is::<gtk4::Box>(), "{id} slider row");
-            assert!(
-                find_control_surface(widget)
-                    .is_some_and(|surface| surface.is::<gtk4::DrawingArea>()),
-                "{id} slider track"
+            let row = widget
+                .clone()
+                .downcast::<gtk4::Box>()
+                .unwrap_or_else(|_| panic!("{id} is a slider row"));
+            let track = row.first_child().expect("slider track");
+            assert!(track.is::<gtk4::DrawingArea>(), "{id} slider track");
+            let value = track.next_sibling().expect("slider value readout");
+            let value = value
+                .downcast::<gtk4::Label>()
+                .unwrap_or_else(|_| panic!("{id} value readout is a label"));
+            let carries_readout = control.carries_inline_readout();
+            assert_eq!(
+                value.property::<bool>("visible"),
+                carries_readout,
+                "{id} readout visibility"
             );
+            let expected_width = if carries_readout {
+                STYLE_SLIDER_W + STYLE_PILL_GAP + STYLE_VALUE_W
+            } else {
+                STYLE_SLIDER_W
+            };
+            assert_eq!(
+                row.width_request(),
+                expected_width.round() as i32,
+                "{id} keeps the shared track width when its readout is visible"
+            );
+            if carries_readout {
+                assert_eq!(
+                    value.xalign(),
+                    0.0,
+                    "{id} places its readout next to the track"
+                );
+            }
         }
         model::StylePillRole::Value => {
             let button = widget

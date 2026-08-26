@@ -109,6 +109,12 @@ pub enum Message {
     QuickColorAdded,
     QuickColorRemoved(usize),
     QuickColorMoved(usize, isize),
+    /// Append a row to the font cycle, on a family the list does not hold yet.
+    FontCycleAdded,
+    FontCycleRemoved(usize),
+    FontCycleMoved(usize, isize),
+    /// One row picked a different family.
+    FontCycleChanged(usize, String),
     QuickColorModeChanged(usize, ColorMode),
     QuickNamedColorSelected(usize, NamedColorOption),
     EraserModeChanged(EraserModeOption),
