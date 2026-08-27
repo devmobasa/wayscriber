@@ -17,7 +17,7 @@ use super::cut_review::{
     CutPreviewKey, PreviewApply, RegionAnnotatedRenderContext, RegionCutBase, RegionCutPreview,
     RegionRenderFingerprint, RegionReviewCorrelation, RegionReviewEdits, native_extent_display,
 };
-use super::render::{RegionPixelSource, compose_region_pixels, render_region_base_pixels};
+use super::render::{RegionPixelSource, compose_shared_region_pixels, render_region_base_pixels};
 
 const TOAST_SOURCE: &str = "capture";
 
@@ -66,11 +66,11 @@ pub(super) fn run_cut_preview(job: CutPreviewJob) -> CutPreviewOutcome {
             }
         }
     };
-    match compose_region_pixels(&base, &key.cuts) {
+    match compose_shared_region_pixels(&base, &key.cuts) {
         Ok(composed) => CutPreviewOutcome::Success {
             key,
             base,
-            composed: Arc::new(composed),
+            composed,
         },
         Err(error) => CutPreviewOutcome::Failed {
             key,
@@ -950,6 +950,29 @@ mod tests {
             CutPreviewOutcome::Success { key, composed, .. } => {
                 assert_eq!(key.cuts, desired.cuts);
                 assert_eq!((composed.width(), composed.height()), (1, 1));
+            }
+            CutPreviewOutcome::Failed { message, .. } => panic!("{message}"),
+        }
+    }
+
+    #[test]
+    fn empty_cuts_reuse_the_cached_base_raster() {
+        let mut desired = key(1, 1);
+        desired.cuts.clear();
+        let base = pixels();
+        match run_cut_preview(CutPreviewJob {
+            key: desired,
+            source: None,
+            base: Some(Arc::clone(&base)),
+        }) {
+            CutPreviewOutcome::Success {
+                base: out_base,
+                composed,
+                ..
+            } => {
+                assert!(Arc::ptr_eq(&base, &out_base));
+                assert!(Arc::ptr_eq(&out_base, &composed));
+                assert_eq!((composed.width(), composed.height()), (2, 1));
             }
             CutPreviewOutcome::Failed { message, .. } => panic!("{message}"),
         }

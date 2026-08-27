@@ -51,18 +51,32 @@ pub(super) fn render_region_base_pixels(
 }
 
 pub(super) fn compose_region_pixels(
-    base: &PackedArgb32,
+    base: PackedArgb32,
     cuts: &[CutBand],
 ) -> Result<PackedArgb32, CaptureError> {
-    apply_band_cuts(base, cuts).map_err(band_cut_error)
+    if cuts.is_empty() {
+        return Ok(base);
+    }
+    apply_band_cuts(&base, cuts).map_err(band_cut_error)
+}
+
+pub(super) fn compose_shared_region_pixels(
+    base: &Arc<PackedArgb32>,
+    cuts: &[CutBand],
+) -> Result<Arc<PackedArgb32>, CaptureError> {
+    if cuts.is_empty() {
+        return Ok(Arc::clone(base));
+    }
+    apply_band_cuts(base.as_ref(), cuts)
+        .map(Arc::new)
+        .map_err(band_cut_error)
 }
 
 pub(super) fn render_region_pixels(
     request: RegionRenderRequest,
 ) -> Result<PackedArgb32, CaptureError> {
     let _ = request.output_size()?;
-    let base = render_region_base_pixels(request.source)?;
-    compose_region_pixels(&base, &request.cuts)
+    compose_region_pixels(render_region_base_pixels(request.source)?, &request.cuts)
 }
 
 /// The PNG job for a submission. Shared by every destination, so what Copy
@@ -192,5 +206,24 @@ mod tests {
         };
         let rendered = region_render_job(request)().expect("raw");
         assert_eq!((rendered.width, rendered.height), (3, 2));
+    }
+
+    #[test]
+    fn empty_cuts_return_the_owned_base_without_copying() {
+        let (_, bytes) = swatch();
+        let base = render_region_base_pixels(RegionPixelSource::Raw {
+            image: Arc::new(ScreenImage {
+                data: bytes,
+                width: 3,
+                height: 2,
+                stride: 12,
+            }),
+            selection: ImagePixelRect::new(0, 0, 3, 2, (3, 2)).unwrap(),
+        })
+        .expect("base");
+        let ptr = base.data().as_ptr();
+        let composed = compose_region_pixels(base, &[]).expect("empty cuts");
+        assert_eq!(composed.data().as_ptr(), ptr);
+        assert_eq!((composed.width(), composed.height()), (3, 2));
     }
 }
