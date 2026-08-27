@@ -263,6 +263,43 @@ pub(super) fn screen_rect_for_image_rect(token: &ScreenSourceToken, rect: ImageP
         .expect("a non-empty image rectangle must map to a non-empty screen rectangle")
 }
 
+/// Map a native-pixel extent whose origin is a source-image point into logical
+/// screen space. The extent is not a second source crop; it only reuses the
+/// source token's image-to-logical scale, including fractional output scale
+/// and Zoom transforms.
+pub(super) fn screen_rect_for_native_extent(
+    token: &ScreenSourceToken,
+    origin: (u32, u32),
+    native_size: (u32, u32),
+) -> Option<Rect> {
+    if native_size.0 == 0
+        || native_size.1 == 0
+        || token.image_size.0 == 0
+        || token.image_size.1 == 0
+    {
+        return None;
+    }
+    let right = origin.0.checked_add(native_size.0)?;
+    let bottom = origin.1.checked_add(native_size.1)?;
+    let first = screen_point_for_image_point(
+        token,
+        ImagePoint::new(f64::from(origin.0), f64::from(origin.1)),
+    );
+    let second =
+        screen_point_for_image_point(token, ImagePoint::new(f64::from(right), f64::from(bottom)));
+    if ![first.0, first.1, second.0, second.1]
+        .iter()
+        .all(|value| value.is_finite())
+    {
+        return None;
+    }
+    let left = first.0.min(second.0).floor() as i32;
+    let top = first.1.min(second.1).floor() as i32;
+    let right = first.0.max(second.0).ceil() as i32;
+    let bottom = first.1.max(second.1).ceil() as i32;
+    Rect::from_min_max(left, top, right, bottom)
+}
+
 #[allow(dead_code)] // The empty-span contract is exercised by mapping tests.
 pub(super) fn screen_rect_for_pixel_span(
     token: &ScreenSourceToken,
@@ -321,49 +358,7 @@ pub(super) fn copy_image_rect(
     if source.width == 0 || source.height == 0 {
         return Err(CropError::Empty);
     }
-    if rect
-        .x()
-        .checked_add(rect.width())
-        .ok_or(CropError::OutOfBounds)?
-        > source.width
-        || rect
-            .y()
-            .checked_add(rect.height())
-            .ok_or(CropError::OutOfBounds)?
-            > source.height
-    {
-        return Err(CropError::OutOfBounds);
-    }
-    let source_stride = usize::try_from(source.stride).map_err(|_| CropError::OutOfBounds)?;
-    let row_bytes = usize::try_from(rect.width())
-        .ok()
-        .and_then(|width| width.checked_mul(4))
-        .ok_or(CropError::OutOfBounds)?;
-    let total_bytes = usize::try_from(rect.height())
-        .ok()
-        .and_then(|height| height.checked_mul(row_bytes))
-        .ok_or(CropError::OutOfBounds)?;
-    let stride = i32::try_from(row_bytes).map_err(|_| CropError::OutOfBounds)?;
-
-    let mut data = Vec::with_capacity(total_bytes);
-    let start_column = usize::try_from(rect.x())
-        .ok()
-        .and_then(|x| x.checked_mul(4))
-        .ok_or(CropError::OutOfBounds)?;
-    for row in 0..rect.height() {
-        let source_row = usize::try_from(rect.y().saturating_add(row))
-            .ok()
-            .and_then(|row| row.checked_mul(source_stride))
-            .ok_or(CropError::OutOfBounds)?;
-        let start = source_row
-            .checked_add(start_column)
-            .ok_or(CropError::OutOfBounds)?;
-        let end = start.checked_add(row_bytes).ok_or(CropError::OutOfBounds)?;
-        data.extend_from_slice(source.data.get(start..end).ok_or(CropError::OutOfBounds)?);
-    }
-
-    crate::screen_pixels::PackedArgb32::new(rect.width(), rect.height(), stride, data)
-        .ok_or(CropError::OutOfBounds)
+    source.copy_rect(rect).ok_or(CropError::OutOfBounds)
 }
 
 #[cfg(test)]

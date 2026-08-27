@@ -8,7 +8,7 @@ use crate::{
     util::Rect,
 };
 
-use crate::backend::wayland::state::WaylandState;
+use crate::backend::wayland::state::{RegionReviewPress, WaylandState};
 use crate::input::state::RegionInputSource;
 
 const STYLUS_CURSOR_DAMAGE_RADIUS: i32 = 64;
@@ -253,13 +253,13 @@ impl WaylandState {
             return false;
         }
         let (x, y) = self.current_or_pending_stylus_position();
-        if let Some(action) = self.region_review_action_at((x, y)) {
-            self.submit_region_review_action(action);
-            self.retire_stylus_contact();
-        } else if self.region_review_bar_contains((x, y)) {
-            self.retire_stylus_contact();
-        } else {
-            self.begin_region_selection(RegionInputSource::Stylus, x, y);
+        match self.consume_region_review_press(RegionInputSource::Stylus, (x, y)) {
+            RegionReviewPress::NotReview | RegionReviewPress::Fallthrough => {
+                self.begin_region_selection(RegionInputSource::Stylus, x, y);
+            }
+            RegionReviewPress::Consumed { .. } => {
+                self.retire_stylus_contact();
+            }
         }
         true
     }

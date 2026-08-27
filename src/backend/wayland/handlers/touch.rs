@@ -6,7 +6,8 @@ use wayland_client::{
 };
 
 use crate::backend::wayland::state::{
-    PerfInputSource, TouchTarget, WaylandState, debug_toolbar_drag_logging_enabled,
+    PerfInputSource, RegionReviewPress, TouchTarget, WaylandState,
+    debug_toolbar_drag_logging_enabled,
 };
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
@@ -220,18 +221,20 @@ impl WaylandState {
             if target == TouchTarget::Toolbar || inline_hit {
                 self.cancel_region_for_toolbar_interaction();
             } else if target == TouchTarget::Overlay {
-                if let Some(action) = self.region_review_action_at(screen_position) {
-                    self.submit_region_review_action(action);
-                    return TouchTarget::Other;
+                match self.consume_region_review_press(RegionInputSource::Touch, screen_position) {
+                    RegionReviewPress::NotReview | RegionReviewPress::Fallthrough => {
+                        self.begin_region_selection(
+                            RegionInputSource::Touch,
+                            screen_position.0,
+                            screen_position.1,
+                        );
+                    }
+                    RegionReviewPress::Consumed { suppress_release } => {
+                        if suppress_release {
+                            self.suppress_next_release_from(RegionInputSource::Touch);
+                        }
+                    }
                 }
-                if self.region_review_bar_contains(screen_position) {
-                    return TouchTarget::Other;
-                }
-                self.begin_region_selection(
-                    RegionInputSource::Touch,
-                    screen_position.0,
-                    screen_position.1,
-                );
                 // Unlike the one-shot eyedropper sample, an OCR region is a
                 // drag: report the real target so motion and release still
                 // resolve to screen coordinates and reach the selector.

@@ -1,17 +1,13 @@
-use crate::canvas_export::{CanvasExportRect, CanvasRegionExportSnapshot, CanvasRegionSource};
 use crate::capture::{
     CaptureDestination, ImageFormatMetadata, ImageOperationKind, RenderImageRequest,
-    RenderedImageDeliveryRequest,
+    RenderedImageDeliveryRequest, output_size as band_cut_output_size,
 };
 use crate::input::state::{BoardPasteTarget, RegionPurposeTag, Toast, ToastPriority};
 use crate::screen_pixels::{EmbeddedImageLimits, ImagePixelRect};
 use crate::ui::RegionAction;
 
 use super::super::capture::should_exit_after_capture;
-use super::super::screen_image::{
-    CropError, copy_image_rect, displayed_screen_image, screen_source_is,
-    shared_displayed_screen_image,
-};
+use super::render::{RegionRenderRequest, region_render_job};
 use super::{ActiveScreenRegion, FreezeOwnership, RegionCaptureIntent, RegionSelectionFinalize};
 use crate::backend::wayland::state::WaylandState;
 
@@ -38,35 +34,6 @@ pub(super) fn region_delivery_request(
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum RegionSubmit {
-    Deliver(CaptureDestination),
-    Board(BoardPasteTarget),
-}
-
-/// What a submission renders from. One or the other, never both and never
-/// neither, so the render job cannot be handed an impossible pair.
-#[derive(Debug)]
-pub(super) enum RegionRenderSource {
-    /// Committed board drawings composited over the crop, on the worker.
-    Annotated(Box<CanvasRegionExportSnapshot>),
-    /// The checked crop taken on the event loop.
-    Raw(crate::screen_pixels::PackedArgb32),
-}
-
-/// The PNG job for a submission. Shared by every destination, so what Copy
-/// writes and what Board pastes can only differ by the Review toggle.
-pub(super) fn region_render_job(source: RegionRenderSource) -> crate::capture::ImageRenderJob {
-    match source {
-        RegionRenderSource::Annotated(snapshot) => {
-            Box::new(move || crate::canvas_export::render_canvas_region_png(*snapshot))
-        }
-        RegionRenderSource::Raw(pixels) => {
-            Box::new(move || crate::capture::png::encode_packed_argb32_png(&pixels))
-        }
-    }
-}
-
 pub(super) const fn review_delivery_destination(
     action: RegionAction,
 ) -> Option<CaptureDestination> {
@@ -74,8 +41,19 @@ pub(super) const fn review_delivery_destination(
         RegionAction::Copy => Some(CaptureDestination::ClipboardOnly),
         RegionAction::Save => Some(CaptureDestination::FileOnly),
         RegionAction::Both => Some(CaptureDestination::ClipboardAndFile),
-        RegionAction::Board | RegionAction::ToggleIncludeDrawings => None,
+        RegionAction::Board
+        | RegionAction::CutBand
+        | RegionAction::UndoCut
+        | RegionAction::RedoCut
+        | RegionAction::ResetCuts
+        | RegionAction::ToggleIncludeDrawings => None,
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum RegionSubmit {
+    Deliver(CaptureDestination),
+    Board(BoardPasteTarget),
 }
 
 impl WaylandState {
@@ -88,7 +66,7 @@ impl WaylandState {
         }
         let selection = self.region_selection_geometry()?.display_selection();
         crate::ui::RegionActionBar::place(selection, (self.surface.width(), self.surface.height()))
-            .hit(point)
+            .enabled_hit(point, self.region_cut_availability())
     }
 
     /// Whether the pointer sits over the reviewed rectangle — the area a press
@@ -131,18 +109,35 @@ impl WaylandState {
         &mut self,
         action: RegionAction,
     ) -> bool {
-        if action == RegionAction::ToggleIncludeDrawings {
-            return self.toggle_region_picker_include_drawings();
+        if !action.is_terminal() {
+            return self.apply_region_review_edit(action);
+        }
+        if !self.region_cut_availability().allows(action) {
+            return true;
         }
         let Some(rect) = self.region_review_rect() else {
             return false;
         };
+        let cuts = self
+            .region_review_edits()
+            .map(|edits| edits.cuts.clone())
+            .unwrap_or_default();
+        if !self.preview_permits_submit(&cuts) {
+            return true;
+        }
+        let Ok(output) = band_cut_output_size((rect.width(), rect.height()), &cuts) else {
+            self.input_state.push_toast(
+                ToastPriority::Critical,
+                TOAST_SOURCE,
+                Toast::error("Could not apply the requested cut."),
+            );
+            return true;
+        };
         let submit = match review_delivery_destination(action) {
             Some(destination) => RegionSubmit::Deliver(destination),
-            None => {
-                debug_assert_eq!(action, RegionAction::Board);
-                let limits = EmbeddedImageLimits::default();
-                if !limits.allows_pixels(rect.width(), rect.height()) {
+            None => match self.board_submit_for_composed(rect, output) {
+                Ok(target) => RegionSubmit::Board(target),
+                Err(BoardSubmitError::TooLarge) => {
                     self.input_state.push_toast(
                         ToastPriority::Info,
                         TOAST_SOURCE,
@@ -150,28 +145,7 @@ impl WaylandState {
                     );
                     return true;
                 }
-                // Placement maps the authoritative image rectangle, not the
-                // picker's outward-rounded display rectangle: composition uses
-                // the same exact world rectangle, so the pasted image lands
-                // where the annotations were drawn instead of stretched by a
-                // quantization the chrome introduced.
-                //
-                // A missing source or a rectangle that will not map is a dead
-                // end for this capture, not a no-op: falling through silently
-                // would leave Review painted over a reservation nothing can
-                // ever complete, so it retires through the usual funnel.
-                let placement = match self.data.active_screen_region {
-                    Some(ActiveScreenRegion::Ready { source, .. }) => {
-                        super::world_rect_for_image_rect_exact(
-                            rect,
-                            self.board_view_offset(),
-                            source,
-                        )
-                        .and_then(super::board_bounds_for_world_rect)
-                    }
-                    _ => None,
-                };
-                let Some(world_bounds) = placement else {
+                Err(BoardSubmitError::Unplaceable) => {
                     self.cancel_region_capture();
                     self.input_state.push_toast(
                         ToastPriority::Critical,
@@ -179,17 +153,55 @@ impl WaylandState {
                         Toast::error("Could not place that region on the board."),
                     );
                     return true;
-                };
-                RegionSubmit::Board(BoardPasteTarget {
-                    board_id: self.input_state.boards.active_board_id().to_string(),
-                    page_index: self.input_state.boards.active_page_index(),
-                    page_generation: self.input_state.boards.active_page_generation(),
-                    world_bounds,
-                })
-            }
+                }
+            },
         };
-        self.submit_region_capture_with(rect, submit);
+        self.submit_region_capture_with(rect, cuts, submit);
         true
+    }
+
+    fn preview_permits_submit(&self, cuts: &[crate::capture::CutBand]) -> bool {
+        cuts.is_empty()
+            || self
+                .region_review_edits()
+                .is_some_and(super::cut_review::RegionReviewEdits::preview_is_current)
+    }
+
+    fn board_submit_for_composed(
+        &self,
+        rect: ImagePixelRect,
+        output: (u32, u32),
+    ) -> Result<BoardPasteTarget, BoardSubmitError> {
+        let limits = EmbeddedImageLimits::default();
+        if !limits.allows_pixels(output.0, output.1) {
+            return Err(BoardSubmitError::TooLarge);
+        }
+        let Some(ActiveScreenRegion::Ready { source, .. }) = self.data.active_screen_region else {
+            return Err(BoardSubmitError::Unplaceable);
+        };
+        let Some(source_world) =
+            super::world_rect_for_image_rect_exact(rect, self.board_view_offset(), source)
+        else {
+            return Err(BoardSubmitError::Unplaceable);
+        };
+        let composed = if output == (rect.width(), rect.height()) {
+            source_world
+        } else {
+            super::world_rect_for_composed_region(
+                source_world,
+                (rect.width(), rect.height()),
+                output,
+            )
+            .ok_or(BoardSubmitError::Unplaceable)?
+        };
+        let world_bounds =
+            super::board_bounds_for_world_rect(composed).ok_or(BoardSubmitError::Unplaceable)?;
+        Ok(BoardPasteTarget {
+            board_id: self.input_state.boards.active_board_id().to_string(),
+            page_index: self.input_state.boards.active_page_index(),
+            page_generation: self.input_state.boards.active_page_generation(),
+            world_bounds,
+        })
     }
 
     /// Submit the whole displayed image and retire any in-flight drag owner.
@@ -202,6 +214,12 @@ impl WaylandState {
         else {
             return;
         };
+        if purpose == RegionPurposeTag::CaptureInteractive
+            && self.input_state.region_state().is_review()
+            && self.region_review_crop_locked()
+        {
+            return;
+        }
         self.clear_region_window_snap();
         self.retire_region_selection_owner(self.input_state.region_state().selection_owner());
         match purpose {
@@ -222,12 +240,16 @@ impl WaylandState {
             }
             _ => return,
         };
-        self.submit_region_capture_with(rect, RegionSubmit::Deliver(destination));
+        self.submit_region_capture_with(rect, Vec::new(), RegionSubmit::Deliver(destination));
     }
 
-    fn submit_region_capture_with(&mut self, rect: ImagePixelRect, submit: RegionSubmit) {
+    fn submit_region_capture_with(
+        &mut self,
+        rect: ImagePixelRect,
+        cuts: Vec<crate::capture::CutBand>,
+        submit: RegionSubmit,
+    ) {
         let Some(ActiveScreenRegion::Ready {
-            source: token,
             freeze_ownership,
             purpose,
             include_drawings,
@@ -240,101 +262,40 @@ impl WaylandState {
         if !purpose.is_capture() {
             return;
         }
-        let Some(source) = displayed_screen_image(
-            &self.zoom,
-            &self.frozen,
-            self.input_state.board_is_transparent(),
-        ) else {
-            self.cancel_region_capture_for_source_change();
-            return;
-        };
-        if !screen_source_is(
-            &token,
-            &source,
-            &self.zoom,
-            &self.frozen,
-            (self.surface.width(), self.surface.height()),
-        ) {
-            self.cancel_region_capture_for_source_change();
-            return;
-        }
-        // Every destination honours the Review toggle, Board included. Pasting a
-        // composited crop onto the board it came from bakes a second, flattened
-        // copy of those annotations over the live shapes; the toggle is the
-        // control for that, so it is not overridden per destination here.
-        //
-        // The composed path validates and crops on the capture worker. The raw
-        // path retains the existing checked event-loop crop, but never pays
-        // that copy when the result would be discarded by composition.
-        let raw_pixels = if include_drawings {
-            None
-        } else {
-            match copy_image_rect(source.image, rect) {
-                Ok(pixels) => Some(pixels),
-                Err(error) => {
-                    let message = match error {
-                        CropError::Empty => "That selection has no screen pixels.",
-                        CropError::OutOfBounds => "Could not read that region of the screen image.",
-                    };
-                    self.cancel_region_capture();
-                    self.input_state.push_toast(
-                        ToastPriority::Critical,
-                        TOAST_SOURCE,
-                        Toast::error(message),
-                    );
-                    return;
-                }
+        let snapshot = match self.snapshot_region_render(rect, include_drawings) {
+            Ok(snapshot) => snapshot,
+            Err(crate::capture::CaptureError::Cancelled(_)) => {
+                self.cancel_region_capture_for_source_change();
+                return;
             }
-        };
-        let drawing_snapshot = include_drawings
-            .then(|| {
-                let shared_image =
-                    shared_displayed_screen_image(&self.zoom, &self.frozen, source.kind)?;
-                let (origin_x, origin_y) = self.board_view_offset();
-                super::world_rect_for_image_rect_exact(rect, (origin_x, origin_y), token)?;
-                let logical_bounds = CanvasExportRect::new(
-                    origin_x,
-                    origin_y,
-                    f64::from(token.surface.0),
-                    f64::from(token.surface.1),
-                )?;
-                // This explicit option shares the full captured source so blur
-                // at a crop edge can sample the same neighboring pixels as the
-                // live canvas. The immutable image handle and frame snapshot
-                // make the worker job independent of later edits.
-                Some(CanvasRegionExportSnapshot {
-                    source: CanvasRegionSource {
-                        image: shared_image,
-                        logical_bounds,
-                    },
-                    selection: rect,
-                    frame: self
-                        .input_state
-                        .boards
-                        .active_frame()
-                        .clone_without_history(),
-                    text_halo_enabled: self.config.drawing.text_halo_enabled,
-                    spotlight: crate::canvas_export::SpotlightPassSnapshot {
-                        dim_opacity: self.input_state.spotlight_dim_opacity,
-                        feather: self.input_state.spotlight_feather,
-                    },
-                })
-            })
-            .flatten();
-        let render_source = match (drawing_snapshot, raw_pixels) {
-            (Some(snapshot), _) => RegionRenderSource::Annotated(Box::new(snapshot)),
-            (None, Some(pixels)) => RegionRenderSource::Raw(pixels),
-            (None, None) => {
-                // The composed path skips the event-loop crop, so a snapshot
-                // that could not be built leaves nothing at all to render.
+            Err(error) => {
                 self.cancel_region_capture();
                 self.input_state.push_toast(
                     ToastPriority::Critical,
                     TOAST_SOURCE,
-                    Toast::error("Could not map the selected drawings into the captured region."),
+                    Toast::error(error.to_string()),
                 );
                 return;
             }
+        };
+        if !cuts.is_empty() {
+            let fingerprint_ok = self.region_review_edits().is_some_and(|edits| {
+                edits.ready_preview.as_ref().is_some_and(|preview| {
+                    preview.key.fingerprint == snapshot.fingerprint && preview.key.cuts == cuts
+                })
+            });
+            if !fingerprint_ok {
+                if let Some(edits) = self.region_review_edits_mut() {
+                    edits.invalidate_base(snapshot.fingerprint);
+                }
+                self.schedule_region_cut_preview();
+                self.mark_region_cut_ui_dirty();
+                return;
+            }
+        }
+        let request = RegionRenderRequest {
+            source: snapshot.source,
+            cuts,
         };
 
         let Some(intent) = self.capture.begin_region_submission() else {
@@ -351,7 +312,7 @@ impl WaylandState {
             self.release_owned_frozen_generation(image_generation);
         }
 
-        let render = region_render_job(render_source);
+        let render = region_render_job(request);
         match submit {
             RegionSubmit::Deliver(destination) => {
                 self.capture.set_exit_on_success(should_exit_after_capture(
@@ -392,4 +353,9 @@ impl WaylandState {
             }
         }
     }
+}
+
+enum BoardSubmitError {
+    TooLarge,
+    Unplaceable,
 }

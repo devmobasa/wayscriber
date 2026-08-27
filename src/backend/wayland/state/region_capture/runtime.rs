@@ -82,8 +82,18 @@ impl WaylandState {
             return false;
         };
         log::debug!("region picker include drawings: {checked}");
-        self.input_state.dirty_tracker.mark_full();
-        self.input_state.needs_redraw = true;
+        if self
+            .region_review_edits()
+            .is_some_and(|edits| !edits.cuts.is_empty())
+        {
+            if let Some(fingerprint) = self.current_region_fingerprint()
+                && let Some(edits) = self.region_review_edits_mut()
+            {
+                edits.invalidate_base(fingerprint);
+            }
+            self.schedule_region_cut_preview();
+        }
+        self.mark_region_cut_ui_dirty();
         true
     }
 
@@ -162,6 +172,7 @@ impl WaylandState {
 
     pub(in crate::backend::wayland::state) fn clear_screen_region_ui_only(&mut self) {
         self.clear_region_window_snap();
+        self.data.region_review_edits = None;
         self.data.active_screen_region = None;
         self.input_state.cancel_region_ui_only();
         self.debug_assert_screen_region_invariant();
@@ -195,12 +206,18 @@ impl WaylandState {
         if self.update_region_window_hover((x, y)) {
             return;
         }
+        if self.update_region_cut_drag(owner, (x, y)) {
+            return;
+        }
         update_region_selection_event(
             &mut self.data.active_screen_region,
             &mut self.input_state,
             owner,
             (x, y),
         );
+        if self.input_state.region_state().is_review() {
+            self.sync_region_review_source_rect();
+        }
     }
 
     pub(in crate::backend::wayland) fn region_selection_geometry(
@@ -227,6 +244,17 @@ impl WaylandState {
         self.data
             .active_screen_region
             .and_then(ActiveScreenRegion::selection_geometry)
+            .and_then(|geometry| {
+                if !self.input_state.region_state().is_review() {
+                    return Some(geometry);
+                }
+                let Some(display) = self.region_cut_displayed_selection() else {
+                    return Some(geometry);
+                };
+                let purpose = self.data.active_screen_region?.purpose();
+                let rect = geometry.image_rect()?;
+                Some(RegionSelectionGeometry::review(purpose, rect, display))
+            })
     }
 
     pub(in crate::backend::wayland) fn region_measure_selection(&self) -> Option<RegionSelection> {
@@ -275,6 +303,7 @@ impl WaylandState {
         };
         self.input_state
             .activate_region_review(purpose, generation, display);
+        self.create_region_review_edits(rect);
         self.debug_assert_screen_region_invariant();
         true
     }
@@ -288,6 +317,9 @@ impl WaylandState {
         if !self.input_state.region_state().is_review() {
             return false;
         }
+        if self.region_review_crop_locked() {
+            return true;
+        }
         let Some(display) = self
             .data
             .active_screen_region
@@ -297,6 +329,7 @@ impl WaylandState {
             return false;
         };
         self.input_state.update_region_review_display(display);
+        self.sync_region_review_source_rect();
         true
     }
 
@@ -319,6 +352,9 @@ impl WaylandState {
         point: (f64, f64),
     ) -> Option<SelectionHandle> {
         if !self.input_state.region_state().is_review() {
+            return None;
+        }
+        if self.region_review_crop_locked() || self.region_cut_mode_armed() {
             return None;
         }
         self.data
@@ -346,6 +382,16 @@ impl WaylandState {
                 height: rect.height(),
             });
         }
+        if self.input_state.region_state().is_review()
+            && let Some(size) = self
+                .region_review_edits()
+                .and_then(RegionReviewEdits::displayed_output_size)
+        {
+            return Some(RegionPickerMeasurement::Size {
+                width: size.0,
+                height: size.1,
+            });
+        }
         self.data
             .active_screen_region
             .and_then(|region| region.picker_measurement(pointer))
@@ -368,6 +414,9 @@ impl WaylandState {
         &mut self,
         source: RegionInputSource,
     ) -> RegionOwnerLoss {
+        if self.abandon_region_cut_drag(source) {
+            return RegionOwnerLoss::Rearmed;
+        }
         region_owner_lost_event(
             &mut self.data.active_screen_region,
             &mut self.input_state,

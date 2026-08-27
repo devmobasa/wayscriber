@@ -24,6 +24,10 @@ struct ScreenModalCursorContext {
     over_selection: bool,
     /// The grip being dragged, or hovered when nothing is being dragged.
     resize_handle: Option<SelectionHandle>,
+    /// Cut mode is armed. The pointer aims a band, not a crop move.
+    cut_armed: bool,
+    /// Cuts exist, so the source crop cannot move or resize.
+    crop_locked: bool,
 }
 
 /// Cursor for the screen-modal surfaces. Targeting keeps the crosshair; a
@@ -42,6 +46,9 @@ fn screen_modal_cursor(context: ScreenModalCursorContext) -> CursorIcon {
     if let Some(handle) = context.resize_handle.filter(|_| context.review_dragging) {
         return resize_cursor(handle);
     }
+    if context.cut_armed && context.review_dragging {
+        return CursorIcon::Crosshair;
+    }
     if context.review_dragging {
         return CursorIcon::Grabbing;
     }
@@ -53,6 +60,12 @@ fn screen_modal_cursor(context: ScreenModalCursorContext) -> CursorIcon {
     }
     if let Some(handle) = context.resize_handle {
         return resize_cursor(handle);
+    }
+    if context.cut_armed && context.over_selection {
+        return CursorIcon::Crosshair;
+    }
+    if context.crop_locked {
+        return CursorIcon::Default;
     }
     if context.over_selection {
         return CursorIcon::Grab;
@@ -146,6 +159,8 @@ impl WaylandState {
             over_bar: self.region_review_bar_contains(point),
             over_selection: self.region_review_selection_contains(point),
             resize_handle,
+            cut_armed: self.region_cut_mode_armed(),
+            crop_locked: self.region_review_crop_locked(),
         }
     }
 
@@ -509,6 +524,45 @@ mod tests {
             })),
             CursorIcon::Grabbing,
             "a move-drag still reads as grabbing"
+        );
+    }
+
+    #[test]
+    fn cut_mode_uses_a_crosshair_and_locked_crops_drop_the_move_hand() {
+        assert_eq!(
+            screen_modal_cursor(review(ScreenModalCursorContext {
+                cut_armed: true,
+                over_selection: true,
+                ..ScreenModalCursorContext::default()
+            })),
+            CursorIcon::Crosshair
+        );
+        assert_eq!(
+            screen_modal_cursor(review(ScreenModalCursorContext {
+                cut_armed: true,
+                review_dragging: true,
+                over_selection: true,
+                ..ScreenModalCursorContext::default()
+            })),
+            CursorIcon::Crosshair
+        );
+        assert_eq!(
+            screen_modal_cursor(review(ScreenModalCursorContext {
+                crop_locked: true,
+                over_selection: true,
+                ..ScreenModalCursorContext::default()
+            })),
+            CursorIcon::Default
+        );
+        assert_eq!(
+            screen_modal_cursor(review(ScreenModalCursorContext {
+                cut_armed: true,
+                over_action: true,
+                over_bar: true,
+                over_selection: true,
+                ..ScreenModalCursorContext::default()
+            })),
+            CursorIcon::Pointer
         );
     }
 

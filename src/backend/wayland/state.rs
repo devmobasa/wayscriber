@@ -119,6 +119,7 @@ mod region_capture;
 pub(in crate::backend::wayland) use region_capture::RegionCaptureIntent;
 #[cfg(test)]
 pub(in crate::backend::wayland) use region_capture::RegionPickerOptions;
+pub(in crate::backend::wayland) use region_capture::RegionReviewPress;
 mod render;
 mod screen_image;
 mod text_clipboard;
@@ -299,6 +300,12 @@ pub(super) struct WaylandState {
             crate::capture::window_geometry::WindowQueryResult,
             crate::capture::window_geometry::WindowGeometryError,
         >,
+    >,
+    /// Capacity-one Review cut preview. Independent of capture delivery so a
+    /// replaceable preview cannot occupy the capture reservation slot.
+    pub(super) region_cut_preview: RuntimeOperationController<
+        region_capture::CutPreviewKey,
+        region_capture::CutPreviewOutcome,
     >,
     /// Text paste requests waiting behind an active read. Repeated requests in
     /// the current edit generation remain distinct; a new generation replaces

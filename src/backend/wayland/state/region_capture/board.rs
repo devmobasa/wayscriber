@@ -101,6 +101,31 @@ pub(in crate::backend::wayland) fn world_rect_for_image_rect_exact(
     )
 }
 
+/// Scale a source world rectangle to the composed native output size, keeping
+/// the original top-left. Width and height use output/source pixel ratios.
+pub(in crate::backend::wayland) fn world_rect_for_composed_region(
+    source_world: CanvasExportRect,
+    source_size: (u32, u32),
+    output_size: (u32, u32),
+) -> Option<CanvasExportRect> {
+    if source_size.0 == 0
+        || source_size.1 == 0
+        || output_size.0 == 0
+        || output_size.1 == 0
+        || !source_world.x.is_finite()
+        || !source_world.y.is_finite()
+        || !source_world.width.is_finite()
+        || !source_world.height.is_finite()
+        || source_world.width <= 0.0
+        || source_world.height <= 0.0
+    {
+        return None;
+    }
+    let width = source_world.width * f64::from(output_size.0) / f64::from(source_size.0);
+    let height = source_world.height * f64::from(output_size.1) / f64::from(source_size.1);
+    CanvasExportRect::new(source_world.x, source_world.y, width, height)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

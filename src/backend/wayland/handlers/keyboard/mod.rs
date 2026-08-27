@@ -415,6 +415,9 @@ impl WaylandState {
             return true;
         }
         if matches!(key, Key::Escape) {
+            if self.handle_region_cut_escape() {
+                return true;
+            }
             self.cancel_active_region_selector();
         }
         true
@@ -625,6 +628,18 @@ fn region_review_key_action(key: Key, ctrl: bool, shift: bool) -> Option<RegionR
         Key::Char('d' | 'D') if !ctrl => Some(RegionReviewKeyAction::Submit(
             crate::ui::RegionAction::ToggleIncludeDrawings,
         )),
+        Key::Char('x' | 'X') if !ctrl => Some(RegionReviewKeyAction::Submit(
+            crate::ui::RegionAction::CutBand,
+        )),
+        Key::Char('z' | 'Z') if ctrl && shift => Some(RegionReviewKeyAction::Submit(
+            crate::ui::RegionAction::RedoCut,
+        )),
+        Key::Char('z' | 'Z') if ctrl => Some(RegionReviewKeyAction::Submit(
+            crate::ui::RegionAction::UndoCut,
+        )),
+        Key::Char('y' | 'Y') if ctrl && !shift => Some(RegionReviewKeyAction::Submit(
+            crate::ui::RegionAction::RedoCut,
+        )),
         _ => None,
     }
 }
@@ -764,6 +779,31 @@ mod tests {
             ))
         );
         assert_eq!(region_review_key_action(Key::Char('d'), true, false), None);
+        assert_eq!(
+            region_review_key_action(Key::Char('x'), false, false),
+            Some(RegionReviewKeyAction::Submit(
+                crate::ui::RegionAction::CutBand
+            ))
+        );
+        assert_eq!(region_review_key_action(Key::Char('x'), true, false), None);
+        assert_eq!(
+            region_review_key_action(Key::Char('z'), true, false),
+            Some(RegionReviewKeyAction::Submit(
+                crate::ui::RegionAction::UndoCut
+            ))
+        );
+        assert_eq!(
+            region_review_key_action(Key::Char('z'), true, true),
+            Some(RegionReviewKeyAction::Submit(
+                crate::ui::RegionAction::RedoCut
+            ))
+        );
+        assert_eq!(
+            region_review_key_action(Key::Char('y'), true, false),
+            Some(RegionReviewKeyAction::Submit(
+                crate::ui::RegionAction::RedoCut
+            ))
+        );
     }
 
     #[test]

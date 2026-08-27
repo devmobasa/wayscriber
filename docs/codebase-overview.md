@@ -124,6 +124,7 @@ The result is a predictable pipeline: Wayland → handlers → `InputState` →
 |-------------|---------|
 | `mod.rs` | Public exports and shared submodules. |
 | `manager.rs` | `CaptureManager` – unique owner of capacity-one request/completion channels, checked request IDs, status, and its Tokio worker task. |
+| `band_cut.rs` | Sequential row/column band cuts on tightly packed ARGB32 rasters. Interactive region review uses this engine; it does not know about Wayland, Cairo, or capture destinations. |
 | `dependencies.rs` | Trait definitions (`CaptureSource`, `CaptureFileSaver`, `CaptureClipboard`) and default implementations. |
 | `pipeline.rs` | `perform_capture`, `deliver_image`, `deliver_document`, and capture/delivery request definitions. |
 | `sources/` | Strategies for acquiring image bytes: Hyprland fast-path (`hyprland.rs`), portal fallback (`portal.rs`), and URI reader/cleanup (`reader.rs`). |
@@ -138,7 +139,13 @@ The result is a predictable pipeline: Wayland → handlers → `InputState` →
    Region actions first reserve an immutable intent and select against the
    frozen desktop image. Straight-delivery actions submit immediately after
    selection; `capture_region_interactive` enters review so Copy, Save, Both,
-   or Board can choose the terminal request.
+   or Board can choose the terminal request. Interactive review can apply
+   sequential band cuts through `capture::band_cut` after flattening a
+   snapshot. Live cut previews run on `WaylandState.region_cut_preview`, a
+   capacity-one `RuntimeOperationController` independent of `CaptureManager`,
+   so a replaceable preview cannot occupy the capture reservation slot.
+   Flatten, cut, and PNG encode stay off the event loop; terminal Copy, Save,
+   Both, or Board still submit through `CaptureManager`.
 5. Canvas export snapshots persisted board content in the current panned viewport, renders PNG bytes, and calls `CaptureManager::request_image_delivery`.
 6. Board PDF export snapshots active-board or all-board pages with per-page layout metadata, renders PDF bytes, and calls `CaptureManager::request_document_delivery`.
 7. A mutable `CaptureManager` submission returns a checked `CaptureRequestId`. `CaptureState` records that ID and remains the sole event-side completion owner until the matching terminal result is consumed.

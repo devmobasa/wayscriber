@@ -314,6 +314,9 @@ impl WaylandState {
         if was_engaged && !self.input_state.region_is_engaged() {
             return true;
         }
+        if self.finish_region_cut_drag(source, (x, y)) {
+            return true;
+        }
         let rect = match finalize_region_selection_event(
             &mut self.data.active_screen_region,
             &mut self.input_state,

@@ -293,6 +293,38 @@ impl PackedArgb32 {
     }
 }
 
+impl ScreenImage {
+    /// Copy `rect` into a tightly packed ARGB snapshot. The source may carry
+    /// row padding; the copy never does.
+    pub(crate) fn copy_rect(&self, rect: ImagePixelRect) -> Option<PackedArgb32> {
+        if self.width == 0 || self.height == 0 {
+            return None;
+        }
+        if rect.x().checked_add(rect.width())? > self.width
+            || rect.y().checked_add(rect.height())? > self.height
+        {
+            return None;
+        }
+        let source_stride = usize::try_from(self.stride).ok()?;
+        let row_bytes = usize::try_from(rect.width()).ok()?.checked_mul(4)?;
+        let total_bytes = usize::try_from(rect.height())
+            .ok()?
+            .checked_mul(row_bytes)?;
+        let stride = i32::try_from(row_bytes).ok()?;
+        let start_column = usize::try_from(rect.x()).ok()?.checked_mul(4)?;
+        let mut data = Vec::with_capacity(total_bytes);
+        for row in 0..rect.height() {
+            let start = usize::try_from(rect.y().saturating_add(row))
+                .ok()
+                .and_then(|row| row.checked_mul(source_stride))
+                .and_then(|row| row.checked_add(start_column))?;
+            let end = start.checked_add(row_bytes)?;
+            data.extend_from_slice(self.data.get(start..end)?);
+        }
+        PackedArgb32::new(rect.width(), rect.height(), stride, data)
+    }
+}
+
 impl std::fmt::Debug for PackedArgb32 {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter

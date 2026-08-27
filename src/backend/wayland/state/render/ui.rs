@@ -409,7 +409,10 @@ impl WaylandState {
         // Grips belong to the reviewed rectangle, not the window-mode
         // candidate, so they follow `region_selection_geometry` rather than
         // the effective selection the scrim cuts out.
-        let resize_handles = region_state.is_review().then(|| {
+        let resize_handles = (region_state.is_review()
+            && !self.region_review_crop_locked()
+            && !self.region_cut_mode_armed())
+        .then(|| {
             geometry
                 .map(|geometry| crate::ui::RegionResizeHandles::place(geometry.display_selection()))
         });
@@ -421,7 +424,8 @@ impl WaylandState {
         .then(|| resize_handles.and_then(|handles| handles.hit(pointer)))
         .flatten();
         let loupe_enabled = options.is_some_and(|options| options.show_loupe())
-            && (region_state.is_selecting() || region_state.is_review());
+            && (region_state.is_selecting() || region_state.is_review())
+            && !self.region_review_loupe_suppressed();
         let loupe_source = if loupe_enabled {
             self.region_picker_source_token().and_then(|token| {
                 let source = displayed_screen_image(
@@ -482,6 +486,20 @@ impl WaylandState {
                 action_bar,
                 hovered_action,
                 include_drawings: self.region_picker_include_drawings(),
+                cut: crate::ui::RegionCaptureCutVisual {
+                    preview: self.region_cut_preview_pixels().and_then(|pixels| {
+                        Some(crate::ui::RegionCutPreviewVisual {
+                            pixels,
+                            display: self.region_cut_displayed_selection()?,
+                        })
+                    }),
+                    drag: self
+                        .region_cut_drag_overlay()
+                        .map(|(axis, band)| crate::ui::RegionCutDragVisual { axis, band }),
+                    availability: self.region_cut_availability(),
+                    cut_armed: self.region_cut_mode_armed(),
+                    status: self.region_cut_status(),
+                },
                 window,
             },
             |image_x, image_y| {

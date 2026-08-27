@@ -16,6 +16,13 @@ impl fmt::Display for RuntimeOperationId {
     }
 }
 
+#[cfg(test)]
+impl RuntimeOperationId {
+    pub(in crate::backend::wayland) const fn from_test(value: u64) -> Self {
+        Self(value)
+    }
+}
+
 #[derive(Clone)]
 pub(in crate::backend::wayland) struct RuntimeOperationIdSource {
     next: Arc<Mutex<Option<u64>>>,
@@ -213,6 +220,16 @@ where
             receiver,
         });
         Ok(id)
+    }
+
+    #[cfg(test)]
+    pub(in crate::backend::wayland) fn try_submit_with_spawner_for_test(
+        &mut self,
+        context: C,
+        operation: impl FnOnce() -> T + Send + 'static,
+        spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::io::Result<()>,
+    ) -> Result<RuntimeOperationId, RuntimeOperationSubmitFailure<C>> {
+        self.try_submit_with_spawner(context, operation, spawn)
     }
 
     pub(in crate::backend::wayland) fn poll(&mut self) -> RuntimeOperationPoll<C, T> {
