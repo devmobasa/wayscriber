@@ -1,5 +1,8 @@
 use super::lifecycle_and_measure::ocr_region;
 use super::*;
+use crate::backend::wayland::state::region_capture::cut_review::{
+    CutCommit, CutMode, RegionRenderFingerprint,
+};
 
 pub(super) fn capture_region() -> ActiveScreenRegion {
     capture_region_at_scale(1.0)
@@ -84,9 +87,10 @@ fn capture_press_snaps_its_anchor_and_starts_with_a_zero_pixel_span() {
 }
 
 #[test]
-fn interactive_release_enters_integer_authoritative_review() {
+fn interactive_release_enters_review_ready_for_the_first_cut_drag() {
     let mut backend = Some(interactive_region());
     let mut input = make_test_input_state();
+    let mut review_edits = None;
     input.activate_region(RegionPurposeTag::CaptureInteractive, 1);
 
     assert!(begin_region_selection_event(
@@ -96,9 +100,10 @@ fn interactive_release_enters_integer_authoritative_review() {
         (10.2, 20.7),
     ));
     assert_eq!(
-        finalize_region_selection_event(
+        finalize_region_selection_with_review_edits(
             &mut backend,
             &mut input,
+            &mut review_edits,
             RegionInputSource::Pointer,
             (30.1, 42.2),
         ),
@@ -117,5 +122,89 @@ fn interactive_release_enters_integer_authoritative_review() {
         backend
             .and_then(ActiveScreenRegion::selection_geometry)
             .map(|geometry| geometry.display_selection())
+    );
+
+    let display = input
+        .region_state()
+        .selection()
+        .expect("Review displays the selected capture");
+    let edits = review_edits
+        .as_mut()
+        .expect("normal interactive Review initializes cut state");
+    assert_eq!(edits.mode, CutMode::Idle);
+    assert_eq!(edits.toggle_mode(), None);
+    assert!(edits.begin_drag(RegionInputSource::Pointer, (12.0, 25.0)));
+    assert!(edits.update_drag(RegionInputSource::Pointer, (20.0, 25.0)));
+    let fingerprint = RegionRenderFingerprint::Raw {
+        correlation: edits.correlation.clone(),
+        source_rect: edits.source_rect,
+    };
+    assert_eq!(
+        edits.finish_drag(
+            RegionInputSource::Pointer,
+            (20.0, 25.0),
+            display,
+            fingerprint,
+        ),
+        CutCommit::Applied
+    );
+    assert_eq!(edits.cuts.len(), 1);
+}
+
+#[test]
+fn reselecting_before_a_cut_replaces_the_review_edit_geometry() {
+    let mut backend = Some(interactive_region());
+    let mut input = make_test_input_state();
+    let mut review_edits = None;
+    input.activate_region(RegionPurposeTag::CaptureInteractive, 1);
+
+    assert!(begin_region_selection_event(
+        &mut backend,
+        &mut input,
+        RegionInputSource::Pointer,
+        (10.0, 10.0),
+    ));
+    assert_eq!(
+        finalize_region_selection_with_review_edits(
+            &mut backend,
+            &mut input,
+            &mut review_edits,
+            RegionInputSource::Pointer,
+            (30.0, 30.0),
+        ),
+        RegionSelectionFinalize::Reviewed
+    );
+    let first_rect = review_edits
+        .as_ref()
+        .expect("first Review initializes edits")
+        .source_rect;
+
+    assert!(begin_region_selection_event(
+        &mut backend,
+        &mut input,
+        RegionInputSource::Pointer,
+        (50.0, 50.0),
+    ));
+    assert!(!input.region_state().is_review());
+    assert_eq!(
+        finalize_region_selection_with_review_edits(
+            &mut backend,
+            &mut input,
+            &mut review_edits,
+            RegionInputSource::Pointer,
+            (80.0, 90.0),
+        ),
+        RegionSelectionFinalize::Reviewed
+    );
+    let second_rect = backend
+        .and_then(ActiveScreenRegion::selection_rect)
+        .expect("replacement Review has geometry");
+    assert_ne!(second_rect, first_rect);
+    assert_eq!(
+        review_edits
+            .as_ref()
+            .expect("replacement Review refreshes edits")
+            .source_rect,
+        second_rect
     );
 }

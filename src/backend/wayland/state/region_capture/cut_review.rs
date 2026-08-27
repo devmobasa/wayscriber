@@ -123,6 +123,25 @@ pub(in crate::backend::wayland) struct RegionReviewEdits {
     pub(super) failed_revision: Option<u64>,
 }
 
+pub(super) fn review_edits_for_active_region(
+    region: Option<ActiveScreenRegion>,
+    rect: ImagePixelRect,
+) -> Option<RegionReviewEdits> {
+    let Some(ActiveScreenRegion::Ready {
+        purpose: crate::input::state::RegionPurposeTag::CaptureInteractive,
+        generation,
+        source,
+        ..
+    }) = region
+    else {
+        return None;
+    };
+    Some(RegionReviewEdits::new(
+        RegionReviewCorrelation { generation, source },
+        rect,
+    ))
+}
+
 impl RegionReviewEdits {
     pub(super) fn new(correlation: RegionReviewCorrelation, source_rect: ImagePixelRect) -> Self {
         Self {
@@ -624,20 +643,8 @@ impl WaylandState {
     }
 
     pub(super) fn create_region_review_edits(&mut self, rect: ImagePixelRect) {
-        let Some(ActiveScreenRegion::Ready {
-            purpose: crate::input::state::RegionPurposeTag::CaptureInteractive,
-            generation,
-            source,
-            ..
-        }) = self.data.active_screen_region
-        else {
-            self.data.region_review_edits = None;
-            return;
-        };
-        self.data.region_review_edits = Some(RegionReviewEdits::new(
-            RegionReviewCorrelation { generation, source },
-            rect,
-        ));
+        self.data.region_review_edits =
+            review_edits_for_active_region(self.data.active_screen_region, rect);
     }
 
     pub(super) fn mark_region_cut_ui_dirty(&mut self) {
