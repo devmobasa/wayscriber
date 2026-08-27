@@ -17,7 +17,7 @@ use super::WaylandState;
 use super::acquisition::report_screen_source_activation_rejected_to;
 use super::region_capture::{
     ActiveScreenRegion, FreezeOwnership, RegionOwnerLoss, RegionSelectionFinalize,
-    finalize_region_selection_event,
+    finalize_region_selection_with_review_edits,
 };
 use super::screen_image::{
     CropError, DisplayedScreenImage, ScreenSourceEntry, copy_image_rect, displayed_screen_image,
@@ -314,9 +314,13 @@ impl WaylandState {
         if was_engaged && !self.input_state.region_is_engaged() {
             return true;
         }
-        let rect = match finalize_region_selection_event(
+        if self.finish_region_cut_drag(source, (x, y)) {
+            return true;
+        }
+        let rect = match finalize_region_selection_with_review_edits(
             &mut self.data.active_screen_region,
             &mut self.input_state,
+            &mut self.data.region_review_edits,
             source,
             (x, y),
         ) {

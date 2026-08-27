@@ -24,7 +24,7 @@ pub struct CanvasPageExportSnapshot {
 }
 
 /// Spotlight appearance carried into an export.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpotlightPassSnapshot {
     pub dim_opacity: f64,
     pub feather: f64,

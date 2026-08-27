@@ -7,12 +7,15 @@ use crate::screen_pixels::{ImagePixelRect, ImagePoint, clamp_edge};
 
 mod active_state;
 mod board;
+mod cut_preview;
+mod cut_review;
 mod delivery;
 mod events;
 mod geometry;
 mod intent;
 mod measure;
 mod picker;
+mod render;
 mod review_state;
 mod runtime;
 mod selection_state;
@@ -21,9 +24,14 @@ mod window_snap;
 
 pub(super) use active_state::{ActiveScreenRegion, FreezeOwnership};
 pub(in crate::backend::wayland) use board::{
-    board_bounds_for_world_rect, world_rect_for_image_rect_exact,
+    board_bounds_for_world_rect, world_rect_for_composed_region, world_rect_for_image_rect_exact,
 };
+pub(in crate::backend::wayland) use cut_preview::CutPreviewOutcome;
+pub(in crate::backend::wayland) use cut_review::RegionReviewPress;
+pub(in crate::backend::wayland) use cut_review::{CutPreviewKey, RegionReviewEdits};
+#[cfg(test)]
 pub(super) use events::finalize_region_selection_event;
+pub(super) use events::finalize_region_selection_with_review_edits;
 use events::*;
 pub(in crate::backend::wayland) use geometry::{RegionPickerMeasurement, RegionSelectionGeometry};
 pub(in crate::backend::wayland) use intent::{RegionCaptureIntent, RegionPickerOptions};

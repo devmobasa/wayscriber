@@ -2,7 +2,7 @@ use log::debug;
 use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, PointerEvent};
 use wayland_client::QueueHandle;
 
-use crate::backend::wayland::state::drag_log;
+use crate::backend::wayland::state::{RegionReviewPress, drag_log};
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 use crate::input::state::HelpOverlayPressSource;
@@ -11,8 +11,9 @@ use crate::ui::toolbar::ToolbarEvent;
 
 use super::*;
 
+#[cfg(test)]
 fn review_action_suppresses_next_release(action: crate::ui::RegionAction) -> bool {
-    action != crate::ui::RegionAction::ToggleIncludeDrawings
+    action.is_terminal()
 }
 
 impl WaylandState {
@@ -141,20 +142,19 @@ impl WaylandState {
         }
         match button {
             BTN_LEFT => {
-                if let Some(action) = self.region_review_action_at(event.position) {
-                    self.submit_region_review_action(action);
-                    // The toggle keeps Review active, so its release is consumed
-                    // by the active-region branch. Arming the generic post-modal
-                    // latch would swallow an unrelated canvas release later.
-                    if review_action_suppresses_next_release(action) {
-                        self.suppress_next_release_from(RegionInputSource::Pointer);
+                match self.consume_region_review_press(RegionInputSource::Pointer, event.position) {
+                    RegionReviewPress::NotReview | RegionReviewPress::Fallthrough => {
+                        self.begin_region_selection(
+                            RegionInputSource::Pointer,
+                            event.position.0,
+                            event.position.1,
+                        );
                     }
-                } else if !self.region_review_bar_contains(event.position) {
-                    self.begin_region_selection(
-                        RegionInputSource::Pointer,
-                        event.position.0,
-                        event.position.1,
-                    );
+                    RegionReviewPress::Consumed { suppress_release } => {
+                        if suppress_release {
+                            self.suppress_next_release_from(RegionInputSource::Pointer);
+                        }
+                    }
                 }
             }
             BTN_RIGHT => {

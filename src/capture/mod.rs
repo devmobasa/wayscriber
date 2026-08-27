@@ -7,6 +7,7 @@
 //! - Clipboard integration
 //! - File saving with configurable formats
 
+pub(crate) mod band_cut;
 pub mod clipboard;
 pub mod file;
 pub(crate) mod png;
@@ -23,6 +24,7 @@ mod pipeline;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use band_cut::{BandCutError, CutAxis, CutBand, apply_band_cuts, output_size};
 pub use manager::{CaptureManager, CapturePoll, CaptureRequestId, CaptureSubmitError};
 #[allow(unused_imports)]
 pub(crate) use pipeline::CaptureRequest;

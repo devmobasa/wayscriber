@@ -791,6 +791,14 @@ the raw crop on the board.
 The native region picker shows those committed drawings over its frozen desktop
 while you select, so the visible preview matches the annotated export; toggling
 drawings off in Review immediately returns the preview to raw desktop pixels.
+In Review you can also remove rows or columns from the captured pixels. Press
+**Cut** (or <kbd>X</kbd>) and drag across the selection; later cuts use the
+already-collapsed output. **Undo** (<kbd>Ctrl+Z</kbd>), **Redo**
+(<kbd>Ctrl+Y</kbd> or <kbd>Ctrl+Shift+Z</kbd>), and **Reset** apply only to
+this Review — they never change board drawings. After any cut the source crop
+is locked until you undo all cuts or Reset, and the loupe is hidden while Cut
+is armed or cuts exist. Copy, Save, Both, and Board all receive the collapsed
+result; Board keeps the original top-left and shrinks to the output size.
 On a transparent board, full-screen and legacy `slurp` captures retain the
 desktop behind the annotations; a solid board retains its canvas background.
 The native region picker always composites committed drawings over its frozen

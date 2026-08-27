@@ -4,8 +4,9 @@ use crate::canvas_export::page::{
     CanvasExportBackdropSnapshot, CanvasExportRect, CanvasPageExportSnapshot, ExportBackdrop,
     SpotlightPassSnapshot, draw_canvas_page_region,
 };
-use crate::canvas_export::png::encode_surface_png;
-use crate::capture::{CaptureError, RenderedImage};
+use crate::capture::CaptureError;
+#[cfg(test)]
+use crate::capture::RenderedImage;
 use crate::draw::Frame;
 use crate::screen_pixels::{ImagePixelRect, PackedArgb32, ScreenImage};
 
@@ -43,37 +44,9 @@ impl CanvasRegionSource {
     }
 
     fn copy_selection(&self, selection: ImagePixelRect) -> Result<PackedArgb32, CaptureError> {
-        let source_stride = usize::try_from(self.image.stride)
-            .map_err(|_| CaptureError::ImageError("Region source stride is invalid".to_string()))?;
-        let row_bytes = usize::try_from(selection.width())
-            .ok()
-            .and_then(|width| width.checked_mul(4))
-            .ok_or_else(|| CaptureError::ImageError("Region row size overflow".to_string()))?;
-        let target_stride = i32::try_from(row_bytes)
-            .map_err(|_| CaptureError::ImageError("Region stride is too large".to_string()))?;
-        let capacity = row_bytes
-            .checked_mul(selection.height() as usize)
-            .ok_or_else(|| CaptureError::ImageError("Region buffer size overflow".to_string()))?;
-        let start_column = usize::try_from(selection.x())
-            .ok()
-            .and_then(|x| x.checked_mul(4))
-            .ok_or_else(|| CaptureError::ImageError("Region offset overflow".to_string()))?;
-        let mut data = Vec::with_capacity(capacity);
-        for row in 0..selection.height() {
-            let start = usize::try_from(selection.y().saturating_add(row))
-                .ok()
-                .and_then(|row| row.checked_mul(source_stride))
-                .and_then(|row| row.checked_add(start_column))
-                .ok_or_else(|| CaptureError::ImageError("Region offset overflow".to_string()))?;
-            let end = start
-                .checked_add(row_bytes)
-                .ok_or_else(|| CaptureError::ImageError("Region offset overflow".to_string()))?;
-            data.extend_from_slice(self.image.data.get(start..end).ok_or_else(|| {
-                CaptureError::ImageError("Region leaves the captured image".to_string())
-            })?);
-        }
-        PackedArgb32::new(selection.width(), selection.height(), target_stride, data)
-            .ok_or_else(|| CaptureError::ImageError("Region pixels are invalid".to_string()))
+        self.image
+            .copy_rect(selection)
+            .ok_or_else(|| CaptureError::ImageError("Region leaves the captured image".to_string()))
     }
 
     fn magnifier_working_selection(
@@ -135,9 +108,58 @@ impl CanvasRegionSource {
     }
 }
 
-pub(crate) fn render_canvas_region_png(
+fn packed_argb32_from_surface(
+    surface: &mut cairo::ImageSurface,
+    subject: &str,
+) -> Result<PackedArgb32, CaptureError> {
+    surface.flush();
+    let width = u32::try_from(surface.width())
+        .map_err(|_| CaptureError::ImageError(format!("{subject} width is too large")))?;
+    let height = u32::try_from(surface.height())
+        .map_err(|_| CaptureError::ImageError(format!("{subject} height is too large")))?;
+    let stride = surface.stride();
+    let data = surface.data().map_err(|err| {
+        CaptureError::ImageError(format!("Failed to read {subject} pixels: {err}"))
+    })?;
+    let row_bytes = usize::try_from(width)
+        .ok()
+        .and_then(|width| width.checked_mul(4))
+        .ok_or_else(|| CaptureError::ImageError(format!("{subject} row size overflow")))?;
+    let tight_stride = i32::try_from(row_bytes)
+        .map_err(|_| CaptureError::ImageError(format!("{subject} stride is too large")))?;
+    let source_stride = usize::try_from(stride)
+        .map_err(|_| CaptureError::ImageError(format!("{subject} stride is invalid")))?;
+    let packed = if source_stride == row_bytes {
+        PackedArgb32::new(width, height, tight_stride, data.to_vec())
+    } else {
+        let height_usize = usize::try_from(height)
+            .map_err(|_| CaptureError::ImageError(format!("{subject} height is too large")))?;
+        let length = row_bytes
+            .checked_mul(height_usize)
+            .ok_or_else(|| CaptureError::ImageError(format!("{subject} buffer size overflow")))?;
+        let mut tight = Vec::new();
+        tight
+            .try_reserve(length)
+            .map_err(|_| CaptureError::ImageError(format!("{subject} buffer size overflow")))?;
+        for row in 0..height_usize {
+            let start = row
+                .checked_mul(source_stride)
+                .ok_or_else(|| CaptureError::ImageError(format!("{subject} offset overflow")))?;
+            let end = start
+                .checked_add(row_bytes)
+                .ok_or_else(|| CaptureError::ImageError(format!("{subject} offset overflow")))?;
+            tight.extend_from_slice(data.get(start..end).ok_or_else(|| {
+                CaptureError::ImageError(format!("{subject} pixels are truncated"))
+            })?);
+        }
+        PackedArgb32::new(width, height, tight_stride, tight)
+    };
+    packed.ok_or_else(|| CaptureError::ImageError(format!("{subject} pixels are invalid")))
+}
+
+pub(crate) fn render_canvas_region_pixels(
     snapshot: CanvasRegionExportSnapshot,
-) -> Result<RenderedImage, CaptureError> {
+) -> Result<PackedArgb32, CaptureError> {
     let working_selection = snapshot
         .source
         .magnifier_working_selection(snapshot.selection, &snapshot.frame)
@@ -154,7 +176,7 @@ pub(crate) fn render_canvas_region_png(
     let height = i32::try_from(working_height)
         .map_err(|_| CaptureError::ImageError("Region height is too large".to_string()))?;
     let stride = pixels.stride();
-    let surface = cairo::ImageSurface::create_for_data(
+    let mut surface = cairo::ImageSurface::create_for_data(
         pixels.into_data(),
         cairo::Format::ARgb32,
         width,
@@ -198,12 +220,12 @@ pub(crate) fn render_canvas_region_png(
     drop(ctx);
 
     if working_selection == snapshot.selection {
-        return encode_surface_png(&surface, "region");
+        return packed_argb32_from_surface(&mut surface, "region");
     }
 
     let output_width = snapshot.selection.width();
     let output_height = snapshot.selection.height();
-    let output = cairo::ImageSurface::create(
+    let mut output = cairo::ImageSurface::create(
         cairo::Format::ARgb32,
         i32::try_from(output_width)
             .map_err(|_| CaptureError::ImageError("Region width is too large".to_string()))?,
@@ -224,7 +246,14 @@ pub(crate) fn render_canvas_region_png(
         .map_err(|err| CaptureError::ImageError(format!("Failed to paint region crop: {err}")))?;
     drop(crop);
 
-    encode_surface_png(&output, "region")
+    packed_argb32_from_surface(&mut output, "region")
+}
+
+#[cfg(test)]
+pub(crate) fn render_canvas_region_png(
+    snapshot: CanvasRegionExportSnapshot,
+) -> Result<RenderedImage, CaptureError> {
+    crate::capture::png::encode_packed_argb32_png(&render_canvas_region_pixels(snapshot)?)
 }
 
 #[cfg(test)]
@@ -604,5 +633,94 @@ mod tests {
                 );
             }
         }
+    }
+
+    fn pixel_at(pixels: &PackedArgb32, x: u32, y: u32) -> u32 {
+        let offset = y as usize * pixels.stride() as usize + x as usize * 4;
+        u32::from_ne_bytes(pixels.data()[offset..offset + 4].try_into().expect("pixel"))
+    }
+
+    #[test]
+    fn no_cut_png_bytes_match_the_extracted_pixels() {
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Rect {
+            x: 11,
+            y: 21,
+            w: 1,
+            h: 1,
+            fill: true,
+            color: RED,
+            thick: 1.0,
+        });
+        let snapshot = CanvasRegionExportSnapshot {
+            source: solid_source(8, 8, 0xFF20_3040),
+            selection: ImagePixelRect::new(0, 0, 8, 8, (8, 8)).unwrap(),
+            frame,
+            text_halo_enabled: true,
+            spotlight: SpotlightPassSnapshot::default(),
+        };
+        let pixels = render_canvas_region_pixels(snapshot.clone()).expect("pixels");
+        let rendered = render_canvas_region_png(snapshot).expect("png");
+        assert_eq!(
+            (pixels.width(), pixels.height()),
+            (rendered.width, rendered.height)
+        );
+        for y in 0..pixels.height() as i32 {
+            for x in 0..pixels.width() as i32 {
+                assert_eq!(
+                    pixel_at(&pixels, x as u32, y as u32),
+                    decoded_pixel(&rendered, x, y),
+                    "pixel ({x}, {y})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_drawing_crossing_a_removed_band_is_flattened_then_joined() {
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Rect {
+            x: 10,
+            y: 20,
+            w: 8,
+            h: 1,
+            fill: true,
+            color: RED,
+            thick: 1.0,
+        });
+        let snapshot = CanvasRegionExportSnapshot {
+            source: solid_source(8, 8, 0xFF20_3040),
+            selection: ImagePixelRect::new(0, 0, 8, 8, (8, 8)).unwrap(),
+            frame,
+            text_halo_enabled: true,
+            spotlight: SpotlightPassSnapshot::default(),
+        };
+        let base = render_canvas_region_pixels(snapshot).expect("flattened");
+        let cut = crate::capture::CutBand::new(crate::capture::CutAxis::Columns, 3, 5).unwrap();
+        let composed = crate::capture::apply_band_cuts(&base, &[cut]).expect("cut");
+        assert_eq!((composed.width(), composed.height()), (6, 8));
+        assert_eq!(pixel_at(&composed, 2, 0), 0xFFFF_0000);
+        assert_eq!(pixel_at(&composed, 3, 0), 0xFFFF_0000);
+        assert_eq!(pixel_at(&base, 2, 0), 0xFFFF_0000);
+        assert_eq!(pixel_at(&base, 3, 0), 0xFFFF_0000);
+        assert_eq!(pixel_at(&base, 5, 0), 0xFFFF_0000);
+    }
+
+    #[test]
+    fn packed_extraction_copies_non_tight_cairo_rows() {
+        let width = 3i32;
+        let height = 2i32;
+        let mut surface =
+            cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).expect("surface");
+        {
+            let ctx = cairo::Context::new(&surface).expect("context");
+            ctx.set_source_rgba(1.0, 0.0, 0.0, 1.0);
+            ctx.paint().expect("paint");
+        }
+        let pixels = packed_argb32_from_surface(&mut surface, "stride-test").expect("packed");
+        assert_eq!(pixels.stride(), width * 4);
+        assert_eq!(pixels.data().len(), (width * height * 4) as usize);
+        assert_eq!(pixel_at(&pixels, 0, 0), 0xFFFF_0000);
+        assert_eq!(pixel_at(&pixels, 2, 1), 0xFFFF_0000);
     }
 }

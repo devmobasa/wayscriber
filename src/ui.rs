@@ -59,11 +59,13 @@ pub(crate) use primitives::ellipsize_to_fit;
 pub(crate) use primitives::{checkerboard_behind, draw_pill};
 pub use properties_panel::render_properties_panel;
 pub use radial_menu::render_radial_menu;
-pub(crate) use region_action_bar::{RegionAction, RegionActionBar};
+pub(crate) use region_action_bar::{
+    RegionAction, RegionActionAvailability, RegionActionBar, RegionCutStatus,
+};
 pub(crate) use region_capture_picker::{
-    OCR_LEGEND_TEXT, RegionCaptureLoupeVisual, RegionCapturePickerVisual,
-    RegionCaptureWindowVisual, capture_size_text, measure_picker_damage,
-    render_region_capture_picker, render_region_legend,
+    OCR_LEGEND_TEXT, RegionCaptureCutVisual, RegionCaptureLoupeVisual, RegionCapturePickerVisual,
+    RegionCaptureWindowVisual, RegionCutDragVisual, RegionCutPreviewVisual, capture_size_text,
+    measure_picker_damage, render_region_capture_picker, render_region_legend,
 };
 pub(crate) use region_resize_handles::RegionResizeHandles;
 pub(crate) use spotlight_control::render_spotlight_magnification_control;

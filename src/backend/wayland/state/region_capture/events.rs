@@ -246,3 +246,21 @@ pub(in crate::backend::wayland::state) fn finalize_region_selection_event(
     }
     RegionSelectionFinalize::Selected { purpose, rect }
 }
+
+pub(in crate::backend::wayland::state) fn finalize_region_selection_with_review_edits(
+    backend: &mut Option<ActiveScreenRegion>,
+    input_state: &mut crate::input::InputState,
+    review_edits: &mut Option<RegionReviewEdits>,
+    owner: RegionInputSource,
+    logical: (f64, f64),
+) -> RegionSelectionFinalize {
+    let was_review = input_state.region_state().is_review();
+    let result = finalize_region_selection_event(backend, input_state, owner, logical);
+    if result == RegionSelectionFinalize::Reviewed
+        && (!was_review || review_edits.is_none())
+        && let Some(rect) = backend.and_then(ActiveScreenRegion::selection_rect)
+    {
+        *review_edits = super::cut_review::review_edits_for_active_region(*backend, rect);
+    }
+    result
+}

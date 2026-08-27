@@ -1,10 +1,13 @@
 use super::*;
 use crate::backend::ExitAfterCaptureMode;
 use crate::backend::wayland::state::region_capture::delivery::{
-    RegionRenderSource, region_delivery_request, region_render_job, review_delivery_destination,
+    region_delivery_request, review_delivery_destination,
 };
 use crate::backend::wayland::state::region_capture::picker::{
     RegionPickerEntry, legacy_region_request, region_destination, region_picker_entry,
+};
+use crate::backend::wayland::state::region_capture::render::{
+    RegionPixelSource, RegionRenderRequest, region_render_job,
 };
 use crate::canvas_export::{
     CanvasExportRect, CanvasRegionExportSnapshot, CanvasRegionSource, SpotlightPassSnapshot,
@@ -14,7 +17,7 @@ use crate::capture::{
 };
 use crate::config::{Action, RegionPicker};
 use crate::input::state::RegionPurposeTag;
-use crate::screen_pixels::PackedArgb32;
+use crate::screen_pixels::{ImagePixelRect, PackedArgb32};
 use crate::ui::RegionAction;
 
 #[test]
@@ -66,6 +69,10 @@ fn review_destination_labels_match_the_delivery_they_request() {
         review_delivery_destination(RegionAction::ToggleIncludeDrawings),
         None
     );
+    assert_eq!(review_delivery_destination(RegionAction::CutBand), None);
+    assert_eq!(review_delivery_destination(RegionAction::UndoCut), None);
+    assert_eq!(review_delivery_destination(RegionAction::RedoCut), None);
+    assert_eq!(review_delivery_destination(RegionAction::ResetCuts), None);
 }
 
 #[test]
@@ -88,9 +95,20 @@ fn the_render_job_composes_drawings_when_asked_and_stays_raw_otherwise() {
         .iter()
         .flat_map(|pixel| pixel.to_ne_bytes())
         .collect();
-    let raw = PackedArgb32::new(3, 2, 12, bytes.clone()).expect("a 3x2 crop");
 
-    let rendered = region_render_job(RegionRenderSource::Raw(raw))().expect("raw render");
+    let rendered = region_render_job(RegionRenderRequest {
+        source: RegionPixelSource::Raw {
+            image: std::sync::Arc::new(crate::screen_pixels::ScreenImage {
+                data: bytes.clone(),
+                width: 3,
+                height: 2,
+                stride: 12,
+            }),
+            selection: ImagePixelRect::new(0, 0, 3, 2, (3, 2)).expect("selection"),
+        },
+        cuts: Vec::new(),
+    })()
+    .expect("raw render");
     let direct = crate::capture::png::encode_packed_argb32_png(
         &PackedArgb32::new(3, 2, 12, bytes).expect("a 3x2 crop"),
     )
@@ -141,8 +159,11 @@ fn the_render_job_composes_drawings_when_asked_and_stays_raw_otherwise() {
             feather: 0.0,
         },
     };
-    let composed =
-        region_render_job(RegionRenderSource::Annotated(Box::new(snapshot)))().expect("composed");
+    let composed = region_render_job(RegionRenderRequest {
+        source: RegionPixelSource::Annotated(Box::new(snapshot)),
+        cuts: Vec::new(),
+    })()
+    .expect("composed");
     assert_eq!(
         (composed.width, composed.height),
         (3, 2),
@@ -152,6 +173,41 @@ fn the_render_job_composes_drawings_when_asked_and_stays_raw_otherwise() {
         decode_png_pixels(&composed.bytes),
         swatch.to_vec(),
         "the board's committed shapes are composited in"
+    );
+}
+
+#[test]
+fn the_render_job_cuts_after_flattening_and_keeps_composed_bytes() {
+    let swatch: [u32; 6] = [
+        0xFF11_2233,
+        0xFF44_5566,
+        0xFF77_8899,
+        0xFFAA_BBCC,
+        0xFFDD_EEFF,
+        0xFF01_0203,
+    ];
+    let bytes: Vec<u8> = swatch
+        .iter()
+        .flat_map(|pixel| pixel.to_ne_bytes())
+        .collect();
+    let cut = crate::capture::CutBand::new(crate::capture::CutAxis::Columns, 1, 2).unwrap();
+    let request = RegionRenderRequest {
+        source: RegionPixelSource::Raw {
+            image: std::sync::Arc::new(crate::screen_pixels::ScreenImage {
+                data: bytes,
+                width: 3,
+                height: 2,
+                stride: 12,
+            }),
+            selection: ImagePixelRect::new(0, 0, 3, 2, (3, 2)).expect("selection"),
+        },
+        cuts: vec![cut],
+    };
+    let rendered = region_render_job(request)().expect("cut render");
+    assert_eq!((rendered.width, rendered.height), (2, 2));
+    assert_eq!(
+        decode_png_pixels(&rendered.bytes),
+        vec![swatch[0], swatch[2], swatch[3], swatch[5]]
     );
 }
 

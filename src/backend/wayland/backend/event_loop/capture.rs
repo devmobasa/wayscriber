@@ -108,6 +108,7 @@ pub(super) fn handle_pending_actions(
     state.poll_text_copy_completion();
     state.poll_text_paste_completion();
     state.poll_region_window_query_completion();
+    state.poll_region_cut_preview_completion();
     state.poll_ocr_completion();
     state.poll_session_file_dialog_completion(qh);
     state.poll_desktop_open_completion();

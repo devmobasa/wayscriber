@@ -1,10 +1,13 @@
+use crate::capture::CutAxis;
 use crate::input::SelectionHandle;
 use crate::input::state::RegionSelection;
+use crate::screen_pixels::PackedArgb32;
 use crate::util::Rect;
 
 use super::primitives::{draw_rounded_rect, text_extents_for};
 use super::region_action_bar::{
-    RegionAction, RegionActionBar, RegionActionRect, render_region_action_bar,
+    RegionAction, RegionActionAvailability, RegionActionBar, RegionActionBarVisual,
+    RegionActionRect, RegionCutStatus, render_region_action_bar,
 };
 use super::region_resize_handles::{RegionResizeHandles, render_region_resize_handles};
 
@@ -92,7 +95,29 @@ pub(crate) struct RegionCapturePickerVisual<'a> {
     pub action_bar: Option<RegionActionBar>,
     pub hovered_action: Option<RegionAction>,
     pub include_drawings: bool,
+    pub cut: RegionCaptureCutVisual<'a>,
     pub window: RegionCaptureWindowVisual<'a>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct RegionCutPreviewVisual<'a> {
+    pub pixels: &'a PackedArgb32,
+    pub display: RegionSelection,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct RegionCutDragVisual {
+    pub axis: CutAxis,
+    pub band: RegionSelection,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub(crate) struct RegionCaptureCutVisual<'a> {
+    pub preview: Option<RegionCutPreviewVisual<'a>>,
+    pub drag: Option<RegionCutDragVisual>,
+    pub availability: RegionActionAvailability,
+    pub cut_armed: bool,
+    pub status: Option<RegionCutStatus>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -242,6 +267,9 @@ pub(crate) fn render_region_capture_picker(
     };
 
     let _ = ctx.save();
+    if let Some(preview) = visual.cut.preview {
+        paint_cut_preview(ctx, preview);
+    }
     if visual.show_scrim {
         ctx.set_source_rgba(SCRIM.0, SCRIM.1, SCRIM.2, SCRIM.3);
         ctx.rectangle(0.0, 0.0, width, height);
@@ -265,6 +293,9 @@ pub(crate) fn render_region_capture_picker(
     }
     if let Some(handles) = visual.resize_handles {
         render_region_resize_handles(ctx, handles, visual.hovered_handle);
+    }
+    if let Some(drag) = visual.cut.drag {
+        draw_cut_drag(ctx, drag);
     }
     if !visual.window.active && !visual.review {
         draw_crosshair(ctx, visual.pointer, (width, height));
@@ -299,11 +330,94 @@ pub(crate) fn render_region_capture_picker(
         render_region_action_bar(
             ctx,
             action_bar,
-            visual.hovered_action,
-            visual.include_drawings,
+            RegionActionBarVisual {
+                hovered: visual.hovered_action,
+                include_drawings: visual.include_drawings,
+                availability: visual.cut.availability,
+                cut_armed: visual.cut.cut_armed,
+                status: visual.cut.status,
+            },
         );
     }
     let _ = ctx.restore();
+}
+
+fn paint_cut_preview(ctx: &cairo::Context, preview: RegionCutPreviewVisual<'_>) {
+    let pixels = preview.pixels;
+    let Ok(width) = i32::try_from(pixels.width()) else {
+        return;
+    };
+    let Ok(height) = i32::try_from(pixels.height()) else {
+        return;
+    };
+    if width <= 0 || height <= 0 {
+        return;
+    }
+    let (x, y, display_width, display_height) = normalized_rect(preview.display);
+    if display_width <= 0.0 || display_height <= 0.0 {
+        return;
+    }
+    // SAFETY: Cairo borrows `pixels.data` for this surface. The buffer is
+    // owned by the Review preview and stays alive until the surface is
+    // dropped at the end of this function. The API wants `*mut u8` even
+    // though this path only reads pixels; we never write through the
+    // pointer, and no other alias mutates the buffer while Cairo holds it.
+    let surface = unsafe {
+        cairo::ImageSurface::create_for_data_unsafe(
+            pixels.data().as_ptr() as *mut u8,
+            cairo::Format::ARgb32,
+            width,
+            height,
+            pixels.stride(),
+        )
+    };
+    let Ok(surface) = surface else {
+        return;
+    };
+    let _ = ctx.save();
+    ctx.rectangle(x, y, display_width, display_height);
+    ctx.clip();
+    ctx.translate(x, y);
+    ctx.scale(
+        display_width / f64::from(pixels.width()),
+        display_height / f64::from(pixels.height()),
+    );
+    // Place the surface in the translated/scaled user space, matching the
+    // frozen-backdrop path: the CTM maps one source pixel onto one displayed
+    // output pixel, and nearest-neighbor keeps cut seams crisp.
+    if ctx.set_source_surface(&surface, 0.0, 0.0).is_ok() {
+        ctx.source().set_filter(cairo::Filter::Nearest);
+        ctx.source().set_extend(cairo::Extend::None);
+        let _ = ctx.paint();
+    }
+    let _ = ctx.restore();
+}
+
+fn draw_cut_drag(ctx: &cairo::Context, drag: RegionCutDragVisual) {
+    let (x, y, width, height) = normalized_rect(drag.band);
+    if width <= 0.0 || height <= 0.0 {
+        return;
+    }
+    ctx.set_source_rgba(0.05, 0.08, 0.14, 0.48);
+    ctx.rectangle(x, y, width, height);
+    let _ = ctx.fill();
+    ctx.set_source_rgba(1.0, 1.0, 1.0, 0.92);
+    ctx.set_line_width(1.0);
+    match drag.axis {
+        CutAxis::Columns => {
+            ctx.move_to(x + 0.5, y);
+            ctx.line_to(x + 0.5, y + height);
+            ctx.move_to(x + width - 0.5, y);
+            ctx.line_to(x + width - 0.5, y + height);
+        }
+        CutAxis::Rows => {
+            ctx.move_to(x, y + 0.5);
+            ctx.line_to(x + width, y + 0.5);
+            ctx.move_to(x, y + height - 0.5);
+            ctx.line_to(x + width, y + height - 0.5);
+        }
+    }
+    let _ = ctx.stroke();
 }
 
 fn normalized_rect(selection: RegionSelection) -> (f64, f64, f64, f64) {
@@ -696,6 +810,7 @@ mod tests {
                 action_bar: None,
                 hovered_action: None,
                 include_drawings: false,
+                cut: Default::default(),
                 window: RegionCaptureWindowVisual::disabled(),
             },
             |_x, _y| None,
@@ -740,6 +855,7 @@ mod tests {
                 action_bar: None,
                 hovered_action: None,
                 include_drawings: false,
+                cut: Default::default(),
                 window: RegionCaptureWindowVisual {
                     available: true,
                     active: true,
@@ -780,6 +896,7 @@ mod tests {
                 action_bar: None,
                 hovered_action: None,
                 include_drawings: false,
+                cut: Default::default(),
                 window: RegionCaptureWindowVisual {
                     available: true,
                     active: true,
@@ -827,6 +944,7 @@ mod tests {
                 action_bar: None,
                 hovered_action: None,
                 include_drawings: false,
+                cut: Default::default(),
                 window: RegionCaptureWindowVisual {
                     available: true,
                     active: true,
@@ -873,6 +991,7 @@ mod tests {
                 action_bar: None,
                 hovered_action: None,
                 include_drawings: false,
+                cut: Default::default(),
                 window: RegionCaptureWindowVisual::disabled(),
             },
             |_x, _y| None,
@@ -940,6 +1059,7 @@ mod tests {
                 action_bar: None,
                 hovered_action: None,
                 include_drawings: false,
+                cut: Default::default(),
                 window: RegionCaptureWindowVisual::disabled(),
             },
             |_x, _y| None,
@@ -980,6 +1100,7 @@ mod tests {
                 action_bar: Some(bar),
                 hovered_action: Some(crate::ui::RegionAction::Both),
                 include_drawings: true,
+                cut: Default::default(),
                 window: RegionCaptureWindowVisual::disabled(),
             },
             |_x, _y| None,
@@ -1090,6 +1211,7 @@ mod tests {
                     action_bar: Some(bar),
                     hovered_action: None,
                     include_drawings: false,
+                    cut: Default::default(),
                     window: RegionCaptureWindowVisual::disabled(),
                 },
                 |_x, _y| None,
@@ -1191,6 +1313,7 @@ mod tests {
                     action_bar: None,
                     hovered_action: None,
                     include_drawings: false,
+                    cut: Default::default(),
                     window: RegionCaptureWindowVisual::disabled(),
                 },
                 |_x, _y| None,
@@ -1244,5 +1367,85 @@ mod tests {
         let data = surface.data().unwrap();
         assert!(data[98 * stride + 88 * 4 + 3] > 0, "loupe center pixel");
         assert_eq!(data[5 * stride + 5 * 4 + 3], 0, "outside untouched");
+    }
+
+    #[test]
+    fn accepted_cut_preview_paints_before_the_scrim_hole() {
+        let pixels = PackedArgb32::new(
+            2,
+            1,
+            8,
+            [0x33, 0x22, 0x11, 0xFF, 0xCC, 0xBB, 0xAA, 0xFF].to_vec(),
+        )
+        .unwrap();
+        let created = unsafe {
+            cairo::ImageSurface::create_for_data_unsafe(
+                pixels.data().as_ptr() as *mut u8,
+                cairo::Format::ARgb32,
+                2,
+                1,
+                8,
+            )
+        };
+        assert!(
+            created.is_ok(),
+            "preview pixels must be a valid Cairo source: {created:?}"
+        );
+        drop(created);
+        // Large enough that the 4–20px corner arms cannot cover the samples,
+        // and far enough from the 1px frame. 2×1 source scales 16× onto this
+        // 32×16 display: (18, 18) is inside the first source pixel, (34, 18)
+        // inside the second.
+        let display = RegionSelection {
+            start: (10.0, 10.0),
+            end: (42.0, 26.0),
+        };
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 60, 40).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        render_region_capture_picker(
+            &ctx,
+            60,
+            40,
+            RegionCapturePickerVisual {
+                selection: Some(display),
+                pointer: (4.0, 4.0),
+                measurement: None,
+                show_scrim: true,
+                review: true,
+                resize_handles: None,
+                hovered_handle: None,
+                show_legend: false,
+                loupe: None,
+                action_bar: None,
+                hovered_action: None,
+                include_drawings: false,
+                cut: RegionCaptureCutVisual {
+                    preview: Some(RegionCutPreviewVisual {
+                        pixels: &pixels,
+                        display,
+                    }),
+                    ..Default::default()
+                },
+                window: RegionCaptureWindowVisual::disabled(),
+            },
+            |_x, _y| None,
+        );
+        drop(ctx);
+        surface.flush();
+        let stride = surface.stride() as usize;
+        let data = surface.data().unwrap();
+        let alpha = |x: usize, y: usize| data[y * stride + x * 4 + 3];
+        assert!(alpha(18, 18) > 0, "preview occupies the displayed output");
+        assert!(alpha(2, 2) > 0, "vacated source is dimmed by the scrim");
+        assert_eq!(
+            &data[18 * stride + 18 * 4..18 * stride + 18 * 4 + 4],
+            &[0x33, 0x22, 0x11, 0xFF],
+            "first source pixel fills the left half of the displayed output"
+        );
+        assert_eq!(
+            &data[18 * stride + 34 * 4..18 * stride + 34 * 4 + 4],
+            &[0xCC, 0xBB, 0xAA, 0xFF],
+            "second source pixel fills the right half of the displayed output"
+        );
     }
 }
