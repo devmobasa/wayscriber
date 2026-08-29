@@ -356,7 +356,7 @@ fn resolve_board_capture_outcome(
                 mime_type: image.format.mime_type,
                 width: image.width,
                 height: image.height,
-                bytes: image.bytes,
+                bytes: image.bytes.into(),
             };
             state
                 .input_state

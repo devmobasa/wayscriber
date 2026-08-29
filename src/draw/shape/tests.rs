@@ -453,7 +453,7 @@ fn image_bounding_box_and_kind_name_use_display_bounds() {
             mime_type: "image/png".to_string(),
             width: 2,
             height: 1,
-            bytes: vec![1, 2, 3],
+            bytes: vec![1, 2, 3].into(),
         },
     };
 
@@ -482,7 +482,7 @@ fn pressure_and_image_bounds_handle_extreme_coordinates() {
             mime_type: "image/png".to_string(),
             width: 1,
             height: 1,
-            bytes: vec![1],
+            bytes: vec![1].into(),
         },
     };
     let image_bounds = image
@@ -593,7 +593,7 @@ fn image_serialization_uses_base64_bytes() {
             mime_type: "image/jpeg".to_string(),
             width: 3,
             height: 4,
-            bytes: vec![1, 2, 3, 4],
+            bytes: vec![1, 2, 3, 4].into(),
         },
     };
 
@@ -604,8 +604,22 @@ fn image_serialization_uses_base64_bytes() {
     match restored {
         Shape::Image { data, .. } => {
             assert_eq!(data.mime_type, "image/jpeg");
-            assert_eq!(data.bytes, vec![1, 2, 3, 4]);
+            assert_eq!(data.bytes.as_ref(), [1, 2, 3, 4]);
         }
         other => panic!("expected image shape, got {:?}", other),
     }
+}
+
+#[test]
+fn embedded_image_clones_share_the_encoded_payload() {
+    let image = EmbeddedImage {
+        mime_type: "image/png".to_string(),
+        width: 1,
+        height: 1,
+        bytes: vec![1, 2, 3, 4].into(),
+    };
+
+    let cloned = image.clone();
+
+    assert!(std::sync::Arc::ptr_eq(&image.bytes, &cloned.bytes));
 }

@@ -426,7 +426,7 @@ fn image_hit_test_uses_display_rectangle() {
                 mime_type: "image/png".to_string(),
                 width: 4,
                 height: 3,
-                bytes: vec![1, 2, 3],
+                bytes: vec![1, 2, 3].into(),
             },
         },
         0,

@@ -209,7 +209,7 @@ fn test_image(bytes: usize) -> EmbeddedImage {
         mime_type: "image/png".to_string(),
         width: 16,
         height: 16,
-        bytes: vec![7; bytes],
+        bytes: vec![7; bytes].into(),
     }
 }
 

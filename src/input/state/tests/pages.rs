@@ -484,7 +484,7 @@ fn add_active_image_shape(state: &mut InputState, bytes: usize) -> ShapeId {
             mime_type: "image/png".to_string(),
             width: 240,
             height: 180,
-            bytes: pseudo_random_bytes(bytes),
+            bytes: pseudo_random_bytes(bytes).into(),
         },
     })
 }

@@ -69,7 +69,7 @@ fn add_active_image_shape(state: &mut InputState) -> ShapeId {
             mime_type: "image/png".to_string(),
             width: 240,
             height: 180,
-            bytes: Vec::new(),
+            bytes: Vec::new().into(),
         },
     })
 }
