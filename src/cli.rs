@@ -257,12 +257,23 @@ impl Cli {
     }
 
     fn validate(&self) -> Result<(), String> {
+        self.validate_runtime_capabilities_command()?;
+        self.validate_session_flag_pairs()?;
+        self.validate_overlay_commands()?;
+        self.validate_session_commands()?;
+        self.validate_catalog_commands()
+    }
+
+    fn validate_runtime_capabilities_command(&self) -> Result<(), String> {
         if self.runtime_capabilities
             && (self.selects_a_launch_command() || self.about || self.check_update)
         {
             return Err("--runtime-capabilities conflicts with launch flags".to_string());
         }
+        Ok(())
+    }
 
+    fn validate_session_flag_pairs(&self) -> Result<(), String> {
         if self.exit_after_capture && self.no_exit_after_capture {
             return Err(conflict("--exit-after-capture", "--no-exit-after-capture"));
         }
@@ -294,7 +305,10 @@ impl Cli {
         if self.rename_session.is_some() && self.selects_overlay_option() {
             return Err("--rename-session conflicts with overlay/daemon options".to_string());
         }
+        Ok(())
+    }
 
+    fn validate_overlay_commands(&self) -> Result<(), String> {
         if self.freeze_on_show && !self.daemon {
             return Err("--freeze-on-show requires --daemon".to_string());
         }
@@ -308,16 +322,7 @@ impl Cli {
             return Err("--freeze-on-show conflicts with overlay/session commands".to_string());
         }
 
-        let overlay_action_count = [
-            self.daemon_action.is_some(),
-            self.light_toggle,
-            self.light_draw_toggle,
-            self.light_draw_on,
-            self.light_draw_off,
-        ]
-        .into_iter()
-        .filter(|selected| *selected)
-        .count();
+        let overlay_action_count = self.overlay_action_count();
 
         if self.session_file.is_some() {
             if overlay_action_count > 0 {
@@ -388,7 +393,23 @@ impl Cli {
         {
             return Err("daemon overlay actions cannot be combined with launch flags".to_string());
         }
+        Ok(())
+    }
 
+    fn overlay_action_count(&self) -> usize {
+        [
+            self.daemon_action.is_some(),
+            self.light_toggle,
+            self.light_draw_toggle,
+            self.light_draw_on,
+            self.light_draw_off,
+        ]
+        .into_iter()
+        .filter(|selected| *selected)
+        .count()
+    }
+
+    fn validate_session_commands(&self) -> Result<(), String> {
         if self.clear_session && (self.daemon || self.active) {
             return Err("--clear-session conflicts with --daemon/--active".to_string());
         }
@@ -429,6 +450,10 @@ impl Cli {
                     .to_string(),
             );
         }
+        Ok(())
+    }
+
+    fn validate_catalog_commands(&self) -> Result<(), String> {
         if self.about && (self.selects_a_launch_command() || self.check_update) {
             return Err("--about conflicts with the selected command".to_string());
         }
