@@ -1,7 +1,7 @@
 use super::blur::{render_black_out_rect, render_blur_placeholder};
 use super::highlight::render_click_highlight;
 use super::image::render_image_shape;
-use super::pressure_strokes::render_freehand_pressure_borrowed;
+use super::pressure_strokes::render_packed_freehand_pressure_borrowed;
 use super::primitives::{render_arrow, render_ellipse, render_line, render_polygon, render_rect};
 use super::strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};
 use super::text::{render_sticky_note, render_text_over_with_halo};
@@ -57,9 +57,7 @@ pub fn render_shape_over_with_halo(
             render_freehand_borrowed(ctx, points, *color, *thick);
         }
         Shape::FreehandPressure { points, color } => {
-            let coords: Vec<(i32, i32)> = points.iter().map(|&(x, y, _)| (x, y)).collect();
-            let thickness: Vec<f32> = points.iter().map(|&(_, _, t)| t).collect();
-            render_freehand_pressure_borrowed(ctx, &coords, &thickness, *color);
+            render_packed_freehand_pressure_borrowed(ctx, points, 0.0, *color);
         }
         Shape::Line {
             x1,
