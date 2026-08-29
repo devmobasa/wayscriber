@@ -253,7 +253,7 @@ pub(crate) fn render_region_capture_picker(
     ctx: &cairo::Context,
     screen_width: u32,
     screen_height: u32,
-    visual: RegionCapturePickerVisual<'_>,
+    visual: &RegionCapturePickerVisual<'_>,
     mut sample_loupe: impl FnMut(f64, f64) -> Option<crate::draw::Color>,
 ) {
     let width = f64::from(screen_width);
@@ -291,7 +291,7 @@ pub(crate) fn render_region_capture_picker(
         // frame drops its arms wherever grips are offered.
         draw_selection_frame(ctx, x, y, w, h, visual.resize_handles.is_none());
     }
-    if let Some(handles) = visual.resize_handles {
+    if let Some(handles) = visual.resize_handles.as_ref() {
         render_region_resize_handles(ctx, handles, visual.hovered_handle);
     }
     if let Some(drag) = visual.cut.drag {
@@ -311,7 +311,7 @@ pub(crate) fn render_region_capture_picker(
             READOUT_FONT_SIZE,
             visual.pointer,
             anchor,
-            visual.action_bar.map(RegionActionBar::bounds),
+            visual.action_bar.as_ref().map(RegionActionBar::bounds),
             (screen_width, screen_height),
             cairo::FontWeight::Bold,
         );
@@ -326,7 +326,7 @@ pub(crate) fn render_region_capture_picker(
     if let Some(loupe) = visual.loupe {
         render_region_capture_loupe(ctx, (screen_width, screen_height), loupe, &mut sample_loupe);
     }
-    if let Some(action_bar) = visual.action_bar {
+    if let Some(action_bar) = visual.action_bar.as_ref() {
         render_region_action_bar(
             ctx,
             action_bar,
@@ -794,7 +794,7 @@ mod tests {
             &ctx,
             40,
             40,
-            RegionCapturePickerVisual {
+            &RegionCapturePickerVisual {
                 selection: Some(RegionSelection {
                     start: (10.0, 10.0),
                     end: (30.0, 30.0),
@@ -842,7 +842,7 @@ mod tests {
             &ctx,
             40,
             40,
-            RegionCapturePickerVisual {
+            &RegionCapturePickerVisual {
                 selection: None,
                 pointer: (28.0, 28.0),
                 measurement: None,
@@ -883,7 +883,7 @@ mod tests {
             &ctx,
             40,
             40,
-            RegionCapturePickerVisual {
+            &RegionCapturePickerVisual {
                 selection: None,
                 pointer: (20.0, 20.0),
                 measurement: None,
@@ -931,7 +931,7 @@ mod tests {
             &ctx,
             40,
             20,
-            RegionCapturePickerVisual {
+            &RegionCapturePickerVisual {
                 selection: None,
                 pointer: (20.0, 18.0),
                 measurement: None,
@@ -978,7 +978,7 @@ mod tests {
             &ctx,
             40,
             40,
-            RegionCapturePickerVisual {
+            &RegionCapturePickerVisual {
                 selection: None,
                 pointer: (20.0, 20.0),
                 measurement: Some("20, 20"),
@@ -1043,7 +1043,7 @@ mod tests {
             &ctx,
             40,
             40,
-            RegionCapturePickerVisual {
+            &RegionCapturePickerVisual {
                 selection: Some(RegionSelection {
                     start: (10.0, 10.0),
                     end: (30.0, 30.0),
@@ -1087,7 +1087,7 @@ mod tests {
             &ctx,
             800,
             600,
-            RegionCapturePickerVisual {
+            &RegionCapturePickerVisual {
                 selection: Some(selection),
                 pointer: (200.0, 150.0),
                 measurement: Some("200 × 100"),
@@ -1198,7 +1198,7 @@ mod tests {
                 &ctx,
                 800,
                 600,
-                RegionCapturePickerVisual {
+                &RegionCapturePickerVisual {
                     selection: Some(selection),
                     pointer: (760.0, 575.0),
                     measurement,
@@ -1294,7 +1294,7 @@ mod tests {
                 &ctx,
                 300,
                 260,
-                RegionCapturePickerVisual {
+                &RegionCapturePickerVisual {
                     selection: Some(selection),
                     // Park the pointer in a corner: targeting still paints a
                     // crosshair, and its two lines must not cross the pixels
@@ -1406,7 +1406,7 @@ mod tests {
             &ctx,
             60,
             40,
-            RegionCapturePickerVisual {
+            &RegionCapturePickerVisual {
                 selection: Some(display),
                 pointer: (4.0, 4.0),
                 measurement: None,

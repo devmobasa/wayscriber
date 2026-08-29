@@ -145,11 +145,11 @@ impl RegionResizeHandles {
 
 pub(crate) fn render_region_resize_handles(
     ctx: &cairo::Context,
-    handles: RegionResizeHandles,
+    handles: &RegionResizeHandles,
     hovered: Option<SelectionHandle>,
 ) {
     let _ = ctx.save();
-    for chip in handles.chips.into_iter().flatten() {
+    for chip in handles.chips.iter().flatten() {
         let (x, y, width, height) = chip.rect();
         if width <= 0.0 || height <= 0.0 {
             continue;
@@ -329,7 +329,7 @@ mod tests {
             let handles = RegionResizeHandles::place(selection(20.0, 20.0, side, side));
             let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 60, 60).unwrap();
             let ctx = cairo::Context::new(&surface).unwrap();
-            render_region_resize_handles(&ctx, handles, Some(SelectionHandle::TopLeft));
+            render_region_resize_handles(&ctx, &handles, Some(SelectionHandle::TopLeft));
             assert_eq!(
                 ctx.status(),
                 Ok(()),
@@ -371,7 +371,7 @@ mod tests {
         let handles = RegionResizeHandles::place(selection(20.0, 20.0, 160.0, 160.0));
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 200, 200).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
-        render_region_resize_handles(&ctx, handles, Some(SelectionHandle::TopLeft));
+        render_region_resize_handles(&ctx, &handles, Some(SelectionHandle::TopLeft));
         drop(ctx);
         surface.flush();
         let stride = surface.stride() as usize;

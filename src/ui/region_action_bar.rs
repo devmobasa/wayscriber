@@ -316,11 +316,11 @@ impl RegionActionBar {
 
     /// The painted frame, without its drop shadow. The picker uses it to keep
     /// the Review size badge out from under the bar.
-    pub(crate) const fn bounds(self) -> RegionActionRect {
+    pub(crate) const fn bounds(&self) -> RegionActionRect {
         self.bounds
     }
 
-    pub(crate) fn hit(self, point: (f64, f64)) -> Option<RegionAction> {
+    pub(crate) fn hit(&self, point: (f64, f64)) -> Option<RegionAction> {
         self.items
             .iter()
             .chain(self.edit.iter())
@@ -335,7 +335,7 @@ impl RegionActionBar {
     }
 
     pub(crate) fn enabled_hit(
-        self,
+        &self,
         point: (f64, f64),
         availability: RegionActionAvailability,
     ) -> Option<RegionAction> {
@@ -343,11 +343,11 @@ impl RegionActionBar {
             .filter(|&action| availability.allows(action))
     }
 
-    pub(crate) fn contains(self, point: (f64, f64)) -> bool {
+    pub(crate) fn contains(&self, point: (f64, f64)) -> bool {
         self.bounds.contains(point)
     }
 
-    fn status_bounds(self) -> Option<RegionActionRect> {
+    fn status_bounds(&self) -> Option<RegionActionRect> {
         let toggle = self.toggle.bounds;
         if toggle.width <= 0.0 {
             return None;
@@ -363,13 +363,13 @@ impl RegionActionBar {
 
 pub(crate) fn render_region_action_bar(
     ctx: &cairo::Context,
-    bar: RegionActionBar,
+    bar: &RegionActionBar,
     visual: RegionActionBarVisual,
 ) {
     let _ = ctx.save();
     draw_bar_frame(ctx, bar.bounds);
 
-    for item in bar.items {
+    for &item in &bar.items {
         draw_action(
             ctx,
             item,
@@ -384,7 +384,7 @@ pub(crate) fn render_region_action_bar(
         bar.edit[0].bounds.y,
         bar.toggle.bounds.width,
     );
-    for item in bar.edit {
+    for &item in &bar.edit {
         draw_action(
             ctx,
             item,
@@ -699,7 +699,7 @@ fn draw_checkbox(ctx: &cairo::Context, x: f64, y: f64, size: f64, checked: bool)
     let _ = ctx.stroke();
 }
 
-fn draw_status(ctx: &cairo::Context, bar: RegionActionBar, status: Option<RegionCutStatus>) {
+fn draw_status(ctx: &cairo::Context, bar: &RegionActionBar, status: Option<RegionCutStatus>) {
     let Some(status) = status else {
         return;
     };
@@ -975,7 +975,7 @@ mod tests {
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_action_bar(
             &ctx,
-            bar,
+            &bar,
             RegionActionBarVisual::simple(Some(RegionAction::Both), true),
         );
         drop(ctx);
@@ -1001,7 +1001,7 @@ mod tests {
         let row_alpha = |checked: bool| {
             let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
             let ctx = cairo::Context::new(&surface).unwrap();
-            render_region_action_bar(&ctx, bar, RegionActionBarVisual::simple(None, checked));
+            render_region_action_bar(&ctx, &bar, RegionActionBarVisual::simple(None, checked));
             drop(ctx);
             surface.flush();
             let stride = surface.stride() as usize;
@@ -1025,7 +1025,7 @@ mod tests {
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_action_bar(
             &ctx,
-            bar,
+            &bar,
             RegionActionBarVisual {
                 hovered: None,
                 include_drawings: false,
@@ -1061,7 +1061,7 @@ mod tests {
         let ctx = cairo::Context::new(&surface).unwrap();
         render_region_action_bar(
             &ctx,
-            bar,
+            &bar,
             RegionActionBarVisual {
                 hovered: None,
                 include_drawings: false,

@@ -458,7 +458,7 @@ impl WaylandState {
             ctx,
             width,
             height,
-            crate::ui::RegionCapturePickerVisual {
+            &crate::ui::RegionCapturePickerVisual {
                 selection,
                 pointer,
                 measurement: measurement.as_deref(),
