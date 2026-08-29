@@ -447,24 +447,10 @@ impl WaylandState {
                 (image_point.x, image_point.y),
             )
         });
-        let window_targets: Vec<_> = self
-            .region_window_snap_targets()
-            .iter()
-            .map(|target| {
-                let rect = target.screen_rect();
-                crate::input::state::RegionSelection {
-                    start: (f64::from(rect.x), f64::from(rect.y)),
-                    end: (
-                        f64::from(rect.x + rect.width),
-                        f64::from(rect.y + rect.height),
-                    ),
-                }
-            })
-            .collect();
         let window = crate::ui::RegionCaptureWindowVisual {
             available: self.region_window_snap_available(),
             active: self.region_window_snap_active(),
-            targets: &window_targets,
+            targets: self.region_window_snap_display_selections(),
             highlighted_target: self.region_window_snap_highlighted_index(),
         };
 

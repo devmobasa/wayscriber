@@ -1,7 +1,7 @@
 use crate::backend::wayland::state::WaylandState;
 use crate::backend::wayland::state::screen_image::{ScreenSourceToken, screen_rect_for_image_rect};
 use crate::capture::window_geometry::{WindowQueryContext, WindowTarget};
-use crate::input::state::{RegionInputSource, RegionPurposeTag};
+use crate::input::state::{RegionInputSource, RegionPurposeTag, RegionSelection};
 use crate::screen_pixels::{ImagePixelRect, ImagePoint};
 use crate::util::Rect;
 
@@ -38,15 +38,19 @@ impl WindowSnapTarget {
         self.image_rect
     }
 
+    #[cfg(test)]
     pub(in crate::backend::wayland) const fn screen_rect(&self) -> Rect {
         self.screen_rect
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 enum WindowSnapAvailability {
     Pending(WindowSnapQueryStage),
-    Ready(Vec<WindowSnapTarget>),
+    Ready {
+        targets: Vec<WindowSnapTarget>,
+        display_selections: Vec<RegionSelection>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,7 +125,7 @@ impl WindowSnapSession {
     }
 
     pub(super) fn is_ready(&self) -> bool {
-        matches!(self.availability, WindowSnapAvailability::Ready(_))
+        matches!(self.availability, WindowSnapAvailability::Ready { .. })
     }
 
     pub(super) const fn mode_active(&self) -> bool {
@@ -131,7 +135,16 @@ impl WindowSnapSession {
     pub(super) fn targets(&self) -> &[WindowSnapTarget] {
         match &self.availability {
             WindowSnapAvailability::Pending(_) => &[],
-            WindowSnapAvailability::Ready(targets) => targets,
+            WindowSnapAvailability::Ready { targets, .. } => targets,
+        }
+    }
+
+    pub(super) fn display_selections(&self) -> &[RegionSelection] {
+        match &self.availability {
+            WindowSnapAvailability::Pending(_) => &[],
+            WindowSnapAvailability::Ready {
+                display_selections, ..
+            } => display_selections,
         }
     }
 
@@ -251,8 +264,25 @@ pub(super) fn apply_window_query_completion(
     let current = session
         .as_mut()
         .expect("a correlated pending window-snap session still exists");
-    current.availability = WindowSnapAvailability::Ready(mapped);
+    let display_selections = mapped
+        .iter()
+        .map(|target| region_selection_for_rect(target.screen_rect))
+        .collect();
+    current.availability = WindowSnapAvailability::Ready {
+        targets: mapped,
+        display_selections,
+    };
     WindowQueryApply::Ready
+}
+
+fn region_selection_for_rect(rect: Rect) -> RegionSelection {
+    RegionSelection {
+        start: (f64::from(rect.x), f64::from(rect.y)),
+        end: (
+            f64::from(rect.x) + f64::from(rect.width),
+            f64::from(rect.y) + f64::from(rect.height),
+        ),
+    }
 }
 
 fn map_window_target(source: ScreenSourceToken, target: WindowTarget) -> Option<WindowSnapTarget> {
@@ -300,11 +330,13 @@ impl WaylandState {
             .is_some_and(WindowSnapSession::mode_active)
     }
 
-    pub(in crate::backend::wayland) fn region_window_snap_targets(&self) -> &[WindowSnapTarget] {
+    pub(in crate::backend::wayland) fn region_window_snap_display_selections(
+        &self,
+    ) -> &[RegionSelection] {
         self.data
             .window_snap
             .as_ref()
-            .map(WindowSnapSession::targets)
+            .map(WindowSnapSession::display_selections)
             .unwrap_or_default()
     }
 
