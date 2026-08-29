@@ -521,7 +521,7 @@ fn value_after(args: &[String], index: usize, name: &str) -> Result<String, Stri
 fn attached_short_value(arg: &str, value_start: usize, name: &str) -> Result<String, String> {
     let value = arg[value_start..]
         .strip_prefix('=')
-        .unwrap_or(&arg[value_start..]);
+        .unwrap_or_else(|| &arg[value_start..]);
     if value.is_empty() {
         return Err(format!("{name} requires a value"));
     }

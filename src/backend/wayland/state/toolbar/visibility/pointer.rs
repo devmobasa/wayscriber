@@ -65,7 +65,10 @@ impl WaylandState {
         // Hide the cursor while dragging with pointer lock to avoid visual jitter.
         if pointer
             .data::<PointerData>()
-            .and_then(|data| data.latest_button_serial().or(data.latest_enter_serial()))
+            .and_then(|data| {
+                data.latest_button_serial()
+                    .or_else(|| data.latest_enter_serial())
+            })
             .is_some()
         {
             self.hide_pointer_cursor();

@@ -42,7 +42,9 @@ impl Daemon {
                 .pending_toggle_request
                 .as_ref()
                 .and_then(|request| request.session_resume_override());
-            set_runtime_session_override(request_override.or(self.session_resume_override()));
+            set_runtime_session_override(
+                request_override.or_else(|| self.session_resume_override()),
+            );
             let requested_mode = self
                 .pending_toggle_request
                 .as_ref()
