@@ -16,7 +16,9 @@ impl ToolbarSurfaceManager {
             return;
         }
         self.top.set_ui_scale(snapshot.toolbar_scale);
-        let top_hover = hover.or(self.top_hover).or(self.top.focused_hover());
+        let top_hover = hover
+            .or(self.top_hover)
+            .or_else(|| self.top.focused_hover());
         let top_hover_start = self.top_hover_start;
         if let Err(err) = self.top.render(
             shm,

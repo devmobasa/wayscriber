@@ -159,7 +159,7 @@ fn modify_image_bounds_undo_redo_changes_geometry_without_replacing_payload() {
             mime_type: "image/png".to_string(),
             width: 10,
             height: 8,
-            bytes: vec![1, 2, 3, 4],
+            bytes: vec![1, 2, 3, 4].into(),
         },
     });
     if let Shape::Image { x, y, w, h, .. } = &mut frame.shape_mut(id).unwrap().shape {
@@ -194,7 +194,7 @@ fn modify_image_bounds_undo_redo_changes_geometry_without_replacing_payload() {
     match &frame.shape(id).unwrap().shape {
         Shape::Image { x, y, w, h, data } => {
             assert_eq!((*x, *y, *w, *h), (0, 0, 10, 8));
-            assert_eq!(data.bytes, vec![1, 2, 3, 4]);
+            assert_eq!(data.bytes.as_ref(), [1, 2, 3, 4]);
         }
         _ => panic!("expected image"),
     }
@@ -203,7 +203,7 @@ fn modify_image_bounds_undo_redo_changes_geometry_without_replacing_payload() {
     match &frame.shape(id).unwrap().shape {
         Shape::Image { x, y, w, h, data } => {
             assert_eq!((*x, *y, *w, *h), (20, 30, 40, 32));
-            assert_eq!(data.bytes, vec![1, 2, 3, 4]);
+            assert_eq!(data.bytes.as_ref(), [1, 2, 3, 4]);
         }
         _ => panic!("expected image"),
     }

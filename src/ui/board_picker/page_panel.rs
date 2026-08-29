@@ -29,7 +29,7 @@ use thumbnail::{
 pub(super) fn render_page_panel(
     ctx: &cairo::Context,
     input_state: &InputState,
-    layout: BoardPickerLayout,
+    layout: &BoardPickerLayout,
     screen_width: u32,
     screen_height: u32,
     text_halo_enabled: bool,
@@ -259,7 +259,7 @@ pub(super) fn render_page_panel(
 
 fn render_sticky_add_button(
     ctx: &cairo::Context,
-    layout: BoardPickerLayout,
+    layout: &BoardPickerLayout,
     pointer_x: i32,
     pointer_y: i32,
 ) {

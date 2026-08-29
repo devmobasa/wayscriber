@@ -57,7 +57,7 @@ pub(super) fn decode_clipboard_image(mime_type: &str, bytes: Vec<u8>) -> Clipboa
         mime_type: canonical_image_mime_type(format).to_string(),
         width: dimensions.0,
         height: dimensions.1,
-        bytes,
+        bytes: bytes.into(),
     })
 }
 

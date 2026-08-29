@@ -6,10 +6,9 @@ impl WaylandState {
         physical_output_identity: Option<String>,
         reason: &str,
     ) {
-        let Some(current_options) = self.session_options().cloned() else {
+        let Some(mut staged_options) = self.session_options().cloned() else {
             return;
         };
-        let mut staged_options = current_options.clone();
         let changed = staged_options.set_output_identity(physical_output_identity.as_deref());
         let same_epoch_pending = self
             .session

@@ -111,6 +111,13 @@ fn output_logical_window_maps_to_authoritative_pixels_then_zoomed_screen() {
     let mapped = &session.targets()[0];
     assert_eq!(mapped.image_rect().size(), (450, 300));
     assert_eq!(mapped.screen_rect(), Rect::new(150, 75, 450, 300).unwrap());
+    assert_eq!(
+        session.display_selections(),
+        &[RegionSelection {
+            start: (150.0, 75.0),
+            end: (600.0, 375.0),
+        }]
+    );
 }
 
 #[test]

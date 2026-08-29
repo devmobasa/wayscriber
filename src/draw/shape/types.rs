@@ -10,6 +10,7 @@ use crate::draw::color::Color;
 use crate::draw::font::FontDescriptor;
 use crate::util::Rect;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::sync::Arc;
 
 /// Encoded image payload stored directly on an image shape.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -18,7 +19,7 @@ pub struct EmbeddedImage {
     pub width: u32,
     pub height: u32,
     #[serde(with = "base64_bytes")]
-    pub bytes: Vec<u8>,
+    pub bytes: Arc<[u8]>,
 }
 
 /// Brush options for eraser strokes.
@@ -561,18 +562,20 @@ fn normalized_rect(x: i32, y: i32, w: i32, h: i32) -> Option<Rect> {
 mod base64_bytes {
     use super::*;
 
-    pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(bytes: &Arc<[u8]>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         crate::base64::encode_standard(bytes).serialize(serializer)
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Arc<[u8]>, D::Error>
     where
         D: Deserializer<'de>,
     {
         let encoded = String::deserialize(deserializer)?;
-        crate::base64::decode_standard(&encoded).map_err(serde::de::Error::custom)
+        crate::base64::decode_standard(&encoded)
+            .map(Arc::from)
+            .map_err(serde::de::Error::custom)
     }
 }

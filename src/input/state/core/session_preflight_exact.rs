@@ -189,7 +189,7 @@ fn duplicate_active_board_in_snapshot(input: &InputState, snapshot: &mut Session
     };
     cloned.pages.active = source_board.pages.active_index();
     let insert_at = (source_index + 1).min(snapshot.boards.len());
-    snapshot.active_board_id = cloned.id.clone();
+    snapshot.active_board_id.clone_from(&cloned.id);
     snapshot.boards.insert(insert_at, cloned);
     true
 }

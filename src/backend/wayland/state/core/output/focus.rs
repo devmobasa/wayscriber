@@ -44,9 +44,7 @@ impl WaylandState {
         }
 
         let surface_current_output = self.surface.current_output();
-        let current_output = surface_current_output
-            .clone()
-            .or_else(|| self.preferred_fullscreen_output());
+        let current_output = surface_current_output.or_else(|| self.preferred_fullscreen_output());
         let current_index = current_output
             .as_ref()
             .and_then(|current| outputs.iter().position(|output| output == current))

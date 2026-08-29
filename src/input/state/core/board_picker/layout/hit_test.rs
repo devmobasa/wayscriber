@@ -15,8 +15,8 @@ struct FloatRect {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct BoardPickerPagePanelHitContext {
-    layout: super::super::BoardPickerLayout,
+struct BoardPickerPagePanelHitContext<'a> {
+    layout: &'a super::super::BoardPickerLayout,
     board_index: usize,
     info: PagePanelInfo,
 }
@@ -30,7 +30,7 @@ impl FloatRect {
 impl InputState {
     fn with_visible_page_context<T>(
         &self,
-        f: impl FnOnce(&BoardPickerPagePanelHitContext) -> Option<T>,
+        f: impl FnOnce(&BoardPickerPagePanelHitContext<'_>) -> Option<T>,
     ) -> Option<T> {
         let context = self.board_picker_page_panel_context()?;
         if context.info.visible_pages == 0 {
@@ -52,8 +52,8 @@ impl InputState {
         layout.padding_y + layout.header_height + row as f64 * layout.row_height
     }
 
-    fn board_picker_page_panel_context(&self) -> Option<BoardPickerPagePanelHitContext> {
-        let layout = self.board_picker_layout?;
+    fn board_picker_page_panel_context(&self) -> Option<BoardPickerPagePanelHitContext<'_>> {
+        let layout = self.board_picker_layout.as_ref()?;
         let board_index = layout.page_board_index?;
         let info = self.board_picker_page_panel_info(layout, board_index)?;
         Some(BoardPickerPagePanelHitContext {
@@ -67,7 +67,7 @@ impl InputState {
         &self,
         x: f64,
         y: f64,
-        context: &BoardPickerPagePanelHitContext,
+        context: &BoardPickerPagePanelHitContext<'_>,
         mut rect_for_thumb: impl FnMut(f64, f64) -> FloatRect,
     ) -> Option<usize> {
         for slot in 0..context.info.visible_slots {
@@ -88,7 +88,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_index_at(&self, x: i32, y: i32) -> Option<usize> {
-        let layout = self.board_picker_layout?;
+        let layout = self.board_picker_layout.as_ref()?;
         let local_x = x as f64 - layout.origin_x;
         let local_y = y as f64 - layout.origin_y;
         let row_top = layout.padding_y + layout.header_height;
@@ -108,7 +108,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_contains_point(&self, x: i32, y: i32) -> bool {
-        if let Some(layout) = self.board_picker_layout {
+        if let Some(layout) = self.board_picker_layout.as_ref() {
             let rect = FloatRect {
                 x: layout.origin_x,
                 y: layout.origin_y,
@@ -126,9 +126,9 @@ impl InputState {
         if self.board_picker_is_new_row(row) {
             return None;
         }
-        let layout = self.board_picker_layout?;
-        let (local_x, local_y) = Self::board_picker_layout_point(&layout, x, y);
-        let row_top = Self::board_picker_row_top(&layout, row);
+        let layout = self.board_picker_layout.as_ref()?;
+        let (local_x, local_y) = Self::board_picker_layout_point(layout, x, y);
+        let row_top = Self::board_picker_row_top(layout, row);
         let swatch_y = row_top + (layout.row_height - layout.swatch_size) * 0.5;
         let swatch_x = layout.padding_x;
         let rect = FloatRect {
@@ -145,7 +145,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_palette_color_at(&self, x: i32, y: i32) -> Option<Color> {
-        let layout = self.board_picker_layout?;
+        let layout = self.board_picker_layout.as_ref()?;
         if layout.palette_rows == 0 || layout.palette_cols == 0 {
             return None;
         }
@@ -244,7 +244,10 @@ impl InputState {
         thumb_rect.contains(x as f64, y as f64)
     }
 
-    fn board_picker_end_of_pages_visible(&self, context: &BoardPickerPagePanelHitContext) -> bool {
+    fn board_picker_end_of_pages_visible(
+        &self,
+        context: &BoardPickerPagePanelHitContext<'_>,
+    ) -> bool {
         context.info.first_visible_page + context.info.visible_pages >= context.info.page_count
             && context.info.visible_pages < context.info.slot_count
     }
@@ -363,13 +366,13 @@ impl InputState {
         if self.board_picker_is_new_row(row) {
             return None;
         }
-        let layout = self.board_picker_layout?;
+        let layout = self.board_picker_layout.as_ref()?;
         if layout.handle_width <= 0.0 || self.board_picker_is_quick() {
             return None;
         }
 
-        let (local_x, local_y) = Self::board_picker_layout_point(&layout, x, y);
-        let row_top = Self::board_picker_row_top(&layout, row);
+        let (local_x, local_y) = Self::board_picker_layout_point(layout, x, y);
+        let row_top = Self::board_picker_row_top(layout, row);
         let list_right = layout.list_width;
         let handle_x = list_right - layout.padding_x - layout.handle_width;
         let rect = FloatRect {
@@ -390,13 +393,13 @@ impl InputState {
         if self.board_picker_is_new_row(row) {
             return None;
         }
-        let layout = self.board_picker_layout?;
+        let layout = self.board_picker_layout.as_ref()?;
         if layout.open_icon_size <= 0.0 || self.board_picker_is_quick() {
             return None;
         }
 
-        let (local_x, local_y) = Self::board_picker_layout_point(&layout, x, y);
-        let row_top = Self::board_picker_row_top(&layout, row);
+        let (local_x, local_y) = Self::board_picker_layout_point(layout, x, y);
+        let row_top = Self::board_picker_row_top(layout, row);
         let list_right = layout.list_width;
         let handle_x = list_right - layout.padding_x - layout.handle_width;
         let open_x = handle_x - layout.open_icon_gap - layout.open_icon_size;
@@ -418,10 +421,10 @@ impl InputState {
         if self.board_picker_is_new_row(row) {
             return None;
         }
-        let layout = self.board_picker_layout?;
+        let layout = self.board_picker_layout.as_ref()?;
 
-        let (local_x, local_y) = Self::board_picker_layout_point(&layout, x, y);
-        let row_top = Self::board_picker_row_top(&layout, row);
+        let (local_x, local_y) = Self::board_picker_layout_point(layout, x, y);
+        let row_top = Self::board_picker_row_top(layout, row);
         let pin_size = layout.swatch_size * super::super::PIN_OFFSET_FACTOR;
         let pin_x = layout.padding_x + layout.swatch_size + layout.swatch_padding - pin_size * 0.25;
         let pin_y = row_top + (layout.row_height - pin_size) * 0.5 - pin_size * 0.25;

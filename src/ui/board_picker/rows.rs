@@ -18,7 +18,7 @@ const SWATCH_TRANSPARENT_OUTLINE: Rgba = (0.62, 0.68, 0.76, 0.85);
 pub(super) fn render_board_rows(
     ctx: &cairo::Context,
     input_state: &InputState,
-    layout: BoardPickerLayout,
+    layout: &BoardPickerLayout,
     board_count: usize,
     max_count: usize,
 ) {
@@ -28,7 +28,7 @@ pub(super) fn render_board_rows(
 struct BoardRowsRenderer<'a> {
     ctx: &'a cairo::Context,
     input: &'a InputState,
-    layout: BoardPickerLayout,
+    layout: &'a BoardPickerLayout,
     board_count: usize,
     max_count: usize,
     rows_top: f64,
@@ -49,7 +49,7 @@ impl<'a> BoardRowsRenderer<'a> {
     fn new(
         ctx: &'a cairo::Context,
         input: &'a InputState,
-        layout: BoardPickerLayout,
+        layout: &'a BoardPickerLayout,
         board_count: usize,
         max_count: usize,
     ) -> Self {

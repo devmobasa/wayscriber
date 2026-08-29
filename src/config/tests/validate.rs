@@ -515,6 +515,7 @@ fn validate_clamps_preset_fields() {
         show_status_bar: None,
         drag_tools: None,
     });
+    config.presets.slot_5 = config.presets.slot_1.clone();
 
     config.validate_and_clamp();
 
@@ -536,6 +537,10 @@ fn validate_clamps_preset_fields() {
     assert_eq!(preset.arrow_length, Some(50.0));
     assert_eq!(preset.arrow_angle, Some(15.0));
     assert_eq!(preset.polygon_sides, Some(3));
+    assert_eq!(
+        config.presets.slot_5, config.presets.slot_1,
+        "the same validation must reach the last supported slot"
+    );
 }
 
 #[test]

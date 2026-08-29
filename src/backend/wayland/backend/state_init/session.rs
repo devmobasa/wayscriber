@@ -43,7 +43,7 @@ pub(super) fn build_session_options(
                 let default_base = paths::data_dir()
                     .unwrap_or_else(|| config_dir.to_path_buf())
                     .join("wayscriber");
-                let display = display_env.clone().unwrap_or_else(|| "default".to_string());
+                let display = display_env.unwrap_or_else(|| "default".to_string());
                 session_options = Some(session::SessionOptions::new(default_base, display));
             }
             if let Some(options) = session_options.as_mut() {

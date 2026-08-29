@@ -2,17 +2,35 @@ use crate::draw::shape::EmbeddedImage;
 use crate::image_decode::{decode_rgba, format_from_mime_or_bytes};
 use cairo::{Format, ImageSurface};
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque, hash_map::DefaultHasher};
+use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+use std::sync::Arc;
 
 const IMAGE_CACHE_ENTRIES: usize = 32;
+
+#[derive(Clone, Debug)]
+struct ImageBytesIdentity(Arc<[u8]>);
+
+impl PartialEq for ImageBytesIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for ImageBytesIdentity {}
+
+impl Hash for ImageBytesIdentity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.as_ptr().hash(state);
+        self.0.len().hash(state);
+    }
+}
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 struct ImageCacheKey {
     mime_type: String,
-    len: usize,
-    hash: u64,
+    bytes: ImageBytesIdentity,
     width: u32,
     height: u32,
 }
@@ -92,8 +110,7 @@ pub fn render_image_shape(
 fn cached_surface(data: &EmbeddedImage) -> Option<Rc<ImageSurface>> {
     let key = ImageCacheKey {
         mime_type: data.mime_type.clone(),
-        len: data.bytes.len(),
-        hash: content_hash(&data.bytes),
+        bytes: ImageBytesIdentity(Arc::clone(&data.bytes)),
         width: data.width,
         height: data.height,
     };
@@ -148,12 +165,6 @@ fn decode_surface(data: &EmbeddedImage) -> Option<ImageSurface> {
     .ok()
 }
 
-fn content_hash(bytes: &[u8]) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    bytes.hash(&mut hasher);
-    hasher.finish()
-}
-
 fn render_missing_image_placeholder(ctx: &cairo::Context, x: i32, y: i32, w: i32, h: i32) {
     let width = w.saturating_abs().max(1) as f64;
     let height = h.saturating_abs().max(1) as f64;
@@ -173,4 +184,21 @@ fn render_missing_image_placeholder(ctx: &cairo::Context, x: i32, y: i32, w: i32
     ctx.line_to(draw_x, draw_y + height);
     let _ = ctx.stroke();
     let _ = ctx.restore();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ImageBytesIdentity;
+    use std::sync::Arc;
+
+    #[test]
+    fn cache_identity_follows_shared_payload_allocation() {
+        let bytes: Arc<[u8]> = vec![1, 2, 3].into();
+        let shared = ImageBytesIdentity(Arc::clone(&bytes));
+        let same_allocation = ImageBytesIdentity(Arc::clone(&bytes));
+        let equal_bytes_in_another_allocation = ImageBytesIdentity(vec![1, 2, 3].into());
+
+        assert_eq!(shared, same_allocation);
+        assert_ne!(shared, equal_bytes_in_another_allocation);
+    }
 }

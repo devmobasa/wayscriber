@@ -109,7 +109,7 @@ mod tests {
             mime_type: "image/png".to_string(),
             width: 10,
             height: 8,
-            bytes: vec![0; bytes],
+            bytes: vec![0; bytes].into(),
         }
     }
 

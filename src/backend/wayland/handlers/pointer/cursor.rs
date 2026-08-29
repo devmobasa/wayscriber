@@ -373,9 +373,10 @@ impl WaylandState {
         let Some(pointer) = self.current_pointer() else {
             return;
         };
-        let serial = pointer
-            .data::<PointerData>()
-            .and_then(|data| data.latest_button_serial().or(data.latest_enter_serial()));
+        let serial = pointer.data::<PointerData>().and_then(|data| {
+            data.latest_button_serial()
+                .or_else(|| data.latest_enter_serial())
+        });
         let Some(serial) = serial else {
             return;
         };

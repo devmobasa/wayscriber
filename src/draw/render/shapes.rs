@@ -1,16 +1,41 @@
 use super::blur::{render_black_out_rect, render_blur_placeholder};
 use super::highlight::render_click_highlight;
 use super::image::render_image_shape;
-use super::pressure_strokes::render_freehand_pressure_borrowed;
+use super::pressure_strokes::render_packed_freehand_pressure_borrowed;
 use super::primitives::{render_arrow, render_ellipse, render_line, render_polygon, render_rect};
 use super::strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};
 use super::text::{render_sticky_note, render_text_over_with_halo};
 use crate::draw::Color;
-use crate::draw::shape::Shape;
 use crate::draw::shape::{
-    ARROW_LABEL_BACKGROUND, arrow_label_ends, arrow_label_layout, measure_text_with_context,
-    step_marker_outline_thickness, step_marker_radius,
+    ARROW_LABEL_BACKGROUND, ArrowLabel, ArrowStyle, Shape, StepMarkerLabel, arrow_label_ends,
+    arrow_label_layout, measure_text_with_context, step_marker_outline_thickness,
+    step_marker_radius,
 };
+
+#[derive(Clone, Copy)]
+struct ShapeTextOptions {
+    known_background_luminance: Option<f64>,
+    halo_enabled: bool,
+}
+
+struct ArrowRenderSpec<'a> {
+    start: (i32, i32),
+    end: (i32, i32),
+    color: Color,
+    thickness: f64,
+    arrow_length: f64,
+    arrow_angle: f64,
+    head_at_end: bool,
+    style: ArrowStyle,
+    bend: f64,
+    label: Option<&'a ArrowLabel>,
+}
+
+struct StepMarkerRenderSpec<'a> {
+    center: (i32, i32),
+    color: Color,
+    label: &'a StepMarkerLabel,
+}
 
 /// Renders a single shape to a Cairo context.
 ///
@@ -48,6 +73,10 @@ pub fn render_shape_over_with_halo(
     known_background_luminance: Option<f64>,
     text_halo_enabled: bool,
 ) {
+    let text_options = ShapeTextOptions {
+        known_background_luminance,
+        halo_enabled: text_halo_enabled,
+    };
     match shape {
         Shape::Freehand {
             points,
@@ -57,9 +86,7 @@ pub fn render_shape_over_with_halo(
             render_freehand_borrowed(ctx, points, *color, *thick);
         }
         Shape::FreehandPressure { points, color } => {
-            let coords: Vec<(i32, i32)> = points.iter().map(|&(x, y, _)| (x, y)).collect();
-            let thickness: Vec<f32> = points.iter().map(|&(_, _, t)| t).collect();
-            render_freehand_pressure_borrowed(ctx, &coords, &thickness, *color);
+            render_packed_freehand_pressure_borrowed(ctx, points, 0.0, *color);
         }
         Shape::Line {
             x1,
@@ -116,53 +143,22 @@ pub fn render_shape_over_with_halo(
             bend,
             label,
         } => {
-            // Only the label needs these: `render_arrow` reads `head_at_end`
-            // itself. `Double` deliberately ignores the flag here, matching the
-            // outline it draws either way.
-            let (tip_x, tip_y, tail_x, tail_y) =
-                arrow_label_ends(*x1, *y1, *x2, *y2, *head_at_end, *style);
-            render_arrow(
+            render_arrow_shape(
                 ctx,
-                *x1,
-                *y1,
-                *x2,
-                *y2,
-                *color,
-                *thick,
-                *arrow_length,
-                *arrow_angle,
-                *head_at_end,
-                *style,
-                *bend,
+                ArrowRenderSpec {
+                    start: (*x1, *y1),
+                    end: (*x2, *y2),
+                    color: *color,
+                    thickness: *thick,
+                    arrow_length: *arrow_length,
+                    arrow_angle: *arrow_angle,
+                    head_at_end: *head_at_end,
+                    style: *style,
+                    bend: *bend,
+                    label: label.as_ref(),
+                },
+                text_options,
             );
-            if let Some(label) = label {
-                let label_text = label.value.to_string();
-                if let Some(layout) = arrow_label_layout(
-                    tip_x,
-                    tip_y,
-                    tail_x,
-                    tail_y,
-                    *thick,
-                    style.effective_bend(*bend),
-                    &label_text,
-                    label.size,
-                    &label.font_descriptor,
-                ) {
-                    render_text_over_with_halo(
-                        ctx,
-                        layout.x,
-                        layout.y,
-                        &label_text,
-                        *color,
-                        label.size,
-                        &label.font_descriptor,
-                        ARROW_LABEL_BACKGROUND,
-                        None,
-                        known_background_luminance,
-                        text_halo_enabled,
-                    );
-                }
-            }
         }
         Shape::BlurRect {
             x,
@@ -209,78 +205,15 @@ pub fn render_shape_over_with_halo(
             );
         }
         Shape::StepMarker { x, y, color, label } => {
-            let label_text = label.value.to_string();
-            let radius = step_marker_radius(label.value, label.size, &label.font_descriptor);
-            let outline_thickness = step_marker_outline_thickness(label.size);
-            let alpha = color.a.clamp(0.0, 1.0);
-            let fill_color = Color {
-                a: (alpha * 0.9).clamp(0.0, 1.0),
-                ..*color
-            };
-            let brightness = super::color_luminance(*color);
-            let (outline_color, text_color) = if brightness > 0.6 {
-                (
-                    Color {
-                        r: 0.05,
-                        g: 0.05,
-                        b: 0.05,
-                        a: 0.85 * alpha,
-                    },
-                    Color {
-                        r: 0.12,
-                        g: 0.12,
-                        b: 0.12,
-                        a: alpha,
-                    },
-                )
-            } else {
-                (
-                    Color {
-                        r: 0.98,
-                        g: 0.98,
-                        b: 0.98,
-                        a: 0.9 * alpha,
-                    },
-                    Color {
-                        r: 0.98,
-                        g: 0.98,
-                        b: 0.98,
-                        a: alpha,
-                    },
-                )
-            };
-            render_click_highlight(
+            render_step_marker_shape(
                 ctx,
-                *x as f64,
-                *y as f64,
-                radius,
-                outline_thickness,
-                fill_color,
-                outline_color,
-                1.0,
+                StepMarkerRenderSpec {
+                    center: (*x, *y),
+                    color: *color,
+                    label,
+                },
+                text_options,
             );
-            let font_desc = label.font_descriptor.to_pango_string(label.size);
-            if let Some(metrics) =
-                measure_text_with_context(ctx, &label_text, &font_desc, label.size, None)
-            {
-                let center_offset_x = metrics.ink_x + metrics.ink_width / 2.0;
-                let center_offset_y = metrics.ink_y + metrics.ink_height / 2.0;
-                let baseline_x = (*x as f64 - center_offset_x).round() as i32;
-                let baseline_y = (*y as f64 - center_offset_y + metrics.baseline).round() as i32;
-                render_text_over_with_halo(
-                    ctx,
-                    baseline_x,
-                    baseline_y,
-                    &label_text,
-                    text_color,
-                    label.size,
-                    &label.font_descriptor,
-                    false,
-                    None,
-                    known_background_luminance,
-                    text_halo_enabled,
-                );
-            }
         }
         Shape::StickyNote {
             x,
@@ -316,6 +249,152 @@ pub fn render_shape_over_with_halo(
             render_image_shape(ctx, *x, *y, *w, *h, data);
         }
     }
+}
+
+fn render_arrow_shape(ctx: &cairo::Context, arrow: ArrowRenderSpec<'_>, text: ShapeTextOptions) {
+    // Only the label needs these: `render_arrow` reads `head_at_end` itself.
+    // `Double` deliberately ignores the flag here, matching the outline it
+    // draws either way.
+    let (tip_x, tip_y, tail_x, tail_y) = arrow_label_ends(
+        arrow.start.0,
+        arrow.start.1,
+        arrow.end.0,
+        arrow.end.1,
+        arrow.head_at_end,
+        arrow.style,
+    );
+    render_arrow(
+        ctx,
+        arrow.start.0,
+        arrow.start.1,
+        arrow.end.0,
+        arrow.end.1,
+        arrow.color,
+        arrow.thickness,
+        arrow.arrow_length,
+        arrow.arrow_angle,
+        arrow.head_at_end,
+        arrow.style,
+        arrow.bend,
+    );
+    let Some(label) = arrow.label else {
+        return;
+    };
+    let label_text = label.value.to_string();
+    let Some(layout) = arrow_label_layout(
+        tip_x,
+        tip_y,
+        tail_x,
+        tail_y,
+        arrow.thickness,
+        arrow.style.effective_bend(arrow.bend),
+        &label_text,
+        label.size,
+        &label.font_descriptor,
+    ) else {
+        return;
+    };
+    render_text_over_with_halo(
+        ctx,
+        layout.x,
+        layout.y,
+        &label_text,
+        arrow.color,
+        label.size,
+        &label.font_descriptor,
+        ARROW_LABEL_BACKGROUND,
+        None,
+        text.known_background_luminance,
+        text.halo_enabled,
+    );
+}
+
+fn render_step_marker_shape(
+    ctx: &cairo::Context,
+    marker: StepMarkerRenderSpec<'_>,
+    text: ShapeTextOptions,
+) {
+    let label_text = marker.label.value.to_string();
+    let radius = step_marker_radius(
+        marker.label.value,
+        marker.label.size,
+        &marker.label.font_descriptor,
+    );
+    let outline_thickness = step_marker_outline_thickness(marker.label.size);
+    let alpha = marker.color.a.clamp(0.0, 1.0);
+    let fill_color = Color {
+        a: (alpha * 0.9).clamp(0.0, 1.0),
+        ..marker.color
+    };
+    let brightness = super::color_luminance(marker.color);
+    let (outline_color, text_color) = if brightness > 0.6 {
+        (
+            Color {
+                r: 0.05,
+                g: 0.05,
+                b: 0.05,
+                a: 0.85 * alpha,
+            },
+            Color {
+                r: 0.12,
+                g: 0.12,
+                b: 0.12,
+                a: alpha,
+            },
+        )
+    } else {
+        (
+            Color {
+                r: 0.98,
+                g: 0.98,
+                b: 0.98,
+                a: 0.9 * alpha,
+            },
+            Color {
+                r: 0.98,
+                g: 0.98,
+                b: 0.98,
+                a: alpha,
+            },
+        )
+    };
+    render_click_highlight(
+        ctx,
+        f64::from(marker.center.0),
+        f64::from(marker.center.1),
+        radius,
+        outline_thickness,
+        fill_color,
+        outline_color,
+        1.0,
+    );
+    let font_desc = marker
+        .label
+        .font_descriptor
+        .to_pango_string(marker.label.size);
+    let Some(metrics) =
+        measure_text_with_context(ctx, &label_text, &font_desc, marker.label.size, None)
+    else {
+        return;
+    };
+    let center_offset_x = metrics.ink_x + metrics.ink_width / 2.0;
+    let center_offset_y = metrics.ink_y + metrics.ink_height / 2.0;
+    let baseline_x = (f64::from(marker.center.0) - center_offset_x).round() as i32;
+    let baseline_y =
+        (f64::from(marker.center.1) - center_offset_y + metrics.baseline).round() as i32;
+    render_text_over_with_halo(
+        ctx,
+        baseline_x,
+        baseline_y,
+        &label_text,
+        text_color,
+        marker.label.size,
+        &marker.label.font_descriptor,
+        false,
+        None,
+        text.known_background_luminance,
+        text.halo_enabled,
+    );
 }
 
 #[cfg(test)]

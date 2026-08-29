@@ -5,7 +5,7 @@ const PRESSURE_STROKE_MAX_SUBDIVISIONS: usize = 128;
 const PRESSURE_STROKE_MIN_WIDTH: f64 = 0.1;
 const PRESSURE_STROKE_EPSILON: f64 = 0.000_001;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct PressureStrokeSample {
     x: f64,
     y: f64,
@@ -67,11 +67,35 @@ fn pressure_stroke_samples(
     thicknesses: &[f32],
 ) -> Vec<PressureStrokeSample> {
     let len = points.len().min(thicknesses.len());
-    let mut samples = Vec::with_capacity(len);
+    pressure_stroke_samples_from_iter(
+        points
+            .iter()
+            .zip(thicknesses)
+            .map(|(&(x, y), &width)| (x, y, width)),
+        len,
+    )
+}
 
-    for i in 0..len {
-        let (x, y) = points[i];
-        let width = (thicknesses[i] as f64).max(PRESSURE_STROKE_MIN_WIDTH);
+fn packed_pressure_stroke_samples(
+    points: &[(i32, i32, f32)],
+    thickness_delta: f32,
+) -> Vec<PressureStrokeSample> {
+    pressure_stroke_samples_from_iter(
+        points
+            .iter()
+            .map(|&(x, y, width)| (x, y, width + thickness_delta)),
+        points.len(),
+    )
+}
+
+fn pressure_stroke_samples_from_iter(
+    points: impl Iterator<Item = (i32, i32, f32)>,
+    capacity: usize,
+) -> Vec<PressureStrokeSample> {
+    let mut samples = Vec::with_capacity(capacity);
+
+    for (x, y, width) in points {
+        let width = f64::from(width).max(PRESSURE_STROKE_MIN_WIDTH);
         let current = PressureStrokeSample {
             x: x as f64,
             y: y as f64,
@@ -226,6 +250,26 @@ pub fn render_freehand_pressure_borrowed(
     }
 
     let samples = pressure_stroke_samples(points, thicknesses);
+    render_pressure_samples(ctx, &samples, color);
+}
+
+/// Render packed `(x, y, thickness)` pressure samples without first splitting
+/// the stored stroke into parallel coordinate and thickness buffers.
+pub(crate) fn render_packed_freehand_pressure_borrowed(
+    ctx: &cairo::Context,
+    points: &[(i32, i32, f32)],
+    thickness_delta: f32,
+    color: Color,
+) {
+    if points.is_empty() {
+        return;
+    }
+
+    let samples = packed_pressure_stroke_samples(points, thickness_delta);
+    render_pressure_samples(ctx, &samples, color);
+}
+
+fn render_pressure_samples(ctx: &cairo::Context, samples: &[PressureStrokeSample], color: Color) {
     if samples.is_empty() {
         return;
     }
@@ -234,7 +278,7 @@ pub fn render_freehand_pressure_borrowed(
     ctx.push_group_with_content(cairo::Content::Alpha);
     ctx.set_operator(cairo::Operator::Over);
     ctx.set_source_rgba(1.0, 1.0, 1.0, 1.0);
-    fill_pressure_geometry(ctx, &samples);
+    fill_pressure_geometry(ctx, samples);
 
     if let Ok(mask) = ctx.pop_group() {
         ctx.set_source_rgba(color.r, color.g, color.b, color.a);
@@ -281,6 +325,30 @@ mod tests {
             .unwrap()
             .chunks_exact(4)
             .any(|pixel| pixel[3] > 0)
+    }
+
+    #[test]
+    fn packed_samples_match_parallel_pressure_buffers() {
+        let packed = [(10, 20, 4.0), (30, 40, 8.0), (50, 25, 2.0)];
+        let points = [(10, 20), (30, 40), (50, 25)];
+        let thicknesses = [4.0, 8.0, 2.0];
+
+        assert_eq!(
+            packed_pressure_stroke_samples(&packed, 0.0),
+            pressure_stroke_samples(&points, &thicknesses)
+        );
+    }
+
+    #[test]
+    fn packed_samples_apply_selection_thickness_delta() {
+        let packed = [(10, 20, 4.0), (30, 40, 8.0)];
+        let points = [(10, 20), (30, 40)];
+        let thicknesses = [8.0, 12.0];
+
+        assert_eq!(
+            packed_pressure_stroke_samples(&packed, 4.0),
+            pressure_stroke_samples(&points, &thicknesses)
+        );
     }
 
     #[test]

@@ -98,7 +98,7 @@ fn clipboard_terminal_outcomes_keep_their_existing_event_loop_policy() {
                 mime_type: "image/png".to_string(),
                 width: 1,
                 height: 1,
-                bytes: vec![0, 0, 0, 255],
+                bytes: vec![0, 0, 0, 255].into(),
             }),
         },
         Some(42),

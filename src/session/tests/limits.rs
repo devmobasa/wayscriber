@@ -195,7 +195,7 @@ fn image_frame(bytes: usize) -> crate::draw::Frame {
             mime_type: "image/png".to_string(),
             width: 640,
             height: 360,
-            bytes: pseudo_random_bytes(bytes),
+            bytes: pseudo_random_bytes(bytes).into(),
         },
     });
     frame
@@ -625,7 +625,7 @@ fn save_snapshot_keeps_depth_one_when_visible_payload_is_near_limit() {
                 mime_type: "image/png".to_string(),
                 width: 640,
                 height: 360,
-                bytes: vec![0x35; 96 * 1024],
+                bytes: vec![0x35; 96 * 1024].into(),
             },
         });
         let id = frame.add_shape(large_freehand(40, 0));
@@ -752,7 +752,7 @@ fn add_image_and_annotations(frame: &mut crate::draw::Frame, page_index: usize, 
             mime_type: "image/png".to_string(),
             width: 640,
             height: 360,
-            bytes: vec![0x5a; bytes],
+            bytes: vec![0x5a; bytes].into(),
         },
     });
     let (image_index, image_shape) = frame

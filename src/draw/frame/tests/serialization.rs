@@ -136,7 +136,7 @@ fn image_bounds_history_serializes_without_duplicate_image_payloads() {
             mime_type: "image/png".to_string(),
             width: 16,
             height: 16,
-            bytes,
+            bytes: bytes.into(),
         },
     });
     let index = frame.find_index(id).unwrap();
