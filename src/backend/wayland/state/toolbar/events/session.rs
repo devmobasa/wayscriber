@@ -11,7 +11,6 @@ pub(super) fn populate_session_snapshot(
 ) {
     let active_path = options.map(|options| options.session_file_path());
     snapshot.active_session_name = active_path.as_deref().map(session_display_name);
-    snapshot.active_session_path = active_path.clone();
     // Recents are only read (from the catalog on disk) while the top strip's
     // Session popover is up.
     snapshot.recent_sessions = if snapshot.session_popover_open {
@@ -19,6 +18,7 @@ pub(super) fn populate_session_snapshot(
     } else {
         Vec::new()
     };
+    snapshot.active_session_path = active_path;
 }
 
 fn session_display_name(path: &Path) -> String {
