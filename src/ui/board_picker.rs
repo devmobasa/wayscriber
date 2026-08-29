@@ -37,7 +37,7 @@ pub(crate) fn render_board_picker_with_halo(
     }
 
     let layout = match input_state.board_picker_layout() {
-        Some(layout) => *layout,
+        Some(layout) => layout,
         None => return,
     };
 

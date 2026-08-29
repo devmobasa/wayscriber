@@ -10,7 +10,7 @@ const PALETTE_SWATCH_GAP: f64 = 6.0;
 pub(super) fn render_board_palette(
     ctx: &cairo::Context,
     input_state: &InputState,
-    layout: crate::input::state::BoardPickerLayout,
+    layout: &crate::input::state::BoardPickerLayout,
 ) {
     if layout.palette_rows == 0 || layout.palette_cols == 0 {
         return;

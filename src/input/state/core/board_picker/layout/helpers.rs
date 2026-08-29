@@ -18,7 +18,7 @@ pub(super) struct PagePanelInfo {
 impl InputState {
     pub(super) fn board_picker_page_panel_info(
         &self,
-        layout: BoardPickerLayout,
+        layout: &BoardPickerLayout,
         board_index: usize,
     ) -> Option<PagePanelInfo> {
         if !layout.page_panel_enabled {
@@ -53,13 +53,13 @@ impl InputState {
         })
     }
 
-    pub(super) const fn board_picker_page_row_stride(layout: BoardPickerLayout) -> f64 {
+    pub(super) const fn board_picker_page_row_stride(layout: &BoardPickerLayout) -> f64 {
         layout.page_thumb_height + PAGE_NAME_HEIGHT + PAGE_NAME_PADDING + layout.page_thumb_gap
     }
 
     pub(super) fn board_picker_slot_to_page_index(
         &self,
-        layout: BoardPickerLayout,
+        layout: &BoardPickerLayout,
         board_index: usize,
         slot: usize,
     ) -> Option<usize> {
@@ -73,7 +73,7 @@ impl InputState {
 
     pub(super) fn board_picker_page_index_to_slot(
         &self,
-        layout: BoardPickerLayout,
+        layout: &BoardPickerLayout,
         board_index: usize,
         page_index: usize,
     ) -> Option<usize> {
@@ -87,7 +87,7 @@ impl InputState {
 
     pub(super) fn board_picker_page_thumb_origin(
         &self,
-        layout: BoardPickerLayout,
+        layout: &BoardPickerLayout,
         board_index: usize,
         page_index: usize,
     ) -> Option<(PagePanelInfo, usize, usize, f64, f64)> {
@@ -98,7 +98,7 @@ impl InputState {
 
     pub(super) fn board_picker_page_thumb_origin_for_slot(
         &self,
-        layout: BoardPickerLayout,
+        layout: &BoardPickerLayout,
         info: PagePanelInfo,
         slot: usize,
     ) -> Option<(PagePanelInfo, usize, usize, f64, f64)> {

@@ -113,7 +113,7 @@ impl InputState {
         Some(BoardPickerCursorHint::Default)
     }
 
-    pub(crate) fn mark_board_picker_region(&mut self, layout: BoardPickerLayout) {
+    pub(crate) fn mark_board_picker_region(&mut self, layout: &BoardPickerLayout) {
         let x = layout.origin_x.floor() as i32;
         let y = layout.origin_y.floor() as i32;
         let width = layout.width.ceil() as i32 + 2;

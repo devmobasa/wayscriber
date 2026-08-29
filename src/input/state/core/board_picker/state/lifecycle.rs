@@ -62,7 +62,7 @@ impl InputState {
 
     pub(crate) fn close_board_picker(&mut self) {
         if let Some(layout) = self.board_picker_layout {
-            self.mark_board_picker_region(layout);
+            self.mark_board_picker_region(&layout);
         }
         // Board picker dims the entire screen; ensure full redraw when closing.
         self.dirty_tracker.mark_full();
