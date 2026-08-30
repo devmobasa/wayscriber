@@ -14,6 +14,9 @@ pub(super) fn create_overlay_surface(
 ) -> Result<()> {
     // Create surface using layer-shell when available, otherwise fall back to xdg-shell
     let wl_surface = state.compositor_state.create_surface(qh);
+    if state.layer_shell.is_some() {
+        state.begin_main_layer_focus_acquisition();
+    }
     if let Some(layer_shell) = state.layer_shell.as_ref() {
         let layer = state.main_surface_layer();
         info!("Creating layer shell surface in {:?} layer", layer);

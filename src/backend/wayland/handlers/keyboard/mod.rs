@@ -69,6 +69,15 @@ impl KeyboardHandler for WaylandState {
             self.set_overlay_ready(true);
             debug!("Overlay ready for keybinds");
         }
+        let is_current_main_layer_surface =
+            !self.surface.is_xdg_window() && self.surface.is_surface(surface);
+        let acquisition_was_pending = self.main_layer_focus_acquiring();
+        if self.try_complete_main_layer_focus_acquisition(is_current_main_layer_surface) {
+            debug!("Initial main-layer keyboard focus acquired");
+            self.refresh_keyboard_interactivity();
+        } else if is_current_main_layer_surface && acquisition_was_pending {
+            debug!("Ignoring superseded main-layer keyboard enter during focus acquisition");
+        }
     }
 
     fn leave(
