@@ -4,7 +4,7 @@ use wayscriber::config::keybindings::KeybindingsConfig;
 use wayscriber::config::{Action, Config, KeybindingAuthorship};
 
 use super::super::error::FormError;
-use super::field::KeybindingField;
+use super::field::{KeybindingField, keybinding_fields};
 use super::parse::parse_keybinding_list;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -30,7 +30,7 @@ pub struct KeybindingEntry {
 
 impl KeybindingsDraft {
     pub fn from_config(config: &KeybindingsConfig) -> Self {
-        let entries: Vec<KeybindingEntry> = KeybindingField::all()
+        let entries: Vec<KeybindingEntry> = keybinding_fields()
             .into_iter()
             .map(|field| KeybindingEntry {
                 value: field.get(config).join(", "),

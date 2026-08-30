@@ -15,7 +15,7 @@ pub use edit::{
     AppendOutcome, ShortcutTextEditor, append_binding, field_matches_defaults, remove_binding,
     reset_field, reset_fields, reset_tooltip, serialize_bindings,
 };
-pub use field::KeybindingField;
+pub use field::{KeybindingField, keybinding_fields, keybinding_tab};
 pub use manager::{
     ShortcutManagerFilter, ShortcutManagerSort, ShortcutManagerSummary, field_matching_search_term,
     next_review_conflict,

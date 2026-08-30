@@ -11,7 +11,7 @@ use super::conflicts::{
 };
 use super::draft::KeybindingsDraft;
 use super::edit::field_matches_defaults;
-use super::field::KeybindingField;
+use super::field::{KeybindingField, keybinding_fields, keybinding_tab};
 use super::parse::parse_keybindings;
 use crate::models::KeybindingsTabId;
 
@@ -154,7 +154,7 @@ pub struct ShortcutManagerSummary {
 impl ShortcutManagerSummary {
     pub fn from_drafts(draft: &KeybindingsDraft, defaults: &KeybindingsDraft) -> Self {
         let contested = contested_fields(draft);
-        let rows = KeybindingField::all()
+        let rows = keybinding_fields()
             .into_iter()
             .map(|field| row_for(draft, defaults, field, contested.contains(&field)))
             .collect();
@@ -184,7 +184,7 @@ impl ShortcutManagerSummary {
         let mut fields: Vec<KeybindingField> = self
             .rows
             .iter()
-            .filter(|row| scope.is_none_or(|tab| row.field.tab() == tab))
+            .filter(|row| scope.is_none_or(|tab| keybinding_tab(row.field) == tab))
             .filter(|row| search_visible(row.field))
             .filter(|row| row_matches_filter(row, filter))
             .map(|row| row.field)
@@ -202,7 +202,7 @@ pub fn field_matching_search_term(term: &str) -> Option<KeybindingField> {
     }
     let mut key_match = None;
     let mut label_match = None;
-    for field in KeybindingField::all() {
+    for field in keybinding_fields() {
         if compact_term(&field.field_key().replace('_', " ")) == needle {
             key_match = Some(field);
         }
@@ -220,7 +220,7 @@ pub fn next_review_conflict(
     Shortcut,
     Vec<super::conflicts::ShortcutClaim>,
 )> {
-    for field in KeybindingField::all() {
+    for field in keybinding_fields() {
         let Some(value) = draft.value_for(field) else {
             continue;
         };
@@ -320,9 +320,7 @@ fn is_device_shortcut(binding: &Shortcut) -> bool {
 }
 
 fn field_has_legacy_tablet(draft: &KeybindingsDraft, field: KeybindingField) -> bool {
-    let Some(action) = field.action() else {
-        return false;
-    };
+    let action = field.action();
     draft.legacy_tablet.stylus_primary == Some(action)
         || draft.legacy_tablet.stylus_secondary == Some(action)
 }
@@ -334,7 +332,7 @@ fn contested_fields(draft: &KeybindingsDraft) -> Vec<KeybindingField> {
             contested.push(field);
         }
     };
-    for field in KeybindingField::all() {
+    for field in keybinding_fields() {
         if field_has_internal_duplicate(draft, field) {
             mark(field);
         }
@@ -376,9 +374,7 @@ fn mark_legacy_claimants(draft: &KeybindingsDraft, mark: &mut impl FnMut(Keybind
 }
 
 fn field_for_action(action: Action) -> Option<KeybindingField> {
-    KeybindingField::all()
-        .into_iter()
-        .find(|field| field.action() == Some(action))
+    KeybindingField::from_action(action)
 }
 
 fn row_matches_filter(row: &ShortcutManagerRow, filter: ShortcutManagerFilter) -> bool {
@@ -433,7 +429,7 @@ mod tests {
         let (draft, defaults) = drafts();
         let summary = ShortcutManagerSummary::from_drafts(&draft, &defaults);
         let fields: Vec<_> = summary.rows().iter().map(|row| row.field).collect();
-        assert_eq!(fields, KeybindingField::all());
+        assert_eq!(fields, keybinding_fields());
         let mut seen = Vec::new();
         for field in fields {
             assert!(
@@ -592,7 +588,7 @@ mod tests {
         assert!(
             visible
                 .iter()
-                .all(|field| field.tab() == KeybindingsTabId::History)
+                .all(|field| keybinding_tab(*field) == KeybindingsTabId::History)
         );
     }
 

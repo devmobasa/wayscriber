@@ -55,7 +55,7 @@ pub fn onboarding_hints_destination() -> ConfiguratorDestination {
 /// A keybinding subtab, mirroring the configurator's own Keybindings sections.
 ///
 /// Duplicated rather than shared because the configurator's tab types are
-/// private to its UI; the mapping between the two lives in the configurator.
+/// private to its UI; the small conversion between the two lives there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeybindingsSection {
     General,
@@ -81,9 +81,9 @@ pub enum KeybindingsSection {
 /// configurator's, not the config file's — it splits
 /// `[keybindings].core` across General, Drawing, and History and merges the
 /// capture and zoom groups — so the correspondence cannot be derived from the
-/// storage layout and is spelled out here instead. `keybindings_tab_matches_the_action_section`
-/// (configurator crate, which can see both sides) is what keeps the two
-/// agreeing.
+/// storage layout and is spelled out here instead.
+/// `every_action_section_matches_the_field_tab_that_holds_it` (in the
+/// configurator crate, which can see both sides) keeps the conversion aligned.
 pub fn keybindings_section_for_action(action: Action) -> Option<KeybindingsSection> {
     let section = match action {
         Action::Exit | Action::OpenConfigurator | Action::OpenAbout => KeybindingsSection::General,

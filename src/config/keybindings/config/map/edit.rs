@@ -7,6 +7,80 @@ macro_rules! define_action_binding_accessors {
         ;
         unsupported: [$( $unsupported:ident ),+ $(,)?]
     ) => {
+        /// One action backed by a persisted `[keybindings]` field.
+        ///
+        /// The variants and their storage access are generated from the same
+        /// declaration, so consumers cannot maintain a second incomplete
+        /// action-to-field registry.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub enum ConfigurableAction {
+            $( $action, )+
+        }
+
+        impl ConfigurableAction {
+            const ALL: &'static [Self] = &[$(Self::$action,)+];
+            const ACTIONS: &'static [Action] = &[$(Action::$action,)+];
+
+            /// Every persisted keybinding field in canonical storage order.
+            pub const fn all() -> &'static [Self] {
+                Self::ALL
+            }
+
+            const fn actions() -> &'static [Action] {
+                Self::ACTIONS
+            }
+
+            /// The runtime action controlled by this field.
+            pub const fn action(self) -> Action {
+                match self {
+                    $(Self::$action => Action::$action,)+
+                }
+            }
+
+            /// The persisted field for a runtime action, when it has one.
+            pub const fn from_action(action: Action) -> Option<Self> {
+                match action {
+                    $(Action::$action => Some(Self::$action),)+
+                    $(Action::$unsupported)|+ => None,
+                }
+            }
+
+            /// The flattened `[keybindings]` TOML key for this field.
+            pub const fn field_key(self) -> &'static str {
+                match self {
+                    $(Self::$action => stringify!($field),)+
+                }
+            }
+
+            /// Resolve a flattened `[keybindings]` TOML key.
+            pub fn from_field_key(key: &str) -> Option<Self> {
+                match key {
+                    $(stringify!($field) => Some(Self::$action),)+
+                    _ => None,
+                }
+            }
+
+            /// Read this field's persisted bindings.
+            pub fn get(self, config: &KeybindingsConfig) -> &[String] {
+                match self {
+                    $(Self::$action => config.$group.$field.as_slice(),)+
+                }
+            }
+
+            /// Replace this field's persisted bindings.
+            pub fn set(self, config: &mut KeybindingsConfig, bindings: Vec<String>) {
+                let target = match self {
+                    $(Self::$action => &mut config.$group.$field,)+
+                };
+                *target = bindings;
+            }
+
+            /// Canonical user-facing label for this action.
+            pub fn label(self) -> &'static str {
+                crate::config::action_label(self.action())
+            }
+        }
+
         impl KeybindingsConfig {
             /// Every action with a persisted `[keybindings]` field, in the
             /// order declared below (the same group order the keymap
@@ -14,16 +88,13 @@ macro_rules! define_action_binding_accessors {
             /// list automatically, which is what lets migrations and the
             /// defaults snapshot test see a newcomer without being told.
             pub fn configurable_actions() -> &'static [Action] {
-                &[$(Action::$action,)+]
+                ConfigurableAction::actions()
             }
 
             /// Bindings stored for one configurable action. Runtime-only
             /// actions return `None` because they have no persisted field.
             pub fn bindings_for_action(&self, action: Action) -> Option<&[String]> {
-                match action {
-                    $(Action::$action => Some(self.$group.$field.as_slice()),)+
-                    $(Action::$unsupported)|+ => None,
-                }
+                ConfigurableAction::from_action(action).map(|field| field.get(self))
             }
 
             /// The `[keybindings]` key that stores one action's bindings.
@@ -31,10 +102,7 @@ macro_rules! define_action_binding_accessors {
             /// and nothing is renamed), so this doubles as the config path used
             /// in diagnostics. Runtime-only actions return `None`.
             pub fn config_key_for_action(action: Action) -> Option<&'static str> {
-                match action {
-                    $(Action::$action => Some(stringify!($field)),)+
-                    $(Action::$unsupported)|+ => None,
-                }
+                ConfigurableAction::from_action(action).map(ConfigurableAction::field_key)
             }
 
             /// Replace every binding for one action. The caller validates the
@@ -44,15 +112,10 @@ macro_rules! define_action_binding_accessors {
                 action: Action,
                 bindings: Vec<String>,
             ) -> Result<(), String> {
-                let target = match action {
-                    $(Action::$action => &mut self.$group.$field,)+
-                    $(Action::$unsupported)|+ => {
-                        return Err(format!(
-                            "{action:?} does not have a configurable keybinding"
-                        ));
-                    }
+                let Some(field) = ConfigurableAction::from_action(action) else {
+                    return Err(format!("{action:?} does not have a configurable keybinding"));
                 };
-                *target = bindings;
+                field.set(self, bindings);
                 Ok(())
             }
         }
@@ -236,6 +299,49 @@ define_action_binding_accessors! {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn configurable_action_identity_and_storage_share_one_registry() {
+        let config = KeybindingsConfig::default();
+
+        assert_eq!(
+            ConfigurableAction::all().len(),
+            KeybindingsConfig::configurable_actions().len()
+        );
+        for &field in ConfigurableAction::all() {
+            let action = field.action();
+            assert_eq!(ConfigurableAction::from_action(action), Some(field));
+            assert_eq!(
+                ConfigurableAction::from_field_key(field.field_key()),
+                Some(field)
+            );
+            assert_eq!(
+                KeybindingsConfig::config_key_for_action(action),
+                Some(field.field_key())
+            );
+            assert_eq!(config.bindings_for_action(action), Some(field.get(&config)));
+        }
+    }
+
+    #[test]
+    fn configurable_action_replaces_and_unbinds_its_own_storage() {
+        let mut config = KeybindingsConfig::default();
+        let field = ConfigurableAction::SelectPenTool;
+
+        field.set(&mut config, vec!["Ctrl+P".into()]);
+        assert_eq!(field.get(&config), ["Ctrl+P"]);
+
+        field.set(&mut config, Vec::new());
+        assert!(field.get(&config).is_empty());
+    }
+
+    #[test]
+    fn configurable_action_uses_canonical_action_labels() {
+        assert_eq!(
+            ConfigurableAction::CaptureRegionInteractive.label(),
+            crate::config::action_label(Action::CaptureRegionInteractive)
+        );
+    }
 
     #[test]
     fn generic_action_access_reads_replaces_and_unbinds() {

@@ -1,6 +1,6 @@
-use wayscriber::configurator_destination::{ConfiguratorScreen, KeybindingsSection};
+use wayscriber::configurator_destination::ConfiguratorScreen;
 
-use crate::models::{KeybindingsTabId, SearchQuery, TabId, UiTabId};
+use crate::models::{SearchQuery, TabId, UiTabId};
 
 use super::effects::Effect;
 use super::state::ConfiguratorApp;
@@ -85,7 +85,7 @@ impl ConfiguratorApp {
                 // No section means the whole manager; a named section keeps
                 // the destination contract of opening that category.
                 if let Some(section) = section {
-                    self.active_keybindings_tab = keybindings_tab(section);
+                    self.active_keybindings_tab = section.into();
                     self.keybindings_show_all = false;
                 } else {
                     self.keybindings_show_all = true;
@@ -100,31 +100,17 @@ impl ConfiguratorApp {
     }
 }
 
-fn keybindings_tab(section: KeybindingsSection) -> KeybindingsTabId {
-    match section {
-        KeybindingsSection::General => KeybindingsTabId::General,
-        KeybindingsSection::Drawing => KeybindingsTabId::Drawing,
-        KeybindingsSection::Tools => KeybindingsTabId::Tools,
-        KeybindingsSection::Selection => KeybindingsTabId::Selection,
-        KeybindingsSection::History => KeybindingsTabId::History,
-        KeybindingsSection::Boards => KeybindingsTabId::Boards,
-        KeybindingsSection::UiModes => KeybindingsTabId::UiModes,
-        KeybindingsSection::CaptureView => KeybindingsTabId::CaptureView,
-        KeybindingsSection::Presets => KeybindingsTabId::Presets,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::Path;
 
     use wayscriber::config::ConfigDocument;
-    use wayscriber::configurator_destination::ConfiguratorDestination;
+    use wayscriber::configurator_destination::{ConfiguratorDestination, KeybindingsSection};
 
     use super::*;
     use crate::app::state::StatusMessage;
     use crate::messages::CommandMessage;
-    use crate::models::StartupRequest;
+    use crate::models::{KeybindingsTabId, StartupRequest, keybinding_fields, keybinding_tab};
     use crate::test_temp::{TempDir, tempdir};
 
     fn status_text(status: &StatusMessage) -> String {
@@ -374,19 +360,15 @@ mod tests {
         assert_eq!(app.active_tab, TabId::Boards);
     }
 
-    /// The overlay names a shortcut's section from the main crate, which
-    /// cannot see `KeybindingField::tab()`; this side can see both, so it is
-    /// where the two groupings are held together. The configurator splits the
-    /// config's `core` group across three tabs and merges capture with zoom, so
-    /// nothing derives one from the other — only this check keeps a new or
-    /// moved action from sending the user to the wrong subtab.
+    /// Both the overlay destination and configurator row derive their section
+    /// from the core action registry. This check keeps that shared mapping and
+    /// the configurator's tab conversion aligned for every persisted action.
     #[test]
     fn every_action_section_matches_the_field_tab_that_holds_it() {
-        use crate::models::KeybindingField;
         use wayscriber::config::keybindings::KeybindingsConfig;
         use wayscriber::configurator_destination::keybindings_section_for_action;
 
-        let fields = KeybindingField::all();
+        let fields = keybinding_fields();
         let actions = KeybindingsConfig::configurable_actions();
         assert_eq!(
             fields.len(),
@@ -405,8 +387,8 @@ mod tests {
                 .unwrap_or_else(|| panic!("{action:?} names no Keybindings section"));
 
             assert_eq!(
-                keybindings_tab(section),
-                field.tab(),
+                KeybindingsTabId::from(section),
+                keybinding_tab(*field),
                 "{action:?} would open the wrong Keybindings subtab"
             );
         }
@@ -430,7 +412,7 @@ mod tests {
             let ConfiguratorScreen::Keybindings(Some(section)) = destination.screen() else {
                 panic!("{action:?} should name a Keybindings section");
             };
-            let expected = keybindings_tab(section);
+            let expected = KeybindingsTabId::from(section);
 
             app.active_tab = TabId::Keybindings;
             app.active_keybindings_tab = expected;

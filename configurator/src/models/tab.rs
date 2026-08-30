@@ -118,6 +118,24 @@ pub enum KeybindingsTabId {
     Presets,
 }
 
+impl From<wayscriber::configurator_destination::KeybindingsSection> for KeybindingsTabId {
+    fn from(section: wayscriber::configurator_destination::KeybindingsSection) -> Self {
+        use wayscriber::configurator_destination::KeybindingsSection;
+
+        match section {
+            KeybindingsSection::General => Self::General,
+            KeybindingsSection::Drawing => Self::Drawing,
+            KeybindingsSection::Tools => Self::Tools,
+            KeybindingsSection::Selection => Self::Selection,
+            KeybindingsSection::History => Self::History,
+            KeybindingsSection::Boards => Self::Boards,
+            KeybindingsSection::UiModes => Self::UiModes,
+            KeybindingsSection::CaptureView => Self::CaptureView,
+            KeybindingsSection::Presets => Self::Presets,
+        }
+    }
+}
+
 impl KeybindingsTabId {
     pub const ALL: [KeybindingsTabId; 9] = [
         KeybindingsTabId::General,

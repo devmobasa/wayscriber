@@ -3,7 +3,9 @@ use wayscriber::config::{CURRENT_CONFIG_REVISION, ConfigDocument, Shortcut};
 use crate::app::effects::Effect;
 use crate::app::state::{ConfiguratorApp, PendingConfirmation, StatusMessage};
 use crate::models::keybindings::keyval;
-use crate::models::{KeybindingField, KeyboardModifiers, RecorderDeviceKind, SearchQuery};
+use crate::models::{
+    KeybindingField, KeyboardModifiers, RecorderDeviceKind, SearchQuery, keybinding_tab,
+};
 use crate::test_temp::TempDir;
 
 fn status_contains(status: &StatusMessage, needle: &str) -> bool {
@@ -740,6 +742,6 @@ fn jump_to_conflict_selects_the_other_claimant() {
         .expect("a claimant to jump to");
     let _ = app.handle_shortcut_manager_jump_to(jump);
     assert_eq!(app.selected_keybinding, Some(jump));
-    assert_eq!(app.active_keybindings_tab, jump.tab());
+    assert_eq!(app.active_keybindings_tab, keybinding_tab(jump));
     assert!(!app.is_dirty);
 }
