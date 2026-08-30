@@ -93,6 +93,7 @@ impl Frame {
                 insert_index -= 1;
             }
             self.shapes.insert(insert_index, shape);
+            self.bump_shape_order_generation();
         }
     }
 

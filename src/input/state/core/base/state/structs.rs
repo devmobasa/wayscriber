@@ -6,7 +6,7 @@ use super::super::super::{
     color_picker_popup::{
         ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, HexPasteTarget,
     },
-    index::SpatialGrid,
+    index::SpatialIndexCache,
     menus::{ContextMenuLayout, ContextMenuState},
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
     radial_menu::{RadialMenuLayout, RadialMenuState},
@@ -622,8 +622,8 @@ pub struct InputState {
     /// inter-piece gap) so its release is still consumed but fires nothing;
     /// `None` means no chip press is pending.
     pub(in crate::input::state) zoom_chip_press_pending: crate::ui::ZoomChipPress,
-    /// Optional spatial index for accelerating hit-testing when many shapes are present
-    pub(in crate::input::state::core) spatial_index: Option<SpatialGrid>,
+    /// Spatial grid plus guarded ShapeId-to-z-order indices for large-frame hit-testing.
+    pub(in crate::input::state::core) spatial_index: Option<SpatialIndexCache>,
     /// Last known pointer position in screen coordinates (for overlays and hover refresh)
     pub(in crate::input::state::core) last_pointer_position: (i32, i32),
     /// Last known pointer position in canvas/world coordinates
