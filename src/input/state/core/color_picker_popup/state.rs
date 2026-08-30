@@ -7,8 +7,8 @@ use crate::input::state::InputState;
 use crate::input::state::QuickColorEdit;
 
 use super::{
-    ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, HexPasteTarget,
-    PickerDrag, color_to_hex, hsv_to_rgb, parse_hex_color, rgb_to_hsv,
+    ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, PickerDrag,
+    color_to_hex, hsv_to_rgb, parse_hex_color, rgb_to_hsv,
 };
 
 fn hex_is_complete_for_live_preview(value: &str) -> bool {
@@ -142,7 +142,9 @@ impl InputState {
     /// filesystem, so the accept records what it decided and the backend drains
     /// it — and raises the toast, which depends on whether the write landed.
     fn request_quick_color_edit(&mut self, index: usize, color: Color) {
-        self.pending_quick_color_edit = Some(QuickColorEdit { index, color });
+        self.emit_input_effect(super::super::base::InputEffect::QuickColor(
+            QuickColorEdit { index, color },
+        ));
     }
 
     /// Show a candidate color on the popup's edit target: the swatch it
@@ -281,12 +283,7 @@ impl InputState {
     }
 
     fn cancel_pending_color_picker_paste(&mut self) {
-        if matches!(
-            self.pending_paste_hex,
-            Some(HexPasteTarget::ColorPickerPopup { .. })
-        ) {
-            self.pending_paste_hex = None;
-        }
+        self.discard_pending_color_picker_paste();
     }
 
     pub(in crate::input::state) fn color_picker_popup_note_action_press(

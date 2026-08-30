@@ -14,6 +14,8 @@ mod tools;
 mod ui;
 mod zoom;
 
+pub use edit::ConfigurableAction;
+
 /// One key claimed by more than one action.
 ///
 /// `actions` follows the keymap traversal order (core, selection, tools,

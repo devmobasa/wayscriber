@@ -179,7 +179,7 @@ impl InputState {
         if tool == Some(Tool::Blur)
             && self.blur_style.needs_backdrop()
             && !self.frozen_active
-            && !self.pending_frozen_toggle
+            && !self.pending_frozen_toggle()
         {
             self.request_frozen_toggle();
             self.push_toast(
@@ -448,7 +448,7 @@ impl InputState {
         if self.blur_style.needs_backdrop()
             && self.active_tool() == Tool::Blur
             && !self.frozen_active
-            && !self.pending_frozen_toggle
+            && !self.pending_frozen_toggle()
         {
             self.request_frozen_toggle();
         }

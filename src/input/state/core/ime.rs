@@ -112,7 +112,7 @@ impl InputState {
     pub(crate) fn begin_text_input_session(&mut self) {
         self.text_input_generation = self.text_input_generation.wrapping_add(1);
         self.text_input_revision = 0;
-        self.pending_text_paste.clear();
+        self.clear_pending_text_pastes();
     }
 
     pub(crate) fn note_text_buffer_mutation(&mut self) {

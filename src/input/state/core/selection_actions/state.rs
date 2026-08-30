@@ -76,7 +76,9 @@ impl InputState {
         {
             let frame = self.boards.active_frame_mut();
             for (index, _) in removed.iter().rev() {
-                frame.shapes.remove(*index);
+                frame
+                    .remove_shape_at(*index)
+                    .expect("recorded selection index remains valid during reverse deletion");
             }
             frame.push_undo_action(
                 UndoAction::Delete { shapes: removed },

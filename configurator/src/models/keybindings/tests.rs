@@ -3,7 +3,7 @@ use wayscriber::config::action_meta_iter;
 use wayscriber::config::keybindings::KeybindingsConfig;
 
 use super::draft::KeybindingsDraft;
-use super::field::KeybindingField;
+use super::field::{KeybindingField, keybinding_fields, keybinding_tab};
 use super::parse::{parse_keybinding_list, parse_keybindings};
 use crate::models::KeybindingsTabId;
 
@@ -28,6 +28,24 @@ fn parse_keybinding_list_rejects_unparseable_shortcuts() {
         error.contains("No key specified"),
         "parser error should name the problem: {error}"
     );
+}
+
+#[test]
+fn presentation_order_covers_each_generated_keybinding_field_once() {
+    let fields = keybinding_fields();
+    let unique: std::collections::HashSet<_> = fields.iter().copied().collect();
+
+    assert_eq!(unique.len(), fields.len());
+    assert_eq!(
+        unique.len(),
+        wayscriber::config::ConfigurableAction::all().len()
+    );
+    for field in wayscriber::config::ConfigurableAction::all() {
+        assert!(
+            unique.contains(field),
+            "missing presentation row for {field:?}"
+        );
+    }
 }
 
 #[test]
@@ -75,28 +93,28 @@ fn command_palette_and_full_screen_capture_fields_expose_current_defaults() {
 #[test]
 fn board_pdf_export_keybinding_field_is_visible_and_in_capture_tab() {
     assert!(
-        KeybindingField::all().contains(&KeybindingField::ExportBoardPdfFile),
+        keybinding_fields().contains(&KeybindingField::ExportBoardPdfFile),
         "PDF export field should appear in ordered keybinding list"
     );
     assert!(
-        KeybindingField::all().contains(&KeybindingField::ExportAllBoardsPdfFile),
+        keybinding_fields().contains(&KeybindingField::ExportAllBoardsPdfFile),
         "All-board PDF export field should appear in ordered keybinding list"
     );
     assert_eq!(
-        KeybindingField::ExportBoardPdfFile.tab(),
+        keybinding_tab(KeybindingField::ExportBoardPdfFile),
         KeybindingsTabId::CaptureView
     );
     assert_eq!(
-        KeybindingField::ExportAllBoardsPdfFile.tab(),
+        keybinding_tab(KeybindingField::ExportAllBoardsPdfFile),
         KeybindingsTabId::CaptureView
     );
 }
 
 #[test]
 fn screen_eyedropper_keybinding_field_is_visible_and_in_drawing_tab() {
-    assert!(KeybindingField::all().contains(&KeybindingField::PickScreenColor));
+    assert!(keybinding_fields().contains(&KeybindingField::PickScreenColor));
     assert_eq!(
-        KeybindingField::PickScreenColor.tab(),
+        keybinding_tab(KeybindingField::PickScreenColor),
         KeybindingsTabId::Drawing
     );
 }
@@ -119,14 +137,14 @@ fn screen_eyedropper_keybinding_field_reads_and_writes_config() {
 
 #[test]
 fn chrome_visibility_keybinding_fields_are_visible_and_in_ui_tab() {
-    assert!(KeybindingField::all().contains(&KeybindingField::ToggleFloatingBadge));
-    assert!(KeybindingField::all().contains(&KeybindingField::ToggleZoomChip));
+    assert!(keybinding_fields().contains(&KeybindingField::ToggleFloatingBadge));
+    assert!(keybinding_fields().contains(&KeybindingField::ToggleZoomChip));
     assert_eq!(
-        KeybindingField::ToggleFloatingBadge.tab(),
+        keybinding_tab(KeybindingField::ToggleFloatingBadge),
         KeybindingsTabId::UiModes
     );
     assert_eq!(
-        KeybindingField::ToggleZoomChip.tab(),
+        keybinding_tab(KeybindingField::ToggleZoomChip),
         KeybindingsTabId::UiModes
     );
 }
@@ -173,8 +191,8 @@ fn interactive_region_capture_keybinding_is_visible_and_round_trips() {
     let field = KeybindingField::CaptureRegionInteractive;
     let mut config = KeybindingsConfig::default();
 
-    assert!(KeybindingField::all().contains(&field));
-    assert_eq!(field.tab(), KeybindingsTabId::CaptureView);
+    assert!(keybinding_fields().contains(&field));
+    assert_eq!(keybinding_tab(field), KeybindingsTabId::CaptureView);
     assert_eq!(field.label(), "Capture Region (Interactive)");
     assert_eq!(
         field.get(&config),
@@ -194,8 +212,8 @@ fn measure_mode_keybinding_is_visible_and_round_trips() {
     let field = KeybindingField::MeasureMode;
     let mut config = KeybindingsConfig::default();
 
-    assert!(KeybindingField::all().contains(&field));
-    assert_eq!(field.tab(), KeybindingsTabId::CaptureView);
+    assert!(keybinding_fields().contains(&field));
+    assert_eq!(keybinding_tab(field), KeybindingsTabId::CaptureView);
     assert_eq!(field.label(), "Measure Mode");
     assert!(field.get(&config).is_empty());
 
@@ -204,7 +222,7 @@ fn measure_mode_keybinding_is_visible_and_round_trips() {
 }
 
 /// Saving in the configurator rebuilds `KeybindingsConfig` from `default()` and
-/// writes back only the fields present in `KeybindingField::all()`. A binding
+/// writes back only the fields present in `keybinding_fields()`. A binding
 /// missing from that registry is therefore silently reset to its default the
 /// next time the user saves *any* unrelated setting.
 ///
@@ -273,21 +291,13 @@ fn every_configurable_config_key_resolves_to_a_field() {
 
 #[test]
 fn every_keybinding_field_label_matches_action_meta() {
-    let mut unlabeled = Vec::new();
     let mut mismatched = Vec::new();
-    for field in KeybindingField::all() {
-        let Some(action) = field.action() else {
-            unlabeled.push(field.field_key());
-            continue;
-        };
+    for field in keybinding_fields() {
+        let action = field.action();
         if field.label() != action_label(action) {
             mismatched.push(field.field_key());
         }
     }
-    assert!(
-        unlabeled.is_empty(),
-        "these fields have no Action, so their labels cannot follow action_meta: {unlabeled:?}"
-    );
     assert!(
         mismatched.is_empty(),
         "these fields still use a private label instead of action_meta: {mismatched:?}"

@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use log::{debug, info, warn};
 
 use crate::config::{Config, UpdatesConfig};
+use crate::notification::NotificationError;
 use crate::update_check::{self, AvailableUpdate, CachedStatus, CheckOutcome};
 
 #[cfg(feature = "tray")]
@@ -179,15 +180,27 @@ fn announce(update: &AvailableUpdate, notify_enabled: bool, overlay_active: &Ato
     if !update_check::notification_pending(update) {
         return true;
     }
-    if !send_notification(update) {
-        return false;
+    match send_notification(update) {
+        Ok(()) => {
+            update_check::claim_notification(update);
+            info!("Notified about Wayscriber {}", update.version);
+            true
+        }
+        Err(NotificationError::Unavailable) => {
+            debug!(
+                "Update notification unavailable in this build; leaving Wayscriber {} pending",
+                update.version
+            );
+            true
+        }
+        Err(NotificationError::Delivery(err)) => {
+            debug!("Update notification not delivered: {err}");
+            false
+        }
     }
-    update_check::claim_notification(update);
-    info!("Notified about Wayscriber {}", update.version);
-    true
 }
 
-fn send_notification(update: &AvailableUpdate) -> bool {
+fn send_notification(update: &AvailableUpdate) -> Result<(), NotificationError> {
     let summary = format!("Wayscriber {} is available", update.version);
     let body = notification_body(update_check::current_version(), update);
 
@@ -198,21 +211,17 @@ fn send_notification(update: &AvailableUpdate) -> bool {
         Ok(runtime) => runtime,
         Err(err) => {
             warn!("Failed to create a runtime for the update notification: {err}");
-            return false;
+            return Err(NotificationError::Delivery(format!(
+                "Failed to create a runtime for the update notification: {err}"
+            )));
         }
     };
 
-    match runtime.block_on(crate::notification::send_notification(
+    runtime.block_on(crate::notification::send_notification(
         &summary,
         &body,
         Some(NOTIFICATION_ICON),
-    )) {
-        Ok(()) => true,
-        Err(err) => {
-            debug!("Update notification not delivered: {err}");
-            false
-        }
-    }
+    ))
 }
 
 /// The body states plainly that nothing was installed, and where the steps are.
@@ -273,6 +282,31 @@ mod tests {
         assert!(announce(&update(), false, &AtomicBool::new(false)));
         // Overlay up: unsettled, so the loop tries again shortly.
         assert!(!announce(&update(), true, &AtomicBool::new(true)));
+    }
+
+    #[cfg(not(feature = "dbus"))]
+    #[test]
+    fn unavailable_notifications_settle_without_claiming_the_release() {
+        let _lock = crate::test_env::lock();
+        let cache_home = crate::test_temp::tempdir().expect("temporary cache home");
+        let previous = std::env::var_os(crate::env_vars::XDG_CACHE_HOME_ENV);
+        unsafe {
+            std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, cache_home.path());
+        }
+
+        let update = update();
+        assert!(update_check::notification_pending(&update));
+        assert!(announce(&update, true, &AtomicBool::new(false)));
+        assert!(update_check::notification_pending(&update));
+
+        match previous {
+            Some(value) => unsafe {
+                std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, value);
+            },
+            None => unsafe {
+                std::env::remove_var(crate::env_vars::XDG_CACHE_HOME_ENV);
+            },
+        }
     }
 
     /// A broken config must not resurrect a check the user switched off.

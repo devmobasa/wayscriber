@@ -1,7 +1,10 @@
 use super::WaylandState;
 use crate::{
     config::Action,
-    input::{InputState, Key},
+    input::{
+        InputState, Key,
+        state::{InputEffect, InputEffectDrain},
+    },
 };
 
 /// The input HUD's live state, before and after an input update.
@@ -64,26 +67,32 @@ impl WaylandState {
     }
 
     fn drain_input_action_followups(&mut self) {
-        if let Some(action) = self.input_state.take_pending_zoom_action() {
-            self.handle_zoom_action(action);
-        }
-        if let Some(action) = self.input_state.take_pending_preset_action() {
-            self.handle_preset_action(action);
-        }
-        if let Some(edit) = self.input_state.take_pending_quick_color_edit() {
-            self.handle_quick_color_edit(edit);
-        }
-        if let Some(color) = self.input_state.take_pending_copy_hex_request() {
-            self.handle_copy_hex_color(color);
-        }
-        if let Some(target) = self.input_state.take_pending_paste_hex_request() {
-            self.handle_paste_hex_color(target);
-        }
-        while let Some(request) = self.input_state.take_pending_text_copy() {
-            self.handle_copy_text(request);
-        }
-        while let Some(target) = self.input_state.take_pending_text_paste() {
-            self.handle_paste_text(target);
+        for effect in self
+            .input_state
+            .drain_input_effects(InputEffectDrain::Immediate)
+        {
+            match effect {
+                InputEffect::Zoom(action) => self.handle_zoom_action(action),
+                InputEffect::Preset(action) => self.handle_preset_action(action),
+                InputEffect::QuickColor(edit) => self.handle_quick_color_edit(edit),
+                InputEffect::CopyHex(color) => self.handle_copy_hex_color(color),
+                InputEffect::PasteHex(target) => self.handle_paste_hex_color(target),
+                InputEffect::TextCopy(request) => self.handle_copy_text(request),
+                InputEffect::TextPaste(target) => self.handle_paste_text(target),
+                effect @ (InputEffect::Backend(_)
+                | InputEffect::SpotlightMagnifierFeedback
+                | InputEffect::ToolbarPersistence(_)
+                | InputEffect::KeybindingEdit(_)
+                | InputEffect::OutputFocus(_)
+                | InputEffect::SelectionClipboardPublish(_)
+                | InputEffect::ClipboardPaste(_)
+                | InputEffect::FrozenPass { .. }
+                | InputEffect::EyedropperToggle
+                | InputEffect::OcrPass { .. }
+                | InputEffect::BoardRuntimeUi(_)) => {
+                    unreachable!("immediate drain returned {effect:?}")
+                }
+            }
         }
         self.drain_clipboard_requests();
     }

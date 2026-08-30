@@ -5,7 +5,7 @@ mod runtime;
 #[cfg(feature = "tray")]
 mod shortcut_hint_io;
 
-pub(crate) use runtime::start_system_tray;
+pub(crate) use runtime::{TrayRuntime, start_system_tray};
 
 #[cfg(feature = "tray")]
 use super::types::{

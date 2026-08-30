@@ -3,7 +3,9 @@ use crate::config::{
     Action, RadialMenuMouseBinding, StatusBarItem, StatusBarStyle, StatusPosition, TopDisplayMode,
 };
 use crate::input::state::core::{ContextMenuKind, MenuCommand};
-use crate::input::state::{InputState, PendingBackendAction, PendingToolbarPersistence};
+use crate::input::state::{
+    InputState, PendingBackendAction, PendingToolbarPersistence, TopMenuState,
+};
 use std::collections::HashMap;
 
 fn unbind_chrome_visibility_actions(state: &mut InputState) {
@@ -74,19 +76,25 @@ fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
 
 #[test]
 fn entering_micro_unminimizes_and_closes_top_menus() {
-    let mut state = create_test_input_state();
-    state.toolbar_top_minimized = true;
-    state.toolbar_shapes_expanded = true;
-    state.toolbar_top_overflow_open = true;
+    for menu in [
+        TopMenuState::ShapePicker,
+        TopMenuState::TopOverflow,
+        TopMenuState::CanvasPopover,
+        TopMenuState::SessionPopover,
+        TopMenuState::SettingsPopover,
+    ] {
+        let mut state = create_test_input_state();
+        state.toolbar_top_minimized = true;
+        state.toolbar_top_menu = menu;
 
-    state.handle_action(Action::CycleToolbarDisplay);
-    assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
-    assert!(
-        !state.toolbar_top_minimized,
-        "micro and minimized are exclusive"
-    );
-    assert!(!state.toolbar_shapes_expanded);
-    assert!(!state.toolbar_top_overflow_open);
+        state.handle_action(Action::CycleToolbarDisplay);
+        assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
+        assert!(
+            !state.toolbar_top_minimized,
+            "micro and minimized are exclusive"
+        );
+        assert_eq!(state.toolbar_top_menu, TopMenuState::Closed);
+    }
 }
 
 #[test]

@@ -18,7 +18,7 @@ impl InputState {
     }
 
     pub(super) fn queue_board_runtime_ui_action(&mut self, action: PendingBoardRuntimeUiAction) {
-        self.pending_board_runtime_ui.push(action);
+        self.emit_input_effect(super::super::base::InputEffect::BoardRuntimeUi(action));
     }
 
     pub(super) fn queue_board_identity_available(&mut self, board_id: &str) {

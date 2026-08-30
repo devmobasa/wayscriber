@@ -27,9 +27,15 @@ mod session_preflight_exact;
 mod status_hud;
 mod text_font;
 mod tool_controls;
+mod top_menu;
 mod tour;
 pub(crate) mod utility;
 mod zoom_chip;
+
+#[cfg(test)]
+mod top_menu_tests;
+
+pub(crate) use top_menu::TopMenuState;
 
 pub use base::{
     BLOCKED_ACTION_DURATION_MS, CompositorCapabilities, DesktopEnvironment, DrawingState,
@@ -48,6 +54,7 @@ pub(crate) use base::{
     PendingOnboardingUsage, PendingSelectionClipboardPublish, PendingToolbarPersistence,
     SelectionPublishState, WayscriberClipboardSelection,
 };
+pub(crate) use base::{InputEffect, InputEffectDrain};
 pub(crate) use base::{KeybindingEditOperation, KeybindingEditRequest};
 pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout};
 pub(crate) use captured_image::BoardPasteTarget;

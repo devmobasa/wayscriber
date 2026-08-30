@@ -42,7 +42,9 @@ fn frame_serializes_history() {
     assert_eq!(frame.redo_stack_len(), 1);
 
     let json = serde_json::to_string(&frame).expect("serialize frame");
+    assert!(!json.contains("shape_order_generation"));
     let mut restored: Frame = serde_json::from_str(&json).expect("deserialize frame");
+    assert_eq!(restored.shape_order_generation(), 0);
     assert_eq!(restored.undo_stack_len(), 1);
     assert_eq!(restored.redo_stack_len(), 1);
 

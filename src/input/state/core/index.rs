@@ -1,13 +1,55 @@
 mod grid;
 
 use super::base::InputState;
-use crate::draw::ShapeId;
+use crate::draw::{Frame, ShapeId};
+use crate::input::boards::BoardIdentityGeneration;
 use crate::input::hit_test::{self, HitTestTolerance};
 use std::collections::{HashMap, HashSet};
 
 pub(super) use self::grid::SpatialGrid;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ActiveFrameOrderGuard {
+    board_identity_generation: BoardIdentityGeneration,
+    board_index: usize,
+    page_generation: u64,
+    page_index: usize,
+    shape_count: usize,
+    shape_order_generation: u64,
+}
+
+impl ActiveFrameOrderGuard {
+    fn same_frame(self, other: Self) -> bool {
+        self.board_identity_generation == other.board_identity_generation
+            && self.board_index == other.board_index
+            && self.page_generation == other.page_generation
+            && self.page_index == other.page_index
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct SpatialIndexCache {
+    grid: SpatialGrid,
+    shape_indices: Option<HashMap<ShapeId, usize>>,
+    guard: ActiveFrameOrderGuard,
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static SPATIAL_SHAPE_INDEX_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl InputState {
+    #[cfg(test)]
+    pub(crate) fn reset_spatial_shape_index_build_count() {
+        SPATIAL_SHAPE_INDEX_BUILDS.with(|count| count.set(0));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn spatial_shape_index_build_count() -> usize {
+        SPATIAL_SHAPE_INDEX_BUILDS.with(std::cell::Cell::get)
+    }
+
     /// Returns all shapes intersecting any of the provided points within tolerance.
     pub(crate) fn hit_test_all_for_points(
         &mut self,
@@ -38,28 +80,47 @@ impl InputState {
             return Vec::new();
         }
 
-        // Build a lookup map for O(1) access by ShapeId (avoids O(n) per candidate)
-        let shape_map: HashMap<ShapeId, &crate::draw::DrawnShape> =
-            frame.shapes.iter().map(|s| (s.id, s)).collect();
-
-        // Get candidate ShapeIds from spatial grid, or fall back to all shapes
-        let candidate_ids: Vec<ShapeId> = if let Some(grid) = self.spatial_index.as_ref() {
+        // Resolve grid candidates through the cached z-order map. If no
+        // complete index is available, walking the frame directly avoids
+        // building a throwaway ShapeId map for this query.
+        let guard = self.active_frame_order_guard();
+        let candidate_indices: Vec<usize> = if let Some((index, shape_indices)) = self
+            .spatial_index
+            .as_ref()
+            .filter(|index| index.guard == guard)
+            .and_then(|index| index.shape_indices.as_ref().map(|indices| (index, indices)))
+        {
             let mut unique = HashSet::new();
             for &(x, y) in points {
                 // Scale query radius by tolerance to avoid false negatives
-                for id in grid.query_with_tolerance((x, y), tolerance) {
+                for id in index.grid.query_with_tolerance((x, y), tolerance) {
                     unique.insert(id);
                 }
             }
-            unique.into_iter().collect()
+            let mut indices = Vec::with_capacity(unique.len());
+            let stale = unique.into_iter().any(|id| {
+                let Some(shape_index) = shape_indices.get(&id).copied() else {
+                    return true;
+                };
+                if frame
+                    .shapes
+                    .get(shape_index)
+                    .is_none_or(|shape| shape.id != id)
+                {
+                    return true;
+                }
+                indices.push(shape_index);
+                false
+            });
+            if stale { (0..len).collect() } else { indices }
         } else {
             // Fall back to all shapes
-            frame.shapes.iter().map(|s| s.id).collect()
+            (0..len).collect()
         };
 
         let mut hits = Vec::new();
-        for id in candidate_ids {
-            let Some(drawn) = shape_map.get(&id) else {
+        for index in candidate_indices {
+            let Some(drawn) = frame.shapes.get(index) else {
                 continue;
             };
             let bounds = hit_test::compute_hit_bounds_with_tolerance(drawn, tolerance);
@@ -68,7 +129,7 @@ impl InputState {
                     && hit_test::hit_test_with_tolerance(drawn, (x, y), tolerance)
             });
             if hit {
-                hits.push(id);
+                hits.push(drawn.id);
             }
         }
 
@@ -101,16 +162,46 @@ impl InputState {
             .active_frame()
             .shape(id)
             .map(|drawn| drawn.bounding_box());
+        let guard = self.active_frame_order_guard();
 
-        if let Some(grid) = &mut self.spatial_index {
+        if self
+            .spatial_index
+            .as_ref()
+            .is_some_and(|index| !index.guard.same_frame(guard))
+        {
+            self.spatial_index = None;
+            return;
+        }
+
+        // `Frame::shapes` is public compatibility storage. If a caller
+        // replaced or inserted an id directly, we cannot know which old grid
+        // entry to remove, so rebuild the complete spatial cache.
+        if self
+            .spatial_index
+            .as_ref()
+            .and_then(|index| index.shape_indices.as_ref())
+            .is_some_and(|shape_indices| !shape_indices.contains_key(&id))
+        {
+            self.spatial_index = None;
+            return;
+        }
+
+        if let Some(index) = &mut self.spatial_index {
             // Remove shape from its old cells
-            grid.remove_shape(id);
+            index.grid.remove_shape(id);
 
             // Add shape to its new cells, or retain it as a global candidate
             // when its full bounds cannot be represented by Rect.
             if let Some(bounds) = new_bounds {
-                grid.add_shape(id, bounds);
+                index.grid.add_shape(id, bounds);
             }
+
+            if index.guard.shape_count != guard.shape_count
+                || index.guard.shape_order_generation != guard.shape_order_generation
+            {
+                index.shape_indices = None;
+            }
+            index.guard = guard;
         }
         // If no grid exists, it will be rebuilt on next query if needed
     }
@@ -141,20 +232,59 @@ impl InputState {
             self.spatial_index = None;
             return;
         }
+        let guard = self.active_frame_order_guard();
 
-        // Only rebuild if no grid exists or shape count is way off (> 20% drift)
+        // Rebuild when the active frame or its z-order changed without passing
+        // through incremental invalidation, or shape count drift is excessive.
         let needs_rebuild = match &self.spatial_index {
             None => true,
-            Some(grid) => {
-                let drift = (grid.shape_count() as i64 - len as i64).unsigned_abs() as usize;
-                drift > len / 5 + 1
+            Some(index) => {
+                let drift = (index.grid.shape_count() as i64 - len as i64).unsigned_abs() as usize;
+                index.guard != guard || drift > len / 5 + 1
             }
         };
 
         if needs_rebuild {
             let frame = self.boards.active_frame();
-            self.spatial_index = SpatialGrid::build(frame);
+            self.spatial_index = SpatialGrid::build(frame).map(|grid| SpatialIndexCache {
+                grid,
+                shape_indices: None,
+                guard,
+            });
         }
+
+        if self
+            .spatial_index
+            .as_ref()
+            .is_some_and(|index| index.shape_indices.is_none())
+        {
+            let shape_indices = Self::build_spatial_shape_indices(self.boards.active_frame());
+            if let Some(index) = &mut self.spatial_index {
+                index.shape_indices = Some(shape_indices);
+            }
+        }
+    }
+
+    fn active_frame_order_guard(&self) -> ActiveFrameOrderGuard {
+        ActiveFrameOrderGuard {
+            board_identity_generation: self.boards.board_identity_generation(),
+            board_index: self.boards.active_index(),
+            page_generation: self.boards.active_page_generation(),
+            page_index: self.boards.active_page_index(),
+            shape_count: self.boards.active_frame().shapes.len(),
+            shape_order_generation: self.boards.active_frame().shape_order_generation(),
+        }
+    }
+
+    fn build_spatial_shape_indices(frame: &Frame) -> HashMap<ShapeId, usize> {
+        #[cfg(test)]
+        SPATIAL_SHAPE_INDEX_BUILDS.with(|count| count.set(count.get().saturating_add(1)));
+        frame
+            .shapes
+            .iter()
+            .enumerate()
+            .map(|(index, shape)| (shape.id, index))
+            .collect()
     }
 
     fn hit_test_single(
@@ -188,26 +318,6 @@ impl InputState {
         None
     }
 
-    fn hit_test_by_id(&mut self, id: ShapeId, x: i32, y: i32, tolerance: HitTestTolerance) -> bool {
-        let frame = self.boards.active_frame();
-        let Some(drawn) = frame.shape(id) else {
-            return false;
-        };
-
-        let cached = self.hit_test_cache.get(&id).copied();
-        let bounds =
-            cached.or_else(|| hit_test::compute_hit_bounds_with_tolerance(drawn, tolerance));
-
-        let hit = bounds.as_ref().is_none_or(|rect| rect.contains(x, y))
-            && hit_test::hit_test_for_point_targeting_with_tolerance(drawn, (x, y), tolerance);
-
-        if let Some(bounds) = bounds {
-            self.hit_test_cache.entry(id).or_insert(bounds);
-        }
-
-        hit
-    }
-
     fn hit_test_indices<I>(
         &mut self,
         indices: I,
@@ -236,30 +346,44 @@ impl InputState {
         if len > threshold {
             self.ensure_spatial_index_for_active_frame();
 
-            if let Some(grid) = &self.spatial_index {
+            if let Some(index) = &self.spatial_index {
                 // Use tolerance-aware query to avoid false negatives
-                let candidates = grid.query_with_tolerance((x, y), tolerance);
+                let candidates = index.grid.query_with_tolerance((x, y), tolerance);
+                let index_map = index
+                    .shape_indices
+                    .as_ref()
+                    .expect("spatial shape indices are built with the grid");
 
-                // Build index map for O(1) lookup instead of O(n) find_index per candidate
+                // Sort candidates by their position in the frame (reverse for top-to-bottom).
+                // Public `Frame::shapes` access remains compatibility API, so
+                // fail over to the linear path if a caller bypassed Frame's
+                // generation-tracked mutation methods.
                 let frame = self.boards.active_frame();
-                let index_map: HashMap<ShapeId, usize> = frame
-                    .shapes
-                    .iter()
-                    .enumerate()
-                    .map(|(i, s)| (s.id, i))
-                    .collect();
-
-                // Sort candidates by their position in the frame (reverse for top-to-bottom)
+                let mut stale = false;
                 let mut sorted_candidates: Vec<_> = candidates
                     .into_iter()
-                    .filter_map(|id| index_map.get(&id).map(|&idx| (idx, id)))
+                    .filter_map(|id| {
+                        let Some(shape_index) = index_map.get(&id).copied() else {
+                            stale = true;
+                            return None;
+                        };
+                        if frame
+                            .shapes
+                            .get(shape_index)
+                            .is_none_or(|shape| shape.id != id)
+                        {
+                            stale = true;
+                            return None;
+                        }
+                        Some(shape_index)
+                    })
                     .collect();
-                sorted_candidates.sort_unstable_by_key(|candidate| std::cmp::Reverse(candidate.0));
+                sorted_candidates.sort_unstable_by_key(|&index| std::cmp::Reverse(index));
 
-                for (_, id) in sorted_candidates {
-                    if self.hit_test_by_id(id, x, y, tolerance) {
-                        return Some(id);
-                    }
+                if !stale
+                    && let Some(id) = self.hit_test_indices(sorted_candidates, x, y, tolerance)
+                {
+                    return Some(id);
                 }
             }
         } else {

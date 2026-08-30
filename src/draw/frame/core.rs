@@ -3,6 +3,11 @@ use super::types::{DrawnShape, ShapeId, UndoAction};
 use crate::draw::shape::Shape;
 use serde::Serialize;
 
+#[cfg(test)]
+std::thread_local! {
+    static LINEAR_ID_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Frame {
     #[serde(with = "frame_storage")]
@@ -17,6 +22,11 @@ pub struct Frame {
     pub(super) redo_stack: Vec<UndoAction>,
     #[serde(skip)]
     pub(super) next_shape_id: ShapeId,
+    /// Monotonic guard for cached `ShapeId -> z-order index` lookups.
+    ///
+    /// This is runtime-only: persisted frames rebuild caches after loading.
+    #[serde(skip)]
+    pub(super) shape_order_generation: u64,
 }
 
 impl Default for Frame {
@@ -35,12 +45,16 @@ impl Frame {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             next_shape_id: 1,
+            shape_order_generation: 0,
         }
     }
 
     /// Clears all shapes and history from the frame.
     #[allow(dead_code)]
     pub fn clear(&mut self) {
+        if !self.shapes.is_empty() {
+            self.bump_shape_order_generation();
+        }
         self.shapes.clear();
         self.undo_stack.clear();
         self.redo_stack.clear();
@@ -155,7 +169,23 @@ impl Frame {
 
     /// Finds the index of a shape by id.
     pub fn find_index(&self, id: ShapeId) -> Option<usize> {
+        #[cfg(test)]
+        LINEAR_ID_LOOKUPS.with(|count| count.set(count.get().saturating_add(1)));
         self.shapes.iter().position(|shape| shape.id == id)
+    }
+
+    pub(crate) fn shape_order_generation(&self) -> u64 {
+        self.shape_order_generation
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reset_linear_id_lookup_count() {
+        LINEAR_ID_LOOKUPS.with(|count| count.set(0));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn linear_id_lookup_count() -> usize {
+        LINEAR_ID_LOOKUPS.with(std::cell::Cell::get)
     }
 
     /// Returns a reference to a shape by id.
@@ -171,7 +201,16 @@ impl Frame {
     /// Removes a shape by id, returning its index and data.
     pub fn remove_shape_by_id(&mut self, id: ShapeId) -> Option<(usize, DrawnShape)> {
         let index = self.find_index(id)?;
-        Some((index, self.shapes.remove(index)))
+        self.remove_shape_at(index).map(|shape| (index, shape))
+    }
+
+    pub(crate) fn remove_shape_at(&mut self, index: usize) -> Option<DrawnShape> {
+        if index >= self.shapes.len() {
+            return None;
+        }
+        let shape = self.shapes.remove(index);
+        self.bump_shape_order_generation();
+        Some(shape)
     }
 
     /// Moves a shape from one index to another.
@@ -188,6 +227,7 @@ impl Frame {
             insert_index -= 1;
         }
         self.shapes.insert(insert_index, shape);
+        self.bump_shape_order_generation();
         Some(())
     }
 
@@ -201,6 +241,7 @@ impl Frame {
     pub(super) fn insert_existing(&mut self, index: usize, drawn: DrawnShape) {
         self.mark_id_used(drawn.id);
         self.shapes.insert(index, drawn);
+        self.bump_shape_order_generation();
     }
 
     pub(super) fn generate_id(&mut self) -> ShapeId {
@@ -226,6 +267,10 @@ impl Frame {
             .unwrap_or(0);
 
         self.next_shape_id = shapes_max.max(history_max).saturating_add(1);
+    }
+
+    pub(super) fn bump_shape_order_generation(&mut self) {
+        self.shape_order_generation = self.shape_order_generation.wrapping_add(1);
     }
 }
 

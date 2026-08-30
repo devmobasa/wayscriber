@@ -597,8 +597,8 @@ pub enum KeybindingEditOperation {
 /// These queue rather than replace one another. Each is a separate write with
 /// its own answer and its own toast, so a request the user made cannot be
 /// dropped by the next one arriving before the backend drains — which is why
-/// they ride `InputState::pending_keybinding_edits` and not the single-slot
-/// [`PendingBackendAction`].
+/// they ride the outbox's FIFO `InputEffect::KeybindingEdit` policy rather than
+/// the last-wins [`PendingBackendAction`] policy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeybindingEditRequest {
     pub action: Action,

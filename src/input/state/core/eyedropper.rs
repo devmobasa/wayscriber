@@ -67,11 +67,7 @@ impl EyedropperUiState {
 
 impl InputState {
     pub(crate) fn request_eyedropper_toggle(&mut self) {
-        self.pending_eyedropper_toggle = true;
-    }
-
-    pub(crate) fn take_pending_eyedropper_toggle(&mut self) -> bool {
-        std::mem::take(&mut self.pending_eyedropper_toggle)
+        self.emit_input_effect(super::base::InputEffect::EyedropperToggle);
     }
 
     pub fn eyedropper_state(&self) -> EyedropperUiState {

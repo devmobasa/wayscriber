@@ -1,6 +1,7 @@
 use super::*;
 use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
 use crate::draw::{Color, FontDescriptor};
+use crate::input::state::TopMenuState;
 use crate::input::{ClickHighlightSettings, EraserMode, InputState};
 use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
 
@@ -261,7 +262,7 @@ fn shapes_popover_hosts_the_relocated_tool_options() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     state.set_tool_override(Some(crate::input::Tool::RegularPolygon));
-    state.toolbar_shapes_expanded = true;
+    state.toolbar_top_menu = TopMenuState::ShapePicker;
     let snapshot = snapshot_from_state(&state);
     assert!(snapshot.shape_picker_open);
 
@@ -306,7 +307,7 @@ fn shapes_popover_hosts_the_relocated_tool_options() {
     // With the popover closed the bar keeps only the island band plus the
     // contextual style pill — the permanently reserved mini-checkbox lane
     // is gone. The pill carries its own Fill toggle for shape tools.
-    state.toolbar_shapes_expanded = false;
+    state.toolbar_top_menu = TopMenuState::Closed;
     let snapshot = snapshot_from_state(&state);
     let (w, h) = top_size(&snapshot);
     assert_eq!(h, 104);
@@ -350,7 +351,7 @@ fn highlight_ring_and_top_popovers_use_separate_lanes() {
     let mut state = create_test_input_state();
     state.toolbar_use_icons = true;
     state.set_highlight_tool(true);
-    state.toolbar_shapes_expanded = true;
+    state.toolbar_top_menu = TopMenuState::ShapePicker;
     let snapshot = snapshot_from_state(&state);
     let (w, h) = top_size(&snapshot);
     let tree =
@@ -363,8 +364,7 @@ fn highlight_ring_and_top_popovers_use_separate_lanes() {
         .expect("shapes panel");
     assert!(shapes.rect.1 >= ring.rect.1 + ring.rect.3);
 
-    state.toolbar_shapes_expanded = false;
-    state.toolbar_top_overflow_open = true;
+    state.toolbar_top_menu = TopMenuState::TopOverflow;
     state.toolbar_items.set_hidden(
         crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
         false,

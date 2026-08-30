@@ -90,7 +90,8 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
 1. **Keyboard events (`handlers/keyboard.rs`)**
    - Translate Wayland keysyms to internal `Key`.
    - Call `InputState::on_key_press` / `on_key_release`.
-   - Key presses can enqueue backend output work; the event loop drains `InputState::take_pending_backend_action`.
+   - Key presses can emit typed backend work; the event loop drains the ordered
+     `InputEffectOutbox` runtime batch through `InputState::drain_input_effects`.
 
 2. **Mouse events (`handlers/pointer.rs`)**
    - Update `current_mouse_x/y`.
@@ -132,8 +133,13 @@ The result is a predictable pipeline: Wayland → handlers → `InputState` →
 | `tests/` | Unit tests and fixtures for the manager, sources, and pipeline. |
 
 **Runtime flow:**
-1. `InputState::handle_action` records screenshot, export, and other backend-owned work in `pending_backend_action`; independently coalesced slots retain the authored badge and zoom-chip preference saves.
-2. The Wayland event loop centrally drains that pending work, so keybindings, command-palette Return, and command-palette mouse clicks share the same dispatch path without the two preference saves overwriting one another.
+1. `InputState::handle_action` emits screenshot, export, and other backend-owned work into its
+   typed `InputEffectOutbox`. The outbox owns each effect's FIFO, coalesced, or last-wins policy;
+   durable toolbar preferences remain independently coalesced per kind.
+2. The Wayland event loop centrally drains the ordered runtime effects, so keybindings,
+   command-palette Return, and command-palette mouse clicks share the same dispatch path. Region
+   capture is ordered before the unconditional frozen-acquisition phase, while ordinary backend
+   work retains its later phase.
 3. Screenshot actions call `WaylandState::handle_capture_action`; explicit canvas PNG export actions call `WaylandState::handle_canvas_export_action`; board PDF actions call `WaylandState::handle_board_pdf_export_action`.
 4. `WaylandState::handle_capture_action` builds a `CaptureRequest` (type + destination + save config), hides the overlay, and queues the request until the suppression frame is confirmed; it then calls `CaptureManager::request_capture`.
    Region actions first reserve an immutable intent and select against the
@@ -325,14 +331,15 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
   it was made after (which would leave their completions applying on top of it). That module is the
   only production caller of the three editors, and is what `tools/check-config-writers.py` pins.
 - Teardown is `finish_config_edits` (called by `shutdown_config_edits`, beside
-  `shutdown_runtime_ui`). It drains the edit-bearing pending slots — preset action, quick-color
-  recolor, recorded shortcut edits — one last time before stopping the worker, because a gesture
+  `shutdown_runtime_ui`). It drains `InputEffectDrain::DurableConfig` — the outbox-owned inventory
+  of preset, quick-color, and recorded shortcut edits — one last time before stopping the worker,
+  because a gesture
   and the exit that follows it can arrive in the same batch of input events and the loop breaks
   before the pass that would have queued it. Then it waits a bounded five seconds for the channel
   *and* the staging queue, so an edit made a moment before quitting still lands. Those completions
   are logged rather than shown: there is no overlay left to toast on, and the write is the half the
-  user cannot redo from memory. Any pending slot added later whose drain queues a `ConfigEdit`
-  belongs in that function too.
+  user cannot redo from memory. A new durable config effect belongs in the outbox's
+  `DurableConfig` drain inventory, so runtime and shutdown cannot drift.
 - A bound that runs out is reported as what it is. The worker is never stopped by an answer nobody
   can hear — it keeps writing every edit it has already accepted, for as long as the process lives
   — and teardown names each edit it did not hear back about (by slot, swatch, or action) at warn
@@ -342,8 +349,8 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
   that has not finished; the one in flight lands whole or not at all because the write is a rename,
   while edits queued behind it have not started yet.
 - The gestures are decided in `src/backend/wayland/state/keybindings.rs` (palette row controls and
-  the toolbar rebind gesture, which queue onto `InputState::pending_keybinding_edits` — a FIFO,
-  not the single-slot `PendingBackendAction`, so two edits recorded from one batch of input events
+  the toolbar rebind gesture, which emit FIFO `InputEffect::KeybindingEdit` entries rather than a
+  last-wins backend effect, so two edits recorded from one batch of input events
   both reach the worker — after conflict-checking the request against `claimed_keys()` for every
   action but the one being edited),
   `.../toolbar/events/presets.rs`, and `.../toolbar/events/quick_colors.rs` (drained from the color

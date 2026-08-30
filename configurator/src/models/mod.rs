@@ -38,6 +38,7 @@ pub use fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOpti
 pub use keybindings::{
     KeybindingField, KeyboardModifiers, PendingShortcutConflict, RecorderDeviceKind,
     ShortcutManagerFilter, ShortcutManagerSort, ShortcutRecorderState, ShortcutTextEditor,
+    keybinding_fields, keybinding_tab,
 };
 pub(crate) use search::SearchQuery;
 pub(crate) use session::SessionCatalogOperation;

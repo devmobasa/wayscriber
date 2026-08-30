@@ -4,7 +4,7 @@ mod terms;
 mod tests;
 mod types;
 
-use crate::models::{KeybindingField, SearchQuery, TabId};
+use crate::models::{KeybindingField, SearchQuery, TabId, keybinding_tab};
 
 use super::effects::Effect;
 use super::state::ConfiguratorApp;
@@ -14,7 +14,7 @@ pub(crate) use types::{AppSearchSummary, SearchArea, TabSearchSummary};
 pub(crate) fn keybinding_row_visible(summary: &AppSearchSummary, field: KeybindingField) -> bool {
     summary.tab(TabId::Keybindings).is_none_or(|keybindings| {
         keybindings.keybinding_field_visible(field)
-            || keybindings.keybinding_tab_title_visible(field.tab())
+            || keybindings.keybinding_tab_title_visible(keybinding_tab(field))
     })
 }
 

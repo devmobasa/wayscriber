@@ -1,4 +1,6 @@
-use crate::models::{KeybindingField, KeybindingsTabId, SearchQuery, TabId, UiTabId};
+use crate::models::{
+    KeybindingField, KeybindingsTabId, SearchQuery, TabId, UiTabId, keybinding_tab,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SearchArea {
@@ -226,7 +228,7 @@ impl TabSearchSummary {
 
     pub(super) fn add_keybinding_field(&mut self, field: KeybindingField) {
         push_unique(&mut self.keybinding_fields, field);
-        self.add_keybinding_tab(field.tab());
+        self.add_keybinding_tab(keybinding_tab(field));
     }
 
     fn add_keybinding_tab(&mut self, tab: KeybindingsTabId) {

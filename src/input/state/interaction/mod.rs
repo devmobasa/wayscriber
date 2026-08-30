@@ -25,7 +25,7 @@ mod tests {
     use super::*;
     use crate::config::Action;
     use crate::draw::Shape;
-    use crate::input::state::test_support::make_test_input_state;
+    use crate::input::state::{TopMenuState, test_support::make_test_input_state};
     use crate::input::{BOARD_ID_BLACKBOARD, EraserMode, Key, MouseButton, Tool};
 
     fn points() -> PointerPoints {
@@ -99,20 +99,20 @@ mod tests {
     #[test]
     fn escape_dismisses_the_open_top_popover_with_named_outcome() {
         let mut state = make_test_input_state();
-        state.toolbar_settings_popover_open = true;
+        state.toolbar_top_menu = TopMenuState::SettingsPopover;
 
         assert_eq!(
             route_key_press(&mut state, Key::Escape),
             RoutingOutcome::Canceled(CancelTarget::TopPopover)
         );
-        assert!(!state.toolbar_settings_popover_open);
+        assert_eq!(state.toolbar_top_menu, TopMenuState::Closed);
 
-        state.toolbar_session_popover_open = true;
+        state.toolbar_top_menu = TopMenuState::SessionPopover;
         assert_eq!(
             route_key_press(&mut state, Key::Escape),
             RoutingOutcome::Canceled(CancelTarget::TopPopover)
         );
-        assert!(!state.toolbar_session_popover_open);
+        assert_eq!(state.toolbar_top_menu, TopMenuState::Closed);
     }
 
     #[test]

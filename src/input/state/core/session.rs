@@ -1,5 +1,5 @@
 use super::base::{DrawingState, InputState, TextBlockDrag, TextEditEntryFeedback, TextInputMode};
-use super::index::SpatialGrid;
+use super::index::SpatialIndexCache;
 use super::{ColorPickerPopupLayout, ColorPickerPopupState};
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Color, DirtyTracker, FontDescriptor, ShapeId};
@@ -41,7 +41,7 @@ struct ActiveInteractionRollback {
     text_block_drag: Option<TextBlockDrag>,
     last_polygon_click: Option<PolygonClickState>,
     hit_test_cache: HashMap<ShapeId, Rect>,
-    spatial_index: Option<SpatialGrid>,
+    spatial_index: Option<SpatialIndexCache>,
 }
 
 #[allow(dead_code)]

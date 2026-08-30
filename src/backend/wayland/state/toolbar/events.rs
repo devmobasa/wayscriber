@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     backend::wayland::runtime_ui_state::ToolbarRuntimeFinish,
-    input::InputState,
+    input::{InputState, state::TopMenuState},
     ui::toolbar::model::{
         ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPopover,
         ToolbarRuntimeUiPersistenceTarget, popovers_for_event,
@@ -316,17 +316,34 @@ impl WaylandState {
     }
 
     fn drain_pending_toolbar_actions(&mut self) {
-        if let Some(action) = self.input_state.take_pending_preset_action() {
-            self.handle_preset_action(action);
-        }
-        if let Some(edit) = self.input_state.take_pending_quick_color_edit() {
-            self.handle_quick_color_edit(edit);
-        }
-        if let Some(color) = self.input_state.take_pending_copy_hex_request() {
-            self.handle_copy_hex_color(color);
-        }
-        if let Some(target) = self.input_state.take_pending_paste_hex_request() {
-            self.handle_paste_hex_color(target);
+        use crate::input::state::{InputEffect, InputEffectDrain};
+
+        for effect in self
+            .input_state
+            .drain_input_effects(InputEffectDrain::Toolbar)
+        {
+            match effect {
+                InputEffect::Preset(action) => self.handle_preset_action(action),
+                InputEffect::QuickColor(edit) => self.handle_quick_color_edit(edit),
+                InputEffect::CopyHex(color) => self.handle_copy_hex_color(color),
+                InputEffect::PasteHex(target) => self.handle_paste_hex_color(target),
+                effect @ (InputEffect::Backend(_)
+                | InputEffect::SpotlightMagnifierFeedback
+                | InputEffect::ToolbarPersistence(_)
+                | InputEffect::KeybindingEdit(_)
+                | InputEffect::OutputFocus(_)
+                | InputEffect::Zoom(_)
+                | InputEffect::TextCopy(_)
+                | InputEffect::TextPaste(_)
+                | InputEffect::SelectionClipboardPublish(_)
+                | InputEffect::ClipboardPaste(_)
+                | InputEffect::FrozenPass { .. }
+                | InputEffect::EyedropperToggle
+                | InputEffect::OcrPass { .. }
+                | InputEffect::BoardRuntimeUi(_)) => {
+                    unreachable!("toolbar drain returned {effect:?}")
+                }
+            }
         }
     }
 
@@ -339,41 +356,19 @@ impl WaylandState {
         {
             self.toolbar.mark_dirty();
         }
-        let dismiss_overflow = self.input_state.toolbar_top_overflow_open
-            && event_dismisses_popover(event, ToolbarPopover::TopOverflow);
-        let dismiss_shapes = self.input_state.toolbar_shapes_expanded
-            && event_dismisses_popover(event, ToolbarPopover::ShapePicker);
-        let dismiss_session = self.input_state.toolbar_session_popover_open
-            && event_dismisses_popover(event, ToolbarPopover::Session);
-        let dismiss_settings = self.input_state.toolbar_settings_popover_open
-            && event_dismisses_popover(event, ToolbarPopover::Settings);
-        let dismiss_canvas = self.input_state.toolbar_canvas_popover_open
-            && event_dismisses_popover(event, ToolbarPopover::Canvas);
-        if !(dismiss_overflow
-            || dismiss_shapes
-            || dismiss_session
-            || dismiss_settings
-            || dismiss_canvas)
-        {
+        let open_popover = match self.input_state.toolbar_top_menu {
+            TopMenuState::Closed => return,
+            TopMenuState::ShapePicker => ToolbarPopover::ShapePicker,
+            TopMenuState::TopOverflow => ToolbarPopover::TopOverflow,
+            TopMenuState::CanvasPopover => ToolbarPopover::Canvas,
+            TopMenuState::SessionPopover => ToolbarPopover::Session,
+            TopMenuState::SettingsPopover => ToolbarPopover::Settings,
+        };
+        if !event_dismisses_popover(event, open_popover) {
             return;
         }
-        if dismiss_overflow {
-            self.input_state.toolbar_top_overflow_open = false;
-        }
-        if dismiss_shapes {
-            self.input_state.toolbar_shapes_expanded = false;
-        }
-        if dismiss_session {
-            self.input_state.toolbar_session_popover_open = false;
-        }
-        if dismiss_settings {
-            self.input_state.toolbar_settings_popover_open = false;
-        }
-        if dismiss_canvas {
-            self.input_state.toolbar_canvas_popover_open = false;
-        }
+        self.input_state.close_top_toolbar_menus();
         self.toolbar.mark_dirty();
-        self.input_state.needs_redraw = true;
     }
 
     fn handle_toolbar_move_event(

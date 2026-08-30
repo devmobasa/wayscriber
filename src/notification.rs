@@ -1,11 +1,34 @@
 #![allow(clippy::too_many_arguments)]
 //! System notifications via freedesktop D-Bus.
 
+/// Why a desktop notification could not be delivered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotificationError {
+    /// This build has no desktop-notification transport compiled in.
+    #[cfg_attr(feature = "dbus", allow(dead_code))]
+    Unavailable,
+    /// A compiled-in transport failed while attempting delivery.
+    Delivery(String),
+}
+
+impl std::fmt::Display for NotificationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unavailable => formatter.write_str("desktop notifications are unavailable"),
+            Self::Delivery(message) => formatter.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for NotificationError {}
+
 #[cfg(feature = "dbus")]
 mod real {
     use std::collections::HashMap;
 
     use zbus::{Connection, proxy};
+
+    use super::NotificationError;
 
     /// D-Bus interface for freedesktop Notifications.
     #[proxy(
@@ -45,7 +68,7 @@ mod real {
         summary: &str,
         body: &str,
         icon: Option<&str>,
-    ) -> Result<(), String> {
+    ) -> Result<(), NotificationError> {
         send_notification_with_timeout(summary, body, icon, 3000).await
     }
 
@@ -54,14 +77,14 @@ mod real {
         body: &str,
         icon: Option<&str>,
         expire_timeout_ms: i32,
-    ) -> Result<(), String> {
-        let connection = Connection::session()
-            .await
-            .map_err(|e| format!("Failed to connect to session bus: {}", e))?;
+    ) -> Result<(), NotificationError> {
+        let connection = Connection::session().await.map_err(|e| {
+            NotificationError::Delivery(format!("Failed to connect to session bus: {e}"))
+        })?;
 
-        let proxy = NotificationsProxy::new(&connection)
-            .await
-            .map_err(|e| format!("Failed to create notifications proxy: {}", e))?;
+        let proxy = NotificationsProxy::new(&connection).await.map_err(|e| {
+            NotificationError::Delivery(format!("Failed to create notifications proxy: {e}"))
+        })?;
 
         let icon = icon.unwrap_or("camera-photo");
         let hints = HashMap::new();
@@ -78,7 +101,9 @@ mod real {
                 expire_timeout_ms,
             )
             .await
-            .map_err(|e| format!("Failed to send notification: {}", e))?;
+            .map_err(|e| {
+                NotificationError::Delivery(format!("Failed to send notification: {e}"))
+            })?;
 
         Ok(())
     }
@@ -117,13 +142,15 @@ mod real {
 
 #[cfg(not(feature = "dbus"))]
 mod real {
+    use super::NotificationError;
+
     #[cfg_attr(not(feature = "dbus"), allow(dead_code))]
     pub async fn send_notification(
         _summary: &str,
         _body: &str,
         _icon: Option<&str>,
-    ) -> Result<(), String> {
-        Ok(())
+    ) -> Result<(), NotificationError> {
+        Err(NotificationError::Unavailable)
     }
 
     #[cfg_attr(not(feature = "dbus"), allow(dead_code))]
@@ -132,8 +159,8 @@ mod real {
         _body: &str,
         _icon: Option<&str>,
         _expire_timeout_ms: i32,
-    ) -> Result<(), String> {
-        Ok(())
+    ) -> Result<(), NotificationError> {
+        Err(NotificationError::Unavailable)
     }
 
     #[cfg_attr(not(feature = "dbus"), allow(dead_code))]
@@ -163,3 +190,20 @@ pub use real::{
     send_notification, send_notification_async, send_notification_with_timeout,
     send_notification_with_timeout_async,
 };
+
+#[cfg(all(test, not(feature = "dbus")))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn notification_without_dbus_reports_unavailable() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime");
+
+        let result = runtime.block_on(send_notification("Summary", "Body", None));
+
+        assert_eq!(result, Err(NotificationError::Unavailable));
+    }
+}

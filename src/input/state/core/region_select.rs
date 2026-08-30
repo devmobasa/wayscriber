@@ -225,20 +225,18 @@ impl InputState {
     }
 
     pub(crate) fn request_copy_text_from_screen(&mut self) {
-        self.pending_ocr_request = true;
-    }
-
-    pub(crate) fn take_pending_ocr_request(&mut self) -> bool {
-        std::mem::take(&mut self.pending_ocr_request)
+        self.emit_input_effect(super::base::InputEffect::OcrPass {
+            requested: true,
+            dismissed_by_toolbar: false,
+        });
     }
 
     /// Record that a toolbar interaction dismissed the selector.
     pub(crate) fn note_ocr_cancelled_by_toolbar(&mut self) {
-        self.ocr_cancelled_by_toolbar = true;
-    }
-
-    pub(crate) fn take_ocr_cancelled_by_toolbar(&mut self) -> bool {
-        std::mem::take(&mut self.ocr_cancelled_by_toolbar)
+        self.emit_input_effect(super::base::InputEffect::OcrPass {
+            requested: false,
+            dismissed_by_toolbar: true,
+        });
     }
 
     pub fn region_state(&self) -> RegionSelectUiState {
@@ -466,6 +464,7 @@ impl InputState {
 mod tests {
     use super::*;
     use crate::input::state::test_support::make_test_input_state;
+    use crate::input::state::{InputEffect, InputEffectDrain};
     use crate::input::{DrawingState, MouseButton, Tool};
 
     // Frozen-capture ownership and capture-failure reporting intentionally no
@@ -661,23 +660,23 @@ mod tests {
     }
 
     /// Clicking the OCR toolbar button while the selector is up toggles it off.
-    /// The cancellation latch belongs to that input batch and must not survive it.
+    /// The cancellation signal merges with the request for that input batch.
     #[test]
-    fn the_toolbar_cancel_latch_marks_one_batch_and_then_clears() {
+    fn the_toolbar_cancel_signal_merges_with_the_same_batch_request() {
         let mut state = make_test_input_state();
-        assert!(!state.take_ocr_cancelled_by_toolbar());
 
         activate_ocr_region(&mut state, 6);
         state.cancel_region_ui_only();
         state.note_ocr_cancelled_by_toolbar();
         state.request_copy_text_from_screen();
 
-        assert!(state.take_ocr_cancelled_by_toolbar());
-        assert!(state.take_pending_ocr_request());
-        assert!(
-            !state.take_ocr_cancelled_by_toolbar(),
-            "the latch outlived the interaction that set it"
-        );
+        assert!(matches!(
+            state.drain_input_effects(InputEffectDrain::Runtime).first(),
+            Some(InputEffect::OcrPass {
+                requested: true,
+                dismissed_by_toolbar: true
+            })
+        ));
     }
 
     #[test]

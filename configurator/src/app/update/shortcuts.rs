@@ -7,7 +7,6 @@ use wayscriber::config::Shortcut;
 
 use crate::app::search::keybinding_row_visible;
 use crate::app::state::{ConfirmationPrompt, PendingConfirmation};
-use crate::models::KeybindingField;
 use crate::models::keybindings::{
     AppendOutcome, KeyboardModifiers, RecordedDevice, RecordedKeyboard, RecorderDeviceKind,
     ShortcutManagerFilter, ShortcutManagerSort, ShortcutManagerSummary, ShortcutRecorderState,
@@ -16,6 +15,7 @@ use crate::models::keybindings::{
     parse_keybindings, remove_binding, reset_field, reset_fields, sequence_keyboard_only_message,
     text_conflicts_for,
 };
+use crate::models::{KeybindingField, keybinding_tab};
 
 use super::super::effects::Effect;
 use super::super::state::{ConfiguratorApp, StatusMessage};
@@ -300,7 +300,7 @@ impl ConfiguratorApp {
 
     pub(crate) fn select_keybinding_field(&mut self, field: KeybindingField) {
         self.selected_keybinding = Some(field);
-        self.active_keybindings_tab = field.tab();
+        self.active_keybindings_tab = keybinding_tab(field);
         self.keybinding_focus_serial = self.keybinding_focus_serial.saturating_add(1);
     }
 

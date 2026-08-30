@@ -46,13 +46,8 @@ fn active_region_cancel_target(purpose: Option<RegionPurposeTag>) -> ActiveRegio
 }
 
 impl WaylandState {
-    /// Drain a `Copy text from screen` request into the region selector.
-    pub(in crate::backend::wayland) fn handle_pending_ocr_request(&mut self) {
-        // Read unconditionally so the latch never outlives the batch that set it.
-        let dismissed_by_toolbar = self.input_state.take_ocr_cancelled_by_toolbar();
-        if !self.input_state.take_pending_ocr_request() {
-            return;
-        }
+    /// Apply a drained `Copy text from screen` request to the region selector.
+    pub(in crate::backend::wayland) fn handle_ocr_request(&mut self, dismissed_by_toolbar: bool) {
         if self.input_state.region_is_engaged() {
             // A second invocation while the selector is up cancels it, matching
             // the eyedropper's toggle behavior.

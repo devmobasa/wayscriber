@@ -110,16 +110,21 @@ impl BlurRenderCache {
         Some(entry)
     }
 
-    fn insert(&mut self, key: BlurCacheKey, entry: CachedBlurRegion) {
+    fn insert(&mut self, key: BlurCacheKey, entry: CachedBlurRegion) -> CachedBlurRegion {
         if let Some(previous) = self.entries.remove(&key) {
             self.cached_bytes = self.cached_bytes.saturating_sub(previous.approx_bytes);
             self.access_order.retain(|existing| existing != &key);
         }
 
+        if entry.approx_bytes > self.max_bytes {
+            return entry;
+        }
+
         self.cached_bytes = self.cached_bytes.saturating_add(entry.approx_bytes);
-        self.entries.insert(key, entry);
+        self.entries.insert(key, entry.clone());
         self.access_order.push_back(key);
         self.evict_if_needed();
+        entry
     }
 
     fn touch(&mut self, key: BlurCacheKey) {
@@ -128,9 +133,7 @@ impl BlurRenderCache {
     }
 
     fn evict_if_needed(&mut self) {
-        while self.entries.len() > self.max_entries
-            || (self.cached_bytes > self.max_bytes && self.entries.len() > 1)
-        {
+        while self.entries.len() > self.max_entries || self.cached_bytes > self.max_bytes {
             let Some(oldest) = self.access_order.pop_front() else {
                 break;
             };
@@ -441,7 +444,7 @@ fn cacheable_blur_entry(
 
     let entry = compute()?;
     if let Some(key) = cache_key {
-        BLUR_RENDER_CACHE.with(|cache| cache.borrow_mut().insert(key, entry.clone()));
+        return Some(BLUR_RENDER_CACHE.with(|cache| cache.borrow_mut().insert(key, entry)));
     }
     Some(entry)
 }

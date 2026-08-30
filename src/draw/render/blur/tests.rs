@@ -150,3 +150,37 @@ fn blur_render_cache_evicts_oldest_entry_when_budget_is_exceeded() {
     assert!(cache.get(&make_key(1)).is_none());
     assert!(cache.get(&make_key(2)).is_some());
 }
+
+#[test]
+fn blur_render_cache_does_not_retain_an_entry_larger_than_its_byte_budget() {
+    let mut cache = BlurRenderCache::new(4, 63);
+    let key = BlurCacheKey {
+        backdrop_cache_key: 1,
+        src_x: 0,
+        src_y: 0,
+        src_w: 4,
+        src_h: 4,
+        primary_factor: 18,
+        secondary_factor: 24,
+        style: BackdropStyle::Gaussian,
+    };
+    let entry = CachedBlurRegion {
+        surface: cairo::ImageSurface::create(cairo::Format::ARgb32, 4, 4).expect("surface"),
+        stats: BlurSurfaceStats {
+            red: 0.5,
+            green: 0.52,
+            blue: 0.55,
+            luminance: 0.5,
+        },
+        approx_bytes: 64,
+    };
+
+    let returned = cache.insert(key, entry);
+
+    assert!(cache.get(&key).is_none());
+    assert!(cache.entries.is_empty());
+    assert!(cache.access_order.is_empty());
+    assert_eq!(cache.cached_bytes, 0);
+    assert_eq!(returned.surface.width(), 4);
+    assert_eq!(returned.surface.height(), 4);
+}

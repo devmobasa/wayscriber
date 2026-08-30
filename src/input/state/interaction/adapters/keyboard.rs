@@ -120,15 +120,8 @@ pub(crate) fn handle_top_popover_dismiss_key(
     state: &mut InputState,
     key: Key,
 ) -> Option<RoutingOutcome> {
-    if matches!(key, Key::Escape)
-        && (state.toolbar_session_popover_open
-            || state.toolbar_settings_popover_open
-            || state.toolbar_canvas_popover_open)
-    {
-        state.toolbar_session_popover_open = false;
-        state.toolbar_settings_popover_open = false;
-        state.toolbar_canvas_popover_open = false;
-        state.needs_redraw = true;
+    if matches!(key, Key::Escape) && state.toolbar_top_menu.is_popover() {
+        state.close_top_toolbar_menus();
         return Some(RoutingOutcome::Canceled(CancelTarget::TopPopover));
     }
 

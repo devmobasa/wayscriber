@@ -32,7 +32,7 @@ use super::protocol_v2::{
     ActionJournal, BootClock, BootDeadline, BootDeadlineSource, CommandOwner, CommandQueueWatcher,
     DaemonRuntimeRecordV2, EffectKind, FinalEffect, ProtocolToken,
 };
-use super::tray::start_system_tray;
+use super::tray::{TrayRuntime, start_system_tray};
 #[cfg(feature = "tray")]
 use super::types::TrayStatusShared;
 use super::types::{
@@ -72,7 +72,7 @@ pub struct Daemon {
     pub(super) freeze_on_show: bool,
     pub(super) tray_enabled: bool,
     pub(super) backend_runner: Option<Arc<BackendRunner>>,
-    pub(super) tray_thread: Option<JoinHandle<()>>,
+    pub(super) tray_runtime: Option<TrayRuntime>,
     pub(super) update_watch_thread: Option<JoinHandle<()>>,
     pub(super) global_shortcuts_listener: Option<GlobalShortcutsListener>,
     pub(super) overlay_child: OverlayChildOwner,
@@ -120,7 +120,7 @@ impl Daemon {
             freeze_on_show: false,
             tray_enabled,
             backend_runner: None,
-            tray_thread: None,
+            tray_runtime: None,
             update_watch_thread: None,
             global_shortcuts_listener: None,
             overlay_child: OverlayChildOwner::default(),
@@ -165,7 +165,7 @@ impl Daemon {
             freeze_on_show: false,
             tray_enabled: true,
             backend_runner: Some(backend_runner),
-            tray_thread: None,
+            tray_runtime: None,
             update_watch_thread: None,
             global_shortcuts_listener: None,
             overlay_child: OverlayChildOwner::default(),
@@ -277,7 +277,7 @@ impl Daemon {
             tray_overlay_active,
             tray_status,
         ) {
-            Ok(tray_handle) => self.tray_thread = Some(tray_handle),
+            Ok(tray_runtime) => self.tray_runtime = Some(tray_runtime),
             Err(err) => {
                 warn!("System tray unavailable: {}", err);
                 warn!(
@@ -823,7 +823,9 @@ impl Daemon {
         if let Some(listener) = self.global_shortcuts_listener.as_mut() {
             listener.request_shutdown();
         }
-        join_daemon_thread(self.tray_thread.take(), "System tray thread");
+        if let Some(tray_runtime) = self.tray_runtime.take() {
+            tray_runtime.shutdown();
+        }
         join_daemon_thread(self.update_watch_thread.take(), "Update watcher thread");
         if let Some(listener) = self.global_shortcuts_listener.take() {
             match listener.join() {

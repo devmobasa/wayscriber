@@ -15,7 +15,7 @@ use relm4::{adw, gtk};
 use adw::prelude::*;
 
 use crate::messages::Message;
-use crate::models::{KeybindingField, KeybindingsTabId};
+use crate::models::{KeybindingField, KeybindingsTabId, keybinding_fields, keybinding_tab};
 
 use super::super::state::ConfiguratorApp;
 use super::{Binding, BuiltPage};
@@ -39,7 +39,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
     }
 
     let page = adw::PreferencesPage::new();
-    let fields = KeybindingField::all();
+    let fields = keybinding_fields();
     let mut groups: Vec<(KeybindingsTabId, adw::PreferencesGroup)> = Vec::new();
     let mut slots: Vec<(KeybindingField, adw::PreferencesRow, adw::PreferencesGroup)> = Vec::new();
 
@@ -48,7 +48,11 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             .title(tab.title())
             .description(SECTION_DESCRIPTION)
             .build();
-        for field in fields.iter().copied().filter(|field| field.tab() == tab) {
+        for field in fields
+            .iter()
+            .copied()
+            .filter(|field| keybinding_tab(*field) == tab)
+        {
             let row = binding_row(&group, field, sender, &mut bindings, refresh.clone());
             slots.push((field, row, group.clone()));
         }
@@ -66,7 +70,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             };
             for (tab, group) in &groups {
                 let show = (app.keybindings_show_all || app.active_keybindings_tab == *tab)
-                    && visible.iter().any(|field| field.tab() == *tab);
+                    && visible.iter().any(|field| keybinding_tab(*field) == *tab);
                 set_visible(group, show);
             }
         }));
@@ -87,7 +91,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
                 let ordered: Vec<KeybindingField> = visible
                     .iter()
                     .copied()
-                    .filter(|field| field.tab() == *tab)
+                    .filter(|field| keybinding_tab(*field) == *tab)
                     .collect();
                 let Some((_, last)) = last_order.iter_mut().find(|(known, _)| *known == *tab)
                 else {
