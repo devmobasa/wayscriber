@@ -188,26 +188,6 @@ impl InputState {
         None
     }
 
-    fn hit_test_by_id(&mut self, id: ShapeId, x: i32, y: i32, tolerance: HitTestTolerance) -> bool {
-        let frame = self.boards.active_frame();
-        let Some(drawn) = frame.shape(id) else {
-            return false;
-        };
-
-        let cached = self.hit_test_cache.get(&id).copied();
-        let bounds =
-            cached.or_else(|| hit_test::compute_hit_bounds_with_tolerance(drawn, tolerance));
-
-        let hit = bounds.as_ref().is_none_or(|rect| rect.contains(x, y))
-            && hit_test::hit_test_for_point_targeting_with_tolerance(drawn, (x, y), tolerance);
-
-        if let Some(bounds) = bounds {
-            self.hit_test_cache.entry(id).or_insert(bounds);
-        }
-
-        hit
-    }
-
     fn hit_test_indices<I>(
         &mut self,
         indices: I,
@@ -252,14 +232,12 @@ impl InputState {
                 // Sort candidates by their position in the frame (reverse for top-to-bottom)
                 let mut sorted_candidates: Vec<_> = candidates
                     .into_iter()
-                    .filter_map(|id| index_map.get(&id).map(|&idx| (idx, id)))
+                    .filter_map(|id| index_map.get(&id).copied())
                     .collect();
-                sorted_candidates.sort_unstable_by_key(|candidate| std::cmp::Reverse(candidate.0));
+                sorted_candidates.sort_unstable_by_key(|&index| std::cmp::Reverse(index));
 
-                for (_, id) in sorted_candidates {
-                    if self.hit_test_by_id(id, x, y, tolerance) {
-                        return Some(id);
-                    }
+                if let Some(id) = self.hit_test_indices(sorted_candidates, x, y, tolerance) {
+                    return Some(id);
                 }
             }
         } else {

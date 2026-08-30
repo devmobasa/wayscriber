@@ -3,6 +3,11 @@ use super::types::{DrawnShape, ShapeId, UndoAction};
 use crate::draw::shape::Shape;
 use serde::Serialize;
 
+#[cfg(test)]
+std::thread_local! {
+    static LINEAR_ID_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Frame {
     #[serde(with = "frame_storage")]
@@ -155,7 +160,19 @@ impl Frame {
 
     /// Finds the index of a shape by id.
     pub fn find_index(&self, id: ShapeId) -> Option<usize> {
+        #[cfg(test)]
+        LINEAR_ID_LOOKUPS.with(|count| count.set(count.get().saturating_add(1)));
         self.shapes.iter().position(|shape| shape.id == id)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reset_linear_id_lookup_count() {
+        LINEAR_ID_LOOKUPS.with(|count| count.set(0));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn linear_id_lookup_count() -> usize {
+        LINEAR_ID_LOOKUPS.with(std::cell::Cell::get)
     }
 
     /// Returns a reference to a shape by id.

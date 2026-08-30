@@ -80,3 +80,42 @@ fn extreme_persisted_rectangle_is_selectable_through_the_spatial_index() {
         vec![extreme_id]
     );
 }
+
+#[test]
+fn spatial_hit_testing_reuses_resolved_candidate_indices_without_id_rescans() {
+    let mut state = create_test_input_state();
+    state.set_hit_test_threshold(1);
+    let color = Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 0,
+        y: 0,
+        w: 20,
+        h: 20,
+        fill: true,
+        color,
+        thick: 1.0,
+    });
+    let topmost = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 0,
+        y: 0,
+        w: 20,
+        h: 20,
+        fill: true,
+        color,
+        thick: 1.0,
+    });
+
+    crate::draw::Frame::reset_linear_id_lookup_count();
+    assert_eq!(state.hit_test_at(10, 10), Some(topmost));
+    assert!(state.has_spatial_index());
+    assert_eq!(
+        crate::draw::Frame::linear_id_lookup_count(),
+        0,
+        "spatial candidates already carry resolved frame indices"
+    );
+}
