@@ -8,6 +8,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 const IMAGE_CACHE_ENTRIES: usize = 32;
+/// Per-render-thread budget for decoded ARGB32 image pixels.
+const IMAGE_CACHE_MAX_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
 struct ImageBytesIdentity(Arc<[u8]>);
@@ -36,40 +38,101 @@ struct ImageCacheKey {
 }
 
 thread_local! {
-    static IMAGE_CACHE: RefCell<ImageSurfaceCache> = RefCell::new(ImageSurfaceCache::new());
+    static IMAGE_CACHE: RefCell<ImageSurfaceCache> = RefCell::new(ImageSurfaceCache::new(
+        IMAGE_CACHE_ENTRIES,
+        IMAGE_CACHE_MAX_BYTES,
+    ));
+}
+
+struct CachedImageSurface {
+    surface: Rc<ImageSurface>,
+    decoded_bytes: usize,
 }
 
 struct ImageSurfaceCache {
-    entries: HashMap<ImageCacheKey, Rc<ImageSurface>>,
-    order: VecDeque<ImageCacheKey>,
+    entries: HashMap<ImageCacheKey, CachedImageSurface>,
+    access_order: VecDeque<ImageCacheKey>,
+    max_entries: usize,
+    max_bytes: usize,
+    cached_bytes: usize,
 }
 
 impl ImageSurfaceCache {
-    fn new() -> Self {
+    fn new(max_entries: usize, max_bytes: usize) -> Self {
         Self {
             entries: HashMap::new(),
-            order: VecDeque::new(),
+            access_order: VecDeque::new(),
+            max_entries,
+            max_bytes,
+            cached_bytes: 0,
         }
     }
 
     fn get(&mut self, key: &ImageCacheKey) -> Option<Rc<ImageSurface>> {
-        self.entries.get(key).cloned()
+        let surface = Rc::clone(&self.entries.get(key)?.surface);
+        self.touch(key);
+        Some(surface)
     }
 
-    fn insert(&mut self, key: ImageCacheKey, surface: Rc<ImageSurface>) -> Rc<ImageSurface> {
-        if self.entries.contains_key(&key) {
-            self.entries.insert(key.clone(), surface.clone());
+    fn insert(
+        &mut self,
+        key: ImageCacheKey,
+        surface: Rc<ImageSurface>,
+        decoded_bytes: usize,
+    ) -> Rc<ImageSurface> {
+        self.remove(&key);
+        if self.max_entries == 0 || decoded_bytes > self.max_bytes {
             return surface;
         }
 
-        self.order.push_back(key.clone());
-        self.entries.insert(key, surface.clone());
-        while self.order.len() > IMAGE_CACHE_ENTRIES {
-            if let Some(oldest) = self.order.pop_front() {
-                self.entries.remove(&oldest);
+        self.cached_bytes += decoded_bytes;
+        self.access_order.push_back(key.clone());
+        self.entries.insert(
+            key,
+            CachedImageSurface {
+                surface: Rc::clone(&surface),
+                decoded_bytes,
+            },
+        );
+        self.evict_if_needed();
+        surface
+    }
+
+    fn touch(&mut self, key: &ImageCacheKey) {
+        if let Some(index) = self
+            .access_order
+            .iter()
+            .position(|candidate| candidate == key)
+        {
+            self.access_order.remove(index);
+            self.access_order.push_back(key.clone());
+        }
+    }
+
+    fn remove(&mut self, key: &ImageCacheKey) {
+        if let Some(entry) = self.entries.remove(key) {
+            self.cached_bytes -= entry.decoded_bytes;
+        }
+        if let Some(index) = self
+            .access_order
+            .iter()
+            .position(|candidate| candidate == key)
+        {
+            self.access_order.remove(index);
+        }
+    }
+
+    fn evict_if_needed(&mut self) {
+        while self.entries.len() > self.max_entries || self.cached_bytes > self.max_bytes {
+            let Some(oldest) = self.access_order.pop_front() else {
+                debug_assert!(self.entries.is_empty());
+                self.cached_bytes = 0;
+                break;
+            };
+            if let Some(entry) = self.entries.remove(&oldest) {
+                self.cached_bytes -= entry.decoded_bytes;
             }
         }
-        surface
     }
 }
 
@@ -121,12 +184,12 @@ fn cached_surface(data: &EmbeddedImage) -> Option<Rc<ImageSurface>> {
             return Some(surface);
         }
 
-        let surface = decode_surface(data).map(Rc::new)?;
-        Some(cache.insert(key, surface))
+        let (surface, decoded_bytes) = decode_surface(data)?;
+        Some(cache.insert(key, Rc::new(surface), decoded_bytes))
     })
 }
 
-fn decode_surface(data: &EmbeddedImage) -> Option<ImageSurface> {
+fn decode_surface(data: &EmbeddedImage) -> Option<(ImageSurface, usize)> {
     let format = format_from_mime_or_bytes(&data.mime_type, &data.bytes)?;
     let image = decode_rgba(format, &data.bytes).ok()?;
     let width = image.width;
@@ -155,6 +218,7 @@ fn decode_surface(data: &EmbeddedImage) -> Option<ImageSurface> {
         }
     }
 
+    let decoded_bytes = pixels.len();
     ImageSurface::create_for_data(
         pixels,
         Format::ARgb32,
@@ -163,6 +227,7 @@ fn decode_surface(data: &EmbeddedImage) -> Option<ImageSurface> {
         stride as i32,
     )
     .ok()
+    .map(|surface| (surface, decoded_bytes))
 }
 
 fn render_missing_image_placeholder(ctx: &cairo::Context, x: i32, y: i32, w: i32, h: i32) {
@@ -188,8 +253,28 @@ fn render_missing_image_placeholder(ctx: &cairo::Context, x: i32, y: i32, w: i32
 
 #[cfg(test)]
 mod tests {
-    use super::ImageBytesIdentity;
+    use super::{ImageBytesIdentity, ImageCacheKey, ImageSurfaceCache};
+    use cairo::{Format, ImageSurface};
+    use std::rc::Rc;
     use std::sync::Arc;
+
+    fn cache_key(marker: u8) -> (ImageCacheKey, std::sync::Weak<[u8]>) {
+        let bytes: Arc<[u8]> = vec![marker].into();
+        let weak = Arc::downgrade(&bytes);
+        (
+            ImageCacheKey {
+                mime_type: "image/png".to_string(),
+                bytes: ImageBytesIdentity(bytes),
+                width: 1,
+                height: 1,
+            },
+            weak,
+        )
+    }
+
+    fn surface() -> Rc<ImageSurface> {
+        Rc::new(ImageSurface::create(Format::ARgb32, 1, 1).expect("test surface"))
+    }
 
     #[test]
     fn cache_identity_follows_shared_payload_allocation() {
@@ -200,5 +285,64 @@ mod tests {
 
         assert_eq!(shared, same_allocation);
         assert_ne!(shared, equal_bytes_in_another_allocation);
+    }
+
+    #[test]
+    fn cache_hit_becomes_most_recent_before_byte_budget_eviction() {
+        let mut cache = ImageSurfaceCache::new(3, 8);
+        let (a, _) = cache_key(1);
+        let (b, _) = cache_key(2);
+        let (c, _) = cache_key(3);
+
+        drop(cache.insert(a.clone(), surface(), 4));
+        drop(cache.insert(b.clone(), surface(), 4));
+        assert!(cache.get(&a).is_some(), "reading A should promote it");
+
+        drop(cache.insert(c.clone(), surface(), 4));
+
+        assert!(cache.entries.contains_key(&a));
+        assert!(!cache.entries.contains_key(&b));
+        assert!(cache.entries.contains_key(&c));
+        assert_eq!(cache.cached_bytes, 8);
+    }
+
+    #[test]
+    fn oversized_surface_is_returned_but_not_retained() {
+        let mut cache = ImageSurfaceCache::new(4, 3);
+        let (key, payload) = cache_key(1);
+        let surface = surface();
+        let weak_surface = Rc::downgrade(&surface);
+
+        let returned = cache.insert(key, surface, 4);
+
+        assert!(cache.entries.is_empty());
+        assert!(cache.access_order.is_empty());
+        assert_eq!(cache.cached_bytes, 0);
+        assert!(
+            payload.upgrade().is_none(),
+            "oversized payload key should not be retained"
+        );
+        assert!(weak_surface.upgrade().is_some());
+
+        drop(returned);
+        assert!(weak_surface.upgrade().is_none());
+    }
+
+    #[test]
+    fn eviction_releases_surface_and_payload() {
+        let mut cache = ImageSurfaceCache::new(1, 8);
+        let (first_key, first_payload) = cache_key(1);
+        let first_surface = surface();
+        let weak_surface = Rc::downgrade(&first_surface);
+
+        drop(cache.insert(first_key, first_surface, 4));
+        assert!(first_payload.upgrade().is_some());
+        assert!(weak_surface.upgrade().is_some());
+
+        let (second_key, _) = cache_key(2);
+        drop(cache.insert(second_key, surface(), 4));
+
+        assert!(first_payload.upgrade().is_none());
+        assert!(weak_surface.upgrade().is_none());
     }
 }
