@@ -68,7 +68,9 @@ use crate::config::{
     Action, Config, ConfigEditOutcome, action_label, persist_keybinding_edit, persist_preset_slot,
     persist_quick_color,
 };
-use crate::input::state::{InputState, KeybindingEditRequest, PresetAction, QuickColorEdit};
+use crate::input::state::{
+    InputEffect, InputEffectDrain, InputState, KeybindingEditRequest, PresetAction, QuickColorEdit,
+};
 use anyhow::{Result, anyhow};
 use log::{error, info, warn};
 use std::collections::VecDeque;
@@ -714,37 +716,52 @@ fn log_completion(completion: &ConfigEditCompletion) {
 /// carried a gesture — the chord captured on one key press and the Escape that
 /// closes the overlay arrive together — and the loop breaks on the exit before
 /// the pass that would have queued the gesture ever runs. Teardown is the last
-/// place that can still notice, so it drains every pending slot whose gesture
-/// becomes a durable edit, and only then stops the worker. Without it a rebind,
+/// place that can still notice, so it drains the outbox's durable config batch
+/// and only then stops the worker. Without it a rebind,
 /// a recolor accepted on the picker's OK, or a preset slot saved a moment before
 /// quitting is silently not written: no error, no toast, and nothing in the file.
 ///
-/// **The inventory is here.** A pending slot added later whose drain queues a
-/// `ConfigEdit` belongs in this function too; the running loop's drains are not
-/// enough, because exit skips them.
+/// The inventory belongs to `InputEffectDrain::DurableConfig`. A new effect
+/// whose drain queues a `ConfigEdit` must join that scope so the running and
+/// shutdown paths cannot drift; the running loop alone is not enough because
+/// exit skips it.
 ///
 /// What is given up is the wording. These completions are logged rather than
 /// shown — there is no overlay left to put a toast on — and the write is the
 /// half the user cannot reconstruct from memory.
 ///
-/// Takes the three fields it needs rather than the whole state: it queues
-/// through the same helpers the running loop uses, and those cannot each borrow
-/// `WaylandState` while this one holds it.
+/// The drained effects queue through the same helpers the running loop uses;
+/// those cannot each borrow `WaylandState` while this function holds it.
 pub(in crate::backend::wayland) fn finish_config_edits(
     config: &mut Config,
     input_state: &mut InputState,
     worker: &mut ConfigEditWorker,
 ) {
-    // The same order the running loop drains them in, so teardown cannot
-    // reorder two gestures the user made.
-    if let Some(action) = input_state.take_pending_preset_action() {
-        queue_preset_action(config, worker, action);
-    }
-    if let Some(edit) = input_state.take_pending_quick_color_edit() {
-        queue_quick_color_edit(config, worker, edit);
-    }
-    for request in input_state.take_pending_keybinding_edits() {
-        queue_keybinding_edit(&config.keybindings, input_state, worker, request);
+    for effect in input_state.drain_input_effects(InputEffectDrain::DurableConfig) {
+        match effect {
+            InputEffect::Preset(action) => queue_preset_action(config, worker, action),
+            InputEffect::QuickColor(edit) => queue_quick_color_edit(config, worker, edit),
+            InputEffect::KeybindingEdit(request) => {
+                queue_keybinding_edit(&config.keybindings, input_state, worker, request);
+            }
+            effect @ (InputEffect::Backend(_)
+            | InputEffect::SpotlightMagnifierFeedback
+            | InputEffect::ToolbarPersistence(_)
+            | InputEffect::OutputFocus(_)
+            | InputEffect::Zoom(_)
+            | InputEffect::CopyHex(_)
+            | InputEffect::PasteHex(_)
+            | InputEffect::TextCopy(_)
+            | InputEffect::TextPaste(_)
+            | InputEffect::SelectionClipboardPublish(_)
+            | InputEffect::ClipboardPaste(_)
+            | InputEffect::FrozenPass { .. }
+            | InputEffect::EyedropperToggle
+            | InputEffect::OcrPass { .. }
+            | InputEffect::BoardRuntimeUi(_)) => {
+                unreachable!("durable config drain returned {effect:?}")
+            }
+        }
     }
     worker.shutdown();
 }

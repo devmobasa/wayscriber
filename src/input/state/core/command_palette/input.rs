@@ -75,8 +75,9 @@ impl InputState {
             );
             return false;
         }
-        self.pending_keybinding_edits
-            .push(KeybindingEditRequest { action, operation });
+        self.emit_input_effect(super::super::base::InputEffect::KeybindingEdit(
+            KeybindingEditRequest { action, operation },
+        ));
         true
     }
 

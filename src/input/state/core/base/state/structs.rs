@@ -3,9 +3,7 @@ use super::super::super::{
         BoardPickerDrag, BoardPickerLayout, BoardPickerPageDrag, BoardPickerPageEdit,
         BoardPickerPageTarget, BoardPickerState,
     },
-    color_picker_popup::{
-        ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, HexPasteTarget,
-    },
+    color_picker_popup::{ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState},
     index::SpatialIndexCache,
     menus::{ContextMenuLayout, ContextMenuState},
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
@@ -13,16 +11,14 @@ use super::super::super::{
     selection::SelectionState,
     status_hud::StatusHudRebuildInputs,
 };
+use super::super::InputEffectOutbox;
 use super::super::toast_queue::ToastQueue;
 use super::super::types::{
-    BlockedActionFeedback, BoardPickerClickState, ClipboardPasteRequest, CompositorCapabilities,
-    DelayedHistory, DrawingState, KeybindingEditRequest, OutputFocusAction, PendingBackendAction,
-    PendingBoardDelete, PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
-    PendingSelectionClipboardPublish, PendingToolbarPersistence, PolygonClickState, PresetAction,
-    PresetFeedbackState, PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit,
-    SelectionAxis, SelectionPublishState, StatusChangeHighlight, TextBlockDrag, TextClickState,
-    TextClipboardRequest, TextEditEntryFeedback, TextInputMode, TextPasteTarget, UiToastState,
-    ZoomAction,
+    BlockedActionFeedback, BoardPickerClickState, CompositorCapabilities, DelayedHistory,
+    DrawingState, PendingBoardDelete, PendingClipboardFallback, PendingOnboardingUsage,
+    PendingPageDelete, PolygonClickState, PresetFeedbackState, PressureThicknessEditMode,
+    PressureThicknessEntryMode, SelectionAxis, SelectionPublishState, StatusChangeHighlight,
+    TextBlockDrag, TextClickState, TextEditEntryFeedback, TextInputMode, UiToastState,
 };
 use crate::config::{
     Action, PresenterModeConfig, QuickColorPalette, RadialMenuMouseBinding, ResolvedToolbarItems,
@@ -33,7 +29,7 @@ use crate::draw::{
     ArrowStyle, BlurStyle, Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId,
 };
 use crate::input::BoardManager;
-use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest, PendingBoardRuntimeUiAction};
+use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest};
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::state::input_hud::InputHudState;
 use crate::input::{
@@ -44,7 +40,7 @@ use crate::input::{
 use crate::render_profiles::RenderProfileSet;
 use crate::session::SessionOptions;
 use crate::util::Rect;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -86,6 +82,10 @@ pub(crate) struct LightModeRestore {
 }
 
 pub struct InputState {
+    /// Typed handoff of in-process work whose side effects belong to the backend.
+    /// The outbox owns FIFO, coalesced, and last-wins storage policy plus the
+    /// ordered runtime and durable-shutdown drain inventories.
+    pub(in crate::input::state::core) input_effects: InputEffectOutbox,
     /// Multi-board canvas management
     pub boards: BoardManager,
     /// Current drawing color (changed with color keys: R, G, B, etc.)
@@ -423,8 +423,6 @@ pub struct InputState {
     pub(in crate::input::state::core) command_palette_results: std::cell::RefCell<
         Option<crate::input::state::core::command_palette::CommandPaletteResults>,
     >,
-    /// Pending backend output action (to be handled by WaylandState).
-    pub(in crate::input::state::core) pending_backend_action: Option<PendingBackendAction>,
     /// Shape and pre-gesture snapshot for an in-flight wheel adjustment of a
     /// Spotlight's magnification.
     ///
@@ -436,41 +434,8 @@ pub struct InputState {
     /// Unconsumed high-resolution wheel units and the Spotlight that owns
     /// them. Wayland defines 120 units as one logical wheel step.
     pub(in crate::input::state) spotlight_wheel_value120_remainder: Option<(ShapeId, i32)>,
-    /// Coalesced request for the backend to explain an unavailable Spotlight
-    /// magnifier source after a user-visible create/property action.
-    pub(in crate::input::state::core) pending_spotlight_magnifier_feedback: bool,
-    /// Durable toolbar chrome changes awaiting their runtime-ui.toml write,
-    /// oldest first.
-    ///
-    /// A queue, not part of the single backend-action slot: its last-action
-    /// semantics would let a capture (or a second toolbar change) silently
-    /// cost an earlier change its persistence — or vice versa.
-    pub(in crate::input::state::core) pending_toolbar_persistence: Vec<PendingToolbarPersistence>,
-    /// Shortcut edits waiting for the backend, oldest first.
-    ///
-    /// A queue, not a slot: the palette can record several edits between two
-    /// drains — a capture and then a correction land in the same input batch —
-    /// and each one is a separate write to `config.toml` with its own answer
-    /// and its own toast. Last-action-wins would drop the earlier edit with
-    /// nothing said about it.
-    pub(in crate::input::state::core) pending_keybinding_edits: Vec<KeybindingEditRequest>,
-    /// Whether this run already said that an overlay preference toggle is a
-    /// current-run change. Said once: every later toggle has the same scope.
-    /// Pending output focus action (to be handled by WaylandState)
-    pub(in crate::input::state::core) pending_output_focus_action: Option<OutputFocusAction>,
-    /// Pending zoom action (to be handled by WaylandState)
-    pub(in crate::input::state::core) pending_zoom_action: Option<ZoomAction>,
     /// Pending first-run onboarding usage markers to persist in onboarding store
     pub(crate) pending_onboarding_usage: PendingOnboardingUsage,
-    /// Color snapshot for the newest pending copy-hex request.
-    pub(crate) pending_copy_hex: Option<Color>,
-    /// Destination owned by the newest pending paste-hex request.
-    pub(crate) pending_paste_hex: Option<HexPasteTarget>,
-    /// Selected text captured for pending copy/cut publications. Multiple key
-    /// events can arrive in one Wayland dispatch cycle, before backend draining.
-    pub(crate) pending_text_copy: VecDeque<TextClipboardRequest>,
-    /// Exact text-edit locations awaiting paste-from-clipboard submission.
-    pub(crate) pending_text_paste: VecDeque<TextPasteTarget>,
     /// Maximum number of shapes allowed per frame (0 = unlimited)
     pub max_shapes_per_frame: usize,
     /// Click highlight animation state
@@ -566,12 +531,6 @@ pub struct InputState {
     pub(in crate::input::state::core) selection_publish_state: SelectionPublishState,
     /// Per-process id embedded in private Wayscriber clipboard payloads.
     pub(in crate::input::state::core) clipboard_app_instance_id: String,
-    /// Pending private selection clipboard publish request for the backend.
-    pub(in crate::input::state::core) pending_selection_clipboard_publish:
-        Option<PendingSelectionClipboardPublish>,
-    /// Pending system clipboard paste request for the backend.
-    pub(in crate::input::state::core) pending_clipboard_paste_request:
-        Option<ClipboardPasteRequest>,
     /// Monotonic id source for paste requests.
     pub(in crate::input::state::core) clipboard_paste_request_counter: u64,
     /// Latest paste request id whose completion should still be accepted.
@@ -642,22 +601,12 @@ pub struct InputState {
     pub(in crate::input::state::core) properties_panel_needs_refresh: bool,
     /// Whether frozen mode is currently active
     pub(in crate::input::state::core) frozen_active: bool,
-    /// Pending toggle request for the backend (handled in the Wayland loop)
-    pub(in crate::input::state::core) pending_frozen_toggle: bool,
     /// Screen-color eyedropper UI lifecycle.
     pub(in crate::input::state::core) eyedropper_ui_state:
         crate::input::state::core::EyedropperUiState,
-    /// Pending eyedropper activation request for the Wayland backend.
-    pub(in crate::input::state::core) pending_eyedropper_toggle: bool,
     /// Generalized screen-region selector lifecycle.
     pub(in crate::input::state::core) region_select_ui_state:
         crate::input::state::core::RegionSelectUiState,
-    /// Pending `Copy text from screen` request for the Wayland backend.
-    pub(in crate::input::state::core) pending_ocr_request: bool,
-    /// A toolbar interaction dismissed the selector in this input batch, so a
-    /// `Copy text from screen` request produced by that same interaction is the
-    /// button toggling itself off — not a fresh invocation to honor.
-    pub(in crate::input::state::core) ocr_cancelled_by_toolbar: bool,
     /// Whether zoom mode is currently active
     pub(in crate::input::state::core) zoom_active: bool,
     /// Whether zoom view is locked
@@ -694,12 +643,6 @@ pub struct InputState {
     pub active_preset_slot: Option<usize>,
     /// Transient preset feedback for toolbar animations
     pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
-    /// Pending preset save/clear action for backend persistence
-    pub(in crate::input::state::core) pending_preset_action: Option<PresetAction>,
-    /// Accepted quick-color recolor awaiting the backend's `config.toml` write
-    pub(in crate::input::state::core) pending_quick_color_edit: Option<QuickColorEdit>,
-    /// Ordered runtime UI actions for board pins and board identity changes.
-    pub(in crate::input::state::core) pending_board_runtime_ui: Vec<PendingBoardRuntimeUiAction>,
     /// Whether the guided tour is currently active
     pub tour_active: bool,
     /// Current step in the guided tour (0-indexed)

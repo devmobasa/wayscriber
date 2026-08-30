@@ -316,17 +316,34 @@ impl WaylandState {
     }
 
     fn drain_pending_toolbar_actions(&mut self) {
-        if let Some(action) = self.input_state.take_pending_preset_action() {
-            self.handle_preset_action(action);
-        }
-        if let Some(edit) = self.input_state.take_pending_quick_color_edit() {
-            self.handle_quick_color_edit(edit);
-        }
-        if let Some(color) = self.input_state.take_pending_copy_hex_request() {
-            self.handle_copy_hex_color(color);
-        }
-        if let Some(target) = self.input_state.take_pending_paste_hex_request() {
-            self.handle_paste_hex_color(target);
+        use crate::input::state::{InputEffect, InputEffectDrain};
+
+        for effect in self
+            .input_state
+            .drain_input_effects(InputEffectDrain::Toolbar)
+        {
+            match effect {
+                InputEffect::Preset(action) => self.handle_preset_action(action),
+                InputEffect::QuickColor(edit) => self.handle_quick_color_edit(edit),
+                InputEffect::CopyHex(color) => self.handle_copy_hex_color(color),
+                InputEffect::PasteHex(target) => self.handle_paste_hex_color(target),
+                effect @ (InputEffect::Backend(_)
+                | InputEffect::SpotlightMagnifierFeedback
+                | InputEffect::ToolbarPersistence(_)
+                | InputEffect::KeybindingEdit(_)
+                | InputEffect::OutputFocus(_)
+                | InputEffect::Zoom(_)
+                | InputEffect::TextCopy(_)
+                | InputEffect::TextPaste(_)
+                | InputEffect::SelectionClipboardPublish(_)
+                | InputEffect::ClipboardPaste(_)
+                | InputEffect::FrozenPass { .. }
+                | InputEffect::EyedropperToggle
+                | InputEffect::OcrPass { .. }
+                | InputEffect::BoardRuntimeUi(_)) => {
+                    unreachable!("toolbar drain returned {effect:?}")
+                }
+            }
         }
     }
 

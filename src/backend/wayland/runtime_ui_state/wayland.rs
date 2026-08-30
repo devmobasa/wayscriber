@@ -336,73 +336,73 @@ impl WaylandState {
         self.input_state.needs_redraw = true;
     }
 
-    pub(in crate::backend::wayland) fn drain_pending_board_runtime_ui_actions(&mut self) {
+    pub(in crate::backend::wayland) fn apply_board_runtime_ui_action(
+        &mut self,
+        action: crate::input::boards::PendingBoardRuntimeUiAction,
+    ) {
         use crate::input::boards::PendingBoardRuntimeUiAction;
 
-        for action in self.input_state.take_pending_board_runtime_ui_actions() {
-            match action {
-                PendingBoardRuntimeUiAction::TogglePin {
-                    board_id,
-                    board_identity_generation,
-                    pin_seed,
-                } => {
-                    if self.input_state.boards.board_identity_generation()
-                        != board_identity_generation
-                    {
-                        continue;
-                    }
-                    let Some(current) = self
-                        .input_state
-                        .boards
-                        .board_states()
-                        .iter()
-                        .find(|board| board.spec.id == board_id)
-                        .map(|board| board.spec.pinned)
-                    else {
-                        continue;
-                    };
-                    let Some(runtime) = self.runtime_ui.as_mut() else {
-                        self.input_state
-                            .apply_board_pinned_runtime(&board_id, !current);
-                        continue;
-                    };
-                    let Some(prepared) =
-                        runtime.begin_board_pin_toggle(&self.config, board_id, pin_seed, current)
-                    else {
-                        continue;
-                    };
-                    let applied = self
-                        .input_state
-                        .apply_board_pinned_runtime(&prepared.board_id, prepared.desired);
-                    let finish = self
-                        .runtime_ui
-                        .as_mut()
-                        .expect("runtime state remained available")
-                        .finish_board_pin_toggle(prepared, applied);
+        match action {
+            PendingBoardRuntimeUiAction::TogglePin {
+                board_id,
+                board_identity_generation,
+                pin_seed,
+            } => {
+                if self.input_state.boards.board_identity_generation() != board_identity_generation
+                {
+                    return;
+                }
+                let Some(current) = self
+                    .input_state
+                    .boards
+                    .board_states()
+                    .iter()
+                    .find(|board| board.spec.id == board_id)
+                    .map(|board| board.spec.pinned)
+                else {
+                    return;
+                };
+                let Some(runtime) = self.runtime_ui.as_mut() else {
+                    self.input_state
+                        .apply_board_pinned_runtime(&board_id, !current);
+                    return;
+                };
+                let Some(prepared) =
+                    runtime.begin_board_pin_toggle(&self.config, board_id, pin_seed, current)
+                else {
+                    return;
+                };
+                let applied = self
+                    .input_state
+                    .apply_board_pinned_runtime(&prepared.board_id, prepared.desired);
+                let finish = self
+                    .runtime_ui
+                    .as_mut()
+                    .expect("runtime state remained available")
+                    .finish_board_pin_toggle(prepared, applied);
+                self.apply_toolbar_runtime_finish(finish);
+            }
+            PendingBoardRuntimeUiAction::IdentityDeleted { board_id } => {
+                if let Some(runtime) = self.runtime_ui.as_mut() {
+                    runtime.remove_board_identity(&self.config, &board_id);
+                }
+            }
+            PendingBoardRuntimeUiAction::IdentityAvailable {
+                board_id,
+                pin_seed,
+                pinned,
+            } => {
+                let finish = self.runtime_ui.as_mut().and_then(|runtime| {
+                    runtime.restore_board_identity(
+                        &self.config,
+                        &mut self.input_state,
+                        board_id,
+                        pin_seed,
+                        pinned,
+                    )
+                });
+                if let Some(finish) = finish {
                     self.apply_toolbar_runtime_finish(finish);
-                }
-                PendingBoardRuntimeUiAction::IdentityDeleted { board_id } => {
-                    if let Some(runtime) = self.runtime_ui.as_mut() {
-                        runtime.remove_board_identity(&self.config, &board_id);
-                    }
-                }
-                PendingBoardRuntimeUiAction::IdentityAvailable {
-                    board_id,
-                    pin_seed,
-                    pinned,
-                } => {
-                    let finish = self.runtime_ui.as_mut().and_then(|runtime| {
-                        runtime.restore_board_identity(
-                            &self.config,
-                            &mut self.input_state,
-                            board_id,
-                            pin_seed,
-                            pinned,
-                        )
-                    });
-                    if let Some(finish) = finish {
-                        self.apply_toolbar_runtime_finish(finish);
-                    }
                 }
             }
         }

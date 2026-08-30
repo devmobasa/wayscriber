@@ -7,8 +7,8 @@ use crate::draw::shape::{
 };
 use crate::input::events::Key;
 use crate::input::state::{
-    DrawingState, InputState, TextClipboardRequest, TextCutTarget, TextInputMode, TextPasteEdit,
-    TextPasteTarget,
+    DrawingState, InputEffect, InputState, TextClipboardRequest, TextCutTarget, TextInputMode,
+    TextPasteEdit, TextPasteTarget,
 };
 
 use super::bindings::{fallback_unshifted_label, key_to_action_label};
@@ -181,7 +181,7 @@ impl InputState {
                 Key::Char('x' | 'X') if self.cut_text_selection() => return true,
                 Key::Char('v' | 'V') => {
                     if let Some(target) = self.capture_text_paste_target() {
-                        self.pending_text_paste.push_back(target);
+                        self.emit_input_effect(InputEffect::TextPaste(target));
                     }
                     return true;
                 }
@@ -342,8 +342,10 @@ impl InputState {
         let Some((_, text)) = self.selected_text() else {
             return false;
         };
-        self.pending_text_copy
-            .push_back(TextClipboardRequest { text, cut: None });
+        self.emit_input_effect(InputEffect::TextCopy(TextClipboardRequest {
+            text,
+            cut: None,
+        }));
         true
     }
 
@@ -354,14 +356,14 @@ impl InputState {
         let Some((range, text)) = self.selected_text() else {
             return false;
         };
-        self.pending_text_copy.push_back(TextClipboardRequest {
+        self.emit_input_effect(InputEffect::TextCopy(TextClipboardRequest {
             text,
             cut: Some(TextCutTarget {
                 generation: self.text_input_generation,
                 revision: self.text_input_revision,
                 range,
             }),
-        });
+        }));
         true
     }
 
@@ -473,11 +475,6 @@ impl InputState {
         })
     }
 
-    /// Take the text captured for a pending clipboard copy/cut, if any.
-    pub(crate) fn take_pending_text_copy(&mut self) -> Option<TextClipboardRequest> {
-        self.pending_text_copy.pop_front()
-    }
-
     /// Complete a successful text clipboard publication. Copies need no state
     /// change; cuts delete only if the originating selection is still intact.
     pub(crate) fn complete_text_copy(&mut self, request: TextClipboardRequest) {
@@ -511,11 +508,6 @@ impl InputState {
             self.needs_redraw = true;
             self.update_text_preview_dirty_from_editor();
         }
-    }
-
-    /// Take and clear a pending clipboard-paste request.
-    pub(crate) fn take_pending_text_paste(&mut self) -> Option<TextPasteTarget> {
-        self.pending_text_paste.pop_front()
     }
 }
 

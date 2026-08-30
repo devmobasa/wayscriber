@@ -45,10 +45,7 @@ pub(in crate::backend::wayland) fn sample_at(
 }
 
 impl WaylandState {
-    pub(in crate::backend::wayland) fn handle_pending_eyedropper_toggle(&mut self) {
-        if !self.input_state.take_pending_eyedropper_toggle() {
-            return;
-        }
+    pub(in crate::backend::wayland) fn handle_eyedropper_toggle(&mut self) {
         if self.input_state.eyedropper_state().is_active()
             || self.input_state.eyedropper_state().is_pending()
         {

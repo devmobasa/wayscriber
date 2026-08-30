@@ -10,7 +10,7 @@ use super::super::helpers::friendly_capture_error;
 use crate::capture::file::{FileSaveConfig, expand_tilde};
 use crate::capture::{CaptureOutcome, CapturePoll, CaptureRequestId, ImageOperationKind};
 use crate::config::Action;
-use crate::input::state::PendingBackendAction;
+use crate::input::state::{InputEffect, InputEffectDrain, PendingBackendAction};
 use crate::notification;
 
 pub(super) fn poll_portal_captures(state: &mut WaylandState, now: Instant) {
@@ -113,70 +113,76 @@ pub(super) fn handle_pending_actions(
     state.poll_session_file_dialog_completion(qh);
     state.poll_desktop_open_completion();
     state.drain_clipboard_requests();
-    state.handle_pending_eyedropper_toggle();
-    state.handle_pending_ocr_request();
-    // Copy/paste-hex requests from the color picker popup's pointer release are
-    // drained here: unlike the toolbar/key paths, that release has no other
-    // drain site. An accepted quick-color recolor is queued from the same
-    // release (clicking OK), so its config write belongs here too — otherwise
-    // the swatch would look saved until some later key or toolbar event.
-    if let Some(color) = state.input_state.take_pending_copy_hex_request() {
-        state.handle_copy_hex_color(color);
-    }
-    if let Some(target) = state.input_state.take_pending_paste_hex_request() {
-        state.handle_paste_hex_color(target);
-    }
-    if let Some(edit) = state.input_state.take_pending_quick_color_edit() {
-        state.handle_quick_color_edit(edit);
-    }
-    // Every shortcut edit recorded since the last pass, not just the newest.
-    // One batch of input events can produce two of them — a captured chord and
-    // then a correction — and each is its own write with its own answer, so
-    // keeping only the last would lose an edit with no save and no toast.
-    for request in state.input_state.take_pending_keybinding_edits() {
-        state.handle_keybinding_edit(request);
+    let effects = state
+        .input_state
+        .drain_input_effects(InputEffectDrain::Runtime);
+    let mut config_completions_drained = false;
+    let mut toolbar_persistence_drained = false;
+    for effect in effects {
+        if !config_completions_drained
+            && matches!(
+                effect,
+                InputEffect::Backend(_)
+                    | InputEffect::FrozenPass { .. }
+                    | InputEffect::BoardRuntimeUi(_)
+                    | InputEffect::SpotlightMagnifierFeedback
+                    | InputEffect::OutputFocus(_)
+                    | InputEffect::Zoom(_)
+            )
+        {
+            state.drain_config_edit_completions();
+            config_completions_drained = true;
+        }
+        if !toolbar_persistence_drained
+            && matches!(effect, InputEffect::OutputFocus(_) | InputEffect::Zoom(_))
+        {
+            state.drain_pending_toolbar_persistence();
+            toolbar_persistence_drained = true;
+        }
+        match effect {
+            InputEffect::EyedropperToggle => state.handle_eyedropper_toggle(),
+            InputEffect::OcrPass {
+                requested,
+                dismissed_by_toolbar,
+            } => {
+                if requested {
+                    state.handle_ocr_request(dismissed_by_toolbar);
+                }
+            }
+            InputEffect::CopyHex(color) => state.handle_copy_hex_color(color),
+            InputEffect::PasteHex(target) => state.handle_paste_hex_color(target),
+            InputEffect::QuickColor(edit) => state.handle_quick_color_edit(edit),
+            InputEffect::KeybindingEdit(request) => state.handle_keybinding_edit(request),
+            InputEffect::Backend(action) => apply_backend_effect(state, action),
+            InputEffect::FrozenPass { user_requested } => {
+                handle_frozen_toggle(state, user_requested);
+            }
+            InputEffect::BoardRuntimeUi(action) => state.apply_board_runtime_ui_action(action),
+            InputEffect::SpotlightMagnifierFeedback => {
+                state.show_spotlight_magnifier_feedback_if_unavailable();
+            }
+            InputEffect::OutputFocus(action) => state.handle_output_focus_action(qh, action),
+            InputEffect::Zoom(action) => state.handle_zoom_action(action),
+            effect @ (InputEffect::ToolbarPersistence(_)
+            | InputEffect::TextCopy(_)
+            | InputEffect::TextPaste(_)
+            | InputEffect::SelectionClipboardPublish(_)
+            | InputEffect::ClipboardPaste(_)
+            | InputEffect::Preset(_)) => {
+                unreachable!("runtime drain returned {effect:?}")
+            }
+        }
     }
     // Config writes that finished on the worker since the last pass. A finished
     // write is what installs a shortcut edit and what decides every one of the
     // three gestures' toasts, so it is drained on the same cadence as the
     // requests that produced it; the worker also wakes the loop when it
     // completes, so the answer is not left waiting for unrelated input.
-    state.drain_config_edit_completions();
-    // A native region action queues its frozen acquisition. Drain that action
-    // before the established frozen-toggle slot so acquisition starts in this
-    // pass instead of waiting for an unrelated wake or protocol event.
-    if let Some(action) = take_pending_region_capture_action(&mut state.input_state) {
-        state.handle_capture_action(action);
+    if !config_completions_drained {
+        state.drain_config_edit_completions();
     }
-    handle_frozen_toggle(state);
-    state.drain_pending_board_runtime_ui_actions();
-    if state
-        .input_state
-        .take_pending_spotlight_magnifier_feedback()
-    {
-        state.show_spotlight_magnifier_feedback_if_unavailable();
-    }
-
-    if let Some(action) = state.input_state.take_pending_backend_action() {
-        match action {
-            PendingBackendAction::Screenshot(action) => state.handle_capture_action(action),
-            PendingBackendAction::MeasureMode => state.handle_measure_mode_action(),
-            PendingBackendAction::CanvasExport(action) => state.handle_canvas_export_action(action),
-            PendingBackendAction::BoardPdfExport(action) => {
-                state.handle_board_pdf_export_action(action);
-            }
-            PendingBackendAction::DesktopOpen(request) => state.handle_desktop_open(request),
-            PendingBackendAction::ClearSavedToolState => {
-                state.handle_clear_saved_tool_state_action();
-            }
-        }
-    }
-    state.drain_pending_toolbar_persistence();
-    if let Some(action) = state.input_state.take_pending_output_focus_action() {
-        state.handle_output_focus_action(qh, action);
-    }
-    if let Some(action) = state.input_state.take_pending_zoom_action() {
-        state.handle_zoom_action(action);
+    if !toolbar_persistence_drained {
+        state.drain_pending_toolbar_persistence();
     }
     state.sync_zoom_board_mode();
     state.resolve_pending_zoom_terminal();
@@ -201,18 +207,18 @@ struct FrozenTogglePassDecision {
     queued_to_start: Option<AcquisitionRecord>,
 }
 
-fn take_pending_region_capture_action(
-    input_state: &mut crate::input::InputState,
-) -> Option<Action> {
-    match input_state.take_pending_backend_action() {
-        Some(PendingBackendAction::Screenshot(action)) if action.is_region_capture() => {
-            Some(action)
+fn apply_backend_effect(state: &mut WaylandState, action: PendingBackendAction) {
+    match action {
+        PendingBackendAction::Screenshot(action) => state.handle_capture_action(action),
+        PendingBackendAction::MeasureMode => state.handle_measure_mode_action(),
+        PendingBackendAction::CanvasExport(action) => state.handle_canvas_export_action(action),
+        PendingBackendAction::BoardPdfExport(action) => {
+            state.handle_board_pdf_export_action(action);
         }
-        Some(pending) => {
-            input_state.set_pending_backend_action(pending);
-            None
+        PendingBackendAction::DesktopOpen(request) => state.handle_desktop_open(request),
+        PendingBackendAction::ClearSavedToolState => {
+            state.handle_clear_saved_tool_state_action();
         }
-        None => None,
     }
 }
 
@@ -244,9 +250,9 @@ fn frozen_toggle_pass_decision(
     }
 }
 
-fn handle_frozen_toggle(state: &mut WaylandState) {
+fn handle_frozen_toggle(state: &mut WaylandState, user_requested: bool) {
     let decision = frozen_toggle_pass_decision(
-        state.input_state.take_pending_frozen_toggle(),
+        user_requested,
         state.screen_acquisition_slot(),
         state.input_state.frozen_active(),
         state.frozen_enabled(),
@@ -751,34 +757,6 @@ mod tests {
                 user_action: FrozenUserToggleAction::IgnoreInProgress,
                 queued_to_start: Some(user),
             }
-        );
-    }
-
-    #[test]
-    fn region_capture_action_is_partitioned_before_the_frozen_drain() {
-        let mut input = crate::input::state::test_support::make_test_input_state();
-        input.set_pending_backend_action(PendingBackendAction::Screenshot(
-            Action::CaptureClipboardSelection,
-        ));
-        assert_eq!(
-            take_pending_region_capture_action(&mut input),
-            Some(Action::CaptureClipboardSelection)
-        );
-        assert_eq!(input.take_pending_backend_action(), None);
-
-        input.set_pending_backend_action(PendingBackendAction::Screenshot(
-            Action::CaptureClipboardFull,
-        ));
-        assert_eq!(
-            take_pending_region_capture_action(&mut input),
-            None,
-            "non-region screenshots keep their established drain position"
-        );
-        assert_eq!(
-            input.take_pending_backend_action(),
-            Some(PendingBackendAction::Screenshot(
-                Action::CaptureClipboardFull
-            ))
         );
     }
 }

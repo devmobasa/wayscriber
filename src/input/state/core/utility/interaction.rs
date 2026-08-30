@@ -193,7 +193,7 @@ impl InputState {
     /// Tears down the transient editor state shared by every text-input exit.
     pub(crate) fn end_text_input_session(&mut self) {
         self.ime = crate::input::state::ImeCompositionState::default();
-        self.pending_text_paste.clear();
+        self.clear_pending_text_pastes();
         self.end_pointer_drag();
         self.clear_text_preview_dirty();
         self.last_text_preview_bounds = None;

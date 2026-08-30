@@ -42,7 +42,7 @@ impl InputState {
         self.selection_clipboard_generation = self.selection_clipboard_generation.wrapping_add(1);
         self.selection_publish_state = SelectionPublishState::NotAttempted;
         self.selection_clipboard = Some(copied.clone());
-        self.pending_selection_clipboard_publish = self
+        let pending_publish = self
             .selection_clipboard_payload(copied)
             .and_then(|payload| {
                 serde_json::to_string(&payload).ok().map(|payload_json| {
@@ -52,6 +52,7 @@ impl InputState {
                     }
                 })
             });
+        self.replace_selection_clipboard_publish(pending_publish);
         count
     }
 
@@ -170,7 +171,9 @@ impl InputState {
             local_selection_fallback_generation: self.local_selection_fallback_generation(),
         };
         self.active_clipboard_paste_request_id = Some(id);
-        self.pending_clipboard_paste_request = Some(request.clone());
+        self.emit_input_effect(super::super::base::InputEffect::ClipboardPaste(
+            request.clone(),
+        ));
         request
     }
 

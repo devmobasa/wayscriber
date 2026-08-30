@@ -54,6 +54,7 @@ pub(crate) use base::{
     PendingOnboardingUsage, PendingSelectionClipboardPublish, PendingToolbarPersistence,
     SelectionPublishState, WayscriberClipboardSelection,
 };
+pub(crate) use base::{InputEffect, InputEffectDrain};
 pub(crate) use base::{KeybindingEditOperation, KeybindingEditRequest};
 pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout};
 pub(crate) use captured_image::BoardPasteTarget;

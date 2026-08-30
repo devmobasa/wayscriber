@@ -1,20 +1,11 @@
-use super::super::base::InputState;
+use super::super::base::{InputEffect, InputState};
 
 impl InputState {
     /// Marks a frozen-mode toggle request for the backend.
     pub(crate) fn request_frozen_toggle(&mut self) {
-        self.pending_frozen_toggle = true;
-    }
-
-    /// Returns and clears any pending frozen-mode toggle request.
-    pub fn take_pending_frozen_toggle(&mut self) -> bool {
-        let pending = self.pending_frozen_toggle;
-        self.pending_frozen_toggle = false;
-        pending
-    }
-
-    pub(crate) fn pending_frozen_toggle(&self) -> bool {
-        self.pending_frozen_toggle
+        self.emit_input_effect(InputEffect::FrozenPass {
+            user_requested: true,
+        });
     }
 
     /// Updates the cached frozen-mode status and triggers a redraw when it changes.

@@ -159,10 +159,12 @@ impl InputState {
             *slot_ref = Some(preset.clone());
         }
         self.set_preset_feedback(slot, PresetFeedbackKind::Save);
-        self.pending_preset_action = Some(super::super::base::PresetAction::Save {
-            slot,
-            preset: Box::new(preset),
-        });
+        self.emit_input_effect(super::super::base::InputEffect::Preset(
+            super::super::base::PresetAction::Save {
+                slot,
+                preset: Box::new(preset),
+            },
+        ));
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         true
@@ -187,7 +189,9 @@ impl InputState {
         if self.active_preset_slot == Some(slot) {
             self.active_preset_slot = None;
         }
-        self.pending_preset_action = Some(super::super::base::PresetAction::Clear { slot });
+        self.emit_input_effect(super::super::base::InputEffect::Preset(
+            super::super::base::PresetAction::Clear { slot },
+        ));
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         had_preset
