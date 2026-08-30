@@ -18,6 +18,8 @@ const AUTOSAVE_HISTORY_FALLBACK_DEPTH: usize = 1;
 mod payload;
 mod recovery;
 mod save_as;
+#[cfg(test)]
+mod tests;
 
 use payload::{
     PayloadCandidate, estimate_from_candidate, payload_candidate, payload_within_limit,
@@ -279,6 +281,15 @@ fn prepare_session_parent_for_save(options: &SessionOptions) -> Result<()> {
     Ok(())
 }
 
+/// Atomically installs a prepared session payload over the current primary.
+///
+/// Keeping replacement as one rename is especially important when backups are
+/// disabled: unlinking the primary first would create a crash window with no
+/// recoverable session file at either path.
+fn replace_session_file(replacement: &Path, primary: &Path) -> std::io::Result<()> {
+    fs::rename(replacement, primary)
+}
+
 /// Removes a temporary file unless it was defused by a successful rename.
 ///
 /// The main save cannot use `durable_io::write_atomic` wholesale: it writes the
@@ -485,8 +496,6 @@ fn save_snapshot_inner(
             if !snapshot_has_board_data && !contentless_clear_boundary {
                 should_mark_backup_recoverable = true;
             }
-        } else {
-            fs::remove_file(&session_path).ok();
         }
     } else if preserves_recoverable_backup {
         should_mark_backup_recoverable = true;
@@ -499,7 +508,7 @@ fn save_snapshot_inner(
         write_recovery_recoverable_marker(options)?;
     }
 
-    fs::rename(&tmp_path, &session_path).with_context(|| {
+    replace_session_file(&tmp_path, &session_path).with_context(|| {
         format!(
             "failed to move temporary session file {} -> {}",
             tmp_path.display(),
