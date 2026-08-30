@@ -4,7 +4,7 @@ use crate::config::{
     TopDisplayMode, factory_individual_toolbar_item_visibility_settings,
 };
 use crate::domain::Action;
-use crate::input::state::{Toast, ToastPriority};
+use crate::input::state::{Toast, ToastPriority, TopMenuState};
 
 /// How long the "Cleared — Undo?" toast stays up after a mouse-path clear.
 pub(crate) const CLEAR_UNDO_TOAST_MS: u64 = 2000;
@@ -310,19 +310,11 @@ impl InputState {
             }
             TopDisplayMode::Micro => {
                 self.toolbar_top_minimized = false;
-                self.toolbar_shapes_expanded = false;
-                self.toolbar_top_overflow_open = false;
-                self.toolbar_session_popover_open = false;
-                self.toolbar_settings_popover_open = false;
-                self.toolbar_canvas_popover_open = false;
+                self.toolbar_top_menu = TopMenuState::Closed;
                 self.show_top_strip_surface();
             }
             TopDisplayMode::Hidden => {
-                self.toolbar_shapes_expanded = false;
-                self.toolbar_top_overflow_open = false;
-                self.toolbar_session_popover_open = false;
-                self.toolbar_settings_popover_open = false;
-                self.toolbar_canvas_popover_open = false;
+                self.toolbar_top_menu = TopMenuState::Closed;
             }
         }
         self.needs_redraw = true;

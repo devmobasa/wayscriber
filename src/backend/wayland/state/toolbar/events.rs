@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     backend::wayland::runtime_ui_state::ToolbarRuntimeFinish,
-    input::InputState,
+    input::{InputState, state::TopMenuState},
     ui::toolbar::model::{
         ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPopover,
         ToolbarRuntimeUiPersistenceTarget, popovers_for_event,
@@ -339,41 +339,19 @@ impl WaylandState {
         {
             self.toolbar.mark_dirty();
         }
-        let dismiss_overflow = self.input_state.toolbar_top_overflow_open
-            && event_dismisses_popover(event, ToolbarPopover::TopOverflow);
-        let dismiss_shapes = self.input_state.toolbar_shapes_expanded
-            && event_dismisses_popover(event, ToolbarPopover::ShapePicker);
-        let dismiss_session = self.input_state.toolbar_session_popover_open
-            && event_dismisses_popover(event, ToolbarPopover::Session);
-        let dismiss_settings = self.input_state.toolbar_settings_popover_open
-            && event_dismisses_popover(event, ToolbarPopover::Settings);
-        let dismiss_canvas = self.input_state.toolbar_canvas_popover_open
-            && event_dismisses_popover(event, ToolbarPopover::Canvas);
-        if !(dismiss_overflow
-            || dismiss_shapes
-            || dismiss_session
-            || dismiss_settings
-            || dismiss_canvas)
-        {
+        let open_popover = match self.input_state.toolbar_top_menu {
+            TopMenuState::Closed => return,
+            TopMenuState::ShapePicker => ToolbarPopover::ShapePicker,
+            TopMenuState::TopOverflow => ToolbarPopover::TopOverflow,
+            TopMenuState::CanvasPopover => ToolbarPopover::Canvas,
+            TopMenuState::SessionPopover => ToolbarPopover::Session,
+            TopMenuState::SettingsPopover => ToolbarPopover::Settings,
+        };
+        if !event_dismisses_popover(event, open_popover) {
             return;
         }
-        if dismiss_overflow {
-            self.input_state.toolbar_top_overflow_open = false;
-        }
-        if dismiss_shapes {
-            self.input_state.toolbar_shapes_expanded = false;
-        }
-        if dismiss_session {
-            self.input_state.toolbar_session_popover_open = false;
-        }
-        if dismiss_settings {
-            self.input_state.toolbar_settings_popover_open = false;
-        }
-        if dismiss_canvas {
-            self.input_state.toolbar_canvas_popover_open = false;
-        }
+        self.input_state.close_top_toolbar_menus();
         self.toolbar.mark_dirty();
-        self.input_state.needs_redraw = true;
     }
 
     fn handle_toolbar_move_event(

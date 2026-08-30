@@ -337,20 +337,10 @@ pub struct InputState {
     pub resolved_toolbar_items: ResolvedToolbarItems,
     /// Active toolbar customization reorder drag source.
     pub toolbar_customize_drag: Option<(ToolbarItemOrderGroup, ToolbarItemId)>,
-    /// Whether the simple-mode shape picker is expanded
-    pub toolbar_shapes_expanded: bool,
-    /// Whether the top strip's overflow menu (width-dropped items) is open.
-    pub toolbar_top_overflow_open: bool,
-    /// Whether the Session popover (anchored to the top overflow toggle) is
-    /// open. Mutually exclusive with the Settings popover and the overflow.
-    pub toolbar_session_popover_open: bool,
-    /// Whether the Settings popover (anchored to the top overflow toggle)
-    /// is open. Mutually exclusive with the Session popover and the overflow.
-    pub toolbar_settings_popover_open: bool,
-    /// Whether the Canvas popover (anchored to the top overflow toggle) is
-    /// open. Mutually exclusive with the Session/Settings popovers and the
-    /// overflow.
-    pub toolbar_canvas_popover_open: bool,
+    /// The one open top-strip menu, if any. A single typed state makes the
+    /// shape picker, overflow, and Canvas/Session/Settings popovers mutually
+    /// exclusive by construction.
+    pub(crate) toolbar_top_menu: crate::input::state::TopMenuState,
     /// Internal scroll offset of the open Canvas/Session/Settings popover
     /// (logical pixels, clamped at render; reset when a popover opens).
     pub toolbar_top_popover_scroll: f64,

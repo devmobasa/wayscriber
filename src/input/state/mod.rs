@@ -6,7 +6,7 @@ pub(crate) mod interaction;
 mod mouse;
 mod render;
 mod spotlight;
-pub(crate) use core::{IdleHandle, SpotlightMagnificationTrack};
+pub(crate) use core::{IdleHandle, SpotlightMagnificationTrack, TopMenuState};
 pub(crate) use spotlight::{
     SpotlightFrameRegions, SpotlightMagnificationGesture, SpotlightWheelClaim,
     SpotlightWheelOutcome,

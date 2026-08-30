@@ -191,11 +191,16 @@ impl ToolbarSnapshot {
             presets,
             active_preset_slot: state.active_preset_slot,
             preset_feedback,
-            shape_picker_open: state.toolbar_shapes_expanded,
-            top_overflow_open: state.toolbar_top_overflow_open,
-            session_popover_open: state.toolbar_session_popover_open,
-            settings_popover_open: state.toolbar_settings_popover_open,
-            canvas_popover_open: state.toolbar_canvas_popover_open,
+            shape_picker_open: state.toolbar_top_menu
+                == crate::input::state::TopMenuState::ShapePicker,
+            top_overflow_open: state.toolbar_top_menu
+                == crate::input::state::TopMenuState::TopOverflow,
+            session_popover_open: state.toolbar_top_menu
+                == crate::input::state::TopMenuState::SessionPopover,
+            settings_popover_open: state.toolbar_top_menu
+                == crate::input::state::TopMenuState::SettingsPopover,
+            canvas_popover_open: state.toolbar_top_menu
+                == crate::input::state::TopMenuState::CanvasPopover,
             top_popover_scroll: state.toolbar_top_popover_scroll,
             top_minimized: state.toolbar_top_minimized,
             top_display_mode: state.toolbar_top_display_mode,
@@ -229,7 +234,7 @@ mod tests {
     use super::*;
     use crate::config::{QuickColorPalette, QuickColorPaletteEntry};
     use crate::draw::Color;
-    use crate::input::state::test_support::make_test_input_state;
+    use crate::input::state::{TopMenuState, test_support::make_test_input_state};
 
     #[test]
     fn snapshot_carries_input_state_quick_colors() {
@@ -248,5 +253,48 @@ mod tests {
         let snapshot = ToolbarSnapshot::from_input(&state);
 
         assert_eq!(snapshot.quick_colors, palette);
+    }
+
+    #[test]
+    fn snapshot_projects_exactly_one_active_top_menu() {
+        let cases = [
+            (TopMenuState::Closed, [false; 5]),
+            (
+                TopMenuState::ShapePicker,
+                [true, false, false, false, false],
+            ),
+            (
+                TopMenuState::TopOverflow,
+                [false, true, false, false, false],
+            ),
+            (
+                TopMenuState::CanvasPopover,
+                [false, false, true, false, false],
+            ),
+            (
+                TopMenuState::SessionPopover,
+                [false, false, false, true, false],
+            ),
+            (
+                TopMenuState::SettingsPopover,
+                [false, false, false, false, true],
+            ),
+        ];
+
+        for (top_menu, expected) in cases {
+            let mut state = make_test_input_state();
+            state.toolbar_top_menu = top_menu;
+
+            let snapshot = ToolbarSnapshot::from_input(&state);
+            let actual = [
+                snapshot.shape_picker_open,
+                snapshot.top_overflow_open,
+                snapshot.canvas_popover_open,
+                snapshot.session_popover_open,
+                snapshot.settings_popover_open,
+            ];
+
+            assert_eq!(actual, expected, "projecting {top_menu:?}");
+        }
     }
 }

@@ -87,27 +87,30 @@ fn runtime_rebuild_reuses_minimize_transition_cleanup() {
     ));
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
 
-    let mut rebuilt = input_from_config(&config);
-    rebuilt.toolbar_shapes_expanded = true;
-    rebuilt.toolbar_top_overflow_open = true;
-    rebuilt.toolbar_session_popover_open = true;
-    rebuilt.toolbar_settings_popover_open = true;
-    rebuilt.toolbar_canvas_popover_open = true;
-    rebuilt.toolbar_customize_items_open = true;
-    rebuilt.toolbar_customize_items_group =
-        Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools);
-    let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
+    for menu in [
+        crate::input::state::TopMenuState::ShapePicker,
+        crate::input::state::TopMenuState::TopOverflow,
+        crate::input::state::TopMenuState::CanvasPopover,
+        crate::input::state::TopMenuState::SessionPopover,
+        crate::input::state::TopMenuState::SettingsPopover,
+    ] {
+        let mut rebuilt = input_from_config(&config);
+        rebuilt.toolbar_top_menu = menu;
+        rebuilt.toolbar_customize_items_open = true;
+        rebuilt.toolbar_customize_items_group =
+            Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools);
+        let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
 
-    runtime.apply_live_state(&mut rebuilt, &mut positions);
+        runtime.apply_live_state(&mut rebuilt, &mut positions);
 
-    assert!(rebuilt.toolbar_top_minimized);
-    assert!(!rebuilt.toolbar_shapes_expanded);
-    assert!(!rebuilt.toolbar_top_overflow_open);
-    assert!(!rebuilt.toolbar_session_popover_open);
-    assert!(!rebuilt.toolbar_settings_popover_open);
-    assert!(!rebuilt.toolbar_canvas_popover_open);
-    assert!(!rebuilt.toolbar_customize_items_open);
-    assert!(rebuilt.toolbar_customize_items_group.is_none());
+        assert!(rebuilt.toolbar_top_minimized);
+        assert_eq!(
+            rebuilt.toolbar_top_menu,
+            crate::input::state::TopMenuState::Closed
+        );
+        assert!(!rebuilt.toolbar_customize_items_open);
+        assert!(rebuilt.toolbar_customize_items_group.is_none());
+    }
     runtime.shutdown_blocking();
 }
 

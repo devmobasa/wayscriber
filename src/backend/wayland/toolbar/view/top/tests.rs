@@ -2,7 +2,7 @@ use super::*;
 use crate::backend::wayland::toolbar::layout::{ToolbarLayoutSpec, top_size};
 use crate::backend::wayland::toolbar::view::{ShortcutBadgePlacement, WidgetKind, WidgetTree};
 use crate::config::{Action, action_label, toolbar_item_ids as ids};
-use crate::input::state::test_support::make_test_input_state;
+use crate::input::state::{TopMenuState, test_support::make_test_input_state};
 use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
 
 fn snapshot() -> ToolbarSnapshot {
@@ -349,7 +349,7 @@ fn strip_fits_its_declared_width() {
 #[test]
 fn shape_picker_grid_hosts_the_relocated_shapes() {
     let mut state = make_test_input_state();
-    state.toolbar_shapes_expanded = true;
+    state.toolbar_top_menu = TopMenuState::ShapePicker;
     let snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
     assert!(snapshot.shape_picker_open);
@@ -369,7 +369,7 @@ fn shape_picker_grid_hosts_the_relocated_shapes() {
 #[test]
 fn shape_picker_shows_fill_while_line_is_active() {
     let mut state = make_test_input_state();
-    state.toolbar_shapes_expanded = true;
+    state.toolbar_top_menu = TopMenuState::ShapePicker;
     let mut snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
     snapshot.active_tool = crate::input::Tool::Line;
@@ -400,7 +400,7 @@ fn shape_picker_shows_fill_while_line_is_active() {
 #[test]
 fn input_rects_cover_islands_and_open_popovers_only() {
     let mut state = make_test_input_state();
-    state.toolbar_shapes_expanded = false;
+    state.toolbar_top_menu = TopMenuState::Closed;
     let snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
     let (w, h) = top_size(&snapshot);
@@ -429,7 +429,7 @@ fn input_rects_cover_islands_and_open_popovers_only() {
         assert_eq!(island.rect, *input_rect, "{}", island.id);
     }
 
-    state.toolbar_shapes_expanded = true;
+    state.toolbar_top_menu = TopMenuState::ShapePicker;
     let snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
     let (w, h) = top_size(&snapshot);
@@ -463,7 +463,7 @@ fn input_rects_cover_islands_and_open_popovers_only() {
 #[test]
 fn island_backgrounds_stop_at_bar_band_when_popover_is_open() {
     let mut state = make_test_input_state();
-    state.toolbar_shapes_expanded = true;
+    state.toolbar_top_menu = TopMenuState::ShapePicker;
     let snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
     let (w, h) = top_size(&snapshot);

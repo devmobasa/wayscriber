@@ -52,13 +52,8 @@ impl InputState {
         } else {
             self.set_tool_override(Some(tool))
         };
-        if self.toolbar_shapes_expanded {
-            self.toolbar_shapes_expanded = false;
-            changed = true;
-        }
-        if self.toolbar_top_overflow_open {
-            self.toolbar_top_overflow_open = false;
-            changed = true;
+        if self.toolbar_top_menu.is_flyout() {
+            changed |= self.toolbar_top_menu.close();
         }
         changed
     }
