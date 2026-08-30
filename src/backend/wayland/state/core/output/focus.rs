@@ -113,6 +113,7 @@ impl WaylandState {
         qh: &QueueHandle<Self>,
         output: &wl_output::WlOutput,
     ) {
+        self.begin_main_layer_focus_acquisition();
         let Some(layer_shell) = self.layer_shell.as_ref() else {
             return;
         };

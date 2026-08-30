@@ -32,6 +32,35 @@ pub enum OverlaySuppressionKeyboardPolicy {
     Retain,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) enum MainLayerFocusPhase {
+    #[default]
+    Acquiring,
+    Acquired,
+}
+
+impl MainLayerFocusPhase {
+    pub(super) fn begin(&mut self) {
+        *self = Self::Acquiring;
+    }
+
+    pub(super) fn complete(&mut self) -> bool {
+        if *self == Self::Acquired {
+            return false;
+        }
+        *self = Self::Acquired;
+        true
+    }
+
+    pub(super) fn is_acquiring(self) -> bool {
+        self == Self::Acquiring
+    }
+
+    pub(super) fn after_keyboard_teardown(self) -> Self {
+        self
+    }
+}
+
 /// One-shot release latches owned by the pointing device whose press armed
 /// them. Pointer and touch can both have an outstanding release; neither may
 /// consume or clear the other's sequence. Stylus contacts use tablet-tool
@@ -128,6 +157,7 @@ use wayland_client::protocol::wl_seat;
 #[derive(Debug, Default)]
 pub struct StateData {
     pub(super) has_keyboard_focus: bool,
+    pub(super) main_layer_focus_phase: MainLayerFocusPhase,
     pub(super) has_pointer_focus: bool,
     pub(super) current_mouse_x: i32,
     pub(super) current_mouse_y: i32,
@@ -256,6 +286,7 @@ impl StateData {
     pub fn new() -> Self {
         Self {
             has_keyboard_focus: false,
+            main_layer_focus_phase: MainLayerFocusPhase::default(),
             has_pointer_focus: false,
             current_mouse_x: 0,
             current_mouse_y: 0,
@@ -348,7 +379,7 @@ impl StateData {
 
 #[cfg(test)]
 mod tests {
-    use super::OverlaySuppression;
+    use super::{MainLayerFocusPhase, OverlaySuppression};
     use crate::input::state::RegionInputSource;
 
     #[test]
@@ -359,6 +390,20 @@ mod tests {
         assert!(!suppression.take(RegionInputSource::Touch));
         assert!(suppression.take(RegionInputSource::Pointer));
         assert!(!suppression.take(RegionInputSource::Pointer));
+    }
+
+    #[test]
+    fn main_layer_focus_phase_completes_once_and_restarts_for_a_new_surface() {
+        let mut phase = MainLayerFocusPhase::default();
+
+        assert!(phase.is_acquiring());
+        assert!(phase.complete());
+        assert!(!phase.is_acquiring());
+        assert!(!phase.complete());
+
+        phase.begin();
+
+        assert!(phase.is_acquiring());
     }
 
     #[test]

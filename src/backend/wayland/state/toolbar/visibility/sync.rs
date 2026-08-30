@@ -1,5 +1,6 @@
 use super::*;
 use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
+use smithay_client_toolkit::shell::WaylandSurface;
 
 fn toolbar_visibility_for_frontend(
     requested: bool,
@@ -20,9 +21,6 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn desired_keyboard_interactivity(
         &self,
     ) -> KeyboardInteractivity {
-        if self.overlay_keyboard_passthrough_requested() {
-            return KeyboardInteractivity::None;
-        }
         // GTK bars count as visible layer toolbars: the canvas must drop
         // from Exclusive to OnDemand while they are mapped, or compositors
         // that honor exclusivity (Hyprland) lock all input to the canvas
@@ -30,12 +28,14 @@ impl WaylandState {
         let toolbar_visible = !self.capture_picker_chrome_suppressed()
             && (self.toolbar.is_visible()
                 || (self.gtk_toolbars_active() && self.input_state.toolbar_top_visible()));
-        desired_keyboard_interactivity_for(
-            self.layer_shell.is_some(),
-            toolbar_visible,
-            self.inline_toolbars_active(),
-            self.input_state.is_color_picker_popup_open(),
-        )
+        keyboard_interactivity_for(KeyboardInteractivityPolicyInput {
+            keyboard_release_requested: self.overlay_keyboard_passthrough_requested(),
+            main_layer_focus_acquiring: self.main_layer_focus_acquiring(),
+            layer_shell_available: self.layer_shell.is_some(),
+            separate_toolbar_visible: toolbar_visible,
+            inline_toolbars_active: self.inline_toolbars_active(),
+            canvas_modal_active: self.input_state.is_color_picker_popup_open(),
+        })
     }
 
     fn log_toolbar_layer_shell_missing_once(&mut self) {
@@ -55,7 +55,7 @@ impl WaylandState {
         self.data.toolbar_layer_shell_missing_logged = true;
     }
 
-    /// Applies keyboard interactivity based on toolbar visibility.
+    /// Applies and commits keyboard interactivity when the desired mode changes.
     pub(in crate::backend::wayland) fn refresh_keyboard_interactivity(&mut self) {
         let desired = self.desired_keyboard_interactivity();
         let current = self.current_keyboard_interactivity();
@@ -63,6 +63,7 @@ impl WaylandState {
         let updated = if let Some(layer) = self.surface.layer_surface_mut() {
             if current != Some(desired) {
                 layer.set_keyboard_interactivity(desired);
+                layer.commit();
                 true
             } else {
                 false
