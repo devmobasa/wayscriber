@@ -512,12 +512,19 @@ pub(crate) struct PendingClipboardFallback {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HelperLaunchRequest {
+    About,
+    Configurator(Option<crate::configurator_destination::ConfiguratorDestination>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PendingBackendAction {
     Screenshot(Action),
     MeasureMode,
     CanvasExport(Action),
     BoardPdfExport(Action),
     DesktopOpen(crate::desktop_open::DesktopOpenRequest),
+    HelperLaunch(HelperLaunchRequest),
     ClearSavedToolState,
 }
 

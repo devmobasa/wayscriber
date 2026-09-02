@@ -106,6 +106,7 @@ mod desktop_open;
 mod eyedropper;
 mod font_catalog;
 mod gtk_toolbar;
+mod helper_launch;
 mod helpers;
 mod input_actions;
 mod input_hud;

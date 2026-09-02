@@ -53,8 +53,8 @@ pub use core::{
 #[allow(unused_imports)]
 pub(crate) use core::{
     BoardPasteTarget, ClipboardFingerprint, ClipboardPasteRequest, HelpOverlayPressSource,
-    HexPasteTarget, KeybindingEditOperation, KeybindingEditRequest, PasteAnchor,
-    PendingBackendAction, PendingOnboardingUsage, PendingSelectionClipboardPublish,
+    HelperLaunchRequest, HexPasteTarget, KeybindingEditOperation, KeybindingEditRequest,
+    PasteAnchor, PendingBackendAction, PendingOnboardingUsage, PendingSelectionClipboardPublish,
     PendingToolbarPersistence, SelectionPublishState, TextClipboardRequest, TextCutTarget,
     TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress, WayscriberClipboardSelection,
 };

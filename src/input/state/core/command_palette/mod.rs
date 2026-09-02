@@ -404,92 +404,31 @@ mod tests {
         assert!(state.command_palette_open);
     }
 
-    /// Where the configurator affordance sends the user is the whole of what it
-    /// does, so the test watches the launch itself: a stand-in configurator
-    /// writes down the arguments the palette handed it.
     #[test]
-    fn ctrl_shift_e_launches_the_configurator_at_the_rows_keybindings_section() {
-        use std::os::unix::fs::PermissionsExt;
+    fn ctrl_shift_e_requests_the_rows_keybindings_section() {
+        use crate::configurator_destination::{
+            ConfiguratorDestination, ConfiguratorScreen, KeybindingsSection,
+        };
+        use crate::input::state::{HelperLaunchRequest, PendingBackendAction};
 
-        let _environment = crate::test_env::lock();
-        let temp = crate::test_temp::tempdir().expect("tempdir");
-        let recorded = temp.path().join("arguments");
-        let recorder = temp.path().join("recording-configurator");
-        std::fs::write(
-            &recorder,
-            // Written under a scratch name and renamed so a read either sees
-            // the whole argument list or no file at all.
-            format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{0}.part'\nmv '{0}.part' '{0}'\n",
-                recorded.display()
-            ),
-        )
-        .expect("the recording configurator should be written");
-        let mut permissions = std::fs::metadata(&recorder)
-            .expect("the recording configurator should exist")
-            .permissions();
-        permissions.set_mode(0o700);
-        std::fs::set_permissions(&recorder, permissions)
-            .expect("the recording configurator should be executable");
+        let mut state = make_state();
+        state.toggle_command_palette();
+        state.command_palette_query = "pen tool".to_string();
+        state.modifiers.ctrl = true;
+        state.modifiers.shift = true;
 
-        let previous_configurator = std::env::var_os(crate::env_vars::CONFIGURATOR_ENV);
-        let previous_config_home = std::env::var_os(crate::env_vars::XDG_CONFIG_HOME_ENV);
-        // SAFETY: access to the process environment is serialized by test_env.
-        // The configurator override makes the broker accept the stand-in; the
-        // config home keeps a launch failure away from the developer's file.
-        unsafe {
-            std::env::set_var(crate::env_vars::CONFIGURATOR_ENV, &recorder);
-            std::env::set_var(crate::env_vars::XDG_CONFIG_HOME_ENV, temp.path());
-        }
-
-        let launched = record_shortcut_launch(&recorded);
-
-        // SAFETY: as above; restored before the assertion so a failure cannot
-        // leak this test's environment into the next one.
-        unsafe {
-            match previous_configurator {
-                Some(value) => std::env::set_var(crate::env_vars::CONFIGURATOR_ENV, value),
-                None => std::env::remove_var(crate::env_vars::CONFIGURATOR_ENV),
-            }
-            match previous_config_home {
-                Some(value) => std::env::set_var(crate::env_vars::XDG_CONFIG_HOME_ENV, value),
-                None => std::env::remove_var(crate::env_vars::XDG_CONFIG_HOME_ENV),
-            }
-        }
-
+        assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
         assert_eq!(
-            launched.as_deref(),
-            Some("--open\nkeybindings/tools?search=select pen tool\n"),
-            "Ctrl+Shift+E must open the section that holds the row's shortcut"
+            state.take_pending_backend_action(),
+            Some(PendingBackendAction::HelperLaunch(
+                HelperLaunchRequest::Configurator(Some(ConfiguratorDestination::with_search(
+                    ConfiguratorScreen::Keybindings(Some(KeybindingsSection::Tools)),
+                    "select pen tool",
+                )))
+            )),
+            "Ctrl+Shift+E must request the section that holds the row's shortcut"
         );
-    }
-
-    /// Press Ctrl+Shift+E and wait for the stand-in configurator to record its
-    /// arguments.
-    ///
-    /// The launch goes through the process broker's active-instance slot, which
-    /// a broker test running in parallel can replace and then clear.
-    /// Re-establishing the broker and pressing again keeps that race out of the
-    /// assertion.
-    fn record_shortcut_launch(recorded: &std::path::Path) -> Option<String> {
-        for _ in 0..3 {
-            let _broker = crate::process_broker::start_for_runtime().ok()?;
-            let mut state = make_state();
-            state.toggle_command_palette();
-            state.command_palette_query = "pen tool".to_string();
-            state.modifiers.ctrl = true;
-            state.modifiers.shift = true;
-            assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
-
-            let deadline = std::time::Instant::now() + Duration::from_secs(2);
-            while std::time::Instant::now() < deadline {
-                if let Ok(arguments) = std::fs::read_to_string(recorded) {
-                    return Some(arguments);
-                }
-                std::thread::sleep(Duration::from_millis(10));
-            }
-        }
-        None
+        assert!(state.take_pending_backend_action().is_none());
     }
 
     fn assert_palette_finds(query: &str, action: Action) {

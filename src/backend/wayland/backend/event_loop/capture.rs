@@ -216,6 +216,7 @@ fn apply_backend_effect(state: &mut WaylandState, action: PendingBackendAction) 
             state.handle_board_pdf_export_action(action);
         }
         PendingBackendAction::DesktopOpen(request) => state.handle_desktop_open(request),
+        PendingBackendAction::HelperLaunch(request) => state.handle_helper_launch(request),
         PendingBackendAction::ClearSavedToolState => {
             state.handle_clear_saved_tool_state_action();
         }

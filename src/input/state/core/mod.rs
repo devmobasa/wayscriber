@@ -50,9 +50,9 @@ pub(crate) use base::{
     TextCutTarget, TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress,
 };
 pub(crate) use base::{
-    ClipboardFingerprint, ClipboardPasteRequest, PasteAnchor, PendingBackendAction,
-    PendingOnboardingUsage, PendingSelectionClipboardPublish, PendingToolbarPersistence,
-    SelectionPublishState, WayscriberClipboardSelection,
+    ClipboardFingerprint, ClipboardPasteRequest, HelperLaunchRequest, PasteAnchor,
+    PendingBackendAction, PendingOnboardingUsage, PendingSelectionClipboardPublish,
+    PendingToolbarPersistence, SelectionPublishState, WayscriberClipboardSelection,
 };
 pub(crate) use base::{InputEffect, InputEffectDrain};
 pub(crate) use base::{KeybindingEditOperation, KeybindingEditRequest};
