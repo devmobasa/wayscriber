@@ -104,12 +104,12 @@ pub fn render_command_palette(
         inner_x,
         cursor_y,
         inner_width,
-        &input_state.command_palette_query,
+        &input_state.command_palette.query,
     );
 
     render_command_palette_rows(ctx, input_state, &rows, inner_x, inner_width, cursor_y);
 
-    if rows.is_empty() && !input_state.command_palette_query.is_empty() {
+    if rows.is_empty() && !input_state.command_palette.query.is_empty() {
         draw_command_palette_empty_state(
             ctx,
             inner_x,
@@ -125,7 +125,7 @@ pub fn render_command_palette(
         palette_width,
         cursor_y,
         rows.len(),
-        input_state.command_palette_scroll,
+        input_state.command_palette.scroll,
     );
 
     if let Some((tooltip, pointer_x, pointer_y)) =
@@ -460,7 +460,7 @@ fn render_command_palette_rows(
 ) {
     let styles = command_palette_row_styles();
 
-    let scroll = input_state.command_palette_scroll;
+    let scroll = input_state.command_palette.scroll;
     for (visible_idx, row) in rows
         .iter()
         .skip(scroll)
@@ -476,7 +476,7 @@ fn render_command_palette_rows(
                 command,
                 command_index,
             } => {
-                let is_selected = *command_index == input_state.command_palette_selected;
+                let is_selected = *command_index == input_state.command_palette.selected;
                 render_command_row(
                     ctx,
                     input_state,

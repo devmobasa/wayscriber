@@ -210,7 +210,7 @@ impl WaylandState {
         }
         if self.input_state.presenter_mode
             || self.input_state.show_help
-            || self.input_state.command_palette_open
+            || self.input_state.command_palette.open
             || self.input_state.tour_active
         {
             return;
@@ -275,7 +275,7 @@ impl WaylandState {
         }
         if self.input_state.presenter_mode
             || self.input_state.show_help
-            || self.input_state.command_palette_open
+            || self.input_state.command_palette.open
             || self.input_state.tour_active
         {
             return;

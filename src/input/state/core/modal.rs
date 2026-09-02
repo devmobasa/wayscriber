@@ -95,7 +95,7 @@ impl InputState {
     pub(crate) fn modal_is_open(&self, surface: ModalSurface) -> bool {
         match surface {
             ModalSurface::Tour => self.tour_active,
-            ModalSurface::CommandPalette => self.command_palette_open,
+            ModalSurface::CommandPalette => self.command_palette.open,
             ModalSurface::HelpOverlay => self.show_help,
             ModalSurface::RadialMenu => self.is_radial_menu_open(),
             ModalSurface::PrecisionEntry => self.is_precision_entry_open(),
@@ -133,7 +133,7 @@ impl InputState {
             // hidden.
             ModalSurface::Tour => self.end_tour(),
             ModalSurface::CommandPalette => {
-                self.command_palette_open = false;
+                self.command_palette.open = false;
                 self.clear_command_palette_repeat();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;

@@ -213,7 +213,7 @@ impl InputState {
             || self.is_board_picker_open()
             || self.is_properties_panel_open()
             || self.is_context_menu_open()
-            || self.command_palette_open
+            || self.command_palette.open
             || self.tour_active
     }
 

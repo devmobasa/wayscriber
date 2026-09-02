@@ -47,7 +47,7 @@ impl WaylandState {
         }
 
         // Block pointer input when modal overlays are active
-        if self.input_state.command_palette_open || self.input_state.tour_active {
+        if self.input_state.command_palette.open || self.input_state.tour_active {
             // For command palette, press handles the click - release is a no-op
             self.clear_pending_overlay_presses();
             return;

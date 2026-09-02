@@ -25,7 +25,7 @@ impl InputState {
     /// shortcut-capture modal is its second half, and it must swallow the same
     /// keys and pointer events the list does.
     pub(crate) fn command_palette_is_engaged(&self) -> bool {
-        self.command_palette_open || self.keybinding_capture_action.is_some()
+        self.command_palette.open || self.keybinding_capture_action.is_some()
     }
 
     /// Arm the capture modal for one action's next keyboard chord.
@@ -99,7 +99,7 @@ impl InputState {
             );
             return false;
         };
-        self.command_palette_open = false;
+        self.command_palette.open = false;
         self.clear_command_palette_repeat();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -109,22 +109,22 @@ impl InputState {
 
     fn open_command_palette_internal(&mut self, track_usage: bool) {
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::CommandPalette);
-        self.command_palette_open = true;
+        self.command_palette.open = true;
         self.clear_command_palette_repeat();
         if track_usage {
             self.pending_onboarding_usage.used_command_palette = true;
         }
-        self.command_palette_query.clear();
-        self.command_palette_selected = 0;
-        self.command_palette_scroll = 0;
+        self.command_palette.query.clear();
+        self.command_palette.selected = 0;
+        self.command_palette.scroll = 0;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
 
     /// Toggle the command palette visibility.
     pub(crate) fn toggle_command_palette(&mut self) {
-        if self.command_palette_open {
-            self.command_palette_open = false;
+        if self.command_palette.open {
+            self.command_palette.open = false;
             self.clear_command_palette_repeat();
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
@@ -158,7 +158,7 @@ impl InputState {
                 true
             }
             Key::Escape => {
-                self.command_palette_open = false;
+                self.command_palette.open = false;
                 self.clear_command_palette_repeat();
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
@@ -166,7 +166,7 @@ impl InputState {
             }
             Key::Return => {
                 if let Some(command) = self.selected_command() {
-                    self.command_palette_open = false;
+                    self.command_palette.open = false;
                     self.clear_command_palette_repeat();
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
@@ -187,9 +187,9 @@ impl InputState {
             }
             Key::Home => {
                 self.clear_command_palette_repeat();
-                if self.command_palette_selected != 0 || self.command_palette_scroll != 0 {
-                    self.command_palette_selected = 0;
-                    self.command_palette_scroll = 0;
+                if self.command_palette.selected != 0 || self.command_palette.scroll != 0 {
+                    self.command_palette.selected = 0;
+                    self.command_palette.scroll = 0;
                     self.needs_redraw = true;
                 }
                 true
@@ -198,11 +198,11 @@ impl InputState {
                 self.clear_command_palette_repeat();
                 let filtered = self.filtered_commands();
                 if let Some(last_index) = filtered.len().checked_sub(1)
-                    && self.command_palette_selected != last_index
+                    && self.command_palette.selected != last_index
                 {
-                    self.command_palette_selected = last_index;
+                    self.command_palette.selected = last_index;
                     // Scroll is in display-row space (headers included).
-                    self.command_palette_scroll = self
+                    self.command_palette.scroll = self
                         .command_palette_rows()
                         .len()
                         .saturating_sub(layout::COMMAND_PALETTE_MAX_VISIBLE);
@@ -215,8 +215,8 @@ impl InputState {
                 true
             }
             Key::Backspace => {
-                if !self.command_palette_query.is_empty() {
-                    self.command_palette_query.pop();
+                if !self.command_palette.query.is_empty() {
+                    self.command_palette.query.pop();
                     self.mark_command_palette_query_changed();
                 }
                 true
@@ -253,12 +253,12 @@ impl InputState {
                 true
             }
             Key::Char(ch) if !self.modifiers.ctrl && !ch.is_control() => {
-                self.command_palette_query.push(ch);
+                self.command_palette.query.push(ch);
                 self.mark_command_palette_query_changed();
                 true
             }
             Key::Space if !self.modifiers.ctrl => {
-                self.command_palette_query.push(' ');
+                self.command_palette.query.push(' ');
                 self.mark_command_palette_query_changed();
                 true
             }
@@ -299,26 +299,26 @@ impl InputState {
     }
 
     fn start_command_palette_repeat(&mut self, key: Key) {
-        self.command_palette_repeat_key = Some(key);
-        self.command_palette_repeat_next_tick =
+        self.command_palette.repeat_key = Some(key);
+        self.command_palette.repeat_next_tick =
             Some(Instant::now() + COMMAND_PALETTE_REPEAT_INITIAL_DELAY);
     }
 
     pub(crate) fn clear_command_palette_repeat(&mut self) {
-        self.command_palette_repeat_key = None;
-        self.command_palette_repeat_next_tick = None;
+        self.command_palette.repeat_key = None;
+        self.command_palette.repeat_next_tick = None;
     }
 
     fn move_command_palette_selection(&mut self, key: Key) -> bool {
         match key {
             Key::Up => {
-                if self.command_palette_selected == 0 {
+                if self.command_palette.selected == 0 {
                     return false;
                 }
-                self.command_palette_selected -= 1;
+                self.command_palette.selected -= 1;
                 let rows = self.command_palette_rows();
                 let display_index =
-                    command_palette_display_index(&rows, self.command_palette_selected);
+                    command_palette_display_index(&rows, self.command_palette.selected);
                 // Keep the group header visible when the selection sits
                 // directly beneath it.
                 let target_top = if display_index > 0
@@ -330,23 +330,23 @@ impl InputState {
                 } else {
                     display_index
                 };
-                if target_top < self.command_palette_scroll {
-                    self.command_palette_scroll = target_top;
+                if target_top < self.command_palette.scroll {
+                    self.command_palette.scroll = target_top;
                 }
             }
             Key::Down => {
                 let filtered = self.filtered_commands();
-                if self.command_palette_selected + 1 >= filtered.len() {
+                if self.command_palette.selected + 1 >= filtered.len() {
                     return false;
                 }
-                self.command_palette_selected += 1;
+                self.command_palette.selected += 1;
                 let rows = self.command_palette_rows();
                 let display_index =
-                    command_palette_display_index(&rows, self.command_palette_selected);
+                    command_palette_display_index(&rows, self.command_palette.selected);
                 if display_index
-                    >= self.command_palette_scroll + layout::COMMAND_PALETTE_MAX_VISIBLE
+                    >= self.command_palette.scroll + layout::COMMAND_PALETTE_MAX_VISIBLE
                 {
-                    self.command_palette_scroll =
+                    self.command_palette.scroll =
                         display_index - layout::COMMAND_PALETTE_MAX_VISIBLE + 1;
                 }
             }
@@ -359,7 +359,7 @@ impl InputState {
     /// Scroll the palette list by one display row (mouse wheel). Keeps the
     /// selection inside the visible window, skipping header rows.
     pub fn command_palette_wheel_scroll(&mut self, direction: i32) {
-        if direction == 0 || !self.command_palette_open {
+        if direction == 0 || !self.command_palette.open {
             return;
         }
         let rows = self.command_palette_rows();
@@ -367,26 +367,26 @@ impl InputState {
             .len()
             .saturating_sub(layout::COMMAND_PALETTE_MAX_VISIBLE);
         if direction > 0 {
-            if self.command_palette_scroll >= max_scroll {
+            if self.command_palette.scroll >= max_scroll {
                 return;
             }
-            self.command_palette_scroll += 1;
+            self.command_palette.scroll += 1;
         } else {
-            if self.command_palette_scroll == 0 {
+            if self.command_palette.scroll == 0 {
                 return;
             }
-            self.command_palette_scroll -= 1;
+            self.command_palette.scroll -= 1;
         }
 
-        let window_start = self.command_palette_scroll;
+        let window_start = self.command_palette.scroll;
         let window_end = window_start + layout::COMMAND_PALETTE_MAX_VISIBLE;
-        let selected_display = command_palette_display_index(&rows, self.command_palette_selected);
+        let selected_display = command_palette_display_index(&rows, self.command_palette.selected);
         if selected_display < window_start {
             if let Some(command_index) = rows[window_start..window_end.min(rows.len())]
                 .iter()
                 .find_map(|row| row.command_index())
             {
-                self.command_palette_selected = command_index;
+                self.command_palette.selected = command_index;
             }
         } else if selected_display >= window_end
             && let Some(command_index) = rows[window_start..window_end.min(rows.len())]
@@ -394,34 +394,35 @@ impl InputState {
                 .rev()
                 .find_map(|row| row.command_index())
         {
-            self.command_palette_selected = command_index;
+            self.command_palette.selected = command_index;
         }
         self.needs_redraw = true;
     }
 
     pub(crate) fn release_command_palette_repeat_key(&mut self, key: Key) {
-        if self.command_palette_repeat_key == Some(key) {
+        if self.command_palette.repeat_key == Some(key) {
             self.clear_command_palette_repeat();
         }
     }
 
     pub(crate) fn command_palette_repeat_timeout(&self, now: Instant) -> Option<Duration> {
-        if !self.command_palette_open {
+        if !self.command_palette.open {
             return None;
         }
-        self.command_palette_repeat_next_tick
+        self.command_palette
+            .repeat_next_tick
             .map(|next_tick| next_tick.saturating_duration_since(now))
     }
 
     pub(crate) fn tick_command_palette_repeat(&mut self, now: Instant) -> bool {
-        if !self.command_palette_open {
+        if !self.command_palette.open {
             self.clear_command_palette_repeat();
             return false;
         }
-        let Some(key) = self.command_palette_repeat_key else {
+        let Some(key) = self.command_palette.repeat_key else {
             return false;
         };
-        let Some(next_tick) = self.command_palette_repeat_next_tick else {
+        let Some(next_tick) = self.command_palette.repeat_next_tick else {
             return false;
         };
         if now < next_tick {
@@ -429,44 +430,46 @@ impl InputState {
         }
 
         let changed = self.move_command_palette_selection(key);
-        self.command_palette_repeat_next_tick = Some(now + COMMAND_PALETTE_REPEAT_INTERVAL);
+        self.command_palette.repeat_next_tick = Some(now + COMMAND_PALETTE_REPEAT_INTERVAL);
         changed
     }
 
     fn mark_command_palette_query_changed(&mut self) {
-        self.command_palette_selected = 0;
-        self.command_palette_scroll = 0;
+        self.command_palette.selected = 0;
+        self.command_palette.scroll = 0;
         self.needs_redraw = true;
     }
 
     fn clear_command_palette_query(&mut self) {
-        if self.command_palette_query.is_empty() {
+        if self.command_palette.query.is_empty() {
             return;
         }
-        self.command_palette_query.clear();
+        self.command_palette.query.clear();
         self.mark_command_palette_query_changed();
     }
 
     fn delete_previous_command_palette_word(&mut self) {
-        if self.command_palette_query.is_empty() {
+        if self.command_palette.query.is_empty() {
             return;
         }
 
         while self
-            .command_palette_query
+            .command_palette
+            .query
             .chars()
             .last()
             .is_some_and(command_palette_token_separator)
         {
-            self.command_palette_query.pop();
+            self.command_palette.query.pop();
         }
         while self
-            .command_palette_query
+            .command_palette
+            .query
             .chars()
             .last()
             .is_some_and(|ch| !command_palette_token_separator(ch))
         {
-            self.command_palette_query.pop();
+            self.command_palette.query.pop();
         }
 
         self.mark_command_palette_query_changed();
@@ -496,7 +499,7 @@ impl InputState {
 
         // Check if click is outside palette bounds - close it.
         if !geometry.contains_local(local_x, local_y) {
-            self.command_palette_open = false;
+            self.command_palette.open = false;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             return true;
@@ -505,7 +508,7 @@ impl InputState {
         // Check command items region.
         if let Some(visible_index) = geometry.visible_item_at(local_x, local_y) {
             // Clicked on row at visible index, actual index accounts for scroll.
-            let display_index = self.command_palette_scroll + visible_index;
+            let display_index = self.command_palette.scroll + visible_index;
             let Some(command_entry) = rows.get(display_index).and_then(|row| match row {
                 CommandPaletteListRow::Header(_) => None,
                 CommandPaletteListRow::Command {
@@ -517,7 +520,7 @@ impl InputState {
                 return true;
             };
             let (command, actual_index) = command_entry;
-            self.command_palette_selected = actual_index;
+            self.command_palette.selected = actual_index;
 
             if let Some((_, row_action)) = geometry.row_action_at(local_x, local_y)
                 && default_keybindings()
@@ -546,7 +549,7 @@ impl InputState {
             }
 
             // Execute the command.
-            self.command_palette_open = false;
+            self.command_palette.open = false;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             self.record_command_palette_action(command.action);
@@ -575,13 +578,13 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) -> Option<CommandPaletteCursorHint> {
-        if !self.command_palette_open {
+        if !self.command_palette.open {
             return None;
         }
 
         let rows = self.command_palette_rows();
         let geometry = self.command_palette_geometry_for_rows(screen_width, screen_height, &rows);
-        command_palette_cursor_hint_from_local(geometry, &rows, self.command_palette_scroll, x, y)
+        command_palette_cursor_hint_from_local(geometry, &rows, self.command_palette.scroll, x, y)
     }
 
     #[cfg(test)]
@@ -590,7 +593,7 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) -> Option<(&'static str, i32, i32)> {
-        if !self.command_palette_open {
+        if !self.command_palette.open {
             return None;
         }
         let rows = self.command_palette_rows();
@@ -603,13 +606,13 @@ impl InputState {
         rows: &[CommandPaletteListRow],
         geometry: CommandPaletteGeometry,
     ) -> Option<(&'static str, i32, i32)> {
-        if !self.command_palette_open {
+        if !self.command_palette.open {
             return None;
         }
         let (x, y) = self.pointer_position();
         let (local_x, local_y) = geometry.local_point(x, y);
         let (visible_index, action) = geometry.row_action_at(local_x, local_y)?;
-        let display_index = self.command_palette_scroll + visible_index;
+        let display_index = self.command_palette.scroll + visible_index;
         let command = match rows.get(display_index)? {
             CommandPaletteListRow::Header(_) => return None,
             CommandPaletteListRow::Command { command, .. } => command,

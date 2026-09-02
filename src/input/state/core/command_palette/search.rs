@@ -2,12 +2,6 @@ use super::super::base::InputState;
 use super::{CommandEntry, command_palette_entries};
 use crate::config::action_meta::{ActionCategory, ActionMeta};
 use crate::domain::Action;
-use crate::palette_recents::PALETTE_RECENTS_CAP;
-
-/// In-memory recents cap; mirrors the persisted file cap so the palette and
-/// `palette_recents.toml` can never disagree about history length.
-const COMMAND_PALETTE_RECENT_LIMIT: usize = PALETTE_RECENTS_CAP;
-
 /// Group label shown above recent commands when the query is empty.
 pub(crate) const COMMAND_PALETTE_RECENT_HEADER: &str = "Recent";
 
@@ -58,17 +52,17 @@ impl InputState {
     /// the query, the recents that bias it, and the keymap revision behind the
     /// shortcut labels it folds in.
     pub fn filtered_commands(&self) -> Vec<&'static CommandEntry> {
-        if let Some(cached) = self.command_palette_results.borrow().as_ref()
-            && cached.query == self.command_palette_query
+        if let Some(cached) = self.command_palette.results.borrow().as_ref()
+            && cached.query == self.command_palette.query
             && cached.keymap_revision == self.keymap_revision
-            && cached.recents == self.command_palette_recent
+            && cached.recents == self.command_palette.recent
         {
             return cached.results.clone();
         }
         let results = self.score_filtered_commands();
-        *self.command_palette_results.borrow_mut() = Some(CommandPaletteResults {
-            query: self.command_palette_query.clone(),
-            recents: self.command_palette_recent.clone(),
+        *self.command_palette.results.borrow_mut() = Some(CommandPaletteResults {
+            query: self.command_palette.query.clone(),
+            recents: self.command_palette.recent.clone(),
             keymap_revision: self.keymap_revision,
             results: results.clone(),
         });
@@ -76,7 +70,7 @@ impl InputState {
     }
 
     fn score_filtered_commands(&self) -> Vec<&'static CommandEntry> {
-        let query = normalize_query(&self.command_palette_query);
+        let query = normalize_query(&self.command_palette.query);
         let tokens = query_tokens(&query);
 
         let mut results: Vec<CommandMatch> = command_palette_entries()
@@ -106,11 +100,11 @@ impl InputState {
     /// contiguous run in score order; any interleaving renders flat.
     pub fn command_palette_rows(&self) -> Vec<CommandPaletteListRow> {
         let filtered = self.filtered_commands();
-        let query_empty = normalize_query(&self.command_palette_query).is_empty();
+        let query_empty = normalize_query(&self.command_palette.query).is_empty();
         let recent_len = if query_empty {
             filtered
                 .iter()
-                .take_while(|command| self.command_palette_recent.contains(&command.action))
+                .take_while(|command| self.command_palette.recent.contains(&command.action))
                 .count()
         } else {
             0
@@ -120,7 +114,7 @@ impl InputState {
 
     pub(super) fn selected_command(&self) -> Option<&'static CommandEntry> {
         let filtered = self.filtered_commands();
-        filtered.get(self.command_palette_selected).copied()
+        filtered.get(self.command_palette.selected).copied()
     }
 
     fn score_command(
@@ -129,7 +123,7 @@ impl InputState {
         query: &str,
         tokens: &[&str],
     ) -> Option<i32> {
-        let recent_bonus = self.recent_bonus(command.action);
+        let recent_bonus = self.command_palette.recent_bonus(command.action);
         if query.is_empty() {
             return Some(recent_bonus);
         }
@@ -160,24 +154,8 @@ impl InputState {
         Some(score + (recent_bonus / 2))
     }
 
-    fn recent_bonus(&self, action: Action) -> i32 {
-        self.command_palette_recent
-            .iter()
-            .position(|recent| *recent == action)
-            .map_or(0, |idx| {
-                (COMMAND_PALETTE_RECENT_LIMIT.saturating_sub(idx) as i32) * 20
-            })
-    }
-
     pub(super) fn record_command_palette_action(&mut self, action: Action) {
-        self.command_palette_recent
-            .retain(|recent| *recent != action);
-        self.command_palette_recent.insert(0, action);
-        if self.command_palette_recent.len() > COMMAND_PALETTE_RECENT_LIMIT {
-            self.command_palette_recent
-                .truncate(COMMAND_PALETTE_RECENT_LIMIT);
-        }
-        self.command_palette_recents_dirty = true;
+        self.command_palette.record_action(action);
 
         // Shortcut-coach slow-path signal: running an action from the palette
         // when that action has its own keyboard shortcut is a canonical "you
@@ -192,16 +170,13 @@ impl InputState {
 
     /// Seed the in-memory recents from the persisted store at startup.
     pub fn set_command_palette_recents(&mut self, recents: Vec<Action>) {
-        self.command_palette_recent = recents;
-        self.command_palette_recent
-            .truncate(COMMAND_PALETTE_RECENT_LIMIT);
-        self.command_palette_recents_dirty = false;
+        self.command_palette.set_recents(recents);
     }
 
     /// True (and reset) when the recents changed since the last drain; the
     /// backend persists the history to `palette_recents.toml` when set.
     pub fn take_command_palette_recents_dirty(&mut self) -> bool {
-        std::mem::take(&mut self.command_palette_recents_dirty)
+        self.command_palette.take_recents_dirty()
     }
 
     /// True while the recents differ from what has been persisted. Unlike
@@ -209,12 +184,12 @@ impl InputState {
     /// backend can retain the pending write when persistence fails and only
     /// [`Self::clear_command_palette_recents_dirty`] once the write succeeds.
     pub fn command_palette_recents_dirty(&self) -> bool {
-        self.command_palette_recents_dirty
+        self.command_palette.recents_dirty
     }
 
     /// Clear the pending-persist flag after the recents were durably written.
     pub fn clear_command_palette_recents_dirty(&mut self) {
-        self.command_palette_recents_dirty = false;
+        self.command_palette.clear_recents_dirty();
     }
 }
 
@@ -479,7 +454,7 @@ mod cache_tests {
     fn results_follow_the_query_the_recents_and_the_keymap() {
         let mut state = make_test_input_state();
 
-        state.command_palette_query = "undo".to_string();
+        state.command_palette.query = "undo".to_string();
         let undo_results = state.filtered_commands();
         assert!(!undo_results.is_empty());
         // A repeat ask is served from the cache and must agree with itself.
@@ -495,13 +470,13 @@ mod cache_tests {
                 .collect::<Vec<_>>()
         );
 
-        state.command_palette_query = "redo".to_string();
+        state.command_palette.query = "redo".to_string();
         let redo_first = state.filtered_commands().first().map(|entry| entry.action);
         let undo_first = undo_results.first().map(|entry| entry.action);
         assert_ne!(redo_first, undo_first, "a new query must re-rank");
 
         // Recents bias the ranking, so promoting one has to invalidate.
-        state.command_palette_query = String::new();
+        state.command_palette.query = String::new();
         let before = state.filtered_commands().first().map(|entry| entry.action);
         state.set_command_palette_recents(vec![Action::ClearCanvas]);
         let after = state.filtered_commands().first().map(|entry| entry.action);
@@ -509,7 +484,7 @@ mod cache_tests {
         assert_ne!(before, after, "a new recent must re-rank");
 
         // Shortcut labels are scored, so replacing the keymap must invalidate.
-        state.command_palette_query = "undo".to_string();
+        state.command_palette.query = "undo".to_string();
         let _ = state.filtered_commands();
         state.set_action_bindings(std::collections::HashMap::new());
         assert!(

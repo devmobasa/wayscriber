@@ -4,6 +4,9 @@ mod input;
 mod layout;
 mod registry;
 mod search;
+mod state;
+
+pub use state::CommandPaletteState;
 
 pub use layout::COMMAND_PALETTE_MAX_VISIBLE;
 pub(crate) use layout::{
@@ -54,7 +57,7 @@ mod tests {
         let x = (geometry.x + geometry.inner_x + 4.0) as i32;
         let y = (geometry.y
             + geometry.items_top
-            + (display_index - state.command_palette_scroll) as f64 * COMMAND_PALETTE_ITEM_HEIGHT
+            + (display_index - state.command_palette.scroll) as f64 * COMMAND_PALETTE_ITEM_HEIGHT
             + COMMAND_PALETTE_ITEM_HEIGHT * 0.5) as i32;
         (x, y)
     }
@@ -147,7 +150,7 @@ mod tests {
 
         assert_eq!(state.keybinding_capture_action, None);
         assert!(state.take_pending_keybinding_edits().is_empty());
-        assert!(state.command_palette_open, "the list is still behind it");
+        assert!(state.command_palette.open, "the list is still behind it");
     }
 
     /// Ctrl+E arms the capture modal for the selected row rather than running
@@ -156,7 +159,7 @@ mod tests {
     fn ctrl_e_starts_capture_for_the_selected_row() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "pen tool".to_string();
+        state.command_palette.query = "pen tool".to_string();
         let action = state.selected_command().expect("selected command").action;
         assert_eq!(action, Action::SelectPenTool);
 
@@ -174,7 +177,7 @@ mod tests {
     fn shift_held_through_the_palette_turns_ctrl_e_into_the_configurator_route() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "pen tool".to_string();
+        state.command_palette.query = "pen tool".to_string();
 
         assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
         assert!(state.handle_command_palette_key(crate::input::Key::Shift));
@@ -186,13 +189,13 @@ mod tests {
             "Ctrl+Shift+E is the durable route, not a capture"
         );
         assert!(state.take_pending_keybinding_edits().is_empty());
-        assert!(!state.command_palette_open, "launching closes the overlay");
+        assert!(!state.command_palette.open, "launching closes the overlay");
 
         // Releasing puts the plain Ctrl+E arm back in charge.
         state.on_key_release(crate::input::Key::Shift);
         assert!(!state.modifiers.shift);
         state.toggle_command_palette();
-        state.command_palette_query = "pen tool".to_string();
+        state.command_palette.query = "pen tool".to_string();
         assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
         assert_eq!(state.keybinding_capture_action, Some(Action::SelectPenTool));
     }
@@ -205,7 +208,7 @@ mod tests {
     fn alt_held_through_the_palette_reaches_the_captured_chord() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "pen tool".to_string();
+        state.command_palette.query = "pen tool".to_string();
 
         // Alt goes down while the list, not the modal, owns the keyboard.
         assert!(state.handle_command_palette_key(crate::input::Key::Alt));
@@ -236,7 +239,7 @@ mod tests {
     fn super_held_through_the_palette_reaches_the_captured_chord() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "pen tool".to_string();
+        state.command_palette.query = "pen tool".to_string();
 
         assert!(state.handle_command_palette_key(crate::input::Key::Super));
         assert!(state.modifiers.logo, "the palette must track Super itself");
@@ -263,7 +266,7 @@ mod tests {
     fn palette_shortcut_controls_request_delete_and_reset() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "pen tool".to_string();
+        state.command_palette.query = "pen tool".to_string();
         let action = state.selected_command().expect("selected command").action;
 
         state.modifiers.ctrl = true;
@@ -290,7 +293,7 @@ mod tests {
     fn palette_edit_icon_starts_capture_without_running_command() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "pen tool".to_string();
+        state.command_palette.query = "pen tool".to_string();
         let filtered = state.filtered_commands();
         let action = filtered.first().expect("matching command").action;
         let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
@@ -303,7 +306,7 @@ mod tests {
 
         assert!(state.handle_command_palette_click(x, y, 1920, 1000));
         assert_eq!(state.keybinding_capture_action, Some(action));
-        assert!(state.command_palette_open);
+        assert!(state.command_palette.open);
         assert!(state.take_pending_keybinding_edits().is_empty());
     }
 
@@ -311,7 +314,7 @@ mod tests {
     fn palette_shortcut_controls_expose_specific_tooltips() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "pen tool".to_string();
+        state.command_palette.query = "pen tool".to_string();
         let filtered = state.filtered_commands();
         let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
         let stride =
@@ -370,7 +373,7 @@ mod tests {
         assert!(state.take_pending_keybinding_edits().is_empty());
 
         assert!(!state.open_configurator_for_shortcut(Action::ReplayTour));
-        assert!(state.command_palette_open);
+        assert!(state.command_palette.open);
     }
 
     #[test]
@@ -382,7 +385,7 @@ mod tests {
 
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "pen tool".to_string();
+        state.command_palette.query = "pen tool".to_string();
         state.modifiers.ctrl = true;
         state.modifiers.shift = true;
 
@@ -402,7 +405,7 @@ mod tests {
 
     fn assert_palette_finds(query: &str, action: Action) {
         let mut state = make_state();
-        state.command_palette_query = query.to_string();
+        state.command_palette.query = query.to_string();
 
         let results = state.filtered_commands();
         assert!(
@@ -463,7 +466,7 @@ mod tests {
     #[test]
     fn shortcut_query_prioritizes_bound_command() {
         let mut state = make_state();
-        state.command_palette_query = "ctrl+shift+f".to_string();
+        state.command_palette.query = "ctrl+shift+f".to_string();
 
         let results = state.filtered_commands();
         assert!(!results.is_empty());
@@ -476,7 +479,7 @@ mod tests {
     #[test]
     fn multi_token_query_returns_file_capture_first() {
         let mut state = make_state();
-        state.command_palette_query = "capture file".to_string();
+        state.command_palette.query = "capture file".to_string();
 
         let results = state.filtered_commands();
         assert!(!results.is_empty());
@@ -492,7 +495,7 @@ mod tests {
         state.record_command_palette_action(crate::config::keybindings::Action::CaptureFileFull);
         state
             .record_command_palette_action(crate::config::keybindings::Action::TogglePresenterMode);
-        state.command_palette_query.clear();
+        state.command_palette.query.clear();
 
         let results = state.filtered_commands();
         assert!(results.len() >= 2);
@@ -509,7 +512,7 @@ mod tests {
     #[test]
     fn monitor_query_matches_output_focus_actions() {
         let mut state = make_state();
-        state.command_palette_query = "monitor".to_string();
+        state.command_palette.query = "monitor".to_string();
 
         let results = state.filtered_commands();
         let actions: HashSet<crate::config::keybindings::Action> =
@@ -521,7 +524,7 @@ mod tests {
     #[test]
     fn display_query_matches_output_focus_actions() {
         let mut state = make_state();
-        state.command_palette_query = "display".to_string();
+        state.command_palette.query = "display".to_string();
 
         let results = state.filtered_commands();
         let actions: HashSet<crate::config::keybindings::Action> =
@@ -533,7 +536,7 @@ mod tests {
     #[test]
     fn alias_query_matches_radial_menu_command() {
         let mut state = make_state();
-        state.command_palette_query = "pie menu".to_string();
+        state.command_palette.query = "pie menu".to_string();
 
         let results = state.filtered_commands();
         assert!(!results.is_empty());
@@ -546,7 +549,7 @@ mod tests {
     #[test]
     fn short_label_query_matches_configurator_command() {
         let mut state = make_state();
-        state.command_palette_query = "config ui".to_string();
+        state.command_palette.query = "config ui".to_string();
 
         let results = state.filtered_commands();
         assert!(!results.is_empty());
@@ -559,7 +562,7 @@ mod tests {
     #[test]
     fn slash_separated_tokens_match_capture_file_command() {
         let mut state = make_state();
-        state.command_palette_query = "capture/file".to_string();
+        state.command_palette.query = "capture/file".to_string();
 
         let results = state.filtered_commands();
         assert!(!results.is_empty());
@@ -572,15 +575,15 @@ mod tests {
     #[test]
     fn toggle_command_palette_opens_and_tracks_usage() {
         let mut state = make_state();
-        assert!(!state.command_palette_open);
+        assert!(!state.command_palette.open);
         assert!(!state.pending_onboarding_usage.used_command_palette);
 
         state.toggle_command_palette();
 
-        assert!(state.command_palette_open);
+        assert!(state.command_palette.open);
         assert!(state.pending_onboarding_usage.used_command_palette);
-        assert_eq!(state.command_palette_selected, 0);
-        assert_eq!(state.command_palette_scroll, 0);
+        assert_eq!(state.command_palette.selected, 0);
+        assert_eq!(state.command_palette.scroll, 0);
     }
 
     #[test]
@@ -591,7 +594,7 @@ mod tests {
 
         state.toggle_command_palette();
 
-        assert!(state.command_palette_open);
+        assert!(state.command_palette.open);
         assert!(!state.is_radial_menu_open());
     }
 
@@ -599,70 +602,70 @@ mod tests {
     fn backspace_resets_selection_and_scroll_when_query_changes() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "zoom".to_string();
-        state.command_palette_selected = 4;
-        state.command_palette_scroll = 3;
+        state.command_palette.query = "zoom".to_string();
+        state.command_palette.selected = 4;
+        state.command_palette.scroll = 3;
 
         assert!(state.handle_command_palette_key(crate::input::Key::Backspace));
-        assert_eq!(state.command_palette_query, "zoo");
-        assert_eq!(state.command_palette_selected, 0);
-        assert_eq!(state.command_palette_scroll, 0);
+        assert_eq!(state.command_palette.query, "zoo");
+        assert_eq!(state.command_palette.selected, 0);
+        assert_eq!(state.command_palette.scroll, 0);
     }
 
     #[test]
     fn ctrl_backspace_deletes_previous_query_word_and_resets_position() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "export canvas clipboard  ".to_string();
-        state.command_palette_selected = 4;
-        state.command_palette_scroll = 3;
+        state.command_palette.query = "export canvas clipboard  ".to_string();
+        state.command_palette.selected = 4;
+        state.command_palette.scroll = 3;
 
         assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
         assert!(state.handle_command_palette_key(crate::input::Key::Backspace));
 
-        assert_eq!(state.command_palette_query, "export canvas ");
-        assert_eq!(state.command_palette_selected, 0);
-        assert_eq!(state.command_palette_scroll, 0);
+        assert_eq!(state.command_palette.query, "export canvas ");
+        assert_eq!(state.command_palette.selected, 0);
+        assert_eq!(state.command_palette.scroll, 0);
     }
 
     #[test]
     fn ctrl_backspace_stops_at_shortcut_token_separator() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "ctrl+shift+f".to_string();
+        state.command_palette.query = "ctrl+shift+f".to_string();
 
         assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
         assert!(state.handle_command_palette_key(crate::input::Key::Backspace));
 
-        assert_eq!(state.command_palette_query, "ctrl+shift+");
+        assert_eq!(state.command_palette.query, "ctrl+shift+");
     }
 
     #[test]
     fn ctrl_backspace_stops_at_slash_token_separator() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "capture/file".to_string();
+        state.command_palette.query = "capture/file".to_string();
 
         assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
         assert!(state.handle_command_palette_key(crate::input::Key::Backspace));
 
-        assert_eq!(state.command_palette_query, "capture/");
+        assert_eq!(state.command_palette.query, "capture/");
     }
 
     #[test]
     fn ctrl_u_clears_query_and_resets_position() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "status bar".to_string();
-        state.command_palette_selected = 4;
-        state.command_palette_scroll = 3;
+        state.command_palette.query = "status bar".to_string();
+        state.command_palette.selected = 4;
+        state.command_palette.scroll = 3;
 
         assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
         assert!(state.handle_command_palette_key(crate::input::Key::Char('u')));
 
-        assert!(state.command_palette_query.is_empty());
-        assert_eq!(state.command_palette_selected, 0);
-        assert_eq!(state.command_palette_scroll, 0);
+        assert!(state.command_palette.query.is_empty());
+        assert_eq!(state.command_palette.selected, 0);
+        assert_eq!(state.command_palette.scroll, 0);
     }
 
     #[test]
@@ -677,14 +680,14 @@ mod tests {
         for step in 0..COMMAND_PALETTE_MAX_VISIBLE * 2 {
             assert!(state.handle_command_palette_key(crate::input::Key::Down));
             // Selection advances one command per press.
-            assert_eq!(state.command_palette_selected, step + 1);
+            assert_eq!(state.command_palette.selected, step + 1);
             // The selected command's display row stays inside the visible window
             // even though interleaved group headers consume display rows.
             let rows = state.command_palette_rows();
-            let display = command_palette_display_index(&rows, state.command_palette_selected);
-            assert!(display >= state.command_palette_scroll);
-            assert!(display < state.command_palette_scroll + COMMAND_PALETTE_MAX_VISIBLE);
-            if state.command_palette_scroll > 0 {
+            let display = command_palette_display_index(&rows, state.command_palette.selected);
+            assert!(display >= state.command_palette.scroll);
+            assert!(display < state.command_palette.scroll + COMMAND_PALETTE_MAX_VISIBLE);
+            if state.command_palette.scroll > 0 {
                 scrolled = true;
             }
         }
@@ -698,13 +701,13 @@ mod tests {
     fn home_key_jumps_to_first_command() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_selected = 5;
-        state.command_palette_scroll = 3;
+        state.command_palette.selected = 5;
+        state.command_palette.scroll = 3;
 
         assert!(state.handle_command_palette_key(crate::input::Key::Home));
 
-        assert_eq!(state.command_palette_selected, 0);
-        assert_eq!(state.command_palette_scroll, 0);
+        assert_eq!(state.command_palette.selected, 0);
+        assert_eq!(state.command_palette.scroll, 0);
     }
 
     #[test]
@@ -716,18 +719,18 @@ mod tests {
 
         assert!(state.handle_command_palette_key(crate::input::Key::End));
 
-        assert_eq!(state.command_palette_selected, filtered_len - 1);
+        assert_eq!(state.command_palette.selected, filtered_len - 1);
         // Scroll is measured in display rows (headers included), so the bottom of
         // the list aligns to the display length, not the command count.
         let rows = state.command_palette_rows();
         assert_eq!(
-            state.command_palette_scroll,
+            state.command_palette.scroll,
             rows.len() - COMMAND_PALETTE_MAX_VISIBLE
         );
         // The last command sits inside the visible window.
-        let display = command_palette_display_index(&rows, state.command_palette_selected);
-        assert!(display >= state.command_palette_scroll);
-        assert!(display < state.command_palette_scroll + COMMAND_PALETTE_MAX_VISIBLE);
+        let display = command_palette_display_index(&rows, state.command_palette.selected);
+        assert!(display >= state.command_palette.scroll);
+        assert!(display < state.command_palette.scroll + COMMAND_PALETTE_MAX_VISIBLE);
     }
 
     #[test]
@@ -736,7 +739,7 @@ mod tests {
         state.toggle_command_palette();
 
         assert!(state.handle_command_palette_key(crate::input::Key::Down));
-        assert_eq!(state.command_palette_selected, 1);
+        assert_eq!(state.command_palette.selected, 1);
         assert!(
             state
                 .command_palette_repeat_timeout(Instant::now())
@@ -744,7 +747,7 @@ mod tests {
         );
 
         assert!(state.tick_command_palette_repeat(Instant::now() + Duration::from_secs(1)));
-        assert_eq!(state.command_palette_selected, 2);
+        assert_eq!(state.command_palette.selected, 2);
 
         state.on_key_release(crate::input::Key::Down);
         assert!(
@@ -753,7 +756,7 @@ mod tests {
                 .is_none()
         );
         assert!(!state.tick_command_palette_repeat(Instant::now() + Duration::from_secs(1)));
-        assert_eq!(state.command_palette_selected, 2);
+        assert_eq!(state.command_palette.selected, 2);
     }
 
     #[test]
@@ -786,7 +789,7 @@ mod tests {
         state.record_command_palette_action(crate::config::keybindings::Action::CaptureFileFull);
 
         assert_eq!(
-            state.command_palette_recent,
+            state.command_palette.recent,
             vec![
                 crate::config::keybindings::Action::CaptureFileFull,
                 crate::config::keybindings::Action::ToggleHelp,
@@ -798,17 +801,17 @@ mod tests {
     fn escape_key_closes_command_palette() {
         let mut state = make_state();
         state.toggle_command_palette();
-        assert!(state.command_palette_open);
+        assert!(state.command_palette.open);
 
         assert!(state.handle_command_palette_key(crate::input::Key::Escape));
-        assert!(!state.command_palette_open);
+        assert!(!state.command_palette.open);
     }
 
     #[test]
     fn return_key_executes_selected_command_and_records_it() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "status bar".to_string();
+        state.command_palette.query = "status bar".to_string();
         let selected = state.selected_command().expect("selected command");
         assert_eq!(
             selected.action,
@@ -817,10 +820,10 @@ mod tests {
         assert!(state.show_status_bar);
 
         assert!(state.handle_command_palette_key(crate::input::Key::Return));
-        assert!(!state.command_palette_open);
+        assert!(!state.command_palette.open);
         assert!(!state.show_status_bar);
         assert_eq!(
-            state.command_palette_recent.first().copied(),
+            state.command_palette.recent.first().copied(),
             Some(crate::config::keybindings::Action::ToggleStatusBar)
         );
     }
@@ -829,7 +832,7 @@ mod tests {
     fn return_key_sets_pending_canvas_export_backend_action() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "export canvas clipboard".to_string();
+        state.command_palette.query = "export canvas clipboard".to_string();
         let selected = state.selected_command().expect("selected command");
         assert_eq!(
             selected.action,
@@ -850,7 +853,7 @@ mod tests {
     fn return_key_sets_pending_board_pdf_export_backend_action() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "export pdf".to_string();
+        state.command_palette.query = "export pdf".to_string();
         let selected = state.selected_command().expect("selected command");
         assert_eq!(
             selected.action,
@@ -871,7 +874,7 @@ mod tests {
     fn return_key_sets_pending_all_boards_pdf_export_backend_action() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "all boards pdf".to_string();
+        state.command_palette.query = "all boards pdf".to_string();
         let selected = state.selected_command().expect("selected command");
         assert_eq!(
             selected.action,
@@ -892,7 +895,7 @@ mod tests {
     fn return_key_sets_pending_clear_saved_tool_state_backend_action() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "clear saved tool state".to_string();
+        state.command_palette.query = "clear saved tool state".to_string();
         let selected = state.selected_command().expect("selected command");
         assert_eq!(
             selected.action,
@@ -913,36 +916,36 @@ mod tests {
         state.toggle_command_palette();
 
         assert!(state.handle_command_palette_click(0, 0, 1920, 1000));
-        assert!(!state.command_palette_open);
+        assert!(!state.command_palette.open);
     }
 
     #[test]
     fn char_key_appends_query_and_resets_selection_and_scroll() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_selected = 3;
-        state.command_palette_scroll = 2;
+        state.command_palette.selected = 3;
+        state.command_palette.scroll = 2;
 
         assert!(state.handle_command_palette_key(crate::input::Key::Char('z')));
-        assert_eq!(state.command_palette_query, "z");
-        assert_eq!(state.command_palette_selected, 0);
-        assert_eq!(state.command_palette_scroll, 0);
+        assert_eq!(state.command_palette.query, "z");
+        assert_eq!(state.command_palette.selected, 0);
+        assert_eq!(state.command_palette.scroll, 0);
     }
 
     #[test]
     fn clicking_input_region_keeps_palette_open_without_executing() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "status".to_string();
-        state.command_palette_selected = 1;
+        state.command_palette.query = "status".to_string();
+        state.command_palette.selected = 1;
         let filtered = state.filtered_commands();
         let geometry = state.command_palette_geometry(1920, 1000, filtered.len());
         let x = (geometry.x + geometry.inner_x + 4.0) as i32;
         let y = (geometry.y + geometry.input_top + 4.0) as i32;
 
         assert!(state.handle_command_palette_click(x, y, 1920, 1000));
-        assert!(state.command_palette_open);
-        assert_eq!(state.command_palette_selected, 1);
+        assert!(state.command_palette.open);
+        assert_eq!(state.command_palette.selected, 1);
         assert!(state.ui_toast.is_none());
     }
 
@@ -950,8 +953,8 @@ mod tests {
     fn clicking_visible_item_executes_selected_command_and_sets_toast() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "status bar".to_string();
-        state.command_palette_selected = 0;
+        state.command_palette.query = "status bar".to_string();
+        state.command_palette.selected = 0;
         let filtered = state.filtered_commands();
         let selected = filtered.first().expect("selected command");
         assert_eq!(
@@ -962,7 +965,7 @@ mod tests {
 
         assert!(state.show_status_bar);
         assert!(state.handle_command_palette_click(x, y, 1920, 1000));
-        assert!(!state.command_palette_open);
+        assert!(!state.command_palette.open);
         assert!(!state.show_status_bar);
         let toast = state.ui_toast.as_ref().expect("command toast");
         assert_eq!(
@@ -976,8 +979,8 @@ mod tests {
     fn clicking_visible_canvas_export_item_sets_pending_backend_action() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "save board".to_string();
-        state.command_palette_selected = 0;
+        state.command_palette.query = "save board".to_string();
+        state.command_palette.selected = 0;
         let filtered = state.filtered_commands();
         assert_eq!(
             filtered.first().expect("selected command").action,
@@ -999,8 +1002,8 @@ mod tests {
     fn clicking_visible_board_pdf_export_item_sets_pending_backend_action() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "export pdf".to_string();
-        state.command_palette_selected = 0;
+        state.command_palette.query = "export pdf".to_string();
+        state.command_palette.selected = 0;
         let filtered = state.filtered_commands();
         assert_eq!(
             filtered.first().expect("selected command").action,
@@ -1022,8 +1025,8 @@ mod tests {
     fn clicking_visible_all_boards_pdf_export_item_sets_pending_backend_action() {
         let mut state = make_state();
         state.toggle_command_palette();
-        state.command_palette_query = "all boards pdf".to_string();
-        state.command_palette_selected = 0;
+        state.command_palette.query = "all boards pdf".to_string();
+        state.command_palette.selected = 0;
         let filtered = state.filtered_commands();
         assert_eq!(
             filtered.first().expect("selected command").action,

@@ -206,7 +206,8 @@ impl InputState {
         }
 
         let query_chars =
-            self.command_palette_query
+            self.command_palette
+                .query
                 .chars()
                 .count()
                 .max(COMMAND_PALETTE_QUERY_PLACEHOLDER.chars().count()) as f64;

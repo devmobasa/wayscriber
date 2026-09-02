@@ -836,7 +836,7 @@ mod tests {
         state.toggle_command_palette();
 
         assert!(!state.show_help);
-        assert!(state.command_palette_open);
+        assert!(state.command_palette.open);
         assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
 
         crate::ui::clear_help_overlay_hit_map();

@@ -271,7 +271,7 @@ impl WaylandState {
             return target;
         }
 
-        if self.input_state.command_palette_open {
+        if self.input_state.command_palette.open {
             let screen_width = self.surface.width();
             let screen_height = self.surface.height();
             if self.input_state.handle_command_palette_click(
@@ -441,7 +441,7 @@ impl WaylandState {
         }
 
         if self.input_state.show_help
-            || self.input_state.command_palette_open
+            || self.input_state.command_palette.open
             || self.input_state.tour_active
         {
             return;
@@ -499,7 +499,7 @@ impl WaylandState {
             return;
         }
 
-        if self.input_state.command_palette_open || self.input_state.tour_active {
+        if self.input_state.command_palette.open || self.input_state.tour_active {
             self.set_pending_toast_press(None);
             self.set_pending_status_hud_press(false);
             self.set_pending_zoom_chip_press(ZoomChipPress::None);

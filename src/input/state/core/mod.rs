@@ -76,6 +76,7 @@ pub(crate) use command_palette::{
 };
 pub use command_palette::{
     COMMAND_PALETTE_MAX_VISIBLE, CommandPaletteCursorHint, CommandPaletteListRow,
+    CommandPaletteState,
 };
 pub use eyedropper::{EyedropperCaptureSource, EyedropperUiState};
 #[allow(unused_imports)]

@@ -33,7 +33,7 @@ use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest};
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::state::input_hud::InputHudState;
 use crate::input::{
-    Key, MouseButton,
+    MouseButton,
     modifiers::{DragToolBindings, Modifiers},
     tool::{EraserMode, PerToolDrawingSettings, Tool},
 };
@@ -206,22 +206,8 @@ pub struct InputState {
     pub board_picker_search: String,
     /// Time of last board picker search input
     pub board_picker_search_last_input: Option<Instant>,
-    /// Whether the command palette is currently visible
-    pub command_palette_open: bool,
-    /// Current command palette search query
-    pub command_palette_query: String,
-    /// Currently selected command index in the palette
-    pub command_palette_selected: usize,
-    /// Scroll offset for command palette (first visible item index)
-    pub command_palette_scroll: usize,
-    /// Held command-palette navigation key for synthetic repeat.
-    pub(crate) command_palette_repeat_key: Option<Key>,
-    /// Next synthetic command-palette repeat tick.
-    pub(crate) command_palette_repeat_next_tick: Option<Instant>,
-    /// Most recently executed command palette actions (most recent first)
-    pub command_palette_recent: Vec<Action>,
-    /// Whether the recents changed since the backend last persisted them.
-    pub(crate) command_palette_recents_dirty: bool,
+    /// State owned by the command palette modal.
+    pub command_palette: crate::input::state::core::command_palette::CommandPaletteState,
     /// Action whose next keyboard chord is being captured for rebinding.
     pub keybinding_capture_action: Option<Action>,
     /// Duration for command palette action toasts (ms)
@@ -389,12 +375,6 @@ pub struct InputState {
     /// Bumped whenever the keymap is replaced. Shortcut labels feed command
     /// scoring, so the palette's result cache keys on this.
     pub(in crate::input::state::core) keymap_revision: u64,
-    /// Memoized `filtered_commands()` output. The renderer asks for the row
-    /// list twice per frame and each ask re-scored every registry entry with
-    /// per-entry allocations.
-    pub(in crate::input::state::core) command_palette_results: std::cell::RefCell<
-        Option<crate::input::state::core::command_palette::CommandPaletteResults>,
-    >,
     /// Shape and pre-gesture snapshot for an in-flight wheel adjustment of a
     /// Spotlight's magnification.
     ///
