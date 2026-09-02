@@ -41,9 +41,7 @@ use wayland_protocols::wp::{
         zwp_locked_pointer_v1::ZwpLockedPointerV1, zwp_pointer_constraints_v1,
     },
     relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1,
-    text_input::zv3::client::{
-        zwp_text_input_manager_v3::ZwpTextInputManagerV3, zwp_text_input_v3::ZwpTextInputV3,
-    },
+    text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3,
 };
 
 #[cfg(feature = "tablet-input")]
@@ -124,6 +122,7 @@ pub(in crate::backend::wayland) use region_capture::RegionReviewPress;
 mod render;
 mod screen_image;
 mod text_clipboard;
+mod text_input;
 mod toolbar;
 #[cfg(feature = "toolbar-gtk")]
 pub(crate) use toolbar::clamp_floating_axis_offset;
@@ -353,26 +352,8 @@ pub(super) struct WaylandState {
     pub(super) key_repeat_key: Option<Key>,
     pub(super) key_repeat_next_tick: Option<Instant>,
 
-    // IME / text-input-v3. The manager is bound at startup; one seat-bound
-    // `text_input` object is created for the first keyboard seat.
-    // `focused` tracks compositor text-input focus (Enter/Leave); `enabled`
-    // tracks whether we have an active enable() outstanding; `serial` counts
-    // our commit() calls to match against Done events.
-    pub(super) text_input_manager: Option<ZwpTextInputManagerV3>,
-    pub(super) text_input: Option<ZwpTextInputV3>,
-    pub(super) text_input_seat: Option<wl_seat::WlSeat>,
-    pub(super) text_input_focused: bool,
-    pub(super) text_input_enabled: bool,
-    pub(super) text_input_serial: u32,
-    /// A visible editor change received against a stale `done` serial. The
-    /// resulting cursor rectangle must be published after a matching `done`.
-    pub(super) text_input_cursor_update_pending: bool,
-    /// The pending cursor/surrounding-text update was authored outside the
-    /// input method and must carry text-input-v3's `Other` change cause.
-    pub(super) text_input_external_change_pending: bool,
-    /// Commit serial that must be acknowledged before another cursor-only
-    /// update is sent. Set only after observing a stale `done`.
-    pub(super) text_input_cursor_update_blocked_until: Option<u32>,
+    // IME / text-input-v3 protocol ownership and synchronization.
+    pub(super) text_input: text_input::TextInputState,
 
     // Tablet / stylus (feature-gated)
     #[cfg(feature = "tablet-input")]

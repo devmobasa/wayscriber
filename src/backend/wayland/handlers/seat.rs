@@ -32,17 +32,7 @@ impl SeatHandler for WaylandState {
                 // IME: create the single supported text-input object alongside the
                 // first physical keyboard seat. Driven by enable()/disable()
                 // reconcile; see the explicit single-seat scope in text_input.rs.
-                if self.text_input.is_none()
-                    && let Some(manager) = &self.text_input_manager
-                {
-                    self.text_input = Some(manager.get_text_input(&seat, qh, ()));
-                    self.text_input_seat = Some(seat.clone());
-                    self.text_input_focused = false;
-                    self.text_input_enabled = false;
-                    self.text_input_serial = 0;
-                    self.text_input_cursor_update_pending = false;
-                    self.text_input_external_change_pending = false;
-                    self.text_input_cursor_update_blocked_until = None;
+                if self.text_input.attach_if_absent(&seat, qh) {
                     debug!("text-input-v3 object created for seat");
                 }
             }
@@ -130,20 +120,9 @@ impl WaylandState {
     /// over to another physical-keyboard seat if one is already advertised.
     /// Every new protocol object starts its own commit serial at zero.
     fn remove_owned_text_input(&mut self, removed_seat: &wl_seat::WlSeat, qh: &QueueHandle<Self>) {
-        if self.text_input_seat.as_ref() != Some(removed_seat) {
+        if !self.text_input.detach_if_owned(removed_seat) {
             return;
         }
-
-        if let Some(ti) = self.text_input.take() {
-            ti.destroy();
-        }
-        self.text_input_seat = None;
-        self.text_input_focused = false;
-        self.text_input_enabled = false;
-        self.text_input_serial = 0;
-        self.text_input_cursor_update_pending = false;
-        self.text_input_external_change_pending = false;
-        self.text_input_cursor_update_blocked_until = None;
         self.input_state.ime_clear();
         self.input_state.take_text_input_cursor_rect_dirty();
         self.input_state.take_text_input_external_change_dirty();
@@ -155,9 +134,9 @@ impl WaylandState {
                     .info(seat)
                     .is_some_and(|info| info.has_keyboard)
         });
-        if let (Some(seat), Some(manager)) = (fallback, &self.text_input_manager) {
-            self.text_input = Some(manager.get_text_input(&seat, qh, ()));
-            self.text_input_seat = Some(seat);
+        if let Some(seat) = fallback
+            && self.text_input.attach_if_absent(&seat, qh)
+        {
             debug!("text-input-v3 object failed over to another keyboard seat");
         }
     }

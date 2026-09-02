@@ -190,15 +190,7 @@ impl WaylandState {
             cursor_hidden: false,
             key_repeat_key: None,
             key_repeat_next_tick: None,
-            text_input_manager,
-            text_input: None,
-            text_input_seat: None,
-            text_input_focused: false,
-            text_input_enabled: false,
-            text_input_serial: 0,
-            text_input_cursor_update_pending: false,
-            text_input_external_change_pending: false,
-            text_input_cursor_update_blocked_until: None,
+            text_input: super::super::text_input::TextInputState::new(text_input_manager),
             #[cfg(feature = "tablet-input")]
             tablet_manager,
             #[cfg(feature = "tablet-input")]
