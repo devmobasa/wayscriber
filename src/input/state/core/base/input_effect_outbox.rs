@@ -184,13 +184,16 @@ impl InputEffectOutbox {
                 // A native region capture reserves the shared frozen-screen
                 // acquisition before the user's freeze toggle is interpreted.
                 // Non-region backend work retains its later runtime position.
-                let region_capture = self
-                    .effects
-                    .iter()
-                    .any(|effect| matches!(effect, InputEffect::Backend(PendingBackendAction::Screenshot(action)) if action.is_region_capture()));
-                if region_capture {
-                    self.drain_kind(InputEffectKind::Backend, &mut drained);
-                }
+                self.drain_matching(
+                    |effect| {
+                        matches!(
+                            effect,
+                            InputEffect::Backend(PendingBackendAction::Screenshot(action))
+                                if action.is_region_capture()
+                        )
+                    },
+                    &mut drained,
+                );
                 let user_requested = self.drain_one(InputEffectKind::FrozenToggle).is_some();
                 drained.push(InputEffect::FrozenPass { user_requested });
                 self.drain_kinds(
@@ -258,9 +261,17 @@ impl InputEffectOutbox {
     }
 
     fn drain_kind(&mut self, kind: InputEffectKind, drained: &mut Vec<InputEffect>) {
+        self.drain_matching(|effect| effect.kind() == kind, drained);
+    }
+
+    fn drain_matching(
+        &mut self,
+        mut matches: impl FnMut(&InputEffect) -> bool,
+        drained: &mut Vec<InputEffect>,
+    ) {
         let mut retained = VecDeque::with_capacity(self.effects.len());
         while let Some(effect) = self.effects.pop_front() {
-            if effect.kind() == kind {
+            if matches(&effect) {
                 drained.push(effect);
             } else {
                 retained.push_back(effect);
@@ -310,12 +321,12 @@ fn policy(effect: &InputEffect) -> EffectPolicy {
         | InputEffect::FrozenPass { .. }
         | InputEffect::EyedropperToggle => EffectPolicy::Coalesce,
         InputEffect::OcrPass { .. } => EffectPolicy::Merge,
-        InputEffect::KeybindingEdit(_)
+        InputEffect::Backend(_)
+        | InputEffect::KeybindingEdit(_)
         | InputEffect::TextCopy(_)
         | InputEffect::TextPaste(_)
         | InputEffect::BoardRuntimeUi(_) => EffectPolicy::Fifo,
-        InputEffect::Backend(_)
-        | InputEffect::OutputFocus(_)
+        InputEffect::OutputFocus(_)
         | InputEffect::Zoom(_)
         | InputEffect::CopyHex(_)
         | InputEffect::PasteHex(_)

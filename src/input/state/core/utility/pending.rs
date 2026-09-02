@@ -27,10 +27,9 @@ impl InputState {
     /// Records that a user action created or changed a magnified Spotlight, so
     /// the backend can resolve source availability and warn once for it.
     ///
-    /// This deliberately does not travel through [`PendingBackendAction`]:
-    /// that slot has last-action semantics, so an export or screenshot queued
-    /// in the same batch of input events would silently cost this request its
-    /// warning — the same reason durable toolbar chrome has its own queue.
+    /// This is a coalesced signal rather than ordered backend work: a batch
+    /// needs one source-availability check regardless of how many magnified
+    /// Spotlights changed.
     pub(crate) fn request_spotlight_magnifier_feedback(&mut self) {
         self.emit_input_effect(InputEffect::SpotlightMagnifierFeedback);
     }
@@ -55,10 +54,10 @@ impl InputState {
         self.input_effects.contains(InputEffectKind::Backend)
     }
 
-    /// Stores backend output work for retrieval by the backend, with
-    /// last-action semantics. Durable toolbar chrome changes do not use this
-    /// slot (see [`Self::queue_toolbar_persistence`]) because last-action
-    /// semantics would let a capture cost a toggle its persistence.
+    /// Queues backend output work for retrieval by the backend, oldest first.
+    ///
+    /// Each accepted action remains distinct. A screenshot, export, or helper
+    /// request queued in the same input batch must not replace an earlier one.
     pub(crate) fn set_pending_backend_action(&mut self, action: PendingBackendAction) {
         self.emit_input_effect(InputEffect::Backend(action));
     }
@@ -383,13 +382,22 @@ mod tests {
     }
 
     #[test]
-    fn pending_backend_action_is_taken_once() {
+    fn pending_backend_actions_are_taken_once_in_emission_order() {
         let mut state = make_state();
         state.set_pending_backend_action(PendingBackendAction::Screenshot(Action::CaptureFileFull));
+        state.set_pending_backend_action(PendingBackendAction::CanvasExport(
+            Action::ExportCanvasClipboard,
+        ));
 
         assert_eq!(
             state.take_pending_backend_action(),
             Some(PendingBackendAction::Screenshot(Action::CaptureFileFull))
+        );
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(PendingBackendAction::CanvasExport(
+                Action::ExportCanvasClipboard
+            ))
         );
         assert_eq!(state.take_pending_backend_action(), None);
     }
@@ -457,7 +465,7 @@ mod tests {
     }
 
     #[test]
-    fn runtime_effect_drain_orders_region_capture_before_freeze_and_keeps_last_wins_slots() {
+    fn runtime_effect_drain_orders_region_capture_before_freeze_without_dropping_other_work() {
         let mut state = make_state();
         state.set_pending_backend_action(PendingBackendAction::Screenshot(Action::CaptureFileFull));
         state.set_pending_backend_action(PendingBackendAction::Screenshot(
@@ -483,6 +491,7 @@ mod tests {
                 InputEffect::FrozenPass {
                     user_requested: true
                 },
+                InputEffect::Backend(PendingBackendAction::Screenshot(Action::CaptureFileFull)),
                 InputEffect::Zoom(ZoomAction::Reset),
             ]
         ));

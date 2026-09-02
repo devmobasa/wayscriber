@@ -523,12 +523,10 @@ pub enum PendingBackendAction {
 
 /// Durable toolbar chrome changes awaiting their runtime-ui.toml write.
 ///
-/// Deliberately not part of [`PendingBackendAction`]: that slot has
-/// last-action semantics, so sharing it would let a screenshot (or a second
-/// toolbar change) silently cost an earlier change its persistence — or vice
-/// versa. These are ordered, coalesced per kind, and drained once more at
-/// teardown, so a change made in the same input batch as an exit request
-/// still reaches the file.
+/// Deliberately not part of [`PendingBackendAction`]: backend actions are FIFO,
+/// while these changes coalesce per preference and are drained once more at
+/// teardown. A change made in the same input batch as an exit request still
+/// reaches the file without scheduling duplicate writes for one preference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PendingToolbarPersistence {
     /// The top-display preference changed by its keyboard cycle (F2). The
@@ -596,9 +594,7 @@ pub enum KeybindingEditOperation {
 ///
 /// These queue rather than replace one another. Each is a separate write with
 /// its own answer and its own toast, so a request the user made cannot be
-/// dropped by the next one arriving before the backend drains — which is why
-/// they ride the outbox's FIFO `InputEffect::KeybindingEdit` policy rather than
-/// the last-wins [`PendingBackendAction`] policy.
+/// dropped by the next one arriving before the backend drains.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeybindingEditRequest {
     pub action: Action,
