@@ -278,8 +278,10 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
   in-memory `Config` — the effective value — and write nothing. Restart restores the configured
   value. Each one is classified `Ephemeral` in `src/ui/toolbar/model/event_policy.rs` and pairs with
   honest wording plus a route into the configurator; the routes are named in
-  `src/configurator_destination.rs` and launched from
-  `src/input/state/core/utility/launcher.rs` (overlay) and `src/daemon/tray/helpers.rs` (tray).
+  `src/configurator_destination.rs`. Overlay input queues typed launch requests in
+  `src/input/state/core/utility/launcher.rs`, and
+  `src/backend/wayland/state/helper_launch.rs` performs them. The tray launches through
+  `src/daemon/tray/helpers.rs`.
 - Board edits are not in that list, and are not a third kind of `config.toml` write either. Board
   contents — rename, recolor, add, delete, and everything drawn on them — belong to the session:
   they mark the session dirty, ride the session autosave, and come back on the next start for
@@ -349,9 +351,9 @@ Notifications are sent via `notification::send_notification_async`, keeping all 
   that has not finished; the one in flight lands whole or not at all because the write is a rename,
   while edits queued behind it have not started yet.
 - The gestures are decided in `src/backend/wayland/state/keybindings.rs` (palette row controls and
-  the toolbar rebind gesture, which emit FIFO `InputEffect::KeybindingEdit` entries rather than a
-  last-wins backend effect, so two edits recorded from one batch of input events
-  both reach the worker — after conflict-checking the request against `claimed_keys()` for every
+  the toolbar rebind gesture, which emit FIFO `InputEffect::KeybindingEdit` entries, so two edits
+  recorded from one batch of input events both reach the worker — after conflict-checking the
+  request against `claimed_keys()` for every
   action but the one being edited),
   `.../toolbar/events/presets.rs`, and `.../toolbar/events/quick_colors.rs` (drained from the color
   picker's pointer release in `event_loop/capture.rs`, which is the only drain site that release

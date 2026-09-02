@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use super::{FontPickerFilter, FontPickerResults, FontPickerTarget};
 use crate::draw::{families_match, try_monospace_font_families, try_system_font_families};
 use crate::input::Key;
-use crate::input::state::core::command_palette::fuzzy_score;
+use crate::input::state::core::search::fuzzy_score;
 use crate::util::Rect;
 
 /// How many families the picker keeps as recently used.

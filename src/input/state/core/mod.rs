@@ -18,6 +18,7 @@ pub(crate) mod modal;
 mod properties;
 pub(crate) mod radial_menu;
 mod region_select;
+mod search;
 mod selection;
 mod selection_actions;
 pub(crate) use selection_actions::{IdleHandle, SpotlightMagnificationTrack};
@@ -71,7 +72,7 @@ pub(crate) use command_palette::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
     COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_ROW_ACTION_COUNT,
     COMMAND_PALETTE_ROW_ACTION_GAP, COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_ROW_ICON_GAP,
-    COMMAND_PALETTE_ROW_ICON_SIZE, COMMAND_PALETTE_TOP_RATIO, action_meta_token_score, fuzzy_score,
+    COMMAND_PALETTE_ROW_ICON_SIZE, COMMAND_PALETTE_TOP_RATIO, action_meta_token_score,
     query_tokens,
 };
 pub use command_palette::{
@@ -102,6 +103,7 @@ pub use region_select::{
     RegionInputSource, RegionPurposeTag, RegionSelectUiState, RegionSelection, ScreenCaptureSource,
     SelectionPolicy,
 };
+pub(crate) use search::fuzzy_score;
 pub use selection::SelectionState;
 pub use tool_controls::PrecisionEntryState;
 pub use tour::TourStep;

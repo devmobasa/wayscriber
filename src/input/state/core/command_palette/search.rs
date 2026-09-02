@@ -2,6 +2,7 @@ use super::super::base::InputState;
 use super::{CommandEntry, command_palette_entries};
 use crate::config::action_meta::{ActionCategory, ActionMeta};
 use crate::domain::Action;
+use crate::input::state::core::search::fuzzy_score;
 /// Group label shown above recent commands when the query is empty.
 pub(crate) const COMMAND_PALETTE_RECENT_HEADER: &str = "Recent";
 
@@ -263,49 +264,6 @@ pub(crate) fn command_palette_display_index(
         .unwrap_or(0)
 }
 
-/// Simple fuzzy matching score, shared by the command palette and the help
-/// overlay search so both surfaces rank identically.
-pub(crate) fn fuzzy_score(query: &str, text: &str) -> i32 {
-    let text_lower = text.to_lowercase();
-
-    // Exact prefix match
-    if text_lower.starts_with(query) {
-        return 100;
-    }
-
-    // Word boundary matches
-    let words: Vec<&str> = text_lower.split_whitespace().collect();
-    for word in &words {
-        if word.starts_with(query) {
-            return 75;
-        }
-    }
-
-    // Substring match
-    if text_lower.contains(query) {
-        return 25;
-    }
-
-    // Check if all query chars appear in order
-    let mut text_chars = text_lower.chars().peekable();
-    let mut matched = 0;
-    let query_len = query.chars().count();
-    for qc in query.chars() {
-        while let Some(&tc) = text_chars.peek() {
-            text_chars.next();
-            if tc == qc {
-                matched += 1;
-                break;
-            }
-        }
-    }
-    if matched == query_len {
-        return 10;
-    }
-
-    0
-}
-
 /// Fuzzy-score a single query `token` against an action's static search model:
 /// its label, short label, description, category name, and search aliases. This
 /// is the command palette's per-token index minus the per-user shortcut labels
@@ -398,16 +356,6 @@ mod tests {
             query_tokens("ctrl+shift/file open"),
             vec!["ctrl", "shift", "file", "open"]
         );
-    }
-
-    #[test]
-    fn fuzzy_score_prefers_prefix_matches_over_subsequence_matches() {
-        assert!(fuzzy_score("cap", "capture to file") > fuzzy_score("cap", "clipboard action"));
-    }
-
-    #[test]
-    fn fuzzy_score_prefers_word_boundary_matches_over_plain_substrings() {
-        assert!(fuzzy_score("bar", "status bar") > fuzzy_score("bar", "crowbar"));
     }
 
     #[test]
