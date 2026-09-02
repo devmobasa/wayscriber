@@ -500,7 +500,7 @@ impl WaylandState {
             animation.preset_feedback,
             animation.blocked_feedback,
             animation.text_edit_entry,
-            render_ui && self.input_state.show_status_bar,
+            render_ui && self.input_state.ui_visibility.show_status_bar,
             render_ui && self.zoom_chip_visible(),
             render_ui && self.input_state.input_hud_visible(),
             render_ui && self.input_state.command_palette_is_engaged(),

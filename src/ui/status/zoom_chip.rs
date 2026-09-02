@@ -906,7 +906,7 @@ mod tests {
     fn chip_shows_percent_in_default_config_regardless_of_pointer() {
         let mut state = make_state();
         assert!(
-            state.show_zoom_actions,
+            state.ui_visibility.show_zoom_actions,
             "default config enables zoom actions"
         );
         let style = StatusBarStyle::default();
@@ -957,9 +957,9 @@ mod tests {
             for show_zoom_chip in [true, false] {
                 for show_status_bar in [true, false] {
                     let mut state = make_state();
-                    state.show_zoom_actions = show_zoom_actions;
-                    state.show_zoom_chip = show_zoom_chip;
-                    state.show_status_bar = show_status_bar;
+                    state.ui_visibility.show_zoom_actions = show_zoom_actions;
+                    state.ui_visibility.show_zoom_chip = show_zoom_chip;
+                    state.ui_visibility.show_status_bar = show_status_bar;
                     state.set_zoom_status(true, false, 2.5, (0.0, 0.0));
 
                     // Chip: present and showing the % exactly when effectively
@@ -1014,7 +1014,7 @@ mod tests {
         let mut state = make_state();
         let style = StatusBarStyle::default();
         let (w, h) = (1920_u32, 1080_u32);
-        state.show_status_bar = true;
+        state.ui_visibility.show_status_bar = true;
         // The damage collector refreshes the status HUD layout before the chip
         // each frame; cache it by hand here at the bottom-right corner.
         state.update_status_hud_layout(crate::config::StatusPosition::BottomRight, &style, w, h);
@@ -1051,7 +1051,7 @@ mod tests {
         let mut state = make_state();
         let style = StatusBarStyle::default();
         let (w, h) = (1920_u32, 1080_u32);
-        state.show_status_bar = true;
+        state.ui_visibility.show_status_bar = true;
         state.update_status_hud_layout(crate::config::StatusPosition::BottomLeft, &style, w, h);
 
         let chip = compute_zoom_chip_layout(&state, &style, w, h).expect("chip layout");

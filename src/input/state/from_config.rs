@@ -31,7 +31,7 @@ impl InputState {
             arrow_length: config.arrow.length,
             arrow_angle: config.arrow.angle_degrees,
             arrow_head_at_end: config.arrow.head_at_end,
-            show_status_bar: config.ui.show_status_bar,
+            ui_visibility: crate::input::state::UiVisibility::from(&config.ui),
             boards_config: config.resolved_boards(),
             action_map,
             max_shapes_per_frame: config.session.max_shapes_per_frame,
@@ -65,20 +65,6 @@ impl InputState {
         input_state.spotlight_feather = config.spotlight.feather;
         input_state.spotlight_magnification = config.spotlight.magnification;
         input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
-        input_state.status_bar_interactive = config.ui.status_bar_interactive;
-        input_state.show_status_selection_info = config.ui.show_status_selection_info;
-        input_state.show_status_board_badge = config.ui.show_status_board_badge;
-        input_state.show_status_page_badge = config.ui.show_status_page_badge;
-        input_state.show_status_color = config.ui.show_status_color;
-        input_state.show_status_tool = config.ui.show_status_tool;
-        input_state.show_status_size = config.ui.show_status_size;
-        input_state.show_status_context_indicators = config.ui.show_status_context_indicators;
-        input_state.show_toolbar_hint = config.ui.show_toolbar_hint;
-        input_state.show_status_help = config.ui.show_status_help;
-        input_state.show_status_about = config.ui.show_status_about;
-        input_state.show_floating_badge_always = config.ui.show_floating_badge_always;
-        input_state.show_floating_badge = config.ui.show_floating_badge;
-        input_state.show_active_output_badge = config.ui.active_output_badge;
         input_state.command_palette_toast_duration_ms = config.ui.command_palette_toast_duration_ms;
         input_state.radial_menu_mouse_binding = config.ui.radial_menu_mouse_binding;
         #[cfg(feature = "tablet-input")]
@@ -89,33 +75,10 @@ impl InputState {
             input_state.pressure_thickness_scale_step = config.tablet.pressure_thickness_scale_step;
         }
 
-        input_state.init_toolbar_from_config(
-            config.ui.toolbar.layout_mode,
-            config.ui.toolbar.mode_overrides.clone(),
-            config.ui.toolbar.items.clone(),
-            config.ui.toolbar.top_pinned,
-            config.ui.toolbar.use_icons,
-            config.ui.toolbar.scale,
-            config.ui.toolbar.show_more_colors,
-            config.ui.toolbar.show_actions_section,
-            config.ui.toolbar.show_actions_advanced,
-            config.ui.toolbar.show_zoom_actions,
-            config.ui.toolbar.show_pages_section,
-            config.ui.toolbar.show_boards_section,
-            config.ui.toolbar.show_presets,
-            config.ui.toolbar.show_step_section,
-            config.ui.toolbar.show_text_controls,
-            config.ui.toolbar.context_aware_ui,
-            config.ui.toolbar.show_delay_sliders,
-            config.ui.toolbar.show_marker_opacity_section,
-            config.ui.toolbar.show_preset_toasts,
-            config.ui.toolbar.idle_fade,
-            config.ui.toolbar.show_tool_preview,
-        );
+        input_state.init_toolbar_from_config(&config.ui.toolbar);
         input_state.init_toolbar_minimized_from_config(config.ui.toolbar.top_minimized);
         input_state.init_toolbar_display_mode_from_config(config.ui.toolbar.top_display_mode);
         input_state.zoom_chip_display = config.ui.toolbar.zoom_chip_display;
-        input_state.show_zoom_chip = config.ui.toolbar.show_zoom_chip;
         input_state.init_toolbar_rebind_modifier_from_config(config.ui.toolbar.rebind_modifier);
         input_state.init_presets_from_config(&config.presets);
 
@@ -229,27 +192,27 @@ mod tests {
         let input = InputState::from_config(&config);
 
         assert!(!input.context_menu_enabled());
-        assert!(!input.status_bar_interactive);
-        assert!(!input.show_status_selection_info);
-        assert!(!input.show_status_board_badge);
-        assert!(!input.show_status_page_badge);
-        assert!(!input.show_status_color);
-        assert!(!input.show_status_tool);
-        assert!(!input.show_status_size);
-        assert!(!input.show_status_context_indicators);
-        assert!(!input.show_toolbar_hint);
-        assert!(!input.show_status_help);
-        assert!(!input.show_status_about);
-        assert!(input.show_floating_badge_always);
+        assert!(!input.ui_visibility.status_bar_interactive);
+        assert!(!input.ui_visibility.show_status_selection_info);
+        assert!(!input.ui_visibility.show_status_board_badge);
+        assert!(!input.ui_visibility.show_status_page_badge);
+        assert!(!input.ui_visibility.show_status_color);
+        assert!(!input.ui_visibility.show_status_tool);
+        assert!(!input.ui_visibility.show_status_size);
+        assert!(!input.ui_visibility.show_status_context_indicators);
+        assert!(!input.ui_visibility.show_toolbar_hint);
+        assert!(!input.ui_visibility.show_status_help);
+        assert!(!input.ui_visibility.show_status_about);
+        assert!(input.ui_visibility.show_floating_badge_always);
         assert!(
-            !input.show_floating_badge,
+            !input.ui_visibility.show_floating_badge,
             "persisted badge visibility must be restored at startup"
         );
         assert!(
-            !input.show_zoom_chip,
+            !input.ui_visibility.show_zoom_chip,
             "persisted zoom chip visibility must be restored at startup"
         );
-        assert!(input.show_active_output_badge);
+        assert!(input.ui_visibility.show_active_output_badge);
         assert_eq!(input.command_palette_toast_duration_ms, 1234);
         assert!(!input.boards.pan_enabled());
         assert!(!input.boards.show_pan_badge());

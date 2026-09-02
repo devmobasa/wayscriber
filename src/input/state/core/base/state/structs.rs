@@ -212,41 +212,8 @@ pub struct InputState {
     pub keybinding_capture_action: Option<Action>,
     /// Duration for command palette action toasts (ms)
     pub command_palette_toast_duration_ms: u64,
-    /// Whether the status bar is currently visible (toggled via keybinding)
-    pub show_status_bar: bool,
-    /// Whether status HUD segments consume clicks to open their surfaces
-    /// (`[ui] status_bar_interactive`); false keeps the bar display-only
-    pub status_bar_interactive: bool,
-    /// Whether to show selection dimensions in the status bar
-    pub show_status_selection_info: bool,
-    /// Whether to show the board label in the status bar
-    pub show_status_board_badge: bool,
-    /// Whether to show the page counter in the status bar
-    pub show_status_page_badge: bool,
-    /// Whether to show the active color dot in the status bar
-    pub show_status_color: bool,
-    /// Whether to show the active tool name in the status bar
-    pub show_status_tool: bool,
-    /// Whether to show the active tool size in the status bar
-    pub show_status_size: bool,
-    /// Whether to show transient text/highlight context indicators
-    pub show_status_context_indicators: bool,
-    /// Whether to show the hidden-toolbar hint chip in the status bar
-    /// (`[ui] show_toolbar_hint`)
-    pub show_toolbar_hint: bool,
-    /// Whether to show the Help shortcut chip in the status bar
-    pub show_status_help: bool,
-    /// Whether to show the About/version chip in the status bar
-    pub show_status_about: bool,
-    /// Whether to show the board/page badge when the status bar is visible
-    pub show_floating_badge_always: bool,
-    /// Whether the floating board/page badge may render at all (persisted
-    /// toggle via `Action::ToggleFloatingBadge`)
-    pub show_floating_badge: bool,
-    /// Whether the bottom-right zoom chip may render while
-    /// `show_zoom_actions` is on (persisted toggle via
-    /// `Action::ToggleZoomChip`)
-    pub show_zoom_chip: bool,
+    /// Runtime visibility preferences for overlay chrome and toolbar sections.
+    pub ui_visibility: crate::input::state::UiVisibility,
     /// When the zoom chip shows: always, or only while zoom is active
     /// (`[ui.toolbar] zoom_chip_display`)
     pub zoom_chip_display: crate::config::ZoomChipDisplay,
@@ -326,8 +293,6 @@ pub struct InputState {
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)
     pub screen_height: u32,
-    /// Whether to show active output badge in status bar.
-    pub show_active_output_badge: bool,
     /// Active output label shown in status bar when configured.
     pub active_output_label: Option<String>,
     /// Previous color before entering board mode (for restoration)
@@ -454,16 +419,6 @@ pub struct InputState {
     pub custom_redo_steps: usize,
     /// Whether the custom undo/redo section is visible
     pub custom_section_enabled: bool,
-    /// Whether to show the delay sliders in Actions section
-    pub show_delay_sliders: bool,
-    /// Whether to keep the marker opacity control available in the style pill
-    pub show_marker_opacity_section: bool,
-    /// Whether to show preset action toast notifications
-    pub show_preset_toasts: bool,
-    /// Whether the top strip dims after a few seconds without drawing
-    pub idle_fade: bool,
-    /// Whether to show the cursor tool preview bubble
-    pub show_tool_preview: bool,
     /// The scan-band overlay shown while screen text recognition runs, and the
     /// outcome card that follows it.
     pub(crate) ocr_scan: Option<crate::input::state::core::utility::ocr_scan::OcrScan>,
@@ -567,26 +522,6 @@ pub struct InputState {
     pub(in crate::input::state::core) zoom_scale: f64,
     /// Current zoom view offset in canvas/world space
     pub(in crate::input::state::core) zoom_view_offset: (f64, f64),
-    /// Whether to show extended color palette
-    pub show_more_colors: bool,
-    /// Whether to show the Actions section (undo all, redo all, etc.)
-    pub show_actions_section: bool,
-    /// Whether to show advanced action buttons
-    pub show_actions_advanced: bool,
-    /// Whether to show zoom actions
-    pub show_zoom_actions: bool,
-    /// Whether to show the Pages section
-    pub show_pages_section: bool,
-    /// Whether to show the Boards section
-    pub show_boards_section: bool,
-    /// Whether to show the presets section
-    pub show_presets: bool,
-    /// Whether to show the Step Undo/Redo section
-    pub show_step_section: bool,
-    /// Whether to keep text controls visible when text is inactive
-    pub show_text_controls: bool,
-    /// Whether to enable context-aware UI that shows/hides controls based on active tool
-    pub context_aware_ui: bool,
     /// Number of preset slots to display
     pub preset_slot_count: usize,
     /// Preset slots for quick tool switching

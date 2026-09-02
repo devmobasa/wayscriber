@@ -101,11 +101,15 @@ impl InputState {
             PendingToolbarPersistence::Visibility {
                 previous_top_pinned,
             } => previous_top_pinned != self.toolbar_top_pinned,
-            PendingToolbarPersistence::StatusBar { previous } => previous != self.show_status_bar,
-            PendingToolbarPersistence::FloatingBadge { previous } => {
-                previous != self.show_floating_badge
+            PendingToolbarPersistence::StatusBar { previous } => {
+                previous != self.ui_visibility.show_status_bar
             }
-            PendingToolbarPersistence::ZoomChip { previous } => previous != self.show_zoom_chip,
+            PendingToolbarPersistence::FloatingBadge { previous } => {
+                previous != self.ui_visibility.show_floating_badge
+            }
+            PendingToolbarPersistence::ZoomChip { previous } => {
+                previous != self.ui_visibility.show_zoom_chip
+            }
             PendingToolbarPersistence::InputHud { previous } => {
                 previous != self.input_hud_enabled()
             }
@@ -617,8 +621,8 @@ mod tests {
     #[test]
     fn toolbar_effects_coalesce_per_kind_and_keep_the_first_rollback_baseline() {
         let mut state = make_state();
-        state.show_status_bar = true;
-        state.show_zoom_chip = true;
+        state.ui_visibility.show_status_bar = true;
+        state.ui_visibility.show_zoom_chip = true;
         state.queue_toolbar_persistence(PendingToolbarPersistence::StatusBar { previous: false });
         state.queue_toolbar_persistence(PendingToolbarPersistence::StatusBar { previous: true });
         state.queue_toolbar_persistence(PendingToolbarPersistence::ZoomChip { previous: false });

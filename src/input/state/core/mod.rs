@@ -44,7 +44,7 @@ pub use base::{
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
     PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, SelectionAxis,
     SelectionHandle, ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome, ToastQueue,
-    UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
+    UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction,
 };
 pub(crate) use base::{
     BoardPickerClickState, InputStateSeed, PolygonClickState, TextBlockDrag, TextClickState,

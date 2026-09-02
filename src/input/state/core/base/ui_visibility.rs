@@ -1,0 +1,76 @@
+use crate::config::UiConfig;
+
+/// Runtime visibility preferences for overlay chrome and toolbar sections.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UiVisibility {
+    pub show_status_bar: bool,
+    pub status_bar_interactive: bool,
+    pub show_status_selection_info: bool,
+    pub show_status_board_badge: bool,
+    pub show_status_page_badge: bool,
+    pub show_status_color: bool,
+    pub show_status_tool: bool,
+    pub show_status_size: bool,
+    pub show_status_context_indicators: bool,
+    pub show_toolbar_hint: bool,
+    pub show_status_help: bool,
+    pub show_status_about: bool,
+    pub show_floating_badge_always: bool,
+    pub show_floating_badge: bool,
+    pub show_zoom_chip: bool,
+    pub show_active_output_badge: bool,
+    pub show_delay_sliders: bool,
+    pub show_marker_opacity_section: bool,
+    pub show_preset_toasts: bool,
+    pub idle_fade: bool,
+    pub show_tool_preview: bool,
+    pub show_more_colors: bool,
+    pub show_actions_section: bool,
+    pub show_actions_advanced: bool,
+    pub show_zoom_actions: bool,
+    pub show_pages_section: bool,
+    pub show_boards_section: bool,
+    pub show_presets: bool,
+    pub show_step_section: bool,
+    pub show_text_controls: bool,
+    pub context_aware_ui: bool,
+}
+
+impl From<&UiConfig> for UiVisibility {
+    fn from(config: &UiConfig) -> Self {
+        let toolbar = &config.toolbar;
+        Self {
+            show_status_bar: config.show_status_bar,
+            status_bar_interactive: config.status_bar_interactive,
+            show_status_selection_info: config.show_status_selection_info,
+            show_status_board_badge: config.show_status_board_badge,
+            show_status_page_badge: config.show_status_page_badge,
+            show_status_color: config.show_status_color,
+            show_status_tool: config.show_status_tool,
+            show_status_size: config.show_status_size,
+            show_status_context_indicators: config.show_status_context_indicators,
+            show_toolbar_hint: config.show_toolbar_hint,
+            show_status_help: config.show_status_help,
+            show_status_about: config.show_status_about,
+            show_floating_badge_always: config.show_floating_badge_always,
+            show_floating_badge: config.show_floating_badge,
+            show_zoom_chip: toolbar.show_zoom_chip,
+            show_active_output_badge: config.active_output_badge,
+            show_delay_sliders: toolbar.show_delay_sliders,
+            show_marker_opacity_section: toolbar.show_marker_opacity_section,
+            show_preset_toasts: toolbar.show_preset_toasts,
+            idle_fade: toolbar.idle_fade,
+            show_tool_preview: toolbar.show_tool_preview,
+            show_more_colors: toolbar.show_more_colors,
+            show_actions_section: toolbar.show_actions_section,
+            show_actions_advanced: toolbar.show_actions_advanced,
+            show_zoom_actions: toolbar.show_zoom_actions,
+            show_pages_section: toolbar.show_pages_section,
+            show_boards_section: toolbar.show_boards_section,
+            show_presets: toolbar.show_presets,
+            show_step_section: toolbar.show_step_section,
+            show_text_controls: toolbar.show_text_controls,
+            context_aware_ui: toolbar.context_aware_ui,
+        }
+    }
+}

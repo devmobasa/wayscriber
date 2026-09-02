@@ -5,10 +5,13 @@ use crate::input::{DragBinding, DragTool, DragToolBindings};
 #[test]
 fn toggle_floating_badge_action_flips_runtime_visibility() {
     let mut state = create_test_input_state();
-    assert!(state.show_floating_badge, "badge visible by default");
+    assert!(
+        state.ui_visibility.show_floating_badge,
+        "badge visible by default"
+    );
 
     state.handle_action(crate::config::Action::ToggleFloatingBadge);
-    assert!(!state.show_floating_badge);
+    assert!(!state.ui_visibility.show_floating_badge);
     assert!(state.needs_redraw);
     // Persisting is the backend's job: it diffs the state before and after
     // the action rather than being handed a queued request.
@@ -16,7 +19,7 @@ fn toggle_floating_badge_action_flips_runtime_visibility() {
     assert!(state.take_pending_backend_action().is_none());
 
     state.handle_action(crate::config::Action::ToggleFloatingBadge);
-    assert!(state.show_floating_badge);
+    assert!(state.ui_visibility.show_floating_badge);
 }
 
 /// The chrome toggles reach the backend through the state they change, not
@@ -30,8 +33,8 @@ fn repeated_chrome_visibility_toggles_queue_no_backend_work() {
     state.handle_action(crate::config::Action::ToggleZoomChip);
     state.handle_action(crate::config::Action::ToggleZoomChip);
 
-    assert!(state.show_floating_badge);
-    assert!(state.show_zoom_chip);
+    assert!(state.ui_visibility.show_floating_badge);
+    assert!(state.ui_visibility.show_zoom_chip);
     assert!(state.take_pending_backend_action().is_none());
 }
 
@@ -86,7 +89,7 @@ fn apply_preset_updates_tool_and_settings() {
     assert_eq!(state.polygon_sides, 8);
     assert_eq!(state.eraser_kind, EraserKind::Rect);
     assert_eq!(state.eraser_mode, EraserMode::Stroke);
-    assert!(!state.show_status_bar);
+    assert!(!state.ui_visibility.show_status_bar);
 }
 
 #[test]
@@ -270,7 +273,7 @@ fn a_chrome_toggle_that_breaks_focus_mode_still_persists() {
     // Focus mode taking chrome over is not a preference.
     assert!(state.take_pending_toolbar_persistence().is_empty());
 
-    let previous = state.show_status_bar;
+    let previous = state.ui_visibility.show_status_bar;
     state.handle_action(crate::config::Action::ToggleStatusBar);
     assert!(!state.focus_mode_active(), "the toggle breaks focus mode");
     assert_eq!(
@@ -286,11 +289,11 @@ fn focus_mode_transitions_queue_no_durable_chrome_change() {
     let mut state = create_test_input_state();
 
     state.handle_action(crate::config::Action::ToggleFocusMode);
-    assert!(!state.show_status_bar);
+    assert!(!state.ui_visibility.show_status_bar);
     assert!(state.take_pending_toolbar_persistence().is_empty());
 
     state.handle_action(crate::config::Action::ToggleFocusMode);
-    assert!(state.show_status_bar);
+    assert!(state.ui_visibility.show_status_bar);
     assert!(state.take_pending_toolbar_persistence().is_empty());
 }
 
@@ -322,7 +325,7 @@ fn a_chrome_toggle_pressed_twice_queues_nothing() {
     state.handle_action(crate::config::Action::ToggleStatusBar);
     state.handle_action(crate::config::Action::ToggleStatusBar);
 
-    assert!(state.show_status_bar);
+    assert!(state.ui_visibility.show_status_bar);
     assert!(state.take_pending_toolbar_persistence().is_empty());
 }
 

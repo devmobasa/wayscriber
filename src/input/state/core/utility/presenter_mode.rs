@@ -26,10 +26,10 @@ impl InputState {
         self.presenter_mode = false;
         if let Some(restore) = self.presenter_restore.take() {
             if let Some(value) = restore.show_status_bar {
-                self.show_status_bar = value;
+                self.ui_visibility.show_status_bar = value;
             }
             if let Some(value) = restore.show_tool_preview {
-                self.show_tool_preview = value;
+                self.ui_visibility.show_tool_preview = value;
             }
             if let Some(value) = restore.toolbar_visible {
                 self.toolbar_visible = value;
@@ -98,12 +98,12 @@ impl InputState {
 
         self.cancel_active_interaction();
         if config.hide_status_bar {
-            restore.show_status_bar = Some(self.show_status_bar);
-            self.show_status_bar = false;
+            restore.show_status_bar = Some(self.ui_visibility.show_status_bar);
+            self.ui_visibility.show_status_bar = false;
         }
         if config.hide_tool_preview {
-            restore.show_tool_preview = Some(self.show_tool_preview);
-            self.show_tool_preview = false;
+            restore.show_tool_preview = Some(self.ui_visibility.show_tool_preview);
+            self.ui_visibility.show_tool_preview = false;
         }
         if config.hide_toolbars {
             restore.toolbar_visible = Some(self.toolbar_visible);

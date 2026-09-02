@@ -202,7 +202,7 @@ fn mode_badges_stack_above_bottom_hud_and_below_top_hud() {
     state.set_zoom_status(true, false, 2.5, (0.0, 0.0));
     // Zoom actions off: the HUD-stacked ZOOM badge is the zoom indicator
     // here (with zoom actions on the bottom-right chip owns it instead).
-    state.show_zoom_actions = false;
+    state.ui_visibility.show_zoom_actions = false;
     let style = StatusBarStyle::default();
 
     let bottom = compute_status_hud_layout(&state, StatusPosition::BottomLeft, &style, 1920, 1080)
@@ -238,7 +238,10 @@ fn zoom_badge_suppressed_when_zoom_actions_enabled() {
     let mut state = make_state();
     state.set_frozen_active(true);
     state.set_zoom_status(true, false, 2.5, (0.0, 0.0));
-    assert!(state.show_zoom_actions, "default enables zoom actions");
+    assert!(
+        state.ui_visibility.show_zoom_actions,
+        "default enables zoom actions"
+    );
     let style = StatusBarStyle::default();
 
     let layout = compute_status_hud_layout(&state, StatusPosition::BottomLeft, &style, 1920, 1080)
@@ -256,7 +259,7 @@ fn zoom_badge_suppressed_when_zoom_actions_enabled() {
     // Hiding the chip through ToggleZoomChip while zoom actions
     // stay on must hand the display back to the HUD badge — otherwise a
     // zoomed session with a visible status bar has NO zoom indicator.
-    state.show_zoom_chip = false;
+    state.ui_visibility.show_zoom_chip = false;
     let chip_hidden =
         compute_status_hud_layout(&state, StatusPosition::BottomLeft, &style, 1920, 1080)
             .expect("layout");
@@ -267,10 +270,10 @@ fn zoom_badge_suppressed_when_zoom_actions_enabled() {
             .any(|badge| badge.label == "ZOOM 250%"),
         "HUD ZOOM badge must return when the chip is master-hidden"
     );
-    state.show_zoom_chip = true;
+    state.ui_visibility.show_zoom_chip = true;
 
     // With zoom actions off the badge returns.
-    state.show_zoom_actions = false;
+    state.ui_visibility.show_zoom_actions = false;
     let restored =
         compute_status_hud_layout(&state, StatusPosition::BottomLeft, &style, 1920, 1080)
             .expect("layout");

@@ -109,12 +109,12 @@ fn snapshot_uses_pre_light_mode_tool_state() {
     let _ = input.set_tool_override(Some(Tool::Marker));
     let _ = input.set_color(desired_color);
     let _ = input.set_thickness(14.0);
-    input.show_status_bar = true;
+    input.ui_visibility.show_status_bar = true;
 
     input.handle_action(Action::ToggleLightMode);
     assert!(input.light_mode);
     assert_eq!(input.tool_override(), Some(Tool::Pen));
-    assert!(!input.show_status_bar);
+    assert!(!input.ui_visibility.show_status_bar);
 
     let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
     let tool_state = snapshot.tool_state.expect("tool state present");
@@ -135,17 +135,17 @@ fn restoring_a_session_keeps_the_configured_status_bar_visibility() {
     options.restore_tool_state = true;
 
     let mut source = dummy_input_state();
-    source.show_status_bar = false;
+    source.ui_visibility.show_status_bar = false;
     let snapshot = snapshot_from_input(&source, &options).expect("snapshot present");
 
     // The next start: chrome seeded from a configuration that shows the bar.
     let mut input = dummy_input_state();
-    input.show_status_bar = true;
+    input.ui_visibility.show_status_bar = true;
 
     apply_snapshot(&mut input, snapshot, &options);
 
     assert!(
-        input.show_status_bar,
+        input.ui_visibility.show_status_bar,
         "the configured value owns chrome; a session must not override it"
     );
 }
@@ -213,25 +213,25 @@ fn restoring_a_session_leaves_focus_modes_pending_status_bar_value_alone() {
     options.restore_tool_state = true;
 
     let mut source = dummy_input_state();
-    source.show_status_bar = false;
+    source.ui_visibility.show_status_bar = false;
     let snapshot = snapshot_from_input(&source, &options).expect("snapshot present");
 
     let mut input = dummy_input_state();
-    input.show_status_bar = true;
+    input.ui_visibility.show_status_bar = true;
     input.handle_action(Action::ToggleFocusMode);
     assert!(input.focus_mode_active());
-    assert!(!input.show_status_bar);
+    assert!(!input.ui_visibility.show_status_bar);
 
     apply_snapshot(&mut input, snapshot, &options);
     assert!(input.focus_mode_active());
     assert!(
-        !input.show_status_bar,
+        !input.ui_visibility.show_status_bar,
         "session restore must not reveal chrome through Focus Mode"
     );
 
     input.handle_action(Action::ToggleFocusMode);
     assert!(
-        input.show_status_bar,
+        input.ui_visibility.show_status_bar,
         "leaving Focus Mode returns this run's own value, not one from a session file"
     );
 }
@@ -275,7 +275,7 @@ fn apply_snapshot_restores_tool_state() {
         b: 0.1,
         a: 1.0,
     });
-    input.show_status_bar = false;
+    input.ui_visibility.show_status_bar = false;
 
     let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
     assert_eq!(
@@ -287,7 +287,7 @@ fn apply_snapshot_restores_tool_state() {
     );
 
     let mut restored = dummy_input_state();
-    restored.show_status_bar = true;
+    restored.ui_visibility.show_status_bar = true;
     apply_snapshot(&mut restored, snapshot, &options);
 
     assert_eq!(restored.current_color, desired_color);
@@ -316,7 +316,7 @@ fn apply_snapshot_restores_tool_state() {
         })
     );
     assert!(
-        restored.show_status_bar,
+        restored.ui_visibility.show_status_bar,
         "the source hid the status bar, but chrome is not tool state and does not travel"
     );
 }

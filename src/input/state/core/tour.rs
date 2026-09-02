@@ -148,8 +148,8 @@ impl InputState {
                  Shape-specific options when clicking on shapes."
                 .to_string(),
             TourStep::StatusBar => {
-                let board = self.show_status_board_badge && self.boards.show_badge();
-                let page = self.show_status_page_badge;
+                let board = self.ui_visibility.show_status_board_badge && self.boards.show_badge();
+                let page = self.ui_visibility.show_status_page_badge;
                 let entry = match (board, page) {
                     (true, true) => Some("Board or Page"),
                     (true, false) => Some("Board"),
@@ -401,7 +401,7 @@ mod tests {
         let mut state = make_test_input_state();
         state.handle_action(Action::ToggleFocusMode);
         assert!(state.focus_mode_active());
-        assert!(!state.show_status_bar);
+        assert!(!state.ui_visibility.show_status_bar);
 
         state.start_tour_replay();
 
@@ -411,7 +411,10 @@ mod tests {
             "the tour and Focus Mode must not own chrome simultaneously"
         );
         state.end_tour();
-        assert!(state.show_status_bar, "pre-Focus chrome must be restored");
+        assert!(
+            state.ui_visibility.show_status_bar,
+            "pre-Focus chrome must be restored"
+        );
         assert!(
             state.toolbar_visible(),
             "pinned toolbar must remain visible"
@@ -482,8 +485,8 @@ mod tests {
 
         // If both configurable picker segments are hidden, never imply that
         // clicking an arbitrary part of the status bar opens the picker.
-        state.show_status_board_badge = false;
-        state.show_status_page_badge = false;
+        state.ui_visibility.show_status_board_badge = false;
+        state.ui_visibility.show_status_page_badge = false;
         let copy = state.tour_step_description(TourStep::StatusBar);
         assert!(copy.contains("segments are hidden"), "copy: {copy:?}");
         assert!(!copy.contains("Click the status bar"), "copy: {copy:?}");

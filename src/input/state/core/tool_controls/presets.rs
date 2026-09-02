@@ -203,7 +203,7 @@ impl InputState {
             return false;
         }
 
-        let duration_ms = if self.show_preset_toasts {
+        let duration_ms = if self.ui_visibility.show_preset_toasts {
             PRESET_TOAST_DURATION_MS
         } else {
             PRESET_FEEDBACK_DURATION_MS
@@ -306,7 +306,7 @@ impl InputState {
             arrow_angle: Some(self.arrow_angle),
             arrow_head_at_end: Some(self.arrow_head_at_end),
             polygon_sides: Some(self.polygon_sides),
-            show_status_bar: Some(self.show_status_bar),
+            show_status_bar: Some(self.ui_visibility.show_status_bar),
             drag_tools: Some(self.drag_tool_bindings.to_config()),
         }
     }

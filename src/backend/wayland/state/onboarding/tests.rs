@@ -245,14 +245,14 @@ fn canvas_hint_requires_reachable_full_top_strip() {
 fn status_bar_hint_requires_a_visible_board_picker_segment() {
     let mut input = crate::input::state::test_support::make_test_input_state();
     assert!(input.boards.create_board(), "test needs multiple boards");
-    input.show_status_bar = true;
-    input.status_bar_interactive = true;
-    input.show_status_board_badge = true;
-    input.show_status_page_badge = true;
+    input.ui_visibility.show_status_bar = true;
+    input.ui_visibility.status_bar_interactive = true;
+    input.ui_visibility.show_status_board_badge = true;
+    input.ui_visibility.show_status_page_badge = true;
     assert_eq!(status_bar_board_picker_entry(&input), Some("Board or Page"));
 
-    input.show_status_board_badge = false;
-    input.show_status_page_badge = false;
+    input.ui_visibility.show_status_board_badge = false;
+    input.ui_visibility.show_status_page_badge = false;
     assert_eq!(status_bar_board_picker_entry(&input), None);
 }
 

@@ -28,7 +28,7 @@ impl InputState {
                 Some(MenuCommand::ShowToolbar),
             ));
         }
-        if !(self.show_status_bar
+        if !(self.ui_visibility.show_status_bar
             || self.presenter_mode && self.presenter_mode_config.hide_status_bar)
         {
             entries.push(ContextMenuEntry::new(

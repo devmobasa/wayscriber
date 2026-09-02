@@ -132,8 +132,8 @@ fn toolbar_context_preserves_temporary_eraser_controls() {
 #[test]
 fn toolbar_context_matches_tool_profiles_for_each_tool() {
     let mut state = create_test_input_state();
-    state.show_text_controls = false;
-    state.show_marker_opacity_section = false;
+    state.ui_visibility.show_text_controls = false;
+    state.ui_visibility.show_marker_opacity_section = false;
 
     let cases = [
         (

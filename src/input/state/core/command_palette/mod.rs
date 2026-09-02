@@ -817,11 +817,11 @@ mod tests {
             selected.action,
             crate::config::keybindings::Action::ToggleStatusBar
         );
-        assert!(state.show_status_bar);
+        assert!(state.ui_visibility.show_status_bar);
 
         assert!(state.handle_command_palette_key(crate::input::Key::Return));
         assert!(!state.command_palette.open);
-        assert!(!state.show_status_bar);
+        assert!(!state.ui_visibility.show_status_bar);
         assert_eq!(
             state.command_palette.recent.first().copied(),
             Some(crate::config::keybindings::Action::ToggleStatusBar)
@@ -963,10 +963,10 @@ mod tests {
         );
         let (x, y) = command_row_click_point(&state, 0, 1920, 1000);
 
-        assert!(state.show_status_bar);
+        assert!(state.ui_visibility.show_status_bar);
         assert!(state.handle_command_palette_click(x, y, 1920, 1000));
         assert!(!state.command_palette.open);
-        assert!(!state.show_status_bar);
+        assert!(!state.ui_visibility.show_status_bar);
         let toast = state.ui_toast.as_ref().expect("command toast");
         assert_eq!(
             toast.kind,

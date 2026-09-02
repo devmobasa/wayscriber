@@ -2,6 +2,7 @@ mod input_effect_outbox;
 mod state;
 mod toast_queue;
 mod types;
+mod ui_visibility;
 
 pub(crate) use input_effect_outbox::{InputEffect, InputEffectDrain};
 pub(in crate::input::state::core) use input_effect_outbox::{InputEffectKind, InputEffectOutbox};
@@ -27,3 +28,4 @@ pub(crate) use types::{
     ToastCommand, ToastPress, WayscriberClipboardSelection,
 };
 pub(crate) use types::{KeybindingEditOperation, KeybindingEditRequest};
+pub use ui_visibility::UiVisibility;

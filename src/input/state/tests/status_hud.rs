@@ -37,7 +37,7 @@ fn status_hud_layout_cleared_when_bar_hidden() {
     update_hud_layout(&mut input, 1280, 720);
     assert!(input.status_hud_layout().is_some());
 
-    input.show_status_bar = false;
+    input.ui_visibility.show_status_bar = false;
     update_hud_layout(&mut input, 1280, 720);
     assert!(input.status_hud_layout().is_none());
     assert!(!input.status_hud_contains(20, 700));
@@ -72,7 +72,7 @@ fn status_hud_hover_tracks_segments_and_requests_redraw() {
 
     // A display-only HUD (`status_bar_interactive = false`) never hovers:
     // no affordance may advertise a click that would be rejected.
-    input.status_bar_interactive = false;
+    input.ui_visibility.status_bar_interactive = false;
     input.on_mouse_motion(x, y);
     assert_eq!(input.status_hud_hover, None);
 }
@@ -373,7 +373,7 @@ fn status_hud_click_outside_is_ignored() {
 #[test]
 fn status_hud_ignores_clicks_when_not_interactive() {
     let mut input = create_test_input_state();
-    input.status_bar_interactive = false;
+    input.ui_visibility.status_bar_interactive = false;
     update_hud_layout(&mut input, 1280, 720);
     // The HUD still renders identically: a layout exists...
     assert!(input.status_hud_layout().is_some());
@@ -397,7 +397,10 @@ fn disabling_every_content_item_removes_the_hud_and_restores_badge_fallback() {
 
     update_hud_layout(&mut input, 1280, 720);
 
-    assert!(input.show_status_bar, "the master preference stays enabled");
+    assert!(
+        input.ui_visibility.show_status_bar,
+        "the master preference stays enabled"
+    );
     assert!(
         input.status_hud_layout().is_none(),
         "no empty pill is cached"
@@ -462,7 +465,7 @@ fn status_hud_press_routing_consumes_left_press_over_interactive_hud() {
     assert_eq!(input.boards.active_frame().shapes.len(), 0);
 
     // With interactivity disabled, presses draw through as before.
-    input.status_bar_interactive = false;
+    input.ui_visibility.status_bar_interactive = false;
     input.on_mouse_press_with_canvas(MouseButton::Left, x, y, x, y);
     assert!(matches!(input.state, DrawingState::Drawing { .. }));
 }

@@ -29,7 +29,7 @@ fn presenter_mode_exits_focus_mode_before_taking_chrome_ownership() {
 
     state.handle_action(Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
-    assert!(!state.show_status_bar);
+    assert!(!state.ui_visibility.show_status_bar);
 
     state.handle_action(Action::TogglePresenterMode);
 
@@ -42,7 +42,10 @@ fn presenter_mode_exits_focus_mode_before_taking_chrome_ownership() {
 
     state.handle_action(Action::TogglePresenterMode);
     assert!(!state.presenter_mode);
-    assert!(state.show_status_bar, "pre-Focus visibility must survive");
+    assert!(
+        state.ui_visibility.show_status_bar,
+        "pre-Focus visibility must survive"
+    );
     assert!(state.toolbar_visible(), "pre-Focus toolbar must survive");
 }
 
@@ -73,10 +76,10 @@ fn presenter_mode_blocks_preset_status_bar_toggle() {
     state.presets[0] = Some(preset);
 
     state.toggle_presenter_mode();
-    assert!(!state.show_status_bar);
+    assert!(!state.ui_visibility.show_status_bar);
 
     assert!(state.apply_preset(1));
-    assert!(!state.show_status_bar);
+    assert!(!state.ui_visibility.show_status_bar);
 }
 
 #[test]
@@ -85,10 +88,10 @@ fn presenter_mode_blocks_tool_preview_toggle() {
     state.presenter_mode_config.hide_tool_preview = true;
 
     state.toggle_presenter_mode();
-    assert!(!state.show_tool_preview);
+    assert!(!state.ui_visibility.show_tool_preview);
 
     assert!(!state.apply_toolbar_event(ToolbarEvent::ToggleToolPreview(true)));
-    assert!(!state.show_tool_preview);
+    assert!(!state.ui_visibility.show_tool_preview);
 }
 
 #[test]
@@ -124,19 +127,19 @@ fn presenter_locked_mode_blocks_non_left_drag_bindings() {
 #[test]
 fn presenter_mode_restores_status_bar_toolbars_and_tool_override_on_exit() {
     let mut state = create_test_input_state();
-    state.show_status_bar = true;
+    state.ui_visibility.show_status_bar = true;
     state.toolbar_visible = true;
     state.toolbar_top_visible = true;
     state.set_tool_override(Some(Tool::Arrow));
 
     state.toggle_presenter_mode();
-    assert!(!state.show_status_bar);
+    assert!(!state.ui_visibility.show_status_bar);
     assert!(!state.toolbar_visible);
     assert_eq!(state.tool_override(), Some(Tool::Highlight));
 
     state.toggle_presenter_mode();
     assert!(!state.presenter_mode);
-    assert!(state.show_status_bar);
+    assert!(state.ui_visibility.show_status_bar);
     assert!(state.toolbar_visible);
     assert!(state.toolbar_top_visible);
     assert_eq!(state.tool_override(), Some(Tool::Arrow));

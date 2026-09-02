@@ -649,7 +649,7 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
     let _ = input.set_thickness(11.0);
     let _ = input.set_spotlight_magnification(3.5);
     input.arrow_head_at_end = false;
-    input.show_status_bar = false;
+    input.ui_visibility.show_status_bar = false;
     let mut session_state = SessionState::new(Some(current_options.clone()));
     session_state.mark_loaded(true);
 
@@ -680,7 +680,7 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
     assert_eq!(input.spotlight_magnification, 2.1);
     assert!(input.arrow_head_at_end);
     assert!(
-        !input.show_status_bar,
+        !input.ui_visibility.show_status_bar,
         "chrome is a process preference, not saved tool state: resetting tools leaves the run's own status-bar choice alone"
     );
     assert!(input.is_session_dirty());
@@ -1723,7 +1723,10 @@ fn protected_session_path_survives_a_run_only_status_bar_toggle() {
     let mut input = test_input_state();
     input.handle_action(Action::ToggleStatusBar);
 
-    assert!(!input.show_status_bar, "the toggle still moves the bar");
+    assert!(
+        !input.ui_visibility.show_status_bar,
+        "the toggle still moves the bar"
+    );
     assert!(!input.is_session_dirty());
     assert!(state.should_skip_save_for_protected_path(&path, input.is_session_dirty()));
 

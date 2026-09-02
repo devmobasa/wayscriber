@@ -197,13 +197,13 @@ impl InputState {
         }
         self.break_focus_mode();
         self.queue_toolbar_persistence(PendingToolbarPersistence::StatusBar {
-            previous: self.show_status_bar,
+            previous: self.ui_visibility.show_status_bar,
         });
-        self.show_status_bar = !self.show_status_bar;
+        self.ui_visibility.show_status_bar = !self.ui_visibility.show_status_bar;
         // This run-only preference redraws without claiming persisted changes.
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
-        if !self.show_status_bar {
+        if !self.ui_visibility.show_status_bar {
             self.warn_if_all_chrome_hidden();
         }
     }
@@ -211,12 +211,12 @@ impl InputState {
     fn handle_toggle_floating_badge(&mut self) {
         self.break_focus_mode();
         self.queue_toolbar_persistence(PendingToolbarPersistence::FloatingBadge {
-            previous: self.show_floating_badge,
+            previous: self.ui_visibility.show_floating_badge,
         });
-        self.show_floating_badge = !self.show_floating_badge;
+        self.ui_visibility.show_floating_badge = !self.ui_visibility.show_floating_badge;
         info!(
             "Floating board/page badge {}",
-            if self.show_floating_badge {
+            if self.ui_visibility.show_floating_badge {
                 "shown"
             } else {
                 "hidden"
@@ -229,12 +229,12 @@ impl InputState {
     fn handle_toggle_zoom_chip(&mut self) {
         self.break_focus_mode();
         self.queue_toolbar_persistence(PendingToolbarPersistence::ZoomChip {
-            previous: self.show_zoom_chip,
+            previous: self.ui_visibility.show_zoom_chip,
         });
-        self.show_zoom_chip = !self.show_zoom_chip;
+        self.ui_visibility.show_zoom_chip = !self.ui_visibility.show_zoom_chip;
         info!(
             "Zoom chip {}",
-            if self.show_zoom_chip {
+            if self.ui_visibility.show_zoom_chip {
                 "shown"
             } else {
                 "hidden"

@@ -7,7 +7,7 @@ pub(in crate::backend::wayland) fn user_tool_preview(input: &InputState) -> bool
         .presenter_restore
         .as_ref()
         .and_then(|restore| restore.show_tool_preview)
-        .unwrap_or(input.show_tool_preview)
+        .unwrap_or(input.ui_visibility.show_tool_preview)
 }
 
 /// Presenter mode forces the click highlight on while it runs, so what
@@ -100,22 +100,22 @@ fn apply_live_display_flags(
     if include(&InteractionSeedTarget::StatusBar)
         && let Some(value) = live_bool(live, InteractionSeedTarget::StatusBar)
     {
-        input.show_status_bar = value;
+        input.ui_visibility.show_status_bar = value;
     }
     if include(&InteractionSeedTarget::StatusBoardBadge)
         && let Some(value) = live_bool(live, InteractionSeedTarget::StatusBoardBadge)
     {
-        input.show_status_board_badge = value;
+        input.ui_visibility.show_status_board_badge = value;
     }
     if include(&InteractionSeedTarget::StatusPageBadge)
         && let Some(value) = live_bool(live, InteractionSeedTarget::StatusPageBadge)
     {
-        input.show_status_page_badge = value;
+        input.ui_visibility.show_status_page_badge = value;
     }
     if include(&InteractionSeedTarget::FloatingBadgeAlways)
         && let Some(value) = live_bool(live, InteractionSeedTarget::FloatingBadgeAlways)
     {
-        input.show_floating_badge_always = value;
+        input.ui_visibility.show_floating_badge_always = value;
     }
 }
 
@@ -132,32 +132,32 @@ fn apply_live_toolbar_preferences(
     if include(&InteractionSeedTarget::ToolbarMoreColors)
         && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarMoreColors)
     {
-        input.show_more_colors = value;
+        input.ui_visibility.show_more_colors = value;
     }
     if include(&InteractionSeedTarget::ToolbarContextAwareUi)
         && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarContextAwareUi)
     {
-        input.context_aware_ui = value;
+        input.ui_visibility.context_aware_ui = value;
     }
     if include(&InteractionSeedTarget::ToolbarPresetToasts)
         && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarPresetToasts)
     {
-        input.show_preset_toasts = value;
+        input.ui_visibility.show_preset_toasts = value;
     }
     if include(&InteractionSeedTarget::ToolbarIdleFade)
         && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarIdleFade)
     {
-        input.idle_fade = value;
+        input.ui_visibility.idle_fade = value;
     }
     if include(&InteractionSeedTarget::ToolbarToolPreview)
         && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarToolPreview)
     {
-        input.show_tool_preview = value;
+        input.ui_visibility.show_tool_preview = value;
     }
     if include(&InteractionSeedTarget::ToolbarDelaySliders)
         && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarDelaySliders)
     {
-        input.show_delay_sliders = value;
+        input.ui_visibility.show_delay_sliders = value;
     }
     if include(&InteractionSeedTarget::HistoryCustomSection)
         && let Some(value) = live_bool(live, InteractionSeedTarget::HistoryCustomSection)
@@ -179,12 +179,12 @@ fn apply_live_overlay_flags(
     if include(&InteractionSeedTarget::FloatingBadge)
         && let Some(value) = live_bool(live, InteractionSeedTarget::FloatingBadge)
     {
-        input.show_floating_badge = value;
+        input.ui_visibility.show_floating_badge = value;
     }
     if include(&InteractionSeedTarget::ZoomChip)
         && let Some(value) = live_bool(live, InteractionSeedTarget::ZoomChip)
     {
-        input.show_zoom_chip = value;
+        input.ui_visibility.show_zoom_chip = value;
     }
     if include(&InteractionSeedTarget::ClickHighlight)
         && let Some(value) = live_bool(live, InteractionSeedTarget::ClickHighlight)
@@ -220,7 +220,7 @@ fn apply_live_toolbar_structure(
     if include(&InteractionSeedTarget::StatusBarInteractive)
         && let Some(value) = live_bool(live, InteractionSeedTarget::StatusBarInteractive)
     {
-        input.status_bar_interactive = value;
+        input.ui_visibility.status_bar_interactive = value;
     }
     for item in crate::config::StatusBarItem::ALL {
         if include(&InteractionSeedTarget::StatusBarItem(item))

@@ -80,11 +80,11 @@ mod tests {
 
     fn snapshot() -> ToolbarSnapshot {
         let mut state = make_test_input_state();
-        state.show_actions_section = true;
-        state.show_actions_advanced = false;
-        state.show_zoom_actions = true;
-        state.show_pages_section = true;
-        state.show_boards_section = true;
+        state.ui_visibility.show_actions_section = true;
+        state.ui_visibility.show_actions_advanced = false;
+        state.ui_visibility.show_zoom_actions = true;
+        state.ui_visibility.show_pages_section = true;
+        state.ui_visibility.show_boards_section = true;
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default())
     }
 

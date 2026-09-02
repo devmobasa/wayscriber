@@ -212,19 +212,19 @@ pub(super) fn toolbar_values(
         Target::TopDisplayMode => top_display_mode_values(input.toolbar_top_display_mode, input),
         Target::StatusBar => RuntimeUiMutationValues::one(
             InteractionSeedTarget::StatusBar,
-            InteractionSeedValue::Bool(input.show_status_bar),
+            InteractionSeedValue::Bool(input.ui_visibility.show_status_bar),
         ),
         Target::StatusBoardBadge => RuntimeUiMutationValues::one(
             InteractionSeedTarget::StatusBoardBadge,
-            InteractionSeedValue::Bool(input.show_status_board_badge),
+            InteractionSeedValue::Bool(input.ui_visibility.show_status_board_badge),
         ),
         Target::StatusPageBadge => RuntimeUiMutationValues::one(
             InteractionSeedTarget::StatusPageBadge,
-            InteractionSeedValue::Bool(input.show_status_page_badge),
+            InteractionSeedValue::Bool(input.ui_visibility.show_status_page_badge),
         ),
         Target::FloatingBadgeAlways => RuntimeUiMutationValues::one(
             InteractionSeedTarget::FloatingBadgeAlways,
-            InteractionSeedValue::Bool(input.show_floating_badge_always),
+            InteractionSeedValue::Bool(input.ui_visibility.show_floating_badge_always),
         ),
         Target::ToolbarIcons => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarIcons,
@@ -232,19 +232,19 @@ pub(super) fn toolbar_values(
         ),
         Target::ToolbarMoreColors => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarMoreColors,
-            InteractionSeedValue::Bool(input.show_more_colors),
+            InteractionSeedValue::Bool(input.ui_visibility.show_more_colors),
         ),
         Target::ToolbarContextAwareUi => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarContextAwareUi,
-            InteractionSeedValue::Bool(input.context_aware_ui),
+            InteractionSeedValue::Bool(input.ui_visibility.context_aware_ui),
         ),
         Target::ToolbarPresetToasts => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarPresetToasts,
-            InteractionSeedValue::Bool(input.show_preset_toasts),
+            InteractionSeedValue::Bool(input.ui_visibility.show_preset_toasts),
         ),
         Target::ToolbarIdleFade => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarIdleFade,
-            InteractionSeedValue::Bool(input.idle_fade),
+            InteractionSeedValue::Bool(input.ui_visibility.idle_fade),
         ),
         Target::ToolbarToolPreview => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarToolPreview,
@@ -252,7 +252,7 @@ pub(super) fn toolbar_values(
         ),
         Target::ToolbarDelaySliders => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarDelaySliders,
-            InteractionSeedValue::Bool(input.show_delay_sliders),
+            InteractionSeedValue::Bool(input.ui_visibility.show_delay_sliders),
         ),
         Target::HistoryCustomSection => RuntimeUiMutationValues::one(
             InteractionSeedTarget::HistoryCustomSection,
@@ -264,11 +264,11 @@ pub(super) fn toolbar_values(
         ),
         Target::FloatingBadge => RuntimeUiMutationValues::one(
             InteractionSeedTarget::FloatingBadge,
-            InteractionSeedValue::Bool(input.show_floating_badge),
+            InteractionSeedValue::Bool(input.ui_visibility.show_floating_badge),
         ),
         Target::ZoomChip => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ZoomChip,
-            InteractionSeedValue::Bool(input.show_zoom_chip),
+            InteractionSeedValue::Bool(input.ui_visibility.show_zoom_chip),
         ),
         Target::ClickHighlight => click_highlight_values(
             user_click_highlight_enabled(input),
@@ -287,7 +287,7 @@ pub(super) fn toolbar_values(
         ),
         Target::StatusBarInteractive => RuntimeUiMutationValues::one(
             InteractionSeedTarget::StatusBarInteractive,
-            InteractionSeedValue::Bool(input.status_bar_interactive),
+            InteractionSeedValue::Bool(input.ui_visibility.status_bar_interactive),
         ),
         Target::StatusBarItem(item) => RuntimeUiMutationValues::one(
             InteractionSeedTarget::StatusBarItem(item),

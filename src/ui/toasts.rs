@@ -219,7 +219,7 @@ pub fn preset_toast_geometry(
     screen_width: u32,
     screen_height: u32,
 ) -> Option<(f64, f64, f64, f64)> {
-    if !input_state.show_preset_toasts {
+    if !input_state.ui_visibility.show_preset_toasts {
         return None;
     }
     let (slot, kind, _progress) = latest_preset_feedback(input_state, Instant::now())?;
@@ -253,7 +253,7 @@ pub fn render_preset_toast(
     screen_width: u32,
     screen_height: u32,
 ) {
-    if !input_state.show_preset_toasts {
+    if !input_state.ui_visibility.show_preset_toasts {
         return;
     }
 

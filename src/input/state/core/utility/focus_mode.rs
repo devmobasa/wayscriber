@@ -57,8 +57,8 @@ impl InputState {
             restore.show_status_bar = show;
             return changed;
         }
-        let changed = self.show_status_bar != show;
-        self.show_status_bar = show;
+        let changed = self.ui_visibility.show_status_bar != show;
+        self.ui_visibility.show_status_bar = show;
         changed
     }
 
@@ -115,12 +115,12 @@ impl InputState {
         }
         if let Some(restore) = self.focus_mode_restore.take() {
             self.clear_focus_mode_toast();
-            self.show_status_bar = restore.show_status_bar;
+            self.ui_visibility.show_status_bar = restore.show_status_bar;
             self.toolbar_visible = restore.toolbar_visible;
             self.toolbar_top_visible = restore.toolbar_top_visible;
             self.toolbar_top_display_mode = restore.toolbar_top_display_mode;
-            self.show_floating_badge = restore.show_floating_badge;
-            self.show_zoom_chip = restore.show_zoom_chip;
+            self.ui_visibility.show_floating_badge = restore.show_floating_badge;
+            self.ui_visibility.show_zoom_chip = restore.show_zoom_chip;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             return;
@@ -137,29 +137,29 @@ impl InputState {
         if !anything_to_hide {
             self.clear_all_chrome_recovery_toast();
             self.set_toolbar_visible(true);
-            self.show_status_bar = true;
-            self.show_floating_badge = true;
-            self.show_zoom_chip = true;
+            self.ui_visibility.show_status_bar = true;
+            self.ui_visibility.show_floating_badge = true;
+            self.ui_visibility.show_zoom_chip = true;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             return;
         }
 
         let restore = FocusModeRestore {
-            show_status_bar: self.show_status_bar,
+            show_status_bar: self.ui_visibility.show_status_bar,
             toolbar_visible: self.toolbar_visible,
             toolbar_top_visible: self.toolbar_top_visible,
             toolbar_top_display_mode: self.toolbar_top_display_mode,
-            show_floating_badge: self.show_floating_badge,
-            show_zoom_chip: self.show_zoom_chip,
+            show_floating_badge: self.ui_visibility.show_floating_badge,
+            show_zoom_chip: self.ui_visibility.show_zoom_chip,
         };
         // Raw flags only: the display mode stays untouched so a micro strip
         // comes back as micro on restore.
         self.toolbar_visible = false;
         self.toolbar_top_visible = false;
-        self.show_status_bar = false;
-        self.show_floating_badge = false;
-        self.show_zoom_chip = false;
+        self.ui_visibility.show_status_bar = false;
+        self.ui_visibility.show_floating_badge = false;
+        self.ui_visibility.show_zoom_chip = false;
         self.focus_mode_restore = Some(restore);
 
         // Focus mode teaches its own way back (instead of the generic

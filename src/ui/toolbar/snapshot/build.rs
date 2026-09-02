@@ -93,12 +93,13 @@ impl ToolbarSnapshot {
         let customize_items_open = state.toolbar_customize_items_open;
         let customize_items_group = state.toolbar_customize_items_group;
         let status_bar_contents_open = state.toolbar_status_bar_contents_open;
-        let show_actions_advanced = state.show_actions_advanced;
-        let show_zoom_actions = state.show_zoom_actions;
-        let show_pages_section = state.show_pages_section;
-        let show_boards_section = state.show_boards_section;
-        let show_step_section = state.show_step_section;
-        let delay_actions_enabled = state.show_step_section && state.show_delay_sliders;
+        let show_actions_advanced = state.ui_visibility.show_actions_advanced;
+        let show_zoom_actions = state.ui_visibility.show_zoom_actions;
+        let show_pages_section = state.ui_visibility.show_pages_section;
+        let show_boards_section = state.ui_visibility.show_boards_section;
+        let show_step_section = state.ui_visibility.show_step_section;
+        let delay_actions_enabled =
+            state.ui_visibility.show_step_section && state.ui_visibility.show_delay_sliders;
 
         Self {
             active_tool,
@@ -148,7 +149,7 @@ impl ToolbarSnapshot {
             undo_all_delay_ms: state.undo_all_delay_ms,
             redo_all_delay_ms: state.redo_all_delay_ms,
             custom_section_enabled: state.custom_section_enabled,
-            show_delay_sliders: state.show_delay_sliders,
+            show_delay_sliders: state.ui_visibility.show_delay_sliders,
             delay_actions_enabled,
             custom_undo_delay_ms: state.custom_undo_delay_ms,
             custom_redo_delay_ms: state.custom_redo_delay_ms,
@@ -159,34 +160,34 @@ impl ToolbarSnapshot {
             toolbar_scale: state.toolbar_scale,
             layout_mode: state.toolbar_layout_mode,
             resolved_toolbar_items: state.resolved_toolbar_items.clone(),
-            show_more_colors: state.show_more_colors,
-            show_actions_section: state.show_actions_section,
+            show_more_colors: state.ui_visibility.show_more_colors,
+            show_actions_section: state.ui_visibility.show_actions_section,
             show_actions_advanced,
             show_zoom_actions,
             show_pages_section,
             show_boards_section,
-            show_marker_opacity_section: state.show_marker_opacity_section,
-            show_preset_toasts: state.show_preset_toasts,
-            idle_fade: state.idle_fade,
-            show_presets: state.show_presets,
+            show_marker_opacity_section: state.ui_visibility.show_marker_opacity_section,
+            show_preset_toasts: state.ui_visibility.show_preset_toasts,
+            idle_fade: state.ui_visibility.idle_fade,
+            show_presets: state.ui_visibility.show_presets,
             show_step_section,
-            show_text_controls: state.show_text_controls,
-            context_aware_ui: state.context_aware_ui,
-            show_tool_preview: state.show_tool_preview,
-            show_status_bar: state.show_status_bar,
-            status_bar_interactive: state.status_bar_interactive,
-            show_active_output_badge: state.show_active_output_badge,
-            show_status_selection_info: state.show_status_selection_info,
-            show_status_board_badge: state.show_status_board_badge,
-            show_status_page_badge: state.show_status_page_badge,
-            show_status_color: state.show_status_color,
-            show_status_tool: state.show_status_tool,
-            show_status_size: state.show_status_size,
-            show_status_context_indicators: state.show_status_context_indicators,
-            show_toolbar_hint: state.show_toolbar_hint,
-            show_status_help: state.show_status_help,
-            show_status_about: state.show_status_about,
-            show_floating_badge_always: state.show_floating_badge_always,
+            show_text_controls: state.ui_visibility.show_text_controls,
+            context_aware_ui: state.ui_visibility.context_aware_ui,
+            show_tool_preview: state.ui_visibility.show_tool_preview,
+            show_status_bar: state.ui_visibility.show_status_bar,
+            status_bar_interactive: state.ui_visibility.status_bar_interactive,
+            show_active_output_badge: state.ui_visibility.show_active_output_badge,
+            show_status_selection_info: state.ui_visibility.show_status_selection_info,
+            show_status_board_badge: state.ui_visibility.show_status_board_badge,
+            show_status_page_badge: state.ui_visibility.show_status_page_badge,
+            show_status_color: state.ui_visibility.show_status_color,
+            show_status_tool: state.ui_visibility.show_status_tool,
+            show_status_size: state.ui_visibility.show_status_size,
+            show_status_context_indicators: state.ui_visibility.show_status_context_indicators,
+            show_toolbar_hint: state.ui_visibility.show_toolbar_hint,
+            show_status_help: state.ui_visibility.show_status_help,
+            show_status_about: state.ui_visibility.show_status_about,
+            show_floating_badge_always: state.ui_visibility.show_floating_badge_always,
             preset_slot_count: state.preset_slot_count,
             presets,
             active_preset_slot: state.active_preset_slot,
