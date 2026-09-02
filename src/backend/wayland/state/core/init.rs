@@ -188,8 +188,7 @@ impl WaylandState {
             locked_pointer: None,
             relative_pointer: None,
             cursor_hidden: false,
-            key_repeat_key: None,
-            key_repeat_next_tick: None,
+            key_repeat: Default::default(),
             text_input: super::super::text_input::TextInputState::new(text_input_manager),
             #[cfg(feature = "tablet-input")]
             tablet: super::super::tablet_runtime::TabletState::new(tablet_manager, tablet_settings),

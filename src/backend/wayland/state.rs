@@ -57,7 +57,7 @@ use crate::{
     config::{Action, Config},
     desktop_open::DesktopOpenRequest,
     input::state::{ClipboardPasteRequest, TextClipboardRequest, TextPasteTarget},
-    input::{DrawingState, EraserMode, InputState, Key, Tool, ZoomAction},
+    input::{DrawingState, EraserMode, InputState, Tool, ZoomAction},
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
 };
@@ -103,6 +103,7 @@ mod helper_launch;
 mod helpers;
 mod input_actions;
 mod input_hud;
+mod key_repeat;
 mod keybindings;
 pub(in crate::backend::wayland) use keybindings::queue_keybinding_edit;
 mod ocr;
@@ -344,10 +345,8 @@ pub(super) struct WaylandState {
     pub(super) cursor_hidden: bool,
 
     // Manual key repeat. The keyboard is created without sctk's calloop-based
-    // repeat (this loop is a manual poll), so `repeat_key` never fires; this
-    // synthesizes repeats for the held key from the event loop instead.
-    pub(super) key_repeat_key: Option<Key>,
-    pub(super) key_repeat_next_tick: Option<Instant>,
+    // repeat (this loop is a manual poll), so `repeat_key` never fires.
+    pub(super) key_repeat: key_repeat::KeyRepeatState,
 
     // IME / text-input-v3 protocol ownership and synchronization.
     pub(super) text_input: text_input::TextInputState,

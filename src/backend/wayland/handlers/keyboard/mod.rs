@@ -233,8 +233,8 @@ impl KeyboardHandler for WaylandState {
         // repeat themselves; other routed overlays (for example Help search)
         // still use this timer even though they disable the canvas IME.
         if !modal_blocks_repeat && is_repeatable_key(key) && self.has_keyboard_focus() {
-            self.key_repeat_key = Some(key);
-            self.key_repeat_next_tick = Some(Instant::now() + Self::KEY_REPEAT_INITIAL_DELAY);
+            self.key_repeat
+                .arm(key, Instant::now(), Self::KEY_REPEAT_INITIAL_DELAY);
         }
     }
 
@@ -249,9 +249,7 @@ impl KeyboardHandler for WaylandState {
         let key = keysym_to_key(event.keysym);
         debug!("Key released: {:?}", key);
         // Stop auto-repeat once the held key comes up.
-        if self.key_repeat_key == Some(key) {
-            self.clear_key_repeat();
-        }
+        self.key_repeat.clear_if_released(key);
         if screen_modal_swallows_key_release(
             self.input_state.region_is_engaged(),
             self.input_state.eyedropper_is_engaged(),
@@ -344,8 +342,7 @@ impl WaylandState {
         KEY_REPEAT_INITIAL_DELAY;
 
     pub(in crate::backend::wayland) fn clear_key_repeat(&mut self) {
-        self.key_repeat_key = None;
-        self.key_repeat_next_tick = None;
+        self.key_repeat.clear();
     }
 
     fn try_handle_region_key(&mut self, conn: &Connection, key: Key) -> bool {
@@ -459,11 +456,7 @@ impl WaylandState {
     /// loop otherwise sleeps until a real event and would never wake to
     /// repeat a held key.
     pub(in crate::backend::wayland) fn key_repeat_timeout(&self, now: Instant) -> Option<Duration> {
-        if !self.has_keyboard_focus() {
-            return None;
-        }
-        self.key_repeat_next_tick
-            .map(|next| next.saturating_duration_since(now))
+        self.key_repeat.timeout(now, self.has_keyboard_focus())
     }
 
     /// Fire a repeat if one is due, then reschedule from `now` (so a long
@@ -474,28 +467,15 @@ impl WaylandState {
         conn: &Connection,
         qh: &QueueHandle<Self>,
     ) {
-        if !self.has_keyboard_focus() {
-            self.clear_key_repeat();
-            return;
-        }
-        if self.input_state.modal_blocks_canvas_key_repeat() {
-            // A modal can open from pointer/toolbar input while a canvas key is
-            // still held. Retire that timer before it starts feeding the new
-            // focus owner (or duplicates the command palette's own repeat).
-            self.clear_key_repeat();
-            return;
-        }
-        let Some(key) = self.key_repeat_key else {
+        let can_repeat =
+            self.has_keyboard_focus() && !self.input_state.modal_blocks_canvas_key_repeat();
+        let Some(key) = self
+            .key_repeat
+            .take_due(now, can_repeat, KEY_REPEAT_INTERVAL)
+        else {
             return;
         };
-        let Some(next) = self.key_repeat_next_tick else {
-            return;
-        };
-        if now < next {
-            return;
-        }
         self.dispatch_key_repeat(key, conn, qh);
-        self.key_repeat_next_tick = Some(now + KEY_REPEAT_INTERVAL);
     }
 
     /// Re-dispatch a held key through the same routing a fresh press uses
