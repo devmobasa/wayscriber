@@ -25,11 +25,11 @@ impl Dispatch<ZwpTabletPadGroupV2, ()> for WaylandState {
             }
             Event::Ring { ring } => {
                 debug!("Tablet pad ring announced: {:?}", ring.id());
-                state.tablet_pad_rings.push(ring);
+                state.tablet.pad_rings.push(ring);
             }
             Event::Strip { strip } => {
                 debug!("Tablet pad strip announced: {:?}", strip.id());
-                state.tablet_pad_strips.push(strip);
+                state.tablet.pad_strips.push(strip);
             }
             Event::Modes { modes } => {
                 debug!("Tablet pad group modes: {}", modes);

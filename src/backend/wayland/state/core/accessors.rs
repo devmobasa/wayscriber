@@ -63,19 +63,12 @@ impl WaylandState {
 
     #[cfg(feature = "tablet-input")]
     pub(in crate::backend::wayland) fn stylus_hover_cursor_visible(&self) -> bool {
-        self.stylus_on_overlay
-            && !self.stylus_on_toolbar
-            && !self.stylus_tip_down
-            && self.stylus_last_pos.is_some()
+        self.tablet.hover_cursor_position().is_some()
     }
 
     #[cfg(feature = "tablet-input")]
     pub(in crate::backend::wayland) fn stylus_hover_cursor_position(&self) -> Option<(f64, f64)> {
-        if self.stylus_hover_cursor_visible() {
-            self.stylus_last_pos
-        } else {
-            None
-        }
+        self.tablet.hover_cursor_position()
     }
 
     /// Retire in-flight stylus input without dispatching a canvas release.
@@ -94,22 +87,9 @@ impl WaylandState {
         // that predates the selector, or apply that batch's pressure and barrel
         // actions behind it. Dropping the batch is unconditional: an uncommitted
         // tip-down is exactly the case where no contact is logically held yet.
-        let had_contact = self.stylus_tip_down || self.pending_stylus_frame.down;
-        self.pending_stylus_frame = Default::default();
         // Clearing our own flags does not lift the pen. The compositor keeps
-        // reporting this contact — pressure included — until the tip rises, and
-        // a pending capture leaves the canvas holding the pen, so without this
-        // the disowned stroke would go on resizing the tool and would commit its
-        // peak on the way up.
-        self.stylus_contact_retired |= had_contact;
-        if !self.stylus_tip_down {
-            return;
-        }
-        let previous_hover = self.stylus_hover_cursor_position();
-        self.stylus_tip_down = false;
-        self.stylus_pressure_thickness = None;
-        self.stylus_peak_thickness = None;
-        let next_hover = self.stylus_hover_cursor_position();
+        // reporting this contact — pressure included — until the tip rises.
+        let (previous_hover, next_hover) = self.tablet.retire_contact();
         self.mark_stylus_hover_cursor_dirty(previous_hover, next_hover);
     }
 
@@ -130,7 +110,7 @@ impl WaylandState {
     /// the next press after it is an ordinary fresh contact.
     #[cfg(feature = "tablet-input")]
     pub(in crate::backend::wayland) fn take_retired_stylus_contact(&mut self) -> bool {
-        std::mem::take(&mut self.stylus_contact_retired)
+        self.tablet.take_retired_contact()
     }
 
     #[cfg(not(feature = "tablet-input"))]

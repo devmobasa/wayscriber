@@ -613,7 +613,7 @@ fn finalize_spotlight_wheel_for_shutdown_persistence(
 
 #[cfg(feature = "tablet-input")]
 fn stylus_tip_down(state: &WaylandState) -> bool {
-    state.stylus_tip_down
+    state.tablet.tip_down
 }
 
 #[cfg(not(feature = "tablet-input"))]

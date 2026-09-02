@@ -22,23 +22,26 @@ impl Dispatch<ZwpTabletSeatV2, ()> for WaylandState {
         match event {
             Event::TabletAdded { id } => {
                 info!("🖊️  TABLET DEVICE DETECTED");
-                state.tablets.push(id);
-                if !state.tablet_found_logged {
-                    state.tablet_found_logged = true;
-                    info!("TABLET FOUND - Total devices: {}", state.tablets.len());
+                state.tablet.devices.push(id);
+                if !state.tablet.found_logged {
+                    state.tablet.found_logged = true;
+                    info!(
+                        "TABLET FOUND - Total devices: {}",
+                        state.tablet.devices.len()
+                    );
                 }
             }
             Event::ToolAdded { id } => {
                 info!("🖊️ TABLET TOOL DETECTED: {:?}", id.id());
-                state.tablet_tools.push(id);
-                if !state.tablet_found_logged {
-                    state.tablet_found_logged = true;
-                    info!("TABLET FOUND - Total tools: {}", state.tablet_tools.len());
+                state.tablet.tools.push(id);
+                if !state.tablet.found_logged {
+                    state.tablet.found_logged = true;
+                    info!("TABLET FOUND - Total tools: {}", state.tablet.tools.len());
                 }
             }
             Event::PadAdded { id } => {
                 info!("🖊️  TABLET PAD DETECTED");
-                state.tablet_pads.push(id);
+                state.tablet.pads.push(id);
             }
             _ => {}
         }
