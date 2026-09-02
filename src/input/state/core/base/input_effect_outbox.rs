@@ -85,6 +85,20 @@ pub(in crate::input::state::core) struct InputEffectOutbox {
 
 impl InputEffectOutbox {
     pub(in crate::input::state::core) fn emit(&mut self, effect: InputEffect) {
+        if let InputEffect::Backend(incoming) = &effect
+            && self
+                .effects
+                .iter()
+                .rev()
+                .find_map(|queued| match queued {
+                    InputEffect::Backend(action) => Some(action),
+                    _ => None,
+                })
+                .is_some_and(|previous| previous == incoming)
+        {
+            return;
+        }
+
         match policy(&effect) {
             EffectPolicy::Fifo => self.effects.push_back(effect),
             EffectPolicy::Coalesce => {

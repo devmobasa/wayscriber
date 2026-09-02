@@ -56,8 +56,8 @@ impl InputState {
 
     /// Queues backend output work for retrieval by the backend, oldest first.
     ///
-    /// Each accepted action remains distinct. A screenshot, export, or helper
-    /// request queued in the same input batch must not replace an earlier one.
+    /// Distinct actions remain FIFO. Repeating the latest queued action is
+    /// coalesced so key auto-repeat cannot launch the same backend work in a storm.
     pub(crate) fn set_pending_backend_action(&mut self, action: PendingBackendAction) {
         self.emit_input_effect(InputEffect::Backend(action));
     }
@@ -360,6 +360,41 @@ mod tests {
         assert_eq!(
             state.take_pending_backend_action(),
             Some(PendingBackendAction::Screenshot(Action::CaptureFileFull))
+        );
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(PendingBackendAction::CanvasExport(
+                Action::ExportCanvasClipboard
+            ))
+        );
+        assert_eq!(state.take_pending_backend_action(), None);
+    }
+
+    #[test]
+    fn adjacent_identical_backend_actions_are_queued_once() {
+        let mut state = make_state();
+        state.set_pending_backend_action(PendingBackendAction::CanvasExport(
+            Action::ExportCanvasClipboard,
+        ));
+        state.set_pending_backend_action(PendingBackendAction::CanvasExport(
+            Action::ExportCanvasClipboard,
+        ));
+        state.set_pending_backend_action(PendingBackendAction::CanvasExport(
+            Action::ExportCanvasFile,
+        ));
+        state.set_pending_backend_action(PendingBackendAction::CanvasExport(
+            Action::ExportCanvasClipboard,
+        ));
+
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(PendingBackendAction::CanvasExport(
+                Action::ExportCanvasClipboard
+            ))
+        );
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(PendingBackendAction::CanvasExport(Action::ExportCanvasFile))
         );
         assert_eq!(
             state.take_pending_backend_action(),
