@@ -37,10 +37,9 @@ mod top_menu_tests;
 
 pub(crate) use top_menu::TopMenuState;
 
-pub(crate) use base::InputStateSeed;
 pub use base::{
     BLOCKED_ACTION_DURATION_MS, CompositorCapabilities, DesktopEnvironment, DrawingState,
-    InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,
+    InputState, InputStateSeed, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
     PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, SelectionAxis,
     SelectionHandle, ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome, ToastQueue,

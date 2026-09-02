@@ -29,113 +29,40 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// need to know which config sections supplied each setting, and call sites
 /// cannot accidentally transpose same-typed positional arguments.
 #[derive(Clone)]
-pub(crate) struct InputStateSeed {
-    pub(crate) color: crate::draw::Color,
-    pub(crate) thickness: f64,
-    pub(crate) eraser_size: f64,
-    pub(crate) eraser_mode: EraserMode,
-    pub(crate) marker_opacity: f64,
-    pub(crate) fill_enabled: bool,
-    pub(crate) font_size: f64,
-    pub(crate) font_descriptor: FontDescriptor,
-    pub(crate) text_background_enabled: bool,
-    pub(crate) arrow_length: f64,
-    pub(crate) arrow_angle: f64,
-    pub(crate) arrow_head_at_end: bool,
-    pub(crate) show_status_bar: bool,
-    pub(crate) boards_config: BoardsConfig,
-    pub(crate) action_map: HashMap<Shortcut, Action>,
-    pub(crate) max_shapes_per_frame: usize,
-    pub(crate) click_highlight_settings: ClickHighlightSettings,
-    pub(crate) undo_all_delay_ms: u64,
-    pub(crate) redo_all_delay_ms: u64,
-    pub(crate) custom_section_enabled: bool,
-    pub(crate) custom_undo_delay_ms: u64,
-    pub(crate) custom_redo_delay_ms: u64,
-    pub(crate) custom_undo_steps: usize,
-    pub(crate) custom_redo_steps: usize,
-    pub(crate) presenter_mode_config: crate::config::PresenterModeConfig,
+pub struct InputStateSeed {
+    pub color: crate::draw::Color,
+    pub thickness: f64,
+    pub eraser_size: f64,
+    pub eraser_mode: EraserMode,
+    pub marker_opacity: f64,
+    pub fill_enabled: bool,
+    pub font_size: f64,
+    pub font_descriptor: FontDescriptor,
+    pub text_background_enabled: bool,
+    pub arrow_length: f64,
+    pub arrow_angle: f64,
+    pub arrow_head_at_end: bool,
+    pub show_status_bar: bool,
+    pub boards_config: BoardsConfig,
+    pub action_map: HashMap<Shortcut, Action>,
+    pub max_shapes_per_frame: usize,
+    pub click_highlight_settings: ClickHighlightSettings,
+    pub undo_all_delay_ms: u64,
+    pub redo_all_delay_ms: u64,
+    pub custom_section_enabled: bool,
+    pub custom_undo_delay_ms: u64,
+    pub custom_redo_delay_ms: u64,
+    pub custom_undo_steps: usize,
+    pub custom_redo_steps: usize,
+    pub presenter_mode_config: crate::config::PresenterModeConfig,
 }
 
 impl InputState {
-    /// Creates a new InputState with specified defaults.
+    /// Creates input state from an explicit runtime seed.
     ///
-    /// Screen dimensions default to 0 and should be updated by the backend
-    /// after surface configuration (see `update_screen_dimensions`).
-    ///
-    /// # Arguments
-    /// * `color` - Initial drawing color
-    /// * `thickness` - Initial pen thickness in pixels
-    /// * `eraser_size` - Initial eraser size in pixels
-    /// * `eraser_mode` - Initial eraser behavior mode
-    /// * `font_size` - Font size for text mode in points
-    /// * `font_descriptor` - Font configuration for text rendering
-    /// * `text_background_enabled` - Whether to draw background behind text
-    /// * `arrow_length` - Arrowhead length in pixels
-    /// * `arrow_angle` - Arrowhead angle in degrees
-    /// * `arrow_head_at_end` - Whether arrowhead is drawn at the end
-    /// * `show_status_bar` - Whether the status bar starts visible
-    /// * `boards_config` - Multi-board configuration
-    /// * `action_map` - Keybinding action map
-    /// * `presenter_mode_config` - Presenter mode behavior configuration
-    #[allow(clippy::too_many_arguments)]
-    pub fn with_defaults(
-        color: crate::draw::Color,
-        thickness: f64,
-        eraser_size: f64,
-        eraser_mode: EraserMode,
-        marker_opacity: f64,
-        fill_enabled: bool,
-        font_size: f64,
-        font_descriptor: FontDescriptor,
-        text_background_enabled: bool,
-        arrow_length: f64,
-        arrow_angle: f64,
-        arrow_head_at_end: bool,
-        show_status_bar: bool,
-        boards_config: BoardsConfig,
-        action_map: HashMap<Shortcut, Action>,
-        max_shapes_per_frame: usize,
-        click_highlight_settings: ClickHighlightSettings,
-        undo_all_delay_ms: u64,
-        redo_all_delay_ms: u64,
-        custom_section_enabled: bool,
-        custom_undo_delay_ms: u64,
-        custom_redo_delay_ms: u64,
-        custom_undo_steps: usize,
-        custom_redo_steps: usize,
-        presenter_mode_config: crate::config::PresenterModeConfig,
-    ) -> Self {
-        Self::from_seed(InputStateSeed {
-            color,
-            thickness,
-            eraser_size,
-            eraser_mode,
-            marker_opacity,
-            fill_enabled,
-            font_size,
-            font_descriptor,
-            text_background_enabled,
-            arrow_length,
-            arrow_angle,
-            arrow_head_at_end,
-            show_status_bar,
-            boards_config,
-            action_map,
-            max_shapes_per_frame,
-            click_highlight_settings,
-            undo_all_delay_ms,
-            redo_all_delay_ms,
-            custom_section_enabled,
-            custom_undo_delay_ms,
-            custom_redo_delay_ms,
-            custom_undo_steps,
-            custom_redo_steps,
-            presenter_mode_config,
-        })
-    }
-
-    pub(crate) fn from_seed(seed: InputStateSeed) -> Self {
+    /// Screen dimensions default to zero and the backend updates them after
+    /// surface configuration.
+    pub fn from_seed(seed: InputStateSeed) -> Self {
         let InputStateSeed {
             color,
             thickness,

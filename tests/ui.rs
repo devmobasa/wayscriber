@@ -6,44 +6,45 @@ use wayscriber::config::{
 use wayscriber::draw::{Color, Shape};
 use wayscriber::input::{
     BOARD_ID_BLACKBOARD, BOARD_ID_WHITEBOARD, ClickHighlightSettings, EraserMode, InputState,
+    InputStateSeed,
 };
 
 fn make_input_state() -> InputState {
     let keybindings = KeybindingsConfig::default();
     let action_map = keybindings.build_action_map().unwrap();
     let action_bindings = keybindings.build_action_bindings().unwrap();
-    let mut input = InputState::with_defaults(
-        Color {
+    let mut input = InputState::from_seed(InputStateSeed {
+        color: Color {
             r: 1.0,
             g: 0.0,
             b: 0.0,
             a: 1.0,
         },
-        4.0,
-        4.0,
-        EraserMode::Brush,
-        0.32,
-        false,
-        32.0,
-        wayscriber::draw::FontDescriptor::default(),
-        false,
-        20.0,
-        30.0,
-        false,
-        true,
-        wayscriber::config::BoardsConfig::default(),
+        thickness: 4.0,
+        eraser_size: 4.0,
+        eraser_mode: EraserMode::Brush,
+        marker_opacity: 0.32,
+        fill_enabled: false,
+        font_size: 32.0,
+        font_descriptor: wayscriber::draw::FontDescriptor::default(),
+        text_background_enabled: false,
+        arrow_length: 20.0,
+        arrow_angle: 30.0,
+        arrow_head_at_end: false,
+        show_status_bar: true,
+        boards_config: wayscriber::config::BoardsConfig::default(),
         action_map,
-        usize::MAX,
-        ClickHighlightSettings::disabled(),
-        0,
-        0,
-        true,
-        0,
-        0,
-        5,
-        5,
-        PresenterModeConfig::default(),
-    );
+        max_shapes_per_frame: usize::MAX,
+        click_highlight_settings: ClickHighlightSettings::disabled(),
+        undo_all_delay_ms: 0,
+        redo_all_delay_ms: 0,
+        custom_section_enabled: true,
+        custom_undo_delay_ms: 0,
+        custom_redo_delay_ms: 0,
+        custom_undo_steps: 5,
+        custom_redo_steps: 5,
+        presenter_mode_config: PresenterModeConfig::default(),
+    });
     input.set_action_bindings(action_bindings);
     input
 }
