@@ -1,14 +1,11 @@
 use super::*;
-use crate::config::{Action, BoardsConfig, Config, PresenterModeConfig, Shortcut};
+use crate::config::{Action, Config, Shortcut};
 use crate::draw::{
     Color, EraserKind, FontDescriptor, Frame, PageDeleteOutcome, REGULAR_POLYGON_DEFAULT_SIDES,
     Shape, ShapeId,
 };
 use crate::env_vars::{CATALOG_HOOKS_TEST_ENV, XDG_DATA_HOME_ENV};
-use crate::input::{
-    BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, ClickHighlightSettings, DrawingState, EraserMode,
-    Tool,
-};
+use crate::input::{BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, DrawingState, EraserMode, Tool};
 use crate::util::Rect;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -106,38 +103,12 @@ fn can_create_probe(parent: &Path) -> bool {
 fn test_input_state() -> InputState {
     let mut action_map = HashMap::new();
     action_map.insert(Shortcut::parse("Escape").unwrap(), Action::Exit);
-    InputState::from_seed(crate::input::InputStateSeed {
-        color: Color {
-            r: 1.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        },
-        thickness: 3.0,
-        eraser_size: 12.0,
-        eraser_mode: EraserMode::Brush,
-        marker_opacity: 0.32,
-        fill_enabled: false,
-        font_size: 32.0,
-        font_descriptor: FontDescriptor::default(),
-        text_background_enabled: false,
-        arrow_length: 20.0,
-        arrow_angle: 30.0,
-        arrow_head_at_end: false,
-        show_status_bar: true,
-        boards_config: BoardsConfig::default(),
-        action_map: action_map,
-        max_shapes_per_frame: usize::MAX,
-        click_highlight_settings: ClickHighlightSettings::disabled(),
-        undo_all_delay_ms: 0,
-        redo_all_delay_ms: 0,
-        custom_section_enabled: true,
-        custom_undo_delay_ms: 0,
-        custom_redo_delay_ms: 0,
-        custom_undo_steps: 5,
-        custom_redo_steps: 5,
-        presenter_mode_config: PresenterModeConfig::default(),
-    })
+    crate::input::state::test_support::TestInputStateBuilder::default()
+        .action_map(action_map)
+        .action_bindings(HashMap::new())
+        .thickness(3.0)
+        .eraser_size(12.0)
+        .build()
 }
 
 fn add_line(input: &mut InputState, x2: i32) -> ShapeId {

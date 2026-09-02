@@ -731,9 +731,8 @@ fn an_answered_edit_gives_its_projection_back_even_when_the_write_failed() {
 /// An input state the way the overlay's own suites build one, so the gestures
 /// below are recorded by the real code rather than poked into a field.
 fn test_input_state() -> crate::input::state::InputState {
-    use crate::config::{Action, BoardsConfig, PresenterModeConfig, Shortcut};
-    use crate::draw::{Color, FontDescriptor};
-    use crate::input::{ClickHighlightSettings, EraserMode};
+    use crate::config::{Action, Shortcut};
+
     use std::collections::HashMap;
 
     let mut action_map = HashMap::new();
@@ -741,38 +740,12 @@ fn test_input_state() -> crate::input::state::InputState {
         Shortcut::parse("Escape").expect("a chord this test spelled"),
         Action::Exit,
     );
-    crate::input::state::InputState::from_seed(crate::input::InputStateSeed {
-        color: Color {
-            r: 1.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        },
-        thickness: 3.0,
-        eraser_size: 12.0,
-        eraser_mode: EraserMode::Brush,
-        marker_opacity: 0.32,
-        fill_enabled: false,
-        font_size: 32.0,
-        font_descriptor: FontDescriptor::default(),
-        text_background_enabled: false,
-        arrow_length: 20.0,
-        arrow_angle: 30.0,
-        arrow_head_at_end: false,
-        show_status_bar: true,
-        boards_config: BoardsConfig::default(),
-        action_map: action_map,
-        max_shapes_per_frame: usize::MAX,
-        click_highlight_settings: ClickHighlightSettings::disabled(),
-        undo_all_delay_ms: 0,
-        redo_all_delay_ms: 0,
-        custom_section_enabled: true,
-        custom_undo_delay_ms: 0,
-        custom_redo_delay_ms: 0,
-        custom_undo_steps: 5,
-        custom_redo_steps: 5,
-        presenter_mode_config: PresenterModeConfig::default(),
-    })
+    crate::input::state::test_support::TestInputStateBuilder::default()
+        .action_map(action_map)
+        .action_bindings(HashMap::new())
+        .thickness(3.0)
+        .eraser_size(12.0)
+        .build()
 }
 
 /// The gestures the overlay can still be holding when it is told to quit, and
