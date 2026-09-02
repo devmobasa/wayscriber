@@ -19,7 +19,6 @@ use crate::{
 };
 
 mod config;
-mod input_state;
 mod output;
 mod session;
 #[cfg(feature = "tablet-input")]
@@ -58,7 +57,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     #[cfg(feature = "tablet-input")]
     let tablet_manager = tablet::bind_tablet_manager(&setup, &config);
 
-    let mut input_state = input_state::build_input_state(&config);
+    let mut input_state = InputState::from_config(&config);
     config::notify_config_load_failure(
         &mut input_state,
         backend.tokio_runtime.handle(),

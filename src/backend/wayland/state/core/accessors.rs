@@ -75,7 +75,7 @@ impl WaylandState {
     ///
     /// A screen-region modal cancels the gesture the pen was making, and then
     /// consumes the tip-up the compositor still owes us — so nothing else
-    /// retires the contact. Left set, `stylus_tip_down` hides the hover cursor
+    /// retires the contact. Left set, `tablet.tip_down` hides the hover cursor
     /// and defers session saving until some unrelated release or proximity-out
     /// happens to clear it. The stroke was cancelled rather than finished, so
     /// its peak pressure is dropped instead of being committed to the tool.
