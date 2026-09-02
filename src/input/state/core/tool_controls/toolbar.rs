@@ -485,8 +485,10 @@ mod tests {
         let mut state = make_test_input_state();
         // A legacy Regular config where zoom actions were turned off and
         // everything else matches the baseline.
-        let mut config = crate::config::ToolbarConfig::default();
-        config.show_zoom_actions = false;
+        let config = crate::config::ToolbarConfig {
+            show_zoom_actions: false,
+            ..Default::default()
+        };
         state.ui_visibility = crate::input::state::UiVisibility::from(&crate::config::UiConfig {
             toolbar: config.clone(),
             ..Default::default()

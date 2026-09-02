@@ -89,8 +89,8 @@ impl WaylandState {
         // tip-down is exactly the case where no contact is logically held yet.
         // Clearing our own flags does not lift the pen. The compositor keeps
         // reporting this contact — pressure included — until the tip rises.
-        let (previous_hover, next_hover) = self.tablet.retire_contact();
-        self.mark_stylus_hover_cursor_dirty(previous_hover, next_hover);
+        let transition = self.tablet.retire_contact();
+        self.mark_stylus_hover_cursor_dirty(transition.previous, transition.next);
     }
 
     #[cfg(not(feature = "tablet-input"))]

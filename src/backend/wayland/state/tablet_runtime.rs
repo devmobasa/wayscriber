@@ -12,6 +12,11 @@ use super::PendingStylusFrame;
 use crate::backend::wayland::TabletToolType;
 use crate::input::{Tool, tablet::TabletSettings};
 
+pub(in crate::backend::wayland) struct HoverTransition {
+    pub(in crate::backend::wayland) previous: Option<(f64, f64)>,
+    pub(in crate::backend::wayland) next: Option<(f64, f64)>,
+}
+
 /// Protocol objects and active-contact state for tablet-input-v2.
 pub(in crate::backend::wayland) struct TabletState {
     pub(in crate::backend::wayland) manager: Option<ZwpTabletManagerV2>,
@@ -46,9 +51,7 @@ impl TabletState {
             .flatten()
     }
 
-    pub(in crate::backend::wayland) fn retire_contact(
-        &mut self,
-    ) -> (Option<(f64, f64)>, Option<(f64, f64)>) {
+    pub(in crate::backend::wayland) fn retire_contact(&mut self) -> HoverTransition {
         let had_contact = self.tip_down || self.pending_frame.down;
         self.pending_frame = PendingStylusFrame::default();
         self.contact_retired |= had_contact;
@@ -58,7 +61,10 @@ impl TabletState {
             self.pressure_thickness = None;
             self.peak_thickness = None;
         }
-        (previous_hover, self.hover_cursor_position())
+        HoverTransition {
+            previous: previous_hover,
+            next: self.hover_cursor_position(),
+        }
     }
 
     pub(in crate::backend::wayland) fn take_retired_contact(&mut self) -> bool {
