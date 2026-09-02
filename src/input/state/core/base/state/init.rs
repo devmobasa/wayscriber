@@ -23,6 +23,40 @@ use crate::input::{
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Runtime values needed to construct an [`InputState`].
+///
+/// The backend translates configuration into this value. Input state does not
+/// need to know which config sections supplied each setting, and call sites
+/// cannot accidentally transpose same-typed positional arguments.
+#[derive(Clone)]
+pub(crate) struct InputStateSeed {
+    pub(crate) color: crate::draw::Color,
+    pub(crate) thickness: f64,
+    pub(crate) eraser_size: f64,
+    pub(crate) eraser_mode: EraserMode,
+    pub(crate) marker_opacity: f64,
+    pub(crate) fill_enabled: bool,
+    pub(crate) font_size: f64,
+    pub(crate) font_descriptor: FontDescriptor,
+    pub(crate) text_background_enabled: bool,
+    pub(crate) arrow_length: f64,
+    pub(crate) arrow_angle: f64,
+    pub(crate) arrow_head_at_end: bool,
+    pub(crate) show_status_bar: bool,
+    pub(crate) boards_config: BoardsConfig,
+    pub(crate) action_map: HashMap<Shortcut, Action>,
+    pub(crate) max_shapes_per_frame: usize,
+    pub(crate) click_highlight_settings: ClickHighlightSettings,
+    pub(crate) undo_all_delay_ms: u64,
+    pub(crate) redo_all_delay_ms: u64,
+    pub(crate) custom_section_enabled: bool,
+    pub(crate) custom_undo_delay_ms: u64,
+    pub(crate) custom_redo_delay_ms: u64,
+    pub(crate) custom_undo_steps: usize,
+    pub(crate) custom_redo_steps: usize,
+    pub(crate) presenter_mode_config: crate::config::PresenterModeConfig,
+}
+
 impl InputState {
     /// Creates a new InputState with specified defaults.
     ///
@@ -72,6 +106,63 @@ impl InputState {
         custom_redo_steps: usize,
         presenter_mode_config: crate::config::PresenterModeConfig,
     ) -> Self {
+        Self::from_seed(InputStateSeed {
+            color,
+            thickness,
+            eraser_size,
+            eraser_mode,
+            marker_opacity,
+            fill_enabled,
+            font_size,
+            font_descriptor,
+            text_background_enabled,
+            arrow_length,
+            arrow_angle,
+            arrow_head_at_end,
+            show_status_bar,
+            boards_config,
+            action_map,
+            max_shapes_per_frame,
+            click_highlight_settings,
+            undo_all_delay_ms,
+            redo_all_delay_ms,
+            custom_section_enabled,
+            custom_undo_delay_ms,
+            custom_redo_delay_ms,
+            custom_undo_steps,
+            custom_redo_steps,
+            presenter_mode_config,
+        })
+    }
+
+    pub(crate) fn from_seed(seed: InputStateSeed) -> Self {
+        let InputStateSeed {
+            color,
+            thickness,
+            eraser_size,
+            eraser_mode,
+            marker_opacity,
+            fill_enabled,
+            font_size,
+            font_descriptor,
+            text_background_enabled,
+            arrow_length,
+            arrow_angle,
+            arrow_head_at_end,
+            show_status_bar,
+            boards_config,
+            action_map,
+            max_shapes_per_frame,
+            click_highlight_settings,
+            undo_all_delay_ms,
+            redo_all_delay_ms,
+            custom_section_enabled,
+            custom_undo_delay_ms,
+            custom_redo_delay_ms,
+            custom_undo_steps,
+            custom_redo_steps,
+            presenter_mode_config,
+        } = seed;
         let clamped_eraser = eraser_size.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         let mut tool_settings = PerToolDrawingSettings::new(color, thickness);
         tool_settings.step_marker.thickness =

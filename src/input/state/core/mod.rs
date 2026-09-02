@@ -37,6 +37,7 @@ mod top_menu_tests;
 
 pub(crate) use top_menu::TopMenuState;
 
+pub(crate) use base::InputStateSeed;
 pub use base::{
     BLOCKED_ACTION_DURATION_MS, CompositorCapabilities, DesktopEnvironment, DrawingState,
     InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,

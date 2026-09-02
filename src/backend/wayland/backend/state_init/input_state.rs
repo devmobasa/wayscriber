@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use crate::config::{Action, Config, KeybindingsConfig, QuickColorPalette, Shortcut};
 use crate::draw::{FontDescriptor, clamp_regular_sides};
+use crate::input::state::InputStateSeed;
 use crate::input::{ClickHighlightSettings, DragToolBindings, InputHudSettings, InputState};
 
 pub(super) fn build_input_state(config: &Config) -> InputState {
@@ -15,33 +16,33 @@ pub(super) fn build_input_state(config: &Config) -> InputState {
     let action_map = build_action_map(config);
     let action_bindings = build_action_bindings(config);
 
-    let mut input_state = InputState::with_defaults(
-        config.drawing.default_color.to_color(),
-        config.drawing.default_thickness,
-        config.drawing.default_eraser_size,
-        config.drawing.default_eraser_mode,
-        config.drawing.marker_opacity,
-        config.drawing.default_fill_enabled,
-        config.drawing.default_font_size,
+    let mut input_state = InputState::from_seed(InputStateSeed {
+        color: config.drawing.default_color.to_color(),
+        thickness: config.drawing.default_thickness,
+        eraser_size: config.drawing.default_eraser_size,
+        eraser_mode: config.drawing.default_eraser_mode,
+        marker_opacity: config.drawing.marker_opacity,
+        fill_enabled: config.drawing.default_fill_enabled,
+        font_size: config.drawing.default_font_size,
         font_descriptor,
-        config.drawing.text_background_enabled,
-        config.arrow.length,
-        config.arrow.angle_degrees,
-        config.arrow.head_at_end,
-        config.ui.show_status_bar,
-        config.resolved_boards(),
+        text_background_enabled: config.drawing.text_background_enabled,
+        arrow_length: config.arrow.length,
+        arrow_angle: config.arrow.angle_degrees,
+        arrow_head_at_end: config.arrow.head_at_end,
+        show_status_bar: config.ui.show_status_bar,
+        boards_config: config.resolved_boards(),
         action_map,
-        config.session.max_shapes_per_frame,
-        ClickHighlightSettings::from(&config.ui.click_highlight),
-        config.history.undo_all_delay_ms,
-        config.history.redo_all_delay_ms,
-        config.history.custom_section_enabled,
-        config.history.custom_undo_delay_ms,
-        config.history.custom_redo_delay_ms,
-        config.history.custom_undo_steps,
-        config.history.custom_redo_steps,
-        config.presenter_mode.clone(),
-    );
+        max_shapes_per_frame: config.session.max_shapes_per_frame,
+        click_highlight_settings: ClickHighlightSettings::from(&config.ui.click_highlight),
+        undo_all_delay_ms: config.history.undo_all_delay_ms,
+        redo_all_delay_ms: config.history.redo_all_delay_ms,
+        custom_section_enabled: config.history.custom_section_enabled,
+        custom_undo_delay_ms: config.history.custom_undo_delay_ms,
+        custom_redo_delay_ms: config.history.custom_redo_delay_ms,
+        custom_undo_steps: config.history.custom_undo_steps,
+        custom_redo_steps: config.history.custom_redo_steps,
+        presenter_mode_config: config.presenter_mode.clone(),
+    });
     input_state.set_action_bindings(action_bindings);
     input_state.init_input_hud_from_config(InputHudSettings::from(&config.ui.input_hud));
     input_state.set_quick_colors(QuickColorPalette::from_config(&config.drawing.quick_colors));
