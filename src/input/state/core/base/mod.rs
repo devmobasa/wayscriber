@@ -5,8 +5,8 @@ mod types;
 
 pub(crate) use input_effect_outbox::{InputEffect, InputEffectDrain};
 pub(in crate::input::state::core) use input_effect_outbox::{InputEffectKind, InputEffectOutbox};
-pub(crate) use state::{FocusModeRestore, LightModeRestore, PresenterRestore};
-pub use state::{InputState, InputStateSeed};
+pub use state::InputState;
+pub(crate) use state::{FocusModeRestore, InputStateSeed, LightModeRestore, PresenterRestore};
 pub use toast_queue::{Toast, ToastPriority, ToastPushOutcome, ToastQueue};
 pub use types::{
     BLOCKED_ACTION_DURATION_MS, BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS,

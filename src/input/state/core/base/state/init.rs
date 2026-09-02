@@ -29,32 +29,32 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// need to know which config sections supplied each setting, and call sites
 /// cannot accidentally transpose same-typed positional arguments.
 #[derive(Clone)]
-pub struct InputStateSeed {
-    pub color: crate::draw::Color,
-    pub thickness: f64,
-    pub eraser_size: f64,
-    pub eraser_mode: EraserMode,
-    pub marker_opacity: f64,
-    pub fill_enabled: bool,
-    pub font_size: f64,
-    pub font_descriptor: FontDescriptor,
-    pub text_background_enabled: bool,
-    pub arrow_length: f64,
-    pub arrow_angle: f64,
-    pub arrow_head_at_end: bool,
-    pub show_status_bar: bool,
-    pub boards_config: BoardsConfig,
-    pub action_map: HashMap<Shortcut, Action>,
-    pub max_shapes_per_frame: usize,
-    pub click_highlight_settings: ClickHighlightSettings,
-    pub undo_all_delay_ms: u64,
-    pub redo_all_delay_ms: u64,
-    pub custom_section_enabled: bool,
-    pub custom_undo_delay_ms: u64,
-    pub custom_redo_delay_ms: u64,
-    pub custom_undo_steps: usize,
-    pub custom_redo_steps: usize,
-    pub presenter_mode_config: crate::config::PresenterModeConfig,
+pub(crate) struct InputStateSeed {
+    pub(crate) color: crate::draw::Color,
+    pub(crate) thickness: f64,
+    pub(crate) eraser_size: f64,
+    pub(crate) eraser_mode: EraserMode,
+    pub(crate) marker_opacity: f64,
+    pub(crate) fill_enabled: bool,
+    pub(crate) font_size: f64,
+    pub(crate) font_descriptor: FontDescriptor,
+    pub(crate) text_background_enabled: bool,
+    pub(crate) arrow_length: f64,
+    pub(crate) arrow_angle: f64,
+    pub(crate) arrow_head_at_end: bool,
+    pub(crate) show_status_bar: bool,
+    pub(crate) boards_config: BoardsConfig,
+    pub(crate) action_map: HashMap<Shortcut, Action>,
+    pub(crate) max_shapes_per_frame: usize,
+    pub(crate) click_highlight_settings: ClickHighlightSettings,
+    pub(crate) undo_all_delay_ms: u64,
+    pub(crate) redo_all_delay_ms: u64,
+    pub(crate) custom_section_enabled: bool,
+    pub(crate) custom_undo_delay_ms: u64,
+    pub(crate) custom_redo_delay_ms: u64,
+    pub(crate) custom_undo_steps: usize,
+    pub(crate) custom_redo_steps: usize,
+    pub(crate) presenter_mode_config: crate::config::PresenterModeConfig,
 }
 
 impl InputState {
@@ -62,7 +62,7 @@ impl InputState {
     ///
     /// Screen dimensions default to zero and the backend updates them after
     /// surface configuration.
-    pub fn from_seed(seed: InputStateSeed) -> Self {
+    pub(crate) fn from_seed(seed: InputStateSeed) -> Self {
         let InputStateSeed {
             color,
             thickness,

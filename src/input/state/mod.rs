@@ -1,12 +1,13 @@
 mod actions;
 mod core;
+mod from_config;
 mod highlight;
 mod input_hud;
 pub(crate) mod interaction;
 mod mouse;
 mod render;
 mod spotlight;
-pub(crate) use core::{IdleHandle, SpotlightMagnificationTrack, TopMenuState};
+pub(crate) use core::{IdleHandle, InputStateSeed, SpotlightMagnificationTrack, TopMenuState};
 pub(crate) use core::{InputEffect, InputEffectDrain};
 pub(crate) use spotlight::{
     SpotlightFrameRegions, SpotlightMagnificationGesture, SpotlightWheelClaim,
@@ -36,17 +37,17 @@ pub use core::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, DesktopEnvironment,
     DrawingState, EyedropperCaptureSource, EyedropperUiState, FontPickerFilter, FontPickerLayout,
     FontPickerResults, FontPickerRow, FontPickerTarget, HelpOverlayClick, HelpOverlayCursorHint,
-    HelpOverlayReleaseOutcome, ImeCompositionState, ImePreedit, InputState, InputStateSeed,
-    MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction, PRESET_FEEDBACK_DURATION_MS,
-    PRESET_TOAST_DURATION_MS, PickerDrag, PrecisionEntryState, PresetAction, PresetFeedbackKind,
-    PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, RADIAL_COMPASS_SLICES,
-    RADIAL_PAINT_DELAY, RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState, RadialParent,
-    RadialRingSwatch, RadialSegmentId, RadialSlice, RadialSliceKind, RegionInputSource,
-    RegionPurposeTag, RegionSelectUiState, RegionSelection, SIZE_RING_ARC_SPAN,
-    SIZE_RING_ARC_START, ScreenCaptureSource, SelectionAxis, SelectionHandle, SelectionPolicy,
-    SelectionPropertyEntry, SelectionPropertyKind, SelectionState, ShellMode, TextInputMode, Toast,
-    ToastPriority, ToastPushOutcome, ToastQueue, TourStep, UI_TOAST_DURATION_MS, UiToastKind,
-    ZoomAction, color_picker_rgb_to_hsv, compass_slice, font_picker_layout, font_picker_rows,
+    HelpOverlayReleaseOutcome, ImeCompositionState, ImePreedit, InputState, MAX_STROKE_THICKNESS,
+    MIN_STROKE_THICKNESS, OutputFocusAction, PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS,
+    PickerDrag, PrecisionEntryState, PresetAction, PresetFeedbackKind, PressureThicknessEditMode,
+    PressureThicknessEntryMode, QuickColorEdit, RADIAL_COMPASS_SLICES, RADIAL_PAINT_DELAY,
+    RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState, RadialParent, RadialRingSwatch,
+    RadialSegmentId, RadialSlice, RadialSliceKind, RegionInputSource, RegionPurposeTag,
+    RegionSelectUiState, RegionSelection, SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START,
+    ScreenCaptureSource, SelectionAxis, SelectionHandle, SelectionPolicy, SelectionPropertyEntry,
+    SelectionPropertyKind, SelectionState, ShellMode, TextInputMode, Toast, ToastPriority,
+    ToastPushOutcome, ToastQueue, TourStep, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
+    color_picker_rgb_to_hsv, compass_slice, font_picker_layout, font_picker_rows,
     size_ring_angle_for_value, size_ring_value_for_angle, slice_parent, sub_ring_child_count,
     sub_ring_children,
 };
@@ -74,9 +75,10 @@ pub use input_hud::{
 
 #[cfg(test)]
 pub(crate) mod test_support {
+    use super::InputStateSeed;
     use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig, Shortcut};
     use crate::draw::{Color, FontDescriptor};
-    use crate::input::{ClickHighlightSettings, EraserMode, InputState, InputStateSeed};
+    use crate::input::{ClickHighlightSettings, EraserMode, InputState};
     use std::collections::HashMap;
 
     pub(crate) struct TestInputStateBuilder {

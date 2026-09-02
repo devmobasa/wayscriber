@@ -40,15 +40,15 @@ pub(crate) use top_menu::TopMenuState;
 
 pub use base::{
     BLOCKED_ACTION_DURATION_MS, CompositorCapabilities, DesktopEnvironment, DrawingState,
-    InputState, InputStateSeed, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,
+    InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
     PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, SelectionAxis,
     SelectionHandle, ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome, ToastQueue,
     UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
 pub(crate) use base::{
-    BoardPickerClickState, PolygonClickState, TextBlockDrag, TextClickState, TextClipboardRequest,
-    TextCutTarget, TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress,
+    BoardPickerClickState, InputStateSeed, PolygonClickState, TextBlockDrag, TextClickState,
+    TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress,
 };
 pub(crate) use base::{
     ClipboardFingerprint, ClipboardPasteRequest, HelperLaunchRequest, PasteAnchor,
