@@ -25,17 +25,10 @@ pub(crate) use state::FontPickerState;
 pub use layout::{FontPickerLayout, FontPickerRow, font_picker_layout, font_picker_rows};
 
 use super::InputState;
-use crate::draw::{
-    FontDescriptor, families_match, system_font_catalog_is_ready, try_monospace_font_families,
-    try_system_font_families,
-};
-use crate::input::state::core::command_palette::fuzzy_score;
+use crate::draw::{FontDescriptor, families_match, system_font_catalog_is_ready};
 
 /// The picker's memoized result list, keyed by what produced it.
 pub type FontPickerResults = Option<((String, FontPickerFilter), Vec<String>)>;
-
-/// How many families the picker keeps as recently used.
-const RECENT_LIMIT: usize = 5;
 
 /// Which slice of the system list the picker is showing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -124,17 +117,12 @@ impl InputState {
 
     fn open_font_picker_with_catalog_ready(&mut self, catalog_ready: bool) {
         self.close_modals_for_open(super::modal::ModalSurface::FontPicker);
-        self.font_picker.open = true;
-        self.font_picker.loading = !catalog_ready;
-        self.font_picker.load_failed = false;
-        self.font_picker.query.clear();
-        self.font_picker.filter = FontPickerFilter::All;
-        self.font_picker.target = if self.selection_has_text() {
+        let target = if self.selection_has_text() {
             FontPickerTarget::Selection
         } else {
             FontPickerTarget::ToolDefault
         };
-        self.font_picker.results.replace(None);
+        self.font_picker.begin_open(catalog_ready, target);
         // Start on the font in use, so the picker opens showing where you are.
         //
         // Centred in the window this surface actually has room for, not in the
@@ -159,13 +147,10 @@ impl InputState {
     ///
     /// Returns whether the open surface changed and needs repainting.
     pub(crate) fn finish_font_picker_catalog_load(&mut self) -> bool {
-        if !self.font_picker.open || !self.font_picker.loading {
+        if !self.font_picker.finish_catalog_load() {
             return false;
         }
         debug_assert!(system_font_catalog_is_ready());
-        self.font_picker.loading = false;
-        self.font_picker.load_failed = false;
-        self.font_picker.results.replace(None);
         self.position_font_picker_on_current_family();
         self.mark_font_picker_dirty();
         true
@@ -174,12 +159,9 @@ impl InputState {
     /// Replace the loading row with a stable error if the background worker
     /// could not produce a catalog. Reopening gives the backend one fresh try.
     pub(crate) fn fail_font_picker_catalog_load(&mut self) -> bool {
-        if !self.font_picker.open || !self.font_picker.loading {
+        if !self.font_picker.fail_catalog_load() {
             return false;
         }
-        self.font_picker.loading = false;
-        self.font_picker.load_failed = true;
-        self.font_picker.results.replace(None);
         self.mark_font_picker_dirty();
         true
     }
@@ -205,16 +187,9 @@ impl InputState {
     }
 
     pub(crate) fn close_font_picker(&mut self) {
-        if !self.font_picker.open {
+        if !self.font_picker.close() {
             return;
         }
-        self.font_picker.open = false;
-        self.font_picker.loading = false;
-        self.font_picker.load_failed = false;
-        self.font_picker.query.clear();
-        self.font_picker.results.replace(None);
-        self.clear_font_picker_repeat();
-        self.font_picker.last_panel = None;
         // The scrim covered the whole surface, so the whole surface comes back.
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -241,66 +216,7 @@ impl InputState {
     /// Memoized on the query and filter: the renderer asks for it more than
     /// once per frame, and scoring walks every installed family.
     pub fn font_picker_families(&self) -> Vec<String> {
-        let key = (self.font_picker.query.clone(), self.font_picker.filter);
-        if let Some((cached_key, cached)) = self.font_picker.results.borrow().as_ref()
-            && *cached_key == key
-        {
-            return cached.clone();
-        }
-        let ranked = self.rank_font_families();
-        self.font_picker
-            .results
-            .replace(Some((key, ranked.clone())));
-        ranked
-    }
-
-    fn rank_font_families(&self) -> Vec<String> {
-        if self.font_picker.loading || self.font_picker.load_failed {
-            return Vec::new();
-        }
-        let source: &[String] = match self.font_picker.filter {
-            FontPickerFilter::All => try_system_font_families(),
-            FontPickerFilter::Monospace => try_monospace_font_families(),
-        }
-        .unwrap_or(&[]);
-        if source.is_empty() {
-            return Vec::new();
-        };
-        let query = self.font_picker.query.trim().to_lowercase();
-
-        if query.is_empty() {
-            // No query: recents first, then the rest in the system's order, so
-            // the list is stable and the fonts you use are within reach.
-            let mut ordered: Vec<String> = self
-                .font_picker
-                .recents
-                .iter()
-                .filter(|family| source.iter().any(|name| families_match(name, family)))
-                .cloned()
-                .collect();
-            let rest: Vec<String> = source
-                .iter()
-                .filter(|name| !ordered.iter().any(|kept| families_match(kept, name)))
-                .cloned()
-                .collect();
-            ordered.extend(rest);
-            return ordered;
-        }
-
-        let mut scored: Vec<(i32, &String)> = source
-            .iter()
-            .filter_map(|family| {
-                let score = fuzzy_score(&query, family);
-                (score > 0).then_some((score, family))
-            })
-            .collect();
-        // Score descending, then the system's own order, so equal matches do not
-        // reshuffle as the query grows.
-        scored.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
-        scored
-            .into_iter()
-            .map(|(_, family)| family.clone())
-            .collect()
+        self.font_picker.families()
     }
 
     /// Apply the highlighted family and close.
@@ -312,7 +228,7 @@ impl InputState {
         };
         let applied = self.apply_font_family(&family);
         if applied {
-            self.remember_font_picker_choice(&family);
+            self.font_picker.remember_choice(&family);
             log::info!("Font picker applied {family}");
             self.push_toast(
                 super::ToastPriority::Info,
@@ -335,14 +251,6 @@ impl InputState {
             self.font_descriptor.weight.clone(),
             self.font_descriptor.style.clone(),
         ))
-    }
-
-    fn remember_font_picker_choice(&mut self, family: &str) {
-        self.font_picker
-            .recents
-            .retain(|existing| !families_match(existing, family));
-        self.font_picker.recents.insert(0, family.to_string());
-        self.font_picker.recents.truncate(RECENT_LIMIT);
     }
 }
 

@@ -11,21 +11,6 @@ use crate::input::events::Key;
 /// tick that moves a single row turns a 269-family list into 269 ticks.
 const FONT_PICKER_WHEEL_ROWS: usize = 3;
 
-/// How long a navigation key must be held before it starts repeating.
-const REPEAT_INITIAL_DELAY: Duration = Duration::from_millis(280);
-/// Interval the repeat starts at, matching the command palette's.
-const REPEAT_INTERVAL: Duration = Duration::from_millis(55);
-/// Interval the repeat ramps down to while the key stays held.
-const REPEAT_FAST_INTERVAL: Duration = Duration::from_millis(20);
-/// How long of holding it takes to reach [`REPEAT_FAST_INTERVAL`].
-///
-/// The palette repeats at one flat rate, which is right for a list of tens.
-/// This list is every font on the system, and crossing it at the flat rate
-/// takes about fifteen seconds — long enough that people give up and reach for
-/// the mouse. Ramping keeps a short press precise and makes a long hold
-/// actually travel.
-const REPEAT_RAMP: Duration = Duration::from_millis(1000);
-
 /// Whether holding this key should keep moving the highlight.
 ///
 /// Navigation only. A query is a handful of characters, so `Backspace` repeat
@@ -54,7 +39,7 @@ impl InputState {
             Key::Tab => {
                 self.font_picker.filter = self.font_picker.filter.next();
                 self.font_picker.results.replace(None);
-                self.reset_font_picker_position();
+                self.font_picker.reset_position();
             }
             Key::Down => self.move_font_picker_selection(1),
             Key::Up => self.move_font_picker_selection(-1),
@@ -74,12 +59,12 @@ impl InputState {
             Key::Space => {
                 self.font_picker.query.push(' ');
                 self.font_picker.results.replace(None);
-                self.reset_font_picker_position();
+                self.font_picker.reset_position();
             }
             Key::Backspace => {
                 self.font_picker.query.pop();
                 self.font_picker.results.replace(None);
-                self.reset_font_picker_position();
+                self.font_picker.reset_position();
             }
             _ => {
                 let Some(text) =
@@ -91,14 +76,14 @@ impl InputState {
                 };
                 self.font_picker.query.push_str(text);
                 self.font_picker.results.replace(None);
-                self.reset_font_picker_position();
+                self.font_picker.reset_position();
             }
         }
         // A held navigation key keeps moving. The backend's own repeat timer is
         // retired while a modal is engaged, or it would feed the canvas behind
         // this panel, so the picker owns its repeat the way the palette does.
         if repeats(key) {
-            self.start_font_picker_repeat(key);
+            self.font_picker.start_repeat(key, Instant::now());
         } else {
             self.clear_font_picker_repeat();
         }
@@ -197,12 +182,6 @@ impl InputState {
         self.font_picker_visible_rows(self.font_picker_families().len())
     }
 
-    /// Back to the top after the result list changed under the highlight.
-    fn reset_font_picker_position(&mut self) {
-        self.font_picker.selected = 0;
-        self.font_picker.scroll = 0;
-    }
-
     /// Scroll the list by one wheel tick.
     ///
     /// The window moves and the highlight comes along only when the window
@@ -234,53 +213,19 @@ impl InputState {
         self.mark_font_picker_dirty();
     }
 
-    fn start_font_picker_repeat(&mut self, key: Key) {
-        let now = Instant::now();
-        // A different key restarts the ramp; the same key held keeps it.
-        if self.font_picker.repeat_key != Some(key) {
-            self.font_picker.repeat_key = Some(key);
-            self.font_picker.repeat_started = Some(now);
-            self.font_picker.repeat_next_tick = Some(now + REPEAT_INITIAL_DELAY);
-        }
-    }
-
     pub(crate) fn clear_font_picker_repeat(&mut self) {
-        self.font_picker.repeat_key = None;
-        self.font_picker.repeat_next_tick = None;
-        self.font_picker.repeat_started = None;
+        self.font_picker.clear_repeat();
     }
 
     /// Stop repeating when the held key comes up.
     pub(crate) fn release_font_picker_repeat_key(&mut self, key: Key) {
-        if self.font_picker.repeat_key == Some(key) {
-            self.clear_font_picker_repeat();
-        }
-    }
-
-    /// Gap to the next repeat, ramping from [`REPEAT_INTERVAL`] down to
-    /// [`REPEAT_FAST_INTERVAL`] over [`REPEAT_RAMP`] of holding.
-    fn font_picker_repeat_interval(&self, now: Instant) -> Duration {
-        let Some(started) = self.font_picker.repeat_started else {
-            return REPEAT_INTERVAL;
-        };
-        let repeating = now
-            .saturating_duration_since(started)
-            .saturating_sub(REPEAT_INITIAL_DELAY);
-        let progress = (repeating.as_secs_f64() / REPEAT_RAMP.as_secs_f64()).clamp(0.0, 1.0);
-        let slow = REPEAT_INTERVAL.as_secs_f64();
-        let fast = REPEAT_FAST_INTERVAL.as_secs_f64();
-        Duration::from_secs_f64(slow + (fast - slow) * progress)
+        self.font_picker.release_repeat_key(key);
     }
 
     /// Time until the next repeat, for the event loop's timeout. Without it the
     /// loop sleeps until a real event and a held key never moves again.
     pub(crate) fn font_picker_repeat_timeout(&self, now: Instant) -> Option<Duration> {
-        if !self.font_picker.open {
-            return None;
-        }
-        self.font_picker
-            .repeat_next_tick
-            .map(|next| next.saturating_duration_since(now))
+        self.font_picker.repeat_timeout(now)
     }
 
     /// Fire one repeat if due. Returns whether anything moved.
@@ -314,7 +259,7 @@ impl InputState {
         }
         // Rescheduled from `now`, not from the deadline: a long frame must not
         // leave a burst of catch-up ticks queued behind it.
-        self.font_picker.repeat_next_tick = Some(now + self.font_picker_repeat_interval(now));
+        self.font_picker.schedule_next_repeat(now);
         let moved = self.font_picker.selected != before;
         if moved {
             self.mark_font_picker_dirty();
