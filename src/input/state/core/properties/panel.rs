@@ -54,7 +54,7 @@ impl InputState {
             let frame = self.boards.active_frame();
             let canvas_bounds = self.selection_bounding_box(ids);
             let anchor_rect = self.selection_screen_bounding_box(ids);
-            let anchor = selection_panel_anchor(anchor_rect, self.last_pointer_position);
+            let anchor = selection_panel_anchor(anchor_rect, self.pointer.screen());
             let entries = self.build_selection_property_entries(ids);
 
             if ids.len() > 1 {
@@ -137,7 +137,7 @@ impl InputState {
             let frame = self.boards.active_frame();
             let canvas_bounds = self.selection_bounding_box(ids);
             let anchor_rect = self.selection_screen_bounding_box(ids);
-            let anchor = selection_panel_anchor(anchor_rect, self.last_pointer_position);
+            let anchor = selection_panel_anchor(anchor_rect, self.pointer.screen());
 
             let (title, lines, multiple_selection) = if ids.len() > 1 {
                 let total = ids.len();

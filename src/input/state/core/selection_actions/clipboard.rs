@@ -54,12 +54,13 @@ impl InputState {
         let mut new_ids = Vec::new();
         let mut limit_hit = false;
 
+        let max_shapes = self.max_shapes_per_frame();
         for shape in shapes {
             let mut cloned_shape = shape;
             cloned_shape.translate(dx, dy);
             let new_id = {
                 let frame = self.boards.active_frame_mut();
-                frame.try_add_shape_with_id(cloned_shape, self.max_shapes_per_frame)
+                frame.try_add_shape_with_id(cloned_shape, max_shapes)
             };
 
             let Some(new_id) = new_id else {
@@ -125,7 +126,7 @@ impl InputState {
             self.boards.active_page_generation(),
             anchor,
             self.visible_canvas_rect(),
-            (self.screen_width, self.screen_height),
+            self.view.screen_size(),
         );
         self.emit_input_effect(super::super::base::InputEffect::ClipboardPaste(
             request.clone(),
@@ -178,7 +179,7 @@ impl InputState {
         let mut hit_ids = Vec::new();
         let mut limit_hit = false;
         let total = shapes.len();
-        let max_shapes = self.max_shapes_per_frame;
+        let max_shapes = self.max_shapes_per_frame();
         let undo_limit = self.history_limits.undo_stack_limit();
 
         let target = self

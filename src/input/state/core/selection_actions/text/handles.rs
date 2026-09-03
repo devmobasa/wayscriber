@@ -34,7 +34,7 @@ impl InputState {
 
     pub(crate) fn hit_text_resize_handle(&self, x: i32, y: i32) -> Option<ShapeId> {
         let (shape_id, handle) = self.selected_text_resize_handle()?;
-        let tolerance = self.hit_test_tolerance.ceil() as i32;
+        let tolerance = self.hit_test_tolerance().ceil() as i32;
         let hit_rect = handle.inflated(tolerance).unwrap_or(handle);
         if hit_rect.contains(x, y) {
             Some(shape_id)

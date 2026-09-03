@@ -397,7 +397,7 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
 pub(super) fn build_prefix_text(input_state: &InputState) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
     if input_state.ui_visibility.show_active_output_badge
-        && let Some(label) = input_state.active_output_label.as_ref()
+        && let Some(label) = input_state.active_output_label()
     {
         let label = crate::util::truncate_with_ellipsis(label, 28);
         parts.push(format!("Output: {label}"));

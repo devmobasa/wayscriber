@@ -19,6 +19,7 @@ pub(crate) mod key_repeat;
 mod keymap;
 mod menus;
 pub(crate) mod modal;
+mod pointer;
 mod presets;
 mod properties;
 pub(crate) mod radial_menu;
@@ -27,9 +28,12 @@ mod search;
 mod selection;
 mod selection_actions;
 pub(crate) use history_limits::HistoryLimits;
+pub(in crate::input::state) use index::CanvasIndex;
 pub(in crate::input::state) use keymap::Keymap;
+pub(in crate::input::state) use pointer::PointerTracking;
 pub(crate) use presets::PresetSlots;
 pub(crate) use selection_actions::{IdleHandle, SpotlightMagnificationTrack};
+pub(in crate::input::state) use view::ViewState;
 mod session;
 mod session_preflight;
 mod session_preflight_exact;
@@ -41,6 +45,7 @@ mod tool_controls;
 mod top_menu;
 mod tour;
 pub(crate) mod utility;
+mod view;
 mod zoom_chip;
 
 #[cfg(test)]

@@ -39,7 +39,7 @@ impl InputState {
             );
             return false;
         }
-        let max_shapes = self.max_shapes_per_frame;
+        let max_shapes = self.max_shapes_per_frame();
         let undo_limit = self.history_limits.undo_stack_limit();
         let Some(frame) = self
             .boards

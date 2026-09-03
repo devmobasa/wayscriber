@@ -1,12 +1,9 @@
 use super::base::{DrawingState, InputState};
-use super::index::SpatialIndexCache;
 use super::selection::PolygonClickState;
 use super::{ColorPickerPopupLayout, ColorPickerPopupState};
-use crate::draw::{DirtyTracker, ShapeId};
+use crate::draw::DirtyTracker;
 use crate::input::BoardManager;
 use crate::input::state::highlight::ClickHighlightState;
-use crate::util::Rect;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 #[allow(dead_code)]
@@ -26,10 +23,9 @@ struct ActiveInteractionRollback {
     needs_redraw: bool,
     session_dirty: bool,
     dirty_tracker: DirtyTracker,
-    last_provisional_bounds: Option<Rect>,
+    pointer: super::PointerTracking,
     last_polygon_click: Option<PolygonClickState>,
-    hit_test_cache: HashMap<ShapeId, Rect>,
-    spatial_index: Option<SpatialIndexCache>,
+    canvas_index: super::CanvasIndex,
 }
 
 #[allow(dead_code)]
@@ -48,10 +44,9 @@ impl ActiveInteractionRollback {
             needs_redraw: input.needs_redraw,
             session_dirty: input.session_dirty,
             dirty_tracker: input.dirty_tracker.clone(),
-            last_provisional_bounds: input.last_provisional_bounds,
+            pointer: input.pointer.clone(),
             last_polygon_click: input.selection_interaction.polygon_click(),
-            hit_test_cache: input.hit_test_cache.clone(),
-            spatial_index: input.spatial_index.clone(),
+            canvas_index: input.canvas_index.clone(),
         }
     }
 
@@ -70,12 +65,11 @@ impl ActiveInteractionRollback {
         input.needs_redraw = self.needs_redraw;
         input.session_dirty = self.session_dirty;
         input.dirty_tracker = self.dirty_tracker;
-        input.last_provisional_bounds = self.last_provisional_bounds;
+        input.pointer = self.pointer;
         input
             .selection_interaction
             .restore_polygon_click(self.last_polygon_click);
-        input.hit_test_cache = self.hit_test_cache;
-        input.spatial_index = self.spatial_index;
+        input.canvas_index.restore_from_rollback(self.canvas_index);
     }
 }
 

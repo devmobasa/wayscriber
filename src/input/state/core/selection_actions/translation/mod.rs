@@ -98,7 +98,7 @@ impl InputState {
         let Some(bounds) = self.movable_selection_bounds() else {
             return false;
         };
-        let screen_width = self.screen_width.min(i32::MAX as u32) as i32;
+        let screen_width = self.view.screen_width().min(i32::MAX as u32) as i32;
         if screen_width <= 0 {
             return false;
         }
@@ -119,7 +119,7 @@ impl InputState {
         let Some(bounds) = self.movable_selection_bounds() else {
             return false;
         };
-        let screen_height = self.screen_height.min(i32::MAX as u32) as i32;
+        let screen_height = self.view.screen_height().min(i32::MAX as u32) as i32;
         if screen_height <= 0 {
             return false;
         }

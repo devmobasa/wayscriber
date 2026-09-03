@@ -107,7 +107,10 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
      IDs, nudge-axis memory, and polygon click timing; `SelectionClipboard` owns copied shapes,
      publication generations, paste request identity, and image-save fallback; `Keymap` owns action
      and sequence matching, rebind revisions, pointer-button consumption, drag bindings, active drag
-     identity, and shortcut capture while shared modifiers stay on `InputState`; `PresetSlots` owns
+     identity, and shortcut capture while shared modifiers stay on `InputState`; `ViewState` owns
+     zoom, frozen-mode, output geometry, and canvas transforms; `PointerTracking` owns pointer and
+     provisional-damage bookkeeping; `SpotlightWheelGesture` owns wheel-burst state; `CanvasIndex`
+     owns hit-test caches, spatial indexing policy, and the frame shape cap. `PresetSlots` owns
      preset lifecycle and feedback; `HistoryLimits` owns undo retention plus delayed playback
      scheduling. Pure translation and scaling are methods on `draw::Shape`.
    - `state/actions/` maps keybindings to `Action` values and routes color, board/page, capture,

@@ -499,7 +499,7 @@ impl InputState {
                     start_y: y,
                     additive: self.modifiers.shift,
                 };
-                self.last_provisional_bounds = None;
+                self.pointer.replace_provisional_bounds(None);
                 self.update_provisional_dirty(x, y);
                 self.needs_redraw = true;
                 return;
@@ -533,7 +533,7 @@ impl InputState {
                     points: vec![(x, y)],
                     point_thicknesses: vec![drawing_thickness as f32],
                 };
-                self.last_provisional_bounds = None;
+                self.pointer.replace_provisional_bounds(None);
                 self.update_provisional_dirty(x, y);
                 self.needs_redraw = true;
             }

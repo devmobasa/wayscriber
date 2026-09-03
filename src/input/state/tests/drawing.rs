@@ -208,7 +208,7 @@ fn freeform_polygon_preview_dirty_has_antialias_padding() {
     let base = crate::draw::shape::bounding_box_for_points(&[(10, 10), (20, 20)], thick)
         .expect("preview should have bounds");
     assert_eq!(
-        state.last_provisional_bounds,
+        state.provisional_bounds(),
         base.inflated(2),
         "building polygon damage should be padded to clear antialias leftovers"
     );
@@ -247,7 +247,7 @@ fn append_path_motion_dirties_only_new_tail_segment() {
         "append motion should not redraw the start of the accumulated stroke; dirty={dirty:?}"
     );
     assert_eq!(
-        state.last_provisional_bounds,
+        state.provisional_bounds(),
         Some(full_bounds),
         "cleanup bounds should still cover the whole active stroke"
     );
@@ -280,7 +280,7 @@ fn append_path_long_diagonal_motion_splits_tail_damage() {
         "split damage should avoid the full tail AABB; dirty={dirty:?}, full={full_tail_bounds:?}"
     );
     assert_eq!(
-        state.last_provisional_bounds,
+        state.provisional_bounds(),
         Some(full_tail_bounds),
         "cleanup bounds should still cover the whole active stroke"
     );
@@ -305,7 +305,7 @@ fn append_path_long_diagonal_release_splits_finished_path_damage() {
             .expect("long finished path should have bounds");
 
     assert_eq!(state.boards.active_frame().shapes.len(), 1);
-    assert_eq!(state.last_provisional_bounds, None);
+    assert_eq!(state.provisional_bounds(), None);
     assert!(
         dirty.iter().all(
             |rect| rect.width < full_path_bounds.width && rect.height < full_path_bounds.height
@@ -354,7 +354,7 @@ fn pressure_preview_release_cleans_wide_preview_when_final_freehand_narrows() {
     state.set_pressure_thickness_for_active_tool(32.0);
     state.on_mouse_motion(900, 100);
     let wide_preview_bounds = state
-        .last_provisional_bounds
+        .provisional_bounds()
         .expect("wide pressure preview should track cleanup bounds");
     let wide_only_probe = crate::util::Rect::new(450, wide_preview_bounds.y, 1, 1).unwrap();
     let final_bounds = crate::draw::shape::bounding_box_for_points(&[(10, 100), (900, 100)], 2.0)
@@ -374,7 +374,7 @@ fn pressure_preview_release_cleans_wide_preview_when_final_freehand_narrows() {
         Shape::Freehand { thick, .. } => assert_eq!(*thick, 2.0),
         other => panic!("expected final pressure samples to downgrade to Freehand, got {other:?}"),
     }
-    assert_eq!(state.last_provisional_bounds, None);
+    assert_eq!(state.provisional_bounds(), None);
     assert!(
         dirty
             .iter()
@@ -395,14 +395,14 @@ fn append_path_limit_rejection_clears_provisional_damage() {
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
-    state.max_shapes_per_frame = 1;
+    state.set_max_shapes_per_frame_for_test(1);
     let _ = state.take_dirty_regions();
 
     state.on_mouse_press(MouseButton::Left, 10, 10);
     let _ = state.take_dirty_regions();
     state.on_mouse_motion(900, 900);
     let provisional_bounds = state
-        .last_provisional_bounds
+        .provisional_bounds()
         .expect("active path preview should track cleanup bounds");
     let _ = state.take_dirty_regions();
 
@@ -410,7 +410,7 @@ fn append_path_limit_rejection_clears_provisional_damage() {
     let dirty = state.take_dirty_regions();
 
     assert_eq!(state.boards.active_frame().shapes.len(), 1);
-    assert_eq!(state.last_provisional_bounds, None);
+    assert_eq!(state.provisional_bounds(), None);
     assert!(
         dirty
             .iter()
@@ -428,7 +428,7 @@ fn pressure_sample_shrink_dirties_previous_full_provisional_bounds() {
 
     state.on_mouse_press(MouseButton::Left, 10, 10);
     let old_full_bounds = state
-        .last_provisional_bounds
+        .provisional_bounds()
         .expect("initial pressure preview should have bounds");
     let old_only_probe = crate::util::Rect::new(10, old_full_bounds.y, 1, 1).unwrap();
     let _ = state.take_dirty_regions();
@@ -473,7 +473,7 @@ fn marker_size_increase_updates_accumulated_cleanup_bounds() {
             .any(|rect| test_rects_intersect(*rect, expanded_only_probe)),
         "cancel should dirty marker pixels exposed by a mid-stroke size increase; dirty={dirty:?}, expanded={expanded_bounds:?}, probe={expanded_only_probe:?}"
     );
-    assert_eq!(state.last_provisional_bounds, None);
+    assert_eq!(state.provisional_bounds(), None);
 }
 
 #[test]
@@ -502,7 +502,7 @@ fn eraser_size_increase_updates_accumulated_cleanup_bounds() {
             .any(|rect| test_rects_intersect(*rect, expanded_only_probe)),
         "cancel should dirty eraser pixels exposed by a mid-stroke size increase; dirty={dirty:?}, expanded={expanded_bounds:?}, probe={expanded_only_probe:?}"
     );
-    assert_eq!(state.last_provisional_bounds, None);
+    assert_eq!(state.provisional_bounds(), None);
 }
 
 #[test]
@@ -528,7 +528,7 @@ fn cancel_active_path_dirties_full_accumulated_provisional_bounds() {
             .any(|rect| test_rects_intersect(*rect, full_bounds)),
         "cancel should dirty the full active stroke bounds; dirty={dirty:?}, full={full_bounds:?}"
     );
-    assert_eq!(state.last_provisional_bounds, None);
+    assert_eq!(state.provisional_bounds(), None);
 }
 
 #[test]

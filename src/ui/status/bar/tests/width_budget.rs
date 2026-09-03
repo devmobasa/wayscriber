@@ -65,7 +65,7 @@ fn each_core_content_flag_removes_only_its_segment() {
 fn prefix_content_keeps_output_before_selection_and_honors_both_flags() {
     let mut state = make_state();
     state.ui_visibility.show_active_output_badge = true;
-    state.active_output_label = Some("DP-3".to_string());
+    assert!(state.set_active_output_label(Some("DP-3".to_string())));
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
         y: 20,

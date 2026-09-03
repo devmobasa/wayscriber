@@ -87,8 +87,9 @@ impl InputState {
 
     pub(super) fn clamp_selection_translation(&self, dx: i32, dy: i32) -> Option<(i32, i32)> {
         let bounds = self.movable_selection_bounds()?;
-        let screen_width = self.screen_width.min(i32::MAX as u32) as i32;
-        let screen_height = self.screen_height.min(i32::MAX as u32) as i32;
+        let (screen_width, screen_height) = self.view.screen_size();
+        let screen_width = screen_width.min(i32::MAX as u32) as i32;
+        let screen_height = screen_height.min(i32::MAX as u32) as i32;
 
         let clamped_dx = if dx == 0 {
             0

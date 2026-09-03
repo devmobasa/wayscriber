@@ -57,6 +57,21 @@ impl Rect {
         self.width > 0 && self.height > 0
     }
 
+    /// Returns the smallest representable rectangle that contains both rectangles.
+    pub(crate) fn union(self, other: Self) -> Option<Self> {
+        let min_x = self.x.min(other.x);
+        let min_y = self.y.min(other.y);
+        let max_x = self
+            .x
+            .saturating_add(self.width)
+            .max(other.x.saturating_add(other.width));
+        let max_y = self
+            .y
+            .saturating_add(self.height)
+            .max(other.y.saturating_add(other.height));
+        Self::from_min_max(min_x, min_y, max_x, max_y)
+    }
+
     /// Returns true if the point lies within the rectangle (inclusive of min, exclusive of max).
     pub fn contains(&self, x: i32, y: i32) -> bool {
         let x = i64::from(x);
@@ -151,6 +166,14 @@ mod tests {
         let rect = Rect::new(10, 20, 5, 4).unwrap();
 
         assert_eq!(rect.inflated(2), Rect::new(8, 18, 9, 8));
+    }
+
+    #[test]
+    fn rect_union_covers_both_rectangles() {
+        let first = Rect::new(10, 20, 30, 40).unwrap();
+        let second = Rect::new(0, 50, 20, 30).unwrap();
+
+        assert_eq!(first.union(second), Rect::new(0, 20, 40, 60));
     }
 
     #[test]

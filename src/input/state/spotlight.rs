@@ -52,12 +52,71 @@ impl FrameIdentity {
 
 /// An in-flight wheel adjustment of one loupe's magnification.
 #[derive(Debug, Clone)]
-pub(crate) struct SpotlightMagnificationGesture {
+struct SpotlightMagnificationGesture {
     /// Frame the gesture started on; it may only ever be committed there.
-    pub(crate) frame: FrameIdentity,
-    pub(crate) shape_id: ShapeId,
+    frame: FrameIdentity,
+    shape_id: ShapeId,
     /// Factor before the first tick, so the whole burst is one undo entry.
-    pub(crate) before: crate::draw::frame::ShapeSnapshot,
+    before: crate::draw::frame::ShapeSnapshot,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(in crate::input::state) struct SpotlightWheelGesture {
+    gesture: Option<SpotlightMagnificationGesture>,
+    value120_remainder: Option<(ShapeId, i32)>,
+}
+
+impl SpotlightWheelGesture {
+    fn is_pending(&self) -> bool {
+        self.gesture.is_some()
+    }
+
+    fn owns_wheel(&self) -> bool {
+        self.gesture.is_some() || self.value120_remainder.is_some()
+    }
+
+    fn begin_with(&mut self, gesture: impl FnOnce() -> SpotlightMagnificationGesture) {
+        self.gesture.get_or_insert_with(gesture);
+    }
+
+    fn accumulate_value120(&mut self, shape_id: ShapeId, delta: i32) -> i32 {
+        let previous = self
+            .value120_remainder
+            .filter(|(owner, _)| *owner == shape_id)
+            .map_or(0, |(_, remainder)| remainder);
+        let total = i64::from(previous) + i64::from(delta);
+        let steps = total / 120;
+        let remainder = (total % 120) as i32;
+        self.value120_remainder = (remainder != 0).then_some((shape_id, remainder));
+        steps as i32
+    }
+
+    fn clear_remainder(&mut self) {
+        self.value120_remainder = None;
+    }
+
+    fn take(&mut self) -> Option<SpotlightMagnificationGesture> {
+        self.clear_remainder();
+        self.gesture.take()
+    }
+
+    fn shape_id(&self) -> Option<ShapeId> {
+        let gesture = self.gesture.as_ref().map(|gesture| gesture.shape_id);
+        let remainder = self.value120_remainder.map(|(shape_id, _)| shape_id);
+        match (gesture, remainder) {
+            (Some(gesture), Some(remainder)) if gesture != remainder => None,
+            (Some(shape_id), _) | (_, Some(shape_id)) => Some(shape_id),
+            (None, None) => None,
+        }
+    }
+
+    fn gesture_shape_id(&self) -> Option<ShapeId> {
+        self.gesture.as_ref().map(|gesture| gesture.shape_id)
+    }
+
+    fn is_owned_by(&self, shape_id: ShapeId) -> bool {
+        self.shape_id() == Some(shape_id)
+    }
 }
 
 /// What a wheel tick over the canvas did.
@@ -102,14 +161,13 @@ fn snapshot_magnification(snapshot: &crate::draw::frame::ShapeSnapshot) -> Optio
 impl InputState {
     /// Whether a live wheel burst still owes its single undo entry.
     pub(crate) fn has_pending_spotlight_magnification_gesture(&self) -> bool {
-        self.spotlight_magnification_gesture.is_some()
+        self.spotlight_wheel.is_pending()
     }
 
     /// Whether a live wheel burst still owns an undo gesture or a partial
     /// high-resolution wheel step.
     pub(crate) fn has_pending_spotlight_wheel_axis_sequence(&self) -> bool {
-        self.spotlight_magnification_gesture.is_some()
-            || self.spotlight_wheel_value120_remainder.is_some()
+        self.spotlight_wheel.owns_wheel()
     }
 
     /// Every committed spotlight on the active page, plus the one being dragged
@@ -189,34 +247,18 @@ impl InputState {
             }
         };
 
-        let gesture_changed = self
-            .spotlight_magnification_gesture
-            .as_ref()
-            .is_some_and(|gesture| gesture.shape_id != shape_id);
-        let remainder_changed = self
-            .spotlight_wheel_value120_remainder
-            .is_some_and(|(owner, _)| owner != shape_id);
-        if gesture_changed || remainder_changed {
+        if self.spotlight_wheel.owns_wheel() && !self.spotlight_wheel.is_owned_by(shape_id) {
             self.flush_spotlight_magnification_gesture();
         }
 
         let steps = if value120 != 0 {
-            let previous = self
-                .spotlight_wheel_value120_remainder
-                .filter(|(owner, _)| *owner == shape_id)
-                .map_or(0, |(_, remainder)| remainder);
-            let total = i64::from(previous) + i64::from(value120);
-            let axis_steps = total / 120;
-            let remainder = (total % 120) as i32;
-            self.spotlight_wheel_value120_remainder =
-                (remainder != 0).then_some((shape_id, remainder));
             // Positive Wayland axis values scroll down; Spotlight
             // magnification increases when the user scrolls up.
-            -(axis_steps as i32)
+            -self.spotlight_wheel.accumulate_value120(shape_id, value120)
         } else {
             // A source using the legacy discrete/continuous representation is
             // a separate unit stream. Do not carry a value120 fraction into it.
-            self.spotlight_wheel_value120_remainder = None;
+            self.spotlight_wheel.clear_remainder();
             if discrete != 0 {
                 discrete.saturating_neg()
             } else if absolute > 0.1 {
@@ -299,9 +341,9 @@ impl InputState {
             }
         };
         if self
-            .spotlight_magnification_gesture
-            .as_ref()
-            .is_some_and(|gesture| gesture.shape_id != shape_id)
+            .spotlight_wheel
+            .gesture_shape_id()
+            .is_some_and(|owner| owner != shape_id)
         {
             self.flush_spotlight_magnification_gesture();
         }
@@ -330,9 +372,10 @@ impl InputState {
             // a brush.
             return SpotlightWheelOutcome::AtRangeEnd;
         }
-        self.spotlight_magnification_gesture
-            .get_or_insert_with(|| SpotlightMagnificationGesture {
-                frame: FrameIdentity::of(&self.boards),
+        let boards = &self.boards;
+        self.spotlight_wheel
+            .begin_with(|| SpotlightMagnificationGesture {
+                frame: FrameIdentity::of(boards),
                 shape_id,
                 before,
             });
@@ -349,18 +392,13 @@ impl InputState {
     /// because nothing else runs between two wheel bursts over one shape.
     pub(crate) fn end_spotlight_magnification_gesture_if_pointer_left(&mut self, x: i32, y: i32) {
         let target = self.spotlight_wheel_target_at(x, y);
-        let gesture_owner_left =
-            self.spotlight_magnification_gesture
-                .as_ref()
-                .is_some_and(|gesture| {
-                    target != Some(SpotlightWheelTarget::Adjustable(gesture.shape_id))
-                });
-        let remainder_owner_left =
-            self.spotlight_wheel_value120_remainder
-                .is_some_and(|(shape_id, _)| {
-                    target != Some(SpotlightWheelTarget::Adjustable(shape_id))
-                });
-        if gesture_owner_left || remainder_owner_left {
+        let owner_left = match target {
+            Some(SpotlightWheelTarget::Adjustable(shape_id)) => {
+                self.spotlight_wheel.owns_wheel() && !self.spotlight_wheel.is_owned_by(shape_id)
+            }
+            Some(SpotlightWheelTarget::Locked) | None => self.spotlight_wheel.owns_wheel(),
+        };
+        if owner_left {
             self.flush_spotlight_magnification_gesture();
         }
     }
@@ -371,8 +409,7 @@ impl InputState {
     /// Called before anything that would make a half-finished gesture
     /// confusing to undo: a pointer press, an undo, a redo.
     pub(crate) fn flush_spotlight_magnification_gesture(&mut self) {
-        self.spotlight_wheel_value120_remainder = None;
-        let Some(gesture) = self.spotlight_magnification_gesture.take() else {
+        let Some(gesture) = self.spotlight_wheel.take() else {
             return;
         };
         let SpotlightMagnificationGesture {
@@ -498,5 +535,76 @@ impl InputState {
                     ..
                 }
             )
+    }
+}
+
+#[cfg(test)]
+mod wheel_gesture_tests {
+    use super::*;
+
+    fn gesture(shape_id: ShapeId) -> SpotlightMagnificationGesture {
+        SpotlightMagnificationGesture {
+            frame: FrameIdentity {
+                board_identity: crate::input::boards::BoardIdentityGeneration(1),
+                board_id: "transparent".to_string(),
+                page_index: 0,
+                page_generation: 0,
+            },
+            shape_id,
+            before: crate::draw::frame::ShapeSnapshot {
+                shape: Shape::Spotlight {
+                    cx: 20,
+                    cy: 30,
+                    rx: 10,
+                    ry: 15,
+                    magnification: 2.0,
+                },
+                locked: false,
+            },
+        }
+    }
+
+    #[test]
+    fn value120_remainder_carries_for_one_shape_and_resets_for_another() {
+        let mut wheel = SpotlightWheelGesture::default();
+
+        assert_eq!(wheel.accumulate_value120(7, 60), 0);
+        assert_eq!(wheel.accumulate_value120(7, 70), 1);
+        assert_eq!(wheel.accumulate_value120(8, 110), 0);
+        assert_eq!(wheel.shape_id(), Some(8));
+        assert_eq!(wheel.accumulate_value120(8, 10), 1);
+        assert_eq!(wheel.shape_id(), None);
+    }
+
+    #[test]
+    fn take_clears_the_gesture_and_its_partial_wheel_step() {
+        let mut wheel = SpotlightWheelGesture::default();
+        wheel.begin_with(|| gesture(7));
+        assert_eq!(wheel.accumulate_value120(7, 60), 0);
+        assert!(wheel.is_pending());
+        assert!(wheel.owns_wheel());
+
+        assert!(wheel.take().is_some());
+        assert!(!wheel.is_pending());
+        assert!(!wheel.owns_wheel());
+        assert_eq!(wheel.shape_id(), None);
+    }
+
+    #[test]
+    fn begin_with_does_not_build_a_replacement_for_a_pending_gesture() {
+        let mut wheel = SpotlightWheelGesture::default();
+        let mut builds = 0;
+
+        wheel.begin_with(|| {
+            builds += 1;
+            gesture(7)
+        });
+        wheel.begin_with(|| {
+            builds += 1;
+            gesture(8)
+        });
+
+        assert_eq!(builds, 1);
+        assert_eq!(wheel.gesture_shape_id(), Some(7));
     }
 }

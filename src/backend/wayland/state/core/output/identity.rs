@@ -96,8 +96,7 @@ impl WaylandState {
                     .and_then(|output| self.output_badge_label_for(output))
             });
 
-        if self.input_state.active_output_label != next_label {
-            self.input_state.active_output_label = next_label;
+        if self.input_state.set_active_output_label(next_label) {
             self.input_state.needs_redraw = true;
         }
     }

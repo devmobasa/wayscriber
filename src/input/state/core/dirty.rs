@@ -25,14 +25,14 @@ const TEXT_PREVIEW_DAMAGE_MARGIN: i32 = 2;
 impl InputState {
     /// Clears any cached provisional shape bounds and marks their damage region.
     pub(crate) fn clear_provisional_dirty(&mut self) {
-        if let Some(prev) = self.last_provisional_bounds.take() {
+        if let Some(prev) = self.pointer.take_provisional_bounds() {
             self.dirty_tracker.mark_rect(prev);
         }
     }
 
     /// Takes cached provisional bounds without marking them dirty.
     pub(crate) fn take_provisional_dirty_bounds(&mut self) -> Option<Rect> {
-        self.last_provisional_bounds.take()
+        self.pointer.take_provisional_bounds()
     }
 
     /// Updates tracked provisional shape bounds for dirty-region purposes.
@@ -42,13 +42,12 @@ impl InputState {
             for region in append_regions {
                 self.dirty_tracker.mark_rect(region);
             }
-            self.last_provisional_bounds =
-                union_optional_rect(self.last_provisional_bounds, append_bounds);
+            self.pointer.union_provisional_bounds(append_bounds);
             return;
         }
 
         let new_bounds = self.compute_provisional_bounds(current_x, current_y);
-        let previous = self.last_provisional_bounds;
+        let previous = self.pointer.provisional_bounds();
 
         if new_bounds != previous
             && let Some(prev) = previous
@@ -58,10 +57,8 @@ impl InputState {
 
         if let Some(bounds) = new_bounds {
             self.dirty_tracker.mark_rect(bounds);
-            self.last_provisional_bounds = Some(bounds);
-        } else {
-            self.last_provisional_bounds = None;
         }
+        self.pointer.replace_provisional_bounds(new_bounds);
     }
 
     /// Marks the full current provisional shape dirty.
@@ -69,11 +66,10 @@ impl InputState {
     /// This is needed when existing provisional geometry changes in place, for
     /// example when the first tablet pressure sample backfills previous widths.
     pub(crate) fn mark_current_provisional_dirty_full(&mut self) {
-        let (current_x, current_y) = self.last_canvas_pointer_position;
+        let (current_x, current_y) = self.pointer.canvas();
         if let Some(bounds) = self.compute_provisional_bounds(current_x, current_y) {
             self.dirty_tracker.mark_rect(bounds);
-            self.last_provisional_bounds =
-                union_optional_rect(self.last_provisional_bounds, bounds);
+            self.pointer.union_provisional_bounds(bounds);
         }
     }
 
@@ -247,7 +243,7 @@ impl InputState {
                     .flatten();
                 for extra in [caret_bounds, decoration_bounds].into_iter().flatten() {
                     live_bounds = Some(match live_bounds {
-                        Some(base) => union_rect(base, extra).unwrap_or(base),
+                        Some(base) => base.union(extra).unwrap_or(base),
                         None => extra,
                     });
                 }
@@ -259,7 +255,7 @@ impl InputState {
         // erased on move-back and on commit (otherwise it lingers there).
         let ghost_bounds = self.text_edit_ghost_damage_bounds();
         let bounds = match (live_bounds, ghost_bounds) {
-            (Some(live), Some(ghost)) => union_rect(live, ghost).or(Some(live)),
+            (Some(live), Some(ghost)) => live.union(ghost).or(Some(live)),
             (Some(live), None) => Some(live),
             (None, ghost) => ghost,
         }?;
@@ -391,23 +387,6 @@ fn text_edit_block_moved(current: (i32, i32), original: &Shape) -> bool {
         }
         _ => false,
     }
-}
-
-fn union_optional_rect(current: Option<Rect>, next: Rect) -> Option<Rect> {
-    match current {
-        Some(current) => union_rect(current, next),
-        None => Some(next),
-    }
-}
-
-fn union_rect(a: Rect, b: Rect) -> Option<Rect> {
-    let min_x = a.x.min(b.x);
-    let min_y = a.y.min(b.y);
-    let max_x = a.x.saturating_add(a.width).max(b.x.saturating_add(b.width));
-    let max_y =
-        a.y.saturating_add(a.height)
-            .max(b.y.saturating_add(b.height));
-    Rect::from_min_max(min_x, min_y, max_x, max_y)
 }
 
 fn append_only_damage_regions(

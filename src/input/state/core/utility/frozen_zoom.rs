@@ -10,8 +10,7 @@ impl InputState {
 
     /// Updates the cached frozen-mode status and triggers a redraw when it changes.
     pub fn set_frozen_active(&mut self, active: bool) {
-        if self.frozen_active != active {
-            self.frozen_active = active;
+        if self.view.set_frozen_active(active) {
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }
@@ -19,7 +18,7 @@ impl InputState {
 
     /// Returns whether frozen mode is active.
     pub fn frozen_active(&self) -> bool {
-        self.frozen_active
+        self.view.frozen_active()
     }
 
     /// Updates cached zoom status and triggers a redraw when it changes.
@@ -30,16 +29,10 @@ impl InputState {
         scale: f64,
         view_offset: (f64, f64),
     ) {
-        let changed = self.zoom_active != active
-            || self.zoom_locked != locked
-            || (self.zoom_scale - scale).abs() > f64::EPSILON
-            || (self.zoom_view_offset.0 - view_offset.0).abs() > f64::EPSILON
-            || (self.zoom_view_offset.1 - view_offset.1).abs() > f64::EPSILON;
-        if changed {
-            self.zoom_active = active;
-            self.zoom_locked = locked;
-            self.zoom_scale = scale;
-            self.zoom_view_offset = view_offset;
+        if self
+            .view
+            .set_zoom_status(active, locked, scale, view_offset)
+        {
             self.sync_canvas_pointer_to_current_transform();
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
@@ -48,17 +41,17 @@ impl InputState {
 
     /// Returns whether zoom mode is active.
     pub fn zoom_active(&self) -> bool {
-        self.zoom_active
+        self.view.zoom_active()
     }
 
     /// Returns whether zoom view is locked.
     pub fn zoom_locked(&self) -> bool {
-        self.zoom_locked
+        self.view.zoom_locked()
     }
 
     /// Returns the current zoom scale.
     pub fn zoom_scale(&self) -> f64 {
-        self.zoom_scale
+        self.view.zoom_scale()
     }
 }
 

@@ -11,10 +11,8 @@ pub(crate) use core::{
     DrawingStyle, HistoryLimits, IdleHandle, SpotlightMagnificationTrack, TopMenuState,
 };
 pub(crate) use core::{InputEffect, InputEffectDrain};
-pub(crate) use spotlight::{
-    SpotlightFrameRegions, SpotlightMagnificationGesture, SpotlightWheelClaim,
-    SpotlightWheelOutcome,
-};
+pub(in crate::input::state) use spotlight::SpotlightWheelGesture;
+pub(crate) use spotlight::{SpotlightFrameRegions, SpotlightWheelClaim, SpotlightWheelOutcome};
 #[cfg(test)]
 mod tests;
 
@@ -78,7 +76,7 @@ pub use input_hud::{
 
 #[cfg(test)]
 pub(crate) mod test_support {
-    use super::core::{InputStateSeed, Keymap};
+    use super::core::{CanvasIndex, InputStateSeed, Keymap};
     use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig, Shortcut};
     use crate::draw::FontDescriptor;
     use crate::input::{ClickHighlightSettings, InputState};
@@ -136,7 +134,7 @@ pub(crate) mod test_support {
                     ui_visibility: super::UiVisibility::from(&crate::config::UiConfig::default()),
                     boards_config: BoardsConfig::default(),
                     keymap,
-                    max_shapes_per_frame: usize::MAX,
+                    canvas_index: CanvasIndex::from_config(6.0, usize::MAX),
                     click_highlight_settings: ClickHighlightSettings::disabled(),
                     history_limits,
                     presenter_mode_config: PresenterModeConfig::default(),

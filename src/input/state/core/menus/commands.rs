@@ -41,7 +41,7 @@ impl InputState {
         } else if let ContextMenuState::Open { anchor, .. } = &self.context_menu.state {
             *anchor
         } else {
-            self.last_pointer_position
+            self.pointer.screen()
         }
     }
 
@@ -133,7 +133,7 @@ impl InputState {
             MenuCommand::OpenZoomMenu => {
                 let anchor = self.context_submenu_anchor();
                 self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Zoom, None);
-                self.pending_menu_hover_recalc = false;
+                self.pointer.clear_menu_hover_recalc();
                 self.set_context_menu_focus(None);
                 self.focus_first_context_menu_entry();
                 self.dirty_tracker.mark_full();
@@ -161,7 +161,7 @@ impl InputState {
             MenuCommand::OpenPagesMenu => {
                 let anchor = self.context_submenu_anchor();
                 self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Pages, None);
-                self.pending_menu_hover_recalc = false;
+                self.pointer.clear_menu_hover_recalc();
                 self.set_context_menu_focus(None);
                 self.focus_first_context_menu_entry();
                 // Mark full screen dirty to ensure submenu renders completely
@@ -171,7 +171,7 @@ impl InputState {
             MenuCommand::OpenBoardsMenu => {
                 let anchor = self.context_submenu_anchor();
                 self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Boards, None);
-                self.pending_menu_hover_recalc = false;
+                self.pointer.clear_menu_hover_recalc();
                 self.set_context_menu_focus(None);
                 self.focus_first_context_menu_entry();
                 // Mark full screen dirty to ensure submenu renders completely
@@ -183,7 +183,7 @@ impl InputState {
                 let target = self.context_menu.page_target;
                 self.open_context_menu(anchor, Vec::new(), ContextMenuKind::PageMove, None);
                 self.context_menu.page_target = target;
-                self.pending_menu_hover_recalc = false;
+                self.pointer.clear_menu_hover_recalc();
                 self.set_context_menu_focus(None);
                 self.focus_first_context_menu_entry();
                 self.dirty_tracker.mark_full();

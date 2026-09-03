@@ -1410,7 +1410,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
     assert!(input.apply_translation_to_selection(200, 0));
     assert!(
         input
-            .hit_test_all_for_points(&[(205, 5)], input.hit_test_tolerance)
+            .hit_test_all_for_points(&[(205, 5)], input.hit_test_tolerance())
             .contains(&shape_id)
     );
     input.state = DrawingState::MovingSelection {
@@ -1434,7 +1434,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
     assert!(input.has_spatial_index());
     assert!(
         input
-            .hit_test_all_for_points(&[(205, 5)], input.hit_test_tolerance)
+            .hit_test_all_for_points(&[(205, 5)], input.hit_test_tolerance())
             .contains(&shape_id),
         "hit testing should use the restored in-progress selection position"
     );

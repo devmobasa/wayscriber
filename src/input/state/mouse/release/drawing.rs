@@ -113,9 +113,10 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
         matches!(shape, Shape::Freehand { .. }) && pressure_preview_exceeds_final_width;
 
     let mut limit_reached = false;
+    let max_shapes = state.max_shapes_per_frame();
     let addition = {
         let frame = state.boards.active_frame_mut();
-        match frame.try_add_shape_with_id(shape.clone(), state.max_shapes_per_frame) {
+        match frame.try_add_shape_with_id(shape.clone(), max_shapes) {
             Some(new_id) => {
                 if let Some(index) = frame.find_index(new_id) {
                     if let Some(new_shape) = frame.shape(new_id) {
@@ -178,7 +179,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
         if limit_reached {
             warn!(
                 "Shape limit ({}) reached; discarding new shape",
-                state.max_shapes_per_frame
+                state.max_shapes_per_frame()
             );
         }
     }

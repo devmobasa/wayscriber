@@ -229,8 +229,7 @@ fn spotlight_state_with_one_loupe(magnification: f64) -> (InputState, crate::dra
     let mut state = create_test_input_state();
     // A real viewport, so the on-canvas control is placed under the same
     // clamping rules it gets on screen.
-    state.screen_width = 1920;
-    state.screen_height = 1080;
+    state.update_screen_dimensions(1920, 1080);
     let id = state.boards.active_frame_mut().add_shape(Shape::Spotlight {
         cx: 200,
         cy: 200,
@@ -622,8 +621,7 @@ fn a_panned_board_still_places_the_control_where_the_user_can_reach_it() {
 fn maximum_persisted_view_offsets_do_not_overflow_the_selected_control_path() {
     let mut state = create_test_input_state();
     state.switch_board(crate::input::BOARD_ID_WHITEBOARD);
-    state.screen_width = 1920;
-    state.screen_height = 1080;
+    state.update_screen_dimensions(1920, 1080);
     let id = state.boards.active_frame_mut().add_shape(Shape::Spotlight {
         cx: 200,
         cy: 200,

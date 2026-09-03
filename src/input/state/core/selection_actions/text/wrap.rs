@@ -8,7 +8,7 @@ impl InputState {
         let min_width = (size * 2.0).round().max(TEXT_WRAP_MIN_WIDTH as f64) as i32;
         let raw = cursor_x - base_x;
         let mut width = raw.max(1);
-        let screen_width = self.screen_width.min(i32::MAX as u32) as i32;
+        let screen_width = self.view.screen_width().min(i32::MAX as u32) as i32;
         if screen_width > 0 {
             let max_width = screen_width.saturating_sub(base_x).max(1);
             let target_min = min_width.min(max_width);

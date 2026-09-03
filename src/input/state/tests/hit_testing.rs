@@ -60,11 +60,11 @@ fn stored_hit_test_tolerance_is_always_valid() {
 
     for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -1.0, f64::MAX] {
         state.set_hit_test_tolerance(invalid);
-        assert_eq!(state.hit_test_tolerance, 1.0);
+        assert_eq!(state.hit_test_tolerance(), 1.0);
     }
 
     state.set_hit_test_tolerance(25.0);
-    assert_eq!(state.hit_test_tolerance, 25.0);
+    assert_eq!(state.hit_test_tolerance(), 25.0);
 }
 
 #[test]

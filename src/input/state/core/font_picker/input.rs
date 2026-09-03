@@ -118,9 +118,10 @@ impl InputState {
         &self,
     ) -> Option<crate::util::Rect> {
         const SHADOW: f64 = 4.0;
+        let (screen_width, screen_height) = self.view.screen_size();
         let layout = font_picker_layout(
-            self.screen_width,
-            self.screen_height,
+            screen_width,
+            screen_height,
             self.font_picker_families().len(),
         );
         crate::util::Rect::new(
@@ -172,7 +173,8 @@ impl InputState {
     /// Rows the current surface has room to show, floored at one so the scroll
     /// arithmetic always has a window to work with.
     pub(crate) fn font_picker_visible_rows(&self, row_count: usize) -> usize {
-        font_picker_layout(self.screen_width, self.screen_height, row_count)
+        let (screen_width, screen_height) = self.view.screen_size();
+        font_picker_layout(screen_width, screen_height, row_count)
             .visible_rows
             .max(1)
     }
@@ -267,7 +269,8 @@ impl InputState {
             return false;
         }
         let families = self.font_picker_families();
-        let layout = font_picker_layout(self.screen_width, self.screen_height, families.len());
+        let (screen_width, screen_height) = self.view.screen_size();
+        let layout = font_picker_layout(screen_width, screen_height, families.len());
         let Some(index) = font_picker_row_at(layout, &families, self.font_picker.scroll, x, y)
         else {
             return false;
@@ -288,7 +291,8 @@ impl InputState {
             return false;
         }
         let families = self.font_picker_families();
-        let layout = font_picker_layout(self.screen_width, self.screen_height, families.len());
+        let (screen_width, screen_height) = self.view.screen_size();
+        let layout = font_picker_layout(screen_width, screen_height, families.len());
         if let Some(index) = font_picker_row_at(layout, &families, self.font_picker.scroll, x, y) {
             self.set_font_picker_selection(index);
             self.commit_font_picker();
