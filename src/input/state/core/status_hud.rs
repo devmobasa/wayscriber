@@ -167,7 +167,7 @@ impl InputState {
     /// guaranteed to follow and clear the cached affordance.
     pub(crate) fn clear_chrome_hover(&mut self) {
         let status_hovered = self.status_hud.clear_hover();
-        let zoom_hovered = self.zoom_chip.hover.take().is_some();
+        let zoom_hovered = self.zoom_chip.clear_hover();
         if status_hovered || zoom_hovered {
             self.needs_redraw = true;
         }
