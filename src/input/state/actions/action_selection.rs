@@ -176,10 +176,10 @@ impl InputState {
             _ => unreachable!("selection nudge dispatcher called with {action:?}"),
         };
         if self.translate_selection_with_undo(dx, dy) {
-            self.last_selection_axis = Some(axis);
+            self.selection_interaction.note_axis(axis);
             info!("Moved selection {} by {} px", direction, step);
         } else if self.has_selection() {
-            self.last_selection_axis = Some(axis);
+            self.selection_interaction.note_axis(axis);
         }
         true
     }

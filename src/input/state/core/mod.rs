@@ -55,13 +55,13 @@ pub use base::{
     UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction,
 };
 pub(crate) use base::{
-    BoardPickerClickState, InputStateSeed, PolygonClickState, TextClipboardRequest, TextCutTarget,
-    TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress,
+    BoardPickerClickState, InputStateSeed, TextClipboardRequest, TextCutTarget, TextPasteEdit,
+    TextPasteTarget, ToastCommand, ToastPress,
 };
 pub(crate) use base::{
     ClipboardFingerprint, ClipboardPasteRequest, HelperLaunchRequest, PasteAnchor,
     PendingBackendAction, PendingOnboardingUsage, PendingSelectionClipboardPublish,
-    PendingToolbarPersistence, SelectionPublishState, WayscriberClipboardSelection,
+    PendingToolbarPersistence, WayscriberClipboardSelection,
 };
 pub(crate) use base::{InputEffect, InputEffectDrain};
 pub(crate) use base::{KeybindingEditOperation, KeybindingEditRequest};
@@ -113,7 +113,7 @@ pub use region_select::{
     SelectionPolicy,
 };
 pub(crate) use search::fuzzy_score;
-pub use selection::SelectionState;
+pub(crate) use selection::LocalSelectionContext;
 pub(crate) use style::DrawingStyle;
 pub(crate) use text_editing::TextEditing;
 pub use tool_controls::PrecisionEntryState;

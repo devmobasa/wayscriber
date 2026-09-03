@@ -27,7 +27,7 @@ impl InputState {
             }
 
             let mut cloned_shape = shape.shape.clone();
-            Self::translate_shape(&mut cloned_shape, DUPLICATE_OFFSET, DUPLICATE_OFFSET);
+            cloned_shape.translate(DUPLICATE_OFFSET, DUPLICATE_OFFSET);
             let new_id = {
                 let frame = self.boards.active_frame_mut();
                 frame.add_shape(cloned_shape)

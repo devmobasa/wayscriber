@@ -63,7 +63,8 @@ fn copy_paste_selection_centers_shape_at_pointer() {
         .take_pending_clipboard_paste_request()
         .expect("pending paste request");
     let shapes = state
-        .local_selection_shapes_for_fallback(
+        .selection_clipboard_snapshot()
+        .shapes_for_fallback(
             request
                 .local_selection_fallback_generation
                 .expect("local fallback generation"),
@@ -108,7 +109,8 @@ fn immediate_paste_after_copy_uses_pending_local_publish_shapes() {
         .take_pending_clipboard_paste_request()
         .expect("pending paste request");
     let shapes = state
-        .local_selection_shapes_for_pending_publish(request.local_selection_fallback_generation)
+        .selection_clipboard_snapshot()
+        .shapes_for_pending_publish(request.local_selection_fallback_generation)
         .expect("pending local publish selection");
 
     assert_eq!(
@@ -155,12 +157,13 @@ fn stale_publish_completion_is_ignored_for_newer_copy() {
 
     assert!(!state.complete_selection_clipboard_publish(first_publish.generation, None, false));
     assert_eq!(
-        state.local_selection_fallback_generation(),
+        state.selection_clipboard_snapshot().fallback_generation(),
         Some(second_publish.generation)
     );
     assert!(
         state
-            .local_selection_shapes_for_pending_publish(Some(second_publish.generation))
+            .selection_clipboard_snapshot()
+            .shapes_for_pending_publish(Some(second_publish.generation))
             .is_some()
     );
 }
@@ -219,8 +222,11 @@ fn failed_local_clipboard_precedence_clears_when_fingerprint_changes() {
             )
             .is_none()
     );
-    assert!(!state.local_selection_fallback_allowed());
-    assert_eq!(state.local_selection_fallback_generation(), None);
+    assert!(!state.selection_clipboard_snapshot().fallback_allowed());
+    assert_eq!(
+        state.selection_clipboard_snapshot().fallback_generation(),
+        None
+    );
 }
 
 #[test]
@@ -257,7 +263,7 @@ fn failed_local_clipboard_without_failure_fingerprint_supersedes_when_current_is
             )
             .is_none()
     );
-    assert!(!state.local_selection_fallback_allowed());
+    assert!(!state.selection_clipboard_snapshot().fallback_allowed());
 }
 
 #[test]
@@ -285,7 +291,7 @@ fn failed_local_clipboard_without_current_fingerprint_does_not_fast_path() {
             .is_none()
     );
     assert!(
-        state.local_selection_fallback_allowed(),
+        state.selection_clipboard_snapshot().fallback_allowed(),
         "transport failure fallback remains available after normal resolution"
     );
 }
@@ -309,21 +315,24 @@ fn published_selection_allows_local_fallback_until_superseded() {
         .expect("pending private clipboard publish");
 
     state.complete_selection_clipboard_publish(publish.generation, None, true);
-    assert!(state.local_selection_fallback_allowed());
+    assert!(state.selection_clipboard_snapshot().fallback_allowed());
     let generation = state
-        .local_selection_fallback_generation()
+        .selection_clipboard_snapshot()
+        .fallback_generation()
         .expect("fallback generation");
     assert!(
         state
-            .local_selection_shapes_for_fallback(generation)
+            .selection_clipboard_snapshot()
+            .shapes_for_fallback(generation)
             .is_some()
     );
 
     state.mark_selection_clipboard_superseded();
-    assert!(!state.local_selection_fallback_allowed());
+    assert!(!state.selection_clipboard_snapshot().fallback_allowed());
     assert!(
         state
-            .local_selection_shapes_for_fallback(generation)
+            .selection_clipboard_snapshot()
+            .shapes_for_fallback(generation)
             .is_none()
     );
 }
@@ -354,11 +363,12 @@ fn fallback_generation_rejects_newer_local_copy() {
 
     assert_ne!(
         Some(request_generation),
-        state.local_selection_fallback_generation()
+        state.selection_clipboard_snapshot().fallback_generation()
     );
     assert!(
         state
-            .local_selection_shapes_for_fallback(request_generation)
+            .selection_clipboard_snapshot()
+            .shapes_for_fallback(request_generation)
             .is_none()
     );
 }
@@ -404,6 +414,7 @@ fn private_payload_for_request_rejects_newer_same_instance_generation() {
 
     assert!(
         state
+            .selection_clipboard_snapshot()
             .private_payload_shapes_for_request(&request, second_payload)
             .is_none()
     );
@@ -446,6 +457,7 @@ fn private_payload_for_request_uses_payload_when_current_generation_changed() {
     state.handle_action(Action::CopySelection);
 
     let shapes = state
+        .selection_clipboard_snapshot()
         .private_payload_shapes_for_request(&request, first_payload)
         .expect("request-owned private payload shapes");
     assert_eq!(shapes.len(), 1);
@@ -490,6 +502,7 @@ fn same_instance_private_payload_with_no_fallback_generation_uses_payload() {
     );
     assert!(
         state
+            .selection_clipboard_snapshot()
             .private_payload_shapes_for_request(&request, payload)
             .is_some()
     );
@@ -529,17 +542,18 @@ fn request_generation_supersede_ignores_newer_local_copy() {
     state.set_selection(vec![second_id]);
     state.handle_action(Action::CopySelection);
     let current_generation = state
-        .local_selection_fallback_generation()
+        .selection_clipboard_snapshot()
+        .fallback_generation()
         .expect("current generation");
 
     assert_ne!(request_generation, current_generation);
     state.mark_selection_clipboard_superseded_for_generation(Some(request_generation));
 
     assert_eq!(
-        state.local_selection_fallback_generation(),
+        state.selection_clipboard_snapshot().fallback_generation(),
         Some(current_generation)
     );
-    assert!(state.local_selection_fallback_allowed());
+    assert!(state.selection_clipboard_snapshot().fallback_allowed());
 }
 
 #[test]
@@ -597,14 +611,19 @@ fn failed_local_fast_path_rejects_newer_generation() {
         false,
     );
 
-    assert!(!state.has_failed_local_selection_for_generation(request_generation));
+    assert!(
+        state
+            .selection_clipboard_snapshot()
+            .failed_probe(request_generation)
+            .is_none()
+    );
     assert!(
         state
             .failed_local_selection_after_fingerprint_probe(request_generation, Some(fingerprint))
             .is_none()
     );
     assert_eq!(
-        state.local_selection_fallback_generation(),
+        state.selection_clipboard_snapshot().fallback_generation(),
         Some(second_publish.generation)
     );
 }
@@ -667,7 +686,10 @@ fn copy_selection_of_only_locked_shapes_leaves_clipboard_empty() {
     state.set_selection(vec![locked_id]);
 
     assert_eq!(state.copy_selection(), 0);
-    assert!(state.selection_clipboard_is_empty());
+    assert_eq!(
+        state.selection_clipboard_snapshot().fallback_generation(),
+        None
+    );
 }
 
 #[test]

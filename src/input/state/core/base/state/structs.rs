@@ -1,16 +1,18 @@
-use super::super::super::{index::SpatialIndexCache, selection::SelectionState};
+use super::super::super::{
+    index::SpatialIndexCache,
+    selection::{SelectionClipboard, SelectionInteraction},
+};
 use super::super::InputEffectOutbox;
 use super::super::toast_queue::ToastQueue;
 use super::super::types::{
     BlockedActionFeedback, CompositorCapabilities, DrawingState, PendingBoardDelete,
-    PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete, PolygonClickState,
-    SelectionAxis, SelectionPublishState, StatusChangeHighlight, UiToastState,
+    PendingOnboardingUsage, PendingPageDelete, StatusChangeHighlight, UiToastState,
 };
 use crate::config::{
     Action, PresenterModeConfig, ResolvedToolbarItems, Shortcut, ToolbarItemId,
     ToolbarItemOrderGroup, ToolbarItemsConfig,
 };
-use crate::draw::{Color, DirtyTracker, Shape, ShapeId};
+use crate::draw::{Color, DirtyTracker, ShapeId};
 use crate::input::BoardManager;
 use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest};
 use crate::input::state::highlight::ClickHighlightState;
@@ -234,10 +236,8 @@ pub struct InputState {
     pub(crate) click_highlight: ClickHighlightState,
     /// On-screen input HUD (keystroke/click chips) state
     pub(crate) input_hud: InputHudState,
-    /// Current selection information
-    pub selection_state: SelectionState,
-    /// Last axis used for selection nudges (used to resolve Home/End axis)
-    pub last_selection_axis: Option<SelectionAxis>,
+    /// Selection membership, nudge direction, and polygon click timing.
+    pub(in crate::input::state) selection_interaction: SelectionInteraction,
     /// Lifecycle, target, and cached layout for the context menu.
     pub(crate) context_menu: crate::input::state::core::menus::ContextMenuPanel,
 
@@ -268,22 +268,10 @@ pub struct InputState {
     pub(crate) ui_toast_bounds: Option<(f64, f64, f64, f64)>,
     /// Cached bounds of up to two rendered toast action chips.
     pub(crate) ui_toast_action_bounds: [Option<(f64, f64, f64, f64)>; 2],
-    /// Copied selection shapes for paste operations
-    pub(in crate::input::state::core) selection_clipboard: Option<Vec<Shape>>,
-    /// Local clipboard generation for the copied shape selection.
-    pub(in crate::input::state::core) selection_clipboard_generation: u64,
-    /// System clipboard publication state for the current local selection.
-    pub(in crate::input::state::core) selection_publish_state: SelectionPublishState,
-    /// Per-process id embedded in private Wayscriber clipboard payloads.
-    pub(in crate::input::state::core) clipboard_app_instance_id: String,
-    /// Monotonic id source for paste requests.
-    pub(in crate::input::state::core) clipboard_paste_request_counter: u64,
-    /// Latest paste request id whose completion should still be accepted.
-    pub(in crate::input::state::core) active_clipboard_paste_request_id: Option<u64>,
+    /// Local selection clipboard, publication, paste request, and image fallback state.
+    pub(in crate::input::state::core) selection_clipboard: SelectionClipboard,
     /// Last capture path (for quick open-folder action)
     pub(in crate::input::state::core) last_capture_path: Option<PathBuf>,
-    /// Last freeform polygon point click used for double-click completion.
-    pub(crate) last_polygon_click: Option<PolygonClickState>,
 
     /// Spatial grid plus guarded ShapeId-to-z-order indices for large-frame hit-testing.
     pub(in crate::input::state::core) spatial_index: Option<SpatialIndexCache>,
@@ -325,8 +313,6 @@ pub struct InputState {
     pub(crate) capability_toast_caps: Option<CompositorCapabilities>,
     /// Blocked action visual feedback state (red flash)
     pub(crate) blocked_action_feedback: Option<BlockedActionFeedback>,
-    /// Pending clipboard fallback for failed copy operations
-    pub(crate) pending_clipboard_fallback: Option<PendingClipboardFallback>,
     /// Recently deleted boards available for undo (with deletion timestamp)
     pub(in crate::input::state::core) deleted_boards: Vec<(BoardRestoreRequest, Instant)>,
     /// Status bar change highlight animation state

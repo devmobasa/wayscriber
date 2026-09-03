@@ -228,9 +228,6 @@ mod tests {
     use super::*;
     use crate::config::KeybindingsConfig;
     use crate::draw::{Shape, ShapeId};
-    use crate::input::state::SelectionState;
-
-    use std::collections::HashSet;
 
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();
@@ -254,11 +251,7 @@ mod tests {
     }
 
     fn set_selection_state(state: &mut InputState, ids: Vec<ShapeId>) {
-        let shape_ids_set = ids.iter().copied().collect::<HashSet<_>>();
-        state.selection_state = SelectionState::Active {
-            shape_ids: ids,
-            shape_ids_set,
-        };
+        state.selection_interaction.set(ids);
     }
 
     #[test]
@@ -276,7 +269,7 @@ mod tests {
         state.set_selection(vec![shape_id]);
         assert!(state.show_properties_panel());
 
-        state.selection_state = SelectionState::None;
+        state.selection_interaction.clear();
         state.refresh_properties_panel();
 
         assert!(state.properties_panel().is_none());

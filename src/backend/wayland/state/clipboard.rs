@@ -163,14 +163,11 @@ impl WaylandState {
         );
         self.suppress_focus_exit_for(Duration::from_millis(1500));
 
-        let pending_shapes = self.input_state.local_selection_shapes_for_pending_publish(
-            request.local_selection_fallback_generation,
-        );
-        let failed_probe = self
-            .input_state
-            .failed_local_selection_probe_for_generation(
-                request.local_selection_fallback_generation,
-            )
+        let local_selection = self.input_state.selection_clipboard_snapshot();
+        let pending_shapes =
+            local_selection.shapes_for_pending_publish(request.local_selection_fallback_generation);
+        let failed_probe = local_selection
+            .failed_probe(request.local_selection_fallback_generation)
             .map(|(generation, expected)| FailedLocalSelectionProbe {
                 generation,
                 expected,
@@ -180,7 +177,8 @@ impl WaylandState {
     }
 
     fn apply_clipboard_paste_completion(&mut self, completion: ClipboardPasteCompletion) {
-        let active_request_id = self.input_state.active_clipboard_paste_request_id();
+        let local_selection = self.input_state.selection_clipboard_snapshot();
+        let active_request_id = local_selection.active_paste_request_id();
         log::info!(
             "Applying clipboard paste completion {} with active_request={:?}: {}",
             completion.request.id,
@@ -203,9 +201,7 @@ impl WaylandState {
                 );
                 return;
             }
-            let local_shapes = self
-                .input_state
-                .local_selection_shapes_for_fallback(generation);
+            let local_shapes = local_selection.shapes_for_fallback(generation);
             let plan = transfer::plan_after_fingerprint_probe(
                 completion.request,
                 generation,
@@ -220,12 +216,10 @@ impl WaylandState {
             ClipboardPasteResult::PrivateSelection(payload)
                 if active_request_id == Some(completion.request.id) =>
             {
-                let payload_matches_local = self
-                    .input_state
+                let payload_matches_local = local_selection
                     .private_payload_matches_request_selection(&completion.request, payload);
-                let same_instance = self.input_state.private_payload_is_same_instance(payload);
-                let shapes = self
-                    .input_state
+                let same_instance = local_selection.private_payload_is_same_instance(payload);
+                let shapes = local_selection
                     .private_payload_shapes_for_request(&completion.request, payload.clone());
                 Some(transfer::PrivateSelectionResolution {
                     payload_matches_local,
@@ -458,7 +452,8 @@ impl WaylandState {
         if let Some(generation) = request.local_selection_fallback_generation
             && let Some(shapes) = self
                 .input_state
-                .local_selection_shapes_for_fallback(generation)
+                .selection_clipboard_snapshot()
+                .shapes_for_fallback(generation)
         {
             let pasted = self
                 .input_state

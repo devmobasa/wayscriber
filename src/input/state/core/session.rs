@@ -1,8 +1,8 @@
 use super::base::{DrawingState, InputState};
 use super::index::SpatialIndexCache;
+use super::selection::PolygonClickState;
 use super::{ColorPickerPopupLayout, ColorPickerPopupState};
 use crate::draw::{Color, DirtyTracker, ShapeId};
-use crate::input::state::core::base::PolygonClickState;
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::{BoardManager, MouseButton};
 use crate::util::Rect;
@@ -48,7 +48,7 @@ impl ActiveInteractionRollback {
             session_dirty: input.session_dirty,
             dirty_tracker: input.dirty_tracker.clone(),
             last_provisional_bounds: input.last_provisional_bounds,
-            last_polygon_click: input.last_polygon_click,
+            last_polygon_click: input.selection_interaction.polygon_click(),
             hit_test_cache: input.hit_test_cache.clone(),
             spatial_index: input.spatial_index.clone(),
         }
@@ -69,7 +69,9 @@ impl ActiveInteractionRollback {
         input.session_dirty = self.session_dirty;
         input.dirty_tracker = self.dirty_tracker;
         input.last_provisional_bounds = self.last_provisional_bounds;
-        input.last_polygon_click = self.last_polygon_click;
+        input
+            .selection_interaction
+            .restore_polygon_click(self.last_polygon_click);
         input.hit_test_cache = self.hit_test_cache;
         input.spatial_index = self.spatial_index;
     }

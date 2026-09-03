@@ -1,6 +1,6 @@
 use super::super::base::{
-    BLOCKED_ACTION_DURATION_MS, BlockedActionFeedback, InputState, PendingClipboardFallback, Toast,
-    ToastCommand, ToastPress, ToastPriority, ToastPushOutcome,
+    BLOCKED_ACTION_DURATION_MS, BlockedActionFeedback, InputState, Toast, ToastCommand, ToastPress,
+    ToastPriority, ToastPushOutcome,
 };
 use crate::capture::{
     ImageOperationKind,
@@ -228,19 +228,19 @@ impl InputState {
         operation: ImageOperationKind,
         exit_after_save: bool,
     ) {
-        self.pending_clipboard_fallback = Some(PendingClipboardFallback {
+        self.selection_clipboard.set_pending_image_fallback(
             image_data,
             save_config,
             operation,
             exit_after_save,
-        });
+        );
     }
 
     /// Save pending clipboard fallback image to file.
     /// On success, clears the fallback and exits if exit-after-capture was enabled.
     /// On error, retains it for retry.
     pub(crate) fn save_pending_clipboard_to_file(&mut self) {
-        let Some(fallback) = self.pending_clipboard_fallback.take() else {
+        let Some(fallback) = self.selection_clipboard.take_pending_image_fallback() else {
             self.push_toast(
                 ToastPriority::Info,
                 "capture.save",
@@ -289,7 +289,8 @@ impl InputState {
                     message
                 );
                 // Restore fallback so user can retry
-                self.pending_clipboard_fallback = Some(fallback);
+                self.selection_clipboard
+                    .restore_pending_image_fallback(fallback);
                 self.push_toast(
                     ToastPriority::Critical,
                     "capture.save",
@@ -817,7 +818,7 @@ mod tests {
             "canvas fallback failure should not mention screenshot: {}",
             toast.message
         );
-        assert!(state.pending_clipboard_fallback.is_some());
+        assert!(state.selection_clipboard.has_pending_image_fallback());
         assert!(state.blocked_action_feedback.is_some());
     }
 

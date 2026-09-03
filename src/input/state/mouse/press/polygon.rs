@@ -5,7 +5,6 @@ use crate::input::Tool;
 use crate::input::state::{Toast, ToastPriority};
 use std::time::Instant;
 
-use super::super::super::core::PolygonClickState;
 use super::super::super::{DrawingState, InputState};
 use super::super::{TEXT_DOUBLE_CLICK_DISTANCE, TEXT_DOUBLE_CLICK_MS};
 
@@ -15,11 +14,8 @@ impl InputState {
         let color = self.color_for_tool(Tool::FreeformPolygon);
         let thick = self.thickness_for_tool(Tool::FreeformPolygon);
         self.clear_selection();
-        self.last_polygon_click = Some(PolygonClickState {
-            x,
-            y,
-            at: Instant::now(),
-        });
+        self.selection_interaction
+            .record_polygon_click(x, y, Instant::now());
         self.state = DrawingState::BuildingPolygon {
             points: vec![(x, y)],
             preview: None,
@@ -38,21 +34,18 @@ impl InputState {
     }
 
     fn should_finish_building_polygon_on_click(&self, x: i32, y: i32) -> bool {
-        let Some(last) = self.last_polygon_click else {
-            return false;
+        let has_minimum_points = match &self.state {
+            DrawingState::BuildingPolygon { points, .. } => has_minimum_distinct_points(points),
+            _ => false,
         };
-        if Instant::now().duration_since(last.at).as_millis() > TEXT_DOUBLE_CLICK_MS as u128 {
-            return false;
-        }
-        if (x - last.x).abs() > TEXT_DOUBLE_CLICK_DISTANCE
-            || (y - last.y).abs() > TEXT_DOUBLE_CLICK_DISTANCE
-        {
-            return false;
-        }
-        let DrawingState::BuildingPolygon { points, .. } = &self.state else {
-            return false;
-        };
-        has_minimum_distinct_points(points)
+        self.selection_interaction.polygon_click_completes(
+            x,
+            y,
+            Instant::now(),
+            TEXT_DOUBLE_CLICK_MS,
+            TEXT_DOUBLE_CLICK_DISTANCE,
+            has_minimum_points,
+        )
     }
 
     pub(crate) fn handle_building_polygon_left_click(&mut self, x: i32, y: i32) {
@@ -72,11 +65,8 @@ impl InputState {
         };
         points.push((x, y));
         *preview = None;
-        self.last_polygon_click = Some(PolygonClickState {
-            x,
-            y,
-            at: Instant::now(),
-        });
+        self.selection_interaction
+            .record_polygon_click(x, y, Instant::now());
         self.update_provisional_dirty(x, y);
         self.needs_redraw = true;
     }
@@ -88,11 +78,11 @@ impl InputState {
         let _ = points.pop();
         if points.is_empty() {
             self.clear_provisional_dirty();
-            self.last_polygon_click = None;
+            self.selection_interaction.clear_polygon_click();
             self.state = DrawingState::Idle;
         } else {
             let (x, y) = self.canvas_pointer_position();
-            self.last_polygon_click = None;
+            self.selection_interaction.clear_polygon_click();
             self.update_provisional_dirty(x, y);
         }
         self.needs_redraw = true;
@@ -113,7 +103,7 @@ impl InputState {
         };
 
         self.clear_provisional_dirty();
-        self.last_polygon_click = None;
+        self.selection_interaction.clear_polygon_click();
         if !has_minimum_distinct_points(&points) {
             self.needs_redraw = true;
             return;
