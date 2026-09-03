@@ -1,7 +1,4 @@
-use super::super::super::{
-    color_picker_popup::ColorPickerPopupState, radial_menu::RadialMenuState,
-    selection::SelectionState,
-};
+use super::super::super::{radial_menu::RadialMenuState, selection::SelectionState};
 use super::super::types::{
     CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
     PendingOnboardingUsage, PressureThicknessEditMode, PressureThicknessEntryMode, TextInputMode,
@@ -215,10 +212,7 @@ impl InputState {
             last_selection_axis: None,
             context_menu: Default::default(),
 
-            color_picker_popup_state: ColorPickerPopupState::Hidden,
-            color_picker_popup_layout: None,
-            color_picker_popup_generation: 0,
-            color_picker_popup_pressed_action: None,
+            color_picker_popup: Default::default(),
             radial_menu_state: RadialMenuState::Hidden,
             radial_menu_layout: None,
             radial_menu_mouse_binding: RadialMenuMouseBinding::Middle,

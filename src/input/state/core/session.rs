@@ -62,8 +62,8 @@ impl ActiveInteractionRollback {
             text_input_mode: input.text_input_mode,
             text_edit_target: input.text_edit_target.clone(),
             text_edit_entry_feedback: input.text_edit_entry_feedback.clone(),
-            color_picker_popup_state: input.color_picker_popup_state.clone(),
-            color_picker_popup_layout: input.color_picker_popup_layout,
+            color_picker_popup_state: input.color_picker_popup.state.clone(),
+            color_picker_popup_layout: input.color_picker_popup.layout,
             active_preset_slot: input.active_preset_slot,
             click_highlight: input.click_highlight.clone(),
             needs_redraw: input.needs_redraw,
@@ -95,8 +95,8 @@ impl ActiveInteractionRollback {
         input.text_input_mode = self.text_input_mode;
         input.text_edit_target = self.text_edit_target;
         input.text_edit_entry_feedback = self.text_edit_entry_feedback;
-        input.color_picker_popup_state = self.color_picker_popup_state;
-        input.color_picker_popup_layout = self.color_picker_popup_layout;
+        input.color_picker_popup.state = self.color_picker_popup_state;
+        input.color_picker_popup.layout = self.color_picker_popup_layout;
         input.active_preset_slot = self.active_preset_slot;
         input.click_highlight = self.click_highlight;
         input.needs_redraw = self.needs_redraw;

@@ -63,7 +63,7 @@ pub(crate) use captured_image::BoardPasteTarget;
 pub(crate) use color_picker_popup::HexPasteTarget;
 pub use color_picker_popup::PickerDrag;
 pub use color_picker_popup::{
-    ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState,
+    ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupPanel, ColorPickerPopupState,
     POPUP_HEIGHT as COLOR_PICKER_POPUP_HEIGHT, POPUP_WIDTH as COLOR_PICKER_POPUP_WIDTH,
     PREVIEW_SIZE as COLOR_PICKER_PREVIEW_SIZE,
     RECENT_SWATCH_COUNT as COLOR_PICKER_RECENT_SWATCH_COUNT,

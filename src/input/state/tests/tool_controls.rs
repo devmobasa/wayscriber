@@ -783,7 +783,8 @@ fn default_button_appears_only_for_slots_the_shipped_palette_defines() {
     assert!(!state.color_picker_popup_shows_default_button());
     assert!(
         state
-            .color_picker_popup_layout()
+            .color_picker_popup
+            .layout()
             .expect("layout")
             .default_btn
             .is_none()

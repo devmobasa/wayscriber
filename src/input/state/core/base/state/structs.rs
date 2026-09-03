@@ -1,5 +1,4 @@
 use super::super::super::{
-    color_picker_popup::{ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState},
     index::SpatialIndexCache,
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
     radial_menu::{RadialMenuLayout, RadialMenuState},
@@ -339,14 +338,8 @@ pub struct InputState {
     /// Lifecycle, target, and cached layout for the context menu.
     pub(crate) context_menu: crate::input::state::core::menus::ContextMenuPanel,
 
-    /// Current color picker popup state
-    pub color_picker_popup_state: ColorPickerPopupState,
-    /// Cached layout details for the color picker popup
-    pub color_picker_popup_layout: Option<ColorPickerPopupLayout>,
-    /// Identity of the currently open color picker popup.
-    pub(in crate::input::state) color_picker_popup_generation: u64,
-    /// Popup action button owned by the current left-button press.
-    pub(in crate::input::state) color_picker_popup_pressed_action: Option<ColorPickerPopupAction>,
+    /// Modal state, cached geometry, and press identity for the color picker popup.
+    pub color_picker_popup: crate::input::state::core::ColorPickerPopupPanel,
     /// Current radial menu state
     pub radial_menu_state: RadialMenuState,
     /// Cached layout details for the radial menu

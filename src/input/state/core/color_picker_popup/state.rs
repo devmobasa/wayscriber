@@ -42,7 +42,7 @@ impl InputState {
     /// Returns true if the color picker popup is open.
     pub fn is_color_picker_popup_open(&self) -> bool {
         matches!(
-            self.color_picker_popup_state,
+            self.color_picker_popup.state,
             ColorPickerPopupState::Open { .. }
         )
     }
@@ -90,10 +90,10 @@ impl InputState {
         let tool = self.active_tool();
         let hex = color_to_hex(color);
 
-        self.color_picker_popup_generation = self.color_picker_popup_generation.wrapping_add(1);
-        self.color_picker_popup_pressed_action = None;
+        self.color_picker_popup.generation = self.color_picker_popup.generation.wrapping_add(1);
+        self.color_picker_popup.pressed_action = None;
 
-        self.color_picker_popup_state = ColorPickerPopupState::Open {
+        self.color_picker_popup.state = ColorPickerPopupState::Open {
             tool,
             slot,
             original_color: color,
@@ -116,7 +116,7 @@ impl InputState {
     pub fn color_picker_popup_title(&self) -> Cow<'static, str> {
         let ColorPickerPopupState::Open {
             slot: Some(index), ..
-        } = &self.color_picker_popup_state
+        } = &self.color_picker_popup.state
         else {
             return Cow::Borrowed("Select Color");
         };
@@ -128,7 +128,7 @@ impl InputState {
 
     /// The quick-color slot the open popup edits, if any.
     pub fn color_picker_popup_slot(&self) -> Option<usize> {
-        match &self.color_picker_popup_state {
+        match &self.color_picker_popup.state {
             ColorPickerPopupState::Open { slot, .. } => *slot,
             ColorPickerPopupState::Hidden => None,
         }
@@ -152,7 +152,7 @@ impl InputState {
     /// swatch in step with the gradient drag; they are reverted on cancel and
     /// persisted on accept.
     fn color_picker_popup_preview(&mut self, color: Color) {
-        match self.color_picker_popup_state {
+        match self.color_picker_popup.state {
             ColorPickerPopupState::Open {
                 slot: Some(index), ..
             } => {
@@ -178,7 +178,7 @@ impl InputState {
             slot,
             original_color,
             ..
-        } = &self.color_picker_popup_state
+        } = &self.color_picker_popup.state
             // A recolor edits durable config, so even an implicit close (light
             // mode, session restore) must not leave the palette changed and
             // unsaved. A tool-color preview stays put, as callers expect.
@@ -191,9 +191,9 @@ impl InputState {
             // recolor puts the swatch's own color back.
             self.color_picker_popup_preview(color);
         }
-        self.color_picker_popup_state = ColorPickerPopupState::Hidden;
-        self.color_picker_popup_layout = None;
-        self.color_picker_popup_pressed_action = None;
+        self.color_picker_popup.state = ColorPickerPopupState::Hidden;
+        self.color_picker_popup.layout = None;
+        self.color_picker_popup.pressed_action = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -209,7 +209,7 @@ impl InputState {
             current_color,
             hex_buffer,
             ..
-        } = &mut self.color_picker_popup_state
+        } = &mut self.color_picker_popup.state
         {
             // Applying is also a commit boundary for valid buffered input.
             // Three-digit hex is intentionally not previewed while typing, so
@@ -258,16 +258,16 @@ impl InputState {
                 }
             }
         }
-        self.color_picker_popup_state = ColorPickerPopupState::Hidden;
-        self.color_picker_popup_layout = None;
-        self.color_picker_popup_pressed_action = None;
+        self.color_picker_popup.state = ColorPickerPopupState::Hidden;
+        self.color_picker_popup.layout = None;
+        self.color_picker_popup.pressed_action = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
 
     /// Gets the current color in the popup (if open).
     pub fn color_picker_popup_current_color(&self) -> Option<Color> {
-        match &self.color_picker_popup_state {
+        match &self.color_picker_popup.state {
             ColorPickerPopupState::Open { current_color, .. } => Some(*current_color),
             ColorPickerPopupState::Hidden => None,
         }
@@ -275,7 +275,7 @@ impl InputState {
 
     pub(crate) fn color_picker_popup_generation(&self) -> Option<u64> {
         self.is_color_picker_popup_open()
-            .then_some(self.color_picker_popup_generation)
+            .then_some(self.color_picker_popup.generation)
     }
 
     pub(crate) fn color_picker_popup_generation_is_current(&self, generation: u64) -> bool {
@@ -292,34 +292,35 @@ impl InputState {
         y: i32,
     ) -> bool {
         let action = self
-            .color_picker_popup_layout
+            .color_picker_popup
+            .layout
             .and_then(|layout| layout.action_at(x as f64, y as f64));
-        self.color_picker_popup_pressed_action = action;
+        self.color_picker_popup.pressed_action = action;
         action.is_some()
     }
 
     pub(in crate::input::state) fn color_picker_popup_clear_action_press(&mut self) {
-        self.color_picker_popup_pressed_action = None;
+        self.color_picker_popup.pressed_action = None;
     }
 
     pub(in crate::input::state) fn color_picker_popup_take_action_press(
         &mut self,
     ) -> Option<ColorPickerPopupAction> {
-        self.color_picker_popup_pressed_action.take()
+        self.color_picker_popup.pressed_action.take()
     }
 
     /// Gets the cached layout for the color picker popup.
     pub fn color_picker_popup_layout(&self) -> Option<ColorPickerPopupLayout> {
-        self.color_picker_popup_layout
+        self.color_picker_popup.layout
     }
 
     /// Updates the layout for the color picker popup.
     pub fn update_color_picker_popup_layout(&mut self, screen_width: u32, screen_height: u32) {
         if !self.is_color_picker_popup_open() {
-            self.color_picker_popup_layout = None;
+            self.color_picker_popup.layout = None;
             return;
         }
-        self.color_picker_popup_layout = Some(ColorPickerPopupLayout::compute(
+        self.color_picker_popup.layout = Some(ColorPickerPopupLayout::compute(
             screen_width,
             screen_height,
             self.color_picker_popup_shows_default_button(),
@@ -353,7 +354,7 @@ impl InputState {
 
     /// Clears the cached color picker popup layout.
     pub fn clear_color_picker_popup_layout(&mut self) {
-        self.color_picker_popup_layout = None;
+        self.color_picker_popup.layout = None;
     }
 
     /// Sets the current color from a position in the saturation/value square.
@@ -376,7 +377,7 @@ impl InputState {
     /// on the square or the hue bar would silently reset a translucent color to
     /// fully opaque.
     fn color_picker_popup_with_alpha(&self, color: Color) -> Color {
-        match &self.color_picker_popup_state {
+        match &self.color_picker_popup.state {
             ColorPickerPopupState::Open { current_color, .. } => Color {
                 a: current_color.a,
                 ..color
@@ -388,7 +389,7 @@ impl InputState {
     /// Sets the color's alpha from a position on the alpha bar.
     pub fn color_picker_popup_set_alpha(&mut self, norm_x: f64) {
         let alpha = norm_x.clamp(0.0, 1.0);
-        let ColorPickerPopupState::Open { current_color, .. } = &self.color_picker_popup_state
+        let ColorPickerPopupState::Open { current_color, .. } = &self.color_picker_popup.state
         else {
             return;
         };
@@ -401,7 +402,7 @@ impl InputState {
 
     /// The live color's alpha, if the popup is open.
     pub fn color_picker_popup_alpha(&self) -> Option<f64> {
-        match &self.color_picker_popup_state {
+        match &self.color_picker_popup.state {
             ColorPickerPopupState::Open { current_color, .. } => Some(current_color.a),
             ColorPickerPopupState::Hidden => None,
         }
@@ -416,7 +417,7 @@ impl InputState {
             current_color,
             hex_buffer,
             ..
-        } = &mut self.color_picker_popup_state
+        } = &mut self.color_picker_popup.state
         {
             *current_color = color;
             *hex_buffer = color_to_hex(color);
@@ -440,7 +441,7 @@ impl InputState {
             hex_editing,
             hex_selected,
             ..
-        } = &mut self.color_picker_popup_state
+        } = &mut self.color_picker_popup.state
         {
             *current_color = color;
             *hex_buffer = color_to_hex(color);
@@ -459,7 +460,7 @@ impl InputState {
         if let ColorPickerPopupState::Open {
             dragging: drag_state,
             ..
-        } = &mut self.color_picker_popup_state
+        } = &mut self.color_picker_popup.state
         {
             *drag_state = dragging;
         }
@@ -502,7 +503,7 @@ impl InputState {
 
     /// The picker area a drag is steering, if one is in flight.
     pub fn color_picker_popup_drag_target(&self) -> Option<PickerDrag> {
-        match &self.color_picker_popup_state {
+        match &self.color_picker_popup.state {
             ColorPickerPopupState::Open { dragging, .. } => *dragging,
             ColorPickerPopupState::Hidden => None,
         }
@@ -516,7 +517,7 @@ impl InputState {
             hex_selected,
             current_color,
             ..
-        } = &mut self.color_picker_popup_state
+        } = &mut self.color_picker_popup.state
         {
             *hex_editing = editing;
             // When starting to edit, ensure buffer matches current color and select all
@@ -533,7 +534,7 @@ impl InputState {
     /// Returns true if the hex input is currently being edited.
     pub fn color_picker_popup_is_hex_editing(&self) -> bool {
         matches!(
-            &self.color_picker_popup_state,
+            &self.color_picker_popup.state,
             ColorPickerPopupState::Open {
                 hex_editing: true,
                 ..
@@ -544,7 +545,7 @@ impl InputState {
     /// Returns true if the hex input text is currently selected (replace-on-type).
     pub fn color_picker_popup_hex_selected(&self) -> bool {
         matches!(
-            &self.color_picker_popup_state,
+            &self.color_picker_popup.state,
             ColorPickerPopupState::Open {
                 hex_selected: true,
                 ..
@@ -562,7 +563,7 @@ impl InputState {
                 hex_selected,
                 current_color,
                 ..
-            } = &mut self.color_picker_popup_state
+            } = &mut self.color_picker_popup.state
             else {
                 return;
             };
@@ -621,7 +622,7 @@ impl InputState {
                 hex_selected,
                 current_color,
                 ..
-            } = &mut self.color_picker_popup_state
+            } = &mut self.color_picker_popup.state
                 && *hex_editing
             {
                 // If text is selected, backspace clears all
@@ -656,7 +657,7 @@ impl InputState {
                 hex_editing,
                 current_color,
                 ..
-            } = &mut self.color_picker_popup_state
+            } = &mut self.color_picker_popup.state
             else {
                 return false;
             };
@@ -690,7 +691,7 @@ impl InputState {
 
     /// Gets the current hex buffer value.
     pub fn color_picker_popup_hex_buffer(&self) -> Option<&str> {
-        match &self.color_picker_popup_state {
+        match &self.color_picker_popup.state {
             ColorPickerPopupState::Open { hex_buffer, .. } => Some(hex_buffer.as_str()),
             ColorPickerPopupState::Hidden => None,
         }
@@ -715,7 +716,7 @@ impl InputState {
             current_color,
             picker_hsv,
             ..
-        } = &self.color_picker_popup_state
+        } = &self.color_picker_popup.state
         else {
             return None;
         };
@@ -735,7 +736,7 @@ impl InputState {
     }
 
     fn color_picker_popup_remember_hsv(&mut self, hsv: (f64, f64, f64)) {
-        if let ColorPickerPopupState::Open { picker_hsv, .. } = &mut self.color_picker_popup_state {
+        if let ColorPickerPopupState::Open { picker_hsv, .. } = &mut self.color_picker_popup.state {
             *picker_hsv = hsv;
         }
     }
@@ -763,9 +764,9 @@ impl InputState {
 
     /// Sets the hover position within the popup.
     pub fn color_picker_popup_set_hover(&mut self, pos: Option<(f64, f64)>) {
-        let layout = self.color_picker_popup_layout;
+        let layout = self.color_picker_popup.layout;
         let visual_changed = if let ColorPickerPopupState::Open { hover_pos, .. } =
-            &mut self.color_picker_popup_state
+            &mut self.color_picker_popup.state
         {
             let previous_action =
                 layout.and_then(|layout| hover_pos.and_then(|(x, y)| layout.action_at(x, y)));
@@ -783,7 +784,7 @@ impl InputState {
 
     /// Gets the current hover position within the popup.
     pub fn color_picker_popup_hover(&self) -> Option<(f64, f64)> {
-        match &self.color_picker_popup_state {
+        match &self.color_picker_popup.state {
             ColorPickerPopupState::Open { hover_pos, .. } => *hover_pos,
             ColorPickerPopupState::Hidden => None,
         }
