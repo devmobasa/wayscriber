@@ -6,18 +6,38 @@ pub(crate) const MAX_PAGES: usize = 10;
 /// Visibility, navigation, search, and pointer bookkeeping for the help overlay.
 #[derive(Debug, Default)]
 pub struct HelpOverlayState {
-    pub visible: bool,
-    pub page: usize,
-    pub search: String,
-    pub search_cursor: usize,
-    pub scroll: f64,
-    pub scroll_max: f64,
-    pub(crate) pending_presses: Vec<(HelpOverlayPressSource, HelpOverlayClick)>,
-    pub(crate) consume_only_presses: Vec<HelpOverlayPressSource>,
-    pub quick_mode: bool,
+    pub(in crate::input::state) visible: bool,
+    pub(in crate::input::state) page: usize,
+    pub(in crate::input::state) search: String,
+    pub(in crate::input::state) search_cursor: usize,
+    pub(in crate::input::state) scroll: f64,
+    pub(in crate::input::state) scroll_max: f64,
+    pub(in crate::input::state) pending_presses: Vec<(HelpOverlayPressSource, HelpOverlayClick)>,
+    pub(in crate::input::state) consume_only_presses: Vec<HelpOverlayPressSource>,
+    pub(in crate::input::state) quick_mode: bool,
 }
 
 impl HelpOverlayState {
+    pub fn is_visible(&self) -> bool {
+        self.visible
+    }
+
+    pub fn page(&self) -> usize {
+        self.page
+    }
+
+    pub fn query(&self) -> &str {
+        &self.search
+    }
+
+    pub fn scroll(&self) -> f64 {
+        self.scroll
+    }
+
+    pub fn is_quick_mode(&self) -> bool {
+        self.quick_mode
+    }
+
     pub(crate) fn open(&mut self, quick_mode: bool) {
         self.visible = true;
         self.quick_mode = quick_mode;
@@ -170,40 +190,6 @@ impl HelpOverlayState {
         true
     }
 
-    pub(crate) fn clear_search_text(&mut self) {
-        self.search.clear();
-        self.scroll = 0.0;
-    }
-
-    pub(crate) fn push_search_char(&mut self, ch: char) {
-        self.search.push(ch);
-        self.scroll = 0.0;
-    }
-
-    pub(crate) fn pop_search_char(&mut self) -> bool {
-        if self.search.pop().is_none() {
-            return false;
-        }
-        self.scroll = 0.0;
-        true
-    }
-
-    pub(crate) fn move_search_cursor_left(&mut self) -> bool {
-        if self.search_cursor == 0 {
-            return false;
-        }
-        self.search_cursor -= 1;
-        true
-    }
-
-    pub(crate) fn move_search_cursor_right(&mut self) -> bool {
-        if self.search_cursor >= self.search.chars().count() {
-            return false;
-        }
-        self.search_cursor += 1;
-        true
-    }
-
     pub(crate) fn insert_search(&mut self, text: &str) {
         let byte_index = self
             .search
@@ -298,13 +284,14 @@ mod tests {
     fn unicode_search_editing_tracks_scalar_cursor_positions() {
         let mut state = HelpOverlayState::default();
         state.insert_search("a🙂b");
-        assert!(state.move_search_cursor_left());
         assert!(state.backspace_search());
-        assert_eq!(state.search, "ab");
-        assert_eq!(state.search_cursor, 1);
-        state.insert_search("é");
-        assert_eq!(state.search, "aéb");
+        assert_eq!(state.search, "a🙂");
         assert_eq!(state.search_cursor, 2);
+        state.insert_search("é");
+        assert_eq!(state.search, "a🙂é");
+        assert_eq!(state.search_cursor, 3);
+        assert!(state.clear_search());
+        assert_eq!((state.search.as_str(), state.search_cursor), ("", 0));
     }
 
     #[test]

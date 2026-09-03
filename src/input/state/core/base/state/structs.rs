@@ -179,7 +179,7 @@ pub struct InputState {
     /// Save Session As target waiting for explicit overwrite confirmation.
     pub(crate) pending_save_as_overwrite: Option<PathBuf>,
     /// Visibility, navigation, and pointer bookkeeping for the help overlay.
-    pub help_overlay: crate::input::state::core::HelpOverlayState,
+    pub(crate) help_overlay: crate::input::state::core::HelpOverlayState,
     /// Board picker quick search query
     pub board_picker_search: String,
     /// Time of last board picker search input

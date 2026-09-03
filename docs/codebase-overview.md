@@ -103,7 +103,8 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
    - Holds `input::BoardManager`, whose ordered `BoardState` entries each own `draw::BoardPages`,
      plus current colors, tool settings, fonts, modifiers, and `DrawingState`.
    - `state/actions/` maps keybindings to `Action` values and routes color, board/page, capture,
-     history, selection, tool, and UI behavior.
+     history, selection, tool, and UI behavior. `HelpOverlayState` owns help visibility, navigation,
+     search, scrolling, and press/release bookkeeping.
    - `state/mouse/` and `state/interaction/` convert pointer gestures into drawing/state changes.
    - `render.rs` exposes provisional shape previews for live feedback.
 

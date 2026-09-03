@@ -231,7 +231,7 @@ impl WaylandState {
         }
 
         // Check help overlay
-        if self.input_state.help_overlay.visible {
+        if self.input_state.help_overlay.is_visible() {
             let (mx, my) = self.current_mouse();
             if let Some(hint) = self.input_state.help_overlay_cursor_hint_at(mx, my) {
                 return match hint {

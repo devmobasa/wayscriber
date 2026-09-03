@@ -261,7 +261,7 @@ impl WaylandState {
     }
 
     fn try_handle_help_axis(&mut self, scroll_direction: i32) -> bool {
-        if !self.input_state.help_overlay.visible {
+        if !self.input_state.help_overlay.is_visible() {
             return false;
         }
         if scroll_direction == 0 {

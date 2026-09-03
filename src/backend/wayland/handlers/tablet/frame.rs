@@ -165,7 +165,7 @@ impl WaylandState {
             return;
         }
 
-        if !self.input_state.help_overlay.visible {
+        if !self.input_state.help_overlay.is_visible() {
             // A new tip-down supersedes any consume-only help ownership left
             // by a sequence whose tip-up was not delivered.
             self.input_state
@@ -190,7 +190,7 @@ impl WaylandState {
 
         // Help owns stylus tip input just as it owns mouse and touch input.
         // Record the press target but do not begin a canvas interaction.
-        if self.input_state.help_overlay.visible {
+        if self.input_state.help_overlay.is_visible() {
             let (x, y) = self.current_stylus_position();
             self.set_current_mouse(x.round() as i32, y.round() as i32);
             self.input_state.note_help_overlay_press(
@@ -320,10 +320,10 @@ mod tests {
         let mut state = make_test_input_state();
         assert!(!modal_blocks_stylus_barrel_actions(&state));
 
-        state.help_overlay.visible = true;
+        state.toggle_help_overlay();
         assert!(modal_blocks_stylus_barrel_actions(&state));
 
-        state.help_overlay.visible = false;
+        state.toggle_help_overlay();
         state.tour_active = true;
         assert!(modal_blocks_stylus_barrel_actions(&state));
     }
