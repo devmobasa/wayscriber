@@ -1,5 +1,5 @@
 use super::super::super::{
-    Keymap, ViewState,
+    Keymap, PointerTracking, ViewState,
     index::SpatialIndexCache,
     selection::{SelectionClipboard, SelectionInteraction},
 };
@@ -82,6 +82,8 @@ pub struct InputState {
     pub(in crate::input::state) keymap: Keymap,
     /// Zoom, frozen-mode, screen geometry, and active-output state.
     pub(in crate::input::state) view: ViewState,
+    /// Pointer positions and transient pointer-driven bookkeeping.
+    pub(in crate::input::state) pointer: PointerTracking,
     /// Current drawing mode state machine
     pub state: DrawingState,
     /// Whether user requested to exit the overlay
@@ -159,9 +161,6 @@ pub struct InputState {
     /// Display form of the top strip (full strip / micro chip / cycle-hidden).
     /// Sibling of `toolbar_top_minimized`; minimized wins when both are set.
     pub toolbar_top_display_mode: crate::config::TopDisplayMode,
-    /// When drawing input last started or committed a stroke; drives the
-    /// top-strip idle fade.
-    pub(crate) last_draw_activity: Instant,
     /// Precise numeric entry popup opened from a pill numeral, when open.
     pub(crate) precision_entry: Option<crate::input::state::PrecisionEntryState>,
     /// Modifier chord that turns a toolbar click into shortcut rebinding.
@@ -186,8 +185,6 @@ pub struct InputState {
     pub(in crate::input::state::core) deleted_pages: Vec<(PageRestoreRequest, Instant)>,
     /// Tracks dirty regions between renders
     pub(crate) dirty_tracker: DirtyTracker,
-    /// Cached bounds for the current provisional shape (if any)
-    pub(crate) last_provisional_bounds: Option<Rect>,
     /// In-flight Spotlight magnification undo gesture and wheel remainder.
     pub(in crate::input::state) spotlight_wheel: crate::input::state::SpotlightWheelGesture,
     /// Pending first-run onboarding usage markers to persist in onboarding store
@@ -237,14 +234,6 @@ pub struct InputState {
 
     /// Spatial grid plus guarded ShapeId-to-z-order indices for large-frame hit-testing.
     pub(in crate::input::state::core) spatial_index: Option<SpatialIndexCache>,
-    /// Last known pointer position in screen coordinates (for overlays and hover refresh)
-    pub(in crate::input::state::core) last_pointer_position: (i32, i32),
-    /// Last known pointer position in canvas/world coordinates
-    pub(in crate::input::state::core) last_canvas_pointer_position: (i32, i32),
-    /// Whether a real pointer position has been observed.
-    pub(in crate::input::state::core) pointer_seen: bool,
-    /// Recompute hover next time layout is available
-    pub(in crate::input::state::core) pending_menu_hover_recalc: bool,
     /// Lifecycle, cached geometry, and deferred refresh state for the properties panel.
     pub(crate) properties: crate::input::state::core::properties::PropertiesPanelState,
     /// Screen-color eyedropper UI lifecycle.
@@ -270,17 +259,4 @@ pub struct InputState {
     /// Status bar change highlight animation state
     #[allow(dead_code)]
     pub(crate) status_change_highlight: Option<StatusChangeHighlight>,
-}
-
-impl InputState {
-    /// Record drawing activity (stroke start/commit); resets the top-strip
-    /// idle-fade clock.
-    pub(crate) fn mark_draw_activity(&mut self) {
-        self.last_draw_activity = Instant::now();
-    }
-
-    /// When drawing input last started or committed a stroke.
-    pub fn last_draw_activity(&self) -> Instant {
-        self.last_draw_activity
-    }
 }

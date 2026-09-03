@@ -1,5 +1,5 @@
 use super::super::super::{
-    Keymap, ViewState,
+    Keymap, PointerTracking, ViewState,
     selection::{SelectionClipboard, SelectionInteraction},
 };
 use super::super::types::{CompositorCapabilities, DrawingState, PendingOnboardingUsage};
@@ -53,6 +53,7 @@ impl InputState {
             modifiers: Modifiers::new(),
             keymap,
             view: ViewState::default(),
+            pointer: PointerTracking::default(),
             state: DrawingState::Idle,
             should_exit: false,
             explicit_exit_requested: false,
@@ -89,7 +90,6 @@ impl InputState {
             toolbar_top_popover_scroll: 0.0,
             toolbar_top_minimized: false,
             toolbar_top_display_mode: crate::config::TopDisplayMode::Full,
-            last_draw_activity: std::time::Instant::now(),
             precision_entry: None,
             toolbar_rebind_modifier: crate::config::ToolbarRebindModifier::default(),
             toolbar_customize_items_open: false,
@@ -101,7 +101,6 @@ impl InputState {
             pending_page_delete: None,
             deleted_pages: Vec::new(),
             dirty_tracker: DirtyTracker::new(),
-            last_provisional_bounds: None,
             spotlight_wheel: Default::default(),
             pending_onboarding_usage: PendingOnboardingUsage::default(),
             max_shapes_per_frame,
@@ -125,10 +124,6 @@ impl InputState {
             selection_clipboard: SelectionClipboard::default(),
             last_capture_path: None,
             spatial_index: None,
-            last_pointer_position: (0, 0),
-            last_canvas_pointer_position: (0, 0),
-            pointer_seen: false,
-            pending_menu_hover_recalc: false,
             properties: Default::default(),
             eyedropper_ui_state: crate::input::state::core::EyedropperUiState::Inactive,
             region_select_ui_state: crate::input::state::core::RegionSelectUiState::Inactive,

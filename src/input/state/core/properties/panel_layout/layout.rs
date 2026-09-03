@@ -188,7 +188,7 @@ impl InputState {
         if self.properties.pending_hover_recalc {
             let focus_set = panel.keyboard_focus.is_some();
             if !focus_set {
-                let (px, py) = self.last_pointer_position;
+                let (px, py) = self.pointer.screen();
                 self.update_properties_panel_hover_from_pointer_internal(px, py, false);
             }
             self.properties.pending_hover_recalc = false;

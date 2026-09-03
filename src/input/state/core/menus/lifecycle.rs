@@ -8,7 +8,7 @@ impl InputState {
         if let Some(layout) = self.context_menu.close() {
             self.mark_context_menu_region(layout);
         }
-        self.pending_menu_hover_recalc = false;
+        self.pointer.clear_menu_hover_recalc();
         self.needs_redraw = true;
     }
 
@@ -35,7 +35,7 @@ impl InputState {
         {
             self.mark_context_menu_region(layout);
         }
-        self.pending_menu_hover_recalc = true;
+        self.pointer.request_menu_hover_recalc();
     }
 
     pub fn open_page_context_menu(
@@ -49,7 +49,7 @@ impl InputState {
         }
         self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Page, None);
         self.context_menu.set_page_target(board_index, page_index);
-        self.pending_menu_hover_recalc = false;
+        self.pointer.clear_menu_hover_recalc();
         self.set_context_menu_focus(None);
         self.focus_first_context_menu_entry();
         self.dirty_tracker.mark_full();
@@ -70,7 +70,7 @@ impl InputState {
             let anchor = self.keyboard_canvas_menu_anchor();
             self.update_pointer_position_synthetic(anchor.0, anchor.1);
             self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Canvas, None);
-            self.pending_menu_hover_recalc = false;
+            self.pointer.clear_menu_hover_recalc();
             self.set_context_menu_focus(None);
             self.focus_first_context_menu_entry();
         } else {
@@ -89,7 +89,7 @@ impl InputState {
             let anchor = self.keyboard_shape_menu_anchor(&selection);
             self.update_pointer_position_synthetic(anchor.0, anchor.1);
             self.open_context_menu(anchor, selection, ContextMenuKind::Shape, None);
-            self.pending_menu_hover_recalc = false;
+            self.pointer.clear_menu_hover_recalc();
             if !focus_edit || !self.focus_context_menu_command(MenuCommand::EditText) {
                 self.focus_first_context_menu_entry();
             }
@@ -114,8 +114,7 @@ impl InputState {
         if let Some(bounds) = self.selection_screen_bounding_box(ids) {
             (bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
         } else {
-            let (px, py) = self.last_pointer_position;
-            (px, py)
+            self.pointer.screen()
         }
     }
 

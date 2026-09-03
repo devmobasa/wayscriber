@@ -1,6 +1,7 @@
 use super::super::base::{DrawingState, InputState, PasteAnchor};
 use crate::draw::DirtyRegionReport;
 use crate::util::Rect;
+use std::time::Instant;
 
 impl InputState {
     fn board_view_offset(&self) -> (f64, f64) {
@@ -18,8 +19,9 @@ impl InputState {
     }
 
     pub(crate) fn sync_canvas_pointer_to_current_transform(&mut self) {
-        let (screen_x, screen_y) = self.last_pointer_position;
-        self.last_canvas_pointer_position = self.canvas_coords_for_screen(screen_x, screen_y);
+        let (screen_x, screen_y) = self.pointer.screen();
+        let canvas = self.canvas_coords_for_screen(screen_x, screen_y);
+        self.pointer.set_canvas(canvas);
     }
 
     pub(crate) fn screen_coords_for_canvas(&self, canvas_x: i32, canvas_y: i32) -> (i32, i32) {
@@ -34,18 +36,17 @@ impl InputState {
 
     /// Returns the last known pointer position.
     pub(crate) fn pointer_position(&self) -> (i32, i32) {
-        self.last_pointer_position
+        self.pointer.screen()
     }
 
     /// Returns the last known pointer position in canvas/world coordinates.
-    #[allow(dead_code)]
     pub(crate) fn canvas_pointer_position(&self) -> (i32, i32) {
-        self.last_canvas_pointer_position
+        self.pointer.canvas()
     }
 
     pub(crate) fn paste_anchor(&self) -> PasteAnchor {
-        if self.pointer_seen {
-            let (x, y) = self.last_canvas_pointer_position;
+        if self.pointer.seen() {
+            let (x, y) = self.pointer.canvas();
             PasteAnchor::Pointer { x, y }
         } else {
             let (x, y) = self.visible_canvas_center();
@@ -77,9 +78,8 @@ impl InputState {
         canvas_x: i32,
         canvas_y: i32,
     ) {
-        self.last_pointer_position = (screen_x, screen_y);
-        self.last_canvas_pointer_position = (canvas_x, canvas_y);
-        self.pointer_seen = true;
+        self.pointer
+            .update((screen_x, screen_y), (canvas_x, canvas_y));
         if self.click_highlight.update_tool_ring(
             self.highlight_tool_active(),
             canvas_x,
@@ -92,8 +92,24 @@ impl InputState {
 
     /// Updates the cached pointer location without triggering pointer-driven visuals.
     pub fn update_pointer_position_synthetic(&mut self, x: i32, y: i32) {
-        self.last_pointer_position = (x, y);
-        self.last_canvas_pointer_position = self.canvas_coords_for_screen(x, y);
+        let canvas = self.canvas_coords_for_screen(x, y);
+        self.pointer.update_synthetic((x, y), canvas);
+    }
+
+    /// Record drawing activity (stroke start/commit); resets the top-strip
+    /// idle-fade clock.
+    pub(crate) fn mark_draw_activity(&mut self) {
+        self.pointer.mark_draw_activity(Instant::now());
+    }
+
+    /// When drawing input last started or committed a stroke.
+    pub fn last_draw_activity(&self) -> Instant {
+        self.pointer.last_draw_activity()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn provisional_bounds(&self) -> Option<Rect> {
+        self.pointer.provisional_bounds()
     }
 
     pub(crate) fn record_first_stroke_done_for_onboarding(&mut self) {
@@ -174,13 +190,11 @@ impl InputState {
             }
             DrawingState::Drawing { .. } => {
                 self.clear_provisional_dirty();
-                self.last_provisional_bounds = None;
                 self.state = DrawingState::Idle;
                 self.needs_redraw = true;
             }
             DrawingState::BuildingPolygon { .. } => {
                 self.clear_provisional_dirty();
-                self.last_provisional_bounds = None;
                 self.selection_interaction.clear_polygon_click();
                 self.state = DrawingState::Idle;
                 self.needs_redraw = true;
@@ -191,7 +205,6 @@ impl InputState {
             }
             DrawingState::Selecting { .. } => {
                 self.clear_provisional_dirty();
-                self.last_provisional_bounds = None;
                 self.state = DrawingState::Idle;
                 self.needs_redraw = true;
             }

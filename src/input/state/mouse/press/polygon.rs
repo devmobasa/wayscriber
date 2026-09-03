@@ -23,7 +23,7 @@ impl InputState {
             color,
             thick,
         };
-        self.last_provisional_bounds = None;
+        self.pointer.replace_provisional_bounds(None);
         self.update_provisional_dirty(x, y);
         self.push_toast(
             ToastPriority::Info,

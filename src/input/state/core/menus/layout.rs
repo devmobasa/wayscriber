@@ -13,7 +13,7 @@ impl InputState {
     /// Clears cached layout data (used when menu closes).
     pub fn clear_context_menu_layout(&mut self) {
         self.context_menu.clear_layout();
-        self.pending_menu_hover_recalc = false;
+        self.pointer.clear_menu_hover_recalc();
     }
 
     /// Recomputes context menu layout for rendering and hit-testing.
@@ -100,7 +100,7 @@ impl InputState {
             arrow_width: ARROW_WIDTH,
         });
 
-        if self.pending_menu_hover_recalc {
+        if self.pointer.take_menu_hover_recalc() {
             let focus_set = matches!(
                 self.context_menu.state,
                 ContextMenuState::Open {
@@ -109,10 +109,9 @@ impl InputState {
                 }
             );
             if !focus_set {
-                let (px, py) = self.last_pointer_position;
+                let (px, py) = self.pointer.screen();
                 self.update_context_menu_hover_from_pointer_internal(px, py, false);
             }
-            self.pending_menu_hover_recalc = false;
         }
 
         if let Some(layout) = self.context_menu.layout {
