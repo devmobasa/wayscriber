@@ -192,11 +192,11 @@ impl InputState {
 
     /// Tears down the transient editor state shared by every text-input exit.
     pub(crate) fn end_text_input_session(&mut self) {
-        self.ime = crate::input::state::ImeCompositionState::default();
+        self.text_editing.ime = crate::input::state::ImeCompositionState::default();
         self.clear_pending_text_pastes();
         self.end_pointer_drag();
         self.clear_text_preview_dirty();
-        self.last_text_preview_bounds = None;
+        self.text_editing.last_text_preview_bounds = None;
         self.style.text_wrap_width = None;
         self.state = DrawingState::Idle;
         self.needs_redraw = true;
@@ -217,7 +217,7 @@ impl InputState {
     /// Cancels any in-progress interaction without exiting the application.
     pub(crate) fn cancel_active_interaction(&mut self) {
         // A canceled interaction never leaves a dangling block-move drag.
-        self.text_block_drag = None;
+        self.text_editing.text_block_drag = None;
         match &self.state {
             DrawingState::TextInput { .. } => {
                 self.cancel_text_input();

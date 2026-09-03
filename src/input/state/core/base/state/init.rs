@@ -1,7 +1,5 @@
 use super::super::super::selection::SelectionState;
-use super::super::types::{
-    CompositorCapabilities, DrawingState, PendingOnboardingUsage, TextInputMode,
-};
+use super::super::types::{CompositorCapabilities, DrawingState, PendingOnboardingUsage};
 use super::structs::InputState;
 use crate::config::{Action, BoardsConfig, Shortcut};
 use crate::draw::DirtyTracker;
@@ -55,7 +53,7 @@ impl InputState {
             boards: BoardManager::from_config(boards_config),
             style,
             font_picker: Default::default(),
-            text_input_mode: TextInputMode::Plain,
+            text_editing: Default::default(),
             modifiers: Modifiers::new(),
             drag_tool_bindings: DragToolBindings::default(),
             active_drag_button: None,
@@ -113,11 +111,6 @@ impl InputState {
             deleted_pages: Vec::new(),
             dirty_tracker: DirtyTracker::new(),
             last_provisional_bounds: None,
-            last_text_preview_bounds: None,
-            text_input_cursor_rect_dirty: false,
-            text_input_external_change_dirty: false,
-            text_input_generation: 0,
-            text_input_revision: 0,
             action_map,
             action_bindings: HashMap::new(),
             sequence_trie,
@@ -152,12 +145,7 @@ impl InputState {
             clipboard_paste_request_counter: 0,
             active_clipboard_paste_request_id: None,
             last_capture_path: None,
-            last_text_click: None,
             last_polygon_click: None,
-            text_edit_target: None,
-            text_block_drag: None,
-            text_edit_entry_feedback: None,
-            ime: crate::input::state::ImeCompositionState::default(),
             spatial_index: None,
             last_pointer_position: (0, 0),
             last_canvas_pointer_position: (0, 0),

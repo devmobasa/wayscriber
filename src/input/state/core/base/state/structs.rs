@@ -4,14 +4,12 @@ use super::super::toast_queue::ToastQueue;
 use super::super::types::{
     BlockedActionFeedback, CompositorCapabilities, DrawingState, PendingBoardDelete,
     PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete, PolygonClickState,
-    SelectionAxis, SelectionPublishState, StatusChangeHighlight, TextBlockDrag, TextClickState,
-    TextEditEntryFeedback, TextInputMode, UiToastState,
+    SelectionAxis, SelectionPublishState, StatusChangeHighlight, UiToastState,
 };
 use crate::config::{
     Action, PresenterModeConfig, ResolvedToolbarItems, Shortcut, ToolbarItemId,
     ToolbarItemOrderGroup, ToolbarItemsConfig,
 };
-use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{Color, DirtyTracker, Shape, ShapeId};
 use crate::input::BoardManager;
 use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest};
@@ -77,8 +75,8 @@ pub struct InputState {
     pub(crate) style: crate::input::state::core::DrawingStyle,
     /// State owned by the system font-picker modal.
     pub(crate) font_picker: crate::input::state::core::font_picker::FontPickerState,
-    /// Which text input style is active (plain vs sticky note)
-    pub text_input_mode: TextInputMode,
+    /// Text-editor mode, asynchronous identity, composition, and pointer state.
+    pub(crate) text_editing: crate::input::state::core::TextEditing,
     /// Current modifier key state
     pub modifiers: Modifiers,
     /// Tool mapping for drag gestures with modifier keys
@@ -201,21 +199,6 @@ pub struct InputState {
     pub(crate) dirty_tracker: DirtyTracker,
     /// Cached bounds for the current provisional shape (if any)
     pub(crate) last_provisional_bounds: Option<Rect>,
-    /// Cached bounds for live text preview/caret (if any)
-    pub(crate) last_text_preview_bounds: Option<Rect>,
-    /// Coalesced request for the Wayland backend to publish the current text
-    /// caret rectangle to text-input-v3.
-    pub(crate) text_input_cursor_rect_dirty: bool,
-    /// Whether the coalesced text-input update was caused outside the input
-    /// method (keyboard editing, pointer placement, or clipboard completion).
-    pub(crate) text_input_external_change_dirty: bool,
-    /// Identity of the current text-edit session. Async clipboard completions
-    /// use this to avoid pasting into a later edit.
-    pub(crate) text_input_generation: u64,
-    /// Buffer mutation revision within the current text-edit session. Deferred
-    /// cuts use it to reject completions after any intervening edit, even when
-    /// the same bytes and selection are later restored.
-    pub(crate) text_input_revision: u64,
     /// Keybinding action map for efficient lookup
     pub(in crate::input::state::core) action_map: HashMap<Shortcut, Action>,
     /// Ordered keybindings per action (as configured)
@@ -299,20 +282,9 @@ pub struct InputState {
     pub(in crate::input::state::core) active_clipboard_paste_request_id: Option<u64>,
     /// Last capture path (for quick open-folder action)
     pub(in crate::input::state::core) last_capture_path: Option<PathBuf>,
-    /// Last text/note click used for double-click detection
-    pub(crate) last_text_click: Option<TextClickState>,
     /// Last freeform polygon point click used for double-click completion.
     pub(crate) last_polygon_click: Option<PolygonClickState>,
 
-    /// Tracks an in-progress text edit target (existing shape to replace)
-    pub(crate) text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
-    /// In-progress Alt+left-drag that repositions the active text block.
-    pub(crate) text_block_drag: Option<TextBlockDrag>,
-    /// Animation state for text edit mode entry (teal glow pulse)
-    pub(crate) text_edit_entry_feedback: Option<TextEditEntryFeedback>,
-    /// Input-method composition state (preedit + pending IME batch) for the
-    /// active text/note edit.
-    pub(crate) ime: super::super::super::ime::ImeCompositionState,
     /// Spatial grid plus guarded ShapeId-to-z-order indices for large-frame hit-testing.
     pub(in crate::input::state::core) spatial_index: Option<SpatialIndexCache>,
     /// Last known pointer position in screen coordinates (for overlays and hover refresh)

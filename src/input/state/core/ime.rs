@@ -110,18 +110,20 @@ impl ImeCompositionState {
 impl InputState {
     /// Start a distinct text-edit session for async completion identity.
     pub(crate) fn begin_text_input_session(&mut self) {
-        self.text_input_generation = self.text_input_generation.wrapping_add(1);
-        self.text_input_revision = 0;
+        self.text_editing.text_input_generation =
+            self.text_editing.text_input_generation.wrapping_add(1);
+        self.text_editing.text_input_revision = 0;
         self.clear_pending_text_pastes();
     }
 
     pub(crate) fn note_text_buffer_mutation(&mut self) {
-        self.text_input_revision = self.text_input_revision.wrapping_add(1);
+        self.text_editing.text_input_revision =
+            self.text_editing.text_input_revision.wrapping_add(1);
     }
 
     pub(crate) fn text_input_generation(&self) -> Option<u64> {
         self.is_text_input_active()
-            .then_some(self.text_input_generation)
+            .then_some(self.text_editing.text_input_generation)
     }
 
     pub(crate) fn text_input_generation_is_current(&self, generation: u64) -> bool {
@@ -202,7 +204,7 @@ impl InputState {
 
     /// The active preedit run (byte-cursor included) for the renderer.
     pub fn ime_preedit(&self) -> Option<&ImePreedit> {
-        self.ime.preedit()
+        self.text_editing.ime.preedit()
     }
 
     /// Queue committed text (`commit_string`) to append on the next `done`.
@@ -210,15 +212,15 @@ impl InputState {
     /// these events replace double-buffered pending state, so a null
     /// `commit_string` must clear an earlier non-null one in the same batch.
     pub fn ime_queue_commit(&mut self, text: Option<String>) {
-        self.ime.pending.commit = text;
+        self.text_editing.ime.pending.commit = text;
     }
 
     /// Queue the in-progress composition (`preedit_string`) for the next
     /// `done`. `text = None` clears the preedit but still carries the event's
     /// selection-removal semantics.
     pub fn ime_queue_preedit(&mut self, text: Option<String>, cursor_begin: i32, cursor_end: i32) {
-        self.ime.pending.preedit_received = true;
-        self.ime.pending.preedit = text.map(|text| ImePreedit {
+        self.text_editing.ime.pending.preedit_received = true;
+        self.text_editing.ime.pending.preedit = text.map(|text| ImePreedit {
             text,
             cursor_begin,
             cursor_end,
@@ -228,8 +230,8 @@ impl InputState {
     /// Queue a surrounding-text deletion (`delete_surrounding_text`), in
     /// UTF-8 bytes around the caret, for the next `done`.
     pub fn ime_queue_delete_surrounding(&mut self, before_length: u32, after_length: u32) {
-        self.ime.pending.delete_before = before_length;
-        self.ime.pending.delete_after = after_length;
+        self.text_editing.ime.pending.delete_before = before_length;
+        self.text_editing.ime.pending.delete_after = after_length;
     }
 
     /// Apply the queued composition changes to the editor and reset the
@@ -238,11 +240,11 @@ impl InputState {
     /// is not active.
     pub fn ime_apply_done(&mut self) -> bool {
         if !self.is_text_input_active() {
-            self.ime = ImeCompositionState::default();
+            self.text_editing.ime = ImeCompositionState::default();
             return false;
         }
 
-        let pending = std::mem::take(&mut self.ime.pending);
+        let pending = std::mem::take(&mut self.text_editing.ime.pending);
         let mut buffer_changed = false;
 
         if let DrawingState::TextInput {
@@ -333,8 +335,8 @@ impl InputState {
         }
 
         // 4) preedit: replace the active composition (absent → cleared).
-        let preedit_changed = self.ime.preedit != pending.preedit;
-        self.ime.preedit = pending.preedit;
+        let preedit_changed = self.text_editing.ime.preedit != pending.preedit;
+        self.text_editing.ime.preedit = pending.preedit;
 
         if buffer_changed {
             self.note_text_buffer_mutation();
@@ -350,8 +352,8 @@ impl InputState {
     /// Drop all composition state (on focus loss / disable / edit exit).
     /// Returns whether a visible preedit was cleared.
     pub fn ime_clear(&mut self) -> bool {
-        let had_preedit = self.ime.preedit.is_some();
-        self.ime = ImeCompositionState::default();
+        let had_preedit = self.text_editing.ime.preedit.is_some();
+        self.text_editing.ime = ImeCompositionState::default();
         if had_preedit {
             self.needs_redraw = true;
             self.update_text_preview_dirty();

@@ -265,7 +265,7 @@ impl InputState {
         self.active_drag_color = None;
         // A block-move drag (Alt+drag in text mode) rides on the pointer drag,
         // so tearing the drag down always clears it.
-        self.text_block_drag = None;
+        self.text_editing.text_block_drag = None;
     }
 
     pub(crate) fn pointer_drag_button_matches(&self, button: MouseButton) -> bool {

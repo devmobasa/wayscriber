@@ -95,7 +95,7 @@ fn delete_active_board_restore_preserves_cancelled_text_edit() {
 
     assert_eq!(state.board_id(), BOARD_ID_BLACKBOARD);
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.text_edit_target.is_none());
+    assert!(state.text_editing.text_edit_target.is_none());
     assert_active_text(&state, shape_id, "Original");
 }
 
@@ -237,7 +237,7 @@ fn page_delete_restore_preserves_cancelled_text_edit() {
 
     assert_eq!(state.boards.active_page_index(), 1);
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.text_edit_target.is_none());
+    assert!(state.text_editing.text_edit_target.is_none());
     assert_active_text(&state, shape_id, "Original");
 }
 

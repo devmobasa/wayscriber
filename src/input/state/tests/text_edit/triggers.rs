@@ -28,7 +28,7 @@ fn double_click_edit_enters_text_input() {
     state.on_mouse_press(MouseButton::Left, click_x, click_y);
     state.on_mouse_release(MouseButton::Left, click_x, click_y);
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.text_edit_target.is_none());
+    assert!(state.text_editing.text_edit_target.is_none());
 
     state.on_mouse_press(MouseButton::Left, click_x, click_y);
     state.on_mouse_release(MouseButton::Left, click_x, click_y);
@@ -37,7 +37,7 @@ fn double_click_edit_enters_text_input() {
         DrawingState::TextInput { buffer, .. } => assert_eq!(buffer, "Hello"),
         _ => panic!("Expected text input state"),
     }
-    assert!(state.text_edit_target.is_some());
+    assert!(state.text_editing.text_edit_target.is_some());
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
@@ -74,16 +74,16 @@ fn right_click_clears_double_click_tracking() {
 
     state.on_mouse_press(MouseButton::Left, click_x, click_y);
     state.on_mouse_release(MouseButton::Left, click_x, click_y);
-    assert!(state.last_text_click.is_some());
+    assert!(state.text_editing.last_text_click.is_some());
 
     state.set_context_menu_enabled(false);
     state.on_mouse_press(MouseButton::Right, click_x, click_y);
-    assert!(state.last_text_click.is_none());
+    assert!(state.text_editing.last_text_click.is_none());
 
     state.on_mouse_press(MouseButton::Left, click_x, click_y);
     state.on_mouse_release(MouseButton::Left, click_x, click_y);
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.text_edit_target.is_none());
+    assert!(state.text_editing.text_edit_target.is_none());
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
@@ -116,7 +116,10 @@ fn enter_key_starts_edit_for_selected_sticky_note() {
         DrawingState::TextInput { buffer, .. } => assert_eq!(buffer, "Note"),
         _ => panic!("Expected text input state"),
     }
-    assert!(matches!(state.text_input_mode, TextInputMode::StickyNote));
+    assert!(matches!(
+        state.text_editing.text_input_mode,
+        TextInputMode::StickyNote
+    ));
 }
 
 #[test]
@@ -140,7 +143,14 @@ fn enter_key_starts_edit_for_selected_text() {
         DrawingState::TextInput { buffer, .. } => assert_eq!(buffer, "Hello"),
         _ => panic!("Expected text input state"),
     }
-    assert!(matches!(state.text_input_mode, TextInputMode::Plain));
-    let edit_id = state.text_edit_target.as_ref().map(|(id, _)| *id);
+    assert!(matches!(
+        state.text_editing.text_input_mode,
+        TextInputMode::Plain
+    ));
+    let edit_id = state
+        .text_editing
+        .text_edit_target
+        .as_ref()
+        .map(|(id, _)| *id);
     assert_eq!(edit_id, Some(shape_id));
 }

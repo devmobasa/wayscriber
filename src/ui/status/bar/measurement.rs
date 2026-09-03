@@ -158,7 +158,7 @@ pub(super) fn layout_mode_badges(
         });
     }
     if matches!(input_state.state, DrawingState::TextInput { .. })
-        && input_state.text_edit_target.is_some()
+        && input_state.text_editing.text_edit_target.is_some()
     {
         specs.push(StatusHudBadgeSpec {
             label: EDITING_BADGE_LABEL.to_string(),

@@ -33,6 +33,7 @@ mod session_preflight;
 mod session_preflight_exact;
 mod status_hud;
 mod style;
+mod text_editing;
 mod text_font;
 mod tool_controls;
 mod top_menu;
@@ -114,6 +115,7 @@ pub use region_select::{
 pub(crate) use search::fuzzy_score;
 pub use selection::SelectionState;
 pub(crate) use style::DrawingStyle;
+pub(crate) use text_editing::TextEditing;
 pub use tool_controls::PrecisionEntryState;
 pub use tour::{TourState, TourStep};
 pub(crate) use utility::HelpOverlayPressSource;

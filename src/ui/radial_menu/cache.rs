@@ -166,7 +166,7 @@ pub(super) fn base_cache_key(
         bindings,
         actives: format!(
             "{active_tool:?};text={text_input};mode={:?};color={}",
-            input_state.text_input_mode,
+            input_state.text_editing.text_input_mode,
             color_key(&active_color),
         ),
         slices,

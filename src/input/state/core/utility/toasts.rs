@@ -303,12 +303,12 @@ impl InputState {
 
     /// Advance the text edit entry feedback animation. Returns true if still active.
     pub fn advance_text_edit_entry_feedback(&mut self, now: Instant) -> bool {
-        let Some(feedback) = &self.text_edit_entry_feedback else {
+        let Some(feedback) = &self.text_editing.text_edit_entry_feedback else {
             return false;
         };
         let duration = Duration::from_millis(TEXT_EDIT_ENTRY_DURATION_MS);
         if now.saturating_duration_since(feedback.started) >= duration {
-            self.text_edit_entry_feedback = None;
+            self.text_editing.text_edit_entry_feedback = None;
             return false;
         }
         true
@@ -316,7 +316,7 @@ impl InputState {
 
     /// Get the progress (0.0 to 1.0) of the text edit entry animation.
     pub fn text_edit_entry_progress(&self) -> Option<f64> {
-        let feedback = self.text_edit_entry_feedback.as_ref()?;
+        let feedback = self.text_editing.text_edit_entry_feedback.as_ref()?;
         let elapsed = Instant::now()
             .saturating_duration_since(feedback.started)
             .as_millis() as f64;
@@ -879,13 +879,18 @@ mod tests {
     #[test]
     fn advance_text_edit_entry_feedback_clears_expired_feedback() {
         let mut state = make_state();
-        state.text_edit_entry_feedback = Some(TextEditEntryFeedback {
+        state.text_editing.text_edit_entry_feedback = Some(TextEditEntryFeedback {
             started: Instant::now(),
         });
-        let now = state.text_edit_entry_feedback.as_ref().unwrap().started
+        let now = state
+            .text_editing
+            .text_edit_entry_feedback
+            .as_ref()
+            .unwrap()
+            .started
             + Duration::from_millis(TEXT_EDIT_ENTRY_DURATION_MS);
 
         assert!(!state.advance_text_edit_entry_feedback(now));
-        assert!(state.text_edit_entry_feedback.is_none());
+        assert!(state.text_editing.text_edit_entry_feedback.is_none());
     }
 }

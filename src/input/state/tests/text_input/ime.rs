@@ -310,19 +310,19 @@ fn oversized_selection_withholds_surrounding_text_until_context_fits_again() {
 fn only_committed_ime_edits_advance_the_text_buffer_revision() {
     let mut state = create_test_input_state();
     enter_text_mode(&mut state);
-    let initial = state.text_input_revision;
+    let initial = state.text_editing.text_input_revision;
 
     state.ime_queue_preedit(Some("draft".to_string()), 5, 5);
     assert!(state.ime_apply_done());
     assert_eq!(
-        state.text_input_revision, initial,
+        state.text_editing.text_input_revision, initial,
         "transient preedit changes do not mutate committed text"
     );
 
     state.ime_queue_commit(Some("done".to_string()));
     assert!(state.ime_apply_done());
     assert_eq!(
-        state.text_input_revision,
+        state.text_editing.text_input_revision,
         initial.wrapping_add(1),
         "an IME commit invalidates deferred cuts from the prior revision"
     );
@@ -379,7 +379,7 @@ fn preedit_start_removes_selection_and_invalidates_pending_clipboard_edit() {
     let stale_paste = state
         .take_pending_text_paste()
         .expect("Ctrl+V captures the selected buffer revision");
-    let initial_revision = state.text_input_revision;
+    let initial_revision = state.text_editing.text_input_revision;
 
     state.ime_queue_preedit(Some("X".to_string()), 1, 1);
     assert!(state.ime_apply_done());
@@ -397,7 +397,7 @@ fn preedit_start_removes_selection_and_invalidates_pending_clipboard_edit() {
         panic!("expected TextInput");
     }
     assert_eq!(
-        state.text_input_revision,
+        state.text_editing.text_input_revision,
         initial_revision.wrapping_add(1),
         "removing selected committed text invalidates deferred clipboard work"
     );
@@ -428,14 +428,17 @@ fn null_preedit_event_still_removes_the_existing_selection() {
         *selection_anchor = Some(1);
         *caret = 4;
     }
-    let initial_revision = state.text_input_revision;
+    let initial_revision = state.text_editing.text_input_revision;
 
     state.ime_queue_preedit(None, 0, 0);
     assert!(state.ime_apply_done());
 
     assert_eq!(buffer(&state), "ho");
     assert!(state.ime_preedit().is_none());
-    assert_eq!(state.text_input_revision, initial_revision.wrapping_add(1));
+    assert_eq!(
+        state.text_editing.text_input_revision,
+        initial_revision.wrapping_add(1)
+    );
 }
 
 #[test]

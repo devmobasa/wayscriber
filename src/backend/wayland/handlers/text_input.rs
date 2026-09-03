@@ -201,7 +201,7 @@ impl WaylandState {
 
         // Fallback: the right edge of the cached preview bounds, kept within the
         // transformed preview even when a small zoom rounds it to one pixel.
-        let Some(canvas_rect) = self.input_state.last_text_preview_bounds else {
+        let Some(canvas_rect) = self.input_state.text_editing.last_text_preview_bounds else {
             return false;
         };
         let Some(rect) = self.input_state.screen_rect_for_canvas(canvas_rect) else {

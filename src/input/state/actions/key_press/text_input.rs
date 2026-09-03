@@ -88,7 +88,7 @@ impl InputState {
             };
 
             if text.is_empty() {
-                if self.text_edit_target.is_some() {
+                if self.text_editing.text_edit_target.is_some() {
                     self.cancel_text_input();
                 } else {
                     self.end_text_input_session();
@@ -96,7 +96,7 @@ impl InputState {
                 return;
             }
 
-            let shape = match self.text_input_mode {
+            let shape = match self.text_editing.text_input_mode {
                 TextInputMode::Plain => Shape::Text {
                     x,
                     y,
@@ -363,8 +363,8 @@ impl InputState {
         self.emit_input_effect(InputEffect::TextCopy(TextClipboardRequest {
             text,
             cut: Some(TextCutTarget {
-                generation: self.text_input_generation,
-                revision: self.text_input_revision,
+                generation: self.text_editing.text_input_generation,
+                revision: self.text_editing.text_input_revision,
                 range,
             }),
         }));
@@ -406,8 +406,8 @@ impl InputState {
             return None;
         };
         Some(TextPasteTarget {
-            generation: self.text_input_generation,
-            revision: self.text_input_revision,
+            generation: self.text_editing.text_input_generation,
+            revision: self.text_editing.text_input_revision,
             caret: *caret,
             selection_anchor: *selection_anchor,
         })
@@ -415,7 +415,7 @@ impl InputState {
 
     pub(crate) fn text_paste_target_is_current(&self, target: TextPasteTarget) -> bool {
         self.text_input_generation_is_current(target.generation)
-            && self.text_input_revision == target.revision
+            && self.text_editing.text_input_revision == target.revision
     }
 
     /// Apply a clipboard result at the selection/caret that invoked it. The
@@ -473,7 +473,7 @@ impl InputState {
         Some(TextPasteEdit {
             generation: target.generation,
             previous_revision: target.revision,
-            revision: self.text_input_revision,
+            revision: self.text_editing.text_input_revision,
             replaced,
             inserted_len,
         })
@@ -488,7 +488,7 @@ impl InputState {
         if !self.text_input_generation_is_current(target.generation) {
             return;
         }
-        if target.revision != self.text_input_revision {
+        if target.revision != self.text_editing.text_input_revision {
             return;
         }
 

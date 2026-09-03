@@ -11,7 +11,7 @@ impl InputState {
         }
         let shape_id = self.selected_shape_ids()[0];
         if let (DrawingState::TextInput { .. }, Some((editing_id, _))) =
-            (&self.state, self.text_edit_target.as_ref())
+            (&self.state, self.text_editing.text_edit_target.as_ref())
             && *editing_id == shape_id
         {
             return true;
@@ -93,7 +93,7 @@ impl InputState {
             self.cancel_text_input();
         }
 
-        self.text_input_mode = mode;
+        self.text_editing.text_input_mode = mode;
         let _ = self.set_color(color);
         let _ = self.set_font_size(size);
         let _ = self.set_font_descriptor(font_descriptor);
@@ -107,13 +107,13 @@ impl InputState {
         }
         self.style.text_wrap_width = wrap_width;
 
-        self.text_edit_target = Some((shape_id, snapshot));
-        self.text_edit_entry_feedback = Some(TextEditEntryFeedback {
+        self.text_editing.text_edit_target = Some((shape_id, snapshot));
+        self.text_editing.text_edit_entry_feedback = Some(TextEditEntryFeedback {
             started: Instant::now(),
         });
         self.begin_text_input_session();
         self.state = DrawingState::text_input(x, y, text);
-        self.last_text_preview_bounds = None;
+        self.text_editing.last_text_preview_bounds = None;
         self.update_text_preview_dirty();
 
         let cleared = {
@@ -143,14 +143,14 @@ impl InputState {
             self.invalidate_hit_cache_for(shape_id);
             self.needs_redraw = true;
         } else {
-            self.text_edit_target = None;
+            self.text_editing.text_edit_target = None;
         }
 
         true
     }
 
     pub(crate) fn cancel_text_edit(&mut self) -> bool {
-        let Some((shape_id, snapshot)) = self.text_edit_target.take() else {
+        let Some((shape_id, snapshot)) = self.text_editing.text_edit_target.take() else {
             return false;
         };
 
@@ -179,7 +179,7 @@ impl InputState {
     }
 
     pub(crate) fn commit_text_edit(&mut self, new_shape: Shape) -> bool {
-        let Some((shape_id, before_snapshot)) = self.text_edit_target.take() else {
+        let Some((shape_id, before_snapshot)) = self.text_editing.text_edit_target.take() else {
             return false;
         };
 

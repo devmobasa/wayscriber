@@ -145,9 +145,9 @@ impl InputState {
 
     /// Updates dirty tracking for the live text preview/caret overlay.
     pub(crate) fn update_text_preview_dirty(&mut self) {
-        self.text_input_cursor_rect_dirty = true;
+        self.text_editing.text_input_cursor_rect_dirty = true;
         let new_bounds = self.compute_text_preview_bounds();
-        let previous = self.last_text_preview_bounds;
+        let previous = self.text_editing.last_text_preview_bounds;
 
         if new_bounds != previous
             && let Some(prev) = previous
@@ -157,9 +157,9 @@ impl InputState {
 
         if let Some(bounds) = new_bounds {
             self.dirty_tracker.mark_rect(bounds);
-            self.last_text_preview_bounds = Some(bounds);
+            self.text_editing.last_text_preview_bounds = Some(bounds);
         } else {
-            self.last_text_preview_bounds = None;
+            self.text_editing.last_text_preview_bounds = None;
         }
     }
 
@@ -167,15 +167,15 @@ impl InputState {
     /// method. The backend uses this bit to publish text-input-v3's `Other`
     /// change cause with the coalesced surrounding-text/caret update.
     pub(crate) fn update_text_preview_dirty_from_editor(&mut self) {
-        self.text_input_external_change_dirty = true;
+        self.text_editing.text_input_external_change_dirty = true;
         self.update_text_preview_dirty();
     }
 
     /// Clears the cached text preview bounds.
     pub(crate) fn clear_text_preview_dirty(&mut self) {
-        self.text_input_cursor_rect_dirty = false;
-        self.text_input_external_change_dirty = false;
-        if let Some(prev) = self.last_text_preview_bounds.take() {
+        self.text_editing.text_input_cursor_rect_dirty = false;
+        self.text_editing.text_input_external_change_dirty = false;
+        if let Some(prev) = self.text_editing.last_text_preview_bounds.take() {
             self.dirty_tracker.mark_rect(prev);
         }
     }
@@ -183,26 +183,26 @@ impl InputState {
     /// Drain one coalesced request to publish the current caret geometry to
     /// the compositor's text-input object.
     pub(crate) fn take_text_input_cursor_rect_dirty(&mut self) -> bool {
-        std::mem::take(&mut self.text_input_cursor_rect_dirty)
+        std::mem::take(&mut self.text_editing.text_input_cursor_rect_dirty)
     }
 
     /// Drains the coalesced external-editor origin for the next protocol
     /// update independently of geometry dirtiness.
     pub(crate) fn take_text_input_external_change_dirty(&mut self) -> bool {
-        std::mem::take(&mut self.text_input_external_change_dirty)
+        std::mem::take(&mut self.text_editing.text_input_external_change_dirty)
     }
 
     fn compute_text_preview_bounds(&self) -> Option<Rect> {
         let DrawingState::TextInput { x, y, .. } = &self.state else {
             return None;
         };
-        let cursor_glyph = if self.text_edit_target.is_some() {
+        let cursor_glyph = if self.text_editing.text_edit_target.is_some() {
             "|"
         } else {
             "_"
         };
         let preview = self.text_input_preview(cursor_glyph)?;
-        let text_bounds = match self.text_input_mode {
+        let text_bounds = match self.text_editing.text_input_mode {
             TextInputMode::Plain => bounding_box_for_text(
                 *x,
                 *y,
@@ -286,7 +286,7 @@ impl InputState {
     /// text, so it stays hidden. The renderer defers to this so the damage
     /// bounds and the drawn ghost always agree.
     pub(crate) fn text_edit_ghost_visible(&self) -> bool {
-        let Some((_, snapshot)) = &self.text_edit_target else {
+        let Some((_, snapshot)) = &self.text_editing.text_edit_target else {
             return false;
         };
         let DrawingState::TextInput { x, y, .. } = &self.state else {
@@ -302,7 +302,7 @@ impl InputState {
         if !self.text_edit_ghost_visible() {
             return None;
         }
-        let (_, snapshot) = self.text_edit_target.as_ref()?;
+        let (_, snapshot) = self.text_editing.text_edit_target.as_ref()?;
         snapshot
             .shape
             .bounding_box()?
@@ -336,7 +336,7 @@ impl InputState {
         let DrawingState::TextInput { x, y, .. } = &self.state else {
             return None;
         };
-        let cursor_glyph = if self.text_edit_target.is_some() {
+        let cursor_glyph = if self.text_editing.text_edit_target.is_some() {
             "|"
         } else {
             "_"
@@ -752,7 +752,7 @@ mod tests {
     #[test]
     fn empty_sticky_note_damage_covers_the_background_not_only_the_caret() {
         let mut state = make_test_input_state();
-        state.text_input_mode = TextInputMode::StickyNote;
+        state.text_editing.text_input_mode = TextInputMode::StickyNote;
         state.state = DrawingState::text_input(100, 100, String::new());
 
         let bounds = state

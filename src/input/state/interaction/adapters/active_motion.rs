@@ -82,7 +82,7 @@ pub(crate) fn handle_active_motion(
                     points,
                     point_thicknesses,
                 };
-                state.last_text_click = None;
+                state.text_editing.last_text_click = None;
                 state.last_provisional_bounds = None;
                 state.update_provisional_dirty(canvas.x(), canvas.y());
                 state.needs_redraw = true;

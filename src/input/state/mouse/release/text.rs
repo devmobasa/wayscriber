@@ -13,6 +13,7 @@ pub(super) fn handle_pending_text_click(
 ) {
     let now = Instant::now();
     let is_double = state
+        .text_editing
         .last_text_click
         .map(|last| {
             last.shape_id == shape_id
@@ -23,11 +24,11 @@ pub(super) fn handle_pending_text_click(
         .unwrap_or(false);
 
     if is_double {
-        state.last_text_click = None;
+        state.text_editing.last_text_click = None;
         state.set_selection(vec![shape_id]);
         let _ = state.edit_selected_text();
     } else {
-        state.last_text_click = Some(TextClickState {
+        state.text_editing.last_text_click = Some(TextClickState {
             shape_id,
             x,
             y,

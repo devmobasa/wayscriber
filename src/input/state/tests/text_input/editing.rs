@@ -513,7 +513,7 @@ fn alt_left_drag_moves_the_whole_block_without_editing() {
     assert_eq!(origin(&state), (120, 115));
     assert_eq!(buffer(&state), "hello", "moving the block never edits text");
     assert!(
-        state.text_block_drag.is_none(),
+        state.text_editing.text_block_drag.is_none(),
         "the drag flag is cleared on release"
     );
     assert!(
@@ -560,7 +560,7 @@ fn plain_left_drag_does_not_move_the_block() {
         (100, 100),
         "a plain drag leaves the block where it is"
     );
-    assert!(state.text_block_drag.is_none());
+    assert!(state.text_editing.text_block_drag.is_none());
 }
 
 #[test]
