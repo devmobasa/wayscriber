@@ -113,6 +113,10 @@ impl SelectionClipboard {
         self.generation
     }
 
+    pub(in crate::input::state::core) fn active_paste_request_id(&self) -> Option<u64> {
+        self.active_paste_request_id
+    }
+
     pub(in crate::input::state::core) fn snapshot(&self) -> LocalSelectionContext {
         LocalSelectionContext {
             shapes: self.shapes.clone(),
@@ -162,7 +166,11 @@ impl SelectionClipboard {
             visible_canvas_rect,
             screen_size,
             selection_clipboard_generation_at_request: self.generation,
-            local_selection_fallback_generation: self.snapshot().fallback_generation(),
+            local_selection_fallback_generation: fallback_generation(
+                self.shapes.as_deref(),
+                self.generation,
+                &self.publish_state,
+            ),
         };
         self.active_paste_request_id = Some(request.id);
         request
@@ -250,24 +258,13 @@ impl LocalSelectionContext {
         self.active_paste_request_id
     }
 
+    #[cfg(test)]
     pub(crate) fn fallback_generation(&self) -> Option<u64> {
         self.fallback_allowed().then_some(self.generation)
     }
 
     pub(crate) fn fallback_allowed(&self) -> bool {
-        if self
-            .shapes
-            .as_ref()
-            .is_none_or(|clipboard| clipboard.is_empty())
-        {
-            return false;
-        }
-        match self.publish_state {
-            SelectionPublishState::NotAttempted => true,
-            SelectionPublishState::Failed { generation, .. }
-            | SelectionPublishState::Published { generation } => generation == self.generation,
-            SelectionPublishState::Superseded { .. } => false,
-        }
+        fallback_generation(self.shapes.as_deref(), self.generation, &self.publish_state).is_some()
     }
 
     pub(crate) fn shapes_for_fallback(&self, generation: u64) -> Option<Vec<Shape>> {
@@ -349,6 +346,28 @@ impl LocalSelectionContext {
     }
 }
 
+fn fallback_generation(
+    shapes: Option<&[Shape]>,
+    current_generation: u64,
+    publish_state: &SelectionPublishState,
+) -> Option<u64> {
+    if shapes.is_none_or(<[Shape]>::is_empty) {
+        return None;
+    }
+    match publish_state {
+        SelectionPublishState::NotAttempted => Some(current_generation),
+        SelectionPublishState::Failed { generation, .. }
+        | SelectionPublishState::Published { generation }
+            if *generation == current_generation =>
+        {
+            Some(current_generation)
+        }
+        SelectionPublishState::Failed { .. }
+        | SelectionPublishState::Published { .. }
+        | SelectionPublishState::Superseded { .. } => None,
+    }
+}
+
 fn non_empty_shapes(shapes: Vec<Shape>) -> Option<Vec<Shape>> {
     (!shapes.is_empty()).then_some(shapes)
 }
@@ -420,14 +439,12 @@ mod tests {
             (800, 600),
         );
 
+        assert_eq!(first.local_selection_fallback_generation, Some(1));
         assert_eq!(second.id, first.id.wrapping_add(1));
         clipboard.finish_paste_request(first.id);
-        assert_eq!(
-            clipboard.snapshot().active_paste_request_id(),
-            Some(second.id)
-        );
+        assert_eq!(clipboard.active_paste_request_id(), Some(second.id));
         clipboard.finish_paste_request(second.id);
-        assert_eq!(clipboard.snapshot().active_paste_request_id(), None);
+        assert_eq!(clipboard.active_paste_request_id(), None);
     }
 
     #[test]

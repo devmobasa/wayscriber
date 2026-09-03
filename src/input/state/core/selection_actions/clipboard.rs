@@ -166,12 +166,7 @@ impl InputState {
         if shapes.is_empty() {
             return 0;
         }
-        if self
-            .selection_clipboard
-            .snapshot()
-            .active_paste_request_id()
-            != Some(request.id)
-        {
+        if self.selection_clipboard.active_paste_request_id() != Some(request.id) {
             return 0;
         }
 

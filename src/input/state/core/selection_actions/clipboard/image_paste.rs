@@ -9,10 +9,7 @@ impl InputState {
         request: &ClipboardPasteRequest,
         image: EmbeddedImage,
     ) -> bool {
-        let active_request_id = self
-            .selection_clipboard
-            .snapshot()
-            .active_paste_request_id();
+        let active_request_id = self.selection_clipboard.active_paste_request_id();
         if active_request_id != Some(request.id) {
             log::info!(
                 "Ignoring external image paste request {} because active request is {:?}",
