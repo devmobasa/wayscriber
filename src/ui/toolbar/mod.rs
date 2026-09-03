@@ -1,4 +1,3 @@
-mod apply;
 pub(crate) mod bindings;
 mod events;
 pub(crate) mod model;
