@@ -172,7 +172,7 @@ impl InputState {
                 lines.push(
                     "The toolbar provides quick access to all tools and settings.".to_string(),
                 );
-                if let Some(click) = self.toolbar_rebind_modifier.click_label() {
+                if let Some(click) = self.toolbar_rebind_click_label() {
                     lines.push(format!(
                         "By default, {click} a bindable control to change its shortcut."
                     ));
@@ -320,10 +320,9 @@ impl InputState {
     pub fn end_tour(&mut self) {
         self.tour.end();
         if !self.presenter_mode || !self.presenter_mode_config.hide_toolbars {
-            let top_visible = self.toolbar_top_pinned;
+            let top_visible = self.toolbar_top_pinned();
             if !self.toolbar_visible() && top_visible {
-                self.toolbar_top_visible = true;
-                self.toolbar_visible = true;
+                self.show_toolbar_visibility();
             }
         }
         self.dirty_tracker.mark_full();
@@ -406,7 +405,7 @@ mod tests {
 
         // The ToolbarIntro step routes the shortcut-rebind chord through the
         // modifier helper — never a hardcoded key string. Default is Ctrl+Shift.
-        state.toolbar_rebind_modifier = ToolbarRebindModifier::CtrlShift;
+        state.test_set_toolbar_rebind_modifier(ToolbarRebindModifier::CtrlShift);
         let toolbar = state.tour_step_description(TourStep::ToolbarIntro);
         assert!(
             toolbar.contains(
@@ -419,7 +418,7 @@ mod tests {
 
         // Changing the modifier changes the copy, proving it is generated, not
         // hardcoded.
-        state.toolbar_rebind_modifier = ToolbarRebindModifier::CtrlAlt;
+        state.test_set_toolbar_rebind_modifier(ToolbarRebindModifier::CtrlAlt);
         let toolbar = state.tour_step_description(TourStep::ToolbarIntro);
         assert!(
             toolbar.contains("Ctrl+Alt+click"),

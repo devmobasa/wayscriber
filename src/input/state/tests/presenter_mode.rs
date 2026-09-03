@@ -128,20 +128,19 @@ fn presenter_locked_mode_blocks_non_left_drag_bindings() {
 fn presenter_mode_restores_status_bar_toolbars_and_tool_override_on_exit() {
     let mut state = create_test_input_state();
     state.ui_visibility.show_status_bar = true;
-    state.toolbar_visible = true;
-    state.toolbar_top_visible = true;
+    state.test_set_toolbar_visibility_state(true, true, state.toolbar_top_pinned());
     state.set_tool_override(Some(Tool::Arrow));
 
     state.toggle_presenter_mode();
     assert!(!state.ui_visibility.show_status_bar);
-    assert!(!state.toolbar_visible);
+    assert!(!state.toolbar_visible());
     assert_eq!(state.tool_override(), Some(Tool::Highlight));
 
     state.toggle_presenter_mode();
     assert!(!state.presenter_mode);
     assert!(state.ui_visibility.show_status_bar);
-    assert!(state.toolbar_visible);
-    assert!(state.toolbar_top_visible);
+    assert!(state.toolbar_visible());
+    assert!(state.toolbar_top_visible());
     assert_eq!(state.tool_override(), Some(Tool::Arrow));
 }
 
@@ -152,9 +151,8 @@ fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
     let mut state = create_test_input_state();
     state.presenter_mode_config.hide_toolbars = true;
     state.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Micro;
-    state.toolbar_visible = true;
-    state.toolbar_top_visible = true;
-    state.toolbar_top_minimized = true;
+    state.test_set_toolbar_visibility_state(true, true, state.toolbar_top_pinned());
+    state.test_set_toolbar_display_state(state.toolbar_top_display_mode(), true);
 
     state.toggle_presenter_mode();
     assert!(state.presenter_mode);
@@ -164,14 +162,14 @@ fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
     );
     assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
     assert!(
-        !state.toolbar_top_minimized,
+        !state.toolbar_top_minimized(),
         "the chip replaces the restore tab"
     );
     state.toggle_presenter_mode();
     assert!(!state.presenter_mode);
-    assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Full);
+    assert_eq!(state.toolbar_top_display_mode(), TopDisplayMode::Full);
     assert!(
-        state.toolbar_top_minimized,
+        state.toolbar_top_minimized(),
         "minimize state restored on exit"
     );
 }
@@ -186,7 +184,7 @@ fn presenter_hidden_mapping_keeps_todays_behavior() {
 
     state.toggle_presenter_mode();
     assert!(!state.toolbar_top_visible());
-    assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Full);
+    assert_eq!(state.toolbar_top_display_mode(), TopDisplayMode::Full);
 }
 
 #[test]

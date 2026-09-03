@@ -134,7 +134,7 @@ fn display_mode_cycle_is_runtime_owned_and_hidden_persists_as_full() {
     let config = Config::default();
     let mut input = input_from_config(&config);
     let mut runtime = test_runtime(&config, &runtime_path);
-    assert_eq!(input.toolbar_top_display_mode, TopDisplayMode::Full);
+    assert_eq!(input.toolbar_top_display_mode(), TopDisplayMode::Full);
 
     assert!(matches!(
         commit_display_mode(&mut runtime, &mut input, TopDisplayMode::Micro),
@@ -153,7 +153,7 @@ fn display_mode_cycle_is_runtime_owned_and_hidden_persists_as_full() {
         ToolbarRuntimeFinish::KeepPreview
     ));
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
-    assert_eq!(input.toolbar_top_display_mode, TopDisplayMode::Hidden);
+    assert_eq!(input.toolbar_top_display_mode(), TopDisplayMode::Hidden);
     assert_eq!(
         stored_display_mode(&runtime),
         None,
@@ -182,13 +182,13 @@ fn a_stored_display_mode_is_restored_at_startup_over_the_config_seed() {
     let mut restarted_input = input_from_config(&config);
     restarted_input.init_toolbar_display_mode_from_config(config.ui.toolbar.top_display_mode);
     assert_eq!(
-        restarted_input.toolbar_top_display_mode,
+        restarted_input.toolbar_top_display_mode(),
         TopDisplayMode::Full
     );
     let restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(&mut restarted_input);
     assert_eq!(
-        restarted_input.toolbar_top_display_mode,
+        restarted_input.toolbar_top_display_mode(),
         TopDisplayMode::Micro
     );
 }
@@ -202,13 +202,13 @@ fn a_display_mode_change_during_presenter_mode_stores_the_pre_presenter_value() 
     let mut input = input_from_config(&config);
     input.presenter_mode_config.hide_toolbars = true;
     input.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Micro;
-    input.toolbar_top_display_mode = TopDisplayMode::Full;
+    input.test_set_toolbar_display_state(TopDisplayMode::Full, input.toolbar_top_minimized());
     input.toggle_presenter_mode();
-    assert_eq!(input.toolbar_top_display_mode, TopDisplayMode::Micro);
+    assert_eq!(input.toolbar_top_display_mode(), TopDisplayMode::Micro);
 
     // The live strip is presenter's; the persisted value stays the saved
     // pre-presenter mode, so committing it is a no-op against the seed.
-    let values = top_display_mode_values(input.toolbar_top_display_mode, &input).unwrap();
+    let values = top_display_mode_values(input.toolbar_top_display_mode(), &input).unwrap();
     assert_eq!(
         values.values().get(&InteractionSeedTarget::TopDisplayMode),
         Some(&InteractionSeedValue::TopDisplayMode(
@@ -271,6 +271,6 @@ fn an_authored_display_mode_edit_drops_the_stale_cycle_override() {
         None,
         "the authored default caught up with the runtime choice"
     );
-    assert_eq!(input.toolbar_top_display_mode, TopDisplayMode::Micro);
+    assert_eq!(input.toolbar_top_display_mode(), TopDisplayMode::Micro);
     runtime.shutdown_blocking();
 }

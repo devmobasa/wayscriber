@@ -87,12 +87,12 @@ fn unsupported_runtime_file_keeps_toolbar_mutations_live_only_and_byte_exact() {
         .begin_toolbar_mutation(target, &input)
         .expect("unsupported authority permits a live-only preview");
     assert!(!prepared.is_persistent_preview());
-    input.toolbar_top_minimized = true;
+    input.test_set_toolbar_display_state(input.toolbar_top_display_mode(), true);
     assert!(matches!(
         runtime.finish_toolbar_mutation(prepared, true, &input),
         ToolbarRuntimeFinish::KeepPreview
     ));
-    assert!(input.toolbar_top_minimized);
+    assert!(input.toolbar_top_minimized());
     assert_eq!(
         runtime.controller.pipeline().latest_accepted(),
         accepted_before,
@@ -104,7 +104,7 @@ fn unsupported_runtime_file_keeps_toolbar_mutations_live_only_and_byte_exact() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(&mut restarted_input);
-    assert!(!restarted_input.toolbar_top_minimized);
+    assert!(!restarted_input.toolbar_top_minimized());
     assert_eq!(fs::read(&runtime_path).unwrap(), UNSUPPORTED);
     restarted.shutdown_blocking();
 }
@@ -121,13 +121,13 @@ fn factory_visibility_reset_survives_restart_over_nondefault_authored_config() {
     let mut input = input_from_config(&config);
     assert!(
         input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .hidden
             .contains(&ids::TOP_TOOL_PEN)
     );
     assert!(
         !input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .hidden
             .contains(&ids::TOP_UTILITY_SCREENSHOT)
     );
@@ -158,13 +158,13 @@ fn factory_visibility_reset_survives_restart_over_nondefault_authored_config() {
     restarted.apply_startup_state(&mut restarted_input);
     assert!(
         !restarted_input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .hidden
             .contains(&ids::TOP_TOOL_PEN)
     );
     assert!(
         restarted_input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .hidden
             .contains(&ids::TOP_UTILITY_SCREENSHOT)
     );
@@ -183,7 +183,7 @@ fn factory_order_reset_survives_restart_over_nondefault_authored_config() {
     let mut input = input_from_config(&config);
     assert_eq!(
         input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .order
             .ordered_ids(ToolbarItemOrderGroup::TopTools)[0],
         ids::TOP_TOOL_PEN
@@ -207,7 +207,7 @@ fn factory_order_reset_survives_restart_over_nondefault_authored_config() {
     restarted.apply_startup_state(&mut restarted_input);
     assert_eq!(
         restarted_input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .order
             .ordered_ids(ToolbarItemOrderGroup::TopTools),
         ToolbarItemsConfig::default()

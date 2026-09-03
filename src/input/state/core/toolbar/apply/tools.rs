@@ -52,8 +52,8 @@ impl InputState {
         } else {
             self.set_tool_override(Some(tool))
         };
-        if self.toolbar_top_menu.is_flyout() {
-            changed |= self.toolbar_top_menu.close();
+        if self.toolbar.top_menu_flyout_open() {
+            changed |= self.toolbar.close_top_menu();
         }
         changed
     }

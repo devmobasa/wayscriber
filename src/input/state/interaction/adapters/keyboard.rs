@@ -120,7 +120,7 @@ pub(crate) fn handle_top_popover_dismiss_key(
     state: &mut InputState,
     key: Key,
 ) -> Option<RoutingOutcome> {
-    if matches!(key, Key::Escape) && state.toolbar_top_menu.is_popover() {
+    if matches!(key, Key::Escape) && state.toolbar_top_menu().is_popover() {
         state.close_top_toolbar_menus();
         return Some(RoutingOutcome::Canceled(CancelTarget::TopPopover));
     }

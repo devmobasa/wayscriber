@@ -20,8 +20,7 @@ fn create_light_mode_test_state_with_click_highlight(
 fn light_mode_enters_passthrough_and_hides_heavy_ui() {
     let mut state = create_light_mode_test_state();
     state.ui_visibility.show_status_bar = true;
-    state.toolbar_visible = true;
-    state.toolbar_top_visible = true;
+    state.test_set_toolbar_visibility_state(true, true, state.toolbar_top_pinned());
     state.ui_visibility.show_tool_preview = true;
     state.set_tool_override(Some(Tool::Arrow));
 
@@ -31,8 +30,8 @@ fn light_mode_enters_passthrough_and_hides_heavy_ui() {
     assert!(!state.light_mode_drawing);
     assert!(state.light_mode_passthrough());
     assert!(!state.ui_visibility.show_status_bar);
-    assert!(!state.toolbar_visible);
-    assert!(!state.toolbar_top_visible);
+    assert!(!state.toolbar_visible());
+    assert!(!state.toolbar_top_visible());
     assert!(!state.ui_visibility.show_tool_preview);
     assert_eq!(state.tool_override(), Some(Tool::Pen));
 }
@@ -69,8 +68,7 @@ fn light_draw_off_does_not_enter_light_mode() {
 fn light_mode_restores_previous_ui_and_tool_on_exit() {
     let mut state = create_light_mode_test_state();
     state.ui_visibility.show_status_bar = true;
-    state.toolbar_visible = true;
-    state.toolbar_top_visible = false;
+    state.test_set_toolbar_visibility_state(true, false, state.toolbar_top_pinned());
     state.ui_visibility.show_tool_preview = true;
     state.set_tool_override(Some(Tool::Marker));
 
@@ -81,8 +79,8 @@ fn light_mode_restores_previous_ui_and_tool_on_exit() {
     assert!(!state.light_mode_drawing);
     assert!(!state.light_mode_passthrough());
     assert!(state.ui_visibility.show_status_bar);
-    assert!(state.toolbar_visible);
-    assert!(!state.toolbar_top_visible);
+    assert!(state.toolbar_visible_flag());
+    assert!(!state.toolbar_top_visible_flag());
     assert!(state.ui_visibility.show_tool_preview);
     assert_eq!(state.tool_override(), Some(Tool::Marker));
 }

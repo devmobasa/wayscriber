@@ -11,7 +11,7 @@ impl InputState {
     /// route both dismiss the same surfaces, so they defer to (or mirror) this
     /// list rather than re-enumerating it and drifting.
     pub(crate) fn close_top_toolbar_menus(&mut self) -> bool {
-        let changed = self.toolbar_top_menu.close();
+        let changed = self.toolbar.close_top_menu();
         if changed {
             self.needs_redraw = true;
         }
@@ -54,15 +54,8 @@ impl InputState {
     /// Minimize keeps the surface mapped as a small restore tab instead of
     /// hiding it, so a presenter who "closes" a bar is never stranded.
     pub(crate) fn apply_toolbar_set_top_minimized(&mut self, minimized: bool) -> bool {
-        if self.toolbar_top_minimized == minimized {
+        if !self.toolbar.set_top_minimized(minimized) {
             return false;
-        }
-        self.toolbar_top_minimized = minimized;
-        if minimized {
-            self.toolbar_top_menu.close();
-            self.toolbar_customize_items_open = false;
-            self.toolbar_customize_items_group = None;
-            self.toolbar_status_bar_contents_open = false;
         }
         self.needs_redraw = true;
         true
@@ -89,21 +82,19 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_pin_top_toolbar(&mut self, pin: bool) -> bool {
-        if self.toolbar_top_pinned != pin {
-            self.toolbar_top_pinned = pin;
-            true
-        } else {
-            false
+        if self.toolbar.top_pinned() == pin {
+            return false;
         }
+        self.toolbar.set_top_pinned(pin);
+        true
     }
 
     pub(super) fn apply_toolbar_toggle_icon_mode(&mut self, use_icons: bool) -> bool {
-        if self.toolbar_use_icons != use_icons {
-            self.toolbar_use_icons = use_icons;
-            true
-        } else {
-            false
+        if self.toolbar.use_icons() == use_icons {
+            return false;
         }
+        self.toolbar.set_use_icons(use_icons);
+        true
     }
 
     pub(super) fn apply_toolbar_toggle_more_colors(&mut self, show: bool) -> bool {
@@ -165,10 +156,9 @@ impl InputState {
     /// single source of truth) and re-derive the mirror booleans, so the
     /// choice survives layout-mode switches.
     fn apply_section_flag(&mut self, flag: crate::config::ToolbarSectionFlag, show: bool) -> bool {
-        if !crate::config::set_section_visibility(&mut self.toolbar_items, flag, show) {
+        if !self.toolbar.set_section_visibility(flag, show) {
             return false;
         }
-        self.resolved_toolbar_items = self.toolbar_items.resolved();
         self.refresh_section_visibility();
         self.needs_redraw = true;
         true
@@ -270,8 +260,8 @@ impl InputState {
 
     pub(super) fn apply_toolbar_toggle_top_overflow(&mut self, open: bool) -> bool {
         let changed = self
-            .toolbar_top_menu
-            .set_open(TopMenuState::TopOverflow, open);
+            .toolbar
+            .set_top_menu_open(TopMenuState::TopOverflow, open);
         if changed {
             self.needs_redraw = true;
         }
@@ -283,8 +273,8 @@ impl InputState {
     /// popovers' shared internal scroll.
     pub(super) fn apply_toolbar_toggle_canvas_popover(&mut self, open: bool) -> bool {
         let mut changed = self
-            .toolbar_top_menu
-            .set_open(TopMenuState::CanvasPopover, open);
+            .toolbar
+            .set_top_menu_open(TopMenuState::CanvasPopover, open);
         if open {
             self.pending_onboarding_usage.used_canvas_popover = true;
             changed |= self.reset_top_popover_scroll();
@@ -300,8 +290,8 @@ impl InputState {
     /// popovers' shared internal scroll.
     pub(super) fn apply_toolbar_toggle_session_popover(&mut self, open: bool) -> bool {
         let mut changed = self
-            .toolbar_top_menu
-            .set_open(TopMenuState::SessionPopover, open);
+            .toolbar
+            .set_top_menu_open(TopMenuState::SessionPopover, open);
         if open {
             changed |= self.reset_top_popover_scroll();
         }
@@ -314,8 +304,8 @@ impl InputState {
     /// Open/close the Settings popover; symmetric with the Session popover.
     pub(super) fn apply_toolbar_toggle_settings_popover(&mut self, open: bool) -> bool {
         let mut changed = self
-            .toolbar_top_menu
-            .set_open(TopMenuState::SettingsPopover, open);
+            .toolbar
+            .set_top_menu_open(TopMenuState::SettingsPopover, open);
         if open {
             changed |= self.reset_top_popover_scroll();
         }
@@ -326,24 +316,15 @@ impl InputState {
     }
 
     fn reset_top_popover_scroll(&mut self) -> bool {
-        if self.toolbar_top_popover_scroll != 0.0 {
-            self.toolbar_top_popover_scroll = 0.0;
-            return true;
-        }
-        false
+        self.toolbar.reset_top_popover_scroll()
     }
 
     /// Set the internal scroll offset of the open Canvas/Session/Settings
     /// popover.
     pub(super) fn apply_toolbar_scroll_top_popover(&mut self, offset: f64) -> bool {
-        if !self.toolbar_top_menu.is_popover() {
+        if !self.toolbar.set_top_popover_scroll(offset) {
             return false;
         }
-        let offset = offset.max(0.0);
-        if (self.toolbar_top_popover_scroll - offset).abs() < 0.5 {
-            return false;
-        }
-        self.toolbar_top_popover_scroll = offset;
         self.needs_redraw = true;
         true
     }
@@ -355,21 +336,20 @@ impl InputState {
     /// defaults here would overwrite an explicit choice with the preset's
     /// baseline before it got the chance.
     pub(crate) fn apply_toolbar_layout_mode_runtime(&mut self, mode: ToolbarLayoutMode) {
-        self.toolbar_layout_mode = mode;
+        self.toolbar.apply_layout_mode(mode);
         self.refresh_section_visibility();
         self.needs_redraw = true;
     }
 
     pub(super) fn apply_toolbar_set_layout_mode(&mut self, mode: ToolbarLayoutMode) -> bool {
-        if self.toolbar_layout_mode != mode {
-            self.toolbar_layout_mode = mode;
-            self.apply_toolbar_mode_defaults(mode);
-            self.toolbar_top_menu
-                .set_open(TopMenuState::ShapePicker, false);
-            true
-        } else {
-            false
+        if self.toolbar.layout_mode() == mode {
+            return false;
         }
+        self.toolbar.apply_layout_mode(mode);
+        self.refresh_section_visibility();
+        self.toolbar
+            .set_top_menu_open(TopMenuState::ShapePicker, false);
+        true
     }
 
     pub(super) fn apply_toolbar_set_item_hidden(
@@ -414,15 +394,8 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_set_item_customization_open(&mut self, open: bool) -> bool {
-        if self.toolbar_customize_items_open == open {
+        if !self.toolbar.set_customize_items_open(open) {
             return false;
-        }
-        self.toolbar_customize_items_open = open;
-        if open {
-            self.toolbar_status_bar_contents_open = false;
-        }
-        if !open {
-            self.toolbar_customize_items_group = None;
         }
         self.needs_redraw = true;
         true
@@ -432,24 +405,16 @@ impl InputState {
         &mut self,
         group: Option<ToolbarItemCustomizeGroup>,
     ) -> bool {
-        if self.toolbar_customize_items_group == group && self.toolbar_customize_items_open {
+        if !self.toolbar.set_customize_items_group(group) {
             return false;
         }
-        self.toolbar_customize_items_open = true;
-        self.toolbar_customize_items_group = group;
-        self.toolbar_status_bar_contents_open = false;
         self.needs_redraw = true;
         true
     }
 
     pub(super) fn apply_toolbar_set_status_bar_contents_open(&mut self, open: bool) -> bool {
-        if self.toolbar_status_bar_contents_open == open {
+        if !self.toolbar.set_status_bar_contents_open(open) {
             return false;
-        }
-        self.toolbar_status_bar_contents_open = open;
-        if open {
-            self.toolbar_customize_items_open = false;
-            self.toolbar_customize_items_group = None;
         }
         self.needs_redraw = true;
         true
@@ -457,8 +422,8 @@ impl InputState {
 
     pub(super) fn apply_toolbar_toggle_shape_picker(&mut self, open: bool) -> bool {
         let changed = self
-            .toolbar_top_menu
-            .set_open(TopMenuState::ShapePicker, open);
+            .toolbar
+            .set_top_menu_open(TopMenuState::ShapePicker, open);
         if changed {
             self.needs_redraw = true;
         }
@@ -508,7 +473,7 @@ mod tests {
         assert!(state.ui_visibility.show_presets);
         assert!(
             state
-                .resolved_toolbar_items
+                .resolved_toolbar_items()
                 .shown
                 .contains(&ToolbarSectionFlag::Presets.item_id())
         );
@@ -521,17 +486,17 @@ mod tests {
         // The deprecated Close event now minimizes: the surface stays
         // visible as a restore tab instead of vanishing.
         state.apply_toolbar_event(ToolbarEvent::CloseTopToolbar);
-        assert!(state.toolbar_top_minimized);
+        assert!(state.toolbar_top_minimized());
         assert!(state.toolbar_top_visible());
 
         state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(false));
-        assert!(!state.toolbar_top_minimized);
+        assert!(!state.toolbar_top_minimized());
     }
 
     #[test]
     fn pin_application_defers_persistence_confirmation_to_backend() {
         let mut state = make_test_input_state();
-        let top_pinned = !state.toolbar_top_pinned;
+        let top_pinned = !state.toolbar_top_pinned();
 
         assert!(state.apply_toolbar_event(ToolbarEvent::PinTopToolbar(top_pinned)));
         assert!(
@@ -550,11 +515,11 @@ mod tests {
             TopMenuState::SettingsPopover,
         ] {
             let mut state = make_test_input_state();
-            state.toolbar_top_menu = menu;
+            state.test_set_toolbar_menu_state(menu, state.toolbar_top_popover_scroll());
 
             state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(true));
 
-            assert_eq!(state.toolbar_top_menu, TopMenuState::Closed);
+            assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
         }
     }
 
@@ -565,27 +530,27 @@ mod tests {
         // Opening the Session popover closes the other top menus and
         // resets the shared internal scroll.
         state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true));
-        state.toolbar_top_popover_scroll = 40.0;
+        state.test_set_toolbar_menu_state(state.toolbar_top_menu(), 40.0);
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSessionPopover(true)));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::SessionPopover);
-        assert_eq!(state.toolbar_top_popover_scroll, 0.0);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::SessionPopover);
+        assert_eq!(state.toolbar_top_popover_scroll(), 0.0);
 
         // Opening the Settings popover closes the Session popover.
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(true)));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::SettingsPopover);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::SettingsPopover);
 
         // Re-opening the overflow (or the shapes picker) closes an open
         // popover.
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true)));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::TopOverflow);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::TopOverflow);
         state.apply_toolbar_event(ToolbarEvent::ToggleSessionPopover(true));
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleShapePicker(true)));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::ShapePicker);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::ShapePicker);
 
         // Explicit close is a plain toggle.
         state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(true));
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(false)));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::Closed);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
     }
 
     #[test]
@@ -602,48 +567,48 @@ mod tests {
         // Opening Canvas closes the overflow, the shapes picker, and resets
         // the shared internal scroll.
         state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true));
-        state.toolbar_top_popover_scroll = 40.0;
+        state.test_set_toolbar_menu_state(state.toolbar_top_menu(), 40.0);
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleCanvasPopover(true)));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::CanvasPopover);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::CanvasPopover);
         assert!(state.pending_onboarding_usage.used_canvas_popover);
-        assert_eq!(state.toolbar_top_popover_scroll, 0.0);
+        assert_eq!(state.toolbar_top_popover_scroll(), 0.0);
     }
 
     fn assert_canvas_is_exclusive_with_session_and_settings(state: &mut crate::input::InputState) {
         // Opening Session or Settings closes Canvas, and Canvas closes them.
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSessionPopover(true)));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::SessionPopover);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::SessionPopover);
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleCanvasPopover(true)));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::CanvasPopover);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::CanvasPopover);
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(true)));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::SettingsPopover);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::SettingsPopover);
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleCanvasPopover(true)));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::CanvasPopover);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::CanvasPopover);
     }
 
     fn assert_overflow_and_shapes_close_canvas(state: &mut crate::input::InputState) {
         // Re-opening the overflow (or the shapes picker) closes Canvas.
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true)));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::TopOverflow);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::TopOverflow);
         state.apply_toolbar_event(ToolbarEvent::ToggleCanvasPopover(true));
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleShapePicker(true)));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::ShapePicker);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::ShapePicker);
     }
 
     fn assert_minimize_and_close_handle_canvas(state: &mut crate::input::InputState) {
         // Minimizing the strip closes an open Canvas popover.
         state.apply_toolbar_event(ToolbarEvent::ToggleCanvasPopover(true));
         state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(true));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::Closed);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
 
         // Explicit close is a plain toggle, and the scroll event applies
         // while Canvas is open.
         state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(false));
         state.apply_toolbar_event(ToolbarEvent::ToggleCanvasPopover(true));
         assert!(state.apply_toolbar_event(ToolbarEvent::ScrollTopPopover(24.0)));
-        assert_eq!(state.toolbar_top_popover_scroll, 24.0);
+        assert_eq!(state.toolbar_top_popover_scroll(), 24.0);
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleCanvasPopover(false)));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::Closed);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
     }
 
     /// Canvas-click-away dismissal (the backend's `dismiss_top_toolbar_menus`
@@ -660,12 +625,12 @@ mod tests {
         ] {
             let mut state = make_test_input_state();
             state.apply_toolbar_event(open);
-            assert!(state.toolbar_top_menu.is_popover());
+            assert!(state.toolbar_top_menu().is_popover());
 
             // The click-away reports it dismissed something (so the backend
             // early-returns) and leaves every top menu closed.
             assert!(state.close_top_toolbar_menus());
-            assert_eq!(state.toolbar_top_menu, TopMenuState::Closed);
+            assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
 
             // Nothing left open: a second click-away is a no-op (no phantom
             // early-return that would swallow a genuine canvas stroke).
@@ -696,7 +661,7 @@ mod tests {
             // handler early-returns instead of pressing into the canvas.
             let swallowed = state.close_top_toolbar_menus();
             assert!(swallowed, "the canvas down dismisses the open popover");
-            assert_eq!(state.toolbar_top_menu, TopMenuState::Closed);
+            assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
             // Nothing was pressed into the canvas: still Idle, no shapes.
             assert!(matches!(state.state, DrawingState::Idle));
             assert_eq!(state.boards.active_frame().shapes.len(), 0);
@@ -717,19 +682,19 @@ mod tests {
 
         // No popover open: the scroll event is a no-op.
         assert!(!state.apply_toolbar_event(ToolbarEvent::ScrollTopPopover(24.0)));
-        assert_eq!(state.toolbar_top_popover_scroll, 0.0);
+        assert_eq!(state.toolbar_top_popover_scroll(), 0.0);
 
         state.apply_toolbar_event(ToolbarEvent::ToggleSettingsPopover(true));
         assert!(state.apply_toolbar_event(ToolbarEvent::ScrollTopPopover(24.0)));
-        assert_eq!(state.toolbar_top_popover_scroll, 24.0);
+        assert_eq!(state.toolbar_top_popover_scroll(), 24.0);
         // Negative offsets clamp to the top.
         assert!(state.apply_toolbar_event(ToolbarEvent::ScrollTopPopover(-5.0)));
-        assert_eq!(state.toolbar_top_popover_scroll, 0.0);
+        assert_eq!(state.toolbar_top_popover_scroll(), 0.0);
 
         // Switching popovers resets the scroll.
         state.apply_toolbar_event(ToolbarEvent::ScrollTopPopover(31.0));
         state.apply_toolbar_event(ToolbarEvent::ToggleSessionPopover(true));
-        assert_eq!(state.toolbar_top_popover_scroll, 0.0);
+        assert_eq!(state.toolbar_top_popover_scroll(), 0.0);
     }
 
     #[test]
@@ -737,22 +702,25 @@ mod tests {
         let mut state = make_test_input_state();
 
         state.apply_toolbar_event(ToolbarEvent::ToggleShapePicker(true));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::ShapePicker);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::ShapePicker);
         state.apply_toolbar_event(ToolbarEvent::ToggleTopOverflow(true));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::TopOverflow);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::TopOverflow);
 
         state.apply_toolbar_event(ToolbarEvent::ToggleShapePicker(true));
-        assert_eq!(state.toolbar_top_menu, TopMenuState::ShapePicker);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::ShapePicker);
     }
 
     #[test]
     fn selecting_from_top_menu_closes_it() {
         let mut state = make_test_input_state();
-        state.toolbar_top_menu = TopMenuState::TopOverflow;
+        state.test_set_toolbar_menu_state(
+            TopMenuState::TopOverflow,
+            state.toolbar_top_popover_scroll(),
+        );
 
         state.apply_toolbar_event(ToolbarEvent::SelectTool(crate::input::Tool::Line));
 
-        assert_eq!(state.toolbar_top_menu, TopMenuState::Closed);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
     }
 
     #[test]
@@ -773,7 +741,7 @@ mod tests {
         assert!(state.ui_visibility.show_presets);
         assert!(
             !state
-                .resolved_toolbar_items
+                .resolved_toolbar_items()
                 .hidden
                 .contains(&ToolbarSectionFlag::Presets.item_id())
         );

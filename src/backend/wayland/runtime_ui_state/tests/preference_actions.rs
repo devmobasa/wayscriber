@@ -184,8 +184,8 @@ fn a_rollback_restores_every_durable_chrome_preference() {
         ),
         (
             InteractionSeedTarget::ToolbarIcons,
-            |i| i.toolbar_use_icons,
-            |i| i.toolbar_use_icons = !i.toolbar_use_icons,
+            |i| i.toolbar_use_icons(),
+            |i| i.set_toolbar_use_icons(!i.toolbar_use_icons()),
         ),
         (
             InteractionSeedTarget::ToolbarMoreColors,
@@ -255,7 +255,7 @@ fn a_rollback_restores_every_durable_chrome_preference() {
     for (target, read, _) in &bools {
         values.insert(target.clone(), InteractionSeedValue::Bool(read(&input)));
     }
-    let original_layout = input.toolbar_layout_mode;
+    let original_layout = input.toolbar_layout_mode();
     values.insert(
         InteractionSeedTarget::ToolbarLayoutMode,
         InteractionSeedValue::LayoutMode(original_layout),
@@ -290,10 +290,10 @@ fn a_rollback_restores_every_durable_chrome_preference() {
             "{target:?} was not rolled back"
         );
     }
-    assert_eq!(input.toolbar_layout_mode, original_layout);
+    assert_eq!(input.toolbar_layout_mode(), original_layout);
     assert_eq!(
         crate::config::item_visibility_setting(
-            &input.resolved_toolbar_items,
+            input.resolved_toolbar_items(),
             ToolbarSectionFlag::Presets.item_id()
         ),
         crate::config::ToolbarItemVisibilitySetting::Default,

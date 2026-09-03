@@ -37,7 +37,8 @@ pub(super) fn top_display_mode_values(
     let presenter_restore = input
         .presenter_restore
         .as_ref()
-        .and_then(|restore| restore.toolbar_top_display_mode);
+        .and_then(|restore| restore.toolbar_visibility)
+        .map(|snapshot| snapshot.top_display_mode());
     RuntimeUiMutationValues::one(
         InteractionSeedTarget::TopDisplayMode,
         InteractionSeedValue::TopDisplayMode(persisted_top_display_mode(mode, presenter_restore)),
@@ -55,12 +56,12 @@ pub(super) fn apply_persisted_top_display_mode(
 ) {
     let mode = mode.display_mode();
     if let Some(restore) = input.presenter_restore.as_mut()
-        && restore.toolbar_top_display_mode.is_some()
+        && let Some(snapshot) = restore.toolbar_visibility.as_mut()
     {
-        restore.toolbar_top_display_mode = Some(mode);
+        snapshot.set_top_display_mode(mode);
         return;
     }
-    if input.toolbar_top_display_mode != mode {
+    if input.toolbar_top_display_mode() != mode {
         input.set_top_display_mode(mode);
     }
 }
@@ -127,7 +128,7 @@ fn apply_live_toolbar_preferences(
     if include(&InteractionSeedTarget::ToolbarIcons)
         && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarIcons)
     {
-        input.toolbar_use_icons = value;
+        input.set_toolbar_use_icons(value);
     }
     if include(&InteractionSeedTarget::ToolbarMoreColors)
         && let Some(value) = live_bool(live, InteractionSeedTarget::ToolbarMoreColors)
@@ -232,7 +233,7 @@ fn apply_live_toolbar_structure(
     if include(&InteractionSeedTarget::TopPinned)
         && let Some(value) = live_bool(live, InteractionSeedTarget::TopPinned)
     {
-        input.toolbar_top_pinned = value;
+        input.set_toolbar_top_pinned(value);
     }
     if include(&InteractionSeedTarget::TopMinimized)
         && let Some(value) = live_bool(live, InteractionSeedTarget::TopMinimized)

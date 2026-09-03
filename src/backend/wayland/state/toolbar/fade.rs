@@ -53,8 +53,8 @@ impl WaylandState {
         // Minimal chrome never fades: the restore tab and micro chip are
         // already the quiet form, and a hidden strip has nothing to fade.
         let reduced_chrome = !input.toolbar_top_visible()
-            || input.toolbar_top_minimized
-            || input.toolbar_top_display_mode == crate::config::TopDisplayMode::Micro;
+            || input.toolbar_top_minimized()
+            || input.toolbar_top_display_mode() == crate::config::TopDisplayMode::Micro;
         let pointer_near = self.pointer_over_toolbar()
             || self.toolbar.top_pointer_present()
             || self.data.inline_top_hover.is_some()
@@ -73,7 +73,7 @@ impl WaylandState {
 /// hold the idle fade: the strip (and the popover hosted on its surface)
 /// must stay full-opacity while one is up, even with the pointer away.
 fn top_menus_open(input: &crate::input::state::InputState) -> bool {
-    input.toolbar_top_menu.is_open() || input.is_color_picker_popup_open()
+    input.toolbar_top_menu().is_open() || input.is_color_picker_popup_open()
 }
 
 #[cfg(test)]
@@ -97,11 +97,11 @@ mod tests {
             TopMenuState::SessionPopover,
             TopMenuState::SettingsPopover,
         ] {
-            input.toolbar_top_menu = menu;
+            input.test_set_toolbar_menu_state(menu, input.toolbar_top_popover_scroll());
             assert!(top_menus_open(&input), "{menu:?}");
         }
 
-        input.toolbar_top_menu = TopMenuState::Closed;
+        input.test_set_toolbar_menu_state(TopMenuState::Closed, input.toolbar_top_popover_scroll());
 
         assert!(!top_menus_open(&input));
     }

@@ -116,9 +116,7 @@ impl InputState {
         if let Some(restore) = self.focus_mode_restore.take() {
             self.clear_focus_mode_toast();
             self.ui_visibility.show_status_bar = restore.show_status_bar;
-            self.toolbar_visible = restore.toolbar_visible;
-            self.toolbar_top_visible = restore.toolbar_top_visible;
-            self.toolbar_top_display_mode = restore.toolbar_top_display_mode;
+            self.restore_toolbar_visibility(restore.toolbar_visibility);
             self.ui_visibility.show_floating_badge = restore.show_floating_badge;
             self.ui_visibility.show_zoom_chip = restore.show_zoom_chip;
             self.dirty_tracker.mark_full();
@@ -147,16 +145,12 @@ impl InputState {
 
         let restore = FocusModeRestore {
             show_status_bar: self.ui_visibility.show_status_bar,
-            toolbar_visible: self.toolbar_visible,
-            toolbar_top_visible: self.toolbar_top_visible,
-            toolbar_top_display_mode: self.toolbar_top_display_mode,
+            toolbar_visibility: self.toolbar_visibility_snapshot(),
             show_floating_badge: self.ui_visibility.show_floating_badge,
             show_zoom_chip: self.ui_visibility.show_zoom_chip,
         };
-        // Raw flags only: the display mode stays untouched so a micro strip
-        // comes back as micro on restore.
-        self.toolbar_visible = false;
-        self.toolbar_top_visible = false;
+        // Leave display mode untouched so a micro strip comes back as micro.
+        self.hide_toolbar_visibility();
         self.ui_visibility.show_status_bar = false;
         self.ui_visibility.show_floating_badge = false;
         self.ui_visibility.show_zoom_chip = false;

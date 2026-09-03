@@ -286,8 +286,8 @@ impl InputState {
         if !self.set_toolbar_visible(now_visible) {
             return;
         }
-        let previous_top_pinned = self.toolbar_top_pinned;
-        self.toolbar_top_pinned = now_visible;
+        let previous_top_pinned = self.toolbar_top_pinned();
+        self.set_toolbar_top_pinned(now_visible);
         if previous_top_pinned != now_visible {
             self.queue_toolbar_persistence(PendingToolbarPersistence::Visibility {
                 previous_top_pinned,
@@ -308,7 +308,7 @@ impl InputState {
             return;
         }
         self.break_focus_mode();
-        let previous_mode = self.toolbar_top_display_mode;
+        let previous_mode = self.toolbar_top_display_mode();
         let mode = self.cycle_top_toolbar_display();
         self.pending_onboarding_usage.used_toolbar_toggle = true;
         let toast = self.toolbar_display_toast(mode);

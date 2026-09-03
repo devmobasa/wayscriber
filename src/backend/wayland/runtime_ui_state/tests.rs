@@ -22,12 +22,7 @@ mod visibility_recovery;
 fn input_from_config(config: &Config) -> InputState {
     let mut input = make_test_input_state();
     input.boards = crate::input::boards::BoardManager::from_config(config.resolved_boards());
-    input.toolbar_items = config.ui.toolbar.items.clone();
-    input.resolved_toolbar_items = input.toolbar_items.resolved();
-    input.toolbar_top_pinned = config.ui.toolbar.top_pinned;
-    input.toolbar_top_minimized = config.ui.toolbar.top_minimized;
-    input.toolbar_top_visible = config.ui.toolbar.top_pinned;
-    input.toolbar_visible = input.toolbar_top_visible;
+    input.init_toolbar_from_config(&config.ui.toolbar);
     input
 }
 

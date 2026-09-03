@@ -96,11 +96,11 @@ impl InputState {
     fn toolbar_persistence_is_due(&self, entry: PendingToolbarPersistence) -> bool {
         match entry {
             PendingToolbarPersistence::DisplayMode { previous } => {
-                previous != self.toolbar_top_display_mode
+                previous != self.toolbar_top_display_mode()
             }
             PendingToolbarPersistence::Visibility {
                 previous_top_pinned,
-            } => previous_top_pinned != self.toolbar_top_pinned,
+            } => previous_top_pinned != self.toolbar_top_pinned(),
             PendingToolbarPersistence::StatusBar { previous } => {
                 previous != self.ui_visibility.show_status_bar
             }

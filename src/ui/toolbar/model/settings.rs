@@ -616,7 +616,7 @@ mod tests {
             crate::config::toolbar_item_ids::SIDE_SETTINGS_STATUS_PAGE_BADGE,
             true,
         ));
-        state.toolbar_status_bar_contents_open = true;
+        state.test_set_toolbar_customization(false, None, true);
         let snapshot =
             ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
         let model = ToolbarSettingsModel::build(&snapshot).expect("settings model");

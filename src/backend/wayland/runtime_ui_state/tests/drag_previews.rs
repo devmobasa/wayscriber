@@ -27,7 +27,7 @@ fn item_drag_commit_accepts_one_revision_and_cancel_accepts_none() {
 
     let accepted_after_drop = runtime.controller.pipeline().latest_accepted();
     let order_before_cancel = input
-        .resolved_toolbar_items
+        .resolved_toolbar_items()
         .order
         .ordered_ids(ToolbarItemOrderGroup::TopTools)
         .to_vec();
@@ -39,7 +39,7 @@ fn item_drag_commit_accepts_one_revision_and_cancel_accepts_none() {
     apply_finish(&mut input, &mut positions, finish);
     assert_eq!(
         input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .order
             .ordered_ids(ToolbarItemOrderGroup::TopTools),
         order_before_cancel
@@ -58,7 +58,7 @@ fn unavailable_persistence_item_drag_cancel_restores_original_order() {
     let mut input = input_from_config(&config);
     let mut previews = UnavailablePersistencePreviews::default();
     let original = input
-        .resolved_toolbar_items
+        .resolved_toolbar_items()
         .order
         .ordered_ids(ToolbarItemOrderGroup::TopTools)
         .to_vec();
@@ -69,7 +69,7 @@ fn unavailable_persistence_item_drag_cancel_restores_original_order() {
     assert!(input.drag_toolbar_item_over(ToolbarItemOrderGroup::TopTools, 5));
     assert_ne!(
         input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .order
             .ordered_ids(ToolbarItemOrderGroup::TopTools),
         original
@@ -81,7 +81,7 @@ fn unavailable_persistence_item_drag_cancel_restores_original_order() {
 
     assert_eq!(
         input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .order
             .ordered_ids(ToolbarItemOrderGroup::TopTools),
         original
@@ -114,7 +114,7 @@ fn persistence_barrier_blocks_updates_without_consuming_untouched_drag_sessions(
     let config = Config::default();
     let mut input = input_from_config(&config);
     let original_order = input
-        .resolved_toolbar_items
+        .resolved_toolbar_items()
         .order
         .ordered_ids(ToolbarItemOrderGroup::TopTools)
         .to_vec();
@@ -138,7 +138,7 @@ fn persistence_barrier_blocks_updates_without_consuming_untouched_drag_sessions(
 
     assert_eq!(
         input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .order
             .ordered_ids(ToolbarItemOrderGroup::TopTools),
         original_order
@@ -184,7 +184,7 @@ fn relevant_reload_aborts_item_and_position_previews_without_restoring_old_seed(
     assert!(!refresh.position_drag_aborted);
     assert_eq!(
         input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .order
             .ordered_ids(ToolbarItemOrderGroup::TopTools),
         expected_b
@@ -253,7 +253,7 @@ fn release_during_barrier_is_consumed_once_and_never_replayed() {
     let config = Config::default();
     let mut input = input_from_config(&config);
     let original = input
-        .resolved_toolbar_items
+        .resolved_toolbar_items()
         .order
         .ordered_ids(ToolbarItemOrderGroup::TopTools)
         .to_vec();
@@ -296,7 +296,7 @@ fn release_during_barrier_is_consumed_once_and_never_replayed() {
     apply_toolbar_runtime_rollback(&mut input, &mut positions, &drain.rollbacks[0]);
     assert_eq!(
         input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .order
             .ordered_ids(ToolbarItemOrderGroup::TopTools),
         original
@@ -325,7 +325,7 @@ fn external_source_conflict_rebuilds_live_toolbar_from_external_authority() {
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     let mut runtime = controller_only_runtime(&config, &runtime_path);
     let original_order = input
-        .resolved_toolbar_items
+        .resolved_toolbar_items()
         .order
         .ordered_ids(ToolbarItemOrderGroup::TopTools)
         .to_vec();
@@ -334,7 +334,7 @@ fn external_source_conflict_rebuilds_live_toolbar_from_external_authority() {
     assert!(input.drag_toolbar_item_over(ToolbarItemOrderGroup::TopTools, 5));
     assert_ne!(
         input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .order
             .ordered_ids(ToolbarItemOrderGroup::TopTools),
         original_order
@@ -343,7 +343,7 @@ fn external_source_conflict_rebuilds_live_toolbar_from_external_authority() {
     let prepared = runtime
         .begin_toolbar_mutation(target, &input)
         .expect("top-pin permit");
-    input.toolbar_top_pinned = false;
+    input.set_toolbar_top_pinned(false);
     let desired = toolbar_values(target, &input).unwrap();
     assert!(matches!(
         runtime.controller.finish_preview(
@@ -372,10 +372,10 @@ fn external_source_conflict_rebuilds_live_toolbar_from_external_authority() {
     assert!(drain.rebuild_live);
     assert!(drain.rollbacks.is_empty());
     runtime.apply_live_state(&mut input, &mut positions);
-    assert!(input.toolbar_top_pinned);
+    assert!(input.toolbar_top_pinned());
     assert_eq!(
         input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .order
             .ordered_ids(ToolbarItemOrderGroup::TopTools),
         original_order
@@ -386,7 +386,7 @@ fn external_source_conflict_rebuilds_live_toolbar_from_external_authority() {
     ));
     assert_eq!(
         input
-            .resolved_toolbar_items
+            .resolved_toolbar_items()
             .order
             .ordered_ids(ToolbarItemOrderGroup::TopTools),
         original_order,

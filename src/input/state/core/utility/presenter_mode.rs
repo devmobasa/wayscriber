@@ -31,17 +31,8 @@ impl InputState {
             if let Some(value) = restore.show_tool_preview {
                 self.ui_visibility.show_tool_preview = value;
             }
-            if let Some(value) = restore.toolbar_visible {
-                self.toolbar_visible = value;
-            }
-            if let Some(value) = restore.toolbar_top_visible {
-                self.toolbar_top_visible = value;
-            }
-            if let Some(value) = restore.toolbar_top_display_mode {
-                self.toolbar_top_display_mode = value;
-            }
-            if let Some(value) = restore.toolbar_top_minimized {
-                self.toolbar_top_minimized = value;
+            if let Some(snapshot) = restore.toolbar_visibility {
+                self.restore_toolbar_visibility(snapshot);
             }
             if let Some(value) = restore.tool_override {
                 self.set_tool_override(value);
@@ -83,10 +74,7 @@ impl InputState {
         let mut restore = PresenterRestore {
             show_status_bar: None,
             show_tool_preview: None,
-            toolbar_visible: None,
-            toolbar_top_visible: None,
-            toolbar_top_display_mode: None,
-            toolbar_top_minimized: None,
+            toolbar_visibility: None,
             click_highlight_enabled: None,
             input_hud_enabled: None,
             tool_override: None,
@@ -106,17 +94,13 @@ impl InputState {
             self.ui_visibility.show_tool_preview = false;
         }
         if config.hide_toolbars {
-            restore.toolbar_visible = Some(self.toolbar_visible);
-            restore.toolbar_top_visible = Some(self.toolbar_top_visible);
+            restore.toolbar_visibility = Some(self.toolbar_visibility_snapshot());
             match config.toolbar_mode {
                 crate::config::PresenterToolbarMode::Hidden => {
-                    self.toolbar_visible = false;
-                    self.toolbar_top_visible = false;
+                    self.hide_toolbar_visibility();
                 }
                 crate::config::PresenterToolbarMode::Micro => {
                     // The top strip stays up as the micro chip.
-                    restore.toolbar_top_display_mode = Some(self.toolbar_top_display_mode);
-                    restore.toolbar_top_minimized = Some(self.toolbar_top_minimized);
                     self.set_top_display_mode(crate::config::TopDisplayMode::Micro);
                 }
             }

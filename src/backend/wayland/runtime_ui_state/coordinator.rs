@@ -62,8 +62,7 @@ impl ToolbarRuntimeState {
     pub(in crate::backend::wayland) fn apply_startup_state(&self, input: &mut InputState) {
         apply_live_toolbar_state(input, self.controller.live_state(), |_| true);
         apply_live_board_state(input, self.controller.live_state(), |_| true);
-        input.toolbar_top_visible = input.toolbar_top_pinned;
-        input.toolbar_visible = input.toolbar_top_visible;
+        input.derive_toolbar_visibility_from_pins();
     }
 
     /// Layer retained position overrides on top of the authored seeds the

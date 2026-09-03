@@ -84,16 +84,16 @@ fn entering_micro_unminimizes_and_closes_top_menus() {
         TopMenuState::SettingsPopover,
     ] {
         let mut state = create_test_input_state();
-        state.toolbar_top_minimized = true;
-        state.toolbar_top_menu = menu;
+        state.test_set_toolbar_display_state(state.toolbar_top_display_mode(), true);
+        state.test_set_toolbar_menu_state(menu, state.toolbar_top_popover_scroll());
 
         state.handle_action(Action::CycleToolbarDisplay);
         assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
         assert!(
-            !state.toolbar_top_minimized,
+            !state.toolbar_top_minimized(),
             "micro and minimized are exclusive"
         );
-        assert_eq!(state.toolbar_top_menu, TopMenuState::Closed);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
     }
 }
 
@@ -121,13 +121,13 @@ fn toggle_toolbar_show_restores_a_cycle_hidden_top_strip() {
 fn toggle_toolbar_drives_the_top_pin_and_queues_its_persistence() {
     let mut state = create_test_input_state();
     assert!(state.toolbar_visible());
-    assert!(state.toolbar_top_pinned);
+    assert!(state.toolbar_top_pinned());
 
     // F9 hide: the durable form of the toggle unpins the strip, and the
     // pending action carries the pre-change pin for the preview's rollback.
     state.handle_action(Action::ToggleToolbar);
     assert!(!state.toolbar_visible());
-    assert!(!state.toolbar_top_pinned);
+    assert!(!state.toolbar_top_pinned());
     assert_eq!(
         state.take_pending_toolbar_persistence(),
         vec![PendingToolbarPersistence::Visibility {
@@ -139,7 +139,7 @@ fn toggle_toolbar_drives_the_top_pin_and_queues_its_persistence() {
     // F9 show: the pin comes back on, with the hidden state as rollback.
     state.handle_action(Action::ToggleToolbar);
     assert!(state.toolbar_visible());
-    assert!(state.toolbar_top_pinned);
+    assert!(state.toolbar_top_pinned());
     assert_eq!(
         state.take_pending_toolbar_persistence(),
         vec![PendingToolbarPersistence::Visibility {
@@ -156,7 +156,7 @@ fn toggle_toolbar_resolves_pins_to_what_is_on_screen() {
     assert!(state.toolbar_visible());
 
     state.handle_action(Action::ToggleToolbar); // off
-    assert!(!state.toolbar_top_pinned);
+    assert!(!state.toolbar_top_pinned());
     assert_eq!(
         state.take_pending_toolbar_persistence(),
         vec![PendingToolbarPersistence::Visibility {
@@ -167,7 +167,7 @@ fn toggle_toolbar_resolves_pins_to_what_is_on_screen() {
     state.handle_action(Action::ToggleToolbar); // on
     assert!(state.toolbar_visible());
     assert!(
-        state.toolbar_top_pinned,
+        state.toolbar_top_pinned(),
         "showing pins the strip so the next start matches the screen"
     );
 }
@@ -184,13 +184,13 @@ fn cycle_hidden_show_with_unchanged_pins_queues_no_persistence() {
     state.handle_action(Action::CycleToolbarDisplay); // micro
     state.handle_action(Action::CycleToolbarDisplay); // hidden
     assert!(!state.toolbar_visible());
-    assert!(state.toolbar_top_pinned);
+    assert!(state.toolbar_top_pinned());
     state.take_pending_toolbar_persistence(); // drain the cycle's display-mode write
 
     state.handle_action(Action::ToggleToolbar); // show: unfolds Hidden → Full
     assert!(state.toolbar_visible());
     assert_eq!(state.top_display_state(), TopDisplayMode::Full);
-    assert!(state.toolbar_top_pinned);
+    assert!(state.toolbar_top_pinned());
     assert!(
         !state.has_pending_toolbar_persistence(),
         "a toggle that moves no pin queues nothing (the raw queue, not the \
@@ -205,12 +205,12 @@ fn cycle_hidden_show_with_unchanged_pins_queues_no_persistence() {
 #[test]
 fn hide_with_an_already_unpinned_strip_queues_no_persistence() {
     let mut state = create_test_input_state();
-    state.toolbar_top_pinned = false;
+    state.set_toolbar_top_pinned(false);
     assert!(state.toolbar_visible());
 
     state.handle_action(Action::ToggleToolbar); // hide
     assert!(!state.toolbar_visible());
-    assert!(!state.toolbar_top_pinned);
+    assert!(!state.toolbar_top_pinned());
     assert!(
         !state.has_pending_toolbar_persistence(),
         "a toggle that moves no pin queues nothing (the raw queue, not the \
@@ -226,7 +226,7 @@ fn presenter_swallowed_toggle_leaves_pins_and_persistence_untouched() {
     assert!(!state.toolbar_visible());
 
     state.handle_action(Action::ToggleToolbar);
-    assert!(state.toolbar_top_pinned);
+    assert!(state.toolbar_top_pinned());
     assert!(
         !state.has_pending_toolbar_persistence(),
         "a swallowed toggle must queue nothing (the raw queue, not the \
@@ -250,7 +250,7 @@ fn focus_and_presenter_transitions_never_queue_pin_persistence() {
     ] {
         state.handle_action(action);
         assert!(
-            state.toolbar_top_pinned,
+            state.toolbar_top_pinned(),
             "{action:?} must not touch the pin overrides"
         );
         assert!(
@@ -272,7 +272,7 @@ fn focus_and_presenter_transitions_never_queue_pin_persistence() {
 #[test]
 fn a_toggle_and_a_cycle_in_one_batch_both_keep_their_persistence() {
     let mut state = create_test_input_state();
-    assert!(state.toolbar_top_pinned);
+    assert!(state.toolbar_top_pinned());
     state.handle_action(Action::CycleToolbarDisplay); // micro
     state.take_pending_toolbar_persistence(); // drain the setup cycle's write
 
@@ -339,11 +339,11 @@ fn visibility_persistence_survives_a_capture_request() {
 #[test]
 fn a_toggle_burst_coalesces_to_the_original_rollback_baseline() {
     let mut state = create_test_input_state();
-    assert!(state.toolbar_top_pinned);
+    assert!(state.toolbar_top_pinned());
 
     state.handle_action(Action::ToggleToolbar); // hide
     state.handle_action(Action::ToggleToolbar); // show: pins back where they started
-    assert!(state.toolbar_top_pinned);
+    assert!(state.toolbar_top_pinned());
 
     assert!(
         state.has_pending_toolbar_persistence(),
@@ -734,7 +734,7 @@ fn presenter_mode_gates_the_cycle_like_toggle_toolbar() {
         !state.toolbar_top_visible(),
         "presenter mode owns toolbar visibility"
     );
-    assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Full);
+    assert_eq!(state.toolbar_top_display_mode(), TopDisplayMode::Full);
 }
 
 #[test]
@@ -771,9 +771,9 @@ fn presenter_mode_gates_the_micro_chip_event_like_the_cycle_action() {
 fn display_mode_init_sanitizes_hidden_to_full() {
     let mut state = create_test_input_state();
     state.init_toolbar_display_mode_from_config(TopDisplayMode::Micro);
-    assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Micro);
+    assert_eq!(state.toolbar_top_display_mode(), TopDisplayMode::Micro);
     state.init_toolbar_display_mode_from_config(TopDisplayMode::Hidden);
-    assert_eq!(state.toolbar_top_display_mode, TopDisplayMode::Full);
+    assert_eq!(state.toolbar_top_display_mode(), TopDisplayMode::Full);
 }
 
 /// `ToolStateSnapshot` leaves chrome visibility out on purpose, so a toggle

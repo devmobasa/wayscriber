@@ -43,12 +43,12 @@ fn top_structure_rebuilds_when_current_shortcuts_change() {
 #[test]
 fn popover_content_keys_track_icon_mode() {
     let mut state = make_test_input_state();
-    state.toolbar_use_icons = false;
+    state.set_toolbar_use_icons(false);
     let text_mode = ToolbarSnapshot::from_input_with_bindings(
         &state,
         ToolbarBindingHints::from_input_state(&state),
     );
-    state.toolbar_use_icons = true;
+    state.set_toolbar_use_icons(true);
     let icon_mode = ToolbarSnapshot::from_input_with_bindings(
         &state,
         ToolbarBindingHints::from_input_state(&state),
@@ -347,13 +347,16 @@ fn canvas_popover_content_key_ignores_delay_slider_values() {
 #[test]
 fn simple_layout_requests_its_smaller_natural_width() {
     let mut state = make_test_input_state();
-    state.toolbar_use_icons = true;
+    state.set_toolbar_use_icons(true);
     let regular = ToolbarSnapshot::from_input_with_bindings(
         &state,
         ToolbarBindingHints::from_input_state(&state),
     );
 
-    state.toolbar_layout_mode = ToolbarLayoutMode::Simple;
+    state.test_set_toolbar_layout(
+        ToolbarLayoutMode::Simple,
+        state.toolbar_mode_overrides().clone(),
+    );
     let simple = ToolbarSnapshot::from_input_with_bindings(
         &state,
         ToolbarBindingHints::from_input_state(&state),

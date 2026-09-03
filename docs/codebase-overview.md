@@ -110,12 +110,16 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
      identity, and shortcut capture while shared modifiers stay on `InputState`; `ViewState` owns
      zoom, frozen-mode, output geometry, and canvas transforms; `PointerTracking` owns pointer and
      provisional-damage bookkeeping; `SpotlightWheelGesture` owns wheel-burst state; `CanvasIndex`
-     owns hit-test caches, spatial indexing policy, and the frame shape cap. `PresetSlots` owns
+     owns hit-test caches, spatial indexing policy, and the frame shape cap; `ToolbarInteraction`
+     owns toolbar visibility, display preferences, resolved item layout, customization state, and
+     top-strip menu lifecycle. `PresetSlots` owns
      preset lifecycle and feedback; `HistoryLimits` owns undo retention plus delayed playback
      scheduling. Pure translation and scaling are methods on `draw::Shape`.
    - `state/actions/` maps keybindings to `Action` values and routes color, board/page, capture,
-     history, selection, tool, and UI behavior. `state/core/toolbar/apply/` applies toolbar events to
-     `InputState`; toolbar models and snapshots remain under `ui/toolbar/`. `HelpOverlayState` owns help visibility, navigation,
+     history, selection, tool, and UI behavior. `state/core/toolbar/apply/` applies toolbar events
+     through `ToolbarInteraction`, while root wrappers retain redraw, persistence, focus-mode, and
+     compatibility-mirror coordination; toolbar models and snapshots remain under `ui/toolbar/`.
+     `HelpOverlayState` owns help visibility, navigation,
      search, scrolling, and press/release bookkeeping. `BoardPickerPanel` similarly owns the board
      picker's modal lifecycle, search timing, layout cache, and drag/edit state. `ContextMenuPanel`
      owns context-menu visibility, targeting, enablement, and cached layout. `ColorPickerPopupPanel`
