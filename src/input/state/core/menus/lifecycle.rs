@@ -1,22 +1,20 @@
 use super::super::base::InputState;
-use super::types::{ContextMenuKind, ContextMenuState, MenuCommand};
+use super::types::{ContextMenuKind, MenuCommand};
 use crate::draw::ShapeId;
 
 impl InputState {
     /// Closes the currently open context menu.
     pub fn close_context_menu(&mut self) {
-        if let Some(layout) = self.context_menu.layout.take() {
+        if let Some(layout) = self.context_menu.close() {
             self.mark_context_menu_region(layout);
         }
-        self.context_menu.state = ContextMenuState::Hidden;
-        self.context_menu.page_target = None;
         self.pending_menu_hover_recalc = false;
         self.needs_redraw = true;
     }
 
     /// Returns true if a context menu is currently visible.
     pub fn is_context_menu_open(&self) -> bool {
-        matches!(self.context_menu.state, ContextMenuState::Open { .. })
+        self.context_menu.is_open()
     }
 
     /// Opens a context menu at the given anchor for the provided kind.
@@ -31,18 +29,12 @@ impl InputState {
             return;
         }
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::ContextMenu);
-        self.context_menu.page_target = None;
-        if let Some(layout) = self.context_menu.layout.take() {
+        if let Some(layout) = self
+            .context_menu
+            .open(anchor, shape_ids, kind, hovered_shape_id)
+        {
             self.mark_context_menu_region(layout);
         }
-        self.context_menu.state = ContextMenuState::Open {
-            anchor,
-            shape_ids,
-            kind,
-            hover_index: None,
-            keyboard_focus: None,
-            hovered_shape_id,
-        };
         self.pending_menu_hover_recalc = true;
     }
 
@@ -56,10 +48,7 @@ impl InputState {
             return;
         }
         self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Page, None);
-        self.context_menu.page_target = Some(super::super::board_picker::BoardPickerPageTarget {
-            board_index,
-            page_index,
-        });
+        self.context_menu.set_page_target(board_index, page_index);
         self.pending_menu_hover_recalc = false;
         self.set_context_menu_focus(None);
         self.focus_first_context_menu_entry();
@@ -131,13 +120,12 @@ impl InputState {
     }
 
     pub fn set_context_menu_enabled(&mut self, enabled: bool) {
-        self.context_menu.enabled = enabled;
-        if !enabled && self.is_context_menu_open() {
+        if self.context_menu.set_enabled(enabled) {
             self.close_context_menu();
         }
     }
 
     pub fn context_menu_enabled(&self) -> bool {
-        self.context_menu.enabled
+        self.context_menu.is_enabled()
     }
 }

@@ -7,12 +7,12 @@ use cairo::Context as CairoContext;
 impl InputState {
     /// Returns cached context menu layout, if available.
     pub fn context_menu_layout(&self) -> Option<&ContextMenuLayout> {
-        self.context_menu.layout.as_ref()
+        self.context_menu.layout()
     }
 
     /// Clears cached layout data (used when menu closes).
     pub fn clear_context_menu_layout(&mut self) {
-        self.context_menu.layout = None;
+        self.context_menu.clear_layout();
         self.pending_menu_hover_recalc = false;
     }
 
