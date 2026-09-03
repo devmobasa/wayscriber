@@ -87,6 +87,11 @@ impl CanvasIndex {
         self.spatial_index = None;
     }
 
+    pub(in crate::input::state) fn restore_from_rollback(&mut self, mut snapshot: Self) {
+        snapshot.content_generation = snapshot.content_generation.max(self.content_generation);
+        *self = snapshot;
+    }
+
     fn invalidate_shape(
         &mut self,
         id: ShapeId,
@@ -561,5 +566,20 @@ mod canvas_index_owner_tests {
         index.set_linear_threshold(2);
         index.ensure_for_frame(&frame, guard(1, &frame));
         assert!(!index.has_spatial_index());
+    }
+
+    #[test]
+    fn rollback_restore_keeps_the_newer_content_generation() {
+        let mut snapshot = CanvasIndex::from_config(6.0, 20);
+        snapshot.invalidate();
+        let mut current = snapshot.clone();
+        current.invalidate();
+        current.set_linear_threshold(1);
+        let newer_generation = current.generation();
+
+        current.restore_from_rollback(snapshot);
+
+        assert_eq!(current.generation(), newer_generation);
+        assert_eq!(current.linear_threshold, 400);
     }
 }

@@ -69,7 +69,7 @@ impl ActiveInteractionRollback {
         input
             .selection_interaction
             .restore_polygon_click(self.last_polygon_click);
-        input.canvas_index = self.canvas_index;
+        input.canvas_index.restore_from_rollback(self.canvas_index);
     }
 }
 

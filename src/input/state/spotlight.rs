@@ -75,8 +75,8 @@ impl SpotlightWheelGesture {
         self.gesture.is_some() || self.value120_remainder.is_some()
     }
 
-    fn begin(&mut self, gesture: SpotlightMagnificationGesture) {
-        self.gesture.get_or_insert(gesture);
+    fn begin_with(&mut self, gesture: impl FnOnce() -> SpotlightMagnificationGesture) {
+        self.gesture.get_or_insert_with(gesture);
     }
 
     fn accumulate_value120(&mut self, shape_id: ShapeId, delta: i32) -> i32 {
@@ -372,11 +372,13 @@ impl InputState {
             // a brush.
             return SpotlightWheelOutcome::AtRangeEnd;
         }
-        self.spotlight_wheel.begin(SpotlightMagnificationGesture {
-            frame: FrameIdentity::of(&self.boards),
-            shape_id,
-            before,
-        });
+        let boards = &self.boards;
+        self.spotlight_wheel
+            .begin_with(|| SpotlightMagnificationGesture {
+                frame: FrameIdentity::of(boards),
+                shape_id,
+                before,
+            });
         if crate::draw::spotlight_magnification_is_active(target) {
             self.request_spotlight_magnifier_feedback();
         }
@@ -577,7 +579,7 @@ mod wheel_gesture_tests {
     #[test]
     fn take_clears_the_gesture_and_its_partial_wheel_step() {
         let mut wheel = SpotlightWheelGesture::default();
-        wheel.begin(gesture(7));
+        wheel.begin_with(|| gesture(7));
         assert_eq!(wheel.accumulate_value120(7, 60), 0);
         assert!(wheel.is_pending());
         assert!(wheel.owns_wheel());
@@ -586,5 +588,23 @@ mod wheel_gesture_tests {
         assert!(!wheel.is_pending());
         assert!(!wheel.owns_wheel());
         assert_eq!(wheel.shape_id(), None);
+    }
+
+    #[test]
+    fn begin_with_does_not_build_a_replacement_for_a_pending_gesture() {
+        let mut wheel = SpotlightWheelGesture::default();
+        let mut builds = 0;
+
+        wheel.begin_with(|| {
+            builds += 1;
+            gesture(7)
+        });
+        wheel.begin_with(|| {
+            builds += 1;
+            gesture(8)
+        });
+
+        assert_eq!(builds, 1);
+        assert_eq!(wheel.gesture_shape_id(), Some(7));
     }
 }

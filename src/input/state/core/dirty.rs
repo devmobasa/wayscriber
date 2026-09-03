@@ -243,7 +243,7 @@ impl InputState {
                     .flatten();
                 for extra in [caret_bounds, decoration_bounds].into_iter().flatten() {
                     live_bounds = Some(match live_bounds {
-                        Some(base) => union_rect(base, extra).unwrap_or(base),
+                        Some(base) => base.union(extra).unwrap_or(base),
                         None => extra,
                     });
                 }
@@ -255,7 +255,7 @@ impl InputState {
         // erased on move-back and on commit (otherwise it lingers there).
         let ghost_bounds = self.text_edit_ghost_damage_bounds();
         let bounds = match (live_bounds, ghost_bounds) {
-            (Some(live), Some(ghost)) => union_rect(live, ghost).or(Some(live)),
+            (Some(live), Some(ghost)) => live.union(ghost).or(Some(live)),
             (Some(live), None) => Some(live),
             (None, ghost) => ghost,
         }?;
@@ -387,16 +387,6 @@ fn text_edit_block_moved(current: (i32, i32), original: &Shape) -> bool {
         }
         _ => false,
     }
-}
-
-fn union_rect(a: Rect, b: Rect) -> Option<Rect> {
-    let min_x = a.x.min(b.x);
-    let min_y = a.y.min(b.y);
-    let max_x = a.x.saturating_add(a.width).max(b.x.saturating_add(b.width));
-    let max_y =
-        a.y.saturating_add(a.height)
-            .max(b.y.saturating_add(b.height));
-    Rect::from_min_max(min_x, min_y, max_x, max_y)
 }
 
 fn append_only_damage_regions(

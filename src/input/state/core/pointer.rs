@@ -95,20 +95,10 @@ impl PointerTracking {
 
     pub(in crate::input::state) fn union_provisional_bounds(&mut self, bounds: Rect) {
         self.provisional_bounds = match self.provisional_bounds {
-            Some(current) => union_rect(current, bounds),
+            Some(current) => current.union(bounds),
             None => Some(bounds),
         };
     }
-}
-
-fn union_rect(a: Rect, b: Rect) -> Option<Rect> {
-    let min_x = a.x.min(b.x);
-    let min_y = a.y.min(b.y);
-    let max_x = a.x.saturating_add(a.width).max(b.x.saturating_add(b.width));
-    let max_y =
-        a.y.saturating_add(a.height)
-            .max(b.y.saturating_add(b.height));
-    Rect::from_min_max(min_x, min_y, max_x, max_y)
 }
 
 #[cfg(test)]
