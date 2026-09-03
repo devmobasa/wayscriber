@@ -168,7 +168,7 @@ impl InputState {
 
     /// Returns true when undo/redo playback is queued.
     pub fn has_pending_history(&self) -> bool {
-        self.pending_history.is_some()
+        self.history_limits.pending_history.is_some()
     }
 
     /// Begin delayed undo playback.
@@ -178,7 +178,7 @@ impl InputState {
         if count == 0 {
             return;
         }
-        self.pending_history = Some(DelayedHistory {
+        self.history_limits.pending_history = Some(DelayedHistory {
             mode: HistoryMode::Undo,
             remaining: count,
             delay_ms: delay_ms.max(MIN_DELAY_MS),
@@ -194,7 +194,7 @@ impl InputState {
         if count == 0 {
             return;
         }
-        self.pending_history = Some(DelayedHistory {
+        self.history_limits.pending_history = Some(DelayedHistory {
             mode: HistoryMode::Redo,
             remaining: count,
             delay_ms: delay_ms.max(MIN_DELAY_MS),
@@ -214,7 +214,7 @@ impl InputState {
         if remaining == 0 {
             return;
         }
-        self.pending_history = Some(DelayedHistory {
+        self.history_limits.pending_history = Some(DelayedHistory {
             mode: HistoryMode::Undo,
             remaining,
             delay_ms: delay_ms.max(MIN_DELAY_MS),
@@ -234,7 +234,7 @@ impl InputState {
         if remaining == 0 {
             return;
         }
-        self.pending_history = Some(DelayedHistory {
+        self.history_limits.pending_history = Some(DelayedHistory {
             mode: HistoryMode::Redo,
             remaining,
             delay_ms: delay_ms.max(MIN_DELAY_MS),
@@ -246,7 +246,7 @@ impl InputState {
     /// Advance delayed history playback; returns true if a step was applied.
     pub fn tick_delayed_history(&mut self, now: Instant) -> bool {
         let mut did_step = false;
-        if let Some(mut pending) = self.pending_history.take() {
+        if let Some(mut pending) = self.history_limits.pending_history.take() {
             while pending.remaining > 0 && now >= pending.next_due {
                 let action = match pending.mode {
                     HistoryMode::Undo => self.boards.active_frame_mut().undo_last(),
@@ -265,7 +265,7 @@ impl InputState {
             }
 
             if pending.remaining > 0 {
-                self.pending_history = Some(pending);
+                self.history_limits.pending_history = Some(pending);
                 // Keep rendering/ticking while history remains.
                 self.needs_redraw = true;
             }

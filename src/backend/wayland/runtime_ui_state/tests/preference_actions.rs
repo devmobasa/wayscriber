@@ -219,8 +219,8 @@ fn a_rollback_restores_every_durable_chrome_preference() {
         ),
         (
             InteractionSeedTarget::HistoryCustomSection,
-            |i| i.custom_section_enabled,
-            |i| i.custom_section_enabled = !i.custom_section_enabled,
+            |i| i.history_limits.custom_section_enabled,
+            |i| i.history_limits.custom_section_enabled = !i.history_limits.custom_section_enabled,
         ),
         (
             InteractionSeedTarget::InputHud,

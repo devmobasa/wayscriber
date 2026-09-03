@@ -106,7 +106,7 @@ fn duplicate_page_in_snapshot(
         return true;
     }
 
-    let history_limit = options.effective_history_limit(input.undo_stack_limit);
+    let history_limit = options.effective_history_limit(input.history_limits.undo_stack_limit);
     let mut pages = pages_for_snapshot(&source_board.pages, history_limit);
     let insert_at = (page_index + 1).min(pages.len());
     pages.insert(insert_at, cloned_page);
@@ -160,7 +160,7 @@ fn copy_page_between_boards_in_snapshot(
         return true;
     }
 
-    let history_limit = options.effective_history_limit(input.undo_stack_limit);
+    let history_limit = options.effective_history_limit(input.history_limits.undo_stack_limit);
     let mut pages = pages_for_snapshot(&target_board.pages, history_limit);
     pages.push(cloned_page);
     snapshot.boards.push(BoardSnapshot {

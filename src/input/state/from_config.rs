@@ -2,7 +2,7 @@ use log::warn;
 use std::collections::HashMap;
 
 use crate::config::{Action, Config, KeybindingsConfig, Shortcut};
-use crate::input::state::{DrawingStyle, InputStateSeed};
+use crate::input::state::{DrawingStyle, HistoryLimits, InputStateSeed};
 use crate::input::{ClickHighlightSettings, DragToolBindings, InputHudSettings, InputState};
 
 impl InputState {
@@ -19,13 +19,7 @@ impl InputState {
             action_map,
             max_shapes_per_frame: config.session.max_shapes_per_frame,
             click_highlight_settings: ClickHighlightSettings::from(&config.ui.click_highlight),
-            undo_all_delay_ms: config.history.undo_all_delay_ms,
-            redo_all_delay_ms: config.history.redo_all_delay_ms,
-            custom_section_enabled: config.history.custom_section_enabled,
-            custom_undo_delay_ms: config.history.custom_undo_delay_ms,
-            custom_redo_delay_ms: config.history.custom_redo_delay_ms,
-            custom_undo_steps: config.history.custom_undo_steps,
-            custom_redo_steps: config.history.custom_redo_steps,
+            history_limits: HistoryLimits::from(&config.history),
             presenter_mode_config: config.presenter_mode.clone(),
         });
         input_state.set_action_bindings(action_bindings);

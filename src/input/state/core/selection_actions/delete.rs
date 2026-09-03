@@ -58,7 +58,7 @@ impl InputState {
             }
             frame.push_undo_action(
                 UndoAction::Delete { shapes: removed },
-                self.undo_stack_limit,
+                self.history_limits.undo_stack_limit,
             );
         }
 

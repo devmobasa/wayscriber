@@ -19,8 +19,8 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_custom_section(&mut self, enable: bool) -> bool {
-        if self.custom_section_enabled != enable {
-            self.custom_section_enabled = enable;
+        if self.history_limits.custom_section_enabled != enable {
+            self.history_limits.custom_section_enabled = enable;
             true
         } else {
             false

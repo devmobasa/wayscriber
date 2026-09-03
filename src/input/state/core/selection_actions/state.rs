@@ -48,9 +48,10 @@ impl InputState {
             return false;
         }
 
-        self.boards
-            .active_frame_mut()
-            .push_undo_action(UndoAction::Compound { actions }, self.undo_stack_limit);
+        self.boards.active_frame_mut().push_undo_action(
+            UndoAction::Compound { actions },
+            self.history_limits.undo_stack_limit,
+        );
         self.mark_session_dirty();
         true
     }
@@ -82,7 +83,7 @@ impl InputState {
             }
             frame.push_undo_action(
                 UndoAction::Delete { shapes: removed },
-                self.undo_stack_limit,
+                self.history_limits.undo_stack_limit,
             );
         }
         self.invalidate_hit_cache();

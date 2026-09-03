@@ -8,7 +8,8 @@ mod mouse;
 mod render;
 mod spotlight;
 pub(crate) use core::{
-    DrawingStyle, IdleHandle, InputStateSeed, SpotlightMagnificationTrack, TopMenuState,
+    DrawingStyle, HistoryLimits, IdleHandle, InputStateSeed, SpotlightMagnificationTrack,
+    TopMenuState,
 };
 pub(crate) use core::{InputEffect, InputEffectDrain};
 pub(crate) use spotlight::{
@@ -122,6 +123,17 @@ pub(crate) mod test_support {
             );
             style.tool_settings.step_marker.thickness =
                 super::core::utility::default_step_marker_size(style.current_font_size);
+            let history_limits = super::HistoryLimits {
+                undo_stack_limit: 100,
+                undo_all_delay_ms: 0,
+                redo_all_delay_ms: 0,
+                custom_undo_delay_ms: 0,
+                custom_redo_delay_ms: 0,
+                custom_undo_steps: 5,
+                custom_redo_steps: 5,
+                custom_section_enabled: true,
+                pending_history: None,
+            };
 
             Self {
                 seed: InputStateSeed {
@@ -131,13 +143,7 @@ pub(crate) mod test_support {
                     action_map,
                     max_shapes_per_frame: usize::MAX,
                     click_highlight_settings: ClickHighlightSettings::disabled(),
-                    undo_all_delay_ms: 0,
-                    redo_all_delay_ms: 0,
-                    custom_section_enabled: true,
-                    custom_undo_delay_ms: 0,
-                    custom_redo_delay_ms: 0,
-                    custom_undo_steps: 5,
-                    custom_redo_steps: 5,
+                    history_limits,
                     presenter_mode_config: PresenterModeConfig::default(),
                 },
                 action_bindings,
@@ -186,7 +192,7 @@ pub(crate) mod test_support {
         }
 
         pub(crate) fn custom_section_enabled(mut self, enabled: bool) -> Self {
-            self.seed.custom_section_enabled = enabled;
+            self.seed.history_limits.custom_section_enabled = enabled;
             self
         }
 
@@ -224,6 +230,6 @@ pub(crate) mod test_support {
         assert_eq!(state.style.current_thickness, 3.0);
         assert_eq!(state.style.eraser_size, 12.0);
         assert!(state.style.text_background_enabled);
-        assert!(!state.custom_section_enabled);
+        assert!(!state.history_limits.custom_section_enabled);
     }
 }

@@ -11,14 +11,16 @@ use std::time::{Duration, Instant};
 
 impl InputState {
     pub fn init_presets_from_config(&mut self, presets: &PresetSlotsConfig) {
-        self.preset_slot_count = presets.slot_count;
-        self.presets = (1..=PRESET_SLOTS_MAX)
+        self.preset_slots.preset_slot_count = presets.slot_count;
+        self.preset_slots.presets = (1..=PRESET_SLOTS_MAX)
             .map(|slot| presets.get_slot(slot).cloned())
             .collect();
-        if self.presets.len() < PRESET_SLOTS_MAX {
-            self.presets.resize_with(PRESET_SLOTS_MAX, || None);
+        if self.preset_slots.presets.len() < PRESET_SLOTS_MAX {
+            self.preset_slots
+                .presets
+                .resize_with(PRESET_SLOTS_MAX, || None);
         }
-        self.active_preset_slot = None;
+        self.preset_slots.active_preset_slot = None;
     }
 
     pub fn apply_preset(&mut self, slot: usize) -> bool {
@@ -26,7 +28,12 @@ impl InputState {
             Some(index) => index,
             None => return false,
         };
-        let preset = match self.presets.get(index).and_then(|p| p.as_ref()) {
+        let preset = match self
+            .preset_slots
+            .presets
+            .get(index)
+            .and_then(|p| p.as_ref())
+        {
             Some(preset) => preset.clone(),
             None => return false,
         };
@@ -104,7 +111,7 @@ impl InputState {
                 .set_drag_tool_bindings(crate::input::DragToolBindings::from_config(&drag_tools));
         }
 
-        self.active_preset_slot = Some(slot);
+        self.preset_slots.active_preset_slot = Some(slot);
         self.set_preset_feedback(slot, PresetFeedbackKind::Apply);
         true
     }
@@ -123,7 +130,12 @@ impl InputState {
             None => return false,
         };
         let mut preset = self.capture_current_preset();
-        if let Some(existing) = self.presets.get(index).and_then(|p| p.as_ref()) {
+        if let Some(existing) = self
+            .preset_slots
+            .presets
+            .get(index)
+            .and_then(|p| p.as_ref())
+        {
             if preset.name.is_none() {
                 preset.name = existing.name.clone();
             }
@@ -131,7 +143,7 @@ impl InputState {
                 return false;
             }
         }
-        if let Some(slot_ref) = self.presets.get_mut(index) {
+        if let Some(slot_ref) = self.preset_slots.presets.get_mut(index) {
             *slot_ref = Some(preset.clone());
         }
         self.set_preset_feedback(slot, PresetFeedbackKind::Save);
@@ -152,18 +164,19 @@ impl InputState {
             None => return false,
         };
         let had_preset = self
+            .preset_slots
             .presets
             .get(index)
             .and_then(|preset| preset.as_ref())
             .is_some();
-        if let Some(slot_ref) = self.presets.get_mut(index) {
+        if let Some(slot_ref) = self.preset_slots.presets.get_mut(index) {
             *slot_ref = None;
         }
         if had_preset {
             self.set_preset_feedback(slot, PresetFeedbackKind::Clear);
         }
-        if self.active_preset_slot == Some(slot) {
-            self.active_preset_slot = None;
+        if self.preset_slots.active_preset_slot == Some(slot) {
+            self.preset_slots.active_preset_slot = None;
         }
         self.emit_input_effect(super::super::base::InputEffect::Preset(
             super::super::base::PresetAction::Clear { slot },
@@ -175,7 +188,12 @@ impl InputState {
 
     pub fn advance_preset_feedback(&mut self, now: Instant) -> bool {
         // Early exit if no feedback is active
-        if !self.preset_feedback.iter().any(|s| s.is_some()) {
+        if !self
+            .preset_slots
+            .preset_feedback
+            .iter()
+            .any(|s| s.is_some())
+        {
             return false;
         }
 
@@ -186,7 +204,7 @@ impl InputState {
         };
         let duration = Duration::from_millis(duration_ms);
         let mut active = false;
-        for slot in &mut self.preset_feedback {
+        for slot in &mut self.preset_slots.preset_feedback {
             let expired = slot
                 .as_ref()
                 .map(|state| now.saturating_duration_since(state.started) >= duration)
@@ -204,7 +222,7 @@ impl InputState {
         if slot == 0 || slot > PRESET_SLOTS_MAX {
             return None;
         }
-        if slot > self.preset_slot_count {
+        if slot > self.preset_slots.preset_slot_count {
             return None;
         }
         Some(slot - 1)
@@ -215,10 +233,12 @@ impl InputState {
             Some(index) => index,
             None => return,
         };
-        if self.preset_feedback.len() < PRESET_SLOTS_MAX {
-            self.preset_feedback.resize_with(PRESET_SLOTS_MAX, || None);
+        if self.preset_slots.preset_feedback.len() < PRESET_SLOTS_MAX {
+            self.preset_slots
+                .preset_feedback
+                .resize_with(PRESET_SLOTS_MAX, || None);
         }
-        if let Some(slot_ref) = self.preset_feedback.get_mut(index) {
+        if let Some(slot_ref) = self.preset_slots.preset_feedback.get_mut(index) {
             *slot_ref = Some(PresetFeedbackState {
                 kind,
                 started: Instant::now(),
@@ -237,7 +257,7 @@ impl InputState {
 
     fn apply_full_preset_tool_settings(&mut self, settings: &PresetToolStatesConfig) {
         if self.style.apply_full_preset_tool_settings(settings) {
-            self.active_preset_slot = None;
+            self.preset_slots.active_preset_slot = None;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             self.mark_session_dirty();

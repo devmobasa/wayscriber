@@ -24,7 +24,7 @@ impl InputState {
         let image_bytes = image.bytes.len();
         let target_active = self.clipboard_request_targets_active_page(request);
         let max_shapes = self.max_shapes_per_frame;
-        let undo_limit = self.undo_stack_limit;
+        let undo_limit = self.history_limits.undo_stack_limit;
         let target = self
             .boards
             .board_state_by_id_mut(&request.target_board_id)

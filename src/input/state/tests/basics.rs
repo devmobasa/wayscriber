@@ -51,8 +51,8 @@ fn test_adjust_font_size_increase() {
 #[test]
 fn apply_preset_updates_tool_and_settings() {
     let mut state = create_test_input_state();
-    state.preset_slot_count = 3;
-    state.presets[0] = Some(ToolPresetConfig {
+    state.preset_slots.preset_slot_count = 3;
+    state.preset_slots.presets[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::Marker,
         color: ColorSpec::Name("blue".to_string()),
@@ -95,7 +95,7 @@ fn apply_preset_updates_tool_and_settings() {
 #[test]
 fn apply_preset_merges_partial_left_drag_tool_bindings() {
     let mut state = create_test_input_state();
-    state.preset_slot_count = 3;
+    state.preset_slots.preset_slot_count = 3;
 
     let mut existing_bindings = DragToolBindings::default();
     existing_bindings.left.shift_drag = DragBinding::from_tool(Tool::Eraser);
@@ -104,7 +104,7 @@ fn apply_preset_merges_partial_left_drag_tool_bindings() {
     let mut left = DragButtonConfig::button_behavior();
     left.drag_tool = DragTool::Marker;
 
-    state.presets[0] = Some(ToolPresetConfig {
+    state.preset_slots.presets[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::Marker,
         color: ColorSpec::Name("blue".to_string()),

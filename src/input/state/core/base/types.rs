@@ -425,6 +425,7 @@ pub(crate) struct PolygonClickState {
 }
 
 /// Tracks in-progress delayed undo/redo playback.
+#[derive(Clone)]
 pub(crate) struct DelayedHistory {
     pub mode: HistoryMode,
     pub remaining: usize,

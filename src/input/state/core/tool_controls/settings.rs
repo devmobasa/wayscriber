@@ -145,7 +145,7 @@ impl InputState {
         if !self.style.set_tool_override(tool) {
             return false;
         }
-        self.active_preset_slot = None;
+        self.preset_slots.active_preset_slot = None;
 
         if tool == Some(Tool::Blur)
             && self.style.blur_style.needs_backdrop()
@@ -310,7 +310,7 @@ impl InputState {
         if !self.style.set_color(tool, color) {
             return false;
         }
-        self.active_preset_slot = None;
+        self.preset_slots.active_preset_slot = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.sync_highlight_color();
@@ -331,7 +331,7 @@ impl InputState {
         let changed = self.style.set_thickness(tool, clamped);
         debug_assert!(changed);
         self.mark_current_provisional_dirty_full();
-        self.active_preset_slot = None;
+        self.preset_slots.active_preset_slot = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.mark_session_dirty();
@@ -348,7 +348,7 @@ impl InputState {
         let changed = self.style.set_eraser_size(clamped);
         debug_assert!(changed);
         self.mark_current_provisional_dirty_full();
-        self.active_preset_slot = None;
+        self.preset_slots.active_preset_slot = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.mark_session_dirty();

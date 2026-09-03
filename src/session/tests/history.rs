@@ -32,7 +32,7 @@ fn snapshot_preserves_history_only_frames() {
         UndoAction::Create {
             shapes: vec![(index, frame.shape(id).unwrap().clone())],
         },
-        input.undo_stack_limit,
+        input.history_limits.undo_stack_limit,
     );
     // Undo to place the action in the redo stack and clear the visible canvas.
     frame.undo_last();
@@ -84,7 +84,7 @@ fn modify_delete_cycle_survives_restore() {
         UndoAction::Create {
             shapes: vec![(index, frame.shape(id).unwrap().clone())],
         },
-        input.undo_stack_limit,
+        input.history_limits.undo_stack_limit,
     );
 
     // Modify the shape (simulate an edit).
@@ -112,7 +112,7 @@ fn modify_delete_cycle_survives_restore() {
                 locked: false,
             },
         },
-        input.undo_stack_limit,
+        input.history_limits.undo_stack_limit,
     );
 
     // Delete it (pushes a Delete with embedded shape data).
@@ -121,7 +121,10 @@ fn modify_delete_cycle_survives_restore() {
         .map(|(idx, shape)| UndoAction::Delete {
             shapes: vec![(idx, shape)],
         });
-    frame.push_undo_action(delete_action.unwrap(), input.undo_stack_limit);
+    frame.push_undo_action(
+        delete_action.unwrap(),
+        input.history_limits.undo_stack_limit,
+    );
 
     assert!(frame.shapes.is_empty());
     assert!(frame.undo_stack_len() >= 3);
@@ -297,7 +300,7 @@ fn corrupted_history_is_dropped_but_shapes_load() {
         UndoAction::Create {
             shapes: vec![(index, frame.shape(id).unwrap().clone())],
         },
-        input.undo_stack_limit,
+        input.history_limits.undo_stack_limit,
     );
 
     let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");

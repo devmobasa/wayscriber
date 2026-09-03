@@ -3,29 +3,29 @@ use crate::ui::toolbar::model::ToolbarSliderSpec;
 
 impl InputState {
     pub(super) fn apply_toolbar_set_undo_delay(&mut self, delay_secs: f64) -> bool {
-        self.undo_all_delay_ms = clamp_delay_ms(delay_secs);
+        self.history_limits.undo_all_delay_ms = clamp_delay_ms(delay_secs);
         true
     }
 
     pub(super) fn apply_toolbar_set_redo_delay(&mut self, delay_secs: f64) -> bool {
-        self.redo_all_delay_ms = clamp_delay_ms(delay_secs);
+        self.history_limits.redo_all_delay_ms = clamp_delay_ms(delay_secs);
         true
     }
 
     pub(super) fn apply_toolbar_set_custom_undo_delay(&mut self, delay_secs: f64) -> bool {
-        self.custom_undo_delay_ms = clamp_delay_ms(delay_secs);
+        self.history_limits.custom_undo_delay_ms = clamp_delay_ms(delay_secs);
         true
     }
 
     pub(super) fn apply_toolbar_set_custom_redo_delay(&mut self, delay_secs: f64) -> bool {
-        self.custom_redo_delay_ms = clamp_delay_ms(delay_secs);
+        self.history_limits.custom_redo_delay_ms = clamp_delay_ms(delay_secs);
         true
     }
 
     pub(super) fn apply_toolbar_set_custom_undo_steps(&mut self, steps: usize) -> bool {
         let clamped = steps.clamp(1, 500);
-        if self.custom_undo_steps != clamped {
-            self.custom_undo_steps = clamped;
+        if self.history_limits.custom_undo_steps != clamped {
+            self.history_limits.custom_undo_steps = clamped;
             true
         } else {
             false
@@ -34,8 +34,8 @@ impl InputState {
 
     pub(super) fn apply_toolbar_set_custom_redo_steps(&mut self, steps: usize) -> bool {
         let clamped = steps.clamp(1, 500);
-        if self.custom_redo_steps != clamped {
-            self.custom_redo_steps = clamped;
+        if self.history_limits.custom_redo_steps != clamped {
+            self.history_limits.custom_redo_steps = clamped;
             true
         } else {
             false
@@ -77,33 +77,33 @@ mod tests {
         assert!(state.apply_toolbar_set_custom_undo_delay(8.0));
         assert!(state.apply_toolbar_set_custom_redo_delay(0.333));
 
-        assert_eq!(state.undo_all_delay_ms, 50);
-        assert_eq!(state.redo_all_delay_ms, 2345);
-        assert_eq!(state.custom_undo_delay_ms, 5000);
-        assert_eq!(state.custom_redo_delay_ms, 333);
+        assert_eq!(state.history_limits.undo_all_delay_ms, 50);
+        assert_eq!(state.history_limits.redo_all_delay_ms, 2345);
+        assert_eq!(state.history_limits.custom_undo_delay_ms, 5000);
+        assert_eq!(state.history_limits.custom_redo_delay_ms, 333);
     }
 
     #[test]
     fn custom_undo_steps_clamp_and_report_when_value_changes() {
         let mut state = make_state();
-        state.custom_undo_steps = 5;
+        state.history_limits.custom_undo_steps = 5;
 
         assert!(state.apply_toolbar_set_custom_undo_steps(0));
-        assert_eq!(state.custom_undo_steps, 1);
+        assert_eq!(state.history_limits.custom_undo_steps, 1);
         assert!(state.apply_toolbar_set_custom_undo_steps(999));
-        assert_eq!(state.custom_undo_steps, 500);
+        assert_eq!(state.history_limits.custom_undo_steps, 500);
         assert!(!state.apply_toolbar_set_custom_undo_steps(500));
     }
 
     #[test]
     fn custom_redo_steps_clamp_and_report_when_value_changes() {
         let mut state = make_state();
-        state.custom_redo_steps = 5;
+        state.history_limits.custom_redo_steps = 5;
 
         assert!(state.apply_toolbar_set_custom_redo_steps(0));
-        assert_eq!(state.custom_redo_steps, 1);
+        assert_eq!(state.history_limits.custom_redo_steps, 1);
         assert!(state.apply_toolbar_set_custom_redo_steps(999));
-        assert_eq!(state.custom_redo_steps, 500);
+        assert_eq!(state.history_limits.custom_redo_steps, 500);
         assert!(!state.apply_toolbar_set_custom_redo_steps(500));
     }
 }

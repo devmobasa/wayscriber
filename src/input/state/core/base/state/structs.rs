@@ -2,14 +2,13 @@ use super::super::super::{index::SpatialIndexCache, selection::SelectionState};
 use super::super::InputEffectOutbox;
 use super::super::toast_queue::ToastQueue;
 use super::super::types::{
-    BlockedActionFeedback, CompositorCapabilities, DelayedHistory, DrawingState,
-    PendingBoardDelete, PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
-    PolygonClickState, PresetFeedbackState, SelectionAxis, SelectionPublishState,
-    StatusChangeHighlight, TextBlockDrag, TextClickState, TextEditEntryFeedback, TextInputMode,
-    UiToastState,
+    BlockedActionFeedback, CompositorCapabilities, DrawingState, PendingBoardDelete,
+    PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete, PolygonClickState,
+    SelectionAxis, SelectionPublishState, StatusChangeHighlight, TextBlockDrag, TextClickState,
+    TextEditEntryFeedback, TextInputMode, UiToastState,
 };
 use crate::config::{
-    Action, PresenterModeConfig, ResolvedToolbarItems, Shortcut, ToolPresetConfig, ToolbarItemId,
+    Action, PresenterModeConfig, ResolvedToolbarItems, Shortcut, ToolbarItemId,
     ToolbarItemOrderGroup, ToolbarItemsConfig,
 };
 use crate::draw::frame::ShapeSnapshot;
@@ -273,22 +272,8 @@ pub struct InputState {
     pub hit_test_tolerance: f64,
     /// Threshold before enabling spatial indexing
     pub max_linear_hit_test: usize,
-    /// Maximum number of undo actions retained in history
-    pub undo_stack_limit: usize,
-    /// Delay between steps when running undo-all via delay (ms)
-    pub undo_all_delay_ms: u64,
-    /// Delay between steps when running redo-all via delay (ms)
-    pub redo_all_delay_ms: u64,
-    /// Delay between steps for custom undo (ms)
-    pub custom_undo_delay_ms: u64,
-    /// Delay between steps for custom redo (ms)
-    pub custom_redo_delay_ms: u64,
-    /// Number of steps to perform for custom undo
-    pub custom_undo_steps: usize,
-    /// Number of steps to perform for custom redo
-    pub custom_redo_steps: usize,
-    /// Whether the custom undo/redo section is visible
-    pub custom_section_enabled: bool,
+    /// Undo retention, delayed playback settings, and active playback state.
+    pub(crate) history_limits: crate::input::state::core::HistoryLimits,
     /// The scan-band overlay shown while screen text recognition runs, and the
     /// outcome card that follows it.
     pub(crate) ocr_scan: Option<crate::input::state::core::utility::ocr_scan::OcrScan>,
@@ -328,9 +313,6 @@ pub struct InputState {
     /// Input-method composition state (preedit + pending IME batch) for the
     /// active text/note edit.
     pub(crate) ime: super::super::super::ime::ImeCompositionState,
-    /// Pending delayed history playback state
-    pub(in crate::input::state::core) pending_history: Option<DelayedHistory>,
-
     /// Spatial grid plus guarded ShapeId-to-z-order indices for large-frame hit-testing.
     pub(in crate::input::state::core) spatial_index: Option<SpatialIndexCache>,
     /// Last known pointer position in screen coordinates (for overlays and hover refresh)
@@ -359,14 +341,8 @@ pub struct InputState {
     pub(in crate::input::state::core) zoom_scale: f64,
     /// Current zoom view offset in canvas/world space
     pub(in crate::input::state::core) zoom_view_offset: (f64, f64),
-    /// Number of preset slots to display
-    pub preset_slot_count: usize,
-    /// Preset slots for quick tool switching
-    pub presets: Vec<Option<ToolPresetConfig>>,
-    /// Last applied preset slot (for UI highlight)
-    pub active_preset_slot: Option<usize>,
-    /// Transient preset feedback for toolbar animations
-    pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
+    /// Runtime preset values, active selection, and transient feedback.
+    pub(crate) preset_slots: crate::input::state::core::PresetSlots,
     /// Lifecycle and navigation state for the guided tour.
     pub(crate) tour: crate::input::state::core::TourState,
     /// Compositor capabilities (layer-shell, screencopy, etc.)

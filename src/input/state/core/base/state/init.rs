@@ -3,7 +3,7 @@ use super::super::types::{
     CompositorCapabilities, DrawingState, PendingOnboardingUsage, TextInputMode,
 };
 use super::structs::InputState;
-use crate::config::{Action, BoardsConfig, PRESET_SLOTS_MAX, Shortcut};
+use crate::config::{Action, BoardsConfig, Shortcut};
 use crate::draw::DirtyTracker;
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::state::input_hud::{InputHudSettings, InputHudState};
@@ -27,13 +27,7 @@ pub(crate) struct InputStateSeed {
     pub(crate) action_map: HashMap<Shortcut, Action>,
     pub(crate) max_shapes_per_frame: usize,
     pub(crate) click_highlight_settings: ClickHighlightSettings,
-    pub(crate) undo_all_delay_ms: u64,
-    pub(crate) redo_all_delay_ms: u64,
-    pub(crate) custom_section_enabled: bool,
-    pub(crate) custom_undo_delay_ms: u64,
-    pub(crate) custom_redo_delay_ms: u64,
-    pub(crate) custom_undo_steps: usize,
-    pub(crate) custom_redo_steps: usize,
+    pub(crate) history_limits: crate::input::state::core::HistoryLimits,
     pub(crate) presenter_mode_config: crate::config::PresenterModeConfig,
 }
 
@@ -50,13 +44,7 @@ impl InputState {
             action_map,
             max_shapes_per_frame,
             click_highlight_settings,
-            undo_all_delay_ms,
-            redo_all_delay_ms,
-            custom_section_enabled,
-            custom_undo_delay_ms,
-            custom_redo_delay_ms,
-            custom_undo_steps,
-            custom_redo_steps,
+            history_limits,
             presenter_mode_config,
         } = seed;
         let sequence_trie =
@@ -151,14 +139,7 @@ impl InputState {
             canvas_content_generation: 0,
             hit_test_tolerance: 6.0,
             max_linear_hit_test: 400,
-            undo_stack_limit: 100,
-            undo_all_delay_ms,
-            redo_all_delay_ms,
-            custom_undo_delay_ms,
-            custom_redo_delay_ms,
-            custom_undo_steps,
-            custom_redo_steps,
-            custom_section_enabled,
+            history_limits,
             ocr_scan: None,
             ui_toast: None,
             toast_queue: super::super::toast_queue::ToastQueue::default(),
@@ -177,7 +158,6 @@ impl InputState {
             text_block_drag: None,
             text_edit_entry_feedback: None,
             ime: crate::input::state::ImeCompositionState::default(),
-            pending_history: None,
             spatial_index: None,
             last_pointer_position: (0, 0),
             last_canvas_pointer_position: (0, 0),
@@ -191,10 +171,7 @@ impl InputState {
             zoom_locked: false,
             zoom_scale: 1.0,
             zoom_view_offset: (0.0, 0.0),
-            preset_slot_count: PRESET_SLOTS_MAX,
-            presets: vec![None; PRESET_SLOTS_MAX],
-            active_preset_slot: None,
-            preset_feedback: vec![None; PRESET_SLOTS_MAX],
+            preset_slots: Default::default(),
             tour: Default::default(),
             compositor_capabilities: CompositorCapabilities::default(),
             capability_toast_caps: None,

@@ -23,22 +23,28 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_undo_all_delayed(&mut self) -> bool {
-        self.start_undo_all_delayed(self.undo_all_delay_ms);
+        self.start_undo_all_delayed(self.history_limits.undo_all_delay_ms);
         true
     }
 
     pub(super) fn apply_toolbar_redo_all_delayed(&mut self) -> bool {
-        self.start_redo_all_delayed(self.redo_all_delay_ms);
+        self.start_redo_all_delayed(self.history_limits.redo_all_delay_ms);
         true
     }
 
     pub(super) fn apply_toolbar_custom_undo(&mut self) -> bool {
-        self.start_custom_undo(self.custom_undo_delay_ms, self.custom_undo_steps);
+        self.start_custom_undo(
+            self.history_limits.custom_undo_delay_ms,
+            self.history_limits.custom_undo_steps,
+        );
         true
     }
 
     pub(super) fn apply_toolbar_custom_redo(&mut self) -> bool {
-        self.start_custom_redo(self.custom_redo_delay_ms, self.custom_redo_steps);
+        self.start_custom_redo(
+            self.history_limits.custom_redo_delay_ms,
+            self.history_limits.custom_redo_steps,
+        );
         true
     }
 

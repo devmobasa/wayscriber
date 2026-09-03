@@ -17,7 +17,7 @@ pub fn snapshot_from_input(
         tool_state: None,
     };
 
-    let history_limit = options.effective_history_limit(input.undo_stack_limit);
+    let history_limit = options.effective_history_limit(input.history_limits.undo_stack_limit);
 
     let capture_pages = |pages: &crate::draw::BoardPages| -> Option<BoardPagesSnapshot> {
         let mut cloned_pages = pages.pages().to_vec();

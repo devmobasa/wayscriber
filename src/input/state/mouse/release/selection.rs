@@ -106,7 +106,7 @@ pub(super) fn finish_text_resize(
                     before: snapshot,
                     after: after_snapshot,
                 },
-                state.undo_stack_limit,
+                state.history_limits.undo_stack_limit,
             );
             state.mark_session_dirty();
         }
@@ -136,7 +136,7 @@ pub(super) fn finish_selection_resize(
                         before_snapshot.clone(),
                         after_snapshot,
                     ),
-                    state.undo_stack_limit,
+                    state.history_limits.undo_stack_limit,
                 );
                 has_changes = true;
             }
