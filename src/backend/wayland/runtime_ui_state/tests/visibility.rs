@@ -21,7 +21,7 @@ fn keyboard_visibility_toggle_persists_both_pins_and_startup_hides_the_toolbar()
     // applied, so the drained entry carries the pre-toggle pins, which
     // supply the write's rollback.
     input.handle_action(Action::ToggleToolbar);
-    assert!(!input.toolbar_top_pinned);
+    assert!(!input.toolbar_top_pinned());
     assert_eq!(
         input.take_pending_toolbar_persistence(),
         vec![PendingToolbarPersistence::Visibility {
@@ -57,12 +57,12 @@ fn keyboard_visibility_toggle_persists_both_pins_and_startup_hides_the_toolbar()
     runtime.shutdown_blocking();
 
     let mut restarted_input = input_from_config(&config);
-    assert!(restarted_input.toolbar_visible);
+    assert!(restarted_input.toolbar_visible());
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(&mut restarted_input);
-    assert!(!restarted_input.toolbar_top_pinned);
+    assert!(!restarted_input.toolbar_top_pinned());
     assert!(
-        !restarted_input.toolbar_visible && !restarted_input.toolbar_top_visible,
+        !restarted_input.toolbar_visible() && !restarted_input.toolbar_top_visible(),
         "a pin-false override starts the toolbar hidden"
     );
     restarted.shutdown_blocking();
@@ -78,13 +78,13 @@ fn a_rolled_back_hide_toggle_restores_live_visibility_from_the_pins() {
     let mut positions = config_positions(&config);
     // Post-toggle live state: everything hidden, the pin driven false.
     assert!(input.set_toolbar_visible(false));
-    input.toolbar_top_pinned = false;
+    input.set_toolbar_top_pinned(false);
 
     apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(true));
 
-    assert!(input.toolbar_top_pinned);
+    assert!(input.toolbar_top_pinned());
     assert!(
-        input.toolbar_visible && input.toolbar_top_visible,
+        input.toolbar_visible() && input.toolbar_top_visible(),
         "restored pins must bring the live toolbar back"
     );
 }
@@ -99,13 +99,13 @@ fn a_rolled_back_show_toggle_re_hides_the_toolbar() {
     let mut positions = config_positions(&config);
     // Post-toggle live state: everything shown, the pin driven true.
     assert!(input.set_toolbar_visible(true));
-    input.toolbar_top_pinned = true;
+    input.set_toolbar_top_pinned(true);
 
     apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(false));
 
-    assert!(!input.toolbar_top_pinned);
+    assert!(!input.toolbar_top_pinned());
     assert!(
-        !input.toolbar_visible && !input.toolbar_top_visible,
+        !input.toolbar_visible() && !input.toolbar_top_visible(),
         "restored pins must hide the live toolbar again"
     );
 }
@@ -117,9 +117,9 @@ fn a_rolled_back_pin_button_keeps_a_visible_unpinned_toolbar_visible() {
     let config = Config::default();
     let mut input = input_from_config(&config);
     let mut positions = config_positions(&config);
-    assert!(input.toolbar_visible && input.toolbar_top_visible);
+    assert!(input.toolbar_visible() && input.toolbar_top_visible());
     // Post-click state: the button pinned an already-visible toolbar.
-    input.toolbar_top_pinned = true;
+    input.set_toolbar_top_pinned(true);
     let rollback = PreviewRollbackSnapshot {
         values: BTreeMap::from([(
             InteractionSeedTarget::TopPinned,
@@ -130,9 +130,9 @@ fn a_rolled_back_pin_button_keeps_a_visible_unpinned_toolbar_visible() {
 
     apply_toolbar_runtime_rollback(&mut input, &mut positions, &rollback);
 
-    assert!(!input.toolbar_top_pinned);
+    assert!(!input.toolbar_top_pinned());
     assert!(
-        input.toolbar_visible && input.toolbar_top_visible,
+        input.toolbar_visible() && input.toolbar_top_visible(),
         "pin rollback must not derive live visibility from the restored pin"
     );
 }
@@ -152,7 +152,7 @@ fn visibility_toggle_rollback_through_a_failed_reset_restores_the_screen() {
 
     let rollback = RuntimeUiMutationValues::batch([(
         InteractionSeedTarget::TopPinned,
-        InteractionSeedValue::Bool(input.toolbar_top_pinned),
+        InteractionSeedValue::Bool(input.toolbar_top_pinned()),
     )])
     .unwrap();
     let prepared = runtime
@@ -162,7 +162,7 @@ fn visibility_toggle_rollback_through_a_failed_reset_restores_the_screen() {
         )
         .expect("visibility permit");
     assert!(input.set_toolbar_visible(false));
-    input.toolbar_top_pinned = false;
+    input.set_toolbar_top_pinned(false);
 
     let reset = match runtime.controller.request_supported_reset() {
         RequestResetResult::Started { .. } => runtime
@@ -189,9 +189,9 @@ fn visibility_toggle_rollback_through_a_failed_reset_restores_the_screen() {
     let drain = runtime.drain_writer_completions();
     assert_eq!(drain.rollbacks.len(), 1);
     apply_toolbar_runtime_rollback(&mut input, &mut positions, &drain.rollbacks[0]);
-    assert!(input.toolbar_top_pinned);
+    assert!(input.toolbar_top_pinned());
     assert!(
-        input.toolbar_visible && input.toolbar_top_visible,
+        input.toolbar_visible() && input.toolbar_top_visible(),
         "the forced rollback must leave the screen matching the restored pins"
     );
 }
@@ -355,9 +355,9 @@ fn an_exit_during_an_active_reset_barrier_still_lands_the_deferred_toggle() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(&mut restarted_input);
-    assert!(!restarted_input.toolbar_top_pinned);
+    assert!(!restarted_input.toolbar_top_pinned());
     assert!(
-        !restarted_input.toolbar_visible,
+        !restarted_input.toolbar_visible(),
         "the toggle pressed during the reset barrier must survive the exit"
     );
     restarted.shutdown_blocking();

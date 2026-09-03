@@ -84,16 +84,15 @@ fn every_opener_ends_the_tour() {
 #[test]
 fn an_opener_that_ends_the_tour_restores_pinned_chrome() {
     let mut state = create_test_input_state();
-    state.toolbar_top_pinned = true;
+    state.set_toolbar_top_pinned(true);
     state.start_tour();
-    state.toolbar_top_visible = false;
-    state.toolbar_visible = false;
+    state.test_set_toolbar_visibility_state(false, false, state.toolbar_top_pinned());
 
     state.toggle_command_palette();
 
     assert!(!state.tour.active);
     assert!(
-        state.toolbar_visible,
+        state.toolbar_visible(),
         "ending the tour must restore pinned toolbar chrome"
     );
 }

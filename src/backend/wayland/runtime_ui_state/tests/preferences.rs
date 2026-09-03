@@ -85,7 +85,7 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
             input.ui_visibility.show_status_bar = !input.ui_visibility.show_status_bar;
         }),
         (ToolbarRuntimeUiPersistenceTarget::ToolbarIcons, |input| {
-            input.toolbar_use_icons = !input.toolbar_use_icons;
+            input.set_toolbar_use_icons(!input.toolbar_use_icons());
         }),
         (
             ToolbarRuntimeUiPersistenceTarget::ToolbarContextAwareUi,
@@ -128,7 +128,7 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
     assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
 
     let expected_status_bar = input.ui_visibility.show_status_bar;
-    let expected_icons = input.toolbar_use_icons;
+    let expected_icons = input.toolbar_use_icons();
     let expected_context = input.ui_visibility.context_aware_ui;
     let expected_sliders = input.ui_visibility.show_delay_sliders;
     let expected_custom = input.history_limits.custom_section_enabled();
@@ -143,7 +143,7 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
         restarted_input.ui_visibility.show_status_bar,
         expected_status_bar
     );
-    assert_eq!(restarted_input.toolbar_use_icons, expected_icons);
+    assert_eq!(restarted_input.toolbar_use_icons(), expected_icons);
     assert_eq!(
         restarted_input.ui_visibility.context_aware_ui,
         expected_context
@@ -182,8 +182,8 @@ fn a_seed_refresh_does_not_prune_persisted_preference_overrides() {
     let prepared = runtime
         .begin_toolbar_mutation(target, &input)
         .expect("icon toggle permit");
-    input.toolbar_use_icons = !input.toolbar_use_icons;
-    let flipped = input.toolbar_use_icons;
+    input.set_toolbar_use_icons(!input.toolbar_use_icons());
+    let flipped = input.toolbar_use_icons();
     runtime.finish_toolbar_mutation(prepared, true, &input);
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
 
@@ -197,7 +197,8 @@ fn a_seed_refresh_does_not_prune_persisted_preference_overrides() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(&mut restarted_input);
     assert_eq!(
-        restarted_input.toolbar_use_icons, flipped,
+        restarted_input.toolbar_use_icons(),
+        flipped,
         "the icon override must outlive an unrelated seed refresh"
     );
     restarted.shutdown_blocking();
@@ -221,9 +222,9 @@ fn section_visibility_survives_restart_without_touching_config() {
 
     let live = |input: &InputState, flag| {
         resolve_section_visibility(
-            input.toolbar_layout_mode,
-            &input.toolbar_mode_overrides,
-            &input.resolved_toolbar_items,
+            input.toolbar_layout_mode(),
+            input.toolbar_mode_overrides(),
+            input.resolved_toolbar_items(),
         )
         .get(flag)
     };
@@ -255,12 +256,12 @@ fn section_visibility_survives_restart_without_touching_config() {
     assert_eq!(live(&restarted_input, untouched), untouched_before);
     assert!(
         !restarted_input
-            .toolbar_items
+            .toolbar_items()
             .resolved()
             .hidden
             .contains(&untouched.item_id())
             && !restarted_input
-                .toolbar_items
+                .toolbar_items()
                 .resolved()
                 .shown
                 .contains(&untouched.item_id()),
@@ -315,13 +316,13 @@ fn toolbar_layout_mode_survives_restart_without_touching_config() {
     restarted.apply_startup_state(&mut restarted_input);
 
     assert_eq!(
-        restarted_input.toolbar_layout_mode,
+        restarted_input.toolbar_layout_mode(),
         ToolbarLayoutMode::Advanced
     );
     let sections = resolve_section_visibility(
-        restarted_input.toolbar_layout_mode,
-        &restarted_input.toolbar_mode_overrides,
-        &restarted_input.resolved_toolbar_items,
+        restarted_input.toolbar_layout_mode(),
+        restarted_input.toolbar_mode_overrides(),
+        restarted_input.resolved_toolbar_items(),
     );
     assert!(!sections.get(pinned), "the pinned section stays hidden");
     let baseline = ToolbarLayoutMode::Advanced;
@@ -331,7 +332,7 @@ fn toolbar_layout_mode_survives_restart_without_touching_config() {
         }
         assert_eq!(
             sections.get(flag),
-            flag.baseline(baseline, &restarted_input.toolbar_mode_overrides),
+            flag.baseline(baseline, restarted_input.toolbar_mode_overrides()),
             "{flag:?} must follow the restored preset"
         );
     }

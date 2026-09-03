@@ -80,7 +80,7 @@ fn runtime_rebuild_reuses_minimize_transition_cleanup() {
     let minimized = runtime
         .begin_toolbar_mutation(ToolbarRuntimeUiPersistenceTarget::TopMinimized, &source)
         .expect("top-minimized permit");
-    source.toolbar_top_minimized = true;
+    source.test_set_toolbar_display_state(source.toolbar_top_display_mode(), true);
     assert!(matches!(
         runtime.finish_toolbar_mutation(minimized, true, &source),
         ToolbarRuntimeFinish::KeepPreview
@@ -95,21 +95,23 @@ fn runtime_rebuild_reuses_minimize_transition_cleanup() {
         crate::input::state::TopMenuState::SettingsPopover,
     ] {
         let mut rebuilt = input_from_config(&config);
-        rebuilt.toolbar_top_menu = menu;
-        rebuilt.toolbar_customize_items_open = true;
-        rebuilt.toolbar_customize_items_group =
-            Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools);
+        rebuilt.test_set_toolbar_menu_state(menu, rebuilt.toolbar_top_popover_scroll());
+        rebuilt.test_set_toolbar_customization(
+            true,
+            Some(crate::ui::toolbar::ToolbarItemCustomizeGroup::TopTools),
+            false,
+        );
         let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
 
         runtime.apply_live_state(&mut rebuilt, &mut positions);
 
-        assert!(rebuilt.toolbar_top_minimized);
+        assert!(rebuilt.toolbar_top_minimized());
         assert_eq!(
-            rebuilt.toolbar_top_menu,
+            rebuilt.toolbar_top_menu(),
             crate::input::state::TopMenuState::Closed
         );
-        assert!(!rebuilt.toolbar_customize_items_open);
-        assert!(rebuilt.toolbar_customize_items_group.is_none());
+        assert!(!rebuilt.toolbar_customize_items_open());
+        assert!(rebuilt.toolbar_customize_items_group().is_none());
     }
     runtime.shutdown_blocking();
 }
@@ -126,7 +128,7 @@ fn supported_runtime_reset_returns_live_state_to_configured_defaults() {
         .begin_toolbar_mutation(ToolbarRuntimeUiPersistenceTarget::TopPinned, &input)
         .expect("top-pin permit");
     assert!(prepared.is_persistent_preview());
-    input.toolbar_top_pinned = false;
+    input.set_toolbar_top_pinned(false);
     assert!(matches!(
         runtime.finish_toolbar_mutation(prepared, true, &input),
         ToolbarRuntimeFinish::KeepPreview
@@ -154,7 +156,7 @@ fn supported_runtime_reset_returns_live_state_to_configured_defaults() {
 
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     runtime.apply_live_state(&mut input, &mut positions);
-    assert_eq!(input.toolbar_top_pinned, config.ui.toolbar.top_pinned);
+    assert_eq!(input.toolbar_top_pinned(), config.ui.toolbar.top_pinned);
 }
 
 #[test]
@@ -169,7 +171,7 @@ fn successful_writer_cleanup_artifacts_reach_toolbar_diagnostics() {
     let prepared = runtime
         .begin_toolbar_mutation(ToolbarRuntimeUiPersistenceTarget::TopPinned, &input)
         .expect("top-pin permit");
-    input.toolbar_top_pinned = false;
+    input.set_toolbar_top_pinned(false);
     let desired = toolbar_values(ToolbarRuntimeUiPersistenceTarget::TopPinned, &input).unwrap();
     assert!(matches!(
         runtime.controller.finish_preview(
@@ -363,7 +365,7 @@ fn cancelling_read_only_recovery_rebuilds_a_staged_seed_reload() {
     let refresh = runtime.refresh_config_seeds(&config_b, &mut input, &mut positions);
     assert!(!refresh.applied, "the reload is staged behind recovery");
     assert!(
-        input.toolbar_top_pinned,
+        input.toolbar_top_pinned(),
         "live input still has the old seed"
     );
 
@@ -374,7 +376,7 @@ fn cancelling_read_only_recovery_rebuilds_a_staged_seed_reload() {
         "synchronous cancellation must publish the staged live authority"
     );
     runtime.apply_live_state(&mut input, &mut positions);
-    assert!(!input.toolbar_top_pinned);
+    assert!(!input.toolbar_top_pinned());
     runtime.shutdown_blocking();
 }
 
@@ -403,10 +405,10 @@ fn runtime_toolbar_routes_leave_authored_config_bytes_exactly_unchanged() {
         match target {
             ToolbarRuntimeUiPersistenceTarget::TopPinned
             | ToolbarRuntimeUiPersistenceTarget::ToolbarVisibility => {
-                input.toolbar_top_pinned = false;
+                input.set_toolbar_top_pinned(false);
             }
             ToolbarRuntimeUiPersistenceTarget::TopMinimized => {
-                input.toolbar_top_minimized = true;
+                input.test_set_toolbar_display_state(input.toolbar_top_display_mode(), true);
             }
             ToolbarRuntimeUiPersistenceTarget::TopDisplayMode => {
                 input.set_top_display_mode(crate::config::TopDisplayMode::Micro);

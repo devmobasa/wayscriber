@@ -13,7 +13,7 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
     // -- the pairing is validated where the snapshot is built.
     for (target, value) in &rollback.values {
         match target {
-            Target::TopPinned => set_bool(value, |v| input.toolbar_top_pinned = v),
+            Target::TopPinned => set_bool(value, |v| input.set_toolbar_top_pinned(v)),
             Target::TopMinimized => set_bool(value, |v| {
                 input.apply_toolbar_set_top_minimized(v);
             }),
@@ -60,7 +60,7 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
                 set_bool(value, |v| input.ui_visibility.show_floating_badge = v)
             }
             Target::ZoomChip => set_bool(value, |v| input.ui_visibility.show_zoom_chip = v),
-            Target::ToolbarIcons => set_bool(value, |v| input.toolbar_use_icons = v),
+            Target::ToolbarIcons => set_bool(value, |v| input.set_toolbar_use_icons(v)),
             Target::ToolbarMoreColors => {
                 set_bool(value, |v| input.ui_visibility.show_more_colors = v)
             }

@@ -356,7 +356,7 @@ impl WaylandState {
         {
             self.toolbar.mark_dirty();
         }
-        let open_popover = match self.input_state.toolbar_top_menu {
+        let open_popover = match self.input_state.toolbar_top_menu() {
             TopMenuState::Closed => return,
             TopMenuState::ShapePicker => ToolbarPopover::ShapePicker,
             TopMenuState::TopOverflow => ToolbarPopover::TopOverflow,

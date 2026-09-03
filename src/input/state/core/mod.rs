@@ -33,6 +33,7 @@ pub(in crate::input::state) use keymap::Keymap;
 pub(in crate::input::state) use pointer::PointerTracking;
 pub(crate) use presets::PresetSlots;
 pub(crate) use selection_actions::{IdleHandle, SpotlightMagnificationTrack};
+pub(in crate::input::state) use toolbar::{ToolbarInteraction, ToolbarVisibility};
 pub(in crate::input::state) use view::ViewState;
 mod session;
 mod session_preflight;

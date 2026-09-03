@@ -1,5 +1,5 @@
 use super::super::super::{
-    CanvasIndex, Keymap, PointerTracking, ViewState,
+    CanvasIndex, Keymap, PointerTracking, ToolbarInteraction, ToolbarVisibility, ViewState,
     selection::{SelectionClipboard, SelectionInteraction},
 };
 use super::super::InputEffectOutbox;
@@ -8,10 +8,7 @@ use super::super::types::{
     BlockedActionFeedback, CompositorCapabilities, DrawingState, PendingBoardDelete,
     PendingOnboardingUsage, PendingPageDelete, StatusChangeHighlight, UiToastState,
 };
-use crate::config::{
-    PresenterModeConfig, ResolvedToolbarItems, ToolbarItemId, ToolbarItemOrderGroup,
-    ToolbarItemsConfig,
-};
+use crate::config::PresenterModeConfig;
 use crate::draw::{Color, DirtyTracker};
 use crate::input::BoardManager;
 use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest};
@@ -27,12 +24,8 @@ use std::time::Instant;
 pub(crate) struct PresenterRestore {
     pub(crate) show_status_bar: Option<bool>,
     pub(crate) show_tool_preview: Option<bool>,
-    pub(crate) toolbar_visible: Option<bool>,
-    pub(crate) toolbar_top_visible: Option<bool>,
-    /// Top-strip form/minimize state before presenter mapped the strip to
-    /// the micro chip (`[presenter_mode] toolbar_mode = "micro"`).
-    pub(crate) toolbar_top_display_mode: Option<crate::config::TopDisplayMode>,
-    pub(crate) toolbar_top_minimized: Option<bool>,
+    /// Toolbar visibility before presenter hid or mapped the strip.
+    pub(crate) toolbar_visibility: Option<ToolbarVisibility>,
     pub(crate) click_highlight_enabled: Option<bool>,
     pub(crate) input_hud_enabled: Option<bool>,
     pub(crate) tool_override: Option<Option<Tool>>,
@@ -43,9 +36,7 @@ pub(crate) struct PresenterRestore {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct FocusModeRestore {
     pub(crate) show_status_bar: bool,
-    pub(crate) toolbar_visible: bool,
-    pub(crate) toolbar_top_visible: bool,
-    pub(crate) toolbar_top_display_mode: crate::config::TopDisplayMode,
+    pub(crate) toolbar_visibility: ToolbarVisibility,
     pub(crate) show_floating_badge: bool,
     pub(crate) show_zoom_chip: bool,
 }
@@ -54,8 +45,7 @@ pub(crate) struct FocusModeRestore {
 pub(crate) struct LightModeRestore {
     pub(crate) show_status_bar: bool,
     pub(crate) show_tool_preview: bool,
-    pub(crate) toolbar_visible: bool,
-    pub(crate) toolbar_top_visible: bool,
+    pub(crate) toolbar_visibility: ToolbarVisibility,
     pub(crate) click_highlight_enabled: bool,
     pub(crate) tool_override: Option<Tool>,
 }
@@ -128,50 +118,10 @@ pub struct InputState {
     pub light_mode_drawing: bool,
     /// Previous UI state to restore after light mode exits
     pub(crate) light_mode_restore: Option<LightModeRestore>,
-    /// Whether the toolbar is visible (combined flag, prefer `toolbar_top_visible`)
-    pub toolbar_visible: bool,
-    /// Whether the top toolbar panel is visible
-    pub toolbar_top_visible: bool,
-    /// Whether the top toolbar is pinned (saved to config, opens at startup)
-    pub toolbar_top_pinned: bool,
-    /// Whether to use icons instead of text labels in toolbars
-    pub toolbar_use_icons: bool,
-    /// Scale factor for toolbar UI (icons + layout)
-    pub toolbar_scale: f64,
-    /// Current toolbar layout complexity
-    pub toolbar_layout_mode: crate::config::ToolbarLayoutMode,
-    /// Optional per-mode overrides for toolbar sections
-    pub toolbar_mode_overrides: crate::config::ToolbarModeOverrides,
-    /// Raw item-level toolbar visibility config, preserving unknown IDs.
-    pub toolbar_items: ToolbarItemsConfig,
-    /// Resolved known item-level toolbar visibility config.
-    pub resolved_toolbar_items: ResolvedToolbarItems,
-    /// Active toolbar customization reorder drag source.
-    pub toolbar_customize_drag: Option<(ToolbarItemOrderGroup, ToolbarItemId)>,
-    /// The one open top-strip menu, if any. A single typed state makes the
-    /// shape picker, overflow, and Canvas/Session/Settings popovers mutually
-    /// exclusive by construction.
-    pub(crate) toolbar_top_menu: crate::input::state::TopMenuState,
-    /// Internal scroll offset of the open Canvas/Session/Settings popover
-    /// (logical pixels, clamped at render; reset when a popover opens).
-    pub toolbar_top_popover_scroll: f64,
-    /// Whether the top strip is minimized to its edge restore tab.
-    pub toolbar_top_minimized: bool,
-    /// Display form of the top strip (full strip / micro chip / cycle-hidden).
-    /// Sibling of `toolbar_top_minimized`; minimized wins when both are set.
-    pub toolbar_top_display_mode: crate::config::TopDisplayMode,
+    /// Toolbar visibility, preferences, resolved layout, and interaction state.
+    pub(in crate::input::state) toolbar: ToolbarInteraction,
     /// Precise numeric entry popup opened from a pill numeral, when open.
     pub(crate) precision_entry: Option<crate::input::state::PrecisionEntryState>,
-    /// Modifier chord that turns a toolbar click into shortcut rebinding.
-    /// Used to generate onboarding copy (the tour's rebind hint) without
-    /// hardcoding key strings. Startup init applies the config value.
-    pub toolbar_rebind_modifier: crate::config::ToolbarRebindModifier,
-    /// Whether the Settings drawer is showing the toolbar item customization sub-panel
-    pub toolbar_customize_items_open: bool,
-    /// Selected toolbar item customization group in the Settings drawer sub-panel
-    pub toolbar_customize_items_group: Option<crate::ui::toolbar::ToolbarItemCustomizeGroup>,
-    /// Whether the Settings drawer is showing status-bar content controls
-    pub toolbar_status_bar_contents_open: bool,
     /// Previous color before entering board mode (for restoration)
     pub board_previous_color: Option<Color>,
     /// Most recently used board ids (most recent first)

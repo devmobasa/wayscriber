@@ -226,18 +226,24 @@ fn shortcut_coach_suppressed_once_learned_or_capped() {
 #[test]
 fn canvas_hint_requires_reachable_full_top_strip() {
     let mut input = crate::input::state::test_support::make_test_input_state();
-    input.toolbar_top_visible = true;
-    input.toolbar_top_display_mode = crate::config::TopDisplayMode::Full;
-    input.toolbar_top_minimized = false;
+    input.test_set_toolbar_visibility_state(true, true, input.toolbar_top_pinned());
+    input.test_set_toolbar_display_state(
+        crate::config::TopDisplayMode::Full,
+        input.toolbar_top_minimized(),
+    );
+    input.test_set_toolbar_display_state(input.toolbar_top_display_mode(), false);
     assert!(canvas_popover_hint_relevant(&input));
 
-    input.toolbar_top_minimized = true;
+    input.test_set_toolbar_display_state(input.toolbar_top_display_mode(), true);
     assert!(
         !canvas_popover_hint_relevant(&input),
         "the minimized restore tab has no Canvas overflow entry"
     );
-    input.toolbar_top_minimized = false;
-    input.toolbar_top_display_mode = crate::config::TopDisplayMode::Micro;
+    input.test_set_toolbar_display_state(input.toolbar_top_display_mode(), false);
+    input.test_set_toolbar_display_state(
+        crate::config::TopDisplayMode::Micro,
+        input.toolbar_top_minimized(),
+    );
     assert!(!canvas_popover_hint_relevant(&input));
 }
 

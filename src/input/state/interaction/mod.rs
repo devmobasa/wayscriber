@@ -99,20 +99,26 @@ mod tests {
     #[test]
     fn escape_dismisses_the_open_top_popover_with_named_outcome() {
         let mut state = make_test_input_state();
-        state.toolbar_top_menu = TopMenuState::SettingsPopover;
+        state.test_set_toolbar_menu_state(
+            TopMenuState::SettingsPopover,
+            state.toolbar_top_popover_scroll(),
+        );
 
         assert_eq!(
             route_key_press(&mut state, Key::Escape),
             RoutingOutcome::Canceled(CancelTarget::TopPopover)
         );
-        assert_eq!(state.toolbar_top_menu, TopMenuState::Closed);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
 
-        state.toolbar_top_menu = TopMenuState::SessionPopover;
+        state.test_set_toolbar_menu_state(
+            TopMenuState::SessionPopover,
+            state.toolbar_top_popover_scroll(),
+        );
         assert_eq!(
             route_key_press(&mut state, Key::Escape),
             RoutingOutcome::Canceled(CancelTarget::TopPopover)
         );
-        assert_eq!(state.toolbar_top_menu, TopMenuState::Closed);
+        assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
     }
 
     #[test]

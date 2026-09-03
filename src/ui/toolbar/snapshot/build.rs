@@ -92,9 +92,9 @@ impl ToolbarSnapshot {
                 })
             })
             .collect();
-        let customize_items_open = state.toolbar_customize_items_open;
-        let customize_items_group = state.toolbar_customize_items_group;
-        let status_bar_contents_open = state.toolbar_status_bar_contents_open;
+        let customize_items_open = state.toolbar_customize_items_open();
+        let customize_items_group = state.toolbar_customize_items_group();
+        let status_bar_contents_open = state.toolbar_status_bar_contents_open();
         let show_actions_advanced = state.ui_visibility.show_actions_advanced;
         let show_zoom_actions = state.ui_visibility.show_zoom_actions;
         let show_pages_section = state.ui_visibility.show_pages_section;
@@ -157,11 +157,11 @@ impl ToolbarSnapshot {
             custom_redo_delay_ms: state.history_limits.custom_redo_delay_ms(),
             custom_undo_steps: state.history_limits.custom_undo_steps(),
             custom_redo_steps: state.history_limits.custom_redo_steps(),
-            top_pinned: state.toolbar_top_pinned,
-            use_icons: state.toolbar_use_icons,
-            toolbar_scale: state.toolbar_scale,
-            layout_mode: state.toolbar_layout_mode,
-            resolved_toolbar_items: state.resolved_toolbar_items.clone(),
+            top_pinned: state.toolbar_top_pinned(),
+            use_icons: state.toolbar_use_icons(),
+            toolbar_scale: state.toolbar_scale(),
+            layout_mode: state.toolbar_layout_mode(),
+            resolved_toolbar_items: state.resolved_toolbar_items().clone(),
             show_more_colors: state.ui_visibility.show_more_colors,
             show_actions_section: state.ui_visibility.show_actions_section,
             show_actions_advanced,
@@ -194,19 +194,19 @@ impl ToolbarSnapshot {
             presets,
             active_preset_slot: state.preset_slots.active(),
             preset_feedback,
-            shape_picker_open: state.toolbar_top_menu
+            shape_picker_open: state.toolbar_top_menu()
                 == crate::input::state::TopMenuState::ShapePicker,
-            top_overflow_open: state.toolbar_top_menu
+            top_overflow_open: state.toolbar_top_menu()
                 == crate::input::state::TopMenuState::TopOverflow,
-            session_popover_open: state.toolbar_top_menu
+            session_popover_open: state.toolbar_top_menu()
                 == crate::input::state::TopMenuState::SessionPopover,
-            settings_popover_open: state.toolbar_top_menu
+            settings_popover_open: state.toolbar_top_menu()
                 == crate::input::state::TopMenuState::SettingsPopover,
-            canvas_popover_open: state.toolbar_top_menu
+            canvas_popover_open: state.toolbar_top_menu()
                 == crate::input::state::TopMenuState::CanvasPopover,
-            top_popover_scroll: state.toolbar_top_popover_scroll,
-            top_minimized: state.toolbar_top_minimized,
-            top_display_mode: state.toolbar_top_display_mode,
+            top_popover_scroll: state.toolbar_top_popover_scroll(),
+            top_minimized: state.toolbar_top_minimized(),
+            top_display_mode: state.toolbar_top_display_mode(),
             // Fade is owned by the backend engine; renderers see 1.0 until
             // the backend publishes the animated value.
             top_fade: 1.0,
@@ -286,7 +286,7 @@ mod tests {
 
         for (top_menu, expected) in cases {
             let mut state = make_test_input_state();
-            state.toolbar_top_menu = top_menu;
+            state.test_set_toolbar_menu_state(top_menu, state.toolbar_top_popover_scroll());
 
             let snapshot = ToolbarSnapshot::from_input(&state);
             let actual = [

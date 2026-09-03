@@ -1,7 +1,7 @@
 use super::super::base::InputState;
 use crate::config::{
     RadialMenuMouseBinding, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting,
-    TopDisplayMode, factory_individual_toolbar_item_visibility_settings,
+    TopDisplayMode,
 };
 use crate::domain::Action;
 use crate::input::state::{Toast, ToastPriority, TopMenuState};
@@ -10,85 +10,38 @@ use crate::input::state::{Toast, ToastPriority, TopMenuState};
 pub(crate) const CLEAR_UNDO_TOAST_MS: u64 = 2000;
 
 impl InputState {
-    /// Sets the toolbar visibility flag. Returns true if toggled.
+    /// Sets toolbar visibility without changing its persisted pin.
     pub fn set_toolbar_visible(&mut self, visible: bool) -> bool {
-        // Showing must also count a cycle-hidden (F2) top strip as a change:
-        // the raw flag can be true while no surface is visible, and the
-        // raw-flag comparison alone would swallow the restore (F9, the
-        // onboarding toast's Show action, and the status-bar hint chip all
-        // dispatch ToggleToolbar into this setter).
-        let unhide_top = visible && self.toolbar_top_display_mode == TopDisplayMode::Hidden;
-        let any_change =
-            unhide_top || self.toolbar_visible != visible || self.toolbar_top_visible != visible;
-
-        if !any_change {
+        if !self.toolbar.set_visible(visible) {
             return false;
-        }
-
-        self.toolbar_visible = visible;
-        self.toolbar_top_visible = visible;
-        // Showing toolbars always brings the top strip back: a cycle-hidden
-        // strip (F2) reverts to its full form when F9 shows the bars again.
-        if visible && self.toolbar_top_display_mode == TopDisplayMode::Hidden {
-            self.toolbar_top_display_mode = TopDisplayMode::Full;
         }
         self.refresh_status_hud_layout();
         self.needs_redraw = true;
         true
     }
 
-    /// Re-derive the live visibility flags from the pin flag — the
-    /// same rule startup applies — and refresh the status HUD layout, which
-    /// follows toolbar visibility (see `set_toolbar_visible`). Used when a
-    /// rolled-back visibility toggle hands the pre-toggle pins back:
-    /// visibility itself is never persisted, so it must be recomputed for
-    /// the screen to match what a restart would show.
+    /// Re-derive live visibility from the persisted pin without surfacing a
+    /// toolbar hidden by a transient chrome owner.
     pub(crate) fn derive_toolbar_visibility_from_pins(&mut self) {
-        let top = self.toolbar_top_pinned;
-        // A rollback can resolve long after the toggle (a failed write
-        // barrier holds it), by which time a transient chrome owner —
-        // focus mode, presenter mode with `hide_toolbars`, or light mode —
-        // may have taken toolbar visibility. Writing the live flags then
-        // would surface toolbars out from under the owner while its
-        // restore snapshot still held the post-toggle state, so exit would
-        // restore the wrong screen. Write the derived values into the
-        // owner's snapshot instead (the presenter-aware pattern of
-        // `apply_persisted_top_display_mode`): the owner keeps its screen
-        // now and hands back pin-agreeing visibility on exit. The three
-        // owners never nest — presenter entry restores focus and exits
-        // light, focus entry is presenter-gated and exits light, light
-        // entry restores focus and exits presenter — so at most one
-        // snapshot exists and there is no restore-order ambiguity.
+        let visible = self.toolbar.top_pinned();
         if let Some(restore) = self.focus_mode_restore.as_mut() {
-            restore.toolbar_top_visible = top;
-            restore.toolbar_visible = top;
+            restore.toolbar_visibility.set_visible(visible);
             return;
         }
-        // Presenter tracks toolbar visibility only when `hide_toolbars`
-        // took it (the three fields are `Some` together); otherwise the
-        // live flags are still the user's and are written below.
         if let Some(restore) = self.presenter_restore.as_mut()
-            && restore.toolbar_visible.is_some()
+            && let Some(snapshot) = restore.toolbar_visibility.as_mut()
         {
-            restore.toolbar_top_visible = Some(top);
-            restore.toolbar_visible = Some(top);
+            snapshot.set_visible(visible);
             return;
         }
         if let Some(restore) = self.light_mode_restore.as_mut() {
-            restore.toolbar_top_visible = top;
-            restore.toolbar_visible = top;
+            restore.toolbar_visibility.set_visible(visible);
             return;
         }
-        self.toolbar_top_visible = top;
-        self.toolbar_visible = top;
+        self.toolbar.derive_visibility_from_pins();
         self.refresh_status_hud_layout();
     }
 
-    /// After hiding a chrome surface: if nothing interactive remains on
-    /// screen (no toolbar surface, no effective status HUD), teach the way
-    /// back right now — the status-bar hint chip cannot help once the HUD
-    /// itself is gone. Skipped only when presenter mode will restore a
-    /// surface that was visible before it took ownership of that surface.
     pub(crate) fn warn_if_all_chrome_hidden(&mut self) {
         if self.toolbar_visible()
             || self.status_hud_effectively_visible()
@@ -116,10 +69,6 @@ impl InputState {
             } else {
                 ("Show toolbar", Action::ToggleToolbar)
             };
-        // Same key as the routine chrome toasts ("Toolbar: hidden"), so this
-        // supersedes them in place instead of queueing behind them. The
-        // action chip gives one-click recovery even when the context menu is
-        // unavailable; the message covers the bindings for both.
         self.push_toast(
             ToastPriority::Info,
             "ui",
@@ -140,55 +89,114 @@ impl InputState {
         let Some(restore) = self.presenter_restore.as_ref() else {
             return false;
         };
-
         let restores_status_bar = restore.show_status_bar == Some(true);
-        let restored_top_mode = restore
-            .toolbar_top_display_mode
-            .unwrap_or(self.toolbar_top_display_mode);
-        let restores_top_toolbar = restore.toolbar_top_visible == Some(true)
-            && restored_top_mode != TopDisplayMode::Hidden;
-
+        let restores_top_toolbar = restore
+            .toolbar_visibility
+            .is_some_and(|snapshot| snapshot.effectively_visible());
         restores_status_bar || restores_top_toolbar
     }
 
-    /// Returns whether the toolbar is effectively visible: the top strip and
-    /// not cycle-hidden. A raw visibility flag that cannot produce a surface
-    /// does not count, so the F9 toggle always has a visible effect on its
-    /// first press.
     pub fn toolbar_visible(&self) -> bool {
-        self.toolbar_top_visible()
+        self.toolbar.effectively_visible()
     }
 
-    /// Returns whether the top toolbar surface is visible. The cycle
-    /// action's Hidden display mode hides the top strip.
     pub fn toolbar_top_visible(&self) -> bool {
-        self.toolbar_top_visible && self.toolbar_top_display_mode != TopDisplayMode::Hidden
+        self.toolbar.effectively_visible()
     }
 
-    /// Store the configured toolbar shortcut-rebind modifier (called at
-    /// startup) so onboarding copy can name the chord without hardcoding keys.
-    pub fn init_toolbar_rebind_modifier_from_config(
+    pub(crate) fn toolbar_top_pinned(&self) -> bool {
+        self.toolbar.top_pinned()
+    }
+
+    pub(crate) fn toolbar_use_icons(&self) -> bool {
+        self.toolbar.use_icons()
+    }
+
+    pub(crate) fn toolbar_scale(&self) -> f64 {
+        self.toolbar.scale()
+    }
+
+    pub(crate) fn toolbar_layout_mode(&self) -> crate::config::ToolbarLayoutMode {
+        self.toolbar.layout_mode()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn toolbar_mode_overrides(&self) -> &crate::config::ToolbarModeOverrides {
+        self.toolbar.mode_overrides()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn toolbar_items(&self) -> &crate::config::ToolbarItemsConfig {
+        self.toolbar.items()
+    }
+
+    pub(crate) fn resolved_toolbar_items(&self) -> &crate::config::ResolvedToolbarItems {
+        self.toolbar.resolved_items()
+    }
+
+    pub(crate) fn toolbar_customize_items_open(&self) -> bool {
+        self.toolbar.customize_items_open()
+    }
+
+    pub(crate) fn toolbar_customize_items_group(
+        &self,
+    ) -> Option<crate::ui::toolbar::ToolbarItemCustomizeGroup> {
+        self.toolbar.customize_items_group()
+    }
+
+    pub(crate) fn toolbar_status_bar_contents_open(&self) -> bool {
+        self.toolbar.status_bar_contents_open()
+    }
+
+    pub(crate) fn toolbar_top_popover_scroll(&self) -> f64 {
+        self.toolbar.top_popover_scroll()
+    }
+
+    pub(crate) fn toolbar_top_minimized(&self) -> bool {
+        self.toolbar.top_minimized()
+    }
+
+    pub(crate) fn toolbar_top_display_mode(&self) -> TopDisplayMode {
+        self.toolbar.top_display_mode()
+    }
+
+    pub(crate) fn toolbar_top_menu(&self) -> TopMenuState {
+        self.toolbar.top_menu()
+    }
+
+    pub(crate) fn toolbar_rebind_click_label(&self) -> Option<&'static str> {
+        self.toolbar.rebind_modifier().click_label()
+    }
+
+    pub(crate) fn toolbar_visibility_snapshot(&self) -> super::super::toolbar::ToolbarVisibility {
+        self.toolbar.visibility_snapshot()
+    }
+
+    pub(crate) fn restore_toolbar_visibility(
         &mut self,
-        modifier: crate::config::ToolbarRebindModifier,
+        snapshot: super::super::toolbar::ToolbarVisibility,
     ) {
-        self.toolbar_rebind_modifier = modifier;
+        self.toolbar.restore_visibility(snapshot);
     }
 
-    /// Initialize toolbar visibility from config (called at startup).
+    pub(crate) fn hide_toolbar_visibility(&mut self) {
+        self.toolbar.hide();
+    }
+
+    pub(crate) fn show_toolbar_visibility(&mut self) {
+        self.toolbar.show();
+    }
+
+    pub(crate) fn set_toolbar_top_pinned(&mut self, pinned: bool) {
+        self.toolbar.set_top_pinned(pinned);
+    }
+
+    pub(crate) fn set_toolbar_use_icons(&mut self, use_icons: bool) {
+        self.toolbar.set_use_icons(use_icons);
+    }
+
     pub fn init_toolbar_from_config(&mut self, config: &crate::config::ToolbarConfig) {
-        self.toolbar_top_pinned = config.top_pinned;
-        self.toolbar_top_visible = config.top_pinned;
-        self.toolbar_visible = config.top_pinned;
-        self.toolbar_use_icons = config.use_icons;
-        self.toolbar_scale = config.scale;
-        self.toolbar_layout_mode = config.layout_mode;
-        self.toolbar_mode_overrides = config.mode_overrides.clone();
-        self.resolved_toolbar_items = config.items.resolved();
-        self.toolbar_items = config.items.clone();
-        // Fold the legacy show_* booleans into explicit item overrides,
-        // then re-derive them from the one resolver. Effective visibility
-        // is bit-identical; the overrides now survive mode switches.
-        let mut legacy = crate::config::ToolbarSectionVisibility {
+        let legacy = crate::config::ToolbarSectionVisibility {
             show_actions_section: self.ui_visibility.show_actions_section,
             show_actions_advanced: self.ui_visibility.show_actions_advanced,
             show_zoom_actions: self.ui_visibility.show_zoom_actions,
@@ -198,27 +206,12 @@ impl InputState {
             show_step_section: self.ui_visibility.show_step_section,
             show_text_controls: self.ui_visibility.show_text_controls,
         };
-        legacy.apply_mode_override(self.toolbar_mode_overrides.for_mode(config.layout_mode));
-        if crate::config::fold_legacy_section_flags(
-            &legacy,
-            config.layout_mode,
-            &self.toolbar_mode_overrides,
-            &mut self.toolbar_items,
-        ) {
-            self.resolved_toolbar_items = self.toolbar_items.resolved();
-        }
+        self.toolbar = super::super::toolbar::ToolbarInteraction::from_config(config, &legacy);
         self.refresh_section_visibility();
     }
 
-    /// Re-derive the live section booleans from the visibility resolver.
-    /// They stay as fields (and config keys) purely as mirrors: every read
-    /// site keeps working and older versions can still read the config.
     pub(crate) fn refresh_section_visibility(&mut self) {
-        let visibility = crate::config::resolve_section_visibility(
-            self.toolbar_layout_mode,
-            &self.toolbar_mode_overrides,
-            &self.resolved_toolbar_items,
-        );
+        let visibility = self.toolbar.section_visibility();
         self.ui_visibility.show_actions_section = visibility.show_actions_section;
         self.ui_visibility.show_actions_advanced = visibility.show_actions_advanced;
         self.ui_visibility.show_zoom_actions = visibility.show_zoom_actions;
@@ -229,28 +222,11 @@ impl InputState {
         self.ui_visibility.show_text_controls = visibility.show_text_controls;
     }
 
-    /// Restore the persisted minimize state of the top strip (called at
-    /// startup). A minimized strip comes back as its edge restore tab.
-    pub fn init_toolbar_minimized_from_config(&mut self, top: bool) {
-        self.toolbar_top_minimized = top;
-    }
-
-    /// Restore the persisted top-strip display form (called at startup).
-    /// `Hidden` sanitizes to `Full`: hidden is runtime-only, startup
-    /// visibility stays governed by `top_pinned`.
-    pub fn init_toolbar_display_mode_from_config(&mut self, mode: TopDisplayMode) {
-        self.toolbar_top_display_mode = mode.persisted();
-    }
-
-    /// Effective display state of the top strip: `Hidden` when the strip
-    /// surface is not visible (either via the cycle action or a plain
-    /// visibility toggle), otherwise the current form. A minimized strip
-    /// reports `Full` — minimize is a sibling feature and wins over micro.
     pub fn top_display_state(&self) -> TopDisplayMode {
         if !self.toolbar_top_visible() {
             TopDisplayMode::Hidden
-        } else if self.toolbar_top_display_mode == TopDisplayMode::Micro
-            && !self.toolbar_top_minimized
+        } else if self.toolbar.top_display_mode() == TopDisplayMode::Micro
+            && !self.toolbar.top_minimized()
         {
             TopDisplayMode::Micro
         } else {
@@ -258,53 +234,24 @@ impl InputState {
         }
     }
 
-    /// Put the top strip into `mode`. `Full` and `Micro` also make the top
-    /// strip visible; entering `Micro` un-minimizes the strip (micro and
-    /// minimized are mutually exclusive through the UI paths) and closes
-    /// the strip's menus, like minimize does.
     pub(crate) fn set_top_display_mode(&mut self, mode: TopDisplayMode) {
-        self.toolbar_top_display_mode = mode;
+        self.toolbar.set_top_display_mode(mode);
         self.refresh_status_hud_layout();
-        match mode {
-            TopDisplayMode::Full => {
-                self.show_top_strip_surface();
-            }
-            TopDisplayMode::Micro => {
-                self.toolbar_top_minimized = false;
-                self.toolbar_top_menu = TopMenuState::Closed;
-                self.show_top_strip_surface();
-            }
-            TopDisplayMode::Hidden => {
-                self.toolbar_top_menu = TopMenuState::Closed;
-            }
-        }
         self.needs_redraw = true;
     }
 
-    fn show_top_strip_surface(&mut self) {
-        self.toolbar_top_visible = true;
-        self.toolbar_visible = true;
-    }
-
-    /// Advance the top strip through Full → Micro → Hidden → Full and
-    /// return the new state.
     pub fn cycle_top_toolbar_display(&mut self) -> TopDisplayMode {
-        let next = match self.top_display_state() {
-            TopDisplayMode::Full => TopDisplayMode::Micro,
-            TopDisplayMode::Micro => TopDisplayMode::Hidden,
-            TopDisplayMode::Hidden => TopDisplayMode::Full,
-        };
-        self.set_top_display_mode(next);
+        let current = self.top_display_state();
+        let next = self.toolbar.cycle_top_display_mode(current);
+        self.refresh_status_hud_layout();
+        self.needs_redraw = true;
         next
     }
 
     pub fn set_toolbar_item_hidden(&mut self, id: ToolbarItemId, hidden: bool) -> bool {
-        let before = self.toolbar_items.clone();
-        self.toolbar_items.set_hidden(id, hidden);
-        if self.toolbar_items == before {
+        if !self.toolbar.set_item_hidden(id, hidden) {
             return false;
         }
-        self.resolved_toolbar_items = self.toolbar_items.resolved();
         self.refresh_section_visibility();
         self.needs_redraw = true;
         true
@@ -315,24 +262,18 @@ impl InputState {
         id: ToolbarItemId,
         setting: ToolbarItemVisibilitySetting,
     ) -> bool {
-        if !self.toolbar_items.set_visibility_setting(id, setting) {
+        if !self.toolbar.set_item_visibility_setting(id, setting) {
             return false;
         }
-        self.resolved_toolbar_items = self.toolbar_items.resolved();
         self.refresh_section_visibility();
         self.needs_redraw = true;
         true
     }
 
     pub fn reset_toolbar_item_hidden_overrides(&mut self) -> bool {
-        let mut changed = false;
-        for (&id, &setting) in factory_individual_toolbar_item_visibility_settings() {
-            changed |= self.toolbar_items.set_visibility_setting(id, setting);
-        }
-        if !changed {
+        if !self.toolbar.reset_individual_item_visibility() {
             return false;
         }
-        self.resolved_toolbar_items = self.toolbar_items.resolved();
         self.refresh_section_visibility();
         self.needs_redraw = true;
         true
@@ -344,11 +285,9 @@ impl InputState {
         id: ToolbarItemId,
         delta: isize,
     ) -> bool {
-        if !self.toolbar_items.move_item_by(group, id, delta) {
+        if !self.toolbar.move_item_by(group, id, delta) {
             return false;
         }
-
-        self.resolved_toolbar_items = self.toolbar_items.resolved();
         self.needs_redraw = true;
         true
     }
@@ -358,11 +297,11 @@ impl InputState {
         group: ToolbarItemOrderGroup,
         id: ToolbarItemId,
     ) -> bool {
-        if self.toolbar_customize_drag == Some((group, id)) {
+        let drag = (group, id);
+        if self.toolbar.customize_drag() == Some(&drag) {
             return false;
         }
-
-        self.toolbar_customize_drag = Some((group, id));
+        self.toolbar.begin_customize_drag(drag);
         true
     }
 
@@ -371,27 +310,15 @@ impl InputState {
         group: ToolbarItemOrderGroup,
         target_index: usize,
     ) -> bool {
-        let Some((source_group, id)) = self.toolbar_customize_drag else {
-            return false;
-        };
-        if source_group != group {
+        if !self.toolbar.move_dragged_item_to_index(group, target_index) {
             return false;
         }
-
-        if !self
-            .toolbar_items
-            .move_item_to_index(group, id, target_index)
-        {
-            return false;
-        }
-
-        self.resolved_toolbar_items = self.toolbar_items.resolved();
         self.needs_redraw = true;
         true
     }
 
     pub fn clear_toolbar_item_drag(&mut self) {
-        self.toolbar_customize_drag = None;
+        self.toolbar.clear_customize_drag();
     }
 
     pub(crate) fn set_toolbar_item_order(
@@ -399,29 +326,90 @@ impl InputState {
         group: ToolbarItemOrderGroup,
         order: &[ToolbarItemId],
     ) -> bool {
-        if !self.toolbar_items.set_known_order(group, order) {
+        if !self.toolbar.set_item_order(group, order) {
             return false;
         }
-        self.resolved_toolbar_items = self.toolbar_items.resolved();
         self.needs_redraw = true;
         true
     }
 
     pub fn reset_toolbar_item_order(&mut self, group: ToolbarItemOrderGroup) -> bool {
-        if !self.toolbar_items.reset_known_order_to_defaults(group) {
+        if !self.toolbar.reset_item_order(group) {
             return false;
         }
-
-        self.resolved_toolbar_items = self.toolbar_items.resolved();
         self.needs_redraw = true;
         true
     }
 
-    /// Layout-mode switches re-resolve the section booleans against the new
-    /// baseline; explicit user overrides in the item store survive, so a
-    /// mode switch no longer erases hand-tuned section settings.
-    pub(crate) fn apply_toolbar_mode_defaults(&mut self, _mode: crate::config::ToolbarLayoutMode) {
+    #[cfg(test)]
+    pub(crate) fn toolbar_visible_flag(&self) -> bool {
+        self.toolbar.visible()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn toolbar_top_visible_flag(&self) -> bool {
+        self.toolbar.top_visible()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_set_toolbar_visibility_state(
+        &mut self,
+        visible: bool,
+        top_visible: bool,
+        top_pinned: bool,
+    ) {
+        self.toolbar
+            .override_visibility_for_test(visible, top_visible, top_pinned);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_set_toolbar_appearance(&mut self, use_icons: bool, scale: f64) {
+        self.toolbar.override_appearance_for_test(use_icons, scale);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_set_toolbar_display_state(&mut self, mode: TopDisplayMode, minimized: bool) {
+        self.toolbar.override_display_for_test(mode, minimized);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_set_toolbar_menu_state(&mut self, menu: TopMenuState, scroll: f64) {
+        self.toolbar.override_menu_for_test(menu, scroll);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_set_toolbar_items(&mut self, items: crate::config::ToolbarItemsConfig) {
+        self.toolbar.override_items_for_test(items);
         self.refresh_section_visibility();
+    }
+
+    #[cfg(all(test, feature = "toolbar-gtk"))]
+    pub(crate) fn test_set_toolbar_layout(
+        &mut self,
+        mode: crate::config::ToolbarLayoutMode,
+        overrides: crate::config::ToolbarModeOverrides,
+    ) {
+        self.toolbar.override_layout_for_test(mode, overrides);
+        self.refresh_section_visibility();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_set_toolbar_customization(
+        &mut self,
+        items_open: bool,
+        group: Option<crate::ui::toolbar::ToolbarItemCustomizeGroup>,
+        status_bar_contents_open: bool,
+    ) {
+        self.toolbar
+            .override_customization_for_test(items_open, group, status_bar_contents_open);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_set_toolbar_rebind_modifier(
+        &mut self,
+        modifier: crate::config::ToolbarRebindModifier,
+    ) {
+        self.toolbar.override_rebind_modifier_for_test(modifier);
     }
 
     /// Wrapper for undo that preserves existing action plumbing.
@@ -501,7 +489,7 @@ mod tests {
         // ...and the disagreement is now an explicit override that
         // survives mode switches.
         let zoom_id = crate::config::ToolbarSectionFlag::ZoomActions.item_id();
-        assert!(state.resolved_toolbar_items.hidden.contains(&zoom_id));
+        assert!(state.resolved_toolbar_items().hidden.contains(&zoom_id));
         state.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::SetToolbarLayoutMode(
             crate::config::ToolbarLayoutMode::Advanced,
         ));
@@ -512,25 +500,18 @@ mod tests {
     fn factory_visibility_reset_changes_only_the_centralized_eligible_set() {
         let mut state = make_test_input_state();
         let section = crate::config::ToolbarSectionFlag::Actions.item_id();
-        state.toolbar_items = ToolbarItemsConfig::default();
-        state
-            .toolbar_items
-            .set_hidden(ids::TOP_UTILITY_SCREENSHOT, false);
-        state.toolbar_items.set_hidden(ids::TOP_UTILITY_OCR, false);
-        state.toolbar_items.set_hidden(ids::TOP_TOOL_PEN, true);
-        state.toolbar_items.set_hidden(section, true);
-        state
-            .toolbar_items
-            .set_hidden(ids::TOP_CHROME_OVERFLOW, true);
-        state
-            .toolbar_items
-            .hidden
-            .push("future.toolbar.item".to_string());
-        state.resolved_toolbar_items = state.toolbar_items.resolved();
+        let mut items = ToolbarItemsConfig::default();
+        items.set_hidden(ids::TOP_UTILITY_SCREENSHOT, false);
+        items.set_hidden(ids::TOP_UTILITY_OCR, false);
+        items.set_hidden(ids::TOP_TOOL_PEN, true);
+        items.set_hidden(section, true);
+        items.set_hidden(ids::TOP_CHROME_OVERFLOW, true);
+        items.hidden.push("future.toolbar.item".to_string());
+        state.test_set_toolbar_items(items);
 
         assert!(state.reset_toolbar_item_hidden_overrides());
 
-        let resolved = state.toolbar_items.resolved();
+        let resolved = state.toolbar_items().resolved();
         assert!(resolved.hidden.contains(&ids::TOP_UTILITY_SCREENSHOT));
         // Restored to its baseline rather than to an explicit entry.
         assert!(resolved.is_hidden(ids::TOP_UTILITY_OCR));

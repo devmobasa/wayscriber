@@ -24,7 +24,7 @@ fn snapshot_from_state(state: &InputState) -> ToolbarSnapshot {
 #[test]
 fn top_size_respects_icon_mode() {
     let mut state = create_test_input_state();
-    state.toolbar_use_icons = true;
+    state.set_toolbar_use_icons(true);
     let snapshot = snapshot_from_state(&state);
     // Width includes the island gaps/padding of the four-pill band (tools,
     // presets, history, chrome): the presets island replaced the retired
@@ -34,7 +34,7 @@ fn top_size_respects_icon_mode() {
     // drawing tool is active.
     assert_eq!(top_size(&snapshot), (1227, 104));
 
-    state.toolbar_use_icons = false;
+    state.set_toolbar_use_icons(false);
     let snapshot = snapshot_from_state(&state);
     assert_eq!(top_size(&snapshot).1, 106);
 }
@@ -42,7 +42,7 @@ fn top_size_respects_icon_mode() {
 #[test]
 fn narrow_viewports_drop_presets_then_overflow_items() {
     let mut state = create_test_input_state();
-    state.toolbar_use_icons = true;
+    state.set_toolbar_use_icons(true);
     let mut snapshot = snapshot_from_state(&state);
 
     // Unconstrained: presets shown, the pill's eight swatches available,
@@ -115,14 +115,11 @@ fn narrow_viewports_drop_presets_then_overflow_items() {
 #[test]
 fn overflow_contains_only_visible_items_and_is_structural() {
     let mut state = create_test_input_state();
-    state.toolbar_use_icons = true;
-    state
-        .toolbar_items
-        .set_hidden(crate::config::toolbar_item_ids::TOP_UTILITY_HIGHLIGHT, true);
-    state
-        .toolbar_items
-        .set_hidden(crate::config::toolbar_item_ids::TOP_CHROME_OVERFLOW, true);
-    state.resolved_toolbar_items = state.toolbar_items.resolved();
+    state.set_toolbar_use_icons(true);
+    let mut items = state.toolbar_items().clone();
+    items.set_hidden(crate::config::toolbar_item_ids::TOP_UTILITY_HIGHLIGHT, true);
+    items.set_hidden(crate::config::toolbar_item_ids::TOP_CHROME_OVERFLOW, true);
+    state.test_set_toolbar_items(items);
     let mut snapshot = snapshot_from_state(&state);
     snapshot.top_viewport_max = Some(700.0);
 
@@ -161,7 +158,7 @@ fn overflow_contains_only_visible_items_and_is_structural() {
 fn top_strip_fits_480_pixels_in_icon_and_text_modes() {
     for use_icons in [true, false] {
         let mut state = create_test_input_state();
-        state.toolbar_use_icons = use_icons;
+        state.set_toolbar_use_icons(use_icons);
         let mut snapshot = snapshot_from_state(&state);
         snapshot.top_viewport_max = Some(480.0);
         let (width, _) = top_size(&snapshot);
@@ -176,7 +173,7 @@ fn top_strip_fits_480_pixels_in_icon_and_text_modes() {
 #[test]
 fn compact_top_strip_respects_budget_without_the_old_floor() {
     let mut state = create_test_input_state();
-    state.toolbar_use_icons = false;
+    state.set_toolbar_use_icons(false);
     let mut snapshot = snapshot_from_state(&state);
     for budget in [376, 320, 300] {
         snapshot.top_viewport_max = Some(budget as f64);
@@ -191,22 +188,23 @@ fn compact_top_strip_respects_budget_without_the_old_floor() {
 #[test]
 fn reordered_overflow_items_keep_visual_order() {
     let mut state = create_test_input_state();
-    state.toolbar_use_icons = true;
-    state.toolbar_items.set_hidden(
+    state.set_toolbar_use_icons(true);
+    let mut items = state.toolbar_items().clone();
+    items.set_hidden(
         crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
         false,
     );
-    state.toolbar_items.move_item_to_index(
+    items.move_item_to_index(
         crate::config::ToolbarItemOrderGroup::TopControls,
         crate::config::toolbar_item_ids::TOP_UTILITY_HIGHLIGHT,
         0,
     );
-    state.toolbar_items.move_item_to_index(
+    items.move_item_to_index(
         crate::config::ToolbarItemOrderGroup::TopControls,
         crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
         1,
     );
-    state.resolved_toolbar_items = state.toolbar_items.resolved();
+    state.test_set_toolbar_items(items);
     let mut snapshot = snapshot_from_state(&state);
     snapshot.top_viewport_max = Some(560.0);
 
@@ -227,9 +225,12 @@ fn reordered_overflow_items_keep_visual_order() {
 #[test]
 fn shapes_popover_hosts_the_relocated_tool_options() {
     let mut state = create_test_input_state();
-    state.toolbar_use_icons = true;
+    state.set_toolbar_use_icons(true);
     state.set_tool_override(Some(crate::input::Tool::RegularPolygon));
-    state.toolbar_top_menu = TopMenuState::ShapePicker;
+    state.test_set_toolbar_menu_state(
+        TopMenuState::ShapePicker,
+        state.toolbar_top_popover_scroll(),
+    );
     let snapshot = snapshot_from_state(&state);
     assert!(snapshot.shape_picker_open);
 
@@ -274,7 +275,7 @@ fn shapes_popover_hosts_the_relocated_tool_options() {
     // With the popover closed the bar keeps only the island band plus the
     // contextual style pill — the permanently reserved mini-checkbox lane
     // is gone. The pill carries its own Fill toggle for shape tools.
-    state.toolbar_top_menu = TopMenuState::Closed;
+    state.test_set_toolbar_menu_state(TopMenuState::Closed, state.toolbar_top_popover_scroll());
     let snapshot = snapshot_from_state(&state);
     let (w, h) = top_size(&snapshot);
     assert_eq!(h, 104);
@@ -286,7 +287,7 @@ fn shapes_popover_hosts_the_relocated_tool_options() {
 #[test]
 fn highlight_ring_row_grows_the_bar_only_while_active() {
     let mut state = create_test_input_state();
-    state.toolbar_use_icons = true;
+    state.set_toolbar_use_icons(true);
     let snapshot = snapshot_from_state(&state);
     // Band (58) plus the contextual style pill (6 + 40) — no ring lane yet.
     assert_eq!(top_size(&snapshot).1, 104);
@@ -316,9 +317,12 @@ fn highlight_ring_row_grows_the_bar_only_while_active() {
 #[test]
 fn highlight_ring_and_top_popovers_use_separate_lanes() {
     let mut state = create_test_input_state();
-    state.toolbar_use_icons = true;
+    state.set_toolbar_use_icons(true);
     state.set_highlight_tool(true);
-    state.toolbar_top_menu = TopMenuState::ShapePicker;
+    state.test_set_toolbar_menu_state(
+        TopMenuState::ShapePicker,
+        state.toolbar_top_popover_scroll(),
+    );
     let snapshot = snapshot_from_state(&state);
     let (w, h) = top_size(&snapshot);
     let tree =
@@ -331,12 +335,16 @@ fn highlight_ring_and_top_popovers_use_separate_lanes() {
         .expect("shapes panel");
     assert!(shapes.rect.1 >= ring.rect.1 + ring.rect.3);
 
-    state.toolbar_top_menu = TopMenuState::TopOverflow;
-    state.toolbar_items.set_hidden(
+    state.test_set_toolbar_menu_state(
+        TopMenuState::TopOverflow,
+        state.toolbar_top_popover_scroll(),
+    );
+    let mut items = state.toolbar_items().clone();
+    items.set_hidden(
         crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
         false,
     );
-    state.resolved_toolbar_items = state.toolbar_items.resolved();
+    state.test_set_toolbar_items(items);
     let mut snapshot = snapshot_from_state(&state);
     snapshot.top_viewport_max = (480..=1120).rev().find_map(|budget| {
         snapshot.top_viewport_max = Some(budget as f64);
@@ -374,13 +382,13 @@ fn highlight_ring_and_top_popovers_use_separate_lanes() {
 #[test]
 fn top_size_scales_with_toolbar_scale() {
     let mut state = create_test_input_state();
-    state.toolbar_use_icons = true;
-    state.toolbar_scale = 1.0;
+    state.set_toolbar_use_icons(true);
+    state.test_set_toolbar_appearance(state.toolbar_use_icons(), 1.0);
     let snapshot = snapshot_from_state(&state);
     let base_size = top_size(&snapshot);
 
     // Scale 1.5x should increase size proportionally
-    state.toolbar_scale = 1.5;
+    state.test_set_toolbar_appearance(state.toolbar_use_icons(), 1.5);
     let snapshot = snapshot_from_state(&state);
     let scaled_size = top_size(&snapshot);
     assert_eq!(
@@ -395,7 +403,7 @@ fn top_size_scales_with_toolbar_scale() {
     );
 
     // Scale 0.75x should decrease size
-    state.toolbar_scale = 0.75;
+    state.test_set_toolbar_appearance(state.toolbar_use_icons(), 0.75);
     let snapshot = snapshot_from_state(&state);
     let small_size = top_size(&snapshot);
     assert!(
@@ -411,19 +419,19 @@ fn top_size_scales_with_toolbar_scale() {
 #[test]
 fn scale_size_handles_non_finite_values() {
     let mut state = create_test_input_state();
-    state.toolbar_use_icons = true;
-    state.toolbar_scale = 1.0;
+    state.set_toolbar_use_icons(true);
+    state.test_set_toolbar_appearance(state.toolbar_use_icons(), 1.0);
     let snapshot = snapshot_from_state(&state);
     let base_size = top_size(&snapshot);
 
     // NaN should fall back to 1.0
-    state.toolbar_scale = f64::NAN;
+    state.test_set_toolbar_appearance(state.toolbar_use_icons(), f64::NAN);
     let snapshot = snapshot_from_state(&state);
     let nan_size = top_size(&snapshot);
     assert_eq!(nan_size, base_size, "NaN scale should fall back to 1.0");
 
     // Infinity should fall back to 1.0
-    state.toolbar_scale = f64::INFINITY;
+    state.test_set_toolbar_appearance(state.toolbar_use_icons(), f64::INFINITY);
     let snapshot = snapshot_from_state(&state);
     let inf_size = top_size(&snapshot);
     assert_eq!(
@@ -432,7 +440,7 @@ fn scale_size_handles_non_finite_values() {
     );
 
     // Negative infinity should fall back to 1.0
-    state.toolbar_scale = f64::NEG_INFINITY;
+    state.test_set_toolbar_appearance(state.toolbar_use_icons(), f64::NEG_INFINITY);
     let snapshot = snapshot_from_state(&state);
     let neg_inf_size = top_size(&snapshot);
     assert_eq!(
@@ -444,24 +452,24 @@ fn scale_size_handles_non_finite_values() {
 #[test]
 fn scale_size_clamps_extreme_values() {
     let mut state = create_test_input_state();
-    state.toolbar_use_icons = true;
+    state.set_toolbar_use_icons(true);
 
     // Test upper bound clamping (max 3.0)
-    state.toolbar_scale = 10.0;
+    state.test_set_toolbar_appearance(state.toolbar_use_icons(), 10.0);
     let snapshot = snapshot_from_state(&state);
     let huge_size = top_size(&snapshot);
 
-    state.toolbar_scale = 3.0;
+    state.test_set_toolbar_appearance(state.toolbar_use_icons(), 3.0);
     let snapshot = snapshot_from_state(&state);
     let max_size = top_size(&snapshot);
     assert_eq!(huge_size, max_size, "Scale > 3.0 should clamp to 3.0");
 
     // Test lower bound clamping (min 0.5)
-    state.toolbar_scale = 0.1;
+    state.test_set_toolbar_appearance(state.toolbar_use_icons(), 0.1);
     let snapshot = snapshot_from_state(&state);
     let tiny_size = top_size(&snapshot);
 
-    state.toolbar_scale = 0.5;
+    state.test_set_toolbar_appearance(state.toolbar_use_icons(), 0.5);
     let snapshot = snapshot_from_state(&state);
     let min_size = top_size(&snapshot);
     assert_eq!(tiny_size, min_size, "Scale < 0.5 should clamp to 0.5");

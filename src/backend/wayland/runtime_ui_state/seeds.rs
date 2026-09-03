@@ -203,13 +203,13 @@ pub(super) fn toolbar_values(
     match target {
         Target::TopPinned => RuntimeUiMutationValues::one(
             InteractionSeedTarget::TopPinned,
-            InteractionSeedValue::Bool(input.toolbar_top_pinned),
+            InteractionSeedValue::Bool(input.toolbar_top_pinned()),
         ),
         Target::TopMinimized => RuntimeUiMutationValues::one(
             InteractionSeedTarget::TopMinimized,
-            InteractionSeedValue::Bool(input.toolbar_top_minimized),
+            InteractionSeedValue::Bool(input.toolbar_top_minimized()),
         ),
-        Target::TopDisplayMode => top_display_mode_values(input.toolbar_top_display_mode, input),
+        Target::TopDisplayMode => top_display_mode_values(input.toolbar_top_display_mode(), input),
         Target::StatusBar => RuntimeUiMutationValues::one(
             InteractionSeedTarget::StatusBar,
             InteractionSeedValue::Bool(input.ui_visibility.show_status_bar),
@@ -228,7 +228,7 @@ pub(super) fn toolbar_values(
         ),
         Target::ToolbarIcons => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarIcons,
-            InteractionSeedValue::Bool(input.toolbar_use_icons),
+            InteractionSeedValue::Bool(input.toolbar_use_icons()),
         ),
         Target::ToolbarMoreColors => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarMoreColors,
@@ -276,12 +276,12 @@ pub(super) fn toolbar_values(
         ),
         Target::LayoutMode => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ToolbarLayoutMode,
-            InteractionSeedValue::LayoutMode(input.toolbar_layout_mode),
+            InteractionSeedValue::LayoutMode(input.toolbar_layout_mode()),
         ),
         Target::NamedSection(flag) => RuntimeUiMutationValues::one(
             InteractionSeedTarget::SectionVisibility(flag),
             InteractionSeedValue::Visibility(item_visibility_setting(
-                &input.resolved_toolbar_items,
+                input.resolved_toolbar_items(),
                 flag.item_id(),
             )),
         ),
@@ -296,7 +296,7 @@ pub(super) fn toolbar_values(
         Target::ItemVisibility { id, .. } => RuntimeUiMutationValues::one(
             InteractionSeedTarget::ItemVisibility(id),
             InteractionSeedValue::Visibility(item_visibility_setting(
-                &input.resolved_toolbar_items,
+                input.resolved_toolbar_items(),
                 id,
             )),
         ),
@@ -304,7 +304,7 @@ pub(super) fn toolbar_values(
             InteractionSeedTarget::ItemOrder(group),
             InteractionSeedValue::ItemOrder(
                 input
-                    .resolved_toolbar_items
+                    .resolved_toolbar_items()
                     .order
                     .ordered_ids(group)
                     .to_vec(),
@@ -315,7 +315,7 @@ pub(super) fn toolbar_values(
                 (
                     InteractionSeedTarget::ItemVisibility(id),
                     InteractionSeedValue::Visibility(item_visibility_setting(
-                        &input.resolved_toolbar_items,
+                        input.resolved_toolbar_items(),
                         id,
                     )),
                 )
@@ -325,7 +325,7 @@ pub(super) fn toolbar_values(
         // button writes, settled through one accepted revision.
         Target::ToolbarVisibility => RuntimeUiMutationValues::one(
             InteractionSeedTarget::TopPinned,
-            InteractionSeedValue::Bool(input.toolbar_top_pinned),
+            InteractionSeedValue::Bool(input.toolbar_top_pinned()),
         ),
     }
 }

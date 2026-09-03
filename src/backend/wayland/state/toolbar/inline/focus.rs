@@ -78,7 +78,7 @@ impl WaylandState {
         conn: Option<&wayland_client::Connection>,
         qh: Option<&wayland_client::QueueHandle<Self>>,
     ) -> bool {
-        if matches!(key, Key::Escape) && self.input_state.toolbar_top_menu.is_flyout() {
+        if matches!(key, Key::Escape) && self.input_state.toolbar_top_menu().is_flyout() {
             self.input_state.close_top_toolbar_menus();
             if self.inline_toolbars_active() {
                 self.mark_inline_toolbar_full_damage();

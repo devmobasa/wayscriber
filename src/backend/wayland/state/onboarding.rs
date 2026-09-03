@@ -64,8 +64,8 @@ fn status_bar_board_picker_entry(input: &crate::input::InputState) -> Option<&'s
 /// Whether the top-strip overflow that owns the Canvas popover is reachable.
 fn canvas_popover_hint_relevant(input: &crate::input::InputState) -> bool {
     input.toolbar_top_visible()
-        && !input.toolbar_top_minimized
-        && input.toolbar_top_display_mode == crate::config::TopDisplayMode::Full
+        && !input.toolbar_top_minimized()
+        && input.toolbar_top_display_mode() == crate::config::TopDisplayMode::Full
 }
 
 fn automatic_tip_toast(message: impl Into<String>, tip: OnboardingTip) -> Toast {
