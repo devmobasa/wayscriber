@@ -20,8 +20,8 @@ pub use types::{
 };
 pub(crate) use types::{
     BlockedActionFeedback, BoardPickerClickState, ClipboardFingerprint, ClipboardPasteRequest,
-    DelayedHistory, HelperLaunchRequest, HistoryMode, PasteAnchor, PendingBackendAction,
-    PendingBoardDelete, PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
+    HelperLaunchRequest, PasteAnchor, PendingBackendAction, PendingBoardDelete,
+    PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
     PendingSelectionClipboardPublish, PendingToolbarPersistence, PolygonClickState,
     PresetFeedbackState, SelectionPublishState, TextBlockDrag, TextClickState,
     TextClipboardRequest, TextCutTarget, TextEditEntryFeedback, TextPasteEdit, TextPasteTarget,

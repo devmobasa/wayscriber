@@ -1,5 +1,5 @@
-use super::base::HistoryMode;
 use super::base::{DrawingState, InputState};
+use super::history_limits::HistoryMode;
 use crate::input::tool::Tool;
 use cairo::Context as CairoContext;
 use std::time::Instant;

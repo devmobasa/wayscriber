@@ -1,20 +1,33 @@
-use super::base::{DelayedHistory, HistoryMode};
 use crate::config::HistoryConfig;
 use crate::ui::toolbar::model::ToolbarSliderSpec;
 use std::time::{Duration, Instant};
 
+#[derive(Clone)]
+struct DelayedHistory {
+    mode: HistoryMode,
+    remaining: usize,
+    delay_ms: u64,
+    next_due: Instant,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum HistoryMode {
+    Undo,
+    Redo,
+}
+
 /// Undo retention, delayed playback settings, and active playback state.
 #[derive(Clone)]
 pub(crate) struct HistoryLimits {
-    pub(crate) undo_stack_limit: usize,
-    pub(crate) undo_all_delay_ms: u64,
-    pub(crate) redo_all_delay_ms: u64,
-    pub(crate) custom_undo_delay_ms: u64,
-    pub(crate) custom_redo_delay_ms: u64,
-    pub(crate) custom_undo_steps: usize,
-    pub(crate) custom_redo_steps: usize,
-    pub(crate) custom_section_enabled: bool,
-    pub(crate) pending_history: Option<DelayedHistory>,
+    undo_stack_limit: usize,
+    undo_all_delay_ms: u64,
+    redo_all_delay_ms: u64,
+    custom_undo_delay_ms: u64,
+    custom_redo_delay_ms: u64,
+    custom_undo_steps: usize,
+    custom_redo_steps: usize,
+    custom_section_enabled: bool,
+    pending_history: Option<DelayedHistory>,
 }
 
 impl HistoryLimits {
@@ -99,11 +112,11 @@ impl HistoryLimits {
         (delay_secs.clamp(spec.min, spec.max) * 1000.0).round() as u64
     }
 
-    pub(crate) fn has_pending(&self) -> bool {
+    pub(super) fn has_pending(&self) -> bool {
         self.pending_history.is_some()
     }
 
-    pub(crate) fn schedule(
+    pub(super) fn schedule(
         &mut self,
         mode: HistoryMode,
         available: usize,
@@ -124,14 +137,14 @@ impl HistoryLimits {
         true
     }
 
-    pub(crate) fn due_mode(&self, now: Instant) -> Option<HistoryMode> {
+    pub(super) fn due_mode(&self, now: Instant) -> Option<HistoryMode> {
         self.pending_history
             .as_ref()
             .filter(|pending| pending.remaining > 0 && now >= pending.next_due)
             .map(|pending| pending.mode)
     }
 
-    pub(crate) fn finish_due_step(&mut self, now: Instant, succeeded: bool) {
+    pub(super) fn finish_due_step(&mut self, now: Instant, succeeded: bool) {
         let Some(pending) = self.pending_history.as_mut() else {
             return;
         };

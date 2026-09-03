@@ -424,21 +424,6 @@ pub(crate) struct PolygonClickState {
     pub at: Instant,
 }
 
-/// Tracks in-progress delayed undo/redo playback.
-#[derive(Clone)]
-pub(crate) struct DelayedHistory {
-    pub mode: HistoryMode,
-    pub remaining: usize,
-    pub delay_ms: u64,
-    pub next_due: Instant,
-}
-
-#[derive(Clone, Copy)]
-pub(crate) enum HistoryMode {
-    Undo,
-    Redo,
-}
-
 /// Tracks which compositor features are available.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CompositorCapabilities {

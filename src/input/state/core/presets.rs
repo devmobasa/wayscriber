@@ -4,10 +4,10 @@ use std::time::{Duration, Instant};
 
 /// Runtime preset slots, active selection, and transient feedback state.
 pub(crate) struct PresetSlots {
-    pub(crate) preset_slot_count: usize,
-    pub(crate) presets: Vec<Option<ToolPresetConfig>>,
-    pub(crate) active_preset_slot: Option<usize>,
-    pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
+    preset_slot_count: usize,
+    presets: Vec<Option<ToolPresetConfig>>,
+    active_preset_slot: Option<usize>,
+    preset_feedback: Vec<Option<PresetFeedbackState>>,
 }
 
 impl PresetSlots {
@@ -25,6 +25,16 @@ impl PresetSlots {
 
     pub(crate) fn feedback(&self) -> &[Option<PresetFeedbackState>] {
         &self.preset_feedback
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_slot_count_for_test(&mut self, count: usize) {
+        self.preset_slot_count = count;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn presets_mut_for_test(&mut self) -> &mut [Option<ToolPresetConfig>] {
+        &mut self.presets
     }
 
     pub(crate) fn preset(&self, slot: usize) -> Option<ToolPresetConfig> {

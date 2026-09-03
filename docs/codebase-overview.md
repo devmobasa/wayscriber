@@ -101,7 +101,9 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
 
 3. **`InputState` responsibilities**
    - Holds `input::BoardManager`, whose ordered `BoardState` entries each own `draw::BoardPages`,
-     plus current colors, tool settings, fonts, modifiers, and `DrawingState`.
+     plus modifiers and `DrawingState`. `DrawingStyle` owns config-derived colors, sizes, fonts, and
+     shape appearance; `PresetSlots` owns preset lifecycle and feedback; `HistoryLimits` owns undo
+     retention plus delayed playback scheduling.
    - `state/actions/` maps keybindings to `Action` values and routes color, board/page, capture,
      history, selection, tool, and UI behavior. `HelpOverlayState` owns help visibility, navigation,
      search, scrolling, and press/release bookkeeping. `BoardPickerPanel` similarly owns the board

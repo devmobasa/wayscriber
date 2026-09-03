@@ -8,7 +8,7 @@ use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnap
 #[test]
 fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
     let mut state = create_test_input_state();
-    state.preset_slots.active_preset_slot = Some(2);
+    state.preset_slots.restore_active(Some(2));
     state.needs_redraw = false;
     state.session_dirty = false;
     state.state = DrawingState::Drawing {
@@ -22,7 +22,7 @@ fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
     assert!(state.set_tool_override(Some(Tool::Arrow)));
     assert_eq!(state.tool_override(), Some(Tool::Arrow));
     assert!(matches!(state.state, DrawingState::Idle));
-    assert_eq!(state.preset_slots.active_preset_slot, None);
+    assert_eq!(state.preset_slots.active(), None);
     assert!(state.needs_redraw);
     assert!(state.session_dirty);
 }
@@ -572,7 +572,7 @@ fn sync_modifiers_resyncs_current_settings_to_compositor_tool() {
 fn canceling_color_picker_restores_color_without_dirtying_session_or_preset() {
     let mut state = create_test_input_state();
     let original = state.color_for_tool(Tool::Pen);
-    state.preset_slots.active_preset_slot = Some(1);
+    state.preset_slots.restore_active(Some(1));
     state.session_dirty = false;
 
     state.open_color_picker_popup();
@@ -582,7 +582,7 @@ fn canceling_color_picker_restores_color_without_dirtying_session_or_preset() {
 
     assert_eq!(state.color_for_tool(Tool::Pen), original);
     assert_eq!(state.style.current_color, original);
-    assert_eq!(state.preset_slots.active_preset_slot, Some(1));
+    assert_eq!(state.preset_slots.active(), Some(1));
     assert!(!state.session_dirty);
 }
 
@@ -627,7 +627,7 @@ fn recoloring_a_swatch_previews_on_the_palette_and_leaves_the_tool_alone() {
 fn accepting_a_recolor_keeps_the_swatch_and_queues_the_durable_write() {
     let mut state = create_test_input_state();
     let tool_color = state.color_for_tool(Tool::Pen);
-    state.preset_slots.active_preset_slot = Some(1);
+    state.preset_slots.restore_active(Some(1));
     state.session_dirty = false;
 
     assert!(state.open_color_picker_popup_for_quick_color(2));
@@ -652,7 +652,7 @@ fn accepting_a_recolor_keeps_the_swatch_and_queues_the_durable_write() {
     );
     // An unselected swatch's recolor is not a drawing change.
     assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
-    assert_eq!(state.preset_slots.active_preset_slot, Some(1));
+    assert_eq!(state.preset_slots.active(), Some(1));
     assert!(!state.session_dirty);
 }
 
@@ -661,7 +661,7 @@ fn recoloring_the_swatch_in_use_moves_the_tool_color_with_it() {
     let mut state = create_test_input_state();
     let slot_color = state.style.quick_colors.color_for_index(3).expect("slot 3");
     assert!(state.apply_color_from_ui(slot_color));
-    state.preset_slots.active_preset_slot = Some(2);
+    state.preset_slots.restore_active(Some(2));
     state.session_dirty = false;
 
     assert!(state.open_color_picker_popup_for_quick_color(3));
@@ -676,7 +676,7 @@ fn recoloring_the_swatch_in_use_moves_the_tool_color_with_it() {
     assert_eq!(state.style.quick_colors.color_for_index(3), Some(picked));
     assert_eq!(state.color_for_tool(Tool::Pen), picked);
     assert_eq!(state.style.current_color, picked);
-    assert_eq!(state.preset_slots.active_preset_slot, None);
+    assert_eq!(state.preset_slots.active(), None);
     assert!(state.session_dirty);
 }
 
@@ -1728,7 +1728,7 @@ fn color_picker_apply_updates_opening_modifier_tool_after_modifier_release() {
 #[test]
 fn save_preset_captures_all_tool_settings() {
     let mut state = create_test_input_state();
-    state.preset_slots.preset_slot_count = 3;
+    state.preset_slots.set_slot_count_for_test(3);
     let styles = [
         (Tool::Pen, Color::new(0.1, 0.2, 0.3, 1.0), 4.0),
         (Tool::Line, Color::new(0.4, 0.5, 0.6, 1.0), 14.0),
@@ -1750,7 +1750,7 @@ fn save_preset_captures_all_tool_settings() {
     assert!(state.set_tool_override(Some(Tool::Line)));
 
     assert!(state.save_preset(1));
-    let preset = state.preset_slots.presets[0]
+    let preset = state.preset_slots.presets_mut_for_test()[0]
         .as_ref()
         .expect("saved preset");
     let tool_settings = preset.tool_settings.as_ref().expect("tool settings");
@@ -1771,7 +1771,7 @@ fn save_preset_captures_all_tool_settings() {
 #[test]
 fn save_preset_ignores_temporary_drag_modifier_tools() {
     let mut state = create_test_input_state();
-    state.preset_slots.preset_slot_count = 4;
+    state.preset_slots.set_slot_count_for_test(4);
     let pen_color = Color {
         r: 0.12,
         g: 0.34,
@@ -1799,7 +1799,7 @@ fn save_preset_ignores_temporary_drag_modifier_tools() {
         for key in modifiers.iter().rev() {
             state.on_key_release(*key);
         }
-        let preset = state.preset_slots.presets[slot - 1]
+        let preset = state.preset_slots.presets_mut_for_test()[slot - 1]
             .as_ref()
             .expect("saved preset");
         assert_eq!(preset.tool, Tool::Pen);
@@ -1811,7 +1811,7 @@ fn save_preset_ignores_temporary_drag_modifier_tools() {
 #[test]
 fn save_preset_without_override_uses_unmodified_drag_tool() {
     let mut state = create_test_input_state();
-    state.preset_slots.preset_slot_count = 1;
+    state.preset_slots.set_slot_count_for_test(1);
     let marker_color = Color {
         r: 0.72,
         g: 0.18,
@@ -1830,7 +1830,7 @@ fn save_preset_without_override_uses_unmodified_drag_tool() {
     assert!(state.save_preset(1));
     state.on_key_release(Key::Shift);
 
-    let preset = state.preset_slots.presets[0]
+    let preset = state.preset_slots.presets_mut_for_test()[0]
         .as_ref()
         .expect("saved preset");
     assert_eq!(preset.tool, Tool::Marker);
@@ -1841,7 +1841,7 @@ fn save_preset_without_override_uses_unmodified_drag_tool() {
 #[test]
 fn apply_full_preset_restores_all_tool_settings() {
     let mut state = create_test_input_state();
-    state.preset_slots.preset_slot_count = 3;
+    state.preset_slots.set_slot_count_for_test(3);
     let styles = [
         (Tool::Pen, Color::new(0.1, 0.2, 0.3, 1.0), 4.0),
         (Tool::Line, Color::new(0.4, 0.5, 0.6, 1.0), 14.0),
@@ -1860,7 +1860,7 @@ fn apply_full_preset_restores_all_tool_settings() {
     }
     let tool_settings = PresetToolStatesConfig::from_runtime(&settings, 33.0);
 
-    state.preset_slots.presets[0] = Some(ToolPresetConfig {
+    state.preset_slots.presets_mut_for_test()[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::Marker,
         color: ColorSpec::from(styles[6].1),
@@ -1901,7 +1901,7 @@ fn apply_full_preset_restores_all_tool_settings() {
 #[test]
 fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
     let mut state = create_test_input_state();
-    state.preset_slots.preset_slot_count = 3;
+    state.preset_slots.set_slot_count_for_test(3);
     let top_level_color = ColorSpec::Rgb([255, 0, 0]);
     let pen_color = ColorSpec::Rgb([10, 20, 30]);
     let marker_color = ColorSpec::Rgb([200, 180, 20]);
@@ -1910,7 +1910,7 @@ fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
     settings.marker.thickness = 22.0;
     let tool_settings = PresetToolStatesConfig::from_runtime(&settings, 18.0);
 
-    state.preset_slots.presets[0] = Some(ToolPresetConfig {
+    state.preset_slots.presets_mut_for_test()[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::Marker,
         color: top_level_color.clone(),
@@ -1929,7 +1929,7 @@ fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
         show_status_bar: None,
         drag_tools: None,
     });
-    state.preset_slots.presets[1] = Some(ToolPresetConfig {
+    state.preset_slots.presets_mut_for_test()[1] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::Eraser,
         color: top_level_color,
@@ -1964,7 +1964,7 @@ fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
 #[test]
 fn legacy_preset_changes_only_selected_tool_settings() {
     let mut state = create_test_input_state();
-    state.preset_slots.preset_slot_count = 3;
+    state.preset_slots.set_slot_count_for_test(3);
     let pen_color = state.color_for_tool(Tool::Pen);
     let pen_thickness = state.thickness_for_tool(Tool::Pen);
     let line_color = Color {
@@ -1976,7 +1976,7 @@ fn legacy_preset_changes_only_selected_tool_settings() {
     let marker_color = state.color_for_tool(Tool::Marker);
     let marker_thickness = state.thickness_for_tool(Tool::Marker);
 
-    state.preset_slots.presets[0] = Some(ToolPresetConfig {
+    state.preset_slots.presets_mut_for_test()[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::Line,
         color: ColorSpec::from(line_color),
@@ -2009,12 +2009,12 @@ fn legacy_preset_changes_only_selected_tool_settings() {
 #[test]
 fn legacy_step_marker_preset_uses_font_derived_size() {
     let mut state = create_test_input_state();
-    state.preset_slots.preset_slot_count = 3;
+    state.preset_slots.set_slot_count_for_test(3);
     state.set_tool_override(Some(Tool::StepMarker));
     assert!(state.set_thickness(30.0));
     state.set_tool_override(Some(Tool::Pen));
 
-    state.preset_slots.presets[0] = Some(ToolPresetConfig {
+    state.preset_slots.presets_mut_for_test()[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::StepMarker,
         color: ColorSpec::Name("blue".to_string()),
@@ -2045,13 +2045,13 @@ fn legacy_step_marker_preset_uses_font_derived_size() {
 #[test]
 fn full_step_marker_preset_uses_captured_profile_size() {
     let mut state = create_test_input_state();
-    state.preset_slots.preset_slot_count = 3;
+    state.preset_slots.set_slot_count_for_test(3);
     let color = ColorSpec::Rgb([20, 40, 60]);
     let mut settings = PerToolDrawingSettings::new(ColorSpec::Rgb([255, 0, 0]).to_color(), 4.0);
     settings.step_marker.color = color.to_color();
     settings.step_marker.thickness = 30.0;
 
-    state.preset_slots.presets[0] = Some(ToolPresetConfig {
+    state.preset_slots.presets_mut_for_test()[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::StepMarker,
         color: ColorSpec::Name("blue".to_string()),

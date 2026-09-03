@@ -123,17 +123,15 @@ pub(crate) mod test_support {
             );
             style.tool_settings.step_marker.thickness =
                 super::core::utility::default_step_marker_size(style.current_font_size);
-            let history_limits = super::HistoryLimits {
-                undo_stack_limit: 100,
+            let history_limits = super::HistoryLimits::from(&crate::config::HistoryConfig {
                 undo_all_delay_ms: 0,
                 redo_all_delay_ms: 0,
+                custom_section_enabled: true,
                 custom_undo_delay_ms: 0,
                 custom_redo_delay_ms: 0,
                 custom_undo_steps: 5,
                 custom_redo_steps: 5,
-                custom_section_enabled: true,
-                pending_history: None,
-            };
+            });
 
             Self {
                 seed: InputStateSeed {

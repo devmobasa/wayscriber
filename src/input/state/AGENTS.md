@@ -5,13 +5,13 @@
 
 ## Architecture
 - `actions/` owns action dispatch and key press/release behavior.
-- `core/` owns board state, history, selection, panels, properties, command palette, board picker, utilities, and session preflight. Panels with their own lifecycle own a state type (`core/font_picker/state.rs`, `core/command_palette/state.rs`, `core/help_overlay/state.rs`, `core/board_picker/panel.rs`, `core/menus/context_menu.rs`, `core/color_picker_popup/panel.rs`, `core/radial_menu/panel.rs`, `core/status_hud/state.rs`, `core/zoom_chip/state.rs`, `core/properties/state.rs`, `core/tour.rs::TourState`); code outside `input::state` reads them through accessors, not fields. Shared modal keyboard-repeat timing belongs to `core/key_repeat.rs`, not to an individual panel's input handler. `core/base/ui_visibility.rs` groups the UI visibility preferences; `core/search.rs` holds the shared fuzzy scorer.
+- `core/` owns board state, history, selection, panels, properties, command palette, board picker, utilities, and session preflight. Panels with their own lifecycle own a state type (`core/font_picker/state.rs`, `core/command_palette/state.rs`, `core/help_overlay/state.rs`, `core/board_picker/panel.rs`, `core/menus/context_menu.rs`, `core/color_picker_popup/panel.rs`, `core/radial_menu/panel.rs`, `core/status_hud/state.rs`, `core/zoom_chip/state.rs`, `core/properties/state.rs`, `core/tour.rs::TourState`); code outside `input::state` reads them through accessors, not fields. Shared modal keyboard-repeat timing belongs to `core/key_repeat.rs`, not to an individual panel's input handler. `core/style.rs` owns drawing-style mutation and preset/session conversion, `core/presets.rs` owns preset slot lifecycle, and `core/history_limits.rs` owns undo retention and delayed playback scheduling. `core/base/ui_visibility.rs` groups the UI visibility preferences; `core/search.rs` holds the shared fuzzy scorer.
 - `from_config.rs` is the only place configuration becomes an `InputState`; runtime code constructs through `InputState::from_config` and tests through `test_support::TestInputStateBuilder`.
 - `mouse/`, `interaction/`, and `highlight/` own pointer/mouse routing, interaction adapters, and highlight state.
 - `tests/` owns focused input state tests.
 
 ## Invariants
-- Keep direct drawing mutations behind `InputState` methods so dirty tracking, undo, and history remain coherent.
+- Keep drawing-value mutation on `DrawingStyle`; `InputState` wrappers coordinate dirty tracking, undo, redraw, and session side effects.
 - Preserve pending backend action boundaries; backend code should drain actions rather than duplicating side effects.
 - Preserve text input lifecycle, panel focus, selection transforms, command palette dispatch, and session preflight behavior.
 
