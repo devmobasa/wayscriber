@@ -1,5 +1,6 @@
 use crate::config::{
-    ArrowConfig, DrawingConfig, MouseDragToolsConfig, PresetToolStatesConfig, QuickColorPalette,
+    ARROW_ANGLE_MAX, ARROW_ANGLE_MIN, ARROW_LENGTH_MAX, ARROW_LENGTH_MIN, ArrowConfig,
+    DrawingConfig, MouseDragToolsConfig, PresetToolStatesConfig, QuickColorPalette,
     SpotlightConfig, ToolPresetConfig,
 };
 use crate::draw::{ArrowStyle, BlurStyle, Color, EraserKind, FontDescriptor, clamp_regular_sides};
@@ -338,14 +339,14 @@ impl DrawingStyle {
     pub(crate) fn apply_preset_shape_settings(&mut self, preset: &ToolPresetConfig) -> bool {
         let mut changed = false;
         if let Some(length) = preset.arrow_length {
-            let clamped = length.clamp(5.0, 50.0);
+            let clamped = clamp_arrow_length(length);
             if (self.arrow_length - clamped).abs() > f64::EPSILON {
                 self.arrow_length = clamped;
                 changed = true;
             }
         }
         if let Some(angle) = preset.arrow_angle {
-            let clamped = angle.clamp(15.0, 60.0);
+            let clamped = clamp_arrow_angle(angle);
             if (self.arrow_angle - clamped).abs() > f64::EPSILON {
                 self.arrow_angle = clamped;
                 changed = true;
@@ -420,8 +421,8 @@ impl DrawingStyle {
         }
         let _ = self.set_font_size(snapshot.current_font_size);
         self.text_background_enabled = snapshot.text_background_enabled;
-        self.arrow_length = snapshot.arrow_length.clamp(5.0, 50.0);
-        self.arrow_angle = snapshot.arrow_angle.clamp(15.0, 60.0);
+        self.arrow_length = clamp_arrow_length(snapshot.arrow_length);
+        self.arrow_angle = clamp_arrow_angle(snapshot.arrow_angle);
         if let Some(head_at_end) = snapshot.arrow_head_at_end {
             self.arrow_head_at_end = head_at_end;
         }
@@ -463,6 +464,14 @@ impl DrawingStyle {
             drag_tools: Some(drag_tools),
         }
     }
+}
+
+fn clamp_arrow_length(length: f64) -> f64 {
+    length.clamp(ARROW_LENGTH_MIN, ARROW_LENGTH_MAX)
+}
+
+fn clamp_arrow_angle(angle: f64) -> f64 {
+    angle.clamp(ARROW_ANGLE_MIN, ARROW_ANGLE_MAX)
 }
 
 #[cfg(test)]

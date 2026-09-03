@@ -60,11 +60,12 @@ pub use keybindings::{
 pub use migration::{MigrationChange, MigrationPreview};
 #[allow(unused_imports)]
 pub use types::{
-    ArrowConfig, BoardBackgroundConfig, BoardColorConfig, BoardConfig, BoardItemConfig,
-    BoardsConfig, CaptureConfig, ClickHighlightConfig, DEFAULT_OCR_LANGUAGES,
-    DEFAULT_PEN_SMOOTHING, DragButtonConfig, DrawingConfig, ExportConfig, HelpOverlayStyle,
-    HistoryConfig, InputHudConfig, InputHudMode, InputHudPosition, MouseDragToolsConfig,
-    PDF_LABEL_APP_BOARD, PDF_LABEL_APP_BOARDS, PDF_LABEL_BOARD_NAME, PDF_LABEL_DEFAULT_TEMPLATE,
+    ARROW_ANGLE_MAX, ARROW_ANGLE_MIN, ARROW_LENGTH_MAX, ARROW_LENGTH_MIN, ArrowConfig,
+    BoardBackgroundConfig, BoardColorConfig, BoardConfig, BoardItemConfig, BoardsConfig,
+    CaptureConfig, ClickHighlightConfig, DEFAULT_OCR_LANGUAGES, DEFAULT_PEN_SMOOTHING,
+    DragButtonConfig, DrawingConfig, ExportConfig, HelpOverlayStyle, HistoryConfig, InputHudConfig,
+    InputHudMode, InputHudPosition, MouseDragToolsConfig, PDF_LABEL_APP_BOARD,
+    PDF_LABEL_APP_BOARDS, PDF_LABEL_BOARD_NAME, PDF_LABEL_DEFAULT_TEMPLATE,
     PDF_LABEL_DOCUMENT_PAGE, PDF_LABEL_DOCUMENT_PAGES, PDF_LABEL_EXPORT_BOARD,
     PDF_LABEL_EXPORT_BOARDS, PDF_LABEL_PAGE, PDF_LABEL_PAGE_NAME, PDF_LABEL_PAGES,
     PDF_LABEL_PLACEHOLDERS, PRESET_SLOTS_MAX, PRESET_SLOTS_MIN, PdfExportConfig, PdfFitMode,

@@ -25,7 +25,9 @@ mod tray;
 mod ui;
 mod updates;
 
-pub use arrow::ArrowConfig;
+pub use arrow::{
+    ARROW_ANGLE_MAX, ARROW_ANGLE_MIN, ARROW_LENGTH_MAX, ARROW_LENGTH_MIN, ArrowConfig,
+};
 pub use board::BoardConfig;
 pub use boards::{BoardBackgroundConfig, BoardColorConfig, BoardItemConfig, BoardsConfig};
 pub use capture::{
