@@ -687,8 +687,7 @@ fn board_picker_page_search_wheel_scroll_syncs_cursor_with_visible_focus() {
     update_picker_layout(&mut input, 1280, 720);
 
     let cols = input
-        .board_picker
-        .layout()
+        .board_picker_layout()
         .expect("layout")
         .page_cols
         .max(1);
