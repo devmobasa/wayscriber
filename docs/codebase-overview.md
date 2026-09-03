@@ -114,6 +114,7 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
      hover identity, and same-source press/release bookkeeping. `PropertiesPanelState` owns panel
      lifecycle, cached geometry, deferred hover recalculation, and refresh scheduling. Font-picker
      and command-palette keyboard timing share the behavior-owning `OverlayKeyRepeat` schedule.
+     `TourState` owns guided-tour lifecycle and bounded step navigation.
    - `state/mouse/` and `state/interaction/` convert pointer gestures into drawing/state changes.
    - `render.rs` exposes provisional shape previews for live feedback.
 

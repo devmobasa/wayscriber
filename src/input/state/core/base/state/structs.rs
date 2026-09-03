@@ -437,7 +437,7 @@ pub struct InputState {
     /// Transient preset feedback for toolbar animations
     pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
     /// Lifecycle and navigation state for the guided tour.
-    pub tour: crate::input::state::core::TourState,
+    pub(crate) tour: crate::input::state::core::TourState,
     /// Compositor capabilities (layer-shell, screencopy, etc.)
     pub compositor_capabilities: CompositorCapabilities,
     /// Capabilities snapshot the capability warning toast last evaluated;

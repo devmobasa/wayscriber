@@ -22,8 +22,8 @@ pub enum TourStep {
 /// Lifecycle and navigation state for the guided tour.
 #[derive(Debug, Default)]
 pub struct TourState {
-    pub active: bool,
-    pub step: usize,
+    pub(crate) active: bool,
+    pub(crate) step: usize,
 }
 
 impl TourState {
