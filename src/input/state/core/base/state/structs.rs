@@ -196,7 +196,7 @@ pub struct InputState {
     /// Chrome snapshot while focus mode is active (`Some` = active).
     pub(crate) focus_mode_restore: Option<FocusModeRestore>,
     /// Cached geometry and pointer interaction state for the status HUD.
-    pub status_hud: crate::input::state::core::status_hud::StatusHudState,
+    pub(crate) status_hud: crate::input::state::core::status_hud::StatusHudState,
     /// Hovered zoom chip button (idle pointer only; same affordance)
     pub zoom_chip_hover: Option<crate::ui::ZoomChipButtonKind>,
     /// Whether passthrough light mode is currently enabled

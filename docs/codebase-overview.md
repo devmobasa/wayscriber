@@ -109,7 +109,8 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
      owns context-menu visibility, targeting, enablement, and cached layout. `ColorPickerPopupPanel`
      owns popup generation, geometry, action presses, and picker-drag lifecycle. `RadialMenuPanel`
      owns radial-menu visibility, paint gating, flick arming, drag capture, cached layout, and its
-     configured pointer trigger.
+     configured pointer trigger. `StatusHudState` owns cached HUD geometry, rebuild inputs, hover
+     identity, and press/release bookkeeping.
    - `state/mouse/` and `state/interaction/` convert pointer gestures into drawing/state changes.
    - `render.rs` exposes provisional shape previews for live feedback.
 
