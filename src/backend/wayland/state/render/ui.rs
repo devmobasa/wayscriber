@@ -208,9 +208,9 @@ impl WaylandState {
                 self.input_state.help_overlay.scroll,
                 self.input_state.help_overlay.quick_mode,
             );
-            self.input_state.help_overlay.scroll_max = scroll_max;
-            self.input_state.help_overlay.scroll =
-                self.input_state.help_overlay.scroll.clamp(0.0, scroll_max);
+            self.input_state
+                .help_overlay
+                .update_scroll_extent(scroll_max);
         }
         if !capture_picker && self.input_state.is_board_picker_open() {
             self.input_state

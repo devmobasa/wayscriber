@@ -1,3 +1,3 @@
-mod state;
+pub(super) mod state;
 
 pub use state::HelpOverlayState;
