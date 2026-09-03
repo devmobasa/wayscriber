@@ -4,9 +4,7 @@ use super::*;
 /// persists is the value presenter will restore -- the user's own.
 pub(in crate::backend::wayland) fn user_tool_preview(input: &InputState) -> bool {
     input
-        .presenter_restore
-        .as_ref()
-        .and_then(|restore| restore.show_tool_preview)
+        .presenter_restored_tool_preview()
         .unwrap_or(input.ui_visibility.show_tool_preview)
 }
 
@@ -14,9 +12,7 @@ pub(in crate::backend::wayland) fn user_tool_preview(input: &InputState) -> bool
 /// persists is the value presenter will restore -- the user's own.
 pub(in crate::backend::wayland) fn user_click_highlight_enabled(input: &InputState) -> bool {
     input
-        .presenter_restore
-        .as_ref()
-        .and_then(|restore| restore.click_highlight_enabled)
+        .presenter_restored_click_highlight()
         .unwrap_or_else(|| input.click_highlight_enabled())
 }
 
@@ -34,11 +30,7 @@ pub(super) fn top_display_mode_values(
     mode: TopDisplayMode,
     input: &InputState,
 ) -> std::result::Result<RuntimeUiMutationValues, MutationShapeError> {
-    let presenter_restore = input
-        .presenter_restore
-        .as_ref()
-        .and_then(|restore| restore.toolbar_visibility)
-        .map(|snapshot| snapshot.top_display_mode());
+    let presenter_restore = input.presenter_restored_top_display_mode();
     RuntimeUiMutationValues::one(
         InteractionSeedTarget::TopDisplayMode,
         InteractionSeedValue::TopDisplayMode(persisted_top_display_mode(mode, presenter_restore)),
@@ -55,10 +47,7 @@ pub(super) fn apply_persisted_top_display_mode(
     mode: PersistedTopDisplayMode,
 ) {
     let mode = mode.display_mode();
-    if let Some(restore) = input.presenter_restore.as_mut()
-        && let Some(snapshot) = restore.toolbar_visibility.as_mut()
-    {
-        snapshot.set_top_display_mode(mode);
+    if input.retarget_presenter_toolbar_display_mode(mode) {
         return;
     }
     if input.toolbar_top_display_mode() != mode {

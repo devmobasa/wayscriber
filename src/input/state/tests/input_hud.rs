@@ -63,11 +63,11 @@ fn toggle_input_hud_defers_the_source_announcement_to_the_backend() {
 #[test]
 fn presenter_mode_forces_input_hud_and_gates_the_manual_toggle() {
     let mut state = create_test_input_state();
-    state.presenter_mode_config.enable_input_hud = true;
+    state.presenter_mode_config_mut_for_test().enable_input_hud = true;
 
     assert!(!state.input_hud_enabled());
     state.toggle_presenter_mode();
-    assert!(state.presenter_mode);
+    assert!(state.presenter_mode_active());
     assert!(state.input_hud_enabled());
     assert!(
         state.take_input_hud_source_announce(),
@@ -82,7 +82,7 @@ fn presenter_mode_forces_input_hud_and_gates_the_manual_toggle() {
     );
 
     state.toggle_presenter_mode();
-    assert!(!state.presenter_mode);
+    assert!(!state.presenter_mode_active());
     assert!(
         !state.input_hud_enabled(),
         "exiting presenter mode restores the pre-presenter value"
@@ -93,7 +93,7 @@ fn presenter_mode_forces_input_hud_and_gates_the_manual_toggle() {
 #[test]
 fn presenter_mode_restores_a_manually_enabled_input_hud() {
     let mut state = create_test_input_state();
-    state.presenter_mode_config.enable_input_hud = true;
+    state.presenter_mode_config_mut_for_test().enable_input_hud = true;
     state.handle_action(Action::ToggleInputHud);
     assert!(state.input_hud_enabled());
 
@@ -173,7 +173,7 @@ fn toolbar_checkbox_toggles_the_input_hud() {
     assert!(state.apply_toolbar_event(ToolbarEvent::ToggleInputHud(false)));
     assert!(!state.input_hud_enabled());
 
-    state.presenter_mode_config.enable_input_hud = true;
+    state.presenter_mode_config_mut_for_test().enable_input_hud = true;
     state.toggle_presenter_mode();
     assert!(state.input_hud_enabled());
     assert!(!state.apply_toolbar_event(ToolbarEvent::ToggleInputHud(false)));

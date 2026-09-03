@@ -288,9 +288,9 @@ fn toolbar_hint_chip_appears_only_while_toolbar_hidden() {
 
     // Presenter mode with hide_toolbars: the hint must not tease a
     // toggle that presenter mode suppresses.
-    state.presenter_mode = true;
+    state.override_presenter_mode_for_test(true);
     assert!(!has_chip(&state));
-    state.presenter_mode = false;
+    state.override_presenter_mode_for_test(false);
 
     // `[ui] show_toolbar_hint = false` opts deliberate toolbar-less
     // setups out entirely.

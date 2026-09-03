@@ -211,7 +211,7 @@ impl WaylandState {
             return false;
         }
         !first_run_card_hidden_by_ui_state(
-            self.input_state.presenter_mode,
+            self.input_state.presenter_mode_active(),
             self.input_state.command_palette.open,
             self.input_state.help_overlay.is_visible(),
             self.input_state.is_radial_menu_open(),

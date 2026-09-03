@@ -327,11 +327,15 @@ fn named_section_visibility_persists_under_its_own_target() {
 #[test]
 fn presenter_mode_persists_the_users_values_not_its_own() {
     let mut input_state = make_test_input_state();
-    input_state.presenter_mode_config.enable_click_highlight = true;
-    input_state.presenter_mode_config.hide_tool_preview = true;
+    input_state
+        .presenter_mode_config_mut_for_test()
+        .enable_click_highlight = true;
+    input_state
+        .presenter_mode_config_mut_for_test()
+        .hide_tool_preview = true;
     input_state.ui_visibility.show_tool_preview = true;
     input_state.toggle_presenter_mode();
-    assert!(input_state.presenter_mode);
+    assert!(input_state.presenter_mode_active());
     assert!(input_state.click_highlight_enabled());
 
     assert!(
@@ -346,7 +350,7 @@ fn presenter_mode_persists_the_users_values_not_its_own() {
     // Leaving presenter mode restores the user's values, and a later toggle
     // is the user's own again.
     input_state.toggle_presenter_mode();
-    assert!(!input_state.presenter_mode);
+    assert!(!input_state.presenter_mode_active());
     assert!(input_state.toggle_click_highlight());
     assert!(user_click_highlight_enabled(&input_state));
 }
@@ -356,7 +360,9 @@ fn presenter_mode_persists_the_users_values_not_its_own() {
 #[test]
 fn presenter_mode_still_follows_the_highlight_ring_preference() {
     let mut input_state = make_test_input_state();
-    input_state.presenter_mode_config.enable_click_highlight = true;
+    input_state
+        .presenter_mode_config_mut_for_test()
+        .enable_click_highlight = true;
     input_state.toggle_presenter_mode();
     assert!(input_state.set_highlight_tool_ring_enabled(true));
 

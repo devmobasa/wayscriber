@@ -1,5 +1,5 @@
 use super::super::super::{
-    CanvasIndex, Keymap, PointerTracking, ViewState,
+    CanvasIndex, ChromeModes, Keymap, PointerTracking, ViewState,
     selection::{SelectionClipboard, SelectionInteraction},
 };
 use super::super::types::{CompositorCapabilities, DrawingState, PendingOnboardingUsage};
@@ -67,15 +67,9 @@ impl InputState {
             feedback: Default::default(),
             ui_visibility,
             zoom_chip: Default::default(),
-            presenter_mode: false,
-            presenter_mode_config,
+            modes: ChromeModes::new(presenter_mode_config),
             render_profiles: crate::render_profiles::RenderProfileSet::default(),
-            presenter_restore: None,
-            focus_mode_restore: None,
             status_hud: Default::default(),
-            light_mode: false,
-            light_mode_drawing: false,
-            light_mode_restore: None,
             toolbar: crate::input::state::core::ToolbarInteraction::default(),
             precision_entry: None,
             board_previous_color: None,

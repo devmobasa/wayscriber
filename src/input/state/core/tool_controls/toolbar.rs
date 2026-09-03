@@ -24,18 +24,7 @@ impl InputState {
     /// toolbar hidden by a transient chrome owner.
     pub(crate) fn derive_toolbar_visibility_from_pins(&mut self) {
         let visible = self.toolbar.top_pinned();
-        if let Some(restore) = self.focus_mode_restore.as_mut() {
-            restore.toolbar_visibility.set_visible(visible);
-            return;
-        }
-        if let Some(restore) = self.presenter_restore.as_mut()
-            && let Some(snapshot) = restore.toolbar_visibility.as_mut()
-        {
-            snapshot.set_visible(visible);
-            return;
-        }
-        if let Some(restore) = self.light_mode_restore.as_mut() {
-            restore.toolbar_visibility.set_visible(visible);
+        if self.modes.retarget_visibility_from_pin(visible) {
             return;
         }
         self.toolbar.derive_visibility_from_pins();
@@ -63,12 +52,11 @@ impl InputState {
         } else {
             format!("All UI hidden — {}", parts.join(" · "))
         };
-        let (action_label, recovery_action) =
-            if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
-                ("Show status bar", Action::ToggleStatusBar)
-            } else {
-                ("Show toolbar", Action::ToggleToolbar)
-            };
+        let (action_label, recovery_action) = if self.presenter_hides_toolbars() {
+            ("Show status bar", Action::ToggleStatusBar)
+        } else {
+            ("Show toolbar", Action::ToggleToolbar)
+        };
         self.push_toast(
             ToastPriority::Info,
             "ui",
@@ -83,16 +71,14 @@ impl InputState {
     }
 
     fn presenter_will_restore_visible_chrome(&self) -> bool {
-        if !self.presenter_mode {
+        if !self.presenter_mode_active() {
             return false;
         }
-        let Some(restore) = self.presenter_restore.as_ref() else {
-            return false;
-        };
-        let restores_status_bar = restore.show_status_bar == Some(true);
-        let restores_top_toolbar = restore
-            .toolbar_visibility
-            .is_some_and(|snapshot| snapshot.effectively_visible());
+        let restores_status_bar = self
+            .modes
+            .presenter_restored_status_bar()
+            .is_some_and(|visible| visible);
+        let restores_top_toolbar = self.modes.presenter_restores_visible_toolbar();
         restores_status_bar || restores_top_toolbar
     }
 

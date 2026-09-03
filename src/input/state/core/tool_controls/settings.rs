@@ -133,9 +133,9 @@ impl InputState {
 
     /// Sets or clears an explicit tool override. Returns true if the tool changed.
     pub fn set_tool_override(&mut self, tool: Option<Tool>) -> bool {
-        if self.presenter_mode
+        if self.presenter_mode_active()
             && matches!(
-                self.presenter_mode_config.tool_behavior,
+                self.presenter_mode_config().tool_behavior,
                 crate::config::PresenterToolBehavior::ForceHighlightLocked
             )
             && tool != Some(Tool::Highlight)

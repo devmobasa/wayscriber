@@ -380,7 +380,7 @@ fn visibility_toggles_stay_process_only_across_focus_mode() {
 fn presenter_mode_gates_focus_mode() {
     let mut state = create_test_input_state();
     state.toggle_presenter_mode();
-    assert!(state.presenter_mode);
+    assert!(state.presenter_mode_active());
 
     state.handle_action(Action::ToggleFocusMode);
     assert!(
@@ -394,11 +394,14 @@ fn focus_mode_exits_light_mode_before_taking_ownership() {
     let mut state = create_test_input_state();
     state.compositor_capabilities.layer_shell = true;
     state.handle_action(Action::ToggleLightMode);
-    assert!(state.light_mode);
+    assert!(state.light_mode_active());
 
     state.handle_action(Action::ToggleFocusMode);
 
-    assert!(!state.light_mode, "transient chrome owners must not nest");
+    assert!(
+        !state.light_mode_active(),
+        "transient chrome owners must not nest"
+    );
     assert!(state.focus_mode_active());
     state.handle_action(Action::ToggleFocusMode);
     assert!(state.ui_visibility.show_status_bar);
@@ -413,7 +416,7 @@ fn light_mode_exits_focus_mode_before_taking_ownership() {
 
     state.handle_action(Action::ToggleLightMode);
 
-    assert!(state.light_mode);
+    assert!(state.light_mode_active());
     assert!(
         !state.focus_mode_active(),
         "transient chrome owners must not nest"
@@ -431,7 +434,7 @@ fn unsupported_light_mode_does_not_break_focus_mode() {
 
     state.handle_action(Action::ToggleLightMode);
 
-    assert!(!state.light_mode);
+    assert!(!state.light_mode_active());
     assert!(
         state.focus_mode_active(),
         "a rejected mode switch must leave the active chrome owner untouched"
@@ -448,8 +451,8 @@ fn light_mode_drawing_exits_focus_mode_before_taking_ownership() {
 
     state.handle_action(Action::ToggleLightModeDrawing);
 
-    assert!(state.light_mode);
-    assert!(state.light_mode_drawing);
+    assert!(state.light_mode_active());
+    assert!(state.light_mode_drawing_active());
     assert!(
         !state.focus_mode_active(),
         "every Light Mode entry path must own chrome exclusively"

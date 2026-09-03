@@ -103,9 +103,9 @@ fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
     assert!(!input.toolbar_visible());
     input.take_pending_toolbar_persistence(); // the write whose rollback arrives below
 
-    input.presenter_mode_config.hide_toolbars = true;
+    input.presenter_mode_config_mut_for_test().hide_toolbars = true;
     input.toggle_presenter_mode();
-    assert!(input.presenter_mode);
+    assert!(input.presenter_mode_active());
 
     apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(true));
 
@@ -116,7 +116,7 @@ fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
     );
 
     input.toggle_presenter_mode();
-    assert!(!input.presenter_mode);
+    assert!(!input.presenter_mode_active());
     assert!(
         input.toolbar_visible() && input.toolbar_top_visible(),
         "presenter exit must restore visibility agreeing with the rolled-back pins"
@@ -184,7 +184,7 @@ fn a_deferred_hide_rollback_lands_in_the_light_mode_snapshot() {
     input.take_pending_toolbar_persistence(); // the write whose rollback arrives below
 
     input.handle_action(Action::ToggleLightMode);
-    assert!(input.light_mode);
+    assert!(input.light_mode_active());
 
     apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(true));
 
@@ -195,7 +195,7 @@ fn a_deferred_hide_rollback_lands_in_the_light_mode_snapshot() {
     );
 
     input.handle_action(Action::ToggleLightMode); // exit restores the snapshot
-    assert!(!input.light_mode);
+    assert!(!input.light_mode_active());
     assert!(
         input.toolbar_visible() && input.toolbar_top_visible(),
         "light-mode exit must restore visibility agreeing with the rolled-back pins"

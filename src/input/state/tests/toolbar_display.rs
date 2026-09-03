@@ -221,7 +221,7 @@ fn hide_with_an_already_unpinned_strip_queues_no_persistence() {
 #[test]
 fn presenter_swallowed_toggle_leaves_pins_and_persistence_untouched() {
     let mut state = create_test_input_state();
-    state.presenter_mode_config.hide_toolbars = true;
+    state.presenter_mode_config_mut_for_test().hide_toolbars = true;
     state.toggle_presenter_mode();
     assert!(!state.toolbar_visible());
 
@@ -240,7 +240,7 @@ fn presenter_swallowed_toggle_leaves_pins_and_persistence_untouched() {
 #[test]
 fn focus_and_presenter_transitions_never_queue_pin_persistence() {
     let mut state = create_test_input_state();
-    state.presenter_mode_config.hide_toolbars = true;
+    state.presenter_mode_config_mut_for_test().hide_toolbars = true;
 
     for action in [
         Action::ToggleFocusMode,
@@ -604,9 +604,9 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
 #[test]
 fn all_chrome_warning_suppressed_while_presenting() {
     let mut state = create_test_input_state();
-    state.presenter_mode_config.hide_toolbars = true;
-    state.presenter_mode_config.hide_status_bar = false;
-    state.presenter_mode_config.show_toast = false;
+    state.presenter_mode_config_mut_for_test().hide_toolbars = true;
+    state.presenter_mode_config_mut_for_test().hide_status_bar = false;
+    state.presenter_mode_config_mut_for_test().show_toast = false;
     state.toggle_presenter_mode();
     assert!(!state.toolbar_visible());
 
@@ -623,9 +623,9 @@ fn all_chrome_warning_suppressed_while_presenting() {
 #[test]
 fn all_chrome_warning_fires_when_presenter_mode_did_not_hide_any_chrome() {
     let mut state = create_test_input_state();
-    state.presenter_mode_config.hide_toolbars = false;
-    state.presenter_mode_config.hide_status_bar = false;
-    state.presenter_mode_config.show_toast = false;
+    state.presenter_mode_config_mut_for_test().hide_toolbars = false;
+    state.presenter_mode_config_mut_for_test().hide_status_bar = false;
+    state.presenter_mode_config_mut_for_test().show_toast = false;
     state.toggle_presenter_mode();
 
     hide_all_chrome(&mut state);
@@ -649,9 +649,9 @@ fn presenter_owned_hidden_toolbar_falls_back_to_status_bar_recovery() {
     state.handle_action(Action::ToggleToolbar);
     assert!(!state.toolbar_visible());
 
-    state.presenter_mode_config.hide_toolbars = true;
-    state.presenter_mode_config.hide_status_bar = false;
-    state.presenter_mode_config.show_toast = false;
+    state.presenter_mode_config_mut_for_test().hide_toolbars = true;
+    state.presenter_mode_config_mut_for_test().hide_status_bar = false;
+    state.presenter_mode_config_mut_for_test().show_toast = false;
     state.toggle_presenter_mode();
     state.handle_action(Action::ToggleStatusBar);
 
@@ -719,7 +719,7 @@ fn context_menu_offers_recovery_entries_only_while_chrome_hidden() {
 #[test]
 fn presenter_mode_gates_the_cycle_like_toggle_toolbar() {
     let mut state = create_test_input_state();
-    state.presenter_mode_config.hide_toolbars = true;
+    state.presenter_mode_config_mut_for_test().hide_toolbars = true;
     state.toggle_presenter_mode();
     assert!(!state.toolbar_top_visible());
 
@@ -737,8 +737,8 @@ fn presenter_mode_gates_the_micro_chip_event_like_the_cycle_action() {
     use crate::ui::toolbar::ToolbarEvent;
 
     let mut state = create_test_input_state();
-    state.presenter_mode_config.hide_toolbars = true;
-    state.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Micro;
+    state.presenter_mode_config_mut_for_test().hide_toolbars = true;
+    state.presenter_mode_config_mut_for_test().toolbar_mode = PresenterToolbarMode::Micro;
     state.toggle_presenter_mode();
     assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
 
@@ -754,7 +754,7 @@ fn presenter_mode_gates_the_micro_chip_event_like_the_cycle_action() {
 
     // After presenter exit the chip works again.
     state.toggle_presenter_mode();
-    assert!(!state.presenter_mode);
+    assert!(!state.presenter_mode_active());
     state.handle_action(Action::CycleToolbarDisplay); // micro
     assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
     assert!(state.apply_toolbar_event(ToolbarEvent::SetTopDisplayMode(TopDisplayMode::Full)));
@@ -775,11 +775,14 @@ fn session_independent_chrome_actions_never_mark_the_session_dirty() {
     let mut state = create_test_input_state();
     // Chrome only: with the tool behavior left at its default, presenter mode
     // would also take the tool override, which *is* session content.
-    state.presenter_mode_config.hide_status_bar = true;
-    state.presenter_mode_config.hide_toolbars = true;
-    state.presenter_mode_config.tool_behavior = crate::config::PresenterToolBehavior::Keep;
-    state.presenter_mode_config.enable_click_highlight = false;
-    state.presenter_mode_config.enable_input_hud = false;
+    state.presenter_mode_config_mut_for_test().hide_status_bar = true;
+    state.presenter_mode_config_mut_for_test().hide_toolbars = true;
+    state.presenter_mode_config_mut_for_test().tool_behavior =
+        crate::config::PresenterToolBehavior::Keep;
+    state
+        .presenter_mode_config_mut_for_test()
+        .enable_click_highlight = false;
+    state.presenter_mode_config_mut_for_test().enable_input_hud = false;
 
     for action in [
         Action::ToggleStatusBar,

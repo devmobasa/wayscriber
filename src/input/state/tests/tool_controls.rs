@@ -86,8 +86,9 @@ fn pick_screen_color_requests_backend_eyedropper_activation() {
 fn presenter_locked_mode_rejects_non_highlight_tool_override() {
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::Highlight)));
-    state.presenter_mode = true;
-    state.presenter_mode_config.tool_behavior = PresenterToolBehavior::ForceHighlightLocked;
+    state.override_presenter_mode_for_test(true);
+    state.presenter_mode_config_mut_for_test().tool_behavior =
+        PresenterToolBehavior::ForceHighlightLocked;
     state.needs_redraw = false;
     state.session_dirty = false;
 

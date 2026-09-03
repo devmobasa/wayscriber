@@ -175,7 +175,7 @@ fn snapshot_uses_pre_light_mode_tool_state() {
     input.ui_visibility.show_status_bar = true;
 
     input.handle_action(Action::ToggleLightMode);
-    assert!(input.light_mode);
+    assert!(input.light_mode_active());
     assert_eq!(input.tool_override(), Some(Tool::Pen));
     assert!(!input.ui_visibility.show_status_bar);
 

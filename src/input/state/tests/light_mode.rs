@@ -26,8 +26,8 @@ fn light_mode_enters_passthrough_and_hides_heavy_ui() {
 
     state.handle_action(Action::ToggleLightMode);
 
-    assert!(state.light_mode);
-    assert!(!state.light_mode_drawing);
+    assert!(state.light_mode_active());
+    assert!(!state.light_mode_drawing_active());
     assert!(state.light_mode_passthrough());
     assert!(!state.ui_visibility.show_status_bar);
     assert!(!state.toolbar_visible());
@@ -43,14 +43,14 @@ fn light_mode_drawing_toggle_disables_passthrough_without_exiting() {
     state.handle_action(Action::ToggleLightMode);
     state.handle_action(Action::ToggleLightModeDrawing);
 
-    assert!(state.light_mode);
-    assert!(state.light_mode_drawing);
+    assert!(state.light_mode_active());
+    assert!(state.light_mode_drawing_active());
     assert!(!state.light_mode_passthrough());
 
     state.handle_action(Action::ToggleLightModeDrawing);
 
-    assert!(state.light_mode);
-    assert!(!state.light_mode_drawing);
+    assert!(state.light_mode_active());
+    assert!(!state.light_mode_drawing_active());
     assert!(state.light_mode_passthrough());
 }
 
@@ -60,8 +60,8 @@ fn light_draw_off_does_not_enter_light_mode() {
 
     assert!(!state.set_light_mode_drawing(false));
 
-    assert!(!state.light_mode);
-    assert!(!state.light_mode_drawing);
+    assert!(!state.light_mode_active());
+    assert!(!state.light_mode_drawing_active());
 }
 
 #[test]
@@ -75,8 +75,8 @@ fn light_mode_restores_previous_ui_and_tool_on_exit() {
     state.handle_action(Action::ToggleLightMode);
     state.handle_action(Action::ToggleLightMode);
 
-    assert!(!state.light_mode);
-    assert!(!state.light_mode_drawing);
+    assert!(!state.light_mode_active());
+    assert!(!state.light_mode_drawing_active());
     assert!(!state.light_mode_passthrough());
     assert!(state.ui_visibility.show_status_bar);
     assert!(state.toolbar_visible_flag());
@@ -92,12 +92,12 @@ fn light_mode_force_enables_click_highlight_by_default_and_restores_on_exit() {
 
     state.handle_action(Action::ToggleLightMode);
 
-    assert!(state.light_mode);
+    assert!(state.light_mode_active());
     assert!(state.click_highlight_enabled());
 
     state.handle_action(Action::ToggleLightMode);
 
-    assert!(!state.light_mode);
+    assert!(!state.light_mode_active());
     assert!(!state.click_highlight_enabled());
 }
 
@@ -109,12 +109,12 @@ fn light_mode_can_leave_click_highlight_disabled() {
 
     state.handle_action(Action::ToggleLightMode);
 
-    assert!(state.light_mode);
+    assert!(state.light_mode_active());
     assert!(!state.click_highlight_enabled());
 
     state.handle_action(Action::ToggleLightModeDrawing);
 
-    assert!(state.light_mode_drawing);
+    assert!(state.light_mode_drawing_active());
     assert!(!state.click_highlight_enabled());
 }
 
@@ -123,12 +123,12 @@ fn light_mode_and_presenter_mode_are_mutually_exclusive() {
     let mut state = create_light_mode_test_state();
 
     state.handle_action(Action::TogglePresenterMode);
-    assert!(state.presenter_mode);
+    assert!(state.presenter_mode_active());
 
     state.handle_action(Action::ToggleLightMode);
 
-    assert!(state.light_mode);
-    assert!(!state.presenter_mode);
+    assert!(state.light_mode_active());
+    assert!(!state.presenter_mode_active());
 }
 
 #[test]
@@ -137,6 +137,6 @@ fn light_mode_does_not_enter_without_layer_shell() {
 
     state.handle_action(Action::ToggleLightMode);
 
-    assert!(!state.light_mode);
+    assert!(!state.light_mode_active());
     assert!(!state.light_mode_passthrough());
 }

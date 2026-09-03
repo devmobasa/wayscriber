@@ -1,15 +1,12 @@
 mod actions;
 mod arrow_labels;
-mod focus_mode;
 mod font;
 mod frozen_zoom;
 mod help_overlay;
 mod interaction;
 mod launcher;
-mod light_mode;
 pub(crate) mod ocr_scan;
 mod pending;
-mod presenter_mode;
 mod render_profiles;
 mod sequence;
 mod step_markers;
