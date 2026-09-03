@@ -153,10 +153,12 @@ impl ToolbarInteraction {
         self.layout_mode
     }
 
+    #[cfg(test)]
     pub(in crate::input::state) const fn mode_overrides(&self) -> &ToolbarModeOverrides {
         &self.mode_overrides
     }
 
+    #[cfg(test)]
     pub(in crate::input::state) const fn items(&self) -> &ToolbarItemsConfig {
         &self.items
     }
@@ -229,7 +231,6 @@ impl ToolbarInteraction {
     pub(in crate::input::state) fn show(&mut self) {
         self.visible = true;
         self.top_visible = true;
-        self.top_pinned = true;
     }
 
     pub(in crate::input::state) fn derive_visibility_from_pins(&mut self) {
@@ -552,7 +553,7 @@ impl ToolbarInteraction {
         self.refresh_resolved_items();
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "toolbar-gtk"))]
     pub(in crate::input::state) fn override_layout_for_test(
         &mut self,
         mode: ToolbarLayoutMode,
@@ -702,6 +703,19 @@ mod tests {
         assert_eq!(toolbar.top_menu(), TopMenuState::CanvasPopover);
         assert!(toolbar.set_top_menu_open(TopMenuState::SettingsPopover, true));
         assert_eq!(toolbar.top_menu(), TopMenuState::SettingsPopover);
+    }
+
+    #[test]
+    fn showing_transient_visibility_does_not_change_the_persisted_pin() {
+        let mut toolbar = ToolbarInteraction::default();
+        toolbar.set_top_pinned(false);
+        toolbar.hide();
+
+        toolbar.show();
+
+        assert!(toolbar.visible());
+        assert!(toolbar.top_visible());
+        assert!(!toolbar.top_pinned());
     }
 
     #[test]

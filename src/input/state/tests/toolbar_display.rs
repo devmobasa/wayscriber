@@ -767,15 +767,6 @@ fn presenter_mode_gates_the_micro_chip_event_like_the_cycle_action() {
     assert_eq!(state.top_display_state(), TopDisplayMode::Full);
 }
 
-#[test]
-fn display_mode_init_sanitizes_hidden_to_full() {
-    let mut state = create_test_input_state();
-    state.init_toolbar_display_mode_from_config(TopDisplayMode::Micro);
-    assert_eq!(state.toolbar_top_display_mode(), TopDisplayMode::Micro);
-    state.init_toolbar_display_mode_from_config(TopDisplayMode::Hidden);
-    assert_eq!(state.toolbar_top_display_mode(), TopDisplayMode::Full);
-}
-
 /// `ToolStateSnapshot` leaves chrome visibility out on purpose, so a toggle
 /// that moves it has nothing for a save to carry. These actions are
 /// session-INDEPENDENT, not run-only: F9 and F2 are durable through

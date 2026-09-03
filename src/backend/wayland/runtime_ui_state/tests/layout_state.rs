@@ -180,7 +180,6 @@ fn a_stored_display_mode_is_restored_at_startup_over_the_config_seed() {
     runtime.shutdown_blocking();
 
     let mut restarted_input = input_from_config(&config);
-    restarted_input.init_toolbar_display_mode_from_config(config.ui.toolbar.top_display_mode);
     assert_eq!(
         restarted_input.toolbar_top_display_mode(),
         TopDisplayMode::Full

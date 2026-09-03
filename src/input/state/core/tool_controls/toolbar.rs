@@ -104,61 +104,59 @@ impl InputState {
         self.toolbar.effectively_visible()
     }
 
-    pub fn toolbar_top_pinned(&self) -> bool {
+    pub(crate) fn toolbar_top_pinned(&self) -> bool {
         self.toolbar.top_pinned()
     }
 
-    pub fn toolbar_use_icons(&self) -> bool {
+    pub(crate) fn toolbar_use_icons(&self) -> bool {
         self.toolbar.use_icons()
     }
 
-    pub fn toolbar_scale(&self) -> f64 {
+    pub(crate) fn toolbar_scale(&self) -> f64 {
         self.toolbar.scale()
     }
 
-    pub fn toolbar_layout_mode(&self) -> crate::config::ToolbarLayoutMode {
+    pub(crate) fn toolbar_layout_mode(&self) -> crate::config::ToolbarLayoutMode {
         self.toolbar.layout_mode()
     }
 
-    pub fn toolbar_mode_overrides(&self) -> &crate::config::ToolbarModeOverrides {
+    #[cfg(test)]
+    pub(crate) fn toolbar_mode_overrides(&self) -> &crate::config::ToolbarModeOverrides {
         self.toolbar.mode_overrides()
     }
 
-    pub fn toolbar_items(&self) -> &crate::config::ToolbarItemsConfig {
+    #[cfg(test)]
+    pub(crate) fn toolbar_items(&self) -> &crate::config::ToolbarItemsConfig {
         self.toolbar.items()
     }
 
-    pub fn resolved_toolbar_items(&self) -> &crate::config::ResolvedToolbarItems {
+    pub(crate) fn resolved_toolbar_items(&self) -> &crate::config::ResolvedToolbarItems {
         self.toolbar.resolved_items()
     }
 
-    pub fn toolbar_customize_drag(&self) -> Option<&(ToolbarItemOrderGroup, ToolbarItemId)> {
-        self.toolbar.customize_drag()
-    }
-
-    pub fn toolbar_customize_items_open(&self) -> bool {
+    pub(crate) fn toolbar_customize_items_open(&self) -> bool {
         self.toolbar.customize_items_open()
     }
 
-    pub fn toolbar_customize_items_group(
+    pub(crate) fn toolbar_customize_items_group(
         &self,
     ) -> Option<crate::ui::toolbar::ToolbarItemCustomizeGroup> {
         self.toolbar.customize_items_group()
     }
 
-    pub fn toolbar_status_bar_contents_open(&self) -> bool {
+    pub(crate) fn toolbar_status_bar_contents_open(&self) -> bool {
         self.toolbar.status_bar_contents_open()
     }
 
-    pub fn toolbar_top_popover_scroll(&self) -> f64 {
+    pub(crate) fn toolbar_top_popover_scroll(&self) -> f64 {
         self.toolbar.top_popover_scroll()
     }
 
-    pub fn toolbar_top_minimized(&self) -> bool {
+    pub(crate) fn toolbar_top_minimized(&self) -> bool {
         self.toolbar.top_minimized()
     }
 
-    pub fn toolbar_top_display_mode(&self) -> TopDisplayMode {
+    pub(crate) fn toolbar_top_display_mode(&self) -> TopDisplayMode {
         self.toolbar.top_display_mode()
     }
 
@@ -166,7 +164,7 @@ impl InputState {
         self.toolbar.top_menu()
     }
 
-    pub fn toolbar_rebind_click_label(&self) -> Option<&'static str> {
+    pub(crate) fn toolbar_rebind_click_label(&self) -> Option<&'static str> {
         self.toolbar.rebind_modifier().click_label()
     }
 
@@ -222,14 +220,6 @@ impl InputState {
         self.ui_visibility.show_presets = visibility.show_presets;
         self.ui_visibility.show_step_section = visibility.show_step_section;
         self.ui_visibility.show_text_controls = visibility.show_text_controls;
-    }
-
-    pub fn init_toolbar_minimized_from_config(&mut self, top: bool) {
-        self.toolbar.set_top_minimized(top);
-    }
-
-    pub fn init_toolbar_display_mode_from_config(&mut self, mode: TopDisplayMode) {
-        self.toolbar.set_top_display_mode(mode.persisted());
     }
 
     pub fn top_display_state(&self) -> TopDisplayMode {
@@ -393,7 +383,7 @@ impl InputState {
         self.refresh_section_visibility();
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "toolbar-gtk"))]
     pub(crate) fn test_set_toolbar_layout(
         &mut self,
         mode: crate::config::ToolbarLayoutMode,
