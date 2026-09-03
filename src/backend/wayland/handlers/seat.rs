@@ -47,9 +47,7 @@ impl SeatHandler for WaylandState {
                 ) {
                     Ok(pointer) => {
                         debug!("Pointer initialized with theme");
-                        self.themed_pointer = Some(pointer);
-                        self.current_pointer_shape = None;
-                        self.cursor_hidden = false;
+                        self.pointer.attach_pointer(pointer);
                     }
                     Err(err) => {
                         warn!("Pointer initialized without theme: {}", err);
@@ -64,7 +62,7 @@ impl SeatHandler for WaylandState {
                 match self.seat_state.get_touch(qh, &seat) {
                     Ok(touch) => {
                         debug!("Touch initialized");
-                        self.touch = Some(touch);
+                        self.pointer.attach_touch(touch);
                     }
                     Err(err) => {
                         warn!("Touch initialization failed: {}", err);
@@ -98,13 +96,11 @@ impl SeatHandler for WaylandState {
         if capability == Capability::Pointer {
             info!("Pointer capability removed");
             self.cancel_region_selection_from(RegionInputSource::Pointer);
-            self.themed_pointer = None;
-            self.current_pointer_shape = None;
-            self.cursor_hidden = false;
+            self.pointer.detach_pointer();
         }
         if capability == Capability::Touch {
             info!("Touch capability removed");
-            self.touch = None;
+            self.pointer.detach_touch();
             self.cancel_active_touch_sequence();
         }
     }

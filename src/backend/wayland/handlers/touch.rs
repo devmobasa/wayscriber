@@ -26,15 +26,17 @@ impl TouchHandler for WaylandState {
         id: i32,
         position: (f64, f64),
     ) {
-        if !self.active_touch.begin(id, position) {
-            debug!("Ignoring secondary touch down id={}", id);
+        if !self
+            .pointer
+            .begin_touch(id, position, surface.clone(), TouchTarget::None)
+        {
+            debug!("Ignoring secondary touch down id={id}");
             return;
         }
 
         self.set_last_activation_serial(Some(serial));
-        self.active_touch_surface = Some(surface.clone());
         let target = self.handle_touch_down(conn, qh, &surface, position);
-        self.active_touch.set_target(target);
+        self.pointer.set_touch_target(target);
     }
 
     fn up(
@@ -46,18 +48,12 @@ impl TouchHandler for WaylandState {
         _time: u32,
         id: i32,
     ) {
-        if !self.active_touch.is_active_id(id) {
-            debug!("Ignoring inactive touch up id={}", id);
+        let Some(end) = self.pointer.end_touch(id) else {
+            debug!("Ignoring inactive touch up id={id}");
             return;
-        }
+        };
 
-        let surface = self.active_touch_surface.clone();
-        let position = self.active_touch.last_position();
-        let target = self.active_touch.target();
-        if let (Some(surface), Some(position)) = (surface.as_ref(), position) {
-            self.handle_touch_up(surface, position, target);
-        }
-        self.clear_active_touch();
+        self.handle_touch_up(&end.surface, end.position, end.target);
     }
 
     fn motion(
@@ -69,14 +65,10 @@ impl TouchHandler for WaylandState {
         id: i32,
         position: (f64, f64),
     ) {
-        if !self.active_touch.update_position(id, position) {
-            return;
-        }
-
-        let Some(surface) = self.active_touch_surface.clone() else {
+        let Some((surface, target)) = self.pointer.touch_position(id, position) else {
             return;
         };
-        self.handle_touch_motion(conn, &surface, position, self.active_touch.target());
+        self.handle_touch_motion(conn, &surface, position, target);
     }
 
     fn shape(
@@ -107,14 +99,13 @@ impl TouchHandler for WaylandState {
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn cancel_active_touch_sequence(&mut self) {
-        if !self.active_touch.is_active() {
-            self.active_touch_surface = None;
+        let Some(end) = self.pointer.cancel_touch() else {
             self.input_state
                 .clear_help_overlay_press_for(HelpOverlayPressSource::Touch);
             return;
-        }
+        };
 
-        let target = self.active_touch.target();
+        let target = end.target;
         // A cancelled sequence never produces a release, so a region drag it
         // started has to end here — otherwise the selector, and any freeze it
         // owns, would outlive the touch that opened it. A region another device
@@ -131,14 +122,11 @@ impl WaylandState {
             target,
             TouchTarget::Overlay | TouchTarget::Toolbar | TouchTarget::InlineToolbar
         ) {
-            self.clear_active_touch();
             return;
         }
 
-        if let Some(surface) = self.active_touch_surface.take()
-            && target == TouchTarget::Toolbar
-        {
-            self.toolbar.pointer_leave(&surface);
+        if target == TouchTarget::Toolbar {
+            self.toolbar.pointer_leave(&end.surface);
             self.toolbar.mark_dirty();
             self.set_pointer_over_toolbar(false);
         }
@@ -153,12 +141,6 @@ impl WaylandState {
         }
         self.input_state.cancel_active_interaction();
         self.input_state.needs_redraw = true;
-        self.clear_active_touch();
-    }
-
-    fn clear_active_touch(&mut self) {
-        self.active_touch.clear();
-        self.active_touch_surface = None;
     }
 
     fn classify_touch_surface(&self, surface: &wl_surface::WlSurface) -> TouchTarget {

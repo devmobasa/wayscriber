@@ -1,6 +1,5 @@
-use log::warn;
-use smithay_client_toolkit::seat::pointer::{CursorIcon, PointerData};
-use wayland_client::{Connection, Proxy};
+use smithay_client_toolkit::seat::pointer::CursorIcon;
+use wayland_client::Connection;
 
 use super::*;
 use crate::backend::wayland::toolbar::ToolbarCursorHint;
@@ -95,20 +94,8 @@ impl WaylandState {
             return;
         }
 
-        if self.cursor_hidden {
-            self.cursor_hidden = false;
-            self.current_pointer_shape = None;
-        }
         let icon = self.compute_cursor_icon(toolbar_hover);
-        if let Some(pointer) = self.themed_pointer.as_ref()
-            && self.current_pointer_shape != Some(icon)
-        {
-            if let Err(err) = pointer.set_cursor(conn, icon) {
-                warn!("Failed to set cursor icon: {}", err);
-            } else {
-                self.current_pointer_shape = Some(icon);
-            }
-        }
+        self.pointer.apply_cursor_icon(conn, icon);
     }
 
     /// Refresh the cursor around a pointer press or release that touched the
@@ -368,22 +355,7 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn hide_pointer_cursor(&mut self) {
-        if self.cursor_hidden {
-            return;
-        }
-        let Some(pointer) = self.current_pointer() else {
-            return;
-        };
-        let serial = pointer.data::<PointerData>().and_then(|data| {
-            data.latest_button_serial()
-                .or_else(|| data.latest_enter_serial())
-        });
-        let Some(serial) = serial else {
-            return;
-        };
-        pointer.set_cursor(serial, None, 0, 0);
-        self.cursor_hidden = true;
-        self.current_pointer_shape = None;
+        self.pointer.hide_cursor();
     }
 }
 

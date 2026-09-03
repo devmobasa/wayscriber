@@ -120,7 +120,6 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
         }
         self.input_state.clear_chrome_hover();
-        self.current_pointer_shape = None;
-        self.cursor_hidden = false;
+        self.pointer.reset_cursor_on_enter();
     }
 }

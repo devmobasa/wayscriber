@@ -2,7 +2,6 @@
 // submodules; provides rendering, capture routing, and overlay helpers used across them.
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
-use smithay_client_toolkit::seat::pointer::CursorIcon;
 use smithay_client_toolkit::{
     activation::{ActivationHandler, ActivationState, RequestData},
     compositor::CompositorState,
@@ -10,9 +9,7 @@ use smithay_client_toolkit::{
     output::OutputState,
     registry::RegistryState,
     seat::{
-        SeatState,
-        pointer::{PointerData, ThemedPointer},
-        pointer_constraints::PointerConstraintsState,
+        SeatState, pointer_constraints::PointerConstraintsState,
         relative_pointer::RelativePointerState,
     },
     shell::{
@@ -27,15 +24,12 @@ use std::{
 };
 use wayland_client::{
     Proxy, QueueHandle,
-    protocol::{wl_output, wl_pointer, wl_seat, wl_surface, wl_touch},
+    protocol::{wl_output, wl_seat},
 };
 #[cfg(feature = "tablet-input")]
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
 use wayland_protocols::wp::{
-    pointer_constraints::zv1::client::{
-        zwp_locked_pointer_v1::ZwpLockedPointerV1, zwp_pointer_constraints_v1,
-    },
-    relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1,
+    pointer_constraints::zv1::client::zwp_pointer_constraints_v1,
     text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3,
 };
 
@@ -110,6 +104,8 @@ mod ocr;
 mod onboarding;
 mod pdf_export;
 mod perf;
+mod pointer_runtime;
+pub(in crate::backend::wayland) use pointer_runtime::TouchTarget;
 mod region_capture;
 pub(in crate::backend::wayland) use region_capture::RegionCaptureIntent;
 #[cfg(test)]
@@ -333,16 +329,8 @@ pub(super) struct WaylandState {
     // Overlay behavior
     pub(super) exit_after_capture_mode: ExitAfterCaptureMode,
 
-    // Pointer cursor
-    pub(super) themed_pointer: Option<ThemedPointer<PointerData>>,
-    #[allow(dead_code)] // Retains the WlTouch protocol object while the seat advertises touch.
-    pub(super) touch: Option<wl_touch::WlTouch>,
-    pub(super) active_touch: TouchState,
-    pub(super) active_touch_surface: Option<wl_surface::WlSurface>,
-    pub(super) locked_pointer: Option<ZwpLockedPointerV1>,
-    pub(super) current_pointer_shape: Option<CursorIcon>,
-    pub(super) relative_pointer: Option<ZwpRelativePointerV1>,
-    pub(super) cursor_hidden: bool,
+    // Pointer, cursor, pointer-lock, and touch protocol runtime.
+    pub(super) pointer: pointer_runtime::PointerRuntime,
 
     // Manual key repeat. The keyboard is created without sctk's calloop-based
     // repeat (this loop is a manual poll), so `repeat_key` never fires.
@@ -373,71 +361,6 @@ pub(super) struct PendingStylusFrame {
     pub(super) down: bool,
     pub(super) up: bool,
     pub(super) button_presses: Vec<u32>,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) enum TouchTarget {
-    #[default]
-    None,
-    Overlay,
-    Toolbar,
-    InlineToolbar,
-    Other,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub(super) struct TouchState {
-    active_id: Option<i32>,
-    target: TouchTarget,
-    last_position: Option<(f64, f64)>,
-}
-
-impl TouchState {
-    pub(super) fn begin(&mut self, id: i32, position: (f64, f64)) -> bool {
-        if self.active_id.is_some() {
-            return false;
-        }
-        self.active_id = Some(id);
-        self.target = TouchTarget::None;
-        self.last_position = Some(position);
-        true
-    }
-
-    pub(super) fn update_position(&mut self, id: i32, position: (f64, f64)) -> bool {
-        if self.active_id != Some(id) {
-            return false;
-        }
-        self.last_position = Some(position);
-        true
-    }
-
-    pub(super) fn is_active_id(&self, id: i32) -> bool {
-        self.active_id == Some(id)
-    }
-
-    pub(super) fn is_active(&self) -> bool {
-        self.active_id.is_some()
-    }
-
-    pub(super) fn set_target(&mut self, target: TouchTarget) {
-        if self.active_id.is_some() {
-            self.target = target;
-        }
-    }
-
-    pub(super) fn target(&self) -> TouchTarget {
-        self.target
-    }
-
-    pub(super) fn last_position(&self) -> Option<(f64, f64)> {
-        self.last_position
-    }
-
-    pub(super) fn clear(&mut self) {
-        self.active_id = None;
-        self.target = TouchTarget::None;
-        self.last_position = None;
-    }
 }
 
 #[cfg(feature = "tablet-input")]
