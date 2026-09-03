@@ -51,30 +51,30 @@ fn status_hud_hover_tracks_segments_and_requests_redraw() {
 
     input.needs_redraw = false;
     input.on_mouse_motion(x, y);
-    assert_eq!(input.status_hud_hover, Some(StatusHudSegmentKind::Help));
+    assert_eq!(input.status_hud.hover, Some(StatusHudSegmentKind::Help));
     assert!(input.needs_redraw, "hover transition requests a redraw");
 
     input.needs_redraw = false;
     input.zoom_chip_hover = Some(crate::ui::ZoomChipButtonKind::In);
     input.clear_chrome_hover();
-    assert_eq!(input.status_hud_hover, None);
+    assert_eq!(input.status_hud.hover, None);
     assert_eq!(input.zoom_chip_hover, None);
     assert!(input.needs_redraw, "surface leave clears hover and redraws");
 
     input.on_mouse_motion(x, y);
-    assert_eq!(input.status_hud_hover, Some(StatusHudSegmentKind::Help));
+    assert_eq!(input.status_hud.hover, Some(StatusHudSegmentKind::Help));
 
     // Moving off the pill clears hover (and redraws once more).
     input.needs_redraw = false;
     input.on_mouse_motion(5, 5);
-    assert_eq!(input.status_hud_hover, None);
+    assert_eq!(input.status_hud.hover, None);
     assert!(input.needs_redraw);
 
     // A display-only HUD (`status_bar_interactive = false`) never hovers:
     // no affordance may advertise a click that would be rejected.
     input.ui_visibility.status_bar_interactive = false;
     input.on_mouse_motion(x, y);
-    assert_eq!(input.status_hud_hover, None);
+    assert_eq!(input.status_hud.hover, None);
 }
 
 #[test]
@@ -84,21 +84,22 @@ fn status_hud_reclassifies_hover_after_toolbar_hint_relayouts_segments() {
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Help);
 
     input.on_mouse_motion(x, y);
-    assert_eq!(input.status_hud_hover, Some(StatusHudSegmentKind::Help));
+    assert_eq!(input.status_hud.hover, Some(StatusHudSegmentKind::Help));
 
     // Hiding the toolbar inserts its recovery segment before Help while the
     // physical pointer remains stationary.
     input.set_toolbar_visible(false);
     update_hud_layout(&mut input, 1280, 720);
     let segment_now_under_pointer = input
-        .status_hud_layout()
+        .status_hud
+        .layout()
         .and_then(|layout| layout.segment_at(x as f64, y as f64));
     assert_eq!(
         segment_now_under_pointer,
         Some(StatusHudSegmentKind::Toolbar)
     );
     assert_eq!(
-        input.status_hud_hover, segment_now_under_pointer,
+        input.status_hud.hover, segment_now_under_pointer,
         "hover must follow rebuilt HUD geometry, not the old segment identity"
     );
 }
@@ -109,7 +110,7 @@ fn status_hud_layout_rebuild_preserves_cleared_hover_after_pointer_leave() {
     update_hud_layout(&mut input, 1280, 720);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Help);
     input.on_mouse_motion(x, y);
-    assert_eq!(input.status_hud_hover, Some(StatusHudSegmentKind::Help));
+    assert_eq!(input.status_hud.hover, Some(StatusHudSegmentKind::Help));
 
     // Pointer leave clears hover but retains the last coordinates. A redraw
     // may rebuild different geometry at those stale coordinates.
@@ -124,7 +125,7 @@ fn status_hud_layout_rebuild_preserves_cleared_hover_after_pointer_leave() {
     );
 
     assert_eq!(
-        input.status_hud_hover, None,
+        input.status_hud.hover, None,
         "layout rebuild must not restore hover without main-surface pointer focus"
     );
 }
@@ -322,7 +323,8 @@ fn status_hud_toolbar_hint_recovers_cycle_hidden_top_strip() {
     update_hud_layout(&mut input, 1280, 720);
     assert!(
         !input
-            .status_hud_layout()
+            .status_hud
+            .layout()
             .expect("status hud layout")
             .segments
             .iter()
@@ -495,7 +497,7 @@ fn status_hud_ignored_while_radial_menu_overlays_it() {
     // menu handlers instead of being swallowed by the HUD.
     input.on_mouse_press_with_canvas(MouseButton::Left, x, y, x, y);
     assert!(
-        !input.status_hud_press_pending,
+        !input.status_hud.press_pending,
         "HUD must not claim presses under an open radial menu"
     );
 }
@@ -544,12 +546,12 @@ fn tablet_path_press_release_activates_chip_via_routing() {
     input.on_mouse_press_with_canvas(MouseButton::Left, x, y, x, y);
     assert!(matches!(input.state, DrawingState::Idle));
     assert!(!input.is_board_picker_open());
-    assert!(input.status_hud_press_pending);
+    assert!(input.status_hud.press_pending);
 
     // ...and the matching release inside the chip activates it.
     input.on_mouse_release_with_canvas(MouseButton::Left, x, y, x, y);
     assert!(input.is_board_picker_open());
-    assert!(!input.status_hud_press_pending);
+    assert!(!input.status_hud.press_pending);
 }
 
 #[test]
@@ -559,13 +561,13 @@ fn tablet_path_release_outside_hud_does_not_activate() {
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Board);
 
     input.on_mouse_press_with_canvas(MouseButton::Left, x, y, x, y);
-    assert!(input.status_hud_press_pending);
+    assert!(input.status_hud.press_pending);
 
     // Releasing outside the pill consumes the pending press without
     // activating, and the flag does not leak into later releases.
     input.on_mouse_release_with_canvas(MouseButton::Left, 5, 5, 5, 5);
     assert!(!input.is_board_picker_open());
-    assert!(!input.status_hud_press_pending);
+    assert!(!input.status_hud.press_pending);
     input.on_mouse_release_with_canvas(MouseButton::Left, x, y, x, y);
     assert!(!input.is_board_picker_open());
 }

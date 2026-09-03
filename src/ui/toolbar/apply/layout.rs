@@ -236,7 +236,7 @@ impl InputState {
             return false;
         }
         self.ui_visibility.status_bar_interactive = interactive;
-        self.status_hud_hover = None;
+        self.status_hud.hover = None;
         self.needs_redraw = true;
         true
     }

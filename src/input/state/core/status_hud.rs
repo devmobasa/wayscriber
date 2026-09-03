@@ -5,6 +5,10 @@
 //! rendering, damage geometry, and pointer hit-testing all read the same
 //! cache so they can never disagree.
 
+mod state;
+
+pub use state::StatusHudState;
+
 use crate::config::{Action, StatusBarItem, StatusBarStyle, StatusPosition};
 use crate::ui::{StatusHudLayout, StatusHudSegmentKind, compute_status_hud_layout};
 
@@ -32,8 +36,8 @@ impl InputState {
 
     pub fn status_hud_effectively_visible(&self) -> bool {
         self.ui_visibility.show_status_bar
-            && self.status_hud_rebuild_inputs.is_some()
-            && self.status_hud_layout.is_some()
+            && self.status_hud.rebuild_inputs.is_some()
+            && self.status_hud.layout.is_some()
     }
 
     pub fn status_bar_item_visible(&self, item: StatusBarItem) -> bool {
@@ -87,9 +91,9 @@ impl InputState {
     /// re-derived so a vanished segment cannot stay lit. Damage stays with
     /// the render effect pass, which re-measures with that frame's inputs.
     pub(crate) fn refresh_status_hud_layout(&mut self) {
-        let Some(inputs) = self.status_hud_rebuild_inputs.clone() else {
-            self.status_hud_layout = None;
-            self.status_hud_hover = None;
+        let Some(inputs) = self.status_hud.rebuild_inputs.clone() else {
+            self.status_hud.layout = None;
+            self.status_hud.hover = None;
             return;
         };
         self.update_status_hud_layout_for_pointer(
@@ -102,7 +106,7 @@ impl InputState {
     }
 
     pub fn status_hud_layout(&self) -> Option<&StatusHudLayout> {
-        self.status_hud_layout.as_ref()
+        self.status_hud.layout.as_ref()
     }
 
     /// Recompute and cache the status HUD layout for this frame. Clears the
@@ -131,13 +135,13 @@ impl InputState {
         screen_height: u32,
         chrome_cursor_focused: bool,
     ) {
-        self.status_hud_rebuild_inputs = Some(StatusHudRebuildInputs {
+        self.status_hud.rebuild_inputs = Some(StatusHudRebuildInputs {
             position,
             style: style.clone(),
             screen_width,
             screen_height,
         });
-        self.status_hud_layout = if self.ui_visibility.show_status_bar {
+        self.status_hud.layout = if self.ui_visibility.show_status_bar {
             compute_status_hud_layout(self, position, style, screen_width, screen_height)
         } else {
             None
@@ -149,7 +153,7 @@ impl InputState {
             // describe the rebuilt geometry.
             let (pointer_x, pointer_y) = self.pointer_position();
             self.update_status_hud_hover_from_pointer(pointer_x, pointer_y);
-        } else if self.status_hud_hover.take().is_some() {
+        } else if self.status_hud.hover.take().is_some() {
             // Cached coordinates outlive pointer/stylus focus. Never resurrect
             // a highlight while the cursor is off-surface or over a toolbar.
             self.needs_redraw = true;
@@ -157,20 +161,20 @@ impl InputState {
     }
 
     pub fn clear_status_hud_layout(&mut self) {
-        self.status_hud_layout = None;
+        self.status_hud.layout = None;
         // This path means UI rendering itself is inactive (the master bar is
         // hidden or overlay suppression is in force), not merely that the
         // configured content produced an empty layout. Do not let retained
         // screen inputs make policy treat a suppressed HUD as visible.
-        self.status_hud_rebuild_inputs = None;
-        self.status_hud_hover = None;
+        self.status_hud.rebuild_inputs = None;
+        self.status_hud.hover = None;
     }
 
     /// Clear pointer hover shared by the two persistent chrome pills. Used
     /// when the Wayland pointer leaves their surface, where no motion event is
     /// guaranteed to follow and clear the cached affordance.
     pub(crate) fn clear_chrome_hover(&mut self) {
-        let status_hovered = self.status_hud_hover.take().is_some();
+        let status_hovered = self.status_hud.hover.take().is_some();
         let zoom_hovered = self.zoom_chip_hover.take().is_some();
         if status_hovered || zoom_hovered {
             self.needs_redraw = true;
@@ -187,14 +191,15 @@ impl InputState {
         let new_hover = if matches!(self.state, crate::input::DrawingState::Idle)
             && self.status_hud_contains(x, y)
         {
-            self.status_hud_layout
+            self.status_hud
+                .layout
                 .as_ref()
                 .and_then(|layout| layout.segment_at(x as f64, y as f64))
         } else {
             None
         };
-        if self.status_hud_hover != new_hover {
-            self.status_hud_hover = new_hover;
+        if self.status_hud.hover != new_hover {
+            self.status_hud.hover = new_hover;
             self.needs_redraw = true;
         }
     }
@@ -235,7 +240,8 @@ impl InputState {
             && self.ui_visibility.show_status_bar
             && !self.status_hud_eclipsed_by_overlay()
             && self
-                .status_hud_layout
+                .status_hud
+                .layout
                 .as_ref()
                 .is_some_and(|layout| layout.pill_contains(x as f64, y as f64))
     }
@@ -246,13 +252,13 @@ impl InputState {
     ///
     /// [`take_status_hud_press_pending`]: InputState::take_status_hud_press_pending
     pub(in crate::input::state) fn set_status_hud_press_pending(&mut self) {
-        self.status_hud_press_pending = true;
+        self.status_hud.press_pending = true;
     }
 
     /// Clears the internal HUD press flag (called at the start of press
     /// routing so a stale flag can never swallow an unrelated release).
     pub(in crate::input::state) fn clear_status_hud_press_pending(&mut self) {
-        self.status_hud_press_pending = false;
+        self.status_hud.press_pending = false;
     }
 
     /// Takes the internal HUD press flag set by
@@ -260,7 +266,7 @@ impl InputState {
     ///
     /// [`set_status_hud_press_pending`]: InputState::set_status_hud_press_pending
     pub(in crate::input::state) fn take_status_hud_press_pending(&mut self) -> bool {
-        std::mem::take(&mut self.status_hud_press_pending)
+        std::mem::take(&mut self.status_hud.press_pending)
     }
 
     /// Check a release at (x, y) against the status HUD segments. On a
@@ -276,7 +282,8 @@ impl InputState {
             return (false, None);
         }
         let Some(kind) = self
-            .status_hud_layout
+            .status_hud
+            .layout
             .as_ref()
             .and_then(|layout| layout.segment_at(x as f64, y as f64))
         else {

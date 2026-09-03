@@ -2,7 +2,6 @@ use super::super::super::{
     index::SpatialIndexCache,
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
     selection::SelectionState,
-    status_hud::StatusHudRebuildInputs,
 };
 use super::super::InputEffectOutbox;
 use super::super::toast_queue::ToastQueue;
@@ -196,9 +195,8 @@ pub struct InputState {
     pub(crate) presenter_restore: Option<PresenterRestore>,
     /// Chrome snapshot while focus mode is active (`Some` = active).
     pub(crate) focus_mode_restore: Option<FocusModeRestore>,
-    /// Hovered status HUD segment (idle pointer only; drives the hover
-    /// backdrop and the pointer cursor over the pill)
-    pub status_hud_hover: Option<crate::ui::StatusHudSegmentKind>,
+    /// Cached geometry and pointer interaction state for the status HUD.
+    pub status_hud: crate::input::state::core::status_hud::StatusHudState,
     /// Hovered zoom chip button (idle pointer only; same affordance)
     pub zoom_chip_hover: Option<crate::ui::ZoomChipButtonKind>,
     /// Whether passthrough light mode is currently enabled
@@ -409,19 +407,6 @@ pub struct InputState {
     /// Pending delayed history playback state
     pub(in crate::input::state::core) pending_history: Option<DelayedHistory>,
 
-    /// Cached layout details for the status HUD (segmented status bar)
-    pub status_hud_layout: Option<crate::ui::StatusHudLayout>,
-    /// Last screen/config inputs used to build the status HUD. Retained while
-    /// UI rendering is active so a content toggle can synchronously refresh
-    /// `status_hud_layout`, keeping policy exact — including width degradation
-    /// on narrow outputs — until the next rendered frame. Suppression clears
-    /// this so policy cannot mistake configured content for chrome that is
-    /// currently on screen.
-    pub(in crate::input::state::core) status_hud_rebuild_inputs: Option<StatusHudRebuildInputs>,
-    /// Set when the internal pointer-routing chain consumed a left press on
-    /// the status HUD (tablet and other paths that bypass the backend's own
-    /// press→release flag); the matching release activates the chip.
-    pub(in crate::input::state) status_hud_press_pending: bool,
     /// Cached layout details for the interactive bottom-right zoom chip
     pub zoom_chip_layout: Option<crate::ui::ZoomChipLayout>,
     /// The chip press a left press recorded, set when the internal

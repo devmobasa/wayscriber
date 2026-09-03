@@ -326,7 +326,7 @@ impl WaylandState {
         // actionable chips/buttons, neutral arrow over the rest of the
         // pill. Both surfaces render above the canvas, so they outrank
         // selection-handle hover in the pixels they occupy.
-        if self.input_state.status_hud_hover.is_some() || self.input_state.zoom_chip_hover.is_some()
+        if self.input_state.status_hud.hover.is_some() || self.input_state.zoom_chip_hover.is_some()
         {
             return CursorIcon::Pointer;
         }
