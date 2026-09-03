@@ -1,8 +1,8 @@
 use crate::config::Config;
-use crate::input::state::{DrawingStyle, HistoryLimits, InputStateSeed};
+use crate::input::state::{DrawingStyle, HistoryLimits};
 use crate::input::{ClickHighlightSettings, InputHudSettings, InputState};
 
-use super::core::Keymap;
+use super::core::{InputStateSeed, Keymap};
 
 impl InputState {
     /// Build runtime input state from validated application configuration.

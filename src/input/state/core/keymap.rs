@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 /// Configured keybindings plus transient keyboard and pointer-dispatch state.
 #[derive(Debug, Clone)]
-pub(crate) struct Keymap {
+pub(in crate::input::state) struct Keymap {
     action_map: HashMap<Shortcut, Action>,
     action_bindings: HashMap<Action, Vec<Shortcut>>,
     sequence_trie: SequenceTrie,

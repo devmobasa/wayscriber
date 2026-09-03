@@ -17,15 +17,15 @@ use std::collections::HashMap;
 /// need to know which config sections supplied each setting, and call sites
 /// cannot accidentally transpose same-typed positional arguments.
 #[derive(Clone)]
-pub(crate) struct InputStateSeed {
-    pub(crate) style: crate::input::state::core::DrawingStyle,
-    pub(crate) ui_visibility: crate::input::state::UiVisibility,
-    pub(crate) boards_config: BoardsConfig,
-    pub(crate) keymap: Keymap,
-    pub(crate) max_shapes_per_frame: usize,
-    pub(crate) click_highlight_settings: ClickHighlightSettings,
-    pub(crate) history_limits: crate::input::state::core::HistoryLimits,
-    pub(crate) presenter_mode_config: crate::config::PresenterModeConfig,
+pub(in crate::input::state) struct InputStateSeed {
+    pub(in crate::input::state) style: crate::input::state::core::DrawingStyle,
+    pub(in crate::input::state) ui_visibility: crate::input::state::UiVisibility,
+    pub(in crate::input::state) boards_config: BoardsConfig,
+    pub(in crate::input::state) keymap: Keymap,
+    pub(in crate::input::state) max_shapes_per_frame: usize,
+    pub(in crate::input::state) click_highlight_settings: ClickHighlightSettings,
+    pub(in crate::input::state) history_limits: crate::input::state::core::HistoryLimits,
+    pub(in crate::input::state) presenter_mode_config: crate::config::PresenterModeConfig,
 }
 
 impl InputState {
@@ -33,7 +33,7 @@ impl InputState {
     ///
     /// Screen dimensions default to zero and the backend updates them after
     /// surface configuration.
-    pub(crate) fn from_seed(seed: InputStateSeed) -> Self {
+    pub(in crate::input::state) fn from_seed(seed: InputStateSeed) -> Self {
         let InputStateSeed {
             style,
             ui_visibility,

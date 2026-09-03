@@ -48,6 +48,7 @@ mod top_menu_tests;
 
 pub(crate) use top_menu::TopMenuState;
 
+pub(in crate::input::state) use base::InputStateSeed;
 pub use base::{
     BLOCKED_ACTION_DURATION_MS, CompositorCapabilities, DesktopEnvironment, DrawingState,
     InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,
@@ -57,8 +58,8 @@ pub use base::{
     UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction,
 };
 pub(crate) use base::{
-    BoardPickerClickState, InputStateSeed, TextClipboardRequest, TextCutTarget, TextPasteEdit,
-    TextPasteTarget, ToastCommand, ToastPress,
+    BoardPickerClickState, TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget,
+    ToastCommand, ToastPress,
 };
 pub(crate) use base::{
     ClipboardFingerprint, ClipboardPasteRequest, HelperLaunchRequest, PasteAnchor,

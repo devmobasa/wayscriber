@@ -8,8 +8,7 @@ mod mouse;
 mod render;
 mod spotlight;
 pub(crate) use core::{
-    DrawingStyle, HistoryLimits, IdleHandle, InputStateSeed, SpotlightMagnificationTrack,
-    TopMenuState,
+    DrawingStyle, HistoryLimits, IdleHandle, SpotlightMagnificationTrack, TopMenuState,
 };
 pub(crate) use core::{InputEffect, InputEffectDrain};
 pub(crate) use spotlight::{
@@ -79,8 +78,7 @@ pub use input_hud::{
 
 #[cfg(test)]
 pub(crate) mod test_support {
-    use super::InputStateSeed;
-    use super::core::Keymap;
+    use super::core::{InputStateSeed, Keymap};
     use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig, Shortcut};
     use crate::draw::FontDescriptor;
     use crate::input::{ClickHighlightSettings, InputState};
