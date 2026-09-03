@@ -12,8 +12,7 @@ use crate::util::Rect;
 
 impl InputState {
     pub fn clear_properties_panel_layout(&mut self) {
-        self.properties.layout = None;
-        self.properties.pending_hover_recalc = false;
+        self.properties.clear_layout();
     }
 
     pub fn update_properties_panel_layout(

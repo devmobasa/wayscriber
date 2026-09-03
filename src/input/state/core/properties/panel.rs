@@ -5,15 +5,15 @@ use super::utils::format_timestamp;
 
 impl InputState {
     pub fn properties_panel(&self) -> Option<&ShapePropertiesPanel> {
-        self.properties.panel.as_ref()
+        self.properties.panel()
     }
 
     pub fn properties_panel_layout(&self) -> Option<&PropertiesPanelLayout> {
-        self.properties.layout.as_ref()
+        self.properties.layout()
     }
 
     pub fn is_properties_panel_open(&self) -> bool {
-        self.properties.panel.is_some()
+        self.properties.is_open()
     }
 
     /// Entries for the top-strip style pill's selection docking: the same
@@ -30,19 +30,14 @@ impl InputState {
     }
 
     pub fn close_properties_panel(&mut self) {
-        if self.properties.panel.take().is_some() {
-            self.clear_properties_panel_layout();
-            self.properties.needs_refresh = false;
+        if self.properties.close() {
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }
     }
 
     pub(super) fn set_properties_panel(&mut self, panel: ShapePropertiesPanel) {
-        self.properties.panel = Some(panel);
-        self.properties.layout = None;
-        self.properties.pending_hover_recalc = true;
-        self.properties.needs_refresh = false;
+        self.properties.open(panel);
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -131,7 +126,7 @@ impl InputState {
     }
 
     pub(super) fn refresh_properties_panel(&mut self) {
-        self.properties.needs_refresh = false;
+        self.properties.begin_refresh();
         let update = (|| {
             let ids = self.selected_shape_ids();
             if ids.is_empty() {
@@ -222,7 +217,7 @@ impl InputState {
             panel.hover_index = None;
         }
 
-        self.properties.pending_hover_recalc = true;
+        self.properties.request_hover_recalc();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }

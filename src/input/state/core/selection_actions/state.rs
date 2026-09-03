@@ -96,7 +96,7 @@ impl InputState {
 
     pub(crate) fn mark_selection_dirty_region(&mut self, rect: Option<Rect>) {
         if self.is_properties_panel_open() {
-            self.properties.needs_refresh = true;
+            self.properties.mark_needs_refresh();
         }
         if let Some(rect) = rect {
             if let Some(inflated) = rect.inflated(SELECTION_DAMAGE_PADDING) {
