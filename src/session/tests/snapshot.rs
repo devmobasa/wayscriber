@@ -1,7 +1,9 @@
 use super::super::*;
 use super::helpers::dummy_input_state;
 use crate::config::{Action, KeybindingsConfig};
-use crate::draw::{Color, FontDescriptor, Frame, PageDeleteOutcome, Shape};
+use crate::draw::{
+    ArrowStyle, BlurStyle, Color, EraserKind, FontDescriptor, Frame, PageDeleteOutcome, Shape,
+};
 use crate::input::BOARD_ID_BLACKBOARD;
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::input::{EraserMode, PerToolDrawingSettings, Tool};
@@ -49,6 +51,64 @@ fn snapshot_includes_frames_and_tool_state() {
             .any(|board| board.id == "transparent")
     );
     assert!(snapshot.tool_state.is_some());
+}
+
+#[test]
+fn every_persisted_drawing_style_survives_snapshot_serialization_and_restore() {
+    let color = Color {
+        r: 0.12,
+        g: 0.34,
+        b: 0.56,
+        a: 0.78,
+    };
+    let recent = Color {
+        r: 0.87,
+        g: 0.65,
+        b: 0.43,
+        a: 1.0,
+    };
+    let tool_settings = PerToolDrawingSettings::new(color, 17.5);
+    let fixture = ToolStateSnapshot {
+        current_color: color,
+        current_thickness: 17.5,
+        eraser_size: 31.0,
+        eraser_kind: EraserKind::Rect,
+        eraser_mode: EraserMode::Stroke,
+        blur_style: BlurStyle::Secure,
+        recent_colors: vec![recent, color],
+        marker_opacity: Some(0.42),
+        pen_smoothing: Some(5),
+        spotlight_magnification: Some(2.25),
+        fill_enabled: Some(true),
+        tool_override: Some(Tool::Marker),
+        current_font_size: 37.0,
+        font_descriptor: Some(FontDescriptor::new(
+            "Fixture Serif".to_string(),
+            "bold".to_string(),
+            "italic".to_string(),
+        )),
+        text_background_enabled: true,
+        arrow_length: 33.0,
+        arrow_angle: 41.0,
+        arrow_head_at_end: Some(false),
+        arrow_style: Some(ArrowStyle::Double),
+        arrow_label_enabled: Some(true),
+        polygon_sides: 9,
+        board_previous_color: Some(recent),
+        tool_settings: Some(tool_settings),
+    };
+
+    let encoded = serde_json::to_vec(&fixture).expect("serialize tool snapshot fixture");
+    let decoded: ToolStateSnapshot =
+        serde_json::from_slice(&encoded).expect("deserialize tool snapshot fixture");
+    let mut restored = dummy_input_state();
+    apply_tool_state_snapshot(&mut restored, decoded);
+
+    let recaptured = ToolStateSnapshot::from_input_state(&restored);
+    assert_eq!(
+        serde_json::to_value(recaptured).expect("serialize recaptured tool state"),
+        serde_json::to_value(fixture).expect("serialize expected tool state")
+    );
 }
 
 #[test]
