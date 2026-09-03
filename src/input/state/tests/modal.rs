@@ -19,7 +19,7 @@ fn opening_help_closes_the_color_picker_popup() {
 
     state.toggle_help_overlay();
 
-    assert!(state.show_help);
+    assert!(state.help_overlay.visible);
     assert!(!state.is_color_picker_popup_open());
 }
 
@@ -31,7 +31,7 @@ fn opening_help_closes_the_board_picker() {
 
     state.toggle_help_overlay();
 
-    assert!(state.show_help);
+    assert!(state.help_overlay.visible);
     assert!(!state.is_board_picker_open());
 }
 

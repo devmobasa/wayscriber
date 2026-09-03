@@ -145,13 +145,7 @@ impl InputState {
             session_dirty: false,
             session_preflight_options: None,
             pending_save_as_overwrite: None,
-            show_help: false,
-            help_overlay_page: 0,
-            help_overlay_search: String::new(),
-            help_overlay_scroll: 0.0,
-            help_overlay_scroll_max: 0.0,
-            help_overlay_pending_presses: Vec::new(),
-            help_overlay_consume_only_presses: Vec::new(),
+            help_overlay: Default::default(),
             board_picker_search: String::new(),
             board_picker_search_last_input: None,
             command_palette: Default::default(),
@@ -301,8 +295,6 @@ impl InputState {
             pending_clipboard_fallback: None,
             deleted_boards: Vec::new(),
             status_change_highlight: None,
-            help_overlay_quick_mode: false,
-            help_overlay_search_cursor: 0,
         };
 
         if state.click_highlight.uses_pen_color() {

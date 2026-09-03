@@ -206,7 +206,7 @@ impl WaylandState {
         let screen_y = screen_position.1.round() as i32;
         self.set_current_mouse(screen_x, screen_y);
 
-        if !self.input_state.show_help {
+        if !self.input_state.help_overlay.visible {
             // A new touch supersedes any consume-only help ownership left by
             // a sequence whose release/cancel was not delivered.
             self.input_state
@@ -262,7 +262,7 @@ impl WaylandState {
         // Help is modal for every pointing modality. Record the same
         // screen-space target as the mouse path and swallow the touch so it
         // cannot operate the toolbar or canvas underneath.
-        if self.input_state.show_help {
+        if self.input_state.help_overlay.visible {
             self.input_state.note_help_overlay_press(
                 HelpOverlayPressSource::Touch,
                 screen_x,
@@ -440,7 +440,7 @@ impl WaylandState {
             return;
         }
 
-        if self.input_state.show_help
+        if self.input_state.help_overlay.visible
             || self.input_state.command_palette.open
             || self.input_state.tour_active
         {

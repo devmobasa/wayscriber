@@ -575,12 +575,15 @@ fn tablet_path_help_chip_dispatches_action_on_release() {
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Help);
-    assert!(!input.show_help);
+    assert!(!input.help_overlay.visible);
 
     // The help chip returns an action rather than opening a surface; on the
     // direct-routing path it dispatches through the shared action routing.
     input.on_mouse_press_with_canvas(MouseButton::Left, x, y, x, y);
-    assert!(!input.show_help);
+    assert!(!input.help_overlay.visible);
     input.on_mouse_release_with_canvas(MouseButton::Left, x, y, x, y);
-    assert!(input.show_help, "help overlay should toggle on release");
+    assert!(
+        input.help_overlay.visible,
+        "help overlay should toggle on release"
+    );
 }

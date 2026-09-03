@@ -24,7 +24,7 @@ pub(crate) fn handle_command_palette_key(
 }
 
 pub(crate) fn handle_help_overlay_key(state: &mut InputState, key: Key) -> Option<RoutingOutcome> {
-    (state.show_help && state.handle_help_overlay_key(key))
+    (state.help_overlay.visible && state.handle_help_overlay_key(key))
         .then_some(RoutingOutcome::Consumed(ConsumedBy::HelpOverlay))
 }
 

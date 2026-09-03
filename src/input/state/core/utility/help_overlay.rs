@@ -59,10 +59,10 @@ pub enum HelpOverlayReleaseOutcome {
 impl InputState {
     fn open_help_overlay_internal(&mut self, quick_mode: bool, track_usage: bool) {
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::HelpOverlay);
-        self.show_help = true;
-        self.help_overlay_quick_mode = quick_mode;
-        self.help_overlay_scroll = 0.0;
-        self.help_overlay_scroll_max = 0.0;
+        self.help_overlay.visible = true;
+        self.help_overlay.quick_mode = quick_mode;
+        self.help_overlay.scroll = 0.0;
+        self.help_overlay.scroll_max = 0.0;
         // Defensively drop any geometry left from a previous open. The hit map
         // is normally cleared on close, but re-opening should never expose the
         // prior layout to a click before the first fresh render repopulates it.
@@ -71,13 +71,13 @@ impl InputState {
         if track_usage {
             self.pending_onboarding_usage.used_help_overlay = true;
         }
-        self.help_overlay_page = 0;
+        self.help_overlay.page = 0;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
 
     pub(crate) fn toggle_help_overlay(&mut self) {
-        if self.show_help {
+        if self.help_overlay.visible {
             self.close_help_overlay();
             return;
         }
@@ -85,7 +85,7 @@ impl InputState {
     }
 
     pub(crate) fn toggle_quick_help(&mut self) {
-        if self.show_help && self.help_overlay_quick_mode {
+        if self.help_overlay.visible && self.help_overlay.quick_mode {
             self.close_help_overlay();
             return;
         }
@@ -95,13 +95,13 @@ impl InputState {
     /// Close the help overlay and drop the stale pointer hit map so a later
     /// click can never act on the previous frame's rectangles.
     pub(crate) fn close_help_overlay(&mut self) {
-        if !self.show_help {
+        if !self.help_overlay.visible {
             return;
         }
-        self.show_help = false;
-        self.help_overlay_quick_mode = false;
-        self.help_overlay_scroll = 0.0;
-        self.help_overlay_scroll_max = 0.0;
+        self.help_overlay.visible = false;
+        self.help_overlay.quick_mode = false;
+        self.help_overlay.scroll = 0.0;
+        self.help_overlay.scroll_max = 0.0;
         self.retire_help_overlay_press_targets();
         crate::ui::clear_help_overlay_hit_map();
         self.dirty_tracker.mark_full();
@@ -131,21 +131,23 @@ impl InputState {
         // A new physical press supersedes any consume-only token left by a
         // release the compositor never delivered for this source.
         if let Some(index) = self
-            .help_overlay_consume_only_presses
+            .help_overlay
+            .consume_only_presses
             .iter()
             .position(|pending_source| *pending_source == source)
         {
-            self.help_overlay_consume_only_presses.swap_remove(index);
+            self.help_overlay.consume_only_presses.swap_remove(index);
         }
         let target = self.help_overlay_click_at(x, y);
         if let Some((_, pending_target)) = self
-            .help_overlay_pending_presses
+            .help_overlay
+            .pending_presses
             .iter_mut()
             .find(|(pending_source, _)| *pending_source == source)
         {
             *pending_target = target;
         } else {
-            self.help_overlay_pending_presses.push((source, target));
+            self.help_overlay.pending_presses.push((source, target));
         }
     }
 
@@ -155,19 +157,21 @@ impl InputState {
     pub(crate) fn clear_help_overlay_press_for(&mut self, source: HelpOverlayPressSource) -> bool {
         let mut removed = false;
         if let Some(index) = self
-            .help_overlay_pending_presses
+            .help_overlay
+            .pending_presses
             .iter()
             .position(|(pressed_source, _)| *pressed_source == source)
         {
-            self.help_overlay_pending_presses.swap_remove(index);
+            self.help_overlay.pending_presses.swap_remove(index);
             removed = true;
         }
         if let Some(index) = self
-            .help_overlay_consume_only_presses
+            .help_overlay
+            .consume_only_presses
             .iter()
             .position(|pending_source| *pending_source == source)
         {
-            self.help_overlay_consume_only_presses.swap_remove(index);
+            self.help_overlay.consume_only_presses.swap_remove(index);
             removed = true;
         }
         removed
@@ -186,24 +190,26 @@ impl InputState {
         x: i32,
         y: i32,
     ) -> Option<HelpOverlayReleaseOutcome> {
-        if !self.show_help {
+        if !self.help_overlay.visible {
             return self
                 .clear_help_overlay_press_for(source)
                 .then_some(HelpOverlayReleaseOutcome::None);
         }
         if let Some(index) = self
-            .help_overlay_consume_only_presses
+            .help_overlay
+            .consume_only_presses
             .iter()
             .position(|pending_source| *pending_source == source)
         {
-            self.help_overlay_consume_only_presses.swap_remove(index);
+            self.help_overlay.consume_only_presses.swap_remove(index);
             return Some(HelpOverlayReleaseOutcome::None);
         }
         let index = self
-            .help_overlay_pending_presses
+            .help_overlay
+            .pending_presses
             .iter()
             .position(|(pressed_source, _)| *pressed_source == source)?;
-        let pressed = self.help_overlay_pending_presses.swap_remove(index);
+        let pressed = self.help_overlay.pending_presses.swap_remove(index);
         let released = self.help_overlay_click_at(x, y);
         Some(match (pressed.1, released) {
             (HelpOverlayClick::Run(pressed_action), HelpOverlayClick::Run(released_action))
@@ -223,19 +229,19 @@ impl InputState {
     /// leaking into a surface opened after help closes, without allowing an
     /// old press to act against a newly rendered help layout.
     fn retire_help_overlay_press_targets(&mut self) {
-        for (source, _) in self.help_overlay_pending_presses.drain(..) {
-            if !self.help_overlay_consume_only_presses.contains(&source) {
-                self.help_overlay_consume_only_presses.push(source);
+        for (source, _) in self.help_overlay.pending_presses.drain(..) {
+            if !self.help_overlay.consume_only_presses.contains(&source) {
+                self.help_overlay.consume_only_presses.push(source);
             }
         }
     }
 
     pub(crate) fn help_overlay_next_page(&mut self) -> bool {
         // Use upper bound; render state clamps to actual page count
-        let next_page = self.help_overlay_page + 1;
+        let next_page = self.help_overlay.page + 1;
         if next_page < HELP_OVERLAY_MAX_PAGES {
-            self.help_overlay_page = next_page;
-            self.help_overlay_scroll = 0.0;
+            self.help_overlay.page = next_page;
+            self.help_overlay.scroll = 0.0;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             return true;
@@ -244,9 +250,9 @@ impl InputState {
     }
 
     pub(crate) fn help_overlay_prev_page(&mut self) -> bool {
-        if self.help_overlay_page > 0 {
-            self.help_overlay_page -= 1;
-            self.help_overlay_scroll = 0.0;
+        if self.help_overlay.page > 0 {
+            self.help_overlay.page -= 1;
+            self.help_overlay.scroll = 0.0;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             true
@@ -258,8 +264,8 @@ impl InputState {
     /// Clear help search and reset cursor position.
     #[allow(dead_code)]
     pub(crate) fn clear_help_search(&mut self) {
-        self.help_overlay_search.clear();
-        self.help_overlay_search_cursor = 0;
+        self.help_overlay.search.clear();
+        self.help_overlay.search_cursor = 0;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -267,15 +273,15 @@ impl InputState {
     /// Move help search cursor left.
     #[allow(dead_code)]
     pub(crate) fn help_search_cursor_left(&mut self) {
-        if self.help_overlay_search_cursor > 0 {
+        if self.help_overlay.search_cursor > 0 {
             // Move back by one character (handle UTF-8 properly)
-            let text = &self.help_overlay_search;
+            let text = &self.help_overlay.search;
             if let Some((idx, _)) = text
                 .char_indices()
-                .take(self.help_overlay_search_cursor)
+                .take(self.help_overlay.search_cursor)
                 .last()
             {
-                self.help_overlay_search_cursor = text[..idx].chars().count();
+                self.help_overlay.search_cursor = text[..idx].chars().count();
             }
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
@@ -285,9 +291,9 @@ impl InputState {
     /// Move help search cursor right.
     #[allow(dead_code)]
     pub(crate) fn help_search_cursor_right(&mut self) {
-        let char_count = self.help_overlay_search.chars().count();
-        if self.help_overlay_search_cursor < char_count {
-            self.help_overlay_search_cursor += 1;
+        let char_count = self.help_overlay.search.chars().count();
+        if self.help_overlay.search_cursor < char_count {
+            self.help_overlay.search_cursor += 1;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }
@@ -296,15 +302,15 @@ impl InputState {
     /// Insert text at cursor position.
     #[allow(dead_code)]
     pub(crate) fn help_search_insert(&mut self, text: &str) {
-        let cursor = self.help_overlay_search_cursor;
-        let current = &self.help_overlay_search;
+        let cursor = self.help_overlay.search_cursor;
+        let current = &self.help_overlay.search;
         let byte_idx = current
             .char_indices()
             .nth(cursor)
             .map(|(i, _)| i)
             .unwrap_or(current.len());
-        self.help_overlay_search.insert_str(byte_idx, text);
-        self.help_overlay_search_cursor += text.chars().count();
+        self.help_overlay.search.insert_str(byte_idx, text);
+        self.help_overlay.search_cursor += text.chars().count();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -312,9 +318,9 @@ impl InputState {
     /// Delete character before cursor (backspace).
     #[allow(dead_code)]
     pub(crate) fn help_search_backspace(&mut self) {
-        if self.help_overlay_search_cursor > 0 {
-            let current = &self.help_overlay_search;
-            let cursor = self.help_overlay_search_cursor;
+        if self.help_overlay.search_cursor > 0 {
+            let current = &self.help_overlay.search;
+            let cursor = self.help_overlay.search_cursor;
             // Find byte index of previous character
             let char_indices: Vec<_> = current.char_indices().collect();
             if cursor <= char_indices.len() {
@@ -328,9 +334,10 @@ impl InputState {
                 } else {
                     current.len()
                 };
-                self.help_overlay_search
+                self.help_overlay
+                    .search
                     .replace_range(char_indices[cursor - 1].0..end_idx, "");
-                self.help_overlay_search_cursor -= 1;
+                self.help_overlay.search_cursor -= 1;
             }
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
@@ -345,7 +352,7 @@ impl InputState {
     /// map): the search well shows a text cursor, clickable rows and the
     /// "Replay tour" footer show a pointer, everything else the default.
     pub fn help_overlay_cursor_hint_at(&self, x: i32, y: i32) -> Option<HelpOverlayCursorHint> {
-        if !self.show_help {
+        if !self.help_overlay.visible {
             return None;
         }
 
@@ -376,10 +383,10 @@ mod tests {
         let mut state = make_state();
         state.toggle_help_overlay();
 
-        assert!(state.show_help);
-        assert!(!state.help_overlay_quick_mode);
+        assert!(state.help_overlay.visible);
+        assert!(!state.help_overlay.quick_mode);
         assert!(state.pending_onboarding_usage.used_help_overlay);
-        assert_eq!(state.help_overlay_page, 0);
+        assert_eq!(state.help_overlay.page, 0);
     }
 
     #[test]
@@ -390,7 +397,7 @@ mod tests {
 
         state.toggle_help_overlay();
 
-        assert!(state.show_help);
+        assert!(state.help_overlay.visible);
         assert!(!state.is_radial_menu_open());
     }
 
@@ -398,51 +405,51 @@ mod tests {
     fn toggle_quick_help_closes_when_already_in_quick_mode() {
         let mut state = make_state();
         state.toggle_quick_help();
-        assert!(state.show_help);
-        assert!(state.help_overlay_quick_mode);
+        assert!(state.help_overlay.visible);
+        assert!(state.help_overlay.quick_mode);
 
         state.toggle_quick_help();
-        assert!(!state.show_help);
-        assert!(!state.help_overlay_quick_mode);
+        assert!(!state.help_overlay.visible);
+        assert!(!state.help_overlay.quick_mode);
     }
 
     #[test]
     fn help_overlay_page_navigation_resets_scroll_and_respects_bounds() {
         let mut state = make_state();
-        state.help_overlay_scroll = 123.0;
+        state.help_overlay.scroll = 123.0;
         assert!(state.help_overlay_next_page());
-        assert_eq!(state.help_overlay_page, 1);
-        assert_eq!(state.help_overlay_scroll, 0.0);
+        assert_eq!(state.help_overlay.page, 1);
+        assert_eq!(state.help_overlay.scroll, 0.0);
 
-        state.help_overlay_page = HELP_OVERLAY_MAX_PAGES - 1;
+        state.help_overlay.page = HELP_OVERLAY_MAX_PAGES - 1;
         assert!(!state.help_overlay_next_page());
         assert!(state.help_overlay_prev_page());
-        assert_eq!(state.help_overlay_page, HELP_OVERLAY_MAX_PAGES - 2);
+        assert_eq!(state.help_overlay.page, HELP_OVERLAY_MAX_PAGES - 2);
     }
 
     #[test]
     fn help_search_insert_and_cursor_movement_handle_unicode_scalars() {
         let mut state = make_state();
         state.help_search_insert("a🙂");
-        assert_eq!(state.help_overlay_search, "a🙂");
-        assert_eq!(state.help_overlay_search_cursor, 2);
+        assert_eq!(state.help_overlay.search, "a🙂");
+        assert_eq!(state.help_overlay.search_cursor, 2);
 
         state.help_search_cursor_left();
-        assert_eq!(state.help_overlay_search_cursor, 1);
+        assert_eq!(state.help_overlay.search_cursor, 1);
         state.help_search_cursor_right();
-        assert_eq!(state.help_overlay_search_cursor, 2);
+        assert_eq!(state.help_overlay.search_cursor, 2);
     }
 
     #[test]
     fn help_search_backspace_removes_previous_unicode_character() {
         let mut state = make_state();
-        state.help_overlay_search = "a🙂b".to_string();
-        state.help_overlay_search_cursor = 2;
+        state.help_overlay.search = "a🙂b".to_string();
+        state.help_overlay.search_cursor = 2;
 
         state.help_search_backspace();
 
-        assert_eq!(state.help_overlay_search, "ab");
-        assert_eq!(state.help_overlay_search_cursor, 1);
+        assert_eq!(state.help_overlay.search, "ab");
+        assert_eq!(state.help_overlay.search_cursor, 1);
     }
 
     #[test]
@@ -515,7 +522,7 @@ mod tests {
     fn close_help_overlay_resets_state_and_clears_hit_map() {
         let mut state = make_state();
         state.toggle_help_overlay();
-        state.help_overlay_scroll = 42.0;
+        state.help_overlay.scroll = 42.0;
         crate::ui::install_help_hit_map_for_test(
             (100.0, 100.0, 200.0, 300.0),
             None,
@@ -524,8 +531,8 @@ mod tests {
 
         state.close_help_overlay();
 
-        assert!(!state.show_help);
-        assert_eq!(state.help_overlay_scroll, 0.0);
+        assert!(!state.help_overlay.visible);
+        assert_eq!(state.help_overlay.scroll, 0.0);
         // Closing dropped the stale hit map, so a later click resolves outside.
         assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
         assert_eq!(
@@ -563,7 +570,7 @@ mod tests {
             ))
         );
         // The recorded press was consumed.
-        assert!(state.help_overlay_pending_presses.is_empty());
+        assert!(state.help_overlay.pending_presses.is_empty());
 
         crate::ui::clear_help_overlay_hit_map();
     }
@@ -578,7 +585,7 @@ mod tests {
         // (150, 280) is inside the box but below the row and search well: chrome.
         state.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 150, 280);
         assert_eq!(
-            state.help_overlay_pending_presses,
+            state.help_overlay.pending_presses,
             vec![(HelpOverlayPressSource::Pointer(1), HelpOverlayClick::Inside)]
         );
         assert_eq!(
@@ -595,7 +602,7 @@ mod tests {
 
         state.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 10, 10);
         assert_eq!(
-            state.help_overlay_pending_presses,
+            state.help_overlay.pending_presses,
             vec![(
                 HelpOverlayPressSource::Pointer(1),
                 HelpOverlayClick::Outside
@@ -640,7 +647,7 @@ mod tests {
         let mut state = state_with_help_row(crate::config::Action::ClearCanvas);
 
         // No note_help_overlay_press call: a release cannot fabricate intent.
-        assert!(state.help_overlay_pending_presses.is_empty());
+        assert!(state.help_overlay.pending_presses.is_empty());
         assert_eq!(
             state.resolve_help_overlay_release(HelpOverlayPressSource::Touch, 150, 215),
             None
@@ -660,7 +667,7 @@ mod tests {
             "a pointer release must fall through when touch owns the help press"
         );
         assert!(
-            !state.help_overlay_pending_presses.is_empty(),
+            !state.help_overlay.pending_presses.is_empty(),
             "another modality must not consume the touch press"
         );
         assert_eq!(
@@ -708,16 +715,16 @@ mod tests {
 
         state.close_help_overlay();
 
-        assert!(state.help_overlay_pending_presses.is_empty());
-        assert_eq!(state.help_overlay_consume_only_presses, vec![pointer]);
+        assert!(state.help_overlay.pending_presses.is_empty());
+        assert_eq!(state.help_overlay.consume_only_presses, vec![pointer]);
 
         assert_eq!(
             state.resolve_help_overlay_release(pointer, 150, 215),
             Some(HelpOverlayReleaseOutcome::None),
             "a press swallowed by help must still consume its physical release after help closes"
         );
-        assert!(state.help_overlay_pending_presses.is_empty());
-        assert!(state.help_overlay_consume_only_presses.is_empty());
+        assert!(state.help_overlay.pending_presses.is_empty());
+        assert!(state.help_overlay.consume_only_presses.is_empty());
 
         crate::ui::clear_help_overlay_hit_map();
     }
@@ -796,9 +803,9 @@ mod tests {
         // before the first fresh render repopulates the map.
         state.toggle_help_overlay();
 
-        assert!(state.show_help);
+        assert!(state.help_overlay.visible);
         assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
-        assert!(state.help_overlay_pending_presses.is_empty());
+        assert!(state.help_overlay.pending_presses.is_empty());
 
         crate::ui::clear_help_overlay_hit_map();
     }
@@ -815,7 +822,7 @@ mod tests {
 
         state.start_tour();
 
-        assert!(!state.show_help);
+        assert!(!state.help_overlay.visible);
         // Routing through close_help_overlay dropped the cached hit map, so a
         // click after help reopens can never act on this stale layout.
         assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
@@ -835,7 +842,7 @@ mod tests {
 
         state.toggle_command_palette();
 
-        assert!(!state.show_help);
+        assert!(!state.help_overlay.visible);
         assert!(state.command_palette.open);
         assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
 

@@ -8,6 +8,7 @@ mod dirty;
 mod eyedropper;
 mod font_cycle;
 pub(crate) mod font_picker;
+mod help_overlay;
 mod highlight_controls;
 mod history;
 mod ime;
@@ -85,6 +86,7 @@ pub use font_picker::{
     FontPickerFilter, FontPickerLayout, FontPickerResults, FontPickerRow, FontPickerTarget,
     font_picker_layout, font_picker_rows,
 };
+pub use help_overlay::HelpOverlayState;
 #[cfg(test)]
 pub(crate) use ime::build_text_input_preview;
 pub use ime::{ImeCompositionState, ImePreedit};

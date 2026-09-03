@@ -389,11 +389,11 @@ fn size_for_active_tool_uses_eraser_size_for_eraser() {
 fn opening_radial_menu_closes_help_overlay() {
     let mut state = create_test_input_state();
     state.toggle_help_overlay();
-    assert!(state.show_help);
+    assert!(state.help_overlay.visible);
 
     state.open_radial_menu(120.0, 90.0);
 
-    assert!(!state.show_help);
+    assert!(!state.help_overlay.visible);
     assert!(state.is_radial_menu_open());
 }
 

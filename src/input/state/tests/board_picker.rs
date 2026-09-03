@@ -1453,7 +1453,7 @@ fn board_picker_commit_edit_rejects_invalid_colors_and_keeps_edit_open() {
 #[test]
 fn open_board_picker_closes_help_and_clears_transient_picker_state() {
     let mut input = create_test_input_state();
-    input.show_help = true;
+    input.help_overlay.visible = true;
     input.board_picker_search = "blue".to_string();
     input.board_picker_drag = Some(BoardPickerDrag {
         source_row: 0,
@@ -1478,7 +1478,7 @@ fn open_board_picker_closes_help_and_clears_transient_picker_state() {
     assert!(input.is_board_picker_open());
     assert_eq!(input.board_picker_mode(), BoardPickerMode::Full);
     assert_eq!(input.board_picker_focus(), BoardPickerFocus::BoardList);
-    assert!(!input.show_help);
+    assert!(!input.help_overlay.visible);
     assert!(input.board_picker_search.is_empty());
     assert!(input.board_picker_drag.is_none());
     assert!(input.board_picker_page_drag.is_none());

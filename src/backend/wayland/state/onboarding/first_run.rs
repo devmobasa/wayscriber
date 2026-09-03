@@ -213,7 +213,7 @@ impl WaylandState {
         !first_run_card_hidden_by_ui_state(
             self.input_state.presenter_mode,
             self.input_state.command_palette.open,
-            self.input_state.show_help,
+            self.input_state.help_overlay.visible,
             self.input_state.is_radial_menu_open(),
             self.input_state.is_context_menu_open(),
             self.input_state.tour_active,

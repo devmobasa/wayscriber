@@ -191,7 +191,7 @@ impl WaylandState {
         height: u32,
         capture_picker: bool,
     ) {
-        if !capture_picker && self.input_state.show_help {
+        if !capture_picker && self.input_state.help_overlay.visible {
             let bindings = crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);
             let scroll_max = crate::ui::render_help_overlay(
                 ctx,
@@ -199,18 +199,18 @@ impl WaylandState {
                 width,
                 height,
                 self.frozen_enabled(),
-                self.input_state.help_overlay_page,
+                self.input_state.help_overlay.page,
                 &bindings,
-                self.input_state.help_overlay_search.as_str(),
+                self.input_state.help_overlay.search.as_str(),
                 self.config.ui.help_overlay_context_filter,
                 self.input_state.boards.board_count() > 1,
                 self.config.capture.enabled,
-                self.input_state.help_overlay_scroll,
-                self.input_state.help_overlay_quick_mode,
+                self.input_state.help_overlay.scroll,
+                self.input_state.help_overlay.quick_mode,
             );
-            self.input_state.help_overlay_scroll_max = scroll_max;
-            self.input_state.help_overlay_scroll =
-                self.input_state.help_overlay_scroll.clamp(0.0, scroll_max);
+            self.input_state.help_overlay.scroll_max = scroll_max;
+            self.input_state.help_overlay.scroll =
+                self.input_state.help_overlay.scroll.clamp(0.0, scroll_max);
         }
         if !capture_picker && self.input_state.is_board_picker_open() {
             self.input_state

@@ -97,13 +97,13 @@ fn presenter_mode_blocks_tool_preview_toggle() {
 #[test]
 fn presenter_mode_closes_help_overlay_and_switches_to_highlight_tool() {
     let mut state = create_test_input_state();
-    state.show_help = true;
+    state.help_overlay.visible = true;
     state.set_tool_override(Some(Tool::Pen));
 
     state.toggle_presenter_mode();
 
     assert!(state.presenter_mode);
-    assert!(!state.show_help);
+    assert!(!state.help_overlay.visible);
     assert_eq!(state.tool_override(), Some(Tool::Highlight));
 }
 

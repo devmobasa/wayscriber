@@ -178,30 +178,8 @@ pub struct InputState {
     pub(crate) session_preflight_options: Option<SessionOptions>,
     /// Save Session As target waiting for explicit overwrite confirmation.
     pub(crate) pending_save_as_overwrite: Option<PathBuf>,
-    /// Whether the help overlay is currently visible (toggled with F10)
-    pub show_help: bool,
-    /// Active help overlay page index
-    pub help_overlay_page: usize,
-    /// Current help overlay search query
-    pub help_overlay_search: String,
-    /// Current help overlay scroll offset (pixels)
-    pub help_overlay_scroll: f64,
-    /// Max scrollable height for help overlay (pixels)
-    pub help_overlay_scroll_max: f64,
-    /// Help targets resolved under pending help-overlay presses, keyed by input
-    /// modality so only the modality that owned a press can resolve it. Each
-    /// matching release only runs a row when press and release land on the SAME
-    /// target. Mirrors the toast press/release contract and guards destructive
-    /// rows (e.g. Clear) against a press-drag-release that starts off-row and
-    /// ends on the row.
-    pub(crate) help_overlay_pending_presses: Vec<(
-        crate::input::state::HelpOverlayPressSource,
-        crate::input::state::HelpOverlayClick,
-    )>,
-    /// Help-owned presses whose overlay generation ended before physical
-    /// release. Their eventual releases must still be swallowed, but can no
-    /// longer resolve an action against either the old or a reopened layout.
-    pub(crate) help_overlay_consume_only_presses: Vec<crate::input::state::HelpOverlayPressSource>,
+    /// Visibility, navigation, and pointer bookkeeping for the help overlay.
+    pub help_overlay: crate::input::state::core::HelpOverlayState,
     /// Board picker quick search query
     pub board_picker_search: String,
     /// Time of last board picker search input
@@ -549,11 +527,6 @@ pub struct InputState {
     /// Status bar change highlight animation state
     #[allow(dead_code)]
     pub(crate) status_change_highlight: Option<StatusChangeHighlight>,
-    /// Whether the help overlay is in quick-reference mode
-    pub help_overlay_quick_mode: bool,
-    /// Cursor position within the help overlay search input
-    #[allow(dead_code)]
-    pub help_overlay_search_cursor: usize,
 }
 
 impl InputState {

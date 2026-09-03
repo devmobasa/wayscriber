@@ -384,7 +384,7 @@ impl WaylandState {
                 // Most actions leave the overlay up; close it so the effect is
                 // visible. Actions that already closed it (ToggleHelp,
                 // ReplayTour) leave `show_help` false, so this is a no-op.
-                if self.input_state.show_help {
+                if self.input_state.help_overlay.visible {
                     self.input_state.close_help_overlay();
                 }
                 self.input_state.needs_redraw = true;
