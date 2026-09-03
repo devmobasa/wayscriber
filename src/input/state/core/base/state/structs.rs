@@ -178,7 +178,7 @@ pub struct InputState {
     /// Visibility, navigation, and pointer bookkeeping for the help overlay.
     pub(crate) help_overlay: crate::input::state::core::HelpOverlayState,
     /// Modal, layout, search, edit, and drag state for the board picker.
-    pub board_picker: crate::input::state::core::BoardPickerPanel,
+    pub(crate) board_picker: crate::input::state::core::BoardPickerPanel,
     /// State owned by the command palette modal.
     pub command_palette: crate::input::state::core::command_palette::CommandPaletteState,
     /// Action whose next keyboard chord is being captured for rebinding.

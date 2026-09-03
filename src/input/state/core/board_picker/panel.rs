@@ -10,17 +10,21 @@ use crate::input::state::core::base::BoardPickerClickState;
 /// Modal, layout, search, edit, and drag state for the board picker.
 #[derive(Debug)]
 pub struct BoardPickerPanel {
-    pub state: BoardPickerState,
-    pub drag: Option<BoardPickerDrag>,
-    pub page_drag: Option<BoardPickerPageDrag>,
-    pub page_edit: Option<BoardPickerPageEdit>,
-    pub layout: Option<BoardPickerLayout>,
-    pub search: String,
-    pub search_last_input: Option<Instant>,
-    pub(crate) last_click: Option<BoardPickerClickState>,
+    pub(in crate::input::state) state: BoardPickerState,
+    pub(in crate::input::state) drag: Option<BoardPickerDrag>,
+    pub(in crate::input::state) page_drag: Option<BoardPickerPageDrag>,
+    pub(in crate::input::state) page_edit: Option<BoardPickerPageEdit>,
+    pub(in crate::input::state) layout: Option<BoardPickerLayout>,
+    pub(in crate::input::state) search: String,
+    pub(in crate::input::state) search_last_input: Option<Instant>,
+    pub(in crate::input::state) last_click: Option<BoardPickerClickState>,
 }
 
 impl BoardPickerPanel {
+    pub fn page_drag(&self) -> Option<BoardPickerPageDrag> {
+        self.page_drag
+    }
+
     pub(crate) fn is_open(&self) -> bool {
         matches!(self.state, BoardPickerState::Open { .. })
     }
