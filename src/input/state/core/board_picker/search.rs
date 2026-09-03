@@ -5,7 +5,9 @@ use super::super::base::InputState;
 impl InputState {
     pub(crate) fn board_picker_clear_search(&mut self) -> bool {
         let changed = self.board_picker.clear_search();
-        self.needs_redraw |= changed;
+        if changed {
+            self.needs_redraw = true;
+        }
         changed
     }
 

@@ -110,7 +110,7 @@ pub struct ToolStateSnapshot {
 impl ToolStateSnapshot {
     pub(crate) fn from_input_state(input: &InputState) -> Self {
         let active_tool = input.session_active_tool();
-        let mut snapshot = Self::from((&input.style, active_tool, input.board_previous_color));
+        let mut snapshot = Self::from((&input.style, active_tool, input.board_previous_color()));
         snapshot.tool_override = input.session_tool_override();
         snapshot
     }

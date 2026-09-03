@@ -147,9 +147,9 @@ impl InputState {
     ) -> Option<Tool> {
         let configured_tool = binding_tool.as_tool();
         if configured_tool.is_some()
-            && self.presenter_mode
+            && self.presenter_mode_active()
             && matches!(
-                self.presenter_mode_config.tool_behavior,
+                self.presenter_mode_config().tool_behavior,
                 crate::config::PresenterToolBehavior::ForceHighlightLocked
             )
         {

@@ -70,13 +70,13 @@ fn enabling_arrow_labels_syncs_counter_and_marks_session_dirty() {
         .active_frame_mut()
         .add_shape(arrow_with_label(5, &font_descriptor));
     state.needs_redraw = false;
-    state.session_dirty = false;
+    state.clear_session_dirty();
 
     assert!(state.set_arrow_label_enabled(true));
     assert!(state.style.arrow_label_enabled);
     assert_eq!(state.style.arrow_label_counter, 6);
     assert!(state.needs_redraw);
-    assert!(state.session_dirty);
+    assert!(state.is_session_dirty());
 }
 
 #[test]
@@ -84,11 +84,11 @@ fn enabling_arrow_labels_is_noop_when_already_enabled() {
     let mut state = create_test_input_state();
     state.style.arrow_label_enabled = true;
     state.needs_redraw = false;
-    state.session_dirty = false;
+    state.clear_session_dirty();
 
     assert!(!state.set_arrow_label_enabled(true));
     assert!(!state.needs_redraw);
-    assert!(!state.session_dirty);
+    assert!(!state.is_session_dirty());
 }
 
 #[test]

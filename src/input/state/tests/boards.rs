@@ -47,11 +47,11 @@ fn switch_board_force_does_not_toggle_back_to_transparent() {
 fn switch_board_recent_skips_current_and_missing_entries() {
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_WHITEBOARD);
-    state.board_recent = vec![
+    state.replace_board_recent_for_test(vec![
         BOARD_ID_WHITEBOARD.to_string(),
         "missing".to_string(),
         "blackboard".to_string(),
-    ];
+    ]);
 
     state.switch_board_recent();
 
@@ -62,7 +62,10 @@ fn switch_board_recent_skips_current_and_missing_entries() {
 fn switch_board_recent_shows_toast_when_no_other_recent_board_exists() {
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_WHITEBOARD);
-    state.board_recent = vec![BOARD_ID_WHITEBOARD.to_string(), "missing".to_string()];
+    state.replace_board_recent_for_test(vec![
+        BOARD_ID_WHITEBOARD.to_string(),
+        "missing".to_string(),
+    ]);
 
     state.switch_board_recent();
 

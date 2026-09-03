@@ -42,7 +42,7 @@ impl ActiveInteractionRollback {
             active_preset_slot: input.preset_slots.active(),
             click_highlight: input.click_highlight.clone(),
             needs_redraw: input.needs_redraw,
-            session_dirty: input.session_dirty,
+            session_dirty: input.is_session_dirty(),
             dirty_tracker: input.dirty_tracker.clone(),
             pointer: input.pointer.clone(),
             last_polygon_click: input.selection_interaction.polygon_click(),
@@ -63,7 +63,7 @@ impl ActiveInteractionRollback {
         input.preset_slots.restore_active(self.active_preset_slot);
         input.click_highlight = self.click_highlight;
         input.needs_redraw = self.needs_redraw;
-        input.session_dirty = self.session_dirty;
+        input.set_session_dirty_state(self.session_dirty);
         input.dirty_tracker = self.dirty_tracker;
         input.pointer = self.pointer;
         input
@@ -74,48 +74,55 @@ impl ActiveInteractionRollback {
 }
 
 impl InputState {
+    pub(crate) fn last_capture_path(&self) -> Option<&Path> {
+        self.session_flags.last_capture_path()
+    }
+
+    pub(crate) fn set_last_capture_path(&mut self, path: Option<PathBuf>) {
+        self.session_flags.set_last_capture_path(path);
+    }
+
     /// Marks session data as dirty for autosave tracking.
     pub(crate) fn mark_session_dirty(&mut self) {
-        self.session_dirty = true;
+        self.session_flags.mark_dirty();
     }
 
     /// Returns true if session data was marked dirty since the last check.
     #[allow(dead_code)]
     pub(crate) fn take_session_dirty(&mut self) -> bool {
-        if self.session_dirty {
-            self.session_dirty = false;
-            true
-        } else {
-            false
-        }
+        self.session_flags.take_dirty()
     }
 
     /// Clears session dirtiness after loading persisted state into memory.
     #[allow(dead_code)]
     pub(crate) fn clear_session_dirty(&mut self) {
-        self.session_dirty = false;
+        self.session_flags.clear_dirty();
     }
 
     /// Returns whether session data is dirty without clearing the dirty flag.
     #[allow(dead_code)]
     pub(crate) fn is_session_dirty(&self) -> bool {
-        self.session_dirty
+        self.session_flags.is_dirty()
+    }
+
+    fn set_session_dirty_state(&mut self, dirty: bool) {
+        self.session_flags.set_dirty(dirty);
     }
 
     #[allow(dead_code)]
     pub(crate) fn pending_save_as_overwrite(&self) -> Option<&Path> {
-        self.pending_save_as_overwrite.as_deref()
+        self.session_flags.pending_save_as_overwrite()
     }
 
     #[allow(dead_code)]
     pub(crate) fn set_pending_save_as_overwrite(&mut self, path: PathBuf) {
-        self.pending_save_as_overwrite = Some(path);
+        self.session_flags.set_pending_save_as_overwrite(path);
         self.needs_redraw = true;
     }
 
     #[allow(dead_code)]
     pub(crate) fn clear_pending_save_as_overwrite(&mut self) -> Option<PathBuf> {
-        let previous = self.pending_save_as_overwrite.take();
+        let previous = self.session_flags.take_pending_save_as_overwrite();
         if previous.is_some() {
             self.needs_redraw = true;
         }

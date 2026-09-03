@@ -75,7 +75,7 @@ impl InputState {
         // Redraw only: the bar's visibility is a this-run preference the
         // session snapshot does not carry, unlike every tool value above it.
         if let Some(show_status_bar) = preset.show_status_bar
-            && !(self.presenter_mode && self.presenter_mode_config.hide_status_bar)
+            && !(self.presenter_mode_active() && self.presenter_mode_config().hide_status_bar)
             && self.set_status_bar_visibility_preserving_focus(show_status_bar)
         {
             self.dirty_tracker.mark_full();

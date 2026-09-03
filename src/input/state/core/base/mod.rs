@@ -8,7 +8,6 @@ pub(crate) use input_effect_outbox::{InputEffect, InputEffectDrain};
 pub(in crate::input::state::core) use input_effect_outbox::{InputEffectKind, InputEffectOutbox};
 pub use state::InputState;
 pub(in crate::input::state) use state::InputStateSeed;
-pub(crate) use state::{FocusModeRestore, LightModeRestore, PresenterRestore};
 pub(in crate::input::state::core) use toast_queue::ToastQueue;
 pub use toast_queue::{Toast, ToastPriority, ToastPushOutcome};
 pub use types::{
@@ -21,10 +20,10 @@ pub use types::{
 };
 pub(crate) use types::{
     BoardPickerClickState, ClipboardFingerprint, ClipboardPasteRequest, HelperLaunchRequest,
-    PasteAnchor, PendingBackendAction, PendingBoardDelete, PendingOnboardingUsage,
-    PendingPageDelete, PendingSelectionClipboardPublish, PendingToolbarPersistence,
-    PresetFeedbackState, TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget,
-    ToastCommand, ToastPress, UiToastState, WayscriberClipboardSelection,
+    PasteAnchor, PendingBackendAction, PendingOnboardingUsage, PendingSelectionClipboardPublish,
+    PendingToolbarPersistence, PresetFeedbackState, TextClipboardRequest, TextCutTarget,
+    TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress, UiToastState,
+    WayscriberClipboardSelection,
 };
 pub(crate) use types::{KeybindingEditOperation, KeybindingEditRequest};
 pub use ui_visibility::UiVisibility;

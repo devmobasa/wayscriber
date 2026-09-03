@@ -157,7 +157,7 @@ impl InputState {
     pub(crate) fn board_picker_recent_label(&self) -> Option<String> {
         let active_id = self.boards.active_board_id();
         let mut names = Vec::new();
-        for id in &self.board_recent {
+        for id in self.board_recent() {
             if id == active_id {
                 continue;
             }
@@ -182,7 +182,7 @@ impl InputState {
     pub(crate) fn board_picker_select_recent(&mut self) {
         let active_id = self.boards.active_board_id();
         let mut recent_index = None;
-        for id in &self.board_recent {
+        for id in self.board_recent() {
             if id == active_id {
                 continue;
             }

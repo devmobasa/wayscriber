@@ -211,7 +211,7 @@ impl WaylandState {
         if !self.surface.is_configured() || self.overlay_suppressed() {
             return;
         }
-        if self.input_state.presenter_mode
+        if self.input_state.presenter_mode_active()
             || self.input_state.help_overlay.is_visible()
             || self.input_state.command_palette.open
             || self.input_state.tour.is_active()
@@ -276,7 +276,7 @@ impl WaylandState {
         if !self.surface.is_configured() || self.overlay_suppressed() {
             return;
         }
-        if self.input_state.presenter_mode
+        if self.input_state.presenter_mode_active()
             || self.input_state.help_overlay.is_visible()
             || self.input_state.command_palette.open
             || self.input_state.tour.is_active()
@@ -450,7 +450,7 @@ impl WaylandState {
         if !self.surface.is_configured() || self.overlay_suppressed() {
             return;
         }
-        if self.input_state.presenter_mode || self.input_state.help_overlay.is_visible() {
+        if self.input_state.presenter_mode_active() || self.input_state.help_overlay.is_visible() {
             return;
         }
         if self.onboarding.state().first_run_active() {

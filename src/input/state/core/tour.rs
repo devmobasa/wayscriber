@@ -319,7 +319,7 @@ impl InputState {
     /// End the tour (skip or complete).
     pub fn end_tour(&mut self) {
         self.tour.end();
-        if !self.presenter_mode || !self.presenter_mode_config.hide_toolbars {
+        if !self.presenter_mode_active() || !self.presenter_mode_config().hide_toolbars {
             let top_visible = self.toolbar_top_pinned();
             if !self.toolbar_visible() && top_visible {
                 self.show_toolbar_visibility();

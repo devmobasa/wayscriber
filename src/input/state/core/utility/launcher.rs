@@ -2,6 +2,7 @@ use super::super::base::InputState;
 use crate::config::Config;
 use crate::configurator_destination::ConfiguratorDestination;
 use crate::input::state::{HelperLaunchRequest, PendingBackendAction, Toast, ToastPriority};
+use std::path::Path;
 
 impl InputState {
     /// Requests the About dialog through the backend-owned helper launcher.
@@ -20,7 +21,7 @@ impl InputState {
 
     /// Opens the most recent capture directory using the desktop default application.
     pub(crate) fn open_capture_folder(&mut self) {
-        let Some(path) = self.last_capture_path.clone() else {
+        let Some(path) = self.last_capture_path().map(Path::to_path_buf) else {
             self.push_toast(
                 ToastPriority::Info,
                 "launcher",

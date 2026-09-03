@@ -1,6 +1,4 @@
-use super::super::super::base::{
-    InputState, PAGE_DELETE_CONFIRM_MS, PAGE_UNDO_EXPIRE_MS, PendingPageDelete,
-};
+use super::super::super::base::{InputState, PAGE_DELETE_CONFIRM_MS};
 use crate::domain::Action;
 use crate::draw::PageDeleteOutcome as CanvasPageDeleteOutcome;
 use crate::input::boards::{
@@ -9,7 +7,7 @@ use crate::input::boards::{
     PageRestoreRequest,
 };
 use crate::input::state::{Toast, ToastPriority};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 impl InputState {
     pub(crate) fn delete_page_in_board(
@@ -37,22 +35,10 @@ impl InputState {
         let board_name = board.spec.name.clone();
         let board_id = board.spec.id.clone();
 
-        if self
-            .pending_page_delete
-            .as_ref()
-            .is_some_and(|pending| now > pending.expires_at)
-        {
-            self.pending_page_delete = None;
-        }
-
         let request = self
-            .pending_page_delete
-            .as_ref()
-            .filter(|pending| {
-                pending.confirmation.board_id == board_id
-                    && pending.confirmation.page_index == page_index
-            })
-            .map(|pending| PageDeleteRequest::Confirm(pending.confirmation.clone()))
+            .board_transitions
+            .confirm_page_delete_for(now, &board_id, page_index)
+            .map(|pending| PageDeleteRequest::Confirm(pending.confirmation().clone()))
             .unwrap_or_else(|| {
                 PageDeleteRequest::Request(PageDeleteTarget {
                     board: PageDeleteBoardTarget::BoardIndex(board_index),
@@ -69,10 +55,7 @@ impl InputState {
 
         match self.boards.delete_page(request) {
             PageDeleteOutcome::RequiresConfirmation { confirmation } => {
-                self.pending_page_delete = Some(PendingPageDelete {
-                    confirmation,
-                    expires_at: now + Duration::from_millis(PAGE_DELETE_CONFIRM_MS),
-                });
+                self.board_transitions.begin_page_delete(confirmation, now);
                 self.push_toast(ToastPriority::Info, "page.delete", Toast::warning(format!(
                         "Delete page {}/{} on '{board_name}' ({board_id})? Click delete again to confirm.",
                         page_index + 1,
@@ -81,7 +64,7 @@ impl InputState {
                 CanvasPageDeleteOutcome::Pending
             }
             PageDeleteOutcome::ClearedLastPage { .. } => {
-                self.pending_page_delete = None;
+                self.board_transitions.cancel_pending_page_delete();
                 self.finish_page_delete_surface_change(is_active_board);
                 self.push_toast(
                     ToastPriority::Info,
@@ -95,7 +78,7 @@ impl InputState {
                 new_page_count,
                 ..
             } => {
-                self.pending_page_delete = None;
+                self.board_transitions.cancel_pending_page_delete();
                 self.finish_page_delete_surface_change(is_active_board);
                 self.push_toast(
                     ToastPriority::Info,
@@ -109,7 +92,7 @@ impl InputState {
                 CanvasPageDeleteOutcome::Removed
             }
             PageDeleteOutcome::Rejected(rejection) => {
-                self.pending_page_delete = None;
+                self.board_transitions.cancel_pending_page_delete();
                 self.set_page_delete_rejection_toast(rejection);
                 CanvasPageDeleteOutcome::Pending
             }
@@ -124,18 +107,10 @@ impl InputState {
         let page_count = self.boards.page_count();
         let page_index = self.boards.active_page_index();
 
-        if self
-            .pending_page_delete
-            .as_ref()
-            .is_some_and(|pending| now > pending.expires_at)
-        {
-            self.pending_page_delete = None;
-        }
-
         let request = self
-            .pending_page_delete
-            .as_ref()
-            .map(|pending| PageDeleteRequest::Confirm(pending.confirmation.clone()))
+            .board_transitions
+            .confirm_page_delete(now)
+            .map(|pending| PageDeleteRequest::Confirm(pending.confirmation().clone()))
             .unwrap_or_else(|| {
                 PageDeleteRequest::Request(PageDeleteTarget {
                     board: PageDeleteBoardTarget::ActiveBoard,
@@ -158,10 +133,7 @@ impl InputState {
 
         match self.boards.delete_page(request) {
             PageDeleteOutcome::RequiresConfirmation { confirmation } => {
-                self.pending_page_delete = Some(PendingPageDelete {
-                    confirmation,
-                    expires_at: now + Duration::from_millis(PAGE_DELETE_CONFIRM_MS),
-                });
+                self.board_transitions.begin_page_delete(confirmation, now);
                 self.push_toast(
                     ToastPriority::Action,
                     "page.delete",
@@ -176,7 +148,7 @@ impl InputState {
                 CanvasPageDeleteOutcome::Pending
             }
             PageDeleteOutcome::ClearedLastPage { .. } => {
-                self.pending_page_delete = None;
+                self.board_transitions.cancel_pending_page_delete();
                 self.finish_page_delete_surface_change(active_target);
                 self.push_toast(
                     ToastPriority::Info,
@@ -192,16 +164,16 @@ impl InputState {
                 new_page_count,
                 ..
             } => {
-                self.pending_page_delete = None;
+                self.board_transitions.cancel_pending_page_delete();
                 self.finish_page_delete_surface_change(active_target);
-                self.deleted_pages.push((
+                self.board_transitions.push_deleted_page(
                     PageRestoreRequest {
                         board_id,
                         page: deleted_page,
                         placement: PageRestorePlacement::AfterActivePage,
                     },
                     now,
-                ));
+                );
                 self.push_toast(
                     ToastPriority::Action,
                     "page.delete",
@@ -214,7 +186,7 @@ impl InputState {
                 CanvasPageDeleteOutcome::Removed
             }
             PageDeleteOutcome::Rejected(rejection) => {
-                self.pending_page_delete = None;
+                self.board_transitions.cancel_pending_page_delete();
                 self.set_page_delete_rejection_toast(rejection);
                 CanvasPageDeleteOutcome::Pending
             }
@@ -267,12 +239,7 @@ impl InputState {
     }
 
     pub(crate) fn restore_deleted_page_at(&mut self, now: Instant) {
-        // Expire old entries
-        let expire_duration = Duration::from_millis(PAGE_UNDO_EXPIRE_MS);
-        self.deleted_pages
-            .retain(|(_, deleted_at)| now.saturating_duration_since(*deleted_at) < expire_duration);
-
-        if let Some((request, deleted_at)) = self.deleted_pages.pop() {
+        if let Some((request, deleted_at)) = self.board_transitions.take_restorable_page(now) {
             let active_target = request.board_id == self.boards.active_board_id();
             if active_target {
                 self.prepare_active_page_content_change();
@@ -295,7 +262,8 @@ impl InputState {
                     );
                 }
                 PageRestoreOutcome::Rejected(PageRestoreRejection::MissingBoard { request }) => {
-                    self.deleted_pages.push((request, deleted_at));
+                    self.board_transitions
+                        .return_deleted_page(request, deleted_at);
                     self.push_toast(
                         ToastPriority::Info,
                         "page.delete",

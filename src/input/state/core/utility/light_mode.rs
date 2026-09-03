@@ -1,9 +1,18 @@
-use super::super::base::{DesktopEnvironment, InputState, LightModeRestore, ShellMode};
+use super::super::base::{DesktopEnvironment, InputState, ShellMode};
+use super::super::modes::LightModeRestore;
 use crate::domain::Action;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::tool::Tool;
 
 impl InputState {
+    pub(crate) fn light_mode_active(&self) -> bool {
+        self.modes.light_active()
+    }
+
+    pub(crate) fn light_mode_drawing_active(&self) -> bool {
+        self.modes.light_drawing()
+    }
+
     pub fn light_mode_supported(&self) -> bool {
         self.compositor_capabilities.layer_shell
     }
@@ -29,12 +38,13 @@ impl InputState {
     }
 
     pub fn light_mode_passthrough(&self) -> bool {
-        self.light_mode_supported() && self.light_mode && !self.light_mode_drawing
+        self.light_mode_supported() && self.light_mode_active() && !self.light_mode_drawing_active()
     }
 
     pub(crate) fn session_tool_override(&self) -> Option<Tool> {
-        self.light_mode_restore
-            .map_or_else(|| self.tool_override(), |restore| restore.tool_override)
+        self.modes
+            .light_restored_tool_override()
+            .unwrap_or_else(|| self.tool_override())
     }
 
     pub(crate) fn session_active_tool(&self) -> Tool {
@@ -43,7 +53,7 @@ impl InputState {
     }
 
     pub(crate) fn toggle_light_mode(&mut self) -> bool {
-        if self.light_mode {
+        if self.light_mode_active() {
             self.exit_light_mode();
         } else {
             if !self.light_mode_supported() {
@@ -57,12 +67,12 @@ impl InputState {
             }
             self.enter_light_mode(false);
         }
-        self.light_mode
+        self.light_mode_active()
     }
 
     pub fn toggle_light_mode_drawing(&mut self) -> bool {
-        let drawing = if self.light_mode {
-            !self.light_mode_drawing
+        let drawing = if self.light_mode_active() {
+            !self.light_mode_drawing_active()
         } else {
             true
         };
@@ -70,7 +80,7 @@ impl InputState {
     }
 
     pub fn set_light_mode_drawing(&mut self, drawing: bool) -> bool {
-        if !self.light_mode {
+        if !self.light_mode_active() {
             if drawing {
                 if !self.light_mode_supported() {
                     self.push_toast(
@@ -83,15 +93,15 @@ impl InputState {
                 }
                 self.enter_light_mode(true);
             }
-            return self.light_mode_drawing;
+            return self.light_mode_drawing_active();
         }
 
-        if self.light_mode_drawing == drawing {
-            return self.light_mode_drawing;
+        if self.light_mode_drawing_active() == drawing {
+            return self.light_mode_drawing_active();
         }
 
         self.cancel_active_interaction();
-        self.light_mode_drawing = drawing;
+        self.modes.set_light_drawing(drawing);
         let message = if drawing {
             "Light Mode drawing"
         } else {
@@ -100,24 +110,22 @@ impl InputState {
         self.push_toast(ToastPriority::Info, "light_mode", Toast::info(message));
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
-        self.light_mode_drawing
+        self.light_mode_drawing_active()
     }
 
     pub(crate) fn exit_light_mode(&mut self) {
-        if !self.light_mode {
+        if !self.light_mode_active() {
             return;
         }
 
         self.cancel_active_interaction();
-        self.light_mode = false;
-        self.light_mode_drawing = false;
 
-        if let Some(restore) = self.light_mode_restore.take() {
-            self.ui_visibility.show_status_bar = restore.show_status_bar;
-            self.ui_visibility.show_tool_preview = restore.show_tool_preview;
-            self.restore_toolbar_visibility(restore.toolbar_visibility);
-            self.set_tool_override(restore.tool_override);
-            if self.click_highlight_enabled() != restore.click_highlight_enabled {
+        if let Some(restore) = self.modes.end_light() {
+            self.ui_visibility.show_status_bar = restore.show_status_bar();
+            self.ui_visibility.show_tool_preview = restore.show_tool_preview();
+            self.restore_toolbar_visibility(restore.toolbar_visibility());
+            self.set_tool_override(restore.tool_override());
+            if self.click_highlight_enabled() != restore.click_highlight_enabled() {
                 self.toggle_click_highlight();
             }
         }
@@ -135,7 +143,7 @@ impl InputState {
         if self.focus_mode_active() {
             self.toggle_focus_mode();
         }
-        if self.presenter_mode {
+        if self.presenter_mode_active() {
             self.toggle_presenter_mode();
         }
 
@@ -149,13 +157,13 @@ impl InputState {
             self.toggle_help_overlay();
         }
 
-        self.light_mode_restore = Some(LightModeRestore {
-            show_status_bar: self.ui_visibility.show_status_bar,
-            show_tool_preview: self.ui_visibility.show_tool_preview,
-            toolbar_visibility: self.toolbar_visibility_snapshot(),
-            click_highlight_enabled: self.click_highlight_enabled(),
-            tool_override: self.tool_override(),
-        });
+        let restore = LightModeRestore::capture(
+            self.ui_visibility.show_status_bar,
+            self.ui_visibility.show_tool_preview,
+            self.toolbar_visibility_snapshot(),
+            self.click_highlight_enabled(),
+            self.tool_override(),
+        );
 
         self.ui_visibility.show_status_bar = false;
         self.ui_visibility.show_tool_preview = false;
@@ -165,8 +173,7 @@ impl InputState {
             self.toggle_click_highlight();
         }
 
-        self.light_mode = true;
-        self.light_mode_drawing = drawing;
+        self.modes.begin_light(drawing, restore);
         let message = if drawing {
             "Light Mode drawing"
         } else {

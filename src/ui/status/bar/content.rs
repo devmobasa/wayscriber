@@ -353,8 +353,7 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
     // toolbar visibility (the toggle is a no-op there); shed first when the
     // width budget binds.
     if input_state.ui_visibility.show_toolbar_hint
-        && !(input_state.toolbar_visible()
-            || input_state.presenter_mode && input_state.presenter_mode_config.hide_toolbars)
+        && !(input_state.toolbar_visible() || input_state.presenter_hides_toolbars())
     {
         pieces.push(StatusHudPiece::text(
             toolbar_hint_label(input_state),

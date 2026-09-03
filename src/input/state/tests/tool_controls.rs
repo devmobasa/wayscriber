@@ -10,7 +10,7 @@ fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
     let mut state = create_test_input_state();
     state.preset_slots.restore_active(Some(2));
     state.needs_redraw = false;
-    state.session_dirty = false;
+    state.clear_session_dirty();
     state.state = DrawingState::Drawing {
         tool: Tool::Pen,
         start_x: 10,
@@ -24,7 +24,7 @@ fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
     assert!(matches!(state.state, DrawingState::Idle));
     assert_eq!(state.preset_slots.active(), None);
     assert!(state.needs_redraw);
-    assert!(state.session_dirty);
+    assert!(state.is_session_dirty());
 }
 
 #[test]
@@ -86,15 +86,16 @@ fn pick_screen_color_requests_backend_eyedropper_activation() {
 fn presenter_locked_mode_rejects_non_highlight_tool_override() {
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::Highlight)));
-    state.presenter_mode = true;
-    state.presenter_mode_config.tool_behavior = PresenterToolBehavior::ForceHighlightLocked;
+    state.override_presenter_mode_for_test(true);
+    state.presenter_mode_config_mut_for_test().tool_behavior =
+        PresenterToolBehavior::ForceHighlightLocked;
     state.needs_redraw = false;
-    state.session_dirty = false;
+    state.clear_session_dirty();
 
     assert!(!state.set_tool_override(Some(Tool::Pen)));
     assert_eq!(state.tool_override(), Some(Tool::Highlight));
     assert!(!state.needs_redraw);
-    assert!(!state.session_dirty);
+    assert!(!state.is_session_dirty());
 }
 
 #[test]
@@ -573,7 +574,7 @@ fn canceling_color_picker_restores_color_without_dirtying_session_or_preset() {
     let mut state = create_test_input_state();
     let original = state.color_for_tool(Tool::Pen);
     state.preset_slots.restore_active(Some(1));
-    state.session_dirty = false;
+    state.clear_session_dirty();
 
     state.open_color_picker_popup();
     state.color_picker_popup_set_from_gradient(0.6, 0.1);
@@ -583,7 +584,7 @@ fn canceling_color_picker_restores_color_without_dirtying_session_or_preset() {
     assert_eq!(state.color_for_tool(Tool::Pen), original);
     assert_eq!(state.style.current_color, original);
     assert_eq!(state.preset_slots.active(), Some(1));
-    assert!(!state.session_dirty);
+    assert!(!state.is_session_dirty());
 }
 
 #[test]
@@ -592,7 +593,7 @@ fn recoloring_a_swatch_previews_on_the_palette_and_leaves_the_tool_alone() {
     let tool_color = state.color_for_tool(Tool::Pen);
     let slot_color = state.style.quick_colors.color_for_index(1).expect("slot 1");
     assert_ne!(tool_color, slot_color, "fixture needs distinct colors");
-    state.session_dirty = false;
+    state.clear_session_dirty();
 
     assert!(state.open_color_picker_popup_for_quick_color(1));
     assert_eq!(state.color_picker_popup_slot(), Some(1));
@@ -614,7 +615,7 @@ fn recoloring_a_swatch_previews_on_the_palette_and_leaves_the_tool_alone() {
         Some(slot_color)
     );
     assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
-    assert!(!state.session_dirty);
+    assert!(!state.is_session_dirty());
     assert!(state.active_toast().is_none());
 }
 
@@ -628,7 +629,7 @@ fn accepting_a_recolor_keeps_the_swatch_and_queues_the_durable_write() {
     let mut state = create_test_input_state();
     let tool_color = state.color_for_tool(Tool::Pen);
     state.preset_slots.restore_active(Some(1));
-    state.session_dirty = false;
+    state.clear_session_dirty();
 
     assert!(state.open_color_picker_popup_for_quick_color(2));
     state.color_picker_popup_set_from_gradient(0.35, 0.25);
@@ -653,7 +654,7 @@ fn accepting_a_recolor_keeps_the_swatch_and_queues_the_durable_write() {
     // An unselected swatch's recolor is not a drawing change.
     assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
     assert_eq!(state.preset_slots.active(), Some(1));
-    assert!(!state.session_dirty);
+    assert!(!state.is_session_dirty());
 }
 
 #[test]
@@ -662,7 +663,7 @@ fn recoloring_the_swatch_in_use_moves_the_tool_color_with_it() {
     let slot_color = state.style.quick_colors.color_for_index(3).expect("slot 3");
     assert!(state.apply_color_from_ui(slot_color));
     state.preset_slots.restore_active(Some(2));
-    state.session_dirty = false;
+    state.clear_session_dirty();
 
     assert!(state.open_color_picker_popup_for_quick_color(3));
     state.color_picker_popup_set_from_gradient(0.8, 0.4);
@@ -677,7 +678,7 @@ fn recoloring_the_swatch_in_use_moves_the_tool_color_with_it() {
     assert_eq!(state.color_for_tool(Tool::Pen), picked);
     assert_eq!(state.style.current_color, picked);
     assert_eq!(state.preset_slots.active(), None);
-    assert!(state.session_dirty);
+    assert!(state.is_session_dirty());
 }
 
 #[test]
@@ -1709,7 +1710,7 @@ fn color_picker_apply_updates_opening_modifier_tool_after_modifier_release() {
     assert!(state.set_tool_override(Some(Tool::Line)));
     assert!(state.set_color(line_color));
     assert!(state.set_tool_override(Some(Tool::Pen)));
-    state.session_dirty = false;
+    state.clear_session_dirty();
 
     state.on_key_press(Key::Shift);
     state.open_color_picker_popup();
@@ -1722,7 +1723,7 @@ fn color_picker_apply_updates_opening_modifier_tool_after_modifier_release() {
     assert_eq!(state.color_for_tool(Tool::Line), applied);
     assert_eq!(state.color_for_tool(Tool::Pen), pen_color);
     assert_eq!(state.style.current_color, pen_color);
-    assert!(state.session_dirty);
+    assert!(state.is_session_dirty());
 }
 
 #[test]
@@ -2108,18 +2109,18 @@ fn toggle_eraser_mode_round_trips_between_brush_and_stroke() {
 fn set_font_size_clamps_and_reports_noop_after_reaching_target() {
     let mut state = create_test_input_state();
     state.needs_redraw = false;
-    state.session_dirty = false;
+    state.clear_session_dirty();
 
     assert!(state.set_font_size(120.0));
     assert_eq!(state.style.current_font_size, 72.0);
     assert!(state.needs_redraw);
-    assert!(state.session_dirty);
+    assert!(state.is_session_dirty());
 
     state.needs_redraw = false;
-    state.session_dirty = false;
+    state.clear_session_dirty();
     assert!(!state.set_font_size(72.0));
     assert!(!state.needs_redraw);
-    assert!(!state.session_dirty);
+    assert!(!state.is_session_dirty());
 }
 
 #[test]
@@ -2131,36 +2132,36 @@ fn set_font_descriptor_marks_session_dirty_and_reports_noop_when_unchanged() {
         "italic".to_string(),
     );
     state.needs_redraw = false;
-    state.session_dirty = false;
+    state.clear_session_dirty();
 
     assert!(state.set_font_descriptor(font.clone()));
     assert_eq!(state.style.font_descriptor, font);
     assert!(state.needs_redraw);
-    assert!(state.session_dirty);
+    assert!(state.is_session_dirty());
 
     state.needs_redraw = false;
-    state.session_dirty = false;
+    state.clear_session_dirty();
     assert!(!state.set_font_descriptor(font));
     assert!(!state.needs_redraw);
-    assert!(!state.session_dirty);
+    assert!(!state.is_session_dirty());
 }
 
 #[test]
 fn set_marker_opacity_clamps_and_reports_noop_after_reaching_target() {
     let mut state = create_test_input_state();
     state.needs_redraw = false;
-    state.session_dirty = false;
+    state.clear_session_dirty();
 
     assert!(state.set_marker_opacity(2.0));
     assert_eq!(state.style.marker_opacity, 0.9);
     assert!(state.needs_redraw);
-    assert!(state.session_dirty);
+    assert!(state.is_session_dirty());
 
     state.needs_redraw = false;
-    state.session_dirty = false;
+    state.clear_session_dirty();
     assert!(!state.set_marker_opacity(0.9));
     assert!(!state.needs_redraw);
-    assert!(!state.session_dirty);
+    assert!(!state.is_session_dirty());
 }
 
 /// The write belongs to the backend, not to this layer.

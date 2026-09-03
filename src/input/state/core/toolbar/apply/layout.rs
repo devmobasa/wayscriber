@@ -71,7 +71,7 @@ impl InputState {
         // click must neither override the mapping nor persist a display mode
         // the user never chose. Returning false also skips the event-policy
         // persistence for this event.
-        if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
+        if self.presenter_hides_toolbars() {
             return false;
         }
         if self.top_display_state() == mode {
@@ -192,7 +192,7 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_tool_preview(&mut self, show: bool) -> bool {
-        if self.presenter_mode && self.presenter_mode_config.hide_tool_preview {
+        if self.presenter_mode_active() && self.presenter_mode_config().hide_tool_preview {
             return false;
         }
         if self.ui_visibility.show_tool_preview != show {
@@ -205,7 +205,7 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_status_bar(&mut self, show: bool) -> bool {
-        if self.presenter_mode && self.presenter_mode_config.hide_status_bar {
+        if self.presenter_mode_active() && self.presenter_mode_config().hide_status_bar {
             return false;
         }
         // This is an explicit chrome control, so it takes ownership from

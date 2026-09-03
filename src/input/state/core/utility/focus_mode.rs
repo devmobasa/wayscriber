@@ -12,7 +12,8 @@
 //! [`InputState::break_focus_mode`], so exiting later can never stomp an
 //! explicit user choice.
 
-use super::super::base::{FocusModeRestore, InputState};
+use super::super::base::InputState;
+use super::super::modes::FocusModeRestore;
 use crate::domain::Action;
 use crate::input::state::{Toast, ToastPriority};
 
@@ -21,7 +22,7 @@ const FOCUS_MODE_TOAST_KEY: &str = "focus.mode";
 impl InputState {
     /// True while a focus-mode snapshot is waiting to be restored.
     pub fn focus_mode_active(&self) -> bool {
-        self.focus_mode_restore.is_some()
+        self.modes.focus_active()
     }
 
     /// Whether passive fallback mode badges may render. Focus Mode suppresses
@@ -52,9 +53,7 @@ impl InputState {
     /// suppression instead of making the bar visible or leaving a stale
     /// snapshot that would overwrite the authored value on exit.
     pub(crate) fn set_status_bar_visibility_preserving_focus(&mut self, show: bool) -> bool {
-        if let Some(restore) = self.focus_mode_restore.as_mut() {
-            let changed = restore.show_status_bar != show;
-            restore.show_status_bar = show;
+        if let Some(changed) = self.modes.retarget_focus_status_bar(show) {
             return changed;
         }
         let changed = self.ui_visibility.show_status_bar != show;
@@ -67,7 +66,7 @@ impl InputState {
     /// override what the user just chose by hand. The next
     /// `ToggleFocusMode` starts from a fresh snapshot.
     pub(crate) fn break_focus_mode(&mut self) {
-        self.focus_mode_restore = None;
+        self.modes.cancel_focus();
         self.clear_focus_mode_toast();
     }
 
@@ -96,15 +95,15 @@ impl InputState {
     /// - nothing visible and no snapshot → show everything (rescue arm, so
     ///   the action always has a visible effect).
     pub(crate) fn toggle_focus_mode(&mut self) {
-        if self.light_mode {
+        if self.light_mode_active() {
             self.exit_light_mode();
         }
-        if let Some(restore) = self.focus_mode_restore.take() {
+        if let Some(restore) = self.modes.end_focus() {
             self.clear_focus_mode_toast();
-            self.ui_visibility.show_status_bar = restore.show_status_bar;
-            self.restore_toolbar_visibility(restore.toolbar_visibility);
-            self.ui_visibility.show_floating_badge = restore.show_floating_badge;
-            self.ui_visibility.show_zoom_chip = restore.show_zoom_chip;
+            self.ui_visibility.show_status_bar = restore.show_status_bar();
+            self.restore_toolbar_visibility(restore.toolbar_visibility());
+            self.ui_visibility.show_floating_badge = restore.show_floating_badge();
+            self.ui_visibility.show_zoom_chip = restore.show_zoom_chip();
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             return;
@@ -129,18 +128,18 @@ impl InputState {
             return;
         }
 
-        let restore = FocusModeRestore {
-            show_status_bar: self.ui_visibility.show_status_bar,
-            toolbar_visibility: self.toolbar_visibility_snapshot(),
-            show_floating_badge: self.ui_visibility.show_floating_badge,
-            show_zoom_chip: self.ui_visibility.show_zoom_chip,
-        };
+        let restore = FocusModeRestore::capture(
+            self.ui_visibility.show_status_bar,
+            self.toolbar_visibility_snapshot(),
+            self.ui_visibility.show_floating_badge,
+            self.ui_visibility.show_zoom_chip,
+        );
         // Leave display mode untouched so a micro strip comes back as micro.
         self.hide_toolbar_visibility();
         self.ui_visibility.show_status_bar = false;
         self.ui_visibility.show_floating_badge = false;
         self.ui_visibility.show_zoom_chip = false;
-        self.focus_mode_restore = Some(restore);
+        self.modes.begin_focus(restore);
 
         // Focus mode teaches its own way back (instead of the generic
         // all-chrome warning): one press restores everything.

@@ -113,7 +113,10 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
      owns hit-test caches, spatial indexing policy, and the frame shape cap; `ToolbarInteraction`
      owns toolbar visibility, display preferences, resolved item layout, customization state, and
      top-strip menu lifecycle; `Feedback` owns toast queueing and hit interaction, blocked-action
-     animation, capability-warning memory, and feedback duration policy. `PresetSlots` owns
+     animation, capability-warning memory, and feedback duration policy. `ChromeModes` owns
+     presenter/focus/light mode state and restore snapshots; `SessionFlags` owns session dirtiness,
+     preflight options, and session-related paths; `BoardTransitions` owns board recents,
+     previous-color restoration, delete confirmations, and timed undo queues. `PresetSlots` owns
      preset lifecycle and feedback; `HistoryLimits` owns undo retention plus delayed playback
      scheduling. Pure translation and scaling are methods on `draw::Shape`.
    - `state/actions/` maps keybindings to `Action` values and routes color, board/page, capture,

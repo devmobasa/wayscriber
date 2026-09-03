@@ -50,7 +50,7 @@ fn handle_render_failure(
         ));
     }
 
-    // Clear redraw flag to avoid infinite error loop.
+    // Clear redraw flag to avoid an infinite error loop.
     *needs_redraw = false;
     None
 }

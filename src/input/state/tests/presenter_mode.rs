@@ -9,11 +9,13 @@ use crate::ui::toolbar::ToolbarEvent;
 #[test]
 fn presenter_mode_forces_click_highlight() {
     let mut state = create_test_input_state();
-    state.presenter_mode_config.enable_click_highlight = true;
+    state
+        .presenter_mode_config_mut_for_test()
+        .enable_click_highlight = true;
 
     assert!(!state.click_highlight_enabled());
     state.toggle_presenter_mode();
-    assert!(state.presenter_mode);
+    assert!(state.presenter_mode_active());
     assert!(state.click_highlight_enabled());
 
     state.toggle_all_highlights();
@@ -23,9 +25,9 @@ fn presenter_mode_forces_click_highlight() {
 #[test]
 fn presenter_mode_exits_focus_mode_before_taking_chrome_ownership() {
     let mut state = create_test_input_state();
-    state.presenter_mode_config.hide_status_bar = true;
-    state.presenter_mode_config.hide_toolbars = true;
-    state.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Micro;
+    state.presenter_mode_config_mut_for_test().hide_status_bar = true;
+    state.presenter_mode_config_mut_for_test().hide_toolbars = true;
+    state.presenter_mode_config_mut_for_test().toolbar_mode = PresenterToolbarMode::Micro;
 
     state.handle_action(Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
@@ -33,7 +35,7 @@ fn presenter_mode_exits_focus_mode_before_taking_chrome_ownership() {
 
     state.handle_action(Action::TogglePresenterMode);
 
-    assert!(state.presenter_mode);
+    assert!(state.presenter_mode_active());
     assert!(
         !state.focus_mode_active(),
         "Presenter Mode must become the sole chrome snapshot owner"
@@ -41,7 +43,7 @@ fn presenter_mode_exits_focus_mode_before_taking_chrome_ownership() {
     assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
 
     state.handle_action(Action::TogglePresenterMode);
-    assert!(!state.presenter_mode);
+    assert!(!state.presenter_mode_active());
     assert!(
         state.ui_visibility.show_status_bar,
         "pre-Focus visibility must survive"
@@ -52,7 +54,7 @@ fn presenter_mode_exits_focus_mode_before_taking_chrome_ownership() {
 #[test]
 fn presenter_mode_blocks_preset_status_bar_toggle() {
     let mut state = create_test_input_state();
-    state.presenter_mode_config.hide_status_bar = true;
+    state.presenter_mode_config_mut_for_test().hide_status_bar = true;
 
     let preset = ToolPresetConfig {
         name: None,
@@ -85,7 +87,7 @@ fn presenter_mode_blocks_preset_status_bar_toggle() {
 #[test]
 fn presenter_mode_blocks_tool_preview_toggle() {
     let mut state = create_test_input_state();
-    state.presenter_mode_config.hide_tool_preview = true;
+    state.presenter_mode_config_mut_for_test().hide_tool_preview = true;
 
     state.toggle_presenter_mode();
     assert!(!state.ui_visibility.show_tool_preview);
@@ -102,7 +104,7 @@ fn presenter_mode_closes_help_overlay_and_switches_to_highlight_tool() {
 
     state.toggle_presenter_mode();
 
-    assert!(state.presenter_mode);
+    assert!(state.presenter_mode_active());
     assert!(!state.help_overlay.visible);
     assert_eq!(state.tool_override(), Some(Tool::Highlight));
 }
@@ -113,7 +115,8 @@ fn presenter_locked_mode_blocks_non_left_drag_bindings() {
     let mut bindings = DragToolBindings::default();
     bindings.right.drag = DragBinding::from_tool(Tool::Pen);
     assert!(state.set_drag_tool_bindings(bindings));
-    state.presenter_mode_config.tool_behavior = PresenterToolBehavior::ForceHighlightLocked;
+    state.presenter_mode_config_mut_for_test().tool_behavior =
+        PresenterToolBehavior::ForceHighlightLocked;
 
     state.toggle_presenter_mode();
     state.on_mouse_press(MouseButton::Right, 0, 0);
@@ -137,7 +140,7 @@ fn presenter_mode_restores_status_bar_toolbars_and_tool_override_on_exit() {
     assert_eq!(state.tool_override(), Some(Tool::Highlight));
 
     state.toggle_presenter_mode();
-    assert!(!state.presenter_mode);
+    assert!(!state.presenter_mode_active());
     assert!(state.ui_visibility.show_status_bar);
     assert!(state.toolbar_visible());
     assert!(state.toolbar_top_visible());
@@ -149,13 +152,13 @@ fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
     use crate::config::{PresenterToolbarMode, TopDisplayMode};
 
     let mut state = create_test_input_state();
-    state.presenter_mode_config.hide_toolbars = true;
-    state.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Micro;
+    state.presenter_mode_config_mut_for_test().hide_toolbars = true;
+    state.presenter_mode_config_mut_for_test().toolbar_mode = PresenterToolbarMode::Micro;
     state.test_set_toolbar_visibility_state(true, true, state.toolbar_top_pinned());
     state.test_set_toolbar_display_state(state.toolbar_top_display_mode(), true);
 
     state.toggle_presenter_mode();
-    assert!(state.presenter_mode);
+    assert!(state.presenter_mode_active());
     assert!(
         state.toolbar_top_visible(),
         "micro mapping keeps the top strip surface mapped"
@@ -166,7 +169,7 @@ fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
         "the chip replaces the restore tab"
     );
     state.toggle_presenter_mode();
-    assert!(!state.presenter_mode);
+    assert!(!state.presenter_mode_active());
     assert_eq!(state.toolbar_top_display_mode(), TopDisplayMode::Full);
     assert!(
         state.toolbar_top_minimized(),
@@ -179,8 +182,8 @@ fn presenter_hidden_mapping_keeps_todays_behavior() {
     use crate::config::{PresenterToolbarMode, TopDisplayMode};
 
     let mut state = create_test_input_state();
-    state.presenter_mode_config.hide_toolbars = true;
-    state.presenter_mode_config.toolbar_mode = PresenterToolbarMode::Hidden;
+    state.presenter_mode_config_mut_for_test().hide_toolbars = true;
+    state.presenter_mode_config_mut_for_test().toolbar_mode = PresenterToolbarMode::Hidden;
 
     state.toggle_presenter_mode();
     assert!(!state.toolbar_top_visible());

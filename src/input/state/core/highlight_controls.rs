@@ -142,7 +142,8 @@ impl InputState {
         }
 
         let click_enabled = self.click_highlight_enabled();
-        let force_click = self.presenter_mode && self.presenter_mode_config.enable_click_highlight;
+        let force_click =
+            self.presenter_mode_active() && self.presenter_mode_config().enable_click_highlight;
 
         // Keep click highlight visuals aligned with highlight mode unless presenter mode forces it on.
         if enable != click_enabled {
@@ -156,7 +157,8 @@ impl InputState {
 
     /// Toggles the combined highlight tool and click highlight together.
     pub fn toggle_all_highlights(&mut self) -> bool {
-        let force_click = self.presenter_mode && self.presenter_mode_config.enable_click_highlight;
+        let force_click =
+            self.presenter_mode_active() && self.presenter_mode_config().enable_click_highlight;
         let enable = if force_click {
             !self.highlight_tool_active()
         } else {

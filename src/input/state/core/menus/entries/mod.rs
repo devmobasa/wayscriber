@@ -17,9 +17,7 @@ impl InputState {
     /// presenter-owned (presenter mode hides chrome by design and restores
     /// it on exit).
     pub(super) fn push_chrome_recovery_entries(&self, entries: &mut Vec<ContextMenuEntry>) {
-        if !(self.toolbar_visible()
-            || self.presenter_mode && self.presenter_mode_config.hide_toolbars)
-        {
+        if !(self.toolbar_visible() || self.presenter_hides_toolbars()) {
             entries.push(ContextMenuEntry::new(
                 "Show Toolbar",
                 self.shortcut_for_action(Action::ToggleToolbar),
@@ -29,7 +27,7 @@ impl InputState {
             ));
         }
         if !(self.ui_visibility.show_status_bar
-            || self.presenter_mode && self.presenter_mode_config.hide_status_bar)
+            || self.presenter_mode_active() && self.presenter_mode_config().hide_status_bar)
         {
             entries.push(ContextMenuEntry::new(
                 "Show Status Bar",

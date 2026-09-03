@@ -175,7 +175,7 @@ impl InputState {
     pub(super) fn apply_toolbar_toggle_input_hud(&mut self, enable: bool) -> bool {
         // Presenter mode owns the HUD while it forces it on; the checkbox
         // must not fight it, exactly like `Action::ToggleInputHud`.
-        if self.presenter_mode && self.presenter_mode_config.enable_input_hud {
+        if self.presenter_mode_active() && self.presenter_mode_config().enable_input_hud {
             return false;
         }
         self.set_input_hud_enabled(enable)

@@ -177,7 +177,7 @@ impl InputState {
     fn handle_toggle_focus_mode(&mut self) {
         // Presenter mode already owns chrome visibility and restores it on
         // exit; a second snapshot layer would fight it.
-        if self.presenter_mode {
+        if self.presenter_mode_active() {
             return;
         }
         self.toggle_focus_mode();
@@ -192,7 +192,7 @@ impl InputState {
     }
 
     fn handle_toggle_status_bar(&mut self) {
-        if self.presenter_mode && self.presenter_mode_config.hide_status_bar {
+        if self.presenter_mode_active() && self.presenter_mode_config().hide_status_bar {
             return;
         }
         self.break_focus_mode();
@@ -245,7 +245,7 @@ impl InputState {
     }
 
     fn handle_toggle_click_highlight(&mut self) {
-        if self.presenter_mode && self.presenter_mode_config.enable_click_highlight {
+        if self.presenter_mode_active() && self.presenter_mode_config().enable_click_highlight {
             return;
         }
         let previous_enabled = self.click_highlight_enabled();
@@ -262,7 +262,7 @@ impl InputState {
     }
 
     fn handle_toggle_input_hud(&mut self) {
-        if self.presenter_mode && self.presenter_mode_config.enable_input_hud {
+        if self.presenter_mode_active() && self.presenter_mode_config().enable_input_hud {
             return;
         }
         let previous = self.input_hud_enabled();
@@ -278,7 +278,7 @@ impl InputState {
     }
 
     fn handle_toggle_toolbar(&mut self) {
-        if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
+        if self.presenter_hides_toolbars() {
             return;
         }
         self.break_focus_mode();
@@ -304,7 +304,7 @@ impl InputState {
     }
 
     fn handle_cycle_toolbar_display(&mut self) {
-        if self.presenter_mode && self.presenter_mode_config.hide_toolbars {
+        if self.presenter_hides_toolbars() {
             return;
         }
         self.break_focus_mode();
