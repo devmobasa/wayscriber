@@ -32,10 +32,7 @@ impl OverlayKeyRepeat {
         }
     }
 
-    pub(crate) fn timeout(&self, active: bool, now: Instant) -> Option<Duration> {
-        if !active {
-            return None;
-        }
+    pub(crate) fn timeout(&self, now: Instant) -> Option<Duration> {
         self.next_tick
             .map(|next| next.saturating_duration_since(now))
     }
@@ -88,6 +85,6 @@ mod tests {
             Some(Key::Down)
         );
         repeat.release(Key::Down);
-        assert_eq!(repeat.timeout(true, now), None);
+        assert_eq!(repeat.timeout(now), None);
     }
 }

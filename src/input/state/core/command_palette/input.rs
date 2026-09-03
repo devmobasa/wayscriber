@@ -408,7 +408,7 @@ impl InputState {
         if !self.command_palette.open {
             return None;
         }
-        self.command_palette.repeat.timeout(true, now)
+        self.command_palette.repeat.timeout(now)
     }
 
     pub(crate) fn tick_command_palette_repeat(&mut self, now: Instant) -> bool {

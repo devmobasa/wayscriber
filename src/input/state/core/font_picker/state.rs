@@ -155,7 +155,7 @@ impl FontPickerState {
         if !self.open {
             return None;
         }
-        self.repeat.timeout(true, now)
+        self.repeat.timeout(now)
     }
 
     pub(crate) fn schedule_next_repeat(&mut self, now: Instant) {
