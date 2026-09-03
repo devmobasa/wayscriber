@@ -109,7 +109,7 @@ pub use region_select::{
 };
 pub(crate) use search::fuzzy_score;
 pub use selection::SelectionState;
-pub use style::DrawingStyle;
+pub(crate) use style::DrawingStyle;
 pub use tool_controls::PrecisionEntryState;
 pub use tour::{TourState, TourStep};
 pub(crate) use utility::HelpOverlayPressSource;

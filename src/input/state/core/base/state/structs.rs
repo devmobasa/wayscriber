@@ -75,7 +75,7 @@ pub struct InputState {
     /// Multi-board canvas management
     pub boards: BoardManager,
     /// Runtime drawing defaults and per-tool appearance settings.
-    pub style: crate::input::state::core::DrawingStyle,
+    pub(crate) style: crate::input::state::core::DrawingStyle,
     /// State owned by the system font-picker modal.
     pub(crate) font_picker: crate::input::state::core::font_picker::FontPickerState,
     /// Which text input style is active (plain vs sticky note)
