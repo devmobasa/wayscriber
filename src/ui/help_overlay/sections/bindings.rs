@@ -49,13 +49,16 @@ impl HelpOverlayBindings {
             "radial_mouse={}",
             radial_menu_mouse_label.as_deref().unwrap_or("")
         ));
-        cache_parts.push(format!("quick_colors={}", state.quick_colors.cache_key()));
+        cache_parts.push(format!(
+            "quick_colors={}",
+            state.style.quick_colors.cache_key()
+        ));
 
         Self {
             labels,
             cache_key: cache_parts.join("|"),
             radial_menu_mouse_label,
-            quick_colors: state.quick_colors.clone(),
+            quick_colors: state.style.quick_colors.clone(),
         }
     }
 

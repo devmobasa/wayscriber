@@ -1,8 +1,8 @@
 use super::*;
 
 fn push_rect_create(state: &mut InputState, x: i32) {
-    let color = state.current_color;
-    let thick = state.current_thickness;
+    let color = state.style.current_color;
+    let thick = state.style.current_thickness;
     let undo_limit = state.undo_stack_limit;
     let frame = state.boards.active_frame_mut();
     let id = frame.add_shape(Shape::Rect {
@@ -36,8 +36,8 @@ fn undo_all_and_redo_all_process_entire_stack() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     let first_index = frame.find_index(first).unwrap();
     let first_snapshot = frame.shape(first).unwrap().clone();
@@ -54,8 +54,8 @@ fn undo_all_and_redo_all_process_entire_stack() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     let second_index = frame.find_index(second).unwrap();
     let second_snapshot = frame.shape(second).unwrap().clone();
@@ -87,8 +87,8 @@ fn undo_all_with_delay_respects_history() {
         y1: 0,
         x2: 10,
         y2: 10,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     let idx = frame.find_index(id).unwrap();
     let snap = frame.shape(id).unwrap().clone();
@@ -115,8 +115,8 @@ fn redo_all_with_delay_replays_history() {
         y1: 0,
         x2: 10,
         y2: 10,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     let idx = frame.find_index(id).unwrap();
     let snap = frame.shape(id).unwrap().clone();

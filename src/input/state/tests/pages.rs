@@ -31,10 +31,10 @@ fn add_active_text_shape(state: &mut InputState, text: &str) -> ShapeId {
         x: 40,
         y: 80,
         text: text.to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     })
 }
@@ -109,7 +109,7 @@ fn set_board_background_color_updates_active_auto_adjust_pen_color() {
         })
     );
     assert_eq!(
-        state.current_color,
+        state.style.current_color,
         board.spec.effective_pen_color().expect("pen color")
     );
 }

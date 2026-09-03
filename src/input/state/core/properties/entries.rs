@@ -78,14 +78,14 @@ impl InputState {
                     all_pressure = false;
                 }
             }
-            let show_pressure_thickness = match self.pressure_thickness_entry_mode {
+            let show_pressure_thickness = match self.style.pressure_thickness_entry_mode {
                 PressureThicknessEntryMode::Never => false,
                 PressureThicknessEntryMode::PressureOnly => all_pressure,
                 PressureThicknessEntryMode::AnyPressure => any_pressure,
             };
 
             if show_pressure_thickness {
-                let pressure_editable = self.pressure_thickness_edit_mode
+                let pressure_editable = self.style.pressure_thickness_edit_mode
                     != PressureThicknessEditMode::Disabled
                     && any_pressure_editable;
                 entries.push(SelectionPropertyEntry {
@@ -266,9 +266,9 @@ mod tests {
             x: 40,
             y: 60,
             text: "Locked".to_string(),
-            color: state.current_color,
+            color: state.style.current_color,
             size: 18.0,
-            font_descriptor: state.font_descriptor.clone(),
+            font_descriptor: state.style.font_descriptor.clone(),
             background_enabled: true,
             wrap_width: None,
         });
@@ -297,7 +297,7 @@ mod tests {
             y1: 0,
             x2: 20,
             y2: 10,
-            color: state.current_color,
+            color: state.style.current_color,
             thick: 3.0,
             arrow_length: 24.0,
             arrow_angle: 35.0,
@@ -322,7 +322,7 @@ mod tests {
             y1: 0,
             x2: 20,
             y2: 10,
-            color: state.current_color,
+            color: state.style.current_color,
             thick: 3.0,
             arrow_length: 24.0,
             arrow_angle: 35.0,
@@ -336,7 +336,7 @@ mod tests {
             y1: 10,
             x2: 30,
             y2: 20,
-            color: state.current_color,
+            color: state.style.current_color,
             thick: 3.0,
             arrow_length: 24.0,
             arrow_angle: 35.0,

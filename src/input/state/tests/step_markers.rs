@@ -25,7 +25,7 @@ fn step_marker_with_label(value: u32, font_descriptor: &FontDescriptor) -> Shape
 #[test]
 fn sync_step_marker_counter_uses_max_across_boards() {
     let mut state = create_test_input_state();
-    let font_descriptor = state.font_descriptor.clone();
+    let font_descriptor = state.style.font_descriptor.clone();
 
     state
         .boards
@@ -45,7 +45,7 @@ fn sync_step_marker_counter_uses_max_across_boards() {
         .add_shape(step_marker_with_label(5, &font_descriptor));
 
     state.sync_step_marker_counter();
-    assert_eq!(state.step_marker_counter, 10);
+    assert_eq!(state.style.step_marker_counter, 10);
 }
 
 #[test]
@@ -76,12 +76,12 @@ fn next_step_marker_label_uses_step_marker_tool_size() {
 #[test]
 fn toolbar_reset_step_marker_counter_resets_to_one() {
     let mut state = create_test_input_state();
-    state.step_marker_counter = 5;
+    state.style.step_marker_counter = 5;
 
     let changed = state.apply_toolbar_event(ToolbarEvent::ResetStepMarkerCounter);
 
     assert!(changed);
-    assert_eq!(state.step_marker_counter, 1);
+    assert_eq!(state.style.step_marker_counter, 1);
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn drawing_step_marker_increments_counter() {
 
     assert_eq!(first_value, 1);
     assert_eq!(second_value, 2);
-    assert_eq!(state.step_marker_counter, 3);
+    assert_eq!(state.style.step_marker_counter, 3);
 }
 
 #[test]
@@ -121,17 +121,20 @@ fn reset_step_marker_counter_reports_no_change_at_default() {
     state.needs_redraw = false;
 
     assert!(!state.reset_step_marker_counter());
-    assert_eq!(state.step_marker_counter, 1);
+    assert_eq!(state.style.step_marker_counter, 1);
     assert!(!state.needs_redraw);
 }
 
 #[test]
 fn next_step_marker_label_uses_current_counter_value() {
     let mut state = create_test_input_state();
-    state.step_marker_counter = 9;
+    state.style.step_marker_counter = 9;
 
     let label = state.next_step_marker_label();
 
     assert_eq!(label.value, 9);
-    assert_eq!(label.font_descriptor.family, state.font_descriptor.family);
+    assert_eq!(
+        label.font_descriptor.family,
+        state.style.font_descriptor.family
+    );
 }

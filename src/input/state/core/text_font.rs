@@ -99,9 +99,9 @@ impl InputState {
             return self.apply_weight_to_selected_text(weight);
         }
         let descriptor = crate::draw::FontDescriptor::new(
-            self.font_descriptor.family.clone(),
+            self.style.font_descriptor.family.clone(),
             weight.to_string(),
-            self.font_descriptor.style.clone(),
+            self.style.font_descriptor.style.clone(),
         );
         self.set_font_descriptor(descriptor)
     }

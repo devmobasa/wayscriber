@@ -112,7 +112,7 @@ impl WaylandState {
                 ..
             }
         );
-        let eraser_stroke = self.input_state.eraser_mode == EraserMode::Stroke;
+        let eraser_stroke = self.input_state.style.eraser_mode == EraserMode::Stroke;
         let eraser_hover = eraser_stroke
             && !eraser_drawing
             && self.input_state.active_tool() == Tool::Eraser

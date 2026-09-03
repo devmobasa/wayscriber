@@ -7,8 +7,8 @@ fn add_rect(state: &mut InputState) -> crate::draw::ShapeId {
         w: 30,
         h: 40,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     })
 }
 

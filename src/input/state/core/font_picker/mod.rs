@@ -203,7 +203,7 @@ impl InputState {
         {
             return family;
         }
-        self.font_descriptor.family.clone()
+        self.style.font_descriptor.family.clone()
     }
 
     /// Families most recently chosen here, most recent first.
@@ -248,8 +248,8 @@ impl InputState {
 
         self.set_font_descriptor(FontDescriptor::new(
             family.to_string(),
-            self.font_descriptor.weight.clone(),
-            self.font_descriptor.style.clone(),
+            self.style.font_descriptor.weight.clone(),
+            self.style.font_descriptor.style.clone(),
         ))
     }
 }

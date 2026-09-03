@@ -65,8 +65,8 @@ impl InputState {
                 current: (current_x, current_y),
                 color: self.active_drag_color_or_current(),
                 size: self.thickness_for_tool(*tool),
-                fill_enabled: self.fill_enabled,
-                regular_sides: self.polygon_sides,
+                fill_enabled: self.style.fill_enabled,
+                regular_sides: self.style.polygon_sides,
             };
             return tool.provisional_polygon_stroke(snapshot);
         }
@@ -79,15 +79,15 @@ impl InputState {
             point_thicknesses,
             color: self.active_drag_color_or_current(),
             size: self.thickness_for_tool(*tool),
-            eraser_size: self.eraser_size,
-            marker_opacity: self.marker_opacity,
-            fill_enabled: self.fill_enabled,
-            blur_style: self.blur_style,
-            spotlight_magnification: self.spotlight_magnification,
-            arrow_length: self.arrow_length,
-            arrow_angle: self.arrow_angle,
-            arrow_head_at_end: self.arrow_head_at_end,
-            arrow_style: self.arrow_style,
+            eraser_size: self.style.eraser_size,
+            marker_opacity: self.style.marker_opacity,
+            fill_enabled: self.style.fill_enabled,
+            blur_style: self.style.blur_style,
+            spotlight_magnification: self.style.spotlight_magnification,
+            arrow_length: self.style.arrow_length,
+            arrow_angle: self.style.arrow_angle,
+            arrow_head_at_end: self.style.arrow_head_at_end,
+            arrow_style: self.style.arrow_style,
             arrow_label: if *tool == Tool::Arrow {
                 self.next_arrow_label()
             } else {

@@ -310,8 +310,8 @@ impl WaylandState {
             board_view_offset: self.board_view_offset(),
             text_halo_enabled: self.config.drawing.text_halo_enabled,
             spotlight: crate::canvas_export::SpotlightPassSnapshot {
-                dim_opacity: self.input_state.spotlight_dim_opacity,
-                feather: self.input_state.spotlight_feather,
+                dim_opacity: self.input_state.style.spotlight_dim_opacity,
+                feather: self.input_state.style.spotlight_feather,
             },
         }
     }

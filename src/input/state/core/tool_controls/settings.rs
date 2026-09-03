@@ -11,7 +11,7 @@ use crate::ui::toolbar::model::ToolbarSliderSpec;
 impl InputState {
     /// Returns the stored drawing color for a tool.
     pub fn color_for_tool(&self, tool: Tool) -> Color {
-        self.tool_settings.get(tool).color
+        self.style.tool_settings.get(tool).color
     }
 
     /// Returns the drawing color for the currently active tool.
@@ -22,9 +22,9 @@ impl InputState {
     /// Returns the stored size for a tool, using eraser size for the eraser.
     pub fn thickness_for_tool(&self, tool: Tool) -> f64 {
         if tool.uses_eraser_size() {
-            self.eraser_size
+            self.style.eraser_size
         } else {
-            self.tool_settings.get(tool).thickness
+            self.style.tool_settings.get(tool).thickness
         }
     }
 
@@ -35,7 +35,7 @@ impl InputState {
 
     /// Replaces all per-tool settings and refreshes the visible active values.
     pub(crate) fn replace_tool_settings(&mut self, settings: PerToolDrawingSettings) {
-        self.tool_settings = settings;
+        self.style.tool_settings = settings;
         self.sync_current_settings_from_active_tool();
         self.sync_highlight_color();
     }
@@ -43,23 +43,23 @@ impl InputState {
     /// Updates the compatibility current_* fields from the active tool settings.
     pub(crate) fn sync_current_settings_from_active_tool(&mut self) {
         let tool = self.active_tool();
-        self.current_color = self.color_for_tool(tool);
+        self.style.current_color = self.color_for_tool(tool);
         if tool.uses_drawing_thickness() {
-            self.current_thickness = self.thickness_for_tool(tool);
+            self.style.current_thickness = self.thickness_for_tool(tool);
         }
     }
 
     pub(crate) fn sync_current_settings_for_tool(&mut self, tool: Tool) {
-        self.current_color = self.color_for_tool(tool);
+        self.style.current_color = self.color_for_tool(tool);
         if tool.uses_drawing_thickness() {
-            self.current_thickness = self.thickness_for_tool(tool);
+            self.style.current_thickness = self.thickness_for_tool(tool);
         }
     }
 
     pub(crate) fn set_pen_color_from_board(&mut self, color: Color) {
-        self.tool_settings.pen.color = color;
+        self.style.tool_settings.pen.color = color;
         if PerToolDrawingSettings::settings_tool(self.active_tool()) == Tool::Pen {
-            self.current_color = color;
+            self.style.current_color = color;
         }
         self.sync_highlight_color();
     }
@@ -68,9 +68,9 @@ impl InputState {
         if self.color_for_tool(tool) == color {
             return false;
         }
-        self.tool_settings.get_mut(tool).color = color;
+        self.style.tool_settings.get_mut(tool).color = color;
         if self.active_tool().settings_slot() == tool.settings_slot() {
-            self.current_color = color;
+            self.style.current_color = color;
         }
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -85,9 +85,9 @@ impl InputState {
         let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         let tool = self.active_tool();
         if tool.uses_drawing_thickness() {
-            self.tool_settings.get_mut(tool).thickness = clamped;
+            self.style.tool_settings.get_mut(tool).thickness = clamped;
         }
-        self.current_thickness = clamped;
+        self.style.current_thickness = clamped;
         let initial_pressure_sample_changes =
             self.active_initial_pressure_sample_changes(clamped as f32);
         if initial_pressure_sample_changes {
@@ -169,15 +169,15 @@ impl InputState {
         {
             return false;
         }
-        if self.tool_override == tool {
+        if self.style.tool_override == tool {
             return false;
         }
 
-        self.tool_override = tool;
+        self.style.tool_override = tool;
         self.active_preset_slot = None;
 
         if tool == Some(Tool::Blur)
-            && self.blur_style.needs_backdrop()
+            && self.style.blur_style.needs_backdrop()
             && !self.frozen_active
             && !self.pending_frozen_toggle()
         {
@@ -208,10 +208,10 @@ impl InputState {
     pub fn set_marker_opacity(&mut self, opacity: f64) -> bool {
         let spec = ToolbarSliderSpec::MARKER_OPACITY;
         let clamped = opacity.clamp(spec.min, spec.max);
-        if (clamped - self.marker_opacity).abs() < f64::EPSILON {
+        if (clamped - self.style.marker_opacity).abs() < f64::EPSILON {
             return false;
         }
-        self.marker_opacity = clamped;
+        self.style.marker_opacity = clamped;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.mark_session_dirty();
@@ -225,14 +225,14 @@ impl InputState {
     /// other on a stray keypress would change every later stroke.
     pub fn nudge_pen_smoothing(&mut self, delta: i32) -> bool {
         let next = crate::draw::shape::clamp_pen_smoothing(
-            i32::from(self.pen_smoothing)
+            i32::from(self.style.pen_smoothing)
                 .saturating_add(delta)
                 .clamp(0, i32::from(crate::draw::shape::MAX_PEN_SMOOTHING)) as u8,
         );
-        if next == self.pen_smoothing {
+        if next == self.style.pen_smoothing {
             return false;
         }
-        self.pen_smoothing = next;
+        self.style.pen_smoothing = next;
         self.mark_session_dirty();
         true
     }
@@ -240,10 +240,10 @@ impl InputState {
     /// Sets the level directly, for config load and session restore.
     pub fn set_pen_smoothing(&mut self, level: u8) -> bool {
         let level = crate::draw::shape::clamp_pen_smoothing(level);
-        if level == self.pen_smoothing {
+        if level == self.style.pen_smoothing {
             return false;
         }
-        self.pen_smoothing = level;
+        self.style.pen_smoothing = level;
         self.mark_session_dirty();
         true
     }
@@ -259,10 +259,10 @@ impl InputState {
         let normalized = ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION.normalize_value(
             crate::draw::normalize_spotlight_magnification(magnification),
         );
-        if (normalized - self.spotlight_magnification).abs() < f64::EPSILON {
+        if (normalized - self.style.spotlight_magnification).abs() < f64::EPSILON {
             return false;
         }
-        self.spotlight_magnification = normalized;
+        self.style.spotlight_magnification = normalized;
         self.needs_redraw = true;
         self.mark_session_dirty();
         true
@@ -270,7 +270,7 @@ impl InputState {
 
     /// Returns the current explicit tool override (if any).
     pub fn tool_override(&self) -> Option<Tool> {
-        self.tool_override
+        self.style.tool_override
     }
 
     /// Sets drag modifier -> tool mappings. Returns true if changed.
@@ -333,7 +333,7 @@ impl InputState {
     pub fn nudge_thickness_for_active_tool(&mut self, delta: f64) -> bool {
         let tool = self.active_tool();
         let changed = if tool.uses_eraser_size() {
-            self.set_eraser_size(self.eraser_size + delta)
+            self.set_eraser_size(self.style.eraser_size + delta)
         } else {
             self.set_thickness(self.thickness_for_tool(tool) + delta)
         };
@@ -356,8 +356,8 @@ impl InputState {
             return false;
         }
 
-        self.tool_settings.get_mut(tool).color = color;
-        self.current_color = color;
+        self.style.tool_settings.get_mut(tool).color = color;
+        self.style.current_color = color;
         self.active_preset_slot = None;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -370,14 +370,14 @@ impl InputState {
     pub fn set_thickness(&mut self, thickness: f64) -> bool {
         let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         let tool = self.active_tool();
-        let current = self.tool_settings.get(tool).thickness;
+        let current = self.style.tool_settings.get(tool).thickness;
         if (clamped - current).abs() < f64::EPSILON {
             return false;
         }
 
         self.mark_current_provisional_dirty_full();
-        self.tool_settings.get_mut(tool).thickness = clamped;
-        self.current_thickness = clamped;
+        self.style.tool_settings.get_mut(tool).thickness = clamped;
+        self.style.current_thickness = clamped;
         self.mark_current_provisional_dirty_full();
         self.active_preset_slot = None;
         self.dirty_tracker.mark_full();
@@ -389,11 +389,11 @@ impl InputState {
     /// Sets the absolute eraser size (px), clamped to valid bounds. Returns true if changed.
     pub fn set_eraser_size(&mut self, size: f64) -> bool {
         let clamped = size.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
-        if (clamped - self.eraser_size).abs() < f64::EPSILON {
+        if (clamped - self.style.eraser_size).abs() < f64::EPSILON {
             return false;
         }
         self.mark_current_provisional_dirty_full();
-        self.eraser_size = clamped;
+        self.style.eraser_size = clamped;
         self.mark_current_provisional_dirty_full();
         self.active_preset_slot = None;
         self.dirty_tracker.mark_full();
@@ -404,10 +404,10 @@ impl InputState {
 
     /// Sets the eraser behavior mode. Returns true if changed.
     pub fn set_eraser_mode(&mut self, mode: EraserMode) -> bool {
-        if self.eraser_mode == mode {
+        if self.style.eraser_mode == mode {
             return false;
         }
-        self.eraser_mode = mode;
+        self.style.eraser_mode = mode;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.mark_session_dirty();
@@ -416,7 +416,7 @@ impl InputState {
 
     /// Toggles between brush and stroke eraser modes.
     pub fn toggle_eraser_mode(&mut self) -> bool {
-        let next = match self.eraser_mode {
+        let next = match self.style.eraser_mode {
             EraserMode::Brush => EraserMode::Stroke,
             EraserMode::Stroke => EraserMode::Brush,
         };
@@ -424,15 +424,15 @@ impl InputState {
     }
 
     pub(crate) fn eraser_hit_radius(&self) -> f64 {
-        (self.eraser_size / 2.0).max(1.0)
+        (self.style.eraser_size / 2.0).max(1.0)
     }
 
     /// Sets how the blur tool obscures its region. Returns true if changed.
     pub fn set_blur_style(&mut self, style: BlurStyle) -> bool {
-        if self.blur_style == style {
+        if self.style.blur_style == style {
             return false;
         }
-        self.blur_style = style;
+        self.style.blur_style = style;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.mark_session_dirty();
@@ -441,11 +441,11 @@ impl InputState {
 
     /// Steps to the next blur style, wrapping around.
     pub fn cycle_blur_style(&mut self) -> bool {
-        if !self.set_blur_style(self.blur_style.next()) {
+        if !self.set_blur_style(self.style.blur_style.next()) {
             return false;
         }
 
-        if self.blur_style.needs_backdrop()
+        if self.style.blur_style.needs_backdrop()
             && self.active_tool() == Tool::Blur
             && !self.frozen_active
             && !self.pending_frozen_toggle()
@@ -458,10 +458,10 @@ impl InputState {
 
     /// Sets the style copied into the next arrow. Returns true if changed.
     pub fn set_arrow_style(&mut self, style: ArrowStyle) -> bool {
-        if self.arrow_style == style {
+        if self.style.arrow_style == style {
             return false;
         }
-        self.arrow_style = style;
+        self.style.arrow_style = style;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.mark_session_dirty();
@@ -470,17 +470,17 @@ impl InputState {
 
     /// Steps to the next arrow style, wrapping around.
     pub fn cycle_arrow_style(&mut self) -> bool {
-        self.set_arrow_style(self.arrow_style.next())
+        self.set_arrow_style(self.style.arrow_style.next())
     }
 
     /// Sets the font descriptor used for text rendering. Returns true if changed.
     #[allow(dead_code)]
     pub fn set_font_descriptor(&mut self, descriptor: FontDescriptor) -> bool {
-        if self.font_descriptor == descriptor {
+        if self.style.font_descriptor == descriptor {
             return false;
         }
 
-        self.font_descriptor = descriptor;
+        self.style.font_descriptor = descriptor;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.mark_session_dirty();
@@ -492,11 +492,11 @@ impl InputState {
     pub fn set_font_size(&mut self, size: f64) -> bool {
         let spec = ToolbarSliderSpec::FONT_SIZE;
         let clamped = size.clamp(spec.min, spec.max);
-        if (clamped - self.current_font_size).abs() < f64::EPSILON {
+        if (clamped - self.style.current_font_size).abs() < f64::EPSILON {
             return false;
         }
 
-        self.current_font_size = clamped;
+        self.style.current_font_size = clamped;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.mark_session_dirty();
@@ -505,10 +505,10 @@ impl InputState {
 
     /// Enables or disables fill for fill-capable shapes.
     pub fn set_fill_enabled(&mut self, enabled: bool) -> bool {
-        if self.fill_enabled == enabled {
+        if self.style.fill_enabled == enabled {
             return false;
         }
-        self.fill_enabled = enabled;
+        self.style.fill_enabled = enabled;
         self.needs_redraw = true;
         self.mark_session_dirty();
         true
@@ -516,10 +516,10 @@ impl InputState {
 
     pub fn set_polygon_sides(&mut self, sides: u8) -> bool {
         let clamped = clamp_regular_sides(sides);
-        if self.polygon_sides == clamped {
+        if self.style.polygon_sides == clamped {
             return false;
         }
-        self.polygon_sides = clamped;
+        self.style.polygon_sides = clamped;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.mark_session_dirty();
@@ -528,9 +528,11 @@ impl InputState {
 
     pub fn nudge_polygon_sides(&mut self, delta: i8) -> bool {
         let next = if delta.is_negative() {
-            self.polygon_sides.saturating_sub(delta.unsigned_abs())
+            self.style
+                .polygon_sides
+                .saturating_sub(delta.unsigned_abs())
         } else {
-            self.polygon_sides.saturating_add(delta as u8)
+            self.style.polygon_sides.saturating_add(delta as u8)
         };
         self.set_polygon_sides(next)
     }

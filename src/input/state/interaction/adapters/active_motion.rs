@@ -182,7 +182,7 @@ pub(crate) fn handle_drawing_or_idle_motion(
         state.update_provisional_dirty(canvas.x(), canvas.y());
         state.needs_redraw = true;
         RoutingOutcome::Continued(ActiveInteractionKind::Drawing)
-    } else if state.eraser_mode == EraserMode::Stroke
+    } else if state.style.eraser_mode == EraserMode::Stroke
         && state.active_tool() == Tool::Eraser
         && matches!(state.state, DrawingState::Idle)
     {
@@ -229,9 +229,9 @@ fn motion_sample_size(state: &InputState, tool: Tool) -> Option<f64> {
         ToolMotionBehavior::NoPathAccumulation => None,
         ToolMotionBehavior::AccumulatePath {
             size_source: ToolMotionSizeSource::ToolSize,
-        } => Some(state.tool_settings.get(tool).thickness),
+        } => Some(state.style.tool_settings.get(tool).thickness),
         ToolMotionBehavior::AccumulatePath {
             size_source: ToolMotionSizeSource::EraserSize,
-        } => Some(state.eraser_size),
+        } => Some(state.style.eraser_size),
     }
 }

@@ -139,7 +139,7 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_nudge_marker_opacity(&mut self, delta: f64) -> bool {
-        self.set_marker_opacity(self.marker_opacity + delta)
+        self.set_marker_opacity(self.style.marker_opacity + delta)
     }
 
     pub(super) fn apply_toolbar_enter_text_mode(&mut self) -> bool {

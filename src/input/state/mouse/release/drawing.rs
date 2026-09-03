@@ -33,7 +33,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
     // long diagonal stroke's box is nearly the whole screen, and re-marking it
     // would undo the split-damage work that `finished_path_damage_regions`
     // exists to do. Computed here because the snapshot takes the points next.
-    let raw_preview_damage = (state.pen_smoothing > 0)
+    let raw_preview_damage = (state.style.pen_smoothing > 0)
         .then(|| {
             raw_preview_damage_regions(
                 &release.points,
@@ -49,8 +49,8 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             end: release.end,
             color: drawing_color,
             size: drawing_thickness,
-            fill_enabled: state.fill_enabled,
-            regular_sides: state.polygon_sides,
+            fill_enabled: state.style.fill_enabled,
+            regular_sides: state.style.polygon_sides,
         };
         tool.finish_polygon_stroke(snapshot)
     } else {
@@ -62,21 +62,21 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
             point_thicknesses: release.point_thicknesses,
             color: drawing_color,
             size: drawing_thickness,
-            marker_opacity: state.marker_opacity,
-            fill_enabled: state.fill_enabled,
-            blur_style: state.blur_style,
-            spotlight_magnification: state.spotlight_magnification,
-            arrow_length: state.arrow_length,
-            arrow_angle: state.arrow_angle,
-            arrow_head_at_end: state.arrow_head_at_end,
-            arrow_style: state.arrow_style,
+            marker_opacity: state.style.marker_opacity,
+            fill_enabled: state.style.fill_enabled,
+            blur_style: state.style.blur_style,
+            spotlight_magnification: state.style.spotlight_magnification,
+            arrow_length: state.style.arrow_length,
+            arrow_angle: state.style.arrow_angle,
+            arrow_head_at_end: state.style.arrow_head_at_end,
+            arrow_style: state.style.arrow_style,
             arrow_label: state.next_arrow_label(),
             step_marker_label: state.next_step_marker_label(),
-            eraser_mode: state.eraser_mode,
-            eraser_size: state.eraser_size,
-            eraser_kind: state.eraser_kind,
-            pressure_variation_threshold: state.pressure_variation_threshold,
-            pen_smoothing: state.pen_smoothing,
+            eraser_mode: state.style.eraser_mode,
+            eraser_size: state.style.eraser_size,
+            eraser_kind: state.style.eraser_kind,
+            pressure_variation_threshold: state.style.pressure_variation_threshold,
+            pen_smoothing: state.style.pen_smoothing,
         };
         tool.finish_stroke(snapshot)
     };

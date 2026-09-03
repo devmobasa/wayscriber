@@ -71,7 +71,7 @@ impl InputState {
             ToolbarEvent::SetFontBold(bold) => self.apply_toolbar_set_font_bold(bold),
             ToolbarEvent::SetFontSize(size) => self.apply_toolbar_set_font_size(size),
             ToolbarEvent::NudgeFontSize(delta) => {
-                self.apply_toolbar_set_font_size(self.current_font_size + delta)
+                self.apply_toolbar_set_font_size(self.style.current_font_size + delta)
             }
             ToolbarEvent::ToggleFill(enable) => self.apply_toolbar_toggle_fill(enable),
             ToolbarEvent::SetPolygonSides(sides) => self.apply_toolbar_set_polygon_sides(sides),

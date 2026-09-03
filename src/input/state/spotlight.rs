@@ -457,7 +457,7 @@ impl InputState {
             rx: f64::from(rx),
             ry: f64::from(ry),
             magnification: crate::draw::normalize_spotlight_magnification(
-                self.spotlight_magnification,
+                self.style.spotlight_magnification,
             ),
         })
     }

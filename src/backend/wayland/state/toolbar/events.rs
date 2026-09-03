@@ -220,7 +220,7 @@ impl WaylandState {
         }
 
         #[cfg(feature = "tablet-input")]
-        let prev_thickness = self.input_state.current_thickness;
+        let prev_thickness = self.input_state.style.current_thickness;
         #[cfg(feature = "tablet-input")]
         let thickness_event = policy.tablet_thickness_sensitive;
 
@@ -266,7 +266,7 @@ impl WaylandState {
             #[cfg(feature = "tablet-input")]
             if thickness_event && self.sync_stylus_thickness_cache(prev_thickness) {
                 if self.tablet.tip_down {
-                    self.record_stylus_peak(self.input_state.current_thickness);
+                    self.record_stylus_peak(self.input_state.style.current_thickness);
                 } else {
                     self.tablet.peak_thickness = None;
                 }
@@ -402,7 +402,7 @@ impl WaylandState {
 
     #[cfg(feature = "tablet-input")]
     pub(in crate::backend::wayland) fn sync_stylus_thickness_cache(&mut self, prev: f64) -> bool {
-        let cur = self.input_state.current_thickness;
+        let cur = self.input_state.style.current_thickness;
         if (cur - prev).abs() <= f64::EPSILON {
             return false;
         }

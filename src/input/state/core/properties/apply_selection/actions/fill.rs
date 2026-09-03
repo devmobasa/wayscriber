@@ -74,7 +74,7 @@ mod tests {
             w: 10,
             h: 10,
             fill: false,
-            color: state.current_color,
+            color: state.style.current_color,
             thick: 2.0,
         });
         let ellipse_id = state.boards.active_frame_mut().add_shape(Shape::Ellipse {
@@ -83,7 +83,7 @@ mod tests {
             rx: 6,
             ry: 7,
             fill: true,
-            color: state.current_color,
+            color: state.style.current_color,
             thick: 2.0,
         });
         state.set_selection(vec![rect_id, ellipse_id]);

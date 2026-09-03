@@ -52,8 +52,8 @@ fn shape_menu_includes_select_this_entry_whenever_hovered() {
         w: 20,
         h: 20,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     let second = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 40,
@@ -61,8 +61,8 @@ fn shape_menu_includes_select_this_entry_whenever_hovered() {
         w: 20,
         h: 20,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_selection(vec![first, second]);
@@ -103,8 +103,8 @@ fn shape_menu_includes_reset_canvas_position_on_solid_boards() {
         w: 20,
         h: 20,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_selection(vec![shape_id]);
@@ -133,8 +133,8 @@ fn select_this_shape_command_focuses_single_shape() {
         w: 20,
         h: 20,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     let second = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 40,
@@ -142,8 +142,8 @@ fn select_this_shape_command_focuses_single_shape() {
         w: 20,
         h: 20,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_selection(vec![first, second]);
@@ -209,10 +209,10 @@ fn keyboard_context_menu_focuses_edit_for_selected_text() {
         x: 40,
         y: 60,
         text: "Hello".to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     });
 
@@ -404,8 +404,8 @@ fn canvas_menu_uses_clear_unlocked_label_when_canvas_has_locked_shapes() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 20,
@@ -413,8 +413,8 @@ fn canvas_menu_uses_clear_unlocked_label_when_canvas_has_locked_shapes() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     let locked_index = state
         .boards
@@ -568,8 +568,8 @@ fn keyboard_shape_menu_anchor_tracks_panned_board_view_offset() {
         w: 20,
         h: 20,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     state.set_selection(vec![shape_id]);
 

@@ -101,20 +101,20 @@ impl InputState {
                     x,
                     y,
                     text,
-                    color: self.current_color,
-                    size: self.current_font_size,
-                    font_descriptor: self.font_descriptor.clone(),
-                    background_enabled: self.text_background_enabled,
-                    wrap_width: self.text_wrap_width,
+                    color: self.style.current_color,
+                    size: self.style.current_font_size,
+                    font_descriptor: self.style.font_descriptor.clone(),
+                    background_enabled: self.style.text_background_enabled,
+                    wrap_width: self.style.text_wrap_width,
                 },
                 TextInputMode::StickyNote => Shape::StickyNote {
                     x,
                     y,
                     text,
-                    background: self.current_color,
-                    size: self.current_font_size,
-                    font_descriptor: self.font_descriptor.clone(),
-                    wrap_width: self.text_wrap_width,
+                    background: self.style.current_color,
+                    size: self.style.current_font_size,
+                    font_descriptor: self.style.font_descriptor.clone(),
+                    wrap_width: self.style.text_wrap_width,
                 },
             };
             let bounds = shape.bounding_box();
@@ -202,9 +202,13 @@ impl InputState {
             key,
             Key::Left | Key::Right | Key::Up | Key::Down | Key::Home | Key::End
         )
-        .then(|| self.font_descriptor.to_pango_string(self.current_font_size));
+        .then(|| {
+            self.style
+                .font_descriptor
+                .to_pango_string(self.style.current_font_size)
+        });
         let font = font_for_navigation.as_deref().unwrap_or_default();
-        let wrap_width = self.text_wrap_width;
+        let wrap_width = self.style.text_wrap_width;
 
         let DrawingState::TextInput {
             buffer,

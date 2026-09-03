@@ -52,13 +52,13 @@ impl ActiveInteractionRollback {
             state: input.state.clone(),
             active_drag_button: input.active_drag_button,
             active_drag_color: input.active_drag_color,
-            current_color: input.current_color,
-            current_thickness: input.current_thickness,
-            tool_settings: input.tool_settings.clone(),
-            current_font_size: input.current_font_size,
-            font_descriptor: input.font_descriptor.clone(),
-            text_background_enabled: input.text_background_enabled,
-            text_wrap_width: input.text_wrap_width,
+            current_color: input.style.current_color,
+            current_thickness: input.style.current_thickness,
+            tool_settings: input.style.tool_settings.clone(),
+            current_font_size: input.style.current_font_size,
+            font_descriptor: input.style.font_descriptor.clone(),
+            text_background_enabled: input.style.text_background_enabled,
+            text_wrap_width: input.style.text_wrap_width,
             text_input_mode: input.text_input_mode,
             text_edit_target: input.text_edit_target.clone(),
             text_edit_entry_feedback: input.text_edit_entry_feedback.clone(),
@@ -85,13 +85,13 @@ impl ActiveInteractionRollback {
         input.state = self.state;
         input.active_drag_button = self.active_drag_button;
         input.active_drag_color = self.active_drag_color;
-        input.current_color = self.current_color;
-        input.current_thickness = self.current_thickness;
-        input.tool_settings = self.tool_settings;
-        input.current_font_size = self.current_font_size;
-        input.font_descriptor = self.font_descriptor;
-        input.text_background_enabled = self.text_background_enabled;
-        input.text_wrap_width = self.text_wrap_width;
+        input.style.current_color = self.current_color;
+        input.style.current_thickness = self.current_thickness;
+        input.style.tool_settings = self.tool_settings;
+        input.style.current_font_size = self.current_font_size;
+        input.style.font_descriptor = self.font_descriptor;
+        input.style.text_background_enabled = self.text_background_enabled;
+        input.style.text_wrap_width = self.text_wrap_width;
         input.text_input_mode = self.text_input_mode;
         input.text_edit_target = self.text_edit_target;
         input.text_edit_entry_feedback = self.text_edit_entry_feedback;
@@ -381,10 +381,10 @@ mod tests {
             x: 40,
             y: 80,
             text: "Original".to_string(),
-            color: state.current_color,
-            size: state.current_font_size,
-            font_descriptor: state.font_descriptor.clone(),
-            background_enabled: state.text_background_enabled,
+            color: state.style.current_color,
+            size: state.style.current_font_size,
+            font_descriptor: state.style.font_descriptor.clone(),
+            background_enabled: state.style.text_background_enabled,
             wrap_width: Some(180),
         });
         state.set_selection(vec![shape_id]);

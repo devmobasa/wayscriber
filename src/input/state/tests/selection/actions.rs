@@ -9,8 +9,8 @@ fn select_all_action_selects_shapes() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     let second = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 30,
@@ -18,8 +18,8 @@ fn select_all_action_selects_shapes() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.handle_action(Action::SelectAll);
@@ -38,8 +38,8 @@ fn escape_clears_selection_before_exit() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_selection(vec![shape_id]);
@@ -57,8 +57,8 @@ fn select_tool_drag_selects_shapes_in_rect() {
         w: 8,
         h: 8,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     let outside = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 80,
@@ -66,8 +66,8 @@ fn select_tool_drag_selects_shapes_in_rect() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_tool_override(Some(Tool::Select));

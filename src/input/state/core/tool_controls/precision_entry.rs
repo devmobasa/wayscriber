@@ -41,12 +41,12 @@ impl InputState {
                         .tool_override()
                         .is_some_and(|tool| tool.uses_eraser_size())
                 {
-                    self.eraser_size
+                    self.style.eraser_size
                 } else {
-                    self.current_thickness
+                    self.style.current_thickness
                 }
             }
-            PrecisionEntryTarget::FontSize => self.current_font_size,
+            PrecisionEntryTarget::FontSize => self.style.current_font_size,
         };
         self.precision_entry = Some(PrecisionEntryState {
             target,
@@ -141,7 +141,7 @@ mod tests {
     #[test]
     fn open_prefills_the_selected_current_value_and_typing_replaces_it() {
         let mut state = make_test_input_state();
-        state.current_thickness = 4.0;
+        state.style.current_thickness = 4.0;
         assert!(state.apply_toolbar_event(ToolbarEvent::OpenPrecisionEntry(
             PrecisionEntryTarget::Thickness
         )));
@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn enter_commits_the_clamped_value_and_esc_cancels() {
         let mut state = make_test_input_state();
-        state.current_thickness = 4.0;
+        state.style.current_thickness = 4.0;
         state.open_precision_entry(PrecisionEntryTarget::Thickness);
         for ch in "999".chars() {
             let _ = state.handle_precision_entry_key(Key::Char(ch));
@@ -178,17 +178,17 @@ mod tests {
         assert!(!state.is_precision_entry_open());
         // Clamped to the shared thickness slider range.
         assert_eq!(
-            state.current_thickness,
+            state.style.current_thickness,
             crate::ui::toolbar::model::ToolbarSliderSpec::THICKNESS.max
         );
 
         // Esc restores nothing and applies nothing.
-        let before = state.current_thickness;
+        let before = state.style.current_thickness;
         state.open_precision_entry(PrecisionEntryTarget::Thickness);
         let _ = state.handle_precision_entry_key(Key::Char('7'));
         assert!(state.handle_precision_entry_key(Key::Escape));
         assert!(!state.is_precision_entry_open());
-        assert_eq!(state.current_thickness, before);
+        assert_eq!(state.style.current_thickness, before);
 
         // A closed popup consumes no keys.
         assert!(!state.handle_precision_entry_key(Key::Char('1')));
@@ -200,7 +200,7 @@ mod tests {
         state.open_precision_entry(PrecisionEntryTarget::FontSize);
         assert_eq!(
             state.precision_entry().expect("entry").buffer,
-            format!("{:.0}", state.current_font_size)
+            format!("{:.0}", state.style.current_font_size)
         );
         assert!(
             state.apply_toolbar_event(ToolbarEvent::CommitPrecisionEntry {
@@ -210,7 +210,7 @@ mod tests {
         );
         assert!(!state.is_precision_entry_open());
         assert_eq!(
-            state.current_font_size,
+            state.style.current_font_size,
             crate::ui::toolbar::model::ToolbarSliderSpec::FONT_SIZE.max
         );
 

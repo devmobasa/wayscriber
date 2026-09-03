@@ -7,10 +7,10 @@ fn double_click_edit_enters_text_input() {
         x: 120,
         y: 120,
         text: "Hello".to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     });
 
@@ -54,10 +54,10 @@ fn right_click_clears_double_click_tracking() {
         x: 80,
         y: 80,
         text: "Hello".to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     });
 
@@ -103,9 +103,9 @@ fn enter_key_starts_edit_for_selected_sticky_note() {
             x: 120,
             y: 120,
             text: "Note".to_string(),
-            background: state.current_color,
-            size: state.current_font_size,
-            font_descriptor: state.font_descriptor.clone(),
+            background: state.style.current_color,
+            size: state.style.current_font_size,
+            font_descriptor: state.style.font_descriptor.clone(),
             wrap_width: None,
         });
 
@@ -126,10 +126,10 @@ fn enter_key_starts_edit_for_selected_text() {
         x: 60,
         y: 70,
         text: "Hello".to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     });
 

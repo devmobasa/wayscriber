@@ -41,10 +41,10 @@ impl ToolbarSnapshot {
             || override_tool
                 .map(|tool| tool.uses_marker_opacity())
                 .unwrap_or(false);
-        let eraser_kind = state.eraser_kind;
-        let eraser_mode = state.eraser_mode;
+        let eraser_kind = state.style.eraser_kind;
+        let eraser_mode = state.style.eraser_mode;
         let thickness_value = if thickness_targets_eraser {
-            state.eraser_size
+            state.style.eraser_size
         } else {
             state.thickness_for_tool(active_tool)
         };
@@ -105,34 +105,34 @@ impl ToolbarSnapshot {
             active_tool,
             tool_override: state.tool_override(),
             color: state.color_for_tool(active_tool),
-            quick_colors: state.quick_colors.clone(),
+            quick_colors: state.style.quick_colors.clone(),
             thickness: thickness_value,
-            eraser_size: state.eraser_size,
+            eraser_size: state.style.eraser_size,
             thickness_targets_eraser,
             thickness_targets_marker,
             eraser_kind,
             eraser_mode,
-            marker_opacity: state.marker_opacity,
-            pen_smoothing: state.pen_smoothing,
-            spotlight_magnification: state.spotlight_magnification,
+            marker_opacity: state.style.marker_opacity,
+            pen_smoothing: state.style.pen_smoothing,
+            spotlight_magnification: state.style.spotlight_magnification,
             // Filled in by the backend that renders the canvas; see the field.
             spotlight_magnifier_source: None,
             selection_spotlight_magnification: state.selection_spotlight_magnification(),
-            font: state.font_descriptor.clone(),
+            font: state.style.font_descriptor.clone(),
             selection_has_text: state.selection_has_text(),
             selected_text_bold: state.first_editable_selected_text_is_bold(),
-            font_size: state.current_font_size,
+            font_size: state.style.current_font_size,
             text_active,
             note_active,
             frozen_active: state.frozen_active(),
             zoom_active: state.zoom_active(),
             zoom_locked: state.zoom_locked(),
-            fill_enabled: state.fill_enabled,
-            polygon_sides: state.polygon_sides,
-            arrow_label_enabled: state.arrow_label_enabled,
-            arrow_style: state.arrow_style,
-            arrow_label_next: state.arrow_label_counter.max(1),
-            step_marker_next: state.step_marker_counter.max(1),
+            fill_enabled: state.style.fill_enabled,
+            polygon_sides: state.style.polygon_sides,
+            arrow_label_enabled: state.style.arrow_label_enabled,
+            arrow_style: state.style.arrow_style,
+            arrow_label_next: state.style.arrow_label_counter.max(1),
+            step_marker_next: state.style.step_marker_counter.max(1),
             undo_available: frame.undo_stack_len() > 0,
             redo_available: frame.redo_stack_len() > 0,
             board_index,

@@ -115,7 +115,10 @@ fn every_persisted_drawing_style_survives_snapshot_serialization_and_restore() {
 fn non_default_pen_smoothing_survives_snapshot_serialization_and_restore() {
     let mut source = dummy_input_state();
     let _ = source.set_pen_smoothing(5);
-    assert_eq!(source.pen_smoothing, 5, "the fixture must be non-default");
+    assert_eq!(
+        source.style.pen_smoothing, 5,
+        "the fixture must be non-default"
+    );
 
     let captured = ToolStateSnapshot::from_input_state(&source);
     let encoded = serde_json::to_vec(&captured).expect("serialize tool snapshot");
@@ -126,7 +129,7 @@ fn non_default_pen_smoothing_survives_snapshot_serialization_and_restore() {
     let _ = restored.set_pen_smoothing(1);
     apply_tool_state_snapshot(&mut restored, decoded);
 
-    assert_eq!(restored.pen_smoothing, 5);
+    assert_eq!(restored.style.pen_smoothing, 5);
 }
 
 #[test]
@@ -148,7 +151,7 @@ fn legacy_snapshot_without_pen_smoothing_preserves_the_configured_level() {
     apply_tool_state_snapshot(&mut restored, decoded);
 
     assert_eq!(
-        restored.pen_smoothing, 4,
+        restored.style.pen_smoothing, 4,
         "a missing legacy field must leave the config-seeded value alone"
     );
 }
@@ -323,12 +326,12 @@ fn apply_snapshot_restores_tool_state() {
     );
     let _ = input.set_font_descriptor(desired_font.clone());
     let _ = input.set_font_size(48.0);
-    input.text_background_enabled = true;
-    input.arrow_length = 40.0;
-    input.arrow_angle = 45.0;
-    input.arrow_head_at_end = true;
-    input.arrow_label_enabled = true;
-    input.polygon_sides = 9;
+    input.style.text_background_enabled = true;
+    input.style.arrow_length = 40.0;
+    input.style.arrow_angle = 45.0;
+    input.style.arrow_head_at_end = true;
+    input.style.arrow_label_enabled = true;
+    input.style.polygon_sides = 9;
     input.board_previous_color = Some(Color {
         r: 0.9,
         g: 0.2,
@@ -350,22 +353,22 @@ fn apply_snapshot_restores_tool_state() {
     restored.ui_visibility.show_status_bar = true;
     apply_snapshot(&mut restored, snapshot, &options);
 
-    assert_eq!(restored.current_color, desired_color);
-    assert_eq!(restored.current_thickness, 18.0);
-    assert_eq!(restored.eraser_size, 22.0);
-    assert_eq!(restored.eraser_mode, EraserMode::Stroke);
-    assert_eq!(restored.marker_opacity, 0.55);
-    assert_eq!(restored.spotlight_magnification, 2.25);
-    assert!(restored.fill_enabled);
-    assert_eq!(restored.font_descriptor, desired_font);
-    assert_eq!(restored.current_font_size, 48.0);
+    assert_eq!(restored.style.current_color, desired_color);
+    assert_eq!(restored.style.current_thickness, 18.0);
+    assert_eq!(restored.style.eraser_size, 22.0);
+    assert_eq!(restored.style.eraser_mode, EraserMode::Stroke);
+    assert_eq!(restored.style.marker_opacity, 0.55);
+    assert_eq!(restored.style.spotlight_magnification, 2.25);
+    assert!(restored.style.fill_enabled);
+    assert_eq!(restored.style.font_descriptor, desired_font);
+    assert_eq!(restored.style.current_font_size, 48.0);
     assert_eq!(restored.tool_override(), Some(Tool::Rect));
-    assert!(restored.text_background_enabled);
-    assert_eq!(restored.arrow_length, 40.0);
-    assert_eq!(restored.arrow_angle, 45.0);
-    assert!(restored.arrow_head_at_end);
-    assert!(restored.arrow_label_enabled);
-    assert_eq!(restored.polygon_sides, 9);
+    assert!(restored.style.text_background_enabled);
+    assert_eq!(restored.style.arrow_length, 40.0);
+    assert_eq!(restored.style.arrow_angle, 45.0);
+    assert!(restored.style.arrow_head_at_end);
+    assert!(restored.style.arrow_label_enabled);
+    assert_eq!(restored.style.polygon_sides, 9);
     assert_eq!(
         restored.board_previous_color,
         Some(Color {
@@ -387,13 +390,13 @@ fn apply_snapshot_clamps_restored_polygon_sides() {
     options.restore_tool_state = true;
 
     let mut input = dummy_input_state();
-    input.polygon_sides = 255;
+    input.style.polygon_sides = 255;
     let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
 
     let mut restored = dummy_input_state();
     apply_snapshot(&mut restored, snapshot, &options);
 
-    assert_eq!(restored.polygon_sides, 12);
+    assert_eq!(restored.style.polygon_sides, 12);
 }
 
 #[test]
@@ -443,13 +446,13 @@ fn apply_legacy_snapshot_preserves_config_initialized_font_descriptor() {
 
     let mut restored = dummy_input_state();
     let _ = restored.set_font_descriptor(config_font.clone());
-    restored.spotlight_magnification = 2.1;
+    restored.style.spotlight_magnification = 2.1;
 
     apply_snapshot(&mut restored, snapshot, &options);
 
-    assert_eq!(restored.font_descriptor, config_font);
-    assert_eq!(restored.current_font_size, 40.0);
-    assert_eq!(restored.spotlight_magnification, 2.1);
+    assert_eq!(restored.style.font_descriptor, config_font);
+    assert_eq!(restored.style.current_font_size, 40.0);
+    assert_eq!(restored.style.spotlight_magnification, 2.1);
 }
 
 #[test]

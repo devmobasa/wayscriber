@@ -75,8 +75,8 @@ fn add_active_image_shape(state: &mut InputState) -> ShapeId {
 }
 
 fn add_active_point_shape(state: &mut InputState, kind: PointShapeKind, points: usize) -> ShapeId {
-    let color = state.current_color;
-    let thick = state.current_thickness;
+    let color = state.style.current_color;
+    let thick = state.style.current_thickness;
     match kind {
         PointShapeKind::Freehand => state.boards.active_frame_mut().add_shape(Shape::Freehand {
             points: point_path(points),

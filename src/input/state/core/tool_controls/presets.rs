@@ -55,9 +55,9 @@ impl InputState {
         }
 
         if let Some(kind) = preset.eraser_kind
-            && self.eraser_kind != kind
+            && self.style.eraser_kind != kind
         {
-            self.eraser_kind = kind;
+            self.style.eraser_kind = kind;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             self.mark_session_dirty();
@@ -75,12 +75,12 @@ impl InputState {
             let _ = self.set_font_size(font_size);
         }
         if legacy_step_marker_preset {
-            let _ = self.set_thickness(default_step_marker_size(self.current_font_size));
+            let _ = self.set_thickness(default_step_marker_size(self.style.current_font_size));
         }
         if let Some(text_background_enabled) = preset.text_background_enabled
-            && self.text_background_enabled != text_background_enabled
+            && self.style.text_background_enabled != text_background_enabled
         {
-            self.text_background_enabled = text_background_enabled;
+            self.style.text_background_enabled = text_background_enabled;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             self.mark_session_dirty();
@@ -112,8 +112,8 @@ impl InputState {
     fn apply_preset_shape_settings(&mut self, preset: &ToolPresetConfig) {
         if let Some(length) = preset.arrow_length {
             let clamped = length.clamp(5.0, 50.0);
-            if (self.arrow_length - clamped).abs() > f64::EPSILON {
-                self.arrow_length = clamped;
+            if (self.style.arrow_length - clamped).abs() > f64::EPSILON {
+                self.style.arrow_length = clamped;
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
                 self.mark_session_dirty();
@@ -121,17 +121,17 @@ impl InputState {
         }
         if let Some(angle) = preset.arrow_angle {
             let clamped = angle.clamp(15.0, 60.0);
-            if (self.arrow_angle - clamped).abs() > f64::EPSILON {
-                self.arrow_angle = clamped;
+            if (self.style.arrow_angle - clamped).abs() > f64::EPSILON {
+                self.style.arrow_angle = clamped;
                 self.dirty_tracker.mark_full();
                 self.needs_redraw = true;
                 self.mark_session_dirty();
             }
         }
         if let Some(head_at_end) = preset.arrow_head_at_end
-            && self.arrow_head_at_end != head_at_end
+            && self.style.arrow_head_at_end != head_at_end
         {
-            self.arrow_head_at_end = head_at_end;
+            self.style.arrow_head_at_end = head_at_end;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             self.mark_session_dirty();
@@ -261,14 +261,14 @@ impl InputState {
 
     fn apply_full_preset_tool_settings(&mut self, settings: &PresetToolStatesConfig) {
         let tool_settings = settings.to_runtime();
-        if self.tool_settings != tool_settings {
-            self.tool_settings = tool_settings;
+        if self.style.tool_settings != tool_settings {
+            self.style.tool_settings = tool_settings;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             self.mark_session_dirty();
         }
-        if (self.eraser_size - settings.eraser_size).abs() > f64::EPSILON {
-            self.eraser_size = settings.eraser_size;
+        if (self.style.eraser_size - settings.eraser_size).abs() > f64::EPSILON {
+            self.style.eraser_size = settings.eraser_size;
             self.active_preset_slot = None;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
@@ -293,19 +293,19 @@ impl InputState {
             color: self.color_for_tool(selected_tool).into(),
             size,
             tool_settings: Some(PresetToolStatesConfig::from_runtime(
-                &self.tool_settings,
-                self.eraser_size,
+                &self.style.tool_settings,
+                self.style.eraser_size,
             )),
-            eraser_kind: Some(self.eraser_kind),
-            eraser_mode: Some(self.eraser_mode),
-            marker_opacity: Some(self.marker_opacity),
-            fill_enabled: Some(self.fill_enabled),
-            font_size: Some(self.current_font_size),
-            text_background_enabled: Some(self.text_background_enabled),
-            arrow_length: Some(self.arrow_length),
-            arrow_angle: Some(self.arrow_angle),
-            arrow_head_at_end: Some(self.arrow_head_at_end),
-            polygon_sides: Some(self.polygon_sides),
+            eraser_kind: Some(self.style.eraser_kind),
+            eraser_mode: Some(self.style.eraser_mode),
+            marker_opacity: Some(self.style.marker_opacity),
+            fill_enabled: Some(self.style.fill_enabled),
+            font_size: Some(self.style.current_font_size),
+            text_background_enabled: Some(self.style.text_background_enabled),
+            arrow_length: Some(self.style.arrow_length),
+            arrow_angle: Some(self.style.arrow_angle),
+            arrow_head_at_end: Some(self.style.arrow_head_at_end),
+            polygon_sides: Some(self.style.polygon_sides),
             show_status_bar: Some(self.ui_visibility.show_status_bar),
             drag_tools: Some(self.drag_tool_bindings.to_config()),
         }

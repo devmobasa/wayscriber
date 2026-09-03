@@ -8,15 +8,15 @@ fn test_idle_mode_plain_letters_trigger_color_actions() {
     // Should be in Idle mode
     assert!(matches!(state.state, DrawingState::Idle));
 
-    let original_color = state.current_color;
+    let original_color = state.style.current_color;
 
     // Press 'g' for green
     state.on_key_press(Key::Char('g'));
 
     // Color should have changed
-    assert_ne!(state.current_color, original_color);
+    assert_ne!(state.style.current_color, original_color);
     assert_eq!(
-        state.current_color,
+        state.style.current_color,
         QuickColorPalette::default().color_for_index(1).unwrap()
     );
 }
@@ -43,5 +43,5 @@ fn idle_mode_plain_letters_use_configured_quick_palette() {
 
     state.on_key_press(Key::Char('g'));
 
-    assert_eq!(state.current_color, configured_green);
+    assert_eq!(state.style.current_color, configured_green);
 }

@@ -16,7 +16,7 @@ impl InputState {
     /// Install the configured list. Blank and repeated names are the config
     /// layer's problem and have already been removed by the time this runs.
     pub fn set_font_cycle(&mut self, families: Vec<String>) {
-        self.font_cycle = families;
+        self.style.font_cycle = families;
     }
 
     /// The family after `current` in the list, or `None` when the list cannot
@@ -30,16 +30,17 @@ impl InputState {
     /// way. Comparing exactly would make `sans` a family the list does not hold,
     /// and the first step would restyle nothing but the spelling.
     pub(crate) fn next_font_family(&self, current: &str) -> Option<String> {
-        if self.font_cycle.is_empty() {
+        if self.style.font_cycle.is_empty() {
             return None;
         }
         let next = match self
+            .style
             .font_cycle
             .iter()
             .position(|family| families_match(family, current))
         {
-            Some(index) => &self.font_cycle[(index + 1) % self.font_cycle.len()],
-            None => &self.font_cycle[0],
+            Some(index) => &self.style.font_cycle[(index + 1) % self.style.font_cycle.len()],
+            None => &self.style.font_cycle[0],
         };
         (!families_match(next, current)).then(|| next.clone())
     }
@@ -50,7 +51,7 @@ impl InputState {
     /// until something is typed, and because a family name is the only way to
     /// tell two similar faces apart at a glance.
     pub(crate) fn cycle_font_family(&mut self) -> bool {
-        if self.font_cycle.is_empty() {
+        if self.style.font_cycle.is_empty() {
             self.push_toast(
                 super::ToastPriority::Info,
                 FONT_CYCLE_TOAST_SOURCE,
@@ -65,13 +66,13 @@ impl InputState {
             return self.cycle_selected_font_family();
         }
 
-        let Some(next) = self.next_font_family(&self.font_descriptor.family) else {
+        let Some(next) = self.next_font_family(&self.style.font_descriptor.family) else {
             return false;
         };
         let descriptor = FontDescriptor::new(
             next.clone(),
-            self.font_descriptor.weight.clone(),
-            self.font_descriptor.style.clone(),
+            self.style.font_descriptor.weight.clone(),
+            self.style.font_descriptor.style.clone(),
         );
         if !self.set_font_descriptor(descriptor) {
             return false;
@@ -177,18 +178,23 @@ mod tests {
     #[test]
     fn cycling_with_nothing_selected_sets_what_the_next_label_uses() {
         let mut state = state_with_cycle();
-        let before = state.font_descriptor.family.clone();
+        let before = state.style.font_descriptor.family.clone();
 
         assert!(state.cycle_font_family());
 
-        assert_ne!(state.font_descriptor.family, before);
-        assert!(state.font_cycle.contains(&state.font_descriptor.family));
+        assert_ne!(state.style.font_descriptor.family, before);
+        assert!(
+            state
+                .style
+                .font_cycle
+                .contains(&state.style.font_descriptor.family)
+        );
     }
 
     #[test]
     fn cycling_with_text_selected_restyles_that_text_and_leaves_the_tool_alone() {
         let mut state = state_with_cycle();
-        let tool_font = state.font_descriptor.family.clone();
+        let tool_font = state.style.font_descriptor.family.clone();
         let id = state.boards.active_frame_mut().add_shape(Shape::Text {
             x: 10,
             y: 10,
@@ -216,7 +222,7 @@ mod tests {
         };
         assert_eq!(font_descriptor.family, "Monospace");
         assert_eq!(
-            state.font_descriptor.family, tool_font,
+            state.style.font_descriptor.family, tool_font,
             "restyling a selection must not also change what the next label uses"
         );
     }
@@ -224,7 +230,7 @@ mod tests {
     #[test]
     fn a_selection_with_no_text_in_it_falls_through_to_the_tool_font() {
         let mut state = state_with_cycle();
-        let before = state.font_descriptor.family.clone();
+        let before = state.style.font_descriptor.family.clone();
         let id = state.boards.active_frame_mut().add_shape(Shape::Rect {
             x: 0,
             y: 0,
@@ -238,6 +244,6 @@ mod tests {
 
         assert!(state.cycle_font_family());
 
-        assert_ne!(state.font_descriptor.family, before);
+        assert_ne!(state.style.font_descriptor.family, before);
     }
 }

@@ -32,7 +32,7 @@ fn arrow_with_label(value: u32, font_descriptor: &FontDescriptor) -> Shape {
 #[test]
 fn sync_arrow_label_counter_uses_max_across_boards() {
     let mut state = create_test_input_state();
-    let font_descriptor = state.font_descriptor.clone();
+    let font_descriptor = state.style.font_descriptor.clone();
 
     state
         .boards
@@ -52,7 +52,7 @@ fn sync_arrow_label_counter_uses_max_across_boards() {
         .add_shape(arrow_with_label(4, &font_descriptor));
 
     state.sync_arrow_label_counter();
-    assert_eq!(state.arrow_label_counter, 8);
+    assert_eq!(state.style.arrow_label_counter, 8);
 }
 
 #[test]
@@ -64,7 +64,7 @@ fn next_arrow_label_returns_none_when_disabled() {
 #[test]
 fn enabling_arrow_labels_syncs_counter_and_marks_session_dirty() {
     let mut state = create_test_input_state();
-    let font_descriptor = state.font_descriptor.clone();
+    let font_descriptor = state.style.font_descriptor.clone();
     state
         .boards
         .active_frame_mut()
@@ -73,8 +73,8 @@ fn enabling_arrow_labels_syncs_counter_and_marks_session_dirty() {
     state.session_dirty = false;
 
     assert!(state.set_arrow_label_enabled(true));
-    assert!(state.arrow_label_enabled);
-    assert_eq!(state.arrow_label_counter, 6);
+    assert!(state.style.arrow_label_enabled);
+    assert_eq!(state.style.arrow_label_counter, 6);
     assert!(state.needs_redraw);
     assert!(state.session_dirty);
 }
@@ -82,7 +82,7 @@ fn enabling_arrow_labels_syncs_counter_and_marks_session_dirty() {
 #[test]
 fn enabling_arrow_labels_is_noop_when_already_enabled() {
     let mut state = create_test_input_state();
-    state.arrow_label_enabled = true;
+    state.style.arrow_label_enabled = true;
     state.needs_redraw = false;
     state.session_dirty = false;
 
@@ -97,6 +97,6 @@ fn reset_arrow_label_counter_reports_no_change_at_default() {
     state.needs_redraw = false;
 
     assert!(!state.reset_arrow_label_counter());
-    assert_eq!(state.arrow_label_counter, 1);
+    assert_eq!(state.style.arrow_label_counter, 1);
     assert!(!state.needs_redraw);
 }

@@ -35,21 +35,21 @@ pub use core::{
     ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState, CommandPaletteCursorHint,
     CommandPaletteListRow, CommandPaletteState, CompassDir, CompositorCapabilities,
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, DesktopEnvironment,
-    DrawingState, EyedropperCaptureSource, EyedropperUiState, FontPickerFilter, FontPickerLayout,
-    FontPickerResults, FontPickerRow, FontPickerTarget, HelpOverlayClick, HelpOverlayCursorHint,
-    HelpOverlayReleaseOutcome, ImeCompositionState, ImePreedit, InputState, MAX_STROKE_THICKNESS,
-    MIN_STROKE_THICKNESS, OutputFocusAction, PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS,
-    PickerDrag, PrecisionEntryState, PresetAction, PresetFeedbackKind, PressureThicknessEditMode,
-    PressureThicknessEntryMode, QuickColorEdit, RADIAL_COMPASS_SLICES, RADIAL_PAINT_DELAY,
-    RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState, RadialParent, RadialRingSwatch,
-    RadialSegmentId, RadialSlice, RadialSliceKind, RegionInputSource, RegionPurposeTag,
-    RegionSelectUiState, RegionSelection, SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START,
-    ScreenCaptureSource, SelectionAxis, SelectionHandle, SelectionPolicy, SelectionPropertyEntry,
-    SelectionPropertyKind, SelectionState, ShellMode, TextInputMode, Toast, ToastPriority,
-    ToastPushOutcome, ToastQueue, TourStep, UI_TOAST_DURATION_MS, UiToastKind, UiVisibility,
-    ZoomAction, color_picker_rgb_to_hsv, compass_slice, font_picker_layout, font_picker_rows,
-    size_ring_angle_for_value, size_ring_value_for_angle, slice_parent, sub_ring_child_count,
-    sub_ring_children,
+    DrawingState, DrawingStyle, EyedropperCaptureSource, EyedropperUiState, FontPickerFilter,
+    FontPickerLayout, FontPickerResults, FontPickerRow, FontPickerTarget, HelpOverlayClick,
+    HelpOverlayCursorHint, HelpOverlayReleaseOutcome, ImeCompositionState, ImePreedit, InputState,
+    MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction, PRESET_FEEDBACK_DURATION_MS,
+    PRESET_TOAST_DURATION_MS, PickerDrag, PrecisionEntryState, PresetAction, PresetFeedbackKind,
+    PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, RADIAL_COMPASS_SLICES,
+    RADIAL_PAINT_DELAY, RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState, RadialParent,
+    RadialRingSwatch, RadialSegmentId, RadialSlice, RadialSliceKind, RegionInputSource,
+    RegionPurposeTag, RegionSelectUiState, RegionSelection, SIZE_RING_ARC_SPAN,
+    SIZE_RING_ARC_START, ScreenCaptureSource, SelectionAxis, SelectionHandle, SelectionPolicy,
+    SelectionPropertyEntry, SelectionPropertyKind, SelectionState, ShellMode, TextInputMode, Toast,
+    ToastPriority, ToastPushOutcome, ToastQueue, TourStep, UI_TOAST_DURATION_MS, UiToastKind,
+    UiVisibility, ZoomAction, color_picker_rgb_to_hsv, compass_slice, font_picker_layout,
+    font_picker_rows, size_ring_angle_for_value, size_ring_value_for_angle, slice_parent,
+    sub_ring_child_count, sub_ring_children,
 };
 #[allow(unused_imports)]
 pub(crate) use core::{
@@ -77,8 +77,8 @@ pub use input_hud::{
 pub(crate) mod test_support {
     use super::InputStateSeed;
     use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig, Shortcut};
-    use crate::draw::{Color, FontDescriptor};
-    use crate::input::{ClickHighlightSettings, EraserMode, InputState};
+    use crate::draw::FontDescriptor;
+    use crate::input::{ClickHighlightSettings, InputState};
     use std::collections::HashMap;
 
     pub(crate) struct TestInputStateBuilder {
@@ -100,25 +100,30 @@ pub(crate) mod test_support {
             let action_bindings = keybindings
                 .build_action_bindings()
                 .expect("test keybindings bindings");
+            let mut style = super::DrawingStyle::from((
+                &crate::config::DrawingConfig::default(),
+                &crate::config::ArrowConfig::default(),
+                &crate::config::SpotlightConfig::default(),
+            ));
+            style.current_color = crate::draw::RED;
+            style.current_thickness = 4.0;
+            style.eraser_size = 4.0;
+            style.marker_opacity = 0.32;
+            style.current_font_size = 32.0;
+            style.font_descriptor = FontDescriptor::default();
+            style.arrow_length = 20.0;
+            style.arrow_angle = 30.0;
+            style.arrow_head_at_end = false;
+            style.tool_settings = crate::input::PerToolDrawingSettings::new(
+                style.current_color,
+                style.current_thickness,
+            );
+            style.tool_settings.step_marker.thickness =
+                super::default_step_marker_size(style.current_font_size);
+
             Self {
                 seed: InputStateSeed {
-                    color: Color {
-                        r: 1.0,
-                        g: 0.0,
-                        b: 0.0,
-                        a: 1.0,
-                    },
-                    thickness: 4.0,
-                    eraser_size: 4.0,
-                    eraser_mode: EraserMode::Brush,
-                    marker_opacity: 0.32,
-                    fill_enabled: false,
-                    font_size: 32.0,
-                    font_descriptor: FontDescriptor::default(),
-                    text_background_enabled: false,
-                    arrow_length: 20.0,
-                    arrow_angle: 30.0,
-                    arrow_head_at_end: false,
+                    style,
                     ui_visibility: super::UiVisibility::from(&crate::config::UiConfig::default()),
                     boards_config: BoardsConfig::default(),
                     action_map,
@@ -151,22 +156,25 @@ pub(crate) mod test_support {
         }
 
         pub(crate) fn thickness(mut self, thickness: f64) -> Self {
-            self.seed.thickness = thickness;
+            self.seed.style.current_thickness = thickness;
+            for tool in crate::input::tool::ToolSettingsSlot::ALL {
+                self.seed.style.tool_settings.get_slot_mut(tool).thickness = thickness;
+            }
             self
         }
 
         pub(crate) fn eraser_size(mut self, eraser_size: f64) -> Self {
-            self.seed.eraser_size = eraser_size;
+            self.seed.style.eraser_size = eraser_size;
             self
         }
 
         pub(crate) fn font_descriptor(mut self, font_descriptor: FontDescriptor) -> Self {
-            self.seed.font_descriptor = font_descriptor;
+            self.seed.style.font_descriptor = font_descriptor;
             self
         }
 
         pub(crate) fn text_background_enabled(mut self, enabled: bool) -> Self {
-            self.seed.text_background_enabled = enabled;
+            self.seed.style.text_background_enabled = enabled;
             self
         }
 
@@ -211,9 +219,9 @@ pub(crate) mod test_support {
             .custom_section_enabled(false)
             .build();
 
-        assert_eq!(state.current_thickness, 3.0);
-        assert_eq!(state.eraser_size, 12.0);
-        assert!(state.text_background_enabled);
+        assert_eq!(state.style.current_thickness, 3.0);
+        assert_eq!(state.style.eraser_size, 12.0);
+        assert!(state.style.text_background_enabled);
         assert!(!state.custom_section_enabled);
     }
 }

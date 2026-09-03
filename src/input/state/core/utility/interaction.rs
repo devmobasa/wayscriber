@@ -197,7 +197,7 @@ impl InputState {
         self.end_pointer_drag();
         self.clear_text_preview_dirty();
         self.last_text_preview_bounds = None;
-        self.text_wrap_width = None;
+        self.style.text_wrap_width = None;
         self.state = DrawingState::Idle;
         self.needs_redraw = true;
     }
@@ -359,14 +359,14 @@ mod tests {
     #[test]
     fn cancel_text_input_clears_wrap_width_and_returns_to_idle() {
         let mut state = make_test_input_state();
-        state.text_wrap_width = Some(240);
+        state.style.text_wrap_width = Some(240);
         state.state = DrawingState::text_input(10, 20, "hello".to_string());
         state.needs_redraw = false;
 
         state.cancel_text_input();
 
         assert!(matches!(state.state, DrawingState::Idle));
-        assert!(state.text_wrap_width.is_none());
+        assert!(state.style.text_wrap_width.is_none());
         assert!(state.needs_redraw);
     }
 

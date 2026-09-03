@@ -1,19 +1,15 @@
 use super::super::super::selection::SelectionState;
 use super::super::types::{
-    CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
-    PendingOnboardingUsage, PressureThicknessEditMode, PressureThicknessEntryMode, TextInputMode,
+    CompositorCapabilities, DrawingState, PendingOnboardingUsage, TextInputMode,
 };
 use super::structs::InputState;
-use crate::config::{Action, BoardsConfig, PRESET_SLOTS_MAX, QuickColorPalette, Shortcut};
-use crate::draw::{
-    ArrowStyle, BlurStyle, DirtyTracker, EraserKind, FontDescriptor, REGULAR_POLYGON_DEFAULT_SIDES,
-};
+use crate::config::{Action, BoardsConfig, PRESET_SLOTS_MAX, Shortcut};
+use crate::draw::DirtyTracker;
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::state::input_hud::{InputHudSettings, InputHudState};
 use crate::input::{
     BoardManager,
     modifiers::{DragToolBindings, Modifiers},
-    tool::{EraserMode, PerToolDrawingSettings},
 };
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -25,18 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// cannot accidentally transpose same-typed positional arguments.
 #[derive(Clone)]
 pub(crate) struct InputStateSeed {
-    pub(crate) color: crate::draw::Color,
-    pub(crate) thickness: f64,
-    pub(crate) eraser_size: f64,
-    pub(crate) eraser_mode: EraserMode,
-    pub(crate) marker_opacity: f64,
-    pub(crate) fill_enabled: bool,
-    pub(crate) font_size: f64,
-    pub(crate) font_descriptor: FontDescriptor,
-    pub(crate) text_background_enabled: bool,
-    pub(crate) arrow_length: f64,
-    pub(crate) arrow_angle: f64,
-    pub(crate) arrow_head_at_end: bool,
+    pub(crate) style: crate::input::state::core::DrawingStyle,
     pub(crate) ui_visibility: crate::input::state::UiVisibility,
     pub(crate) boards_config: BoardsConfig,
     pub(crate) action_map: HashMap<Shortcut, Action>,
@@ -59,18 +44,7 @@ impl InputState {
     /// surface configuration.
     pub(crate) fn from_seed(seed: InputStateSeed) -> Self {
         let InputStateSeed {
-            color,
-            thickness,
-            eraser_size,
-            eraser_mode,
-            marker_opacity,
-            fill_enabled,
-            font_size,
-            font_descriptor,
-            text_background_enabled,
-            arrow_length,
-            arrow_angle,
-            arrow_head_at_end,
+            style,
             ui_visibility,
             boards_config,
             action_map,
@@ -85,50 +59,15 @@ impl InputState {
             custom_redo_steps,
             presenter_mode_config,
         } = seed;
-        let clamped_eraser = eraser_size.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
-        let mut tool_settings = PerToolDrawingSettings::new(color, thickness);
-        tool_settings.step_marker.thickness =
-            super::super::super::utility::default_step_marker_size(font_size);
         let sequence_trie =
             crate::input::state::core::utility::SequenceTrie::from_action_map(&action_map);
         let mut state = Self {
             input_effects: Default::default(),
             keymap_revision: 0,
             boards: BoardManager::from_config(boards_config),
-            current_color: color,
-            quick_colors: QuickColorPalette::default(),
-            recent_colors: Vec::new(),
-            current_thickness: thickness,
-            tool_settings,
-            pressure_variation_threshold: 0.1,
-            pressure_thickness_edit_mode: PressureThicknessEditMode::Disabled,
-            pressure_thickness_entry_mode: PressureThicknessEntryMode::PressureOnly,
-            pressure_thickness_scale_step: 0.1,
-            eraser_size: clamped_eraser,
-            eraser_kind: EraserKind::Circle,
-            eraser_mode,
-            marker_opacity,
-            pen_smoothing: crate::draw::shape::clamp_pen_smoothing(
-                crate::config::DEFAULT_PEN_SMOOTHING,
-            ),
-            blur_style: BlurStyle::default(),
-            spotlight_dim_opacity: 0.6,
-            spotlight_feather: 0.35,
-            spotlight_magnification: crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
-            current_font_size: font_size,
-            font_descriptor,
-            font_cycle: Vec::new(),
+            style,
             font_picker: Default::default(),
-            text_background_enabled,
-            text_wrap_width: None,
             text_input_mode: TextInputMode::Plain,
-            arrow_length,
-            arrow_angle,
-            arrow_head_at_end,
-            arrow_style: ArrowStyle::default(),
-            arrow_label_enabled: false,
-            arrow_label_counter: 1,
-            step_marker_counter: 1,
             modifiers: Modifiers::new(),
             drag_tool_bindings: DragToolBindings::default(),
             active_drag_button: None,
@@ -158,8 +97,6 @@ impl InputState {
             light_mode_restore: None,
             toolbar_visible: true,
             toolbar_top_visible: true,
-            fill_enabled,
-            polygon_sides: REGULAR_POLYGON_DEFAULT_SIDES,
             toolbar_top_pinned: true,
             toolbar_use_icons: true, // Default to icon mode
             toolbar_scale: 1.0,
@@ -204,7 +141,6 @@ impl InputState {
             max_shapes_per_frame,
             click_highlight: ClickHighlightState::new(click_highlight_settings),
             input_hud: InputHudState::new(InputHudSettings::default()),
-            tool_override: None,
             selection_state: SelectionState::None,
             last_selection_axis: None,
             context_menu: Default::default(),

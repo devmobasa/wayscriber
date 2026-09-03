@@ -4,8 +4,8 @@ use crate::draw::ArrowStyle;
 #[test]
 fn erase_stroke_samples_sparse_path() {
     let mut state = create_test_input_state();
-    state.eraser_size = 4.0;
-    state.eraser_mode = EraserMode::Stroke;
+    state.style.eraser_size = 4.0;
+    state.style.eraser_mode = EraserMode::Stroke;
 
     let line_id = state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
@@ -29,8 +29,8 @@ fn erase_stroke_samples_sparse_path() {
 #[test]
 fn erase_stroke_includes_release_segment() {
     let mut state = create_test_input_state();
-    state.eraser_size = 4.0;
-    state.eraser_mode = EraserMode::Stroke;
+    state.style.eraser_size = 4.0;
+    state.style.eraser_mode = EraserMode::Stroke;
     state.set_tool_override(Some(Tool::Eraser));
 
     let line_id = state.boards.active_frame_mut().add_shape(Shape::Line {
@@ -56,8 +56,8 @@ fn erase_stroke_includes_release_segment() {
 #[test]
 fn erase_stroke_skips_locked_shapes() {
     let mut state = create_test_input_state();
-    state.eraser_size = 4.0;
-    state.eraser_mode = EraserMode::Stroke;
+    state.style.eraser_size = 4.0;
+    state.style.eraser_mode = EraserMode::Stroke;
 
     let locked_id = state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
@@ -107,8 +107,8 @@ fn erase_stroke_samples_randomized_crossings() {
     let mut seed = 0x1234_5678_9abc_def0u64;
     for _ in 0..16 {
         let mut state = create_test_input_state();
-        state.eraser_size = 4.0;
-        state.eraser_mode = EraserMode::Stroke;
+        state.style.eraser_size = 4.0;
+        state.style.eraser_mode = EraserMode::Stroke;
 
         let line_id = state.boards.active_frame_mut().add_shape(Shape::Line {
             x1: 0,
@@ -211,8 +211,8 @@ fn erase_stroke_hits_various_shapes() {
 
     for (shape, path) in cases {
         let mut state = create_test_input_state();
-        state.eraser_size = 4.0;
-        state.eraser_mode = EraserMode::Stroke;
+        state.style.eraser_size = 4.0;
+        state.style.eraser_mode = EraserMode::Stroke;
         let shape_id = state.boards.active_frame_mut().add_shape(shape);
 
         let erased = state.erase_strokes_by_points(&path);
@@ -226,8 +226,8 @@ fn erase_stroke_hits_various_shapes() {
 #[test]
 fn spatial_grid_eraser_hits_after_add_move_delete() {
     let mut state = create_test_input_state();
-    state.eraser_size = 10.0;
-    state.eraser_mode = EraserMode::Stroke;
+    state.style.eraser_size = 10.0;
+    state.style.eraser_mode = EraserMode::Stroke;
     // Lower threshold to force spatial grid usage with fewer shapes
     state.set_hit_test_threshold(2);
 

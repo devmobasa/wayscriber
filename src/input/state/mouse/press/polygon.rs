@@ -23,7 +23,7 @@ impl InputState {
         self.state = DrawingState::BuildingPolygon {
             points: vec![(x, y)],
             preview: None,
-            fill: self.fill_enabled,
+            fill: self.style.fill_enabled,
             color,
             thick,
         };

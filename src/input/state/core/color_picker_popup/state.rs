@@ -56,13 +56,13 @@ impl InputState {
     /// index is past the palette — a stale click on a snapshot rendered before
     /// the palette shrank, which must open nothing.
     pub fn open_color_picker_popup_for_quick_color(&mut self, index: usize) -> bool {
-        if self.quick_colors.entry(index).is_none() {
+        if self.style.quick_colors.entry(index).is_none() {
             return false;
         }
         // Abandon a live recolor first, so the color read below is the slot's
         // saved value even when the same swatch is right-clicked twice.
         self.discard_open_color_picker_recolor();
-        let Some(color) = self.quick_colors.color_for_index(index) else {
+        let Some(color) = self.style.quick_colors.color_for_index(index) else {
             return false;
         };
         self.open_color_picker_popup_for(Some(index), color);
@@ -101,7 +101,7 @@ impl InputState {
         else {
             return Cow::Borrowed("Select Color");
         };
-        match self.quick_colors.entry(*index) {
+        match self.style.quick_colors.entry(*index) {
             Some(entry) => Cow::Owned(format!("Recolor {}", single_line_slot_label(&entry.label))),
             None => Cow::Borrowed("Recolor swatch"),
         }
@@ -134,7 +134,7 @@ impl InputState {
             ColorPickerPopupState::Open {
                 slot: Some(index), ..
             } => {
-                if self.quick_colors.set_color_for_index(index, color) {
+                if self.style.quick_colors.set_color_for_index(index, color) {
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
                 }

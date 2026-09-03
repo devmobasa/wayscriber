@@ -109,7 +109,7 @@ impl InputState {
             .modifiers
             .current_tool_with_bindings(self.drag_tool_bindings);
 
-        if let Some(override_tool) = self.tool_override {
+        if let Some(override_tool) = self.style.tool_override {
             if matches!(override_tool, Tool::Highlight | Tool::Eraser) {
                 return override_tool;
             }

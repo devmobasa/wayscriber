@@ -133,7 +133,7 @@ impl InputState {
             }
             ToolMotionBehavior::AccumulatePath {
                 size_source: ToolMotionSizeSource::EraserSize,
-            } => self.eraser_size,
+            } => self.style.eraser_size,
         };
 
         let start = points.len().saturating_sub(2);
@@ -207,18 +207,18 @@ impl InputState {
                 *x,
                 *y,
                 &preview.text,
-                self.current_font_size,
-                &self.font_descriptor,
-                self.text_background_enabled,
-                self.text_wrap_width,
+                self.style.current_font_size,
+                &self.style.font_descriptor,
+                self.style.text_background_enabled,
+                self.style.text_wrap_width,
             ),
             TextInputMode::StickyNote => bounding_box_for_sticky_note_preview(
                 *x,
                 *y,
                 &preview.text,
-                self.current_font_size,
-                &self.font_descriptor,
-                self.text_wrap_width,
+                self.style.current_font_size,
+                &self.style.font_descriptor,
+                self.style.text_wrap_width,
             ),
         };
 
@@ -238,16 +238,19 @@ impl InputState {
         // together: with a selection or composition showing that is one layout
         // instead of two. Skipped entirely when neither is present.
         if preview.caret.is_some() || decorations_showing {
-            let font = self.font_descriptor.to_pango_string(self.current_font_size);
+            let font = self
+                .style
+                .font_descriptor
+                .to_pango_string(self.style.current_font_size);
             if let Some(geometry) = crate::draw::shape::text_preview_geometry(
                 &preview.text,
                 &font,
-                self.text_wrap_width,
+                self.style.text_wrap_width,
                 preview.caret,
             ) {
                 let caret_bounds = geometry
                     .caret
-                    .and_then(|geom| caret_damage_rect(geom, *x, *y, self.current_font_size));
+                    .and_then(|geom| caret_damage_rect(geom, *x, *y, self.style.current_font_size));
                 let decoration_bounds = decorations_showing
                     .then(|| pango_decoration_damage_rect(geometry.logical, *x, *y))
                     .flatten();
@@ -312,10 +315,14 @@ impl InputState {
     /// buffer and an offset.
     #[cfg(test)]
     fn caret_damage_rect_for(&self, buffer: &str, x: i32, y: i32, caret: usize) -> Option<Rect> {
-        let size = self.current_font_size;
-        let font = self.font_descriptor.to_pango_string(size);
-        let geom =
-            crate::draw::shape::caret_geometry_text(buffer, &font, self.text_wrap_width, caret)?;
+        let size = self.style.current_font_size;
+        let font = self.style.font_descriptor.to_pango_string(size);
+        let geom = crate::draw::shape::caret_geometry_text(
+            buffer,
+            &font,
+            self.style.text_wrap_width,
+            caret,
+        )?;
         caret_damage_rect(geom, x, y, size)
     }
 
@@ -336,11 +343,14 @@ impl InputState {
         };
         let preview = self.text_input_preview(cursor_glyph)?;
         let cursor = preview.ime_cursor?;
-        let font = self.font_descriptor.to_pango_string(self.current_font_size);
+        let font = self
+            .style
+            .font_descriptor
+            .to_pango_string(self.style.current_font_size);
         let geom = crate::draw::shape::caret_geometry_text(
             &preview.text,
             &font,
-            self.text_wrap_width,
+            self.style.text_wrap_width,
             cursor,
         )?;
         let caret_x = x + geom.x.round() as i32;
@@ -547,10 +557,10 @@ mod tests {
             100,
             100,
             "kako",
-            state.current_font_size,
-            &state.font_descriptor,
-            state.text_background_enabled,
-            state.text_wrap_width,
+            state.style.current_font_size,
+            &state.style.font_descriptor,
+            state.style.text_background_enabled,
+            state.style.text_wrap_width,
         )
         .expect("non-empty preedit measures");
         // Past the ink box *and* past the plain anti-aliasing margin, i.e. only
@@ -577,10 +587,10 @@ mod tests {
             100,
             100,
             "kako",
-            state.current_font_size,
-            &state.font_descriptor,
-            state.text_background_enabled,
-            state.text_wrap_width,
+            state.style.current_font_size,
+            &state.style.font_descriptor,
+            state.style.text_background_enabled,
+            state.style.text_wrap_width,
         )
         .expect("non-empty text measures");
         assert!(
@@ -600,13 +610,14 @@ mod tests {
         let mut state = make_test_input_state();
         state.state = DrawingState::text_input(100, 100, "hi".to_string());
         let font = state
+            .style
             .font_descriptor
-            .to_pango_string(state.current_font_size);
+            .to_pango_string(state.style.current_font_size);
         let geom = crate::draw::shape::caret_geometry_text("hi", &font, None, 1).unwrap();
         let rect = state
             .caret_damage_rect_for("hi", 100, 100, 1)
             .expect("caret has a damage rect");
-        let half = crate::draw::caret_outline_width(state.current_font_size) / 2.0;
+        let half = crate::draw::caret_outline_width(state.style.current_font_size) / 2.0;
         let painted_left = 100.0 + geom.x - half;
         let painted_right = 100.0 + geom.x + half;
         assert!(

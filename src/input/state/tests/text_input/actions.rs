@@ -11,8 +11,8 @@ fn test_redo_restores_shape_after_undo() {
             y1: 0,
             x2: 10,
             y2: 10,
-            color: state.current_color,
-            thick: state.current_thickness,
+            color: state.style.current_color,
+            thick: state.style.current_thickness,
         });
 
         let index = frame.find_index(shape_id).unwrap();

@@ -14,7 +14,7 @@ impl InputState {
         if !self.nudge_pen_smoothing(delta) {
             return;
         }
-        let level = self.pen_smoothing;
+        let level = self.style.pen_smoothing;
         let max = crate::draw::shape::MAX_PEN_SMOOTHING;
         info!("Pen smoothing set to {level}/{max}");
         let message = if level == 0 {
@@ -51,10 +51,10 @@ impl InputState {
                 self.nudge_thickness_for_active_tool(-1.0);
             }
             Action::IncreaseMarkerOpacity => {
-                self.set_marker_opacity(self.marker_opacity + 0.05);
+                self.set_marker_opacity(self.style.marker_opacity + 0.05);
             }
             Action::DecreaseMarkerOpacity => {
-                self.set_marker_opacity(self.marker_opacity - 0.05);
+                self.set_marker_opacity(self.style.marker_opacity - 0.05);
             }
             Action::CycleFontFamily => {
                 self.cycle_font_family();
@@ -66,7 +66,7 @@ impl InputState {
             Action::DecreasePenSmoothing => self.announce_pen_smoothing(-1),
             Action::ToggleEraserMode => {
                 if self.toggle_eraser_mode() {
-                    info!("Eraser mode set to {:?}", self.eraser_mode);
+                    info!("Eraser mode set to {:?}", self.style.eraser_mode);
                 }
             }
             Action::SelectSpotlightTool => {
@@ -74,7 +74,7 @@ impl InputState {
             }
             Action::CycleBlurStyle => {
                 if self.cycle_blur_style() {
-                    let label = self.blur_style.label();
+                    let label = self.style.blur_style.label();
                     info!("Blur style set to {label}");
                     self.push_toast(
                         ToastPriority::Info,
@@ -90,7 +90,7 @@ impl InputState {
                 if self.selection_contains_arrow() {
                     self.cycle_selected_arrow_style_from_action();
                 } else if self.cycle_arrow_style() {
-                    let label = self.arrow_style.label();
+                    let label = self.style.arrow_style.label();
                     info!("Arrow style set to {label}");
                     self.push_toast(
                         ToastPriority::Info,
@@ -116,7 +116,7 @@ impl InputState {
                 }
             }
             Action::ToggleFill => {
-                let enable = !self.fill_enabled;
+                let enable = !self.style.fill_enabled;
                 if self.set_fill_enabled(enable) {
                     info!("Fill {}", if enable { "enabled" } else { "disabled" });
                 }

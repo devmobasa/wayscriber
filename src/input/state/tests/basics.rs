@@ -41,10 +41,10 @@ fn repeated_chrome_visibility_toggles_queue_no_backend_work() {
 #[test]
 fn test_adjust_font_size_increase() {
     let mut state = create_test_input_state();
-    assert_eq!(state.current_font_size, 32.0);
+    assert_eq!(state.style.current_font_size, 32.0);
 
     state.adjust_font_size(2.0);
-    assert_eq!(state.current_font_size, 34.0);
+    assert_eq!(state.style.current_font_size, 34.0);
     assert!(state.needs_redraw);
 }
 
@@ -75,20 +75,20 @@ fn apply_preset_updates_tool_and_settings() {
     assert!(state.apply_preset(1));
     assert_eq!(state.active_tool(), Tool::Marker);
     assert_eq!(
-        state.current_color,
+        state.style.current_color,
         ColorSpec::Name("blue".to_string()).to_color()
     );
-    assert_eq!(state.current_thickness, 12.0);
-    assert_eq!(state.marker_opacity, 0.6);
-    assert!(state.fill_enabled);
-    assert_eq!(state.current_font_size, 28.0);
-    assert!(state.text_background_enabled);
-    assert_eq!(state.arrow_length, 25.0);
-    assert_eq!(state.arrow_angle, 45.0);
-    assert!(state.arrow_head_at_end);
-    assert_eq!(state.polygon_sides, 8);
-    assert_eq!(state.eraser_kind, EraserKind::Rect);
-    assert_eq!(state.eraser_mode, EraserMode::Stroke);
+    assert_eq!(state.style.current_thickness, 12.0);
+    assert_eq!(state.style.marker_opacity, 0.6);
+    assert!(state.style.fill_enabled);
+    assert_eq!(state.style.current_font_size, 28.0);
+    assert!(state.style.text_background_enabled);
+    assert_eq!(state.style.arrow_length, 25.0);
+    assert_eq!(state.style.arrow_angle, 45.0);
+    assert!(state.style.arrow_head_at_end);
+    assert_eq!(state.style.polygon_sides, 8);
+    assert_eq!(state.style.eraser_kind, EraserKind::Rect);
+    assert_eq!(state.style.eraser_mode, EraserMode::Stroke);
     assert!(!state.ui_visibility.show_status_bar);
 }
 
@@ -148,10 +148,10 @@ fn apply_preset_merges_partial_left_drag_tool_bindings() {
 #[test]
 fn test_adjust_font_size_decrease() {
     let mut state = create_test_input_state();
-    assert_eq!(state.current_font_size, 32.0);
+    assert_eq!(state.style.current_font_size, 32.0);
 
     state.adjust_font_size(-2.0);
-    assert_eq!(state.current_font_size, 30.0);
+    assert_eq!(state.style.current_font_size, 30.0);
     assert!(state.needs_redraw);
 }
 
@@ -179,21 +179,21 @@ fn test_toggle_all_highlights_toggles_both() {
 #[test]
 fn test_adjust_font_size_clamp_min() {
     let mut state = create_test_input_state();
-    state.current_font_size = 10.0;
+    state.style.current_font_size = 10.0;
 
     // Try to go below minimum (8.0)
     state.adjust_font_size(-5.0);
-    assert_eq!(state.current_font_size, 8.0);
+    assert_eq!(state.style.current_font_size, 8.0);
 }
 
 #[test]
 fn test_adjust_font_size_clamp_max() {
     let mut state = create_test_input_state();
-    state.current_font_size = 70.0;
+    state.style.current_font_size = 70.0;
 
     // Try to go above maximum (72.0)
     state.adjust_font_size(5.0);
-    assert_eq!(state.current_font_size, 72.0);
+    assert_eq!(state.style.current_font_size, 72.0);
 }
 
 #[test]
@@ -201,31 +201,31 @@ fn test_adjust_font_size_at_boundaries() {
     let mut state = create_test_input_state();
 
     // Test at minimum boundary
-    state.current_font_size = 8.0;
+    state.style.current_font_size = 8.0;
     state.adjust_font_size(0.0);
-    assert_eq!(state.current_font_size, 8.0);
+    assert_eq!(state.style.current_font_size, 8.0);
 
     // Test at maximum boundary
-    state.current_font_size = 72.0;
+    state.style.current_font_size = 72.0;
     state.adjust_font_size(0.0);
-    assert_eq!(state.current_font_size, 72.0);
+    assert_eq!(state.style.current_font_size, 72.0);
 }
 
 #[test]
 fn test_adjust_font_size_multiple_adjustments() {
     let mut state = create_test_input_state();
-    assert_eq!(state.current_font_size, 32.0);
+    assert_eq!(state.style.current_font_size, 32.0);
 
     // Simulate multiple Ctrl+Shift++ presses
     state.adjust_font_size(2.0);
     state.adjust_font_size(2.0);
     state.adjust_font_size(2.0);
-    assert_eq!(state.current_font_size, 38.0);
+    assert_eq!(state.style.current_font_size, 38.0);
 
     // Then decrease
     state.adjust_font_size(-2.0);
     state.adjust_font_size(-2.0);
-    assert_eq!(state.current_font_size, 34.0);
+    assert_eq!(state.style.current_font_size, 34.0);
 }
 
 /// Each chrome action queues its own durable entry carrying the value it

@@ -46,7 +46,7 @@ impl WaylandState {
 
     fn apply_input_update(&mut self, update: impl FnOnce(&mut InputState)) {
         #[cfg(feature = "tablet-input")]
-        let prev_thickness = self.input_state.current_thickness;
+        let prev_thickness = self.input_state.style.current_thickness;
         let hud_before = InputHudSnapshot::from_input_state(&self.input_state);
 
         update(&mut self.input_state);
@@ -104,7 +104,7 @@ impl WaylandState {
         }
 
         if self.tablet.tip_down {
-            self.record_stylus_peak(self.input_state.current_thickness);
+            self.record_stylus_peak(self.input_state.style.current_thickness);
         } else {
             self.tablet.peak_thickness = None;
         }
