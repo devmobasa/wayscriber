@@ -1,4 +1,3 @@
-
 use super::*;
 use crate::draw::{
     ArrowLabel, ArrowStyle, BLACK, BlurStyle, EmbeddedImage, EraserBrush, EraserKind,

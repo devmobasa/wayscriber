@@ -1,15 +1,16 @@
 mod clipboard;
 
-pub(crate) use clipboard::{LocalSelectionContext, SelectionClipboard};
+pub(crate) use clipboard::LocalSelectionContext;
+pub(in crate::input::state::core) use clipboard::SelectionClipboard;
 
-use super::base::{InputState, PolygonClickState, SelectionAxis};
+use super::base::{InputState, SelectionAxis};
 use crate::draw::ShapeId;
 use crate::util::Rect;
 use std::collections::HashSet;
 use std::time::Instant;
 
 #[derive(Debug, Clone, Default)]
-pub enum SelectionState {
+enum SelectionState {
     #[default]
     None,
     Active {
@@ -19,39 +20,46 @@ pub enum SelectionState {
     },
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(in crate::input::state::core) struct PolygonClickState {
+    x: i32,
+    y: i32,
+    at: Instant,
+}
+
 /// Selection membership plus interaction memory shared by selection and polygon input.
 #[derive(Debug, Clone, Default)]
-pub(crate) struct SelectionInteraction {
+pub(in crate::input::state) struct SelectionInteraction {
     state: SelectionState,
     last_axis: Option<SelectionAxis>,
     last_polygon_click: Option<PolygonClickState>,
 }
 
 impl SelectionInteraction {
-    pub(crate) fn selected_shape_ids(&self) -> &[ShapeId] {
+    pub(in crate::input::state) fn selected_shape_ids(&self) -> &[ShapeId] {
         match &self.state {
             SelectionState::Active { shape_ids, .. } => shape_ids,
             SelectionState::None => &[],
         }
     }
 
-    pub(crate) fn selected_shape_ids_set(&self) -> Option<&HashSet<ShapeId>> {
+    pub(in crate::input::state) fn selected_shape_ids_set(&self) -> Option<&HashSet<ShapeId>> {
         match &self.state {
             SelectionState::Active { shape_ids_set, .. } => Some(shape_ids_set),
             SelectionState::None => None,
         }
     }
 
-    pub(crate) fn has_selection(&self) -> bool {
+    pub(in crate::input::state) fn has_selection(&self) -> bool {
         matches!(self.state, SelectionState::Active { .. })
     }
 
-    pub(crate) fn clear(&mut self) {
+    pub(in crate::input::state) fn clear(&mut self) {
         self.state = SelectionState::None;
         self.last_axis = None;
     }
 
-    pub(crate) fn set(&mut self, ids: Vec<ShapeId>) {
+    pub(in crate::input::state) fn set(&mut self, ids: Vec<ShapeId>) {
         if ids.is_empty() {
             self.clear();
             return;
@@ -71,7 +79,7 @@ impl SelectionInteraction {
         self.last_axis = None;
     }
 
-    pub(crate) fn extend<I>(&mut self, iter: I)
+    pub(in crate::input::state) fn extend<I>(&mut self, iter: I)
     where
         I: IntoIterator<Item = ShapeId>,
     {
@@ -91,15 +99,15 @@ impl SelectionInteraction {
         }
     }
 
-    pub(crate) fn note_axis(&mut self, axis: SelectionAxis) {
+    pub(in crate::input::state) fn note_axis(&mut self, axis: SelectionAxis) {
         self.last_axis = Some(axis);
     }
 
-    pub(crate) fn record_polygon_click(&mut self, x: i32, y: i32, at: Instant) {
+    pub(in crate::input::state) fn record_polygon_click(&mut self, x: i32, y: i32, at: Instant) {
         self.last_polygon_click = Some(PolygonClickState { x, y, at });
     }
 
-    pub(crate) fn polygon_click_completes(
+    pub(in crate::input::state) fn polygon_click_completes(
         &self,
         x: i32,
         y: i32,
@@ -117,15 +125,18 @@ impl SelectionInteraction {
             && (y - last.y).abs() <= max_distance
     }
 
-    pub(crate) fn clear_polygon_click(&mut self) {
+    pub(in crate::input::state) fn clear_polygon_click(&mut self) {
         self.last_polygon_click = None;
     }
 
-    pub(crate) fn polygon_click(&self) -> Option<PolygonClickState> {
+    pub(in crate::input::state::core) fn polygon_click(&self) -> Option<PolygonClickState> {
         self.last_polygon_click
     }
 
-    pub(crate) fn restore_polygon_click(&mut self, click: Option<PolygonClickState>) {
+    pub(in crate::input::state::core) fn restore_polygon_click(
+        &mut self,
+        click: Option<PolygonClickState>,
+    ) {
         self.last_polygon_click = click;
     }
 }

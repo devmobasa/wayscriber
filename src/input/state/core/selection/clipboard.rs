@@ -1,18 +1,44 @@
 //! Clipboard state for copied selections and image-save fallback.
 
+use crate::capture::{ImageOperationKind, file::FileSaveConfig};
 use crate::draw::Shape;
 use crate::input::state::core::base::{
-    ClipboardFingerprint, ClipboardPasteRequest, PasteAnchor, PendingClipboardFallback,
-    PendingSelectionClipboardPublish, SelectionPublishState, WayscriberClipboardSelection,
+    ClipboardFingerprint, ClipboardPasteRequest, PasteAnchor, PendingSelectionClipboardPublish,
+    WayscriberClipboardSelection,
 };
 use crate::util::Rect;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const PRIVATE_CLIPBOARD_SCHEMA_VERSION: u32 = 1;
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+enum SelectionPublishState {
+    #[default]
+    NotAttempted,
+    Published {
+        generation: u64,
+    },
+    Failed {
+        generation: u64,
+        clipboard_fingerprint_at_failure: Option<ClipboardFingerprint>,
+    },
+    Superseded {
+        generation: u64,
+    },
+}
+
+/// Pending image data retained when publishing a capture to the clipboard fails.
+#[derive(Debug, Clone)]
+pub(in crate::input::state::core) struct PendingClipboardFallback {
+    pub(in crate::input::state::core) image_data: Vec<u8>,
+    pub(in crate::input::state::core) save_config: FileSaveConfig,
+    pub(in crate::input::state::core) operation: ImageOperationKind,
+    pub(in crate::input::state::core) exit_after_save: bool,
+}
+
 /// Local selection clipboard identity, publication, paste requests, and capture fallback.
 #[derive(Debug, Clone)]
-pub(crate) struct SelectionClipboard {
+pub(in crate::input::state::core) struct SelectionClipboard {
     shapes: Option<Vec<Shape>>,
     generation: u64,
     publish_state: SelectionPublishState,
@@ -47,7 +73,7 @@ impl Default for SelectionClipboard {
 }
 
 impl SelectionClipboard {
-    pub(crate) fn copy_shapes(
+    pub(in crate::input::state::core) fn copy_shapes(
         &mut self,
         shapes: Vec<Shape>,
     ) -> Option<PendingSelectionClipboardPublish> {
@@ -73,21 +99,21 @@ impl SelectionClipboard {
             })
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    pub(in crate::input::state::core) fn is_empty(&self) -> bool {
         self.shapes
             .as_ref()
             .is_none_or(|clipboard| clipboard.is_empty())
     }
 
-    pub(crate) fn shapes(&self) -> Option<Vec<Shape>> {
+    pub(in crate::input::state::core) fn shapes(&self) -> Option<Vec<Shape>> {
         self.shapes.clone().filter(|shapes| !shapes.is_empty())
     }
 
-    pub(crate) fn generation(&self) -> u64 {
+    pub(in crate::input::state::core) fn generation(&self) -> u64 {
         self.generation
     }
 
-    pub(crate) fn snapshot(&self) -> LocalSelectionContext {
+    pub(in crate::input::state::core) fn snapshot(&self) -> LocalSelectionContext {
         LocalSelectionContext {
             shapes: self.shapes.clone(),
             generation: self.generation,
@@ -97,7 +123,7 @@ impl SelectionClipboard {
         }
     }
 
-    pub(crate) fn complete_publish(
+    pub(in crate::input::state::core) fn complete_publish(
         &mut self,
         generation: u64,
         fingerprint_at_failure: Option<ClipboardFingerprint>,
@@ -117,7 +143,7 @@ impl SelectionClipboard {
         true
     }
 
-    pub(crate) fn begin_paste_request(
+    pub(in crate::input::state::core) fn begin_paste_request(
         &mut self,
         target_board_id: String,
         target_page_index: usize,
@@ -142,13 +168,13 @@ impl SelectionClipboard {
         request
     }
 
-    pub(crate) fn finish_paste_request(&mut self, id: u64) {
+    pub(in crate::input::state::core) fn finish_paste_request(&mut self, id: u64) {
         if self.active_paste_request_id == Some(id) {
             self.active_paste_request_id = None;
         }
     }
 
-    pub(crate) fn failed_after_fingerprint_probe(
+    pub(in crate::input::state::core) fn failed_after_fingerprint_probe(
         &mut self,
         request_generation: Option<u64>,
         current: Option<ClipboardFingerprint>,
@@ -177,7 +203,7 @@ impl SelectionClipboard {
         self.shapes()
     }
 
-    pub(crate) fn mark_superseded(&mut self, generation: Option<u64>) {
+    pub(in crate::input::state::core) fn mark_superseded(&mut self, generation: Option<u64>) {
         if generation == Some(self.generation) && !self.is_empty() {
             self.publish_state = SelectionPublishState::Superseded {
                 generation: self.generation,
@@ -185,20 +211,36 @@ impl SelectionClipboard {
         }
     }
 
-    pub(crate) fn set_pending_image_fallback(&mut self, fallback: PendingClipboardFallback) {
-        self.pending_image_fallback = Some(fallback);
+    pub(in crate::input::state::core) fn set_pending_image_fallback(
+        &mut self,
+        image_data: Vec<u8>,
+        save_config: FileSaveConfig,
+        operation: ImageOperationKind,
+        exit_after_save: bool,
+    ) {
+        self.pending_image_fallback = Some(PendingClipboardFallback {
+            image_data,
+            save_config,
+            operation,
+            exit_after_save,
+        });
     }
 
-    pub(crate) fn take_pending_image_fallback(&mut self) -> Option<PendingClipboardFallback> {
+    pub(in crate::input::state::core) fn take_pending_image_fallback(
+        &mut self,
+    ) -> Option<PendingClipboardFallback> {
         self.pending_image_fallback.take()
     }
 
-    pub(crate) fn restore_pending_image_fallback(&mut self, fallback: PendingClipboardFallback) {
+    pub(in crate::input::state::core) fn restore_pending_image_fallback(
+        &mut self,
+        fallback: PendingClipboardFallback,
+    ) {
         self.pending_image_fallback = Some(fallback);
     }
 
     #[cfg(test)]
-    pub(crate) fn has_pending_image_fallback(&self) -> bool {
+    pub(in crate::input::state::core) fn has_pending_image_fallback(&self) -> bool {
         self.pending_image_fallback.is_some()
     }
 }

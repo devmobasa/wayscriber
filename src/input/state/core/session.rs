@@ -1,8 +1,8 @@
 use super::base::{DrawingState, InputState};
 use super::index::SpatialIndexCache;
+use super::selection::PolygonClickState;
 use super::{ColorPickerPopupLayout, ColorPickerPopupState};
 use crate::draw::{Color, DirtyTracker, ShapeId};
-use crate::input::state::core::base::PolygonClickState;
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::{BoardManager, MouseButton};
 use crate::util::Rect;

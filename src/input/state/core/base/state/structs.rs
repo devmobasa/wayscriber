@@ -269,7 +269,7 @@ pub struct InputState {
     /// Cached bounds of up to two rendered toast action chips.
     pub(crate) ui_toast_action_bounds: [Option<(f64, f64, f64, f64)>; 2],
     /// Local selection clipboard, publication, paste request, and image fallback state.
-    pub(in crate::input::state) selection_clipboard: SelectionClipboard,
+    pub(in crate::input::state::core) selection_clipboard: SelectionClipboard,
     /// Last capture path (for quick open-folder action)
     pub(in crate::input::state::core) last_capture_path: Option<PathBuf>,
 

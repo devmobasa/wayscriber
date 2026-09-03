@@ -1,6 +1,6 @@
 use super::super::base::{
-    BLOCKED_ACTION_DURATION_MS, BlockedActionFeedback, InputState, PendingClipboardFallback, Toast,
-    ToastCommand, ToastPress, ToastPriority, ToastPushOutcome,
+    BLOCKED_ACTION_DURATION_MS, BlockedActionFeedback, InputState, Toast, ToastCommand, ToastPress,
+    ToastPriority, ToastPushOutcome,
 };
 use crate::capture::{
     ImageOperationKind,
@@ -228,13 +228,12 @@ impl InputState {
         operation: ImageOperationKind,
         exit_after_save: bool,
     ) {
-        self.selection_clipboard
-            .set_pending_image_fallback(PendingClipboardFallback {
-                image_data,
-                save_config,
-                operation,
-                exit_after_save,
-            });
+        self.selection_clipboard.set_pending_image_fallback(
+            image_data,
+            save_config,
+            operation,
+            exit_after_save,
+        );
     }
 
     /// Save pending clipboard fallback image to file.

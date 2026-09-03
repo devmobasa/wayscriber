@@ -103,8 +103,11 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
    - Holds `input::BoardManager`, whose ordered `BoardState` entries each own `draw::BoardPages`,
      plus modifiers and `DrawingState`. `DrawingStyle` owns config-derived colors, sizes, fonts, and
      shape appearance; `TextEditing` owns editor mode, asynchronous identity, IME composition,
-     caret/selection edits, and existing-shape edit lifecycle; `PresetSlots` owns preset lifecycle
-     and feedback; `HistoryLimits` owns undo retention plus delayed playback scheduling.
+     caret/selection edits, and existing-shape edit lifecycle; `SelectionInteraction` owns selected
+     IDs, nudge-axis memory, and polygon click timing; `SelectionClipboard` owns copied shapes,
+     publication generations, paste request identity, and image-save fallback; `PresetSlots` owns
+     preset lifecycle and feedback; `HistoryLimits` owns undo retention plus delayed playback
+     scheduling. Pure translation and scaling are methods on `draw::Shape`.
    - `state/actions/` maps keybindings to `Action` values and routes color, board/page, capture,
      history, selection, tool, and UI behavior. `HelpOverlayState` owns help visibility, navigation,
      search, scrolling, and press/release bookkeeping. `BoardPickerPanel` similarly owns the board

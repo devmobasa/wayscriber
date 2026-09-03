@@ -13,7 +13,6 @@ pub const PAGE_UNDO_EXPIRE_MS: u64 = 30_000;
 #[allow(dead_code)]
 pub const STATUS_CHANGE_HIGHLIGHT_MS: u64 = 300;
 
-use crate::capture::{ImageOperationKind, file::FileSaveConfig};
 use crate::config::ToolPresetConfig;
 use crate::domain::{Action, OnboardingTip};
 use crate::draw::frame::ShapeSnapshot;
@@ -400,13 +399,6 @@ pub(crate) struct BoardPickerClickState {
     pub at: Instant,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct PolygonClickState {
-    pub x: i32,
-    pub y: i32,
-    pub at: Instant,
-}
-
 /// Tracks which compositor features are available.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CompositorCapabilities {
@@ -468,16 +460,6 @@ impl CompositorCapabilities {
 #[derive(Debug, Clone)]
 pub(crate) struct BlockedActionFeedback {
     pub started: Instant,
-}
-
-/// Pending clipboard fallback data for when clipboard copy fails.
-#[derive(Debug, Clone)]
-pub(crate) struct PendingClipboardFallback {
-    pub image_data: Vec<u8>,
-    pub save_config: FileSaveConfig,
-    pub operation: ImageOperationKind,
-    /// Whether to exit after successful fallback save (from exit-after-capture mode).
-    pub exit_after_save: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -593,23 +575,6 @@ pub(crate) struct ClipboardFingerprint {
     pub bounded_content_hash: Option<u64>,
     pub bounded_content_len: Option<usize>,
     pub bounded_content_truncated: bool,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub(crate) enum SelectionPublishState {
-    #[default]
-    NotAttempted,
-    Published {
-        generation: u64,
-    },
-    Failed {
-        generation: u64,
-        clipboard_fingerprint_at_failure: Option<ClipboardFingerprint>,
-    },
-    Superseded {
-        generation: u64,
-    },
 }
 
 #[allow(dead_code)]
