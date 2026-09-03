@@ -88,8 +88,9 @@ impl Default for ToolbarInteraction {
 impl ToolbarInteraction {
     pub(in crate::input::state) fn from_config(
         config: &ToolbarConfig,
-        mut legacy_flags: ToolbarSectionVisibility,
+        legacy_flags: &ToolbarSectionVisibility,
     ) -> Self {
+        let mut legacy_flags = *legacy_flags;
         let mut items = config.items.clone();
         legacy_flags.apply_mode_override(config.mode_overrides.for_mode(config.layout_mode));
         fold_legacy_section_flags(
@@ -231,7 +232,7 @@ impl ToolbarInteraction {
         self.top_pinned = true;
     }
 
-    pub(in crate::input::state) fn set_visibility_from_top_pin(&mut self) {
+    pub(in crate::input::state) fn derive_visibility_from_pins(&mut self) {
         self.top_visible = self.top_pinned;
         self.visible = self.top_visible;
     }
@@ -344,10 +345,8 @@ impl ToolbarInteraction {
         self.customize_drag = Some(drag);
     }
 
-    pub(in crate::input::state) fn take_customize_drag(
-        &mut self,
-    ) -> Option<(ToolbarItemOrderGroup, ToolbarItemId)> {
-        self.customize_drag.take()
+    pub(in crate::input::state) fn clear_customize_drag(&mut self) -> bool {
+        self.customize_drag.take().is_some()
     }
 
     pub(in crate::input::state) fn set_customize_items_open(&mut self, open: bool) -> bool {
@@ -612,7 +611,7 @@ mod tests {
             ..ToolbarConfig::default()
         };
 
-        let toolbar = ToolbarInteraction::from_config(&config, legacy_visibility());
+        let toolbar = ToolbarInteraction::from_config(&config, &legacy_visibility());
 
         assert!(!toolbar.visible());
         assert!(!toolbar.top_visible());
@@ -674,8 +673,46 @@ mod tests {
         toolbar.begin_customize_drag(drag);
 
         assert_eq!(toolbar.customize_drag(), Some(&drag));
-        assert_eq!(toolbar.take_customize_drag(), Some(drag));
+        assert!(toolbar.clear_customize_drag());
         assert!(toolbar.customize_drag().is_none());
+        assert!(!toolbar.clear_customize_drag());
+    }
+
+    #[test]
+    fn dragging_an_item_reorders_only_its_group() {
+        let mut toolbar = ToolbarInteraction::default();
+        let group = ToolbarItemOrderGroup::TopTools;
+        let pen = crate::config::toolbar_item_ids::TOP_TOOL_PEN;
+        let before = toolbar.resolved_items().order.ordered_ids(group).to_vec();
+        toolbar.begin_customize_drag((group, pen));
+
+        assert!(toolbar.move_dragged_item_to_index(group, 3));
+        assert_eq!(toolbar.resolved_items().order.ordered_ids(group)[3], pen);
+        assert_ne!(toolbar.resolved_items().order.ordered_ids(group), before);
+        assert!(toolbar.clear_customize_drag());
+    }
+
+    #[test]
+    fn opening_a_top_menu_closes_the_previous_one() {
+        let mut toolbar = ToolbarInteraction::default();
+
+        assert!(toolbar.set_top_menu_open(TopMenuState::ShapePicker, true));
+        assert_eq!(toolbar.top_menu(), TopMenuState::ShapePicker);
+        assert!(toolbar.set_top_menu_open(TopMenuState::CanvasPopover, true));
+        assert_eq!(toolbar.top_menu(), TopMenuState::CanvasPopover);
+        assert!(toolbar.set_top_menu_open(TopMenuState::SettingsPopover, true));
+        assert_eq!(toolbar.top_menu(), TopMenuState::SettingsPopover);
+    }
+
+    #[test]
+    fn deriving_visibility_from_pins_updates_both_live_flags() {
+        let mut toolbar = ToolbarInteraction::default();
+        toolbar.set_top_pinned(false);
+
+        toolbar.derive_visibility_from_pins();
+
+        assert!(!toolbar.visible());
+        assert!(!toolbar.top_visible());
     }
 
     #[test]

@@ -38,7 +38,7 @@ impl InputState {
             restore.toolbar_visibility.set_visible(visible);
             return;
         }
-        self.toolbar.set_visibility_from_top_pin();
+        self.toolbar.derive_visibility_from_pins();
         self.refresh_status_hud_layout();
     }
 
@@ -208,7 +208,7 @@ impl InputState {
             show_step_section: self.ui_visibility.show_step_section,
             show_text_controls: self.ui_visibility.show_text_controls,
         };
-        self.toolbar = super::super::toolbar::ToolbarInteraction::from_config(config, legacy);
+        self.toolbar = super::super::toolbar::ToolbarInteraction::from_config(config, &legacy);
         self.refresh_section_visibility();
     }
 
@@ -328,7 +328,7 @@ impl InputState {
     }
 
     pub fn clear_toolbar_item_drag(&mut self) {
-        self.toolbar.take_customize_drag();
+        self.toolbar.clear_customize_drag();
     }
 
     pub(crate) fn set_toolbar_item_order(
