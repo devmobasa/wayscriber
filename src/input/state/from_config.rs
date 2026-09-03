@@ -78,7 +78,7 @@ impl InputState {
         input_state.init_toolbar_from_config(&config.ui.toolbar);
         input_state.init_toolbar_minimized_from_config(config.ui.toolbar.top_minimized);
         input_state.init_toolbar_display_mode_from_config(config.ui.toolbar.top_display_mode);
-        input_state.zoom_chip_display = config.ui.toolbar.zoom_chip_display;
+        input_state.zoom_chip.display = config.ui.toolbar.zoom_chip_display;
         input_state.init_toolbar_rebind_modifier_from_config(config.ui.toolbar.rebind_modifier);
         input_state.init_presets_from_config(&config.presets);
 

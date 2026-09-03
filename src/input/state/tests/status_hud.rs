@@ -55,10 +55,10 @@ fn status_hud_hover_tracks_segments_and_requests_redraw() {
     assert!(input.needs_redraw, "hover transition requests a redraw");
 
     input.needs_redraw = false;
-    input.zoom_chip_hover = Some(crate::ui::ZoomChipButtonKind::In);
+    input.zoom_chip.hover = Some(crate::ui::ZoomChipButtonKind::In);
     input.clear_chrome_hover();
     assert_eq!(input.status_hud.hover, None);
-    assert_eq!(input.zoom_chip_hover, None);
+    assert_eq!(input.zoom_chip.hover, None);
     assert!(input.needs_redraw, "surface leave clears hover and redraws");
 
     input.on_mouse_motion(x, y);

@@ -182,9 +182,8 @@ pub struct InputState {
     pub command_palette_toast_duration_ms: u64,
     /// Runtime visibility preferences for overlay chrome and toolbar sections.
     pub ui_visibility: crate::input::state::UiVisibility,
-    /// When the zoom chip shows: always, or only while zoom is active
-    /// (`[ui.toolbar] zoom_chip_display`)
-    pub zoom_chip_display: crate::config::ZoomChipDisplay,
+    /// Display policy, cached geometry, and pointer interaction state for the zoom chip.
+    pub zoom_chip: crate::input::state::core::zoom_chip::ZoomChipState,
     /// Whether presenter mode is currently enabled
     pub presenter_mode: bool,
     /// Presenter mode behavior configuration
@@ -197,8 +196,6 @@ pub struct InputState {
     pub(crate) focus_mode_restore: Option<FocusModeRestore>,
     /// Cached geometry and pointer interaction state for the status HUD.
     pub(crate) status_hud: crate::input::state::core::status_hud::StatusHudState,
-    /// Hovered zoom chip button (idle pointer only; same affordance)
-    pub zoom_chip_hover: Option<crate::ui::ZoomChipButtonKind>,
     /// Whether passthrough light mode is currently enabled
     pub light_mode: bool,
     /// Whether light mode is temporarily accepting drawing input
@@ -407,16 +404,6 @@ pub struct InputState {
     /// Pending delayed history playback state
     pub(in crate::input::state::core) pending_history: Option<DelayedHistory>,
 
-    /// Cached layout details for the interactive bottom-right zoom chip
-    pub zoom_chip_layout: Option<crate::ui::ZoomChipLayout>,
-    /// The chip press a left press recorded, set when the internal
-    /// pointer-routing chain consumed that press (tablet and other paths that
-    /// bypass the backend's own press→release flag). `Button(kind)` records the
-    /// pressed button so the matching release fires only when it lands on the
-    /// SAME button; `Passive` marks a press on the passive `NN%` readout (or an
-    /// inter-piece gap) so its release is still consumed but fires nothing;
-    /// `None` means no chip press is pending.
-    pub(in crate::input::state) zoom_chip_press_pending: crate::ui::ZoomChipPress,
     /// Spatial grid plus guarded ShapeId-to-z-order indices for large-frame hit-testing.
     pub(in crate::input::state::core) spatial_index: Option<SpatialIndexCache>,
     /// Last known pointer position in screen coordinates (for overlays and hover refresh)

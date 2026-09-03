@@ -89,7 +89,7 @@ pub(super) fn maybe_render(
         state.begin_perf_render(render_start);
         let chrome_hover_before = (
             state.input_state.status_hud.hover,
-            state.input_state.zoom_chip_hover,
+            state.input_state.zoom_chip.hover,
         );
         match state.render(qh) {
             Ok(RenderOutcome::BuffersInFlight) => {
@@ -121,7 +121,7 @@ pub(super) fn maybe_render(
                 state.start_font_catalog_prewarm();
                 let chrome_hover_after = (
                     state.input_state.status_hud.hover,
-                    state.input_state.zoom_chip_hover,
+                    state.input_state.zoom_chip.hover,
                 );
                 if chrome_hover_before != chrome_hover_after && state.has_pointer_focus() {
                     // Layout can move under a stationary pointer (for example,
