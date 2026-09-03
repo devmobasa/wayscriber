@@ -9,7 +9,8 @@ pub(in crate::input::state::core) use input_effect_outbox::{InputEffectKind, Inp
 pub use state::InputState;
 pub(in crate::input::state) use state::InputStateSeed;
 pub(crate) use state::{FocusModeRestore, LightModeRestore, PresenterRestore};
-pub use toast_queue::{Toast, ToastPriority, ToastPushOutcome, ToastQueue};
+pub(in crate::input::state::core) use toast_queue::ToastQueue;
+pub use toast_queue::{Toast, ToastPriority, ToastPushOutcome};
 pub use types::{
     BLOCKED_ACTION_DURATION_MS, BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS,
     CompositorCapabilities, DesktopEnvironment, DrawingState, MAX_STROKE_THICKNESS,
@@ -19,11 +20,11 @@ pub use types::{
     SelectionHandle, ShellMode, TextInputMode, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
 pub(crate) use types::{
-    BlockedActionFeedback, BoardPickerClickState, ClipboardFingerprint, ClipboardPasteRequest,
-    HelperLaunchRequest, PasteAnchor, PendingBackendAction, PendingBoardDelete,
-    PendingOnboardingUsage, PendingPageDelete, PendingSelectionClipboardPublish,
-    PendingToolbarPersistence, PresetFeedbackState, TextClipboardRequest, TextCutTarget,
-    TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress, WayscriberClipboardSelection,
+    BoardPickerClickState, ClipboardFingerprint, ClipboardPasteRequest, HelperLaunchRequest,
+    PasteAnchor, PendingBackendAction, PendingBoardDelete, PendingOnboardingUsage,
+    PendingPageDelete, PendingSelectionClipboardPublish, PendingToolbarPersistence,
+    PresetFeedbackState, TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget,
+    ToastCommand, ToastPress, UiToastState, WayscriberClipboardSelection,
 };
 pub(crate) use types::{KeybindingEditOperation, KeybindingEditRequest};
 pub use ui_visibility::UiVisibility;

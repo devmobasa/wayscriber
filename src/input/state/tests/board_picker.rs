@@ -853,7 +853,7 @@ fn board_picker_page_jump_edges_keep_picker_open() {
         BoardPickerPageNavMode::Jump
     );
     assert_eq!(
-        input.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        input.active_toast().map(|toast| toast.message.as_str()),
         Some("Page number out of range.")
     );
 
@@ -1417,7 +1417,7 @@ fn board_picker_edit_color_selected_shows_info_toast_for_transparent_board() {
 
     assert!(input.board_picker_edit_state().is_none());
     assert_eq!(
-        input.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        input.active_toast().map(|toast| toast.message.as_str()),
         Some("Overlay board has no background color.")
     );
 }
@@ -1441,7 +1441,7 @@ fn board_picker_commit_edit_rejects_invalid_colors_and_keeps_edit_open() {
 
     assert!(!input.board_picker_commit_edit());
     assert_eq!(
-        input.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        input.active_toast().map(|toast| toast.message.as_str()),
         Some("Invalid color. Use #RRGGBB or RRGGBB.")
     );
     assert_eq!(
@@ -1731,8 +1731,7 @@ fn board_picker_delete_page_requires_confirmation_for_multi_page_boards() {
     );
     assert!(
         input
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Click delete again to confirm."))
     );
 

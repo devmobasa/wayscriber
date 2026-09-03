@@ -1,56 +1,99 @@
 use super::super::base::{
-    BLOCKED_ACTION_DURATION_MS, BlockedActionFeedback, InputState, Toast, ToastCommand, ToastPress,
-    ToastPriority, ToastPushOutcome,
+    CompositorCapabilities, InputState, Toast, ToastCommand, ToastPress, ToastPriority,
+    ToastPushOutcome, UiToastState,
 };
+use super::super::feedback::ToastBounds;
 use crate::capture::{
     ImageOperationKind,
     file::{FileSaveConfig, save_screenshot},
 };
 use crate::domain::Action;
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 impl InputState {
-    /// Push a toast into the priority queue. Higher priorities preempt the
-    /// visible toast, equal priorities queue FIFO, and a push with the key of
-    /// an active/queued toast updates it in place (see
-    /// [`crate::input::state::ToastQueue`]).
+    /// Push a toast into the priority queue.
     pub(crate) fn push_toast(
         &mut self,
         priority: ToastPriority,
         key: &'static str,
         toast: Toast,
     ) -> ToastPushOutcome {
-        let outcome =
-            self.toast_queue
-                .push(&mut self.ui_toast, priority, key, toast, Instant::now());
+        let outcome = self.feedback.push(priority, key, toast, Instant::now());
         if outcome.changed_active() {
-            self.ui_toast_bounds = None;
-            self.ui_toast_action_bounds = [None, None];
             self.needs_redraw = true;
         }
         outcome
     }
 
-    /// Whether no toast is visible and nothing is queued. Hint producers use
-    /// this to defer instead of competing with real feedback.
     pub(crate) fn toasts_idle(&self) -> bool {
-        self.ui_toast.is_none() && self.toast_queue.is_empty()
+        self.feedback.idle()
+    }
+
+    pub(crate) fn active_toast(&self) -> Option<&UiToastState> {
+        self.feedback.active()
+    }
+
+    pub(crate) fn has_active_toast(&self) -> bool {
+        self.feedback.active().is_some()
+    }
+
+    pub(crate) fn command_palette_toast_duration_ms(&self) -> u64 {
+        self.feedback.command_palette_toast_duration_ms()
+    }
+
+    pub(crate) fn set_command_palette_toast_duration_ms(&mut self, duration_ms: u64) {
+        self.feedback
+            .set_command_palette_toast_duration_ms(duration_ms);
+    }
+
+    pub(crate) fn set_toast_geometry(
+        &mut self,
+        bounds: Option<ToastBounds>,
+        action_bounds: [Option<ToastBounds>; 2],
+    ) {
+        self.feedback.set_geometry(bounds, action_bounds);
+    }
+
+    pub(crate) fn remove_matching_toasts(
+        &mut self,
+        should_remove: impl FnMut(&'static str, Option<Action>) -> bool,
+    ) -> bool {
+        let active_removed = self.feedback.remove_matching(should_remove);
+        if active_removed {
+            self.needs_redraw = true;
+        }
+        active_removed
     }
 
     #[cfg(test)]
     pub(crate) fn test_toast_count(&self) -> usize {
-        usize::from(self.ui_toast.is_some()) + self.toast_queue.pending_len()
+        self.feedback.toast_count()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_pending_toast_count(&self) -> usize {
+        self.feedback.pending_toast_count()
     }
 
     #[cfg(test)]
     pub(crate) fn test_active_toast_message(&self) -> Option<&str> {
-        self.ui_toast.as_ref().map(|toast| toast.message.as_str())
+        self.feedback.active().map(|toast| toast.message.as_str())
     }
 
     #[cfg(test)]
     pub(crate) fn test_active_toast_key(&self) -> Option<&'static str> {
-        self.ui_toast.as_ref().map(|toast| toast.key)
+        self.feedback.active().map(|toast| toast.key)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_toast_geometry(&self) -> Option<ToastBounds> {
+        self.feedback.geometry()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_blocked_feedback_active(&self) -> bool {
+        self.feedback.blocked_action_active()
     }
 
     #[allow(dead_code)]
@@ -89,120 +132,52 @@ impl InputState {
     }
 
     pub fn advance_ui_toast(&mut self, now: Instant) -> bool {
-        let had_toast = self.ui_toast.is_some();
-        let (still_showing, activated) = self.toast_queue.advance(&mut self.ui_toast, now);
-        if activated || (had_toast && !still_showing) {
-            // The visible toast changed (expired or a queued one replaced it).
-            self.ui_toast_bounds = None;
-            self.ui_toast_action_bounds = [None, None];
+        let before = self.feedback.active().map(|toast| toast.activation_id);
+        let still_showing = self.feedback.advance(now);
+        let after = self.feedback.active().map(|toast| toast.activation_id);
+        if before != after {
             self.needs_redraw = true;
         }
         still_showing
     }
 
-    /// Capture the identity of the toast under a press without dismissing it.
     pub(crate) fn toast_press_at(&self, x: i32, y: i32) -> Option<ToastPress> {
-        let toast = self.ui_toast.as_ref()?;
-        if !self.toast_contains(x, y) {
-            return None;
-        }
-        if toast.secondary_action.is_none() {
-            return Some(ToastPress::body(toast.activation_id));
-        }
-        Some(match self.toast_action_at(x, y) {
-            Some(index) => ToastPress::new(toast.activation_id, index),
-            None => ToastPress::body(toast.activation_id),
-        })
+        self.feedback.press_at(x, y)
     }
 
-    /// Resolve a toast release only when the exact toast activation captured
-    /// on press is still visible and the release remains within its bounds.
     pub(crate) fn resolve_toast_release(
         &mut self,
         pressed: ToastPress,
         x: i32,
         y: i32,
     ) -> (bool, Option<ToastCommand>) {
-        let Some(toast) = self.ui_toast.as_ref() else {
-            return (false, None);
-        };
-
-        let release_target = toast
-            .secondary_action
-            .is_some()
-            .then(|| self.toast_action_at(x, y))
-            .flatten();
-        let release_inside = self.toast_contains(x, y);
-
-        if pressed.matches(toast) && release_inside && pressed.matches_target(release_target) {
-            let action = if toast.secondary_action.is_some() {
-                match pressed.action_index() {
-                    Some(0) => toast.action.as_ref().map(|action| action.command),
-                    Some(1) => toast.secondary_action.as_ref().map(|action| action.command),
-                    _ => None,
-                }
-            } else {
-                toast.action.as_ref().map(|action| action.command)
-            };
-            // Dismiss the toast and promote the next queued one, if any.
-            self.toast_queue
-                .on_dismissed(&mut self.ui_toast, Instant::now());
-            self.ui_toast_bounds = None;
-            self.ui_toast_action_bounds = [None, None];
+        let result = self.feedback.release_at(pressed, x, y, Instant::now());
+        if result.0 {
             self.needs_redraw = true;
-            return (true, action);
         }
-        (false, None)
+        result
     }
 
+    #[cfg(test)]
     pub(crate) fn toast_contains(&self, x: i32, y: i32) -> bool {
-        self.ui_toast.is_some()
-            && self.ui_toast_bounds.is_some_and(|(bx, by, bw, bh)| {
-                let xf = x as f64;
-                let yf = y as f64;
-                xf >= bx && xf <= bx + bw && yf >= by && yf <= by + bh
-            })
+        self.feedback.contains(x, y)
     }
 
-    fn toast_action_at(&self, x: i32, y: i32) -> Option<usize> {
-        let xf = x as f64;
-        let yf = y as f64;
-        self.ui_toast_action_bounds.iter().position(|bounds| {
-            bounds.is_some_and(|(bx, by, bw, bh)| {
-                xf >= bx && xf <= bx + bw && yf >= by && yf <= by + bh
-            })
-        })
+    pub(crate) fn note_capability_toast(&mut self, caps: CompositorCapabilities) -> Option<String> {
+        self.feedback.note_capability_toast(caps)
     }
 
-    /// Trigger the blocked action visual feedback (red flash on screen edges).
     pub(crate) fn trigger_blocked_feedback(&mut self) {
-        self.blocked_action_feedback = Some(BlockedActionFeedback {
-            started: Instant::now(),
-        });
+        self.feedback.trigger_blocked_action(Instant::now());
         self.needs_redraw = true;
     }
 
-    /// Advance the blocked action feedback animation. Returns true if still active.
     pub fn advance_blocked_feedback(&mut self, now: Instant) -> bool {
-        let Some(feedback) = &self.blocked_action_feedback else {
-            return false;
-        };
-        let duration = Duration::from_millis(BLOCKED_ACTION_DURATION_MS);
-        if now.saturating_duration_since(feedback.started) >= duration {
-            self.blocked_action_feedback = None;
-            return false;
-        }
-        true
+        self.feedback.advance_blocked_action(now)
     }
 
-    /// Get the progress (0.0 to 1.0) of the blocked action feedback animation.
     pub fn blocked_feedback_progress(&self) -> Option<f64> {
-        let feedback = self.blocked_action_feedback.as_ref()?;
-        let elapsed = Instant::now()
-            .saturating_duration_since(feedback.started)
-            .as_millis() as f64;
-        let total = BLOCKED_ACTION_DURATION_MS as f64;
-        Some((elapsed / total).min(1.0))
+        self.feedback.blocked_action_progress(Instant::now())
     }
 
     /// Request overlay exit that must not be deferred by XDG stay-mode focus loss.
@@ -325,6 +300,7 @@ mod tests {
     };
 
     use crate::ui::toolbar::ToolbarEvent;
+    use std::time::Duration;
 
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();
@@ -343,12 +319,12 @@ mod tests {
             "test",
             Toast::info("Hello").duration_ms(10),
         );
-        state.ui_toast_bounds = Some((1.0, 2.0, 3.0, 4.0));
-        let now = state.ui_toast.as_ref().unwrap().started + Duration::from_millis(10);
+        state.set_toast_geometry(Some((1.0, 2.0, 3.0, 4.0)), [None, None]);
+        let now = state.active_toast().unwrap().started + Duration::from_millis(10);
 
         assert!(!state.advance_ui_toast(now));
-        assert!(state.ui_toast.is_none());
-        assert!(state.ui_toast_bounds.is_none());
+        assert!(state.active_toast().is_none());
+        assert!(state.test_toast_geometry().is_none());
     }
 
     #[test]
@@ -356,15 +332,18 @@ mod tests {
         let mut state = make_state();
         state.push_toast(ToastPriority::Info, "first", Toast::info("First"));
         state.push_toast(ToastPriority::Info, "second", Toast::info("Second"));
-        state.ui_toast_bounds = Some((1.0, 2.0, 3.0, 4.0));
+        state.set_toast_geometry(Some((1.0, 2.0, 3.0, 4.0)), [None, None]);
         state.needs_redraw = false;
-        let now = state.ui_toast.as_ref().unwrap().started
-            + Duration::from_millis(state.ui_toast.as_ref().unwrap().duration_ms);
+        let now = state.active_toast().unwrap().started
+            + Duration::from_millis(state.active_toast().unwrap().duration_ms);
 
         assert!(state.advance_ui_toast(now), "queued toast keeps showing");
-        let toast = state.ui_toast.as_ref().expect("promoted toast");
+        let toast = state.active_toast().expect("promoted toast");
         assert_eq!(toast.message, "Second");
-        assert!(state.ui_toast_bounds.is_none(), "stale bounds cleared");
+        assert!(
+            state.test_toast_geometry().is_none(),
+            "stale bounds cleared"
+        );
         assert!(state.needs_redraw);
     }
 
@@ -376,7 +355,7 @@ mod tests {
             "test",
             Toast::info("Saved").action("Open", Action::OpenCaptureFolder),
         );
-        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        state.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
 
         let pressed = state.toast_press_at(50, 40).expect("toast press");
         let (hit, action) = state.resolve_toast_release(pressed, 50, 40);
@@ -386,8 +365,8 @@ mod tests {
             action,
             Some(ToastCommand::Dispatch(Action::OpenCaptureFolder))
         );
-        assert!(state.ui_toast.is_none());
-        assert!(state.ui_toast_bounds.is_none());
+        assert!(state.active_toast().is_none());
+        assert!(state.test_toast_geometry().is_none());
     }
 
     #[test]
@@ -412,11 +391,13 @@ mod tests {
                     },
                 ),
         );
-        state.ui_toast_bounds = Some((10.0, 20.0, 220.0, 40.0));
-        state.ui_toast_action_bounds = [
-            Some((120.0, 24.0, 44.0, 28.0)),
-            Some((170.0, 24.0, 56.0, 28.0)),
-        ];
+        state.set_toast_geometry(
+            Some((10.0, 20.0, 220.0, 40.0)),
+            [
+                Some((120.0, 24.0, 44.0, 28.0)),
+                Some((170.0, 24.0, 56.0, 28.0)),
+            ],
+        );
 
         let pressed = state.toast_press_at(190, 38).expect("secondary chip press");
         let (hit, action) = state.resolve_toast_release(pressed, 190, 38);
@@ -429,7 +410,7 @@ mod tests {
                 then: Some(Action::OpenConfiguratorOnboardingHints),
             })
         );
-        assert!(state.ui_toast.is_none());
+        assert!(state.active_toast().is_none());
     }
 
     #[test]
@@ -454,18 +435,20 @@ mod tests {
                     },
                 ),
         );
-        state.ui_toast_bounds = Some((10.0, 20.0, 220.0, 40.0));
-        state.ui_toast_action_bounds = [
-            Some((120.0, 24.0, 44.0, 28.0)),
-            Some((170.0, 24.0, 56.0, 28.0)),
-        ];
+        state.set_toast_geometry(
+            Some((10.0, 20.0, 220.0, 40.0)),
+            [
+                Some((120.0, 24.0, 44.0, 28.0)),
+                Some((170.0, 24.0, 56.0, 28.0)),
+            ],
+        );
 
         let pressed = state.toast_press_at(50, 38).expect("toast body press");
         let (hit, action) = state.resolve_toast_release(pressed, 50, 38);
 
         assert!(hit);
         assert_eq!(action, None);
-        assert!(state.ui_toast.is_none());
+        assert!(state.active_toast().is_none());
     }
 
     #[test]
@@ -490,11 +473,13 @@ mod tests {
                     },
                 ),
         );
-        state.ui_toast_bounds = Some((10.0, 20.0, 220.0, 40.0));
-        state.ui_toast_action_bounds = [
-            Some((120.0, 24.0, 44.0, 28.0)),
-            Some((170.0, 24.0, 56.0, 28.0)),
-        ];
+        state.set_toast_geometry(
+            Some((10.0, 20.0, 220.0, 40.0)),
+            [
+                Some((120.0, 24.0, 44.0, 28.0)),
+                Some((170.0, 24.0, 56.0, 28.0)),
+            ],
+        );
 
         let pressed = state.toast_press_at(140, 38).expect("primary chip press");
         let (hit, action) = state.resolve_toast_release(pressed, 190, 38);
@@ -502,7 +487,7 @@ mod tests {
         assert!(!hit);
         assert_eq!(action, None);
         assert!(
-            state.ui_toast.is_some(),
+            state.active_toast().is_some(),
             "mismatched release keeps the toast"
         );
     }
@@ -516,16 +501,16 @@ mod tests {
             Toast::info("Delete page?").action("Confirm", Action::PageDelete),
         );
         state.push_toast(ToastPriority::Info, "info", Toast::info("Later"));
-        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        state.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
 
         let pressed = state.toast_press_at(50, 40).expect("toast press");
         let (hit, action) = state.resolve_toast_release(pressed, 50, 40);
 
         assert!(hit);
         assert_eq!(action, Some(ToastCommand::Dispatch(Action::PageDelete)));
-        let promoted = state.ui_toast.as_ref().expect("queued toast promoted");
+        let promoted = state.active_toast().expect("queued toast promoted");
         assert_eq!(promoted.message, "Later");
-        assert!(state.ui_toast_bounds.is_none());
+        assert!(state.test_toast_geometry().is_none());
     }
 
     fn add_test_shape(state: &mut InputState) {
@@ -557,7 +542,7 @@ mod tests {
             state.boards.active_frame().undo_stack_len() > 0,
             "the toast's Undo? chip needs an undoable clear"
         );
-        let toast = state.ui_toast.as_ref().expect("undo toast");
+        let toast = state.active_toast().expect("undo toast");
         assert_eq!(toast.kind, UiToastKind::Info);
         assert_eq!(toast.message, "Cleared");
         assert_eq!(toast.duration_ms, 2000, "short-lived action toast");
@@ -566,7 +551,7 @@ mod tests {
         assert_eq!(action.dispatch_action(), Some(Action::Undo));
 
         // Clicking inside the toast returns the attached Undo action.
-        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        state.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
         let pressed = state.toast_press_at(50, 40).expect("toast press");
         assert_eq!(
             state.resolve_toast_release(pressed, 50, 40),
@@ -582,7 +567,10 @@ mod tests {
         assert!(state.apply_toolbar_event(ToolbarEvent::ClearCanvas { instant: true }));
 
         assert!(state.boards.active_frame().shapes.is_empty());
-        assert!(state.ui_toast.is_none(), "Shift+click clears silently");
+        assert!(
+            state.active_toast().is_none(),
+            "Shift+click clears silently"
+        );
     }
 
     #[test]
@@ -592,7 +580,7 @@ mod tests {
         assert!(state.apply_toolbar_event(ToolbarEvent::ClearCanvas { instant: false }));
 
         assert!(
-            state.ui_toast.is_none(),
+            state.active_toast().is_none(),
             "nothing was cleared, so nothing to undo"
         );
     }
@@ -601,18 +589,18 @@ mod tests {
     fn toast_contains_reports_hit_without_dismissing() {
         let mut state = make_state();
         state.push_toast(ToastPriority::Info, "test", Toast::info("Saved"));
-        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        state.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
 
         assert!(state.toast_contains(50, 40));
-        assert!(state.ui_toast.is_some());
-        assert!(state.ui_toast_bounds.is_some());
+        assert!(state.active_toast().is_some());
+        assert!(state.test_toast_geometry().is_some());
     }
 
     #[test]
     fn preempting_toast_clears_stale_click_bounds() {
         let mut state = make_state();
         state.push_toast(ToastPriority::Info, "info", Toast::info("Saved"));
-        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        state.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
 
         // Action priority preempts the plain info toast.
         let outcome = state.push_toast(
@@ -622,9 +610,9 @@ mod tests {
         );
 
         assert_eq!(outcome, ToastPushOutcome::Displayed);
-        let toast = state.ui_toast.as_ref().expect("preempting toast visible");
+        let toast = state.active_toast().expect("preempting toast visible");
         assert_eq!(toast.message, "Delete page?");
-        assert!(state.ui_toast_bounds.is_none());
+        assert!(state.test_toast_geometry().is_none());
         assert!(!state.toast_contains(50, 40));
         let stale_press = ToastPress::body(0);
         assert_eq!(
@@ -640,10 +628,10 @@ mod tests {
         let outcome = state.push_toast(ToastPriority::Info, "board.switch", Toast::info("Board 3"));
 
         assert_eq!(outcome, ToastPushOutcome::UpdatedActive);
-        assert_eq!(state.ui_toast.as_ref().unwrap().message, "Board 3");
-        assert!(state.toasts_idle() || state.ui_toast.is_some());
+        assert_eq!(state.active_toast().unwrap().message, "Board 3");
+        assert!(state.toasts_idle() || state.active_toast().is_some());
         assert!(
-            state.toast_queue.is_empty(),
+            state.test_pending_toast_count() == 0,
             "no stacking for spam producers"
         );
     }
@@ -657,11 +645,11 @@ mod tests {
         let outcome = state.push_toast(ToastPriority::Hint, "hint", Toast::info("Press F1"));
         assert_eq!(outcome, ToastPushOutcome::HintYielded);
         assert!(!outcome.accepted());
-        assert_eq!(state.ui_toast.as_ref().unwrap().message, "Busy");
+        assert_eq!(state.active_toast().unwrap().message, "Busy");
 
         // Once idle again, the hint is accepted.
-        let now = state.ui_toast.as_ref().unwrap().started
-            + Duration::from_millis(state.ui_toast.as_ref().unwrap().duration_ms);
+        let now = state.active_toast().unwrap().started
+            + Duration::from_millis(state.active_toast().unwrap().duration_ms);
         state.advance_ui_toast(now);
         assert!(state.toasts_idle());
         let outcome = state.push_toast(ToastPriority::Hint, "hint", Toast::info("Press F1"));
@@ -672,14 +660,14 @@ mod tests {
     fn toast_release_ignores_releases_outside_bounds() {
         let mut state = make_state();
         state.push_toast(ToastPriority::Info, "test", Toast::info("Saved"));
-        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        state.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
 
         let pressed = state.toast_press_at(50, 40).expect("toast press");
         let (hit, action) = state.resolve_toast_release(pressed, 5, 5);
 
         assert!(!hit);
         assert_eq!(action, None);
-        assert!(state.ui_toast.is_some());
+        assert!(state.active_toast().is_some());
     }
 
     #[test]
@@ -697,15 +685,14 @@ mod tests {
             "destructive",
             Toast::warning("Delete page?").action("Delete", Action::PageDelete),
         );
-        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        state.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
         let pressed = state.toast_press_at(50, 40).expect("first toast press");
-        let expiry =
-            state.ui_toast.as_ref().expect("first toast").started + Duration::from_millis(10);
+        let expiry = state.active_toast().expect("first toast").started + Duration::from_millis(10);
 
         assert!(state.advance_ui_toast(expiry));
-        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        state.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
         assert_eq!(
-            state.ui_toast.as_ref().expect("promoted toast").message,
+            state.active_toast().expect("promoted toast").message,
             "Delete page?"
         );
 
@@ -716,8 +703,7 @@ mod tests {
         );
         assert_eq!(
             state
-                .ui_toast
-                .as_ref()
+                .active_toast()
                 .expect("promoted toast remains")
                 .message,
             "Delete page?"
@@ -732,7 +718,7 @@ mod tests {
             "confirm",
             Toast::info("Undo clear?").action("Undo", Action::Undo),
         );
-        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        state.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
         let pressed = state.toast_press_at(50, 40).expect("original toast press");
 
         assert_eq!(
@@ -743,7 +729,7 @@ mod tests {
             ),
             ToastPushOutcome::UpdatedActive
         );
-        state.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+        state.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
 
         assert_eq!(
             state.resolve_toast_release(pressed, 50, 40),
@@ -758,10 +744,10 @@ mod tests {
 
         state.save_pending_clipboard_to_file();
 
-        let toast = state.ui_toast.as_ref().expect("warning toast");
+        let toast = state.active_toast().expect("warning toast");
         assert_eq!(toast.kind, UiToastKind::Warning);
         assert_eq!(toast.message, "No pending image to save");
-        assert!(state.blocked_action_feedback.is_some());
+        assert!(state.test_blocked_feedback_active());
     }
 
     #[test]
@@ -806,7 +792,7 @@ mod tests {
 
         state.save_pending_clipboard_to_file();
 
-        let toast = state.ui_toast.as_ref().expect("error toast");
+        let toast = state.active_toast().expect("error toast");
         assert_eq!(toast.kind, UiToastKind::Error);
         assert!(
             toast.message.contains("Failed to save canvas export"),
@@ -819,7 +805,7 @@ mod tests {
             toast.message
         );
         assert!(state.selection_clipboard.has_pending_image_fallback());
-        assert!(state.blocked_action_feedback.is_some());
+        assert!(state.test_blocked_feedback_active());
     }
 
     /// Producer-migration completeness: every toast producer goes through

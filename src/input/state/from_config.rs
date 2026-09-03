@@ -33,7 +33,8 @@ impl InputState {
         input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
         input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
         input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
-        input_state.command_palette_toast_duration_ms = config.ui.command_palette_toast_duration_ms;
+        input_state
+            .set_command_palette_toast_duration_ms(config.ui.command_palette_toast_duration_ms);
         input_state.radial_menu.mouse_binding = config.ui.radial_menu_mouse_binding;
         #[cfg(feature = "tablet-input")]
         {
@@ -137,7 +138,7 @@ mod tests {
             "persisted zoom chip visibility must be restored at startup"
         );
         assert!(input.ui_visibility.show_active_output_badge);
-        assert_eq!(input.command_palette_toast_duration_ms, 1234);
+        assert_eq!(input.command_palette_toast_duration_ms(), 1234);
         assert!(!input.boards.pan_enabled());
         assert!(!input.boards.show_pan_badge());
     }

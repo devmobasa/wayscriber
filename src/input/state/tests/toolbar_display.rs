@@ -46,7 +46,7 @@ fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
         "micro keeps the surface mapped"
     );
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Toolbar: micro")
     );
     assert_eq!(
@@ -61,7 +61,7 @@ fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
     assert_eq!(state.top_display_state(), TopDisplayMode::Hidden);
     assert!(!state.toolbar_top_visible());
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Toolbar: hidden")
     );
 
@@ -69,7 +69,7 @@ fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
     assert_eq!(state.top_display_state(), TopDisplayMode::Full);
     assert!(state.toolbar_top_visible());
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Toolbar: full")
     );
 }
@@ -394,7 +394,7 @@ fn hidden_cycle_toast_offers_a_show_action() {
     refresh_status_hud_layout(&mut state);
     state.handle_action(Action::CycleToolbarDisplay); // micro
     state.handle_action(Action::CycleToolbarDisplay); // hidden
-    let toast = state.ui_toast.as_ref().expect("hidden toast");
+    let toast = state.active_toast().expect("hidden toast");
     assert_eq!(toast.message, "Toolbar: hidden");
     let action = toast.action.as_ref().expect("show action chip");
     assert_eq!(action.label, "Show (F2)");
@@ -410,13 +410,13 @@ fn hiding_the_last_chrome_surface_warns_with_recovery_bindings() {
     // still up, so its hint chip covers recovery — no warning yet.
     state.handle_action(Action::ToggleToolbar);
     assert!(
-        state.ui_toast.is_none(),
+        state.active_toast().is_none(),
         "no warning while the status bar remains"
     );
 
     // Hiding the status bar too removes the last interactive chrome.
     state.handle_action(Action::ToggleStatusBar);
-    let toast = state.ui_toast.as_ref().expect("all-chrome warning");
+    let toast = state.active_toast().expect("all-chrome warning");
     assert!(
         toast.message.starts_with("All UI hidden"),
         "unexpected message: {}",
@@ -462,7 +462,7 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
 
     state.handle_action(Action::ToggleToolbar);
 
-    let toast = state.ui_toast.as_ref().expect("all-chrome warning");
+    let toast = state.active_toast().expect("all-chrome warning");
     assert!(toast.message.starts_with("All UI hidden"));
     assert_eq!(
         toast
@@ -523,7 +523,7 @@ fn toolbar_hint_prevents_a_false_all_chrome_warning_when_it_becomes_visible() {
         "effective visibility follows the newly eligible toolbar hint before redraw"
     );
     assert!(
-        state.ui_toast.is_none(),
+        state.active_toast().is_none(),
         "the visible recovery hint makes an all-chrome warning redundant"
     );
 }
@@ -532,11 +532,14 @@ fn toolbar_hint_prevents_a_false_all_chrome_warning_when_it_becomes_visible() {
 fn all_chrome_warning_fires_from_the_cycle_path_and_supersedes_its_toast() {
     let mut state = create_test_input_state();
     state.handle_action(Action::ToggleStatusBar);
-    assert!(state.ui_toast.is_none(), "toolbar still up: no warning");
+    assert!(
+        state.active_toast().is_none(),
+        "toolbar still up: no warning"
+    );
 
     state.handle_action(Action::CycleToolbarDisplay); // micro
     state.handle_action(Action::CycleToolbarDisplay); // hidden: last chrome
-    let toast = state.ui_toast.as_ref().expect("toast");
+    let toast = state.active_toast().expect("toast");
     assert!(
         toast.message.starts_with("All UI hidden"),
         "the warning must supersede \"Toolbar: hidden\", got: {}",
@@ -550,10 +553,7 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
     unbind_chrome_visibility_actions(&mut available);
     hide_all_chrome(&mut available);
     assert_eq!(
-        available
-            .ui_toast
-            .as_ref()
-            .map(|toast| toast.message.as_str()),
+        available.active_toast().map(|toast| toast.message.as_str()),
         Some("All UI hidden — right-click to restore")
     );
 
@@ -562,16 +562,12 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
     disabled.set_context_menu_enabled(false);
     hide_all_chrome(&mut disabled);
     assert_eq!(
-        disabled
-            .ui_toast
-            .as_ref()
-            .map(|toast| toast.message.as_str()),
+        disabled.active_toast().map(|toast| toast.message.as_str()),
         Some("All UI hidden — select the recovery action")
     );
     assert_eq!(
         disabled
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .and_then(|toast| toast.action.as_ref())
             .and_then(|action| action.dispatch_action()),
         Some(Action::ToggleToolbar)
@@ -582,13 +578,12 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
     zoomed.set_zoom_status(true, false, 2.0, (0.0, 0.0));
     hide_all_chrome(&mut zoomed);
     assert_eq!(
-        zoomed.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        zoomed.active_toast().map(|toast| toast.message.as_str()),
         Some("All UI hidden — select the recovery action")
     );
     assert_eq!(
         zoomed
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .and_then(|toast| toast.action.as_ref())
             .and_then(|action| action.dispatch_action()),
         Some(Action::ToggleToolbar)
@@ -600,8 +595,7 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
     hide_all_chrome(&mut right_click_radial);
     assert_eq!(
         right_click_radial
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .map(|toast| toast.message.as_str()),
         Some("All UI hidden — select the recovery action")
     );
@@ -621,7 +615,7 @@ fn all_chrome_warning_suppressed_while_presenting() {
     state.handle_action(Action::ToggleStatusBar);
     assert!(!state.ui_visibility.show_status_bar);
     assert!(
-        state.ui_toast.is_none(),
+        state.active_toast().is_none(),
         "presenter mode must not trigger the all-chrome warning"
     );
 }
@@ -635,7 +629,7 @@ fn all_chrome_warning_fires_when_presenter_mode_did_not_hide_any_chrome() {
     state.toggle_presenter_mode();
 
     hide_all_chrome(&mut state);
-    let toast = state.ui_toast.as_ref().expect("all-chrome warning");
+    let toast = state.active_toast().expect("all-chrome warning");
     assert!(
         toast.message.starts_with("All UI hidden"),
         "presenter mode must not suppress recovery for user-hidden chrome"
@@ -661,7 +655,7 @@ fn presenter_owned_hidden_toolbar_falls_back_to_status_bar_recovery() {
     state.toggle_presenter_mode();
     state.handle_action(Action::ToggleStatusBar);
 
-    let toast = state.ui_toast.as_ref().expect("all-chrome warning");
+    let toast = state.active_toast().expect("all-chrome warning");
     assert!(toast.message.starts_with("All UI hidden"));
     let action = toast.action.as_ref().expect("recovery action");
     assert_eq!(action.label, "Show status bar");

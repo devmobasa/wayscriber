@@ -1,12 +1,12 @@
 use super::super::super::{
-    CanvasIndex, Keymap, PointerTracking, ToolbarInteraction, ToolbarVisibility, ViewState,
+    CanvasIndex, Feedback, Keymap, PointerTracking, ToolbarInteraction, ToolbarVisibility,
+    ViewState,
     selection::{SelectionClipboard, SelectionInteraction},
 };
 use super::super::InputEffectOutbox;
-use super::super::toast_queue::ToastQueue;
 use super::super::types::{
-    BlockedActionFeedback, CompositorCapabilities, DrawingState, PendingBoardDelete,
-    PendingOnboardingUsage, PendingPageDelete, StatusChangeHighlight, UiToastState,
+    CompositorCapabilities, DrawingState, PendingBoardDelete, PendingOnboardingUsage,
+    PendingPageDelete,
 };
 use crate::config::PresenterModeConfig;
 use crate::draw::{Color, DirtyTracker};
@@ -94,8 +94,8 @@ pub struct InputState {
     pub(crate) board_picker: crate::input::state::core::BoardPickerPanel,
     /// State owned by the command palette modal.
     pub command_palette: crate::input::state::core::command_palette::CommandPaletteState,
-    /// Duration for command palette action toasts (ms)
-    pub command_palette_toast_duration_ms: u64,
+    /// Toast, geometry, blocked-action, and capability feedback state.
+    pub(in crate::input::state) feedback: Feedback,
     /// Runtime visibility preferences for overlay chrome and toolbar sections.
     pub ui_visibility: crate::input::state::UiVisibility,
     /// Display policy, cached geometry, and pointer interaction state for the zoom chip.
@@ -156,14 +156,6 @@ pub struct InputState {
     /// The scan-band overlay shown while screen text recognition runs, and the
     /// outcome card that follows it.
     pub(crate) ocr_scan: Option<crate::input::state::core::utility::ocr_scan::OcrScan>,
-    /// Active (visible) UI toast (errors/warnings/info)
-    pub(crate) ui_toast: Option<UiToastState>,
-    /// Pending toasts waiting behind the active one, plus rate-limit memory
-    pub(crate) toast_queue: ToastQueue,
-    /// Cached bounds of the rendered toast for click detection (x, y, w, h)
-    pub(crate) ui_toast_bounds: Option<(f64, f64, f64, f64)>,
-    /// Cached bounds of up to two rendered toast action chips.
-    pub(crate) ui_toast_action_bounds: [Option<(f64, f64, f64, f64)>; 2],
     /// Local selection clipboard, publication, paste request, and image fallback state.
     pub(in crate::input::state::core) selection_clipboard: SelectionClipboard,
     /// Last capture path (for quick open-folder action)
@@ -182,15 +174,6 @@ pub struct InputState {
     pub(crate) tour: crate::input::state::core::TourState,
     /// Compositor capabilities (layer-shell, screencopy, etc.)
     pub compositor_capabilities: CompositorCapabilities,
-    /// Capabilities snapshot the capability warning toast last evaluated;
-    /// `None` until first evaluated, re-evaluated whenever capabilities change
-    /// (read/written each tick by the wayland backend's capability toast).
-    pub(crate) capability_toast_caps: Option<CompositorCapabilities>,
-    /// Blocked action visual feedback state (red flash)
-    pub(crate) blocked_action_feedback: Option<BlockedActionFeedback>,
     /// Recently deleted boards available for undo (with deletion timestamp)
     pub(in crate::input::state::core) deleted_boards: Vec<(BoardRestoreRequest, Instant)>,
-    /// Status bar change highlight animation state
-    #[allow(dead_code)]
-    pub(crate) status_change_highlight: Option<StatusChangeHighlight>,
 }

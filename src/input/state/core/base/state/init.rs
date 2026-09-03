@@ -64,7 +64,7 @@ impl InputState {
             help_overlay: Default::default(),
             board_picker: Default::default(),
             command_palette: Default::default(),
-            command_palette_toast_duration_ms: 1500,
+            feedback: Default::default(),
             ui_visibility,
             zoom_chip: Default::default(),
             presenter_mode: false,
@@ -95,10 +95,6 @@ impl InputState {
             radial_menu: Default::default(),
             history_limits,
             ocr_scan: None,
-            ui_toast: None,
-            toast_queue: super::super::toast_queue::ToastQueue::default(),
-            ui_toast_bounds: None,
-            ui_toast_action_bounds: [None, None],
             selection_clipboard: SelectionClipboard::default(),
             last_capture_path: None,
             properties: Default::default(),
@@ -107,10 +103,7 @@ impl InputState {
             preset_slots: Default::default(),
             tour: Default::default(),
             compositor_capabilities: CompositorCapabilities::default(),
-            capability_toast_caps: None,
-            blocked_action_feedback: None,
             deleted_boards: Vec::new(),
-            status_change_highlight: None,
         };
 
         if state.click_highlight.uses_pen_color() {

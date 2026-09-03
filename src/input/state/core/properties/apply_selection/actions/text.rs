@@ -101,7 +101,7 @@ mod tests {
 
         assert!(!state.apply_selection_text_background(0));
         assert_eq!(
-            state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+            state.active_toast().map(|toast| toast.message.as_str()),
             Some("No text shapes selected.")
         );
     }

@@ -37,7 +37,7 @@ fn toggle_input_hud_defers_the_source_announcement_to_the_backend() {
     let mut state = create_test_input_state();
     state.handle_action(Action::ToggleInputHud);
     assert!(
-        state.ui_toast.is_none(),
+        state.active_toast().is_none(),
         "the enable path must not toast a source before reconciliation"
     );
     assert!(
@@ -50,7 +50,7 @@ fn toggle_input_hud_defers_the_source_announcement_to_the_backend() {
     );
 
     state.handle_action(Action::ToggleInputHud);
-    let toast = state.ui_toast.as_ref().expect("disable toast");
+    let toast = state.active_toast().expect("disable toast");
     assert_eq!(toast.message, "Input HUD disabled");
     assert!(
         !state.take_input_hud_source_announce(),

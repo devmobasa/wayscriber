@@ -339,7 +339,7 @@ mod tests {
         let mut state = make_state();
         assert!(!state.apply_selection_arrow_style(1));
         assert_eq!(
-            state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+            state.active_toast().map(|toast| toast.message.as_str()),
             Some("No arrows selected.")
         );
     }
@@ -372,7 +372,7 @@ mod tests {
 
         state.handle_action(crate::domain::Action::CycleArrowStyle);
         assert_eq!(
-            state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+            state.active_toast().map(|toast| toast.message.as_str()),
             Some("All arrow style shapes are locked.")
         );
         assert_eq!(

@@ -592,12 +592,11 @@ fn apply_snapshot_clears_pending_board_delete_confirmation() {
     assert!(input.has_pending_board_delete());
     assert!(
         input
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .and_then(|toast| toast.action.as_ref())
             .is_some_and(|action| action.dispatch_action() == Some(Action::BoardDelete))
     );
-    input.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+    input.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
 
     let snapshot = SessionSnapshot {
         active_board_id: BOARD_ID_BLACKBOARD.to_string(),
@@ -614,8 +613,8 @@ fn apply_snapshot_clears_pending_board_delete_confirmation() {
     apply_snapshot(&mut input, snapshot, &options);
 
     assert!(!input.has_pending_board_delete());
-    assert!(input.ui_toast.is_none());
-    assert!(input.ui_toast_bounds.is_none());
+    assert!(input.active_toast().is_none());
+    assert!(input.test_toast_geometry().is_none());
     input.delete_active_board();
     assert_eq!(input.boards.board_count(), board_count);
     assert!(input.has_pending_board_delete());
@@ -632,12 +631,11 @@ fn apply_snapshot_clears_pending_page_delete_confirmation() {
     assert!(input.has_pending_page_delete());
     assert!(
         input
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .and_then(|toast| toast.action.as_ref())
             .is_some_and(|action| action.dispatch_action() == Some(Action::PageDelete))
     );
-    input.ui_toast_bounds = Some((10.0, 20.0, 100.0, 40.0));
+    input.set_toast_geometry(Some((10.0, 20.0, 100.0, 40.0)), [None, None]);
 
     let snapshot = SessionSnapshot {
         active_board_id: BOARD_ID_BLACKBOARD.to_string(),
@@ -654,7 +652,7 @@ fn apply_snapshot_clears_pending_page_delete_confirmation() {
     apply_snapshot(&mut input, snapshot, &options);
 
     assert!(!input.has_pending_page_delete());
-    assert!(input.ui_toast.is_none());
-    assert!(input.ui_toast_bounds.is_none());
+    assert!(input.active_toast().is_none());
+    assert!(input.test_toast_geometry().is_none());
     assert_eq!(input.boards.page_count(), 1);
 }

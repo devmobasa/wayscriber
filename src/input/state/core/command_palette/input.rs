@@ -555,7 +555,7 @@ impl InputState {
             self.push_toast(
                 ToastPriority::Info,
                 "palette.feedback",
-                Toast::info(command.label).duration_ms(self.command_palette_toast_duration_ms),
+                Toast::info(command.label).duration_ms(self.command_palette_toast_duration_ms()),
             );
 
             self.handle_action(command.action);
