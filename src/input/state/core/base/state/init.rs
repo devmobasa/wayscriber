@@ -1,12 +1,10 @@
-use super::super::super::{radial_menu::RadialMenuState, selection::SelectionState};
+use super::super::super::selection::SelectionState;
 use super::super::types::{
     CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
     PendingOnboardingUsage, PressureThicknessEditMode, PressureThicknessEntryMode, TextInputMode,
 };
 use super::structs::InputState;
-use crate::config::{
-    Action, BoardsConfig, PRESET_SLOTS_MAX, QuickColorPalette, RadialMenuMouseBinding, Shortcut,
-};
+use crate::config::{Action, BoardsConfig, PRESET_SLOTS_MAX, QuickColorPalette, Shortcut};
 use crate::draw::{
     ArrowStyle, BlurStyle, DirtyTracker, EraserKind, FontDescriptor, REGULAR_POLYGON_DEFAULT_SIDES,
 };
@@ -213,9 +211,7 @@ impl InputState {
             context_menu: Default::default(),
 
             color_picker_popup: Default::default(),
-            radial_menu_state: RadialMenuState::Hidden,
-            radial_menu_layout: None,
-            radial_menu_mouse_binding: RadialMenuMouseBinding::Middle,
+            radial_menu: Default::default(),
             hit_test_cache: HashMap::new(),
             canvas_content_generation: 0,
             hit_test_tolerance: 6.0,

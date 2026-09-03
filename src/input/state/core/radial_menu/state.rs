@@ -12,13 +12,13 @@ use crate::input::state::InputState;
 impl InputState {
     /// Whether the radial menu is currently visible.
     pub fn is_radial_menu_open(&self) -> bool {
-        matches!(self.radial_menu_state, RadialMenuState::Open { .. })
+        matches!(self.radial_menu.state, RadialMenuState::Open { .. })
     }
 
     fn open_radial_menu_internal(&mut self, x: f64, y: f64, track_usage: bool) {
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::RadialMenu);
 
-        self.radial_menu_state = RadialMenuState::Open {
+        self.radial_menu.state = RadialMenuState::Open {
             center_x: x,
             center_y: y,
             hover: None,
@@ -43,8 +43,8 @@ impl InputState {
     /// Close the radial menu.
     pub fn close_radial_menu(&mut self) {
         if self.is_radial_menu_open() {
-            self.radial_menu_state = RadialMenuState::Hidden;
-            self.radial_menu_layout = None;
+            self.radial_menu.state = RadialMenuState::Hidden;
+            self.radial_menu.layout = None;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }
@@ -67,7 +67,7 @@ impl InputState {
     /// render path (or its pending frame callback) takes it from there, and
     /// a zero timeout would spin the dispatch loop until it lands.
     pub fn radial_menu_paint_timeout(&self, now: Instant) -> Option<Duration> {
-        match &self.radial_menu_state {
+        match &self.radial_menu.state {
             RadialMenuState::Open {
                 opened_at,
                 painted: false,
@@ -87,7 +87,7 @@ impl InputState {
     /// menu has passed, request the redraw that will paint it. Returns true
     /// when a redraw was requested.
     pub fn tick_radial_menu_paint(&mut self, now: Instant) -> bool {
-        match &self.radial_menu_state {
+        match &self.radial_menu.state {
             RadialMenuState::Open {
                 opened_at,
                 painted: false,
@@ -109,7 +109,7 @@ impl InputState {
             opened_at,
             ref mut painted,
             ..
-        } = self.radial_menu_state
+        } = self.radial_menu.state
         {
             if *painted {
                 return true;
@@ -125,7 +125,7 @@ impl InputState {
     /// Whether the open menu has been painted at least once.
     pub fn radial_menu_has_painted(&self) -> bool {
         matches!(
-            self.radial_menu_state,
+            self.radial_menu.state,
             RadialMenuState::Open { painted: true, .. }
         )
     }
@@ -139,8 +139,8 @@ impl InputState {
             ref mut hover,
             ref mut expanded_sub_ring,
             ..
-        } = self.radial_menu_state
-            && let Some(layout) = &self.radial_menu_layout
+        } = self.radial_menu.state
+            && let Some(layout) = &self.radial_menu.layout
         {
             let segment =
                 super::hit_test::hit_test_radial(layout, *expanded_sub_ring, color_count, x, y);
@@ -186,7 +186,7 @@ impl InputState {
 
     /// Select the currently hovered segment and close the menu.
     pub fn radial_menu_select_hovered(&mut self) {
-        let hover = match &self.radial_menu_state {
+        let hover = match &self.radial_menu.state {
             RadialMenuState::Open { hover, .. } => *hover,
             _ => return,
         };
@@ -241,7 +241,7 @@ impl InputState {
             ref mut flick_armed,
             size_dragging: false,
             ..
-        } = self.radial_menu_state
+        } = self.radial_menu.state
         {
             // Arm on pointer travel from the raw open position, never from
             // the clamped layout center: near a screen edge that center sits
@@ -281,7 +281,7 @@ impl InputState {
         if !self.is_radial_menu_toggle_button(button) {
             return true;
         }
-        let (flick_armed, painted, expanded_sub_ring) = match &self.radial_menu_state {
+        let (flick_armed, painted, expanded_sub_ring) = match &self.radial_menu.state {
             RadialMenuState::Open {
                 flick_armed,
                 painted,
@@ -306,7 +306,7 @@ impl InputState {
 
         // Sighted releases (menu painted) may commit exactly what the
         // pointer is on when that is a sub-ring child or a color swatch.
-        if painted && let Some(layout) = self.radial_menu_layout {
+        if painted && let Some(layout) = self.radial_menu.layout {
             match super::hit_test::hit_test_radial(
                 &layout,
                 expanded_sub_ring,
@@ -348,7 +348,7 @@ impl InputState {
     /// drag instead of selecting).
     pub(crate) fn radial_menu_hover_is_size_ring(&self) -> bool {
         matches!(
-            self.radial_menu_state,
+            self.radial_menu.state,
             RadialMenuState::Open {
                 hover: Some(RadialSegmentId::SizeRing),
                 ..
@@ -359,7 +359,7 @@ impl InputState {
     /// Whether a size-ring drag is capturing pointer motion.
     pub fn radial_menu_is_size_dragging(&self) -> bool {
         matches!(
-            self.radial_menu_state,
+            self.radial_menu.state,
             RadialMenuState::Open {
                 size_dragging: true,
                 ..
@@ -373,7 +373,7 @@ impl InputState {
         if let RadialMenuState::Open {
             ref mut size_dragging,
             ..
-        } = self.radial_menu_state
+        } = self.radial_menu.state
         {
             *size_dragging = true;
         }
@@ -399,7 +399,7 @@ impl InputState {
         if let RadialMenuState::Open {
             ref mut size_dragging,
             ..
-        } = self.radial_menu_state
+        } = self.radial_menu.state
         {
             *size_dragging = false;
         }
@@ -477,7 +477,7 @@ impl InputState {
         if let RadialMenuState::Open {
             ref mut expanded_sub_ring,
             ..
-        } = self.radial_menu_state
+        } = self.radial_menu.state
         {
             *expanded_sub_ring = Some(idx);
         }
@@ -492,7 +492,7 @@ impl InputState {
     /// would misread the flick direction. Sighted (painted) releases resolve
     /// against the visible menu center.
     fn radial_menu_flick_geometry(&self) -> Option<(f64, f64, f64)> {
-        match &self.radial_menu_state {
+        match &self.radial_menu.state {
             RadialMenuState::Open {
                 center_x,
                 center_y,
@@ -508,10 +508,10 @@ impl InputState {
     /// (normal path — layout is computed on the first render pass after
     /// opening), else the raw open position with the fixed center radius.
     fn radial_menu_center_geometry(&self) -> Option<(f64, f64, f64)> {
-        if let Some(layout) = &self.radial_menu_layout {
+        if let Some(layout) = &self.radial_menu.layout {
             return Some((layout.center_x, layout.center_y, layout.center_radius));
         }
-        match &self.radial_menu_state {
+        match &self.radial_menu.state {
             RadialMenuState::Open {
                 center_x, center_y, ..
             } => Some((*center_x, *center_y, CENTER_RADIUS)),

@@ -96,10 +96,10 @@ pub use menus::{
 pub use properties::{SelectionPropertyEntry, SelectionPropertyKind};
 pub use radial_menu::{
     COMPASS_SLICES as RADIAL_COMPASS_SLICES, CompassDir, RADIAL_PAINT_DELAY, RadialMenuLayout,
-    RadialMenuState, RadialParent, RadialRingSwatch, RadialSegmentId, RadialSlice, RadialSliceKind,
-    SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START, TOOL_SEGMENT_COUNT as RADIAL_TOOL_SEGMENT_COUNT,
-    compass_slice, size_ring_angle_for_value, size_ring_value_for_angle, slice_parent,
-    sub_ring_child_count, sub_ring_children,
+    RadialMenuPanel, RadialMenuState, RadialParent, RadialRingSwatch, RadialSegmentId, RadialSlice,
+    RadialSliceKind, SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START,
+    TOOL_SEGMENT_COUNT as RADIAL_TOOL_SEGMENT_COUNT, compass_slice, size_ring_angle_for_value,
+    size_ring_value_for_angle, slice_parent, sub_ring_child_count, sub_ring_children,
 };
 pub use region_select::{
     RegionInputSource, RegionPurposeTag, RegionSelectUiState, RegionSelection, ScreenCaptureSource,

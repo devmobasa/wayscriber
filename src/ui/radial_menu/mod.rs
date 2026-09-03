@@ -45,7 +45,7 @@ const HINT_LABEL_DROP: f64 = 8.0;
 
 /// Render the radial menu overlay.
 pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width: u32, height: u32) {
-    let (hover, expanded_sub_ring, size_dragging) = match &input_state.radial_menu_state {
+    let (hover, expanded_sub_ring, size_dragging) = match &input_state.radial_menu.state {
         RadialMenuState::Open {
             hover,
             expanded_sub_ring,
@@ -55,7 +55,7 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
         RadialMenuState::Hidden => return,
     };
 
-    let layout = match &input_state.radial_menu_layout {
+    let layout = match &input_state.radial_menu.layout {
         Some(l) => *l,
         None => return,
     };

@@ -40,7 +40,7 @@ impl HelpOverlayBindings {
                 cache_parts.push(format!("{:?}={}", meta.action, values.join("/")));
             }
         }
-        let radial_menu_mouse_label = match state.radial_menu_mouse_binding {
+        let radial_menu_mouse_label = match state.radial_menu.mouse_binding {
             RadialMenuMouseBinding::Middle => Some("Middle Click".to_string()),
             RadialMenuMouseBinding::Right => Some("Right Click".to_string()),
             RadialMenuMouseBinding::Disabled => None,

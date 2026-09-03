@@ -59,12 +59,13 @@ fn open_with_layout(state: &mut InputState) -> RadialMenuLayout {
     state.open_radial_menu(400.0, 300.0);
     state.update_radial_menu_layout(800, 600);
     state
-        .radial_menu_layout
+        .radial_menu
+        .layout
         .expect("layout should exist for open radial menu")
 }
 
 fn expanded_sub_ring_of(state: &InputState) -> Option<u8> {
-    match &state.radial_menu_state {
+    match &state.radial_menu.state {
         RadialMenuState::Open {
             expanded_sub_ring, ..
         } => *expanded_sub_ring,
@@ -80,7 +81,8 @@ fn radial_layout_small_surface_centers_menu_without_panic() {
     state.update_radial_menu_layout(120, 90);
 
     let layout = state
-        .radial_menu_layout
+        .radial_menu
+        .layout
         .expect("layout should be computed even on tiny surfaces");
     assert!((layout.center_x - 60.0).abs() < f64::EPSILON);
     assert!((layout.center_y - 45.0).abs() < f64::EPSILON);
@@ -172,7 +174,7 @@ fn north_wedge_spans_22_5_degrees_around_straight_up() {
     ] {
         let (x, y) = point_at(layout.center_x, layout.center_y, radius, degrees);
         state.update_radial_menu_hover(x, y);
-        let hover = match &state.radial_menu_state {
+        let hover = match &state.radial_menu.state {
             RadialMenuState::Open { hover, .. } => *hover,
             RadialMenuState::Hidden => panic!("menu should stay open while hovering"),
         };
@@ -400,7 +402,7 @@ fn opening_radial_menu_closes_help_overlay() {
 #[test]
 fn right_click_toggles_radial_when_configured() {
     let mut state = create_test_input_state();
-    state.radial_menu_mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Right;
 
     state.on_mouse_press(MouseButton::Right, 200, 150);
     assert!(state.is_radial_menu_open());
@@ -500,7 +502,8 @@ fn color_hit_test_uses_color_ring_alignment_when_tool_count_differs() {
     state.open_radial_menu(300.0, 220.0);
     state.update_radial_menu_layout(900, 700);
     let layout = state
-        .radial_menu_layout
+        .radial_menu
+        .layout
         .expect("layout should exist for open radial menu");
 
     // Just inside color segment 1 (Green), close to the segment boundary.
@@ -539,7 +542,8 @@ fn color_ring_selection_uses_configured_quick_palette() {
     state.open_radial_menu(300.0, 220.0);
     state.update_radial_menu_layout(900, 700);
     let layout = state
-        .radial_menu_layout
+        .radial_menu
+        .layout
         .expect("layout should exist for open radial menu");
 
     let seg = 2.0 * PI / state.quick_colors.radial_rendered_len() as f64;
@@ -567,7 +571,7 @@ use std::time::{Duration, Instant};
 fn rewind_radial_open(state: &mut InputState, by: Duration) {
     if let RadialMenuState::Open {
         ref mut opened_at, ..
-    } = state.radial_menu_state
+    } = state.radial_menu.state
     {
         *opened_at = opened_at
             .checked_sub(by)
@@ -576,19 +580,20 @@ fn rewind_radial_open(state: &mut InputState, by: Duration) {
 }
 
 fn hover_of(state: &InputState) -> Option<RadialSegmentId> {
-    match &state.radial_menu_state {
+    match &state.radial_menu.state {
         RadialMenuState::Open { hover, .. } => *hover,
         RadialMenuState::Hidden => panic!("radial menu should be open"),
     }
 }
 
 fn open_via_right_press(state: &mut InputState) -> RadialMenuLayout {
-    state.radial_menu_mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Right;
     state.on_mouse_press(MouseButton::Right, 400, 300);
     assert!(state.is_radial_menu_open());
     state.update_radial_menu_layout(800, 600);
     state
-        .radial_menu_layout
+        .radial_menu
+        .layout
         .expect("layout should exist for open radial menu")
 }
 
@@ -782,12 +787,13 @@ fn toggle_release_without_leaving_deadzone_keeps_menu_open() {
 /// Open the menu with a right press near the left screen edge, where the
 /// layout clamps the rendered center far away from the press point.
 fn open_via_right_press_at_edge(state: &mut InputState, x: i32, y: i32) -> RadialMenuLayout {
-    state.radial_menu_mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Right;
     state.on_mouse_press(MouseButton::Right, x, y);
     assert!(state.is_radial_menu_open());
     state.update_radial_menu_layout(800, 600);
     let layout = state
-        .radial_menu_layout
+        .radial_menu
+        .layout
         .expect("layout should exist for open radial menu");
     assert!(
         layout.center_x - x as f64 > layout.center_radius,
@@ -924,10 +930,10 @@ fn size_ring_hit_test_covers_arc_but_not_gap() {
 #[test]
 fn size_ring_drag_adjusts_thickness_live_and_keeps_menu_open() {
     let mut state = create_test_input_state();
-    state.radial_menu_mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Right;
     state.on_mouse_press(MouseButton::Right, 400, 300);
     state.update_radial_menu_layout(800, 600);
-    let layout = state.radial_menu_layout.expect("layout");
+    let layout = state.radial_menu.layout.expect("layout");
     let band_r = (layout.size_inner + layout.size_outer) / 2.0;
 
     // Press on the gauge at west starts a drag and applies the value.

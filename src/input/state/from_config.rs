@@ -66,7 +66,7 @@ impl InputState {
         input_state.spotlight_magnification = config.spotlight.magnification;
         input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
         input_state.command_palette_toast_duration_ms = config.ui.command_palette_toast_duration_ms;
-        input_state.radial_menu_mouse_binding = config.ui.radial_menu_mouse_binding;
+        input_state.radial_menu.mouse_binding = config.ui.radial_menu_mouse_binding;
         #[cfg(feature = "tablet-input")]
         {
             input_state.pressure_variation_threshold = config.tablet.pressure_variation_threshold;

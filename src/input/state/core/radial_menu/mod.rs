@@ -1,6 +1,7 @@
 pub(crate) mod compass;
 pub(crate) mod hit_test;
 mod layout;
+mod panel;
 pub(crate) mod size_ring;
 pub(crate) mod state;
 
@@ -10,6 +11,7 @@ pub use compass::{
     COMPASS_SLICES, CompassDir, RadialParent, RadialSlice, RadialSliceKind, TOOL_SEGMENT_COUNT,
     compass_slice, slice_parent, sub_ring_child_count, sub_ring_children,
 };
+pub use panel::RadialMenuPanel;
 pub use size_ring::{
     SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START, size_ring_angle_for_value, size_ring_value_for_angle,
 };

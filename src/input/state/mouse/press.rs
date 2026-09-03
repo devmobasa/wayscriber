@@ -26,7 +26,7 @@ impl InputState {
         button: MouseButton,
     ) -> bool {
         use crate::config::RadialMenuMouseBinding;
-        match self.radial_menu_mouse_binding {
+        match self.radial_menu.mouse_binding {
             RadialMenuMouseBinding::Middle => matches!(button, MouseButton::Middle),
             RadialMenuMouseBinding::Right => matches!(button, MouseButton::Right),
             RadialMenuMouseBinding::Disabled => false,

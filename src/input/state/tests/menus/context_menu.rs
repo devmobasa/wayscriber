@@ -304,7 +304,7 @@ fn context_menu_radial_entry_shows_mouse_and_keyboard_shortcut() {
 #[test]
 fn context_menu_radial_entry_shows_right_click_shortcut_when_configured() {
     let mut state = create_test_input_state();
-    state.radial_menu_mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Right;
     state.toggle_context_menu_via_keyboard();
 
     let entries = state.context_menu_entries();
@@ -320,7 +320,7 @@ fn context_menu_radial_entry_shows_keyboard_shortcut_when_mouse_binding_disabled
     let mut keybindings = crate::config::KeybindingsConfig::default();
     keybindings.ui.toggle_radial_menu = vec!["Ctrl+R".to_string()];
     let mut state = create_test_input_state_with_keybindings(keybindings);
-    state.radial_menu_mouse_binding = crate::config::RadialMenuMouseBinding::Disabled;
+    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Disabled;
     state.toggle_context_menu_via_keyboard();
 
     let entries = state.context_menu_entries();

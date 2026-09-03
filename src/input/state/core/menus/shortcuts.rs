@@ -21,7 +21,7 @@ impl InputState {
     fn radial_menu_shortcut_label(&self) -> Option<String> {
         use crate::config::RadialMenuMouseBinding;
 
-        let mouse_label = match self.radial_menu_mouse_binding {
+        let mouse_label = match self.radial_menu.mouse_binding {
             RadialMenuMouseBinding::Middle => Some("Middle Click".to_string()),
             RadialMenuMouseBinding::Right => Some("Right Click".to_string()),
             RadialMenuMouseBinding::Disabled => None,
@@ -77,7 +77,7 @@ mod tests {
     #[test]
     fn shortcut_for_radial_menu_uses_mouse_binding_when_no_key_binding_exists() {
         let mut state = make_test_input_state_with_action_bindings(HashMap::new());
-        state.radial_menu_mouse_binding = RadialMenuMouseBinding::Middle;
+        state.radial_menu.mouse_binding = RadialMenuMouseBinding::Middle;
         assert_eq!(
             state.shortcut_for_action(Action::ToggleRadialMenu),
             Some("Middle Click".to_string())
@@ -90,7 +90,7 @@ mod tests {
             Action::ToggleRadialMenu,
             &["Ctrl+R"],
         )]));
-        state.radial_menu_mouse_binding = RadialMenuMouseBinding::Middle;
+        state.radial_menu.mouse_binding = RadialMenuMouseBinding::Middle;
 
         assert_eq!(
             state.shortcut_for_action(Action::ToggleRadialMenu),
@@ -104,7 +104,7 @@ mod tests {
             Action::ToggleRadialMenu,
             &["Ctrl+R"],
         )]));
-        state.radial_menu_mouse_binding = RadialMenuMouseBinding::Disabled;
+        state.radial_menu.mouse_binding = RadialMenuMouseBinding::Disabled;
 
         assert_eq!(
             state.shortcut_for_action(Action::ToggleRadialMenu),
@@ -115,7 +115,7 @@ mod tests {
     #[test]
     fn shortcut_for_radial_menu_returns_none_when_fully_unbound() {
         let mut state = make_test_input_state_with_action_bindings(HashMap::new());
-        state.radial_menu_mouse_binding = RadialMenuMouseBinding::Disabled;
+        state.radial_menu.mouse_binding = RadialMenuMouseBinding::Disabled;
 
         assert_eq!(state.shortcut_for_action(Action::ToggleRadialMenu), None);
     }

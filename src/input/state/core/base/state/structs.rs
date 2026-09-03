@@ -1,7 +1,6 @@
 use super::super::super::{
     index::SpatialIndexCache,
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
-    radial_menu::{RadialMenuLayout, RadialMenuState},
     selection::SelectionState,
     status_hud::StatusHudRebuildInputs,
 };
@@ -15,8 +14,8 @@ use super::super::types::{
     TextEditEntryFeedback, TextInputMode, UiToastState,
 };
 use crate::config::{
-    Action, PresenterModeConfig, QuickColorPalette, RadialMenuMouseBinding, ResolvedToolbarItems,
-    Shortcut, ToolPresetConfig, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemsConfig,
+    Action, PresenterModeConfig, QuickColorPalette, ResolvedToolbarItems, Shortcut,
+    ToolPresetConfig, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemsConfig,
 };
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{
@@ -340,12 +339,8 @@ pub struct InputState {
 
     /// Modal state, cached geometry, and press identity for the color picker popup.
     pub(crate) color_picker_popup: crate::input::state::core::ColorPickerPopupPanel,
-    /// Current radial menu state
-    pub radial_menu_state: RadialMenuState,
-    /// Cached layout details for the radial menu
-    pub radial_menu_layout: Option<RadialMenuLayout>,
-    /// Mouse button used to toggle the radial menu.
-    pub radial_menu_mouse_binding: RadialMenuMouseBinding,
+    /// Lifecycle, layout, and configured pointer trigger for the radial menu.
+    pub radial_menu: crate::input::state::core::RadialMenuPanel,
     /// Cached hit-test bounds per shape id
     pub(in crate::input::state::core) hit_test_cache: HashMap<ShapeId, Rect>,
     /// Monotonic counter bumped whenever committed shape content may have
