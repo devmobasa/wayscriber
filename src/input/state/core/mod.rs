@@ -55,8 +55,8 @@ pub use base::{
     UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction,
 };
 pub(crate) use base::{
-    BoardPickerClickState, InputStateSeed, PolygonClickState, TextClipboardRequest, TextCutTarget,
-    TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress,
+    BoardPickerClickState, InputStateSeed, TextClipboardRequest, TextCutTarget, TextPasteEdit,
+    TextPasteTarget, ToastCommand, ToastPress,
 };
 pub(crate) use base::{
     ClipboardFingerprint, ClipboardPasteRequest, HelperLaunchRequest, PasteAnchor,
@@ -113,6 +113,7 @@ pub use region_select::{
     SelectionPolicy,
 };
 pub(crate) use search::fuzzy_score;
+pub(crate) use selection::LocalSelectionContext;
 pub use selection::SelectionState;
 pub(crate) use style::DrawingStyle;
 pub(crate) use text_editing::TextEditing;

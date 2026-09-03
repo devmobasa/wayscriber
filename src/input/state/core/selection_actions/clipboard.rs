@@ -1,13 +1,9 @@
-use super::super::base::{
-    ClipboardFingerprint, ClipboardPasteRequest, InputState, PasteAnchor,
-    PendingSelectionClipboardPublish, SelectionPublishState, WayscriberClipboardSelection,
-};
+use super::super::base::{ClipboardFingerprint, ClipboardPasteRequest, InputState, PasteAnchor};
+use super::super::selection::LocalSelectionContext;
 use crate::draw::Shape;
 use crate::draw::frame::UndoAction;
 use crate::input::state::{Toast, ToastPriority};
 use crate::util::Rect;
-
-const PRIVATE_CLIPBOARD_SCHEMA_VERSION: u32 = 1;
 
 mod duplicate;
 mod image_paste;
@@ -39,48 +35,13 @@ impl InputState {
         }
 
         let count = copied.len();
-        self.selection_clipboard.generation = self.selection_clipboard.generation.wrapping_add(1);
-        self.selection_clipboard.publish_state = SelectionPublishState::NotAttempted;
-        self.selection_clipboard.shapes = Some(copied.clone());
-        let pending_publish = self
-            .selection_clipboard_payload(copied)
-            .and_then(|payload| {
-                serde_json::to_string(&payload).ok().map(|payload_json| {
-                    PendingSelectionClipboardPublish {
-                        generation: payload.copy_generation,
-                        payload_json,
-                    }
-                })
-            });
+        let pending_publish = self.selection_clipboard.copy_shapes(copied);
         self.replace_selection_clipboard_publish(pending_publish);
         count
     }
 
-    fn selection_clipboard_payload(
-        &self,
-        shapes: Vec<Shape>,
-    ) -> Option<WayscriberClipboardSelection> {
-        if shapes.is_empty() {
-            return None;
-        }
-        Some(WayscriberClipboardSelection {
-            schema_version: PRIVATE_CLIPBOARD_SCHEMA_VERSION,
-            app_version: env!("CARGO_PKG_VERSION").to_string(),
-            app_instance_id: self.selection_clipboard.app_instance_id.clone(),
-            copy_generation: self.selection_clipboard.generation,
-            shapes,
-        })
-    }
-
-    pub(crate) fn selection_clipboard_is_empty(&self) -> bool {
-        self.selection_clipboard
-            .shapes
-            .as_ref()
-            .is_none_or(|clipboard| clipboard.is_empty())
-    }
-
     pub(crate) fn paste_selection(&mut self) -> usize {
-        let Some(shapes) = self.selection_clipboard.shapes.clone() else {
+        let Some(shapes) = self.selection_clipboard.shapes() else {
             return 0;
         };
         if shapes.is_empty() {
@@ -95,7 +56,7 @@ impl InputState {
 
         for shape in shapes {
             let mut cloned_shape = shape;
-            Self::translate_shape(&mut cloned_shape, dx, dy);
+            cloned_shape.translate(dx, dy);
             let new_id = {
                 let frame = self.boards.active_frame_mut();
                 frame.try_add_shape_with_id(cloned_shape, self.max_shapes_per_frame)
@@ -158,110 +119,22 @@ impl InputState {
         &mut self,
         anchor: PasteAnchor,
     ) -> ClipboardPasteRequest {
-        self.selection_clipboard.paste_request_counter = self
-            .selection_clipboard
-            .paste_request_counter
-            .wrapping_add(1);
-        let id = self.selection_clipboard.paste_request_counter;
-        let request = ClipboardPasteRequest {
-            id,
-            target_board_id: self.boards.active_board_id().to_string(),
-            target_page_index: self.boards.active_page_index(),
-            target_page_generation: self.boards.active_page_generation(),
+        let request = self.selection_clipboard.begin_paste_request(
+            self.boards.active_board_id().to_string(),
+            self.boards.active_page_index(),
+            self.boards.active_page_generation(),
             anchor,
-            visible_canvas_rect: self.visible_canvas_rect(),
-            screen_size: (self.screen_width, self.screen_height),
-            selection_clipboard_generation_at_request: self.selection_clipboard.generation,
-            local_selection_fallback_generation: self.local_selection_fallback_generation(),
-        };
-        self.selection_clipboard.active_paste_request_id = Some(id);
+            self.visible_canvas_rect(),
+            (self.screen_width, self.screen_height),
+        );
         self.emit_input_effect(super::super::base::InputEffect::ClipboardPaste(
             request.clone(),
         ));
         request
     }
 
-    pub(crate) fn local_selection_fallback_generation(&self) -> Option<u64> {
-        self.local_selection_fallback_allowed()
-            .then_some(self.selection_clipboard.generation)
-    }
-
-    pub(crate) fn local_selection_fallback_allowed(&self) -> bool {
-        if self.selection_clipboard_is_empty() {
-            return false;
-        }
-        match self.selection_clipboard.publish_state {
-            SelectionPublishState::NotAttempted => true,
-            SelectionPublishState::Failed { generation, .. } => {
-                generation == self.selection_clipboard.generation
-            }
-            SelectionPublishState::Published { generation } => {
-                generation == self.selection_clipboard.generation
-            }
-            SelectionPublishState::Superseded { .. } => false,
-        }
-    }
-
-    pub(crate) fn local_selection_shapes_for_fallback(
-        &self,
-        generation: u64,
-    ) -> Option<Vec<Shape>> {
-        (generation == self.selection_clipboard.generation
-            && self.local_selection_fallback_allowed())
-        .then(|| self.selection_clipboard.shapes.clone())
-        .flatten()
-        .filter(|shapes| !shapes.is_empty())
-    }
-
-    pub(crate) fn local_selection_shapes_for_pending_publish(
-        &self,
-        generation: Option<u64>,
-    ) -> Option<Vec<Shape>> {
-        let generation = generation?;
-        (generation == self.selection_clipboard.generation
-            && matches!(
-                self.selection_clipboard.publish_state,
-                SelectionPublishState::NotAttempted
-            ))
-        .then(|| self.selection_clipboard.shapes.clone())
-        .flatten()
-        .filter(|shapes| !shapes.is_empty())
-    }
-
-    pub(crate) fn has_failed_local_selection_for_generation(
-        &self,
-        generation: Option<u64>,
-    ) -> bool {
-        matches!(
-            (generation, &self.selection_clipboard.publish_state),
-            (
-                Some(request_generation),
-                SelectionPublishState::Failed {
-                    generation: failed_generation,
-                    ..
-                },
-            ) if *failed_generation == request_generation
-                    && *failed_generation == self.selection_clipboard.generation
-                    && !self.selection_clipboard_is_empty()
-        )
-    }
-
-    pub(crate) fn failed_local_selection_probe_for_generation(
-        &self,
-        generation: Option<u64>,
-    ) -> Option<(u64, Option<ClipboardFingerprint>)> {
-        let request_generation = generation?;
-        let SelectionPublishState::Failed {
-            generation,
-            clipboard_fingerprint_at_failure,
-        } = &self.selection_clipboard.publish_state
-        else {
-            return None;
-        };
-        (*generation == request_generation
-            && *generation == self.selection_clipboard.generation
-            && !self.selection_clipboard_is_empty())
-        .then(|| (*generation, clipboard_fingerprint_at_failure.clone()))
+    pub(crate) fn selection_clipboard_snapshot(&self) -> LocalSelectionContext {
+        self.selection_clipboard.snapshot()
     }
 
     pub(crate) fn failed_local_selection_after_fingerprint_probe(
@@ -269,94 +142,20 @@ impl InputState {
         request_generation: Option<u64>,
         current: Option<ClipboardFingerprint>,
     ) -> Option<Vec<Shape>> {
-        let request_generation = request_generation?;
-        let SelectionPublishState::Failed {
-            generation,
-            clipboard_fingerprint_at_failure,
-        } = &self.selection_clipboard.publish_state
-        else {
-            return None;
-        };
-        if *generation != request_generation || *generation != self.selection_clipboard.generation {
-            return None;
-        }
-
-        match (clipboard_fingerprint_at_failure.as_ref(), current.as_ref()) {
-            (Some(previous), Some(current)) if previous == current => {}
-            (None, None) => return None,
-            _ => {
-                self.mark_selection_clipboard_superseded_for_generation(Some(*generation));
-                return None;
-            }
-        }
-
         self.selection_clipboard
-            .shapes
-            .clone()
-            .filter(|shapes| !shapes.is_empty())
+            .failed_after_fingerprint_probe(request_generation, current)
     }
 
     pub(crate) fn mark_selection_clipboard_superseded(&mut self) {
-        self.mark_selection_clipboard_superseded_for_generation(Some(
-            self.selection_clipboard.generation,
-        ));
+        let generation = self.selection_clipboard.generation();
+        self.selection_clipboard.mark_superseded(Some(generation));
     }
 
     pub(crate) fn mark_selection_clipboard_superseded_for_generation(
         &mut self,
         generation: Option<u64>,
     ) {
-        if generation == Some(self.selection_clipboard.generation)
-            && !self.selection_clipboard_is_empty()
-        {
-            self.selection_clipboard.publish_state = SelectionPublishState::Superseded {
-                generation: self.selection_clipboard.generation,
-            };
-        }
-    }
-
-    pub(crate) fn private_payload_matches_request_selection(
-        &self,
-        request: &ClipboardPasteRequest,
-        payload: &WayscriberClipboardSelection,
-    ) -> bool {
-        payload.app_instance_id == self.selection_clipboard.app_instance_id
-            && request.local_selection_fallback_generation == Some(payload.copy_generation)
-    }
-
-    pub(crate) fn private_payload_is_same_instance(
-        &self,
-        payload: &WayscriberClipboardSelection,
-    ) -> bool {
-        payload.app_instance_id == self.selection_clipboard.app_instance_id
-    }
-
-    pub(crate) fn private_payload_shapes_for_request(
-        &self,
-        request: &ClipboardPasteRequest,
-        payload: WayscriberClipboardSelection,
-    ) -> Option<Vec<Shape>> {
-        if payload.app_instance_id == self.selection_clipboard.app_instance_id {
-            if request.local_selection_fallback_generation == Some(payload.copy_generation) {
-                if self.selection_clipboard.generation == payload.copy_generation
-                    && let Some(shapes) = &self.selection_clipboard.shapes
-                    && !shapes.is_empty()
-                {
-                    return Some(shapes.clone());
-                }
-                return non_empty_shapes(payload.shapes);
-            }
-
-            if request.local_selection_fallback_generation.is_none()
-                && payload.copy_generation == request.selection_clipboard_generation_at_request
-            {
-                return non_empty_shapes(payload.shapes);
-            }
-
-            return None;
-        }
-
-        non_empty_shapes(payload.shapes)
+        self.selection_clipboard.mark_superseded(generation);
     }
 
     pub(crate) fn paste_clipboard_shapes_from_request(
@@ -367,7 +166,12 @@ impl InputState {
         if shapes.is_empty() {
             return 0;
         }
-        if self.selection_clipboard.active_paste_request_id != Some(request.id) {
+        if self
+            .selection_clipboard
+            .snapshot()
+            .active_paste_request_id()
+            != Some(request.id)
+        {
             return 0;
         }
 
@@ -400,7 +204,7 @@ impl InputState {
 
         for shape in shapes {
             let mut cloned_shape = shape;
-            Self::translate_shape(&mut cloned_shape, dx, dy);
+            cloned_shape.translate(dx, dy);
             let Some(new_id) = frame.try_add_shape_with_id(cloned_shape, max_shapes) else {
                 limit_hit = true;
                 break;
@@ -450,14 +254,6 @@ impl InputState {
             );
         }
         created_len
-    }
-}
-
-fn non_empty_shapes(shapes: Vec<Shape>) -> Option<Vec<Shape>> {
-    if shapes.is_empty() {
-        None
-    } else {
-        Some(shapes)
     }
 }
 

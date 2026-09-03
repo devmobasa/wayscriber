@@ -2,7 +2,7 @@ use super::super::base::{
     ClipboardFingerprint, ClipboardPasteRequest, InputEffect, InputEffectDrain, InputEffectKind,
     InputState, KeybindingEditRequest, OutputFocusAction, PendingBackendAction,
     PendingSelectionClipboardPublish, PendingToolbarPersistence, PresetAction, QuickColorEdit,
-    SelectionPublishState, ZoomAction,
+    ZoomAction,
 };
 use super::super::base::{TextClipboardRequest, TextPasteTarget};
 use crate::draw::Color;
@@ -222,18 +222,8 @@ impl InputState {
         fingerprint_at_failure: Option<ClipboardFingerprint>,
         succeeded: bool,
     ) -> bool {
-        if generation != self.selection_clipboard.generation {
-            return false;
-        }
-        self.selection_clipboard.publish_state = if succeeded {
-            SelectionPublishState::Published { generation }
-        } else {
-            SelectionPublishState::Failed {
-                generation,
-                clipboard_fingerprint_at_failure: fingerprint_at_failure,
-            }
-        };
-        true
+        self.selection_clipboard
+            .complete_publish(generation, fingerprint_at_failure, succeeded)
     }
 
     pub(crate) fn take_pending_clipboard_paste_request(&mut self) -> Option<ClipboardPasteRequest> {
@@ -325,14 +315,8 @@ impl InputState {
         }
     }
 
-    pub(crate) fn active_clipboard_paste_request_id(&self) -> Option<u64> {
-        self.selection_clipboard.active_paste_request_id
-    }
-
     pub(crate) fn finish_clipboard_paste_request(&mut self, id: u64) {
-        if self.selection_clipboard.active_paste_request_id == Some(id) {
-            self.selection_clipboard.active_paste_request_id = None;
-        }
+        self.selection_clipboard.finish_paste_request(id);
     }
 }
 

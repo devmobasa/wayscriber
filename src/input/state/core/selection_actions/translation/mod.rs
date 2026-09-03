@@ -3,7 +3,7 @@ use crate::draw::frame::ShapeSnapshot;
 use crate::input::InputState;
 
 mod bounds;
-mod transform;
+mod restore;
 mod undo;
 
 impl InputState {
@@ -55,7 +55,7 @@ impl InputState {
                         None
                     } else {
                         let before = shape.bounding_box();
-                        Self::translate_shape(&mut shape.shape, dx, dy);
+                        shape.shape.translate(dx, dy);
                         shape.invalidate_bounds();
                         let after = shape.bounding_box();
                         Some((before, after))

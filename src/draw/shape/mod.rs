@@ -7,6 +7,7 @@ mod smoothing;
 mod step_marker;
 mod text;
 mod text_cache;
+mod transform;
 mod types;
 
 pub use polygon::{

@@ -369,7 +369,7 @@ fn restore_selection_snapshots_reverts_translation() {
 
 #[test]
 fn resizing_a_curved_arrow_keeps_its_style_and_curvature() {
-    // `scale_shape` rebuilds `Shape::Arrow` field by field, so a field left out
+    // `Shape::scaled` rebuilds `Shape::Arrow` field by field, so a field left out
     // there silently resets on every resize. `style` has to survive untouched;
     // `bend` has to survive as an *arc*, which a non-uniform scale means is not
     // the same as surviving as a number.
