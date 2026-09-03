@@ -131,7 +131,7 @@ impl InputState {
     /// Returns true while pointer-driven work is in progress and autosave should wait.
     #[allow(dead_code)]
     pub(crate) fn has_active_pointer_interaction(&self) -> bool {
-        self.keymap.active_drag_state().0.is_some()
+        self.keymap.pointer_drag_active()
             || matches!(
                 self.state,
                 DrawingState::Drawing { .. }
