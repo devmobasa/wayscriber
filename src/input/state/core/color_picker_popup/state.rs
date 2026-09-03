@@ -217,13 +217,13 @@ impl InputState {
                     // the current color alone.
                     if self.color_for_tool(tool) == original_color {
                         let _ = self.preview_color_for_tool(tool, color);
-                        self.preset_slots.active_preset_slot = None;
+                        self.preset_slots.clear_active();
                         self.note_recent_color(color);
                         self.mark_session_dirty();
                     }
                 }
                 None => {
-                    self.preset_slots.active_preset_slot = None;
+                    self.preset_slots.clear_active();
                     // Accepting is where a mixed color becomes the color in
                     // use, so it belongs in recents. This commits on the
                     // popup's own target rather than through

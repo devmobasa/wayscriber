@@ -360,7 +360,7 @@ fn save_snapshot_drops_history_when_modified_stroke_exceeds_limit() {
                     locked: false,
                 },
             },
-            input.history_limits.undo_stack_limit,
+            input.history_limits.undo_stack_limit(),
         );
     }
 
@@ -463,7 +463,7 @@ fn save_snapshot_keeps_largest_recent_history_depth_that_fits() {
                         locked: false,
                     },
                 },
-                input.history_limits.undo_stack_limit,
+                input.history_limits.undo_stack_limit(),
             );
         }
     }
@@ -553,7 +553,7 @@ fn autosave_snapshot_uses_bounded_history_fallback() {
                         locked: false,
                     },
                 },
-                input.history_limits.undo_stack_limit,
+                input.history_limits.undo_stack_limit(),
             );
         }
     }
@@ -649,7 +649,7 @@ fn save_snapshot_keeps_depth_one_when_visible_payload_is_near_limit() {
                         locked: false,
                     },
                 },
-                input.history_limits.undo_stack_limit,
+                input.history_limits.undo_stack_limit(),
             );
         }
     }

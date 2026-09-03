@@ -199,7 +199,7 @@ impl InputState {
                         before: before_snapshot,
                         after: after_snapshot,
                     },
-                    self.history_limits.undo_stack_limit,
+                    self.history_limits.undo_stack_limit(),
                 );
                 Some((before_bounds, after_bounds))
             } else {

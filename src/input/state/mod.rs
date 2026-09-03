@@ -192,7 +192,7 @@ pub(crate) mod test_support {
         }
 
         pub(crate) fn custom_section_enabled(mut self, enabled: bool) -> Self {
-            self.seed.history_limits.custom_section_enabled = enabled;
+            self.seed.history_limits.set_custom_section_enabled(enabled);
             self
         }
 
@@ -230,6 +230,6 @@ pub(crate) mod test_support {
         assert_eq!(state.style.current_thickness, 3.0);
         assert_eq!(state.style.eraser_size, 12.0);
         assert!(state.style.text_background_enabled);
-        assert!(!state.history_limits.custom_section_enabled);
+        assert!(!state.history_limits.custom_section_enabled());
     }
 }

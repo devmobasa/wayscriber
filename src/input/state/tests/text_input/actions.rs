@@ -21,7 +21,7 @@ fn test_redo_restores_shape_after_undo() {
             UndoAction::Create {
                 shapes: vec![(index, snapshot)],
             },
-            state.history_limits.undo_stack_limit,
+            state.history_limits.undo_stack_limit(),
         );
     }
 

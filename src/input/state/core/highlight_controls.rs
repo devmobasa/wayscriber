@@ -1,8 +1,8 @@
-use super::base::{DelayedHistory, HistoryMode};
+use super::base::HistoryMode;
 use super::base::{DrawingState, InputState};
 use crate::input::tool::Tool;
 use cairo::Context as CairoContext;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 impl InputState {
     /// Returns whether the click highlight feature is currently enabled.
@@ -168,107 +168,75 @@ impl InputState {
 
     /// Returns true when undo/redo playback is queued.
     pub fn has_pending_history(&self) -> bool {
-        self.history_limits.pending_history.is_some()
+        self.history_limits.has_pending()
     }
 
     /// Begin delayed undo playback.
     pub fn start_undo_all_delayed(&mut self, delay_ms: u64) {
-        const MIN_DELAY_MS: u64 = 50;
         let count = self.boards.active_frame().undo_stack_len();
-        if count == 0 {
-            return;
+        if self
+            .history_limits
+            .schedule(HistoryMode::Undo, count, count, delay_ms, Instant::now())
+        {
+            self.needs_redraw = true;
         }
-        self.history_limits.pending_history = Some(DelayedHistory {
-            mode: HistoryMode::Undo,
-            remaining: count,
-            delay_ms: delay_ms.max(MIN_DELAY_MS),
-            next_due: Instant::now(),
-        });
-        self.needs_redraw = true;
     }
 
     /// Begin delayed redo playback.
     pub fn start_redo_all_delayed(&mut self, delay_ms: u64) {
-        const MIN_DELAY_MS: u64 = 50;
         let count = self.boards.active_frame().redo_stack_len();
-        if count == 0 {
-            return;
+        if self
+            .history_limits
+            .schedule(HistoryMode::Redo, count, count, delay_ms, Instant::now())
+        {
+            self.needs_redraw = true;
         }
-        self.history_limits.pending_history = Some(DelayedHistory {
-            mode: HistoryMode::Redo,
-            remaining: count,
-            delay_ms: delay_ms.max(MIN_DELAY_MS),
-            next_due: Instant::now(),
-        });
-        self.needs_redraw = true;
     }
 
     /// Begin custom undo playback with a step budget.
     pub fn start_custom_undo(&mut self, delay_ms: u64, steps: usize) {
-        const MIN_DELAY_MS: u64 = 50;
-        if steps == 0 {
-            return;
-        }
         let available = self.boards.active_frame().undo_stack_len();
-        let remaining = available.min(steps);
-        if remaining == 0 {
-            return;
+        if self.history_limits.schedule(
+            HistoryMode::Undo,
+            available,
+            steps,
+            delay_ms,
+            Instant::now(),
+        ) {
+            self.needs_redraw = true;
         }
-        self.history_limits.pending_history = Some(DelayedHistory {
-            mode: HistoryMode::Undo,
-            remaining,
-            delay_ms: delay_ms.max(MIN_DELAY_MS),
-            next_due: Instant::now(),
-        });
-        self.needs_redraw = true;
     }
 
     /// Begin custom redo playback with a step budget.
     pub fn start_custom_redo(&mut self, delay_ms: u64, steps: usize) {
-        const MIN_DELAY_MS: u64 = 50;
-        if steps == 0 {
-            return;
-        }
         let available = self.boards.active_frame().redo_stack_len();
-        let remaining = available.min(steps);
-        if remaining == 0 {
-            return;
+        if self.history_limits.schedule(
+            HistoryMode::Redo,
+            available,
+            steps,
+            delay_ms,
+            Instant::now(),
+        ) {
+            self.needs_redraw = true;
         }
-        self.history_limits.pending_history = Some(DelayedHistory {
-            mode: HistoryMode::Redo,
-            remaining,
-            delay_ms: delay_ms.max(MIN_DELAY_MS),
-            next_due: Instant::now(),
-        });
-        self.needs_redraw = true;
     }
 
     /// Advance delayed history playback; returns true if a step was applied.
     pub fn tick_delayed_history(&mut self, now: Instant) -> bool {
-        let mut did_step = false;
-        if let Some(mut pending) = self.history_limits.pending_history.take() {
-            while pending.remaining > 0 && now >= pending.next_due {
-                let action = match pending.mode {
-                    HistoryMode::Undo => self.boards.active_frame_mut().undo_last(),
-                    HistoryMode::Redo => self.boards.active_frame_mut().redo_last(),
-                };
-
-                if let Some(action) = action {
-                    self.apply_action_side_effects(&action);
-                    pending.remaining = pending.remaining.saturating_sub(1);
-                    let delay = Duration::from_millis(pending.delay_ms);
-                    pending.next_due = now + delay;
-                    did_step = true;
-                } else {
-                    pending.remaining = 0;
-                }
-            }
-
-            if pending.remaining > 0 {
-                self.history_limits.pending_history = Some(pending);
-                // Keep rendering/ticking while history remains.
-                self.needs_redraw = true;
-            }
+        let Some(mode) = self.history_limits.due_mode(now) else {
+            return false;
+        };
+        let action = match mode {
+            HistoryMode::Undo => self.boards.active_frame_mut().undo_last(),
+            HistoryMode::Redo => self.boards.active_frame_mut().redo_last(),
+        };
+        let did_step = action.is_some();
+        if let Some(action) = action {
+            self.apply_action_side_effects(&action);
+        }
+        self.history_limits.finish_due_step(now, did_step);
+        if self.history_limits.has_pending() {
+            self.needs_redraw = true;
         }
         did_step
     }

@@ -192,7 +192,7 @@ fn snapshot_after_external_image_paste_from_input(
         data: image.clone(),
     };
     let id = frame.try_add_shape_with_id(shape, input.max_shapes_per_frame)?;
-    let history_limit = options.effective_history_limit(input.history_limits.undo_stack_limit);
+    let history_limit = options.effective_history_limit(input.history_limits.undo_stack_limit());
     if history_limit > 0 {
         let (index, stored) = frame
             .find_index(id)
@@ -220,7 +220,7 @@ fn snapshot_pages_for_preflight(
     input: &InputState,
     options: &session::SessionOptions,
 ) -> session::BoardPagesSnapshot {
-    let history_limit = options.effective_history_limit(input.history_limits.undo_stack_limit);
+    let history_limit = options.effective_history_limit(input.history_limits.undo_stack_limit());
     let mut pages = board.pages.pages().to_vec();
     for page in &mut pages {
         if history_limit == 0 {

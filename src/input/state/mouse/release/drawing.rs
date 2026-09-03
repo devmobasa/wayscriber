@@ -124,7 +124,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
                             UndoAction::Create {
                                 shapes: vec![(index, snapshot.clone())],
                             },
-                            state.history_limits.undo_stack_limit,
+                            state.history_limits.undo_stack_limit(),
                         );
                         Some((new_id, snapshot))
                     } else {

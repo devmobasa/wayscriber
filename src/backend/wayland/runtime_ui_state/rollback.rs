@@ -77,9 +77,9 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
             Target::ToolbarDelaySliders => {
                 set_bool(value, |v| input.ui_visibility.show_delay_sliders = v)
             }
-            Target::HistoryCustomSection => {
-                set_bool(value, |v| input.history_limits.custom_section_enabled = v)
-            }
+            Target::HistoryCustomSection => set_bool(value, |v| {
+                input.history_limits.set_custom_section_enabled(v)
+            }),
             Target::InputHud => set_bool(value, |v| {
                 input.set_input_hud_enabled(v);
             }),

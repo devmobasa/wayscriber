@@ -50,7 +50,7 @@ impl InputState {
 
         self.boards.active_frame_mut().push_undo_action(
             UndoAction::Compound { actions },
-            self.history_limits.undo_stack_limit,
+            self.history_limits.undo_stack_limit(),
         );
         self.mark_session_dirty();
         true
@@ -83,7 +83,7 @@ impl InputState {
             }
             frame.push_undo_action(
                 UndoAction::Delete { shapes: removed },
-                self.history_limits.undo_stack_limit,
+                self.history_limits.undo_stack_limit(),
             );
         }
         self.invalidate_hit_cache();

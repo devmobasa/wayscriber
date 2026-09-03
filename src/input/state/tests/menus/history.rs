@@ -3,7 +3,7 @@ use super::*;
 fn push_rect_create(state: &mut InputState, x: i32) {
     let color = state.style.current_color;
     let thick = state.style.current_thickness;
-    let undo_limit = state.history_limits.undo_stack_limit;
+    let undo_limit = state.history_limits.undo_stack_limit();
     let frame = state.boards.active_frame_mut();
     let id = frame.add_shape(Shape::Rect {
         x,
@@ -45,7 +45,7 @@ fn undo_all_and_redo_all_process_entire_stack() {
         UndoAction::Create {
             shapes: vec![(first_index, first_snapshot)],
         },
-        state.history_limits.undo_stack_limit,
+        state.history_limits.undo_stack_limit(),
     );
 
     let second = frame.add_shape(Shape::Rect {
@@ -63,7 +63,7 @@ fn undo_all_and_redo_all_process_entire_stack() {
         UndoAction::Create {
             shapes: vec![(second_index, second_snapshot)],
         },
-        state.history_limits.undo_stack_limit,
+        state.history_limits.undo_stack_limit(),
     );
 
     assert_eq!(state.boards.active_frame().undo_stack_len(), 2);
@@ -96,7 +96,7 @@ fn undo_all_with_delay_respects_history() {
         UndoAction::Create {
             shapes: vec![(idx, snap)],
         },
-        state.history_limits.undo_stack_limit,
+        state.history_limits.undo_stack_limit(),
     );
 
     state.start_undo_all_delayed(0);
@@ -124,7 +124,7 @@ fn redo_all_with_delay_replays_history() {
         UndoAction::Create {
             shapes: vec![(idx, snap)],
         },
-        state.history_limits.undo_stack_limit,
+        state.history_limits.undo_stack_limit(),
     );
 
     state.undo_all_immediate();

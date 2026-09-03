@@ -100,8 +100,8 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
         (
             ToolbarRuntimeUiPersistenceTarget::HistoryCustomSection,
             |input| {
-                input.history_limits.custom_section_enabled =
-                    !input.history_limits.custom_section_enabled
+                let enabled = !input.history_limits.custom_section_enabled();
+                input.history_limits.set_custom_section_enabled(enabled);
             },
         ),
         (
@@ -131,7 +131,7 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
     let expected_icons = input.toolbar_use_icons;
     let expected_context = input.ui_visibility.context_aware_ui;
     let expected_sliders = input.ui_visibility.show_delay_sliders;
-    let expected_custom = input.history_limits.custom_section_enabled;
+    let expected_custom = input.history_limits.custom_section_enabled();
     let expected_badge = input.ui_visibility.show_floating_badge_always;
     runtime.shutdown_blocking();
 
@@ -153,7 +153,7 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
         expected_sliders
     );
     assert_eq!(
-        restarted_input.history_limits.custom_section_enabled,
+        restarted_input.history_limits.custom_section_enabled(),
         expected_custom
     );
     assert_eq!(

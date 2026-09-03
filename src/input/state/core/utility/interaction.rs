@@ -165,7 +165,7 @@ impl InputState {
 
     /// Updates the undo stack limit for subsequent actions.
     pub fn set_undo_stack_limit(&mut self, limit: usize) {
-        self.history_limits.undo_stack_limit = limit.max(1);
+        self.history_limits.set_undo_stack_limit(limit);
     }
 
     /// Updates screen dimensions after backend configuration.
@@ -350,10 +350,10 @@ mod tests {
     fn set_undo_stack_limit_clamps_to_at_least_one() {
         let mut state = make_test_input_state();
         state.set_undo_stack_limit(0);
-        assert_eq!(state.history_limits.undo_stack_limit, 1);
+        assert_eq!(state.history_limits.undo_stack_limit(), 1);
 
         state.set_undo_stack_limit(25);
-        assert_eq!(state.history_limits.undo_stack_limit, 25);
+        assert_eq!(state.history_limits.undo_stack_limit(), 25);
     }
 
     #[test]

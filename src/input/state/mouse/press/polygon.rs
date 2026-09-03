@@ -138,7 +138,7 @@ impl InputState {
                         UndoAction::Create {
                             shapes: vec![(index, snapshot.clone())],
                         },
-                        self.history_limits.undo_stack_limit,
+                        self.history_limits.undo_stack_limit(),
                     );
                     Some((new_id, snapshot))
                 })

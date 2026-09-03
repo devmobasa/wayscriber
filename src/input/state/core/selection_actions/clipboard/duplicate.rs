@@ -52,7 +52,7 @@ impl InputState {
 
         self.boards.active_frame_mut().push_undo_action(
             UndoAction::Create { shapes: created },
-            self.history_limits.undo_stack_limit,
+            self.history_limits.undo_stack_limit(),
         );
         self.mark_session_dirty();
         self.needs_redraw = true;

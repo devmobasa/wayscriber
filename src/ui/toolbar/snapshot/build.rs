@@ -50,7 +50,7 @@ impl ToolbarSnapshot {
         };
         let presets = state
             .preset_slots
-            .presets
+            .presets()
             .iter()
             .map(|preset| {
                 preset.as_ref().map(|preset| PresetSlotSnapshot {
@@ -75,7 +75,7 @@ impl ToolbarSnapshot {
         let duration_secs = PRESET_FEEDBACK_DURATION_MS as f32 / 1000.0;
         let preset_feedback = state
             .preset_slots
-            .preset_feedback
+            .feedback()
             .iter()
             .map(|entry| {
                 entry.as_ref().and_then(|feedback| {
@@ -148,15 +148,15 @@ impl ToolbarSnapshot {
             highlight_tool_active: state.highlight_tool_active(),
             highlight_tool_ring_enabled: state.highlight_tool_ring_enabled(),
             any_highlight_active: state.click_highlight_enabled() || state.highlight_tool_active(),
-            undo_all_delay_ms: state.history_limits.undo_all_delay_ms,
-            redo_all_delay_ms: state.history_limits.redo_all_delay_ms,
-            custom_section_enabled: state.history_limits.custom_section_enabled,
+            undo_all_delay_ms: state.history_limits.undo_all_delay_ms(),
+            redo_all_delay_ms: state.history_limits.redo_all_delay_ms(),
+            custom_section_enabled: state.history_limits.custom_section_enabled(),
             show_delay_sliders: state.ui_visibility.show_delay_sliders,
             delay_actions_enabled,
-            custom_undo_delay_ms: state.history_limits.custom_undo_delay_ms,
-            custom_redo_delay_ms: state.history_limits.custom_redo_delay_ms,
-            custom_undo_steps: state.history_limits.custom_undo_steps,
-            custom_redo_steps: state.history_limits.custom_redo_steps,
+            custom_undo_delay_ms: state.history_limits.custom_undo_delay_ms(),
+            custom_redo_delay_ms: state.history_limits.custom_redo_delay_ms(),
+            custom_undo_steps: state.history_limits.custom_undo_steps(),
+            custom_redo_steps: state.history_limits.custom_redo_steps(),
             top_pinned: state.toolbar_top_pinned,
             use_icons: state.toolbar_use_icons,
             toolbar_scale: state.toolbar_scale,
@@ -190,9 +190,9 @@ impl ToolbarSnapshot {
             show_status_help: state.ui_visibility.show_status_help,
             show_status_about: state.ui_visibility.show_status_about,
             show_floating_badge_always: state.ui_visibility.show_floating_badge_always,
-            preset_slot_count: state.preset_slots.preset_slot_count,
+            preset_slot_count: state.preset_slots.slot_count(),
             presets,
-            active_preset_slot: state.preset_slots.active_preset_slot,
+            active_preset_slot: state.preset_slots.active(),
             preset_feedback,
             shape_picker_open: state.toolbar_top_menu
                 == crate::input::state::TopMenuState::ShapePicker,

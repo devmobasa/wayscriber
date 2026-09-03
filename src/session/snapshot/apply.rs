@@ -17,7 +17,7 @@ fn apply_snapshot_inner(
     replacement_board_ids: Option<&HashSet<String>>,
 ) {
     let runtime_history_limit =
-        options.effective_history_limit(input.history_limits.undo_stack_limit);
+        options.effective_history_limit(input.history_limits.undo_stack_limit());
     let board_generation_before = input.boards.board_identity_generation();
     input.clear_pending_delete_confirmations();
 
