@@ -234,15 +234,9 @@ impl InputState {
             self.clear_font_picker_repeat();
             return false;
         }
-        let Some(key) = self.font_picker.repeat_key else {
+        let Some(key) = self.font_picker.due_repeat_key(now) else {
             return false;
         };
-        let Some(next) = self.font_picker.repeat_next_tick else {
-            return false;
-        };
-        if now < next {
-            return false;
-        }
         let before = self.font_picker.selected;
         match key {
             Key::Up => self.move_font_picker_selection(-1),

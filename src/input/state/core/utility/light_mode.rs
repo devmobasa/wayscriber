@@ -146,7 +146,7 @@ impl InputState {
         self.close_radial_menu();
         self.close_board_picker();
         self.close_color_picker_popup(false);
-        if self.show_help {
+        if self.help_overlay.visible {
             self.toggle_help_overlay();
         }
 

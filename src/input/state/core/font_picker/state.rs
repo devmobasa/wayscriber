@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use super::{FontPickerFilter, FontPickerResults, FontPickerTarget};
 use crate::draw::{families_match, try_monospace_font_families, try_system_font_families};
 use crate::input::Key;
+use crate::input::state::core::key_repeat::OverlayKeyRepeat;
 use crate::input::state::core::search::fuzzy_score;
 use crate::util::Rect;
 
@@ -27,9 +28,7 @@ pub(crate) struct FontPickerState {
     pub(crate) target: FontPickerTarget,
     pub(crate) recents: Vec<String>,
     pub(crate) results: RefCell<FontPickerResults>,
-    pub(crate) repeat_key: Option<Key>,
-    pub(crate) repeat_next_tick: Option<Instant>,
-    pub(crate) repeat_started: Option<Instant>,
+    pub(crate) repeat: OverlayKeyRepeat,
     pub(crate) last_panel: Option<Rect>,
 }
 
@@ -73,9 +72,7 @@ impl FontPickerState {
         self.load_failed = false;
         self.query.clear();
         self.results.replace(None);
-        self.repeat_key = None;
-        self.repeat_next_tick = None;
-        self.repeat_started = None;
+        self.repeat.clear();
         self.last_panel = None;
         true
     }
@@ -143,49 +140,36 @@ impl FontPickerState {
     }
 
     pub(crate) fn start_repeat(&mut self, key: Key, now: Instant) {
-        if self.repeat_key != Some(key) {
-            self.repeat_key = Some(key);
-            self.repeat_started = Some(now);
-            self.repeat_next_tick = Some(now + REPEAT_INITIAL_DELAY);
-        }
+        self.repeat.start(key, now, REPEAT_INITIAL_DELAY);
     }
 
     pub(crate) fn clear_repeat(&mut self) {
-        self.repeat_key = None;
-        self.repeat_next_tick = None;
-        self.repeat_started = None;
+        self.repeat.clear();
     }
 
     pub(crate) fn release_repeat_key(&mut self, key: Key) {
-        if self.repeat_key == Some(key) {
-            self.clear_repeat();
-        }
+        self.repeat.release(key);
     }
 
     pub(crate) fn repeat_timeout(&self, now: Instant) -> Option<Duration> {
         if !self.open {
             return None;
         }
-        self.repeat_next_tick
-            .map(|next| next.saturating_duration_since(now))
+        self.repeat.timeout(now)
     }
 
     pub(crate) fn schedule_next_repeat(&mut self, now: Instant) {
-        let interval = self.repeat_interval(now);
-        self.repeat_next_tick = Some(now + interval);
+        self.repeat.schedule_ramped(
+            now,
+            REPEAT_INITIAL_DELAY,
+            REPEAT_INTERVAL,
+            REPEAT_FAST_INTERVAL,
+            REPEAT_RAMP,
+        );
     }
 
-    fn repeat_interval(&self, now: Instant) -> Duration {
-        let Some(started) = self.repeat_started else {
-            return REPEAT_INTERVAL;
-        };
-        let repeating = now
-            .saturating_duration_since(started)
-            .saturating_sub(REPEAT_INITIAL_DELAY);
-        let progress = (repeating.as_secs_f64() / REPEAT_RAMP.as_secs_f64()).clamp(0.0, 1.0);
-        let slow = REPEAT_INTERVAL.as_secs_f64();
-        let fast = REPEAT_FAST_INTERVAL.as_secs_f64();
-        Duration::from_secs_f64(slow + (fast - slow) * progress)
+    pub(crate) fn due_repeat_key(&self, now: Instant) -> Option<Key> {
+        self.repeat.due_key(now)
     }
 
     pub(crate) fn remember_choice(&mut self, family: &str) {
@@ -210,9 +194,7 @@ impl Default for FontPickerState {
             target: FontPickerTarget::ToolDefault,
             recents: Vec::new(),
             results: RefCell::new(None),
-            repeat_key: None,
-            repeat_next_tick: None,
-            repeat_started: None,
+            repeat: OverlayKeyRepeat::default(),
             last_panel: None,
         }
     }

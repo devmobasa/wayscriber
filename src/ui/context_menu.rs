@@ -23,7 +23,7 @@ pub fn render_context_menu(
     _screen_width: u32,
     _screen_height: u32,
 ) {
-    let (hover_index, focus_index) = match &input_state.context_menu_state {
+    let (hover_index, focus_index) = match input_state.context_menu.state() {
         ContextMenuState::Open {
             hover_index,
             keyboard_focus,

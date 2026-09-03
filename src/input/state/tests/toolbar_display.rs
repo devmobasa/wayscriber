@@ -596,7 +596,7 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
 
     let mut right_click_radial = create_test_input_state();
     unbind_chrome_visibility_actions(&mut right_click_radial);
-    right_click_radial.radial_menu_mouse_binding = RadialMenuMouseBinding::Right;
+    right_click_radial.radial_menu.mouse_binding = RadialMenuMouseBinding::Right;
     hide_all_chrome(&mut right_click_radial);
     assert_eq!(
         right_click_radial

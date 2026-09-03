@@ -40,7 +40,7 @@ impl WaylandState {
         self.input_state.dismiss_ocr_scan_result();
 
         let help_press_source = HelpOverlayPressSource::Pointer(button);
-        if !self.input_state.show_help {
+        if !self.input_state.help_overlay.is_visible() {
             // A new press proves any older help-owned sequence for this button
             // has ended, even if its release was lost with a surface/device.
             self.input_state
@@ -200,11 +200,11 @@ impl WaylandState {
         button: u32,
         help_press_source: HelpOverlayPressSource,
     ) -> bool {
-        if self.input_state.tour_active {
+        if self.input_state.tour.is_active() {
             return true;
         }
         // Help is modal: remember the target so release can require the same row.
-        if self.input_state.show_help {
+        if self.input_state.help_overlay.is_visible() {
             let screen_position = if on_toolbar {
                 self.toolbar_surface_screen_coords(&event.surface, event.position)
             } else {

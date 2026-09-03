@@ -19,6 +19,56 @@ pub enum TourStep {
     Complete,
 }
 
+/// Lifecycle and navigation state for the guided tour.
+#[derive(Debug, Default)]
+pub struct TourState {
+    pub(in crate::input::state) active: bool,
+    pub(in crate::input::state) step: usize,
+}
+
+impl TourState {
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
+
+    /// Zero-based index of the current step, regardless of whether the tour is active.
+    pub fn step(&self) -> usize {
+        self.step
+    }
+
+    pub(crate) fn start(&mut self) {
+        self.active = true;
+        self.step = 0;
+    }
+
+    pub(crate) fn end(&mut self) {
+        self.active = false;
+    }
+
+    pub(crate) fn advance(&mut self) -> bool {
+        if self.step + 1 >= TourStep::COUNT {
+            return false;
+        }
+        self.step += 1;
+        true
+    }
+
+    pub(crate) fn retreat(&mut self) -> bool {
+        if self.step == 0 {
+            return false;
+        }
+        self.step -= 1;
+        true
+    }
+
+    pub fn current_step(&self) -> Option<TourStep> {
+        if !self.active {
+            return None;
+        }
+        TourStep::from_index(self.step)
+    }
+}
+
 impl TourStep {
     /// Total number of tour steps.
     pub const COUNT: usize = 9;
@@ -253,8 +303,7 @@ impl InputState {
             self.toggle_focus_mode();
         }
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::Tour);
-        self.tour_active = true;
-        self.tour_step = 0;
+        self.tour.start();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -269,7 +318,7 @@ impl InputState {
 
     /// End the tour (skip or complete).
     pub fn end_tour(&mut self) {
-        self.tour_active = false;
+        self.tour.end();
         if !self.presenter_mode || !self.presenter_mode_config.hide_toolbars {
             let top_visible = self.toolbar_top_pinned;
             if !self.toolbar_visible() && top_visible {
@@ -283,19 +332,17 @@ impl InputState {
 
     /// Advance to the next tour step.
     pub fn tour_next(&mut self) {
-        if self.tour_step + 1 < TourStep::COUNT {
-            self.tour_step += 1;
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
-        } else {
+        if !self.tour.advance() {
             self.end_tour();
+            return;
         }
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
     }
 
     /// Go back to the previous tour step.
     pub fn tour_prev(&mut self) {
-        if self.tour_step > 0 {
-            self.tour_step -= 1;
+        if self.tour.retreat() {
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }
@@ -303,17 +350,13 @@ impl InputState {
 
     /// Get the current tour step.
     pub fn current_tour_step(&self) -> Option<TourStep> {
-        if self.tour_active {
-            TourStep::from_index(self.tour_step)
-        } else {
-            None
-        }
+        self.tour.current_step()
     }
 
     /// Handle a key press while the tour is active.
     /// Returns true if the key was handled.
     pub(crate) fn handle_tour_key(&mut self, key: Key) -> bool {
-        if !self.tour_active {
+        if !self.tour.is_active() {
             return false;
         }
 
@@ -337,7 +380,22 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
-    use super::TourStep;
+    use super::{TourState, TourStep};
+
+    #[test]
+    fn tour_navigation_respects_both_ends() {
+        let mut tour = TourState::default();
+        tour.start();
+        assert_eq!(tour.current_step(), Some(TourStep::Welcome));
+        assert!(!tour.retreat());
+        for _ in 1..TourStep::COUNT {
+            assert!(tour.advance());
+        }
+        assert_eq!(tour.current_step(), Some(TourStep::Complete));
+        assert!(!tour.advance());
+        tour.end();
+        assert_eq!(tour.current_step(), None);
+    }
     use crate::config::ToolbarRebindModifier;
     use crate::config::keybindings::Action;
     use crate::input::state::test_support::make_test_input_state;
@@ -405,7 +463,7 @@ mod tests {
 
         state.start_tour_replay();
 
-        assert!(state.tour_active);
+        assert!(state.tour.active);
         assert!(
             !state.focus_mode_active(),
             "the tour and Focus Mode must not own chrome simultaneously"

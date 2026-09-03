@@ -3,10 +3,13 @@
 //! Provides a modal popup for selecting colors with a larger gradient picker
 //! and editable hex input field.
 
+mod panel;
 mod state;
 
 use crate::draw::Color;
 use crate::input::Tool;
+
+pub use panel::ColorPickerPopupPanel;
 
 /// Width of the popup panel.
 pub const POPUP_WIDTH: f64 = 300.0;

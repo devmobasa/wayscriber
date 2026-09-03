@@ -92,7 +92,7 @@ impl InputState {
             tool_override: None,
         };
 
-        if config.close_help_overlay && self.show_help {
+        if config.close_help_overlay && self.help_overlay.visible {
             self.toggle_help_overlay();
         }
 

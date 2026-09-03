@@ -45,7 +45,7 @@ pub(super) fn render_page_panel(
     };
     let pages = board.pages.pages();
     let page_count = board.pages.page_count();
-    let drag = input_state.board_picker_page_drag;
+    let drag = input_state.board_picker.page_drag();
     let is_dragging = drag.is_some_and(|d| d.board_index == board_index);
 
     // Vertical divider between board list and page panel

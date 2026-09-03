@@ -19,7 +19,7 @@ fn opening_help_closes_the_color_picker_popup() {
 
     state.toggle_help_overlay();
 
-    assert!(state.show_help);
+    assert!(state.help_overlay.visible);
     assert!(!state.is_color_picker_popup_open());
 }
 
@@ -31,7 +31,7 @@ fn opening_help_closes_the_board_picker() {
 
     state.toggle_help_overlay();
 
-    assert!(state.show_help);
+    assert!(state.help_overlay.visible);
     assert!(!state.is_board_picker_open());
 }
 
@@ -70,11 +70,11 @@ fn every_opener_ends_the_tour() {
     ] {
         let mut state = create_test_input_state();
         state.start_tour();
-        assert!(state.tour_active);
+        assert!(state.tour.active);
 
         open(&mut state);
 
-        assert!(!state.tour_active, "opening the {name} must end the tour");
+        assert!(!state.tour.active, "opening the {name} must end the tour");
     }
 }
 
@@ -91,7 +91,7 @@ fn an_opener_that_ends_the_tour_restores_pinned_chrome() {
 
     state.toggle_command_palette();
 
-    assert!(!state.tour_active);
+    assert!(!state.tour.active);
     assert!(
         state.toolbar_visible,
         "ending the tour must restore pinned toolbar chrome"

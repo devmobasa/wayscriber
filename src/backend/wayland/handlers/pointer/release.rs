@@ -47,7 +47,7 @@ impl WaylandState {
         }
 
         // Block pointer input when modal overlays are active
-        if self.input_state.command_palette.open || self.input_state.tour_active {
+        if self.input_state.command_palette.open || self.input_state.tour.is_active() {
             // For command palette, press handles the click - release is a no-op
             self.clear_pending_overlay_presses();
             return;
@@ -384,7 +384,7 @@ impl WaylandState {
                 // Most actions leave the overlay up; close it so the effect is
                 // visible. Actions that already closed it (ToggleHelp,
                 // ReplayTour) leave `show_help` false, so this is a no-op.
-                if self.input_state.show_help {
+                if self.input_state.help_overlay.is_visible() {
                     self.input_state.close_help_overlay();
                 }
                 self.input_state.needs_redraw = true;

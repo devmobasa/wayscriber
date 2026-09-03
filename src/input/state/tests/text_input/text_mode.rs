@@ -133,13 +133,13 @@ fn test_text_mode_f10_shows_help() {
     // Enter text mode
     state.state = DrawingState::text_input(100, 100, String::new());
 
-    assert!(!state.show_help);
+    assert!(!state.help_overlay.visible);
 
     // Press F10 (should toggle help even in text mode)
     state.on_key_press(Key::F10);
 
     // Help should be visible
-    assert!(state.show_help);
+    assert!(state.help_overlay.visible);
 
     // Should still be in text mode
     assert!(matches!(state.state, DrawingState::TextInput { .. }));

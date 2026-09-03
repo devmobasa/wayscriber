@@ -26,7 +26,7 @@ impl InputState {
     pub fn update_radial_menu_layout(&mut self, width: u32, height: u32) {
         if let RadialMenuState::Open {
             center_x, center_y, ..
-        } = &self.radial_menu_state
+        } = &self.radial_menu.state
         {
             // Track the outermost band so the whole menu (size ring included)
             // still fits the screen edges.
@@ -34,7 +34,7 @@ impl InputState {
             let cx = clamp_center_coordinate(*center_x, width as f64, margin);
             let cy = clamp_center_coordinate(*center_y, height as f64, margin);
 
-            self.radial_menu_layout = Some(RadialMenuLayout {
+            self.radial_menu.layout = Some(RadialMenuLayout {
                 center_x: cx,
                 center_y: cy,
                 center_radius: CENTER_RADIUS,
@@ -52,7 +52,7 @@ impl InputState {
 
     /// Clear the cached layout when the menu is hidden.
     pub fn clear_radial_menu_layout(&mut self) {
-        self.radial_menu_layout = None;
+        self.radial_menu.layout = None;
     }
 }
 

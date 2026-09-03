@@ -130,7 +130,7 @@ impl InputState {
     fn right_click_chrome_recovery_available(&self) -> bool {
         self.context_menu_enabled()
             && !self.zoom_active()
-            && self.radial_menu_mouse_binding != RadialMenuMouseBinding::Right
+            && self.radial_menu.mouse_binding != RadialMenuMouseBinding::Right
     }
 
     fn presenter_will_restore_visible_chrome(&self) -> bool {

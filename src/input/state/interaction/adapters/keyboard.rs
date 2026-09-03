@@ -11,7 +11,7 @@ use crate::input::state::actions::key_press::bindings::{
 use crate::input::state::{DrawingState, InputState};
 
 pub(crate) fn handle_tour_key(state: &mut InputState, key: Key) -> Option<RoutingOutcome> {
-    (state.tour_active && state.handle_tour_key(key))
+    (state.tour.is_active() && state.handle_tour_key(key))
         .then_some(RoutingOutcome::Consumed(ConsumedBy::Tour))
 }
 
@@ -24,7 +24,7 @@ pub(crate) fn handle_command_palette_key(
 }
 
 pub(crate) fn handle_help_overlay_key(state: &mut InputState, key: Key) -> Option<RoutingOutcome> {
-    (state.show_help && state.handle_help_overlay_key(key))
+    (state.help_overlay.visible && state.handle_help_overlay_key(key))
         .then_some(RoutingOutcome::Consumed(ConsumedBy::HelpOverlay))
 }
 

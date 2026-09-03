@@ -16,7 +16,7 @@ impl InputState {
             ref mut hover_index,
             ref mut keyboard_focus,
             ..
-        } = self.context_menu_state
+        } = self.context_menu.state
             && *hover_index != new_hover
         {
             *hover_index = new_hover;
@@ -41,7 +41,7 @@ impl InputState {
             ref mut keyboard_focus,
             ref mut hover_index,
             ..
-        } = self.context_menu_state
+        } = self.context_menu.state
         {
             let changed = *keyboard_focus != focus;
             *keyboard_focus = focus;

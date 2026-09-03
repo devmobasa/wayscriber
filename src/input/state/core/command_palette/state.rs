@@ -1,10 +1,8 @@
-use std::cell::RefCell;
-use std::time::Instant;
-
 use super::CommandPaletteResults;
 use crate::config::Action;
-use crate::input::Key;
+use crate::input::state::core::key_repeat::OverlayKeyRepeat;
 use crate::palette_recents::PALETTE_RECENTS_CAP;
+use std::cell::RefCell;
 
 /// Mutable state and memoized search results owned by the command palette.
 pub struct CommandPaletteState {
@@ -12,8 +10,7 @@ pub struct CommandPaletteState {
     pub query: String,
     pub selected: usize,
     pub scroll: usize,
-    pub(crate) repeat_key: Option<Key>,
-    pub(crate) repeat_next_tick: Option<Instant>,
+    pub(crate) repeat: OverlayKeyRepeat,
     pub(crate) recent: Vec<Action>,
     pub(crate) recents_dirty: bool,
     pub(in crate::input::state::core) results: RefCell<Option<CommandPaletteResults>>,
@@ -58,8 +55,7 @@ impl Default for CommandPaletteState {
             query: String::new(),
             selected: 0,
             scroll: 0,
-            repeat_key: None,
-            repeat_next_tick: None,
+            repeat: OverlayKeyRepeat::default(),
             recent: Vec::new(),
             recents_dirty: false,
             results: RefCell::new(None),

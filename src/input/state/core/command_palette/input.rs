@@ -299,14 +299,15 @@ impl InputState {
     }
 
     fn start_command_palette_repeat(&mut self, key: Key) {
-        self.command_palette.repeat_key = Some(key);
-        self.command_palette.repeat_next_tick =
-            Some(Instant::now() + COMMAND_PALETTE_REPEAT_INITIAL_DELAY);
+        self.command_palette.repeat.start(
+            key,
+            Instant::now(),
+            COMMAND_PALETTE_REPEAT_INITIAL_DELAY,
+        );
     }
 
     pub(crate) fn clear_command_palette_repeat(&mut self) {
-        self.command_palette.repeat_key = None;
-        self.command_palette.repeat_next_tick = None;
+        self.command_palette.repeat.clear();
     }
 
     fn move_command_palette_selection(&mut self, key: Key) -> bool {
@@ -400,18 +401,14 @@ impl InputState {
     }
 
     pub(crate) fn release_command_palette_repeat_key(&mut self, key: Key) {
-        if self.command_palette.repeat_key == Some(key) {
-            self.clear_command_palette_repeat();
-        }
+        self.command_palette.repeat.release(key);
     }
 
     pub(crate) fn command_palette_repeat_timeout(&self, now: Instant) -> Option<Duration> {
         if !self.command_palette.open {
             return None;
         }
-        self.command_palette
-            .repeat_next_tick
-            .map(|next_tick| next_tick.saturating_duration_since(now))
+        self.command_palette.repeat.timeout(now)
     }
 
     pub(crate) fn tick_command_palette_repeat(&mut self, now: Instant) -> bool {
@@ -419,18 +416,14 @@ impl InputState {
             self.clear_command_palette_repeat();
             return false;
         }
-        let Some(key) = self.command_palette.repeat_key else {
+        let Some(key) = self.command_palette.repeat.due_key(now) else {
             return false;
         };
-        let Some(next_tick) = self.command_palette.repeat_next_tick else {
-            return false;
-        };
-        if now < next_tick {
-            return false;
-        }
 
         let changed = self.move_command_palette_selection(key);
-        self.command_palette.repeat_next_tick = Some(now + COMMAND_PALETTE_REPEAT_INTERVAL);
+        self.command_palette
+            .repeat
+            .schedule_fixed(now, COMMAND_PALETTE_REPEAT_INTERVAL);
         changed
     }
 

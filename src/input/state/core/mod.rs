@@ -8,11 +8,13 @@ mod dirty;
 mod eyedropper;
 mod font_cycle;
 pub(crate) mod font_picker;
+mod help_overlay;
 mod highlight_controls;
 mod history;
 mod ime;
 mod index;
 mod input_hud_controls;
+pub(crate) mod key_repeat;
 mod menus;
 pub(crate) mod modal;
 mod properties;
@@ -57,12 +59,12 @@ pub(crate) use base::{
 };
 pub(crate) use base::{InputEffect, InputEffectDrain};
 pub(crate) use base::{KeybindingEditOperation, KeybindingEditRequest};
-pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout};
+pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout, BoardPickerPanel};
 pub(crate) use captured_image::BoardPasteTarget;
 pub(crate) use color_picker_popup::HexPasteTarget;
 pub use color_picker_popup::PickerDrag;
 pub use color_picker_popup::{
-    ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState,
+    ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupPanel, ColorPickerPopupState,
     POPUP_HEIGHT as COLOR_PICKER_POPUP_HEIGHT, POPUP_WIDTH as COLOR_PICKER_POPUP_WIDTH,
     PREVIEW_SIZE as COLOR_PICKER_PREVIEW_SIZE,
     RECENT_SWATCH_COUNT as COLOR_PICKER_RECENT_SWATCH_COUNT,
@@ -85,6 +87,7 @@ pub use font_picker::{
     FontPickerFilter, FontPickerLayout, FontPickerResults, FontPickerRow, FontPickerTarget,
     font_picker_layout, font_picker_rows,
 };
+pub use help_overlay::HelpOverlayState;
 #[cfg(test)]
 pub(crate) use ime::build_text_input_preview;
 pub use ime::{ImeCompositionState, ImePreedit};
@@ -94,10 +97,10 @@ pub use menus::{
 pub use properties::{SelectionPropertyEntry, SelectionPropertyKind};
 pub use radial_menu::{
     COMPASS_SLICES as RADIAL_COMPASS_SLICES, CompassDir, RADIAL_PAINT_DELAY, RadialMenuLayout,
-    RadialMenuState, RadialParent, RadialRingSwatch, RadialSegmentId, RadialSlice, RadialSliceKind,
-    SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START, TOOL_SEGMENT_COUNT as RADIAL_TOOL_SEGMENT_COUNT,
-    compass_slice, size_ring_angle_for_value, size_ring_value_for_angle, slice_parent,
-    sub_ring_child_count, sub_ring_children,
+    RadialMenuPanel, RadialMenuState, RadialParent, RadialRingSwatch, RadialSegmentId, RadialSlice,
+    RadialSliceKind, SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START,
+    TOOL_SEGMENT_COUNT as RADIAL_TOOL_SEGMENT_COUNT, compass_slice, size_ring_angle_for_value,
+    size_ring_value_for_angle, slice_parent, sub_ring_child_count, sub_ring_children,
 };
 pub use region_select::{
     RegionInputSource, RegionPurposeTag, RegionSelectUiState, RegionSelection, ScreenCaptureSource,
@@ -106,7 +109,7 @@ pub use region_select::{
 pub(crate) use search::fuzzy_score;
 pub use selection::SelectionState;
 pub use tool_controls::PrecisionEntryState;
-pub use tour::TourStep;
+pub use tour::{TourState, TourStep};
 pub(crate) use utility::HelpOverlayPressSource;
 pub(crate) use utility::SequenceMatch;
 pub(crate) use utility::default_step_marker_size;

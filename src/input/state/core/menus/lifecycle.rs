@@ -1,22 +1,20 @@
 use super::super::base::InputState;
-use super::types::{ContextMenuKind, ContextMenuState, MenuCommand};
+use super::types::{ContextMenuKind, MenuCommand};
 use crate::draw::ShapeId;
 
 impl InputState {
     /// Closes the currently open context menu.
     pub fn close_context_menu(&mut self) {
-        if let Some(layout) = self.context_menu_layout.take() {
+        if let Some(layout) = self.context_menu.close() {
             self.mark_context_menu_region(layout);
         }
-        self.context_menu_state = ContextMenuState::Hidden;
-        self.context_menu_page_target = None;
         self.pending_menu_hover_recalc = false;
         self.needs_redraw = true;
     }
 
     /// Returns true if a context menu is currently visible.
     pub fn is_context_menu_open(&self) -> bool {
-        matches!(self.context_menu_state, ContextMenuState::Open { .. })
+        self.context_menu.is_open()
     }
 
     /// Opens a context menu at the given anchor for the provided kind.
@@ -27,22 +25,16 @@ impl InputState {
         kind: ContextMenuKind,
         hovered_shape_id: Option<ShapeId>,
     ) {
-        if !self.context_menu_enabled {
+        if !self.context_menu.enabled {
             return;
         }
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::ContextMenu);
-        self.context_menu_page_target = None;
-        if let Some(layout) = self.context_menu_layout.take() {
+        if let Some(layout) = self
+            .context_menu
+            .open(anchor, shape_ids, kind, hovered_shape_id)
+        {
             self.mark_context_menu_region(layout);
         }
-        self.context_menu_state = ContextMenuState::Open {
-            anchor,
-            shape_ids,
-            kind,
-            hover_index: None,
-            keyboard_focus: None,
-            hovered_shape_id,
-        };
         self.pending_menu_hover_recalc = true;
     }
 
@@ -52,14 +44,11 @@ impl InputState {
         board_index: usize,
         page_index: usize,
     ) {
-        if !self.context_menu_enabled {
+        if !self.context_menu.enabled {
             return;
         }
         self.open_context_menu(anchor, Vec::new(), ContextMenuKind::Page, None);
-        self.context_menu_page_target = Some(super::super::board_picker::BoardPickerPageTarget {
-            board_index,
-            page_index,
-        });
+        self.context_menu.set_page_target(board_index, page_index);
         self.pending_menu_hover_recalc = false;
         self.set_context_menu_focus(None);
         self.focus_first_context_menu_entry();
@@ -68,7 +57,7 @@ impl InputState {
     }
 
     pub fn toggle_context_menu_via_keyboard(&mut self) {
-        if !self.context_menu_enabled {
+        if !self.context_menu.enabled {
             return;
         }
         if self.is_context_menu_open() {
@@ -114,7 +103,7 @@ impl InputState {
     fn keyboard_canvas_menu_anchor(&self) -> (i32, i32) {
         let padding = 16;
         let x = padding;
-        let y = match &self.context_menu_layout {
+        let y = match &self.context_menu.layout {
             Some(layout) => (layout.origin_y + layout.height + padding as f64) as i32,
             None => padding,
         };
@@ -131,13 +120,12 @@ impl InputState {
     }
 
     pub fn set_context_menu_enabled(&mut self, enabled: bool) {
-        self.context_menu_enabled = enabled;
-        if !enabled && self.is_context_menu_open() {
+        if self.context_menu.set_enabled(enabled) {
             self.close_context_menu();
         }
     }
 
     pub fn context_menu_enabled(&self) -> bool {
-        self.context_menu_enabled
+        self.context_menu.is_enabled()
     }
 }

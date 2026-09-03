@@ -94,13 +94,13 @@ fn zoom_chip_hover_tracks_buttons_and_clears_when_hidden() {
 
     input.needs_redraw = false;
     input.on_mouse_motion(x, y);
-    assert_eq!(input.zoom_chip_hover, Some(ZoomChipButtonKind::In));
+    assert_eq!(input.zoom_chip.hover, Some(ZoomChipButtonKind::In));
     assert!(input.needs_redraw, "hover transition requests a redraw");
 
     // Runtime-hiding the chip clears hover on the next layout pass.
     input.handle_action(crate::config::Action::ToggleZoomChip);
     update_chip_layout(&mut input, 1280, 720);
-    assert_eq!(input.zoom_chip_hover, None);
+    assert_eq!(input.zoom_chip.hover, None);
 }
 
 #[test]
@@ -111,7 +111,7 @@ fn zoom_chip_reclassifies_hover_after_fit_removes_the_lock_button() {
     let (x, y) = button_center(&input, ZoomChipButtonKind::Fit);
 
     input.on_mouse_motion_with_canvas(x, y, x, y);
-    assert_eq!(input.zoom_chip_hover, Some(ZoomChipButtonKind::Fit));
+    assert_eq!(input.zoom_chip.hover, Some(ZoomChipButtonKind::Fit));
 
     // Fit returns to 100%, removing Lock and shrinking the right-anchored
     // layout while the physical pointer remains stationary.
@@ -120,7 +120,7 @@ fn zoom_chip_reclassifies_hover_after_fit_removes_the_lock_button() {
     let button_now_under_pointer = input.zoom_chip_button_at(x, y);
     assert_ne!(button_now_under_pointer, Some(ZoomChipButtonKind::Fit));
     assert_eq!(
-        input.zoom_chip_hover, button_now_under_pointer,
+        input.zoom_chip.hover, button_now_under_pointer,
         "hover must follow the rebuilt geometry, not the old button identity"
     );
 }
@@ -132,7 +132,7 @@ fn zoom_chip_layout_rebuild_preserves_cleared_hover_after_pointer_leave() {
     update_chip_layout(&mut input, 1280, 720);
     let (x, y) = button_center(&input, ZoomChipButtonKind::In);
     input.on_mouse_motion_with_canvas(x, y, x, y);
-    assert_eq!(input.zoom_chip_hover, Some(ZoomChipButtonKind::In));
+    assert_eq!(input.zoom_chip.hover, Some(ZoomChipButtonKind::In));
 
     // Pointer leave clears hover but retains the last coordinates. A redraw
     // must not reapply that stale hit while focus is elsewhere.
@@ -140,7 +140,7 @@ fn zoom_chip_layout_rebuild_preserves_cleared_hover_after_pointer_leave() {
     input.update_zoom_chip_layout_for_pointer(&StatusBarStyle::default(), 1280, 720, false);
 
     assert_eq!(
-        input.zoom_chip_hover, None,
+        input.zoom_chip.hover, None,
         "layout rebuild must not restore hover without main-surface pointer focus"
     );
 }
@@ -148,7 +148,7 @@ fn zoom_chip_layout_rebuild_preserves_cleared_hover_after_pointer_leave() {
 #[test]
 fn while_zoomed_display_mode_shows_the_chip_only_during_zoom() {
     let mut input = create_test_input_state();
-    input.zoom_chip_display = crate::config::ZoomChipDisplay::WhileZoomed;
+    input.zoom_chip.display = crate::config::ZoomChipDisplay::WhileZoomed;
 
     // At 100% the corner stays clean: no layout, no hit.
     update_chip_layout(&mut input, 1280, 720);
@@ -357,7 +357,7 @@ fn zoom_chip_press_routing_consumes_left_press() {
     assert!(matches!(input.state, DrawingState::Idle));
     assert_eq!(input.boards.active_frame().shapes.len(), 0);
     assert_eq!(
-        input.zoom_chip_press_pending,
+        input.zoom_chip.press_pending,
         ZoomChipPress::Button(ZoomChipButtonKind::In)
     );
 
@@ -378,7 +378,7 @@ fn tablet_path_press_release_dispatches_zoom_action() {
     // press consumes without dispatching, recording the pressed button...
     input.on_mouse_press_with_canvas(MouseButton::Left, x, y, x, y);
     assert_eq!(
-        input.zoom_chip_press_pending,
+        input.zoom_chip.press_pending,
         ZoomChipPress::Button(ZoomChipButtonKind::In)
     );
     assert_eq!(input.take_pending_zoom_action(), None);
@@ -387,7 +387,7 @@ fn tablet_path_press_release_dispatches_zoom_action() {
     // through the shared action path, leaving a pending zoom action for the
     // event loop to drain.
     input.on_mouse_release_with_canvas(MouseButton::Left, x, y, x, y);
-    assert_eq!(input.zoom_chip_press_pending, ZoomChipPress::None);
+    assert_eq!(input.zoom_chip.press_pending, ZoomChipPress::None);
     assert_eq!(input.take_pending_zoom_action(), Some(ZoomAction::In));
 }
 
@@ -399,14 +399,14 @@ fn tablet_path_release_outside_does_not_dispatch() {
 
     input.on_mouse_press_with_canvas(MouseButton::Left, x, y, x, y);
     assert_eq!(
-        input.zoom_chip_press_pending,
+        input.zoom_chip.press_pending,
         ZoomChipPress::Button(ZoomChipButtonKind::In)
     );
 
     // Releasing outside the pill consumes the pending press without
     // dispatching, and the flag does not leak into later releases.
     input.on_mouse_release_with_canvas(MouseButton::Left, 5, 5, 5, 5);
-    assert_eq!(input.zoom_chip_press_pending, ZoomChipPress::None);
+    assert_eq!(input.zoom_chip.press_pending, ZoomChipPress::None);
     assert_eq!(input.take_pending_zoom_action(), None);
 }
 
@@ -439,14 +439,14 @@ fn press_out_drag_to_in_release_dispatches_nothing() {
 
     input.on_mouse_press_with_canvas(MouseButton::Left, ox, oy, ox, oy);
     assert_eq!(
-        input.zoom_chip_press_pending,
+        input.zoom_chip.press_pending,
         ZoomChipPress::Button(ZoomChipButtonKind::Out)
     );
 
     // Release over ⊕ (a different button): the pending press clears and no zoom
     // action is dispatched.
     input.on_mouse_release_with_canvas(MouseButton::Left, ix, iy, ix, iy);
-    assert_eq!(input.zoom_chip_press_pending, ZoomChipPress::None);
+    assert_eq!(input.zoom_chip.press_pending, ZoomChipPress::None);
     assert_eq!(input.take_pending_zoom_action(), None);
 }
 
@@ -465,13 +465,13 @@ fn passive_percent_press_never_fires_a_zoom_action() {
     input.on_mouse_press_with_canvas(MouseButton::Left, px, py, px, py);
     assert!(matches!(input.state, DrawingState::Idle));
     assert_eq!(input.boards.active_frame().shapes.len(), 0);
-    assert_eq!(input.zoom_chip_press_pending, ZoomChipPress::Passive);
+    assert_eq!(input.zoom_chip.press_pending, ZoomChipPress::Passive);
 
     // Even releasing over a real button (⊕) fires nothing: a Passive press
     // carries no button to match. The release still consumes the pending flag.
     let (ix, iy) = button_center(&input, ZoomChipButtonKind::In);
     input.on_mouse_release_with_canvas(MouseButton::Left, ix, iy, ix, iy);
-    assert_eq!(input.zoom_chip_press_pending, ZoomChipPress::None);
+    assert_eq!(input.zoom_chip.press_pending, ZoomChipPress::None);
     assert_eq!(input.take_pending_zoom_action(), None);
 }
 
@@ -500,7 +500,7 @@ fn passive_chip_release_does_not_finish_in_flight_interaction() {
     // Press the passive % area: swallowed, recorded as Passive (not None).
     let (px, py) = passive_percent_center(&input);
     input.on_mouse_press_with_canvas(MouseButton::Left, px, py, px, py);
-    assert_eq!(input.zoom_chip_press_pending, ZoomChipPress::Passive);
+    assert_eq!(input.zoom_chip.press_pending, ZoomChipPress::Passive);
     // The in-flight stroke is untouched by the swallowed press.
     assert!(matches!(input.state, DrawingState::Drawing { .. }));
 
@@ -508,7 +508,7 @@ fn passive_chip_release_does_not_finish_in_flight_interaction() {
     // the drawing state is left intact and nothing is committed. Under the old
     // two-state flag this release fell through and finished the stroke.
     input.on_mouse_release_with_canvas(MouseButton::Left, px, py, px, py);
-    assert_eq!(input.zoom_chip_press_pending, ZoomChipPress::None);
+    assert_eq!(input.zoom_chip.press_pending, ZoomChipPress::None);
     assert!(
         matches!(input.state, DrawingState::Drawing { .. }),
         "passive chip release must not finish the in-flight stroke"

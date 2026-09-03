@@ -3,14 +3,11 @@ use super::super::{BoardPickerFocus, BoardPickerMode, BoardPickerPageNavMode, Bo
 
 impl InputState {
     pub(crate) fn is_board_picker_open(&self) -> bool {
-        matches!(self.board_picker_state, BoardPickerState::Open { .. })
+        self.board_picker.is_open()
     }
 
     pub(crate) fn board_picker_mode(&self) -> BoardPickerMode {
-        match &self.board_picker_state {
-            BoardPickerState::Open { mode, .. } => *mode,
-            BoardPickerState::Hidden => BoardPickerMode::Full,
-        }
+        self.board_picker.mode()
     }
 
     pub(crate) fn board_picker_is_quick(&self) -> bool {
@@ -30,49 +27,21 @@ impl InputState {
         self.pending_onboarding_usage.used_board_picker = true;
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::BoardPicker);
         self.cancel_active_interaction();
-        self.board_picker_clear_search();
-        self.board_picker_drag = None;
-        self.board_picker_page_drag = None;
-        self.board_picker_page_edit = None;
         let active_index = self.boards.active_index();
         let active_page = self.boards.active_page_index();
-        self.board_picker_state = BoardPickerState::Open {
-            selected: active_index,
-            hover_index: None,
-            edit: None,
-            mode,
-            focus: BoardPickerFocus::BoardList,
-            page_focus_page_index: None,
-            page_scroll_row: 0,
-            page_scroll_target_page_index: Some(active_page),
-            page_nav_mode: BoardPickerPageNavMode::Normal,
-            page_search_query: String::new(),
-            page_search_cursor: None,
-            page_jump_buffer: String::new(),
-        };
         let selected_row = self.board_picker_row_for_board(active_index);
-        if let (Some(selected), BoardPickerState::Open { selected: row, .. }) =
-            (selected_row, &mut self.board_picker_state)
-        {
-            *row = selected;
-        }
+        self.board_picker
+            .open(mode, active_index, active_page, selected_row);
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
 
     pub(crate) fn close_board_picker(&mut self) {
-        if let Some(layout) = self.board_picker_layout {
+        if let Some(layout) = self.board_picker.close() {
             self.mark_board_picker_region(&layout);
         }
         // Board picker dims the entire screen; ensure full redraw when closing.
         self.dirty_tracker.mark_full();
-        self.board_picker_state = BoardPickerState::Hidden;
-        self.board_picker_drag = None;
-        self.board_picker_page_drag = None;
-        self.board_picker_page_edit = None;
-        self.board_picker_layout = None;
-        self.last_board_picker_click = None;
-        self.board_picker_clear_search();
         self.needs_redraw = true;
     }
 
@@ -93,21 +62,11 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_active_index(&self) -> Option<usize> {
-        match &self.board_picker_state {
-            BoardPickerState::Open {
-                hover_index,
-                selected,
-                ..
-            } => hover_index.or(Some(*selected)),
-            BoardPickerState::Hidden => None,
-        }
+        self.board_picker.active_index()
     }
 
     pub(crate) fn board_picker_selected_index(&self) -> Option<usize> {
-        match &self.board_picker_state {
-            BoardPickerState::Open { selected, .. } => Some(*selected),
-            BoardPickerState::Hidden => None,
-        }
+        self.board_picker.selected_index()
     }
 
     pub(crate) fn board_picker_page_panel_board_index(&self) -> Option<usize> {
@@ -120,56 +79,23 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_focus(&self) -> BoardPickerFocus {
-        match &self.board_picker_state {
-            BoardPickerState::Open { focus, .. } => *focus,
-            BoardPickerState::Hidden => BoardPickerFocus::BoardList,
-        }
+        self.board_picker.focus()
     }
 
     pub(crate) fn board_picker_set_focus(&mut self, new_focus: BoardPickerFocus) {
-        if self.board_picker_focus() == new_focus {
-            return;
-        }
         let active_page = if new_focus == BoardPickerFocus::PagePanel {
             self.board_picker_selected_board_active_page()
         } else {
             0
         };
-        let BoardPickerState::Open {
-            focus,
-            page_focus_page_index,
-            page_scroll_target_page_index,
-            page_nav_mode,
-            page_search_query,
-            page_search_cursor,
-            page_jump_buffer,
-            ..
-        } = &mut self.board_picker_state
-        else {
-            return;
-        };
-        *focus = new_focus;
-        match new_focus {
-            BoardPickerFocus::PagePanel => {
-                if page_focus_page_index.is_none() {
-                    *page_focus_page_index = Some(active_page);
-                    *page_scroll_target_page_index = Some(active_page);
-                }
-            }
-            BoardPickerFocus::BoardList => {
-                *page_focus_page_index = None;
-                *page_nav_mode = BoardPickerPageNavMode::Normal;
-                page_search_query.clear();
-                *page_search_cursor = None;
-                page_jump_buffer.clear();
-            }
+        if self.board_picker.set_focus(new_focus, active_page) {
+            self.needs_redraw = true;
+            self.dirty_tracker.mark_full();
         }
-        self.needs_redraw = true;
-        self.dirty_tracker.mark_full();
     }
 
     pub(crate) fn board_picker_page_focus_page_index(&self) -> Option<usize> {
-        match &self.board_picker_state {
+        match &self.board_picker.state {
             BoardPickerState::Open {
                 page_focus_page_index,
                 ..
@@ -184,7 +110,7 @@ impl InputState {
             page_focus_page_index,
             page_scroll_target_page_index,
             ..
-        } = &mut self.board_picker_state
+        } = &mut self.board_picker.state
         {
             *page_focus_page_index = Some(clamped);
             *page_scroll_target_page_index = Some(clamped);
@@ -226,7 +152,7 @@ impl InputState {
             page_search_cursor,
             page_jump_buffer,
             ..
-        } = &mut self.board_picker_state
+        } = &mut self.board_picker.state
         {
             *selected = next;
             *focus = BoardPickerFocus::BoardList;
@@ -245,17 +171,17 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_is_dragging(&self) -> bool {
-        self.board_picker_drag.is_some()
+        self.board_picker.drag.is_some()
     }
 
     pub(crate) fn board_picker_is_page_dragging(&self) -> bool {
-        self.board_picker_page_drag.is_some()
+        self.board_picker.page_drag.is_some()
     }
 
     pub(crate) fn board_picker_page_panel_state_parts(
         &self,
     ) -> Option<(usize, Option<usize>, Option<usize>)> {
-        match &self.board_picker_state {
+        match &self.board_picker.state {
             BoardPickerState::Open {
                 page_scroll_row,
                 page_focus_page_index,
@@ -281,7 +207,7 @@ impl InputState {
             page_focus_page_index,
             page_scroll_target_page_index,
             ..
-        } = &mut self.board_picker_state
+        } = &mut self.board_picker.state
         {
             *page_scroll_row = scroll_row;
             *page_focus_page_index = focus_page_index;
@@ -294,7 +220,7 @@ impl InputState {
         if let BoardPickerState::Open {
             page_scroll_target_page_index,
             ..
-        } = &mut self.board_picker_state
+        } = &mut self.board_picker.state
         {
             *page_scroll_target_page_index = Some(clamped);
             self.needs_redraw = true;
@@ -303,7 +229,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_scroll_page_panel_rows(&mut self, delta_rows: isize) -> bool {
-        let Some(layout) = self.board_picker_layout else {
+        let Some(layout) = self.board_picker.layout else {
             return false;
         };
         if !layout.page_panel_enabled || delta_rows == 0 {
@@ -347,7 +273,7 @@ impl InputState {
             page_nav_mode,
             page_search_cursor,
             ..
-        } = &mut self.board_picker_state
+        } = &mut self.board_picker.state
         {
             *page_scroll_target_page_index = None;
             *page_scroll_row = next;

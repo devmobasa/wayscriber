@@ -261,24 +261,15 @@ impl WaylandState {
     }
 
     fn try_handle_help_axis(&mut self, scroll_direction: i32) -> bool {
-        if !self.input_state.show_help {
+        if !self.input_state.help_overlay.is_visible() {
             return false;
         }
         if scroll_direction == 0 {
             return true;
         }
 
-        let delta = if scroll_direction > 0 { 1.0 } else { -1.0 };
-        let scroll_step = 48.0;
-        let max_scroll = self.input_state.help_overlay_scroll_max;
-        let mut next = self.input_state.help_overlay_scroll + delta * scroll_step;
-        if max_scroll > 0.0 {
-            next = next.clamp(0.0, max_scroll);
-        } else {
-            next = next.max(0.0);
-        }
-        if (next - self.input_state.help_overlay_scroll).abs() > f64::EPSILON {
-            self.input_state.help_overlay_scroll = next;
+        let delta = if scroll_direction > 0 { 48.0 } else { -48.0 };
+        if self.input_state.help_overlay.scroll_by(delta) {
             self.input_state.dirty_tracker.mark_full();
             self.input_state.needs_redraw = true;
         }

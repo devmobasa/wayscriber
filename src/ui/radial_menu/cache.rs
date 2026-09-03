@@ -301,7 +301,7 @@ mod tests {
         ));
         state.open_radial_menu(960.0, 540.0);
         state.update_radial_menu_layout(1920, 1080);
-        let layout = state.radial_menu_layout.expect("radial layout");
+        let layout = state.radial_menu.layout().expect("radial layout");
 
         let surface = render_base_surface(
             &state,

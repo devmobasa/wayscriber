@@ -15,6 +15,10 @@
 //! method for why). Only an overlay rendering above the pill suppresses hit
 //! testing, via `zoom_chip_contains`'s eclipse guard.
 
+mod state;
+
+pub use state::ZoomChipState;
+
 use crate::config::{Action, StatusBarStyle};
 use crate::ui::{ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress, compute_zoom_chip_layout};
 
@@ -22,7 +26,7 @@ use super::base::InputState;
 
 impl InputState {
     pub fn zoom_chip_layout(&self) -> Option<&ZoomChipLayout> {
-        self.zoom_chip_layout.as_ref()
+        self.zoom_chip.layout()
     }
 
     /// Effective zoom-chip visibility: the `show_zoom_actions` toolbar
@@ -33,10 +37,11 @@ impl InputState {
     /// disagree. Outside Focus Mode, fallback zoom badges show exactly when
     /// the chip does not; Focus Mode deliberately suppresses both.
     pub fn zoom_chip_enabled(&self) -> bool {
-        self.ui_visibility.show_zoom_actions
-            && self.ui_visibility.show_zoom_chip
-            && (self.zoom_chip_display == crate::config::ZoomChipDisplay::Always
-                || self.zoom_active())
+        self.zoom_chip.is_enabled(
+            self.ui_visibility.show_zoom_actions,
+            self.ui_visibility.show_zoom_chip,
+            self.zoom_active(),
+        )
     }
 
     /// Recompute and cache the zoom chip layout for this frame. Clears the
@@ -57,11 +62,12 @@ impl InputState {
         screen_height: u32,
         chrome_cursor_focused: bool,
     ) {
-        self.zoom_chip_layout = if self.zoom_chip_enabled() {
+        let layout = if self.zoom_chip_enabled() {
             compute_zoom_chip_layout(self, style, screen_width, screen_height)
         } else {
             None
         };
+        self.zoom_chip.replace_layout(layout);
         if chrome_cursor_focused {
             // The right-anchored chip changes width when optional controls such as
             // Lock appear or disappear. Reclassify from the stationary pointer so
@@ -69,7 +75,7 @@ impl InputState {
             // its new position after the layout shifts.
             let (pointer_x, pointer_y) = self.pointer_position();
             self.update_zoom_chip_hover_from_pointer(pointer_x, pointer_y);
-        } else if self.zoom_chip_hover.take().is_some() {
+        } else if self.zoom_chip.hover.take().is_some() {
             // Cached coordinates outlive pointer/stylus focus. Never resurrect
             // a highlight while the cursor is off-surface or over a toolbar.
             self.needs_redraw = true;
@@ -77,8 +83,7 @@ impl InputState {
     }
 
     pub fn clear_zoom_chip_layout(&mut self) {
-        self.zoom_chip_layout = None;
-        self.zoom_chip_hover = None;
+        self.zoom_chip.clear_layout();
     }
 
     /// Update the hovered chip button from idle pointer motion (same
@@ -92,8 +97,7 @@ impl InputState {
         } else {
             None
         };
-        if self.zoom_chip_hover != new_hover {
-            self.zoom_chip_hover = new_hover;
+        if self.zoom_chip.update_hover(new_hover) {
             self.needs_redraw = true;
         }
     }
@@ -108,12 +112,11 @@ impl InputState {
     /// [`check_zoom_chip_click`]: InputState::check_zoom_chip_click
     /// [`zoom_chip_enabled`]: InputState::zoom_chip_enabled
     pub(crate) fn zoom_chip_contains(&self, x: i32, y: i32) -> bool {
-        self.zoom_chip_enabled()
-            && !self.status_hud_eclipsed_by_overlay()
-            && self
-                .zoom_chip_layout
-                .as_ref()
-                .is_some_and(|layout| layout.chip_contains(x as f64, y as f64))
+        self.zoom_chip.contains(
+            self.zoom_chip_enabled() && !self.status_hud_eclipsed_by_overlay(),
+            x,
+            y,
+        )
     }
 
     /// The zoom-chip button under (x, y), or `None` for a hit off any button
@@ -121,9 +124,7 @@ impl InputState {
     /// Read on press to record the pressed button for the same-button release
     /// contract.
     pub(crate) fn zoom_chip_button_at(&self, x: i32, y: i32) -> Option<ZoomChipButtonKind> {
-        self.zoom_chip_layout
-            .as_ref()
-            .and_then(|layout| layout.button_at(x as f64, y as f64))
+        self.zoom_chip.button_at(x, y)
     }
 
     /// Classify a press at (x, y) into the three-state [`ZoomChipPress`] the
@@ -153,13 +154,13 @@ impl InputState {
     ///
     /// [`take_zoom_chip_press_pending`]: InputState::take_zoom_chip_press_pending
     pub(in crate::input::state) fn set_zoom_chip_press_pending(&mut self, pressed: ZoomChipPress) {
-        self.zoom_chip_press_pending = pressed;
+        self.zoom_chip.set_press_pending(pressed);
     }
 
     /// Clears the internal chip press flag (called at the start of press
     /// routing so a stale flag can never swallow an unrelated release).
     pub(in crate::input::state) fn clear_zoom_chip_press_pending(&mut self) {
-        self.zoom_chip_press_pending = ZoomChipPress::None;
+        self.zoom_chip.clear_press_pending();
     }
 
     /// Takes the internal chip press flag set by
@@ -167,7 +168,7 @@ impl InputState {
     ///
     /// [`set_zoom_chip_press_pending`]: InputState::set_zoom_chip_press_pending
     pub(in crate::input::state) fn take_zoom_chip_press_pending(&mut self) -> ZoomChipPress {
-        std::mem::replace(&mut self.zoom_chip_press_pending, ZoomChipPress::None)
+        self.zoom_chip.take_press_pending()
     }
 
     /// Check a release at (x, y) against the pressed zoom chip button, enforcing

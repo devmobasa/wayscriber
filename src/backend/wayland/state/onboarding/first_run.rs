@@ -213,10 +213,10 @@ impl WaylandState {
         !first_run_card_hidden_by_ui_state(
             self.input_state.presenter_mode,
             self.input_state.command_palette.open,
-            self.input_state.show_help,
+            self.input_state.help_overlay.is_visible(),
             self.input_state.is_radial_menu_open(),
             self.input_state.is_context_menu_open(),
-            self.input_state.tour_active,
+            self.input_state.tour.is_active(),
             self.zoom.is_engaged(),
         )
     }
@@ -224,7 +224,7 @@ impl WaylandState {
     pub(super) fn apply_first_run_progress(&mut self) {
         let usage = std::mem::take(&mut self.input_state.pending_onboarding_usage);
         let context_enabled = self.input_state.context_menu_enabled();
-        let radial_binding = self.input_state.radial_menu_mouse_binding;
+        let radial_binding = self.input_state.radial_menu.mouse_binding();
         let radial_available = self.shortcut_label_opt(Action::ToggleRadialMenu).is_some();
         let context_keyboard_available = self.shortcut_label_opt(Action::OpenContextMenu).is_some();
         let toolbar_visible = self.input_state.toolbar_visible();
@@ -398,7 +398,7 @@ impl WaylandState {
         state: &OnboardingState,
     ) -> Vec<OnboardingChecklistItem> {
         let context_enabled = self.input_state.context_menu_enabled();
-        let radial_binding = self.input_state.radial_menu_mouse_binding;
+        let radial_binding = self.input_state.radial_menu.mouse_binding();
         let radial_label = self.shortcut_label_opt(Action::ToggleRadialMenu);
         let radial_available = radial_label.is_some();
         let context_keyboard = self.shortcut_label_opt(Action::OpenContextMenu);

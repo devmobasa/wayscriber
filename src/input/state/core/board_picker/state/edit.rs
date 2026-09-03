@@ -12,20 +12,20 @@ use super::super::{
 
 impl InputState {
     pub(crate) fn board_picker_clear_edit(&mut self) {
-        if let BoardPickerState::Open { edit, .. } = &mut self.board_picker_state {
+        if let BoardPickerState::Open { edit, .. } = &mut self.board_picker.state {
             *edit = None;
         }
     }
 
     pub(crate) fn board_picker_start_edit(&mut self, mode: BoardPickerEditMode, buffer: String) {
-        if let BoardPickerState::Open { edit, .. } = &mut self.board_picker_state {
+        if let BoardPickerState::Open { edit, .. } = &mut self.board_picker.state {
             *edit = Some(BoardPickerEdit { mode, buffer });
         }
         self.board_picker_clear_search();
     }
 
     pub(crate) fn board_picker_edit_state(&self) -> Option<(BoardPickerEditMode, usize, &str)> {
-        let BoardPickerState::Open { selected, edit, .. } = &self.board_picker_state else {
+        let BoardPickerState::Open { selected, edit, .. } = &self.board_picker.state else {
             return None;
         };
         let edit = edit.as_ref()?;
@@ -33,14 +33,15 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_edit_buffer_mut(&mut self) -> Option<&mut BoardPickerEdit> {
-        let BoardPickerState::Open { edit, .. } = &mut self.board_picker_state else {
+        let BoardPickerState::Open { edit, .. } = &mut self.board_picker.state else {
             return None;
         };
         edit.as_mut()
     }
 
     pub(crate) fn board_picker_page_edit_state(&self) -> Option<(usize, usize, &str)> {
-        self.board_picker_page_edit
+        self.board_picker
+            .page_edit
             .as_ref()
             .map(|edit| (edit.board_index, edit.page_index, edit.buffer.as_str()))
     }
@@ -58,7 +59,7 @@ impl InputState {
             .unwrap_or_default()
             .to_string();
         self.board_picker_clear_edit();
-        self.board_picker_page_edit = Some(BoardPickerPageEdit {
+        self.board_picker.page_edit = Some(BoardPickerPageEdit {
             board_index,
             page_index,
             buffer,
@@ -68,7 +69,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_commit_page_edit(&mut self) -> bool {
-        let Some(edit) = self.board_picker_page_edit.take() else {
+        let Some(edit) = self.board_picker.page_edit.take() else {
             return false;
         };
         let name = edit.buffer.trim().to_string();
@@ -80,21 +81,21 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_cancel_page_edit(&mut self) {
-        if self.board_picker_page_edit.is_some() {
-            self.board_picker_page_edit = None;
+        if self.board_picker.page_edit.is_some() {
+            self.board_picker.page_edit = None;
             self.needs_redraw = true;
         }
     }
 
     pub(crate) fn board_picker_page_edit_backspace(&mut self) {
-        if let Some(edit) = &mut self.board_picker_page_edit {
+        if let Some(edit) = &mut self.board_picker.page_edit {
             edit.buffer.pop();
             self.needs_redraw = true;
         }
     }
 
     pub(crate) fn board_picker_page_edit_append(&mut self, ch: char) {
-        let Some(edit) = &mut self.board_picker_page_edit else {
+        let Some(edit) = &mut self.board_picker.page_edit else {
             return;
         };
         if edit.buffer.len() >= MAX_PAGE_NAME_LEN {
@@ -121,7 +122,7 @@ impl InputState {
             }
             BoardPickerPageNavMode::Normal => {}
         }
-        let search = self.board_picker_search.trim();
+        let search = self.board_picker.search.trim();
         if !search.is_empty() {
             return format!(
                 "Search: {}  (Esc: clear)",
@@ -134,7 +135,8 @@ impl InputState {
             "Enter: open  Ctrl+N: add  Ctrl+G: page  /: search  F2: rename".to_string()
         } else {
             let page_panel_enabled = self
-                .board_picker_layout
+                .board_picker
+                .layout
                 .is_some_and(|layout| layout.page_panel_enabled);
             if page_panel_enabled {
                 "Enter: open  F2: rename  Ctrl+C: color  Del: delete  Tab: pages".to_string()
@@ -200,7 +202,7 @@ impl InputState {
     }
 
     pub(super) fn board_picker_promote_to_full(&mut self) {
-        let selected_board = match &self.board_picker_state {
+        let selected_board = match &self.board_picker.state {
             BoardPickerState::Open { selected, mode, .. } => {
                 self.board_picker_board_index_for_row_in_mode(*selected, *mode)
             }
@@ -226,7 +228,7 @@ impl InputState {
             page_search_query,
             page_search_cursor,
             page_jump_buffer,
-        } = &mut self.board_picker_state
+        } = &mut self.board_picker.state
         else {
             return;
         };
@@ -247,7 +249,7 @@ impl InputState {
         if let Some(row) = selected_row_full {
             *selected = row;
         }
-        self.board_picker_layout = None;
+        self.board_picker.layout = None;
         self.needs_redraw = true;
     }
 

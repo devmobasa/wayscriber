@@ -124,7 +124,7 @@ fn help_overlay_owns_input_while_canvas_text_edit_remains_active() {
     let mut state = create_test_input_state();
     enter_text_mode(&mut state);
 
-    state.show_help = true;
+    state.help_overlay.visible = true;
 
     assert!(state.is_text_input_active());
     assert!(

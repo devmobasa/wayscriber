@@ -105,7 +105,7 @@ fn copy_menu_command_publishes_selection_and_closes_menu() {
         .expect("pending clipboard publish");
     assert_eq!(publish.generation, 1);
     assert!(publish.payload_json.contains("\"schema_version\":1"));
-    assert!(matches!(state.context_menu_state, ContextMenuState::Hidden));
+    assert!(matches!(state.context_menu.state, ContextMenuState::Hidden));
 }
 
 #[test]
@@ -120,5 +120,5 @@ fn paste_menu_command_uses_context_anchor_after_pointer_moves_to_menu_item() {
         .take_pending_clipboard_paste_request()
         .expect("pending clipboard paste");
     assert_eq!(request.anchor.point(), (44, 55));
-    assert!(matches!(state.context_menu_state, ContextMenuState::Hidden));
+    assert!(matches!(state.context_menu.state, ContextMenuState::Hidden));
 }

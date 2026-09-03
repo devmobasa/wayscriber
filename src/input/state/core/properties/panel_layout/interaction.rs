@@ -2,8 +2,8 @@ use super::super::super::base::InputState;
 
 impl InputState {
     pub fn properties_panel_index_at(&self, x: i32, y: i32) -> Option<usize> {
-        let layout = self.properties_panel_layout?;
-        let panel = self.shape_properties_panel.as_ref()?;
+        let layout = self.properties.layout?;
+        let panel = self.properties.panel.as_ref()?;
         if panel.entries.is_empty() {
             return None;
         }
@@ -33,7 +33,7 @@ impl InputState {
         trigger_redraw: bool,
     ) {
         let new_hover = self.properties_panel_index_at(x, y);
-        let Some(panel) = self.shape_properties_panel.as_mut() else {
+        let Some(panel) = self.properties.panel.as_mut() else {
             return;
         };
 

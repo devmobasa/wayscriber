@@ -1,28 +1,16 @@
-use super::super::super::{
-    board_picker::{
-        BoardPickerDrag, BoardPickerLayout, BoardPickerPageDrag, BoardPickerPageEdit,
-        BoardPickerPageTarget, BoardPickerState,
-    },
-    color_picker_popup::{ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState},
-    index::SpatialIndexCache,
-    menus::{ContextMenuLayout, ContextMenuState},
-    properties::{PropertiesPanelLayout, ShapePropertiesPanel},
-    radial_menu::{RadialMenuLayout, RadialMenuState},
-    selection::SelectionState,
-    status_hud::StatusHudRebuildInputs,
-};
+use super::super::super::{index::SpatialIndexCache, selection::SelectionState};
 use super::super::InputEffectOutbox;
 use super::super::toast_queue::ToastQueue;
 use super::super::types::{
-    BlockedActionFeedback, BoardPickerClickState, CompositorCapabilities, DelayedHistory,
-    DrawingState, PendingBoardDelete, PendingClipboardFallback, PendingOnboardingUsage,
-    PendingPageDelete, PolygonClickState, PresetFeedbackState, PressureThicknessEditMode,
-    PressureThicknessEntryMode, SelectionAxis, SelectionPublishState, StatusChangeHighlight,
-    TextBlockDrag, TextClickState, TextEditEntryFeedback, TextInputMode, UiToastState,
+    BlockedActionFeedback, CompositorCapabilities, DelayedHistory, DrawingState,
+    PendingBoardDelete, PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
+    PolygonClickState, PresetFeedbackState, PressureThicknessEditMode, PressureThicknessEntryMode,
+    SelectionAxis, SelectionPublishState, StatusChangeHighlight, TextBlockDrag, TextClickState,
+    TextEditEntryFeedback, TextInputMode, UiToastState,
 };
 use crate::config::{
-    Action, PresenterModeConfig, QuickColorPalette, RadialMenuMouseBinding, ResolvedToolbarItems,
-    Shortcut, ToolPresetConfig, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemsConfig,
+    Action, PresenterModeConfig, QuickColorPalette, ResolvedToolbarItems, Shortcut,
+    ToolPresetConfig, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemsConfig,
 };
 use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{
@@ -178,34 +166,10 @@ pub struct InputState {
     pub(crate) session_preflight_options: Option<SessionOptions>,
     /// Save Session As target waiting for explicit overwrite confirmation.
     pub(crate) pending_save_as_overwrite: Option<PathBuf>,
-    /// Whether the help overlay is currently visible (toggled with F10)
-    pub show_help: bool,
-    /// Active help overlay page index
-    pub help_overlay_page: usize,
-    /// Current help overlay search query
-    pub help_overlay_search: String,
-    /// Current help overlay scroll offset (pixels)
-    pub help_overlay_scroll: f64,
-    /// Max scrollable height for help overlay (pixels)
-    pub help_overlay_scroll_max: f64,
-    /// Help targets resolved under pending help-overlay presses, keyed by input
-    /// modality so only the modality that owned a press can resolve it. Each
-    /// matching release only runs a row when press and release land on the SAME
-    /// target. Mirrors the toast press/release contract and guards destructive
-    /// rows (e.g. Clear) against a press-drag-release that starts off-row and
-    /// ends on the row.
-    pub(crate) help_overlay_pending_presses: Vec<(
-        crate::input::state::HelpOverlayPressSource,
-        crate::input::state::HelpOverlayClick,
-    )>,
-    /// Help-owned presses whose overlay generation ended before physical
-    /// release. Their eventual releases must still be swallowed, but can no
-    /// longer resolve an action against either the old or a reopened layout.
-    pub(crate) help_overlay_consume_only_presses: Vec<crate::input::state::HelpOverlayPressSource>,
-    /// Board picker quick search query
-    pub board_picker_search: String,
-    /// Time of last board picker search input
-    pub board_picker_search_last_input: Option<Instant>,
+    /// Visibility, navigation, and pointer bookkeeping for the help overlay.
+    pub(crate) help_overlay: crate::input::state::core::HelpOverlayState,
+    /// Modal, layout, search, edit, and drag state for the board picker.
+    pub(crate) board_picker: crate::input::state::core::BoardPickerPanel,
     /// State owned by the command palette modal.
     pub command_palette: crate::input::state::core::command_palette::CommandPaletteState,
     /// Action whose next keyboard chord is being captured for rebinding.
@@ -214,9 +178,8 @@ pub struct InputState {
     pub command_palette_toast_duration_ms: u64,
     /// Runtime visibility preferences for overlay chrome and toolbar sections.
     pub ui_visibility: crate::input::state::UiVisibility,
-    /// When the zoom chip shows: always, or only while zoom is active
-    /// (`[ui.toolbar] zoom_chip_display`)
-    pub zoom_chip_display: crate::config::ZoomChipDisplay,
+    /// Display policy, cached geometry, and pointer interaction state for the zoom chip.
+    pub(crate) zoom_chip: crate::input::state::core::zoom_chip::ZoomChipState,
     /// Whether presenter mode is currently enabled
     pub presenter_mode: bool,
     /// Presenter mode behavior configuration
@@ -227,11 +190,8 @@ pub struct InputState {
     pub(crate) presenter_restore: Option<PresenterRestore>,
     /// Chrome snapshot while focus mode is active (`Some` = active).
     pub(crate) focus_mode_restore: Option<FocusModeRestore>,
-    /// Hovered status HUD segment (idle pointer only; drives the hover
-    /// backdrop and the pointer cursor over the pill)
-    pub status_hud_hover: Option<crate::ui::StatusHudSegmentKind>,
-    /// Hovered zoom chip button (idle pointer only; same affordance)
-    pub zoom_chip_hover: Option<crate::ui::ZoomChipButtonKind>,
+    /// Cached geometry and pointer interaction state for the status HUD.
+    pub(crate) status_hud: crate::input::state::core::status_hud::StatusHudState,
     /// Whether passthrough light mode is currently enabled
     pub light_mode: bool,
     /// Whether light mode is temporarily accepting drawing input
@@ -365,34 +325,13 @@ pub struct InputState {
     pub selection_state: SelectionState,
     /// Last axis used for selection nudges (used to resolve Home/End axis)
     pub last_selection_axis: Option<SelectionAxis>,
-    /// Current context menu state
-    pub context_menu_state: ContextMenuState,
-    /// Page context target for the context menu
-    pub(in crate::input::state::core) context_menu_page_target: Option<BoardPickerPageTarget>,
-    /// Whether context menu interactions are enabled
-    pub(in crate::input::state::core) context_menu_enabled: bool,
-    /// Current board picker state
-    pub board_picker_state: BoardPickerState,
-    /// Active board picker drag state (full mode reorder)
-    pub board_picker_drag: Option<BoardPickerDrag>,
-    /// Active board picker page drag state (thumbnail reorder)
-    pub board_picker_page_drag: Option<BoardPickerPageDrag>,
-    /// Active board picker page rename state
-    pub board_picker_page_edit: Option<BoardPickerPageEdit>,
-    /// Current color picker popup state
-    pub color_picker_popup_state: ColorPickerPopupState,
-    /// Cached layout details for the color picker popup
-    pub color_picker_popup_layout: Option<ColorPickerPopupLayout>,
-    /// Identity of the currently open color picker popup.
-    pub(in crate::input::state) color_picker_popup_generation: u64,
-    /// Popup action button owned by the current left-button press.
-    pub(in crate::input::state) color_picker_popup_pressed_action: Option<ColorPickerPopupAction>,
-    /// Current radial menu state
-    pub radial_menu_state: RadialMenuState,
-    /// Cached layout details for the radial menu
-    pub radial_menu_layout: Option<RadialMenuLayout>,
-    /// Mouse button used to toggle the radial menu.
-    pub radial_menu_mouse_binding: RadialMenuMouseBinding,
+    /// Lifecycle, target, and cached layout for the context menu.
+    pub(crate) context_menu: crate::input::state::core::menus::ContextMenuPanel,
+
+    /// Modal state, cached geometry, and press identity for the color picker popup.
+    pub(crate) color_picker_popup: crate::input::state::core::ColorPickerPopupPanel,
+    /// Lifecycle, layout, and configured pointer trigger for the radial menu.
+    pub(crate) radial_menu: crate::input::state::core::RadialMenuPanel,
     /// Cached hit-test bounds per shape id
     pub(in crate::input::state::core) hit_test_cache: HashMap<ShapeId, Rect>,
     /// Monotonic counter bumped whenever committed shape content may have
@@ -448,8 +387,7 @@ pub struct InputState {
     pub(crate) last_text_click: Option<TextClickState>,
     /// Last freeform polygon point click used for double-click completion.
     pub(crate) last_polygon_click: Option<PolygonClickState>,
-    /// Last board picker row click used for double-click detection
-    pub(crate) last_board_picker_click: Option<BoardPickerClickState>,
+
     /// Tracks an in-progress text edit target (existing shape to replace)
     pub(crate) text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
     /// In-progress Alt+left-drag that repositions the active text block.
@@ -461,33 +399,7 @@ pub struct InputState {
     pub(crate) ime: super::super::super::ime::ImeCompositionState,
     /// Pending delayed history playback state
     pub(in crate::input::state::core) pending_history: Option<DelayedHistory>,
-    /// Cached layout details for the currently open context menu
-    pub context_menu_layout: Option<ContextMenuLayout>,
-    /// Cached layout details for the board picker overlay
-    pub board_picker_layout: Option<BoardPickerLayout>,
-    /// Cached layout details for the status HUD (segmented status bar)
-    pub status_hud_layout: Option<crate::ui::StatusHudLayout>,
-    /// Last screen/config inputs used to build the status HUD. Retained while
-    /// UI rendering is active so a content toggle can synchronously refresh
-    /// `status_hud_layout`, keeping policy exact — including width degradation
-    /// on narrow outputs — until the next rendered frame. Suppression clears
-    /// this so policy cannot mistake configured content for chrome that is
-    /// currently on screen.
-    pub(in crate::input::state::core) status_hud_rebuild_inputs: Option<StatusHudRebuildInputs>,
-    /// Set when the internal pointer-routing chain consumed a left press on
-    /// the status HUD (tablet and other paths that bypass the backend's own
-    /// press→release flag); the matching release activates the chip.
-    pub(in crate::input::state) status_hud_press_pending: bool,
-    /// Cached layout details for the interactive bottom-right zoom chip
-    pub zoom_chip_layout: Option<crate::ui::ZoomChipLayout>,
-    /// The chip press a left press recorded, set when the internal
-    /// pointer-routing chain consumed that press (tablet and other paths that
-    /// bypass the backend's own press→release flag). `Button(kind)` records the
-    /// pressed button so the matching release fires only when it lands on the
-    /// SAME button; `Passive` marks a press on the passive `NN%` readout (or an
-    /// inter-piece gap) so its release is still consumed but fires nothing;
-    /// `None` means no chip press is pending.
-    pub(in crate::input::state) zoom_chip_press_pending: crate::ui::ZoomChipPress,
+
     /// Spatial grid plus guarded ShapeId-to-z-order indices for large-frame hit-testing.
     pub(in crate::input::state::core) spatial_index: Option<SpatialIndexCache>,
     /// Last known pointer position in screen coordinates (for overlays and hover refresh)
@@ -498,14 +410,8 @@ pub struct InputState {
     pub(in crate::input::state::core) pointer_seen: bool,
     /// Recompute hover next time layout is available
     pub(in crate::input::state::core) pending_menu_hover_recalc: bool,
-    /// Optional properties panel describing the current selection
-    pub(in crate::input::state::core) shape_properties_panel: Option<ShapePropertiesPanel>,
-    /// Cached layout details for the current properties panel
-    pub properties_panel_layout: Option<PropertiesPanelLayout>,
-    /// Recompute properties hover next time layout is available
-    pub(in crate::input::state::core) pending_properties_hover_recalc: bool,
-    /// Refresh properties panel entries on the next layout pass
-    pub(in crate::input::state::core) properties_panel_needs_refresh: bool,
+    /// Lifecycle, cached geometry, and deferred refresh state for the properties panel.
+    pub(crate) properties: crate::input::state::core::properties::PropertiesPanelState,
     /// Whether frozen mode is currently active
     pub(in crate::input::state::core) frozen_active: bool,
     /// Screen-color eyedropper UI lifecycle.
@@ -530,10 +436,8 @@ pub struct InputState {
     pub active_preset_slot: Option<usize>,
     /// Transient preset feedback for toolbar animations
     pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
-    /// Whether the guided tour is currently active
-    pub tour_active: bool,
-    /// Current step in the guided tour (0-indexed)
-    pub tour_step: usize,
+    /// Lifecycle and navigation state for the guided tour.
+    pub(crate) tour: crate::input::state::core::TourState,
     /// Compositor capabilities (layer-shell, screencopy, etc.)
     pub compositor_capabilities: CompositorCapabilities,
     /// Capabilities snapshot the capability warning toast last evaluated;
@@ -549,11 +453,6 @@ pub struct InputState {
     /// Status bar change highlight animation state
     #[allow(dead_code)]
     pub(crate) status_change_highlight: Option<StatusChangeHighlight>,
-    /// Whether the help overlay is in quick-reference mode
-    pub help_overlay_quick_mode: bool,
-    /// Cursor position within the help overlay search input
-    #[allow(dead_code)]
-    pub help_overlay_search_cursor: usize,
 }
 
 impl InputState {

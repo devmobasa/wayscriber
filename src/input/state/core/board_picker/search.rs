@@ -1,30 +1,17 @@
 use std::time::Instant;
 
 use super::super::base::InputState;
-use super::{
-    BOARD_PICKER_SEARCH_MAX_LEN, BOARD_PICKER_SEARCH_TIMEOUT, BoardPickerFocus, BoardPickerState,
-};
 
 impl InputState {
     pub(crate) fn board_picker_clear_search(&mut self) -> bool {
-        if self.board_picker_search.is_empty() {
-            return false;
-        }
-        self.board_picker_search.clear();
-        self.board_picker_search_last_input = None;
-        self.needs_redraw = true;
-        true
+        let changed = self.board_picker.clear_search();
+        self.needs_redraw |= changed;
+        changed
     }
 
     pub(crate) fn board_picker_backspace_search(&mut self) -> bool {
-        if self.board_picker_search.is_empty() {
+        if !self.board_picker.backspace_search(Instant::now()) {
             return false;
-        }
-        self.board_picker_search.pop();
-        if self.board_picker_search.is_empty() {
-            self.board_picker_search_last_input = None;
-        } else {
-            self.board_picker_search_last_input = Some(Instant::now());
         }
         self.board_picker_select_search_match();
         self.needs_redraw = true;
@@ -32,40 +19,16 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_append_search(&mut self, ch: char) -> bool {
-        self.board_picker_reset_search_if_stale();
-        if self.board_picker_search.len() >= BOARD_PICKER_SEARCH_MAX_LEN {
+        if !self.board_picker.append_search(ch, Instant::now()) {
             return false;
-        }
-        self.board_picker_search.push(ch);
-        self.board_picker_search_last_input = Some(Instant::now());
-        // Typing always returns focus to the board list
-        if let BoardPickerState::Open {
-            focus,
-            page_focus_page_index,
-            ..
-        } = &mut self.board_picker_state
-        {
-            *focus = BoardPickerFocus::BoardList;
-            *page_focus_page_index = None;
         }
         self.board_picker_select_search_match();
         self.needs_redraw = true;
         true
     }
 
-    fn board_picker_reset_search_if_stale(&mut self) {
-        let Some(last_input) = self.board_picker_search_last_input else {
-            return;
-        };
-        if last_input.elapsed() > BOARD_PICKER_SEARCH_TIMEOUT {
-            self.board_picker_search.clear();
-            self.board_picker_search_last_input = None;
-            self.needs_redraw = true;
-        }
-    }
-
     fn board_picker_select_search_match(&mut self) {
-        let Some(index) = self.board_picker_match_index(self.board_picker_search.trim()) else {
+        let Some(index) = self.board_picker_match_index(self.board_picker.search.trim()) else {
             return;
         };
         self.board_picker_set_selected(index);
@@ -184,7 +147,10 @@ fn fuzzy_score_with_single_swap(needle: &str, haystack: &str) -> Option<i32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{BOARD_PICKER_SEARCH_TIMEOUT, BoardPickerFocus, fuzzy_score, fuzzy_score_relaxed};
+    use super::super::{
+        BOARD_PICKER_SEARCH_MAX_LEN, BOARD_PICKER_SEARCH_TIMEOUT, BoardPickerFocus,
+    };
+    use super::{fuzzy_score, fuzzy_score_relaxed};
     use crate::config::KeybindingsConfig;
 
     use crate::input::InputState;
@@ -268,26 +234,26 @@ mod tests {
     fn board_picker_append_search_resets_stale_query_before_appending() {
         let mut state = make_state();
         state.open_board_picker();
-        state.board_picker_search = "old".to_string();
-        state.board_picker_search_last_input =
+        state.board_picker.search = "old".to_string();
+        state.board_picker.search_last_input =
             Some(Instant::now() - BOARD_PICKER_SEARCH_TIMEOUT - Duration::from_millis(1));
 
         state.board_picker_append_search('b');
 
-        assert_eq!(state.board_picker_search, "b");
-        assert!(state.board_picker_search_last_input.is_some());
+        assert_eq!(state.board_picker.search, "b");
+        assert!(state.board_picker.search_last_input.is_some());
     }
 
     #[test]
     fn board_picker_clear_search_reports_when_work_was_done() {
         let mut state = make_state();
-        state.board_picker_search = "blue".to_string();
-        state.board_picker_search_last_input = Some(Instant::now());
+        state.board_picker.search = "blue".to_string();
+        state.board_picker.search_last_input = Some(Instant::now());
         state.needs_redraw = false;
 
         assert!(state.board_picker_clear_search());
-        assert!(state.board_picker_search.is_empty());
-        assert!(state.board_picker_search_last_input.is_none());
+        assert!(state.board_picker.search.is_empty());
+        assert!(state.board_picker.search_last_input.is_none());
         assert!(state.needs_redraw);
         assert!(!state.board_picker_clear_search());
     }
@@ -295,24 +261,21 @@ mod tests {
     #[test]
     fn board_picker_backspace_search_clears_timestamp_when_last_character_removed() {
         let mut state = make_state();
-        state.board_picker_search = "b".to_string();
-        state.board_picker_search_last_input = Some(Instant::now());
+        state.board_picker.search = "b".to_string();
+        state.board_picker.search_last_input = Some(Instant::now());
 
         assert!(state.board_picker_backspace_search());
-        assert!(state.board_picker_search.is_empty());
-        assert!(state.board_picker_search_last_input.is_none());
+        assert!(state.board_picker.search.is_empty());
+        assert!(state.board_picker.search_last_input.is_none());
     }
 
     #[test]
     fn board_picker_append_search_rejects_input_past_max_len() {
         let mut state = make_state();
-        state.board_picker_search = "x".repeat(super::BOARD_PICKER_SEARCH_MAX_LEN);
+        state.board_picker.search = "x".repeat(BOARD_PICKER_SEARCH_MAX_LEN);
 
         assert!(!state.board_picker_append_search('y'));
-        assert_eq!(
-            state.board_picker_search.len(),
-            super::BOARD_PICKER_SEARCH_MAX_LEN
-        );
+        assert_eq!(state.board_picker.search.len(), BOARD_PICKER_SEARCH_MAX_LEN);
     }
 
     #[test]
