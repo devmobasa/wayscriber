@@ -1,5 +1,5 @@
 use super::super::super::{
-    Keymap,
+    Keymap, ViewState,
     index::SpatialIndexCache,
     selection::{SelectionClipboard, SelectionInteraction},
 };
@@ -80,6 +80,8 @@ pub struct InputState {
     pub modifiers: Modifiers,
     /// Configured shortcuts plus transient keyboard and pointer-dispatch state.
     pub(in crate::input::state) keymap: Keymap,
+    /// Zoom, frozen-mode, screen geometry, and active-output state.
+    pub(in crate::input::state) view: ViewState,
     /// Current drawing mode state machine
     pub state: DrawingState,
     /// Whether user requested to exit the overlay
@@ -172,12 +174,6 @@ pub struct InputState {
     pub toolbar_customize_items_group: Option<crate::ui::toolbar::ToolbarItemCustomizeGroup>,
     /// Whether the Settings drawer is showing status-bar content controls
     pub toolbar_status_bar_contents_open: bool,
-    /// Screen width in pixels (set by backend after configuration)
-    pub screen_width: u32,
-    /// Screen height in pixels (set by backend after configuration)
-    pub screen_height: u32,
-    /// Active output label shown in status bar when configured.
-    pub active_output_label: Option<String>,
     /// Previous color before entering board mode (for restoration)
     pub board_previous_color: Option<Color>,
     /// Most recently used board ids (most recent first)
@@ -260,22 +256,12 @@ pub struct InputState {
     pub(in crate::input::state::core) pending_menu_hover_recalc: bool,
     /// Lifecycle, cached geometry, and deferred refresh state for the properties panel.
     pub(crate) properties: crate::input::state::core::properties::PropertiesPanelState,
-    /// Whether frozen mode is currently active
-    pub(in crate::input::state::core) frozen_active: bool,
     /// Screen-color eyedropper UI lifecycle.
     pub(in crate::input::state::core) eyedropper_ui_state:
         crate::input::state::core::EyedropperUiState,
     /// Generalized screen-region selector lifecycle.
     pub(in crate::input::state::core) region_select_ui_state:
         crate::input::state::core::RegionSelectUiState,
-    /// Whether zoom mode is currently active
-    pub(in crate::input::state::core) zoom_active: bool,
-    /// Whether zoom view is locked
-    pub(in crate::input::state::core) zoom_locked: bool,
-    /// Current zoom scale (1.0 = no zoom)
-    pub(in crate::input::state::core) zoom_scale: f64,
-    /// Current zoom view offset in canvas/world space
-    pub(in crate::input::state::core) zoom_view_offset: (f64, f64),
     /// Runtime preset values, active selection, and transient feedback.
     pub(crate) preset_slots: crate::input::state::core::PresetSlots,
     /// Lifecycle and navigation state for the guided tour.

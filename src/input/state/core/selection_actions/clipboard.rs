@@ -125,7 +125,7 @@ impl InputState {
             self.boards.active_page_generation(),
             anchor,
             self.visible_canvas_rect(),
-            (self.screen_width, self.screen_height),
+            self.view.screen_size(),
         );
         self.emit_input_effect(super::super::base::InputEffect::ClipboardPaste(
             request.clone(),

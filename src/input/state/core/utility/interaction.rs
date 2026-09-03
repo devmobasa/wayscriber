@@ -12,33 +12,9 @@ impl InputState {
         }
     }
 
-    fn current_canvas_scale(&self) -> f64 {
-        if self.zoom_active {
-            self.zoom_scale.max(f64::MIN_POSITIVE)
-        } else {
-            1.0
-        }
-    }
-
-    fn current_canvas_origin(&self) -> (f64, f64) {
-        let (board_x, board_y) = self.board_view_offset();
-        if self.zoom_active {
-            (
-                board_x + self.zoom_view_offset.0,
-                board_y + self.zoom_view_offset.1,
-            )
-        } else {
-            (board_x, board_y)
-        }
-    }
-
     pub(crate) fn canvas_coords_for_screen(&self, screen_x: i32, screen_y: i32) -> (i32, i32) {
-        let scale = self.current_canvas_scale();
-        let (origin_x, origin_y) = self.current_canvas_origin();
-        (
-            (origin_x + screen_x as f64 / scale).round() as i32,
-            (origin_y + screen_y as f64 / scale).round() as i32,
-        )
+        self.view
+            .canvas_coords_for_screen(self.board_view_offset(), screen_x, screen_y)
     }
 
     pub(crate) fn sync_canvas_pointer_to_current_transform(&mut self) {
@@ -46,24 +22,14 @@ impl InputState {
         self.last_canvas_pointer_position = self.canvas_coords_for_screen(screen_x, screen_y);
     }
 
-    #[allow(dead_code)] // Kept for legacy input wrappers that translate canvas coords back to UI space.
     pub(crate) fn screen_coords_for_canvas(&self, canvas_x: i32, canvas_y: i32) -> (i32, i32) {
-        let scale = self.current_canvas_scale();
-        let (origin_x, origin_y) = self.current_canvas_origin();
-        (
-            ((canvas_x as f64 - origin_x) * scale).round() as i32,
-            ((canvas_y as f64 - origin_y) * scale).round() as i32,
-        )
+        self.view
+            .screen_coords_for_canvas(self.board_view_offset(), canvas_x, canvas_y)
     }
 
     pub(crate) fn screen_rect_for_canvas(&self, rect: Rect) -> Option<Rect> {
-        let scale = self.current_canvas_scale();
-        let (origin_x, origin_y) = self.current_canvas_origin();
-        let min_x = ((rect.x as f64 - origin_x) * scale).floor() as i32;
-        let min_y = ((rect.y as f64 - origin_y) * scale).floor() as i32;
-        let max_x = (((rect.x + rect.width) as f64 - origin_x) * scale).ceil() as i32;
-        let max_y = (((rect.y + rect.height) as f64 - origin_y) * scale).ceil() as i32;
-        Rect::from_min_max(min_x, min_y, max_x, max_y)
+        self.view
+            .screen_rect_for_canvas(self.board_view_offset(), rect)
     }
 
     /// Returns the last known pointer position.
@@ -90,36 +56,11 @@ impl InputState {
     /// Returns the visible canvas area, or a 1x1 fallback at its minimum corner
     /// when the transformed extent cannot be represented by [`Rect`].
     pub(crate) fn visible_canvas_rect(&self) -> Rect {
-        let (x1, y1) = self.canvas_coords_for_screen(0, 0);
-        let (x2, y2) = self.canvas_coords_for_screen(
-            self.screen_width.min(i32::MAX as u32) as i32,
-            self.screen_height.min(i32::MAX as u32) as i32,
-        );
-        let min_x = x1.min(x2);
-        let min_y = y1.min(y2);
-        let fallback = Rect {
-            x: min_x,
-            y: min_y,
-            width: 1,
-            height: 1,
-        };
-        // Widen before adding the non-empty minimum. Persisted view offsets
-        // can saturate both transformed corners at i32::MAX, where `min + 1`
-        // would overflow in debug builds.
-        let max_x = i64::from(x1.max(x2)).max(i64::from(min_x) + 1);
-        let max_y = i64::from(y1.max(y2)).max(i64::from(min_y) + 1);
-        let (Ok(max_x), Ok(max_y)) = (i32::try_from(max_x), i32::try_from(max_y)) else {
-            return fallback;
-        };
-        Rect::from_min_max(min_x, min_y, max_x, max_y).unwrap_or(fallback)
+        self.view.visible_canvas_rect(self.board_view_offset())
     }
 
     fn visible_canvas_center(&self) -> (i32, i32) {
-        let rect = self.visible_canvas_rect();
-        (
-            rect.x.saturating_add(rect.width / 2),
-            rect.y.saturating_add(rect.height / 2),
-        )
+        self.view.visible_canvas_center(self.board_view_offset())
     }
 
     /// Updates the cached pointer location.
@@ -173,8 +114,7 @@ impl InputState {
     /// This should be called by the backend when it receives the actual
     /// screen dimensions from the display server.
     pub fn update_screen_dimensions(&mut self, width: u32, height: u32) {
-        self.screen_width = width;
-        self.screen_height = height;
+        self.view.set_screen_dimensions(width, height);
         // A surface resize is painted with full damage by the backend. Make
         // that newly painted geometry the picker's damage baseline, or the
         // next narrowing query clears the panel from before the resize instead
@@ -182,6 +122,14 @@ impl InputState {
         if self.font_picker.open {
             self.font_picker.last_panel = self.font_picker_panel_bounds();
         }
+    }
+
+    pub(crate) fn set_active_output_label(&mut self, label: Option<String>) -> bool {
+        self.view.set_active_output_label(label)
+    }
+
+    pub(crate) fn active_output_label(&self) -> Option<&str> {
+        self.view.active_output_label()
     }
 
     /// Cancels the current text input session and restores any edited shape.
@@ -277,8 +225,9 @@ impl InputState {
     }
 
     pub(crate) fn take_dirty_region_report(&mut self) -> DirtyRegionReport {
-        let width = self.screen_width.min(i32::MAX as u32) as i32;
-        let height = self.screen_height.min(i32::MAX as u32) as i32;
+        let (screen_width, screen_height) = self.view.screen_size();
+        let width = screen_width.min(i32::MAX as u32) as i32;
+        let height = screen_height.min(i32::MAX as u32) as i32;
         self.dirty_tracker.take_region_report(width, height)
     }
 }

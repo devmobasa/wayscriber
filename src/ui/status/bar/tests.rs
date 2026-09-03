@@ -58,7 +58,9 @@ fn make_worst_case_state() -> InputState {
         thick: 4.0,
     };
     state.ui_visibility.show_active_output_badge = true;
-    state.active_output_label = Some("DP-3 Dell UltraSharp U2723QE 3840x2160@60".to_string());
+    assert!(state.set_active_output_label(Some(
+        "DP-3 Dell UltraSharp U2723QE 3840x2160@60".to_string(),
+    )));
     state
 }
 

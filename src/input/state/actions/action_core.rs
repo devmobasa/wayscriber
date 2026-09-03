@@ -20,9 +20,10 @@ impl InputState {
                     self.text_editing.prepare_new(TextInputMode::Plain);
                     self.style.text_wrap_width = None;
                     self.begin_text_input_session();
+                    let (screen_width, screen_height) = self.view.screen_size();
                     self.state = DrawingState::text_input(
-                        (self.screen_width / 2) as i32,
-                        (self.screen_height / 2) as i32,
+                        (screen_width / 2) as i32,
+                        (screen_height / 2) as i32,
                         String::new(),
                     );
                     self.update_text_preview_dirty();
@@ -35,9 +36,10 @@ impl InputState {
                     self.text_editing.prepare_new(TextInputMode::StickyNote);
                     self.style.text_wrap_width = None;
                     self.begin_text_input_session();
+                    let (screen_width, screen_height) = self.view.screen_size();
                     self.state = DrawingState::text_input(
-                        (self.screen_width / 2) as i32,
-                        (self.screen_height / 2) as i32,
+                        (screen_width / 2) as i32,
+                        (screen_height / 2) as i32,
                         String::new(),
                     );
                     self.update_text_preview_dirty();

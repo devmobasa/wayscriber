@@ -1,5 +1,5 @@
 use super::super::super::{
-    Keymap,
+    Keymap, ViewState,
     selection::{SelectionClipboard, SelectionInteraction},
 };
 use super::super::types::{CompositorCapabilities, DrawingState, PendingOnboardingUsage};
@@ -52,6 +52,7 @@ impl InputState {
             text_editing: Default::default(),
             modifiers: Modifiers::new(),
             keymap,
+            view: ViewState::default(),
             state: DrawingState::Idle,
             should_exit: false,
             explicit_exit_requested: false,
@@ -94,9 +95,6 @@ impl InputState {
             toolbar_customize_items_open: false,
             toolbar_customize_items_group: None,
             toolbar_status_bar_contents_open: false,
-            screen_width: 0,
-            screen_height: 0,
-            active_output_label: None,
             board_previous_color: None,
             board_recent: Vec::new(),
             pending_board_delete: None,
@@ -133,13 +131,8 @@ impl InputState {
             pointer_seen: false,
             pending_menu_hover_recalc: false,
             properties: Default::default(),
-            frozen_active: false,
             eyedropper_ui_state: crate::input::state::core::EyedropperUiState::Inactive,
             region_select_ui_state: crate::input::state::core::RegionSelectUiState::Inactive,
-            zoom_active: false,
-            zoom_locked: false,
-            zoom_scale: 1.0,
-            zoom_view_offset: (0.0, 0.0),
             preset_slots: Default::default(),
             tour: Default::default(),
             compositor_capabilities: CompositorCapabilities::default(),
