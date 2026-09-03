@@ -41,6 +41,120 @@ enum MonitorStart {
     Failed(String),
 }
 
+/// System-reader lifecycle and reconciliation latches for the input HUD.
+pub(in crate::backend::wayland) struct InputHudRuntime {
+    #[cfg(feature = "input-monitor")]
+    monitor_wake: crate::backend::wayland::RuntimeWakeHandle,
+    #[cfg(feature = "input-monitor")]
+    monitor: Option<crate::backend::wayland::input_monitor::InputMonitor>,
+    system_warned: bool,
+    announce_pending: bool,
+    last_request: Option<(bool, InputHudMode)>,
+}
+
+impl InputHudRuntime {
+    pub(super) fn new(monitor_wake: crate::backend::wayland::RuntimeWakeHandle) -> Self {
+        #[cfg(not(feature = "input-monitor"))]
+        let _ = monitor_wake;
+        Self {
+            #[cfg(feature = "input-monitor")]
+            monitor_wake,
+            #[cfg(feature = "input-monitor")]
+            monitor: None,
+            system_warned: false,
+            announce_pending: false,
+            last_request: None,
+        }
+    }
+
+    fn should_resync(&self, request: (bool, InputHudMode)) -> bool {
+        self.last_request != Some(request)
+    }
+
+    fn note_request(&mut self, request: (bool, InputHudMode)) {
+        self.last_request = Some(request);
+    }
+
+    fn request_announce(&mut self) {
+        self.announce_pending = true;
+    }
+
+    fn take_announce(&mut self) -> bool {
+        std::mem::take(&mut self.announce_pending)
+    }
+
+    fn clear_announce(&mut self) {
+        self.announce_pending = false;
+    }
+
+    fn clear_system_warning(&mut self) {
+        self.system_warned = false;
+    }
+
+    fn note_system_warning(&mut self) -> bool {
+        if self.system_warned {
+            return false;
+        }
+        self.system_warned = true;
+        true
+    }
+
+    #[cfg(feature = "input-monitor")]
+    fn start(&mut self) -> MonitorStart {
+        if let Some(monitor) = self.monitor.as_ref() {
+            return if monitor.is_ready() {
+                MonitorStart::Live
+            } else {
+                MonitorStart::Pending
+            };
+        }
+        match crate::backend::wayland::input_monitor::InputMonitor::start(self.monitor_wake.clone())
+        {
+            Ok(monitor) => {
+                self.monitor = Some(monitor);
+                log::info!("Input HUD: waiting for system-wide capture to come up");
+                MonitorStart::Pending
+            }
+            Err(err) => MonitorStart::Failed(
+                crate::backend::wayland::input_monitor::SystemInputFailure::StartFailed(
+                    err.to_string(),
+                )
+                .user_message(),
+            ),
+        }
+    }
+
+    #[cfg(not(feature = "input-monitor"))]
+    fn start(&mut self) -> MonitorStart {
+        MonitorStart::Failed(SYSTEM_CAPTURE_HINT.to_string())
+    }
+
+    #[cfg(feature = "input-monitor")]
+    fn stop(&mut self) -> bool {
+        self.monitor.take().is_some()
+    }
+
+    #[cfg(not(feature = "input-monitor"))]
+    fn stop(&mut self) -> bool {
+        false
+    }
+
+    #[cfg(feature = "input-monitor")]
+    fn drain(&mut self) -> Vec<crate::backend::wayland::input_monitor::SystemInputEvent> {
+        self.monitor
+            .as_mut()
+            .map(crate::backend::wayland::input_monitor::InputMonitor::drain)
+            .unwrap_or_default()
+    }
+
+    #[cfg(feature = "input-monitor")]
+    fn mark_ready(&mut self) {
+        if let Some(monitor) = self.monitor.as_mut() {
+            monitor.mark_ready();
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ResolvedInputHudSource {
     Overlay,
@@ -85,8 +199,7 @@ impl WaylandState {
             self.input_state.input_hud_enabled(),
             self.input_state.input_hud_configured_mode(),
         );
-        if self.last_input_hud_request != Some(request)
-            || self.input_state.has_input_hud_source_announce()
+        if self.input_hud.should_resync(request) || self.input_state.has_input_hud_source_announce()
         {
             self.sync_input_monitor();
         }
@@ -98,12 +211,12 @@ impl WaylandState {
     /// action, command palette, toolbar checkbox, presenter mode) can call it
     /// unconditionally.
     pub(in crate::backend::wayland) fn sync_input_monitor(&mut self) {
-        self.last_input_hud_request = Some((
+        self.input_hud.note_request((
             self.input_state.input_hud_enabled(),
             self.input_state.input_hud_configured_mode(),
         ));
         if self.input_state.take_input_hud_source_announce() {
-            self.input_hud_announce_pending = true;
+            self.input_hud.request_announce();
         }
         let wanted = self.input_state.input_hud_enabled().then(|| {
             resolve_input_hud_source(
@@ -121,16 +234,23 @@ impl WaylandState {
         // announcement waits for the handshake to resolve.
         let mut awaiting_reader = false;
         match wanted {
-            Some(ResolvedInputHudSource::System) => match self.start_input_monitor() {
-                MonitorStart::Live => self.input_hud_system_warned = false,
+            Some(ResolvedInputHudSource::System) => match self.input_hud.start() {
+                MonitorStart::Live => self.input_hud.clear_system_warning(),
                 MonitorStart::Pending => {
-                    self.input_hud_system_warned = false;
+                    self.input_hud.clear_system_warning();
                     awaiting_reader = true;
                 }
-                MonitorStart::Failed(message) => system_denied = Some(message),
+                MonitorStart::Failed(message) => {
+                    let _ = self
+                        .input_state
+                        .set_input_hud_source(InputHudActiveSource::Overlay);
+                    system_denied = Some(message);
+                }
             },
             Some(ResolvedInputHudSource::OverlayWithWarning) => {
-                self.stop_input_monitor();
+                if self.input_hud.stop() {
+                    log::info!("Input HUD: system-wide capture stopped");
+                }
                 let _ = self
                     .input_state
                     .set_input_hud_source(InputHudActiveSource::Overlay);
@@ -141,15 +261,17 @@ impl WaylandState {
                 system_denied = Some(self.system_capture_denied_message());
             }
             Some(ResolvedInputHudSource::Overlay) | None => {
-                self.stop_input_monitor();
+                if self.input_hud.stop() {
+                    log::info!("Input HUD: system-wide capture stopped");
+                }
                 let _ = self
                     .input_state
                     .set_input_hud_source(InputHudActiveSource::Overlay);
-                self.input_hud_system_warned = false;
+                self.input_hud.clear_system_warning();
                 // A HUD that is off (or overlay-only by configuration) has
                 // nothing pending to announce later.
                 if wanted.is_none() {
-                    self.input_hud_announce_pending = false;
+                    self.input_hud.clear_announce();
                 }
             }
         }
@@ -168,7 +290,7 @@ impl WaylandState {
     /// it. Called once the source is settled — after the reader's `Ready` or
     /// its failure — never while the handshake is still outstanding.
     fn announce_input_hud_source_if_pending(&mut self) {
-        if !std::mem::take(&mut self.input_hud_announce_pending) {
+        if !self.input_hud.take_announce() {
             return;
         }
         if !self.input_state.input_hud_enabled() {
@@ -231,80 +353,16 @@ impl WaylandState {
             return;
         }
         // The warning stands in for the source announcement.
-        self.input_hud_announce_pending = false;
-        if self.input_hud_system_warned {
+        self.input_hud.clear_announce();
+        if !self.input_hud.note_system_warning() {
             return;
         }
-        self.input_hud_system_warned = true;
         self.input_state.push_toast(
             ToastPriority::Info,
             "input-hud",
             Toast::warning(message.to_string()),
         );
     }
-
-    /// Ensure the reader thread runs.
-    ///
-    /// Spawning proves nothing: the seat may be empty and the keymap may not
-    /// compile, and both are only discovered on the reader thread. So a fresh
-    /// spawn reports `Pending` and the HUD keeps reporting overlay input
-    /// until the reader's `Ready` event arrives (see
-    /// [`drain_system_input_events`]).
-    ///
-    /// [`drain_system_input_events`]: WaylandState::drain_system_input_events
-    #[cfg(feature = "input-monitor")]
-    fn start_input_monitor(&mut self) -> MonitorStart {
-        if let Some(monitor) = self.input_monitor.as_ref() {
-            return if monitor.is_ready() {
-                MonitorStart::Live
-            } else {
-                MonitorStart::Pending
-            };
-        }
-        match crate::backend::wayland::input_monitor::InputMonitor::start(
-            self.input_monitor_wake.clone(),
-        ) {
-            Ok(monitor) => {
-                self.input_monitor = Some(monitor);
-                log::info!("Input HUD: waiting for system-wide capture to come up");
-                MonitorStart::Pending
-            }
-            Err(err) => {
-                let _ = self
-                    .input_state
-                    .set_input_hud_source(InputHudActiveSource::Overlay);
-                // A pipe or thread that could not be created is an OS resource
-                // failure; report it verbatim rather than blaming permissions.
-                MonitorStart::Failed(
-                    crate::backend::wayland::input_monitor::SystemInputFailure::StartFailed(
-                        err.to_string(),
-                    )
-                    .user_message(),
-                )
-            }
-        }
-    }
-
-    #[cfg(not(feature = "input-monitor"))]
-    fn start_input_monitor(&mut self) -> MonitorStart {
-        // Without the feature the probe never reports availability, so this
-        // arm is only reachable if the resolver changes; stay on overlay.
-        let _ = self
-            .input_state
-            .set_input_hud_source(InputHudActiveSource::Overlay);
-        MonitorStart::Failed(SYSTEM_CAPTURE_HINT.to_string())
-    }
-
-    #[cfg(feature = "input-monitor")]
-    fn stop_input_monitor(&mut self) {
-        // Dropping the handle writes the stop byte and joins with a bound.
-        if self.input_monitor.take().is_some() {
-            log::info!("Input HUD: system-wide capture stopped");
-        }
-    }
-
-    #[cfg(not(feature = "input-monitor"))]
-    fn stop_input_monitor(&mut self) {}
 
     /// Push every chip the reader thread produced since the last wake into the
     /// HUD. A terminal failure tears the monitor down and falls back to the
@@ -313,10 +371,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn drain_system_input_events(&mut self) {
         use crate::backend::wayland::input_monitor::SystemInputEvent;
 
-        let Some(monitor) = self.input_monitor.as_mut() else {
-            return;
-        };
-        let events = monitor.drain();
+        let events = self.input_hud.drain();
         let mut failure = None;
         let mut became_ready = false;
         for event in events {
@@ -350,11 +405,13 @@ impl WaylandState {
                 }
             }
         }
-        if became_ready && let Some(monitor) = self.input_monitor.as_mut() {
-            monitor.mark_ready();
+        if became_ready {
+            self.input_hud.mark_ready();
         }
         if let Some(reason) = failure {
-            self.stop_input_monitor();
+            if self.input_hud.stop() {
+                log::info!("Input HUD: system-wide capture stopped");
+            }
             let _ = self
                 .input_state
                 .set_input_hud_source(InputHudActiveSource::Overlay);
@@ -362,7 +419,7 @@ impl WaylandState {
             // stops a following sync from repeating it. This is also where a
             // never-ready reader lands, so the enable that was waiting on the
             // handshake is answered here.
-            self.input_hud_system_warned = false;
+            self.input_hud.clear_system_warning();
             self.report_system_capture_denied(&reason.user_message());
         } else if became_ready {
             // The deferred enable announcement, now that the source is real.
@@ -375,13 +432,51 @@ impl WaylandState {
 
     /// Stop the reader thread at overlay exit.
     pub(in crate::backend::wayland) fn shutdown_input_monitor(&mut self) {
-        self.stop_input_monitor();
+        if self.input_hud.stop() {
+            log::info!("Input HUD: system-wide capture stopped");
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn runtime() -> InputHudRuntime {
+        let wake = crate::backend::wayland::RuntimeWakeSource::new()
+            .expect("runtime wake source")
+            .handle();
+        InputHudRuntime::new(wake)
+    }
+
+    #[test]
+    fn request_reconciliation_tracks_the_last_settled_request() {
+        let mut runtime = runtime();
+        let request = (true, InputHudMode::System);
+
+        assert!(runtime.should_resync(request));
+        runtime.note_request(request);
+        assert!(!runtime.should_resync(request));
+        assert!(runtime.should_resync((false, InputHudMode::System)));
+    }
+
+    #[test]
+    fn announce_and_warning_latches_are_consumed_or_reset_once() {
+        let mut runtime = runtime();
+
+        runtime.request_announce();
+        assert!(runtime.take_announce());
+        assert!(!runtime.take_announce());
+        assert!(runtime.note_system_warning());
+        assert!(!runtime.note_system_warning());
+        runtime.clear_system_warning();
+        assert!(runtime.note_system_warning());
+    }
+
+    #[test]
+    fn stopping_without_a_live_reader_reports_no_transition() {
+        assert!(!runtime().stop());
+    }
 
     /// Mode resolution is a pure table: overlay never reads `/dev/input`, auto
     /// degrades silently, and system announces its fallback.

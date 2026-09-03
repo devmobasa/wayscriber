@@ -167,13 +167,7 @@ impl WaylandState {
             session: SessionState::new(session_options),
             session_config_failed,
             persistence,
-            #[cfg(feature = "input-monitor")]
-            input_monitor_wake: runtime_wake.clone(),
-            #[cfg(feature = "input-monitor")]
-            input_monitor: None,
-            input_hud_system_warned: false,
-            input_hud_announce_pending: false,
-            last_input_hud_request: None,
+            input_hud: super::super::input_hud::InputHudRuntime::new(runtime_wake.clone()),
             session_dialog: super::super::toolbar::SessionFileDialogController::new(runtime_wake),
             durable_action_finish: None,
             durable_action_retry_at: None,
