@@ -104,6 +104,7 @@ pub(in crate::backend::wayland) use region_capture::RegionPickerOptions;
 pub(in crate::backend::wayland) use region_capture::RegionReviewPress;
 mod render;
 mod screen_image;
+mod spotlight_runtime;
 #[cfg(feature = "tablet-input")]
 mod tablet_runtime;
 mod text_clipboard;
@@ -172,26 +173,8 @@ pub(super) struct WaylandState {
     pub(super) buffer_damage: buffer_damage::BufferDamageTracker,
     /// Baked committed-shapes layer for panned canvas rendering.
     pub(super) canvas_layer_cache: canvas_layer::CanvasLayerCache,
-    /// Whether the frame just rendered carried a spotlight dim layer.
-    ///
-    /// Removing the last spotlight makes `has_spotlight()` false, but the buffer
-    /// on screen still holds the full-screen dim. One more full-damage frame is
-    /// needed to wash it out, so the decision looks at the previous frame too.
-    pub(super) spotlight_dimmed_last_frame: bool,
-    /// Reused bounded Cairo snapshots for Spotlight loupe rendering.
-    pub(super) spotlight_magnifier_scratch: crate::draw::SpotlightMagnifierScratch,
-    /// Deduplicates the live render-failure warning.
-    pub(super) spotlight_magnifier_warning_active: bool,
-    /// When an in-flight wheel adjustment of a loupe stops counting as one
-    /// burst. Discrete wheels send no end-of-gesture signal, so the boundary
-    /// is a quiet period: without it two visits minutes apart, at unchanged
-    /// coordinates, would merge into a single undo entry.
-    pub(super) spotlight_wheel_idle_deadline: Option<std::time::Instant>,
-    /// Availability that the standing "this page cannot magnify" warning was
-    /// last shown for, so loading or switching pages warns once rather than
-    /// once per frame, and warns again once availability changes.
-    pub(super) spotlight_magnifier_page_warned_source:
-        Option<crate::draw::SpotlightMagnifierSource>,
+    /// Render memory, warning latches, and wheel timing for Spotlight effects.
+    pub(super) spotlight: spotlight_runtime::SpotlightRuntime,
 
     // Configuration
     pub(super) config: Config,

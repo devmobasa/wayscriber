@@ -524,7 +524,10 @@ impl WaylandState {
             Some(FullDamageReason::Zoom)
         } else if self.canvas_transform_active() {
             Some(FullDamageReason::BoardPan)
-        } else if self.input_state.has_spotlight() || self.spotlight_dimmed_last_frame {
+        } else if self
+            .spotlight
+            .needs_dim_washout(self.input_state.has_spotlight())
+        {
             // A spotlight darkens every pixel outside itself, so no partial
             // damage rect can describe adding, moving, or removing one. The
             // previous frame counts as well: after the last spotlight is deleted

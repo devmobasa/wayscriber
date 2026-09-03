@@ -82,7 +82,7 @@ impl WaylandState {
         self.set_pointer_focus(false);
         // The pointer is gone, so no further wheel tick can extend the burst.
         self.input_state.flush_spotlight_magnification_gesture();
-        self.spotlight_wheel_idle_deadline = None;
+        self.spotlight.clear_wheel_idle_deadline();
         if !on_toolbar {
             self.cancel_region_selection_from(RegionInputSource::Pointer);
         }

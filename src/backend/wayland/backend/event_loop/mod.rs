@@ -118,7 +118,7 @@ pub(super) fn run_event_loop(
         capture::poll_capture_deadlines(state, qh, Instant::now());
         interaction::poll_interaction_deadlines(
             &mut state.input_state,
-            &mut state.spotlight_wheel_idle_deadline,
+            state.spotlight.wheel_idle_deadline_mut(),
             Instant::now(),
         );
 
@@ -304,7 +304,7 @@ fn event_loop_timeout(
         state.input_state.command_palette_repeat_timeout(now),
         state.input_state.font_picker_repeat_timeout(now),
         capture::capture_timeout(state, now),
-        interaction::interaction_timeout(state.spotlight_wheel_idle_deadline, now),
+        interaction::interaction_timeout(state.spotlight.wheel_idle_deadline(), now),
         durable_action_retry_timeout(state, now),
         pending_backend_action_timeout,
         state.input_state.radial_menu_paint_timeout(now),

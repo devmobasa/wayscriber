@@ -210,7 +210,7 @@ impl WaylandState {
         // adjustment first, so its undo entry is part of what gets persisted
         // instead of being dropped with the frame it belonged to.
         self.input_state.flush_spotlight_magnification_gesture();
-        self.spotlight_wheel_idle_deadline = None;
+        self.spotlight.clear_wheel_idle_deadline();
         session_save::persistence_barrier(self)?;
         let current_options = self
             .session_options()

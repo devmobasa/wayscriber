@@ -125,7 +125,7 @@ impl WaylandState {
         self.handle_pointer_axis_inner(event, on_toolbar, vertical, source);
         finalize_spotlight_wheel_if_axis_stopped(
             &mut self.input_state,
-            &mut self.spotlight_wheel_idle_deadline,
+            self.spotlight.wheel_idle_deadline_mut(),
             stopped,
         );
     }
@@ -228,7 +228,7 @@ impl WaylandState {
         let canvas_position = self.input_state.canvas_pointer_position();
         if try_handle_spotlight_axis(
             &mut self.input_state,
-            &mut self.spotlight_wheel_idle_deadline,
+            self.spotlight.wheel_idle_deadline_mut(),
             canvas_position,
             vertical,
             source,
