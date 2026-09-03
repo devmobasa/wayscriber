@@ -41,7 +41,7 @@ impl PointerConstraintsHandler for WaylandState {
         _pointer: &wl_pointer::WlPointer,
     ) {
         log::info!("Pointer lock activated for toolbar drag");
-        self.locked_pointer = Some(locked_pointer.clone());
+        self.pointer.lock(locked_pointer.clone(), None);
     }
 
     fn unlocked(

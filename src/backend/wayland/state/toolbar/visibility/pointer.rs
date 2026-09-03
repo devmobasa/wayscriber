@@ -1,10 +1,11 @@
 use super::*;
 use crate::env_vars::TOOLBAR_POINTER_LOCK_ENV;
-use wayland_client::Proxy;
+use smithay_client_toolkit::seat::pointer::PointerData;
+use wayland_client::{Proxy, protocol::wl_surface};
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn pointer_lock_active(&self) -> bool {
-        self.locked_pointer.is_some()
+        self.pointer.is_locked()
     }
 
     #[allow(dead_code)] // Kept for potential future pointer lock support
@@ -46,7 +47,7 @@ impl WaylandState {
             qh,
         ) {
             Ok(lp) => {
-                self.locked_pointer = Some(lp);
+                self.pointer.lock(lp, None);
                 drag_log(|| {
                     format!(
                         "pointer lock requested: seat={:?}, surface={}, pointer_id={}",
@@ -79,7 +80,7 @@ impl WaylandState {
             .get_relative_pointer(&pointer, qh)
         {
             Ok(rp) => {
-                self.relative_pointer = Some(rp);
+                self.pointer.attach_relative_pointer(rp);
                 drag_log(|| "relative pointer bound for drag");
             }
             Err(err) => {
@@ -91,20 +92,10 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn unlock_pointer(&mut self) {
-        if self.locked_pointer.is_some() || self.relative_pointer.is_some() {
-            drag_log(|| {
-                format!(
-                    "unlock pointer: locked={}, relative={}",
-                    self.locked_pointer.is_some(),
-                    self.relative_pointer.is_some()
-                )
-            });
+        let (locked, relative) = self.pointer.lock_state();
+        if locked || relative {
+            drag_log(|| format!("unlock pointer: locked={locked}, relative={relative}"));
         }
-        if let Some(lp) = self.locked_pointer.take() {
-            lp.destroy();
-        }
-        if let Some(rp) = self.relative_pointer.take() {
-            rp.destroy();
-        }
+        self.pointer.unlock();
     }
 }

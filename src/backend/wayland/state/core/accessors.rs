@@ -1,4 +1,5 @@
 use smithay_client_toolkit::shell::{WaylandSurface, wlr_layer::Layer};
+use wayland_client::protocol::wl_pointer;
 
 use super::super::*;
 use std::time::{Duration, Instant};
@@ -126,7 +127,7 @@ impl WaylandState {
 
     #[allow(dead_code)] // Kept for potential future pointer lock support
     pub(in crate::backend::wayland) fn current_pointer(&self) -> Option<wl_pointer::WlPointer> {
-        self.themed_pointer.as_ref().map(|p| p.pointer().clone())
+        self.pointer.current_pointer()
     }
 
     pub(in crate::backend::wayland) fn current_seat_id(&self) -> Option<u32> {
