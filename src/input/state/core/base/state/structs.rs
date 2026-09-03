@@ -337,7 +337,7 @@ pub struct InputState {
     /// Last axis used for selection nudges (used to resolve Home/End axis)
     pub last_selection_axis: Option<SelectionAxis>,
     /// Lifecycle, target, and cached layout for the context menu.
-    pub context_menu: crate::input::state::core::menus::ContextMenuPanel,
+    pub(crate) context_menu: crate::input::state::core::menus::ContextMenuPanel,
 
     /// Current color picker popup state
     pub color_picker_popup_state: ColorPickerPopupState,

@@ -105,7 +105,8 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
    - `state/actions/` maps keybindings to `Action` values and routes color, board/page, capture,
      history, selection, tool, and UI behavior. `HelpOverlayState` owns help visibility, navigation,
      search, scrolling, and press/release bookkeeping. `BoardPickerPanel` similarly owns the board
-     picker's modal lifecycle, search timing, layout cache, and drag/edit state.
+     picker's modal lifecycle, search timing, layout cache, and drag/edit state. `ContextMenuPanel`
+     owns context-menu visibility, targeting, enablement, and cached layout.
    - `state/mouse/` and `state/interaction/` convert pointer gestures into drawing/state changes.
    - `render.rs` exposes provisional shape previews for live feedback.
 

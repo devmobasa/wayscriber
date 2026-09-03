@@ -5,13 +5,17 @@ use crate::draw::ShapeId;
 /// Lifecycle, target, and cached layout for the context menu.
 #[derive(Debug)]
 pub struct ContextMenuPanel {
-    pub state: ContextMenuState,
-    pub(crate) page_target: Option<BoardPickerPageTarget>,
-    pub(crate) enabled: bool,
-    pub layout: Option<ContextMenuLayout>,
+    pub(in crate::input::state) state: ContextMenuState,
+    pub(in crate::input::state) page_target: Option<BoardPickerPageTarget>,
+    pub(in crate::input::state) enabled: bool,
+    pub(in crate::input::state) layout: Option<ContextMenuLayout>,
 }
 
 impl ContextMenuPanel {
+    pub fn state(&self) -> &ContextMenuState {
+        &self.state
+    }
+
     pub fn is_open(&self) -> bool {
         matches!(self.state, ContextMenuState::Open { .. })
     }
