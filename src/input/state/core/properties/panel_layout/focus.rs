@@ -2,7 +2,7 @@ use super::super::super::base::InputState;
 
 impl InputState {
     pub fn set_properties_panel_focus(&mut self, focus: Option<usize>) {
-        if let Some(panel) = self.shape_properties_panel.as_mut() {
+        if let Some(panel) = self.properties.panel.as_mut() {
             panel.keyboard_focus = focus;
         }
     }
@@ -10,7 +10,8 @@ impl InputState {
     pub(in crate::input::state::core::properties) fn current_properties_focus_or_hover(
         &self,
     ) -> Option<usize> {
-        self.shape_properties_panel
+        self.properties
+            .panel
             .as_ref()
             .and_then(|panel| panel.keyboard_focus.or(panel.hover_index))
     }
@@ -32,7 +33,7 @@ impl InputState {
     }
 
     fn select_properties_edge_entry(&mut self, start_front: bool) -> bool {
-        let Some(panel) = self.shape_properties_panel.as_ref() else {
+        let Some(panel) = self.properties.panel.as_ref() else {
             return false;
         };
         if panel.entries.is_empty() {
@@ -68,7 +69,7 @@ impl InputState {
     }
 
     fn advance_properties_focus(&mut self, forward: bool) -> bool {
-        let Some(panel) = self.shape_properties_panel.as_ref() else {
+        let Some(panel) = self.properties.panel.as_ref() else {
             return false;
         };
         if panel.entries.is_empty() {
@@ -145,7 +146,7 @@ mod tests {
     fn current_properties_focus_prefers_keyboard_focus_over_hover() {
         let mut state = make_state();
         open_rect_panel(&mut state);
-        let panel = state.shape_properties_panel.as_mut().expect("panel");
+        let panel = state.properties.panel.as_mut().expect("panel");
         panel.hover_index = Some(1);
         panel.keyboard_focus = Some(0);
 
@@ -156,7 +157,7 @@ mod tests {
     fn focus_first_properties_entry_skips_disabled_entries() {
         let mut state = make_state();
         open_rect_panel(&mut state);
-        let panel = state.shape_properties_panel.as_mut().expect("panel");
+        let panel = state.properties.panel.as_mut().expect("panel");
         panel.entries[0].disabled = true;
         panel.entries[1].disabled = false;
 
@@ -174,7 +175,7 @@ mod tests {
         let mut state = make_state();
         open_rect_panel(&mut state);
         let last = state.properties_panel().expect("panel").entries.len() - 1;
-        let panel = state.shape_properties_panel.as_mut().expect("panel");
+        let panel = state.properties.panel.as_mut().expect("panel");
         panel.entries[last].disabled = true;
 
         assert!(state.focus_last_properties_entry());
@@ -190,7 +191,7 @@ mod tests {
     fn focus_next_properties_entry_uses_hover_when_keyboard_focus_is_missing() {
         let mut state = make_state();
         open_rect_panel(&mut state);
-        let panel = state.shape_properties_panel.as_mut().expect("panel");
+        let panel = state.properties.panel.as_mut().expect("panel");
         panel.hover_index = Some(0);
         panel.keyboard_focus = None;
         panel.entries[1].disabled = true;

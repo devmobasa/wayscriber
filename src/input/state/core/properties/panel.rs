@@ -5,15 +5,15 @@ use super::utils::format_timestamp;
 
 impl InputState {
     pub fn properties_panel(&self) -> Option<&ShapePropertiesPanel> {
-        self.shape_properties_panel.as_ref()
+        self.properties.panel.as_ref()
     }
 
     pub fn properties_panel_layout(&self) -> Option<&PropertiesPanelLayout> {
-        self.properties_panel_layout.as_ref()
+        self.properties.layout.as_ref()
     }
 
     pub fn is_properties_panel_open(&self) -> bool {
-        self.shape_properties_panel.is_some()
+        self.properties.panel.is_some()
     }
 
     /// Entries for the top-strip style pill's selection docking: the same
@@ -30,19 +30,19 @@ impl InputState {
     }
 
     pub fn close_properties_panel(&mut self) {
-        if self.shape_properties_panel.take().is_some() {
+        if self.properties.panel.take().is_some() {
             self.clear_properties_panel_layout();
-            self.properties_panel_needs_refresh = false;
+            self.properties.needs_refresh = false;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }
     }
 
     pub(super) fn set_properties_panel(&mut self, panel: ShapePropertiesPanel) {
-        self.shape_properties_panel = Some(panel);
-        self.properties_panel_layout = None;
-        self.pending_properties_hover_recalc = true;
-        self.properties_panel_needs_refresh = false;
+        self.properties.panel = Some(panel);
+        self.properties.layout = None;
+        self.properties.pending_hover_recalc = true;
+        self.properties.needs_refresh = false;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -131,7 +131,7 @@ impl InputState {
     }
 
     pub(super) fn refresh_properties_panel(&mut self) {
-        self.properties_panel_needs_refresh = false;
+        self.properties.needs_refresh = false;
         let update = (|| {
             let ids = self.selected_shape_ids();
             if ids.is_empty() {
@@ -199,7 +199,7 @@ impl InputState {
             return;
         };
 
-        let Some(panel) = self.shape_properties_panel.as_mut() else {
+        let Some(panel) = self.properties.panel.as_mut() else {
             return;
         };
         panel.title = title;
@@ -222,7 +222,7 @@ impl InputState {
             panel.hover_index = None;
         }
 
-        self.pending_properties_hover_recalc = true;
+        self.properties.pending_hover_recalc = true;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -294,7 +294,8 @@ mod tests {
         state.set_selection(vec![shape_id]);
         assert!(state.show_properties_panel());
         state
-            .shape_properties_panel
+            .properties
+            .panel
             .as_mut()
             .expect("panel")
             .keyboard_focus = Some(0);
@@ -315,7 +316,7 @@ mod tests {
         let shape_id = add_rect(&mut state, 10, 20, 30, 40);
         state.set_selection(vec![shape_id]);
         assert!(state.show_properties_panel());
-        let panel = state.shape_properties_panel.as_mut().expect("panel");
+        let panel = state.properties.panel.as_mut().expect("panel");
         panel.keyboard_focus = Some(99);
         panel.hover_index = Some(99);
 

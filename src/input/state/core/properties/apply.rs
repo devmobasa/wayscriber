@@ -18,7 +18,7 @@ impl InputState {
 
     fn apply_properties_entry(&mut self, index: usize, direction: i32) -> bool {
         let entry = {
-            let Some(panel) = self.shape_properties_panel.as_ref() else {
+            let Some(panel) = self.properties.panel.as_ref() else {
                 return false;
             };
             let Some(entry) = panel.entries.get(index) else {

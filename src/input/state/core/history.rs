@@ -13,7 +13,7 @@ impl InputState {
 
     fn mark_dirty_from_action(&mut self, action: &UndoAction) {
         if self.is_properties_panel_open() {
-            self.properties_panel_needs_refresh = true;
+            self.properties.needs_refresh = true;
         }
         match action {
             UndoAction::Create { shapes } | UndoAction::Delete { shapes } => {

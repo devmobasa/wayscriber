@@ -12,8 +12,8 @@ use crate::util::Rect;
 
 impl InputState {
     pub fn clear_properties_panel_layout(&mut self) {
-        self.properties_panel_layout = None;
-        self.pending_properties_hover_recalc = false;
+        self.properties.layout = None;
+        self.properties.pending_hover_recalc = false;
     }
 
     pub fn update_properties_panel_layout(
@@ -22,11 +22,11 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) {
-        if self.properties_panel_needs_refresh {
+        if self.properties.needs_refresh {
             self.refresh_properties_panel();
         }
-        let Some(panel) = self.shape_properties_panel.as_ref() else {
-            self.properties_panel_layout = None;
+        let Some(panel) = self.properties.panel.as_ref() else {
+            self.properties.layout = None;
             return;
         };
 
@@ -172,7 +172,7 @@ impl InputState {
         let label_x = origin_x + PANEL_PADDING_X;
         let value_x = origin_x + panel_width - PANEL_PADDING_X - max_value_width;
 
-        self.properties_panel_layout = Some(PropertiesPanelLayout {
+        self.properties.layout = Some(PropertiesPanelLayout {
             origin_x,
             origin_y,
             width: panel_width,
@@ -186,16 +186,16 @@ impl InputState {
             value_x,
         });
 
-        if self.pending_properties_hover_recalc {
+        if self.properties.pending_hover_recalc {
             let focus_set = panel.keyboard_focus.is_some();
             if !focus_set {
                 let (px, py) = self.last_pointer_position;
                 self.update_properties_panel_hover_from_pointer_internal(px, py, false);
             }
-            self.pending_properties_hover_recalc = false;
+            self.properties.pending_hover_recalc = false;
         }
 
-        if let Some(layout) = self.properties_panel_layout {
+        if let Some(layout) = self.properties.layout {
             mark_properties_panel_region(self, layout);
         }
     }

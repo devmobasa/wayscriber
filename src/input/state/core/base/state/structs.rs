@@ -1,8 +1,4 @@
-use super::super::super::{
-    index::SpatialIndexCache,
-    properties::{PropertiesPanelLayout, ShapePropertiesPanel},
-    selection::SelectionState,
-};
+use super::super::super::{index::SpatialIndexCache, selection::SelectionState};
 use super::super::InputEffectOutbox;
 use super::super::toast_queue::ToastQueue;
 use super::super::types::{
@@ -414,14 +410,8 @@ pub struct InputState {
     pub(in crate::input::state::core) pointer_seen: bool,
     /// Recompute hover next time layout is available
     pub(in crate::input::state::core) pending_menu_hover_recalc: bool,
-    /// Optional properties panel describing the current selection
-    pub(in crate::input::state::core) shape_properties_panel: Option<ShapePropertiesPanel>,
-    /// Cached layout details for the current properties panel
-    pub properties_panel_layout: Option<PropertiesPanelLayout>,
-    /// Recompute properties hover next time layout is available
-    pub(in crate::input::state::core) pending_properties_hover_recalc: bool,
-    /// Refresh properties panel entries on the next layout pass
-    pub(in crate::input::state::core) properties_panel_needs_refresh: bool,
+    /// Lifecycle, cached geometry, and deferred refresh state for the properties panel.
+    pub(crate) properties: crate::input::state::core::properties::PropertiesPanelState,
     /// Whether frozen mode is currently active
     pub(in crate::input::state::core) frozen_active: bool,
     /// Screen-color eyedropper UI lifecycle.
