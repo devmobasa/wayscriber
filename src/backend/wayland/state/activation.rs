@@ -15,7 +15,7 @@ impl WaylandState {
         let Some(token) = self.take_startup_activation_token() else {
             return false;
         };
-        let Some(activation) = self.activation.as_ref() else {
+        let Some(activation) = self.protocol.activation() else {
             return false;
         };
         let Some(wl_surface) = self.surface.wl_surface().cloned() else {
@@ -32,7 +32,7 @@ impl WaylandState {
             return;
         }
 
-        let Some(activation) = self.activation.as_ref() else {
+        let Some(activation) = self.protocol.activation() else {
             return;
         };
 
@@ -70,7 +70,7 @@ impl WaylandState {
             return;
         };
 
-        let Some(activation) = self.activation.as_ref() else {
+        let Some(activation) = self.protocol.activation() else {
             return;
         };
 

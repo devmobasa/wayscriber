@@ -12,13 +12,14 @@ impl WaylandState {
                 return false;
             }
             if toolbar_drag_preview_enabled()
-                && self.layer_shell.is_some()
+                && self.protocol.layer_shell().is_some()
                 && !self.inline_toolbars_active()
                 && !self.toolbar_drag_preview_active()
             {
                 drag_log(|| "enable inline drag preview (layer-shell toolbars hidden)");
                 self.set_toolbar_drag_preview_active(true);
-                self.toolbar.set_suppressed(&self.compositor_state, true);
+                self.toolbar
+                    .set_suppressed(self.protocol.compositor(), true);
                 self.input_state.dirty_tracker.mark_full();
                 self.input_state.needs_redraw = true;
             }
@@ -37,7 +38,7 @@ impl WaylandState {
                     coord.1,
                     coord_is_screen,
                     self.inline_toolbars_active(),
-                    self.layer_shell.is_some()
+                    self.protocol.layer_shell().is_some()
                 )
             });
             // Store initial coord with explicit coordinate space (screen vs toolbar-local).
@@ -172,7 +173,7 @@ impl WaylandState {
                 self.input_state.dirty_tracker.mark_full();
                 self.input_state.needs_redraw = true;
             }
-            if self.layer_shell.is_none() || inline_render_active {
+            if self.protocol.layer_shell().is_none() || inline_render_active {
                 self.clear_inline_toolbar_hits();
             }
             return;
@@ -267,7 +268,7 @@ impl WaylandState {
             self.input_state.dirty_tracker.mark_full();
             self.input_state.needs_redraw = true;
         }
-        if self.layer_shell.is_none() || inline_render_active {
+        if self.protocol.layer_shell().is_none() || inline_render_active {
             self.clear_inline_toolbar_hits();
         }
     }
@@ -393,7 +394,7 @@ impl WaylandState {
             self.input_state.dirty_tracker.mark_full();
             self.input_state.needs_redraw = true;
         }
-        if self.layer_shell.is_none() || inline_render_active {
+        if self.protocol.layer_shell().is_none() || inline_render_active {
             // Inline mode uses cached rects, so force a relayout.
             self.clear_inline_toolbar_hits();
         }

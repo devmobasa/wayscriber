@@ -126,7 +126,7 @@ impl CompositorHandler for WaylandState {
         }
         self.refresh_active_output_label();
 
-        if let Some(info) = self.output_state.info(output) {
+        if let Some(info) = self.protocol.output().info(output) {
             let scale = info.scale_factor.max(1);
             self.surface.set_scale(scale);
             // Mark full damage when entering output - scale may have changed, pool may be new

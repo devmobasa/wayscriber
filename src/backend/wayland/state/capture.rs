@@ -92,10 +92,12 @@ impl WaylandState {
         failed_backend: FrozenCaptureBackend,
         qh: &QueueHandle<Self>,
     ) {
-        if let Err(error) =
-            self.frozen
-                .begin_fallback_capture(failed_backend, &self.shm, qh, &self.tokio_handle)
-        {
+        if let Err(error) = self.frozen.begin_fallback_capture(
+            failed_backend,
+            self.protocol.shm(),
+            qh,
+            &self.tokio_handle,
+        ) {
             log::warn!("No frozen capture fallback succeeded after {failed_backend:?}: {error:#}");
             self.frozen
                 .finish_failed_fallback_capture(&mut self.input_state);

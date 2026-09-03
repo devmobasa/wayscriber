@@ -10,7 +10,7 @@ use super::super::state::WaylandState;
 
 impl ProvidesRegistryState for WaylandState {
     fn registry(&mut self) -> &mut RegistryState {
-        &mut self.registry_state
+        self.protocol.registry_mut()
     }
 
     registry_handlers![OutputState, SeatState];

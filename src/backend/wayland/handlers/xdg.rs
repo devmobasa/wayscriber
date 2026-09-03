@@ -34,10 +34,11 @@ impl WindowHandler for WaylandState {
         _serial: u32,
     ) {
         let fallback_dimensions = self
-            .output_state
+            .protocol
+            .output()
             .outputs()
             .next()
-            .and_then(|output| self.output_state.info(&output))
+            .and_then(|output| self.protocol.output().info(&output))
             .and_then(|info| {
                 if let Some((w, h)) = info.logical_size {
                     Some((w.max(1) as u32, h.max(1) as u32))
@@ -87,7 +88,7 @@ impl WindowHandler for WaylandState {
         }
 
         if self.surface.current_output().is_none()
-            && let Some(output) = self.output_state.outputs().next()
+            && let Some(output) = self.protocol.output().outputs().next()
         {
             self.surface.set_current_output(output);
             self.set_has_seen_surface_enter(false);

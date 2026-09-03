@@ -346,10 +346,12 @@ impl WaylandState {
                     self.cancel_overlay_capture_preflight(reason, None);
                     return;
                 };
-                if let Err(err) =
-                    self.frozen
-                        .begin_preflight_capture(backend, &self.shm, qh, &self.tokio_handle)
-                {
+                if let Err(err) = self.frozen.begin_preflight_capture(
+                    backend,
+                    self.protocol.shm(),
+                    qh,
+                    &self.tokio_handle,
+                ) {
                     log::warn!("Frozen preflight capture failed: {err}");
                     if self.frozen.has_acquisition_attempt() {
                         self.frozen
@@ -372,7 +374,7 @@ impl WaylandState {
                 };
                 if let Err(err) = self.zoom.begin_preflight_capture(
                     use_fallback,
-                    &self.shm,
+                    self.protocol.shm(),
                     qh,
                     &self.tokio_handle,
                 ) {

@@ -51,10 +51,10 @@ impl WaylandState {
         }
         self.data.overlay_clickthrough = clickthrough;
         if let Some(wl_surface) = self.surface.wl_surface().cloned() {
-            set_surface_clickthrough(&self.compositor_state, &wl_surface, clickthrough);
+            set_surface_clickthrough(self.protocol.compositor(), &wl_surface, clickthrough);
         }
         self.toolbar
-            .set_suppressed(&self.compositor_state, clickthrough);
+            .set_suppressed(self.protocol.compositor(), clickthrough);
     }
 
     pub(in crate::backend::wayland) fn sync_overlay_interactivity(&mut self) {

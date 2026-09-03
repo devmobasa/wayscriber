@@ -78,7 +78,7 @@ impl WaylandState {
         let request = requested_backend(&self.config);
         let preconditions = GtkPreconditions {
             feature_compiled: cfg!(feature = "toolbar-gtk"),
-            layer_shell: self.layer_shell.is_some(),
+            layer_shell: self.protocol.layer_shell().is_some(),
             force_inline: super::force_inline_toolbars_requested(&self.config),
             main_surface_uses_overlay_layer: self.data.main_surface_uses_overlay_layer,
         };
@@ -239,7 +239,7 @@ impl WaylandState {
             output_name: self
                 .surface
                 .current_output()
-                .and_then(|output| self.output_state.info(&output))
+                .and_then(|output| self.protocol.output().info(&output))
                 .and_then(|info| info.name),
             rebind_modifier: self.config.ui.toolbar.rebind_modifier,
             rebind_modifier_active: self.config.ui.toolbar.rebind_modifier.matches(

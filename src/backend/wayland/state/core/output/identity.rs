@@ -5,7 +5,7 @@ impl WaylandState {
         &self,
     ) -> Option<wl_output::WlOutput> {
         if let Some(preferred) = self.preferred_output_identity()
-            && let Some(output) = self.output_state.outputs().find(|output| {
+            && let Some(output) = self.protocol.output().outputs().find(|output| {
                 self.output_identity_for(output)
                     .map(|id| id.eq_ignore_ascii_case(preferred))
                     .unwrap_or(false)
@@ -16,14 +16,14 @@ impl WaylandState {
 
         self.surface
             .current_output()
-            .or_else(|| self.output_state.outputs().next())
+            .or_else(|| self.protocol.output().outputs().next())
     }
 
     pub(in crate::backend::wayland) fn output_identity_for(
         &self,
         output: &wl_output::WlOutput,
     ) -> Option<String> {
-        let info = self.output_state.info(output)?;
+        let info = self.protocol.output().info(output)?;
 
         let mut components: Vec<String> = Vec::new();
 
@@ -48,10 +48,12 @@ impl WaylandState {
 
     pub(super) fn sorted_known_outputs(&self) -> Vec<wl_output::WlOutput> {
         let mut outputs: Vec<(u32, wl_output::WlOutput)> = self
-            .output_state
+            .protocol
+            .output()
             .outputs()
             .filter_map(|output| {
-                self.output_state
+                self.protocol
+                    .output()
                     .info(&output)
                     .map(|info| (info.id, output))
             })
@@ -62,7 +64,7 @@ impl WaylandState {
     }
 
     pub(super) fn output_badge_label_for(&self, output: &wl_output::WlOutput) -> Option<String> {
-        let info = self.output_state.info(output)?;
+        let info = self.protocol.output().info(output)?;
 
         if let Some(name) = info.name.as_deref().filter(|name| !name.is_empty()) {
             return Some(crate::util::truncate_with_ellipsis(

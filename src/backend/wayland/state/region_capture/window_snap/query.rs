@@ -161,7 +161,7 @@ impl WaylandState {
 
     fn region_window_query_context(&self, source: ScreenSourceToken) -> Option<WindowQueryContext> {
         let output = self.surface.current_output()?;
-        let info = self.output_state.info(&output)?;
+        let info = self.protocol.output().info(&output)?;
         if info.id != source.output_id {
             return None;
         }

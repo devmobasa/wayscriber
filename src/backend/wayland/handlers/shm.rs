@@ -5,6 +5,6 @@ use super::super::state::WaylandState;
 
 impl ShmHandler for WaylandState {
     fn shm_state(&mut self) -> &mut Shm {
-        &mut self.shm
+        self.protocol.shm_mut()
     }
 }
