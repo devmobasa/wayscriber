@@ -7,7 +7,7 @@ mod tools;
 
 use crate::input::InputState;
 
-use super::events::ToolbarEvent;
+use crate::ui::toolbar::ToolbarEvent;
 
 impl InputState {
     /// Applies a toolbar-originated event to the input state.

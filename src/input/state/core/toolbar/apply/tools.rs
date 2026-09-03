@@ -1,8 +1,8 @@
 use crate::draw::{Color, FontDescriptor};
 use crate::input::{DrawingState, EraserMode, InputState, Tool};
 
-use super::super::PrecisionEntryTarget;
-use super::super::model::ToolbarSliderSpec;
+use crate::ui::toolbar::PrecisionEntryTarget;
+use crate::ui::toolbar::model::ToolbarSliderSpec;
 
 impl InputState {
     /// Open the precise-entry popup for a pill numeral.

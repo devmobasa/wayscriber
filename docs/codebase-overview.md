@@ -114,7 +114,8 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
      preset lifecycle and feedback; `HistoryLimits` owns undo retention plus delayed playback
      scheduling. Pure translation and scaling are methods on `draw::Shape`.
    - `state/actions/` maps keybindings to `Action` values and routes color, board/page, capture,
-     history, selection, tool, and UI behavior. `HelpOverlayState` owns help visibility, navigation,
+     history, selection, tool, and UI behavior. `state/core/toolbar/apply/` applies toolbar events to
+     `InputState`; toolbar models and snapshots remain under `ui/toolbar/`. `HelpOverlayState` owns help visibility, navigation,
      search, scrolling, and press/release bookkeeping. `BoardPickerPanel` similarly owns the board
      picker's modal lifecycle, search timing, layout cache, and drag/edit state. `ContextMenuPanel`
      owns context-menu visibility, targeting, enablement, and cached layout. `ColorPickerPopupPanel`

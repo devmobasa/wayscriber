@@ -42,6 +42,7 @@ mod style;
 mod text_editing;
 mod text_font;
 mod tool_controls;
+mod toolbar;
 mod top_menu;
 mod tour;
 pub(crate) mod utility;
