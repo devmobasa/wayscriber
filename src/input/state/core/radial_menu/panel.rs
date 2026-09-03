@@ -7,12 +7,24 @@ use crate::config::RadialMenuMouseBinding;
 /// Lifecycle, layout, and configured pointer trigger for the radial menu.
 #[derive(Debug)]
 pub struct RadialMenuPanel {
-    pub(crate) state: RadialMenuState,
-    pub(crate) layout: Option<RadialMenuLayout>,
-    pub(crate) mouse_binding: RadialMenuMouseBinding,
+    pub(in crate::input::state) state: RadialMenuState,
+    pub(in crate::input::state) layout: Option<RadialMenuLayout>,
+    pub(in crate::input::state) mouse_binding: RadialMenuMouseBinding,
 }
 
 impl RadialMenuPanel {
+    pub fn state(&self) -> &RadialMenuState {
+        &self.state
+    }
+
+    pub fn layout(&self) -> Option<RadialMenuLayout> {
+        self.layout
+    }
+
+    pub fn mouse_binding(&self) -> RadialMenuMouseBinding {
+        self.mouse_binding
+    }
+
     pub fn is_open(&self) -> bool {
         matches!(self.state, RadialMenuState::Open { .. })
     }
