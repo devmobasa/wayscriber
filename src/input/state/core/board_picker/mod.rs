@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 mod layout;
+mod panel;
 mod search;
 mod state;
 
@@ -8,6 +9,8 @@ use std::time::Duration;
 
 use crate::draw::{BLACK, BLUE, Color, GREEN, ORANGE, PINK, RED, WHITE, YELLOW};
 use crate::input::runtime_contrast_pen_color;
+
+pub use panel::BoardPickerPanel;
 
 const TITLE_FONT_SIZE: f64 = 17.0;
 const BODY_FONT_SIZE: f64 = 14.0;

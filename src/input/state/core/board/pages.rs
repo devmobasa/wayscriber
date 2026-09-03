@@ -102,11 +102,11 @@ impl InputState {
         }
         let selected_row = self.board_picker_row_for_board(board_index);
         if let (Some(row), super::super::board_picker::BoardPickerState::Open { selected, .. }) =
-            (selected_row, &mut self.board_picker_state)
+            (selected_row, &mut self.board_picker.state)
         {
             *selected = row;
         }
-        self.board_picker_layout = None;
+        self.board_picker.layout = None;
         self.mark_board_surface_dirty();
         true
     }

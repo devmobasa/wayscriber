@@ -9,7 +9,7 @@ impl InputState {
         let Some(board_index) = self.board_picker_board_index_for_row(row) else {
             return false;
         };
-        self.board_picker_drag = Some(BoardPickerDrag {
+        self.board_picker.drag = Some(BoardPickerDrag {
             source_row: row,
             source_board: board_index,
             current_row: row,
@@ -34,7 +34,7 @@ impl InputState {
         if page_index >= page_count {
             return false;
         }
-        self.board_picker_page_drag = Some(BoardPickerPageDrag {
+        self.board_picker.page_drag = Some(BoardPickerPageDrag {
             source_index: page_index,
             current_index: page_index,
             board_index,
@@ -45,11 +45,12 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_update_drag_from_pointer(&mut self, _x: i32, y: i32) {
-        let Some(layout) = self.board_picker_layout else {
+        let Some(layout) = self.board_picker.layout else {
             return;
         };
         let Some(source_board) = self
-            .board_picker_drag
+            .board_picker
+            .drag
             .as_ref()
             .map(|drag| drag.source_board)
         else {
@@ -64,7 +65,7 @@ impl InputState {
         let max_row = board_count.saturating_sub(1) as isize;
         let clamped = row.clamp(0, max_row) as usize;
         let target_row = self.board_picker_clamp_drag_row(clamped, source_board);
-        if let Some(drag) = &mut self.board_picker_drag
+        if let Some(drag) = &mut self.board_picker.drag
             && drag.current_row != target_row
         {
             drag.current_row = target_row;
@@ -74,10 +75,10 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_update_page_drag_from_pointer(&mut self, x: i32, y: i32) {
-        let Some(layout) = self.board_picker_layout else {
+        let Some(layout) = self.board_picker.layout else {
             return;
         };
-        let Some(drag) = self.board_picker_page_drag else {
+        let Some(drag) = self.board_picker.page_drag else {
             return;
         };
         if !layout.page_panel_enabled {
@@ -98,7 +99,7 @@ impl InputState {
         }
 
         let mut updated = false;
-        if let Some(drag) = &mut self.board_picker_page_drag {
+        if let Some(drag) = &mut self.board_picker.page_drag {
             if drag.target_board != next_target_board {
                 drag.target_board = next_target_board;
                 updated = true;
@@ -109,7 +110,7 @@ impl InputState {
             }
         }
 
-        if let BoardPickerState::Open { hover_index, .. } = &mut self.board_picker_state
+        if let BoardPickerState::Open { hover_index, .. } = &mut self.board_picker.state
             && *hover_index != next_hover_row
         {
             *hover_index = next_hover_row;
@@ -122,7 +123,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_finish_drag(&mut self) -> bool {
-        let Some(drag) = self.board_picker_drag.take() else {
+        let Some(drag) = self.board_picker.drag.take() else {
             return false;
         };
         let target_row = self.board_picker_clamp_drag_row(drag.current_row, drag.source_board);
@@ -159,7 +160,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_finish_page_drag(&mut self) -> bool {
-        let Some(drag) = self.board_picker_page_drag.take() else {
+        let Some(drag) = self.board_picker.page_drag.take() else {
             return false;
         };
         let target_board = drag.target_board.unwrap_or(drag.board_index);

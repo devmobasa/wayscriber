@@ -53,7 +53,7 @@ impl InputState {
     }
 
     fn board_picker_page_panel_context(&self) -> Option<BoardPickerPagePanelHitContext<'_>> {
-        let layout = self.board_picker_layout.as_ref()?;
+        let layout = self.board_picker.layout.as_ref()?;
         let board_index = layout.page_board_index?;
         let info = self.board_picker_page_panel_info(layout, board_index)?;
         Some(BoardPickerPagePanelHitContext {
@@ -88,7 +88,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_index_at(&self, x: i32, y: i32) -> Option<usize> {
-        let layout = self.board_picker_layout.as_ref()?;
+        let layout = self.board_picker.layout.as_ref()?;
         let local_x = x as f64 - layout.origin_x;
         let local_y = y as f64 - layout.origin_y;
         let row_top = layout.padding_y + layout.header_height;
@@ -108,7 +108,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_contains_point(&self, x: i32, y: i32) -> bool {
-        if let Some(layout) = self.board_picker_layout.as_ref() {
+        if let Some(layout) = self.board_picker.layout.as_ref() {
             let rect = FloatRect {
                 x: layout.origin_x,
                 y: layout.origin_y,
@@ -126,7 +126,7 @@ impl InputState {
         if self.board_picker_is_new_row(row) {
             return None;
         }
-        let layout = self.board_picker_layout.as_ref()?;
+        let layout = self.board_picker.layout.as_ref()?;
         let (local_x, local_y) = Self::board_picker_layout_point(layout, x, y);
         let row_top = Self::board_picker_row_top(layout, row);
         let swatch_y = row_top + (layout.row_height - layout.swatch_size) * 0.5;
@@ -145,7 +145,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_palette_color_at(&self, x: i32, y: i32) -> Option<Color> {
-        let layout = self.board_picker_layout.as_ref()?;
+        let layout = self.board_picker.layout.as_ref()?;
         if layout.palette_rows == 0 || layout.palette_cols == 0 {
             return None;
         }
@@ -366,7 +366,7 @@ impl InputState {
         if self.board_picker_is_new_row(row) {
             return None;
         }
-        let layout = self.board_picker_layout.as_ref()?;
+        let layout = self.board_picker.layout.as_ref()?;
         if layout.handle_width <= 0.0 || self.board_picker_is_quick() {
             return None;
         }
@@ -393,7 +393,7 @@ impl InputState {
         if self.board_picker_is_new_row(row) {
             return None;
         }
-        let layout = self.board_picker_layout.as_ref()?;
+        let layout = self.board_picker.layout.as_ref()?;
         if layout.open_icon_size <= 0.0 || self.board_picker_is_quick() {
             return None;
         }
@@ -421,7 +421,7 @@ impl InputState {
         if self.board_picker_is_new_row(row) {
             return None;
         }
-        let layout = self.board_picker_layout.as_ref()?;
+        let layout = self.board_picker.layout.as_ref()?;
 
         let (local_x, local_y) = Self::board_picker_layout_point(layout, x, y);
         let row_top = Self::board_picker_row_top(layout, row);

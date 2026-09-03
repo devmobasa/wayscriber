@@ -11,7 +11,7 @@ impl InputState {
             return;
         }
         let hover = self.board_picker_index_at(x, y);
-        if let BoardPickerState::Open { hover_index, .. } = &mut self.board_picker_state
+        if let BoardPickerState::Open { hover_index, .. } = &mut self.board_picker.state
             && *hover_index != hover
         {
             *hover_index = hover;
@@ -29,7 +29,7 @@ impl InputState {
         if !self.is_board_picker_open() {
             return None;
         }
-        let layout = self.board_picker_layout?;
+        let layout = self.board_picker.layout?;
 
         // Check if point is within the panel
         if !self.board_picker_contains_point(x, y) {
@@ -37,7 +37,7 @@ impl InputState {
         }
 
         // Check if currently dragging a board (grabbing)
-        if self.board_picker_drag.is_some() || self.board_picker_page_drag.is_some() {
+        if self.board_picker.drag.is_some() || self.board_picker.page_drag.is_some() {
             return Some(BoardPickerCursorHint::Grabbing);
         }
 

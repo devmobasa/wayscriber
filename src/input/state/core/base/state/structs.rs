@@ -1,8 +1,5 @@
 use super::super::super::{
-    board_picker::{
-        BoardPickerDrag, BoardPickerLayout, BoardPickerPageDrag, BoardPickerPageEdit,
-        BoardPickerPageTarget, BoardPickerState,
-    },
+    board_picker::BoardPickerPageTarget,
     color_picker_popup::{ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState},
     index::SpatialIndexCache,
     menus::{ContextMenuLayout, ContextMenuState},
@@ -14,11 +11,11 @@ use super::super::super::{
 use super::super::InputEffectOutbox;
 use super::super::toast_queue::ToastQueue;
 use super::super::types::{
-    BlockedActionFeedback, BoardPickerClickState, CompositorCapabilities, DelayedHistory,
-    DrawingState, PendingBoardDelete, PendingClipboardFallback, PendingOnboardingUsage,
-    PendingPageDelete, PolygonClickState, PresetFeedbackState, PressureThicknessEditMode,
-    PressureThicknessEntryMode, SelectionAxis, SelectionPublishState, StatusChangeHighlight,
-    TextBlockDrag, TextClickState, TextEditEntryFeedback, TextInputMode, UiToastState,
+    BlockedActionFeedback, CompositorCapabilities, DelayedHistory, DrawingState,
+    PendingBoardDelete, PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
+    PolygonClickState, PresetFeedbackState, PressureThicknessEditMode, PressureThicknessEntryMode,
+    SelectionAxis, SelectionPublishState, StatusChangeHighlight, TextBlockDrag, TextClickState,
+    TextEditEntryFeedback, TextInputMode, UiToastState,
 };
 use crate::config::{
     Action, PresenterModeConfig, QuickColorPalette, RadialMenuMouseBinding, ResolvedToolbarItems,
@@ -180,10 +177,8 @@ pub struct InputState {
     pub(crate) pending_save_as_overwrite: Option<PathBuf>,
     /// Visibility, navigation, and pointer bookkeeping for the help overlay.
     pub(crate) help_overlay: crate::input::state::core::HelpOverlayState,
-    /// Board picker quick search query
-    pub board_picker_search: String,
-    /// Time of last board picker search input
-    pub board_picker_search_last_input: Option<Instant>,
+    /// Modal, layout, search, edit, and drag state for the board picker.
+    pub board_picker: crate::input::state::core::BoardPickerPanel,
     /// State owned by the command palette modal.
     pub command_palette: crate::input::state::core::command_palette::CommandPaletteState,
     /// Action whose next keyboard chord is being captured for rebinding.
@@ -349,14 +344,7 @@ pub struct InputState {
     pub(in crate::input::state::core) context_menu_page_target: Option<BoardPickerPageTarget>,
     /// Whether context menu interactions are enabled
     pub(in crate::input::state::core) context_menu_enabled: bool,
-    /// Current board picker state
-    pub board_picker_state: BoardPickerState,
-    /// Active board picker drag state (full mode reorder)
-    pub board_picker_drag: Option<BoardPickerDrag>,
-    /// Active board picker page drag state (thumbnail reorder)
-    pub board_picker_page_drag: Option<BoardPickerPageDrag>,
-    /// Active board picker page rename state
-    pub board_picker_page_edit: Option<BoardPickerPageEdit>,
+
     /// Current color picker popup state
     pub color_picker_popup_state: ColorPickerPopupState,
     /// Cached layout details for the color picker popup
@@ -426,8 +414,7 @@ pub struct InputState {
     pub(crate) last_text_click: Option<TextClickState>,
     /// Last freeform polygon point click used for double-click completion.
     pub(crate) last_polygon_click: Option<PolygonClickState>,
-    /// Last board picker row click used for double-click detection
-    pub(crate) last_board_picker_click: Option<BoardPickerClickState>,
+
     /// Tracks an in-progress text edit target (existing shape to replace)
     pub(crate) text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
     /// In-progress Alt+left-drag that repositions the active text block.
@@ -441,8 +428,7 @@ pub struct InputState {
     pub(in crate::input::state::core) pending_history: Option<DelayedHistory>,
     /// Cached layout details for the currently open context menu
     pub context_menu_layout: Option<ContextMenuLayout>,
-    /// Cached layout details for the board picker overlay
-    pub board_picker_layout: Option<BoardPickerLayout>,
+
     /// Cached layout details for the status HUD (segmented status bar)
     pub status_hud_layout: Option<crate::ui::StatusHudLayout>,
     /// Last screen/config inputs used to build the status HUD. Retained while

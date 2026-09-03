@@ -129,11 +129,11 @@ struct BoardPickerLayoutGeometry {
 
 impl InputState {
     pub(crate) fn board_picker_layout(&self) -> Option<&BoardPickerLayout> {
-        self.board_picker_layout.as_ref()
+        self.board_picker.layout.as_ref()
     }
 
     pub(crate) fn clear_board_picker_layout(&mut self) {
-        self.board_picker_layout = None;
+        self.board_picker.layout = None;
     }
 
     pub(crate) fn update_board_picker_layout(
@@ -143,13 +143,13 @@ impl InputState {
         screen_height: u32,
     ) {
         if !self.is_board_picker_open() {
-            self.board_picker_layout = None;
+            self.board_picker.layout = None;
             return;
         }
 
         let row_count = self.board_picker_row_count();
         if row_count == 0 {
-            self.board_picker_layout = None;
+            self.board_picker.layout = None;
             return;
         }
 
@@ -188,7 +188,7 @@ impl InputState {
             &page_panel,
         );
 
-        self.board_picker_layout = Some(self.build_board_picker_layout(
+        self.board_picker.layout = Some(self.build_board_picker_layout(
             &config,
             row_count,
             &content,

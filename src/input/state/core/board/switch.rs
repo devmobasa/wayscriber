@@ -262,7 +262,7 @@ impl InputState {
                 self.board_picker_set_selected(row);
             }
             if let super::super::board_picker::BoardPickerState::Open { hover_index, .. } =
-                &mut self.board_picker_state
+                &mut self.board_picker.state
             {
                 *hover_index = None;
             }

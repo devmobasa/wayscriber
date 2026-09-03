@@ -78,7 +78,7 @@ fn switch_board_updates_open_board_picker_selection_and_clears_hover() {
     let mut state = create_test_input_state();
     state.open_board_picker();
 
-    if let BoardPickerState::Open { hover_index, .. } = &mut state.board_picker_state {
+    if let BoardPickerState::Open { hover_index, .. } = &mut state.board_picker.state {
         *hover_index = Some(0);
     }
 
@@ -89,7 +89,7 @@ fn switch_board_updates_open_board_picker_selection_and_clears_hover() {
         state.board_picker_selected_index(),
         state.board_picker_row_for_board(state.boards.active_index())
     );
-    match &state.board_picker_state {
+    match &state.board_picker.state {
         BoardPickerState::Open { hover_index, .. } => assert!(hover_index.is_none()),
         BoardPickerState::Hidden => panic!("board picker should remain open"),
     }

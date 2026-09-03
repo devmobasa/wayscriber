@@ -9,14 +9,14 @@ use super::super::{
 
 impl InputState {
     pub(crate) fn board_picker_page_nav_mode(&self) -> BoardPickerPageNavMode {
-        match &self.board_picker_state {
+        match &self.board_picker.state {
             BoardPickerState::Open { page_nav_mode, .. } => *page_nav_mode,
             BoardPickerState::Hidden => BoardPickerPageNavMode::Normal,
         }
     }
 
     pub(crate) fn board_picker_page_jump_buffer(&self) -> Option<&str> {
-        match &self.board_picker_state {
+        match &self.board_picker.state {
             BoardPickerState::Open {
                 page_nav_mode,
                 page_jump_buffer,
@@ -27,7 +27,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_page_search_query(&self) -> Option<&str> {
-        match &self.board_picker_state {
+        match &self.board_picker.state {
             BoardPickerState::Open {
                 page_nav_mode,
                 page_search_query,
@@ -40,7 +40,7 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_page_search_cursor(&self) -> Option<usize> {
-        match &self.board_picker_state {
+        match &self.board_picker.state {
             BoardPickerState::Open {
                 page_nav_mode,
                 page_search_cursor,
@@ -58,7 +58,7 @@ impl InputState {
             page_search_cursor,
             page_jump_buffer,
             ..
-        } = &mut self.board_picker_state
+        } = &mut self.board_picker.state
         {
             *page_nav_mode = BoardPickerPageNavMode::Jump;
             page_search_query.clear();
@@ -77,7 +77,7 @@ impl InputState {
             page_search_cursor,
             page_jump_buffer,
             ..
-        } = &mut self.board_picker_state
+        } = &mut self.board_picker.state
         {
             *page_nav_mode = BoardPickerPageNavMode::Search;
             page_search_query.clear();
@@ -95,7 +95,7 @@ impl InputState {
             page_search_cursor,
             page_jump_buffer,
             ..
-        } = &mut self.board_picker_state
+        } = &mut self.board_picker.state
         else {
             return false;
         };
@@ -135,7 +135,7 @@ impl InputState {
             Key::Backspace | Key::Delete => {
                 if let BoardPickerState::Open {
                     page_jump_buffer, ..
-                } = &mut self.board_picker_state
+                } = &mut self.board_picker.state
                 {
                     page_jump_buffer.pop();
                     self.needs_redraw = true;
@@ -145,7 +145,7 @@ impl InputState {
             Key::Char(ch) if ch.is_ascii_digit() => {
                 if let BoardPickerState::Open {
                     page_jump_buffer, ..
-                } = &mut self.board_picker_state
+                } = &mut self.board_picker.state
                     && page_jump_buffer.len() < BOARD_PICKER_PAGE_JUMP_MAX_LEN
                 {
                     page_jump_buffer.push(ch);
@@ -198,7 +198,7 @@ impl InputState {
             Key::Backspace | Key::Delete => {
                 if let BoardPickerState::Open {
                     page_search_query, ..
-                } = &mut self.board_picker_state
+                } = &mut self.board_picker.state
                 {
                     page_search_query.pop();
                 }
@@ -224,7 +224,7 @@ impl InputState {
     fn board_picker_append_page_search_char(&mut self, ch: char) {
         if let BoardPickerState::Open {
             page_search_query, ..
-        } = &mut self.board_picker_state
+        } = &mut self.board_picker.state
         {
             if page_search_query.len() >= BOARD_PICKER_PAGE_SEARCH_MAX_LEN {
                 return;
@@ -238,7 +238,7 @@ impl InputState {
         let matches = self.board_picker_page_search_match_indexes();
         if let BoardPickerState::Open {
             page_search_cursor, ..
-        } = &mut self.board_picker_state
+        } = &mut self.board_picker.state
         {
             *page_search_cursor = if matches.is_empty() { None } else { Some(0) };
         }
@@ -261,7 +261,7 @@ impl InputState {
 
         if let BoardPickerState::Open {
             page_search_cursor, ..
-        } = &mut self.board_picker_state
+        } = &mut self.board_picker.state
         {
             if matches.is_empty() {
                 *page_search_cursor = None;
@@ -293,7 +293,7 @@ impl InputState {
         if matches.is_empty() {
             if let BoardPickerState::Open {
                 page_search_cursor, ..
-            } = &mut self.board_picker_state
+            } = &mut self.board_picker.state
             {
                 *page_search_cursor = None;
             }
@@ -313,7 +313,7 @@ impl InputState {
         };
         if let BoardPickerState::Open {
             page_search_cursor, ..
-        } = &mut self.board_picker_state
+        } = &mut self.board_picker.state
         {
             *page_search_cursor = Some(next);
         }

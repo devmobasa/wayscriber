@@ -187,7 +187,8 @@ pub(super) fn handle_board_picker_release(state: &mut InputState, x: i32, y: i32
         }
         let now = Instant::now();
         let is_double = state
-            .last_board_picker_click
+            .board_picker
+            .last_click
             .map(|last| {
                 last.row == index
                     && now.duration_since(last.at).as_millis()
@@ -197,10 +198,10 @@ pub(super) fn handle_board_picker_release(state: &mut InputState, x: i32, y: i32
             })
             .unwrap_or(false);
         if is_double {
-            state.last_board_picker_click = None;
+            state.board_picker.last_click = None;
             state.board_picker_activate_row(index);
         } else {
-            state.last_board_picker_click = Some(BoardPickerClickState {
+            state.board_picker.last_click = Some(BoardPickerClickState {
                 row: index,
                 x,
                 y,

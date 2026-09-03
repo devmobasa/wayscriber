@@ -303,7 +303,7 @@ mod tests {
     #[test]
     fn active_pointer_interaction_covers_picker_drags() {
         let mut state = make_test_input_state();
-        state.board_picker_drag = Some(BoardPickerDrag {
+        state.board_picker.drag = Some(BoardPickerDrag {
             source_row: 0,
             source_board: 0,
             current_row: 0,
@@ -311,7 +311,7 @@ mod tests {
         assert!(state.has_active_pointer_interaction());
 
         let mut state = make_test_input_state();
-        state.board_picker_page_drag = Some(BoardPickerPageDrag {
+        state.board_picker.page_drag = Some(BoardPickerPageDrag {
             source_index: 0,
             current_index: 0,
             board_index: 0,

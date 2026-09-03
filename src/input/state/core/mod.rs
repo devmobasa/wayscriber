@@ -58,7 +58,7 @@ pub(crate) use base::{
 };
 pub(crate) use base::{InputEffect, InputEffectDrain};
 pub(crate) use base::{KeybindingEditOperation, KeybindingEditRequest};
-pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout};
+pub use board_picker::{BoardPickerCursorHint, BoardPickerLayout, BoardPickerPanel};
 pub(crate) use captured_image::BoardPasteTarget;
 pub(crate) use color_picker_popup::HexPasteTarget;
 pub use color_picker_popup::PickerDrag;

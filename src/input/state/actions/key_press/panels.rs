@@ -199,7 +199,8 @@ impl InputState {
             }
             Key::Tab | Key::Right => {
                 let page_panel_enabled = self
-                    .board_picker_layout
+                    .board_picker
+                    .layout
                     .is_some_and(|l| l.page_panel_enabled);
                 if !self.board_picker_is_quick() && page_panel_enabled {
                     self.board_picker_set_focus(BoardPickerFocus::PagePanel);
@@ -343,7 +344,7 @@ impl InputState {
     }
 
     fn navigate_board_picker_page_panel(&mut self, key: Key, page_count: usize, current: usize) {
-        let layout = self.board_picker_layout;
+        let layout = self.board_picker.layout;
         let page_cols = layout.map(|l| l.page_cols.max(1)).unwrap_or(1);
 
         match key {

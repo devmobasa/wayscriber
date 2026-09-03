@@ -141,7 +141,7 @@ fn board_picker_drag_pinned_clamped_to_pinned_section() {
         .board_picker_row_for_board(blackboard_index)
         .expect("row");
     let last_row = input.boards.board_count().saturating_sub(1);
-    input.board_picker_drag = Some(BoardPickerDrag {
+    input.board_picker.drag = Some(BoardPickerDrag {
         source_row: pinned_row,
         source_board: blackboard_index,
         current_row: last_row,
@@ -178,7 +178,7 @@ fn board_picker_drag_unpinned_clamped_after_pinned() {
     let whiteboard_row = input
         .board_picker_row_for_board(whiteboard_index)
         .expect("row");
-    input.board_picker_drag = Some(BoardPickerDrag {
+    input.board_picker.drag = Some(BoardPickerDrag {
         source_row: whiteboard_row,
         source_board: whiteboard_index,
         current_row: 0,
@@ -687,7 +687,8 @@ fn board_picker_page_search_wheel_scroll_syncs_cursor_with_visible_focus() {
     update_picker_layout(&mut input, 1280, 720);
 
     let cols = input
-        .board_picker_layout()
+        .board_picker
+        .layout()
         .expect("layout")
         .page_cols
         .max(1);
@@ -1063,7 +1064,7 @@ fn board_picker_page_search_rename_updates_derived_match() {
     }
     assert_eq!(input.board_picker_page_search_match_count(), 0);
 
-    input.board_picker_page_edit = Some(BoardPickerPageEdit {
+    input.board_picker.page_edit = Some(BoardPickerPageEdit {
         board_index,
         page_index: 9,
         buffer: "Target".to_string(),
@@ -1201,7 +1202,7 @@ fn board_picker_page_focus_clamps_to_existing_pages() {
 fn board_picker_footer_text_prefers_active_search_query() {
     let mut input = create_test_input_state();
     input.open_board_picker();
-    input.board_picker_search = "blue".to_string();
+    input.board_picker.search = "blue".to_string();
 
     assert_eq!(
         input.board_picker_footer_text(),
@@ -1454,19 +1455,19 @@ fn board_picker_commit_edit_rejects_invalid_colors_and_keeps_edit_open() {
 fn open_board_picker_closes_help_and_clears_transient_picker_state() {
     let mut input = create_test_input_state();
     input.help_overlay.visible = true;
-    input.board_picker_search = "blue".to_string();
-    input.board_picker_drag = Some(BoardPickerDrag {
+    input.board_picker.search = "blue".to_string();
+    input.board_picker.drag = Some(BoardPickerDrag {
         source_row: 0,
         source_board: 0,
         current_row: 0,
     });
-    input.board_picker_page_drag = Some(BoardPickerPageDrag {
+    input.board_picker.page_drag = Some(BoardPickerPageDrag {
         source_index: 0,
         current_index: 0,
         board_index: 0,
         target_board: Some(0),
     });
-    input.board_picker_page_edit = Some(BoardPickerPageEdit {
+    input.board_picker.page_edit = Some(BoardPickerPageEdit {
         board_index: 0,
         page_index: 0,
         buffer: "Draft".to_string(),
@@ -1479,10 +1480,10 @@ fn open_board_picker_closes_help_and_clears_transient_picker_state() {
     assert_eq!(input.board_picker_mode(), BoardPickerMode::Full);
     assert_eq!(input.board_picker_focus(), BoardPickerFocus::BoardList);
     assert!(!input.help_overlay.visible);
-    assert!(input.board_picker_search.is_empty());
-    assert!(input.board_picker_drag.is_none());
-    assert!(input.board_picker_page_drag.is_none());
-    assert!(input.board_picker_page_edit.is_none());
+    assert!(input.board_picker.search.is_empty());
+    assert!(input.board_picker.drag.is_none());
+    assert!(input.board_picker.page_drag.is_none());
+    assert!(input.board_picker.page_edit.is_none());
     assert_eq!(
         input.board_picker_selected_index(),
         input.board_picker_row_for_board(input.boards.active_index())
@@ -1493,19 +1494,19 @@ fn open_board_picker_closes_help_and_clears_transient_picker_state() {
 fn close_board_picker_clears_transient_picker_state() {
     let mut input = create_test_input_state();
     input.open_board_picker();
-    input.board_picker_search = "blue".to_string();
-    input.board_picker_drag = Some(BoardPickerDrag {
+    input.board_picker.search = "blue".to_string();
+    input.board_picker.drag = Some(BoardPickerDrag {
         source_row: 0,
         source_board: 0,
         current_row: 0,
     });
-    input.board_picker_page_drag = Some(BoardPickerPageDrag {
+    input.board_picker.page_drag = Some(BoardPickerPageDrag {
         source_index: 0,
         current_index: 0,
         board_index: 0,
         target_board: Some(0),
     });
-    input.board_picker_page_edit = Some(BoardPickerPageEdit {
+    input.board_picker.page_edit = Some(BoardPickerPageEdit {
         board_index: 0,
         page_index: 0,
         buffer: "Draft".to_string(),
@@ -1514,12 +1515,12 @@ fn close_board_picker_clears_transient_picker_state() {
     input.close_board_picker();
 
     assert!(!input.is_board_picker_open());
-    assert!(matches!(input.board_picker_state, BoardPickerState::Hidden));
-    assert!(input.board_picker_search.is_empty());
-    assert!(input.board_picker_drag.is_none());
-    assert!(input.board_picker_page_drag.is_none());
-    assert!(input.board_picker_page_edit.is_none());
-    assert!(input.board_picker_layout.is_none());
+    assert!(matches!(input.board_picker.state, BoardPickerState::Hidden));
+    assert!(input.board_picker.search.is_empty());
+    assert!(input.board_picker.drag.is_none());
+    assert!(input.board_picker.page_drag.is_none());
+    assert!(input.board_picker.page_edit.is_none());
+    assert!(input.board_picker.layout.is_none());
 }
 
 #[test]
@@ -1528,7 +1529,7 @@ fn board_picker_active_index_prefers_hover_over_selected_row() {
     input.open_board_picker();
     input.board_picker_set_selected(0);
 
-    if let BoardPickerState::Open { hover_index, .. } = &mut input.board_picker_state {
+    if let BoardPickerState::Open { hover_index, .. } = &mut input.board_picker.state {
         *hover_index = Some(1);
     }
 
