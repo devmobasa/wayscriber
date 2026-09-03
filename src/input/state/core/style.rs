@@ -1,9 +1,17 @@
-use crate::config::{ArrowConfig, DrawingConfig, QuickColorPalette, SpotlightConfig};
+use crate::config::{
+    ArrowConfig, DrawingConfig, MouseDragToolsConfig, PresetToolStatesConfig, QuickColorPalette,
+    SpotlightConfig, ToolPresetConfig,
+};
 use crate::draw::{ArrowStyle, BlurStyle, Color, EraserKind, FontDescriptor, clamp_regular_sides};
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::input::{EraserMode, PerToolDrawingSettings, Tool};
+use crate::session::ToolStateSnapshot;
+use crate::ui::toolbar::model::ToolbarSliderSpec;
 
 use super::{PressureThicknessEditMode, PressureThicknessEntryMode};
+
+/// Maximum number of session-only recently applied colors.
+pub(crate) const RECENT_COLORS_CAP: usize = 6;
 
 /// Runtime drawing defaults and per-tool appearance settings.
 #[derive(Debug, Clone)]
@@ -96,9 +104,430 @@ impl From<(&DrawingConfig, &ArrowConfig, &SpotlightConfig)> for DrawingStyle {
     }
 }
 
+impl DrawingStyle {
+    pub(crate) fn color_for_tool(&self, tool: Tool) -> Color {
+        self.tool_settings.get(tool).color
+    }
+
+    pub(crate) fn thickness_for_tool(&self, tool: Tool) -> f64 {
+        if tool.uses_eraser_size() {
+            self.eraser_size
+        } else {
+            self.tool_settings.get(tool).thickness
+        }
+    }
+
+    pub(crate) fn replace_tool_settings(
+        &mut self,
+        settings: PerToolDrawingSettings,
+        active_tool: Tool,
+    ) {
+        self.tool_settings = settings;
+        self.sync_current_settings(active_tool);
+    }
+
+    pub(crate) fn sync_current_settings(&mut self, tool: Tool) {
+        self.current_color = self.color_for_tool(tool);
+        if tool.uses_drawing_thickness() {
+            self.current_thickness = self.thickness_for_tool(tool);
+        }
+    }
+
+    pub(crate) fn set_pen_color(&mut self, color: Color, active_tool: Tool) {
+        self.tool_settings.pen.color = color;
+        if PerToolDrawingSettings::settings_tool(active_tool) == Tool::Pen {
+            self.current_color = color;
+        }
+    }
+
+    pub(crate) fn preview_color(&mut self, tool: Tool, active_tool: Tool, color: Color) -> bool {
+        if self.color_for_tool(tool) == color {
+            return false;
+        }
+        self.tool_settings.get_mut(tool).color = color;
+        if active_tool.settings_slot() == tool.settings_slot() {
+            self.current_color = color;
+        }
+        true
+    }
+
+    pub(crate) fn set_pressure_thickness(&mut self, tool: Tool, thickness: f64) -> f64 {
+        let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+        if tool.uses_drawing_thickness() {
+            self.tool_settings.get_mut(tool).thickness = clamped;
+        }
+        self.current_thickness = clamped;
+        clamped
+    }
+
+    pub(crate) fn set_tool_override(&mut self, tool: Option<Tool>) -> bool {
+        if self.tool_override == tool {
+            return false;
+        }
+        self.tool_override = tool;
+        true
+    }
+
+    pub(crate) fn set_marker_opacity(&mut self, opacity: f64) -> bool {
+        let spec = ToolbarSliderSpec::MARKER_OPACITY;
+        let clamped = opacity.clamp(spec.min, spec.max);
+        if (clamped - self.marker_opacity).abs() < f64::EPSILON {
+            return false;
+        }
+        self.marker_opacity = clamped;
+        true
+    }
+
+    pub(crate) fn nudge_pen_smoothing(&mut self, delta: i32) -> bool {
+        let next = crate::draw::shape::clamp_pen_smoothing(
+            i32::from(self.pen_smoothing)
+                .saturating_add(delta)
+                .clamp(0, i32::from(crate::draw::shape::MAX_PEN_SMOOTHING)) as u8,
+        );
+        self.set_pen_smoothing(next)
+    }
+
+    pub(crate) fn set_pen_smoothing(&mut self, level: u8) -> bool {
+        let level = crate::draw::shape::clamp_pen_smoothing(level);
+        if level == self.pen_smoothing {
+            return false;
+        }
+        self.pen_smoothing = level;
+        true
+    }
+
+    pub(crate) fn set_spotlight_magnification(&mut self, magnification: f64) -> bool {
+        let normalized = ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION.normalize_value(
+            crate::draw::normalize_spotlight_magnification(magnification),
+        );
+        if (normalized - self.spotlight_magnification).abs() < f64::EPSILON {
+            return false;
+        }
+        self.spotlight_magnification = normalized;
+        true
+    }
+
+    pub(crate) fn set_color(&mut self, tool: Tool, color: Color) -> bool {
+        if self.color_for_tool(tool) == color {
+            return false;
+        }
+        self.tool_settings.get_mut(tool).color = color;
+        self.current_color = color;
+        true
+    }
+
+    pub(crate) fn set_thickness(&mut self, tool: Tool, thickness: f64) -> bool {
+        let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+        if (clamped - self.tool_settings.get(tool).thickness).abs() < f64::EPSILON {
+            return false;
+        }
+        self.tool_settings.get_mut(tool).thickness = clamped;
+        self.current_thickness = clamped;
+        true
+    }
+
+    pub(crate) fn set_eraser_size(&mut self, size: f64) -> bool {
+        let clamped = size.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+        if (clamped - self.eraser_size).abs() < f64::EPSILON {
+            return false;
+        }
+        self.eraser_size = clamped;
+        true
+    }
+
+    pub(crate) fn set_eraser_mode(&mut self, mode: EraserMode) -> bool {
+        if self.eraser_mode == mode {
+            return false;
+        }
+        self.eraser_mode = mode;
+        true
+    }
+
+    pub(crate) fn toggle_eraser_mode(&mut self) -> bool {
+        let next = match self.eraser_mode {
+            EraserMode::Brush => EraserMode::Stroke,
+            EraserMode::Stroke => EraserMode::Brush,
+        };
+        self.set_eraser_mode(next)
+    }
+
+    pub(crate) fn eraser_hit_radius(&self) -> f64 {
+        (self.eraser_size / 2.0).max(1.0)
+    }
+
+    pub(crate) fn set_blur_style(&mut self, style: BlurStyle) -> bool {
+        if self.blur_style == style {
+            return false;
+        }
+        self.blur_style = style;
+        true
+    }
+
+    pub(crate) fn cycle_blur_style(&mut self) -> bool {
+        self.set_blur_style(self.blur_style.next())
+    }
+
+    pub(crate) fn set_arrow_style(&mut self, style: ArrowStyle) -> bool {
+        if self.arrow_style == style {
+            return false;
+        }
+        self.arrow_style = style;
+        true
+    }
+
+    pub(crate) fn cycle_arrow_style(&mut self) -> bool {
+        self.set_arrow_style(self.arrow_style.next())
+    }
+
+    pub(crate) fn set_font_descriptor(&mut self, descriptor: FontDescriptor) -> bool {
+        if self.font_descriptor == descriptor {
+            return false;
+        }
+        self.font_descriptor = descriptor;
+        true
+    }
+
+    pub(crate) fn set_font_size(&mut self, size: f64) -> bool {
+        let spec = ToolbarSliderSpec::FONT_SIZE;
+        let clamped = size.clamp(spec.min, spec.max);
+        if (clamped - self.current_font_size).abs() < f64::EPSILON {
+            return false;
+        }
+        self.current_font_size = clamped;
+        true
+    }
+
+    pub(crate) fn set_fill_enabled(&mut self, enabled: bool) -> bool {
+        if self.fill_enabled == enabled {
+            return false;
+        }
+        self.fill_enabled = enabled;
+        true
+    }
+
+    pub(crate) fn set_polygon_sides(&mut self, sides: u8) -> bool {
+        let clamped = clamp_regular_sides(sides);
+        if self.polygon_sides == clamped {
+            return false;
+        }
+        self.polygon_sides = clamped;
+        true
+    }
+
+    pub(crate) fn nudge_polygon_sides(&mut self, delta: i8) -> bool {
+        let next = if delta.is_negative() {
+            self.polygon_sides.saturating_sub(delta.unsigned_abs())
+        } else {
+            self.polygon_sides.saturating_add(delta as u8)
+        };
+        self.set_polygon_sides(next)
+    }
+
+    pub(crate) fn apply_full_preset_tool_settings(
+        &mut self,
+        settings: &PresetToolStatesConfig,
+    ) -> bool {
+        let tool_settings = settings.to_runtime();
+        let changed = self.tool_settings != tool_settings
+            || (self.eraser_size - settings.eraser_size).abs() > f64::EPSILON;
+        self.tool_settings = tool_settings;
+        self.eraser_size = settings.eraser_size;
+        changed
+    }
+
+    pub(crate) fn apply_preset_shape_settings(&mut self, preset: &ToolPresetConfig) -> bool {
+        let mut changed = false;
+        if let Some(length) = preset.arrow_length {
+            let clamped = length.clamp(5.0, 50.0);
+            if (self.arrow_length - clamped).abs() > f64::EPSILON {
+                self.arrow_length = clamped;
+                changed = true;
+            }
+        }
+        if let Some(angle) = preset.arrow_angle {
+            let clamped = angle.clamp(15.0, 60.0);
+            if (self.arrow_angle - clamped).abs() > f64::EPSILON {
+                self.arrow_angle = clamped;
+                changed = true;
+            }
+        }
+        if let Some(head_at_end) = preset.arrow_head_at_end
+            && self.arrow_head_at_end != head_at_end
+        {
+            self.arrow_head_at_end = head_at_end;
+            changed = true;
+        }
+        if let Some(polygon_sides) = preset.polygon_sides {
+            changed |= self.set_polygon_sides(polygon_sides);
+        }
+        changed
+    }
+
+    pub(crate) fn record_recent_color(&mut self, color: Color) {
+        self.recent_colors.retain(|recent| *recent != color);
+        self.recent_colors.insert(0, color);
+        self.recent_colors.truncate(RECENT_COLORS_CAP);
+    }
+
+    pub(crate) fn restore_recent_colors(&mut self, colors: &[Color]) {
+        self.recent_colors.clear();
+        for color in colors {
+            if self.recent_colors.contains(color) {
+                continue;
+            }
+            self.recent_colors.push(*color);
+            if self.recent_colors.len() == RECENT_COLORS_CAP {
+                break;
+            }
+        }
+    }
+
+    pub(crate) fn restore_snapshot(&mut self, snapshot: &ToolStateSnapshot, active_tool: Tool) {
+        let current_thickness = snapshot
+            .current_thickness
+            .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
+        let tool_settings = snapshot.tool_settings.clone().unwrap_or_else(|| {
+            let mut settings =
+                PerToolDrawingSettings::new(snapshot.current_color, current_thickness);
+            settings.step_marker.thickness =
+                super::utility::default_step_marker_size(snapshot.current_font_size);
+            settings
+        });
+        self.replace_tool_settings(
+            tool_settings.clamp_thicknesses(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS),
+            active_tool,
+        );
+        let _ = self.set_eraser_size(snapshot.eraser_size);
+        self.eraser_kind = snapshot.eraser_kind;
+        let _ = self.set_eraser_mode(snapshot.eraser_mode);
+        let _ = self.set_blur_style(snapshot.blur_style);
+        self.restore_recent_colors(&snapshot.recent_colors);
+        if let Some(level) = snapshot.pen_smoothing {
+            let _ = self.set_pen_smoothing(level);
+        }
+        if let Some(opacity) = snapshot.marker_opacity {
+            let _ = self.set_marker_opacity(opacity);
+        }
+        if let Some(magnification) = snapshot.spotlight_magnification {
+            self.spotlight_magnification =
+                crate::draw::normalize_spotlight_magnification(magnification);
+        }
+        if let Some(fill_enabled) = snapshot.fill_enabled {
+            let _ = self.set_fill_enabled(fill_enabled);
+        }
+        if let Some(font_descriptor) = snapshot.font_descriptor.clone() {
+            let _ = self.set_font_descriptor(font_descriptor);
+        }
+        let _ = self.set_font_size(snapshot.current_font_size);
+        self.text_background_enabled = snapshot.text_background_enabled;
+        self.arrow_length = snapshot.arrow_length.clamp(5.0, 50.0);
+        self.arrow_angle = snapshot.arrow_angle.clamp(15.0, 60.0);
+        if let Some(head_at_end) = snapshot.arrow_head_at_end {
+            self.arrow_head_at_end = head_at_end;
+        }
+        if let Some(style) = snapshot.arrow_style {
+            let _ = self.set_arrow_style(style);
+        }
+        if let Some(label_enabled) = snapshot.arrow_label_enabled {
+            self.arrow_label_enabled = label_enabled;
+        }
+        self.polygon_sides = clamp_regular_sides(snapshot.polygon_sides);
+    }
+
+    pub(crate) fn capture_preset(
+        &self,
+        selected_tool: Tool,
+        show_status_bar: bool,
+        drag_tools: MouseDragToolsConfig,
+    ) -> ToolPresetConfig {
+        ToolPresetConfig {
+            name: None,
+            tool: selected_tool,
+            color: self.color_for_tool(selected_tool).into(),
+            size: self.thickness_for_tool(selected_tool),
+            tool_settings: Some(PresetToolStatesConfig::from_runtime(
+                &self.tool_settings,
+                self.eraser_size,
+            )),
+            eraser_kind: Some(self.eraser_kind),
+            eraser_mode: Some(self.eraser_mode),
+            marker_opacity: Some(self.marker_opacity),
+            fill_enabled: Some(self.fill_enabled),
+            font_size: Some(self.current_font_size),
+            text_background_enabled: Some(self.text_background_enabled),
+            arrow_length: Some(self.arrow_length),
+            arrow_angle: Some(self.arrow_angle),
+            arrow_head_at_end: Some(self.arrow_head_at_end),
+            polygon_sides: Some(self.polygon_sides),
+            show_status_bar: Some(show_status_bar),
+            drag_tools: Some(drag_tools),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn default_style() -> DrawingStyle {
+        DrawingStyle::from((
+            &DrawingConfig::default(),
+            &ArrowConfig::default(),
+            &SpotlightConfig::default(),
+        ))
+    }
+
+    #[test]
+    fn drawing_style_owns_per_tool_color_and_thickness_updates() {
+        let mut style = default_style();
+        let color = Color::new(0.2, 0.4, 0.6, 0.8);
+
+        assert!(style.set_color(Tool::Marker, color));
+        assert!(!style.set_color(Tool::Marker, color));
+        assert_eq!(style.color_for_tool(Tool::Marker), color);
+        assert_eq!(style.current_color, color);
+
+        assert!(style.set_thickness(Tool::Marker, MAX_STROKE_THICKNESS + 20.0));
+        assert_eq!(style.thickness_for_tool(Tool::Marker), MAX_STROKE_THICKNESS);
+        assert_eq!(style.current_thickness, MAX_STROKE_THICKNESS);
+    }
+
+    #[test]
+    fn drawing_style_normalizes_bounded_values_and_reports_noops() {
+        let mut style = default_style();
+
+        assert!(style.set_marker_opacity(f64::INFINITY));
+        assert_eq!(style.marker_opacity, ToolbarSliderSpec::MARKER_OPACITY.max);
+        assert!(!style.set_marker_opacity(f64::INFINITY));
+
+        assert!(style.set_polygon_sides(u8::MAX));
+        assert_eq!(style.polygon_sides, crate::draw::REGULAR_POLYGON_MAX_SIDES);
+        assert!(!style.set_polygon_sides(u8::MAX));
+    }
+
+    #[test]
+    fn drawing_style_owns_recent_color_order_deduplication_and_capacity() {
+        let mut style = default_style();
+        let colors = (0..=RECENT_COLORS_CAP)
+            .map(|index| Color::new(index as f64 / 10.0, 0.0, 0.0, 1.0))
+            .collect::<Vec<_>>();
+
+        for color in &colors {
+            style.record_recent_color(*color);
+        }
+        style.record_recent_color(colors[2]);
+
+        assert_eq!(style.recent_colors.len(), RECENT_COLORS_CAP);
+        assert_eq!(style.recent_colors[0], colors[2]);
+        assert_eq!(
+            style
+                .recent_colors
+                .iter()
+                .filter(|color| **color == colors[2])
+                .count(),
+            1
+        );
+    }
 
     #[test]
     fn drawing_style_maps_each_config_owner() {

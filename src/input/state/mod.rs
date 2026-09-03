@@ -63,8 +63,8 @@ pub(crate) use core::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
     COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_ROW_ACTION_COUNT,
     COMMAND_PALETTE_ROW_ACTION_GAP, COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_ROW_ICON_GAP,
-    COMMAND_PALETTE_ROW_ICON_SIZE, COMMAND_PALETTE_TOP_RATIO, action_meta_token_score,
-    default_step_marker_size, fuzzy_score, query_tokens,
+    COMMAND_PALETTE_ROW_ICON_SIZE, COMMAND_PALETTE_TOP_RATIO, action_meta_token_score, fuzzy_score,
+    query_tokens,
 };
 pub use highlight::ClickHighlightSettings;
 #[allow(unused_imports)]
@@ -119,7 +119,7 @@ pub(crate) mod test_support {
                 style.current_thickness,
             );
             style.tool_settings.step_marker.thickness =
-                super::default_step_marker_size(style.current_font_size);
+                super::core::utility::default_step_marker_size(style.current_font_size);
 
             Self {
                 seed: InputStateSeed {

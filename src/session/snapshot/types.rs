@@ -1,9 +1,8 @@
 use crate::config::Config;
 use crate::draw::{
     ArrowStyle, BlurStyle, Color, EraserKind, FontDescriptor, Frame, REGULAR_POLYGON_DEFAULT_SIDES,
-    clamp_regular_sides,
 };
-use crate::input::{EraserMode, InputState, PerToolDrawingSettings, Tool};
+use crate::input::{DrawingStyle, EraserMode, InputState, PerToolDrawingSettings, Tool};
 use serde::{Deserialize, Serialize};
 
 pub(super) const CURRENT_VERSION: u32 = 6;
@@ -111,70 +110,46 @@ pub struct ToolStateSnapshot {
 impl ToolStateSnapshot {
     pub(crate) fn from_input_state(input: &InputState) -> Self {
         let active_tool = input.session_active_tool();
-        Self {
-            current_color: input.color_for_tool(active_tool),
-            current_thickness: input.thickness_for_tool(active_tool),
-            eraser_size: input.style.eraser_size,
-            eraser_kind: input.style.eraser_kind,
-            eraser_mode: input.style.eraser_mode,
-            blur_style: input.style.blur_style,
-            recent_colors: input.recent_colors().to_vec(),
-            marker_opacity: Some(input.style.marker_opacity),
-            pen_smoothing: Some(input.style.pen_smoothing),
-            spotlight_magnification: Some(input.style.spotlight_magnification),
-            fill_enabled: Some(input.style.fill_enabled),
-            tool_override: input.session_tool_override(),
-            current_font_size: input.style.current_font_size,
-            font_descriptor: Some(input.style.font_descriptor.clone()),
-            text_background_enabled: input.style.text_background_enabled,
-            arrow_length: input.style.arrow_length,
-            arrow_angle: input.style.arrow_angle,
-            arrow_head_at_end: Some(input.style.arrow_head_at_end),
-            arrow_style: Some(input.style.arrow_style),
-            arrow_label_enabled: Some(input.style.arrow_label_enabled),
-            polygon_sides: input.style.polygon_sides,
-            board_previous_color: input.board_previous_color,
-            tool_settings: Some(input.style.tool_settings.clone()),
-        }
+        let mut snapshot = Self::from((&input.style, active_tool, input.board_previous_color));
+        snapshot.tool_override = input.session_tool_override();
+        snapshot
     }
 
     #[allow(dead_code)]
     pub(crate) fn from_config(config: &Config) -> Self {
-        let color = config.drawing.default_color.to_color();
-        let thickness = config.drawing.default_thickness;
-        let font_descriptor = FontDescriptor::new(
-            config.drawing.font_family.clone(),
-            config.drawing.font_weight.clone(),
-            config.drawing.font_style.clone(),
-        );
-        let mut tool_settings = PerToolDrawingSettings::new(color, thickness);
-        tool_settings.step_marker.thickness =
-            crate::input::state::default_step_marker_size(config.drawing.default_font_size);
+        let style = DrawingStyle::from((&config.drawing, &config.arrow, &config.spotlight));
+        Self::from((&style, Tool::Pen, None))
+    }
+}
 
+impl From<(&DrawingStyle, Tool, Option<Color>)> for ToolStateSnapshot {
+    fn from(
+        (style, active_tool, board_previous_color): (&DrawingStyle, Tool, Option<Color>),
+    ) -> Self {
         Self {
-            current_color: color,
-            current_thickness: thickness,
-            eraser_size: config.drawing.default_eraser_size,
-            eraser_kind: EraserKind::Circle,
-            eraser_mode: config.drawing.default_eraser_mode,
-            blur_style: config.drawing.default_blur_style,
-            recent_colors: Vec::new(),
-            marker_opacity: Some(config.drawing.marker_opacity),
-            pen_smoothing: Some(config.drawing.pen_smoothing),
-            spotlight_magnification: Some(config.spotlight.magnification),
-            fill_enabled: Some(config.drawing.default_fill_enabled),
+            current_color: style.color_for_tool(active_tool),
+            current_thickness: style.thickness_for_tool(active_tool),
+            eraser_size: style.eraser_size,
+            eraser_kind: style.eraser_kind,
+            eraser_mode: style.eraser_mode,
+            blur_style: style.blur_style,
+            recent_colors: style.recent_colors.clone(),
+            marker_opacity: Some(style.marker_opacity),
+            pen_smoothing: Some(style.pen_smoothing),
+            spotlight_magnification: Some(style.spotlight_magnification),
+            fill_enabled: Some(style.fill_enabled),
             tool_override: None,
-            current_font_size: config.drawing.default_font_size,
-            font_descriptor: Some(font_descriptor),
-            text_background_enabled: config.drawing.text_background_enabled,
-            arrow_length: config.arrow.length,
-            arrow_angle: config.arrow.angle_degrees,
-            arrow_head_at_end: Some(config.arrow.head_at_end),
-            arrow_style: Some(config.arrow.style),
-            arrow_label_enabled: Some(false),
-            polygon_sides: clamp_regular_sides(config.drawing.polygon_sides),
-            board_previous_color: None,
-            tool_settings: Some(tool_settings),
+            current_font_size: style.current_font_size,
+            font_descriptor: Some(style.font_descriptor.clone()),
+            text_background_enabled: style.text_background_enabled,
+            arrow_length: style.arrow_length,
+            arrow_angle: style.arrow_angle,
+            arrow_head_at_end: Some(style.arrow_head_at_end),
+            arrow_style: Some(style.arrow_style),
+            arrow_label_enabled: Some(style.arrow_label_enabled),
+            polygon_sides: style.polygon_sides,
+            board_previous_color,
+            tool_settings: Some(style.tool_settings.clone()),
         }
     }
 }

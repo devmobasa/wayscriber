@@ -1,7 +1,6 @@
 use super::types::{BoardPagesSnapshot, SessionSnapshot, ToolStateSnapshot};
-use crate::draw::{BoardPages, clamp_regular_sides};
-use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
-use crate::input::{BOARD_ID_TRANSPARENT, InputState, PerToolDrawingSettings};
+use crate::draw::BoardPages;
+use crate::input::{BOARD_ID_TRANSPARENT, InputState};
 use crate::session::options::SessionOptions;
 use anyhow::{Result, anyhow};
 use std::collections::HashSet;
@@ -93,57 +92,10 @@ pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: Tool
         tool_state.board_previous_color,
         tool_state.arrow_label_enabled
     );
-    let current_thickness = tool_state
-        .current_thickness
-        .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
-    let tool_settings = tool_state.tool_settings.unwrap_or_else(|| {
-        let mut settings = PerToolDrawingSettings::new(tool_state.current_color, current_thickness);
-        settings.step_marker.thickness =
-            crate::input::state::default_step_marker_size(tool_state.current_font_size);
-        settings
-    });
-    let tool_settings = tool_settings.clamp_thicknesses(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
-    input.replace_tool_settings(tool_settings);
-    let _ = input.set_eraser_size(
-        tool_state
-            .eraser_size
-            .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS),
-    );
-    input.style.eraser_kind = tool_state.eraser_kind;
-    let _ = input.set_eraser_mode(tool_state.eraser_mode);
-    let _ = input.set_blur_style(tool_state.blur_style);
-    input.restore_recent_colors(tool_state.recent_colors.clone());
-    if let Some(level) = tool_state.pen_smoothing {
-        let _ = input.set_pen_smoothing(level);
-    }
-    if let Some(opacity) = tool_state.marker_opacity {
-        let _ = input.set_marker_opacity(opacity);
-    }
-    if let Some(magnification) = tool_state.spotlight_magnification {
-        input.style.spotlight_magnification =
-            crate::draw::normalize_spotlight_magnification(magnification);
-    }
-    if let Some(fill_enabled) = tool_state.fill_enabled {
-        let _ = input.set_fill_enabled(fill_enabled);
-    }
+    let active_tool = input.active_tool();
+    input.style.restore_snapshot(&tool_state, active_tool);
+    input.sync_highlight_color();
     let _ = input.set_tool_override(tool_state.tool_override);
-    if let Some(font_descriptor) = tool_state.font_descriptor {
-        let _ = input.set_font_descriptor(font_descriptor);
-    }
-    let _ = input.set_font_size(tool_state.current_font_size.clamp(8.0, 72.0));
-    input.style.text_background_enabled = tool_state.text_background_enabled;
-    input.style.arrow_length = tool_state.arrow_length.clamp(5.0, 50.0);
-    input.style.arrow_angle = tool_state.arrow_angle.clamp(15.0, 60.0);
-    if let Some(head_at_end) = tool_state.arrow_head_at_end {
-        input.style.arrow_head_at_end = head_at_end;
-    }
-    if let Some(style) = tool_state.arrow_style {
-        let _ = input.set_arrow_style(style);
-    }
-    if let Some(label_enabled) = tool_state.arrow_label_enabled {
-        input.style.arrow_label_enabled = label_enabled;
-    }
-    input.style.polygon_sides = clamp_regular_sides(tool_state.polygon_sides);
     input.board_previous_color = tool_state.board_previous_color;
     input.sync_step_marker_counter();
     input.needs_redraw = true;

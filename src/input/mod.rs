@@ -24,11 +24,11 @@ pub use events::{Key, MouseButton};
 pub(crate) use state::IdleHandle;
 pub use state::{
     BoardPickerCursorHint, ClickHighlightSettings, ColorPickerCursorHint, CommandPaletteCursorHint,
-    CommandPaletteState, ContextMenuCursorHint, DrawingState, EyedropperUiState, HelpOverlayClick,
-    HelpOverlayCursorHint, HelpOverlayReleaseOutcome, InputHudActiveSource, InputHudEntry,
-    InputHudEntryKind, InputHudSettings, InputState, OutputFocusAction, RegionInputSource,
-    RegionPurposeTag, RegionSelectUiState, SelectionHandle, SelectionPropertyEntry,
-    SelectionPropertyKind, TextInputMode, ZoomAction,
+    CommandPaletteState, ContextMenuCursorHint, DrawingState, DrawingStyle, EyedropperUiState,
+    HelpOverlayClick, HelpOverlayCursorHint, HelpOverlayReleaseOutcome, InputHudActiveSource,
+    InputHudEntry, InputHudEntryKind, InputHudSettings, InputState, OutputFocusAction,
+    RegionInputSource, RegionPurposeTag, RegionSelectUiState, SelectionHandle,
+    SelectionPropertyEntry, SelectionPropertyKind, TextInputMode, ZoomAction,
 };
 #[cfg(feature = "tablet-input")]
 #[allow(unused_imports)]

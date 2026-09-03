@@ -110,34 +110,10 @@ impl InputState {
     }
 
     fn apply_preset_shape_settings(&mut self, preset: &ToolPresetConfig) {
-        if let Some(length) = preset.arrow_length {
-            let clamped = length.clamp(5.0, 50.0);
-            if (self.style.arrow_length - clamped).abs() > f64::EPSILON {
-                self.style.arrow_length = clamped;
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.mark_session_dirty();
-            }
-        }
-        if let Some(angle) = preset.arrow_angle {
-            let clamped = angle.clamp(15.0, 60.0);
-            if (self.style.arrow_angle - clamped).abs() > f64::EPSILON {
-                self.style.arrow_angle = clamped;
-                self.dirty_tracker.mark_full();
-                self.needs_redraw = true;
-                self.mark_session_dirty();
-            }
-        }
-        if let Some(head_at_end) = preset.arrow_head_at_end
-            && self.style.arrow_head_at_end != head_at_end
-        {
-            self.style.arrow_head_at_end = head_at_end;
+        if self.style.apply_preset_shape_settings(preset) {
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             self.mark_session_dirty();
-        }
-        if let Some(polygon_sides) = preset.polygon_sides {
-            let _ = self.set_polygon_sides(polygon_sides);
         }
     }
 
@@ -260,15 +236,7 @@ impl InputState {
     }
 
     fn apply_full_preset_tool_settings(&mut self, settings: &PresetToolStatesConfig) {
-        let tool_settings = settings.to_runtime();
-        if self.style.tool_settings != tool_settings {
-            self.style.tool_settings = tool_settings;
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
-            self.mark_session_dirty();
-        }
-        if (self.style.eraser_size - settings.eraser_size).abs() > f64::EPSILON {
-            self.style.eraser_size = settings.eraser_size;
+        if self.style.apply_full_preset_tool_settings(settings) {
             self.active_preset_slot = None;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
@@ -286,28 +254,10 @@ impl InputState {
             self.drag_tool_bindings
                 .tool_for_modifier(DragModifier::None)
         });
-        let size = self.thickness_for_tool(selected_tool);
-        ToolPresetConfig {
-            name: None,
-            tool: selected_tool,
-            color: self.color_for_tool(selected_tool).into(),
-            size,
-            tool_settings: Some(PresetToolStatesConfig::from_runtime(
-                &self.style.tool_settings,
-                self.style.eraser_size,
-            )),
-            eraser_kind: Some(self.style.eraser_kind),
-            eraser_mode: Some(self.style.eraser_mode),
-            marker_opacity: Some(self.style.marker_opacity),
-            fill_enabled: Some(self.style.fill_enabled),
-            font_size: Some(self.style.current_font_size),
-            text_background_enabled: Some(self.style.text_background_enabled),
-            arrow_length: Some(self.style.arrow_length),
-            arrow_angle: Some(self.style.arrow_angle),
-            arrow_head_at_end: Some(self.style.arrow_head_at_end),
-            polygon_sides: Some(self.style.polygon_sides),
-            show_status_bar: Some(self.ui_visibility.show_status_bar),
-            drag_tools: Some(self.drag_tool_bindings.to_config()),
-        }
+        self.style.capture_preset(
+            selected_tool,
+            self.ui_visibility.show_status_bar,
+            self.drag_tool_bindings.to_config(),
+        )
     }
 }

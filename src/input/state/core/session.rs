@@ -2,10 +2,9 @@ use super::base::{DrawingState, InputState, TextBlockDrag, TextEditEntryFeedback
 use super::index::SpatialIndexCache;
 use super::{ColorPickerPopupLayout, ColorPickerPopupState};
 use crate::draw::frame::ShapeSnapshot;
-use crate::draw::{Color, DirtyTracker, FontDescriptor, ShapeId};
+use crate::draw::{Color, DirtyTracker, ShapeId};
 use crate::input::state::core::base::PolygonClickState;
 use crate::input::state::highlight::ClickHighlightState;
-use crate::input::tool::PerToolDrawingSettings;
 use crate::input::{BoardManager, MouseButton};
 use crate::util::Rect;
 use std::collections::HashMap;
@@ -17,13 +16,7 @@ struct ActiveInteractionRollback {
     state: DrawingState,
     active_drag_button: Option<MouseButton>,
     active_drag_color: Option<Color>,
-    current_color: Color,
-    current_thickness: f64,
-    tool_settings: PerToolDrawingSettings,
-    current_font_size: f64,
-    font_descriptor: FontDescriptor,
-    text_background_enabled: bool,
-    text_wrap_width: Option<i32>,
+    style: super::DrawingStyle,
     text_input_mode: TextInputMode,
     text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
     text_edit_entry_feedback: Option<TextEditEntryFeedback>,
@@ -52,13 +45,7 @@ impl ActiveInteractionRollback {
             state: input.state.clone(),
             active_drag_button: input.active_drag_button,
             active_drag_color: input.active_drag_color,
-            current_color: input.style.current_color,
-            current_thickness: input.style.current_thickness,
-            tool_settings: input.style.tool_settings.clone(),
-            current_font_size: input.style.current_font_size,
-            font_descriptor: input.style.font_descriptor.clone(),
-            text_background_enabled: input.style.text_background_enabled,
-            text_wrap_width: input.style.text_wrap_width,
+            style: input.style.clone(),
             text_input_mode: input.text_input_mode,
             text_edit_target: input.text_edit_target.clone(),
             text_edit_entry_feedback: input.text_edit_entry_feedback.clone(),
@@ -85,13 +72,7 @@ impl ActiveInteractionRollback {
         input.state = self.state;
         input.active_drag_button = self.active_drag_button;
         input.active_drag_color = self.active_drag_color;
-        input.style.current_color = self.current_color;
-        input.style.current_thickness = self.current_thickness;
-        input.style.tool_settings = self.tool_settings;
-        input.style.current_font_size = self.current_font_size;
-        input.style.font_descriptor = self.font_descriptor;
-        input.style.text_background_enabled = self.text_background_enabled;
-        input.style.text_wrap_width = self.text_wrap_width;
+        input.style = self.style;
         input.text_input_mode = self.text_input_mode;
         input.text_edit_target = self.text_edit_target;
         input.text_edit_entry_feedback = self.text_edit_entry_feedback;

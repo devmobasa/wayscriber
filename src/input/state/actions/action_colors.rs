@@ -5,9 +5,6 @@ use crate::input::Tool;
 
 use super::super::{HexPasteTarget, InputEffect, InputState};
 
-/// Cap on the recent-color list (`InputState::recent_colors`).
-pub(crate) const RECENT_COLORS_CAP: usize = 6;
-
 impl InputState {
     pub fn set_quick_colors(&mut self, quick_colors: QuickColorPalette) {
         self.style.quick_colors = quick_colors;
@@ -41,9 +38,7 @@ impl InputState {
     /// Record a UI-applied color in the recents list:
     /// most-recent-first, deduped, capped. Persisted with the session.
     pub(in crate::input::state) fn note_recent_color(&mut self, color: Color) {
-        self.style.recent_colors.retain(|recent| *recent != color);
-        self.style.recent_colors.insert(0, color);
-        self.style.recent_colors.truncate(RECENT_COLORS_CAP);
+        self.style.record_recent_color(color);
         self.mark_session_dirty();
     }
 
@@ -55,16 +50,7 @@ impl InputState {
     /// Restores recents from a session snapshot, re-applying the dedupe and cap
     /// so a hand-edited session file cannot grow the list past its bound.
     pub fn restore_recent_colors(&mut self, colors: Vec<Color>) {
-        self.style.recent_colors.clear();
-        for color in colors {
-            if self.style.recent_colors.contains(&color) {
-                continue;
-            }
-            self.style.recent_colors.push(color);
-            if self.style.recent_colors.len() == RECENT_COLORS_CAP {
-                break;
-            }
-        }
+        self.style.restore_recent_colors(&colors);
     }
 
     /// Request a hex-color copy to the clipboard. The color is captured now so
