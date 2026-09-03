@@ -128,7 +128,7 @@ impl WaylandState {
             );
         }
         if matches!(self.input_state.state, DrawingState::TextInput { .. })
-            && self.input_state.text_editing.text_edit_target.is_some()
+            && self.input_state.text_editing.edit_target().is_some()
             && !status_visible
             && fallback_visible
         {

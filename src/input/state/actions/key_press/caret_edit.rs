@@ -19,6 +19,15 @@
 use std::ops::Range;
 use unicode_segmentation::{GraphemeCursor, UnicodeSegmentation};
 
+use crate::draw::shape::{
+    VisualCaretDirection, VisualLineDirection, VisualLineEdge, caret_on_adjacent_visual_line,
+    caret_on_visual_line_edge,
+};
+use crate::input::events::Key;
+use crate::input::state::DrawingState;
+
+use super::text_input::move_horizontal_caret;
+
 /// Maximum text-buffer length in bytes, shared by keyboard entry and IME
 /// commits so both enforce the same cap.
 pub(in crate::input::state) const MAX_TEXT_LENGTH: usize = 10_000;
@@ -474,6 +483,114 @@ pub(in crate::input::state) fn select_all(
     true
 }
 
+impl crate::input::state::core::TextEditing {
+    /// Apply one editor-owned key. `None` means the key belongs to the action
+    /// layer; `Some` reports whether the visible editor state changed.
+    pub(in crate::input::state) fn apply_key_edit(
+        &mut self,
+        state: &mut DrawingState,
+        key: Key,
+        ctrl: bool,
+        shift: bool,
+        font: &str,
+        wrap_width: Option<i32>,
+    ) -> Option<bool> {
+        let mutates_buffer = match key {
+            Key::Char(_) | Key::Space => !ctrl,
+            Key::Return => shift,
+            Key::Backspace | Key::Delete => true,
+            _ => false,
+        };
+        let DrawingState::TextInput {
+            buffer,
+            caret,
+            selection_anchor,
+            ..
+        } = state
+        else {
+            return None;
+        };
+        clamp(buffer, caret, selection_anchor);
+
+        let anchor = selection_anchor;
+        let changed = match key {
+            Key::Char(c) if !ctrl => {
+                let mut encoded = [0u8; 4];
+                insert_str(
+                    buffer,
+                    caret,
+                    anchor,
+                    c.encode_utf8(&mut encoded),
+                    MAX_TEXT_LENGTH,
+                )
+            }
+            Key::Char('a' | 'A') if ctrl => select_all(buffer, caret, anchor),
+            Key::Space if !ctrl => insert_str(buffer, caret, anchor, " ", MAX_TEXT_LENGTH),
+            Key::Return if shift => insert_str(buffer, caret, anchor, "\n", MAX_TEXT_LENGTH),
+            Key::Backspace if ctrl => delete_word_backward(buffer, caret, anchor),
+            Key::Backspace => backspace(buffer, caret, anchor),
+            Key::Delete if ctrl => delete_word_forward(buffer, caret, anchor),
+            Key::Delete => delete_forward(buffer, caret, anchor),
+            Key::Left => move_horizontal_caret(
+                buffer,
+                font,
+                wrap_width,
+                caret,
+                anchor,
+                shift,
+                ctrl,
+                VisualCaretDirection::Left,
+            ),
+            Key::Right => move_horizontal_caret(
+                buffer,
+                font,
+                wrap_width,
+                caret,
+                anchor,
+                shift,
+                ctrl,
+                VisualCaretDirection::Right,
+            ),
+            Key::Up => caret_on_adjacent_visual_line(
+                buffer,
+                font,
+                wrap_width,
+                *caret,
+                VisualLineDirection::Up,
+            )
+            .map(|new| move_to_offset(caret, anchor, shift, new))
+            .unwrap_or_else(|| move_up(buffer, caret, anchor, shift)),
+            Key::Down => caret_on_adjacent_visual_line(
+                buffer,
+                font,
+                wrap_width,
+                *caret,
+                VisualLineDirection::Down,
+            )
+            .map(|new| move_to_offset(caret, anchor, shift, new))
+            .unwrap_or_else(|| move_down(buffer, caret, anchor, shift)),
+            Key::Home if ctrl => move_document_start(caret, anchor, shift),
+            Key::Home => {
+                caret_on_visual_line_edge(buffer, font, wrap_width, *caret, VisualLineEdge::Start)
+                    .map(|new| move_to_offset(caret, anchor, shift, new))
+                    .unwrap_or_else(|| move_line_home(buffer, caret, anchor, shift))
+            }
+            Key::End if ctrl => move_document_end(buffer, caret, anchor, shift),
+            Key::End => {
+                caret_on_visual_line_edge(buffer, font, wrap_width, *caret, VisualLineEdge::End)
+                    .map(|new| move_to_offset(caret, anchor, shift, new))
+                    .unwrap_or_else(|| move_line_end(buffer, caret, anchor, shift))
+            }
+            _ => return None,
+        };
+
+        if changed && mutates_buffer {
+            self.note_buffer_mutation();
+        }
+        Some(changed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -500,6 +617,24 @@ mod tests {
                 anchor: Some(anchor),
             }
         }
+    }
+
+    #[test]
+    fn owner_key_edits_advance_revision_only_for_buffer_mutations() {
+        let mut editing = crate::input::state::core::TextEditing::default();
+        let mut state = DrawingState::text_input(0, 0, "ab".to_string());
+        editing.begin_session();
+
+        assert_eq!(
+            editing.apply_key_edit(&mut state, Key::Char('c'), false, false, "", None),
+            Some(true)
+        );
+        assert_eq!(editing.revision(), 1);
+        assert_eq!(
+            editing.apply_key_edit(&mut state, Key::Left, false, false, "", None),
+            Some(true)
+        );
+        assert_eq!(editing.revision(), 1, "caret motion is not a buffer edit");
     }
 
     #[test]

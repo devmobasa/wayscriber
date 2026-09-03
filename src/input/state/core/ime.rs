@@ -14,7 +14,8 @@
 
 use std::ops::Range;
 
-use super::super::{DrawingState, InputState};
+use super::TextEditing;
+use super::base::{DrawingState, InputState};
 
 const MAX_SURROUNDING_TEXT_BYTES: usize = 4_000;
 
@@ -39,7 +40,7 @@ struct ImePending {
     delete_after: u32,
 }
 
-/// IME composition state stored on `InputState`.
+/// IME composition state stored by [`TextEditing`].
 #[derive(Debug, Clone, Default)]
 pub struct ImeCompositionState {
     /// The active preedit rendered after the buffer, if any.
@@ -107,33 +108,29 @@ impl ImeCompositionState {
     }
 }
 
-impl InputState {
+impl TextEditing {
     /// Start a distinct text-edit session for async completion identity.
-    pub(crate) fn begin_text_input_session(&mut self) {
-        self.text_editing.text_input_generation =
-            self.text_editing.text_input_generation.wrapping_add(1);
-        self.text_editing.text_input_revision = 0;
-        self.clear_pending_text_pastes();
+    pub(crate) fn begin_session(&mut self) {
+        self.text_input_generation = self.text_input_generation.wrapping_add(1);
+        self.text_input_revision = 0;
     }
 
-    pub(crate) fn note_text_buffer_mutation(&mut self) {
-        self.text_editing.text_input_revision =
-            self.text_editing.text_input_revision.wrapping_add(1);
+    pub(crate) fn note_buffer_mutation(&mut self) {
+        self.text_input_revision = self.text_input_revision.wrapping_add(1);
     }
 
-    pub(crate) fn text_input_generation(&self) -> Option<u64> {
-        self.is_text_input_active()
-            .then_some(self.text_editing.text_input_generation)
+    pub(crate) fn generation(&self, state: &DrawingState) -> Option<u64> {
+        self.is_active(state).then_some(self.text_input_generation)
     }
 
-    pub(crate) fn text_input_generation_is_current(&self, generation: u64) -> bool {
-        self.text_input_generation() == Some(generation)
+    pub(crate) fn generation_is_current(&self, state: &DrawingState, generation: u64) -> bool {
+        self.generation(state) == Some(generation)
     }
 
     /// True while a text/note edit is in progress — the gate for enabling
     /// the text-input protocol.
-    pub fn is_text_input_active(&self) -> bool {
-        matches!(self.state, DrawingState::TextInput { .. })
+    pub(crate) fn is_active(&self, state: &DrawingState) -> bool {
+        matches!(state, DrawingState::TextInput { .. })
     }
 
     /// Surrounding committed text and the directional cursor/anchor byte
@@ -141,13 +138,13 @@ impl InputState {
     /// complete selection cannot fit the protocol limit, returns `None`; the
     /// backend temporarily disables the protocol object rather than applying
     /// an empty value that may make later surrounding-text updates ineffective.
-    pub(crate) fn text_input_surrounding_state(&self) -> Option<(String, usize, usize)> {
+    pub(crate) fn surrounding_state(&self, state: &DrawingState) -> Option<(String, usize, usize)> {
         let DrawingState::TextInput {
             buffer,
             caret,
             selection_anchor,
             ..
-        } = &self.state
+        } = state
         else {
             return None;
         };
@@ -160,13 +157,13 @@ impl InputState {
 
     /// Whether the active selection can be represented in text-input-v3's
     /// bounded surrounding-text request without allocating the actual window.
-    pub(crate) fn text_input_surrounding_available(&self) -> bool {
+    pub(crate) fn surrounding_available(&self, state: &DrawingState) -> bool {
         let DrawingState::TextInput {
             buffer,
             caret,
             selection_anchor,
             ..
-        } = &self.state
+        } = state
         else {
             return false;
         };
@@ -180,13 +177,17 @@ impl InputState {
     /// Build the authoritative preview for the active text edit. A composing
     /// preedit replaces any selection and carries its own cursor; without a
     /// preedit, the normal caret and selection remain in buffer coordinates.
-    pub(crate) fn text_input_preview(&self, cursor_glyph: &str) -> Option<TextInputPreview> {
+    pub(crate) fn preview(
+        &self,
+        state: &DrawingState,
+        cursor_glyph: &str,
+    ) -> Option<TextInputPreview> {
         let DrawingState::TextInput {
             buffer,
             caret,
             selection_anchor,
             ..
-        } = &self.state
+        } = state
         else {
             return None;
         };
@@ -204,7 +205,7 @@ impl InputState {
 
     /// The active preedit run (byte-cursor included) for the renderer.
     pub fn ime_preedit(&self) -> Option<&ImePreedit> {
-        self.text_editing.ime.preedit()
+        self.ime.preedit()
     }
 
     /// Queue committed text (`commit_string`) to append on the next `done`.
@@ -212,15 +213,15 @@ impl InputState {
     /// these events replace double-buffered pending state, so a null
     /// `commit_string` must clear an earlier non-null one in the same batch.
     pub fn ime_queue_commit(&mut self, text: Option<String>) {
-        self.text_editing.ime.pending.commit = text;
+        self.ime.pending.commit = text;
     }
 
     /// Queue the in-progress composition (`preedit_string`) for the next
     /// `done`. `text = None` clears the preedit but still carries the event's
     /// selection-removal semantics.
     pub fn ime_queue_preedit(&mut self, text: Option<String>, cursor_begin: i32, cursor_end: i32) {
-        self.text_editing.ime.pending.preedit_received = true;
-        self.text_editing.ime.pending.preedit = text.map(|text| ImePreedit {
+        self.ime.pending.preedit_received = true;
+        self.ime.pending.preedit = text.map(|text| ImePreedit {
             text,
             cursor_begin,
             cursor_end,
@@ -230,21 +231,21 @@ impl InputState {
     /// Queue a surrounding-text deletion (`delete_surrounding_text`), in
     /// UTF-8 bytes around the caret, for the next `done`.
     pub fn ime_queue_delete_surrounding(&mut self, before_length: u32, after_length: u32) {
-        self.text_editing.ime.pending.delete_before = before_length;
-        self.text_editing.ime.pending.delete_after = after_length;
+        self.ime.pending.delete_before = before_length;
+        self.ime.pending.delete_after = after_length;
     }
 
     /// Apply the queued composition changes to the editor and reset the
     /// pending batch (the protocol `done` event). Returns whether anything
     /// visible changed. No-op (and clears any stale state) when a text edit
     /// is not active.
-    pub fn ime_apply_done(&mut self) -> bool {
-        if !self.is_text_input_active() {
-            self.text_editing.ime = ImeCompositionState::default();
+    pub(crate) fn apply_ime_done(&mut self, state: &mut DrawingState) -> bool {
+        if !self.is_active(state) {
+            self.ime = ImeCompositionState::default();
             return false;
         }
 
-        let pending = std::mem::take(&mut self.text_editing.ime.pending);
+        let pending = std::mem::take(&mut self.ime.pending);
         let mut buffer_changed = false;
 
         if let DrawingState::TextInput {
@@ -252,7 +253,7 @@ impl InputState {
             caret,
             selection_anchor,
             ..
-        } = &mut self.state
+        } = state
         {
             use crate::input::state::actions::key_press::caret_edit;
             caret_edit::clamp(buffer, caret, selection_anchor);
@@ -335,13 +336,68 @@ impl InputState {
         }
 
         // 4) preedit: replace the active composition (absent → cleared).
-        let preedit_changed = self.text_editing.ime.preedit != pending.preedit;
-        self.text_editing.ime.preedit = pending.preedit;
+        let preedit_changed = self.ime.preedit != pending.preedit;
+        self.ime.preedit = pending.preedit;
 
         if buffer_changed {
-            self.note_text_buffer_mutation();
+            self.note_buffer_mutation();
         }
-        let changed = buffer_changed || preedit_changed;
+        buffer_changed || preedit_changed
+    }
+
+    /// Drop all composition state (on focus loss / disable / edit exit).
+    /// Returns whether a visible preedit was cleared.
+    pub(crate) fn clear_ime(&mut self) -> bool {
+        let had_preedit = self.ime.preedit.is_some();
+        self.ime = ImeCompositionState::default();
+        had_preedit
+    }
+}
+
+impl InputState {
+    /// Start a distinct text-edit session for asynchronous completion identity.
+    pub(crate) fn begin_text_input_session(&mut self) {
+        self.text_editing.begin_session();
+        self.clear_pending_text_pastes();
+    }
+
+    /// True while a text/note edit is in progress.
+    pub fn is_text_input_active(&self) -> bool {
+        self.text_editing.is_active(&self.state)
+    }
+
+    pub(crate) fn text_input_surrounding_state(&self) -> Option<(String, usize, usize)> {
+        self.text_editing.surrounding_state(&self.state)
+    }
+
+    pub(crate) fn text_input_surrounding_available(&self) -> bool {
+        self.text_editing.surrounding_available(&self.state)
+    }
+
+    pub(crate) fn text_input_preview(&self, cursor_glyph: &str) -> Option<TextInputPreview> {
+        self.text_editing.preview(&self.state, cursor_glyph)
+    }
+
+    pub fn ime_preedit(&self) -> Option<&ImePreedit> {
+        self.text_editing.ime_preedit()
+    }
+
+    pub fn ime_queue_commit(&mut self, text: Option<String>) {
+        self.text_editing.ime_queue_commit(text);
+    }
+
+    pub fn ime_queue_preedit(&mut self, text: Option<String>, cursor_begin: i32, cursor_end: i32) {
+        self.text_editing
+            .ime_queue_preedit(text, cursor_begin, cursor_end);
+    }
+
+    pub fn ime_queue_delete_surrounding(&mut self, before_length: u32, after_length: u32) {
+        self.text_editing
+            .ime_queue_delete_surrounding(before_length, after_length);
+    }
+
+    pub fn ime_apply_done(&mut self) -> bool {
+        let changed = self.text_editing.apply_ime_done(&mut self.state);
         if changed {
             self.needs_redraw = true;
             self.update_text_preview_dirty();
@@ -349,11 +405,8 @@ impl InputState {
         changed
     }
 
-    /// Drop all composition state (on focus loss / disable / edit exit).
-    /// Returns whether a visible preedit was cleared.
     pub fn ime_clear(&mut self) -> bool {
-        let had_preedit = self.text_editing.ime.preedit.is_some();
-        self.text_editing.ime = ImeCompositionState::default();
+        let had_preedit = self.text_editing.clear_ime();
         if had_preedit {
             self.needs_redraw = true;
             self.update_text_preview_dirty();
@@ -514,4 +567,40 @@ fn clamp_char_boundary(s: &str, byte: usize) -> usize {
         idx -= 1;
     }
     idx
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn owner_applies_an_ime_batch_atomically_and_advances_revision_once() {
+        let mut editing = TextEditing::default();
+        let mut state = DrawingState::text_input(0, 0, String::new());
+        editing.begin_session();
+        editing.ime_queue_commit(Some("你".to_string()));
+        editing.ime_queue_preedit(Some("hao".to_string()), 3, 3);
+
+        assert!(editing.apply_ime_done(&mut state));
+        assert_eq!(editing.revision(), 1);
+        assert_eq!(
+            editing.ime_preedit().map(|value| value.text.as_str()),
+            Some("hao")
+        );
+        assert!(matches!(
+            state,
+            DrawingState::TextInput { ref buffer, caret: 3, .. } if buffer == "你"
+        ));
+    }
+
+    #[test]
+    fn owner_clears_queued_composition_when_no_editor_is_active() {
+        let mut editing = TextEditing::default();
+        let mut state = DrawingState::Idle;
+        editing.ime_queue_preedit(Some("draft".to_string()), 5, 5);
+
+        assert!(!editing.apply_ime_done(&mut state));
+        assert!(editing.ime_preedit().is_none());
+        assert!(!editing.clear_ime());
+    }
 }

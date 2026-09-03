@@ -425,12 +425,19 @@ fn delayed_paste_replaces_the_selection_captured_at_invocation() {
 fn paste_generation_does_not_match_a_later_text_edit() {
     let mut state = create_test_input_state();
     state.handle_action(Action::EnterTextMode);
-    let first = state.text_input_generation().expect("text edit is active");
+    let first = state
+        .text_editing
+        .generation(&state.state)
+        .expect("text edit is active");
 
     state.cancel_text_input();
     state.handle_action(Action::EnterTextMode);
 
-    assert!(!state.text_input_generation_is_current(first));
+    assert!(
+        !state
+            .text_editing
+            .generation_is_current(&state.state, first)
+    );
 }
 
 #[test]
@@ -513,7 +520,7 @@ fn alt_left_drag_moves_the_whole_block_without_editing() {
     assert_eq!(origin(&state), (120, 115));
     assert_eq!(buffer(&state), "hello", "moving the block never edits text");
     assert!(
-        state.text_editing.text_block_drag.is_none(),
+        state.text_editing.text_block_drag().is_none(),
         "the drag flag is cleared on release"
     );
     assert!(
@@ -560,7 +567,7 @@ fn plain_left_drag_does_not_move_the_block() {
         (100, 100),
         "a plain drag leaves the block where it is"
     );
-    assert!(state.text_editing.text_block_drag.is_none());
+    assert!(state.text_editing.text_block_drag().is_none());
 }
 
 #[test]

@@ -38,7 +38,7 @@ fn locked_shape_blocks_edit_and_delete() {
     state.set_selection(vec![shape_id]);
     assert!(!state.edit_selected_text());
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.text_editing.text_edit_target.is_none());
+    assert!(state.text_editing.edit_target().is_none());
 
     assert!(!state.delete_selection());
     assert!(state.boards.active_frame().shape(shape_id).is_some());

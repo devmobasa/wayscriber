@@ -8,7 +8,7 @@ use std::ops::Range;
 impl WaylandState {
     pub(super) fn render_text_input_preview(&self, ctx: &cairo::Context) {
         if let DrawingState::TextInput { x, y, .. } = &self.input_state.state {
-            let is_editing_existing = self.input_state.text_editing.text_edit_target.is_some();
+            let is_editing_existing = self.input_state.text_editing.edit_target().is_some();
 
             // The faded original ("ghost") is a "where it was" reference, useful
             // only once the block has been repositioned. While editing in place
@@ -16,7 +16,7 @@ impl WaylandState {
             // text, so it stays hidden until the block actually moves. The input
             // layer owns this predicate so the damage bounds and the render agree.
             if self.input_state.text_edit_ghost_visible()
-                && let Some((_, snapshot)) = &self.input_state.text_editing.text_edit_target
+                && let Some((_, snapshot)) = self.input_state.text_editing.edit_target()
             {
                 self.render_text_edit_ghost(ctx, &snapshot.shape);
             }
@@ -38,10 +38,10 @@ impl WaylandState {
                 return;
             };
             let decoration_color = text_preview_decoration_color(
-                self.input_state.text_editing.text_input_mode,
+                self.input_state.text_editing.mode(),
                 self.input_state.style.current_color,
             );
-            match self.input_state.text_editing.text_input_mode {
+            match self.input_state.text_editing.mode() {
                 crate::input::TextInputMode::Plain => {
                     crate::draw::render_text_with_halo(
                         ctx,

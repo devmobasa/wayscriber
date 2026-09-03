@@ -2,10 +2,10 @@ use log::warn;
 
 use crate::draw::Shape;
 use crate::draw::shape::{
-    VisualCaretDirection, VisualLineDirection, VisualLineEdge, caret_at_visual_selection_edge,
-    caret_on_adjacent_visual_line, caret_on_adjacent_visual_position, caret_on_visual_line_edge,
+    VisualCaretDirection, caret_at_visual_selection_edge, caret_on_adjacent_visual_position,
 };
 use crate::input::events::Key;
+use crate::input::state::core::TextEditing;
 use crate::input::state::{
     DrawingState, InputEffect, InputState, TextClipboardRequest, TextCutTarget, TextInputMode,
     TextPasteEdit, TextPasteTarget,
@@ -88,7 +88,7 @@ impl InputState {
             };
 
             if text.is_empty() {
-                if self.text_editing.text_edit_target.is_some() {
+                if self.text_editing.edit_target().is_some() {
                     self.cancel_text_input();
                 } else {
                     self.end_text_input_session();
@@ -96,7 +96,7 @@ impl InputState {
                 return;
             }
 
-            let shape = match self.text_editing.text_input_mode {
+            let shape = match self.text_editing.mode() {
                 TextInputMode::Plain => Shape::Text {
                     x,
                     y,
@@ -189,15 +189,8 @@ impl InputState {
             }
         }
 
-        let mutates_buffer = match key {
-            Key::Char(_) | Key::Space => !ctrl,
-            Key::Return => shift,
-            Key::Backspace | Key::Delete => true,
-            _ => false,
-        };
-        // Only Pango-resolved navigation needs a font string; building one for
-        // every key would allocate on each Escape, F-key, and unbound shortcut
-        // that merely passes through text mode.
+        // Only visual navigation needs a font string; avoid allocating one for
+        // keys that pass through text mode.
         let font_for_navigation = matches!(
             key,
             Key::Left | Key::Right | Key::Up | Key::Down | Key::Home | Key::End
@@ -207,106 +200,18 @@ impl InputState {
                 .font_descriptor
                 .to_pango_string(self.style.current_font_size)
         });
-        let font = font_for_navigation.as_deref().unwrap_or_default();
-        let wrap_width = self.style.text_wrap_width;
-
-        let DrawingState::TextInput {
-            buffer,
-            caret,
-            selection_anchor,
-            ..
-        } = &mut self.state
-        else {
-            return false;
+        let changed = match self.text_editing.apply_key_edit(
+            &mut self.state,
+            key,
+            ctrl,
+            shift,
+            font_for_navigation.as_deref().unwrap_or_default(),
+            self.style.text_wrap_width,
+        ) {
+            Some(changed) => changed,
+            None => return false,
         };
-        // Guard against a caret desynced by external buffer edits (e.g. IME or
-        // tests mutating the buffer directly).
-        caret_edit::clamp(buffer, caret, selection_anchor);
-
-        let anchor = selection_anchor;
-        let changed = match key {
-            // Plain text insertion (Ctrl/Alt combinations fall through to the
-            // action layer so shortcuts like undo/exit still work).
-            Key::Char(c) if !ctrl && !alt => {
-                let mut encoded = [0u8; 4];
-                caret_edit::insert_str(
-                    buffer,
-                    caret,
-                    anchor,
-                    c.encode_utf8(&mut encoded),
-                    MAX_TEXT_LENGTH,
-                )
-            }
-            Key::Char('a' | 'A') if ctrl && !alt => caret_edit::select_all(buffer, caret, anchor),
-            Key::Space if !ctrl && !alt => {
-                caret_edit::insert_str(buffer, caret, anchor, " ", MAX_TEXT_LENGTH)
-            }
-            // Shift+Enter inserts a newline; plain Return finalizes below.
-            Key::Return if shift => {
-                caret_edit::insert_str(buffer, caret, anchor, "\n", MAX_TEXT_LENGTH)
-            }
-            Key::Backspace if ctrl => caret_edit::delete_word_backward(buffer, caret, anchor),
-            Key::Backspace => caret_edit::backspace(buffer, caret, anchor),
-            Key::Delete if ctrl => caret_edit::delete_word_forward(buffer, caret, anchor),
-            Key::Delete => caret_edit::delete_forward(buffer, caret, anchor),
-            Key::Left => move_horizontal_caret(
-                buffer,
-                font,
-                wrap_width,
-                caret,
-                anchor,
-                shift,
-                ctrl,
-                VisualCaretDirection::Left,
-            ),
-            Key::Right => move_horizontal_caret(
-                buffer,
-                font,
-                wrap_width,
-                caret,
-                anchor,
-                shift,
-                ctrl,
-                VisualCaretDirection::Right,
-            ),
-            Key::Up => caret_on_adjacent_visual_line(
-                buffer,
-                font,
-                wrap_width,
-                *caret,
-                VisualLineDirection::Up,
-            )
-            .map(|new| caret_edit::move_to_offset(caret, anchor, shift, new))
-            .unwrap_or_else(|| caret_edit::move_up(buffer, caret, anchor, shift)),
-            Key::Down => caret_on_adjacent_visual_line(
-                buffer,
-                font,
-                wrap_width,
-                *caret,
-                VisualLineDirection::Down,
-            )
-            .map(|new| caret_edit::move_to_offset(caret, anchor, shift, new))
-            .unwrap_or_else(|| caret_edit::move_down(buffer, caret, anchor, shift)),
-            Key::Home if ctrl => caret_edit::move_document_start(caret, anchor, shift),
-            Key::Home => {
-                caret_on_visual_line_edge(buffer, font, wrap_width, *caret, VisualLineEdge::Start)
-                    .map(|new| caret_edit::move_to_offset(caret, anchor, shift, new))
-                    .unwrap_or_else(|| caret_edit::move_line_home(buffer, caret, anchor, shift))
-            }
-            Key::End if ctrl => caret_edit::move_document_end(buffer, caret, anchor, shift),
-            Key::End => {
-                caret_on_visual_line_edge(buffer, font, wrap_width, *caret, VisualLineEdge::End)
-                    .map(|new| caret_edit::move_to_offset(caret, anchor, shift, new))
-                    .unwrap_or_else(|| caret_edit::move_line_end(buffer, caret, anchor, shift))
-            }
-            // Not an editing key — let the action layer handle it.
-            _ => return false,
-        };
-
         if changed {
-            if mutates_buffer {
-                self.note_text_buffer_mutation();
-            }
             self.needs_redraw = true;
             self.update_text_preview_dirty_from_editor();
         }
@@ -323,14 +228,74 @@ impl InputState {
                     .is_some_and(|fallback| self.find_action(fallback).is_some()))
     }
 
-    /// The currently selected text, if any (for copy/cut).
-    fn selected_text(&self) -> Option<(std::ops::Range<usize>, String)> {
+    /// Capture the selection for a pending copy to the system clipboard.
+    fn copy_text_selection(&mut self) -> bool {
+        let Some(request) = self.text_editing.copy_request(&self.state) else {
+            return false;
+        };
+        self.emit_input_effect(InputEffect::TextCopy(request));
+        true
+    }
+
+    /// Capture the selection for the clipboard. Deletion remains deferred until
+    /// the backend confirms successful publication.
+    fn cut_text_selection(&mut self) -> bool {
+        let Some(request) = self.text_editing.cut_request(&self.state) else {
+            return false;
+        };
+        self.emit_input_effect(InputEffect::TextCopy(request));
+        true
+    }
+
+    /// Insert clipboard text at the caret, then coordinate redraw and protocol
+    /// effects owned by the root state.
+    pub(crate) fn insert_text_at_caret(&mut self, text: &str) -> bool {
+        let changed = self.text_editing.insert_text(&mut self.state, text);
+        if changed {
+            self.needs_redraw = true;
+            self.update_text_preview_dirty_from_editor();
+        }
+        changed
+    }
+
+    fn capture_text_paste_target(&self) -> Option<TextPasteTarget> {
+        self.text_editing.capture_paste_target(&self.state)
+    }
+
+    pub(crate) fn text_paste_target_is_current(&self, target: TextPasteTarget) -> bool {
+        self.text_editing
+            .paste_target_is_current(&self.state, target)
+    }
+
+    pub(crate) fn apply_text_paste(
+        &mut self,
+        target: TextPasteTarget,
+        text: &str,
+    ) -> Option<TextPasteEdit> {
+        let edit = self
+            .text_editing
+            .apply_paste(&mut self.state, target, text)?;
+        self.needs_redraw = true;
+        self.update_text_preview_dirty_from_editor();
+        Some(edit)
+    }
+
+    pub(crate) fn complete_text_copy(&mut self, request: TextClipboardRequest) {
+        if self.text_editing.complete_copy(&mut self.state, request) {
+            self.needs_redraw = true;
+            self.update_text_preview_dirty_from_editor();
+        }
+    }
+}
+
+impl TextEditing {
+    fn selected_text(&self, state: &DrawingState) -> Option<(std::ops::Range<usize>, String)> {
         let DrawingState::TextInput {
             buffer,
             caret,
             selection_anchor,
             ..
-        } = &self.state
+        } = state
         else {
             return None;
         };
@@ -340,183 +305,157 @@ impl InputState {
             .map(|text| (range, text.to_string()))
     }
 
-    /// Capture the selection for a pending copy to the system clipboard.
-    /// Returns whether there was a selection to publish.
-    fn copy_text_selection(&mut self) -> bool {
-        let Some((_, text)) = self.selected_text() else {
-            return false;
-        };
-        self.emit_input_effect(InputEffect::TextCopy(TextClipboardRequest {
-            text,
-            cut: None,
-        }));
-        true
+    fn copy_request(&self, state: &DrawingState) -> Option<TextClipboardRequest> {
+        let (_, text) = self.selected_text(state)?;
+        Some(TextClipboardRequest { text, cut: None })
     }
 
-    /// Capture the selection for the clipboard. Deletion is deferred until the
-    /// backend confirms successful publication, so a failed copy cannot lose
-    /// the user's text. Returns whether there was a selection to publish.
-    fn cut_text_selection(&mut self) -> bool {
-        let Some((range, text)) = self.selected_text() else {
-            return false;
-        };
-        self.emit_input_effect(InputEffect::TextCopy(TextClipboardRequest {
+    fn cut_request(&self, state: &DrawingState) -> Option<TextClipboardRequest> {
+        let (range, text) = self.selected_text(state)?;
+        Some(TextClipboardRequest {
             text,
             cut: Some(TextCutTarget {
-                generation: self.text_editing.text_input_generation,
-                revision: self.text_editing.text_input_revision,
+                generation: self.text_input_generation,
+                revision: self.text_input_revision,
                 range,
             }),
-        }));
-        true
+        })
     }
 
-    /// Insert clipboard text at the caret (replacing any selection). Multi-line
-    /// text is kept as-is. Called by the backend once the clipboard read
-    /// completes; returns whether the buffer changed.
-    pub(crate) fn insert_text_at_caret(&mut self, text: &str) -> bool {
+    fn insert_text(&mut self, state: &mut DrawingState, text: &str) -> bool {
         if text.is_empty() {
             return false;
         }
-        if let DrawingState::TextInput {
+        let DrawingState::TextInput {
             buffer,
             caret,
             selection_anchor,
             ..
-        } = &mut self.state
-        {
-            caret_edit::clamp(buffer, caret, selection_anchor);
-            if caret_edit::insert_str(buffer, caret, selection_anchor, text, MAX_TEXT_LENGTH) {
-                self.note_text_buffer_mutation();
-                self.needs_redraw = true;
-                self.update_text_preview_dirty_from_editor();
-                return true;
-            }
+        } = state
+        else {
+            return false;
+        };
+        caret_edit::clamp(buffer, caret, selection_anchor);
+        if !caret_edit::insert_str(buffer, caret, selection_anchor, text, MAX_TEXT_LENGTH) {
+            return false;
         }
-        false
+        self.note_buffer_mutation();
+        true
     }
 
-    fn capture_text_paste_target(&self) -> Option<TextPasteTarget> {
+    fn capture_paste_target(&self, state: &DrawingState) -> Option<TextPasteTarget> {
         let DrawingState::TextInput {
             caret,
             selection_anchor,
             ..
-        } = &self.state
+        } = state
         else {
             return None;
         };
         Some(TextPasteTarget {
-            generation: self.text_editing.text_input_generation,
-            revision: self.text_editing.text_input_revision,
+            generation: self.text_input_generation,
+            revision: self.text_input_revision,
             caret: *caret,
             selection_anchor: *selection_anchor,
         })
     }
 
-    pub(crate) fn text_paste_target_is_current(&self, target: TextPasteTarget) -> bool {
-        self.text_input_generation_is_current(target.generation)
-            && self.text_editing.text_input_revision == target.revision
+    fn paste_target_is_current(&self, state: &DrawingState, target: TextPasteTarget) -> bool {
+        self.generation_is_current(state, target.generation)
+            && self.text_input_revision == target.revision
     }
 
-    /// Apply a clipboard result at the selection/caret that invoked it. The
-    /// revision check rejects unrelated intervening buffer edits, while plain
-    /// caret movement cannot retarget the asynchronous completion.
-    pub(crate) fn apply_text_paste(
+    fn apply_paste(
         &mut self,
+        state: &mut DrawingState,
         target: TextPasteTarget,
         text: &str,
     ) -> Option<TextPasteEdit> {
-        if text.is_empty() || !self.text_paste_target_is_current(target) {
+        if text.is_empty() || !self.paste_target_is_current(state, target) {
             return None;
         }
 
-        let mut applied = None;
-        if let DrawingState::TextInput {
+        let DrawingState::TextInput {
             buffer,
             caret,
             selection_anchor,
             ..
-        } = &mut self.state
-        {
-            let valid_target = target.caret <= buffer.len()
-                && buffer.is_char_boundary(target.caret)
-                && target
-                    .selection_anchor
-                    .is_none_or(|anchor| anchor <= buffer.len() && buffer.is_char_boundary(anchor));
-            if !valid_target {
-                return None;
-            }
-
-            let replaced = caret_edit::selection_range(target.caret, target.selection_anchor)
-                .unwrap_or(target.caret..target.caret);
-            let old_len = buffer.len();
-            let mut target_caret = target.caret;
-            let mut target_anchor = target.selection_anchor;
-            if caret_edit::insert_str(
-                buffer,
-                &mut target_caret,
-                &mut target_anchor,
-                text,
-                MAX_TEXT_LENGTH,
-            ) {
-                let inserted_len = buffer.len() + replaced.len() - old_len;
-                *caret = target_caret;
-                *selection_anchor = target_anchor;
-                applied = Some((replaced, inserted_len));
-            }
+        } = state
+        else {
+            return None;
+        };
+        let valid_target = target.caret <= buffer.len()
+            && buffer.is_char_boundary(target.caret)
+            && target
+                .selection_anchor
+                .is_none_or(|anchor| anchor <= buffer.len() && buffer.is_char_boundary(anchor));
+        if !valid_target {
+            return None;
         }
 
-        let (replaced, inserted_len) = applied?;
-        self.note_text_buffer_mutation();
-        self.needs_redraw = true;
-        self.update_text_preview_dirty_from_editor();
+        let replaced = caret_edit::selection_range(target.caret, target.selection_anchor)
+            .unwrap_or(target.caret..target.caret);
+        let old_len = buffer.len();
+        let mut target_caret = target.caret;
+        let mut target_anchor = target.selection_anchor;
+        if !caret_edit::insert_str(
+            buffer,
+            &mut target_caret,
+            &mut target_anchor,
+            text,
+            MAX_TEXT_LENGTH,
+        ) {
+            return None;
+        }
+
+        let inserted_len = buffer.len() + replaced.len() - old_len;
+        *caret = target_caret;
+        *selection_anchor = target_anchor;
+        self.note_buffer_mutation();
         Some(TextPasteEdit {
             generation: target.generation,
             previous_revision: target.revision,
-            revision: self.text_editing.text_input_revision,
+            revision: self.text_input_revision,
             replaced,
             inserted_len,
         })
     }
 
-    /// Complete a successful text clipboard publication. Copies need no state
-    /// change; cuts delete only if the originating selection is still intact.
-    pub(crate) fn complete_text_copy(&mut self, request: TextClipboardRequest) {
+    fn complete_copy(&mut self, state: &mut DrawingState, request: TextClipboardRequest) -> bool {
         let Some(target) = request.cut else {
-            return;
+            return false;
         };
-        if !self.text_input_generation_is_current(target.generation) {
-            return;
-        }
-        if target.revision != self.text_editing.text_input_revision {
-            return;
+        if !self.generation_is_current(state, target.generation)
+            || target.revision != self.text_input_revision
+        {
+            return false;
         }
 
-        let mut changed = false;
-        if let DrawingState::TextInput {
+        let DrawingState::TextInput {
             buffer,
             caret,
             selection_anchor,
             ..
-        } = &mut self.state
+        } = state
+        else {
+            return false;
+        };
+        caret_edit::clamp(buffer, caret, selection_anchor);
+        if caret_edit::selection_range(*caret, *selection_anchor) != Some(target.range.clone())
+            || buffer.get(target.range) != Some(request.text.as_str())
         {
-            caret_edit::clamp(buffer, caret, selection_anchor);
-            if caret_edit::selection_range(*caret, *selection_anchor) == Some(target.range.clone())
-                && buffer.get(target.range) == Some(request.text.as_str())
-            {
-                changed = caret_edit::delete_selection(buffer, caret, selection_anchor);
-            }
+            return false;
         }
-        if changed {
-            self.note_text_buffer_mutation();
-            self.needs_redraw = true;
-            self.update_text_preview_dirty_from_editor();
+        if !caret_edit::delete_selection(buffer, caret, selection_anchor) {
+            return false;
         }
+        self.note_buffer_mutation();
+        true
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-fn move_horizontal_caret(
+pub(super) fn move_horizontal_caret(
     buffer: &str,
     font: &str,
     wrap_width: Option<i32>,
@@ -569,5 +508,48 @@ fn move_horizontal_caret(
         std::cmp::Ordering::Less => caret_edit::move_word_left(buffer, caret, anchor, extend),
         std::cmp::Ordering::Greater => caret_edit::move_word_right(buffer, caret, anchor, extend),
         std::cmp::Ordering::Equal => caret_edit::move_to_offset(caret, anchor, extend, adjacent),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stale_paste_target_is_rejected_after_an_owner_managed_edit() {
+        let mut editing = TextEditing::default();
+        let mut state = DrawingState::text_input(0, 0, "ab".to_string());
+        editing.begin_session();
+        let target = editing.capture_paste_target(&state).expect("active target");
+
+        assert!(editing.insert_text(&mut state, "c"));
+        assert!(editing.apply_paste(&mut state, target, "stale").is_none());
+        assert_eq!(editing.revision(), 1);
+        assert!(matches!(
+            state,
+            DrawingState::TextInput { ref buffer, .. } if buffer == "abc"
+        ));
+    }
+
+    #[test]
+    fn successful_cut_completion_deletes_only_the_captured_selection() {
+        let mut editing = TextEditing::default();
+        let mut state = DrawingState::TextInput {
+            x: 0,
+            y: 0,
+            buffer: "hello".to_string(),
+            caret: 4,
+            selection_anchor: Some(1),
+        };
+        editing.begin_session();
+        let request = editing.cut_request(&state).expect("selected text");
+
+        assert!(editing.complete_copy(&mut state, request));
+        assert_eq!(editing.revision(), 1);
+        assert!(matches!(
+            state,
+            DrawingState::TextInput { ref buffer, caret: 1, selection_anchor: None, .. }
+                if buffer == "ho"
+        ));
     }
 }

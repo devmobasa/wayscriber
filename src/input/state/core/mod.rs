@@ -55,8 +55,8 @@ pub use base::{
     UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction,
 };
 pub(crate) use base::{
-    BoardPickerClickState, InputStateSeed, PolygonClickState, TextBlockDrag, TextClickState,
-    TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress,
+    BoardPickerClickState, InputStateSeed, PolygonClickState, TextClipboardRequest, TextCutTarget,
+    TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress,
 };
 pub(crate) use base::{
     ClipboardFingerprint, ClipboardPasteRequest, HelperLaunchRequest, PasteAnchor,

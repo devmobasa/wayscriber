@@ -186,7 +186,7 @@ impl InputState {
 mod tests {
     use crate::draw::frame::ShapeSnapshot;
     use crate::draw::{BLACK, Shape};
-    use crate::input::state::core::TextBlockDrag;
+    use crate::input::state::core::base::TextBlockDrag;
     use crate::input::state::core::board_picker::{BoardPickerDrag, BoardPickerPageDrag};
     use crate::input::state::test_support::make_test_input_state;
     use crate::input::{BOARD_ID_BLACKBOARD, DrawingState, MouseButton, SelectionHandle, Tool};
@@ -313,10 +313,10 @@ mod tests {
     fn session_capture_rollback_preserves_text_block_drag_release_contract() {
         let mut state = make_test_input_state();
         state.state = DrawingState::text_input(100, 100, "drag me".to_string());
-        state.text_editing.text_block_drag = Some(TextBlockDrag {
+        state.text_editing.set_text_block_drag(Some(TextBlockDrag {
             grab_dx: 5,
             grab_dy: 7,
-        });
+        }));
         state.begin_pointer_drag(MouseButton::Left, None);
 
         state.with_active_interaction_canceled_for_capture(|input| {

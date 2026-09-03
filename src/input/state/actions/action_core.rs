@@ -17,8 +17,7 @@ impl InputState {
             }
             Action::EnterTextMode => {
                 if matches!(self.state, DrawingState::Idle) {
-                    self.text_editing.text_input_mode = TextInputMode::Plain;
-                    self.text_editing.text_edit_target = None;
+                    self.text_editing.prepare_new(TextInputMode::Plain);
                     self.style.text_wrap_width = None;
                     self.begin_text_input_session();
                     self.state = DrawingState::text_input(
@@ -26,7 +25,6 @@ impl InputState {
                         (self.screen_height / 2) as i32,
                         String::new(),
                     );
-                    self.text_editing.last_text_preview_bounds = None;
                     self.update_text_preview_dirty();
                     self.needs_redraw = true;
                 }
@@ -34,8 +32,7 @@ impl InputState {
             }
             Action::EnterStickyNoteMode => {
                 if matches!(self.state, DrawingState::Idle) {
-                    self.text_editing.text_input_mode = TextInputMode::StickyNote;
-                    self.text_editing.text_edit_target = None;
+                    self.text_editing.prepare_new(TextInputMode::StickyNote);
                     self.style.text_wrap_width = None;
                     self.begin_text_input_session();
                     self.state = DrawingState::text_input(
@@ -43,7 +40,6 @@ impl InputState {
                         (self.screen_height / 2) as i32,
                         String::new(),
                     );
-                    self.text_editing.last_text_preview_bounds = None;
                     self.update_text_preview_dirty();
                     self.needs_redraw = true;
                 }

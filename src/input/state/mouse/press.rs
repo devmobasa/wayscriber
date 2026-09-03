@@ -50,7 +50,7 @@ impl InputState {
         canvas_y: i32,
     ) {
         self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
-        self.text_editing.last_text_click = None;
+        self.text_editing.set_last_click(None);
         if self.try_cancel_active_interaction() {
             return;
         }
@@ -230,7 +230,7 @@ impl InputState {
         if self.modifiers.alt {
             self.begin_text_block_drag(canvas_x, canvas_y, color);
         } else if !self.modifiers.shift
-            && self.text_editing.text_edit_target.is_none()
+            && self.text_editing.edit_target().is_none()
             && matches!(&self.state, DrawingState::TextInput { buffer, .. } if buffer.is_empty())
         {
             // A newly selected text tool is seeded at the screen center so its
@@ -270,7 +270,7 @@ impl InputState {
             let DrawingState::TextInput { x, y, .. } = &self.state else {
                 return;
             };
-            let cursor_glyph = if self.text_editing.text_edit_target.is_some() {
+            let cursor_glyph = if self.text_editing.edit_target().is_some() {
                 "|"
             } else {
                 "_"
@@ -322,34 +322,29 @@ impl InputState {
         canvas_y: i32,
         color: Option<crate::draw::Color>,
     ) {
-        let DrawingState::TextInput { x, y, .. } = &self.state else {
-            return;
-        };
-        let drag = crate::input::state::core::TextBlockDrag {
-            grab_dx: canvas_x - *x,
-            grab_dy: canvas_y - *y,
-        };
-        self.text_editing.text_block_drag = Some(drag);
-        self.begin_pointer_drag(MouseButton::Left, color);
-        self.needs_redraw = true;
+        if self
+            .text_editing
+            .begin_block_drag(&self.state, canvas_x, canvas_y)
+        {
+            self.begin_pointer_drag(MouseButton::Left, color);
+            self.needs_redraw = true;
+        }
     }
 
     /// Whether an Alt+drag block move is in progress. The motion and release
     /// routers use this to keep the (otherwise passive) `TextInput` state
     /// draggable while the flag is set.
     pub(in crate::input::state) fn text_block_drag_active(&self) -> bool {
-        self.text_editing.text_block_drag.is_some()
+        self.text_editing.text_block_drag().is_some()
     }
 
     /// Update the active text block's origin from a canvas-space pointer during
     /// an Alt+drag, preserving the grab offset. No-op when not dragging.
     pub(in crate::input::state) fn drag_text_block_to(&mut self, canvas_x: i32, canvas_y: i32) {
-        let Some(drag) = self.text_editing.text_block_drag else {
-            return;
-        };
-        if let DrawingState::TextInput { x, y, .. } = &mut self.state {
-            *x = canvas_x - drag.grab_dx;
-            *y = canvas_y - drag.grab_dy;
+        if self
+            .text_editing
+            .drag_block_to(&mut self.state, canvas_x, canvas_y)
+        {
             self.update_text_preview_dirty();
             self.needs_redraw = true;
         }
@@ -394,7 +389,7 @@ impl InputState {
         match self.hit_idle_handle(x, y) {
             Some(IdleHandle::SpotlightMagnification(shape_id)) => {
                 if let Some(snapshot) = self.shape_snapshot(shape_id) {
-                    self.text_editing.last_text_click = None;
+                    self.text_editing.set_last_click(None);
                     self.begin_pointer_drag(button, color);
                     self.state =
                         DrawingState::AdjustingSpotlightMagnification { shape_id, snapshot };
@@ -406,7 +401,7 @@ impl InputState {
             }
             Some(IdleHandle::ArrowBend(shape_id)) => {
                 if let Some(snapshot) = self.shape_snapshot(shape_id) {
-                    self.text_editing.last_text_click = None;
+                    self.text_editing.set_last_click(None);
                     self.begin_pointer_drag(button, color);
                     self.state = DrawingState::BendingArrow { shape_id, snapshot };
                     // Jump the arc to where the user pressed, so a click beside
@@ -422,7 +417,7 @@ impl InputState {
                         Shape::StickyNote { x, size, .. } => (*x, *size),
                         _ => return,
                     };
-                    self.text_editing.last_text_click = None;
+                    self.text_editing.set_last_click(None);
                     self.begin_pointer_drag(button, color);
                     self.state = DrawingState::ResizingText {
                         shape_id,
@@ -437,7 +432,7 @@ impl InputState {
                 if let Some(original_bounds) = self.selection_bounds() {
                     let snapshots = self.capture_resize_selection_snapshots();
                     if !snapshots.is_empty() {
-                        self.text_editing.last_text_click = None;
+                        self.text_editing.set_last_click(None);
                         self.begin_pointer_drag(button, color);
                         self.state = DrawingState::ResizingSelection {
                             handle,
@@ -475,7 +470,7 @@ impl InputState {
             }
         }
 
-        self.text_editing.last_text_click = None;
+        self.text_editing.set_last_click(None);
         if selection_click {
             if let Some(hit_id) = hit_id {
                 if !self.selected_shape_ids().contains(&hit_id) {
