@@ -109,7 +109,7 @@ pub use region_select::{
 pub(crate) use search::fuzzy_score;
 pub use selection::SelectionState;
 pub use tool_controls::PrecisionEntryState;
-pub use tour::TourStep;
+pub use tour::{TourState, TourStep};
 pub(crate) use utility::HelpOverlayPressSource;
 pub(crate) use utility::SequenceMatch;
 pub(crate) use utility::default_step_marker_size;

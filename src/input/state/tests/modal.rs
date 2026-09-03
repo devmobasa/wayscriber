@@ -70,11 +70,11 @@ fn every_opener_ends_the_tour() {
     ] {
         let mut state = create_test_input_state();
         state.start_tour();
-        assert!(state.tour_active);
+        assert!(state.tour.active);
 
         open(&mut state);
 
-        assert!(!state.tour_active, "opening the {name} must end the tour");
+        assert!(!state.tour.active, "opening the {name} must end the tour");
     }
 }
 
@@ -91,7 +91,7 @@ fn an_opener_that_ends_the_tour_restores_pinned_chrome() {
 
     state.toggle_command_palette();
 
-    assert!(!state.tour_active);
+    assert!(!state.tour.active);
     assert!(
         state.toolbar_visible,
         "ending the tour must restore pinned toolbar chrome"

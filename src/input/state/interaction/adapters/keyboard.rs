@@ -11,7 +11,7 @@ use crate::input::state::actions::key_press::bindings::{
 use crate::input::state::{DrawingState, InputState};
 
 pub(crate) fn handle_tour_key(state: &mut InputState, key: Key) -> Option<RoutingOutcome> {
-    (state.tour_active && state.handle_tour_key(key))
+    (state.tour.active && state.handle_tour_key(key))
         .then_some(RoutingOutcome::Consumed(ConsumedBy::Tour))
 }
 

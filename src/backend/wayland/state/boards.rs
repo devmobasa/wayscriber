@@ -55,7 +55,7 @@ impl WaylandState {
         self.input_state.boards.pan_enabled()
             && !self.input_state.board_is_transparent()
             && !self.zoom.active
-            && !self.input_state.tour_active
+            && !self.input_state.tour.active
             && !self.input_state.command_palette.open
             && !self.input_state.is_board_picker_open()
             && !self.input_state.is_color_picker_popup_open()
@@ -126,7 +126,7 @@ impl WaylandState {
         self.input_state.boards.pan_enabled()
             && !self.input_state.board_is_transparent()
             && !self.zoom.active
-            && !self.input_state.tour_active
+            && !self.input_state.tour.active
             && !self.input_state.help_overlay.is_visible()
             && !self.input_state.command_palette.open
             && !self.input_state.is_board_picker_open()

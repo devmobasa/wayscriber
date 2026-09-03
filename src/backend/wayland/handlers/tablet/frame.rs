@@ -184,7 +184,7 @@ impl WaylandState {
             return;
         }
 
-        if self.input_state.tour_active {
+        if self.input_state.tour.active {
             return;
         }
 
@@ -324,7 +324,7 @@ mod tests {
         assert!(modal_blocks_stylus_barrel_actions(&state));
 
         state.toggle_help_overlay();
-        state.tour_active = true;
+        state.tour.active = true;
         assert!(modal_blocks_stylus_barrel_actions(&state));
     }
 

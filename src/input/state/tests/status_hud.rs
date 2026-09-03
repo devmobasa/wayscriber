@@ -529,9 +529,9 @@ fn status_hud_ignored_while_other_eclipsing_overlays_are_open() {
     assert!(!input.status_hud_contains(x, y));
     input.command_palette.open = false;
 
-    input.tour_active = true;
+    input.tour.active = true;
     assert!(!input.status_hud_contains(x, y));
-    input.tour_active = false;
+    input.tour.active = false;
     assert!(input.status_hud_contains(x, y));
 }
 

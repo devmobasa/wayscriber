@@ -216,7 +216,7 @@ impl WaylandState {
             self.input_state.help_overlay.is_visible(),
             self.input_state.is_radial_menu_open(),
             self.input_state.is_context_menu_open(),
-            self.input_state.tour_active,
+            self.input_state.tour.active,
             self.zoom.is_engaged(),
         )
     }
