@@ -1,6 +1,5 @@
 use super::super::super::{
-    Keymap, PointerTracking, ViewState,
-    index::SpatialIndexCache,
+    CanvasIndex, Keymap, PointerTracking, ViewState,
     selection::{SelectionClipboard, SelectionInteraction},
 };
 use super::super::InputEffectOutbox;
@@ -13,7 +12,7 @@ use crate::config::{
     PresenterModeConfig, ResolvedToolbarItems, ToolbarItemId, ToolbarItemOrderGroup,
     ToolbarItemsConfig,
 };
-use crate::draw::{Color, DirtyTracker, ShapeId};
+use crate::draw::{Color, DirtyTracker};
 use crate::input::BoardManager;
 use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest};
 use crate::input::state::highlight::ClickHighlightState;
@@ -21,8 +20,6 @@ use crate::input::state::input_hud::InputHudState;
 use crate::input::{modifiers::Modifiers, tool::Tool};
 use crate::render_profiles::RenderProfileSet;
 use crate::session::SessionOptions;
-use crate::util::Rect;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -84,6 +81,8 @@ pub struct InputState {
     pub(in crate::input::state) view: ViewState,
     /// Pointer positions and transient pointer-driven bookkeeping.
     pub(in crate::input::state) pointer: PointerTracking,
+    /// Hit-test caches, indexing policy, and frame shape cap.
+    pub(in crate::input::state) canvas_index: CanvasIndex,
     /// Current drawing mode state machine
     pub state: DrawingState,
     /// Whether user requested to exit the overlay
@@ -189,8 +188,6 @@ pub struct InputState {
     pub(in crate::input::state) spotlight_wheel: crate::input::state::SpotlightWheelGesture,
     /// Pending first-run onboarding usage markers to persist in onboarding store
     pub(crate) pending_onboarding_usage: PendingOnboardingUsage,
-    /// Maximum number of shapes allowed per frame (0 = unlimited)
-    pub max_shapes_per_frame: usize,
     /// Click highlight animation state
     pub(crate) click_highlight: ClickHighlightState,
     /// On-screen input HUD (keystroke/click chips) state
@@ -204,16 +201,6 @@ pub struct InputState {
     pub(crate) color_picker_popup: crate::input::state::core::ColorPickerPopupPanel,
     /// Lifecycle, layout, and configured pointer trigger for the radial menu.
     pub(crate) radial_menu: crate::input::state::core::RadialMenuPanel,
-    /// Cached hit-test bounds per shape id
-    pub(in crate::input::state::core) hit_test_cache: HashMap<ShapeId, Rect>,
-    /// Monotonic counter bumped whenever committed shape content may have
-    /// changed (piggybacks on hit-cache invalidation). Used by render-side
-    /// caches to detect content changes cheaply.
-    pub(in crate::input::state::core) canvas_content_generation: u64,
-    /// Hit test tolerance in pixels
-    pub hit_test_tolerance: f64,
-    /// Threshold before enabling spatial indexing
-    pub max_linear_hit_test: usize,
     /// Undo retention, delayed playback settings, and active playback state.
     pub(crate) history_limits: crate::input::state::core::HistoryLimits,
     /// The scan-band overlay shown while screen text recognition runs, and the
@@ -231,9 +218,6 @@ pub struct InputState {
     pub(in crate::input::state::core) selection_clipboard: SelectionClipboard,
     /// Last capture path (for quick open-folder action)
     pub(in crate::input::state::core) last_capture_path: Option<PathBuf>,
-
-    /// Spatial grid plus guarded ShapeId-to-z-order indices for large-frame hit-testing.
-    pub(in crate::input::state::core) spatial_index: Option<SpatialIndexCache>,
     /// Lifecycle, cached geometry, and deferred refresh state for the properties panel.
     pub(crate) properties: crate::input::state::core::properties::PropertiesPanelState,
     /// Screen-color eyedropper UI lifecycle.

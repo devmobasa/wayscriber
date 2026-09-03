@@ -28,6 +28,7 @@ mod search;
 mod selection;
 mod selection_actions;
 pub(crate) use history_limits::HistoryLimits;
+pub(in crate::input::state) use index::CanvasIndex;
 pub(in crate::input::state) use keymap::Keymap;
 pub(in crate::input::state) use pointer::PointerTracking;
 pub(crate) use presets::PresetSlots;

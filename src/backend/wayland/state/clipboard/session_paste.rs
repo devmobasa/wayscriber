@@ -191,7 +191,7 @@ fn snapshot_after_external_image_paste_from_input(
         h: i32::try_from(image.height).unwrap_or(i32::MAX).max(1),
         data: image.clone(),
     };
-    let id = frame.try_add_shape_with_id(shape, input.max_shapes_per_frame)?;
+    let id = frame.try_add_shape_with_id(shape, input.max_shapes_per_frame())?;
     let history_limit = options.effective_history_limit(input.history_limits.undo_stack_limit());
     if history_limit > 0 {
         let (index, stored) = frame

@@ -736,7 +736,7 @@ fn paste_selection_warns_when_shape_limit_prevents_any_paste() {
     });
     state.set_selection(vec![original_id]);
     assert_eq!(state.copy_selection(), 1);
-    state.max_shapes_per_frame = 1;
+    state.set_max_shapes_per_frame_for_test(1);
 
     assert_eq!(state.paste_selection(), 0);
     assert_eq!(
@@ -768,7 +768,7 @@ fn paste_selection_warns_when_shape_limit_allows_only_partial_paste() {
     });
     state.set_selection(vec![first, second]);
     assert_eq!(state.copy_selection(), 2);
-    state.max_shapes_per_frame = 3;
+    state.set_max_shapes_per_frame_for_test(3);
 
     assert_eq!(state.paste_selection(), 1);
     assert_eq!(state.boards.active_frame().shapes.len(), 3);

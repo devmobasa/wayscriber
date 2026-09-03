@@ -207,7 +207,7 @@ impl InputState {
         y: i32,
     ) -> Option<SelectedSpotlightControl> {
         let control = self.selected_spotlight_control()?;
-        let tolerance = self.hit_test_tolerance.ceil() as i32;
+        let tolerance = self.hit_test_tolerance().ceil() as i32;
         let hit = control
             .track
             .track

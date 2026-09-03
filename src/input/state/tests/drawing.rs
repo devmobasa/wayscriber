@@ -395,7 +395,7 @@ fn append_path_limit_rejection_clears_provisional_damage() {
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
-    state.max_shapes_per_frame = 1;
+    state.set_max_shapes_per_frame_for_test(1);
     let _ = state.take_dirty_regions();
 
     state.on_mouse_press(MouseButton::Left, 10, 10);

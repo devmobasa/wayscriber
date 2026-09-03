@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::input::state::{DrawingStyle, HistoryLimits};
 use crate::input::{ClickHighlightSettings, InputHudSettings, InputState};
 
-use super::core::{InputStateSeed, Keymap};
+use super::core::{CanvasIndex, InputStateSeed, Keymap};
 
 impl InputState {
     /// Build runtime input state from validated application configuration.
@@ -10,13 +10,17 @@ impl InputState {
         let style = DrawingStyle::from((&config.drawing, &config.arrow, &config.spotlight));
         let keymap =
             Keymap::from_config(&config.keybindings, &config.drawing.effective_drag_tools());
+        let canvas_index = CanvasIndex::from_config(
+            config.drawing.hit_test_tolerance,
+            config.session.max_shapes_per_frame,
+        );
 
         let mut input_state = InputState::from_seed(InputStateSeed {
             style,
             ui_visibility: crate::input::state::UiVisibility::from(&config.ui),
             boards_config: config.resolved_boards(),
             keymap,
-            max_shapes_per_frame: config.session.max_shapes_per_frame,
+            canvas_index,
             click_highlight_settings: ClickHighlightSettings::from(&config.ui.click_highlight),
             history_limits: HistoryLimits::from(&config.history),
             presenter_mode_config: config.presenter_mode.clone(),
@@ -26,7 +30,6 @@ impl InputState {
             &config.render_profiles,
         ));
 
-        input_state.set_hit_test_tolerance(config.drawing.hit_test_tolerance);
         input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
         input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
         input_state.set_context_menu_enabled(config.ui.context_menu.enabled);

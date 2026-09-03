@@ -1,5 +1,5 @@
 use super::super::super::{
-    Keymap, PointerTracking, ViewState,
+    CanvasIndex, Keymap, PointerTracking, ViewState,
     selection::{SelectionClipboard, SelectionInteraction},
 };
 use super::super::types::{CompositorCapabilities, DrawingState, PendingOnboardingUsage};
@@ -9,7 +9,6 @@ use crate::draw::DirtyTracker;
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::state::input_hud::{InputHudSettings, InputHudState};
 use crate::input::{BoardManager, modifiers::Modifiers};
-use std::collections::HashMap;
 
 /// Runtime values needed to construct an [`InputState`].
 ///
@@ -22,7 +21,7 @@ pub(in crate::input::state) struct InputStateSeed {
     pub(in crate::input::state) ui_visibility: crate::input::state::UiVisibility,
     pub(in crate::input::state) boards_config: BoardsConfig,
     pub(in crate::input::state) keymap: Keymap,
-    pub(in crate::input::state) max_shapes_per_frame: usize,
+    pub(in crate::input::state) canvas_index: CanvasIndex,
     pub(in crate::input::state) click_highlight_settings: ClickHighlightSettings,
     pub(in crate::input::state) history_limits: crate::input::state::core::HistoryLimits,
     pub(in crate::input::state) presenter_mode_config: crate::config::PresenterModeConfig,
@@ -39,7 +38,7 @@ impl InputState {
             ui_visibility,
             boards_config,
             keymap,
-            max_shapes_per_frame,
+            canvas_index,
             click_highlight_settings,
             history_limits,
             presenter_mode_config,
@@ -54,6 +53,7 @@ impl InputState {
             keymap,
             view: ViewState::default(),
             pointer: PointerTracking::default(),
+            canvas_index,
             state: DrawingState::Idle,
             should_exit: false,
             explicit_exit_requested: false,
@@ -103,7 +103,6 @@ impl InputState {
             dirty_tracker: DirtyTracker::new(),
             spotlight_wheel: Default::default(),
             pending_onboarding_usage: PendingOnboardingUsage::default(),
-            max_shapes_per_frame,
             click_highlight: ClickHighlightState::new(click_highlight_settings),
             input_hud: InputHudState::new(InputHudSettings::default()),
             selection_interaction: SelectionInteraction::default(),
@@ -111,10 +110,6 @@ impl InputState {
 
             color_picker_popup: Default::default(),
             radial_menu: Default::default(),
-            hit_test_cache: HashMap::new(),
-            canvas_content_generation: 0,
-            hit_test_tolerance: 6.0,
-            max_linear_hit_test: 400,
             history_limits,
             ocr_scan: None,
             ui_toast: None,
@@ -123,7 +118,6 @@ impl InputState {
             ui_toast_action_bounds: [None, None],
             selection_clipboard: SelectionClipboard::default(),
             last_capture_path: None,
-            spatial_index: None,
             properties: Default::default(),
             eyedropper_ui_state: crate::input::state::core::EyedropperUiState::Inactive,
             region_select_ui_state: crate::input::state::core::RegionSelectUiState::Inactive,

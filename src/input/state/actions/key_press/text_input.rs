@@ -124,10 +124,11 @@ impl InputState {
                 return;
             }
 
+            let max_shapes = self.max_shapes_per_frame();
             let added = self
                 .boards
                 .active_frame_mut()
-                .try_add_shape(shape, self.max_shapes_per_frame);
+                .try_add_shape(shape, max_shapes);
             if added {
                 self.dirty_tracker.mark_optional_rect(bounds);
                 self.needs_redraw = true;
@@ -135,7 +136,7 @@ impl InputState {
             } else {
                 warn!(
                     "Shape limit ({}) reached; new text not added",
-                    self.max_shapes_per_frame
+                    self.max_shapes_per_frame()
                 );
             }
             self.end_text_input_session();

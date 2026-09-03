@@ -117,10 +117,11 @@ impl InputState {
             thick,
         };
         let bounds = shape.bounding_box();
+        let max_shapes = self.max_shapes_per_frame();
         let addition = {
             let frame = self.boards.active_frame_mut();
             frame
-                .try_add_shape_with_id(shape, self.max_shapes_per_frame)
+                .try_add_shape_with_id(shape, max_shapes)
                 .and_then(|new_id| {
                     let index = frame.find_index(new_id)?;
                     let snapshot = frame.shape(new_id)?.clone();

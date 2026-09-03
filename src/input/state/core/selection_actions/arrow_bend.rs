@@ -77,7 +77,7 @@ impl InputState {
     /// Whether the pointer is on the bend handle, and which arrow it belongs to.
     pub(crate) fn hit_arrow_bend_handle(&self, x: i32, y: i32) -> Option<ArrowBendHandle> {
         let handle = self.selected_arrow_bend_handle()?;
-        let tolerance = self.hit_test_tolerance.ceil() as i32;
+        let tolerance = self.hit_test_tolerance().ceil() as i32;
         let hit = handle.rect.inflated(tolerance).unwrap_or(handle.rect);
         hit.contains(x, y).then_some(handle)
     }

@@ -1,12 +1,9 @@
 use super::base::{DrawingState, InputState};
-use super::index::SpatialIndexCache;
 use super::selection::PolygonClickState;
 use super::{ColorPickerPopupLayout, ColorPickerPopupState};
-use crate::draw::{DirtyTracker, ShapeId};
+use crate::draw::DirtyTracker;
 use crate::input::BoardManager;
 use crate::input::state::highlight::ClickHighlightState;
-use crate::util::Rect;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 #[allow(dead_code)]
@@ -28,8 +25,7 @@ struct ActiveInteractionRollback {
     dirty_tracker: DirtyTracker,
     pointer: super::PointerTracking,
     last_polygon_click: Option<PolygonClickState>,
-    hit_test_cache: HashMap<ShapeId, Rect>,
-    spatial_index: Option<SpatialIndexCache>,
+    canvas_index: super::CanvasIndex,
 }
 
 #[allow(dead_code)]
@@ -50,8 +46,7 @@ impl ActiveInteractionRollback {
             dirty_tracker: input.dirty_tracker.clone(),
             pointer: input.pointer.clone(),
             last_polygon_click: input.selection_interaction.polygon_click(),
-            hit_test_cache: input.hit_test_cache.clone(),
-            spatial_index: input.spatial_index.clone(),
+            canvas_index: input.canvas_index.clone(),
         }
     }
 
@@ -74,8 +69,7 @@ impl ActiveInteractionRollback {
         input
             .selection_interaction
             .restore_polygon_click(self.last_polygon_click);
-        input.hit_test_cache = self.hit_test_cache;
-        input.spatial_index = self.spatial_index;
+        input.canvas_index = self.canvas_index;
     }
 }
 
