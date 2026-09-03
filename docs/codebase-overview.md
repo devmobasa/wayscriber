@@ -77,7 +77,7 @@ Daemon mode therefore provides a persistent background service that reacts to us
    - Communicate with `capture::CaptureManager` for screenshot actions.
    - Exit when `InputState.should_exit` is set (Escape, tray close, etc.).
 
-`WaylandState` coordinates the runtime owners handlers need. `ProtocolGlobals` owns bound globals and toolkit handler state; `PointerRuntime` owns pointer, cursor, pointer-lock, and single-contact touch protocol lifecycles; `InputHudRuntime` owns system-reader lifecycle and reconciliation; `SpotlightRuntime` owns render memory, warning latches, and wheel timing. The root retains cross-owner input and toolbar routing.
+`WaylandState` coordinates the runtime owners handlers need. `ProtocolGlobals` owns bound globals and toolkit handler state; `PointerRuntime` owns pointer, cursor, pointer-lock, and single-contact touch protocol lifecycles; `InputHudRuntime` owns system-reader lifecycle and reconciliation; `SpotlightRuntime` owns render memory, warning latches, and wheel timing; `ClipboardRuntime` owns single-flight clipboard workers and queue policy. The root retains cross-owner input and toolbar routing.
 
 Freeze capture waits for the overlay-suppression frame, then selects `wlr-screencopy`, `ext-image-copy-capture`, or the screenshot portal in that order. The two direct protocols capture the active output into shared memory; the portal captures the desktop and the client crops the selected output when needed. Direct capture and portal crop both require compositor-reported output pixels; a missing current mode fails instead of guessing from the overlay buffer.
 

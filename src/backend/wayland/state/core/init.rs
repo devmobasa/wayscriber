@@ -92,17 +92,11 @@ impl WaylandState {
         let runtime_operation_ids = RuntimeOperationIdSource::new();
         let font_catalog_prewarm =
             RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
-        let clipboard_publish =
-            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
-        let clipboard_paste =
-            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
-        let clipboard_hex_copy =
-            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
+        let clipboard = super::super::clipboard_runtime::ClipboardRuntime::new(
+            runtime_operation_ids.clone(),
+            runtime_wake.clone(),
+        );
         let desktop_open =
-            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
-        let clipboard_text_copy =
-            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
-        let clipboard_text_paste =
             RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
         let window_query =
             RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
@@ -126,15 +120,8 @@ impl WaylandState {
             font_catalog_prewarm,
             font_catalog_prewarm_started: false,
             palette_recents,
-            clipboard_publish,
-            clipboard_paste,
-            clipboard_hex_copy,
+            clipboard,
             desktop_open,
-            pending_hex_copy: None,
-            clipboard_text_copy,
-            pending_text_copy: Default::default(),
-            clipboard_text_paste,
-            pending_text_paste: Default::default(),
             window_query,
             region_cut_preview,
             ocr,

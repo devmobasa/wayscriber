@@ -6,7 +6,7 @@
 
 ## Architecture
 - This subtree supports live overlay runtime state: buffers, damage, boards, capture routing, clipboard paste, color picker, onboarding, PDF export, render helpers, toolbar plumbing, zoom, and core accessors.
-- Protocol and interaction sub-states extracted from `WaylandState` live beside it: `protocol_globals.rs` (bound globals and toolkit handler state), `pointer_runtime.rs` (pointer, cursor, pointer-lock, and touch lifecycles), `input_hud.rs` (system-reader lifecycle and reconciliation), `spotlight_runtime.rs` (render memory, warning latches, and wheel timing), `text_input.rs` (text-input-v3 lifecycle and commit serials), `tablet_runtime.rs` (tablet-input-v2 objects and stylus contact), `key_repeat.rs` (manual key-repeat timing), and `helper_launch.rs` (About/configurator launches requested by input).
+- Protocol and interaction sub-states extracted from `WaylandState` live beside it: `protocol_globals.rs` (bound globals and toolkit handler state), `pointer_runtime.rs` (pointer, cursor, pointer-lock, and touch lifecycles), `input_hud.rs` (system-reader lifecycle and reconciliation), `spotlight_runtime.rs` (render memory, warning latches, and wheel timing), `clipboard_runtime.rs` (single-flight workers and queue policy), `text_input.rs` (text-input-v3 lifecycle and commit serials), `tablet_runtime.rs` (tablet-input-v2 objects and stylus contact), `key_repeat.rs` (manual key-repeat timing), and `helper_launch.rs` (About/configurator launches requested by input).
 - `render/` owns overlay render phases; `toolbar/` owns runtime toolbar state helpers; `clipboard/` owns session paste helpers.
 
 ## Invariants

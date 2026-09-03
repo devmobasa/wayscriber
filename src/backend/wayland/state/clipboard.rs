@@ -19,7 +19,7 @@ use session_paste::{PastePersistenceDecision, SessionPasteWarning};
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn drain_clipboard_requests(&mut self) {
-        if !self.clipboard_publish.is_active()
+        if !self.clipboard.publish_active()
             && let Some(request) = self.input_state.take_pending_selection_clipboard_publish()
         {
             self.start_selection_clipboard_publish(request.generation, request.payload_json);
@@ -27,14 +27,14 @@ impl WaylandState {
 
         if let Some(request) = take_pending_clipboard_paste_if_idle(
             &mut self.input_state,
-            self.clipboard_paste.is_active(),
+            self.clipboard.paste_active(),
         ) {
             self.start_clipboard_paste(request);
         }
     }
 
     pub(in crate::backend::wayland) fn poll_clipboard_publish_completion(&mut self) {
-        match self.clipboard_publish.poll() {
+        match self.clipboard.poll_publish() {
             RuntimeOperationPoll::Idle | RuntimeOperationPoll::Pending { .. } => {}
             RuntimeOperationPoll::Ready {
                 id,
@@ -76,7 +76,7 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn poll_clipboard_paste_completion(&mut self) {
-        match self.clipboard_paste.poll() {
+        match self.clipboard.poll_paste() {
             RuntimeOperationPoll::Idle | RuntimeOperationPoll::Pending { .. } => {}
             RuntimeOperationPoll::Ready {
                 id,
@@ -125,12 +125,7 @@ impl WaylandState {
 
     fn start_selection_clipboard_publish(&mut self, generation: u64, payload_json: String) {
         self.suppress_focus_exit_for(Duration::from_millis(1500));
-        if let Err(failure) =
-            self.clipboard_publish
-                .try_submit(generation, "clipboard-publish", move || {
-                    transfer::resolve_selection_clipboard_publish(generation, payload_json)
-                })
-        {
+        if let Err(failure) = self.clipboard.submit_publish(generation, payload_json) {
             let (error, generation) = failure.into_parts();
             log::warn!("Could not submit clipboard publish operation: {error}");
             self.apply_selection_clipboard_publish_completion(failed_clipboard_publish_completion(
@@ -374,8 +369,8 @@ impl WaylandState {
         );
         let context = request.clone();
         if let Err(failure) =
-            self.clipboard_paste
-                .try_submit(context, "clipboard-fingerprint-probe", move || {
+            self.clipboard
+                .submit_paste(context, "clipboard-fingerprint-probe", move || {
                     let started = Instant::now();
                     let current = clipboard::clipboard_fingerprint();
                     log::info!(
@@ -400,8 +395,7 @@ impl WaylandState {
                 request.id
             );
             self.apply_clipboard_paste_completion(failed_clipboard_paste_completion(
-                request,
-                &error.to_string(),
+                request, &error,
             ));
         }
     }
@@ -409,19 +403,19 @@ impl WaylandState {
     fn start_system_clipboard_read(&mut self, request: ClipboardPasteRequest) {
         log::info!("Reading system clipboard for paste request {}", request.id);
         let context = request.clone();
-        if let Err(failure) =
-            self.clipboard_paste
-                .try_submit(context, "clipboard-paste", move || {
-                    let started = Instant::now();
-                    let result = transfer::resolve_system_clipboard();
-                    log::info!(
-                        "System clipboard read for paste request {} completed in {:?}: {}",
-                        request.id,
-                        started.elapsed(),
-                        result.summary()
-                    );
-                    ClipboardPasteCompletion { request, result }
-                })
+        if let Err(failure) = self
+            .clipboard
+            .submit_paste(context, "clipboard-paste", move || {
+                let started = Instant::now();
+                let result = transfer::resolve_system_clipboard();
+                log::info!(
+                    "System clipboard read for paste request {} completed in {:?}: {}",
+                    request.id,
+                    started.elapsed(),
+                    result.summary()
+                );
+                ClipboardPasteCompletion { request, result }
+            })
         {
             let (error, request) = failure.into_parts();
             log::warn!(
@@ -429,8 +423,7 @@ impl WaylandState {
                 request.id
             );
             self.apply_clipboard_paste_completion(failed_clipboard_paste_completion(
-                request,
-                &error.to_string(),
+                request, &error,
             ));
         }
     }
