@@ -17,7 +17,7 @@
 - Keep selection and shape-clipboard transitions on their owners. Pure per-variant translation and scaling belong to `Shape`; `InputState` coordinates frame mutation, undo, dirty regions, redraw, and backend effects.
 - Keep keymap matching, sequence deadlines, rebind revisions, pointer-button consumption, drag bindings, and capture lifecycle on `Keymap`; root wrappers retain redraw and cross-owner cleanup.
 - Keep transform math on `ViewState`, pointer bookkeeping on `PointerTracking`, Spotlight wheel-burst lifecycle on `SpotlightWheelGesture`, and hit-test cache/index policy on `CanvasIndex`; pass board offsets, frames, and frame guards into owners rather than giving them board access.
-- Keep toolbar visibility/display transitions, resolved item state, customization lifecycle, and top-menu exclusivity on `ToolbarInteraction`; root code reads section visibility before writing the compatibility mirror on `UiVisibility`.
+- Keep toolbar visibility/display transitions, resolved item state, customization lifecycle, and top-menu exclusivity on `ToolbarInteraction`; root code reads section visibility before writing the compatibility mirror on `UiVisibility`. Transient show/hide and mode restores must not change the persisted top-toolbar pin.
 - Preserve pending backend action boundaries; backend code should drain actions rather than duplicating side effects.
 - Preserve text input lifecycle, panel focus, selection transforms, command palette dispatch, and session preflight behavior.
 
