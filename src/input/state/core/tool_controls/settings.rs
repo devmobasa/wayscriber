@@ -229,47 +229,53 @@ impl InputState {
         self.style.tool_override
     }
 
+    pub fn drag_tool_bindings(&self) -> DragToolBindings {
+        self.keymap.drag_tool_bindings()
+    }
+
     /// Sets drag modifier -> tool mappings. Returns true if changed.
     pub fn set_drag_tool_bindings(&mut self, bindings: DragToolBindings) -> bool {
-        if self.drag_tool_bindings == bindings {
+        if !self.keymap.set_drag_tool_bindings(bindings) {
             return false;
         }
-        self.drag_tool_bindings = bindings;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         true
     }
 
     pub fn drag_binding_for_button(&self, button: MouseButton) -> DragBinding {
-        self.drag_tool_bindings
-            .binding_for_button_modifier(button, self.modifiers.active_drag_modifier())
+        self.keymap.drag_binding_for_button(button, self.modifiers)
     }
 
     pub(crate) fn active_drag_color_or_current(&self) -> Color {
-        self.active_drag_color
+        self.keymap
+            .active_drag_color()
             .unwrap_or_else(|| self.color_for_active_tool())
     }
 
     pub(crate) fn active_drag_color_or_tool(&self, tool: Tool) -> Color {
-        self.active_drag_color
+        self.keymap
+            .active_drag_color()
             .unwrap_or_else(|| self.color_for_tool(tool))
     }
 
     pub(crate) fn begin_pointer_drag(&mut self, button: MouseButton, color: Option<Color>) {
-        self.active_drag_button = Some(button);
-        self.active_drag_color = color;
+        self.keymap.begin_pointer_drag(button, color);
     }
 
     pub(crate) fn end_pointer_drag(&mut self) {
-        self.active_drag_button = None;
-        self.active_drag_color = None;
+        self.keymap.end_pointer_drag();
         // A block-move drag (Alt+drag in text mode) rides on the pointer drag,
         // so tearing the drag down always clears it.
         self.text_editing.set_text_block_drag(None);
     }
 
+    pub(crate) fn pointer_drag_active(&self) -> bool {
+        self.keymap.pointer_drag_active()
+    }
+
     pub(crate) fn pointer_drag_button_matches(&self, button: MouseButton) -> bool {
-        self.active_drag_button == Some(button)
+        self.keymap.pointer_drag_button_matches(button)
     }
 
     /// Sets thickness or eraser size depending on the active tool.

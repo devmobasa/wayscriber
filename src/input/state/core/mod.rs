@@ -16,6 +16,7 @@ mod ime;
 mod index;
 mod input_hud_controls;
 pub(crate) mod key_repeat;
+mod keymap;
 mod menus;
 pub(crate) mod modal;
 mod presets;
@@ -26,6 +27,7 @@ mod search;
 mod selection;
 mod selection_actions;
 pub(crate) use history_limits::HistoryLimits;
+pub(in crate::input::state) use keymap::Keymap;
 pub(crate) use presets::PresetSlots;
 pub(crate) use selection_actions::{IdleHandle, SpotlightMagnificationTrack};
 mod session;
@@ -46,6 +48,7 @@ mod top_menu_tests;
 
 pub(crate) use top_menu::TopMenuState;
 
+pub(in crate::input::state) use base::InputStateSeed;
 pub use base::{
     BLOCKED_ACTION_DURATION_MS, CompositorCapabilities, DesktopEnvironment, DrawingState,
     InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,
@@ -55,8 +58,8 @@ pub use base::{
     UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction,
 };
 pub(crate) use base::{
-    BoardPickerClickState, InputStateSeed, TextClipboardRequest, TextCutTarget, TextPasteEdit,
-    TextPasteTarget, ToastCommand, ToastPress,
+    BoardPickerClickState, TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget,
+    ToastCommand, ToastPress,
 };
 pub(crate) use base::{
     ClipboardFingerprint, ClipboardPasteRequest, HelperLaunchRequest, PasteAnchor,

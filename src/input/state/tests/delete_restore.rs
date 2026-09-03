@@ -388,7 +388,7 @@ fn pending_page_delete_survives_active_board_drift_and_deletes_original_page() {
         Some("Page restored (2/2)")
     );
     assert!(matches!(state.state, DrawingState::Drawing { .. }));
-    assert_eq!(state.active_drag_button, Some(MouseButton::Left));
+    assert!(state.pointer_drag_button_matches(MouseButton::Left));
 }
 
 #[test]
@@ -422,7 +422,7 @@ fn stale_active_page_delete_confirmation_does_not_cancel_active_interaction() {
     );
 
     assert!(matches!(state.state, DrawingState::Drawing { .. }));
-    assert_eq!(state.active_drag_button, Some(MouseButton::Left));
+    assert!(state.pointer_drag_button_matches(MouseButton::Left));
     assert!(!state.has_pending_page_delete());
 }
 
@@ -459,6 +459,6 @@ fn stale_board_panel_page_delete_confirmation_does_not_cancel_active_interaction
     );
 
     assert!(matches!(state.state, DrawingState::Drawing { .. }));
-    assert_eq!(state.active_drag_button, Some(MouseButton::Left));
+    assert!(state.pointer_drag_button_matches(MouseButton::Left));
     assert!(!state.has_pending_page_delete());
 }

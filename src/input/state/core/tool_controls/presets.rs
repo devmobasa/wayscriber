@@ -82,7 +82,7 @@ impl InputState {
             self.needs_redraw = true;
         }
         if let Some(drag_tools) = preset.drag_tools.as_ref() {
-            let left_defaults = self.drag_tool_bindings.to_config().left;
+            let left_defaults = self.drag_tool_bindings().to_config().left;
             let drag_tools = drag_tools
                 .clone()
                 .resolve_with_left_defaults(&left_defaults);
@@ -174,13 +174,13 @@ impl InputState {
         // Rect, and so on), so `active_tool()` would capture the shortcut's
         // transient tool instead of the user's persistent selection.
         let selected_tool = self.tool_override().unwrap_or_else(|| {
-            self.drag_tool_bindings
+            self.drag_tool_bindings()
                 .tool_for_modifier(DragModifier::None)
         });
         self.style.capture_preset(
             selected_tool,
             self.ui_visibility.show_status_bar,
-            self.drag_tool_bindings.to_config(),
+            self.drag_tool_bindings().to_config(),
         )
     }
 }

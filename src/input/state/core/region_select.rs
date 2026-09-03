@@ -740,7 +740,7 @@ mod tests {
         activate_ocr_region(&mut state, 10);
 
         assert!(matches!(state.state, DrawingState::Idle));
-        assert!(state.active_drag_button.is_none());
+        assert!(!state.pointer_drag_active());
         assert_eq!(state.active_tool(), Tool::Marker);
         assert_eq!(
             state.region_state(),
@@ -762,7 +762,7 @@ mod tests {
         activate_ocr_region(&mut state, 11);
 
         assert!(matches!(state.state, DrawingState::Idle));
-        assert!(state.active_drag_button.is_none());
+        assert!(!state.pointer_drag_active());
         assert_eq!(
             state.region_state(),
             RegionSelectUiState::Armed {

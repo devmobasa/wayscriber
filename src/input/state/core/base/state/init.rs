@@ -1,15 +1,15 @@
-use super::super::super::selection::{SelectionClipboard, SelectionInteraction};
+use super::super::super::{
+    Keymap,
+    selection::{SelectionClipboard, SelectionInteraction},
+};
 use super::super::types::{CompositorCapabilities, DrawingState, PendingOnboardingUsage};
 use super::structs::InputState;
-use crate::config::{Action, BoardsConfig, Shortcut};
+use crate::config::BoardsConfig;
 use crate::draw::DirtyTracker;
 use crate::input::state::highlight::{ClickHighlightSettings, ClickHighlightState};
 use crate::input::state::input_hud::{InputHudSettings, InputHudState};
-use crate::input::{
-    BoardManager,
-    modifiers::{DragToolBindings, Modifiers},
-};
-use std::collections::{HashMap, HashSet};
+use crate::input::{BoardManager, modifiers::Modifiers};
+use std::collections::HashMap;
 
 /// Runtime values needed to construct an [`InputState`].
 ///
@@ -17,15 +17,15 @@ use std::collections::{HashMap, HashSet};
 /// need to know which config sections supplied each setting, and call sites
 /// cannot accidentally transpose same-typed positional arguments.
 #[derive(Clone)]
-pub(crate) struct InputStateSeed {
-    pub(crate) style: crate::input::state::core::DrawingStyle,
-    pub(crate) ui_visibility: crate::input::state::UiVisibility,
-    pub(crate) boards_config: BoardsConfig,
-    pub(crate) action_map: HashMap<Shortcut, Action>,
-    pub(crate) max_shapes_per_frame: usize,
-    pub(crate) click_highlight_settings: ClickHighlightSettings,
-    pub(crate) history_limits: crate::input::state::core::HistoryLimits,
-    pub(crate) presenter_mode_config: crate::config::PresenterModeConfig,
+pub(in crate::input::state) struct InputStateSeed {
+    pub(in crate::input::state) style: crate::input::state::core::DrawingStyle,
+    pub(in crate::input::state) ui_visibility: crate::input::state::UiVisibility,
+    pub(in crate::input::state) boards_config: BoardsConfig,
+    pub(in crate::input::state) keymap: Keymap,
+    pub(in crate::input::state) max_shapes_per_frame: usize,
+    pub(in crate::input::state) click_highlight_settings: ClickHighlightSettings,
+    pub(in crate::input::state) history_limits: crate::input::state::core::HistoryLimits,
+    pub(in crate::input::state) presenter_mode_config: crate::config::PresenterModeConfig,
 }
 
 impl InputState {
@@ -33,30 +33,25 @@ impl InputState {
     ///
     /// Screen dimensions default to zero and the backend updates them after
     /// surface configuration.
-    pub(crate) fn from_seed(seed: InputStateSeed) -> Self {
+    pub(in crate::input::state) fn from_seed(seed: InputStateSeed) -> Self {
         let InputStateSeed {
             style,
             ui_visibility,
             boards_config,
-            action_map,
+            keymap,
             max_shapes_per_frame,
             click_highlight_settings,
             history_limits,
             presenter_mode_config,
         } = seed;
-        let sequence_trie =
-            crate::input::state::core::utility::SequenceTrie::from_action_map(&action_map);
         let mut state = Self {
             input_effects: Default::default(),
-            keymap_revision: 0,
             boards: BoardManager::from_config(boards_config),
             style,
             font_picker: Default::default(),
             text_editing: Default::default(),
             modifiers: Modifiers::new(),
-            drag_tool_bindings: DragToolBindings::default(),
-            active_drag_button: None,
-            active_drag_color: None,
+            keymap,
             state: DrawingState::Idle,
             should_exit: false,
             explicit_exit_requested: false,
@@ -67,7 +62,6 @@ impl InputState {
             help_overlay: Default::default(),
             board_picker: Default::default(),
             command_palette: Default::default(),
-            keybinding_capture_action: None,
             command_palette_toast_duration_ms: 1500,
             ui_visibility,
             zoom_chip: Default::default(),
@@ -110,11 +104,6 @@ impl InputState {
             deleted_pages: Vec::new(),
             dirty_tracker: DirtyTracker::new(),
             last_provisional_bounds: None,
-            action_map,
-            action_bindings: HashMap::new(),
-            sequence_trie,
-            pending_sequence: None,
-            consumed_pointer_buttons: HashSet::new(),
             spotlight_magnification_gesture: None,
             spotlight_wheel_value120_remainder: None,
             pending_onboarding_usage: PendingOnboardingUsage::default(),

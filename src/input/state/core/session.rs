@@ -2,9 +2,9 @@ use super::base::{DrawingState, InputState};
 use super::index::SpatialIndexCache;
 use super::selection::PolygonClickState;
 use super::{ColorPickerPopupLayout, ColorPickerPopupState};
-use crate::draw::{Color, DirtyTracker, ShapeId};
+use crate::draw::{DirtyTracker, ShapeId};
+use crate::input::BoardManager;
 use crate::input::state::highlight::ClickHighlightState;
-use crate::input::{BoardManager, MouseButton};
 use crate::util::Rect;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -13,8 +13,10 @@ use std::path::{Path, PathBuf};
 struct ActiveInteractionRollback {
     boards: BoardManager,
     state: DrawingState,
-    active_drag_button: Option<MouseButton>,
-    active_drag_color: Option<Color>,
+    active_drag: (
+        Option<crate::input::MouseButton>,
+        Option<crate::draw::Color>,
+    ),
     style: super::DrawingStyle,
     text_editing: super::TextEditing,
     color_picker_popup_state: ColorPickerPopupState,
@@ -36,8 +38,7 @@ impl ActiveInteractionRollback {
         Self {
             boards: input.boards.clone_preserving_identity_generation(),
             state: input.state.clone(),
-            active_drag_button: input.active_drag_button,
-            active_drag_color: input.active_drag_color,
+            active_drag: input.keymap.active_drag_state(),
             style: input.style.clone(),
             text_editing: input.text_editing.clone(),
             color_picker_popup_state: input.color_picker_popup.state.clone(),
@@ -57,8 +58,9 @@ impl ActiveInteractionRollback {
     fn restore(self, input: &mut InputState) {
         input.boards = self.boards;
         input.state = self.state;
-        input.active_drag_button = self.active_drag_button;
-        input.active_drag_color = self.active_drag_color;
+        input
+            .keymap
+            .restore_active_drag_state(self.active_drag.0, self.active_drag.1);
         input.style = self.style;
         input.text_editing = self.text_editing;
         input.color_picker_popup.state = self.color_picker_popup_state;
@@ -129,7 +131,7 @@ impl InputState {
     /// Returns true while pointer-driven work is in progress and autosave should wait.
     #[allow(dead_code)]
     pub(crate) fn has_active_pointer_interaction(&self) -> bool {
-        self.active_drag_button.is_some()
+        self.keymap.pointer_drag_active()
             || matches!(
                 self.state,
                 DrawingState::Drawing { .. }

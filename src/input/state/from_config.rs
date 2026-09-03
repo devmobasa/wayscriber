@@ -1,30 +1,27 @@
-use log::warn;
-use std::collections::HashMap;
+use crate::config::Config;
+use crate::input::state::{DrawingStyle, HistoryLimits};
+use crate::input::{ClickHighlightSettings, InputHudSettings, InputState};
 
-use crate::config::{Action, Config, KeybindingsConfig, Shortcut};
-use crate::input::state::{DrawingStyle, HistoryLimits, InputStateSeed};
-use crate::input::{ClickHighlightSettings, DragToolBindings, InputHudSettings, InputState};
+use super::core::{InputStateSeed, Keymap};
 
 impl InputState {
     /// Build runtime input state from validated application configuration.
     pub fn from_config(config: &Config) -> Self {
         let style = DrawingStyle::from((&config.drawing, &config.arrow, &config.spotlight));
-        let action_map = build_action_map(config);
-        let action_bindings = build_action_bindings(config);
+        let keymap =
+            Keymap::from_config(&config.keybindings, &config.drawing.effective_drag_tools());
 
         let mut input_state = InputState::from_seed(InputStateSeed {
             style,
             ui_visibility: crate::input::state::UiVisibility::from(&config.ui),
             boards_config: config.resolved_boards(),
-            action_map,
+            keymap,
             max_shapes_per_frame: config.session.max_shapes_per_frame,
             click_highlight_settings: ClickHighlightSettings::from(&config.ui.click_highlight),
             history_limits: HistoryLimits::from(&config.history),
             presenter_mode_config: config.presenter_mode.clone(),
         });
-        input_state.set_action_bindings(action_bindings);
         input_state.init_input_hud_from_config(InputHudSettings::from(&config.ui.input_hud));
-        input_state.set_drag_tool_bindings(build_drag_tool_bindings(config));
         input_state.set_render_profiles(crate::render_profiles::RenderProfileSet::from_config(
             &config.render_profiles,
         ));
@@ -58,56 +55,10 @@ impl InputState {
     }
 }
 
-fn build_drag_tool_bindings(config: &Config) -> DragToolBindings {
-    let drag_tools = config.drawing.effective_drag_tools();
-    DragToolBindings::from_config(&drag_tools)
-}
-
-fn build_action_map(config: &Config) -> HashMap<Shortcut, Action> {
-    match config.keybindings.build_action_map() {
-        Ok(map) => map,
-        Err(err) => {
-            warn!(
-                "Invalid keybindings config: {}. Falling back to defaults.",
-                err
-            );
-            KeybindingsConfig::default()
-                .build_action_map()
-                .unwrap_or_else(|err| {
-                    warn!(
-                        "Failed to build default keybindings: {}. Continuing with no bindings.",
-                        err
-                    );
-                    HashMap::new()
-                })
-        }
-    }
-}
-
-fn build_action_bindings(config: &Config) -> HashMap<Action, Vec<Shortcut>> {
-    match config.keybindings.build_action_bindings() {
-        Ok(map) => map,
-        Err(err) => {
-            warn!(
-                "Invalid keybindings config: {}. Falling back to defaults.",
-                err
-            );
-            KeybindingsConfig::default()
-                .build_action_bindings()
-                .unwrap_or_else(|err| {
-                    warn!(
-                        "Failed to build default keybindings: {}. Continuing with no bindings.",
-                        err
-                    );
-                    HashMap::new()
-                })
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::KeybindingsConfig;
 
     #[test]
     fn build_action_map_falls_back_when_keybindings_invalid() {
@@ -115,12 +66,12 @@ mod tests {
         config.keybindings.core.undo = vec!["Ctrl+Z".to_string()];
         config.keybindings.core.redo = vec!["Ctrl+Z".to_string()];
 
-        let map = build_action_map(&config);
+        let map = Keymap::from_config(&config.keybindings, &config.drawing.effective_drag_tools());
         let default_map = KeybindingsConfig::default()
             .build_action_map()
             .expect("default keybindings should build");
 
-        assert_eq!(map, default_map);
+        assert_eq!(map.action_map_for_test(), &default_map);
     }
 
     #[test]
@@ -129,12 +80,13 @@ mod tests {
         config.keybindings.core.undo = vec!["Ctrl+Z".to_string()];
         config.keybindings.core.redo = vec!["Ctrl+Z".to_string()];
 
-        let bindings = build_action_bindings(&config);
+        let keymap =
+            Keymap::from_config(&config.keybindings, &config.drawing.effective_drag_tools());
         let default_bindings = KeybindingsConfig::default()
             .build_action_bindings()
             .expect("default keybindings should build");
 
-        assert_eq!(bindings, default_bindings);
+        assert_eq!(keymap.action_bindings_for_test(), &default_bindings);
     }
 
     #[test]
@@ -201,7 +153,7 @@ mod tests {
 
         let input = InputState::from_config(&config);
         assert_eq!(
-            input.drag_tool_bindings,
+            input.drag_tool_bindings(),
             crate::input::DragToolBindings {
                 left: crate::input::DragButtonBindings {
                     drag: crate::input::DragBinding::from_tool(crate::input::Tool::Arrow),
@@ -228,15 +180,15 @@ mod tests {
         let input = InputState::from_config(&config);
 
         assert_eq!(
-            input.drag_tool_bindings.left.drag.tool,
+            input.drag_tool_bindings().left.drag.tool,
             crate::input::DragTool::Line
         );
         assert_eq!(
-            input.drag_tool_bindings.right.drag.tool,
+            input.drag_tool_bindings().right.drag.tool,
             crate::input::DragTool::Pen
         );
         assert_eq!(
-            input.drag_tool_bindings.right.drag.color,
+            input.drag_tool_bindings().right.drag.color,
             Some(crate::config::ColorSpec::Name("blue".to_string()).to_color())
         );
     }

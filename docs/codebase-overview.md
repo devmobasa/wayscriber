@@ -105,7 +105,9 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
      shape appearance; `TextEditing` owns editor mode, asynchronous identity, IME composition,
      caret/selection edits, and existing-shape edit lifecycle; `SelectionInteraction` owns selected
      IDs, nudge-axis memory, and polygon click timing; `SelectionClipboard` owns copied shapes,
-     publication generations, paste request identity, and image-save fallback; `PresetSlots` owns
+     publication generations, paste request identity, and image-save fallback; `Keymap` owns action
+     and sequence matching, rebind revisions, pointer-button consumption, drag bindings, active drag
+     identity, and shortcut capture while shared modifiers stay on `InputState`; `PresetSlots` owns
      preset lifecycle and feedback; `HistoryLimits` owns undo retention plus delayed playback
      scheduling. Pure translation and scaling are methods on `draw::Shape`.
    - `state/actions/` maps keybindings to `Action` values and routes color, board/page, capture,

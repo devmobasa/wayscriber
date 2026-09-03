@@ -1819,7 +1819,9 @@ fn save_preset_without_override_uses_unmodified_drag_tool() {
         a: 1.0,
     };
 
-    state.drag_tool_bindings.left.drag = DragBinding::from_tool(Tool::Marker);
+    let mut bindings = state.drag_tool_bindings();
+    bindings.left.drag = DragBinding::from_tool(Tool::Marker);
+    assert!(state.set_drag_tool_bindings(bindings));
     assert!(state.set_tool_override(Some(Tool::Marker)));
     assert!(state.set_color(marker_color));
     assert!(state.set_thickness(19.0));

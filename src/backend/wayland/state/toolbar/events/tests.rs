@@ -470,7 +470,7 @@ fn the_toolbar_rebind_gesture_opens_capture_for_the_controls_action() {
             ToolbarEventPreflight::RebindCaptured
         );
         assert_eq!(
-            input_state.keybinding_capture_action,
+            input_state.keybinding_capture_action(),
             Some(expected),
             "{event:?} should arm capture for its own action"
         );
@@ -478,7 +478,7 @@ fn the_toolbar_rebind_gesture_opens_capture_for_the_controls_action() {
             input_state.take_pending_keybinding_edits().is_empty(),
             "arming capture must not queue an edit on its own"
         );
-        input_state.keybinding_capture_action = None;
+        input_state.on_key_press(crate::input::Key::Escape);
     }
 }
 
@@ -524,7 +524,7 @@ fn toolbar_rebind_capture_finalizes_a_held_arrow_bend_before_its_early_return() 
         handle_toolbar_event_preflight(&mut input_state, &mut deadline, &event, true),
         ToolbarEventPreflight::RebindCaptured
     );
-    assert_eq!(input_state.keybinding_capture_action, Some(Action::Undo));
+    assert_eq!(input_state.keybinding_capture_action(), Some(Action::Undo));
     assert!(
         matches!(input_state.state, crate::input::state::DrawingState::Idle),
         "rebind capture returned while the bend gesture was still active"
@@ -533,7 +533,7 @@ fn toolbar_rebind_capture_finalizes_a_held_arrow_bend_before_its_early_return() 
     // Escape belongs to the newly-opened capture modal, and the later pointer
     // release must not revive or recommit the already-finalized bend.
     input_state.on_key_press(crate::input::Key::Escape);
-    assert!(input_state.keybinding_capture_action.is_none());
+    assert!(input_state.keybinding_capture_action().is_none());
     input_state.on_mouse_release(crate::input::MouseButton::Left, 200, 20);
     input_state.handle_action(Action::Undo);
     match input_state

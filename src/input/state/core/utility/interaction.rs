@@ -411,7 +411,7 @@ mod tests {
         assert!(state.try_cancel_active_interaction());
 
         assert!(matches!(state.state, DrawingState::Idle));
-        assert!(state.active_drag_button.is_none());
+        assert!(!state.pointer_drag_active());
         assert!(state.needs_redraw);
     }
 

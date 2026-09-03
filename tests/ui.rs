@@ -143,7 +143,7 @@ fn render_command_palette_with_query_draws_content() {
 fn render_keybinding_capture_draws_content() {
     let (mut surface, ctx) = surface_with_context(800, 600);
     let mut input = make_input_state();
-    input.keybinding_capture_action = Some(Action::SelectPenTool);
+    assert!(input.begin_keybinding_capture(Action::SelectPenTool));
 
     wayscriber::ui::render_command_palette(&ctx, &input, 800, 600);
 

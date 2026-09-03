@@ -112,7 +112,7 @@ fn switch_board_cancels_active_drawing_through_lifecycle_transition() {
 
     assert_eq!(state.board_id(), BOARD_ID_WHITEBOARD);
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.active_drag_button.is_none());
+    assert!(!state.pointer_drag_active());
     assert!(state.needs_redraw);
 }
 
@@ -134,7 +134,7 @@ fn failed_switch_board_preserves_active_interaction() {
 
     assert_eq!(state.board_id(), BOARD_ID_TRANSPARENT);
     assert!(matches!(state.state, DrawingState::Drawing { .. }));
-    assert_eq!(state.active_drag_button, Some(MouseButton::Left));
+    assert!(state.pointer_drag_button_matches(MouseButton::Left));
     assert!(!state.needs_redraw);
 }
 
@@ -190,7 +190,7 @@ fn switch_board_cancels_selection_move_on_source_board_before_switching() {
 
     assert_eq!(state.board_id(), BOARD_ID_WHITEBOARD);
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.active_drag_button.is_none());
+    assert!(!state.pointer_drag_active());
 
     let source_index = board_index(&state, BOARD_ID_TRANSPARENT);
     let source_shape = state.boards.board_states()[source_index]
