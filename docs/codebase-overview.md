@@ -112,7 +112,8 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
      configured pointer trigger. `StatusHudState` owns cached HUD geometry, rebuild inputs, hover
      identity, and press/release bookkeeping. `ZoomChipState` owns display policy, cached geometry,
      hover identity, and same-source press/release bookkeeping. `PropertiesPanelState` owns panel
-     lifecycle, cached geometry, deferred hover recalculation, and refresh scheduling.
+     lifecycle, cached geometry, deferred hover recalculation, and refresh scheduling. Font-picker
+     and command-palette keyboard timing share the behavior-owning `OverlayKeyRepeat` schedule.
    - `state/mouse/` and `state/interaction/` convert pointer gestures into drawing/state changes.
    - `render.rs` exposes provisional shape previews for live feedback.
 
