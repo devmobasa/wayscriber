@@ -95,6 +95,12 @@ pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: Tool
     );
     let active_tool = input.active_tool();
     input.style.restore_snapshot(&tool_state, active_tool);
+    // The snapshot replaces every value a highlighted preset slot described,
+    // and the per-field setters this used to go through invalidated the
+    // canvas as they went; keep both effects now that the owner restores in
+    // one step.
+    input.preset_slots.clear_active();
+    input.dirty_tracker.mark_full();
     input.sync_highlight_color();
     let _ = input.set_tool_override(tool_state.tool_override);
     input.board_previous_color = tool_state.board_previous_color;
