@@ -255,7 +255,7 @@ mod tests {
 
     fn set_selection_state(state: &mut InputState, ids: Vec<ShapeId>) {
         let shape_ids_set = ids.iter().copied().collect::<HashSet<_>>();
-        state.selection_state = SelectionState::Active {
+        state.selection_interaction.state = SelectionState::Active {
             shape_ids: ids,
             shape_ids_set,
         };
@@ -276,7 +276,7 @@ mod tests {
         state.set_selection(vec![shape_id]);
         assert!(state.show_properties_panel());
 
-        state.selection_state = SelectionState::None;
+        state.selection_interaction.state = SelectionState::None;
         state.refresh_properties_panel();
 
         assert!(state.properties_panel().is_none());

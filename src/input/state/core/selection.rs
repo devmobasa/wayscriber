@@ -1,4 +1,8 @@
-use super::base::InputState;
+mod clipboard;
+
+pub(crate) use clipboard::SelectionClipboard;
+
+use super::base::{InputState, PolygonClickState, SelectionAxis};
 use crate::draw::ShapeId;
 use crate::util::Rect;
 use std::collections::HashSet;
@@ -13,9 +17,27 @@ pub enum SelectionState {
     },
 }
 
+/// Selection membership plus interaction memory shared by selection and polygon input.
+#[derive(Debug, Clone)]
+pub(crate) struct SelectionInteraction {
+    pub(in crate::input::state) state: SelectionState,
+    pub(in crate::input::state) last_axis: Option<SelectionAxis>,
+    pub(in crate::input::state) last_polygon_click: Option<PolygonClickState>,
+}
+
+impl Default for SelectionInteraction {
+    fn default() -> Self {
+        Self {
+            state: SelectionState::None,
+            last_axis: None,
+            last_polygon_click: None,
+        }
+    }
+}
+
 impl InputState {
     pub fn selected_shape_ids(&self) -> &[ShapeId] {
-        match &self.selection_state {
+        match &self.selection_interaction.state {
             SelectionState::Active { shape_ids, .. } => shape_ids,
             _ => &[],
         }
@@ -24,26 +46,29 @@ impl InputState {
     /// Returns a reference to the cached HashSet of selected shape IDs.
     /// Use this for O(1) membership tests instead of creating a new HashSet.
     pub fn selected_shape_ids_set(&self) -> Option<&HashSet<ShapeId>> {
-        match &self.selection_state {
+        match &self.selection_interaction.state {
             SelectionState::Active { shape_ids_set, .. } => Some(shape_ids_set),
             _ => None,
         }
     }
 
     pub fn has_selection(&self) -> bool {
-        matches!(self.selection_state, SelectionState::Active { .. })
+        matches!(
+            self.selection_interaction.state,
+            SelectionState::Active { .. }
+        )
     }
 
     pub fn clear_selection(&mut self) {
-        self.selection_state = SelectionState::None;
-        self.last_selection_axis = None;
+        self.selection_interaction.state = SelectionState::None;
+        self.selection_interaction.last_axis = None;
         self.close_properties_panel();
     }
 
     pub fn set_selection(&mut self, ids: Vec<ShapeId>) {
         if ids.is_empty() {
-            self.selection_state = SelectionState::None;
-            self.last_selection_axis = None;
+            self.selection_interaction.state = SelectionState::None;
+            self.selection_interaction.last_axis = None;
             self.close_properties_panel();
             return;
         }
@@ -55,11 +80,11 @@ impl InputState {
                 ordered.push(id);
             }
         }
-        self.selection_state = SelectionState::Active {
+        self.selection_interaction.state = SelectionState::Active {
             shape_ids: ordered,
             shape_ids_set: seen,
         };
-        self.last_selection_axis = None;
+        self.selection_interaction.last_axis = None;
         self.close_properties_panel();
     }
 
@@ -67,7 +92,7 @@ impl InputState {
     where
         I: IntoIterator<Item = ShapeId>,
     {
-        match &mut self.selection_state {
+        match &mut self.selection_interaction.state {
             SelectionState::Active {
                 shape_ids,
                 shape_ids_set,
@@ -77,7 +102,7 @@ impl InputState {
                         shape_ids.push(id);
                     }
                 }
-                self.last_selection_axis = None;
+                self.selection_interaction.last_axis = None;
                 self.close_properties_panel();
             }
             _ => {

@@ -228,7 +228,7 @@ impl InputState {
         operation: ImageOperationKind,
         exit_after_save: bool,
     ) {
-        self.pending_clipboard_fallback = Some(PendingClipboardFallback {
+        self.selection_clipboard.pending_image_fallback = Some(PendingClipboardFallback {
             image_data,
             save_config,
             operation,
@@ -240,7 +240,7 @@ impl InputState {
     /// On success, clears the fallback and exits if exit-after-capture was enabled.
     /// On error, retains it for retry.
     pub(crate) fn save_pending_clipboard_to_file(&mut self) {
-        let Some(fallback) = self.pending_clipboard_fallback.take() else {
+        let Some(fallback) = self.selection_clipboard.pending_image_fallback.take() else {
             self.push_toast(
                 ToastPriority::Info,
                 "capture.save",
@@ -289,7 +289,7 @@ impl InputState {
                     message
                 );
                 // Restore fallback so user can retry
-                self.pending_clipboard_fallback = Some(fallback);
+                self.selection_clipboard.pending_image_fallback = Some(fallback);
                 self.push_toast(
                     ToastPriority::Critical,
                     "capture.save",
@@ -817,7 +817,7 @@ mod tests {
             "canvas fallback failure should not mention screenshot: {}",
             toast.message
         );
-        assert!(state.pending_clipboard_fallback.is_some());
+        assert!(state.selection_clipboard.pending_image_fallback.is_some());
         assert!(state.blocked_action_feedback.is_some());
     }
 

@@ -233,7 +233,7 @@ impl InputState {
             DrawingState::BuildingPolygon { .. } => {
                 self.clear_provisional_dirty();
                 self.last_provisional_bounds = None;
-                self.last_polygon_click = None;
+                self.selection_interaction.last_polygon_click = None;
                 self.state = DrawingState::Idle;
                 self.needs_redraw = true;
             }

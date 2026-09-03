@@ -15,7 +15,7 @@ impl InputState {
         let color = self.color_for_tool(Tool::FreeformPolygon);
         let thick = self.thickness_for_tool(Tool::FreeformPolygon);
         self.clear_selection();
-        self.last_polygon_click = Some(PolygonClickState {
+        self.selection_interaction.last_polygon_click = Some(PolygonClickState {
             x,
             y,
             at: Instant::now(),
@@ -38,7 +38,7 @@ impl InputState {
     }
 
     fn should_finish_building_polygon_on_click(&self, x: i32, y: i32) -> bool {
-        let Some(last) = self.last_polygon_click else {
+        let Some(last) = self.selection_interaction.last_polygon_click else {
             return false;
         };
         if Instant::now().duration_since(last.at).as_millis() > TEXT_DOUBLE_CLICK_MS as u128 {
@@ -72,7 +72,7 @@ impl InputState {
         };
         points.push((x, y));
         *preview = None;
-        self.last_polygon_click = Some(PolygonClickState {
+        self.selection_interaction.last_polygon_click = Some(PolygonClickState {
             x,
             y,
             at: Instant::now(),
@@ -88,11 +88,11 @@ impl InputState {
         let _ = points.pop();
         if points.is_empty() {
             self.clear_provisional_dirty();
-            self.last_polygon_click = None;
+            self.selection_interaction.last_polygon_click = None;
             self.state = DrawingState::Idle;
         } else {
             let (x, y) = self.canvas_pointer_position();
-            self.last_polygon_click = None;
+            self.selection_interaction.last_polygon_click = None;
             self.update_provisional_dirty(x, y);
         }
         self.needs_redraw = true;
@@ -113,7 +113,7 @@ impl InputState {
         };
 
         self.clear_provisional_dirty();
-        self.last_polygon_click = None;
+        self.selection_interaction.last_polygon_click = None;
         if !has_minimum_distinct_points(&points) {
             self.needs_redraw = true;
             return;

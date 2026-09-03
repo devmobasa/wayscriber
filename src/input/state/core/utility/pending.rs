@@ -222,10 +222,10 @@ impl InputState {
         fingerprint_at_failure: Option<ClipboardFingerprint>,
         succeeded: bool,
     ) -> bool {
-        if generation != self.selection_clipboard_generation {
+        if generation != self.selection_clipboard.generation {
             return false;
         }
-        self.selection_publish_state = if succeeded {
+        self.selection_clipboard.publish_state = if succeeded {
             SelectionPublishState::Published { generation }
         } else {
             SelectionPublishState::Failed {
@@ -326,12 +326,12 @@ impl InputState {
     }
 
     pub(crate) fn active_clipboard_paste_request_id(&self) -> Option<u64> {
-        self.active_clipboard_paste_request_id
+        self.selection_clipboard.active_paste_request_id
     }
 
     pub(crate) fn finish_clipboard_paste_request(&mut self, id: u64) {
-        if self.active_clipboard_paste_request_id == Some(id) {
-            self.active_clipboard_paste_request_id = None;
+        if self.selection_clipboard.active_paste_request_id == Some(id) {
+            self.selection_clipboard.active_paste_request_id = None;
         }
     }
 }

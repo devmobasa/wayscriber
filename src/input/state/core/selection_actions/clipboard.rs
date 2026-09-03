@@ -39,9 +39,9 @@ impl InputState {
         }
 
         let count = copied.len();
-        self.selection_clipboard_generation = self.selection_clipboard_generation.wrapping_add(1);
-        self.selection_publish_state = SelectionPublishState::NotAttempted;
-        self.selection_clipboard = Some(copied.clone());
+        self.selection_clipboard.generation = self.selection_clipboard.generation.wrapping_add(1);
+        self.selection_clipboard.publish_state = SelectionPublishState::NotAttempted;
+        self.selection_clipboard.shapes = Some(copied.clone());
         let pending_publish = self
             .selection_clipboard_payload(copied)
             .and_then(|payload| {
@@ -66,20 +66,21 @@ impl InputState {
         Some(WayscriberClipboardSelection {
             schema_version: PRIVATE_CLIPBOARD_SCHEMA_VERSION,
             app_version: env!("CARGO_PKG_VERSION").to_string(),
-            app_instance_id: self.clipboard_app_instance_id.clone(),
-            copy_generation: self.selection_clipboard_generation,
+            app_instance_id: self.selection_clipboard.app_instance_id.clone(),
+            copy_generation: self.selection_clipboard.generation,
             shapes,
         })
     }
 
     pub(crate) fn selection_clipboard_is_empty(&self) -> bool {
         self.selection_clipboard
+            .shapes
             .as_ref()
             .is_none_or(|clipboard| clipboard.is_empty())
     }
 
     pub(crate) fn paste_selection(&mut self) -> usize {
-        let Some(shapes) = self.selection_clipboard.clone() else {
+        let Some(shapes) = self.selection_clipboard.shapes.clone() else {
             return 0;
         };
         if shapes.is_empty() {
@@ -157,8 +158,11 @@ impl InputState {
         &mut self,
         anchor: PasteAnchor,
     ) -> ClipboardPasteRequest {
-        self.clipboard_paste_request_counter = self.clipboard_paste_request_counter.wrapping_add(1);
-        let id = self.clipboard_paste_request_counter;
+        self.selection_clipboard.paste_request_counter = self
+            .selection_clipboard
+            .paste_request_counter
+            .wrapping_add(1);
+        let id = self.selection_clipboard.paste_request_counter;
         let request = ClipboardPasteRequest {
             id,
             target_board_id: self.boards.active_board_id().to_string(),
@@ -167,10 +171,10 @@ impl InputState {
             anchor,
             visible_canvas_rect: self.visible_canvas_rect(),
             screen_size: (self.screen_width, self.screen_height),
-            selection_clipboard_generation_at_request: self.selection_clipboard_generation,
+            selection_clipboard_generation_at_request: self.selection_clipboard.generation,
             local_selection_fallback_generation: self.local_selection_fallback_generation(),
         };
-        self.active_clipboard_paste_request_id = Some(id);
+        self.selection_clipboard.active_paste_request_id = Some(id);
         self.emit_input_effect(super::super::base::InputEffect::ClipboardPaste(
             request.clone(),
         ));
@@ -179,20 +183,20 @@ impl InputState {
 
     pub(crate) fn local_selection_fallback_generation(&self) -> Option<u64> {
         self.local_selection_fallback_allowed()
-            .then_some(self.selection_clipboard_generation)
+            .then_some(self.selection_clipboard.generation)
     }
 
     pub(crate) fn local_selection_fallback_allowed(&self) -> bool {
         if self.selection_clipboard_is_empty() {
             return false;
         }
-        match self.selection_publish_state {
+        match self.selection_clipboard.publish_state {
             SelectionPublishState::NotAttempted => true,
             SelectionPublishState::Failed { generation, .. } => {
-                generation == self.selection_clipboard_generation
+                generation == self.selection_clipboard.generation
             }
             SelectionPublishState::Published { generation } => {
-                generation == self.selection_clipboard_generation
+                generation == self.selection_clipboard.generation
             }
             SelectionPublishState::Superseded { .. } => false,
         }
@@ -202,9 +206,9 @@ impl InputState {
         &self,
         generation: u64,
     ) -> Option<Vec<Shape>> {
-        (generation == self.selection_clipboard_generation
+        (generation == self.selection_clipboard.generation
             && self.local_selection_fallback_allowed())
-        .then(|| self.selection_clipboard.clone())
+        .then(|| self.selection_clipboard.shapes.clone())
         .flatten()
         .filter(|shapes| !shapes.is_empty())
     }
@@ -214,12 +218,12 @@ impl InputState {
         generation: Option<u64>,
     ) -> Option<Vec<Shape>> {
         let generation = generation?;
-        (generation == self.selection_clipboard_generation
+        (generation == self.selection_clipboard.generation
             && matches!(
-                self.selection_publish_state,
+                self.selection_clipboard.publish_state,
                 SelectionPublishState::NotAttempted
             ))
-        .then(|| self.selection_clipboard.clone())
+        .then(|| self.selection_clipboard.shapes.clone())
         .flatten()
         .filter(|shapes| !shapes.is_empty())
     }
@@ -229,7 +233,7 @@ impl InputState {
         generation: Option<u64>,
     ) -> bool {
         matches!(
-            (generation, &self.selection_publish_state),
+            (generation, &self.selection_clipboard.publish_state),
             (
                 Some(request_generation),
                 SelectionPublishState::Failed {
@@ -237,7 +241,7 @@ impl InputState {
                     ..
                 },
             ) if *failed_generation == request_generation
-                    && *failed_generation == self.selection_clipboard_generation
+                    && *failed_generation == self.selection_clipboard.generation
                     && !self.selection_clipboard_is_empty()
         )
     }
@@ -250,12 +254,12 @@ impl InputState {
         let SelectionPublishState::Failed {
             generation,
             clipboard_fingerprint_at_failure,
-        } = &self.selection_publish_state
+        } = &self.selection_clipboard.publish_state
         else {
             return None;
         };
         (*generation == request_generation
-            && *generation == self.selection_clipboard_generation
+            && *generation == self.selection_clipboard.generation
             && !self.selection_clipboard_is_empty())
         .then(|| (*generation, clipboard_fingerprint_at_failure.clone()))
     }
@@ -269,11 +273,11 @@ impl InputState {
         let SelectionPublishState::Failed {
             generation,
             clipboard_fingerprint_at_failure,
-        } = &self.selection_publish_state
+        } = &self.selection_clipboard.publish_state
         else {
             return None;
         };
-        if *generation != request_generation || *generation != self.selection_clipboard_generation {
+        if *generation != request_generation || *generation != self.selection_clipboard.generation {
             return None;
         }
 
@@ -287,13 +291,14 @@ impl InputState {
         }
 
         self.selection_clipboard
+            .shapes
             .clone()
             .filter(|shapes| !shapes.is_empty())
     }
 
     pub(crate) fn mark_selection_clipboard_superseded(&mut self) {
         self.mark_selection_clipboard_superseded_for_generation(Some(
-            self.selection_clipboard_generation,
+            self.selection_clipboard.generation,
         ));
     }
 
@@ -301,11 +306,11 @@ impl InputState {
         &mut self,
         generation: Option<u64>,
     ) {
-        if generation == Some(self.selection_clipboard_generation)
+        if generation == Some(self.selection_clipboard.generation)
             && !self.selection_clipboard_is_empty()
         {
-            self.selection_publish_state = SelectionPublishState::Superseded {
-                generation: self.selection_clipboard_generation,
+            self.selection_clipboard.publish_state = SelectionPublishState::Superseded {
+                generation: self.selection_clipboard.generation,
             };
         }
     }
@@ -315,7 +320,7 @@ impl InputState {
         request: &ClipboardPasteRequest,
         payload: &WayscriberClipboardSelection,
     ) -> bool {
-        payload.app_instance_id == self.clipboard_app_instance_id
+        payload.app_instance_id == self.selection_clipboard.app_instance_id
             && request.local_selection_fallback_generation == Some(payload.copy_generation)
     }
 
@@ -323,7 +328,7 @@ impl InputState {
         &self,
         payload: &WayscriberClipboardSelection,
     ) -> bool {
-        payload.app_instance_id == self.clipboard_app_instance_id
+        payload.app_instance_id == self.selection_clipboard.app_instance_id
     }
 
     pub(crate) fn private_payload_shapes_for_request(
@@ -331,10 +336,10 @@ impl InputState {
         request: &ClipboardPasteRequest,
         payload: WayscriberClipboardSelection,
     ) -> Option<Vec<Shape>> {
-        if payload.app_instance_id == self.clipboard_app_instance_id {
+        if payload.app_instance_id == self.selection_clipboard.app_instance_id {
             if request.local_selection_fallback_generation == Some(payload.copy_generation) {
-                if self.selection_clipboard_generation == payload.copy_generation
-                    && let Some(shapes) = &self.selection_clipboard
+                if self.selection_clipboard.generation == payload.copy_generation
+                    && let Some(shapes) = &self.selection_clipboard.shapes
                     && !shapes.is_empty()
                 {
                     return Some(shapes.clone());
@@ -362,7 +367,7 @@ impl InputState {
         if shapes.is_empty() {
             return 0;
         }
-        if self.active_clipboard_paste_request_id != Some(request.id) {
+        if self.selection_clipboard.active_paste_request_id != Some(request.id) {
             return 0;
         }
 

@@ -1,4 +1,4 @@
-use super::super::super::selection::SelectionState;
+use super::super::super::selection::{SelectionClipboard, SelectionInteraction};
 use super::super::types::{CompositorCapabilities, DrawingState, PendingOnboardingUsage};
 use super::structs::InputState;
 use crate::config::{Action, BoardsConfig, Shortcut};
@@ -10,7 +10,6 @@ use crate::input::{
     modifiers::{DragToolBindings, Modifiers},
 };
 use std::collections::{HashMap, HashSet};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Runtime values needed to construct an [`InputState`].
 ///
@@ -122,8 +121,7 @@ impl InputState {
             max_shapes_per_frame,
             click_highlight: ClickHighlightState::new(click_highlight_settings),
             input_hud: InputHudState::new(InputHudSettings::default()),
-            selection_state: SelectionState::None,
-            last_selection_axis: None,
+            selection_interaction: SelectionInteraction::default(),
             context_menu: Default::default(),
 
             color_picker_popup: Default::default(),
@@ -138,14 +136,8 @@ impl InputState {
             toast_queue: super::super::toast_queue::ToastQueue::default(),
             ui_toast_bounds: None,
             ui_toast_action_bounds: [None, None],
-            selection_clipboard: None,
-            selection_clipboard_generation: 0,
-            selection_publish_state: super::super::types::SelectionPublishState::NotAttempted,
-            clipboard_app_instance_id: new_clipboard_app_instance_id(),
-            clipboard_paste_request_counter: 0,
-            active_clipboard_paste_request_id: None,
+            selection_clipboard: SelectionClipboard::default(),
             last_capture_path: None,
-            last_polygon_click: None,
             spatial_index: None,
             last_pointer_position: (0, 0),
             last_canvas_pointer_position: (0, 0),
@@ -164,7 +156,6 @@ impl InputState {
             compositor_capabilities: CompositorCapabilities::default(),
             capability_toast_caps: None,
             blocked_action_feedback: None,
-            pending_clipboard_fallback: None,
             deleted_boards: Vec::new(),
             status_change_highlight: None,
         };
@@ -175,12 +166,4 @@ impl InputState {
 
         state
     }
-}
-
-fn new_clipboard_app_instance_id() -> String {
-    let millis = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis())
-        .unwrap_or(0);
-    format!("{}-{}", std::process::id(), millis)
 }
