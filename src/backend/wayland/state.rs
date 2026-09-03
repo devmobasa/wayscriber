@@ -209,34 +209,8 @@ pub(super) struct WaylandState {
     /// committed frame instead of inside a picker-opening input callback.
     pub(super) font_catalog_prewarm: RuntimeOperationController<(), Duration>,
     pub(super) font_catalog_prewarm_started: bool,
-    /// Wake handle the input HUD's system reader pokes after sending chips.
-    /// Cloned from the shared runtime source at startup so the reader can be
-    /// started and stopped whenever the HUD toggles.
-    #[cfg(feature = "input-monitor")]
-    pub(super) input_monitor_wake: crate::backend::wayland::RuntimeWakeHandle,
-    /// Live system-wide input reader (`Some` only while the HUD runs in system
-    /// mode); dropping it stops the thread.
-    #[cfg(feature = "input-monitor")]
-    pub(super) input_monitor: Option<crate::backend::wayland::input_monitor::InputMonitor>,
-    /// Latch for the "system capture unavailable" guidance: one warning per
-    /// denied episode, whether the request came from startup config, a
-    /// toggle, or a mode change. Reset when system capture starts or stops
-    /// being requested.
-    pub(super) input_hud_system_warned: bool,
-    /// A runtime enable is waiting to announce which source it got. Held
-    /// across the reader thread's readiness handshake, so the toast names the
-    /// source the HUD actually ended up with.
-    pub(super) input_hud_announce_pending: bool,
-    /// The HUD request the reader thread was last reconciled against.
-    ///
-    /// Every path that can move the HUD has to reach `sync_input_monitor`, and
-    /// they do not all run through one handler: a command-palette entry
-    /// clicked with the mouse, and a rollback undoing a rejected write, both
-    /// change the flag somewhere else entirely. The event loop compares this
-    /// against the live request each pass instead of asking each of them to
-    /// remember, so the reader can never be left running for a HUD that is
-    /// already off.
-    pub(super) last_input_hud_request: Option<(bool, crate::config::InputHudMode)>,
+    /// System-reader lifecycle and reconciliation latches for the input HUD.
+    pub(super) input_hud: input_hud::InputHudRuntime,
     pub(super) clipboard_publish: RuntimeOperationController<u64, ClipboardPublishCompletion>,
     pub(super) clipboard_paste:
         RuntimeOperationController<ClipboardPasteRequest, ClipboardPasteCompletion>,
