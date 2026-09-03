@@ -14,6 +14,7 @@ mod history;
 mod ime;
 mod index;
 mod input_hud_controls;
+pub(crate) mod key_repeat;
 mod menus;
 pub(crate) mod modal;
 mod properties;
