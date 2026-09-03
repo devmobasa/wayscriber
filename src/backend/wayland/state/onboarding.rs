@@ -525,10 +525,7 @@ impl WaylandState {
         }
 
         let caps = self.input_state.compositor_capabilities;
-        let message = capability_toast_message(self.input_state.capability_toast_caps, caps);
-        self.input_state.capability_toast_caps = Some(caps);
-
-        if let Some(message) = message {
+        if let Some(message) = self.input_state.note_capability_toast(caps) {
             self.input_state.push_toast(
                 ToastPriority::Critical,
                 "capability.limitations",
@@ -543,24 +540,6 @@ pub(super) fn automatic_onboarding_allowed(
     persistence_available: bool,
 ) -> bool {
     preference_enabled && persistence_available
-}
-
-/// The capability warning to raise, if any: only when this exact capability
-/// set has not been evaluated yet this session (once per session unless the
-/// detected capabilities change) and something is actually limited. The
-/// queue's once-per-content rate limit additionally keeps an identical
-/// summary from re-showing.
-pub(super) fn capability_toast_message(
-    previous: Option<crate::input::state::CompositorCapabilities>,
-    current: crate::input::state::CompositorCapabilities,
-) -> Option<String> {
-    if previous == Some(current) {
-        return None;
-    }
-    // `limitations_summary()` is the authority on whether anything is limited:
-    // it returns `None` only when nothing is degraded. (`all_available()` omits
-    // `freeze_capture`, so a freeze-only limitation must not gate on it.)
-    current.limitations_summary()
 }
 
 #[cfg(test)]

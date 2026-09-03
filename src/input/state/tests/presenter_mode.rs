@@ -192,7 +192,7 @@ fn presenter_mode_emits_entry_and_exit_toasts() {
     let mut state = create_test_input_state();
 
     state.toggle_presenter_mode();
-    let entry_toast = state.ui_toast.as_ref().expect("entry toast");
+    let entry_toast = state.active_toast().expect("entry toast");
     assert_eq!(entry_toast.message, "Presenter Mode active");
     assert_eq!(
         entry_toast
@@ -203,7 +203,7 @@ fn presenter_mode_emits_entry_and_exit_toasts() {
     );
 
     state.toggle_presenter_mode();
-    let exit_toast = state.ui_toast.as_ref().expect("exit toast");
+    let exit_toast = state.active_toast().expect("exit toast");
     assert_eq!(exit_toast.message, "Stopping Presenter Mode");
     assert!(exit_toast.action.is_none());
 }

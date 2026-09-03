@@ -85,7 +85,7 @@ fn restore_deleted_board_expires_old_entries_with_supplied_now() {
     assert!(state.deleted_boards.is_empty());
     assert_eq!(state.boards.board_count(), board_count_after_delete);
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("No deleted board to restore.")
     );
     assert!(state.take_pending_board_runtime_ui_actions().is_empty());
@@ -195,8 +195,7 @@ fn session_replacement_drops_queued_delete_undo_toast() {
     );
     assert_eq!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .and_then(|toast| toast.action.as_ref())
             .and_then(|action| action.dispatch_action()),
         Some(Action::BoardRestoreDeleted),
@@ -211,12 +210,12 @@ fn session_replacement_drops_queued_delete_undo_toast() {
         Toast::warning("Freeze unavailable"),
     );
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.key),
+        state.active_toast().map(|toast| toast.key),
         Some("capability.limitations"),
         "critical toast is active"
     );
     assert!(
-        !state.toast_queue.is_empty(),
+        state.test_pending_toast_count() > 0,
         "undo toast queued behind the critical toast"
     );
 
@@ -225,16 +224,16 @@ fn session_replacement_drops_queued_delete_undo_toast() {
     state.clear_session_delete_restore_state();
     assert!(state.deleted_boards.is_empty(), "undo state discarded");
     assert!(
-        state.toast_queue.is_empty(),
+        state.test_pending_toast_count() == 0,
         "queued delete/restore toast retracted, not left behind"
     );
 
     // (4): the Critical toast expires. (5): nothing stale surfaces.
-    let critical = state.ui_toast.as_ref().expect("critical toast");
+    let critical = state.active_toast().expect("critical toast");
     let after = critical.started + Duration::from_millis(critical.duration_ms);
     state.advance_ui_toast(after);
     assert!(
-        state.ui_toast.is_none(),
+        state.active_toast().is_none(),
         "no stale delete/restore toast surfaced after the critical toast expired"
     );
 }
@@ -263,7 +262,7 @@ fn restore_deleted_page_expires_old_entries_with_supplied_now() {
     assert!(state.deleted_pages.is_empty());
     assert_eq!(state.boards.page_count(), page_count_after_delete);
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("No deleted page to restore.")
     );
 }

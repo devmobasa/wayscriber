@@ -6,6 +6,7 @@ pub(crate) mod color_picker_popup;
 mod command_palette;
 mod dirty;
 mod eyedropper;
+mod feedback;
 mod font_cycle;
 pub(crate) mod font_picker;
 mod help_overlay;
@@ -27,6 +28,7 @@ mod region_select;
 mod search;
 mod selection;
 mod selection_actions;
+pub(in crate::input::state) use feedback::Feedback;
 pub(crate) use history_limits::HistoryLimits;
 pub(in crate::input::state) use index::CanvasIndex;
 pub(in crate::input::state) use keymap::Keymap;
@@ -61,7 +63,7 @@ pub use base::{
     InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS, OutputFocusAction,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
     PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, SelectionAxis,
-    SelectionHandle, ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome, ToastQueue,
+    SelectionHandle, ShellMode, TextInputMode, Toast, ToastPriority, ToastPushOutcome,
     UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction,
 };
 pub(crate) use base::{

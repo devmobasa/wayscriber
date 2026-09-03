@@ -51,8 +51,7 @@ fn page_duplicate_blocks_mixed_image_and_point_strokes_when_real_save_exceeds_li
         );
         assert!(
             state
-                .ui_toast
-                .as_ref()
+                .active_toast()
                 .is_some_and(|toast| toast.message.contains("Page duplicate blocked")),
             "{kind:?}"
         );

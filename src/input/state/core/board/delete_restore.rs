@@ -23,7 +23,7 @@ impl InputState {
         if self.pending_board_delete.is_some() {
             self.pending_board_delete = None;
             // Push under the confirmation's key so the queue dedups the active
-            // "board.delete" prompt in place; clearing `ui_toast` here would
+            // "board.delete" prompt in place; clearing the active toast here would
             // bypass the queue and let an unrelated queued toast surface.
             self.push_toast(
                 ToastPriority::Info,
@@ -43,7 +43,7 @@ impl InputState {
         if self.pending_page_delete.is_some() {
             self.pending_page_delete = None;
             // Push under the page-delete key (matching the confirmation prompt)
-            // so the queue dedups it in place instead of clearing `ui_toast`
+            // so the queue dedups it in place instead of clearing the active toast
             // directly and letting an unrelated queued toast surface.
             self.push_toast(
                 ToastPriority::Info,
@@ -71,28 +71,21 @@ impl InputState {
         // Retract the delete/restore toasts across BOTH the active slot and the
         // pending queue, then let the queue promote the next valid entry. A
         // Critical toast (e.g. a capability warning) can hold a confirm/undo
-        // toast queued behind it; scanning only `ui_toast` would leave that
+        // toast queued behind it; scanning only the active toast would leave that
         // queued action alive to surface later against a session that no longer
         // backs it (delete/restore state is being discarded here).
-        let changed = self
-            .toast_queue
-            .remove_matching(&mut self.ui_toast, |key, action| {
-                if !matches!(key, "board.delete" | "page.delete") {
-                    return false;
+        self.remove_matching_toasts(|key, action| {
+            if !matches!(key, "board.delete" | "page.delete") {
+                return false;
+            }
+            match action {
+                Some(Action::BoardDelete) | Some(Action::PageDelete) => true,
+                Some(Action::BoardRestoreDeleted) | Some(Action::PageRestoreDeleted) => {
+                    include_restore_actions
                 }
-                match action {
-                    Some(Action::BoardDelete) | Some(Action::PageDelete) => true,
-                    Some(Action::BoardRestoreDeleted) | Some(Action::PageRestoreDeleted) => {
-                        include_restore_actions
-                    }
-                    _ => false,
-                }
-            });
-        if changed {
-            self.ui_toast_bounds = None;
-            self.ui_toast_action_bounds = [None, None];
-            self.needs_redraw = true;
-        }
+                _ => false,
+            }
+        });
     }
 
     pub fn delete_active_board(&mut self) {

@@ -374,7 +374,7 @@ impl WaylandState {
                 .mark_full_for(DirtyFullReason::FirstRunOnboarding);
             self.input_state.needs_redraw = true;
         }
-        if completed_now && self.input_state.ui_toast.is_none() {
+        if completed_now && !self.input_state.has_active_toast() {
             self.input_state.push_toast(
                 ToastPriority::Info,
                 "onboarding.first_run",

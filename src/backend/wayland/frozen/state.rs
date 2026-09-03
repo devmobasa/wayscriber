@@ -1458,10 +1458,7 @@ mod tests {
 
         state.finish_failed_fallback_capture(&mut input_state);
 
-        let toast = input_state
-            .ui_toast
-            .as_ref()
-            .expect("visible stale rejection");
+        let toast = input_state.active_toast().expect("visible stale rejection");
         assert!(toast.message.contains("display layout changed"));
         assert!(state.take_capture_done());
     }
@@ -1474,10 +1471,7 @@ mod tests {
 
         state.finish_failed_fallback_capture(&mut input_state);
 
-        let toast = input_state
-            .ui_toast
-            .as_ref()
-            .expect("visible capture failure");
+        let toast = input_state.active_toast().expect("visible capture failure");
         assert_eq!(toast.message, "Freeze could not capture the screen.");
         assert!(state.take_capture_done());
     }

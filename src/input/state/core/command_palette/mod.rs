@@ -369,8 +369,7 @@ mod tests {
         assert!(state.take_pending_keybinding_edits().is_empty());
         assert_eq!(
             state
-                .ui_toast
-                .as_ref()
+                .active_toast()
                 .map(|toast| toast.message.as_str())
                 .unwrap_or_default(),
             "Replay Tour has no configurable keyboard shortcut."
@@ -956,7 +955,7 @@ mod tests {
         assert!(state.handle_command_palette_click(x, y, 1920, 1000));
         assert!(state.command_palette.open);
         assert_eq!(state.command_palette.selected, 1);
-        assert!(state.ui_toast.is_none());
+        assert!(state.active_toast().is_none());
     }
 
     #[test]
@@ -977,7 +976,7 @@ mod tests {
         assert!(state.handle_command_palette_click(x, y, 1920, 1000));
         assert!(!state.command_palette.open);
         assert!(!state.ui_visibility.show_status_bar);
-        let toast = state.ui_toast.as_ref().expect("command toast");
+        let toast = state.active_toast().expect("command toast");
         assert_eq!(
             toast.kind,
             crate::input::state::core::base::UiToastKind::Info

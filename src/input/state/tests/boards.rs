@@ -68,7 +68,7 @@ fn switch_board_recent_shows_toast_when_no_other_recent_board_exists() {
 
     assert_eq!(state.board_id(), BOARD_ID_WHITEBOARD);
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("No recent board to switch to.")
     );
 }
@@ -214,7 +214,7 @@ fn duplicate_board_from_transparent_shows_info_toast_without_creating_board() {
 
     assert_eq!(state.boards.board_count(), initial_count);
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Overlay board cannot be duplicated.")
     );
 }
@@ -253,8 +253,7 @@ fn duplicate_board_blocks_when_clone_would_exceed_persisted_session_limit() {
     assert_eq!(state.board_id(), BOARD_ID_WHITEBOARD);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Board duplicate blocked"))
     );
 }
@@ -275,8 +274,7 @@ fn duplicate_board_skips_session_preflight_for_single_empty_page_board() {
     assert_ne!(state.board_id(), BOARD_ID_WHITEBOARD);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Board duplicated"))
     );
 }
@@ -299,8 +297,7 @@ fn duplicate_board_ignores_history_only_page_when_history_persistence_disabled()
     assert_ne!(state.board_id(), BOARD_ID_WHITEBOARD);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Board duplicated"))
     );
 }
@@ -323,8 +320,7 @@ fn duplicate_board_ignores_history_only_page_for_visible_save_preflight() {
     assert_ne!(state.board_id(), BOARD_ID_WHITEBOARD);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Board duplicated"))
     );
 }
@@ -348,8 +344,7 @@ fn duplicate_board_preflight_handles_existing_copy_board_when_over_image_limit()
     assert_eq!(state.board_id(), BOARD_ID_WHITEBOARD);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Board duplicate blocked"))
     );
 }
@@ -463,8 +458,7 @@ fn create_board_adds_board_and_emits_toast() {
     assert_eq!(state.boards.board_count(), initial_count + 1);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.starts_with("Board created:"))
     );
 }

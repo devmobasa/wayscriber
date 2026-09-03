@@ -740,7 +740,7 @@ fn paste_selection_warns_when_shape_limit_prevents_any_paste() {
 
     assert_eq!(state.paste_selection(), 0);
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Shape limit reached; nothing pasted.")
     );
 }
@@ -774,7 +774,7 @@ fn paste_selection_warns_when_shape_limit_allows_only_partial_paste() {
     assert_eq!(state.boards.active_frame().shapes.len(), 3);
     assert_eq!(state.selected_shape_ids().len(), 1);
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Shape limit reached; pasted 1 of 2.")
     );
 }

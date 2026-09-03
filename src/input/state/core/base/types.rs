@@ -456,12 +456,6 @@ impl CompositorCapabilities {
     }
 }
 
-/// State for blocked action visual feedback (red flash).
-#[derive(Debug, Clone)]
-pub(crate) struct BlockedActionFeedback {
-    pub started: Instant,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HelperLaunchRequest {
     About,
@@ -624,13 +618,6 @@ pub(crate) struct PendingBoardDelete {
 pub(crate) struct PendingPageDelete {
     pub confirmation: crate::input::boards::PageDeleteConfirmation,
     pub expires_at: Instant,
-}
-
-/// State for status bar change highlight animation.
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub(crate) struct StatusChangeHighlight {
-    pub started: Instant,
 }
 
 /// Pending first-run onboarding usage signals emitted by input handlers.

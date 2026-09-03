@@ -74,16 +74,9 @@ impl InputState {
     fn clear_focus_mode_toast(&mut self) {
         // The Restore action can be queued behind a higher-priority warning,
         // so retract it from both slots whenever Focus no longer owns chrome.
-        let active_removed = self
-            .toast_queue
-            .remove_matching(&mut self.ui_toast, |key, action| {
-                key == FOCUS_MODE_TOAST_KEY || action == Some(Action::ToggleFocusMode)
-            });
-        if active_removed {
-            self.ui_toast_bounds = None;
-            self.ui_toast_action_bounds = [None, None];
-            self.needs_redraw = true;
-        }
+        self.remove_matching_toasts(|key, action| {
+            key == FOCUS_MODE_TOAST_KEY || action == Some(Action::ToggleFocusMode)
+        });
     }
 
     fn clear_all_chrome_recovery_toast(&mut self) {
@@ -91,16 +84,9 @@ impl InputState {
         // `ui` key so it can replace "Toolbar: hidden" in place. Match the
         // recovery action as well: after the rescue arm shows the toolbar,
         // either toast's Show action would immediately hide it again.
-        let active_removed = self
-            .toast_queue
-            .remove_matching(&mut self.ui_toast, |key, action| {
-                key == "ui" && action == Some(Action::ToggleToolbar)
-            });
-        if active_removed {
-            self.ui_toast_bounds = None;
-            self.ui_toast_action_bounds = [None, None];
-            self.needs_redraw = true;
-        }
+        self.remove_matching_toasts(|key, action| {
+            key == "ui" && action == Some(Action::ToggleToolbar)
+        });
     }
 
     /// Toggle focus mode:

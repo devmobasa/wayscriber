@@ -500,7 +500,7 @@ mod tests {
 
         assert!(state.apply_toolbar_event(ToolbarEvent::PinTopToolbar(top_pinned)));
         assert!(
-            state.ui_toast.is_none(),
+            state.active_toast().is_none(),
             "input application does not yet know whether the runtime mutation is durable"
         );
     }

@@ -31,8 +31,7 @@ fn focus_mode_hides_all_chrome_and_restores_exactly() {
     assert!(state.zoom_chip_enabled());
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .and_then(|toast| toast.action.as_ref())
             .is_none_or(|action| action.dispatch_action() != Some(Action::ToggleFocusMode)),
         "restoring Focus Mode must retract its Restore action"
@@ -53,7 +52,7 @@ fn focus_mode_toast_offers_restore_action() {
     let mut state = create_test_input_state();
     state.handle_action(Action::ToggleFocusMode);
 
-    let toast = state.ui_toast.as_ref().expect("focus mode toast");
+    let toast = state.active_toast().expect("focus mode toast");
     assert!(
         toast.message.starts_with("Focus mode"),
         "unexpected message: {}",
@@ -77,7 +76,7 @@ fn focus_mode_suppresses_fallback_mode_badges_but_keeps_restore_toast() {
         "Focus Mode must suppress zoom, frozen, pan, and editing fallback badges"
     );
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| {
+        state.active_toast().map(|toast| {
             toast
                 .action
                 .as_ref()
@@ -103,8 +102,7 @@ fn manual_chrome_toggle_breaks_focus_mode() {
     assert!(!state.zoom_chip_enabled());
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .and_then(|toast| toast.action.as_ref())
             .is_none_or(|action| action.dispatch_action() != Some(Action::ToggleFocusMode)),
         "breaking Focus Mode must retract its stale Restore action"
@@ -129,7 +127,7 @@ fn breaking_focus_mode_retracts_a_restore_toast_queued_behind_a_warning() {
     state.handle_action(Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
     assert!(
-        !state.toast_queue.is_empty(),
+        state.test_pending_toast_count() > 0,
         "the lower-priority Restore toast should be queued"
     );
 
@@ -137,11 +135,11 @@ fn breaking_focus_mode_retracts_a_restore_toast_queued_behind_a_warning() {
 
     assert!(!state.focus_mode_active());
     assert!(
-        state.toast_queue.is_empty(),
+        state.test_pending_toast_count() == 0,
         "breaking Focus Mode must retract a queued Restore action"
     );
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Keep this warning"),
         "unrelated active feedback must remain"
     );
@@ -202,8 +200,7 @@ fn focus_mode_rescues_a_fully_hidden_ui() {
     assert!(!state.zoom_chip_enabled());
     assert_eq!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .and_then(|toast| toast.action.as_ref())
             .and_then(|action| action.dispatch_action()),
         Some(Action::ToggleToolbar),
@@ -220,8 +217,7 @@ fn focus_mode_rescues_a_fully_hidden_ui() {
     assert!(state.zoom_chip_enabled());
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .and_then(|toast| toast.action.as_ref())
             .is_none_or(|action| action.dispatch_action() != Some(Action::ToggleToolbar)),
         "Focus rescue must retract the stale Show toolbar action"

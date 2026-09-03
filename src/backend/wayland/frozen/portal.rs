@@ -402,7 +402,7 @@ mod tests {
         assert!(!frozen.is_in_progress());
         assert!(frozen.take_capture_done());
         assert!(!input.frozen_active());
-        assert!(input.ui_toast.is_none());
+        assert!(input.active_toast().is_none());
         Ok(())
     }
 
@@ -436,7 +436,7 @@ mod tests {
             Some(ScreenAcquisitionOutcome::Cancelled)
         );
         assert!(frozen.take_capture_done());
-        assert!(input.ui_toast.is_none());
+        assert!(input.active_toast().is_none());
         Ok(())
     }
 
@@ -460,7 +460,7 @@ mod tests {
         assert!(input.frozen_active());
         assert!(!frozen.has_pending_image());
         assert!(frozen.take_capture_done());
-        assert!(input.ui_toast.is_some());
+        assert!(input.active_toast().is_some());
         Ok(())
     }
 
@@ -483,7 +483,7 @@ mod tests {
 
         assert!(!frozen.has_pending_image());
         assert!(frozen.take_capture_done());
-        assert!(input.ui_toast.is_some());
+        assert!(input.active_toast().is_some());
         Ok(())
     }
 

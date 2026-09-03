@@ -57,8 +57,7 @@ fn delete_active_board_requires_confirmation_then_restore_recovers_board() {
     assert_eq!(state.boards.board_count(), initial_count);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Click to confirm."))
     );
 
@@ -67,7 +66,7 @@ fn delete_active_board_requires_confirmation_then_restore_recovers_board() {
     assert_eq!(state.boards.board_count(), initial_count - 1);
     assert_ne!(state.board_id(), BOARD_ID_BLACKBOARD);
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Board deleted: Blackboard")
     );
 
@@ -75,7 +74,7 @@ fn delete_active_board_requires_confirmation_then_restore_recovers_board() {
     assert_eq!(state.boards.board_count(), initial_count);
     assert_eq!(state.board_id(), BOARD_ID_BLACKBOARD);
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Board restored: Blackboard")
     );
 }
@@ -155,7 +154,7 @@ fn cancel_pending_board_delete_clears_confirmation_state() {
     assert!(!state.has_pending_board_delete());
     assert_eq!(state.board_id(), BOARD_ID_BLACKBOARD);
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Board deletion cancelled.")
     );
 }
@@ -170,8 +169,7 @@ fn cancel_pending_board_delete_dedups_confirmation_over_queued_toast() {
     assert!(state.has_pending_board_delete());
     assert_eq!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .map(|toast| toast.message.contains("confirm")),
         Some(true),
         "the delete confirmation is the visible toast"
@@ -186,7 +184,7 @@ fn cancel_pending_board_delete_dedups_confirmation_over_queued_toast() {
     // the unrelated queued toast must not jump ahead and steal the slot.
     assert!(!state.has_pending_board_delete());
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Board deletion cancelled."),
         "cancellation replaces the confirmation, not the queued page.nav toast"
     );
@@ -207,7 +205,7 @@ fn page_delete_requires_confirmation_and_restore_recovers_deleted_page() {
     assert!(!state.has_pending_page_delete());
     assert_eq!(state.boards.page_count(), 1);
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Page deleted (1/1)")
     );
 
@@ -215,7 +213,7 @@ fn page_delete_requires_confirmation_and_restore_recovers_deleted_page() {
     assert_eq!(state.boards.page_count(), 2);
     assert_eq!(state.boards.active_page_index(), 1);
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Page restored (2/2)")
     );
 }
@@ -255,7 +253,7 @@ fn cancel_pending_page_delete_clears_confirmation_state() {
     assert!(!state.has_pending_page_delete());
     assert_eq!(state.boards.page_count(), 2);
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Page deletion cancelled.")
     );
 }
@@ -279,7 +277,7 @@ fn page_delete_on_last_page_clears_shapes_without_removing_page() {
     assert_eq!(state.boards.page_count(), 1);
     assert!(state.boards.active_frame().shapes.is_empty());
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Page cleared (last page)")
     );
 }
@@ -312,7 +310,7 @@ fn board_rename_does_not_stale_pending_board_delete() {
 
     assert!(!state.boards.has_board(BOARD_ID_BLACKBOARD));
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Board deleted: Renamed Board")
     );
 }
@@ -384,7 +382,7 @@ fn pending_page_delete_survives_active_board_drift_and_deletes_original_page() {
         2
     );
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Page restored (2/2)")
     );
     assert!(matches!(state.state, DrawingState::Drawing { .. }));

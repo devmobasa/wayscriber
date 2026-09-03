@@ -77,7 +77,7 @@ fn set_board_name_rejects_empty_input_with_warning_toast() {
 
     assert_eq!(state.boards.board_states()[index].spec.name, original);
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Board name cannot be empty.")
     );
 }
@@ -147,8 +147,7 @@ fn move_page_between_boards_copy_preserves_source_and_adds_page_to_target() {
     );
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Page copied to 'Blackboard'"))
     );
 }
@@ -162,7 +161,7 @@ fn reset_active_canvas_position_clears_view_offset_on_solid_board() {
     assert!(state.reset_active_canvas_position());
     assert_eq!(state.boards.active_frame().view_offset(), (0, 0));
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("Canvas position reset.")
     );
 }
@@ -190,8 +189,7 @@ fn move_page_between_boards_move_removes_source_page_and_activates_target_copy()
     assert_eq!(state.boards.board_states()[target].pages.active_index(), 1);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Page moved to 'Blackboard'"))
     );
 }
@@ -246,8 +244,7 @@ fn page_duplicate_blocks_when_clone_would_exceed_persisted_session_limit() {
     assert_eq!(state.boards.board_states()[board].pages.page_count(), 1);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Page duplicate blocked"))
     );
 }
@@ -273,8 +270,7 @@ fn page_duplicate_blocks_many_tiny_images_when_real_save_exceeds_limit() {
     assert_eq!(state.boards.board_states()[board].pages.page_count(), 1);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Page duplicate blocked"))
     );
 }
@@ -299,8 +295,7 @@ fn page_duplicate_blocks_mixed_image_and_text_when_real_save_exceeds_limit() {
     assert_eq!(state.boards.board_states()[board].pages.page_count(), 1);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Page duplicate blocked"))
     );
 }
@@ -321,8 +316,7 @@ fn page_duplicate_preflights_omitted_empty_board_becoming_persisted() {
     assert_eq!(state.boards.board_states()[board].pages.page_count(), 1);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Page duplicate blocked"))
     );
 }
@@ -370,8 +364,7 @@ fn page_duplicate_blocks_compressed_text_when_real_save_exceeds_limit() {
     assert_eq!(state.boards.board_states()[board].pages.page_count(), 1);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Page duplicate blocked"))
     );
 }
@@ -395,8 +388,7 @@ fn page_duplicate_blocks_uncompressed_text_when_real_save_exceeds_limit() {
     assert_eq!(state.boards.board_states()[board].pages.page_count(), 1);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Page duplicate blocked"))
     );
 }
@@ -419,8 +411,7 @@ fn cross_board_page_copy_blocks_when_clone_would_exceed_persisted_session_limit(
     assert_eq!(state.boards.board_states()[target].pages.page_count(), 1);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Page copy blocked"))
     );
 }
@@ -449,8 +440,7 @@ fn cross_board_page_copy_preflights_when_source_was_not_previously_persisted() {
     assert_eq!(state.boards.board_states()[target].pages.page_count(), 1);
     assert!(
         state
-            .ui_toast
-            .as_ref()
+            .active_toast()
             .is_some_and(|toast| toast.message.contains("Page copy blocked"))
     );
 }

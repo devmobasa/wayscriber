@@ -140,7 +140,7 @@ fn ui_toast_layout(
     screen_width: u32,
     screen_height: u32,
 ) -> Option<UiToastLayout> {
-    let toast = input_state.ui_toast.as_ref()?;
+    let toast = input_state.active_toast()?;
     let actions = [toast.action.as_ref(), toast.secondary_action.as_ref()];
     let action_sizes = actions.map(|action| {
         action.and_then(|action| {
@@ -302,7 +302,7 @@ pub fn render_ui_toast(
     screen_width: u32,
     screen_height: u32,
 ) -> Option<UiToastRenderGeometry> {
-    let toast = input_state.ui_toast.as_ref()?;
+    let toast = input_state.active_toast()?;
 
     let now = Instant::now();
     let duration_secs = toast.duration_ms as f32 / 1000.0;

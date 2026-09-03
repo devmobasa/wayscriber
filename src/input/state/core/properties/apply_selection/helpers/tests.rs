@@ -249,7 +249,7 @@ fn report_selection_apply_result_emits_expected_toasts() {
         "fill",
     ));
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("No fill to edit in selection.")
     );
 
@@ -262,7 +262,7 @@ fn report_selection_apply_result_emits_expected_toasts() {
         "color",
     ));
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("All color shapes are locked.")
     );
 
@@ -275,7 +275,7 @@ fn report_selection_apply_result_emits_expected_toasts() {
         "fill",
     ));
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("No changes applied.")
     );
 
@@ -288,7 +288,7 @@ fn report_selection_apply_result_emits_expected_toasts() {
         "fill",
     ));
     assert_eq!(
-        state.ui_toast.as_ref().map(|toast| toast.message.as_str()),
+        state.active_toast().map(|toast| toast.message.as_str()),
         Some("2 locked shape(s) unchanged.")
     );
 }

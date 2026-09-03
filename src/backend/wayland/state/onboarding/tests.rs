@@ -5,8 +5,7 @@ use super::first_run::{
 };
 use super::{
     acknowledge_tip_command, automatic_onboarding_allowed, automatic_tip_toast,
-    canvas_popover_hint_relevant, capability_toast_message, shortcut_coach_should_fire,
-    status_bar_board_picker_entry,
+    canvas_popover_hint_relevant, shortcut_coach_should_fire, status_bar_board_picker_entry,
 };
 use crate::config::{RadialMenuMouseBinding, ToolbarRebindModifier};
 use crate::domain::{Action, OnboardingTip};
@@ -371,32 +370,32 @@ fn limited_caps() -> CompositorCapabilities {
 
 #[test]
 fn capability_warning_shows_once_per_session() {
+    let mut input = crate::input::state::test_support::make_test_input_state();
     let caps = limited_caps();
 
-    let first = capability_toast_message(None, caps);
     assert!(
-        first.is_some(),
+        input.note_capability_toast(caps).is_some(),
         "limited capabilities warn on first evaluation"
     );
-
-    // Same capability set again this session: no re-warning (#156).
-    assert_eq!(capability_toast_message(Some(caps), caps), None);
+    assert_eq!(input.note_capability_toast(caps), None);
 }
 
 #[test]
 fn capability_warning_returns_when_capabilities_change() {
+    let mut input = crate::input::state::test_support::make_test_input_state();
     let caps = limited_caps();
-    let first = capability_toast_message(None, caps);
+    let first = input.note_capability_toast(caps);
 
     let mut changed = caps;
     changed.layer_shell = false;
-    let second = capability_toast_message(Some(caps), changed);
+    let second = input.note_capability_toast(changed);
     assert!(second.is_some(), "changed capability state warns again");
     assert_ne!(first, second, "the summary reflects the new state");
 }
 
 #[test]
 fn capability_warning_skipped_when_everything_available() {
+    let mut input = crate::input::state::test_support::make_test_input_state();
     let caps = CompositorCapabilities {
         layer_shell: true,
         screencopy: true,
@@ -404,7 +403,7 @@ fn capability_warning_skipped_when_everything_available() {
         pointer_constraints: true,
         ..CompositorCapabilities::default()
     };
-    assert_eq!(capability_toast_message(None, caps), None);
+    assert_eq!(input.note_capability_toast(caps), None);
 }
 
 #[test]

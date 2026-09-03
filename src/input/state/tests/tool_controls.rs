@@ -615,7 +615,7 @@ fn recoloring_a_swatch_previews_on_the_palette_and_leaves_the_tool_alone() {
     );
     assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
     assert!(!state.session_dirty);
-    assert!(state.ui_toast.is_none());
+    assert!(state.active_toast().is_none());
 }
 
 /// Accepting keeps the swatch and hands the slot to the backend to write.
@@ -647,7 +647,7 @@ fn accepting_a_recolor_keeps_the_swatch_and_queues_the_durable_write() {
         })
     );
     assert!(
-        state.ui_toast.is_none(),
+        state.active_toast().is_none(),
         "the backend raises the toast once it knows whether the write landed"
     );
     // An unselected swatch's recolor is not a drawing change.
@@ -706,7 +706,7 @@ fn reopening_the_picker_abandons_an_unsaved_recolor() {
     state.open_color_picker_popup();
     assert_eq!(state.style.quick_colors.color_for_index(1), Some(second));
     assert_eq!(state.color_picker_popup_slot(), None);
-    assert!(state.ui_toast.is_none());
+    assert!(state.active_toast().is_none());
 }
 
 #[test]
@@ -729,7 +729,7 @@ fn a_recolor_never_survives_an_implicit_close_unsaved() {
         state.style.quick_colors.color_for_index(0),
         Some(slot_color)
     );
-    assert!(state.ui_toast.is_none());
+    assert!(state.active_toast().is_none());
 }
 
 #[test]
@@ -827,7 +827,7 @@ fn default_button_stages_the_shipped_color_for_ok_to_accept() {
     assert!(state.is_color_picker_popup_open());
     assert_eq!(state.color_picker_popup_current_color(), Some(shipped));
     assert_eq!(state.style.quick_colors.color_for_index(1), Some(shipped));
-    assert!(state.ui_toast.is_none());
+    assert!(state.active_toast().is_none());
 
     state.apply_color_picker_popup();
     assert_eq!(state.style.quick_colors.color_for_index(1), Some(shipped));
@@ -864,7 +864,7 @@ fn canceling_after_default_keeps_the_customized_color() {
         state.style.quick_colors.color_for_index(2),
         Some(customized)
     );
-    assert!(state.ui_toast.is_none());
+    assert!(state.active_toast().is_none());
 }
 
 /// The OK button is clicked with the pointer, so the release path must reach
