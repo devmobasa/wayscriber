@@ -44,7 +44,7 @@ impl InputState {
                     && self.boards.show_pan_badge()
                     && !self.board_is_transparent())
                 || (matches!(self.state, crate::input::DrawingState::TextInput { .. })
-                    && self.text_edit_target.is_some()))
+                    && self.text_editing.edit_target().is_some()))
     }
 
     /// Apply a status-bar value authored by a preset or session restore.

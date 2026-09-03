@@ -236,7 +236,7 @@ pub(crate) fn handle_right_press(state: &mut InputState, points: PointerPoints) 
     }
 
     state.update_pointer_positions(screen.x(), screen.y(), canvas.x(), canvas.y());
-    state.last_text_click = None;
+    state.text_editing.set_last_click(None);
     if let Some(kind) = active_interaction_kind(state)
         && state.try_cancel_active_interaction()
     {

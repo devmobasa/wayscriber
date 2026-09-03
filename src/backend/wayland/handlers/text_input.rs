@@ -2,7 +2,7 @@
 //!
 //! The manager is bound at startup and a seat-bound `text_input` object is
 //! created when a keyboard capability appears (see `handlers/seat.rs`). This
-//! module translates the protocol's batched events into the `InputState`
+//! module translates the protocol's batched events into `TextEditing`
 //! IME state machine (`ime_queue_*` / `ime_apply_done`) and drives the
 //! enable/disable lifecycle against the current text-edit state.
 //!
@@ -73,12 +73,13 @@ impl Dispatch<ZwpTextInputV3, ()> for WaylandState {
             } => {
                 state
                     .input_state
+                    .text_editing
                     .ime_queue_preedit(text, cursor_begin, cursor_end);
             }
             // A null `commit_string` overwrites (retracts) any commit queued
             // earlier in the same batch — the pending state is double-buffered.
             Event::CommitString { text } => {
-                state.input_state.ime_queue_commit(text);
+                state.input_state.text_editing.ime_queue_commit(text);
             }
             Event::DeleteSurroundingText {
                 before_length,
@@ -86,6 +87,7 @@ impl Dispatch<ZwpTextInputV3, ()> for WaylandState {
             } => {
                 state
                     .input_state
+                    .text_editing
                     .ime_queue_delete_surrounding(before_length, after_length);
             }
             Event::Done { serial } => state.on_ime_done(serial),
@@ -201,7 +203,7 @@ impl WaylandState {
 
         // Fallback: the right edge of the cached preview bounds, kept within the
         // transformed preview even when a small zoom rounds it to one pixel.
-        let Some(canvas_rect) = self.input_state.last_text_preview_bounds else {
+        let Some(canvas_rect) = self.input_state.text_editing.preview_bounds() else {
             return false;
         };
         let Some(rect) = self.input_state.screen_rect_for_canvas(canvas_rect) else {

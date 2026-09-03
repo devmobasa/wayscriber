@@ -29,9 +29,9 @@ impl ToolbarSnapshot {
         let page_count = state.boards.page_count();
         let page_index = state.boards.active_page_index();
         let text_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })
-            && state.text_input_mode == crate::input::TextInputMode::Plain;
+            && state.text_editing.mode() == crate::input::TextInputMode::Plain;
         let note_active = matches!(state.state, crate::input::DrawingState::TextInput { .. })
-            && state.text_input_mode == crate::input::TextInputMode::StickyNote;
+            && state.text_editing.mode() == crate::input::TextInputMode::StickyNote;
         let override_tool = state.tool_override();
         let thickness_targets_eraser = active_tool.uses_eraser_size()
             || override_tool

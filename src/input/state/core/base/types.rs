@@ -393,23 +393,6 @@ impl ToastPress {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct TextClickState {
-    pub shape_id: ShapeId,
-    pub x: i32,
-    pub y: i32,
-    pub at: Instant,
-}
-
-/// Tracks an in-progress Alt+left-drag that repositions the active text block.
-/// Stores the grab offset (pointer minus block origin) so the block follows the
-/// cursor exactly under the grabbed point rather than snapping its origin there.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct TextBlockDrag {
-    pub grab_dx: i32,
-    pub grab_dy: i32,
-}
-
-#[derive(Debug, Clone, Copy)]
 pub(crate) struct BoardPickerClickState {
     pub row: usize,
     pub x: i32,
@@ -682,15 +665,6 @@ pub(crate) struct PendingPageDelete {
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub(crate) struct StatusChangeHighlight {
-    pub started: Instant,
-}
-
-/// Duration for text edit entry animation in milliseconds.
-pub const TEXT_EDIT_ENTRY_DURATION_MS: u64 = 200;
-
-/// State for text edit entry animation (teal glow pulse).
-#[derive(Debug, Clone)]
-pub(crate) struct TextEditEntryFeedback {
     pub started: Instant,
 }
 

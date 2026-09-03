@@ -145,64 +145,55 @@ impl InputState {
 
     /// Updates dirty tracking for the live text preview/caret overlay.
     pub(crate) fn update_text_preview_dirty(&mut self) {
-        self.text_input_cursor_rect_dirty = true;
+        self.text_editing.mark_cursor_rect_dirty();
         let new_bounds = self.compute_text_preview_bounds();
-        let previous = self.last_text_preview_bounds;
+        let previous = self.text_editing.replace_preview_bounds(new_bounds);
 
         if new_bounds != previous
             && let Some(prev) = previous
         {
             self.dirty_tracker.mark_rect(prev);
         }
-
-        if let Some(bounds) = new_bounds {
-            self.dirty_tracker.mark_rect(bounds);
-            self.last_text_preview_bounds = Some(bounds);
-        } else {
-            self.last_text_preview_bounds = None;
-        }
+        self.dirty_tracker.mark_optional_rect(new_bounds);
     }
 
     /// Updates text preview damage for a change authored outside the input
     /// method. The backend uses this bit to publish text-input-v3's `Other`
     /// change cause with the coalesced surrounding-text/caret update.
     pub(crate) fn update_text_preview_dirty_from_editor(&mut self) {
-        self.text_input_external_change_dirty = true;
+        self.text_editing.mark_external_change_dirty();
         self.update_text_preview_dirty();
     }
 
     /// Clears the cached text preview bounds.
     pub(crate) fn clear_text_preview_dirty(&mut self) {
-        self.text_input_cursor_rect_dirty = false;
-        self.text_input_external_change_dirty = false;
-        if let Some(prev) = self.last_text_preview_bounds.take() {
-            self.dirty_tracker.mark_rect(prev);
-        }
+        self.dirty_tracker
+            .mark_optional_rect(self.text_editing.clear_preview_dirty());
     }
 
     /// Drain one coalesced request to publish the current caret geometry to
     /// the compositor's text-input object.
     pub(crate) fn take_text_input_cursor_rect_dirty(&mut self) -> bool {
-        std::mem::take(&mut self.text_input_cursor_rect_dirty)
+        self.text_editing.take_cursor_rect_dirty()
     }
 
     /// Drains the coalesced external-editor origin for the next protocol
     /// update independently of geometry dirtiness.
     pub(crate) fn take_text_input_external_change_dirty(&mut self) -> bool {
-        std::mem::take(&mut self.text_input_external_change_dirty)
+        self.text_editing.take_external_change_dirty()
     }
 
     fn compute_text_preview_bounds(&self) -> Option<Rect> {
         let DrawingState::TextInput { x, y, .. } = &self.state else {
             return None;
         };
-        let cursor_glyph = if self.text_edit_target.is_some() {
+        let cursor_glyph = if self.text_editing.edit_target().is_some() {
             "|"
         } else {
             "_"
         };
         let preview = self.text_input_preview(cursor_glyph)?;
-        let text_bounds = match self.text_input_mode {
+        let text_bounds = match self.text_editing.mode() {
             TextInputMode::Plain => bounding_box_for_text(
                 *x,
                 *y,
@@ -286,7 +277,7 @@ impl InputState {
     /// text, so it stays hidden. The renderer defers to this so the damage
     /// bounds and the drawn ghost always agree.
     pub(crate) fn text_edit_ghost_visible(&self) -> bool {
-        let Some((_, snapshot)) = &self.text_edit_target else {
+        let Some((_, snapshot)) = self.text_editing.edit_target() else {
             return false;
         };
         let DrawingState::TextInput { x, y, .. } = &self.state else {
@@ -302,7 +293,7 @@ impl InputState {
         if !self.text_edit_ghost_visible() {
             return None;
         }
-        let (_, snapshot) = self.text_edit_target.as_ref()?;
+        let (_, snapshot) = self.text_editing.edit_target()?;
         snapshot
             .shape
             .bounding_box()?
@@ -336,7 +327,7 @@ impl InputState {
         let DrawingState::TextInput { x, y, .. } = &self.state else {
             return None;
         };
-        let cursor_glyph = if self.text_edit_target.is_some() {
+        let cursor_glyph = if self.text_editing.edit_target().is_some() {
             "|"
         } else {
             "_"
@@ -547,7 +538,9 @@ mod tests {
         // built from ink alone leaves the underline behind when the block moves.
         let mut state = make_test_input_state();
         state.state = DrawingState::text_input(100, 100, String::new());
-        state.ime_queue_preedit(Some("kako".to_string()), 4, 4);
+        state
+            .text_editing
+            .ime_queue_preedit(Some("kako".to_string()), 4, 4);
         assert!(state.ime_apply_done());
 
         let bounds = state
@@ -672,7 +665,9 @@ mod tests {
             *selection_anchor = Some(0);
             *caret = 5;
         }
-        state.ime_queue_preedit(Some("X".to_string()), 1, 1);
+        state
+            .text_editing
+            .ime_queue_preedit(Some("X".to_string()), 1, 1);
         state.ime_apply_done();
 
         let rect = state
@@ -752,7 +747,7 @@ mod tests {
     #[test]
     fn empty_sticky_note_damage_covers_the_background_not_only_the_caret() {
         let mut state = make_test_input_state();
-        state.text_input_mode = TextInputMode::StickyNote;
+        state.text_editing.set_mode(TextInputMode::StickyNote);
         state.state = DrawingState::text_input(100, 100, String::new());
 
         let bounds = state

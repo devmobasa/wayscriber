@@ -1,6 +1,6 @@
 use super::super::base::{
-    BLOCKED_ACTION_DURATION_MS, BlockedActionFeedback, InputState, PendingClipboardFallback,
-    TEXT_EDIT_ENTRY_DURATION_MS, Toast, ToastCommand, ToastPress, ToastPriority, ToastPushOutcome,
+    BLOCKED_ACTION_DURATION_MS, BlockedActionFeedback, InputState, PendingClipboardFallback, Toast,
+    ToastCommand, ToastPress, ToastPriority, ToastPushOutcome,
 };
 use crate::capture::{
     ImageOperationKind,
@@ -303,25 +303,12 @@ impl InputState {
 
     /// Advance the text edit entry feedback animation. Returns true if still active.
     pub fn advance_text_edit_entry_feedback(&mut self, now: Instant) -> bool {
-        let Some(feedback) = &self.text_edit_entry_feedback else {
-            return false;
-        };
-        let duration = Duration::from_millis(TEXT_EDIT_ENTRY_DURATION_MS);
-        if now.saturating_duration_since(feedback.started) >= duration {
-            self.text_edit_entry_feedback = None;
-            return false;
-        }
-        true
+        self.text_editing.expire_edit_entry_feedback(now)
     }
 
     /// Get the progress (0.0 to 1.0) of the text edit entry animation.
     pub fn text_edit_entry_progress(&self) -> Option<f64> {
-        let feedback = self.text_edit_entry_feedback.as_ref()?;
-        let elapsed = Instant::now()
-            .saturating_duration_since(feedback.started)
-            .as_millis() as f64;
-        let total = TEXT_EDIT_ENTRY_DURATION_MS as f64;
-        Some((elapsed / total).min(1.0))
+        self.text_editing.edit_entry_progress(Instant::now())
     }
 }
 
@@ -331,7 +318,10 @@ mod tests {
     use crate::config::KeybindingsConfig;
     use crate::domain::OnboardingTip;
     use crate::draw::{Color, Shape};
-    use crate::input::state::core::base::{TextEditEntryFeedback, UiToastKind};
+    use crate::input::state::core::base::UiToastKind;
+    use crate::input::state::core::text_editing::{
+        TEXT_EDIT_ENTRY_DURATION_MS, TextEditEntryFeedback,
+    };
 
     use crate::ui::toolbar::ToolbarEvent;
 
@@ -879,13 +869,13 @@ mod tests {
     #[test]
     fn advance_text_edit_entry_feedback_clears_expired_feedback() {
         let mut state = make_state();
-        state.text_edit_entry_feedback = Some(TextEditEntryFeedback {
-            started: Instant::now(),
-        });
-        let now = state.text_edit_entry_feedback.as_ref().unwrap().started
-            + Duration::from_millis(TEXT_EDIT_ENTRY_DURATION_MS);
+        let started = Instant::now();
+        state
+            .text_editing
+            .set_edit_entry_feedback(Some(TextEditEntryFeedback { started }));
+        let now = started + Duration::from_millis(TEXT_EDIT_ENTRY_DURATION_MS);
 
         assert!(!state.advance_text_edit_entry_feedback(now));
-        assert!(state.text_edit_entry_feedback.is_none());
+        assert!(state.text_editing.edit_entry_progress(now).is_none());
     }
 }

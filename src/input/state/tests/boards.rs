@@ -159,7 +159,7 @@ fn switch_board_cancels_text_edit_on_source_board_before_switching() {
 
     assert_eq!(state.board_id(), BOARD_ID_WHITEBOARD);
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.text_edit_target.is_none());
+    assert!(state.text_editing.edit_target().is_none());
     assert_board_text(&state, BOARD_ID_TRANSPARENT, shape_id, "Original");
 }
 
@@ -375,7 +375,7 @@ fn duplicate_board_cancels_text_edit_before_cloning_board() {
     state.duplicate_board();
 
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.text_edit_target.is_none());
+    assert!(state.text_editing.edit_target().is_none());
     assert_board_text(&state, BOARD_ID_WHITEBOARD, shape_id, "Original");
 
     let duplicated_id = state.board_id().to_string();

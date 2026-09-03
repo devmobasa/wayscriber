@@ -25,7 +25,7 @@ fn edit_selected_text_commit_updates_and_undo() {
 
     state.on_key_press(Key::Return);
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.text_edit_target.is_none());
+    assert!(state.text_editing.edit_target().is_none());
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
@@ -72,7 +72,7 @@ fn edit_selected_text_cancel_restores_original() {
 
     state.cancel_text_input();
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.text_edit_target.is_none());
+    assert!(state.text_editing.edit_target().is_none());
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
@@ -116,7 +116,7 @@ fn edit_selected_sticky_note_commit_updates_and_undo() {
 
     state.on_key_press(Key::Return);
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.text_edit_target.is_none());
+    assert!(state.text_editing.edit_target().is_none());
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
@@ -185,7 +185,7 @@ fn edit_selected_sticky_note_cancel_restores_original() {
 
     state.cancel_text_input();
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.text_edit_target.is_none());
+    assert!(state.text_editing.edit_target().is_none());
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();

@@ -31,7 +31,7 @@ pub(super) fn pill_origin(
 
 pub(super) fn tool_display_name(input_state: &InputState, tool: Tool) -> &'static str {
     match &input_state.state {
-        DrawingState::TextInput { .. } => match input_state.text_input_mode {
+        DrawingState::TextInput { .. } => match input_state.text_editing.mode() {
             TextInputMode::Plain => action_display_label(Action::EnterTextMode),
             TextInputMode::StickyNote => action_display_label(Action::EnterStickyNoteMode),
         },

@@ -26,7 +26,7 @@ impl InputState {
             return false;
         }
 
-        self.last_text_click = None;
+        self.text_editing.set_last_click(None);
         if self.is_point_in_context_menu(screen_x, screen_y) {
             self.update_context_menu_hover_from_pointer(screen_x, screen_y);
         } else {

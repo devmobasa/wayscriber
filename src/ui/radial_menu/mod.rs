@@ -727,11 +727,11 @@ fn action_is_active(action: Action, active_tool: Tool, input_state: &InputState)
     match action {
         Action::EnterTextMode => {
             matches!(input_state.state, DrawingState::TextInput { .. })
-                && matches!(input_state.text_input_mode, TextInputMode::Plain)
+                && matches!(input_state.text_editing.mode(), TextInputMode::Plain)
         }
         Action::EnterStickyNoteMode => {
             matches!(input_state.state, DrawingState::TextInput { .. })
-                && matches!(input_state.text_input_mode, TextInputMode::StickyNote)
+                && matches!(input_state.text_editing.mode(), TextInputMode::StickyNote)
         }
         _ => Tool::from_select_action(action) == Some(active_tool),
     }
@@ -743,7 +743,7 @@ fn center_glyph(input_state: &InputState, active_tool: Tool) -> ToolbarIconPaint
     use crate::ui::toolbar::model::{TopToolbarIcon, semantic_icon_for_tool};
 
     if matches!(input_state.state, DrawingState::TextInput { .. }) {
-        let icon = match input_state.text_input_mode {
+        let icon = match input_state.text_editing.mode() {
             TextInputMode::StickyNote => TopToolbarIcon::StickyNote,
             _ => TopToolbarIcon::Text,
         };

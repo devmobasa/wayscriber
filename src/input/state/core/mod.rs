@@ -33,6 +33,7 @@ mod session_preflight;
 mod session_preflight_exact;
 mod status_hud;
 mod style;
+mod text_editing;
 mod text_font;
 mod tool_controls;
 mod top_menu;
@@ -54,8 +55,8 @@ pub use base::{
     UI_TOAST_DURATION_MS, UiToastKind, UiVisibility, ZoomAction,
 };
 pub(crate) use base::{
-    BoardPickerClickState, InputStateSeed, PolygonClickState, TextBlockDrag, TextClickState,
-    TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress,
+    BoardPickerClickState, InputStateSeed, PolygonClickState, TextClipboardRequest, TextCutTarget,
+    TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress,
 };
 pub(crate) use base::{
     ClipboardFingerprint, ClipboardPasteRequest, HelperLaunchRequest, PasteAnchor,
@@ -93,9 +94,9 @@ pub use font_picker::{
     font_picker_layout, font_picker_rows,
 };
 pub use help_overlay::HelpOverlayState;
+pub use ime::ImePreedit;
 #[cfg(test)]
 pub(crate) use ime::build_text_input_preview;
-pub use ime::{ImeCompositionState, ImePreedit};
 pub use menus::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,
 };
@@ -114,6 +115,7 @@ pub use region_select::{
 pub(crate) use search::fuzzy_score;
 pub use selection::SelectionState;
 pub(crate) use style::DrawingStyle;
+pub(crate) use text_editing::TextEditing;
 pub use tool_controls::PrecisionEntryState;
 pub use tour::{TourState, TourStep};
 pub(crate) use utility::HelpOverlayPressSource;

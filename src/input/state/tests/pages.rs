@@ -209,7 +209,7 @@ fn switch_to_page_cancels_text_edit_before_leaving_source_page() {
     assert!(state.switch_to_page(1));
 
     assert_eq!(state.boards.active_page_index(), 1);
-    assert!(state.text_edit_target.is_none());
+    assert!(state.text_editing.edit_target().is_none());
     assert_page_text(&state, board, 0, shape_id, "Original");
 }
 
@@ -225,7 +225,7 @@ fn page_duplicate_cancels_text_edit_before_cloning_source_page() {
     state.page_duplicate();
 
     assert_eq!(state.boards.active_page_index(), 1);
-    assert!(state.text_edit_target.is_none());
+    assert!(state.text_editing.edit_target().is_none());
     assert_page_text(&state, board, 0, shape_id, "Original");
     assert_page_text(&state, board, 1, shape_id, "Original");
 }
@@ -469,7 +469,7 @@ fn cross_board_page_copy_cancels_active_source_text_edit_before_cloning() {
 
     assert!(state.move_page_between_boards_with_activation(source, 0, target, true, false));
 
-    assert!(state.text_edit_target.is_none());
+    assert!(state.text_editing.edit_target().is_none());
     assert_page_text(&state, source, 0, shape_id, "Original");
     assert_page_text(&state, target, 1, shape_id, "Original");
 }

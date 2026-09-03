@@ -197,7 +197,7 @@ fn west_wedge_enters_text_mode_and_closes_menu() {
 
     assert!(!state.is_radial_menu_open());
     assert!(matches!(state.state, DrawingState::TextInput { .. }));
-    assert!(matches!(state.text_input_mode, TextInputMode::Plain));
+    assert!(matches!(state.text_editing.mode(), TextInputMode::Plain));
 }
 
 #[test]
@@ -325,7 +325,10 @@ fn notes_sub_ring_child_dispatches_sticky_note_mode() {
 
     assert!(!state.is_radial_menu_open());
     assert!(matches!(state.state, DrawingState::TextInput { .. }));
-    assert!(matches!(state.text_input_mode, TextInputMode::StickyNote));
+    assert!(matches!(
+        state.text_editing.mode(),
+        TextInputMode::StickyNote
+    ));
 }
 
 #[test]

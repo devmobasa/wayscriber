@@ -15,17 +15,15 @@ pub use types::{
     MIN_STROKE_THICKNESS, OutputFocusAction, PAGE_DELETE_CONFIRM_MS, PAGE_UNDO_EXPIRE_MS,
     PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS, PresetAction, PresetFeedbackKind,
     PressureThicknessEditMode, PressureThicknessEntryMode, QuickColorEdit, SelectionAxis,
-    SelectionHandle, ShellMode, TEXT_EDIT_ENTRY_DURATION_MS, TextInputMode, UI_TOAST_DURATION_MS,
-    UiToastKind, ZoomAction,
+    SelectionHandle, ShellMode, TextInputMode, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
 };
 pub(crate) use types::{
     BlockedActionFeedback, BoardPickerClickState, ClipboardFingerprint, ClipboardPasteRequest,
     HelperLaunchRequest, PasteAnchor, PendingBackendAction, PendingBoardDelete,
     PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
     PendingSelectionClipboardPublish, PendingToolbarPersistence, PolygonClickState,
-    PresetFeedbackState, SelectionPublishState, TextBlockDrag, TextClickState,
-    TextClipboardRequest, TextCutTarget, TextEditEntryFeedback, TextPasteEdit, TextPasteTarget,
-    ToastCommand, ToastPress, WayscriberClipboardSelection,
+    PresetFeedbackState, SelectionPublishState, TextClipboardRequest, TextCutTarget, TextPasteEdit,
+    TextPasteTarget, ToastCommand, ToastPress, WayscriberClipboardSelection,
 };
 pub(crate) use types::{KeybindingEditOperation, KeybindingEditRequest};
 pub use ui_visibility::UiVisibility;
