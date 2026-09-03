@@ -403,7 +403,21 @@ fn published_v2_runtime_drives_a_typed_request_to_terminal_response() {
             assert!(Instant::now() < deadline, "v2 caller did not publish");
             std::thread::sleep(Duration::from_millis(2));
         }
-        daemon.process_v2_commands().unwrap();
+        loop {
+            daemon.process_v2_commands().unwrap();
+            if !observed_modes
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .is_empty()
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "v2 daemon did not claim the published request"
+            );
+            std::thread::sleep(Duration::from_millis(2));
+        }
         caller.join().unwrap().unwrap();
     });
 
