@@ -70,7 +70,7 @@ pub(in crate::backend::wayland) fn queue_quick_color_edit(
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn handle_quick_color_edit(&mut self, edit: QuickColorEdit) {
-        queue_quick_color_edit(&mut self.config, &mut self.config_edits, edit);
+        queue_quick_color_edit(&mut self.config, self.preferences.config_edits_mut(), edit);
     }
 
     pub(in crate::backend::wayland) fn finish_quick_color_edit(

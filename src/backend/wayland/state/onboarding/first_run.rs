@@ -12,7 +12,7 @@ impl WaylandState {
         key: Key,
     ) -> bool {
         if !background_mode_prompt_active(
-            self.onboarding.state(),
+            self.preferences.onboarding().state(),
             self.first_run_onboarding_card_visible(),
         ) {
             return false;
@@ -25,7 +25,10 @@ impl WaylandState {
         if enable_background_mode {
             match crate::daemon::setup::setup_background_mode() {
                 Ok(summary) => {
-                    mark_background_mode_prompt(self.onboarding.state_mut(), true);
+                    mark_background_mode_prompt(
+                        self.preferences.onboarding_mut().state_mut(),
+                        true,
+                    );
                     self.save_onboarding_state();
                     self.input_state.push_toast(
                         ToastPriority::Info,
@@ -37,7 +40,10 @@ impl WaylandState {
                     );
                 }
                 Err(err) => {
-                    mark_background_mode_prompt(self.onboarding.state_mut(), false);
+                    mark_background_mode_prompt(
+                        self.preferences.onboarding_mut().state_mut(),
+                        false,
+                    );
                     self.save_onboarding_state();
                     self.input_state.push_toast(ToastPriority::Critical, "onboarding.first_run", Toast::error(format!(
                             "Background mode setup failed: {err}. You can set this up later in Background Mode settings."
@@ -45,7 +51,7 @@ impl WaylandState {
                 }
             }
         } else {
-            mark_background_mode_prompt(self.onboarding.state_mut(), false);
+            mark_background_mode_prompt(self.preferences.onboarding_mut().state_mut(), false);
             self.save_onboarding_state();
             self.input_state.push_toast(
                 ToastPriority::Info,
@@ -63,12 +69,12 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn try_skip_first_run_onboarding(&mut self) -> bool {
         if !first_run_skip_allowed(
-            self.onboarding.state().first_run_active(),
+            self.preferences.onboarding().state().first_run_active(),
             self.first_run_onboarding_card_visible(),
         ) {
             return false;
         }
-        let state = self.onboarding.state_mut();
+        let state = self.preferences.onboarding_mut().state_mut();
         state.first_run_skipped = true;
         state.first_run_completed = true;
         state.active_step = None;
@@ -87,7 +93,7 @@ impl WaylandState {
             return None;
         }
 
-        let state = self.onboarding.state();
+        let state = self.preferences.onboarding().state();
         if !state.first_run_active() {
             return None;
         }
@@ -204,7 +210,7 @@ impl WaylandState {
     fn first_run_onboarding_card_visible(&self) -> bool {
         if !super::automatic_onboarding_allowed(
             self.config.ui.show_onboarding_hints,
-            self.onboarding.persistence_available(),
+            self.preferences.onboarding().persistence_available(),
         ) || !self.surface.is_configured()
             || self.overlay_suppressed()
         {
@@ -234,7 +240,7 @@ impl WaylandState {
         let mut completed_now = false;
 
         {
-            let state = self.onboarding.state_mut();
+            let state = self.preferences.onboarding_mut().state_mut();
             let first_run_active = state.first_run_active();
 
             if apply_persisted_usage_signals(state, &usage) {

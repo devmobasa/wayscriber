@@ -150,7 +150,10 @@ impl WaylandState {
         match command {
             ToastCommand::Dispatch(action) => self.dispatch_input_action(action),
             ToastCommand::AcknowledgeTip { tip, then } => {
-                let outcome = acknowledge_tip_command(self.onboarding.acknowledge_tip(tip), then);
+                let outcome = acknowledge_tip_command(
+                    self.preferences.onboarding_mut().acknowledge_tip(tip),
+                    then,
+                );
                 if let Some(action) = outcome.follow_up {
                     self.dispatch_input_action(action);
                 }
@@ -166,7 +169,7 @@ impl WaylandState {
         self.apply_capability_toast();
         if !automatic_onboarding_allowed(
             self.config.ui.show_onboarding_hints,
-            self.onboarding.persistence_available(),
+            self.preferences.onboarding().persistence_available(),
         ) {
             return;
         }
@@ -197,7 +200,7 @@ impl WaylandState {
     fn apply_shortcut_coach(&mut self, slow_path: Option<(Action, u32)>) {
         // Only coach after first-run onboarding: during onboarding the palette
         // and toolbar are being taught, so slow-path use there is expected.
-        if !self.onboarding.state().first_run_completed {
+        if !self.preferences.onboarding().state().first_run_completed {
             return;
         }
 
@@ -225,7 +228,7 @@ impl WaylandState {
         let now = Instant::now();
         let should_fire = {
             let session = &self.data.shortcut_coach;
-            let state = self.onboarding.state();
+            let state = self.preferences.onboarding().state();
             shortcut_coach_should_fire(
                 session.streak,
                 session.hints_this_session,
@@ -263,7 +266,7 @@ impl WaylandState {
             session.hints_this_session = session.hints_this_session.saturating_add(1);
             session.clear_streak();
 
-            let state = self.onboarding.state_mut();
+            let state = self.preferences.onboarding_mut().state_mut();
             state.coach_hint_count = state.coach_hint_count.saturating_add(1);
             if state.coach_hint_count >= DEFERRED_HINT_REPEAT_MAX {
                 state.coach_hint_shown = true;
@@ -307,7 +310,7 @@ impl WaylandState {
         let mut changed = false;
         let mut hint = None;
         {
-            let state = self.onboarding.state_mut();
+            let state = self.preferences.onboarding_mut().state_mut();
             if !state.first_run_completed {
                 return;
             }
@@ -444,7 +447,7 @@ impl WaylandState {
     }
 
     fn apply_toolbar_visibility_hint(&mut self) {
-        if self.onboarding.state().toolbar_hint_shown {
+        if self.preferences.onboarding().state().toolbar_hint_shown {
             return;
         }
         if !self.surface.is_configured() || self.overlay_suppressed() {
@@ -453,7 +456,7 @@ impl WaylandState {
         if self.input_state.presenter_mode_active() || self.input_state.help_overlay.is_visible() {
             return;
         }
-        if self.onboarding.state().first_run_active() {
+        if self.preferences.onboarding().state().first_run_active() {
             return;
         }
         if self.input_state.toolbar_visible() || !self.input_state.toasts_idle() {
@@ -475,7 +478,10 @@ impl WaylandState {
                 ),
         );
         if outcome.accepted() {
-            self.onboarding.state_mut().toolbar_hint_shown = true;
+            self.preferences
+                .onboarding_mut()
+                .state_mut()
+                .toolbar_hint_shown = true;
             self.save_onboarding_state();
         }
     }
@@ -486,7 +492,7 @@ impl WaylandState {
     }
 
     fn save_onboarding_state(&mut self) -> bool {
-        match self.onboarding.save() {
+        match self.preferences.onboarding_mut().save() {
             Ok(()) => true,
             Err(error) => {
                 self.show_onboarding_persistence_warning(&error);

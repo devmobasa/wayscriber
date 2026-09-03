@@ -24,10 +24,12 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn finish_toolbar_item_drag(&mut self, commit: bool) {
-        let finish = match self.runtime_ui.as_mut() {
+        let finish = match self.preferences.runtime_ui_mut().state_mut() {
             Some(runtime) => runtime.finish_item_drag(commit, &self.input_state),
             None => self
-                .runtime_ui_unavailable_previews
+                .preferences
+                .runtime_ui_mut()
+                .unavailable_previews_mut()
                 .finish_item_drag(commit),
         };
         self.input_state.clear_toolbar_item_drag();
@@ -38,19 +40,23 @@ impl WaylandState {
         &mut self,
         group: ToolbarItemOrderGroup,
     ) -> bool {
-        match self.runtime_ui.as_mut() {
+        match self.preferences.runtime_ui_mut().state_mut() {
             Some(runtime) => runtime.begin_item_drag(group, &self.input_state),
             None => self
-                .runtime_ui_unavailable_previews
+                .preferences
+                .runtime_ui_mut()
+                .unavailable_previews_mut()
                 .begin_item_drag(group, &self.input_state),
         }
     }
 
     pub(in crate::backend::wayland) fn toolbar_item_drag_update_allowed(&self) -> bool {
-        match self.runtime_ui.as_ref() {
+        match self.preferences.runtime_ui().state() {
             Some(runtime) => runtime.item_drag_update_allowed(),
             None => self
-                .runtime_ui_unavailable_previews
+                .preferences
+                .runtime_ui()
+                .unavailable_previews()
                 .item_drag_update_allowed(),
         }
     }
@@ -59,10 +65,12 @@ impl WaylandState {
         &self,
         kind: MoveDragKind,
     ) -> bool {
-        match self.runtime_ui.as_ref() {
+        match self.preferences.runtime_ui().state() {
             Some(runtime) => runtime.position_drag_update_allowed(kind),
             None => self
-                .runtime_ui_unavailable_previews
+                .preferences
+                .runtime_ui()
+                .unavailable_previews()
                 .position_drag_update_allowed(kind),
         }
     }
@@ -72,10 +80,12 @@ impl WaylandState {
         kind: MoveDragKind,
     ) -> bool {
         let positions = self.toolbar_position_snapshot();
-        match self.runtime_ui.as_mut() {
+        match self.preferences.runtime_ui_mut().state_mut() {
             Some(runtime) => runtime.begin_position_drag(kind, positions),
             None => self
-                .runtime_ui_unavailable_previews
+                .preferences
+                .runtime_ui_mut()
+                .unavailable_previews_mut()
                 .begin_position_drag(kind, positions),
         }
     }
@@ -86,10 +96,12 @@ impl WaylandState {
     /// `ui.toolbar.*_offset*` values stay the seeds the configurator edits.
     pub(in crate::backend::wayland) fn finish_toolbar_position_preview(&mut self, commit: bool) {
         let positions = self.toolbar_position_snapshot();
-        let finish = match self.runtime_ui.as_mut() {
+        let finish = match self.preferences.runtime_ui_mut().state_mut() {
             Some(runtime) => runtime.finish_position_drag(commit, positions),
             None => self
-                .runtime_ui_unavailable_previews
+                .preferences
+                .runtime_ui_mut()
+                .unavailable_previews_mut()
                 .finish_position_drag(commit),
         };
         self.apply_toolbar_runtime_finish(finish);
@@ -114,7 +126,7 @@ impl WaylandState {
         // One borrow for both halves of the mutation: `input_state` is a
         // disjoint field, so nothing here has to hand the runtime back and
         // reacquire it between beginning and finishing.
-        let Some(runtime) = self.runtime_ui.as_mut() else {
+        let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() else {
             return;
         };
         let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, rollback) else {
@@ -145,7 +157,7 @@ impl WaylandState {
                 return;
             }
         };
-        let Some(runtime) = self.runtime_ui.as_mut() else {
+        let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() else {
             return;
         };
         let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, rollback) else {
@@ -172,7 +184,7 @@ impl WaylandState {
                 return;
             }
         };
-        let Some(runtime) = self.runtime_ui.as_mut() else {
+        let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() else {
             return;
         };
         let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, rollback) else {
@@ -206,7 +218,7 @@ impl WaylandState {
                 return;
             }
         };
-        let Some(runtime) = self.runtime_ui.as_mut() else {
+        let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() else {
             return;
         };
         let Some(prepared) = runtime.begin_toolbar_mutation_with_rollback(target, rollback) else {
@@ -231,7 +243,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn drain_pending_toolbar_persistence(&mut self) {
         use crate::input::state::PendingToolbarPersistence;
 
-        match self.runtime_ui.as_ref() {
+        match self.preferences.runtime_ui().state() {
             // Degraded mode is run-only: consume the entries so the queue
             // cannot wake the loop for writes that have nowhere to land.
             None => {
@@ -283,7 +295,7 @@ impl WaylandState {
     /// drain's no-op filter judges against the post-barrier screen, then
     /// drain. The caller's writer shutdown flushes the writes to disk.
     pub(in crate::backend::wayland) fn drain_toolbar_persistence_for_teardown(&mut self) {
-        if let Some(runtime) = self.runtime_ui.as_mut() {
+        if let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() {
             runtime.settle_barrier_for_teardown();
         }
         self.drain_runtime_ui_completions();
@@ -299,8 +311,9 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn toolbar_persistence_drain_ready(&self) -> bool {
         self.input_state.has_pending_toolbar_persistence()
             && self
-                .runtime_ui
-                .as_ref()
+                .preferences
+                .runtime_ui()
+                .state()
                 .is_none_or(|runtime| !runtime.mutation_barrier_active())
     }
 
@@ -314,7 +327,7 @@ impl WaylandState {
             .boards
             .sync_pin_seeds_from_config(&configured_boards);
         let mut positions = self.toolbar_position_snapshot();
-        let Some(runtime) = self.runtime_ui.as_mut() else {
+        let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() else {
             return;
         };
         let refresh =
@@ -362,7 +375,7 @@ impl WaylandState {
                 else {
                     return;
                 };
-                let Some(runtime) = self.runtime_ui.as_mut() else {
+                let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() else {
                     self.input_state
                         .apply_board_pinned_runtime(&board_id, !current);
                     return;
@@ -376,14 +389,15 @@ impl WaylandState {
                     .input_state
                     .apply_board_pinned_runtime(&prepared.board_id, prepared.desired);
                 let finish = self
-                    .runtime_ui
-                    .as_mut()
+                    .preferences
+                    .runtime_ui_mut()
+                    .state_mut()
                     .expect("runtime state remained available")
                     .finish_board_pin_toggle(prepared, applied);
                 self.apply_toolbar_runtime_finish(finish);
             }
             PendingBoardRuntimeUiAction::IdentityDeleted { board_id } => {
-                if let Some(runtime) = self.runtime_ui.as_mut() {
+                if let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() {
                     runtime.remove_board_identity(&self.config, &board_id);
                 }
             }
@@ -392,15 +406,19 @@ impl WaylandState {
                 pin_seed,
                 pinned,
             } => {
-                let finish = self.runtime_ui.as_mut().and_then(|runtime| {
-                    runtime.restore_board_identity(
-                        &self.config,
-                        &mut self.input_state,
-                        board_id,
-                        pin_seed,
-                        pinned,
-                    )
-                });
+                let finish = self
+                    .preferences
+                    .runtime_ui_mut()
+                    .state_mut()
+                    .and_then(|runtime| {
+                        runtime.restore_board_identity(
+                            &self.config,
+                            &mut self.input_state,
+                            board_id,
+                            pin_seed,
+                            pinned,
+                        )
+                    });
                 if let Some(finish) = finish {
                     self.apply_toolbar_runtime_finish(finish);
                 }
@@ -410,8 +428,9 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn drain_runtime_ui_completions(&mut self) {
         let drain = self
-            .runtime_ui
-            .as_mut()
+            .preferences
+            .runtime_ui_mut()
+            .state_mut()
             .map(ToolbarRuntimeState::drain_writer_completions)
             .unwrap_or_default();
         for rollback in drain.rollbacks {
@@ -423,7 +442,7 @@ impl WaylandState {
             self.cancel_toolbar_move_drag();
             self.cancel_gtk_toolbar_drag_lifecycle();
             let mut positions = self.toolbar_position_snapshot();
-            if let Some(runtime) = self.runtime_ui.as_ref() {
+            if let Some(runtime) = self.preferences.runtime_ui().state() {
                 runtime.apply_live_state(&mut self.input_state, &mut positions);
             }
             self.restore_toolbar_offsets(positions.top);
@@ -436,8 +455,9 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
         }
         let deferred_finishes = self
-            .runtime_ui
-            .as_mut()
+            .preferences
+            .runtime_ui_mut()
+            .state_mut()
             .map(|runtime| runtime.finish_deferred_board_pin_restores(&mut self.input_state))
             .unwrap_or_default();
         for finish in deferred_finishes {
@@ -446,7 +466,7 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn shutdown_runtime_ui(&mut self) {
-        if let Some(runtime) = self.runtime_ui.as_mut() {
+        if let Some(runtime) = self.preferences.runtime_ui_mut().state_mut() {
             runtime.shutdown_blocking();
         }
     }

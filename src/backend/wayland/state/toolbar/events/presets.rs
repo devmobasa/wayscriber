@@ -84,7 +84,11 @@ pub(in crate::backend::wayland) fn queue_preset_action(
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn handle_preset_action(&mut self, action: PresetAction) {
-        queue_preset_action(&mut self.config, &mut self.config_edits, action);
+        queue_preset_action(
+            &mut self.config,
+            self.preferences.config_edits_mut(),
+            action,
+        );
     }
 
     pub(in crate::backend::wayland) fn finish_preset_action(

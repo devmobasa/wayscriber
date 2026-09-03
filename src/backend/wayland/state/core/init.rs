@@ -85,13 +85,16 @@ impl WaylandState {
             )
         });
         let zoom_manager = screencopy_manager.clone();
-        let ui_animation_interval =
-            WaylandState::ui_animation_interval_from_fps(config.performance.ui_animation_fps);
+        let ui_animation = super::super::ui_animation::UiAnimationClock::from_fps(
+            config.performance.ui_animation_fps,
+        );
 
         let buffer_count = config.performance.buffer_count as usize;
         let runtime_operation_ids = RuntimeOperationIdSource::new();
-        let font_catalog_prewarm =
-            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
+        let font_catalog = super::super::font_catalog::FontCatalogPrewarm::new(
+            runtime_operation_ids.clone(),
+            runtime_wake.clone(),
+        );
         let clipboard = super::super::clipboard_runtime::ClipboardRuntime::new(
             runtime_operation_ids.clone(),
             runtime_wake.clone(),
@@ -103,6 +106,13 @@ impl WaylandState {
         let region_cut_preview =
             RuntimeOperationController::new(runtime_operation_ids, runtime_wake.clone());
         let ocr = crate::ocr::OcrController::new(runtime_wake.clone());
+        let preferences = super::super::preference_stores::PreferenceStores::new(
+            onboarding,
+            palette_recents,
+            runtime_ui,
+            runtime_ui_unavailable,
+            runtime_wake.clone(),
+        );
 
         Self {
             protocol: globals,
@@ -113,25 +123,16 @@ impl WaylandState {
             canvas_layer_cache: super::super::canvas_layer::CanvasLayerCache::new(),
             spotlight: super::super::spotlight_runtime::SpotlightRuntime::new(),
             config,
-            runtime_ui,
-            runtime_ui_unavailable,
-            runtime_ui_unavailable_previews: Default::default(),
+            preferences,
             input_state,
-            font_catalog_prewarm,
-            font_catalog_prewarm_started: false,
-            palette_recents,
+            font_catalog,
             clipboard,
             desktop_open,
             window_query,
             region_cut_preview,
             ocr,
             gtk_toolbar: None,
-            onboarding,
-            config_edits: super::super::super::config_edits::ConfigEditWorker::new(
-                runtime_wake.clone(),
-            ),
-            ui_animation_next_tick: None,
-            ui_animation_interval,
+            ui_animation,
             capture: CaptureState::new(capture_manager),
             frozen: FrozenState::new_with_backends(
                 screencopy_manager,

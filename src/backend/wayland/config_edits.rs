@@ -769,7 +769,7 @@ pub(in crate::backend::wayland) fn finish_config_edits(
 impl WaylandState {
     /// Apply every write that has finished since the last pass.
     pub(in crate::backend::wayland) fn drain_config_edit_completions(&mut self) {
-        while let Some(completion) = self.config_edits.try_recv() {
+        while let Some(completion) = self.preferences.config_edits_mut().try_recv() {
             self.finish_config_edit(completion);
         }
     }
@@ -778,7 +778,7 @@ impl WaylandState {
         finish_config_edits(
             &mut self.config,
             &mut self.input_state,
-            &mut self.config_edits,
+            self.preferences.config_edits_mut(),
         );
     }
 
