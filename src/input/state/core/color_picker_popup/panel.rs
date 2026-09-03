@@ -8,10 +8,10 @@ use crate::input::Tool;
 /// Modal state, cached geometry, and press identity for the color picker popup.
 #[derive(Debug, Default)]
 pub struct ColorPickerPopupPanel {
-    pub state: ColorPickerPopupState,
-    pub layout: Option<ColorPickerPopupLayout>,
-    pub(crate) generation: u64,
-    pub(crate) pressed_action: Option<ColorPickerPopupAction>,
+    pub(in crate::input::state) state: ColorPickerPopupState,
+    pub(in crate::input::state) layout: Option<ColorPickerPopupLayout>,
+    pub(in crate::input::state) generation: u64,
+    pub(in crate::input::state) pressed_action: Option<ColorPickerPopupAction>,
 }
 
 impl ColorPickerPopupPanel {

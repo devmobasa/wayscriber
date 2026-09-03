@@ -339,7 +339,7 @@ pub struct InputState {
     pub(crate) context_menu: crate::input::state::core::menus::ContextMenuPanel,
 
     /// Modal state, cached geometry, and press identity for the color picker popup.
-    pub color_picker_popup: crate::input::state::core::ColorPickerPopupPanel,
+    pub(crate) color_picker_popup: crate::input::state::core::ColorPickerPopupPanel,
     /// Current radial menu state
     pub radial_menu_state: RadialMenuState,
     /// Cached layout details for the radial menu
