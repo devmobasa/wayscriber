@@ -567,7 +567,7 @@ pub fn render_zoom_chip(
     // Hover backdrop: a faint rounded fill behind the hovered button so the
     // actionable pieces announce themselves on mouse-over
     // (`zoom_chip_hover` is only ever set while the chip is interactive).
-    if let Some(kind) = input_state.zoom_chip.hover
+    if let Some(kind) = input_state.zoom_chip.hover()
         && let Some(button) = layout.buttons.iter().find(|button| button.kind == kind)
     {
         ctx.set_source_rgba(r, g, b, a * 0.12);

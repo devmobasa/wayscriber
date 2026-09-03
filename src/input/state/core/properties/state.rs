@@ -4,7 +4,7 @@ use super::{PropertiesPanelLayout, ShapePropertiesPanel};
 #[derive(Debug, Default)]
 pub struct PropertiesPanelState {
     pub(super) panel: Option<ShapePropertiesPanel>,
-    pub(crate) layout: Option<PropertiesPanelLayout>,
+    pub(in crate::input::state) layout: Option<PropertiesPanelLayout>,
     pub(super) pending_hover_recalc: bool,
     pub(super) needs_refresh: bool,
 }

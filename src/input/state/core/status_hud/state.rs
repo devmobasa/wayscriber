@@ -12,8 +12,8 @@ pub(super) struct StatusHudRebuildInputs {
 /// Cached geometry and pointer interaction state for the status HUD.
 #[derive(Debug, Default)]
 pub struct StatusHudState {
-    pub(crate) hover: Option<StatusHudSegmentKind>,
-    pub(crate) layout: Option<StatusHudLayout>,
+    pub(in crate::input::state) hover: Option<StatusHudSegmentKind>,
+    pub(in crate::input::state) layout: Option<StatusHudLayout>,
     pub(super) rebuild_inputs: Option<StatusHudRebuildInputs>,
     pub(in crate::input::state) press_pending: bool,
 }
@@ -25,6 +25,10 @@ impl StatusHudState {
 
     pub fn layout(&self) -> Option<&StatusHudLayout> {
         self.layout.as_ref()
+    }
+
+    pub fn hover(&self) -> Option<StatusHudSegmentKind> {
+        self.hover
     }
 
     pub(super) fn rebuild_inputs(&self) -> Option<StatusHudRebuildInputs> {

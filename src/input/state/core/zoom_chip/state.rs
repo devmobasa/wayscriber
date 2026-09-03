@@ -4,15 +4,19 @@ use crate::ui::{ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress};
 /// Display policy, cached geometry, and pointer interaction state for the zoom chip.
 #[derive(Debug)]
 pub struct ZoomChipState {
-    pub(crate) display: ZoomChipDisplay,
-    pub(crate) hover: Option<ZoomChipButtonKind>,
-    pub(crate) layout: Option<ZoomChipLayout>,
+    pub(in crate::input::state) display: ZoomChipDisplay,
+    pub(in crate::input::state) hover: Option<ZoomChipButtonKind>,
+    pub(in crate::input::state) layout: Option<ZoomChipLayout>,
     pub(in crate::input::state) press_pending: ZoomChipPress,
 }
 
 impl ZoomChipState {
     pub fn layout(&self) -> Option<&ZoomChipLayout> {
         self.layout.as_ref()
+    }
+
+    pub fn hover(&self) -> Option<ZoomChipButtonKind> {
+        self.hover
     }
 
     pub(crate) fn is_enabled(

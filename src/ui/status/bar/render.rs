@@ -57,7 +57,7 @@ pub fn render_status_bar(
     // Hover backdrop: a faint rounded fill behind the hovered interactive
     // segment so clickable chips announce themselves on mouse-over
     // (`status_hud_hover` is only ever set while the HUD is interactive).
-    if let Some(kind) = input_state.status_hud.hover
+    if let Some(kind) = input_state.status_hud.hover()
         && let Some(segment) = layout.segments.iter().find(|segment| segment.kind == kind)
     {
         ctx.set_source_rgba(r, g, b, a * 0.12);
