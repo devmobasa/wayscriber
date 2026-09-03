@@ -186,8 +186,8 @@ impl InputState {
 mod tests {
     use crate::draw::frame::ShapeSnapshot;
     use crate::draw::{BLACK, Shape};
-    use crate::input::state::core::base::TextBlockDrag;
     use crate::input::state::core::board_picker::{BoardPickerDrag, BoardPickerPageDrag};
+    use crate::input::state::core::text_editing::TextBlockDrag;
     use crate::input::state::test_support::make_test_input_state;
     use crate::input::{BOARD_ID_BLACKBOARD, DrawingState, MouseButton, SelectionHandle, Tool};
     use crate::util::Rect;

@@ -312,11 +312,12 @@ impl TextEditing {
 
     fn cut_request(&self, state: &DrawingState) -> Option<TextClipboardRequest> {
         let (range, text) = self.selected_text(state)?;
+        let (generation, revision) = self.session_identity();
         Some(TextClipboardRequest {
             text,
             cut: Some(TextCutTarget {
-                generation: self.text_input_generation,
-                revision: self.text_input_revision,
+                generation,
+                revision,
                 range,
             }),
         })
@@ -352,17 +353,17 @@ impl TextEditing {
         else {
             return None;
         };
+        let (generation, revision) = self.session_identity();
         Some(TextPasteTarget {
-            generation: self.text_input_generation,
-            revision: self.text_input_revision,
+            generation,
+            revision,
             caret: *caret,
             selection_anchor: *selection_anchor,
         })
     }
 
     fn paste_target_is_current(&self, state: &DrawingState, target: TextPasteTarget) -> bool {
-        self.generation_is_current(state, target.generation)
-            && self.text_input_revision == target.revision
+        self.generation_is_current(state, target.generation) && self.revision() == target.revision
     }
 
     fn apply_paste(
@@ -415,7 +416,7 @@ impl TextEditing {
         Some(TextPasteEdit {
             generation: target.generation,
             previous_revision: target.revision,
-            revision: self.text_input_revision,
+            revision: self.revision(),
             replaced,
             inserted_len,
         })
@@ -426,7 +427,7 @@ impl TextEditing {
             return false;
         };
         if !self.generation_is_current(state, target.generation)
-            || target.revision != self.text_input_revision
+            || target.revision != self.revision()
         {
             return false;
         }

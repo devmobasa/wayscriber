@@ -1,25 +1,44 @@
-use super::base::{
-    DrawingState, TextBlockDrag, TextClickState, TextEditEntryFeedback, TextInputMode,
-};
+use super::base::{DrawingState, TextInputMode};
 use super::ime::ImeCompositionState;
 use crate::draw::frame::{Frame, ShapeSnapshot, UndoAction};
 use crate::draw::{Color, FontDescriptor, Shape, ShapeId};
 use crate::util::Rect;
 
+pub(super) const TEXT_EDIT_ENTRY_DURATION_MS: u64 = 200;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TextClickState {
+    pub(crate) shape_id: ShapeId,
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) at: std::time::Instant,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TextBlockDrag {
+    pub(crate) grab_dx: i32,
+    pub(crate) grab_dy: i32,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct TextEditEntryFeedback {
+    pub(crate) started: std::time::Instant,
+}
+
 /// Text-editor mode, asynchronous identity, composition, and pointer state.
 #[derive(Debug, Clone)]
 pub(crate) struct TextEditing {
-    pub(crate) text_input_mode: TextInputMode,
-    pub(crate) text_input_cursor_rect_dirty: bool,
-    pub(crate) text_input_external_change_dirty: bool,
-    pub(crate) text_input_generation: u64,
-    pub(crate) text_input_revision: u64,
-    pub(crate) text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
-    pub(crate) text_block_drag: Option<TextBlockDrag>,
-    pub(crate) text_edit_entry_feedback: Option<TextEditEntryFeedback>,
-    pub(crate) ime: ImeCompositionState,
-    pub(crate) last_text_click: Option<TextClickState>,
-    pub(crate) last_text_preview_bounds: Option<Rect>,
+    pub(super) text_input_mode: TextInputMode,
+    pub(super) text_input_cursor_rect_dirty: bool,
+    pub(super) text_input_external_change_dirty: bool,
+    pub(super) text_input_generation: u64,
+    pub(super) text_input_revision: u64,
+    pub(super) text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
+    pub(super) text_block_drag: Option<TextBlockDrag>,
+    pub(super) text_edit_entry_feedback: Option<TextEditEntryFeedback>,
+    pub(super) ime: ImeCompositionState,
+    pub(super) last_text_click: Option<TextClickState>,
+    pub(super) last_text_preview_bounds: Option<Rect>,
 }
 
 pub(crate) struct TextEditStart {
@@ -76,8 +95,11 @@ impl TextEditing {
         self.last_text_preview_bounds = None;
     }
 
-    #[cfg(test)]
-    pub(crate) fn revision(&self) -> u64 {
+    pub(in crate::input::state) fn session_identity(&self) -> (u64, u64) {
+        (self.text_input_generation, self.text_input_revision)
+    }
+
+    pub(in crate::input::state) fn revision(&self) -> u64 {
         self.text_input_revision
     }
 
@@ -101,7 +123,7 @@ impl TextEditing {
             return false;
         };
         if now.saturating_duration_since(feedback.started).as_millis()
-            < u128::from(super::base::TEXT_EDIT_ENTRY_DURATION_MS)
+            < u128::from(TEXT_EDIT_ENTRY_DURATION_MS)
         {
             return true;
         }
@@ -112,7 +134,7 @@ impl TextEditing {
     pub(crate) fn edit_entry_progress(&self, now: std::time::Instant) -> Option<f64> {
         let feedback = self.text_edit_entry_feedback.as_ref()?;
         let elapsed = now.saturating_duration_since(feedback.started).as_millis() as f64;
-        let total = super::base::TEXT_EDIT_ENTRY_DURATION_MS as f64;
+        let total = TEXT_EDIT_ENTRY_DURATION_MS as f64;
         Some((elapsed / total).min(1.0))
     }
 

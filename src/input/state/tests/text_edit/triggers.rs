@@ -144,10 +144,6 @@ fn enter_key_starts_edit_for_selected_text() {
         _ => panic!("Expected text input state"),
     }
     assert!(matches!(state.text_editing.mode(), TextInputMode::Plain));
-    let edit_id = state
-        .text_editing
-        .text_edit_target
-        .as_ref()
-        .map(|(id, _)| *id);
+    let edit_id = state.text_editing.edit_target().map(|(id, _)| *id);
     assert_eq!(edit_id, Some(shape_id));
 }

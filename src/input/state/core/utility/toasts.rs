@@ -318,8 +318,9 @@ mod tests {
     use crate::config::KeybindingsConfig;
     use crate::domain::OnboardingTip;
     use crate::draw::{Color, Shape};
-    use crate::input::state::core::base::{
-        TEXT_EDIT_ENTRY_DURATION_MS, TextEditEntryFeedback, UiToastKind,
+    use crate::input::state::core::base::UiToastKind;
+    use crate::input::state::core::text_editing::{
+        TEXT_EDIT_ENTRY_DURATION_MS, TextEditEntryFeedback,
     };
 
     use crate::ui::toolbar::ToolbarEvent;

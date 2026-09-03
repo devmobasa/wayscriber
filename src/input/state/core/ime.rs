@@ -42,7 +42,7 @@ struct ImePending {
 
 /// IME composition state stored by [`TextEditing`].
 #[derive(Debug, Clone, Default)]
-pub struct ImeCompositionState {
+pub(super) struct ImeCompositionState {
     /// The active preedit rendered after the buffer, if any.
     preedit: Option<ImePreedit>,
     /// Changes queued since the last `done`, applied together on `done`.

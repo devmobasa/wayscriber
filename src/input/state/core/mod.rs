@@ -94,9 +94,9 @@ pub use font_picker::{
     font_picker_layout, font_picker_rows,
 };
 pub use help_overlay::HelpOverlayState;
+pub use ime::ImePreedit;
 #[cfg(test)]
 pub(crate) use ime::build_text_input_preview;
-pub use ime::{ImeCompositionState, ImePreedit};
 pub use menus::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, MenuCommand,
 };
