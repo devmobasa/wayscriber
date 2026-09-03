@@ -213,7 +213,7 @@ impl InputState {
             || self.is_properties_panel_open()
             || self.is_context_menu_open()
             || self.command_palette.open
-            || self.tour.active
+            || self.tour.is_active()
     }
 
     /// True when the interactive status HUD pill is under (x, y): the press

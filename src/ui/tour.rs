@@ -90,7 +90,11 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
 
     // Step counter
     constants::set_color(ctx, TEXT_HINT);
-    let step_text = format!("Step {} of {}", input_state.tour.step + 1, TourStep::COUNT);
+    let step_text = format!(
+        "Step {} of {}",
+        input_state.tour.step() + 1,
+        TourStep::COUNT
+    );
     draw_text_baseline(ctx, step_style, &step_text, content_x, y + 12.0, None);
     y += 24.0;
 
@@ -115,7 +119,7 @@ pub fn render_tour(ctx: &cairo::Context, input_state: &InputState, width: u32, h
     let _ = ctx.fill();
 
     let filled_width =
-        progress_width * ((input_state.tour.step + 1) as f64 / TourStep::COUNT as f64);
+        progress_width * ((input_state.tour.step() + 1) as f64 / TourStep::COUNT as f64);
     constants::set_color(ctx, PROGRESS_FILL);
     draw_rounded_rect(ctx, content_x, progress_y, filled_width, 6.0, 3.0);
     let _ = ctx.fill();

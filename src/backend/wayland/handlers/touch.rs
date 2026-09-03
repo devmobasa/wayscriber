@@ -255,7 +255,7 @@ impl WaylandState {
             }
         }
 
-        if self.input_state.tour.active {
+        if self.input_state.tour.is_active() {
             return TouchTarget::Other;
         }
 
@@ -442,7 +442,7 @@ impl WaylandState {
 
         if self.input_state.help_overlay.is_visible()
             || self.input_state.command_palette.open
-            || self.input_state.tour.active
+            || self.input_state.tour.is_active()
         {
             return;
         }
@@ -499,7 +499,7 @@ impl WaylandState {
             return;
         }
 
-        if self.input_state.command_palette.open || self.input_state.tour.active {
+        if self.input_state.command_palette.open || self.input_state.tour.is_active() {
             self.set_pending_toast_press(None);
             self.set_pending_status_hud_press(false);
             self.set_pending_zoom_chip_press(ZoomChipPress::None);

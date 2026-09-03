@@ -22,13 +22,18 @@ pub enum TourStep {
 /// Lifecycle and navigation state for the guided tour.
 #[derive(Debug, Default)]
 pub struct TourState {
-    pub(crate) active: bool,
-    pub(crate) step: usize,
+    pub(in crate::input::state) active: bool,
+    pub(in crate::input::state) step: usize,
 }
 
 impl TourState {
     pub fn is_active(&self) -> bool {
         self.active
+    }
+
+    /// Zero-based index of the current step, regardless of whether the tour is active.
+    pub fn step(&self) -> usize {
+        self.step
     }
 
     pub(crate) fn start(&mut self) {

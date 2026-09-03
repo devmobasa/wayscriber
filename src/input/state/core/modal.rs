@@ -94,7 +94,7 @@ impl InputState {
     /// Whether the surface is open right now.
     pub(crate) fn modal_is_open(&self, surface: ModalSurface) -> bool {
         match surface {
-            ModalSurface::Tour => self.tour.active,
+            ModalSurface::Tour => self.tour.is_active(),
             ModalSurface::CommandPalette => self.command_palette.open,
             ModalSurface::HelpOverlay => self.help_overlay.visible,
             ModalSurface::RadialMenu => self.is_radial_menu_open(),

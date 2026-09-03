@@ -213,7 +213,7 @@ impl WaylandState {
             return;
         }
         // Block normal pointer motion while the tour modal is active.
-        if self.input_state.tour.active {
+        if self.input_state.tour.is_active() {
             self.update_pointer_cursor(false, conn);
             return;
         }
