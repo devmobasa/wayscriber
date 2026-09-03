@@ -183,7 +183,7 @@ pub struct InputState {
     /// Runtime visibility preferences for overlay chrome and toolbar sections.
     pub ui_visibility: crate::input::state::UiVisibility,
     /// Display policy, cached geometry, and pointer interaction state for the zoom chip.
-    pub zoom_chip: crate::input::state::core::zoom_chip::ZoomChipState,
+    pub(crate) zoom_chip: crate::input::state::core::zoom_chip::ZoomChipState,
     /// Whether presenter mode is currently enabled
     pub presenter_mode: bool,
     /// Presenter mode behavior configuration
