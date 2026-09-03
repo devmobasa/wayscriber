@@ -1,22 +1,16 @@
 use super::super::super::{
-    CanvasIndex, ChromeModes, Feedback, Keymap, PointerTracking, ToolbarInteraction, ViewState,
+    BoardTransitions, CanvasIndex, ChromeModes, Feedback, Keymap, PointerTracking, SessionFlags,
+    ToolbarInteraction, ViewState,
     selection::{SelectionClipboard, SelectionInteraction},
 };
 use super::super::InputEffectOutbox;
-use super::super::types::{
-    CompositorCapabilities, DrawingState, PendingBoardDelete, PendingOnboardingUsage,
-    PendingPageDelete,
-};
-use crate::draw::{Color, DirtyTracker};
+use super::super::types::{CompositorCapabilities, DrawingState, PendingOnboardingUsage};
+use crate::draw::DirtyTracker;
 use crate::input::BoardManager;
-use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest};
 use crate::input::modifiers::Modifiers;
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::state::input_hud::InputHudState;
 use crate::render_profiles::RenderProfileSet;
-use crate::session::SessionOptions;
-use std::path::PathBuf;
-use std::time::Instant;
 
 pub struct InputState {
     /// Typed handoff of in-process work whose side effects belong to the backend.
@@ -48,14 +42,10 @@ pub struct InputState {
     /// Exit that must not be deferred by XDG stay-mode focus loss (for example
     /// exit-after-capture). Consumed together with the Wayland explicit-close bit.
     pub(crate) explicit_exit_requested: bool,
-    /// Whether the display needs to be redrawn
+    /// Whether the display needs to be redrawn.
     pub needs_redraw: bool,
-    /// Whether session persistence should capture changes (cleared after autosave check)
-    pub(crate) session_dirty: bool,
-    /// Runtime session options used to preflight clone-heavy actions before mutation.
-    pub(crate) session_preflight_options: Option<SessionOptions>,
-    /// Save Session As target waiting for explicit overwrite confirmation.
-    pub(crate) pending_save_as_overwrite: Option<PathBuf>,
+    /// Dirty, preflight, save-as, and last-capture session state.
+    pub(in crate::input::state) session_flags: SessionFlags,
     /// Visibility, navigation, and pointer bookkeeping for the help overlay.
     pub(crate) help_overlay: crate::input::state::core::HelpOverlayState,
     /// Modal, layout, search, edit, and drag state for the board picker.
@@ -78,16 +68,8 @@ pub struct InputState {
     pub(in crate::input::state) toolbar: ToolbarInteraction,
     /// Precise numeric entry popup opened from a pill numeral, when open.
     pub(crate) precision_entry: Option<crate::input::state::PrecisionEntryState>,
-    /// Previous color before entering board mode (for restoration)
-    pub board_previous_color: Option<Color>,
-    /// Most recently used board ids (most recent first)
-    pub board_recent: Vec<String>,
-    /// Pending confirmation for deleting a board
-    pub(in crate::input::state::core) pending_board_delete: Option<PendingBoardDelete>,
-    /// Pending confirmation for deleting a page
-    pub(in crate::input::state::core) pending_page_delete: Option<PendingPageDelete>,
-    /// Recently deleted pages (for undo), with expiration timestamps
-    pub(in crate::input::state::core) deleted_pages: Vec<(PageRestoreRequest, Instant)>,
+    /// Board switch color, recents, delete confirmations, and restore queues.
+    pub(in crate::input::state) board_transitions: BoardTransitions,
     /// Tracks dirty regions between renders
     pub(crate) dirty_tracker: DirtyTracker,
     /// In-flight Spotlight magnification undo gesture and wheel remainder.
@@ -114,8 +96,6 @@ pub struct InputState {
     pub(crate) ocr_scan: Option<crate::input::state::core::utility::ocr_scan::OcrScan>,
     /// Local selection clipboard, publication, paste request, and image fallback state.
     pub(in crate::input::state::core) selection_clipboard: SelectionClipboard,
-    /// Last capture path (for quick open-folder action)
-    pub(in crate::input::state::core) last_capture_path: Option<PathBuf>,
     /// Lifecycle, cached geometry, and deferred refresh state for the properties panel.
     pub(crate) properties: crate::input::state::core::properties::PropertiesPanelState,
     /// Screen-color eyedropper UI lifecycle.
@@ -130,6 +110,4 @@ pub struct InputState {
     pub(crate) tour: crate::input::state::core::TourState,
     /// Compositor capabilities (layer-shell, screencopy, etc.)
     pub compositor_capabilities: CompositorCapabilities,
-    /// Recently deleted boards available for undo (with deletion timestamp)
-    pub(in crate::input::state::core) deleted_boards: Vec<(BoardRestoreRequest, Instant)>,
 }

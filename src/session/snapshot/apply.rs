@@ -103,7 +103,7 @@ pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: Tool
     input.dirty_tracker.mark_full();
     input.sync_highlight_color();
     let _ = input.set_tool_override(tool_state.tool_override);
-    input.board_previous_color = tool_state.board_previous_color;
+    input.set_board_previous_color(tool_state.board_previous_color);
     input.sync_step_marker_counter();
     input.needs_redraw = true;
 }

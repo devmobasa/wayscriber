@@ -20,10 +20,10 @@ pub use types::{
 };
 pub(crate) use types::{
     BoardPickerClickState, ClipboardFingerprint, ClipboardPasteRequest, HelperLaunchRequest,
-    PasteAnchor, PendingBackendAction, PendingBoardDelete, PendingOnboardingUsage,
-    PendingPageDelete, PendingSelectionClipboardPublish, PendingToolbarPersistence,
-    PresetFeedbackState, TextClipboardRequest, TextCutTarget, TextPasteEdit, TextPasteTarget,
-    ToastCommand, ToastPress, UiToastState, WayscriberClipboardSelection,
+    PasteAnchor, PendingBackendAction, PendingOnboardingUsage, PendingSelectionClipboardPublish,
+    PendingToolbarPersistence, PresetFeedbackState, TextClipboardRequest, TextCutTarget,
+    TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress, UiToastState,
+    WayscriberClipboardSelection,
 };
 pub(crate) use types::{KeybindingEditOperation, KeybindingEditRequest};
 pub use ui_visibility::UiVisibility;

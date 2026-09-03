@@ -3,6 +3,23 @@ use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BOARD_ID_TRANSPARENT, BoardSpec};
 
 impl InputState {
+    pub(crate) fn board_previous_color(&self) -> Option<crate::draw::Color> {
+        self.board_transitions.previous_color()
+    }
+
+    pub(crate) fn set_board_previous_color(&mut self, color: Option<crate::draw::Color>) {
+        self.board_transitions.set_previous_color(color);
+    }
+
+    pub(crate) fn board_recent(&self) -> &[String] {
+        self.board_transitions.recent()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn replace_board_recent_for_test(&mut self, recent: Vec<String>) {
+        self.board_transitions.replace_recent_for_test(recent);
+    }
+
     /// Returns the active board id.
     pub fn board_id(&self) -> &str {
         self.boards.active_board_id()
@@ -162,7 +179,8 @@ impl InputState {
         // Find the first recent board that isn't the current one
         let current_id = self.boards.active_board_id();
         let target = self
-            .board_recent
+            .board_transitions
+            .recent()
             .iter()
             .find(|id| id.as_str() != current_id && self.boards.has_board(id))
             .cloned();
@@ -238,13 +256,14 @@ impl InputState {
 
         match (current_auto, target_auto) {
             (false, true) => {
-                self.board_previous_color = Some(self.color_for_tool(crate::input::Tool::Pen));
+                self.board_transitions
+                    .remember_previous_color(self.color_for_tool(crate::input::Tool::Pen));
                 if let Some(default_color) = target_spec.effective_pen_color() {
                     self.set_pen_color_from_board(default_color);
                 }
             }
             (true, false) => {
-                if let Some(prev_color) = self.board_previous_color.take() {
+                if let Some(prev_color) = self.board_transitions.take_previous_color() {
                     self.set_pen_color_from_board(prev_color);
                 }
             }
@@ -280,14 +299,10 @@ impl InputState {
     }
 
     fn record_board_recent(&mut self, board_id: &str) {
-        self.board_recent.retain(|id| id != board_id);
-        self.board_recent.insert(0, board_id.to_string());
-        if self.board_recent.len() > super::BOARD_RECENT_LIMIT {
-            self.board_recent.truncate(super::BOARD_RECENT_LIMIT);
-        }
+        self.board_transitions.note_switched_to(board_id);
     }
 
     pub(super) fn remove_board_recent(&mut self, board_id: &str) {
-        self.board_recent.retain(|id| id != board_id);
+        self.board_transitions.forget(board_id);
     }
 }

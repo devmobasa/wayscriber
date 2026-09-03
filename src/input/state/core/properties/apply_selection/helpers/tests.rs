@@ -214,7 +214,7 @@ fn apply_selection_change_reports_applicable_locked_and_changed_counts() {
     );
     state.set_selection(vec![unlocked, locked]);
     state.needs_redraw = false;
-    state.session_dirty = false;
+    state.clear_session_dirty();
 
     let result = state.apply_selection_change(
         |shape| matches!(shape, Shape::Rect { .. }),
@@ -231,7 +231,7 @@ fn apply_selection_change_reports_applicable_locked_and_changed_counts() {
     assert_eq!(result.locked, 1);
     assert_eq!(result.changed, 1);
     assert!(state.needs_redraw);
-    assert!(state.session_dirty);
+    assert!(state.is_session_dirty());
     assert_eq!(state.boards.active_frame().undo_stack_len(), 1);
     assert!(!state.take_dirty_regions().is_empty());
 }

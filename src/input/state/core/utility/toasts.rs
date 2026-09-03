@@ -104,7 +104,7 @@ impl InputState {
         open_folder_binding: Option<&str>,
     ) {
         let mut parts = Vec::new();
-        self.last_capture_path = saved_path.map(|path| path.to_path_buf());
+        self.set_last_capture_path(saved_path.map(|path| path.to_path_buf()));
         if let Some(path) = saved_path {
             let mut saved = format!("Saved to {}", path.display());
             if let Some(binding) = open_folder_binding {
@@ -232,7 +232,7 @@ impl InputState {
                     fallback.operation.saved_log_label(),
                     path.display()
                 );
-                self.last_capture_path = Some(path.clone());
+                self.set_last_capture_path(Some(path.clone()));
                 if let Some(filename) = path.file_name() {
                     self.push_toast(
                         ToastPriority::Info,

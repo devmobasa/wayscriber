@@ -125,7 +125,7 @@ mod tests {
         state.set_selection(vec![shape_id]);
         let _ = state.take_dirty_regions();
         state.needs_redraw = false;
-        state.session_dirty = false;
+        state.clear_session_dirty();
 
         state.apply_action_side_effects(&UndoAction::Create {
             shapes: vec![(0, drawn)],
@@ -133,7 +133,7 @@ mod tests {
 
         assert!(state.selected_shape_ids().is_empty());
         assert!(state.needs_redraw);
-        assert!(state.session_dirty);
+        assert!(state.is_session_dirty());
         assert!(!state.take_dirty_regions().is_empty());
     }
 
@@ -211,7 +211,7 @@ mod tests {
             ],
         });
 
-        assert!(state.session_dirty);
+        assert!(state.is_session_dirty());
         assert!(!state.take_dirty_regions().is_empty());
     }
 }

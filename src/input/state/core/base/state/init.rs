@@ -1,5 +1,5 @@
 use super::super::super::{
-    CanvasIndex, ChromeModes, Keymap, PointerTracking, ViewState,
+    BoardTransitions, CanvasIndex, ChromeModes, Keymap, PointerTracking, SessionFlags, ViewState,
     selection::{SelectionClipboard, SelectionInteraction},
 };
 use super::super::types::{CompositorCapabilities, DrawingState, PendingOnboardingUsage};
@@ -58,9 +58,7 @@ impl InputState {
             should_exit: false,
             explicit_exit_requested: false,
             needs_redraw: true,
-            session_dirty: false,
-            session_preflight_options: None,
-            pending_save_as_overwrite: None,
+            session_flags: SessionFlags::new(),
             help_overlay: Default::default(),
             board_picker: Default::default(),
             command_palette: Default::default(),
@@ -72,11 +70,7 @@ impl InputState {
             status_hud: Default::default(),
             toolbar: crate::input::state::core::ToolbarInteraction::default(),
             precision_entry: None,
-            board_previous_color: None,
-            board_recent: Vec::new(),
-            pending_board_delete: None,
-            pending_page_delete: None,
-            deleted_pages: Vec::new(),
+            board_transitions: BoardTransitions::default(),
             dirty_tracker: DirtyTracker::new(),
             spotlight_wheel: Default::default(),
             pending_onboarding_usage: PendingOnboardingUsage::default(),
@@ -90,14 +84,12 @@ impl InputState {
             history_limits,
             ocr_scan: None,
             selection_clipboard: SelectionClipboard::default(),
-            last_capture_path: None,
             properties: Default::default(),
             eyedropper_ui_state: crate::input::state::core::EyedropperUiState::Inactive,
             region_select_ui_state: crate::input::state::core::RegionSelectUiState::Inactive,
             preset_slots: Default::default(),
             tour: Default::default(),
             compositor_capabilities: CompositorCapabilities::default(),
-            deleted_boards: Vec::new(),
         };
 
         if state.click_highlight.uses_pen_color() {

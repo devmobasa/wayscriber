@@ -37,8 +37,7 @@ fn confirmed_board_delete_uses_supplied_now_for_undo_timestamp() {
     state.delete_active_board_at(requested_at);
     state.delete_active_board_at(confirmed_at);
 
-    let (_, deleted_at) = state.deleted_boards.last().expect("deleted board undo");
-    assert_eq!(*deleted_at, confirmed_at);
+    assert_eq!(state.latest_deleted_board_at_for_test(), Some(confirmed_at));
 }
 
 #[test]
@@ -53,13 +52,9 @@ fn expired_board_delete_confirmation_is_replaced_with_supplied_now() {
     state.delete_active_board_at(expired_at);
 
     assert_eq!(state.boards.board_count(), board_count);
-    let pending = state
-        .pending_board_delete
-        .as_ref()
-        .expect("replacement confirmation");
     assert_eq!(
-        pending.expires_at,
-        expired_at + Duration::from_millis(BOARD_DELETE_CONFIRM_MS)
+        state.pending_board_delete_expires_at_for_test(),
+        Some(expired_at + Duration::from_millis(BOARD_DELETE_CONFIRM_MS))
     );
 }
 
@@ -82,7 +77,7 @@ fn restore_deleted_board_expires_old_entries_with_supplied_now() {
 
     state.restore_deleted_board_at(confirmed_at + Duration::from_millis(BOARD_UNDO_EXPIRE_MS + 1));
 
-    assert!(state.deleted_boards.is_empty());
+    assert!(!state.has_deleted_boards_for_test());
     assert_eq!(state.boards.board_count(), board_count_after_delete);
     assert_eq!(
         state.active_toast().map(|toast| toast.message.as_str()),
@@ -109,8 +104,7 @@ fn confirmed_active_page_delete_uses_supplied_now_for_undo_timestamp() {
         crate::draw::PageDeleteOutcome::Removed
     );
 
-    let (_, deleted_at) = state.deleted_pages.last().expect("deleted page undo");
-    assert_eq!(*deleted_at, confirmed_at);
+    assert_eq!(state.latest_deleted_page_at_for_test(), Some(confirmed_at));
 }
 
 #[test]
@@ -133,13 +127,9 @@ fn expired_active_page_delete_confirmation_is_replaced_with_supplied_now() {
     );
 
     assert_eq!(state.boards.page_count(), page_count);
-    let pending = state
-        .pending_page_delete
-        .as_ref()
-        .expect("replacement confirmation");
     assert_eq!(
-        pending.expires_at,
-        expired_at + Duration::from_millis(PAGE_DELETE_CONFIRM_MS)
+        state.pending_page_delete_expires_at_for_test(),
+        Some(expired_at + Duration::from_millis(PAGE_DELETE_CONFIRM_MS))
     );
 }
 
@@ -165,13 +155,9 @@ fn expired_page_in_board_delete_confirmation_is_replaced_with_supplied_now() {
         state.boards.board_states()[board].pages.page_count(),
         page_count
     );
-    let pending = state
-        .pending_page_delete
-        .as_ref()
-        .expect("replacement confirmation");
     assert_eq!(
-        pending.expires_at,
-        expired_at + Duration::from_millis(PAGE_DELETE_CONFIRM_MS)
+        state.pending_page_delete_expires_at_for_test(),
+        Some(expired_at + Duration::from_millis(PAGE_DELETE_CONFIRM_MS))
     );
 }
 
@@ -190,7 +176,7 @@ fn session_replacement_drops_queued_delete_undo_toast() {
     state.delete_active_board_at(requested_at);
     state.delete_active_board_at(confirmed_at);
     assert!(
-        !state.deleted_boards.is_empty(),
+        state.has_deleted_boards_for_test(),
         "board delete recorded undo"
     );
     assert_eq!(
@@ -222,7 +208,7 @@ fn session_replacement_drops_queued_delete_undo_toast() {
     // (3): session replacement clears delete/restore state and must retract the
     // queued undo toast alongside it.
     state.clear_session_delete_restore_state();
-    assert!(state.deleted_boards.is_empty(), "undo state discarded");
+    assert!(!state.has_deleted_boards_for_test(), "undo state discarded");
     assert!(
         state.test_pending_toast_count() == 0,
         "queued delete/restore toast retracted, not left behind"
@@ -259,7 +245,7 @@ fn restore_deleted_page_expires_old_entries_with_supplied_now() {
 
     state.restore_deleted_page_at(confirmed_at + Duration::from_millis(PAGE_UNDO_EXPIRE_MS + 1));
 
-    assert!(state.deleted_pages.is_empty());
+    assert!(!state.has_deleted_pages_for_test());
     assert_eq!(state.boards.page_count(), page_count_after_delete);
     assert_eq!(
         state.active_toast().map(|toast| toast.message.as_str()),

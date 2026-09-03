@@ -332,12 +332,12 @@ fn apply_snapshot_restores_tool_state() {
     input.style.arrow_head_at_end = true;
     input.style.arrow_label_enabled = true;
     input.style.polygon_sides = 9;
-    input.board_previous_color = Some(Color {
+    input.set_board_previous_color(Some(Color {
         r: 0.9,
         g: 0.2,
         b: 0.1,
         a: 1.0,
-    });
+    }));
     input.ui_visibility.show_status_bar = false;
 
     let snapshot = snapshot_from_input(&input, &options).expect("snapshot present");
@@ -370,7 +370,7 @@ fn apply_snapshot_restores_tool_state() {
     assert!(restored.style.arrow_label_enabled);
     assert_eq!(restored.style.polygon_sides, 9);
     assert_eq!(
-        restored.board_previous_color,
+        restored.board_previous_color(),
         Some(Color {
             r: 0.9,
             g: 0.2,

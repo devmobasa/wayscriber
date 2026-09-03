@@ -1256,12 +1256,12 @@ fn board_picker_footer_text_changes_for_quick_and_page_panel_modes() {
 fn board_picker_title_and_recent_label_reflect_mode_and_recent_boards() {
     let mut input = create_test_input_state();
     input.switch_board("whiteboard");
-    input.board_recent = vec![
+    input.replace_board_recent_for_test(vec![
         "whiteboard".to_string(),
         "missing".to_string(),
         "blackboard".to_string(),
         "transparent".to_string(),
-    ];
+    ]);
 
     input.open_board_picker();
     assert_eq!(input.board_picker_title(3, 8), "Boards (3/8)");

@@ -107,14 +107,14 @@ impl CloneStorageEstimate {
 impl InputState {
     #[allow(dead_code)]
     pub(crate) fn set_session_preflight_options(&mut self, options: Option<SessionOptions>) {
-        self.session_preflight_options = options;
+        self.session_flags.replace_preflight_options(options);
     }
     pub(crate) fn session_allows_page_duplicate(
         &mut self,
         board_index: usize,
         page_index: usize,
     ) -> bool {
-        let Some(options) = self.session_preflight_options.as_ref() else {
+        let Some(options) = self.session_flags.preflight_options() else {
             return true;
         };
         if !session_persistence_enabled(options) {
@@ -156,7 +156,7 @@ impl InputState {
         if source_board_index == target_board_index {
             return true;
         }
-        let Some(options) = self.session_preflight_options.as_ref() else {
+        let Some(options) = self.session_flags.preflight_options() else {
             return true;
         };
         if !session_persistence_enabled(options) {
@@ -195,7 +195,7 @@ impl InputState {
         )
     }
     pub(crate) fn session_allows_board_duplicate(&mut self) -> bool {
-        let Some(options) = self.session_preflight_options.as_ref() else {
+        let Some(options) = self.session_flags.preflight_options() else {
             return true;
         };
         if !session_persistence_enabled(options) {
@@ -233,7 +233,7 @@ impl InputState {
         // producer's one-key-per-domain dedup) instead of queueing behind a
         // lingering success toast.
         let toast_key = clone_action_toast_key(&action);
-        let Some(options) = self.session_preflight_options.clone() else {
+        let Some(options) = self.session_flags.preflight_options().cloned() else {
             return true;
         };
         let current = estimate_visible_session_storage(self, &options);

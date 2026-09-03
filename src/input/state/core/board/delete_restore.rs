@@ -1,6 +1,4 @@
-use super::super::base::{
-    BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS, InputState, PendingBoardDelete,
-};
+use super::super::base::{BOARD_DELETE_CONFIRM_MS, InputState};
 use crate::domain::Action;
 use crate::input::boards::{
     BoardDeleteOutcome, BoardDeleteRejection, BoardDeleteRequest, BoardDeleteTarget,
@@ -8,20 +6,49 @@ use crate::input::boards::{
     PendingBoardRuntimeUiAction,
 };
 use crate::input::state::{Toast, ToastPriority};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 mod page;
 
 impl InputState {
+    #[cfg(test)]
+    pub(crate) fn latest_deleted_board_at_for_test(&self) -> Option<Instant> {
+        self.board_transitions.latest_deleted_board_at()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn latest_deleted_page_at_for_test(&self) -> Option<Instant> {
+        self.board_transitions.latest_deleted_page_at()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn pending_board_delete_expires_at_for_test(&self) -> Option<Instant> {
+        self.board_transitions.pending_board_delete_expires_at()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn pending_page_delete_expires_at_for_test(&self) -> Option<Instant> {
+        self.board_transitions.pending_page_delete_expires_at()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_deleted_boards_for_test(&self) -> bool {
+        self.board_transitions.deleted_board_count() != 0
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_deleted_pages_for_test(&self) -> bool {
+        self.board_transitions.deleted_page_count() != 0
+    }
+
     /// Returns true if there's a pending board deletion confirmation.
     pub fn has_pending_board_delete(&self) -> bool {
-        self.pending_board_delete.is_some()
+        self.board_transitions.has_pending_board_delete()
     }
 
     /// Cancels pending board deletion and clears the toast.
     pub fn cancel_pending_board_delete(&mut self) {
-        if self.pending_board_delete.is_some() {
-            self.pending_board_delete = None;
+        if self.board_transitions.cancel_pending_board_delete() {
             // Push under the confirmation's key so the queue dedups the active
             // "board.delete" prompt in place; clearing the active toast here would
             // bypass the queue and let an unrelated queued toast surface.
@@ -35,13 +62,12 @@ impl InputState {
 
     /// Returns true if there's a pending page deletion confirmation.
     pub fn has_pending_page_delete(&self) -> bool {
-        self.pending_page_delete.is_some()
+        self.board_transitions.has_pending_page_delete()
     }
 
     /// Cancels pending page deletion and clears the toast.
     pub fn cancel_pending_page_delete(&mut self) {
-        if self.pending_page_delete.is_some() {
-            self.pending_page_delete = None;
+        if self.board_transitions.cancel_pending_page_delete() {
             // Push under the page-delete key (matching the confirmation prompt)
             // so the queue dedups it in place instead of clearing the active toast
             // directly and letting an unrelated queued toast surface.
@@ -54,16 +80,12 @@ impl InputState {
     }
 
     pub(crate) fn clear_pending_delete_confirmations(&mut self) {
-        self.pending_board_delete = None;
-        self.pending_page_delete = None;
+        self.board_transitions.clear_pending_confirmations();
         self.clear_delete_action_toast(false);
     }
 
     pub(crate) fn clear_session_delete_restore_state(&mut self) {
-        self.pending_board_delete = None;
-        self.pending_page_delete = None;
-        self.deleted_boards.clear();
-        self.deleted_pages.clear();
+        self.board_transitions.clear_all();
         self.clear_delete_action_toast(true);
     }
 
@@ -93,18 +115,10 @@ impl InputState {
     }
 
     pub(crate) fn delete_active_board_at(&mut self, now: Instant) {
-        if self
-            .pending_board_delete
-            .as_ref()
-            .is_some_and(|pending| now > pending.expires_at)
-        {
-            self.pending_board_delete = None;
-        }
-
         let request = self
-            .pending_board_delete
-            .as_ref()
-            .map(|pending| BoardDeleteRequest::Confirm(pending.confirmation.clone()))
+            .board_transitions
+            .confirm_board_delete(now)
+            .map(|pending| BoardDeleteRequest::Confirm(pending.confirmation().clone()))
             .unwrap_or(BoardDeleteRequest::Request(BoardDeleteTarget::Active));
 
         let active_id_before = self.boards.active_board_id().to_string();
@@ -137,10 +151,7 @@ impl InputState {
         match self.boards.delete_board(request) {
             BoardDeleteOutcome::RequiresConfirmation { confirmation } => {
                 let name = confirmation.board_name.clone();
-                self.pending_board_delete = Some(PendingBoardDelete {
-                    confirmation,
-                    expires_at: now + Duration::from_millis(BOARD_DELETE_CONFIRM_MS),
-                });
+                self.board_transitions.begin_board_delete(confirmation, now);
                 self.push_toast(
                     ToastPriority::Action,
                     "board.delete",
@@ -156,20 +167,20 @@ impl InputState {
                 deleted_pin_seed,
                 ..
             } => {
-                self.pending_board_delete = None;
+                self.board_transitions.cancel_pending_board_delete();
                 self.clear_pending_deletes_after_board_generation_change(generation_before);
                 self.remove_board_recent(&deleted_id);
                 self.queue_board_runtime_ui_action(PendingBoardRuntimeUiAction::IdentityDeleted {
                     board_id: deleted_id.clone(),
                 });
-                self.deleted_boards.push((
+                self.board_transitions.push_deleted_board(
                     BoardRestoreRequest {
                         board: deleted_board,
                         preferred_index: deleted_index,
                         pin_seed: deleted_pin_seed,
                     },
                     now,
-                ));
+                );
                 self.push_toast(
                     ToastPriority::Action,
                     "board.delete",
@@ -184,7 +195,7 @@ impl InputState {
                 }
             }
             BoardDeleteOutcome::Rejected(rejection) => {
-                self.pending_board_delete = None;
+                self.board_transitions.cancel_pending_board_delete();
                 self.set_board_delete_rejection_toast(rejection);
             }
         }
@@ -231,10 +242,7 @@ impl InputState {
     }
 
     pub(crate) fn restore_deleted_board_at(&mut self, now: Instant) {
-        // Expire old entries first
-        self.expire_deleted_boards_at(now);
-
-        let Some((request, timestamp)) = self.deleted_boards.pop() else {
+        let Some((request, timestamp)) = self.board_transitions.take_restorable_board(now) else {
             self.push_toast(
                 ToastPriority::Info,
                 "board.delete",
@@ -263,7 +271,8 @@ impl InputState {
                 );
             }
             BoardRestoreOutcome::Rejected(BoardRestoreRejection::MaxCountReached { request }) => {
-                self.deleted_boards.push((request, timestamp));
+                self.board_transitions
+                    .return_deleted_board(request, timestamp);
                 self.push_toast(
                     ToastPriority::Info,
                     "board.delete",
@@ -271,14 +280,6 @@ impl InputState {
                 );
             }
         }
-    }
-
-    /// Remove deleted boards that have expired (older than BOARD_UNDO_EXPIRE_MS).
-    fn expire_deleted_boards_at(&mut self, now: Instant) {
-        let expire_duration = std::time::Duration::from_millis(BOARD_UNDO_EXPIRE_MS);
-        self.deleted_boards.retain(|(_request, timestamp)| {
-            now.saturating_duration_since(*timestamp) < expire_duration
-        });
     }
 }
 

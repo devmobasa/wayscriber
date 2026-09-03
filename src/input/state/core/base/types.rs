@@ -606,20 +606,6 @@ pub(crate) struct ClipboardPasteRequest {
     pub local_selection_fallback_generation: Option<u64>,
 }
 
-/// Pending board deletion confirmation state.
-#[derive(Debug, Clone)]
-pub(crate) struct PendingBoardDelete {
-    pub confirmation: crate::input::boards::BoardDeleteConfirmation,
-    pub expires_at: Instant,
-}
-
-/// Pending page deletion confirmation state.
-#[derive(Debug, Clone)]
-pub(crate) struct PendingPageDelete {
-    pub confirmation: crate::input::boards::PageDeleteConfirmation,
-    pub expires_at: Instant,
-}
-
 /// Pending first-run onboarding usage signals emitted by input handlers.
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct PendingOnboardingUsage {
