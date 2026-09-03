@@ -1,3 +1,5 @@
+//! Pointer positions, hover invalidation, activity timing, and provisional bounds.
+
 use crate::util::Rect;
 use std::time::Instant;
 

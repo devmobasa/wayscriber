@@ -1,3 +1,5 @@
+//! Zoom, frozen-mode, output geometry, and canvas coordinate transforms.
+
 use crate::util::Rect;
 
 #[derive(Debug, Clone)]

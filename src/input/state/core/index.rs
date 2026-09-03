@@ -1,3 +1,5 @@
+//! Canvas hit-testing caches, spatial indexing policy, and frame shape limits.
+
 mod grid;
 
 use super::base::InputState;
@@ -75,11 +77,11 @@ impl CanvasIndex {
         index
     }
 
-    pub(in crate::input::state) fn generation(&self) -> u64 {
+    fn generation(&self) -> u64 {
         self.content_generation
     }
 
-    pub(in crate::input::state) fn invalidate(&mut self) {
+    fn invalidate(&mut self) {
         self.content_generation = self.content_generation.wrapping_add(1);
         self.hit_test_cache.clear();
         self.spatial_index = None;
@@ -284,25 +286,25 @@ impl CanvasIndex {
         self.hit_test_indices(frame, (0..len).rev(), x, y, tolerance)
     }
 
-    pub(in crate::input::state) fn tolerance(&self) -> f64 {
+    fn tolerance(&self) -> f64 {
         self.tolerance
     }
 
-    pub(in crate::input::state) fn set_tolerance(&mut self, tolerance: f64) {
+    fn set_tolerance(&mut self, tolerance: f64) {
         self.tolerance = Self::normalized_tolerance(tolerance);
         self.invalidate();
     }
 
-    pub(in crate::input::state) fn set_linear_threshold(&mut self, threshold: usize) {
+    fn set_linear_threshold(&mut self, threshold: usize) {
         self.linear_threshold = threshold.max(1);
     }
 
-    pub(in crate::input::state) fn max_shapes_per_frame(&self) -> usize {
+    fn max_shapes_per_frame(&self) -> usize {
         self.max_shapes_per_frame
     }
 
     #[cfg(test)]
-    pub(in crate::input::state) fn set_max_shapes_per_frame(&mut self, limit: usize) {
+    fn set_max_shapes_per_frame(&mut self, limit: usize) {
         self.max_shapes_per_frame = limit;
     }
 
