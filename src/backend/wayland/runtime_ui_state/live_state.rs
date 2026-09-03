@@ -162,7 +162,7 @@ fn apply_live_toolbar_preferences(
     if include(&InteractionSeedTarget::HistoryCustomSection)
         && let Some(value) = live_bool(live, InteractionSeedTarget::HistoryCustomSection)
     {
-        input.custom_section_enabled = value;
+        input.history_limits.set_custom_section_enabled(value);
     }
 }
 

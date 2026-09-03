@@ -47,7 +47,7 @@ impl WaylandState {
                 wx,
                 wy,
             );
-            if self.input_state.eraser_mode == EraserMode::Stroke
+            if self.input_state.style.eraser_mode == EraserMode::Stroke
                 && self.input_state.active_tool() == Tool::Eraser
             {
                 self.input_state.needs_redraw = true;
@@ -105,7 +105,7 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
         }
         if !on_toolbar
-            && self.input_state.eraser_mode == EraserMode::Stroke
+            && self.input_state.style.eraser_mode == EraserMode::Stroke
             && self.input_state.active_tool() == Tool::Eraser
         {
             self.input_state.needs_redraw = true;

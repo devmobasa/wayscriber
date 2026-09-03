@@ -51,7 +51,7 @@ pub(crate) fn try_apply_pressure_to_state(
     let thick = settings.min_thickness + (settings.max_thickness - settings.min_thickness) * p;
     let new_thickness = thick.clamp(1.0, MAX_STROKE_THICKNESS);
 
-    if (new_thickness - state.current_thickness).abs() > 0.1 {
+    if (new_thickness - state.style.current_thickness).abs() > 0.1 {
         log::debug!(
             "Pressure {} → thickness {:.1}px (range: {:.1}-{:.1})",
             p,
@@ -84,7 +84,7 @@ mod tests {
     #[test]
     fn apply_pressure_to_state_ignores_disabled_tablet_settings() {
         let mut state = make_state();
-        state.current_thickness = 3.0;
+        state.style.current_thickness = 3.0;
         state.needs_redraw = false;
 
         assert!(!try_apply_pressure_to_state(
@@ -93,7 +93,7 @@ mod tests {
             TabletSettings::default()
         ));
 
-        assert_eq!(state.current_thickness, 3.0);
+        assert_eq!(state.style.current_thickness, 3.0);
         assert!(!state.needs_redraw);
     }
 
@@ -110,7 +110,7 @@ mod tests {
 
         assert!(!try_apply_pressure_to_state(0.8, &mut state, settings));
 
-        assert_eq!(state.current_thickness, 4.0);
+        assert_eq!(state.style.current_thickness, 4.0);
         assert!(!state.needs_redraw);
     }
 
@@ -126,13 +126,13 @@ mod tests {
         };
 
         assert!(try_apply_pressure_to_state(-1.0, &mut state, settings));
-        assert_eq!(state.current_thickness, 2.0);
+        assert_eq!(state.style.current_thickness, 2.0);
         assert_eq!(state.thickness_for_tool(Tool::Pen), 2.0);
         assert!(state.needs_redraw);
 
         state.needs_redraw = false;
         assert!(try_apply_pressure_to_state(2.0, &mut state, settings));
-        assert_eq!(state.current_thickness, 6.0);
+        assert_eq!(state.style.current_thickness, 6.0);
         assert_eq!(state.thickness_for_tool(Tool::Pen), 6.0);
         assert!(state.needs_redraw);
     }
@@ -149,7 +149,7 @@ mod tests {
 
         assert!(try_apply_pressure_to_state(1.0, &mut state, settings));
 
-        assert_eq!(state.current_thickness, MAX_STROKE_THICKNESS);
+        assert_eq!(state.style.current_thickness, MAX_STROKE_THICKNESS);
         assert_eq!(state.thickness_for_tool(Tool::Pen), MAX_STROKE_THICKNESS);
         assert!(state.needs_redraw);
     }

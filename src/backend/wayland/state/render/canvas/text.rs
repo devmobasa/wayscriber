@@ -39,7 +39,7 @@ impl WaylandState {
             };
             let decoration_color = text_preview_decoration_color(
                 self.input_state.text_input_mode,
-                self.input_state.current_color,
+                self.input_state.style.current_color,
             );
             match self.input_state.text_input_mode {
                 crate::input::TextInputMode::Plain => {
@@ -48,11 +48,11 @@ impl WaylandState {
                         *x,
                         *y,
                         &preview.text,
-                        self.input_state.current_color,
-                        self.input_state.current_font_size,
-                        &self.input_state.font_descriptor,
-                        self.input_state.text_background_enabled,
-                        self.input_state.text_wrap_width,
+                        self.input_state.style.current_color,
+                        self.input_state.style.current_font_size,
+                        &self.input_state.style.font_descriptor,
+                        self.input_state.style.text_background_enabled,
+                        self.input_state.style.text_wrap_width,
                         self.config.drawing.text_halo_enabled,
                     );
                 }
@@ -62,10 +62,10 @@ impl WaylandState {
                         *x,
                         *y,
                         &preview.text,
-                        self.input_state.current_color,
-                        self.input_state.current_font_size,
-                        &self.input_state.font_descriptor,
-                        self.input_state.text_wrap_width,
+                        self.input_state.style.current_color,
+                        self.input_state.style.current_font_size,
+                        &self.input_state.style.font_descriptor,
+                        self.input_state.style.text_wrap_width,
                     );
                 }
             }
@@ -98,12 +98,12 @@ impl WaylandState {
         let Some(caret) = caret else {
             return;
         };
-        let size = self.input_state.current_font_size;
-        let font_desc = self.input_state.font_descriptor.to_pango_string(size);
+        let size = self.input_state.style.current_font_size;
+        let font_desc = self.input_state.style.font_descriptor.to_pango_string(size);
         let Some(geom) = crate::draw::shape::caret_geometry_text(
             preview_text,
             &font_desc,
-            self.input_state.text_wrap_width,
+            self.input_state.style.text_wrap_width,
             caret,
         ) else {
             return;
@@ -136,15 +136,15 @@ impl WaylandState {
         let (Ok(start), Ok(end)) = (u32::try_from(range.start), u32::try_from(range.end)) else {
             return;
         };
-        let size = self.input_state.current_font_size;
-        let font_desc = self.input_state.font_descriptor.to_pango_string(size);
+        let size = self.input_state.style.current_font_size;
+        let font_desc = self.input_state.style.font_descriptor.to_pango_string(size);
         paint_preedit_underline(
             ctx,
             (x, y),
             preview_text,
             start..end,
             &font_desc,
-            self.input_state.text_wrap_width,
+            self.input_state.style.text_wrap_width,
             color,
         );
     }
@@ -172,15 +172,15 @@ impl WaylandState {
             return;
         };
 
-        let size = self.input_state.current_font_size;
+        let size = self.input_state.style.current_font_size;
         paint_preedit_selection(
             ctx,
             x,
             y,
             preview_text,
             start..end,
-            &self.input_state.font_descriptor.to_pango_string(size),
-            self.input_state.text_wrap_width,
+            &self.input_state.style.font_descriptor.to_pango_string(size),
+            self.input_state.style.text_wrap_width,
         );
     }
 

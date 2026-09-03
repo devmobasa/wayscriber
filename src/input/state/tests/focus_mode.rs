@@ -150,7 +150,7 @@ fn breaking_focus_mode_retracts_a_restore_toast_queued_behind_a_warning() {
 #[test]
 fn preset_status_bar_update_stays_hidden_until_focus_mode_restores_it() {
     let mut state = create_test_input_state();
-    state.presets[0] = Some(ToolPresetConfig {
+    state.preset_slots.presets_mut_for_test()[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::Pen,
         color: ColorSpec::Name("red".to_string()),

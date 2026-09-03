@@ -26,10 +26,10 @@ fn add_text_shape(state: &mut InputState, text: &str) -> ShapeId {
         x: 40,
         y: 80,
         text: text.to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     })
 }
@@ -270,8 +270,8 @@ fn page_delete_on_last_page_clears_shapes_without_removing_page() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     assert_eq!(state.page_delete(), PageDeleteOutcome::Cleared);
@@ -332,8 +332,8 @@ fn page_content_edit_does_not_stale_pending_page_delete() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     assert_eq!(
         state.delete_active_page_at(requested_at + Duration::from_millis(1)),

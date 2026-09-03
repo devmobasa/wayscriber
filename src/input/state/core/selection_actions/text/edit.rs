@@ -98,14 +98,14 @@ impl InputState {
         let _ = self.set_font_size(size);
         let _ = self.set_font_descriptor(font_descriptor);
         if let Some(background_enabled) = background_enabled
-            && self.text_background_enabled != background_enabled
+            && self.style.text_background_enabled != background_enabled
         {
-            self.text_background_enabled = background_enabled;
+            self.style.text_background_enabled = background_enabled;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             self.mark_session_dirty();
         }
-        self.text_wrap_width = wrap_width;
+        self.style.text_wrap_width = wrap_width;
 
         self.text_edit_target = Some((shape_id, snapshot));
         self.text_edit_entry_feedback = Some(TextEditEntryFeedback {
@@ -199,7 +199,7 @@ impl InputState {
                         before: before_snapshot,
                         after: after_snapshot,
                     },
-                    self.undo_stack_limit,
+                    self.history_limits.undo_stack_limit(),
                 );
                 Some((before_bounds, after_bounds))
             } else {

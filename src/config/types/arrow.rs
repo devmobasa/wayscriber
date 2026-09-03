@@ -2,6 +2,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::draw::ArrowStyle;
 
+/// Smallest arrowhead length in pixels accepted from config, presets, and sessions.
+pub const ARROW_LENGTH_MIN: f64 = 5.0;
+/// Largest arrowhead length in pixels accepted from config, presets, and sessions.
+pub const ARROW_LENGTH_MAX: f64 = 50.0;
+/// Narrowest arrowhead angle in degrees accepted from config, presets, and sessions.
+pub const ARROW_ANGLE_MIN: f64 = 15.0;
+/// Widest arrowhead angle in degrees accepted from config, presets, and sessions.
+pub const ARROW_ANGLE_MAX: f64 = 60.0;
+
 /// Arrow drawing settings.
 ///
 /// Controls the appearance of arrowheads when using the arrow tool.

@@ -94,7 +94,7 @@ mod tests {
             w: 10,
             h: 10,
             fill: false,
-            color: state.current_color,
+            color: state.style.current_color,
             thick: 2.0,
         });
         state.set_selection(vec![rect_id]);
@@ -113,9 +113,9 @@ mod tests {
             x: 10,
             y: 20,
             text: "Note".to_string(),
-            color: state.current_color,
+            color: state.style.current_color,
             size: MAX_FONT_SIZE - 1.0,
-            font_descriptor: state.font_descriptor.clone(),
+            font_descriptor: state.style.font_descriptor.clone(),
             background_enabled: false,
             wrap_width: None,
         });

@@ -7,7 +7,10 @@ pub(crate) mod interaction;
 mod mouse;
 mod render;
 mod spotlight;
-pub(crate) use core::{IdleHandle, InputStateSeed, SpotlightMagnificationTrack, TopMenuState};
+pub(crate) use core::{
+    DrawingStyle, HistoryLimits, IdleHandle, InputStateSeed, SpotlightMagnificationTrack,
+    TopMenuState,
+};
 pub(crate) use core::{InputEffect, InputEffectDrain};
 pub(crate) use spotlight::{
     SpotlightFrameRegions, SpotlightMagnificationGesture, SpotlightWheelClaim,
@@ -63,8 +66,8 @@ pub(crate) use core::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
     COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_ROW_ACTION_COUNT,
     COMMAND_PALETTE_ROW_ACTION_GAP, COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_ROW_ICON_GAP,
-    COMMAND_PALETTE_ROW_ICON_SIZE, COMMAND_PALETTE_TOP_RATIO, action_meta_token_score,
-    default_step_marker_size, fuzzy_score, query_tokens,
+    COMMAND_PALETTE_ROW_ICON_SIZE, COMMAND_PALETTE_TOP_RATIO, action_meta_token_score, fuzzy_score,
+    query_tokens,
 };
 pub use highlight::ClickHighlightSettings;
 #[allow(unused_imports)]
@@ -77,8 +80,8 @@ pub use input_hud::{
 pub(crate) mod test_support {
     use super::InputStateSeed;
     use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig, Shortcut};
-    use crate::draw::{Color, FontDescriptor};
-    use crate::input::{ClickHighlightSettings, EraserMode, InputState};
+    use crate::draw::FontDescriptor;
+    use crate::input::{ClickHighlightSettings, InputState};
     use std::collections::HashMap;
 
     pub(crate) struct TestInputStateBuilder {
@@ -100,37 +103,45 @@ pub(crate) mod test_support {
             let action_bindings = keybindings
                 .build_action_bindings()
                 .expect("test keybindings bindings");
+            let mut style = super::DrawingStyle::from((
+                &crate::config::DrawingConfig::default(),
+                &crate::config::ArrowConfig::default(),
+                &crate::config::SpotlightConfig::default(),
+            ));
+            style.current_color = crate::draw::RED;
+            style.current_thickness = 4.0;
+            style.eraser_size = 4.0;
+            style.marker_opacity = 0.32;
+            style.current_font_size = 32.0;
+            style.font_descriptor = FontDescriptor::default();
+            style.arrow_length = 20.0;
+            style.arrow_angle = 30.0;
+            style.arrow_head_at_end = false;
+            style.tool_settings = crate::input::PerToolDrawingSettings::new(
+                style.current_color,
+                style.current_thickness,
+            );
+            style.tool_settings.step_marker.thickness =
+                super::core::utility::default_step_marker_size(style.current_font_size);
+            let history_limits = super::HistoryLimits::from(&crate::config::HistoryConfig {
+                undo_all_delay_ms: 0,
+                redo_all_delay_ms: 0,
+                custom_section_enabled: true,
+                custom_undo_delay_ms: 0,
+                custom_redo_delay_ms: 0,
+                custom_undo_steps: 5,
+                custom_redo_steps: 5,
+            });
+
             Self {
                 seed: InputStateSeed {
-                    color: Color {
-                        r: 1.0,
-                        g: 0.0,
-                        b: 0.0,
-                        a: 1.0,
-                    },
-                    thickness: 4.0,
-                    eraser_size: 4.0,
-                    eraser_mode: EraserMode::Brush,
-                    marker_opacity: 0.32,
-                    fill_enabled: false,
-                    font_size: 32.0,
-                    font_descriptor: FontDescriptor::default(),
-                    text_background_enabled: false,
-                    arrow_length: 20.0,
-                    arrow_angle: 30.0,
-                    arrow_head_at_end: false,
+                    style,
                     ui_visibility: super::UiVisibility::from(&crate::config::UiConfig::default()),
                     boards_config: BoardsConfig::default(),
                     action_map,
                     max_shapes_per_frame: usize::MAX,
                     click_highlight_settings: ClickHighlightSettings::disabled(),
-                    undo_all_delay_ms: 0,
-                    redo_all_delay_ms: 0,
-                    custom_section_enabled: true,
-                    custom_undo_delay_ms: 0,
-                    custom_redo_delay_ms: 0,
-                    custom_undo_steps: 5,
-                    custom_redo_steps: 5,
+                    history_limits,
                     presenter_mode_config: PresenterModeConfig::default(),
                 },
                 action_bindings,
@@ -151,22 +162,25 @@ pub(crate) mod test_support {
         }
 
         pub(crate) fn thickness(mut self, thickness: f64) -> Self {
-            self.seed.thickness = thickness;
+            self.seed.style.current_thickness = thickness;
+            for tool in crate::input::tool::ToolSettingsSlot::ALL {
+                self.seed.style.tool_settings.get_slot_mut(tool).thickness = thickness;
+            }
             self
         }
 
         pub(crate) fn eraser_size(mut self, eraser_size: f64) -> Self {
-            self.seed.eraser_size = eraser_size;
+            self.seed.style.eraser_size = eraser_size;
             self
         }
 
         pub(crate) fn font_descriptor(mut self, font_descriptor: FontDescriptor) -> Self {
-            self.seed.font_descriptor = font_descriptor;
+            self.seed.style.font_descriptor = font_descriptor;
             self
         }
 
         pub(crate) fn text_background_enabled(mut self, enabled: bool) -> Self {
-            self.seed.text_background_enabled = enabled;
+            self.seed.style.text_background_enabled = enabled;
             self
         }
 
@@ -176,7 +190,7 @@ pub(crate) mod test_support {
         }
 
         pub(crate) fn custom_section_enabled(mut self, enabled: bool) -> Self {
-            self.seed.custom_section_enabled = enabled;
+            self.seed.history_limits.set_custom_section_enabled(enabled);
             self
         }
 
@@ -211,9 +225,9 @@ pub(crate) mod test_support {
             .custom_section_enabled(false)
             .build();
 
-        assert_eq!(state.current_thickness, 3.0);
-        assert_eq!(state.eraser_size, 12.0);
-        assert!(state.text_background_enabled);
-        assert!(!state.custom_section_enabled);
+        assert_eq!(state.style.current_thickness, 3.0);
+        assert_eq!(state.style.eraser_size, 12.0);
+        assert!(state.style.text_background_enabled);
+        assert!(!state.history_limits.custom_section_enabled());
     }
 }

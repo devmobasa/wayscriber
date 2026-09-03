@@ -10,8 +10,8 @@ fn add_rect(state: &mut InputState, x: i32, y: i32, w: i32, h: i32) -> crate::dr
         w,
         h,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     })
 }
 
@@ -249,9 +249,9 @@ fn adjust_font_size_entry_increases_text_size_and_refreshes_panel_value() {
         x: 10,
         y: 20,
         text: "Note".to_string(),
-        color: state.current_color,
+        color: state.style.current_color,
         size: 18.0,
-        font_descriptor: state.font_descriptor.clone(),
+        font_descriptor: state.style.font_descriptor.clone(),
         background_enabled: false,
         wrap_width: None,
     });
@@ -285,9 +285,9 @@ fn activate_text_background_entry_on_mixed_selection_turns_all_backgrounds_on() 
         x: 10,
         y: 20,
         text: "One".to_string(),
-        color: state.current_color,
+        color: state.style.current_color,
         size: 18.0,
-        font_descriptor: state.font_descriptor.clone(),
+        font_descriptor: state.style.font_descriptor.clone(),
         background_enabled: false,
         wrap_width: None,
     });
@@ -295,9 +295,9 @@ fn activate_text_background_entry_on_mixed_selection_turns_all_backgrounds_on() 
         x: 40,
         y: 50,
         text: "Two".to_string(),
-        color: state.current_color,
+        color: state.style.current_color,
         size: 18.0,
-        font_descriptor: state.font_descriptor.clone(),
+        font_descriptor: state.style.font_descriptor.clone(),
         background_enabled: true,
         wrap_width: None,
     });
@@ -336,7 +336,7 @@ fn adjust_arrow_length_entry_clamps_to_max_and_refreshes_panel_value() {
         y1: 0,
         x2: 20,
         y2: 10,
-        color: state.current_color,
+        color: state.style.current_color,
         thick: 3.0,
         arrow_length: 49.0,
         arrow_angle: 30.0,
@@ -499,7 +499,7 @@ fn magnification_only_touches_the_spotlights_in_a_multi_kind_selection() {
 #[test]
 fn editing_a_selected_spotlight_leaves_the_next_shape_default_alone() {
     let mut state = create_test_input_state();
-    let default_before = state.spotlight_magnification;
+    let default_before = state.style.spotlight_magnification;
     let shape_id = add_spotlight(&mut state, 2.0);
     state.set_selection(vec![shape_id]);
 
@@ -507,7 +507,7 @@ fn editing_a_selected_spotlight_leaves_the_next_shape_default_alone() {
 
     assert_eq!(spotlight_magnification(&state, shape_id), 2.25);
     assert_eq!(
-        state.spotlight_magnification, default_before,
+        state.style.spotlight_magnification, default_before,
         "editing one shape must not rewrite what the next Spotlight will use"
     );
 }

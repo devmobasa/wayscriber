@@ -330,6 +330,7 @@ impl InputState {
     /// duplicates) appended as a visually separated arc.
     pub(crate) fn radial_ring_swatches(&self) -> Vec<RadialRingSwatch> {
         let mut swatches: Vec<RadialRingSwatch> = self
+            .style
             .quick_colors
             .radial_rendered_entries()
             .iter()
@@ -338,7 +339,7 @@ impl InputState {
                 recent: false,
             })
             .collect();
-        for color in &self.recent_colors {
+        for color in &self.style.recent_colors {
             if swatches
                 .iter()
                 .any(|swatch| !swatch.recent && swatch.color == *color)
@@ -355,9 +356,10 @@ impl InputState {
 
     /// Number of color-ring segments (quick palette + displayed recents).
     pub(crate) fn radial_ring_swatch_count(&self) -> usize {
-        let quick = self.quick_colors.radial_rendered_entries();
+        let quick = self.style.quick_colors.radial_rendered_entries();
         quick.len()
             + self
+                .style
                 .recent_colors
                 .iter()
                 .filter(|color| !quick.iter().any(|entry| entry.color == **color))

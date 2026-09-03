@@ -10,7 +10,7 @@ fn only_shape(state: &InputState) -> &Shape {
 #[test]
 fn dragging_the_spotlight_tool_commits_an_elliptical_region() {
     let mut state = create_test_input_state();
-    state.spotlight_magnification = 2.25;
+    state.style.spotlight_magnification = 2.25;
     state.set_tool_override(Some(Tool::Spotlight));
     assert!(
         !state.take_pending_frozen_toggle(),

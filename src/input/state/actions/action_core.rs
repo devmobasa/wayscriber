@@ -19,7 +19,7 @@ impl InputState {
                 if matches!(self.state, DrawingState::Idle) {
                     self.text_input_mode = TextInputMode::Plain;
                     self.text_edit_target = None;
-                    self.text_wrap_width = None;
+                    self.style.text_wrap_width = None;
                     self.begin_text_input_session();
                     self.state = DrawingState::text_input(
                         (self.screen_width / 2) as i32,
@@ -36,7 +36,7 @@ impl InputState {
                 if matches!(self.state, DrawingState::Idle) {
                     self.text_input_mode = TextInputMode::StickyNote;
                     self.text_edit_target = None;
-                    self.text_wrap_width = None;
+                    self.style.text_wrap_width = None;
                     self.begin_text_input_session();
                     self.state = DrawingState::text_input(
                         (self.screen_width / 2) as i32,

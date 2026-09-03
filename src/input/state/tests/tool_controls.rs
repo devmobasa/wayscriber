@@ -8,7 +8,7 @@ use crate::ui::toolbar::{ToolContext, ToolOptionsKind, ToolbarEvent, ToolbarSnap
 #[test]
 fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
     let mut state = create_test_input_state();
-    state.active_preset_slot = Some(2);
+    state.preset_slots.restore_active(Some(2));
     state.needs_redraw = false;
     state.session_dirty = false;
     state.state = DrawingState::Drawing {
@@ -22,7 +22,7 @@ fn set_tool_override_clears_active_preset_and_resets_drawing_state() {
     assert!(state.set_tool_override(Some(Tool::Arrow)));
     assert_eq!(state.tool_override(), Some(Tool::Arrow));
     assert!(matches!(state.state, DrawingState::Idle));
-    assert_eq!(state.active_preset_slot, None);
+    assert_eq!(state.preset_slots.active(), None);
     assert!(state.needs_redraw);
     assert!(state.session_dirty);
 }
@@ -69,7 +69,7 @@ fn cycling_from_black_out_to_sampling_blur_requests_frozen_capture() {
 
     assert!(state.cycle_blur_style());
 
-    assert_eq!(state.blur_style, BlurStyle::Gaussian);
+    assert_eq!(state.style.blur_style, BlurStyle::Gaussian);
     assert!(state.take_pending_frozen_toggle());
 }
 
@@ -103,8 +103,8 @@ fn set_thickness_for_active_tool_updates_eraser_size_when_eraser_is_active() {
     state.set_tool_override(Some(Tool::Eraser));
 
     assert!(state.set_thickness_for_active_tool(17.0));
-    assert_eq!(state.eraser_size, 17.0);
-    assert_eq!(state.current_thickness, 3.0);
+    assert_eq!(state.style.eraser_size, 17.0);
+    assert_eq!(state.style.current_thickness, 3.0);
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn toolbar_context_preserves_temporary_eraser_controls() {
     bindings.left.shift_drag = DragBinding::from_tool(Tool::Eraser);
     assert!(state.set_drag_tool_bindings(bindings));
     assert!(state.set_tool_override(Some(Tool::Pen)));
-    state.eraser_size = 17.0;
+    state.style.eraser_size = 17.0;
 
     state.on_key_press(Key::Shift);
     let snapshot = ToolbarSnapshot::from_input(&state);
@@ -336,22 +336,22 @@ fn toolbar_spotlight_magnification_clamps_and_updates_the_snapshot() {
     state.clear_session_dirty();
 
     assert!(state.apply_toolbar_event(ToolbarEvent::SetSpotlightMagnification(2.13)));
-    assert_eq!(state.spotlight_magnification, 2.25);
+    assert_eq!(state.style.spotlight_magnification, 2.25);
     assert!(state.apply_toolbar_event(ToolbarEvent::SetSpotlightMagnification(9.0)));
-    assert_eq!(state.spotlight_magnification, 4.0);
+    assert_eq!(state.style.spotlight_magnification, 4.0);
     assert_eq!(
         ToolbarSnapshot::from_input(&state).spotlight_magnification,
         4.0
     );
     assert!(state.is_session_dirty());
     assert!(state.apply_toolbar_event(ToolbarEvent::SetSpotlightMagnification(f64::NAN)));
-    assert_eq!(state.spotlight_magnification, 1.0);
+    assert_eq!(state.style.spotlight_magnification, 1.0);
 }
 
 #[test]
 fn changing_the_next_shape_default_does_not_warn_about_sources() {
     let mut state = create_test_input_state();
-    state.spotlight_magnification = 1.0;
+    state.style.spotlight_magnification = 1.0;
 
     // The slider changes what the *next* Spotlight will use. No Spotlight has
     // been created or edited, so there is no action to warn about; the style
@@ -395,12 +395,12 @@ fn polygon_side_controls_clamp_and_mark_session_dirty() {
     state.clear_session_dirty();
 
     assert!(state.apply_toolbar_event(ToolbarEvent::SetPolygonSides(2)));
-    assert_eq!(state.polygon_sides, 3);
+    assert_eq!(state.style.polygon_sides, 3);
     assert!(state.is_session_dirty());
 
     state.clear_session_dirty();
     assert!(state.apply_toolbar_event(ToolbarEvent::NudgePolygonSides(99)));
-    assert_eq!(state.polygon_sides, 12);
+    assert_eq!(state.style.polygon_sides, 12);
     assert!(state.is_session_dirty());
 }
 
@@ -410,7 +410,7 @@ fn nudge_thickness_for_active_tool_clamps_pen_thickness() {
     assert!(state.set_thickness(49.0));
 
     assert!(state.nudge_thickness_for_active_tool(10.0));
-    assert_eq!(state.current_thickness, 50.0);
+    assert_eq!(state.style.current_thickness, 50.0);
 }
 
 #[test]
@@ -438,12 +438,12 @@ fn tool_color_and_thickness_are_independent_between_pen_and_marker() {
     assert_eq!(state.thickness_for_tool(Tool::Pen), pen_thickness);
 
     assert!(state.set_tool_override(Some(Tool::Pen)));
-    assert_eq!(state.current_color, pen_color);
-    assert_eq!(state.current_thickness, pen_thickness);
+    assert_eq!(state.style.current_color, pen_color);
+    assert_eq!(state.style.current_thickness, pen_thickness);
 
     assert!(state.set_tool_override(Some(Tool::Marker)));
-    assert_eq!(state.current_color, marker_color);
-    assert_eq!(state.current_thickness, 24.0);
+    assert_eq!(state.style.current_color, marker_color);
+    assert_eq!(state.style.current_thickness, 24.0);
 }
 
 #[test]
@@ -451,14 +451,14 @@ fn increase_thickness_action_changes_marker_width_not_marker_opacity() {
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::Marker)));
     assert!(state.set_thickness(24.0));
-    let original_opacity = state.marker_opacity;
+    let original_opacity = state.style.marker_opacity;
     let pen_thickness = state.thickness_for_tool(Tool::Pen);
 
     state.handle_action(crate::config::Action::IncreaseThickness);
 
     assert_eq!(state.thickness_for_tool(Tool::Marker), 25.0);
     assert_eq!(state.thickness_for_tool(Tool::Pen), pen_thickness);
-    assert_eq!(state.marker_opacity, original_opacity);
+    assert_eq!(state.style.marker_opacity, original_opacity);
 }
 
 #[test]
@@ -480,18 +480,18 @@ fn modifier_release_resyncs_current_settings_to_base_tool() {
 
     state.on_key_press(Key::Shift);
     assert_eq!(state.active_tool(), Tool::Line);
-    assert_eq!(state.current_color, line_color);
-    assert_eq!(state.current_thickness, 14.0);
+    assert_eq!(state.style.current_color, line_color);
+    assert_eq!(state.style.current_thickness, 14.0);
 
     state.on_mouse_press(MouseButton::Left, 0, 0);
     state.on_mouse_release(MouseButton::Left, 10, 10);
-    assert_eq!(state.current_color, line_color);
-    assert_eq!(state.current_thickness, 14.0);
+    assert_eq!(state.style.current_color, line_color);
+    assert_eq!(state.style.current_thickness, 14.0);
 
     state.on_key_release(Key::Shift);
     assert_eq!(state.active_tool(), Tool::Pen);
-    assert_eq!(state.current_color, pen_color);
-    assert_eq!(state.current_thickness, pen_thickness);
+    assert_eq!(state.style.current_color, pen_color);
+    assert_eq!(state.style.current_thickness, pen_thickness);
 }
 
 #[test]
@@ -513,13 +513,13 @@ fn reset_modifiers_resyncs_current_settings_to_base_tool() {
 
     state.on_key_press(Key::Shift);
     assert_eq!(state.active_tool(), Tool::Line);
-    assert_eq!(state.current_color, line_color);
-    assert_eq!(state.current_thickness, 14.0);
+    assert_eq!(state.style.current_color, line_color);
+    assert_eq!(state.style.current_thickness, 14.0);
 
     state.reset_modifiers();
     assert_eq!(state.active_tool(), Tool::Pen);
-    assert_eq!(state.current_color, pen_color);
-    assert_eq!(state.current_thickness, pen_thickness);
+    assert_eq!(state.style.current_color, pen_color);
+    assert_eq!(state.style.current_thickness, pen_thickness);
 }
 
 #[test]
@@ -559,20 +559,20 @@ fn sync_modifiers_resyncs_current_settings_to_compositor_tool() {
 
     state.on_key_press(Key::Shift);
     assert_eq!(state.active_tool(), Tool::Line);
-    assert_eq!(state.current_color, line_color);
-    assert_eq!(state.current_thickness, 14.0);
+    assert_eq!(state.style.current_color, line_color);
+    assert_eq!(state.style.current_thickness, 14.0);
 
     state.sync_modifiers(false, false, false, false);
     assert_eq!(state.active_tool(), Tool::Pen);
-    assert_eq!(state.current_color, pen_color);
-    assert_eq!(state.current_thickness, pen_thickness);
+    assert_eq!(state.style.current_color, pen_color);
+    assert_eq!(state.style.current_thickness, pen_thickness);
 }
 
 #[test]
 fn canceling_color_picker_restores_color_without_dirtying_session_or_preset() {
     let mut state = create_test_input_state();
     let original = state.color_for_tool(Tool::Pen);
-    state.active_preset_slot = Some(1);
+    state.preset_slots.restore_active(Some(1));
     state.session_dirty = false;
 
     state.open_color_picker_popup();
@@ -581,8 +581,8 @@ fn canceling_color_picker_restores_color_without_dirtying_session_or_preset() {
     state.close_color_picker_popup(true);
 
     assert_eq!(state.color_for_tool(Tool::Pen), original);
-    assert_eq!(state.current_color, original);
-    assert_eq!(state.active_preset_slot, Some(1));
+    assert_eq!(state.style.current_color, original);
+    assert_eq!(state.preset_slots.active(), Some(1));
     assert!(!state.session_dirty);
 }
 
@@ -590,7 +590,7 @@ fn canceling_color_picker_restores_color_without_dirtying_session_or_preset() {
 fn recoloring_a_swatch_previews_on_the_palette_and_leaves_the_tool_alone() {
     let mut state = create_test_input_state();
     let tool_color = state.color_for_tool(Tool::Pen);
-    let slot_color = state.quick_colors.color_for_index(1).expect("slot 1");
+    let slot_color = state.style.quick_colors.color_for_index(1).expect("slot 1");
     assert_ne!(tool_color, slot_color, "fixture needs distinct colors");
     state.session_dirty = false;
 
@@ -604,12 +604,15 @@ fn recoloring_a_swatch_previews_on_the_palette_and_leaves_the_tool_alone() {
         .color_picker_popup_current_color()
         .expect("picked color");
     // The swatch tracks the drag so the toolbar shows the candidate...
-    assert_eq!(state.quick_colors.color_for_index(1), Some(picked));
+    assert_eq!(state.style.quick_colors.color_for_index(1), Some(picked));
     // ...while the color being painted with is untouched.
     assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
 
     state.close_color_picker_popup(true);
-    assert_eq!(state.quick_colors.color_for_index(1), Some(slot_color));
+    assert_eq!(
+        state.style.quick_colors.color_for_index(1),
+        Some(slot_color)
+    );
     assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
     assert!(!state.session_dirty);
     assert!(state.ui_toast.is_none());
@@ -624,7 +627,7 @@ fn recoloring_a_swatch_previews_on_the_palette_and_leaves_the_tool_alone() {
 fn accepting_a_recolor_keeps_the_swatch_and_queues_the_durable_write() {
     let mut state = create_test_input_state();
     let tool_color = state.color_for_tool(Tool::Pen);
-    state.active_preset_slot = Some(1);
+    state.preset_slots.restore_active(Some(1));
     state.session_dirty = false;
 
     assert!(state.open_color_picker_popup_for_quick_color(2));
@@ -635,7 +638,7 @@ fn accepting_a_recolor_keeps_the_swatch_and_queues_the_durable_write() {
     state.apply_color_picker_popup();
 
     assert!(!state.is_color_picker_popup_open());
-    assert_eq!(state.quick_colors.color_for_index(2), Some(picked));
+    assert_eq!(state.style.quick_colors.color_for_index(2), Some(picked));
     assert_eq!(
         state.take_pending_quick_color_edit(),
         Some(crate::input::state::QuickColorEdit {
@@ -649,16 +652,16 @@ fn accepting_a_recolor_keeps_the_swatch_and_queues_the_durable_write() {
     );
     // An unselected swatch's recolor is not a drawing change.
     assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
-    assert_eq!(state.active_preset_slot, Some(1));
+    assert_eq!(state.preset_slots.active(), Some(1));
     assert!(!state.session_dirty);
 }
 
 #[test]
 fn recoloring_the_swatch_in_use_moves_the_tool_color_with_it() {
     let mut state = create_test_input_state();
-    let slot_color = state.quick_colors.color_for_index(3).expect("slot 3");
+    let slot_color = state.style.quick_colors.color_for_index(3).expect("slot 3");
     assert!(state.apply_color_from_ui(slot_color));
-    state.active_preset_slot = Some(2);
+    state.preset_slots.restore_active(Some(2));
     state.session_dirty = false;
 
     assert!(state.open_color_picker_popup_for_quick_color(3));
@@ -670,24 +673,24 @@ fn recoloring_the_swatch_in_use_moves_the_tool_color_with_it() {
 
     // The selection ring cannot disagree with the live color, so the swatch
     // being painted with follows its own recolor.
-    assert_eq!(state.quick_colors.color_for_index(3), Some(picked));
+    assert_eq!(state.style.quick_colors.color_for_index(3), Some(picked));
     assert_eq!(state.color_for_tool(Tool::Pen), picked);
-    assert_eq!(state.current_color, picked);
-    assert_eq!(state.active_preset_slot, None);
+    assert_eq!(state.style.current_color, picked);
+    assert_eq!(state.preset_slots.active(), None);
     assert!(state.session_dirty);
 }
 
 #[test]
 fn reopening_the_picker_abandons_an_unsaved_recolor() {
     let mut state = create_test_input_state();
-    let first = state.quick_colors.color_for_index(0).expect("slot 0");
-    let second = state.quick_colors.color_for_index(1).expect("slot 1");
+    let first = state.style.quick_colors.color_for_index(0).expect("slot 0");
+    let second = state.style.quick_colors.color_for_index(1).expect("slot 1");
 
     // Moving on to another swatch reverts the one left behind.
     assert!(state.open_color_picker_popup_for_quick_color(0));
     state.color_picker_popup_set_from_gradient(0.5, 0.5);
     assert!(state.open_color_picker_popup_for_quick_color(1));
-    assert_eq!(state.quick_colors.color_for_index(0), Some(first));
+    assert_eq!(state.style.quick_colors.color_for_index(0), Some(first));
     assert_eq!(state.color_picker_popup_slot(), Some(1));
     assert_eq!(state.color_picker_popup_current_color(), Some(second));
 
@@ -695,13 +698,13 @@ fn reopening_the_picker_abandons_an_unsaved_recolor() {
     // rather than adopting the abandoned candidate as the new baseline.
     state.color_picker_popup_set_from_gradient(0.2, 0.7);
     assert!(state.open_color_picker_popup_for_quick_color(1));
-    assert_eq!(state.quick_colors.color_for_index(1), Some(second));
+    assert_eq!(state.style.quick_colors.color_for_index(1), Some(second));
     assert_eq!(state.color_picker_popup_current_color(), Some(second));
 
     // The tool chip does the same when it takes over the popup.
     state.color_picker_popup_set_from_gradient(0.9, 0.3);
     state.open_color_picker_popup();
-    assert_eq!(state.quick_colors.color_for_index(1), Some(second));
+    assert_eq!(state.style.quick_colors.color_for_index(1), Some(second));
     assert_eq!(state.color_picker_popup_slot(), None);
     assert!(state.ui_toast.is_none());
 }
@@ -709,17 +712,23 @@ fn reopening_the_picker_abandons_an_unsaved_recolor() {
 #[test]
 fn a_recolor_never_survives_an_implicit_close_unsaved() {
     let mut state = create_test_input_state();
-    let slot_color = state.quick_colors.color_for_index(0).expect("slot 0");
+    let slot_color = state.style.quick_colors.color_for_index(0).expect("slot 0");
 
     assert!(state.open_color_picker_popup_for_quick_color(0));
     state.color_picker_popup_set_from_gradient(0.5, 0.5);
-    assert_ne!(state.quick_colors.color_for_index(0), Some(slot_color));
+    assert_ne!(
+        state.style.quick_colors.color_for_index(0),
+        Some(slot_color)
+    );
 
     // Light mode and session restore close the popup without restoring; the
     // palette is durable config, so it still reverts.
     state.close_color_picker_popup(false);
 
-    assert_eq!(state.quick_colors.color_for_index(0), Some(slot_color));
+    assert_eq!(
+        state.style.quick_colors.color_for_index(0),
+        Some(slot_color)
+    );
     assert!(state.ui_toast.is_none());
 }
 
@@ -736,7 +745,7 @@ fn recolor_hex_entry_lands_on_the_swatch() {
     assert!(state.color_picker_popup_commit_hex());
 
     let expected = crate::input::state::parse_hex_color("#1A2B3C").expect("hex");
-    assert_eq!(state.quick_colors.color_for_index(4), Some(expected));
+    assert_eq!(state.style.quick_colors.color_for_index(4), Some(expected));
     assert_eq!(state.color_for_tool(Tool::Pen), tool_color);
 }
 
@@ -801,7 +810,7 @@ fn default_button_stages_the_shipped_color_for_ok_to_accept() {
         b: 0.9,
         a: 1.0,
     };
-    assert!(state.quick_colors.set_color_for_index(1, customized));
+    assert!(state.style.quick_colors.set_color_for_index(1, customized));
 
     assert!(state.open_color_picker_popup_for_quick_color(1));
     state.update_color_picker_popup_layout(1920, 1080);
@@ -817,11 +826,11 @@ fn default_button_stages_the_shipped_color_for_ok_to_accept() {
     // and the popup stays open so OK/Cancel still decide.
     assert!(state.is_color_picker_popup_open());
     assert_eq!(state.color_picker_popup_current_color(), Some(shipped));
-    assert_eq!(state.quick_colors.color_for_index(1), Some(shipped));
+    assert_eq!(state.style.quick_colors.color_for_index(1), Some(shipped));
     assert!(state.ui_toast.is_none());
 
     state.apply_color_picker_popup();
-    assert_eq!(state.quick_colors.color_for_index(1), Some(shipped));
+    assert_eq!(state.style.quick_colors.color_for_index(1), Some(shipped));
     assert_eq!(
         state.take_pending_quick_color_edit(),
         Some(crate::input::state::QuickColorEdit {
@@ -840,15 +849,21 @@ fn canceling_after_default_keeps_the_customized_color() {
         b: 0.3,
         a: 1.0,
     };
-    assert!(state.quick_colors.set_color_for_index(2, customized));
+    assert!(state.style.quick_colors.set_color_for_index(2, customized));
 
     assert!(state.open_color_picker_popup_for_quick_color(2));
     assert!(state.color_picker_popup_restore_default());
-    assert_ne!(state.quick_colors.color_for_index(2), Some(customized));
+    assert_ne!(
+        state.style.quick_colors.color_for_index(2),
+        Some(customized)
+    );
 
     state.close_color_picker_popup(true);
 
-    assert_eq!(state.quick_colors.color_for_index(2), Some(customized));
+    assert_eq!(
+        state.style.quick_colors.color_for_index(2),
+        Some(customized)
+    );
     assert!(state.ui_toast.is_none());
 }
 
@@ -872,7 +887,7 @@ fn accepting_a_recolor_from_the_popup_release_queues_the_durable_write() {
     assert!(state.handle_color_picker_popup_release_at(x, y));
 
     assert!(!state.is_color_picker_popup_open());
-    assert_eq!(state.quick_colors.color_for_index(0), Some(picked));
+    assert_eq!(state.style.quick_colors.color_for_index(0), Some(picked));
     assert_eq!(
         state.take_pending_quick_color_edit(),
         Some(crate::input::state::QuickColorEdit {
@@ -896,7 +911,7 @@ fn restoring_a_default_is_inert_without_a_slot() {
 #[test]
 fn recolor_popup_rejects_a_slot_past_the_palette() {
     let mut state = create_test_input_state();
-    let len = state.quick_colors.len();
+    let len = state.style.quick_colors.len();
 
     assert!(!state.open_color_picker_popup_for_quick_color(len));
     assert!(!state.is_color_picker_popup_open());
@@ -911,6 +926,7 @@ fn popup_title_names_the_slot_being_recolored() {
     assert_eq!(state.color_picker_popup_slot(), None);
 
     let label = state
+        .style
         .quick_colors
         .entry(1)
         .map(|entry| entry.label.clone())
@@ -960,7 +976,7 @@ fn toolbar_edit_quick_color_event_opens_the_popup_on_that_slot() {
     assert_eq!(state.color_picker_popup_slot(), Some(5));
 
     state.close_color_picker_popup(true);
-    let stale = state.quick_colors.len() + 3;
+    let stale = state.style.quick_colors.len() + 3;
     assert!(!state.apply_toolbar_event(ToolbarEvent::EditQuickColor { index: stale }));
     assert!(!state.is_color_picker_popup_open());
 }
@@ -1283,8 +1299,8 @@ fn accepting_the_popup_records_the_color_in_recents() {
 
     // Recoloring a swatch the tool is not painting with edits the palette
     // without putting that color in use, so it is not a recent color either.
-    let unused_slot = (0..state.quick_colors.len())
-        .find(|index| state.quick_colors.color_for_index(*index) != Some(picked))
+    let unused_slot = (0..state.style.quick_colors.len())
+        .find(|index| state.style.quick_colors.color_for_index(*index) != Some(picked))
         .expect("a slot the tool is not using");
     assert!(state.open_color_picker_popup_for_quick_color(unused_slot));
     state.color_picker_popup_set_from_gradient(0.15, 0.65);
@@ -1629,7 +1645,7 @@ fn color_picker_ok_button_commits_valid_three_digit_hex_before_apply() {
     let expected = crate::input::state::parse_hex_color("A1B").unwrap();
     assert!(!state.is_color_picker_popup_open());
     assert_eq!(state.color_for_tool(Tool::Pen), expected);
-    assert_eq!(state.current_color, expected);
+    assert_eq!(state.style.current_color, expected);
 }
 
 #[test]
@@ -1663,12 +1679,12 @@ fn color_picker_cancel_restores_opening_modifier_tool_after_modifier_release() {
     state.open_color_picker_popup();
     state.on_key_release(Key::Shift);
     assert_eq!(state.active_tool(), Tool::Pen);
-    assert_eq!(state.current_color, pen_color);
+    assert_eq!(state.style.current_color, pen_color);
 
     state.color_picker_popup_set_from_gradient(0.3, 0.2);
     assert_ne!(state.color_for_tool(Tool::Line), line_color);
     assert_eq!(state.color_for_tool(Tool::Pen), pen_color);
-    assert_eq!(state.current_color, pen_color);
+    assert_eq!(state.style.current_color, pen_color);
 
     state.close_color_picker_popup(true);
     assert_eq!(
@@ -1676,7 +1692,7 @@ fn color_picker_cancel_restores_opening_modifier_tool_after_modifier_release() {
         ColorSpec::from(line_color).to_color()
     );
     assert_eq!(state.color_for_tool(Tool::Pen), pen_color);
-    assert_eq!(state.current_color, pen_color);
+    assert_eq!(state.style.current_color, pen_color);
 }
 
 #[test]
@@ -1705,14 +1721,14 @@ fn color_picker_apply_updates_opening_modifier_tool_after_modifier_release() {
 
     assert_eq!(state.color_for_tool(Tool::Line), applied);
     assert_eq!(state.color_for_tool(Tool::Pen), pen_color);
-    assert_eq!(state.current_color, pen_color);
+    assert_eq!(state.style.current_color, pen_color);
     assert!(state.session_dirty);
 }
 
 #[test]
 fn save_preset_captures_all_tool_settings() {
     let mut state = create_test_input_state();
-    state.preset_slot_count = 3;
+    state.preset_slots.set_slot_count_for_test(3);
     let styles = [
         (Tool::Pen, Color::new(0.1, 0.2, 0.3, 1.0), 4.0),
         (Tool::Line, Color::new(0.4, 0.5, 0.6, 1.0), 14.0),
@@ -1734,7 +1750,9 @@ fn save_preset_captures_all_tool_settings() {
     assert!(state.set_tool_override(Some(Tool::Line)));
 
     assert!(state.save_preset(1));
-    let preset = state.presets[0].as_ref().expect("saved preset");
+    let preset = state.preset_slots.presets_mut_for_test()[0]
+        .as_ref()
+        .expect("saved preset");
     let tool_settings = preset.tool_settings.as_ref().expect("tool settings");
 
     assert_eq!(preset.tool, Tool::Line);
@@ -1753,7 +1771,7 @@ fn save_preset_captures_all_tool_settings() {
 #[test]
 fn save_preset_ignores_temporary_drag_modifier_tools() {
     let mut state = create_test_input_state();
-    state.preset_slot_count = 4;
+    state.preset_slots.set_slot_count_for_test(4);
     let pen_color = Color {
         r: 0.12,
         g: 0.34,
@@ -1781,7 +1799,9 @@ fn save_preset_ignores_temporary_drag_modifier_tools() {
         for key in modifiers.iter().rev() {
             state.on_key_release(*key);
         }
-        let preset = state.presets[slot - 1].as_ref().expect("saved preset");
+        let preset = state.preset_slots.presets_mut_for_test()[slot - 1]
+            .as_ref()
+            .expect("saved preset");
         assert_eq!(preset.tool, Tool::Pen);
         assert_eq!(preset.color, ColorSpec::from(pen_color));
         assert_eq!(preset.size, 7.0);
@@ -1791,7 +1811,7 @@ fn save_preset_ignores_temporary_drag_modifier_tools() {
 #[test]
 fn save_preset_without_override_uses_unmodified_drag_tool() {
     let mut state = create_test_input_state();
-    state.preset_slot_count = 1;
+    state.preset_slots.set_slot_count_for_test(1);
     let marker_color = Color {
         r: 0.72,
         g: 0.18,
@@ -1810,7 +1830,9 @@ fn save_preset_without_override_uses_unmodified_drag_tool() {
     assert!(state.save_preset(1));
     state.on_key_release(Key::Shift);
 
-    let preset = state.presets[0].as_ref().expect("saved preset");
+    let preset = state.preset_slots.presets_mut_for_test()[0]
+        .as_ref()
+        .expect("saved preset");
     assert_eq!(preset.tool, Tool::Marker);
     assert_eq!(preset.color, ColorSpec::from(marker_color));
     assert_eq!(preset.size, 19.0);
@@ -1819,7 +1841,7 @@ fn save_preset_without_override_uses_unmodified_drag_tool() {
 #[test]
 fn apply_full_preset_restores_all_tool_settings() {
     let mut state = create_test_input_state();
-    state.preset_slot_count = 3;
+    state.preset_slots.set_slot_count_for_test(3);
     let styles = [
         (Tool::Pen, Color::new(0.1, 0.2, 0.3, 1.0), 4.0),
         (Tool::Line, Color::new(0.4, 0.5, 0.6, 1.0), 14.0),
@@ -1838,7 +1860,7 @@ fn apply_full_preset_restores_all_tool_settings() {
     }
     let tool_settings = PresetToolStatesConfig::from_runtime(&settings, 33.0);
 
-    state.presets[0] = Some(ToolPresetConfig {
+    state.preset_slots.presets_mut_for_test()[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::Marker,
         color: ColorSpec::from(styles[6].1),
@@ -1868,15 +1890,18 @@ fn apply_full_preset_restores_all_tool_settings() {
         );
         assert_eq!(state.thickness_for_tool(tool), thickness);
     }
-    assert_eq!(state.eraser_size, 33.0);
-    assert_eq!(state.current_color, ColorSpec::from(styles[6].1).to_color());
-    assert_eq!(state.current_thickness, 24.0);
+    assert_eq!(state.style.eraser_size, 33.0);
+    assert_eq!(
+        state.style.current_color,
+        ColorSpec::from(styles[6].1).to_color()
+    );
+    assert_eq!(state.style.current_thickness, 24.0);
 }
 
 #[test]
 fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
     let mut state = create_test_input_state();
-    state.preset_slot_count = 3;
+    state.preset_slots.set_slot_count_for_test(3);
     let top_level_color = ColorSpec::Rgb([255, 0, 0]);
     let pen_color = ColorSpec::Rgb([10, 20, 30]);
     let marker_color = ColorSpec::Rgb([200, 180, 20]);
@@ -1885,7 +1910,7 @@ fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
     settings.marker.thickness = 22.0;
     let tool_settings = PresetToolStatesConfig::from_runtime(&settings, 18.0);
 
-    state.presets[0] = Some(ToolPresetConfig {
+    state.preset_slots.presets_mut_for_test()[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::Marker,
         color: top_level_color.clone(),
@@ -1904,7 +1929,7 @@ fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
         show_status_bar: None,
         drag_tools: None,
     });
-    state.presets[1] = Some(ToolPresetConfig {
+    state.preset_slots.presets_mut_for_test()[1] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::Eraser,
         color: top_level_color,
@@ -1939,7 +1964,7 @@ fn toolbar_preset_preview_uses_nested_profile_for_active_preset_tool() {
 #[test]
 fn legacy_preset_changes_only_selected_tool_settings() {
     let mut state = create_test_input_state();
-    state.preset_slot_count = 3;
+    state.preset_slots.set_slot_count_for_test(3);
     let pen_color = state.color_for_tool(Tool::Pen);
     let pen_thickness = state.thickness_for_tool(Tool::Pen);
     let line_color = Color {
@@ -1951,7 +1976,7 @@ fn legacy_preset_changes_only_selected_tool_settings() {
     let marker_color = state.color_for_tool(Tool::Marker);
     let marker_thickness = state.thickness_for_tool(Tool::Marker);
 
-    state.presets[0] = Some(ToolPresetConfig {
+    state.preset_slots.presets_mut_for_test()[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::Line,
         color: ColorSpec::from(line_color),
@@ -1984,12 +2009,12 @@ fn legacy_preset_changes_only_selected_tool_settings() {
 #[test]
 fn legacy_step_marker_preset_uses_font_derived_size() {
     let mut state = create_test_input_state();
-    state.preset_slot_count = 3;
+    state.preset_slots.set_slot_count_for_test(3);
     state.set_tool_override(Some(Tool::StepMarker));
     assert!(state.set_thickness(30.0));
     state.set_tool_override(Some(Tool::Pen));
 
-    state.presets[0] = Some(ToolPresetConfig {
+    state.preset_slots.presets_mut_for_test()[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::StepMarker,
         color: ColorSpec::Name("blue".to_string()),
@@ -2012,7 +2037,7 @@ fn legacy_step_marker_preset_uses_font_derived_size() {
     assert!(state.apply_preset(1));
 
     assert_eq!(state.active_tool(), Tool::StepMarker);
-    assert_eq!(state.current_font_size, 48.0);
+    assert_eq!(state.style.current_font_size, 48.0);
     assert!((state.thickness_for_tool(Tool::StepMarker) - 28.8).abs() < 1e-9);
     assert!((state.next_step_marker_label().size - 28.8).abs() < 1e-9);
 }
@@ -2020,13 +2045,13 @@ fn legacy_step_marker_preset_uses_font_derived_size() {
 #[test]
 fn full_step_marker_preset_uses_captured_profile_size() {
     let mut state = create_test_input_state();
-    state.preset_slot_count = 3;
+    state.preset_slots.set_slot_count_for_test(3);
     let color = ColorSpec::Rgb([20, 40, 60]);
     let mut settings = PerToolDrawingSettings::new(ColorSpec::Rgb([255, 0, 0]).to_color(), 4.0);
     settings.step_marker.color = color.to_color();
     settings.step_marker.thickness = 30.0;
 
-    state.presets[0] = Some(ToolPresetConfig {
+    state.preset_slots.presets_mut_for_test()[0] = Some(ToolPresetConfig {
         name: None,
         tool: Tool::StepMarker,
         color: ColorSpec::Name("blue".to_string()),
@@ -2049,7 +2074,7 @@ fn full_step_marker_preset_uses_captured_profile_size() {
     assert!(state.apply_preset(1));
 
     assert_eq!(state.active_tool(), Tool::StepMarker);
-    assert_eq!(state.current_font_size, 48.0);
+    assert_eq!(state.style.current_font_size, 48.0);
     assert_eq!(state.color_for_tool(Tool::StepMarker), color.to_color());
     assert_eq!(state.thickness_for_tool(Tool::StepMarker), 30.0);
     assert_eq!(state.next_step_marker_label().size, 30.0);
@@ -2059,22 +2084,22 @@ fn full_step_marker_preset_uses_captured_profile_size() {
 fn nudge_thickness_for_active_tool_clamps_eraser_size() {
     let mut state = create_test_input_state();
     state.set_tool_override(Some(Tool::Eraser));
-    state.eraser_size = 2.0;
+    state.style.eraser_size = 2.0;
 
     assert!(state.nudge_thickness_for_active_tool(-10.0));
-    assert_eq!(state.eraser_size, 1.0);
+    assert_eq!(state.style.eraser_size, 1.0);
 }
 
 #[test]
 fn toggle_eraser_mode_round_trips_between_brush_and_stroke() {
     let mut state = create_test_input_state();
-    assert_eq!(state.eraser_mode, EraserMode::Brush);
+    assert_eq!(state.style.eraser_mode, EraserMode::Brush);
 
     assert!(state.toggle_eraser_mode());
-    assert_eq!(state.eraser_mode, EraserMode::Stroke);
+    assert_eq!(state.style.eraser_mode, EraserMode::Stroke);
 
     assert!(state.toggle_eraser_mode());
-    assert_eq!(state.eraser_mode, EraserMode::Brush);
+    assert_eq!(state.style.eraser_mode, EraserMode::Brush);
 }
 
 #[test]
@@ -2084,7 +2109,7 @@ fn set_font_size_clamps_and_reports_noop_after_reaching_target() {
     state.session_dirty = false;
 
     assert!(state.set_font_size(120.0));
-    assert_eq!(state.current_font_size, 72.0);
+    assert_eq!(state.style.current_font_size, 72.0);
     assert!(state.needs_redraw);
     assert!(state.session_dirty);
 
@@ -2107,7 +2132,7 @@ fn set_font_descriptor_marks_session_dirty_and_reports_noop_when_unchanged() {
     state.session_dirty = false;
 
     assert!(state.set_font_descriptor(font.clone()));
-    assert_eq!(state.font_descriptor, font);
+    assert_eq!(state.style.font_descriptor, font);
     assert!(state.needs_redraw);
     assert!(state.session_dirty);
 
@@ -2125,7 +2150,7 @@ fn set_marker_opacity_clamps_and_reports_noop_after_reaching_target() {
     state.session_dirty = false;
 
     assert!(state.set_marker_opacity(2.0));
-    assert_eq!(state.marker_opacity, 0.9);
+    assert_eq!(state.style.marker_opacity, 0.9);
     assert!(state.needs_redraw);
     assert!(state.session_dirty);
 
@@ -2172,7 +2197,7 @@ fn a_quick_color_recolor_queues_the_write_without_touching_the_file_itself() {
             .expect("picked color");
         state.apply_color_picker_popup();
 
-        assert_eq!(state.quick_colors.color_for_index(0), Some(picked));
+        assert_eq!(state.style.quick_colors.color_for_index(0), Some(picked));
         assert_eq!(
             state.take_pending_quick_color_edit(),
             Some(crate::input::state::QuickColorEdit {
@@ -2201,7 +2226,7 @@ fn cycling_arrow_style_with_nothing_selected_only_moves_the_next_arrow() {
         y1: 0,
         x2: 100,
         y2: 0,
-        color: state.current_color,
+        color: state.style.current_color,
         thick: 4.0,
         arrow_length: 20.0,
         arrow_angle: 30.0,
@@ -2213,7 +2238,7 @@ fn cycling_arrow_style_with_nothing_selected_only_moves_the_next_arrow() {
 
     state.handle_action(Action::CycleArrowStyle);
 
-    assert_eq!(state.arrow_style, ArrowStyle::Pointy);
+    assert_eq!(state.style.arrow_style, ArrowStyle::Pointy);
     match &state
         .boards
         .active_frame()
@@ -2238,7 +2263,7 @@ fn cycling_arrow_style_with_arrows_selected_restyles_them_instead() {
         y1: 0,
         x2: 100,
         y2: 0,
-        color: state.current_color,
+        color: state.style.current_color,
         thick: 4.0,
         arrow_length: 20.0,
         arrow_angle: 30.0,
@@ -2262,7 +2287,7 @@ fn cycling_arrow_style_with_arrows_selected_restyles_them_instead() {
         other => panic!("expected arrow, got {other:?}"),
     }
     assert_eq!(
-        state.arrow_style,
+        state.style.arrow_style,
         ArrowStyle::Standard,
         "restyling a selection must not also move the next-arrow default"
     );
@@ -2277,14 +2302,14 @@ fn cycling_arrow_style_with_a_non_arrow_selected_falls_back_to_the_default() {
         w: 20,
         h: 20,
         fill: false,
-        color: state.current_color,
+        color: state.style.current_color,
         thick: 2.0,
     });
     state.set_selection(vec![rect]);
 
     state.handle_action(Action::CycleArrowStyle);
 
-    assert_eq!(state.arrow_style, ArrowStyle::Pointy);
+    assert_eq!(state.style.arrow_style, ArrowStyle::Pointy);
 }
 
 #[test]
@@ -2292,7 +2317,7 @@ fn bold_reaches_selected_text_and_otherwise_sets_what_the_next_label_uses() {
     // The same target rule the font picker uses for a family: edit what the
     // user is looking at, or set the tool when they are looking at nothing.
     let mut state = create_test_input_state();
-    let tool_weight = state.font_descriptor.weight.clone();
+    let tool_weight = state.style.font_descriptor.weight.clone();
     let id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 10,
         y: 10,
@@ -2320,7 +2345,7 @@ fn bold_reaches_selected_text_and_otherwise_sets_what_the_next_label_uses() {
     };
     assert!(font_descriptor.is_bold());
     assert_eq!(
-        state.font_descriptor.weight, tool_weight,
+        state.style.font_descriptor.weight, tool_weight,
         "restyling a selection must not also change what the next label uses"
     );
 
@@ -2329,9 +2354,9 @@ fn bold_reaches_selected_text_and_otherwise_sets_what_the_next_label_uses() {
     // user had no way back out of once the Sans/Mono segment was removed.
     state.clear_selection();
     assert!(state.apply_toolbar_event(ToolbarEvent::SetFontBold(false)));
-    assert!(!state.font_descriptor.is_bold());
+    assert!(!state.style.font_descriptor.is_bold());
     assert!(state.apply_toolbar_event(ToolbarEvent::SetFontBold(true)));
-    assert!(state.font_descriptor.is_bold());
+    assert!(state.style.font_descriptor.is_bold());
 }
 
 #[test]
@@ -2385,7 +2410,7 @@ fn rendered_bold_control_reads_and_mutates_the_selected_text_target() {
     };
     assert!(font_descriptor.is_bold());
     assert!(
-        state.font_descriptor.is_bold(),
+        state.style.font_descriptor.is_bold(),
         "selected-text mutation leaves the tool default alone"
     );
 }
@@ -2476,7 +2501,7 @@ fn turning_bold_off_leaves_the_family_and_style_alone() {
 
     assert!(state.apply_toolbar_event(ToolbarEvent::SetFontBold(false)));
 
-    assert_eq!(state.font_descriptor.family, "Serif");
-    assert_eq!(state.font_descriptor.style, "italic");
-    assert!(!state.font_descriptor.is_bold());
+    assert_eq!(state.style.font_descriptor.family, "Serif");
+    assert_eq!(state.style.font_descriptor.style, "italic");
+    assert!(!state.style.font_descriptor.is_bold());
 }

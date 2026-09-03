@@ -86,7 +86,7 @@ fn latest_preset_feedback(
     let duration_secs = PRESET_TOAST_DURATION_MS as f32 / 1000.0;
     let mut latest: Option<(usize, PresetFeedbackKind, Instant, f32)> = None;
 
-    for (index, entry) in input_state.preset_feedback.iter().enumerate() {
+    for (index, entry) in input_state.preset_slots.feedback().iter().enumerate() {
         let Some(feedback) = entry.as_ref() else {
             continue;
         };

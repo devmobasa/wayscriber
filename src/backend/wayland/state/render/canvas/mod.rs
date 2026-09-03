@@ -218,7 +218,7 @@ impl WaylandState {
         match crate::draw::render_spotlight_magnification_pass(
             ctx,
             &spotlight_regions,
-            self.input_state.spotlight_feather,
+            self.input_state.style.spotlight_feather,
             magnifier_source,
             Some((phys_width, phys_height)),
             &mut self.spotlight_magnifier_scratch,
@@ -275,8 +275,8 @@ impl WaylandState {
             ctx,
             &spotlight_regions,
             crate::draw::SpotlightPass {
-                dim_opacity: self.input_state.spotlight_dim_opacity,
-                feather: self.input_state.spotlight_feather,
+                dim_opacity: self.input_state.style.spotlight_dim_opacity,
+                feather: self.input_state.style.spotlight_feather,
             },
         );
 

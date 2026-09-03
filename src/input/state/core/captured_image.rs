@@ -40,7 +40,7 @@ impl InputState {
             return false;
         }
         let max_shapes = self.max_shapes_per_frame;
-        let undo_limit = self.undo_stack_limit;
+        let undo_limit = self.history_limits.undo_stack_limit();
         let Some(frame) = self
             .boards
             .board_state_by_id_mut(&target.board_id)

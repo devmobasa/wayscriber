@@ -8,8 +8,8 @@ fn delete_shapes_by_ids_ignores_missing_ids() {
         y1: 0,
         x2: 5,
         y2: 5,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     let removed = state.delete_shapes_by_ids(&[9999]);
@@ -24,10 +24,10 @@ fn locked_shape_blocks_edit_and_delete() {
         x: 40,
         y: 50,
         text: "Locked".to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     });
 
@@ -52,8 +52,8 @@ fn clear_all_removes_shapes_even_when_marked_frozen() {
         y1: 0,
         x2: 10,
         y2: 10,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     // Simulate frozen flag being on
@@ -74,8 +74,8 @@ fn clear_all_skips_locked_shapes() {
         w: 20,
         h: 20,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     let unlocked_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 40,
@@ -83,8 +83,8 @@ fn clear_all_skips_locked_shapes() {
         w: 20,
         h: 20,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     if let Some(index) = state.boards.active_frame().find_index(locked_id) {
@@ -112,8 +112,8 @@ fn clear_all_returns_false_when_all_locked() {
         w: 20,
         h: 20,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     if let Some(index) = state.boards.active_frame().find_index(locked_id) {

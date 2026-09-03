@@ -130,7 +130,7 @@ impl InputState {
 
         self.boards
             .active_frame_mut()
-            .push_undo_action(undo_action, self.undo_stack_limit);
+            .push_undo_action(undo_action, self.history_limits.undo_stack_limit());
         self.mark_session_dirty();
 
         for (shape_id, before, after) in dirty_regions {

@@ -55,7 +55,7 @@ impl WaylandState {
     }
 
     fn stylus_hover_eraser_needs_full_damage(&self) -> bool {
-        self.input_state.eraser_mode == EraserMode::Stroke
+        self.input_state.style.eraser_mode == EraserMode::Stroke
             && self.input_state.active_tool() == Tool::Eraser
             && matches!(self.input_state.state, DrawingState::Idle)
     }
@@ -143,7 +143,7 @@ impl WaylandState {
         self.set_toolbar_dragging(false);
         self.cancel_toolbar_move_drag();
         self.tablet.tip_down = false;
-        self.tablet.base_thickness = Some(self.input_state.current_thickness);
+        self.tablet.base_thickness = Some(self.input_state.style.current_thickness);
         self.tablet.pressure_thickness = None;
         self.tablet.last_pos = None;
         self.tablet.pending_frame = Default::default();

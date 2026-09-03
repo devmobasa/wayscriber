@@ -7,10 +7,10 @@ fn edit_selected_text_commit_updates_and_undo() {
         x: 100,
         y: 100,
         text: "Hello".to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     });
 
@@ -54,10 +54,10 @@ fn edit_selected_text_cancel_restores_original() {
         x: 40,
         y: 80,
         text: "Original".to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     });
 
@@ -100,8 +100,8 @@ fn edit_selected_sticky_note_commit_updates_and_undo() {
             y: 100,
             text: "Note".to_string(),
             background,
-            size: state.current_font_size,
-            font_descriptor: state.font_descriptor.clone(),
+            size: state.style.current_font_size,
+            font_descriptor: state.style.font_descriptor.clone(),
             wrap_width: None,
         });
 
@@ -169,8 +169,8 @@ fn edit_selected_sticky_note_cancel_restores_original() {
             y: 80,
             text: "Original".to_string(),
             background,
-            size: state.current_font_size,
-            font_descriptor: state.font_descriptor.clone(),
+            size: state.style.current_font_size,
+            font_descriptor: state.style.font_descriptor.clone(),
             wrap_width: None,
         });
 

@@ -414,7 +414,7 @@ impl InputState {
         if snapshot_magnification(&before) == after_factor {
             return;
         }
-        let limit = self.undo_stack_limit;
+        let limit = self.history_limits.undo_stack_limit();
         self.boards.active_frame_mut().push_undo_action(
             crate::draw::frame::UndoAction::Modify {
                 shape_id,
@@ -457,7 +457,7 @@ impl InputState {
             rx: f64::from(rx),
             ry: f64::from(ry),
             magnification: crate::draw::normalize_spotlight_magnification(
-                self.spotlight_magnification,
+                self.style.spotlight_magnification,
             ),
         })
     }

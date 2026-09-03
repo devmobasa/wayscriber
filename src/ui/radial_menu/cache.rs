@@ -161,7 +161,7 @@ pub(super) fn base_cache_key(
     BaseKey {
         px: physical_size(extent, scale),
         scale_thousandths: (scale * 1000.0).round() as i64,
-        palette: input_state.quick_colors.cache_key(),
+        palette: input_state.style.quick_colors.cache_key(),
         recents,
         bindings,
         actives: format!(

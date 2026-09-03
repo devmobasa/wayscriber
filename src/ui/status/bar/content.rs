@@ -324,7 +324,7 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
             DrawingState::TextInput { .. } | DrawingState::PendingTextClick { .. }
         ) {
             pieces.push(StatusHudPiece::text(
-                format!("Text {}px", input_state.current_font_size as i32),
+                format!("Text {}px", input_state.style.current_font_size as i32),
                 None,
                 true,
             ));

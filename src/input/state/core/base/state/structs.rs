@@ -2,20 +2,17 @@ use super::super::super::{index::SpatialIndexCache, selection::SelectionState};
 use super::super::InputEffectOutbox;
 use super::super::toast_queue::ToastQueue;
 use super::super::types::{
-    BlockedActionFeedback, CompositorCapabilities, DelayedHistory, DrawingState,
-    PendingBoardDelete, PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
-    PolygonClickState, PresetFeedbackState, PressureThicknessEditMode, PressureThicknessEntryMode,
+    BlockedActionFeedback, CompositorCapabilities, DrawingState, PendingBoardDelete,
+    PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete, PolygonClickState,
     SelectionAxis, SelectionPublishState, StatusChangeHighlight, TextBlockDrag, TextClickState,
     TextEditEntryFeedback, TextInputMode, UiToastState,
 };
 use crate::config::{
-    Action, PresenterModeConfig, QuickColorPalette, ResolvedToolbarItems, Shortcut,
-    ToolPresetConfig, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemsConfig,
+    Action, PresenterModeConfig, ResolvedToolbarItems, Shortcut, ToolbarItemId,
+    ToolbarItemOrderGroup, ToolbarItemsConfig,
 };
 use crate::draw::frame::ShapeSnapshot;
-use crate::draw::{
-    ArrowStyle, BlurStyle, Color, DirtyTracker, EraserKind, FontDescriptor, Shape, ShapeId,
-};
+use crate::draw::{Color, DirtyTracker, Shape, ShapeId};
 use crate::input::BoardManager;
 use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest};
 use crate::input::state::highlight::ClickHighlightState;
@@ -23,7 +20,7 @@ use crate::input::state::input_hud::InputHudState;
 use crate::input::{
     MouseButton,
     modifiers::{DragToolBindings, Modifiers},
-    tool::{EraserMode, PerToolDrawingSettings, Tool},
+    tool::Tool,
 };
 use crate::render_profiles::RenderProfileSet;
 use crate::session::SessionOptions;
@@ -76,73 +73,12 @@ pub struct InputState {
     pub(in crate::input::state::core) input_effects: InputEffectOutbox,
     /// Multi-board canvas management
     pub boards: BoardManager,
-    /// Current drawing color (changed with color keys: R, G, B, etc.)
-    pub current_color: Color,
-    /// Colors selected by quick color actions and palette UI.
-    pub(crate) quick_colors: QuickColorPalette,
-    /// Session-only recently applied colors, most-recent-first, deduped and
-    /// capped (like `board_recent`, never persisted). Shown as the radial
-    /// color ring's appended recents arc.
-    pub(crate) recent_colors: Vec<Color>,
-    /// Current pen/line thickness in pixels (changed with +/- keys)
-    pub current_thickness: f64,
-    /// Independent color/thickness values for drawing tools.
-    pub(crate) tool_settings: PerToolDrawingSettings,
-    /// Threshold (in pixels) before storing pressure-sensitive strokes.
-    pub(crate) pressure_variation_threshold: f64,
-    /// How selection thickness edits apply to pressure-sensitive strokes.
-    pub(crate) pressure_thickness_edit_mode: PressureThicknessEditMode,
-    /// When to show a thickness entry for pressure-sensitive selections.
-    pub(crate) pressure_thickness_entry_mode: PressureThicknessEntryMode,
-    /// Per-step scale factor when using scale mode for pressure thickness edits.
-    pub(crate) pressure_thickness_scale_step: f64,
-    /// Current eraser size in pixels
-    pub eraser_size: f64,
-    /// Current eraser brush shape
-    pub eraser_kind: EraserKind,
-    /// Current eraser behavior mode
-    pub eraser_mode: EraserMode,
-    /// Opacity multiplier for marker tool strokes
-    pub marker_opacity: f64,
-    /// Release-time smoothing passes applied to finished freehand and marker
-    /// strokes. 0 keeps the exact drawn path.
-    pub pen_smoothing: u8,
-    /// How the blur tool obscures the region it covers
-    pub blur_style: BlurStyle,
-    /// Alpha of the dim layer outside every spotlight
-    pub spotlight_dim_opacity: f64,
-    /// Fraction of each spotlight radius spent fading out at the edge
-    pub spotlight_feather: f64,
-    /// Magnification copied into the next Spotlight shape.
-    pub spotlight_magnification: f64,
-    /// Current font size for text mode (from config)
-    pub current_font_size: f64,
-    /// Font descriptor for text rendering (family, weight, style)
-    pub font_descriptor: FontDescriptor,
-    /// Families the font-cycle action steps through. Empty turns it off.
-    pub(crate) font_cycle: Vec<String>,
+    /// Runtime drawing defaults and per-tool appearance settings.
+    pub(crate) style: crate::input::state::core::DrawingStyle,
     /// State owned by the system font-picker modal.
     pub(crate) font_picker: crate::input::state::core::font_picker::FontPickerState,
-    /// Whether to draw background behind text
-    pub text_background_enabled: bool,
-    /// Optional wrap width for text input (None = auto)
-    pub text_wrap_width: Option<i32>,
     /// Which text input style is active (plain vs sticky note)
     pub text_input_mode: TextInputMode,
-    /// Arrowhead length in pixels (from config)
-    pub arrow_length: f64,
-    /// Arrowhead angle in degrees (from config)
-    pub arrow_angle: f64,
-    /// Whether the arrowhead is placed at the end of the line
-    pub arrow_head_at_end: bool,
-    /// Style copied into the next arrow drawn
-    pub arrow_style: ArrowStyle,
-    /// Whether auto-numbered arrow labels are enabled
-    pub arrow_label_enabled: bool,
-    /// Next label value for auto-numbered arrows
-    pub arrow_label_counter: u32,
-    /// Next label value for step markers
-    pub step_marker_counter: u32,
     /// Current modifier key state
     pub modifiers: Modifiers,
     /// Tool mapping for drag gestures with modifier keys
@@ -202,10 +138,6 @@ pub struct InputState {
     pub toolbar_visible: bool,
     /// Whether the top toolbar panel is visible
     pub toolbar_top_visible: bool,
-    /// Whether fill is enabled for fill-capable shapes (rect, ellipse)
-    pub fill_enabled: bool,
-    /// Current side count for regular polygon drawing.
-    pub polygon_sides: u8,
     /// Whether the top toolbar is pinned (saved to config, opens at startup)
     pub toolbar_top_pinned: bool,
     /// Whether to use icons instead of text labels in toolbars
@@ -319,8 +251,6 @@ pub struct InputState {
     pub(crate) click_highlight: ClickHighlightState,
     /// On-screen input HUD (keystroke/click chips) state
     pub(crate) input_hud: InputHudState,
-    /// Optional tool override independent of modifier keys
-    pub(in crate::input::state::core) tool_override: Option<Tool>,
     /// Current selection information
     pub selection_state: SelectionState,
     /// Last axis used for selection nudges (used to resolve Home/End axis)
@@ -342,22 +272,8 @@ pub struct InputState {
     pub hit_test_tolerance: f64,
     /// Threshold before enabling spatial indexing
     pub max_linear_hit_test: usize,
-    /// Maximum number of undo actions retained in history
-    pub undo_stack_limit: usize,
-    /// Delay between steps when running undo-all via delay (ms)
-    pub undo_all_delay_ms: u64,
-    /// Delay between steps when running redo-all via delay (ms)
-    pub redo_all_delay_ms: u64,
-    /// Delay between steps for custom undo (ms)
-    pub custom_undo_delay_ms: u64,
-    /// Delay between steps for custom redo (ms)
-    pub custom_redo_delay_ms: u64,
-    /// Number of steps to perform for custom undo
-    pub custom_undo_steps: usize,
-    /// Number of steps to perform for custom redo
-    pub custom_redo_steps: usize,
-    /// Whether the custom undo/redo section is visible
-    pub custom_section_enabled: bool,
+    /// Undo retention, delayed playback settings, and active playback state.
+    pub(crate) history_limits: crate::input::state::core::HistoryLimits,
     /// The scan-band overlay shown while screen text recognition runs, and the
     /// outcome card that follows it.
     pub(crate) ocr_scan: Option<crate::input::state::core::utility::ocr_scan::OcrScan>,
@@ -397,9 +313,6 @@ pub struct InputState {
     /// Input-method composition state (preedit + pending IME batch) for the
     /// active text/note edit.
     pub(crate) ime: super::super::super::ime::ImeCompositionState,
-    /// Pending delayed history playback state
-    pub(in crate::input::state::core) pending_history: Option<DelayedHistory>,
-
     /// Spatial grid plus guarded ShapeId-to-z-order indices for large-frame hit-testing.
     pub(in crate::input::state::core) spatial_index: Option<SpatialIndexCache>,
     /// Last known pointer position in screen coordinates (for overlays and hover refresh)
@@ -428,14 +341,8 @@ pub struct InputState {
     pub(in crate::input::state::core) zoom_scale: f64,
     /// Current zoom view offset in canvas/world space
     pub(in crate::input::state::core) zoom_view_offset: (f64, f64),
-    /// Number of preset slots to display
-    pub preset_slot_count: usize,
-    /// Preset slots for quick tool switching
-    pub presets: Vec<Option<ToolPresetConfig>>,
-    /// Last applied preset slot (for UI highlight)
-    pub active_preset_slot: Option<usize>,
-    /// Transient preset feedback for toolbar animations
-    pub(crate) preset_feedback: Vec<Option<PresetFeedbackState>>,
+    /// Runtime preset values, active selection, and transient feedback.
+    pub(crate) preset_slots: crate::input::state::core::PresetSlots,
     /// Lifecycle and navigation state for the guided tour.
     pub(crate) tour: crate::input::state::core::TourState,
     /// Compositor capabilities (layer-shell, screencopy, etc.)

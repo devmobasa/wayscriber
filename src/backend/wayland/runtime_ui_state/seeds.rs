@@ -256,7 +256,7 @@ pub(super) fn toolbar_values(
         ),
         Target::HistoryCustomSection => RuntimeUiMutationValues::one(
             InteractionSeedTarget::HistoryCustomSection,
-            InteractionSeedValue::Bool(input.custom_section_enabled),
+            InteractionSeedValue::Bool(input.history_limits.custom_section_enabled()),
         ),
         Target::InputHud => RuntimeUiMutationValues::one(
             InteractionSeedTarget::InputHud,

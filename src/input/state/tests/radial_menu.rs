@@ -377,8 +377,8 @@ fn radial_hover_collapse_without_hover_change_requests_redraw() {
 #[test]
 fn size_for_active_tool_uses_eraser_size_for_eraser() {
     let mut state = create_test_input_state();
-    state.current_thickness = 3.0;
-    state.eraser_size = 17.0;
+    state.style.current_thickness = 3.0;
+    state.style.eraser_size = 17.0;
 
     assert!(state.set_tool_override(Some(Tool::Eraser)));
     assert!((state.size_for_active_tool() - 17.0).abs() < f64::EPSILON);
@@ -472,8 +472,8 @@ fn right_click_when_radial_open_on_panned_board_uses_canvas_hit_testing() {
         y1: 90,
         x2: 180,
         y2: 90,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     state.open_radial_menu(50.0, 40.0);
     assert!(state.is_radial_menu_open());
@@ -507,7 +507,7 @@ fn color_hit_test_uses_color_ring_alignment_when_tool_count_differs() {
         .expect("layout should exist for open radial menu");
 
     // Just inside color segment 1 (Green), close to the segment boundary.
-    let seg = 2.0 * PI / state.quick_colors.radial_rendered_len() as f64;
+    let seg = 2.0 * PI / state.style.quick_colors.radial_rendered_len() as f64;
     let probe_angle = -PI / 2.0 + seg + 0.04;
     let probe_radius = (layout.color_inner + layout.color_outer) / 2.0;
     let probe_x = layout.center_x + probe_radius * probe_angle.cos();
@@ -516,8 +516,8 @@ fn color_hit_test_uses_color_ring_alignment_when_tool_count_differs() {
     state.update_radial_menu_hover(probe_x, probe_y);
     state.radial_menu_select_hovered();
 
-    let expected = state.quick_colors.radial_color_for_index(1).unwrap();
-    assert!(colors_approx_eq(&state.current_color, &expected));
+    let expected = state.style.quick_colors.radial_color_for_index(1).unwrap();
+    assert!(colors_approx_eq(&state.style.current_color, &expected));
 }
 
 #[test]
@@ -546,7 +546,7 @@ fn color_ring_selection_uses_configured_quick_palette() {
         .layout
         .expect("layout should exist for open radial menu");
 
-    let seg = 2.0 * PI / state.quick_colors.radial_rendered_len() as f64;
+    let seg = 2.0 * PI / state.style.quick_colors.radial_rendered_len() as f64;
     let probe_angle = -PI / 2.0 + seg + 0.04;
     let probe_radius = (layout.color_inner + layout.color_outer) / 2.0;
     let probe_x = layout.center_x + probe_radius * probe_angle.cos();
@@ -556,7 +556,7 @@ fn color_ring_selection_uses_configured_quick_palette() {
     state.radial_menu_select_hovered();
 
     let expected = configured_green;
-    assert!(colors_approx_eq(&state.current_color, &expected));
+    assert!(colors_approx_eq(&state.style.current_color, &expected));
 }
 
 fn colors_approx_eq(a: &Color, b: &Color) -> bool {
@@ -981,15 +981,20 @@ fn recent_colors_are_deduped_most_recent_first_and_capped() {
     for i in 0..8 {
         state.apply_color_from_ui(color(i as f64 * 0.125));
     }
-    assert_eq!(state.recent_colors.len(), 6, "recents are capped");
-    assert_eq!(state.recent_colors[0], color(0.875), "most recent first");
+    assert_eq!(state.style.recent_colors.len(), 6, "recents are capped");
+    assert_eq!(
+        state.style.recent_colors[0],
+        color(0.875),
+        "most recent first"
+    );
 
     // Re-applying an existing color moves it to the front without growing.
     state.apply_color_from_ui(color(0.5));
-    assert_eq!(state.recent_colors.len(), 6);
-    assert_eq!(state.recent_colors[0], color(0.5));
+    assert_eq!(state.style.recent_colors.len(), 6);
+    assert_eq!(state.style.recent_colors[0], color(0.5));
     assert_eq!(
         state
+            .style
             .recent_colors
             .iter()
             .filter(|c| **c == color(0.5))
@@ -1001,7 +1006,7 @@ fn recent_colors_are_deduped_most_recent_first_and_capped() {
 #[test]
 fn radial_ring_appends_recents_after_quick_palette_without_duplicates() {
     let mut state = create_test_input_state();
-    let quick_len = state.quick_colors.radial_rendered_len();
+    let quick_len = state.style.quick_colors.radial_rendered_len();
     let unique = Color {
         r: 0.11,
         g: 0.22,
@@ -1011,6 +1016,7 @@ fn radial_ring_appends_recents_after_quick_palette_without_duplicates() {
     state.apply_color_from_ui(unique);
     // A recent identical to a quick swatch is filtered from the ring.
     let quick0 = state
+        .style
         .quick_colors
         .radial_color_for_index(0)
         .expect("quick color 0");
@@ -1035,11 +1041,12 @@ fn recent_color_segment_applies_through_the_color_path() {
     state.apply_color_from_ui(unique);
     // Move the current color away so applying the recent is observable.
     let quick0 = state
+        .style
         .quick_colors
         .radial_color_for_index(0)
         .expect("quick color 0");
     state.apply_color_from_ui(quick0);
-    let quick_len = state.quick_colors.radial_rendered_len();
+    let quick_len = state.style.quick_colors.radial_rendered_len();
 
     let layout = open_with_layout(&mut state);
     let total = state.radial_ring_swatch_count();
@@ -1058,5 +1065,5 @@ fn recent_color_segment_applies_through_the_color_path() {
     state.radial_menu_select_hovered();
 
     assert!(!state.is_radial_menu_open());
-    assert!(colors_approx_eq(&state.current_color, &unique));
+    assert!(colors_approx_eq(&state.style.current_color, &unique));
 }

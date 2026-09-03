@@ -72,8 +72,8 @@ fn prefix_content_keeps_output_before_selection_and_honors_both_flags() {
         w: 30,
         h: 40,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     state.set_selection(vec![shape_id]);
 

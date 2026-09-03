@@ -2,10 +2,9 @@ use super::base::{DrawingState, InputState, TextBlockDrag, TextEditEntryFeedback
 use super::index::SpatialIndexCache;
 use super::{ColorPickerPopupLayout, ColorPickerPopupState};
 use crate::draw::frame::ShapeSnapshot;
-use crate::draw::{Color, DirtyTracker, FontDescriptor, ShapeId};
+use crate::draw::{Color, DirtyTracker, ShapeId};
 use crate::input::state::core::base::PolygonClickState;
 use crate::input::state::highlight::ClickHighlightState;
-use crate::input::tool::PerToolDrawingSettings;
 use crate::input::{BoardManager, MouseButton};
 use crate::util::Rect;
 use std::collections::HashMap;
@@ -17,13 +16,7 @@ struct ActiveInteractionRollback {
     state: DrawingState,
     active_drag_button: Option<MouseButton>,
     active_drag_color: Option<Color>,
-    current_color: Color,
-    current_thickness: f64,
-    tool_settings: PerToolDrawingSettings,
-    current_font_size: f64,
-    font_descriptor: FontDescriptor,
-    text_background_enabled: bool,
-    text_wrap_width: Option<i32>,
+    style: super::DrawingStyle,
     text_input_mode: TextInputMode,
     text_edit_target: Option<(ShapeId, ShapeSnapshot)>,
     text_edit_entry_feedback: Option<TextEditEntryFeedback>,
@@ -52,19 +45,13 @@ impl ActiveInteractionRollback {
             state: input.state.clone(),
             active_drag_button: input.active_drag_button,
             active_drag_color: input.active_drag_color,
-            current_color: input.current_color,
-            current_thickness: input.current_thickness,
-            tool_settings: input.tool_settings.clone(),
-            current_font_size: input.current_font_size,
-            font_descriptor: input.font_descriptor.clone(),
-            text_background_enabled: input.text_background_enabled,
-            text_wrap_width: input.text_wrap_width,
+            style: input.style.clone(),
             text_input_mode: input.text_input_mode,
             text_edit_target: input.text_edit_target.clone(),
             text_edit_entry_feedback: input.text_edit_entry_feedback.clone(),
             color_picker_popup_state: input.color_picker_popup.state.clone(),
             color_picker_popup_layout: input.color_picker_popup.layout,
-            active_preset_slot: input.active_preset_slot,
+            active_preset_slot: input.preset_slots.active(),
             click_highlight: input.click_highlight.clone(),
             needs_redraw: input.needs_redraw,
             session_dirty: input.session_dirty,
@@ -85,19 +72,13 @@ impl ActiveInteractionRollback {
         input.state = self.state;
         input.active_drag_button = self.active_drag_button;
         input.active_drag_color = self.active_drag_color;
-        input.current_color = self.current_color;
-        input.current_thickness = self.current_thickness;
-        input.tool_settings = self.tool_settings;
-        input.current_font_size = self.current_font_size;
-        input.font_descriptor = self.font_descriptor;
-        input.text_background_enabled = self.text_background_enabled;
-        input.text_wrap_width = self.text_wrap_width;
+        input.style = self.style;
         input.text_input_mode = self.text_input_mode;
         input.text_edit_target = self.text_edit_target;
         input.text_edit_entry_feedback = self.text_edit_entry_feedback;
         input.color_picker_popup.state = self.color_picker_popup_state;
         input.color_picker_popup.layout = self.color_picker_popup_layout;
-        input.active_preset_slot = self.active_preset_slot;
+        input.preset_slots.restore_active(self.active_preset_slot);
         input.click_highlight = self.click_highlight;
         input.needs_redraw = self.needs_redraw;
         input.session_dirty = self.session_dirty;
@@ -381,10 +362,10 @@ mod tests {
             x: 40,
             y: 80,
             text: "Original".to_string(),
-            color: state.current_color,
-            size: state.current_font_size,
-            font_descriptor: state.font_descriptor.clone(),
-            background_enabled: state.text_background_enabled,
+            color: state.style.current_color,
+            size: state.style.current_font_size,
+            font_descriptor: state.style.font_descriptor.clone(),
+            background_enabled: state.style.text_background_enabled,
             wrap_width: Some(180),
         });
         state.set_selection(vec![shape_id]);

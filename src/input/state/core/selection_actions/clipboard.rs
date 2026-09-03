@@ -132,7 +132,7 @@ impl InputState {
         let created_len = created.len();
         self.boards.active_frame_mut().push_undo_action(
             UndoAction::Create { shapes: created },
-            self.undo_stack_limit,
+            self.history_limits.undo_stack_limit(),
         );
         self.mark_session_dirty();
         self.needs_redraw = true;
@@ -375,7 +375,7 @@ impl InputState {
         let mut limit_hit = false;
         let total = shapes.len();
         let max_shapes = self.max_shapes_per_frame;
-        let undo_limit = self.undo_stack_limit;
+        let undo_limit = self.history_limits.undo_stack_limit();
 
         let target = self
             .boards

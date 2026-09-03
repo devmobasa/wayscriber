@@ -73,7 +73,7 @@ fn presenter_mode_blocks_preset_status_bar_toggle() {
         show_status_bar: Some(true),
         drag_tools: None,
     };
-    state.presets[0] = Some(preset);
+    state.preset_slots.presets_mut_for_test()[0] = Some(preset);
 
     state.toggle_presenter_mode();
     assert!(!state.ui_visibility.show_status_bar);

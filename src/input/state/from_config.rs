@@ -1,53 +1,29 @@
 use log::warn;
 use std::collections::HashMap;
 
-use crate::config::{Action, Config, KeybindingsConfig, QuickColorPalette, Shortcut};
-use crate::draw::{FontDescriptor, clamp_regular_sides};
-use crate::input::state::InputStateSeed;
+use crate::config::{Action, Config, KeybindingsConfig, Shortcut};
+use crate::input::state::{DrawingStyle, HistoryLimits, InputStateSeed};
 use crate::input::{ClickHighlightSettings, DragToolBindings, InputHudSettings, InputState};
 
 impl InputState {
     /// Build runtime input state from validated application configuration.
     pub fn from_config(config: &Config) -> Self {
-        let font_descriptor = FontDescriptor::new(
-            config.drawing.font_family.clone(),
-            config.drawing.font_weight.clone(),
-            config.drawing.font_style.clone(),
-        );
-
+        let style = DrawingStyle::from((&config.drawing, &config.arrow, &config.spotlight));
         let action_map = build_action_map(config);
         let action_bindings = build_action_bindings(config);
 
         let mut input_state = InputState::from_seed(InputStateSeed {
-            color: config.drawing.default_color.to_color(),
-            thickness: config.drawing.default_thickness,
-            eraser_size: config.drawing.default_eraser_size,
-            eraser_mode: config.drawing.default_eraser_mode,
-            marker_opacity: config.drawing.marker_opacity,
-            fill_enabled: config.drawing.default_fill_enabled,
-            font_size: config.drawing.default_font_size,
-            font_descriptor,
-            text_background_enabled: config.drawing.text_background_enabled,
-            arrow_length: config.arrow.length,
-            arrow_angle: config.arrow.angle_degrees,
-            arrow_head_at_end: config.arrow.head_at_end,
+            style,
             ui_visibility: crate::input::state::UiVisibility::from(&config.ui),
             boards_config: config.resolved_boards(),
             action_map,
             max_shapes_per_frame: config.session.max_shapes_per_frame,
             click_highlight_settings: ClickHighlightSettings::from(&config.ui.click_highlight),
-            undo_all_delay_ms: config.history.undo_all_delay_ms,
-            redo_all_delay_ms: config.history.redo_all_delay_ms,
-            custom_section_enabled: config.history.custom_section_enabled,
-            custom_undo_delay_ms: config.history.custom_undo_delay_ms,
-            custom_redo_delay_ms: config.history.custom_redo_delay_ms,
-            custom_undo_steps: config.history.custom_undo_steps,
-            custom_redo_steps: config.history.custom_redo_steps,
+            history_limits: HistoryLimits::from(&config.history),
             presenter_mode_config: config.presenter_mode.clone(),
         });
         input_state.set_action_bindings(action_bindings);
         input_state.init_input_hud_from_config(InputHudSettings::from(&config.ui.input_hud));
-        input_state.set_quick_colors(QuickColorPalette::from_config(&config.drawing.quick_colors));
         input_state.set_drag_tool_bindings(build_drag_tool_bindings(config));
         input_state.set_render_profiles(crate::render_profiles::RenderProfileSet::from_config(
             &config.render_profiles,
@@ -56,23 +32,19 @@ impl InputState {
         input_state.set_hit_test_tolerance(config.drawing.hit_test_tolerance);
         input_state.set_hit_test_threshold(config.drawing.hit_test_linear_threshold);
         input_state.set_undo_stack_limit(config.drawing.undo_stack_limit);
-        input_state.polygon_sides = clamp_regular_sides(config.drawing.polygon_sides);
-        input_state.blur_style = config.drawing.default_blur_style;
-        input_state.arrow_style = config.arrow.style;
-        input_state.set_pen_smoothing(config.drawing.pen_smoothing);
-        input_state.set_font_cycle(config.drawing.font_cycle.clone());
-        input_state.spotlight_dim_opacity = config.spotlight.dim_opacity;
-        input_state.spotlight_feather = config.spotlight.feather;
-        input_state.spotlight_magnification = config.spotlight.magnification;
         input_state.set_context_menu_enabled(config.ui.context_menu.enabled);
         input_state.command_palette_toast_duration_ms = config.ui.command_palette_toast_duration_ms;
         input_state.radial_menu.mouse_binding = config.ui.radial_menu_mouse_binding;
         #[cfg(feature = "tablet-input")]
         {
-            input_state.pressure_variation_threshold = config.tablet.pressure_variation_threshold;
-            input_state.pressure_thickness_edit_mode = config.tablet.pressure_thickness_edit_mode;
-            input_state.pressure_thickness_entry_mode = config.tablet.pressure_thickness_entry_mode;
-            input_state.pressure_thickness_scale_step = config.tablet.pressure_thickness_scale_step;
+            input_state.style.pressure_variation_threshold =
+                config.tablet.pressure_variation_threshold;
+            input_state.style.pressure_thickness_edit_mode =
+                config.tablet.pressure_thickness_edit_mode;
+            input_state.style.pressure_thickness_entry_mode =
+                config.tablet.pressure_thickness_entry_mode;
+            input_state.style.pressure_thickness_scale_step =
+                config.tablet.pressure_thickness_scale_step;
         }
 
         input_state.init_toolbar_from_config(&config.ui.toolbar);

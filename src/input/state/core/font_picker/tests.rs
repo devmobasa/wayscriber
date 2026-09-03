@@ -322,14 +322,14 @@ fn choosing_a_font_with_nothing_selected_sets_what_the_next_label_uses() {
 
     assert!(state.commit_font_picker());
 
-    assert_eq!(state.font_descriptor.family, chosen);
+    assert_eq!(state.style.font_descriptor.family, chosen);
     assert!(!state.is_font_picker_open());
 }
 
 #[test]
 fn choosing_a_font_with_text_selected_restyles_it_and_leaves_the_tool_alone() {
     let mut state = make_test_input_state();
-    let tool_font = state.font_descriptor.family.clone();
+    let tool_font = state.style.font_descriptor.family.clone();
     let id = state
         .boards
         .active_frame_mut()
@@ -351,7 +351,7 @@ fn choosing_a_font_with_text_selected_restyles_it_and_leaves_the_tool_alone() {
     };
     assert_eq!(font_descriptor.family, chosen);
     assert_eq!(
-        state.font_descriptor.family, tool_font,
+        state.style.font_descriptor.family, tool_font,
         "restyling a selection must not also change what the next label uses"
     );
 }
@@ -397,14 +397,14 @@ fn recents_keep_the_most_recent_first_without_repeats() {
 #[test]
 fn escape_closes_without_changing_anything() {
     let mut state = make_test_input_state();
-    let before = state.font_descriptor.family.clone();
+    let before = state.style.font_descriptor.family.clone();
     open_ready_font_picker(&mut state);
     state.set_font_picker_selection(3);
 
     state.handle_font_picker_key(Key::Escape, None);
 
     assert!(!state.is_font_picker_open());
-    assert_eq!(state.font_descriptor.family, before);
+    assert_eq!(state.style.font_descriptor.family, before);
     assert!(state.font_picker_recents().is_empty());
 }
 

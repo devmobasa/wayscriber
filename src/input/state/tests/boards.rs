@@ -145,10 +145,10 @@ fn switch_board_cancels_text_edit_on_source_board_before_switching() {
         x: 40,
         y: 80,
         text: "Original".to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     });
     state.set_selection(vec![shape_id]);
@@ -172,8 +172,8 @@ fn switch_board_cancels_selection_move_on_source_board_before_switching() {
         w: 30,
         h: 20,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     state.set_selection(vec![shape_id]);
     let snapshots = state.capture_movable_selection_snapshots();
@@ -224,7 +224,7 @@ fn duplicate_board_cancels_text_input_through_lifecycle_transition() {
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_WHITEBOARD);
     let initial_count = state.boards.board_count();
-    state.text_wrap_width = Some(240);
+    state.style.text_wrap_width = Some(240);
     state.state = DrawingState::text_input(10, 20, "draft".to_string());
     state.needs_redraw = false;
 
@@ -232,7 +232,7 @@ fn duplicate_board_cancels_text_input_through_lifecycle_transition() {
 
     assert_eq!(state.boards.board_count(), initial_count + 1);
     assert!(matches!(state.state, DrawingState::Idle));
-    assert!(state.text_wrap_width.is_none());
+    assert!(state.style.text_wrap_width.is_none());
     assert!(state.needs_redraw);
 }
 
@@ -362,10 +362,10 @@ fn duplicate_board_cancels_text_edit_before_cloning_board() {
         x: 40,
         y: 80,
         text: "Original".to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     });
     state.set_selection(vec![shape_id]);

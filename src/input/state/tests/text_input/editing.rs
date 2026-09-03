@@ -447,7 +447,7 @@ fn first_click_places_a_new_empty_text_block() {
 #[test]
 fn up_and_down_follow_wrapped_visual_lines() {
     let mut state = text_state("abcdefghij");
-    state.text_wrap_width = Some(35);
+    state.style.text_wrap_width = Some(35);
     state.modifiers.ctrl = true;
     state.on_key_press(Key::Home);
     state.modifiers.ctrl = false;
@@ -467,8 +467,8 @@ fn up_and_down_follow_wrapped_visual_lines() {
 #[test]
 fn home_and_end_stay_on_the_current_wrapped_visual_line() {
     let mut state = text_state("abcdefghij");
-    state.current_font_size = 20.0;
-    state.text_wrap_width = Some(50);
+    state.style.current_font_size = 20.0;
+    state.style.text_wrap_width = Some(50);
     state.modifiers.ctrl = true;
     state.on_key_press(Key::Home);
     state.modifiers.ctrl = false;
@@ -605,8 +605,9 @@ fn click_after_visible_preedit_maps_back_to_the_committed_buffer() {
 
     let preview = "abMMMMMMMMcd";
     let font = state
+        .style
         .font_descriptor
-        .to_pango_string(state.current_font_size);
+        .to_pango_string(state.style.current_font_size);
     let geometry = crate::draw::shape::caret_geometry_text(preview, &font, None, 11)
         .expect("preview caret geometry is measurable");
     let click_x = geometry.x.round() as i32;
@@ -628,10 +629,10 @@ fn edit_ghost_is_hidden_in_place_and_shown_after_moving() {
         x: 100,
         y: 100,
         text: "some text".to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     });
     state.set_selection(vec![shape_id]);

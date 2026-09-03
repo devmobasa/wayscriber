@@ -225,7 +225,7 @@ mod tests {
             y1: 0,
             x2: 20,
             y2: 10,
-            color: state.current_color,
+            color: state.style.current_color,
             thick: 3.0,
             arrow_length: 24.0,
             arrow_angle,

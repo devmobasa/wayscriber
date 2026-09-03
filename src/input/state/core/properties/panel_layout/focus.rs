@@ -135,8 +135,8 @@ mod tests {
             w: 30,
             h: 40,
             fill: false,
-            color: state.current_color,
-            thick: state.current_thickness,
+            color: state.style.current_color,
+            thick: state.style.current_thickness,
         });
         state.set_selection(vec![shape_id]);
         assert!(state.show_properties_panel());

@@ -127,10 +127,10 @@ impl WaylandState {
         }
         if first_pressure_sample {
             self.input_state
-                .replace_active_drawing_pressure_samples(self.input_state.current_thickness);
+                .replace_active_drawing_pressure_samples(self.input_state.style.current_thickness);
         }
-        self.tablet.pressure_thickness = Some(self.input_state.current_thickness);
-        self.record_stylus_peak(self.input_state.current_thickness);
+        self.tablet.pressure_thickness = Some(self.input_state.style.current_thickness);
+        self.record_stylus_peak(self.input_state.style.current_thickness);
     }
 
     fn commit_stylus_motion_sample(&mut self, x: f64, y: f64, pressure_sample: bool) {
@@ -230,7 +230,7 @@ impl WaylandState {
         let (wx, wy) = self.zoomed_world_coords(x, y);
         self.input_state
             .on_mouse_press_with_canvas(MouseButton::Left, screen_x, screen_y, wx, wy);
-        let base_thickness = self.input_state.current_thickness;
+        let base_thickness = self.input_state.style.current_thickness;
         self.tablet.base_thickness = Some(base_thickness);
         self.record_stylus_motion_thickness();
         self.input_state.needs_redraw = true;
@@ -305,8 +305,8 @@ impl WaylandState {
             return;
         }
 
-        self.tablet.pressure_thickness = Some(self.input_state.current_thickness);
-        self.record_stylus_peak(self.input_state.current_thickness);
+        self.tablet.pressure_thickness = Some(self.input_state.style.current_thickness);
+        self.record_stylus_peak(self.input_state.style.current_thickness);
     }
 }
 

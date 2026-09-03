@@ -7,35 +7,35 @@ const ARROW_LABEL_MAX_SIZE: f64 = 28.0;
 
 impl InputState {
     pub(crate) fn next_arrow_label(&self) -> Option<ArrowLabel> {
-        if !self.arrow_label_enabled {
+        if !self.style.arrow_label_enabled {
             return None;
         }
         Some(ArrowLabel {
-            value: self.arrow_label_counter.max(1),
+            value: self.style.arrow_label_counter.max(1),
             size: self.arrow_label_size(),
-            font_descriptor: self.font_descriptor.clone(),
+            font_descriptor: self.style.font_descriptor.clone(),
         })
     }
 
     pub(crate) fn bump_arrow_label(&mut self) {
-        self.arrow_label_counter = self.arrow_label_counter.saturating_add(1);
+        self.style.arrow_label_counter = self.style.arrow_label_counter.saturating_add(1);
     }
 
     pub(crate) fn reset_arrow_label_counter(&mut self) -> bool {
-        if self.arrow_label_counter == 1 {
+        if self.style.arrow_label_counter == 1 {
             return false;
         }
-        self.arrow_label_counter = 1;
+        self.style.arrow_label_counter = 1;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         true
     }
 
     pub(crate) fn set_arrow_label_enabled(&mut self, enabled: bool) -> bool {
-        if self.arrow_label_enabled == enabled {
+        if self.style.arrow_label_enabled == enabled {
             return false;
         }
-        self.arrow_label_enabled = enabled;
+        self.style.arrow_label_enabled = enabled;
         if enabled {
             self.sync_arrow_label_counter();
         }
@@ -59,11 +59,11 @@ impl InputState {
                 }
             }
         }
-        self.arrow_label_counter = max_label.saturating_add(1);
+        self.style.arrow_label_counter = max_label.saturating_add(1);
     }
 
     fn arrow_label_size(&self) -> f64 {
-        (self.current_font_size * ARROW_LABEL_FONT_SCALE)
+        (self.style.current_font_size * ARROW_LABEL_FONT_SCALE)
             .clamp(ARROW_LABEL_MIN_SIZE, ARROW_LABEL_MAX_SIZE)
     }
 }

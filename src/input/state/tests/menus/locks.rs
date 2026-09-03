@@ -7,10 +7,10 @@ fn shape_menu_disables_edit_for_locked_text() {
         x: 15,
         y: 25,
         text: "Locked".to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     });
 
@@ -43,8 +43,8 @@ fn shape_menu_disables_delete_when_all_locked() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     let second = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 25,
@@ -52,8 +52,8 @@ fn shape_menu_disables_delete_when_all_locked() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     if let Some(index) = state.boards.active_frame().find_index(first) {
@@ -88,8 +88,8 @@ fn shape_menu_allows_delete_when_mixed_lock_state() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     let unlocked_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 30,
@@ -97,8 +97,8 @@ fn shape_menu_allows_delete_when_mixed_lock_state() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     if let Some(index) = state.boards.active_frame().find_index(locked_id) {

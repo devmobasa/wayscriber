@@ -382,8 +382,8 @@ impl WaylandState {
                 origin_y: origin_y.round() as i32,
             },
             spotlight: crate::canvas_export::SpotlightPassSnapshot {
-                dim_opacity: self.input_state.spotlight_dim_opacity,
-                feather: self.input_state.spotlight_feather,
+                dim_opacity: self.input_state.style.spotlight_dim_opacity,
+                feather: self.input_state.style.spotlight_feather,
             },
             backdrop: match self.input_state.boards.active_background() {
                 crate::input::BoardBackground::Transparent => {

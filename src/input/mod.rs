@@ -20,8 +20,6 @@ pub use boards::{
     BoardSpec, runtime_contrast_pen_color,
 };
 pub use events::{Key, MouseButton};
-#[allow(unused_imports)]
-pub(crate) use state::IdleHandle;
 pub use state::{
     BoardPickerCursorHint, ClickHighlightSettings, ColorPickerCursorHint, CommandPaletteCursorHint,
     CommandPaletteState, ContextMenuCursorHint, DrawingState, EyedropperUiState, HelpOverlayClick,
@@ -30,6 +28,8 @@ pub use state::{
     RegionPurposeTag, RegionSelectUiState, SelectionHandle, SelectionPropertyEntry,
     SelectionPropertyKind, TextInputMode, ZoomAction,
 };
+#[allow(unused_imports)]
+pub(crate) use state::{DrawingStyle, IdleHandle};
 #[cfg(feature = "tablet-input")]
 #[allow(unused_imports)]
 pub use tablet::TabletSettings;

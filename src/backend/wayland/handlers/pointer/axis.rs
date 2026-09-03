@@ -242,14 +242,14 @@ impl WaylandState {
                 self.input_state.adjust_font_size(-2.0);
                 debug!(
                     "Font size decreased: {:.1}px",
-                    self.input_state.current_font_size
+                    self.input_state.style.current_font_size
                 );
             }
             std::cmp::Ordering::Less if self.input_state.modifiers.shift => {
                 self.input_state.adjust_font_size(2.0);
                 debug!(
                     "Font size increased: {:.1}px",
-                    self.input_state.current_font_size
+                    self.input_state.style.current_font_size
                 );
             }
             std::cmp::Ordering::Greater | std::cmp::Ordering::Less => {
@@ -279,7 +279,7 @@ impl WaylandState {
     fn adjust_active_tool_thickness(&mut self, delta: f64, radial_menu_path: bool) {
         let eraser_active = self.input_state.active_tool() == Tool::Eraser;
         #[cfg(feature = "tablet-input")]
-        let prev_thickness = self.input_state.current_thickness;
+        let prev_thickness = self.input_state.style.current_thickness;
 
         let changed = if radial_menu_path {
             self.input_state.radial_menu_adjust_thickness(delta)
@@ -294,24 +294,24 @@ impl WaylandState {
             if eraser_active {
                 debug!(
                     "Eraser size adjusted: {:.0}px",
-                    self.input_state.eraser_size
+                    self.input_state.style.eraser_size
                 );
             } else {
                 debug!(
                     "Thickness adjusted: {:.0}px",
-                    self.input_state.current_thickness
+                    self.input_state.style.current_thickness
                 );
             }
         }
 
         #[cfg(feature = "tablet-input")]
         if !eraser_active
-            && (self.input_state.current_thickness - prev_thickness).abs() > f64::EPSILON
+            && (self.input_state.style.current_thickness - prev_thickness).abs() > f64::EPSILON
         {
-            self.tablet.base_thickness = Some(self.input_state.current_thickness);
+            self.tablet.base_thickness = Some(self.input_state.style.current_thickness);
             if self.tablet.tip_down {
-                self.tablet.pressure_thickness = Some(self.input_state.current_thickness);
-                self.record_stylus_peak(self.input_state.current_thickness);
+                self.tablet.pressure_thickness = Some(self.input_state.style.current_thickness);
+                self.record_stylus_peak(self.input_state.style.current_thickness);
             } else {
                 self.tablet.pressure_thickness = None;
                 self.tablet.peak_thickness = None;
@@ -378,7 +378,7 @@ mod tests {
 
         let layout = *input_state.board_picker_layout().expect("layout");
         let position = (layout.page_viewport_x + 1.0, layout.page_viewport_y + 1.0);
-        let thickness = input_state.current_thickness;
+        let thickness = input_state.style.current_thickness;
         input_state.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
         assert!(try_handle_board_picker_page_panel_axis(
@@ -386,7 +386,7 @@ mod tests {
             position,
             1,
         ));
-        assert_eq!(input_state.current_thickness, thickness);
+        assert_eq!(input_state.style.current_thickness, thickness);
         update_picker_layout(&mut input_state);
 
         let layout = *input_state.board_picker_layout().expect("layout");

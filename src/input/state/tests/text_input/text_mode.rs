@@ -8,7 +8,7 @@ fn test_text_mode_plain_letters_not_triggering_actions() {
     state.state = DrawingState::text_input(100, 100, String::new());
 
     // Type 'r' - should add to buffer, not change color
-    let original_color = state.current_color;
+    let original_color = state.style.current_color;
     state.on_key_press(Key::Char('r'));
 
     // Check that 'r' was added to buffer
@@ -19,7 +19,7 @@ fn test_text_mode_plain_letters_not_triggering_actions() {
     }
 
     // Color should NOT have changed
-    assert_eq!(state.current_color, original_color);
+    assert_eq!(state.style.current_color, original_color);
 
     // Type more color keys
     state.on_key_press(Key::Char('g'));
@@ -33,7 +33,7 @@ fn test_text_mode_plain_letters_not_triggering_actions() {
     }
 
     // Color should still not have changed
-    assert_eq!(state.current_color, original_color);
+    assert_eq!(state.style.current_color, original_color);
 }
 
 #[test]

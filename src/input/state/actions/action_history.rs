@@ -33,11 +33,11 @@ impl InputState {
                 true
             }
             Action::UndoAllDelayed => {
-                self.start_undo_all_delayed(self.undo_all_delay_ms);
+                self.start_undo_all_delayed(self.history_limits.undo_all_delay_ms());
                 true
             }
             Action::RedoAllDelayed => {
-                self.start_redo_all_delayed(self.redo_all_delay_ms);
+                self.start_redo_all_delayed(self.history_limits.redo_all_delay_ms());
                 true
             }
             _ => false,

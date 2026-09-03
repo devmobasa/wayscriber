@@ -13,21 +13,21 @@ pub(crate) fn default_step_marker_size(font_size: f64) -> f64 {
 impl InputState {
     pub(crate) fn next_step_marker_label(&self) -> StepMarkerLabel {
         StepMarkerLabel {
-            value: self.step_marker_counter.max(1),
+            value: self.style.step_marker_counter.max(1),
             size: self.step_marker_size(),
-            font_descriptor: self.font_descriptor.clone(),
+            font_descriptor: self.style.font_descriptor.clone(),
         }
     }
 
     pub(crate) fn bump_step_marker(&mut self) {
-        self.step_marker_counter = self.step_marker_counter.saturating_add(1);
+        self.style.step_marker_counter = self.style.step_marker_counter.saturating_add(1);
     }
 
     pub(crate) fn reset_step_marker_counter(&mut self) -> bool {
-        if self.step_marker_counter == 1 {
+        if self.style.step_marker_counter == 1 {
             return false;
         }
-        self.step_marker_counter = 1;
+        self.style.step_marker_counter = 1;
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         true
@@ -44,7 +44,7 @@ impl InputState {
                 }
             }
         }
-        self.step_marker_counter = max_label.saturating_add(1);
+        self.style.step_marker_counter = max_label.saturating_add(1);
     }
 
     fn step_marker_size(&self) -> f64 {

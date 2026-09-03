@@ -196,7 +196,7 @@ impl InputState {
         if snapshot_bend(&snapshot) == snapshot_bend(&after) {
             return;
         }
-        let limit = self.undo_stack_limit;
+        let limit = self.history_limits.undo_stack_limit();
         self.boards.active_frame_mut().push_undo_action(
             crate::draw::frame::UndoAction::Modify {
                 shape_id,

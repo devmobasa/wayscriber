@@ -129,8 +129,8 @@ fn alt_click_selects_filled_polygon_interior() {
         kind: crate::draw::PolygonKind::Triangle,
         points: vec![(10, 10), (40, 10), (25, 40)],
         fill: true,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.modifiers.alt = true;
@@ -347,7 +347,7 @@ fn pressure_preview_release_cleans_wide_preview_when_final_freehand_narrows() {
     assert!(state.set_thickness(2.0));
     state.update_screen_dimensions(1000, 1000);
     state.pending_onboarding_usage.first_stroke_done = true;
-    state.pressure_variation_threshold = 1000.0;
+    state.style.pressure_variation_threshold = 1000.0;
     let _ = state.take_dirty_regions();
 
     state.on_mouse_press(MouseButton::Left, 10, 100);
@@ -392,8 +392,8 @@ fn append_path_limit_rejection_clears_provisional_damage() {
         y1: 1,
         x2: 2,
         y2: 2,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
     state.max_shapes_per_frame = 1;
     let _ = state.take_dirty_regions();
@@ -535,7 +535,7 @@ fn cancel_active_path_dirties_full_accumulated_provisional_bounds() {
 fn freeform_polygon_freezes_style_on_first_click() {
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
-    let original = state.current_color;
+    let original = state.style.current_color;
     let changed = crate::draw::Color {
         r: 0.0,
         g: 0.0,
@@ -691,7 +691,7 @@ fn configured_non_left_drag_closes_context_menu_before_drawing() {
 #[test]
 fn drag_binding_color_overrides_stroke_without_changing_current_color() {
     let mut state = create_test_input_state();
-    let original_color = state.current_color;
+    let original_color = state.style.current_color;
     let blue = Color {
         r: 0.0,
         g: 0.0,
@@ -706,7 +706,7 @@ fn drag_binding_color_overrides_stroke_without_changing_current_color() {
     state.on_mouse_motion(10, 10);
     state.on_mouse_release(MouseButton::Right, 10, 10);
 
-    assert_eq!(state.current_color, original_color);
+    assert_eq!(state.style.current_color, original_color);
     match &state.boards.active_frame().shapes[0].shape {
         Shape::Freehand { color, .. } => assert_eq!(*color, blue),
         other => panic!("expected freehand shape, got {other:?}"),
@@ -792,7 +792,7 @@ fn highlight_tool_prevents_drawing() {
 fn sync_highlight_color_marks_dirty_when_pen_color_changes() {
     let mut state = create_test_input_state();
     state.needs_redraw = false;
-    state.tool_settings.pen.color = Color {
+    state.style.tool_settings.pen.color = Color {
         r: 0.25,
         g: 0.5,
         b: 0.75,

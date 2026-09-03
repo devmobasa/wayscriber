@@ -39,8 +39,8 @@ mod tests {
             w: 30,
             h: 40,
             fill: false,
-            color: state.current_color,
-            thick: state.current_thickness,
+            color: state.style.current_color,
+            thick: state.style.current_thickness,
         })
     }
 
@@ -205,7 +205,7 @@ mod tests {
     #[test]
     fn idle_eraser_hover_returns_named_pointer_side_effect() {
         let mut state = make_test_input_state();
-        state.eraser_mode = EraserMode::Stroke;
+        state.style.eraser_mode = EraserMode::Stroke;
         assert!(state.set_tool_override(Some(Tool::Eraser)));
 
         assert_eq!(

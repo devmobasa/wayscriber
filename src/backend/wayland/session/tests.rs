@@ -648,7 +648,7 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
     let mut input = test_input_state();
     let _ = input.set_thickness(11.0);
     let _ = input.set_spotlight_magnification(3.5);
-    input.arrow_head_at_end = false;
+    input.style.arrow_head_at_end = false;
     input.ui_visibility.show_status_bar = false;
     let mut session_state = SessionState::new(Some(current_options.clone()));
     session_state.mark_loaded(true);
@@ -677,8 +677,8 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
         })
     );
     assert_eq!(input.thickness_for_active_tool(), 7.0);
-    assert_eq!(input.spotlight_magnification, 2.1);
-    assert!(input.arrow_head_at_end);
+    assert_eq!(input.style.spotlight_magnification, 2.1);
+    assert!(input.style.arrow_head_at_end);
     assert!(
         !input.ui_visibility.show_status_bar,
         "chrome is a process preference, not saved tool state: resetting tools leaves the run's own status-bar choice alone"
@@ -1242,10 +1242,10 @@ fn runtime_open_saves_current_after_canceling_active_text_edit() {
         x: 40,
         y: 80,
         text: "Original".to_string(),
-        color: input.current_color,
-        size: input.current_font_size,
-        font_descriptor: input.font_descriptor.clone(),
-        background_enabled: input.text_background_enabled,
+        color: input.style.current_color,
+        size: input.style.current_font_size,
+        font_descriptor: input.style.font_descriptor.clone(),
+        background_enabled: input.style.text_background_enabled,
         wrap_width: Some(180),
     });
     input.set_selection(vec![shape_id]);
@@ -1399,8 +1399,8 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
         w: 10,
         h: 10,
         fill: false,
-        color: input.current_color,
-        thick: input.current_thickness,
+        color: input.style.current_color,
+        thick: input.style.current_thickness,
     });
     input.ensure_spatial_index_for_active_frame();
     assert!(input.has_spatial_index());

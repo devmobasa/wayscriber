@@ -56,7 +56,7 @@ fn handle_is_offered_only_for_a_single_unlocked_curved_arrow() {
         y1: 200,
         x2: 400,
         y2: 200,
-        color: state.current_color,
+        color: state.style.current_color,
         thick: 4.0,
         arrow_length: 20.0,
         arrow_angle: 30.0,

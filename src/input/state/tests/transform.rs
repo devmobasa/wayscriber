@@ -8,8 +8,8 @@ fn translate_selection_with_undo_moves_shape() {
         y1: 0,
         x2: 50,
         y2: 50,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_selection(vec![shape_id]);
@@ -52,8 +52,8 @@ fn resizing_selection_marks_previous_live_bounds_dirty() {
         w: 20,
         h: 20,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_selection(vec![shape_id]);
@@ -107,8 +107,8 @@ fn resizing_selection_back_to_start_restores_original_geometry() {
         w: 20,
         h: 20,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_selection(vec![shape_id]);
@@ -168,8 +168,8 @@ fn move_selection_to_horizontal_edges_uses_screen_bounds() {
         w: 20,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_selection(vec![shape_id]);
@@ -202,8 +202,8 @@ fn move_selection_to_horizontal_edges_ignores_last_axis() {
         w: 20,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_selection(vec![shape_id]);
@@ -237,8 +237,8 @@ fn move_selection_to_vertical_edges_explicit_actions() {
         w: 20,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_selection(vec![shape_id]);
@@ -270,8 +270,8 @@ fn nudge_selection_large_uses_large_step() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_selection(vec![shape_id]);
@@ -295,8 +295,8 @@ fn nudge_selection_clamps_left_and_top_edges() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_selection(vec![shape_id]);
@@ -319,8 +319,8 @@ fn nudge_selection_clamps_right_and_bottom_edges() {
         w: 10,
         h: 10,
         fill: false,
-        color: state.current_color,
-        thick: state.current_thickness,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
     });
 
     state.set_selection(vec![shape_id]);
@@ -343,10 +343,10 @@ fn restore_selection_snapshots_reverts_translation() {
         x: 100,
         y: 100,
         text: "Hello".to_string(),
-        color: state.current_color,
-        size: state.current_font_size,
-        font_descriptor: state.font_descriptor.clone(),
-        background_enabled: state.text_background_enabled,
+        color: state.style.current_color,
+        size: state.style.current_font_size,
+        font_descriptor: state.style.font_descriptor.clone(),
+        background_enabled: state.style.text_background_enabled,
         wrap_width: None,
     });
 
@@ -379,7 +379,7 @@ fn resizing_a_curved_arrow_keeps_its_style_and_curvature() {
         y1: 0,
         x2: 100,
         y2: 0,
-        color: state.current_color,
+        color: state.style.current_color,
         thick: 4.0,
         arrow_length: 20.0,
         arrow_angle: 30.0,
@@ -437,7 +437,7 @@ fn stretching_a_flat_curved_arrow_downward_grows_its_arc() {
         y1: 200,
         x2: 300,
         y2: 200,
-        color: state.current_color,
+        color: state.style.current_color,
         thick: 4.0,
         arrow_length: 20.0,
         arrow_angle: 30.0,

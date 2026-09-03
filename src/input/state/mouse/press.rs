@@ -278,11 +278,14 @@ impl InputState {
             let Some(preview) = self.text_input_preview(cursor_glyph) else {
                 return;
             };
-            let font = self.font_descriptor.to_pango_string(self.current_font_size);
+            let font = self
+                .style
+                .font_descriptor
+                .to_pango_string(self.style.current_font_size);
             let Some(preview_offset) = crate::draw::shape::hit_test_text(
                 &preview.text,
                 &font,
-                self.text_wrap_width,
+                self.style.text_wrap_width,
                 (canvas_x - *x) as f64,
                 (canvas_y - *y) as f64,
             ) else {
@@ -519,7 +522,7 @@ impl InputState {
             } => {
                 self.mark_draw_activity();
                 if request_blur_capture
-                    && self.blur_style.needs_backdrop()
+                    && self.style.blur_style.needs_backdrop()
                     && !self.frozen_active()
                     && !self.pending_frozen_toggle()
                 {
