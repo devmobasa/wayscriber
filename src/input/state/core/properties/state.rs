@@ -6,7 +6,7 @@ pub struct PropertiesPanelState {
     pub(super) panel: Option<ShapePropertiesPanel>,
     pub(crate) layout: Option<PropertiesPanelLayout>,
     pub(super) pending_hover_recalc: bool,
-    pub(in crate::input::state::core) needs_refresh: bool,
+    pub(super) needs_refresh: bool,
 }
 
 impl PropertiesPanelState {
@@ -46,6 +46,10 @@ impl PropertiesPanelState {
 
     pub(in crate::input::state::core) fn mark_needs_refresh(&mut self) {
         self.needs_refresh = true;
+    }
+
+    pub(super) fn needs_refresh(&self) -> bool {
+        self.needs_refresh
     }
 
     pub(super) fn begin_refresh(&mut self) {

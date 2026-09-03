@@ -21,7 +21,7 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) {
-        if self.properties.needs_refresh {
+        if self.properties.needs_refresh() {
             self.refresh_properties_panel();
         }
         let Some(panel) = self.properties.panel.as_ref() else {
