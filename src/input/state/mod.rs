@@ -80,6 +80,7 @@ pub use input_hud::{
 #[cfg(test)]
 pub(crate) mod test_support {
     use super::InputStateSeed;
+    use super::core::Keymap;
     use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig, Shortcut};
     use crate::draw::FontDescriptor;
     use crate::input::{ClickHighlightSettings, InputState};
@@ -87,7 +88,6 @@ pub(crate) mod test_support {
 
     pub(crate) struct TestInputStateBuilder {
         seed: InputStateSeed,
-        action_bindings: HashMap<Action, Vec<Shortcut>>,
     }
 
     impl Default for TestInputStateBuilder {
@@ -98,12 +98,10 @@ pub(crate) mod test_support {
 
     impl TestInputStateBuilder {
         pub(crate) fn with_keybindings(keybindings: KeybindingsConfig) -> Self {
-            let action_map = keybindings
-                .build_action_map()
-                .expect("test keybindings map");
-            let action_bindings = keybindings
-                .build_action_bindings()
-                .expect("test keybindings bindings");
+            let keymap = Keymap::from_config(
+                &keybindings,
+                &crate::config::MouseDragToolsConfig::default(),
+            );
             let mut style = super::DrawingStyle::from((
                 &crate::config::DrawingConfig::default(),
                 &crate::config::ArrowConfig::default(),
@@ -139,18 +137,17 @@ pub(crate) mod test_support {
                     style,
                     ui_visibility: super::UiVisibility::from(&crate::config::UiConfig::default()),
                     boards_config: BoardsConfig::default(),
-                    action_map,
+                    keymap,
                     max_shapes_per_frame: usize::MAX,
                     click_highlight_settings: ClickHighlightSettings::disabled(),
                     history_limits,
                     presenter_mode_config: PresenterModeConfig::default(),
                 },
-                action_bindings,
             }
         }
 
         pub(crate) fn action_map(mut self, action_map: HashMap<Shortcut, Action>) -> Self {
-            self.seed.action_map = action_map;
+            self.seed.keymap.set_action_map(action_map);
             self
         }
 
@@ -158,7 +155,7 @@ pub(crate) mod test_support {
             mut self,
             action_bindings: HashMap<Action, Vec<Shortcut>>,
         ) -> Self {
-            self.action_bindings = action_bindings;
+            self.seed.keymap.set_action_bindings(action_bindings);
             self
         }
 
@@ -196,9 +193,7 @@ pub(crate) mod test_support {
         }
 
         pub(crate) fn build(self) -> InputState {
-            let mut state = InputState::from_seed(self.seed);
-            state.set_action_bindings(self.action_bindings);
-            state
+            InputState::from_seed(self.seed)
         }
     }
 

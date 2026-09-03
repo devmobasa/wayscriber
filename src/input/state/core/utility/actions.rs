@@ -1,30 +1,21 @@
 use super::super::base::InputState;
-use crate::config::{KeyBinding, PointerButton, PointerTrigger, Shortcut, ShortcutTrigger};
+use crate::config::{PointerButton, PointerTrigger, Shortcut, ShortcutTrigger};
 #[cfg(feature = "tablet-input")]
 use crate::config::{StylusButton, StylusTrigger};
 use crate::domain::Action;
-use crate::input::state::core::utility::{SequenceMatch, SequenceTrie};
+use crate::input::state::core::utility::SequenceMatch;
 use crate::label_format::format_binding_labels;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 impl InputState {
     /// Look up a complete single keyboard chord. Does not advance sequences.
     pub(crate) fn find_action(&self, key_str: &str) -> Option<Action> {
-        let shortcut = Shortcut::Single(ShortcutTrigger::Keyboard(KeyBinding {
-            key: key_str.to_string(),
-            ctrl: self.modifiers.ctrl,
-            shift: self.modifiers.shift,
-            alt: self.modifiers.alt,
-            logo: self.modifiers.logo,
-        }));
-        self.action_map.get(&shortcut).copied()
+        self.keymap.find_action(key_str, self.modifiers)
     }
 
     pub(crate) fn find_trigger_action(&self, trigger: &ShortcutTrigger) -> Option<Action> {
-        self.action_map
-            .get(&Shortcut::Single(trigger.clone()))
-            .copied()
+        self.keymap.find_trigger_action(trigger)
     }
 
     pub(crate) fn pointer_trigger(&self, button: PointerButton) -> ShortcutTrigger {
@@ -49,16 +40,15 @@ impl InputState {
     }
 
     pub(crate) fn consume_pointer_shortcut_button(&mut self, code: u32) {
-        self.consumed_pointer_buttons.insert(code);
+        self.keymap.consume_pointer_button(code);
     }
 
     pub(crate) fn take_consumed_pointer_shortcut_button(&mut self, code: u32) -> bool {
-        self.consumed_pointer_buttons.remove(&code)
+        self.keymap.take_consumed_pointer_button(code)
     }
 
     pub fn set_action_bindings(&mut self, action_bindings: HashMap<Action, Vec<Shortcut>>) {
-        self.action_bindings = action_bindings;
-        self.keymap_revision = self.keymap_revision.wrapping_add(1);
+        self.keymap.set_action_bindings(action_bindings);
     }
 
     /// Install a keymap rebuilt after a shortcut edit.
@@ -71,16 +61,12 @@ impl InputState {
         action_map: HashMap<Shortcut, Action>,
         action_bindings: HashMap<Action, Vec<Shortcut>>,
     ) {
-        self.action_map = action_map;
-        self.action_bindings = action_bindings;
-        self.sequence_trie = SequenceTrie::from_action_map(&self.action_map);
-        self.clear_pending_sequence();
-        self.keymap_revision = self.keymap_revision.wrapping_add(1);
+        self.keymap.set_maps(action_map, action_bindings);
         self.needs_redraw = true;
     }
 
     pub(crate) fn clear_pending_sequence(&mut self) {
-        self.pending_sequence = None;
+        self.keymap.clear_pending_sequence();
     }
 
     /// Match a keyboard chord, advancing or dispatching a sequence when needed.
@@ -90,15 +76,8 @@ impl InputState {
         is_repeat: bool,
         now: Instant,
     ) -> SequenceMatch {
-        let chord = KeyBinding {
-            key: key_str.to_string(),
-            ctrl: self.modifiers.ctrl,
-            shift: self.modifiers.shift,
-            alt: self.modifiers.alt,
-            logo: self.modifiers.logo,
-        };
-        self.sequence_trie
-            .match_chord(&mut self.pending_sequence, &chord, now, is_repeat)
+        self.keymap
+            .match_keyboard_chord(key_str, self.modifiers, is_repeat, now)
     }
 
     /// Retry a shifted-punctuation fallback against the pending sequence as it
@@ -110,54 +89,25 @@ impl InputState {
         is_repeat: bool,
         now: Instant,
     ) -> SequenceMatch {
-        let snapshot = self.pending_sequence.clone();
-        match self.match_keyboard_chord(key_str, is_repeat, now) {
-            SequenceMatch::None => {
-                self.pending_sequence = snapshot;
-                self.match_keyboard_chord(fallback, is_repeat, now)
-            }
-            other => other,
-        }
+        self.keymap.match_keyboard_chord_with_fallback(
+            key_str,
+            fallback,
+            self.modifiers,
+            is_repeat,
+            now,
+        )
     }
 
     pub(crate) fn sequence_timeout(&self, now: Instant) -> Option<Duration> {
-        self.pending_sequence
-            .as_ref()
-            .map(|pending| pending.deadline().saturating_duration_since(now))
+        self.keymap.sequence_timeout(now)
     }
 
     pub(crate) fn expire_pending_sequence(&mut self, now: Instant) -> bool {
-        let expired = self
-            .pending_sequence
-            .as_ref()
-            .is_some_and(|pending| now >= pending.deadline());
-        if expired {
-            self.clear_pending_sequence();
-        }
-        expired
+        self.keymap.expire_pending_sequence(now)
     }
 
     pub fn action_binding_labels(&self, action: Action) -> Vec<String> {
-        if let Some(bindings) = self.action_bindings.get(&action) {
-            let mut labels = Vec::new();
-            let mut seen = HashSet::new();
-            for binding in bindings {
-                let label = binding.display_label();
-                if seen.insert(label.clone()) {
-                    labels.push(label);
-                }
-            }
-            return labels;
-        }
-        let mut labels: Vec<String> = self
-            .action_map
-            .iter()
-            .filter(|(_, mapped)| **mapped == action)
-            .map(|(binding, _)| binding.display_label())
-            .collect();
-        labels.sort();
-        labels.dedup();
-        labels
+        self.keymap.action_binding_labels(action)
     }
 
     #[allow(dead_code)]

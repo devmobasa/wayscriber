@@ -163,7 +163,7 @@ mod tests {
             state.state,
             crate::input::state::DrawingState::Idle
         ));
-        assert!(state.active_drag_button.is_none());
+        assert!(!state.pointer_drag_active());
     }
 
     #[test]

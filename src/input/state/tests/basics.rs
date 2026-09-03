@@ -129,18 +129,21 @@ fn apply_preset_merges_partial_left_drag_tool_bindings() {
     });
 
     assert!(state.apply_preset(1));
-    assert_eq!(state.drag_tool_bindings.left.drag.tool, DragTool::Marker);
+    assert_eq!(state.drag_tool_bindings().left.drag.tool, DragTool::Marker);
     assert_eq!(
-        state.drag_tool_bindings.left.shift_drag.tool,
+        state.drag_tool_bindings().left.shift_drag.tool,
         DragTool::Eraser
     );
-    assert_eq!(state.drag_tool_bindings.left.ctrl_drag.tool, DragTool::Rect);
     assert_eq!(
-        state.drag_tool_bindings.left.ctrl_shift_drag.tool,
+        state.drag_tool_bindings().left.ctrl_drag.tool,
+        DragTool::Rect
+    );
+    assert_eq!(
+        state.drag_tool_bindings().left.ctrl_shift_drag.tool,
         DragTool::Arrow
     );
     assert_eq!(
-        state.drag_tool_bindings.left.tab_drag.tool,
+        state.drag_tool_bindings().left.tab_drag.tool,
         DragTool::Ellipse
     );
 }

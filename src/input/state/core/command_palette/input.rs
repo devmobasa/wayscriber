@@ -18,6 +18,10 @@ const COMMAND_PALETTE_REPEAT_INITIAL_DELAY: Duration = Duration::from_millis(280
 const COMMAND_PALETTE_REPEAT_INTERVAL: Duration = Duration::from_millis(55);
 
 impl InputState {
+    pub fn keybinding_capture_action(&self) -> Option<Action> {
+        self.keymap.capture_action()
+    }
+
     /// Whether the palette owns keyboard and pointer input.
     ///
     /// This is what the toolbar and GTK modal gates ask, which is why it keeps
@@ -25,7 +29,7 @@ impl InputState {
     /// shortcut-capture modal is its second half, and it must swallow the same
     /// keys and pointer events the list does.
     pub(crate) fn command_palette_is_engaged(&self) -> bool {
-        self.command_palette.open || self.keybinding_capture_action.is_some()
+        self.command_palette.open || self.keymap.capture_action().is_some()
     }
 
     /// Arm the capture modal for one action's next keyboard chord.
@@ -35,7 +39,7 @@ impl InputState {
     /// and a save that fails degrades to a this-run edit whose toast says so.
     /// An action with no `[keybindings]` field has nothing to rebind, so the
     /// affordance explains instead of opening a modal that cannot succeed.
-    pub(crate) fn begin_keybinding_capture(&mut self, action: Action) -> bool {
+    pub fn begin_keybinding_capture(&mut self, action: Action) -> bool {
         if default_keybindings().bindings_for_action(action).is_none() {
             self.push_toast(
                 ToastPriority::Info,
@@ -47,7 +51,7 @@ impl InputState {
             );
             return false;
         }
-        self.keybinding_capture_action = Some(action);
+        self.keymap.begin_capture(action);
         self.clear_command_palette_repeat();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -140,7 +144,7 @@ impl InputState {
             return false;
         }
 
-        if let Some(action) = self.keybinding_capture_action {
+        if let Some(action) = self.keymap.capture_action() {
             return self.handle_keybinding_capture_key(action, key);
         }
 
@@ -272,7 +276,7 @@ impl InputState {
             return true;
         }
         if matches!(key, Key::Escape) {
-            self.keybinding_capture_action = None;
+            self.keymap.clear_capture();
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             return true;
@@ -291,7 +295,7 @@ impl InputState {
             logo: self.modifiers.logo,
         }
         .to_string();
-        self.keybinding_capture_action = None;
+        self.keymap.clear_capture();
         self.request_keybinding_edit(action, KeybindingEditOperation::Replace(vec![binding]));
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
@@ -480,7 +484,7 @@ impl InputState {
         if !self.command_palette_is_engaged() {
             return false;
         }
-        if self.keybinding_capture_action.take().is_some() {
+        if self.keymap.take_capture().is_some() {
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             return true;

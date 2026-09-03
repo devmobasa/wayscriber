@@ -71,7 +71,7 @@ pub fn render_command_palette(
         return;
     }
 
-    if let Some(action) = input_state.keybinding_capture_action {
+    if let Some(action) = input_state.keybinding_capture_action() {
         render_keybinding_capture(ctx, input_state, action, screen_width, screen_height);
         return;
     }
@@ -157,7 +157,7 @@ pub fn command_palette_visual_geometry(
         return None;
     }
 
-    if input_state.keybinding_capture_action.is_some() {
+    if input_state.keybinding_capture_action().is_some() {
         let (x, y, width, height) = keybinding_capture_geometry(screen_width, screen_height);
         return Some((
             x,

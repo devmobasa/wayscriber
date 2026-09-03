@@ -524,7 +524,7 @@ fn alt_left_drag_moves_the_whole_block_without_editing() {
         "the drag flag is cleared on release"
     );
     assert!(
-        state.active_drag_button.is_none(),
+        !state.pointer_drag_active(),
         "the pointer drag is ended on release"
     );
 }

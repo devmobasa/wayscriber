@@ -217,7 +217,7 @@ pub(crate) fn releasable_active_kind(state: &InputState) -> Option<ActiveInterac
 }
 
 pub(crate) fn has_active_drag(state: &InputState) -> bool {
-    state.active_drag_button.is_some()
+    state.pointer_drag_active()
 }
 
 pub(crate) fn release_button_matches_active_drag(state: &InputState, button: MouseButton) -> bool {

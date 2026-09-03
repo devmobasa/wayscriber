@@ -94,7 +94,7 @@ mod tests {
                 ]),
             }]
         );
-        assert_eq!(state.keybinding_capture_action, None);
+        assert_eq!(state.keybinding_capture_action(), None);
     }
 
     /// Two chords captured before the backend drains are two edits, not one.
@@ -148,7 +148,7 @@ mod tests {
 
         assert!(state.handle_command_palette_key(crate::input::Key::Escape));
 
-        assert_eq!(state.keybinding_capture_action, None);
+        assert_eq!(state.keybinding_capture_action(), None);
         assert!(state.take_pending_keybinding_edits().is_empty());
         assert!(state.command_palette.open, "the list is still behind it");
     }
@@ -166,7 +166,7 @@ mod tests {
         state.modifiers.ctrl = true;
         assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
 
-        assert_eq!(state.keybinding_capture_action, Some(action));
+        assert_eq!(state.keybinding_capture_action(), Some(action));
         assert!(state.take_pending_keybinding_edits().is_empty());
     }
 
@@ -185,7 +185,8 @@ mod tests {
         assert!(state.handle_command_palette_key(crate::input::Key::Char('E')));
 
         assert_eq!(
-            state.keybinding_capture_action, None,
+            state.keybinding_capture_action(),
+            None,
             "Ctrl+Shift+E is the durable route, not a capture"
         );
         assert!(state.take_pending_keybinding_edits().is_empty());
@@ -197,7 +198,10 @@ mod tests {
         state.toggle_command_palette();
         state.command_palette.query = "pen tool".to_string();
         assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
-        assert_eq!(state.keybinding_capture_action, Some(Action::SelectPenTool));
+        assert_eq!(
+            state.keybinding_capture_action(),
+            Some(Action::SelectPenTool)
+        );
     }
 
     /// A modifier held before the modal opened is still part of the chord the
@@ -215,7 +219,10 @@ mod tests {
         assert!(state.modifiers.alt, "the palette must track Alt itself");
         assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
         assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
-        assert_eq!(state.keybinding_capture_action, Some(Action::SelectPenTool));
+        assert_eq!(
+            state.keybinding_capture_action(),
+            Some(Action::SelectPenTool)
+        );
 
         // Still held when the modal reads the chord.
         assert!(state.handle_command_palette_key(crate::input::Key::Char('k')));
@@ -245,7 +252,10 @@ mod tests {
         assert!(state.modifiers.logo, "the palette must track Super itself");
         assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
         assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
-        assert_eq!(state.keybinding_capture_action, Some(Action::SelectPenTool));
+        assert_eq!(
+            state.keybinding_capture_action(),
+            Some(Action::SelectPenTool)
+        );
 
         assert!(state.handle_command_palette_key(crate::input::Key::Char('k')));
         assert_eq!(
@@ -305,7 +315,7 @@ mod tests {
         let y = (geometry.y + geometry.items_top + 4.0).round() as i32;
 
         assert!(state.handle_command_palette_click(x, y, 1920, 1000));
-        assert_eq!(state.keybinding_capture_action, Some(action));
+        assert_eq!(state.keybinding_capture_action(), Some(action));
         assert!(state.command_palette.open);
         assert!(state.take_pending_keybinding_edits().is_empty());
     }
@@ -355,7 +365,7 @@ mod tests {
         state.toggle_command_palette();
 
         assert!(!state.begin_keybinding_capture(Action::ReplayTour));
-        assert_eq!(state.keybinding_capture_action, None);
+        assert_eq!(state.keybinding_capture_action(), None);
         assert!(state.take_pending_keybinding_edits().is_empty());
         assert_eq!(
             state

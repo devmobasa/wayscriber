@@ -1,4 +1,5 @@
 use super::super::super::{
+    Keymap,
     index::SpatialIndexCache,
     selection::{SelectionClipboard, SelectionInteraction},
 };
@@ -9,23 +10,19 @@ use super::super::types::{
     PendingOnboardingUsage, PendingPageDelete, StatusChangeHighlight, UiToastState,
 };
 use crate::config::{
-    Action, PresenterModeConfig, ResolvedToolbarItems, Shortcut, ToolbarItemId,
-    ToolbarItemOrderGroup, ToolbarItemsConfig,
+    PresenterModeConfig, ResolvedToolbarItems, ToolbarItemId, ToolbarItemOrderGroup,
+    ToolbarItemsConfig,
 };
 use crate::draw::{Color, DirtyTracker, ShapeId};
 use crate::input::BoardManager;
 use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest};
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::state::input_hud::InputHudState;
-use crate::input::{
-    MouseButton,
-    modifiers::{DragToolBindings, Modifiers},
-    tool::Tool,
-};
+use crate::input::{modifiers::Modifiers, tool::Tool};
 use crate::render_profiles::RenderProfileSet;
 use crate::session::SessionOptions;
 use crate::util::Rect;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -81,12 +78,8 @@ pub struct InputState {
     pub(crate) text_editing: crate::input::state::core::TextEditing,
     /// Current modifier key state
     pub modifiers: Modifiers,
-    /// Tool mapping for drag gestures with modifier keys
-    pub drag_tool_bindings: DragToolBindings,
-    /// Mouse button that started the active pointer drag, if any.
-    pub(crate) active_drag_button: Option<MouseButton>,
-    /// Per-drag color override, if the current drag binding configured one.
-    pub(crate) active_drag_color: Option<Color>,
+    /// Configured shortcuts plus transient keyboard and pointer-dispatch state.
+    pub(in crate::input::state) keymap: Keymap,
     /// Current drawing mode state machine
     pub state: DrawingState,
     /// Whether user requested to exit the overlay
@@ -108,8 +101,6 @@ pub struct InputState {
     pub(crate) board_picker: crate::input::state::core::BoardPickerPanel,
     /// State owned by the command palette modal.
     pub command_palette: crate::input::state::core::command_palette::CommandPaletteState,
-    /// Action whose next keyboard chord is being captured for rebinding.
-    pub keybinding_capture_action: Option<Action>,
     /// Duration for command palette action toasts (ms)
     pub command_palette_toast_duration_ms: u64,
     /// Runtime visibility preferences for overlay chrome and toolbar sections.
@@ -201,22 +192,6 @@ pub struct InputState {
     pub(crate) dirty_tracker: DirtyTracker,
     /// Cached bounds for the current provisional shape (if any)
     pub(crate) last_provisional_bounds: Option<Rect>,
-    /// Keybinding action map for efficient lookup
-    pub(in crate::input::state::core) action_map: HashMap<Shortcut, Action>,
-    /// Ordered keybindings per action (as configured)
-    pub(in crate::input::state::core) action_bindings: HashMap<Action, Vec<Shortcut>>,
-    /// Keyboard sequence trie derived from `action_map`.
-    pub(in crate::input::state::core) sequence_trie:
-        crate::input::state::core::utility::SequenceTrie,
-    /// In-progress multi-step keyboard sequence, if any.
-    pub(in crate::input::state::core) pending_sequence:
-        Option<crate::input::state::core::utility::PendingSequence>,
-    /// Auxiliary pointer codes whose press dispatched a shortcut, so the
-    /// matching release is consumed instead of starting a stroke or UI action.
-    pub(crate) consumed_pointer_buttons: HashSet<u32>,
-    /// Bumped whenever the keymap is replaced. Shortcut labels feed command
-    /// scoring, so the palette's result cache keys on this.
-    pub(in crate::input::state::core) keymap_revision: u64,
     /// Shape and pre-gesture snapshot for an in-flight wheel adjustment of a
     /// Spotlight's magnification.
     ///

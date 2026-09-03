@@ -55,7 +55,7 @@ impl InputState {
     pub fn filtered_commands(&self) -> Vec<&'static CommandEntry> {
         if let Some(cached) = self.command_palette.results.borrow().as_ref()
             && cached.query == self.command_palette.query
-            && cached.keymap_revision == self.keymap_revision
+            && cached.keymap_revision == self.keymap.revision()
             && cached.recents == self.command_palette.recent
         {
             return cached.results.clone();
@@ -64,7 +64,7 @@ impl InputState {
         *self.command_palette.results.borrow_mut() = Some(CommandPaletteResults {
             query: self.command_palette.query.clone(),
             recents: self.command_palette.recent.clone(),
-            keymap_revision: self.keymap_revision,
+            keymap_revision: self.keymap.revision(),
             results: results.clone(),
         });
         results

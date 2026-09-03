@@ -167,7 +167,7 @@ mod tests {
         state.activate_eyedropper(Some(1));
 
         assert!(matches!(state.state, DrawingState::Idle));
-        assert!(state.active_drag_button.is_none());
+        assert!(!state.pointer_drag_active());
         assert!(state.eyedropper_is_active());
     }
 
