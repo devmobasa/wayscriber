@@ -26,6 +26,44 @@ pub struct TourState {
     pub step: usize,
 }
 
+impl TourState {
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
+
+    pub(crate) fn start(&mut self) {
+        self.active = true;
+        self.step = 0;
+    }
+
+    pub(crate) fn end(&mut self) {
+        self.active = false;
+    }
+
+    pub(crate) fn advance(&mut self) -> bool {
+        if self.step + 1 >= TourStep::COUNT {
+            return false;
+        }
+        self.step += 1;
+        true
+    }
+
+    pub(crate) fn retreat(&mut self) -> bool {
+        if self.step == 0 {
+            return false;
+        }
+        self.step -= 1;
+        true
+    }
+
+    pub fn current_step(&self) -> Option<TourStep> {
+        if !self.active {
+            return None;
+        }
+        TourStep::from_index(self.step)
+    }
+}
+
 impl TourStep {
     /// Total number of tour steps.
     pub const COUNT: usize = 9;
@@ -260,8 +298,7 @@ impl InputState {
             self.toggle_focus_mode();
         }
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::Tour);
-        self.tour.active = true;
-        self.tour.step = 0;
+        self.tour.start();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -276,7 +313,7 @@ impl InputState {
 
     /// End the tour (skip or complete).
     pub fn end_tour(&mut self) {
-        self.tour.active = false;
+        self.tour.end();
         if !self.presenter_mode || !self.presenter_mode_config.hide_toolbars {
             let top_visible = self.toolbar_top_pinned;
             if !self.toolbar_visible() && top_visible {
@@ -290,19 +327,17 @@ impl InputState {
 
     /// Advance to the next tour step.
     pub fn tour_next(&mut self) {
-        if self.tour.step + 1 < TourStep::COUNT {
-            self.tour.step += 1;
-            self.dirty_tracker.mark_full();
-            self.needs_redraw = true;
-        } else {
+        if !self.tour.advance() {
             self.end_tour();
+            return;
         }
+        self.dirty_tracker.mark_full();
+        self.needs_redraw = true;
     }
 
     /// Go back to the previous tour step.
     pub fn tour_prev(&mut self) {
-        if self.tour.step > 0 {
-            self.tour.step -= 1;
+        if self.tour.retreat() {
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
         }
@@ -310,17 +345,13 @@ impl InputState {
 
     /// Get the current tour step.
     pub fn current_tour_step(&self) -> Option<TourStep> {
-        if self.tour.active {
-            TourStep::from_index(self.tour.step)
-        } else {
-            None
-        }
+        self.tour.current_step()
     }
 
     /// Handle a key press while the tour is active.
     /// Returns true if the key was handled.
     pub(crate) fn handle_tour_key(&mut self, key: Key) -> bool {
-        if !self.tour.active {
+        if !self.tour.is_active() {
             return false;
         }
 
@@ -344,7 +375,22 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
-    use super::TourStep;
+    use super::{TourState, TourStep};
+
+    #[test]
+    fn tour_navigation_respects_both_ends() {
+        let mut tour = TourState::default();
+        tour.start();
+        assert_eq!(tour.current_step(), Some(TourStep::Welcome));
+        assert!(!tour.retreat());
+        for _ in 1..TourStep::COUNT {
+            assert!(tour.advance());
+        }
+        assert_eq!(tour.current_step(), Some(TourStep::Complete));
+        assert!(!tour.advance());
+        tour.end();
+        assert_eq!(tour.current_step(), None);
+    }
     use crate::config::ToolbarRebindModifier;
     use crate::config::keybindings::Action;
     use crate::input::state::test_support::make_test_input_state;
@@ -356,7 +402,7 @@ mod tests {
         // The ToolbarIntro step routes the shortcut-rebind chord through the
         // modifier helper — never a hardcoded key string. Default is Ctrl+Shift.
         state.toolbar_rebind_modifier = ToolbarRebindModifier::CtrlShift;
-        let toolbar = state.tour.step_description(TourStep::ToolbarIntro);
+        let toolbar = state.tour_step_description(TourStep::ToolbarIntro);
         assert!(
             toolbar.contains(
                 ToolbarRebindModifier::CtrlShift
@@ -369,7 +415,7 @@ mod tests {
         // Changing the modifier changes the copy, proving it is generated, not
         // hardcoded.
         state.toolbar_rebind_modifier = ToolbarRebindModifier::CtrlAlt;
-        let toolbar = state.tour.step_description(TourStep::ToolbarIntro);
+        let toolbar = state.tour_step_description(TourStep::ToolbarIntro);
         assert!(
             toolbar.contains("Ctrl+Alt+click"),
             "toolbar copy: {toolbar:?}"
@@ -389,7 +435,7 @@ mod tests {
 
         // The command palette step teaches the row shortcut controls and names
         // the configurator route beside them.
-        let palette = state.tour.step_description(TourStep::CommandPalette);
+        let palette = state.tour_step_description(TourStep::CommandPalette);
         assert!(palette.contains("edit"), "palette copy: {palette:?}");
         assert!(palette.contains("unbind"), "palette copy: {palette:?}");
         assert!(palette.contains("reset"), "palette copy: {palette:?}");
@@ -442,7 +488,7 @@ mod tests {
         let mut state = make_test_input_state();
         state.set_action_bindings(bindings);
 
-        let palette = state.tour.step_description(TourStep::CommandPalette);
+        let palette = state.tour_step_description(TourStep::CommandPalette);
         assert!(
             palette.contains("Ctrl+Shift+P"),
             "palette copy did not follow the rebind: {palette:?}"
@@ -466,7 +512,7 @@ mod tests {
         let mut state = make_test_input_state();
         state.set_action_bindings(bindings);
 
-        let copy = state.tour.step_description(TourStep::StatusBar);
+        let copy = state.tour_step_description(TourStep::StatusBar);
         assert!(copy.contains("status bar"), "status bar copy: {copy:?}");
         assert!(
             copy.contains("Board or Page segment"),
@@ -483,7 +529,7 @@ mod tests {
             .expect("default bindings");
         bindings.insert(Action::BoardPicker, Vec::new());
         state.set_action_bindings(bindings);
-        let copy = state.tour.step_description(TourStep::StatusBar);
+        let copy = state.tour_step_description(TourStep::StatusBar);
         assert!(copy.contains("status bar"), "status bar copy: {copy:?}");
         assert!(
             !copy.contains("press"),
@@ -494,7 +540,7 @@ mod tests {
         // clicking an arbitrary part of the status bar opens the picker.
         state.ui_visibility.show_status_board_badge = false;
         state.ui_visibility.show_status_page_badge = false;
-        let copy = state.tour.step_description(TourStep::StatusBar);
+        let copy = state.tour_step_description(TourStep::StatusBar);
         assert!(copy.contains("segments are hidden"), "copy: {copy:?}");
         assert!(!copy.contains("Click the status bar"), "copy: {copy:?}");
     }
