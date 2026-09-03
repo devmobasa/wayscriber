@@ -8,7 +8,7 @@ use crate::input::RegionInputSource;
 
 impl SeatHandler for WaylandState {
     fn seat_state(&mut self) -> &mut SeatState {
-        &mut self.seat_state
+        self.protocol.seat_mut()
     }
 
     fn new_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: wl_seat::WlSeat) {
@@ -26,7 +26,12 @@ impl SeatHandler for WaylandState {
             Capability::Keyboard => {
                 info!("Keyboard capability available");
                 self.set_current_seat(Some(seat.clone()));
-                if self.seat_state.get_keyboard(qh, &seat, None).is_ok() {
+                if self
+                    .protocol
+                    .seat_mut()
+                    .get_keyboard(qh, &seat, None)
+                    .is_ok()
+                {
                     debug!("Keyboard initialized");
                 }
                 // IME: create the single supported text-input object alongside the
@@ -38,11 +43,13 @@ impl SeatHandler for WaylandState {
             }
             Capability::Pointer => {
                 info!("Pointer capability available");
-                match self.seat_state.get_pointer_with_theme(
+                let shm = self.protocol.shm().wl_shm().clone();
+                let cursor_surface = self.protocol.compositor().create_surface(qh);
+                match self.protocol.seat_mut().get_pointer_with_theme(
                     qh,
                     &seat,
-                    self.shm.wl_shm(),
-                    self.compositor_state.create_surface(qh),
+                    &shm,
+                    cursor_surface,
                     ThemeSpec::default(),
                 ) {
                     Ok(pointer) => {
@@ -51,7 +58,7 @@ impl SeatHandler for WaylandState {
                     }
                     Err(err) => {
                         warn!("Pointer initialized without theme: {}", err);
-                        if self.seat_state.get_pointer(qh, &seat).is_ok() {
+                        if self.protocol.seat_mut().get_pointer(qh, &seat).is_ok() {
                             debug!("Pointer initialized without theme fallback");
                         }
                     }
@@ -59,7 +66,7 @@ impl SeatHandler for WaylandState {
             }
             Capability::Touch => {
                 info!("Touch capability available");
-                match self.seat_state.get_touch(qh, &seat) {
+                match self.protocol.seat_mut().get_touch(qh, &seat) {
                     Ok(touch) => {
                         debug!("Touch initialized");
                         self.pointer.attach_touch(touch);
@@ -123,10 +130,11 @@ impl WaylandState {
         self.input_state.take_text_input_cursor_rect_dirty();
         self.input_state.take_text_input_external_change_dirty();
 
-        let fallback = self.seat_state.seats().find(|seat| {
+        let fallback = self.protocol.seat().seats().find(|seat| {
             seat != removed_seat
                 && self
-                    .seat_state
+                    .protocol
+                    .seat()
                     .info(seat)
                     .is_some_and(|info| info.has_keyboard)
         });

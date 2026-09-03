@@ -31,7 +31,7 @@ impl WaylandState {
         keyboard_interactivity_for(KeyboardInteractivityPolicyInput {
             keyboard_release_requested: self.overlay_keyboard_passthrough_requested(),
             main_layer_focus_acquiring: self.main_layer_focus_acquiring(),
-            layer_shell_available: self.layer_shell.is_some(),
+            layer_shell_available: self.protocol.layer_shell().is_some(),
             separate_toolbar_visible: toolbar_visible,
             inline_toolbars_active: self.inline_toolbars_active(),
             canvas_modal_active: self.input_state.is_color_picker_popup_open(),
@@ -110,7 +110,7 @@ impl WaylandState {
             log::debug!(
                 "Toolbar visibility sync: top_visible={}, layer_shell_available={}, inline_active={}, top_created={}, needs_recreate={}, scale={}",
                 top_visible,
-                self.layer_shell.is_some(),
+                self.protocol.layer_shell().is_some(),
                 inline_active,
                 self.toolbar.top_created(),
                 self.toolbar_needs_recreate(),
@@ -122,14 +122,14 @@ impl WaylandState {
                     self.data.toolbar_top_offset,
                     self.data.toolbar_top_offset_y,
                     inline_active,
-                    self.layer_shell.is_some(),
+                    self.protocol.layer_shell().is_some(),
                     self.toolbar_needs_recreate()
                 )
             });
         }
 
         // Warn the user when layer-shell is unavailable and we're forced to inline fallback.
-        if any_visible && self.layer_shell.is_none() {
+        if any_visible && self.protocol.layer_shell().is_none() {
             self.log_toolbar_layer_shell_missing_once();
         }
 
@@ -144,7 +144,7 @@ impl WaylandState {
             self.data.toolbar_configure_miss_count = 0;
         }
 
-        if any_visible && self.layer_shell.is_some() && !inline_active && !drag_preview {
+        if any_visible && self.protocol.layer_shell().is_some() && !inline_active && !drag_preview {
             // Detect compositors ignoring or failing to configure toolbar layer surfaces; if they
             // never configure after repeated attempts, fall back to inline toolbars automatically.
             let top_configured = self.toolbar.top_configured();
@@ -188,12 +188,12 @@ impl WaylandState {
             if !self.is_move_dragging() {
                 let _ = self.apply_toolbar_offsets(&snapshot);
             }
-            if let Some(layer_shell) = self.layer_shell.as_ref() {
+            if let Some(layer_shell) = self.protocol.layer_shell() {
                 let scale = self.surface.scale();
                 let output = self.surface.current_output();
                 self.toolbar.ensure_created(
                     qh,
-                    &self.compositor_state,
+                    self.protocol.compositor(),
                     layer_shell,
                     scale,
                     output.as_ref(),
@@ -218,8 +218,8 @@ impl WaylandState {
         // No hover tracking yet; pass None. Can be updated when we record pointer positions per surface.
         let render_profile = self.input_state.active_ui_render_profile().cloned();
         self.toolbar
-            .render(&self.shm, snapshot, None, render_profile.as_ref());
-        self.toolbar.apply_input_regions(&self.compositor_state);
+            .render(self.protocol.shm(), snapshot, None, render_profile.as_ref());
+        self.toolbar.apply_input_regions(self.protocol.compositor());
     }
 
     pub(in crate::backend::wayland) fn render_layer_toolbars_if_needed(&mut self) {

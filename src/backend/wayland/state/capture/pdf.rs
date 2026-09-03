@@ -115,7 +115,7 @@ impl WaylandState {
         let active_output_id = self
             .surface
             .current_output()
-            .and_then(|output| self.output_state.info(&output).map(|info| info.id));
+            .and_then(|output| self.protocol.output().info(&output).map(|info| info.id));
         if !pending
             .layout_context
             .matches(active_output_id, self.frozen.output_layout_generation())
@@ -231,7 +231,7 @@ impl WaylandState {
         operation: ImageOperationKind,
     ) -> Option<(DesktopBackdropCaptureRequest, CaptureLayoutContext)> {
         let output = self.surface.current_output()?;
-        let output_id = self.output_state.info(&output)?.id;
+        let output_id = self.protocol.output().info(&output)?.id;
         let geometry = self.desktop_backdrop_geometry()?;
         let layout_context =
             CaptureLayoutContext::new(output_id, self.frozen.output_layout_generation());

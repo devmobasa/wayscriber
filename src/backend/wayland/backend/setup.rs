@@ -25,7 +25,7 @@ use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
 
 use super::super::{
     frozen::ExtImageCopyManagers,
-    state::{WaylandGlobals, WaylandState},
+    state::{ProtocolGlobals, ProtocolGlobalsSeed, WaylandState},
 };
 
 // Freeze/zoom capture currently consumes wl_shm buffer events and ignores linux-dmabuf.
@@ -39,7 +39,7 @@ pub(super) struct WaylandSetup {
     pub(super) globals: wayland_client::globals::GlobalList,
     pub(super) event_queue: EventQueue<WaylandState>,
     pub(super) qh: wayland_client::QueueHandle<WaylandState>,
-    pub(super) state_globals: WaylandGlobals,
+    pub(super) state_globals: ProtocolGlobals,
     pub(super) screencopy_manager: Option<ZwlrScreencopyManagerV1>,
     pub(super) ext_image_copy_managers: Option<ExtImageCopyManagers>,
     pub(super) text_input_manager: Option<ZwpTextInputManagerV3>,
@@ -211,18 +211,18 @@ pub(super) fn setup_wayland() -> Result<WaylandSetup> {
 
     let layer_shell_available = layer_shell.is_some();
 
-    let state_globals = WaylandGlobals {
-        registry_state,
-        compositor_state,
+    let state_globals = ProtocolGlobals::from_seed(ProtocolGlobalsSeed {
+        registry: registry_state,
+        compositor: compositor_state,
         layer_shell,
         xdg_shell,
         activation,
         shm,
-        pointer_constraints_state,
-        relative_pointer_state,
-        output_state,
-        seat_state,
-    };
+        pointer_constraints: pointer_constraints_state,
+        relative_pointer: relative_pointer_state,
+        output: output_state,
+        seat: seat_state,
+    });
 
     Ok(WaylandSetup {
         conn,

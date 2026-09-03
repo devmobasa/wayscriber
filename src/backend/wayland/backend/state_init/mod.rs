@@ -112,13 +112,13 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         freeze_capture: frozen_supported,
         pointer_constraints: setup
             .state_globals
-            .pointer_constraints_state
+            .pointer_constraints()
             .bound_global()
             .is_ok(),
         desktop_environment: desktop_environment_from_env(),
         shell_mode: if setup.layer_shell_available {
             ShellMode::LayerShell
-        } else if setup.state_globals.xdg_shell.is_some() {
+        } else if setup.state_globals.xdg_shell().is_some() {
             ShellMode::XdgFallback
         } else {
             ShellMode::Unknown

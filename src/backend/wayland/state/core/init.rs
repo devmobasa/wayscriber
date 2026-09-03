@@ -31,19 +31,6 @@ impl WaylandState {
             #[cfg(feature = "tablet-input")]
             tablet_manager,
         } = init;
-        let WaylandGlobals {
-            registry_state,
-            compositor_state,
-            layer_shell,
-            xdg_shell,
-            activation,
-            shm,
-            pointer_constraints_state,
-            relative_pointer_state,
-            output_state,
-            seat_state,
-        } = globals;
-
         #[cfg(feature = "tablet-input")]
         let tablet_settings = {
             TabletSettings {
@@ -66,8 +53,9 @@ impl WaylandState {
         data.xdg_fullscreen = xdg_fullscreen;
         data.main_surface_uses_overlay_layer = main_surface_uses_overlay_layer;
         let force_inline_toolbars = force_inline_toolbars_requested(&config);
-        data.inline_toolbars =
-            layer_shell.is_none() || force_inline_toolbars || main_surface_uses_overlay_layer;
+        data.inline_toolbars = globals.layer_shell().is_none()
+            || force_inline_toolbars
+            || main_surface_uses_overlay_layer;
         if force_inline_toolbars {
             info!(
                 "Forcing inline toolbars (config/ui.toolbar.force_inline or {FORCE_INLINE_TOOLBARS_ENV})"
@@ -123,16 +111,7 @@ impl WaylandState {
         let ocr = crate::ocr::OcrController::new(runtime_wake.clone());
 
         Self {
-            registry_state,
-            compositor_state,
-            layer_shell,
-            xdg_shell,
-            activation,
-            shm,
-            pointer_constraints_state,
-            relative_pointer_state,
-            output_state,
-            seat_state,
+            protocol: globals,
             surface: SurfaceState::new(),
             toolbar: ToolbarSurfaceManager::new(),
             data,

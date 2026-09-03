@@ -3,20 +3,9 @@
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
 use smithay_client_toolkit::{
-    activation::{ActivationHandler, ActivationState, RequestData},
-    compositor::CompositorState,
+    activation::{ActivationHandler, RequestData},
     globals::ProvidesBoundGlobal,
-    output::OutputState,
-    registry::RegistryState,
-    seat::{
-        SeatState, pointer_constraints::PointerConstraintsState,
-        relative_pointer::RelativePointerState,
-    },
-    shell::{
-        wlr_layer::{KeyboardInteractivity, LayerShell},
-        xdg::XdgShell,
-    },
-    shm::Shm,
+    shell::wlr_layer::KeyboardInteractivity,
 };
 use std::{
     collections::VecDeque,
@@ -106,6 +95,8 @@ mod pdf_export;
 mod perf;
 mod pointer_runtime;
 pub(in crate::backend::wayland) use pointer_runtime::TouchTarget;
+mod protocol_globals;
+pub(in crate::backend::wayland) use protocol_globals::{ProtocolGlobals, ProtocolGlobalsSeed};
 mod region_capture;
 pub(in crate::backend::wayland) use region_capture::RegionCaptureIntent;
 #[cfg(test)]
@@ -140,21 +131,8 @@ pub(super) use helpers::{
     toolbar_drag_preview_enabled, toolbar_drag_throttle_interval, toolbar_pointer_lock_enabled,
 };
 
-pub(in crate::backend::wayland) struct WaylandGlobals {
-    pub registry_state: RegistryState,
-    pub compositor_state: CompositorState,
-    pub layer_shell: Option<LayerShell>,
-    pub xdg_shell: Option<XdgShell>,
-    pub activation: Option<ActivationState>,
-    pub shm: Shm,
-    pub pointer_constraints_state: PointerConstraintsState,
-    pub relative_pointer_state: RelativePointerState,
-    pub output_state: OutputState,
-    pub seat_state: SeatState,
-}
-
 pub(in crate::backend::wayland) struct WaylandStateInit {
-    pub globals: WaylandGlobals,
+    pub globals: ProtocolGlobals,
     pub config: Config,
     pub input_state: InputState,
     pub onboarding: crate::onboarding::OnboardingStore,
@@ -183,19 +161,8 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
 
 /// Internal Wayland state shared across modules.
 pub(super) struct WaylandState {
-    // Wayland protocol objects
-    pub(super) registry_state: RegistryState,
-    pub(super) compositor_state: CompositorState,
-    pub(super) layer_shell: Option<LayerShell>,
-    pub(super) xdg_shell: Option<XdgShell>,
-    pub(super) activation: Option<ActivationState>,
-    pub(super) shm: Shm,
-    // Both drive pointer lock for toolbar drags; see
-    // state/toolbar/visibility/pointer.rs.
-    pub(super) pointer_constraints_state: PointerConstraintsState,
-    pub(super) relative_pointer_state: RelativePointerState,
-    pub(super) output_state: OutputState,
-    pub(super) seat_state: SeatState,
+    // Bound Wayland globals and toolkit handler state.
+    pub(super) protocol: ProtocolGlobals,
 
     // Surface and buffer management
     pub(super) surface: SurfaceState,

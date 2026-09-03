@@ -7,7 +7,7 @@ use super::super::state::WaylandState;
 
 impl OutputHandler for WaylandState {
     fn output_state(&mut self) -> &mut OutputState {
-        &mut self.output_state
+        self.protocol.output_mut()
     }
 
     fn new_output(

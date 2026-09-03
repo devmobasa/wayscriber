@@ -107,7 +107,7 @@ impl WaylandState {
         // effect's on-screen footprint.
         let acquired = record_stage!(buffer_acquire, {
             self.surface.acquire_buffer(
-                &self.shm,
+                self.protocol.shm(),
                 buffer_count,
                 phys_width as i32,
                 phys_height as i32,

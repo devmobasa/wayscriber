@@ -13,11 +13,11 @@ pub(super) fn create_overlay_surface(
     qh: &wayland_client::QueueHandle<WaylandState>,
 ) -> Result<()> {
     // Create surface using layer-shell when available, otherwise fall back to xdg-shell
-    let wl_surface = state.compositor_state.create_surface(qh);
-    if state.layer_shell.is_some() {
+    let wl_surface = state.protocol.compositor().create_surface(qh);
+    if state.protocol.layer_shell().is_some() {
         state.begin_main_layer_focus_acquisition();
     }
-    if let Some(layer_shell) = state.layer_shell.as_ref() {
+    if let Some(layer_shell) = state.protocol.layer_shell() {
         let layer = state.main_surface_layer();
         info!("Creating layer shell surface in {:?} layer", layer);
         let layer_surface = layer_shell.create_layer_surface(
@@ -41,7 +41,7 @@ pub(super) fn create_overlay_surface(
         state.surface.set_layer_surface(layer_surface);
         state.set_current_keyboard_interactivity(Some(desired_keyboard_mode));
         info!("Layer shell surface created");
-    } else if let Some(xdg_shell) = state.xdg_shell.as_ref() {
+    } else if let Some(xdg_shell) = state.protocol.xdg_shell() {
         info!("Layer shell missing; creating xdg-shell window");
         let window = xdg_shell.create_window(wl_surface, WindowDecorations::None, qh);
         window.set_title("wayscriber overlay");

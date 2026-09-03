@@ -30,7 +30,7 @@ impl WaylandState {
             log::info!("skip pointer lock: already_locked");
             return;
         }
-        if self.pointer_constraints_state.bound_global().is_err() {
+        if self.protocol.pointer_constraints().bound_global().is_err() {
             log::info!("pointer lock unavailable: constraints global missing");
             return;
         }
@@ -39,7 +39,7 @@ impl WaylandState {
             return;
         };
 
-        match self.pointer_constraints_state.lock_pointer(
+        match self.protocol.pointer_constraints().lock_pointer(
             surface,
             &pointer,
             None,
@@ -76,7 +76,8 @@ impl WaylandState {
         }
 
         match self
-            .relative_pointer_state
+            .protocol
+            .relative_pointer()
             .get_relative_pointer(&pointer, qh)
         {
             Ok(rp) => {

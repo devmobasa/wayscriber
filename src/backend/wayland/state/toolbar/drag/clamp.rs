@@ -115,7 +115,7 @@ impl WaylandState {
             drag_log(|| "skip apply_toolbar_offsets: drag preview active without pointer lock");
             return false;
         }
-        if self.layer_shell.is_none() {
+        if self.protocol.layer_shell().is_none() {
             return false;
         }
         let top_base_x = self.inline_top_base_x();

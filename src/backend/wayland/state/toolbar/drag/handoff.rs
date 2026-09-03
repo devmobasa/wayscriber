@@ -141,7 +141,8 @@ impl WaylandState {
         self.set_toolbar_drag_preview_active(false);
         let snapshot = self.toolbar_snapshot();
         let _ = self.apply_toolbar_offsets(&snapshot);
-        self.toolbar.set_suppressed(&self.compositor_state, false);
+        self.toolbar
+            .set_suppressed(self.protocol.compositor(), false);
         self.request_toolbar_drag_flush();
         self.clear_inline_toolbar_hits();
         self.clear_inline_toolbar_hover();

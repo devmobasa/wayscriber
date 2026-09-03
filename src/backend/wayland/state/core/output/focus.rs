@@ -91,7 +91,7 @@ impl WaylandState {
             return;
         }
 
-        if self.layer_shell.is_none() {
+        if self.protocol.layer_shell().is_none() {
             warn!("Output switch requested, but no supported shell is active");
             self.input_state.trigger_blocked_feedback();
             return;
@@ -114,11 +114,11 @@ impl WaylandState {
         output: &wl_output::WlOutput,
     ) {
         self.begin_main_layer_focus_acquisition();
-        let Some(layer_shell) = self.layer_shell.as_ref() else {
+        let Some(layer_shell) = self.protocol.layer_shell() else {
             return;
         };
 
-        let wl_surface = self.compositor_state.create_surface(qh);
+        let wl_surface = self.protocol.compositor().create_surface(qh);
         wl_surface.set_buffer_scale(self.surface.scale().max(1));
         let layer = self.main_surface_layer();
         let layer_surface = layer_shell.create_layer_surface(

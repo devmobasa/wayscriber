@@ -67,14 +67,14 @@ impl WaylandState {
         if exclude.is_some_and(|destroyed| destroyed == &output) {
             return None;
         }
-        let active_info = self.output_state.info(&output)?;
+        let active_info = self.protocol.output().info(&output)?;
         let active = desktop_backdrop_output_geometry_from_info(&active_info)?;
         let mut outputs = Vec::new();
-        for candidate in self.output_state.outputs() {
+        for candidate in self.protocol.output().outputs() {
             if exclude.is_some_and(|destroyed| destroyed == &candidate) {
                 continue;
             }
-            let info = self.output_state.info(&candidate)?;
+            let info = self.protocol.output().info(&candidate)?;
             outputs.push(desktop_backdrop_output_geometry_from_info(&info)?);
         }
 
@@ -91,7 +91,7 @@ impl WaylandState {
 
     fn known_output_count_excluding(&self, exclude: Option<&wl_output::WlOutput>) -> Option<u32> {
         let mut count = 0u32;
-        for candidate in self.output_state.outputs() {
+        for candidate in self.protocol.output().outputs() {
             if exclude.is_some_and(|destroyed| destroyed == &candidate) {
                 continue;
             }
@@ -142,7 +142,7 @@ impl WaylandState {
             self.zoom.set_active_output(None, None);
             return;
         }
-        let Some(info) = self.output_state.info(&output) else {
+        let Some(info) = self.protocol.output().info(&output) else {
             self.set_freeze_zoom_geometry_excluding(None, exclude);
             self.frozen.set_active_output(None, None);
             self.zoom.set_active_output(None, None);
