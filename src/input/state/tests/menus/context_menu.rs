@@ -158,7 +158,7 @@ fn select_this_shape_command_focuses_single_shape() {
     assert_eq!(state.selected_shape_ids(), &[second]);
 
     assert!(
-        matches!(state.context_menu_state, ContextMenuState::Hidden),
+        matches!(state.context_menu.state, ContextMenuState::Hidden),
         "Context menu should close after selecting hovered shape"
     );
 }
@@ -194,7 +194,7 @@ fn properties_command_opens_panel() {
 fn keyboard_context_menu_sets_initial_focus() {
     let mut state = create_test_input_state();
     state.toggle_context_menu_via_keyboard();
-    match &state.context_menu_state {
+    match &state.context_menu.state {
         ContextMenuState::Open { keyboard_focus, .. } => {
             assert!(keyboard_focus.is_some());
         }
@@ -219,7 +219,7 @@ fn keyboard_context_menu_focuses_edit_for_selected_text() {
     state.set_selection(vec![shape_id]);
     state.toggle_context_menu_via_keyboard();
 
-    let focus_index = match &state.context_menu_state {
+    let focus_index = match &state.context_menu.state {
         ContextMenuState::Open {
             keyboard_focus: Some(index),
             ..
@@ -338,7 +338,7 @@ fn open_zoom_menu_command_switches_to_zoom_submenu_with_actionable_focus() {
 
     state.execute_menu_command(MenuCommand::OpenZoomMenu);
 
-    let focus_index = match &state.context_menu_state {
+    let focus_index = match &state.context_menu.state {
         ContextMenuState::Open {
             kind: ContextMenuKind::Zoom,
             keyboard_focus,
@@ -523,7 +523,7 @@ fn open_pages_menu_command_switches_to_pages_submenu_with_actionable_focus() {
 
     state.execute_menu_command(MenuCommand::OpenPagesMenu);
 
-    let focus_index = match &state.context_menu_state {
+    let focus_index = match &state.context_menu.state {
         ContextMenuState::Open {
             kind: ContextMenuKind::Pages,
             keyboard_focus,
@@ -543,7 +543,7 @@ fn open_boards_menu_command_switches_to_boards_submenu_with_actionable_focus() {
 
     state.execute_menu_command(MenuCommand::OpenBoardsMenu);
 
-    let focus_index = match &state.context_menu_state {
+    let focus_index = match &state.context_menu.state {
         ContextMenuState::Open {
             kind: ContextMenuKind::Boards,
             keyboard_focus,
@@ -575,7 +575,7 @@ fn keyboard_shape_menu_anchor_tracks_panned_board_view_offset() {
 
     state.toggle_context_menu_via_keyboard();
 
-    match state.context_menu_state {
+    match state.context_menu.state {
         ContextMenuState::Open {
             kind: ContextMenuKind::Shape,
             anchor,

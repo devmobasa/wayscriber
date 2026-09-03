@@ -7,12 +7,12 @@ use cairo::Context as CairoContext;
 impl InputState {
     /// Returns cached context menu layout, if available.
     pub fn context_menu_layout(&self) -> Option<&ContextMenuLayout> {
-        self.context_menu_layout.as_ref()
+        self.context_menu.layout.as_ref()
     }
 
     /// Clears cached layout data (used when menu closes).
     pub fn clear_context_menu_layout(&mut self) {
-        self.context_menu_layout = None;
+        self.context_menu.layout = None;
         self.pending_menu_hover_recalc = false;
     }
 
@@ -24,13 +24,13 @@ impl InputState {
         screen_height: u32,
     ) {
         if !self.is_context_menu_open() {
-            self.context_menu_layout = None;
+            self.context_menu.layout = None;
             return;
         }
 
         let entries = self.context_menu_entries();
         if entries.is_empty() {
-            self.context_menu_layout = None;
+            self.context_menu.layout = None;
             return;
         }
 
@@ -69,11 +69,11 @@ impl InputState {
             + ARROW_WIDTH;
         let menu_height = PADDING_Y * 2.0 + ROW_HEIGHT * entries.len() as f64;
 
-        let mut origin_x = match &self.context_menu_state {
+        let mut origin_x = match &self.context_menu.state {
             ContextMenuState::Open { anchor, .. } => anchor.0 as f64,
             ContextMenuState::Hidden => 0.0,
         };
-        let mut origin_y = match &self.context_menu_state {
+        let mut origin_y = match &self.context_menu.state {
             ContextMenuState::Open { anchor, .. } => anchor.1 as f64,
             ContextMenuState::Hidden => 0.0,
         };
@@ -87,7 +87,7 @@ impl InputState {
             origin_y = (screen_h - menu_height - 6.0).max(6.0);
         }
 
-        self.context_menu_layout = Some(ContextMenuLayout {
+        self.context_menu.layout = Some(ContextMenuLayout {
             origin_x,
             origin_y,
             width: menu_width,
@@ -102,7 +102,7 @@ impl InputState {
 
         if self.pending_menu_hover_recalc {
             let focus_set = matches!(
-                self.context_menu_state,
+                self.context_menu.state,
                 ContextMenuState::Open {
                     keyboard_focus: Some(_),
                     ..
@@ -115,7 +115,7 @@ impl InputState {
             self.pending_menu_hover_recalc = false;
         }
 
-        if let Some(layout) = self.context_menu_layout {
+        if let Some(layout) = self.context_menu.layout {
             self.mark_context_menu_region(layout);
         }
     }

@@ -1,8 +1,6 @@
 use super::super::super::{
-    board_picker::BoardPickerPageTarget,
     color_picker_popup::{ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState},
     index::SpatialIndexCache,
-    menus::{ContextMenuLayout, ContextMenuState},
     properties::{PropertiesPanelLayout, ShapePropertiesPanel},
     radial_menu::{RadialMenuLayout, RadialMenuState},
     selection::SelectionState,
@@ -338,12 +336,8 @@ pub struct InputState {
     pub selection_state: SelectionState,
     /// Last axis used for selection nudges (used to resolve Home/End axis)
     pub last_selection_axis: Option<SelectionAxis>,
-    /// Current context menu state
-    pub context_menu_state: ContextMenuState,
-    /// Page context target for the context menu
-    pub(in crate::input::state::core) context_menu_page_target: Option<BoardPickerPageTarget>,
-    /// Whether context menu interactions are enabled
-    pub(in crate::input::state::core) context_menu_enabled: bool,
+    /// Lifecycle, target, and cached layout for the context menu.
+    pub context_menu: crate::input::state::core::menus::ContextMenuPanel,
 
     /// Current color picker popup state
     pub color_picker_popup_state: ColorPickerPopupState,
@@ -426,8 +420,6 @@ pub struct InputState {
     pub(crate) ime: super::super::super::ime::ImeCompositionState,
     /// Pending delayed history playback state
     pub(in crate::input::state::core) pending_history: Option<DelayedHistory>,
-    /// Cached layout details for the currently open context menu
-    pub context_menu_layout: Option<ContextMenuLayout>,
 
     /// Cached layout details for the status HUD (segmented status bar)
     pub status_hud_layout: Option<crate::ui::StatusHudLayout>,

@@ -4,7 +4,7 @@ use crate::domain::Action;
 
 impl InputState {
     pub(super) fn page_context_menu_entries(&self) -> Vec<ContextMenuEntry> {
-        let Some(target) = self.context_menu_page_target else {
+        let Some(target) = self.context_menu.page_target else {
             return Vec::new();
         };
         let Some(board) = self.boards.board_states().get(target.board_index) else {
@@ -64,7 +64,7 @@ impl InputState {
     }
 
     pub(super) fn page_move_menu_entries(&self) -> Vec<ContextMenuEntry> {
-        let Some(target) = self.context_menu_page_target else {
+        let Some(target) = self.context_menu.page_target else {
             return Vec::new();
         };
         let boards = self.boards.board_states();

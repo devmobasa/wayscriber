@@ -43,7 +43,7 @@ impl InputState {
 
     /// Returns the entries to render for the currently open context menu.
     pub fn context_menu_entries(&self) -> Vec<ContextMenuEntry> {
-        match &self.context_menu_state {
+        match &self.context_menu.state {
             ContextMenuState::Hidden => Vec::new(),
             ContextMenuState::Open {
                 kind,

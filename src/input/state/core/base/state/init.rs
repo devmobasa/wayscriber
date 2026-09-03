@@ -1,6 +1,6 @@
 use super::super::super::{
-    color_picker_popup::ColorPickerPopupState, menus::ContextMenuState,
-    radial_menu::RadialMenuState, selection::SelectionState,
+    color_picker_popup::ColorPickerPopupState, radial_menu::RadialMenuState,
+    selection::SelectionState,
 };
 use super::super::types::{
     CompositorCapabilities, DrawingState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS,
@@ -213,9 +213,7 @@ impl InputState {
             tool_override: None,
             selection_state: SelectionState::None,
             last_selection_axis: None,
-            context_menu_state: ContextMenuState::Hidden,
-            context_menu_enabled: true,
-            context_menu_page_target: None,
+            context_menu: Default::default(),
 
             color_picker_popup_state: ColorPickerPopupState::Hidden,
             color_picker_popup_layout: None,
@@ -255,7 +253,6 @@ impl InputState {
             text_edit_entry_feedback: None,
             ime: crate::input::state::ImeCompositionState::default(),
             pending_history: None,
-            context_menu_layout: None,
             status_hud_layout: None,
             status_hud_rebuild_inputs: None,
             status_hud_press_pending: false,

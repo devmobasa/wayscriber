@@ -479,7 +479,7 @@ fn right_click_when_radial_open_on_panned_board_uses_canvas_hit_testing() {
     state.on_mouse_press_with_canvas(MouseButton::Right, 50, 40, 150, 90);
 
     assert!(!state.is_radial_menu_open());
-    match &state.context_menu_state {
+    match &state.context_menu.state {
         ContextMenuState::Open {
             kind,
             shape_ids,

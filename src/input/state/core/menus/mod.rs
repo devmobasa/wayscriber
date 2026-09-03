@@ -1,4 +1,5 @@
 mod commands;
+mod context_menu;
 mod entries;
 mod focus;
 mod hover;
@@ -7,6 +8,7 @@ mod lifecycle;
 mod shortcuts;
 mod types;
 
+pub use context_menu::ContextMenuPanel;
 pub use types::{
     ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuLayout, ContextMenuState,
     MenuCommand,

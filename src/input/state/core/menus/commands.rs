@@ -11,7 +11,7 @@ impl InputState {
         if let ContextMenuState::Open {
             hovered_shape_id: Some(shape_id),
             ..
-        } = &self.context_menu_state
+        } = &self.context_menu.state
         {
             Some(*shape_id)
         } else {
@@ -20,7 +20,7 @@ impl InputState {
     }
 
     fn context_menu_paste_anchor(&self) -> PasteAnchor {
-        if let ContextMenuState::Open { anchor, .. } = self.context_menu_state {
+        if let ContextMenuState::Open { anchor, .. } = self.context_menu.state {
             let (x, y) = self.canvas_coords_for_screen(anchor.0, anchor.1);
             PasteAnchor::Pointer { x, y }
         } else {
@@ -33,12 +33,12 @@ impl InputState {
     }
 
     fn context_submenu_anchor(&self) -> (i32, i32) {
-        if let Some(layout) = self.context_menu_layout {
+        if let Some(layout) = self.context_menu.layout {
             (
                 (layout.origin_x + layout.width + 8.0).round() as i32,
                 layout.origin_y.round() as i32,
             )
-        } else if let ContextMenuState::Open { anchor, .. } = &self.context_menu_state {
+        } else if let ContextMenuState::Open { anchor, .. } = &self.context_menu.state {
             *anchor
         } else {
             self.last_pointer_position
@@ -180,9 +180,9 @@ impl InputState {
             }
             MenuCommand::OpenPageMoveMenu => {
                 let anchor = self.context_submenu_anchor();
-                let target = self.context_menu_page_target;
+                let target = self.context_menu.page_target;
                 self.open_context_menu(anchor, Vec::new(), ContextMenuKind::PageMove, None);
-                self.context_menu_page_target = target;
+                self.context_menu.page_target = target;
                 self.pending_menu_hover_recalc = false;
                 self.set_context_menu_focus(None);
                 self.focus_first_context_menu_entry();
@@ -216,13 +216,13 @@ impl InputState {
                 self.close_context_menu();
             }
             MenuCommand::PageRename => {
-                if let Some(target) = self.context_menu_page_target {
+                if let Some(target) = self.context_menu.page_target {
                     self.board_picker_start_page_rename(target.board_index, target.page_index);
                 }
                 self.close_context_menu();
             }
             MenuCommand::PageDuplicateFromContext => {
-                if let Some(target) = self.context_menu_page_target {
+                if let Some(target) = self.context_menu.page_target {
                     let affects_panel =
                         self.board_picker_page_context_change_affects_panel(target.board_index);
                     if self.duplicate_page_in_board(target.board_index, target.page_index)
@@ -234,7 +234,7 @@ impl InputState {
                 self.close_context_menu();
             }
             MenuCommand::PageDeleteFromContext => {
-                if let Some(target) = self.context_menu_page_target {
+                if let Some(target) = self.context_menu.page_target {
                     let affects_panel =
                         self.board_picker_page_context_change_affects_panel(target.board_index);
                     let outcome = self.delete_page_in_board(target.board_index, target.page_index);
@@ -246,7 +246,7 @@ impl InputState {
                 self.close_context_menu();
             }
             MenuCommand::PageMoveToBoard { id } => {
-                if let Some(target) = self.context_menu_page_target {
+                if let Some(target) = self.context_menu.page_target {
                     let source_board = target.board_index;
                     let page_index = target.page_index;
                     let affects_panel =

@@ -7,7 +7,7 @@ impl InputState {
             hover_index,
             keyboard_focus,
             ..
-        } = &self.context_menu_state
+        } = &self.context_menu.state
         {
             hover_index.or(*keyboard_focus)
         } else {
