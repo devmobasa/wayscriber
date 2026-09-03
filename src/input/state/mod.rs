@@ -11,10 +11,8 @@ pub(crate) use core::{
     DrawingStyle, HistoryLimits, IdleHandle, SpotlightMagnificationTrack, TopMenuState,
 };
 pub(crate) use core::{InputEffect, InputEffectDrain};
-pub(crate) use spotlight::{
-    SpotlightFrameRegions, SpotlightMagnificationGesture, SpotlightWheelClaim,
-    SpotlightWheelOutcome,
-};
+pub(in crate::input::state) use spotlight::SpotlightWheelGesture;
+pub(crate) use spotlight::{SpotlightFrameRegions, SpotlightWheelClaim, SpotlightWheelOutcome};
 #[cfg(test)]
 mod tests;
 

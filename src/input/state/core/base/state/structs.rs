@@ -188,17 +188,8 @@ pub struct InputState {
     pub(crate) dirty_tracker: DirtyTracker,
     /// Cached bounds for the current provisional shape (if any)
     pub(crate) last_provisional_bounds: Option<Rect>,
-    /// Shape and pre-gesture snapshot for an in-flight wheel adjustment of a
-    /// Spotlight's magnification.
-    ///
-    /// A wheel burst is one user action, so the snapshot is held here and a
-    /// single undo entry is pushed when the gesture ends rather than one per
-    /// tick.
-    pub(in crate::input::state) spotlight_magnification_gesture:
-        Option<crate::input::state::SpotlightMagnificationGesture>,
-    /// Unconsumed high-resolution wheel units and the Spotlight that owns
-    /// them. Wayland defines 120 units as one logical wheel step.
-    pub(in crate::input::state) spotlight_wheel_value120_remainder: Option<(ShapeId, i32)>,
+    /// In-flight Spotlight magnification undo gesture and wheel remainder.
+    pub(in crate::input::state) spotlight_wheel: crate::input::state::SpotlightWheelGesture,
     /// Pending first-run onboarding usage markers to persist in onboarding store
     pub(crate) pending_onboarding_usage: PendingOnboardingUsage,
     /// Maximum number of shapes allowed per frame (0 = unlimited)
