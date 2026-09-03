@@ -382,20 +382,6 @@ impl InputState {
         self.text_editing.ime_preedit()
     }
 
-    pub fn ime_queue_commit(&mut self, text: Option<String>) {
-        self.text_editing.ime_queue_commit(text);
-    }
-
-    pub fn ime_queue_preedit(&mut self, text: Option<String>, cursor_begin: i32, cursor_end: i32) {
-        self.text_editing
-            .ime_queue_preedit(text, cursor_begin, cursor_end);
-    }
-
-    pub fn ime_queue_delete_surrounding(&mut self, before_length: u32, after_length: u32) {
-        self.text_editing
-            .ime_queue_delete_surrounding(before_length, after_length);
-    }
-
     pub fn ime_apply_done(&mut self) -> bool {
         let changed = self.text_editing.apply_ime_done(&mut self.state);
         if changed {

@@ -538,7 +538,9 @@ mod tests {
         // built from ink alone leaves the underline behind when the block moves.
         let mut state = make_test_input_state();
         state.state = DrawingState::text_input(100, 100, String::new());
-        state.ime_queue_preedit(Some("kako".to_string()), 4, 4);
+        state
+            .text_editing
+            .ime_queue_preedit(Some("kako".to_string()), 4, 4);
         assert!(state.ime_apply_done());
 
         let bounds = state
@@ -663,7 +665,9 @@ mod tests {
             *selection_anchor = Some(0);
             *caret = 5;
         }
-        state.ime_queue_preedit(Some("X".to_string()), 1, 1);
+        state
+            .text_editing
+            .ime_queue_preedit(Some("X".to_string()), 1, 1);
         state.ime_apply_done();
 
         let rect = state

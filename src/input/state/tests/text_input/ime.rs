@@ -1,7 +1,7 @@
-//! IME (zwp_text_input_v3) composition state-machine tests. These drive the
-//! `ime_queue_*` / `ime_apply_done` API the backend Wayland handlers call,
-//! and assert the caret-aware editor buffer + transient preedit behave per
-//! the protocol's batch-then-done model.
+//! IME (zwp_text_input_v3) composition state-machine tests. These queue
+//! composition events on `TextEditing`, apply each batch through the root
+//! `ime_apply_done` coordinator, and assert the caret-aware editor buffer and
+//! transient preedit follow the protocol's batch-then-done model.
 
 use super::super::*;
 
@@ -21,7 +21,9 @@ fn commit_string_appends_to_the_buffer_on_done() {
     let mut state = create_test_input_state();
     enter_text_mode(&mut state);
 
-    state.ime_queue_commit(Some("你好".to_string()));
+    state
+        .text_editing
+        .ime_queue_commit(Some("你好".to_string()));
     assert_eq!(buffer(&state), "", "nothing applies before done");
     assert!(state.ime_apply_done());
     assert_eq!(buffer(&state), "你好");
@@ -41,14 +43,16 @@ fn preedit_is_transient_and_not_part_of_the_buffer() {
     enter_text_mode(&mut state);
 
     // Compose: a preedit shows but is not committed text yet.
-    state.ime_queue_preedit(Some("ni".to_string()), 2, 2);
+    state
+        .text_editing
+        .ime_queue_preedit(Some("ni".to_string()), 2, 2);
     assert!(state.ime_apply_done());
     assert_eq!(buffer(&state), "", "preedit never enters the buffer");
     assert_eq!(state.ime_preedit().map(|p| p.text.as_str()), Some("ni"));
 
     // Commit replaces the preedit with real text and clears the preedit.
-    state.ime_queue_commit(Some("你".to_string()));
-    state.ime_queue_preedit(None, 0, 0);
+    state.text_editing.ime_queue_commit(Some("你".to_string()));
+    state.text_editing.ime_queue_preedit(None, 0, 0);
     assert!(state.ime_apply_done());
     assert_eq!(buffer(&state), "你");
     assert!(state.ime_preedit().is_none());
@@ -59,7 +63,9 @@ fn preedit_clears_when_no_preedit_is_queued_next_cycle() {
     let mut state = create_test_input_state();
     enter_text_mode(&mut state);
 
-    state.ime_queue_preedit(Some("wip".to_string()), 3, 3);
+    state
+        .text_editing
+        .ime_queue_preedit(Some("wip".to_string()), 3, 3);
     state.ime_apply_done();
     assert!(state.ime_preedit().is_some());
 
@@ -72,14 +78,16 @@ fn preedit_clears_when_no_preedit_is_queued_next_cycle() {
 fn delete_surrounding_text_trims_bytes_before_the_caret_then_commits() {
     let mut state = create_test_input_state();
     enter_text_mode(&mut state);
-    state.ime_queue_commit(Some("abcd".to_string()));
+    state
+        .text_editing
+        .ime_queue_commit(Some("abcd".to_string()));
     state.ime_apply_done();
     assert_eq!(buffer(&state), "abcd");
 
     // Delete the last 2 bytes, then commit a replacement (Korean/Japanese
     // correction style): delete applies before the commit insert.
-    state.ime_queue_delete_surrounding(2, 0);
-    state.ime_queue_commit(Some("XY".to_string()));
+    state.text_editing.ime_queue_delete_surrounding(2, 0);
+    state.text_editing.ime_queue_commit(Some("XY".to_string()));
     assert!(state.ime_apply_done());
     assert_eq!(buffer(&state), "abXY");
 }
@@ -88,13 +96,13 @@ fn delete_surrounding_text_trims_bytes_before_the_caret_then_commits() {
 fn delete_surrounding_text_respects_utf8_char_boundaries() {
     let mut state = create_test_input_state();
     enter_text_mode(&mut state);
-    state.ime_queue_commit(Some("a你".to_string())); // '你' is 3 bytes
+    state.text_editing.ime_queue_commit(Some("a你".to_string())); // '你' is 3 bytes
     state.ime_apply_done();
     assert_eq!(buffer(&state), "a你");
 
     // Asking to delete 1 byte must not split the 3-byte char; it snaps back
     // to the char boundary and removes the whole '你'.
-    state.ime_queue_delete_surrounding(1, 0);
+    state.text_editing.ime_queue_delete_surrounding(1, 0);
     assert!(state.ime_apply_done());
     assert_eq!(buffer(&state), "a");
 }
@@ -106,8 +114,10 @@ fn null_commit_string_cancels_an_earlier_queued_commit() {
 
     // A compositor may queue a commit and then retract it with a null
     // commit_string before the same done; the retraction must win.
-    state.ime_queue_commit(Some("draft".to_string()));
-    state.ime_queue_commit(None);
+    state
+        .text_editing
+        .ime_queue_commit(Some("draft".to_string()));
+    state.text_editing.ime_queue_commit(None);
     assert!(
         !state.ime_apply_done(),
         "a cancelled commit leaves nothing to apply"
@@ -146,7 +156,7 @@ fn commit_inserts_at_the_caret_and_advances_it() {
         *caret = 1;
     }
 
-    state.ime_queue_commit(Some("bc".to_string()));
+    state.text_editing.ime_queue_commit(Some("bc".to_string()));
     assert!(state.ime_apply_done());
     assert_eq!(
         buffer(&state),
@@ -170,8 +180,8 @@ fn delete_surrounding_trims_before_the_caret_not_the_buffer_end() {
     }
 
     // Delete one byte before the caret, then commit a replacement.
-    state.ime_queue_delete_surrounding(1, 0);
-    state.ime_queue_commit(Some("Y".to_string()));
+    state.text_editing.ime_queue_delete_surrounding(1, 0);
+    state.text_editing.ime_queue_commit(Some("Y".to_string()));
     assert!(state.ime_apply_done());
     assert_eq!(buffer(&state), "abYcd");
 }
@@ -184,8 +194,8 @@ fn delete_surrounding_removes_bytes_on_both_sides_of_the_caret() {
         *caret = 3;
     }
 
-    state.ime_queue_delete_surrounding(1, 1);
-    state.ime_queue_commit(Some("Y".to_string()));
+    state.text_editing.ime_queue_delete_surrounding(1, 1);
+    state.text_editing.ime_queue_commit(Some("Y".to_string()));
     assert!(state.ime_apply_done());
 
     assert_eq!(buffer(&state), "abYd");
@@ -207,8 +217,8 @@ fn delete_surrounding_excludes_the_selection_before_commit_replaces_it() {
 
     // Delete "12" before and "78" after the selection, then replace the
     // still-active selection with the commit.
-    state.ime_queue_delete_surrounding(2, 2);
-    state.ime_queue_commit(Some("X".to_string()));
+    state.text_editing.ime_queue_delete_surrounding(2, 2);
+    state.text_editing.ime_queue_commit(Some("X".to_string()));
     assert!(state.ime_apply_done());
 
     assert_eq!(buffer(&state), "0X9");
@@ -228,8 +238,8 @@ fn delete_surrounding_preserves_a_reverse_selection_for_commit() {
         *selection_anchor = Some(7); // reverse selection of "3456"
     }
 
-    state.ime_queue_delete_surrounding(2, 2);
-    state.ime_queue_commit(Some("X".to_string()));
+    state.text_editing.ime_queue_delete_surrounding(2, 2);
+    state.text_editing.ime_queue_commit(Some("X".to_string()));
     assert!(state.ime_apply_done());
 
     assert_eq!(buffer(&state), "0X9");
@@ -312,7 +322,9 @@ fn only_committed_ime_edits_advance_the_text_buffer_revision() {
     enter_text_mode(&mut state);
     let initial = state.text_editing.revision();
 
-    state.ime_queue_preedit(Some("draft".to_string()), 5, 5);
+    state
+        .text_editing
+        .ime_queue_preedit(Some("draft".to_string()), 5, 5);
     assert!(state.ime_apply_done());
     assert_eq!(
         state.text_editing.revision(),
@@ -320,7 +332,9 @@ fn only_committed_ime_edits_advance_the_text_buffer_revision() {
         "transient preedit changes do not mutate committed text"
     );
 
-    state.ime_queue_commit(Some("done".to_string()));
+    state
+        .text_editing
+        .ime_queue_commit(Some("done".to_string()));
     assert!(state.ime_apply_done());
     assert_eq!(
         state.text_editing.revision(),
@@ -342,7 +356,9 @@ fn preedit_replacing_a_forward_selection_has_one_effective_preview_and_cursor() 
         *selection_anchor = Some(0);
         *caret = 5;
     }
-    state.ime_queue_preedit(Some("X".to_string()), 1, 1);
+    state
+        .text_editing
+        .ime_queue_preedit(Some("X".to_string()), 1, 1);
     state.ime_apply_done();
 
     let preview = state
@@ -382,7 +398,9 @@ fn preedit_start_removes_selection_and_invalidates_pending_clipboard_edit() {
         .expect("Ctrl+V captures the selected buffer revision");
     let initial_revision = state.text_editing.revision();
 
-    state.ime_queue_preedit(Some("X".to_string()), 1, 1);
+    state
+        .text_editing
+        .ime_queue_preedit(Some("X".to_string()), 1, 1);
     assert!(state.ime_apply_done());
 
     assert_eq!(buffer(&state), " world");
@@ -403,7 +421,7 @@ fn preedit_start_removes_selection_and_invalidates_pending_clipboard_edit() {
         "removing selected committed text invalidates deferred clipboard work"
     );
 
-    state.ime_queue_preedit(None, 0, 0);
+    state.text_editing.ime_queue_preedit(None, 0, 0);
     assert!(state.ime_apply_done());
     assert_eq!(
         buffer(&state),
@@ -431,7 +449,7 @@ fn null_preedit_event_still_removes_the_existing_selection() {
     }
     let initial_revision = state.text_editing.revision();
 
-    state.ime_queue_preedit(None, 0, 0);
+    state.text_editing.ime_queue_preedit(None, 0, 0);
     assert!(state.ime_apply_done());
 
     assert_eq!(buffer(&state), "ho");
@@ -446,8 +464,12 @@ fn null_preedit_event_still_removes_the_existing_selection() {
 fn ime_events_are_ignored_outside_text_mode() {
     let mut state = create_test_input_state();
     // Not in text mode.
-    state.ime_queue_commit(Some("nope".to_string()));
-    state.ime_queue_preedit(Some("nope".to_string()), 0, 0);
+    state
+        .text_editing
+        .ime_queue_commit(Some("nope".to_string()));
+    state
+        .text_editing
+        .ime_queue_preedit(Some("nope".to_string()), 0, 0);
     assert!(!state.ime_apply_done(), "no-op when no text edit is active");
     assert!(state.ime_preedit().is_none());
     assert!(matches!(state.state, DrawingState::Idle));
@@ -457,7 +479,9 @@ fn ime_events_are_ignored_outside_text_mode() {
 fn ime_clear_drops_the_active_preedit() {
     let mut state = create_test_input_state();
     enter_text_mode(&mut state);
-    state.ime_queue_preedit(Some("half".to_string()), 4, 4);
+    state
+        .text_editing
+        .ime_queue_preedit(Some("half".to_string()), 4, 4);
     state.ime_apply_done();
     assert!(state.ime_preedit().is_some());
 
@@ -473,9 +497,11 @@ fn ime_clear_drops_the_active_preedit() {
 fn finalizing_the_edit_drops_composition_state() {
     let mut state = create_test_input_state();
     enter_text_mode(&mut state);
-    state.ime_queue_commit(Some("hi".to_string()));
+    state.text_editing.ime_queue_commit(Some("hi".to_string()));
     state.ime_apply_done();
-    state.ime_queue_preedit(Some("mid".to_string()), 3, 3);
+    state
+        .text_editing
+        .ime_queue_preedit(Some("mid".to_string()), 3, 3);
     state.ime_apply_done();
     assert!(state.ime_preedit().is_some());
 

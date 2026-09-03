@@ -607,7 +607,9 @@ fn click_after_visible_preedit_maps_back_to_the_committed_buffer() {
         *caret = 6;
         *selection_anchor = Some(2);
     }
-    state.ime_queue_preedit(Some("MMMMMMMM".to_string()), -1, -1);
+    state
+        .text_editing
+        .ime_queue_preedit(Some("MMMMMMMM".to_string()), -1, -1);
     assert!(state.ime_apply_done());
 
     let preview = "abMMMMMMMMcd";
