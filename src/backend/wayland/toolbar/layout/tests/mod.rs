@@ -1,53 +1,20 @@
 use super::*;
-use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
-use crate::draw::{Color, FontDescriptor};
+use crate::draw::FontDescriptor;
+use crate::input::InputState;
 use crate::input::state::TopMenuState;
-use crate::input::{ClickHighlightSettings, EraserMode, InputState};
 use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
 
 fn create_test_input_state() -> InputState {
-    let keybindings = KeybindingsConfig::default();
-    let action_map = keybindings.build_action_map().unwrap();
-    let action_bindings = keybindings.build_action_bindings().unwrap();
-
-    let mut state = InputState::with_defaults(
-        Color {
-            r: 1.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        },
-        3.0,
-        12.0,
-        EraserMode::Brush,
-        0.32,
-        false,
-        32.0,
-        FontDescriptor {
+    crate::input::state::test_support::TestInputStateBuilder::default()
+        .thickness(3.0)
+        .eraser_size(12.0)
+        .font_descriptor(FontDescriptor {
             family: "Sans".to_string(),
             weight: "bold".to_string(),
             style: "normal".to_string(),
-        },
-        false,
-        20.0,
-        30.0,
-        false,
-        true,
-        BoardsConfig::default(),
-        action_map,
-        usize::MAX,
-        ClickHighlightSettings::disabled(),
-        0,
-        0,
-        false,
-        0,
-        0,
-        5,
-        5,
-        PresenterModeConfig::default(),
-    );
-    state.set_action_bindings(action_bindings);
-    state
+        })
+        .custom_section_enabled(false)
+        .build()
 }
 
 fn snapshot_from_state(state: &InputState) -> ToolbarSnapshot {

@@ -1,9 +1,6 @@
 use super::*;
-use crate::config::{
-    BoardsConfig, KeybindingsConfig, PresenterModeConfig, StatusBarItem, StatusBarStyle,
-};
-use crate::draw::{Color, FontDescriptor, Shape};
-use crate::input::{ClickHighlightSettings, EraserMode};
+use crate::config::{KeybindingsConfig, StatusBarItem, StatusBarStyle};
+use crate::draw::{Color, Shape};
 
 /// Worst-case prefix: selection info plus a long output label on a
 /// narrow screen.
@@ -16,42 +13,11 @@ const DOT_DIAMETER: f64 = 12.0;
 
 fn make_state() -> InputState {
     let keybindings = KeybindingsConfig::default();
-    let action_map = keybindings
+    let _action_map = keybindings
         .build_action_map()
         .expect("default keybindings map");
 
-    InputState::with_defaults(
-        Color {
-            r: 1.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        },
-        4.0,
-        4.0,
-        EraserMode::Brush,
-        0.32,
-        false,
-        32.0,
-        FontDescriptor::default(),
-        false,
-        20.0,
-        30.0,
-        false,
-        true,
-        BoardsConfig::default(),
-        action_map,
-        usize::MAX,
-        ClickHighlightSettings::disabled(),
-        0,
-        0,
-        true,
-        0,
-        0,
-        5,
-        5,
-        PresenterModeConfig::default(),
-    )
+    crate::input::state::test_support::make_test_input_state()
 }
 
 fn measure(
@@ -91,7 +57,7 @@ fn make_worst_case_state() -> InputState {
         },
         thick: 4.0,
     };
-    state.show_active_output_badge = true;
+    state.ui_visibility.show_active_output_badge = true;
     state.active_output_label = Some("DP-3 Dell UltraSharp U2723QE 3840x2160@60".to_string());
     state
 }

@@ -103,10 +103,10 @@ impl WaylandState {
             return;
         }
 
-        if self.stylus_tip_down {
+        if self.tablet.tip_down {
             self.record_stylus_peak(self.input_state.current_thickness);
         } else {
-            self.stylus_peak_thickness = None;
+            self.tablet.peak_thickness = None;
         }
     }
 }

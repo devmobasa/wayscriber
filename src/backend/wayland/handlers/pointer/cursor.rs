@@ -214,7 +214,7 @@ impl WaylandState {
         }
 
         // Check command palette
-        if self.input_state.command_palette_open {
+        if self.input_state.command_palette.open {
             let (mx, my) = self.current_mouse();
             let screen_width = self.surface.width();
             let screen_height = self.surface.height();

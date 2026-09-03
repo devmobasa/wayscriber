@@ -329,7 +329,7 @@ fn presenter_mode_persists_the_users_values_not_its_own() {
     let mut input_state = make_test_input_state();
     input_state.presenter_mode_config.enable_click_highlight = true;
     input_state.presenter_mode_config.hide_tool_preview = true;
-    input_state.show_tool_preview = true;
+    input_state.ui_visibility.show_tool_preview = true;
     input_state.toggle_presenter_mode();
     assert!(input_state.presenter_mode);
     assert!(input_state.click_highlight_enabled());

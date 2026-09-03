@@ -26,45 +26,15 @@ fn create_test_input_state_with_keybindings_and_click_highlight(
     keybindings: crate::config::KeybindingsConfig,
     click_highlight_settings: ClickHighlightSettings,
 ) -> InputState {
-    let action_map = keybindings.build_action_map().unwrap();
-    let action_bindings = keybindings.build_action_bindings().unwrap();
-
-    let mut state = InputState::with_defaults(
-        Color {
-            r: 1.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        }, // Red
-        3.0,  // thickness
-        12.0, // eraser size
-        EraserMode::Brush,
-        0.32,  // marker_opacity
-        false, // fill_enabled
-        32.0,  // font_size
-        FontDescriptor {
+    crate::input::state::test_support::TestInputStateBuilder::with_keybindings(keybindings)
+        .thickness(3.0)
+        .eraser_size(12.0)
+        .font_descriptor(FontDescriptor {
             family: "Sans".to_string(),
             weight: "bold".to_string(),
             style: "normal".to_string(),
-        },
-        false,                   // text_background_enabled
-        20.0,                    // arrow_length
-        30.0,                    // arrow_angle
-        false,                   // arrow_head_at_end
-        true,                    // show_status_bar
-        BoardsConfig::default(), // boards_config
-        action_map,              // action_map
-        usize::MAX,
-        click_highlight_settings,
-        0,
-        0,
-        false, // custom_section_enabled
-        0,     // custom_undo_delay_ms
-        0,     // custom_redo_delay_ms
-        5,     // custom_undo_steps
-        5,     // custom_redo_steps
-        crate::config::PresenterModeConfig::default(),
-    );
-    state.set_action_bindings(action_bindings);
-    state
+        })
+        .click_highlight_settings(click_highlight_settings)
+        .custom_section_enabled(false)
+        .build()
 }

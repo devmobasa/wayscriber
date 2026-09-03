@@ -27,10 +27,9 @@ impl InputState {
     /// Records that a user action created or changed a magnified Spotlight, so
     /// the backend can resolve source availability and warn once for it.
     ///
-    /// This deliberately does not travel through [`PendingBackendAction`]:
-    /// that slot has last-action semantics, so an export or screenshot queued
-    /// in the same batch of input events would silently cost this request its
-    /// warning — the same reason durable toolbar chrome has its own queue.
+    /// This is a coalesced signal rather than ordered backend work: a batch
+    /// needs one source-availability check regardless of how many magnified
+    /// Spotlights changed.
     pub(crate) fn request_spotlight_magnifier_feedback(&mut self) {
         self.emit_input_effect(InputEffect::SpotlightMagnifierFeedback);
     }
@@ -55,10 +54,10 @@ impl InputState {
         self.input_effects.contains(InputEffectKind::Backend)
     }
 
-    /// Stores backend output work for retrieval by the backend, with
-    /// last-action semantics. Durable toolbar chrome changes do not use this
-    /// slot (see [`Self::queue_toolbar_persistence`]) because last-action
-    /// semantics would let a capture cost a toggle its persistence.
+    /// Queues backend output work for retrieval by the backend, oldest first.
+    ///
+    /// Distinct actions remain FIFO. Repeating the latest queued action is
+    /// coalesced so key auto-repeat cannot launch the same backend work in a storm.
     pub(crate) fn set_pending_backend_action(&mut self, action: PendingBackendAction) {
         self.emit_input_effect(InputEffect::Backend(action));
     }
@@ -102,11 +101,15 @@ impl InputState {
             PendingToolbarPersistence::Visibility {
                 previous_top_pinned,
             } => previous_top_pinned != self.toolbar_top_pinned,
-            PendingToolbarPersistence::StatusBar { previous } => previous != self.show_status_bar,
-            PendingToolbarPersistence::FloatingBadge { previous } => {
-                previous != self.show_floating_badge
+            PendingToolbarPersistence::StatusBar { previous } => {
+                previous != self.ui_visibility.show_status_bar
             }
-            PendingToolbarPersistence::ZoomChip { previous } => previous != self.show_zoom_chip,
+            PendingToolbarPersistence::FloatingBadge { previous } => {
+                previous != self.ui_visibility.show_floating_badge
+            }
+            PendingToolbarPersistence::ZoomChip { previous } => {
+                previous != self.ui_visibility.show_zoom_chip
+            }
             PendingToolbarPersistence::InputHud { previous } => {
                 previous != self.input_hud_enabled()
             }
@@ -336,60 +339,72 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig};
-    use crate::draw::{BLACK, Color, FontDescriptor, WHITE};
+    use crate::config::{Action, KeybindingsConfig};
+    use crate::draw::{BLACK, WHITE};
     use crate::input::state::KeybindingEditOperation;
     use crate::input::state::core::base::{InputEffect, InputEffectDrain};
-    use crate::input::{ClickHighlightSettings, EraserMode};
 
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();
-        let action_map = keybindings
+        let _action_map = keybindings
             .build_action_map()
             .expect("default keybindings map");
 
-        InputState::with_defaults(
-            Color {
-                r: 1.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            },
-            4.0,
-            4.0,
-            EraserMode::Brush,
-            0.32,
-            false,
-            32.0,
-            FontDescriptor::default(),
-            false,
-            20.0,
-            30.0,
-            false,
-            true,
-            BoardsConfig::default(),
-            action_map,
-            usize::MAX,
-            ClickHighlightSettings::disabled(),
-            0,
-            0,
-            true,
-            0,
-            0,
-            5,
-            5,
-            PresenterModeConfig::default(),
-        )
+        crate::input::state::test_support::make_test_input_state()
     }
 
     #[test]
-    fn pending_backend_action_is_taken_once() {
+    fn pending_backend_actions_are_taken_once_in_emission_order() {
         let mut state = make_state();
         state.set_pending_backend_action(PendingBackendAction::Screenshot(Action::CaptureFileFull));
+        state.set_pending_backend_action(PendingBackendAction::CanvasExport(
+            Action::ExportCanvasClipboard,
+        ));
 
         assert_eq!(
             state.take_pending_backend_action(),
             Some(PendingBackendAction::Screenshot(Action::CaptureFileFull))
+        );
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(PendingBackendAction::CanvasExport(
+                Action::ExportCanvasClipboard
+            ))
+        );
+        assert_eq!(state.take_pending_backend_action(), None);
+    }
+
+    #[test]
+    fn adjacent_identical_backend_actions_are_queued_once() {
+        let mut state = make_state();
+        state.set_pending_backend_action(PendingBackendAction::CanvasExport(
+            Action::ExportCanvasClipboard,
+        ));
+        state.set_pending_backend_action(PendingBackendAction::CanvasExport(
+            Action::ExportCanvasClipboard,
+        ));
+        state.set_pending_backend_action(PendingBackendAction::CanvasExport(
+            Action::ExportCanvasFile,
+        ));
+        state.set_pending_backend_action(PendingBackendAction::CanvasExport(
+            Action::ExportCanvasClipboard,
+        ));
+
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(PendingBackendAction::CanvasExport(
+                Action::ExportCanvasClipboard
+            ))
+        );
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(PendingBackendAction::CanvasExport(Action::ExportCanvasFile))
+        );
+        assert_eq!(
+            state.take_pending_backend_action(),
+            Some(PendingBackendAction::CanvasExport(
+                Action::ExportCanvasClipboard
+            ))
         );
         assert_eq!(state.take_pending_backend_action(), None);
     }
@@ -457,7 +472,7 @@ mod tests {
     }
 
     #[test]
-    fn runtime_effect_drain_orders_region_capture_before_freeze_and_keeps_last_wins_slots() {
+    fn runtime_effect_drain_orders_region_capture_before_freeze_without_dropping_other_work() {
         let mut state = make_state();
         state.set_pending_backend_action(PendingBackendAction::Screenshot(Action::CaptureFileFull));
         state.set_pending_backend_action(PendingBackendAction::Screenshot(
@@ -483,6 +498,7 @@ mod tests {
                 InputEffect::FrozenPass {
                     user_requested: true
                 },
+                InputEffect::Backend(PendingBackendAction::Screenshot(Action::CaptureFileFull)),
                 InputEffect::Zoom(ZoomAction::Reset),
             ]
         ));
@@ -605,8 +621,8 @@ mod tests {
     #[test]
     fn toolbar_effects_coalesce_per_kind_and_keep_the_first_rollback_baseline() {
         let mut state = make_state();
-        state.show_status_bar = true;
-        state.show_zoom_chip = true;
+        state.ui_visibility.show_status_bar = true;
+        state.ui_visibility.show_zoom_chip = true;
         state.queue_toolbar_persistence(PendingToolbarPersistence::StatusBar { previous: false });
         state.queue_toolbar_persistence(PendingToolbarPersistence::StatusBar { previous: true });
         state.queue_toolbar_persistence(PendingToolbarPersistence::ZoomChip { previous: false });

@@ -91,7 +91,7 @@ impl WaylandState {
             key,
             self.toolbar.is_visible(),
             matches!(self.input_state.state, DrawingState::TextInput { .. }),
-            self.input_state.command_palette_open,
+            self.input_state.command_palette.open,
         ) {
             return false;
         }

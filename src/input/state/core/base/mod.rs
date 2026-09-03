@@ -2,11 +2,12 @@ mod input_effect_outbox;
 mod state;
 mod toast_queue;
 mod types;
+mod ui_visibility;
 
 pub(crate) use input_effect_outbox::{InputEffect, InputEffectDrain};
 pub(in crate::input::state::core) use input_effect_outbox::{InputEffectKind, InputEffectOutbox};
 pub use state::InputState;
-pub(crate) use state::{FocusModeRestore, LightModeRestore, PresenterRestore};
+pub(crate) use state::{FocusModeRestore, InputStateSeed, LightModeRestore, PresenterRestore};
 pub use toast_queue::{Toast, ToastPriority, ToastPushOutcome, ToastQueue};
 pub use types::{
     BLOCKED_ACTION_DURATION_MS, BOARD_DELETE_CONFIRM_MS, BOARD_UNDO_EXPIRE_MS,
@@ -19,11 +20,12 @@ pub use types::{
 };
 pub(crate) use types::{
     BlockedActionFeedback, BoardPickerClickState, ClipboardFingerprint, ClipboardPasteRequest,
-    DelayedHistory, HistoryMode, PasteAnchor, PendingBackendAction, PendingBoardDelete,
-    PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
+    DelayedHistory, HelperLaunchRequest, HistoryMode, PasteAnchor, PendingBackendAction,
+    PendingBoardDelete, PendingClipboardFallback, PendingOnboardingUsage, PendingPageDelete,
     PendingSelectionClipboardPublish, PendingToolbarPersistence, PolygonClickState,
     PresetFeedbackState, SelectionPublishState, TextBlockDrag, TextClickState,
     TextClipboardRequest, TextCutTarget, TextEditEntryFeedback, TextPasteEdit, TextPasteTarget,
     ToastCommand, ToastPress, WayscriberClipboardSelection,
 };
 pub(crate) use types::{KeybindingEditOperation, KeybindingEditRequest};
+pub use ui_visibility::UiVisibility;

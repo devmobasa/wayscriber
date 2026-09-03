@@ -24,30 +24,31 @@ impl InputState {
     /// An enabled status bar with no effective HUD geometry does not suppress
     /// the fallback badge.
     pub fn floating_badge_visible(&self) -> bool {
-        self.show_floating_badge
-            && (!self.status_hud_effectively_visible() || self.show_floating_badge_always)
+        self.ui_visibility.show_floating_badge
+            && (!self.status_hud_effectively_visible()
+                || self.ui_visibility.show_floating_badge_always)
             && (self.boards.board_count() > 1 || self.boards.page_count() > 1)
     }
 
     pub fn status_hud_effectively_visible(&self) -> bool {
-        self.show_status_bar
+        self.ui_visibility.show_status_bar
             && self.status_hud_rebuild_inputs.is_some()
             && self.status_hud_layout.is_some()
     }
 
     pub fn status_bar_item_visible(&self, item: StatusBarItem) -> bool {
         match item {
-            StatusBarItem::ActiveOutput => self.show_active_output_badge,
-            StatusBarItem::SelectionInfo => self.show_status_selection_info,
-            StatusBarItem::Board => self.show_status_board_badge,
-            StatusBarItem::Page => self.show_status_page_badge,
-            StatusBarItem::Color => self.show_status_color,
-            StatusBarItem::Tool => self.show_status_tool,
-            StatusBarItem::Size => self.show_status_size,
-            StatusBarItem::ContextIndicators => self.show_status_context_indicators,
-            StatusBarItem::ToolbarHint => self.show_toolbar_hint,
-            StatusBarItem::Help => self.show_status_help,
-            StatusBarItem::About => self.show_status_about,
+            StatusBarItem::ActiveOutput => self.ui_visibility.show_active_output_badge,
+            StatusBarItem::SelectionInfo => self.ui_visibility.show_status_selection_info,
+            StatusBarItem::Board => self.ui_visibility.show_status_board_badge,
+            StatusBarItem::Page => self.ui_visibility.show_status_page_badge,
+            StatusBarItem::Color => self.ui_visibility.show_status_color,
+            StatusBarItem::Tool => self.ui_visibility.show_status_tool,
+            StatusBarItem::Size => self.ui_visibility.show_status_size,
+            StatusBarItem::ContextIndicators => self.ui_visibility.show_status_context_indicators,
+            StatusBarItem::ToolbarHint => self.ui_visibility.show_toolbar_hint,
+            StatusBarItem::Help => self.ui_visibility.show_status_help,
+            StatusBarItem::About => self.ui_visibility.show_status_about,
         }
     }
 
@@ -60,17 +61,19 @@ impl InputState {
             return false;
         }
         match item {
-            StatusBarItem::ActiveOutput => self.show_active_output_badge = visible,
-            StatusBarItem::SelectionInfo => self.show_status_selection_info = visible,
-            StatusBarItem::Board => self.show_status_board_badge = visible,
-            StatusBarItem::Page => self.show_status_page_badge = visible,
-            StatusBarItem::Color => self.show_status_color = visible,
-            StatusBarItem::Tool => self.show_status_tool = visible,
-            StatusBarItem::Size => self.show_status_size = visible,
-            StatusBarItem::ContextIndicators => self.show_status_context_indicators = visible,
-            StatusBarItem::ToolbarHint => self.show_toolbar_hint = visible,
-            StatusBarItem::Help => self.show_status_help = visible,
-            StatusBarItem::About => self.show_status_about = visible,
+            StatusBarItem::ActiveOutput => self.ui_visibility.show_active_output_badge = visible,
+            StatusBarItem::SelectionInfo => self.ui_visibility.show_status_selection_info = visible,
+            StatusBarItem::Board => self.ui_visibility.show_status_board_badge = visible,
+            StatusBarItem::Page => self.ui_visibility.show_status_page_badge = visible,
+            StatusBarItem::Color => self.ui_visibility.show_status_color = visible,
+            StatusBarItem::Tool => self.ui_visibility.show_status_tool = visible,
+            StatusBarItem::Size => self.ui_visibility.show_status_size = visible,
+            StatusBarItem::ContextIndicators => {
+                self.ui_visibility.show_status_context_indicators = visible
+            }
+            StatusBarItem::ToolbarHint => self.ui_visibility.show_toolbar_hint = visible,
+            StatusBarItem::Help => self.ui_visibility.show_status_help = visible,
+            StatusBarItem::About => self.ui_visibility.show_status_about = visible,
         }
         self.refresh_status_hud_layout();
         self.needs_redraw = true;
@@ -134,7 +137,7 @@ impl InputState {
             screen_width,
             screen_height,
         });
-        self.status_hud_layout = if self.show_status_bar {
+        self.status_hud_layout = if self.ui_visibility.show_status_bar {
             compute_status_hud_layout(self, position, style, screen_width, screen_height)
         } else {
             None
@@ -213,7 +216,7 @@ impl InputState {
             || self.is_board_picker_open()
             || self.is_properties_panel_open()
             || self.is_context_menu_open()
-            || self.command_palette_open
+            || self.command_palette.open
             || self.tour_active
     }
 
@@ -228,8 +231,8 @@ impl InputState {
     /// [`check_status_hud_click`]: InputState::check_status_hud_click
     /// [`status_hud_eclipsed_by_overlay`]: InputState::status_hud_eclipsed_by_overlay
     pub(crate) fn status_hud_contains(&self, x: i32, y: i32) -> bool {
-        self.status_bar_interactive
-            && self.show_status_bar
+        self.ui_visibility.status_bar_interactive
+            && self.ui_visibility.show_status_bar
             && !self.status_hud_eclipsed_by_overlay()
             && self
                 .status_hud_layout

@@ -44,12 +44,15 @@ fn acknowledge_tip_command(
 /// not advertise the pill when both configurable Board/Page segments are
 /// absent: the remaining color/tool/help segments perform different actions.
 fn status_bar_board_picker_entry(input: &crate::input::InputState) -> Option<&'static str> {
-    if !input.show_status_bar || !input.status_bar_interactive || input.boards.board_count() <= 1 {
+    if !input.ui_visibility.show_status_bar
+        || !input.ui_visibility.status_bar_interactive
+        || input.boards.board_count() <= 1
+    {
         return None;
     }
 
-    let board = input.show_status_board_badge && input.boards.show_badge();
-    let page = input.show_status_page_badge;
+    let board = input.ui_visibility.show_status_board_badge && input.boards.show_badge();
+    let page = input.ui_visibility.show_status_page_badge;
     match (board, page) {
         (true, true) => Some("Board or Page"),
         (true, false) => Some("Board"),
@@ -210,7 +213,7 @@ impl WaylandState {
         }
         if self.input_state.presenter_mode
             || self.input_state.show_help
-            || self.input_state.command_palette_open
+            || self.input_state.command_palette.open
             || self.input_state.tour_active
         {
             return;
@@ -275,7 +278,7 @@ impl WaylandState {
         }
         if self.input_state.presenter_mode
             || self.input_state.show_help
-            || self.input_state.command_palette_open
+            || self.input_state.command_palette.open
             || self.input_state.tour_active
         {
             return;

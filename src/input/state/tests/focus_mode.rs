@@ -16,18 +16,18 @@ fn focus_mode_hides_all_chrome_and_restores_exactly() {
     state.handle_action(Action::CycleToolbarDisplay); // micro
     state.handle_action(Action::ToggleFloatingBadge); // badge hidden
     assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
-    assert!(!state.show_floating_badge);
+    assert!(!state.ui_visibility.show_floating_badge);
 
     state.handle_action(Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
     assert!(!state.toolbar_visible());
-    assert!(!state.show_status_bar);
-    assert!(!state.show_floating_badge);
+    assert!(!state.ui_visibility.show_status_bar);
+    assert!(!state.ui_visibility.show_floating_badge);
     assert!(!state.zoom_chip_enabled());
     state.handle_action(Action::ToggleFocusMode);
     assert!(!state.focus_mode_active());
     assert!(state.toolbar_visible());
-    assert!(state.show_status_bar);
+    assert!(state.ui_visibility.show_status_bar);
     assert!(state.zoom_chip_enabled());
     assert!(
         state
@@ -43,7 +43,7 @@ fn focus_mode_hides_all_chrome_and_restores_exactly() {
         "the micro strip form must survive the round trip"
     );
     assert!(
-        !state.show_floating_badge,
+        !state.ui_visibility.show_floating_badge,
         "a pre-hidden badge stays hidden after restore"
     );
 }
@@ -99,7 +99,7 @@ fn manual_chrome_toggle_breaks_focus_mode() {
     state.handle_action(Action::ToggleToolbar);
     assert!(!state.focus_mode_active());
     assert!(state.toolbar_visible());
-    assert!(!state.show_status_bar);
+    assert!(!state.ui_visibility.show_status_bar);
     assert!(!state.zoom_chip_enabled());
     assert!(
         state
@@ -175,11 +175,14 @@ fn preset_status_bar_update_stays_hidden_until_focus_mode_restores_it() {
 
     assert!(state.apply_preset(1));
     assert!(state.focus_mode_active());
-    assert!(!state.show_status_bar, "Focus Mode keeps chrome suppressed");
+    assert!(
+        !state.ui_visibility.show_status_bar,
+        "Focus Mode keeps chrome suppressed"
+    );
 
     state.handle_action(Action::ToggleFocusMode);
     assert!(
-        !state.show_status_bar,
+        !state.ui_visibility.show_status_bar,
         "Focus restore must honor the status-bar value authored by the preset"
     );
 }
@@ -194,8 +197,8 @@ fn focus_mode_rescues_a_fully_hidden_ui() {
     state.handle_action(Action::ToggleZoomChip);
     assert!(!state.focus_mode_active());
     assert!(!state.toolbar_visible());
-    assert!(!state.show_status_bar);
-    assert!(!state.show_floating_badge);
+    assert!(!state.ui_visibility.show_status_bar);
+    assert!(!state.ui_visibility.show_floating_badge);
     assert!(!state.zoom_chip_enabled());
     assert_eq!(
         state
@@ -212,8 +215,8 @@ fn focus_mode_rescues_a_fully_hidden_ui() {
     state.handle_action(Action::ToggleFocusMode);
     assert!(!state.focus_mode_active());
     assert!(state.toolbar_visible());
-    assert!(state.show_status_bar);
-    assert!(state.show_floating_badge);
+    assert!(state.ui_visibility.show_status_bar);
+    assert!(state.ui_visibility.show_floating_badge);
     assert!(state.zoom_chip_enabled());
     assert!(
         state
@@ -229,8 +232,8 @@ fn focus_mode_rescues_a_fully_hidden_ui() {
 fn focus_mode_rescues_when_the_enabled_status_bar_has_no_visible_content() {
     let mut state = create_test_input_state();
     state.set_toolbar_visible(false);
-    state.show_floating_badge = false;
-    state.show_zoom_chip = false;
+    state.ui_visibility.show_floating_badge = false;
+    state.ui_visibility.show_zoom_chip = false;
     for item in StatusBarItem::ALL {
         state.set_status_bar_item_visible(item, false);
     }
@@ -241,7 +244,7 @@ fn focus_mode_rescues_when_the_enabled_status_bar_has_no_visible_content() {
         720,
     );
     assert!(
-        state.show_status_bar,
+        state.ui_visibility.show_status_bar,
         "the master preference remains enabled"
     );
     assert!(!state.status_hud_effectively_visible());
@@ -256,8 +259,8 @@ fn focus_mode_rescues_when_the_enabled_status_bar_has_no_visible_content() {
         state.toolbar_visible(),
         "the rescue arm restores the toolbar"
     );
-    assert!(state.show_status_bar);
-    assert!(state.show_floating_badge);
+    assert!(state.ui_visibility.show_status_bar);
+    assert!(state.ui_visibility.show_floating_badge);
     assert!(state.zoom_chip_enabled());
 }
 
@@ -269,9 +272,9 @@ fn focus_mode_hides_a_floating_badge_when_it_is_the_only_visible_chrome() {
         "the floating badge needs multiple boards or pages to render"
     );
     state.set_toolbar_visible(false);
-    state.show_status_bar = false;
-    state.show_zoom_chip = false;
-    state.show_floating_badge = true;
+    state.ui_visibility.show_status_bar = false;
+    state.ui_visibility.show_zoom_chip = false;
+    state.ui_visibility.show_floating_badge = true;
 
     state.handle_action(Action::ToggleFocusMode);
 
@@ -280,8 +283,8 @@ fn focus_mode_hides_a_floating_badge_when_it_is_the_only_visible_chrome() {
         "the visible floating badge must put Focus Mode on its hide arm"
     );
     assert!(!state.toolbar_visible());
-    assert!(!state.show_status_bar);
-    assert!(!state.show_floating_badge);
+    assert!(!state.ui_visibility.show_status_bar);
+    assert!(!state.ui_visibility.show_floating_badge);
     assert!(!state.zoom_chip_enabled());
 }
 
@@ -289,9 +292,9 @@ fn focus_mode_hides_a_floating_badge_when_it_is_the_only_visible_chrome() {
 fn focus_mode_hides_a_zoom_badge_when_it_is_the_only_visible_chrome() {
     let mut state = create_test_input_state();
     state.set_toolbar_visible(false);
-    state.show_status_bar = false;
-    state.show_floating_badge = false;
-    state.show_zoom_chip = false;
+    state.ui_visibility.show_status_bar = false;
+    state.ui_visibility.show_floating_badge = false;
+    state.ui_visibility.show_zoom_chip = false;
     state.set_zoom_status(true, false, 2.0, (0.0, 0.0));
     assert!(state.zoom_active());
     assert!(!state.zoom_chip_enabled());
@@ -304,15 +307,15 @@ fn focus_mode_hides_a_zoom_badge_when_it_is_the_only_visible_chrome() {
     );
     assert!(!state.fallback_mode_badges_visible());
     assert!(!state.toolbar_visible());
-    assert!(!state.show_status_bar);
+    assert!(!state.ui_visibility.show_status_bar);
 }
 
 #[test]
 fn focus_mode_hides_a_fallback_badge_when_the_enabled_status_bar_is_empty() {
     let mut state = create_test_input_state();
     state.set_toolbar_visible(false);
-    state.show_floating_badge = false;
-    state.show_zoom_chip = false;
+    state.ui_visibility.show_floating_badge = false;
+    state.ui_visibility.show_zoom_chip = false;
     state.set_zoom_status(true, false, 2.0, (0.0, 0.0));
     for item in StatusBarItem::ALL {
         state.set_status_bar_item_visible(item, false);
@@ -323,7 +326,7 @@ fn focus_mode_hides_a_fallback_badge_when_the_enabled_status_bar_is_empty() {
         1280,
         720,
     );
-    assert!(state.show_status_bar);
+    assert!(state.ui_visibility.show_status_bar);
     assert!(!state.status_hud_effectively_visible());
 
     state.handle_action(Action::ToggleFocusMode);
@@ -357,23 +360,23 @@ fn focus_mode_never_enqueues_persistence() {
 #[test]
 fn visibility_toggles_stay_process_only_across_focus_mode() {
     let mut state = create_test_input_state();
-    state.show_floating_badge = false;
-    state.show_zoom_chip = false;
+    state.ui_visibility.show_floating_badge = false;
+    state.ui_visibility.show_zoom_chip = false;
 
     state.handle_action(Action::ToggleFloatingBadge);
     state.handle_action(Action::ToggleZoomChip);
-    assert!(state.show_floating_badge);
-    assert!(state.show_zoom_chip);
+    assert!(state.ui_visibility.show_floating_badge);
+    assert!(state.ui_visibility.show_zoom_chip);
 
     // Suppress both live flags; focus mode owns them until it restores.
     state.handle_action(Action::ToggleFocusMode);
-    assert!(!state.show_floating_badge);
-    assert!(!state.show_zoom_chip);
+    assert!(!state.ui_visibility.show_floating_badge);
+    assert!(!state.ui_visibility.show_zoom_chip);
     assert!(state.take_pending_backend_action().is_none());
 
     state.handle_action(Action::ToggleFocusMode);
-    assert!(state.show_floating_badge);
-    assert!(state.show_zoom_chip);
+    assert!(state.ui_visibility.show_floating_badge);
+    assert!(state.ui_visibility.show_zoom_chip);
     assert!(state.take_pending_backend_action().is_none());
 }
 
@@ -402,7 +405,7 @@ fn focus_mode_exits_light_mode_before_taking_ownership() {
     assert!(!state.light_mode, "transient chrome owners must not nest");
     assert!(state.focus_mode_active());
     state.handle_action(Action::ToggleFocusMode);
-    assert!(state.show_status_bar);
+    assert!(state.ui_visibility.show_status_bar);
 }
 
 #[test]
@@ -420,7 +423,7 @@ fn light_mode_exits_focus_mode_before_taking_ownership() {
         "transient chrome owners must not nest"
     );
     state.handle_action(Action::ToggleLightMode);
-    assert!(state.show_status_bar);
+    assert!(state.ui_visibility.show_status_bar);
 }
 
 #[test]
@@ -437,7 +440,7 @@ fn unsupported_light_mode_does_not_break_focus_mode() {
         state.focus_mode_active(),
         "a rejected mode switch must leave the active chrome owner untouched"
     );
-    assert!(!state.show_status_bar);
+    assert!(!state.ui_visibility.show_status_bar);
 }
 
 #[test]
@@ -456,5 +459,5 @@ fn light_mode_drawing_exits_focus_mode_before_taking_ownership() {
         "every Light Mode entry path must own chrome exclusively"
     );
     state.handle_action(Action::ToggleLightMode);
-    assert!(state.show_status_bar);
+    assert!(state.ui_visibility.show_status_bar);
 }

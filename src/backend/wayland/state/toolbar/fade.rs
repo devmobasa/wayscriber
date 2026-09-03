@@ -64,7 +64,7 @@ impl WaylandState {
             pointer_near,
             menus_open: top_menus_open(input),
             reduced_chrome,
-            idle_fade_enabled: input.idle_fade,
+            idle_fade_enabled: input.ui_visibility.idle_fade,
         }
     }
 }

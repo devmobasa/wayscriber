@@ -1,12 +1,13 @@
 mod actions;
 mod core;
+mod from_config;
 mod highlight;
 mod input_hud;
 pub(crate) mod interaction;
 mod mouse;
 mod render;
 mod spotlight;
-pub(crate) use core::{IdleHandle, SpotlightMagnificationTrack, TopMenuState};
+pub(crate) use core::{IdleHandle, InputStateSeed, SpotlightMagnificationTrack, TopMenuState};
 pub(crate) use core::{InputEffect, InputEffectDrain};
 pub(crate) use spotlight::{
     SpotlightFrameRegions, SpotlightMagnificationGesture, SpotlightWheelClaim,
@@ -32,9 +33,9 @@ pub use core::{
     COLOR_PICKER_POPUP_HEIGHT, COLOR_PICKER_POPUP_WIDTH, COLOR_PICKER_PREVIEW_SIZE,
     COLOR_PICKER_RECENT_SWATCH_COUNT, COLOR_PICKER_RECENT_SWATCH_SIZE, COMMAND_PALETTE_MAX_VISIBLE,
     ColorPickerCursorHint, ColorPickerPopupLayout, ColorPickerPopupState, CommandPaletteCursorHint,
-    CommandPaletteListRow, CompassDir, CompositorCapabilities, ContextMenuCursorHint,
-    ContextMenuEntry, ContextMenuKind, ContextMenuState, DesktopEnvironment, DrawingState,
-    EyedropperCaptureSource, EyedropperUiState, FontPickerFilter, FontPickerLayout,
+    CommandPaletteListRow, CommandPaletteState, CompassDir, CompositorCapabilities,
+    ContextMenuCursorHint, ContextMenuEntry, ContextMenuKind, ContextMenuState, DesktopEnvironment,
+    DrawingState, EyedropperCaptureSource, EyedropperUiState, FontPickerFilter, FontPickerLayout,
     FontPickerResults, FontPickerRow, FontPickerTarget, HelpOverlayClick, HelpOverlayCursorHint,
     HelpOverlayReleaseOutcome, ImeCompositionState, ImePreedit, InputState, MAX_STROKE_THICKNESS,
     MIN_STROKE_THICKNESS, OutputFocusAction, PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS,
@@ -45,16 +46,16 @@ pub use core::{
     RegionSelectUiState, RegionSelection, SIZE_RING_ARC_SPAN, SIZE_RING_ARC_START,
     ScreenCaptureSource, SelectionAxis, SelectionHandle, SelectionPolicy, SelectionPropertyEntry,
     SelectionPropertyKind, SelectionState, ShellMode, TextInputMode, Toast, ToastPriority,
-    ToastPushOutcome, ToastQueue, TourStep, UI_TOAST_DURATION_MS, UiToastKind, ZoomAction,
-    color_picker_rgb_to_hsv, compass_slice, font_picker_layout, font_picker_rows,
+    ToastPushOutcome, ToastQueue, TourStep, UI_TOAST_DURATION_MS, UiToastKind, UiVisibility,
+    ZoomAction, color_picker_rgb_to_hsv, compass_slice, font_picker_layout, font_picker_rows,
     size_ring_angle_for_value, size_ring_value_for_angle, slice_parent, sub_ring_child_count,
     sub_ring_children,
 };
 #[allow(unused_imports)]
 pub(crate) use core::{
     BoardPasteTarget, ClipboardFingerprint, ClipboardPasteRequest, HelpOverlayPressSource,
-    HexPasteTarget, KeybindingEditOperation, KeybindingEditRequest, PasteAnchor,
-    PendingBackendAction, PendingOnboardingUsage, PendingSelectionClipboardPublish,
+    HelperLaunchRequest, HexPasteTarget, KeybindingEditOperation, KeybindingEditRequest,
+    PasteAnchor, PendingBackendAction, PendingOnboardingUsage, PendingSelectionClipboardPublish,
     PendingToolbarPersistence, SelectionPublishState, TextClipboardRequest, TextCutTarget,
     TextPasteEdit, TextPasteTarget, ToastCommand, ToastPress, WayscriberClipboardSelection,
 };
@@ -74,17 +75,120 @@ pub use input_hud::{
 
 #[cfg(test)]
 pub(crate) mod test_support {
+    use super::InputStateSeed;
     use crate::config::{Action, BoardsConfig, KeybindingsConfig, PresenterModeConfig, Shortcut};
     use crate::draw::{Color, FontDescriptor};
     use crate::input::{ClickHighlightSettings, EraserMode, InputState};
     use std::collections::HashMap;
 
+    pub(crate) struct TestInputStateBuilder {
+        seed: InputStateSeed,
+        action_bindings: HashMap<Action, Vec<Shortcut>>,
+    }
+
+    impl Default for TestInputStateBuilder {
+        fn default() -> Self {
+            Self::with_keybindings(KeybindingsConfig::default())
+        }
+    }
+
+    impl TestInputStateBuilder {
+        pub(crate) fn with_keybindings(keybindings: KeybindingsConfig) -> Self {
+            let action_map = keybindings
+                .build_action_map()
+                .expect("test keybindings map");
+            let action_bindings = keybindings
+                .build_action_bindings()
+                .expect("test keybindings bindings");
+            Self {
+                seed: InputStateSeed {
+                    color: Color {
+                        r: 1.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 1.0,
+                    },
+                    thickness: 4.0,
+                    eraser_size: 4.0,
+                    eraser_mode: EraserMode::Brush,
+                    marker_opacity: 0.32,
+                    fill_enabled: false,
+                    font_size: 32.0,
+                    font_descriptor: FontDescriptor::default(),
+                    text_background_enabled: false,
+                    arrow_length: 20.0,
+                    arrow_angle: 30.0,
+                    arrow_head_at_end: false,
+                    ui_visibility: super::UiVisibility::from(&crate::config::UiConfig::default()),
+                    boards_config: BoardsConfig::default(),
+                    action_map,
+                    max_shapes_per_frame: usize::MAX,
+                    click_highlight_settings: ClickHighlightSettings::disabled(),
+                    undo_all_delay_ms: 0,
+                    redo_all_delay_ms: 0,
+                    custom_section_enabled: true,
+                    custom_undo_delay_ms: 0,
+                    custom_redo_delay_ms: 0,
+                    custom_undo_steps: 5,
+                    custom_redo_steps: 5,
+                    presenter_mode_config: PresenterModeConfig::default(),
+                },
+                action_bindings,
+            }
+        }
+
+        pub(crate) fn action_map(mut self, action_map: HashMap<Shortcut, Action>) -> Self {
+            self.seed.action_map = action_map;
+            self
+        }
+
+        pub(crate) fn action_bindings(
+            mut self,
+            action_bindings: HashMap<Action, Vec<Shortcut>>,
+        ) -> Self {
+            self.action_bindings = action_bindings;
+            self
+        }
+
+        pub(crate) fn thickness(mut self, thickness: f64) -> Self {
+            self.seed.thickness = thickness;
+            self
+        }
+
+        pub(crate) fn eraser_size(mut self, eraser_size: f64) -> Self {
+            self.seed.eraser_size = eraser_size;
+            self
+        }
+
+        pub(crate) fn font_descriptor(mut self, font_descriptor: FontDescriptor) -> Self {
+            self.seed.font_descriptor = font_descriptor;
+            self
+        }
+
+        pub(crate) fn text_background_enabled(mut self, enabled: bool) -> Self {
+            self.seed.text_background_enabled = enabled;
+            self
+        }
+
+        pub(crate) fn click_highlight_settings(mut self, settings: ClickHighlightSettings) -> Self {
+            self.seed.click_highlight_settings = settings;
+            self
+        }
+
+        pub(crate) fn custom_section_enabled(mut self, enabled: bool) -> Self {
+            self.seed.custom_section_enabled = enabled;
+            self
+        }
+
+        pub(crate) fn build(self) -> InputState {
+            let mut state = InputState::from_seed(self.seed);
+            state.set_action_bindings(self.action_bindings);
+            state
+        }
+    }
+
     pub(crate) fn make_test_input_state() -> InputState {
-        let keybindings = KeybindingsConfig::default();
-        let action_bindings = keybindings
-            .build_action_bindings()
-            .expect("default keybindings bindings");
-        make_test_input_state_with_action_bindings(action_bindings)
+        TestInputStateBuilder::default().build()
     }
 
     // This helper is for tests that only need a stable InputState plus optional
@@ -93,43 +197,23 @@ pub(crate) mod test_support {
     pub(crate) fn make_test_input_state_with_action_bindings(
         action_bindings: HashMap<Action, Vec<Shortcut>>,
     ) -> InputState {
-        let action_map = KeybindingsConfig::default()
-            .build_action_map()
-            .expect("default keybindings map");
+        TestInputStateBuilder::default()
+            .action_bindings(action_bindings)
+            .build()
+    }
 
-        let mut state = InputState::with_defaults(
-            Color {
-                r: 1.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            },
-            4.0,
-            4.0,
-            EraserMode::Brush,
-            0.32,
-            false,
-            32.0,
-            FontDescriptor::default(),
-            false,
-            20.0,
-            30.0,
-            false,
-            true,
-            BoardsConfig::default(),
-            action_map,
-            usize::MAX,
-            ClickHighlightSettings::disabled(),
-            0,
-            0,
-            true,
-            0,
-            0,
-            5,
-            5,
-            PresenterModeConfig::default(),
-        );
-        state.set_action_bindings(action_bindings);
-        state
+    #[test]
+    fn test_input_state_builder_applies_named_overrides() {
+        let state = TestInputStateBuilder::default()
+            .thickness(3.0)
+            .eraser_size(12.0)
+            .text_background_enabled(true)
+            .custom_section_enabled(false)
+            .build();
+
+        assert_eq!(state.current_thickness, 3.0);
+        assert_eq!(state.eraser_size, 12.0);
+        assert!(state.text_background_enabled);
+        assert!(!state.custom_section_enabled);
     }
 }

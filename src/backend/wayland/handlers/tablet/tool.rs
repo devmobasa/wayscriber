@@ -126,7 +126,7 @@ impl WaylandState {
         surface: wayland_client::protocol::wl_surface::WlSurface,
     ) {
         let tool_id = proxy.id();
-        let tool_type = self.stylus_tool_types.get(&tool_id).copied();
+        let tool_type = self.tablet.tool_types.get(&tool_id).copied();
         debug!(
             "Tablet proximity in: tool {:?}, type: {:?}",
             tool_id, tool_type
@@ -136,17 +136,17 @@ impl WaylandState {
             .wl_surface()
             .is_some_and(|candidate| candidate.id() == surface.id());
         let on_toolbar = self.toolbar.is_toolbar_surface(&surface);
-        self.stylus_surface = Some(surface);
-        self.stylus_on_overlay = on_overlay;
-        self.stylus_on_toolbar = on_toolbar;
+        self.tablet.surface = Some(surface);
+        self.tablet.on_overlay = on_overlay;
+        self.tablet.on_toolbar = on_toolbar;
         self.finish_toolbar_item_drag(false);
         self.set_toolbar_dragging(false);
         self.cancel_toolbar_move_drag();
-        self.stylus_tip_down = false;
-        self.stylus_base_thickness = Some(self.input_state.current_thickness);
-        self.stylus_pressure_thickness = None;
-        self.stylus_last_pos = None;
-        self.pending_stylus_frame = Default::default();
+        self.tablet.tip_down = false;
+        self.tablet.base_thickness = Some(self.input_state.current_thickness);
+        self.tablet.pressure_thickness = None;
+        self.tablet.last_pos = None;
+        self.tablet.pending_frame = Default::default();
         self.auto_switch_physical_eraser(tool_type);
 
         if on_overlay {
@@ -168,18 +168,18 @@ impl WaylandState {
         {
             return;
         }
-        self.stylus_pre_eraser_tool_override = self.input_state.tool_override();
+        self.tablet.pre_eraser_tool_override = self.input_state.tool_override();
         self.input_state.set_tool_override(Some(Tool::Eraser));
-        self.stylus_auto_switched_to_eraser = true;
+        self.tablet.auto_switched_to_eraser = true;
         info!(
             "Auto-switched to eraser (physical eraser detected), saved previous: {:?}",
-            self.stylus_pre_eraser_tool_override
+            self.tablet.pre_eraser_tool_override
         );
     }
 
     fn handle_stylus_proximity_out(&mut self, proxy: &ZwpTabletToolV2) {
         let tool_id = proxy.id();
-        let tool_type = self.stylus_tool_types.get(&tool_id).copied();
+        let tool_type = self.tablet.tool_types.get(&tool_id).copied();
         debug!(
             "Tablet proximity out: tool {:?}, type: {:?}",
             tool_id, tool_type
@@ -188,33 +188,33 @@ impl WaylandState {
         self.cancel_region_selection_from(RegionInputSource::Stylus);
         self.take_retired_stylus_contact();
         let hover_cursor_pos = self.stylus_hover_cursor_pos();
-        self.stylus_tip_down = false;
-        self.stylus_on_overlay = false;
-        self.stylus_on_toolbar = false;
+        self.tablet.tip_down = false;
+        self.tablet.on_overlay = false;
+        self.tablet.on_toolbar = false;
         self.finish_toolbar_item_drag(false);
         self.set_toolbar_dragging(false);
         self.cancel_toolbar_move_drag();
-        if let Some(surface) = self.stylus_surface.take()
+        if let Some(surface) = self.tablet.surface.take()
             && self.toolbar.is_toolbar_surface(&surface)
         {
             self.toolbar.pointer_leave(&surface);
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
         }
-        self.stylus_pressure_thickness = None;
-        self.stylus_last_pos = None;
+        self.tablet.pressure_thickness = None;
+        self.tablet.last_pos = None;
         self.mark_stylus_hover_cursor_dirty(hover_cursor_pos, None);
         self.restore_tool_after_physical_eraser();
     }
 
     fn restore_tool_after_physical_eraser(&mut self) {
-        if !self.stylus_auto_switched_to_eraser {
+        if !self.tablet.auto_switched_to_eraser {
             return;
         }
-        let restored_tool = self.stylus_pre_eraser_tool_override;
+        let restored_tool = self.tablet.pre_eraser_tool_override;
         self.input_state.set_tool_override(restored_tool);
-        self.stylus_auto_switched_to_eraser = false;
-        self.stylus_pre_eraser_tool_override = None;
+        self.tablet.auto_switched_to_eraser = false;
+        self.tablet.pre_eraser_tool_override = None;
         info!(
             "Restored previous tool after eraser proximity out: {:?}",
             restored_tool
@@ -222,7 +222,7 @@ impl WaylandState {
     }
 
     fn handle_stylus_down(&mut self, conn: &Connection, qh: &QueueHandle<Self>) {
-        if self.stylus_contact_retired {
+        if self.tablet.contact_retired {
             return;
         }
         self.input_state.dismiss_ocr_scan_result();
@@ -235,7 +235,7 @@ impl WaylandState {
         {
             return;
         }
-        if self.handle_toolbar_stylus_down(conn, qh) || !self.stylus_on_overlay {
+        if self.handle_toolbar_stylus_down(conn, qh) || !self.tablet.on_overlay {
             return;
         }
         self.queue_stylus_down();
@@ -245,11 +245,11 @@ impl WaylandState {
         if !self.input_state.region_is_active() {
             return false;
         }
-        if self.stylus_on_toolbar {
+        if self.tablet.on_toolbar {
             self.cancel_region_for_toolbar_interaction();
             return false;
         }
-        if !self.stylus_on_overlay {
+        if !self.tablet.on_overlay {
             return false;
         }
         let (x, y) = self.current_or_pending_stylus_position();
@@ -268,11 +268,11 @@ impl WaylandState {
         if !self.input_state.eyedropper_is_active() {
             return false;
         }
-        if self.stylus_on_toolbar {
+        if self.tablet.on_toolbar {
             self.cancel_eyedropper();
             return false;
         }
-        if !self.stylus_on_overlay {
+        if !self.tablet.on_overlay {
             return false;
         }
         let (x, y) = self.current_or_pending_stylus_position();
@@ -285,18 +285,18 @@ impl WaylandState {
         if !self.inline_toolbar_press(position, Some(conn), Some(qh)) {
             return false;
         }
-        self.stylus_on_toolbar = true;
+        self.tablet.on_toolbar = true;
         self.set_toolbar_dragging(self.toolbar_dragging());
         true
     }
 
     fn handle_toolbar_stylus_down(&mut self, conn: &Connection, qh: &QueueHandle<Self>) -> bool {
-        if !self.stylus_on_toolbar {
+        if !self.tablet.on_toolbar {
             return false;
         }
         let (x, y) = self.current_or_pending_stylus_position();
         self.set_current_mouse(x as i32, y as i32);
-        if let Some(surface) = self.stylus_surface.as_ref()
+        if let Some(surface) = self.tablet.surface.as_ref()
             && let Some((intent, drag)) = self.toolbar.pointer_press(surface, (x, y))
         {
             self.set_toolbar_dragging(drag);
@@ -312,7 +312,7 @@ impl WaylandState {
     fn handle_stylus_up(&mut self) {
         let retired_contact = self.take_retired_stylus_contact();
         if self.input_state.region_is_active() {
-            if self.stylus_on_overlay {
+            if self.tablet.on_overlay {
                 let (x, y) = self.current_or_pending_stylus_position();
                 self.finish_region_selection(RegionInputSource::Stylus, x, y);
             } else {
@@ -321,21 +321,21 @@ impl WaylandState {
             return;
         }
         let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
-        if inline_active && self.stylus_on_toolbar {
+        if inline_active && self.tablet.on_toolbar {
             let (x, y) = self.current_mouse();
             self.inline_toolbar_release((x as f64, y as f64));
-            self.stylus_on_toolbar = false;
+            self.tablet.on_toolbar = false;
             self.set_toolbar_dragging(false);
             self.end_toolbar_move_drag();
             return;
         }
-        if self.stylus_on_toolbar {
+        if self.tablet.on_toolbar {
             self.finish_toolbar_item_drag(true);
             self.set_toolbar_dragging(false);
             self.end_toolbar_move_drag();
             return;
         }
-        if self.stylus_on_overlay && !retired_contact {
+        if self.tablet.on_overlay && !retired_contact {
             self.queue_stylus_up();
         }
     }
@@ -349,30 +349,30 @@ impl WaylandState {
             return;
         }
         if self.inline_toolbars_active() && self.toolbar.is_visible() {
-            self.stylus_last_pos = Some((x, y));
+            self.tablet.last_pos = Some((x, y));
             if self.inline_toolbar_motion((x, y)) {
                 self.commit_pending_stylus_frame();
-                self.stylus_last_pos = Some((x, y));
-                self.stylus_on_toolbar = true;
+                self.tablet.last_pos = Some((x, y));
+                self.tablet.on_toolbar = true;
                 self.mark_stylus_hover_cursor_dirty(previous_hover, None);
                 return;
             }
-            self.stylus_on_toolbar = false;
+            self.tablet.on_toolbar = false;
         }
-        if self.stylus_on_overlay {
+        if self.tablet.on_overlay {
             self.queue_stylus_motion(x, y);
         }
     }
 
     fn handle_modal_stylus_motion(&mut self, x: f64, y: f64) -> bool {
-        if self.input_state.region_is_active() && self.stylus_on_overlay {
-            self.stylus_last_pos = Some((x, y));
+        if self.input_state.region_is_active() && self.tablet.on_overlay {
+            self.tablet.last_pos = Some((x, y));
             self.set_current_mouse(x.round() as i32, y.round() as i32);
             self.update_region_selection(RegionInputSource::Stylus, x, y);
             return true;
         }
-        if self.input_state.eyedropper_is_active() && self.stylus_on_overlay {
-            self.stylus_last_pos = Some((x, y));
+        if self.input_state.eyedropper_is_active() && self.tablet.on_overlay {
+            self.tablet.last_pos = Some((x, y));
             self.set_current_mouse(x.round() as i32, y.round() as i32);
             self.update_eyedropper_hover(x, y);
             return true;
@@ -387,7 +387,7 @@ impl WaylandState {
         let Some(kind) = self.active_move_drag_kind() else {
             return false;
         };
-        if self.stylus_on_toolbar {
+        if self.tablet.on_toolbar {
             self.handle_toolbar_move(kind, (x, y));
         } else {
             self.handle_toolbar_move_screen(kind, (x, y));
@@ -405,11 +405,11 @@ impl WaylandState {
         x: f64,
         y: f64,
     ) -> bool {
-        if !self.stylus_on_toolbar {
+        if !self.tablet.on_toolbar {
             return false;
         }
-        self.stylus_last_pos = Some((x, y));
-        if let Some(surface) = self.stylus_surface.as_ref() {
+        self.tablet.last_pos = Some((x, y));
+        if let Some(surface) = self.tablet.surface.as_ref() {
             let event = self.toolbar.pointer_motion(surface, (x, y));
             if self.toolbar_dragging() {
                 let intent = event.or_else(|| self.move_drag_intent(x, y));
@@ -456,8 +456,8 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
             }
             Event::Pressure { pressure } => {
                 if drop_stylus_pressure(
-                    state.stylus_on_overlay,
-                    state.stylus_contact_retired,
+                    state.tablet.on_overlay,
+                    state.tablet.contact_retired,
                     &state.input_state,
                 ) {
                     return;
@@ -469,7 +469,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 let physical_type = TabletToolType::from(tool_type);
                 let tool_id = _proxy.id();
                 debug!("Tablet tool type: {:?} -> {:?}", tool_id, physical_type);
-                state.stylus_tool_types.insert(tool_id, physical_type);
+                state.tablet.tool_types.insert(tool_id, physical_type);
 
                 // Note: We don't switch tools here - this event comes during initial
                 // tool setup, before proximity_in. The actual switch happens in proximity_in.

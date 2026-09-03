@@ -155,7 +155,7 @@ impl WaylandState {
                 self.input_state.boards.page_count(),
             );
         }
-        if self.input_state.show_status_bar {
+        if self.input_state.ui_visibility.show_status_bar {
             crate::ui::render_status_bar(
                 ctx,
                 &self.input_state,
@@ -506,7 +506,7 @@ impl WaylandState {
     /// idle-motion damage and the actual draw can never disagree about whether
     /// the bubble is visible.
     pub(in crate::backend::wayland) fn mouse_tool_preview_eligible(&self) -> bool {
-        self.input_state.show_tool_preview
+        self.input_state.ui_visibility.show_tool_preview
             && self.has_cursor_focus()
             && !self.cursor_blocked_by_toolbar()
             && matches!(

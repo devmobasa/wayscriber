@@ -33,7 +33,7 @@ use crate::input::boards::{BoardRestoreRequest, PageRestoreRequest};
 use crate::input::state::highlight::ClickHighlightState;
 use crate::input::state::input_hud::InputHudState;
 use crate::input::{
-    Key, MouseButton,
+    MouseButton,
     modifiers::{DragToolBindings, Modifiers},
     tool::{EraserMode, PerToolDrawingSettings, Tool},
 };
@@ -133,36 +133,8 @@ pub struct InputState {
     pub font_descriptor: FontDescriptor,
     /// Families the font-cycle action steps through. Empty turns it off.
     pub(crate) font_cycle: Vec<String>,
-    /// Whether the system font picker owns input.
-    pub(crate) font_picker_open: bool,
-    /// The picker opened before the worker-built system catalog was ready.
-    pub(crate) font_picker_loading: bool,
-    /// The latest catalog worker failed while this picker was open.
-    pub(crate) font_picker_load_failed: bool,
-    pub(crate) font_picker_query: String,
-    pub(crate) font_picker_selected: usize,
-    pub(crate) font_picker_scroll: usize,
-    pub(crate) font_picker_filter: crate::input::state::FontPickerFilter,
-    /// What a chosen row changes, decided when the picker opens so its caption
-    /// cannot disagree with what Enter does.
-    pub(crate) font_picker_target: crate::input::state::FontPickerTarget,
-    /// Families chosen here, most recent first.
-    pub(crate) font_picker_recents: Vec<String>,
-    /// Ranked results memoized on the query and filter, because scoring walks
-    /// every installed family and the renderer asks more than once per frame.
-    pub(crate) font_picker_results: std::cell::RefCell<crate::input::state::FontPickerResults>,
-    /// Navigation key held in the font picker, and when its next repeat is due.
-    ///
-    /// The picker blocks the backend's canvas repeat timer (a held key must not
-    /// reach the drawing behind a modal), so it runs its own — the same
-    /// arrangement the command palette uses.
-    pub(crate) font_picker_repeat_key: Option<Key>,
-    pub(crate) font_picker_repeat_next_tick: Option<Instant>,
-    /// When the held key went down, which is what the repeat ramps from.
-    pub(crate) font_picker_repeat_started: Option<Instant>,
-    /// Panel rectangle the last frame drew, so a move can repaint the panel it
-    /// is leaving as well as the one it is arriving at.
-    pub(crate) font_picker_last_panel: Option<crate::util::Rect>,
+    /// State owned by the system font-picker modal.
+    pub(crate) font_picker: crate::input::state::core::font_picker::FontPickerState,
     /// Whether to draw background behind text
     pub text_background_enabled: bool,
     /// Optional wrap width for text input (None = auto)
@@ -234,61 +206,14 @@ pub struct InputState {
     pub board_picker_search: String,
     /// Time of last board picker search input
     pub board_picker_search_last_input: Option<Instant>,
-    /// Whether the command palette is currently visible
-    pub command_palette_open: bool,
-    /// Current command palette search query
-    pub command_palette_query: String,
-    /// Currently selected command index in the palette
-    pub command_palette_selected: usize,
-    /// Scroll offset for command palette (first visible item index)
-    pub command_palette_scroll: usize,
-    /// Held command-palette navigation key for synthetic repeat.
-    pub(crate) command_palette_repeat_key: Option<Key>,
-    /// Next synthetic command-palette repeat tick.
-    pub(crate) command_palette_repeat_next_tick: Option<Instant>,
-    /// Most recently executed command palette actions (most recent first)
-    pub command_palette_recent: Vec<Action>,
-    /// Whether the recents changed since the backend last persisted them.
-    pub(crate) command_palette_recents_dirty: bool,
+    /// State owned by the command palette modal.
+    pub command_palette: crate::input::state::core::command_palette::CommandPaletteState,
     /// Action whose next keyboard chord is being captured for rebinding.
     pub keybinding_capture_action: Option<Action>,
     /// Duration for command palette action toasts (ms)
     pub command_palette_toast_duration_ms: u64,
-    /// Whether the status bar is currently visible (toggled via keybinding)
-    pub show_status_bar: bool,
-    /// Whether status HUD segments consume clicks to open their surfaces
-    /// (`[ui] status_bar_interactive`); false keeps the bar display-only
-    pub status_bar_interactive: bool,
-    /// Whether to show selection dimensions in the status bar
-    pub show_status_selection_info: bool,
-    /// Whether to show the board label in the status bar
-    pub show_status_board_badge: bool,
-    /// Whether to show the page counter in the status bar
-    pub show_status_page_badge: bool,
-    /// Whether to show the active color dot in the status bar
-    pub show_status_color: bool,
-    /// Whether to show the active tool name in the status bar
-    pub show_status_tool: bool,
-    /// Whether to show the active tool size in the status bar
-    pub show_status_size: bool,
-    /// Whether to show transient text/highlight context indicators
-    pub show_status_context_indicators: bool,
-    /// Whether to show the hidden-toolbar hint chip in the status bar
-    /// (`[ui] show_toolbar_hint`)
-    pub show_toolbar_hint: bool,
-    /// Whether to show the Help shortcut chip in the status bar
-    pub show_status_help: bool,
-    /// Whether to show the About/version chip in the status bar
-    pub show_status_about: bool,
-    /// Whether to show the board/page badge when the status bar is visible
-    pub show_floating_badge_always: bool,
-    /// Whether the floating board/page badge may render at all (persisted
-    /// toggle via `Action::ToggleFloatingBadge`)
-    pub show_floating_badge: bool,
-    /// Whether the bottom-right zoom chip may render while
-    /// `show_zoom_actions` is on (persisted toggle via
-    /// `Action::ToggleZoomChip`)
-    pub show_zoom_chip: bool,
+    /// Runtime visibility preferences for overlay chrome and toolbar sections.
+    pub ui_visibility: crate::input::state::UiVisibility,
     /// When the zoom chip shows: always, or only while zoom is active
     /// (`[ui.toolbar] zoom_chip_display`)
     pub zoom_chip_display: crate::config::ZoomChipDisplay,
@@ -368,8 +293,6 @@ pub struct InputState {
     pub screen_width: u32,
     /// Screen height in pixels (set by backend after configuration)
     pub screen_height: u32,
-    /// Whether to show active output badge in status bar.
-    pub show_active_output_badge: bool,
     /// Active output label shown in status bar when configured.
     pub active_output_label: Option<String>,
     /// Previous color before entering board mode (for restoration)
@@ -417,12 +340,6 @@ pub struct InputState {
     /// Bumped whenever the keymap is replaced. Shortcut labels feed command
     /// scoring, so the palette's result cache keys on this.
     pub(in crate::input::state::core) keymap_revision: u64,
-    /// Memoized `filtered_commands()` output. The renderer asks for the row
-    /// list twice per frame and each ask re-scored every registry entry with
-    /// per-entry allocations.
-    pub(in crate::input::state::core) command_palette_results: std::cell::RefCell<
-        Option<crate::input::state::core::command_palette::CommandPaletteResults>,
-    >,
     /// Shape and pre-gesture snapshot for an in-flight wheel adjustment of a
     /// Spotlight's magnification.
     ///
@@ -502,16 +419,6 @@ pub struct InputState {
     pub custom_redo_steps: usize,
     /// Whether the custom undo/redo section is visible
     pub custom_section_enabled: bool,
-    /// Whether to show the delay sliders in Actions section
-    pub show_delay_sliders: bool,
-    /// Whether to keep the marker opacity control available in the style pill
-    pub show_marker_opacity_section: bool,
-    /// Whether to show preset action toast notifications
-    pub show_preset_toasts: bool,
-    /// Whether the top strip dims after a few seconds without drawing
-    pub idle_fade: bool,
-    /// Whether to show the cursor tool preview bubble
-    pub show_tool_preview: bool,
     /// The scan-band overlay shown while screen text recognition runs, and the
     /// outcome card that follows it.
     pub(crate) ocr_scan: Option<crate::input::state::core::utility::ocr_scan::OcrScan>,
@@ -615,26 +522,6 @@ pub struct InputState {
     pub(in crate::input::state::core) zoom_scale: f64,
     /// Current zoom view offset in canvas/world space
     pub(in crate::input::state::core) zoom_view_offset: (f64, f64),
-    /// Whether to show extended color palette
-    pub show_more_colors: bool,
-    /// Whether to show the Actions section (undo all, redo all, etc.)
-    pub show_actions_section: bool,
-    /// Whether to show advanced action buttons
-    pub show_actions_advanced: bool,
-    /// Whether to show zoom actions
-    pub show_zoom_actions: bool,
-    /// Whether to show the Pages section
-    pub show_pages_section: bool,
-    /// Whether to show the Boards section
-    pub show_boards_section: bool,
-    /// Whether to show the presets section
-    pub show_presets: bool,
-    /// Whether to show the Step Undo/Redo section
-    pub show_step_section: bool,
-    /// Whether to keep text controls visible when text is inactive
-    pub show_text_controls: bool,
-    /// Whether to enable context-aware UI that shows/hides controls based on active tool
-    pub context_aware_ui: bool,
     /// Number of preset slots to display
     pub preset_slot_count: usize,
     /// Preset slots for quick tool switching

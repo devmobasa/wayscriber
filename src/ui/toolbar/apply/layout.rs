@@ -28,8 +28,8 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_delay_sliders(&mut self, show: bool) -> bool {
-        if self.show_delay_sliders != show {
-            self.show_delay_sliders = show;
+        if self.ui_visibility.show_delay_sliders != show {
+            self.ui_visibility.show_delay_sliders = show;
             true
         } else {
             false
@@ -107,8 +107,8 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_more_colors(&mut self, show: bool) -> bool {
-        if self.show_more_colors != show {
-            self.show_more_colors = show;
+        if self.ui_visibility.show_more_colors != show {
+            self.ui_visibility.show_more_colors = show;
             true
         } else {
             false
@@ -175,8 +175,8 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_context_aware_ui(&mut self, enabled: bool) -> bool {
-        if self.context_aware_ui != enabled {
-            self.context_aware_ui = enabled;
+        if self.ui_visibility.context_aware_ui != enabled {
+            self.ui_visibility.context_aware_ui = enabled;
             true
         } else {
             false
@@ -184,8 +184,8 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_preset_toasts(&mut self, show: bool) -> bool {
-        if self.show_preset_toasts != show {
-            self.show_preset_toasts = show;
+        if self.ui_visibility.show_preset_toasts != show {
+            self.ui_visibility.show_preset_toasts = show;
             true
         } else {
             false
@@ -193,8 +193,8 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_idle_fade(&mut self, enable: bool) -> bool {
-        if self.idle_fade != enable {
-            self.idle_fade = enable;
+        if self.ui_visibility.idle_fade != enable {
+            self.ui_visibility.idle_fade = enable;
             true
         } else {
             false
@@ -205,8 +205,8 @@ impl InputState {
         if self.presenter_mode && self.presenter_mode_config.hide_tool_preview {
             return false;
         }
-        if self.show_tool_preview != show {
-            self.show_tool_preview = show;
+        if self.ui_visibility.show_tool_preview != show {
+            self.ui_visibility.show_tool_preview = show;
             self.needs_redraw = true;
             true
         } else {
@@ -221,8 +221,8 @@ impl InputState {
         // This is an explicit chrome control, so it takes ownership from
         // Focus Mode just like the keyboard/palette toggle does.
         self.break_focus_mode();
-        if self.show_status_bar != show {
-            self.show_status_bar = show;
+        if self.ui_visibility.show_status_bar != show {
+            self.ui_visibility.show_status_bar = show;
             self.refresh_status_hud_layout();
             self.needs_redraw = true;
             true
@@ -232,10 +232,10 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_set_status_bar_interactive(&mut self, interactive: bool) -> bool {
-        if self.status_bar_interactive == interactive {
+        if self.ui_visibility.status_bar_interactive == interactive {
             return false;
         }
-        self.status_bar_interactive = interactive;
+        self.ui_visibility.status_bar_interactive = interactive;
         self.status_hud_hover = None;
         self.needs_redraw = true;
         true
@@ -258,8 +258,8 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_floating_badge_always(&mut self, show: bool) -> bool {
-        if self.show_floating_badge_always != show {
-            self.show_floating_badge_always = show;
+        if self.ui_visibility.show_floating_badge_always != show {
+            self.ui_visibility.show_floating_badge_always = show;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             true
@@ -475,37 +475,37 @@ mod tests {
     #[test]
     fn section_toggles_survive_layout_mode_switches() {
         let mut state = make_test_input_state();
-        assert!(state.show_zoom_actions);
+        assert!(state.ui_visibility.show_zoom_actions);
 
         state.apply_toolbar_event(ToolbarEvent::ToggleZoomActions(false));
-        assert!(!state.show_zoom_actions);
+        assert!(!state.ui_visibility.show_zoom_actions);
 
         // The old behavior recomputed all section booleans from mode
         // defaults on every switch, erasing the choice.
         state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
             ToolbarLayoutMode::Simple,
         ));
-        assert!(!state.show_zoom_actions);
+        assert!(!state.ui_visibility.show_zoom_actions);
         state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
             ToolbarLayoutMode::Regular,
         ));
-        assert!(!state.show_zoom_actions);
+        assert!(!state.ui_visibility.show_zoom_actions);
 
         // Simple hides presets by baseline; an explicit show survives the
         // round trip through other modes.
         state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
             ToolbarLayoutMode::Simple,
         ));
-        assert!(!state.show_presets);
+        assert!(!state.ui_visibility.show_presets);
         state.apply_toolbar_event(ToolbarEvent::TogglePresets(true));
-        assert!(state.show_presets);
+        assert!(state.ui_visibility.show_presets);
         state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
             ToolbarLayoutMode::Advanced,
         ));
         state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
             ToolbarLayoutMode::Simple,
         ));
-        assert!(state.show_presets);
+        assert!(state.ui_visibility.show_presets);
         assert!(
             state
                 .resolved_toolbar_items
@@ -765,12 +765,12 @@ mod tests {
             ToolbarSectionFlag::Presets.item_id(),
             true,
         ));
-        assert!(!state.show_presets);
+        assert!(!state.ui_visibility.show_presets);
 
         // Re-enable through the Settings toggle — the hidden entry is
         // replaced, not fought, so the section comes back.
         state.apply_toolbar_event(ToolbarEvent::TogglePresets(true));
-        assert!(state.show_presets);
+        assert!(state.ui_visibility.show_presets);
         assert!(
             !state
                 .resolved_toolbar_items

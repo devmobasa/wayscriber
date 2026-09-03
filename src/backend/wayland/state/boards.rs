@@ -56,7 +56,7 @@ impl WaylandState {
             && !self.input_state.board_is_transparent()
             && !self.zoom.active
             && !self.input_state.tour_active
-            && !self.input_state.command_palette_open
+            && !self.input_state.command_palette.open
             && !self.input_state.is_board_picker_open()
             && !self.input_state.is_color_picker_popup_open()
             && !self.input_state.is_context_menu_open()
@@ -128,7 +128,7 @@ impl WaylandState {
             && !self.zoom.active
             && !self.input_state.tour_active
             && !self.input_state.show_help
-            && !self.input_state.command_palette_open
+            && !self.input_state.command_palette.open
             && !self.input_state.is_board_picker_open()
             && !self.input_state.is_color_picker_popup_open()
             && !self.input_state.is_context_menu_open()

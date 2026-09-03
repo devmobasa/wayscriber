@@ -30,20 +30,13 @@ use wayland_client::{
     protocol::{wl_output, wl_pointer, wl_seat, wl_surface, wl_touch},
 };
 #[cfg(feature = "tablet-input")]
-use wayland_protocols::wp::tablet::zv2::client::{
-    zwp_tablet_manager_v2::ZwpTabletManagerV2, zwp_tablet_pad_group_v2::ZwpTabletPadGroupV2,
-    zwp_tablet_pad_ring_v2::ZwpTabletPadRingV2, zwp_tablet_pad_strip_v2::ZwpTabletPadStripV2,
-    zwp_tablet_pad_v2::ZwpTabletPadV2, zwp_tablet_seat_v2::ZwpTabletSeatV2,
-    zwp_tablet_tool_v2::ZwpTabletToolV2, zwp_tablet_v2::ZwpTabletV2,
-};
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
 use wayland_protocols::wp::{
     pointer_constraints::zv1::client::{
         zwp_locked_pointer_v1::ZwpLockedPointerV1, zwp_pointer_constraints_v1,
     },
     relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1,
-    text_input::zv3::client::{
-        zwp_text_input_manager_v3::ZwpTextInputManagerV3, zwp_text_input_v3::ZwpTextInputV3,
-    },
+    text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3,
 };
 
 #[cfg(feature = "tablet-input")]
@@ -64,7 +57,7 @@ use crate::{
     config::{Action, Config},
     desktop_open::DesktopOpenRequest,
     input::state::{ClipboardPasteRequest, TextClipboardRequest, TextPasteTarget},
-    input::{DrawingState, EraserMode, InputState, Key, Tool, ZoomAction},
+    input::{DrawingState, EraserMode, InputState, Tool, ZoomAction},
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
 };
@@ -106,9 +99,11 @@ mod desktop_open;
 mod eyedropper;
 mod font_catalog;
 mod gtk_toolbar;
+mod helper_launch;
 mod helpers;
 mod input_actions;
 mod input_hud;
+mod key_repeat;
 mod keybindings;
 pub(in crate::backend::wayland) use keybindings::queue_keybinding_edit;
 mod ocr;
@@ -122,7 +117,10 @@ pub(in crate::backend::wayland) use region_capture::RegionPickerOptions;
 pub(in crate::backend::wayland) use region_capture::RegionReviewPress;
 mod render;
 mod screen_image;
+#[cfg(feature = "tablet-input")]
+mod tablet_runtime;
 mod text_clipboard;
+mod text_input;
 mod toolbar;
 #[cfg(feature = "toolbar-gtk")]
 pub(crate) use toolbar::clamp_floating_axis_offset;
@@ -347,90 +345,14 @@ pub(super) struct WaylandState {
     pub(super) cursor_hidden: bool,
 
     // Manual key repeat. The keyboard is created without sctk's calloop-based
-    // repeat (this loop is a manual poll), so `repeat_key` never fires; this
-    // synthesizes repeats for the held key from the event loop instead.
-    pub(super) key_repeat_key: Option<Key>,
-    pub(super) key_repeat_next_tick: Option<Instant>,
+    // repeat (this loop is a manual poll), so `repeat_key` never fires.
+    pub(super) key_repeat: key_repeat::KeyRepeatState,
 
-    // IME / text-input-v3. The manager is bound at startup; one seat-bound
-    // `text_input` object is created for the first keyboard seat.
-    // `focused` tracks compositor text-input focus (Enter/Leave); `enabled`
-    // tracks whether we have an active enable() outstanding; `serial` counts
-    // our commit() calls to match against Done events.
-    pub(super) text_input_manager: Option<ZwpTextInputManagerV3>,
-    pub(super) text_input: Option<ZwpTextInputV3>,
-    pub(super) text_input_seat: Option<wl_seat::WlSeat>,
-    pub(super) text_input_focused: bool,
-    pub(super) text_input_enabled: bool,
-    pub(super) text_input_serial: u32,
-    /// A visible editor change received against a stale `done` serial. The
-    /// resulting cursor rectangle must be published after a matching `done`.
-    pub(super) text_input_cursor_update_pending: bool,
-    /// The pending cursor/surrounding-text update was authored outside the
-    /// input method and must carry text-input-v3's `Other` change cause.
-    pub(super) text_input_external_change_pending: bool,
-    /// Commit serial that must be acknowledged before another cursor-only
-    /// update is sent. Set only after observing a stale `done`.
-    pub(super) text_input_cursor_update_blocked_until: Option<u32>,
+    // IME / text-input-v3 protocol ownership and synchronization.
+    pub(super) text_input: text_input::TextInputState,
 
-    // Tablet / stylus (feature-gated)
     #[cfg(feature = "tablet-input")]
-    pub(super) tablet_manager: Option<ZwpTabletManagerV2>,
-    #[cfg(feature = "tablet-input")]
-    pub(super) tablet_seats: Vec<ZwpTabletSeatV2>,
-    #[cfg(feature = "tablet-input")]
-    pub(super) tablets: Vec<ZwpTabletV2>,
-    #[cfg(feature = "tablet-input")]
-    pub(super) tablet_tools: Vec<ZwpTabletToolV2>,
-    #[cfg(feature = "tablet-input")]
-    pub(super) tablet_pads: Vec<ZwpTabletPadV2>,
-    #[cfg(feature = "tablet-input")]
-    pub(super) tablet_pad_groups: Vec<ZwpTabletPadGroupV2>,
-    #[cfg(feature = "tablet-input")]
-    pub(super) tablet_pad_rings: Vec<ZwpTabletPadRingV2>,
-    #[cfg(feature = "tablet-input")]
-    pub(super) tablet_pad_strips: Vec<ZwpTabletPadStripV2>,
-    #[cfg(feature = "tablet-input")]
-    pub(super) tablet_settings: TabletSettings,
-    #[cfg(feature = "tablet-input")]
-    pub(super) tablet_found_logged: bool,
-    #[cfg(feature = "tablet-input")]
-    pub(super) stylus_tip_down: bool,
-    #[cfg(feature = "tablet-input")]
-    pub(super) stylus_on_overlay: bool,
-    #[cfg(feature = "tablet-input")]
-    pub(super) stylus_on_toolbar: bool,
-    #[cfg(feature = "tablet-input")]
-    pub(super) stylus_base_thickness: Option<f64>,
-    #[cfg(feature = "tablet-input")]
-    pub(super) stylus_pressure_thickness: Option<f64>,
-    #[cfg(feature = "tablet-input")]
-    pub(super) stylus_surface: Option<wl_surface::WlSurface>,
-    #[cfg(feature = "tablet-input")]
-    pub(super) stylus_last_pos: Option<(f64, f64)>,
-    #[cfg(feature = "tablet-input")]
-    pub(super) stylus_peak_thickness: Option<f64>,
-    #[cfg(feature = "tablet-input")]
-    pub(super) pending_stylus_frame: PendingStylusFrame,
-    /// The pen is still physically down, but the contact was disowned when a
-    /// screen-region modal took over. Wayscriber's own flags were cleared, yet
-    /// the compositor keeps reporting this contact until the tip lifts — so it
-    /// is tracked separately and ignored until then, rather than being mistaken
-    /// for a fresh press made during the wait.
-    #[cfg(feature = "tablet-input")]
-    pub(super) stylus_contact_retired: bool,
-    /// Map of tool object IDs to their physical types (pen, eraser, etc.)
-    #[cfg(feature = "tablet-input")]
-    pub(super) stylus_tool_types: std::collections::HashMap<
-        wayland_client::backend::ObjectId,
-        crate::backend::wayland::TabletToolType,
-    >,
-    /// Whether we auto-switched to eraser (if true, restore previous tool on proximity out)
-    #[cfg(feature = "tablet-input")]
-    pub(super) stylus_auto_switched_to_eraser: bool,
-    /// Tool override that was active before auto-switching to eraser
-    #[cfg(feature = "tablet-input")]
-    pub(super) stylus_pre_eraser_tool_override: Option<crate::input::Tool>,
+    pub(super) tablet: tablet_runtime::TabletState,
 
     // Session persistence
     pub(super) session: SessionState,

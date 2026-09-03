@@ -18,14 +18,17 @@ fn status_bar_content_survives_restart_without_touching_config() {
     let mut input = input_from_config(&config);
     let mut runtime = test_runtime(&config, &runtime_path);
 
-    assert!(input.status_bar_interactive, "shipped default");
+    assert!(
+        input.ui_visibility.status_bar_interactive,
+        "shipped default"
+    );
     assert!(input.status_bar_item_visible(StatusBarItem::Size));
 
     let target = ToolbarRuntimeUiPersistenceTarget::StatusBarInteractive;
     let prepared = runtime
         .begin_toolbar_mutation(target, &input)
         .expect("interactivity permit");
-    input.status_bar_interactive = false;
+    input.ui_visibility.status_bar_interactive = false;
     let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
     assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
 
@@ -46,7 +49,7 @@ fn status_bar_content_survives_restart_without_touching_config() {
     restarted.apply_startup_state(&mut restarted_input);
 
     assert!(
-        !restarted_input.status_bar_interactive,
+        !restarted_input.ui_visibility.status_bar_interactive,
         "clickable-segments stays off across a restart"
     );
     assert!(
@@ -79,18 +82,20 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
     type Flip = (ToolbarRuntimeUiPersistenceTarget, fn(&mut InputState));
     let flips: Vec<Flip> = vec![
         (ToolbarRuntimeUiPersistenceTarget::StatusBar, |input| {
-            input.show_status_bar = !input.show_status_bar;
+            input.ui_visibility.show_status_bar = !input.ui_visibility.show_status_bar;
         }),
         (ToolbarRuntimeUiPersistenceTarget::ToolbarIcons, |input| {
             input.toolbar_use_icons = !input.toolbar_use_icons;
         }),
         (
             ToolbarRuntimeUiPersistenceTarget::ToolbarContextAwareUi,
-            |input| input.context_aware_ui = !input.context_aware_ui,
+            |input| input.ui_visibility.context_aware_ui = !input.ui_visibility.context_aware_ui,
         ),
         (
             ToolbarRuntimeUiPersistenceTarget::ToolbarDelaySliders,
-            |input| input.show_delay_sliders = !input.show_delay_sliders,
+            |input| {
+                input.ui_visibility.show_delay_sliders = !input.ui_visibility.show_delay_sliders
+            },
         ),
         (
             ToolbarRuntimeUiPersistenceTarget::HistoryCustomSection,
@@ -98,7 +103,10 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
         ),
         (
             ToolbarRuntimeUiPersistenceTarget::FloatingBadgeAlways,
-            |input| input.show_floating_badge_always = !input.show_floating_badge_always,
+            |input| {
+                input.ui_visibility.show_floating_badge_always =
+                    !input.ui_visibility.show_floating_badge_always
+            },
         ),
     ];
 
@@ -116,24 +124,36 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
     assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
 
-    let expected_status_bar = input.show_status_bar;
+    let expected_status_bar = input.ui_visibility.show_status_bar;
     let expected_icons = input.toolbar_use_icons;
-    let expected_context = input.context_aware_ui;
-    let expected_sliders = input.show_delay_sliders;
+    let expected_context = input.ui_visibility.context_aware_ui;
+    let expected_sliders = input.ui_visibility.show_delay_sliders;
     let expected_custom = input.custom_section_enabled;
-    let expected_badge = input.show_floating_badge_always;
+    let expected_badge = input.ui_visibility.show_floating_badge_always;
     runtime.shutdown_blocking();
 
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(&mut restarted_input);
 
-    assert_eq!(restarted_input.show_status_bar, expected_status_bar);
+    assert_eq!(
+        restarted_input.ui_visibility.show_status_bar,
+        expected_status_bar
+    );
     assert_eq!(restarted_input.toolbar_use_icons, expected_icons);
-    assert_eq!(restarted_input.context_aware_ui, expected_context);
-    assert_eq!(restarted_input.show_delay_sliders, expected_sliders);
+    assert_eq!(
+        restarted_input.ui_visibility.context_aware_ui,
+        expected_context
+    );
+    assert_eq!(
+        restarted_input.ui_visibility.show_delay_sliders,
+        expected_sliders
+    );
     assert_eq!(restarted_input.custom_section_enabled, expected_custom);
-    assert_eq!(restarted_input.show_floating_badge_always, expected_badge);
+    assert_eq!(
+        restarted_input.ui_visibility.show_floating_badge_always,
+        expected_badge
+    );
     assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
     restarted.shutdown_blocking();
 }

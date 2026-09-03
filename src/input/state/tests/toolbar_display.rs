@@ -19,7 +19,7 @@ fn hide_all_chrome(state: &mut InputState) {
     state.handle_action(Action::ToggleToolbar);
     state.handle_action(Action::ToggleStatusBar);
     assert!(!state.toolbar_visible());
-    assert!(!state.show_status_bar);
+    assert!(!state.ui_visibility.show_status_bar);
 }
 
 fn refresh_status_hud_layout(state: &mut InputState) {
@@ -440,7 +440,7 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
         state.set_status_bar_item_visible(item, false);
     }
     assert!(
-        state.show_status_bar,
+        state.ui_visibility.show_status_bar,
         "the master preference remains enabled"
     );
     assert!(
@@ -619,7 +619,7 @@ fn all_chrome_warning_suppressed_while_presenting() {
     // Hiding the status bar now leaves no chrome, but presenter mode hides
     // chrome by design and restores it on exit — no nag mid-presentation.
     state.handle_action(Action::ToggleStatusBar);
-    assert!(!state.show_status_bar);
+    assert!(!state.ui_visibility.show_status_bar);
     assert!(
         state.ui_toast.is_none(),
         "presenter mode must not trigger the all-chrome warning"
@@ -712,7 +712,7 @@ fn context_menu_offers_recovery_entries_only_while_chrome_hidden() {
     assert!(state.toolbar_visible());
     state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Canvas, None);
     state.execute_menu_command(MenuCommand::ShowStatusBar);
-    assert!(state.show_status_bar);
+    assert!(state.ui_visibility.show_status_bar);
     state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Canvas, None);
     assert!(!labels(&state).iter().any(|label| label == "Show Toolbar"));
     assert!(
@@ -821,7 +821,7 @@ fn session_independent_chrome_actions_never_mark_the_session_dirty() {
 
     hide_all_chrome(&mut state);
     state.handle_action(Action::ToggleFocusMode); // rescue arm
-    assert!(state.show_status_bar);
+    assert!(state.ui_visibility.show_status_bar);
     assert!(
         !state.is_session_dirty(),
         "the rescue arm restores chrome only"

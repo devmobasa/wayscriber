@@ -23,55 +23,73 @@ use crate::input::{
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Runtime values needed to construct an [`InputState`].
+///
+/// The backend translates configuration into this value. Input state does not
+/// need to know which config sections supplied each setting, and call sites
+/// cannot accidentally transpose same-typed positional arguments.
+#[derive(Clone)]
+pub(crate) struct InputStateSeed {
+    pub(crate) color: crate::draw::Color,
+    pub(crate) thickness: f64,
+    pub(crate) eraser_size: f64,
+    pub(crate) eraser_mode: EraserMode,
+    pub(crate) marker_opacity: f64,
+    pub(crate) fill_enabled: bool,
+    pub(crate) font_size: f64,
+    pub(crate) font_descriptor: FontDescriptor,
+    pub(crate) text_background_enabled: bool,
+    pub(crate) arrow_length: f64,
+    pub(crate) arrow_angle: f64,
+    pub(crate) arrow_head_at_end: bool,
+    pub(crate) ui_visibility: crate::input::state::UiVisibility,
+    pub(crate) boards_config: BoardsConfig,
+    pub(crate) action_map: HashMap<Shortcut, Action>,
+    pub(crate) max_shapes_per_frame: usize,
+    pub(crate) click_highlight_settings: ClickHighlightSettings,
+    pub(crate) undo_all_delay_ms: u64,
+    pub(crate) redo_all_delay_ms: u64,
+    pub(crate) custom_section_enabled: bool,
+    pub(crate) custom_undo_delay_ms: u64,
+    pub(crate) custom_redo_delay_ms: u64,
+    pub(crate) custom_undo_steps: usize,
+    pub(crate) custom_redo_steps: usize,
+    pub(crate) presenter_mode_config: crate::config::PresenterModeConfig,
+}
+
 impl InputState {
-    /// Creates a new InputState with specified defaults.
+    /// Creates input state from an explicit runtime seed.
     ///
-    /// Screen dimensions default to 0 and should be updated by the backend
-    /// after surface configuration (see `update_screen_dimensions`).
-    ///
-    /// # Arguments
-    /// * `color` - Initial drawing color
-    /// * `thickness` - Initial pen thickness in pixels
-    /// * `eraser_size` - Initial eraser size in pixels
-    /// * `eraser_mode` - Initial eraser behavior mode
-    /// * `font_size` - Font size for text mode in points
-    /// * `font_descriptor` - Font configuration for text rendering
-    /// * `text_background_enabled` - Whether to draw background behind text
-    /// * `arrow_length` - Arrowhead length in pixels
-    /// * `arrow_angle` - Arrowhead angle in degrees
-    /// * `arrow_head_at_end` - Whether arrowhead is drawn at the end
-    /// * `show_status_bar` - Whether the status bar starts visible
-    /// * `boards_config` - Multi-board configuration
-    /// * `action_map` - Keybinding action map
-    /// * `presenter_mode_config` - Presenter mode behavior configuration
-    #[allow(clippy::too_many_arguments)]
-    pub fn with_defaults(
-        color: crate::draw::Color,
-        thickness: f64,
-        eraser_size: f64,
-        eraser_mode: EraserMode,
-        marker_opacity: f64,
-        fill_enabled: bool,
-        font_size: f64,
-        font_descriptor: FontDescriptor,
-        text_background_enabled: bool,
-        arrow_length: f64,
-        arrow_angle: f64,
-        arrow_head_at_end: bool,
-        show_status_bar: bool,
-        boards_config: BoardsConfig,
-        action_map: HashMap<Shortcut, Action>,
-        max_shapes_per_frame: usize,
-        click_highlight_settings: ClickHighlightSettings,
-        undo_all_delay_ms: u64,
-        redo_all_delay_ms: u64,
-        custom_section_enabled: bool,
-        custom_undo_delay_ms: u64,
-        custom_redo_delay_ms: u64,
-        custom_undo_steps: usize,
-        custom_redo_steps: usize,
-        presenter_mode_config: crate::config::PresenterModeConfig,
-    ) -> Self {
+    /// Screen dimensions default to zero and the backend updates them after
+    /// surface configuration.
+    pub(crate) fn from_seed(seed: InputStateSeed) -> Self {
+        let InputStateSeed {
+            color,
+            thickness,
+            eraser_size,
+            eraser_mode,
+            marker_opacity,
+            fill_enabled,
+            font_size,
+            font_descriptor,
+            text_background_enabled,
+            arrow_length,
+            arrow_angle,
+            arrow_head_at_end,
+            ui_visibility,
+            boards_config,
+            action_map,
+            max_shapes_per_frame,
+            click_highlight_settings,
+            undo_all_delay_ms,
+            redo_all_delay_ms,
+            custom_section_enabled,
+            custom_undo_delay_ms,
+            custom_redo_delay_ms,
+            custom_undo_steps,
+            custom_redo_steps,
+            presenter_mode_config,
+        } = seed;
         let clamped_eraser = eraser_size.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         let mut tool_settings = PerToolDrawingSettings::new(color, thickness);
         tool_settings.step_marker.thickness =
@@ -81,7 +99,6 @@ impl InputState {
         let mut state = Self {
             input_effects: Default::default(),
             keymap_revision: 0,
-            command_palette_results: std::cell::RefCell::new(None),
             boards: BoardManager::from_config(boards_config),
             current_color: color,
             quick_colors: QuickColorPalette::default(),
@@ -106,20 +123,7 @@ impl InputState {
             current_font_size: font_size,
             font_descriptor,
             font_cycle: Vec::new(),
-            font_picker_open: false,
-            font_picker_loading: false,
-            font_picker_load_failed: false,
-            font_picker_query: String::new(),
-            font_picker_selected: 0,
-            font_picker_scroll: 0,
-            font_picker_filter: crate::input::state::FontPickerFilter::All,
-            font_picker_target: crate::input::state::FontPickerTarget::ToolDefault,
-            font_picker_recents: Vec::new(),
-            font_picker_results: std::cell::RefCell::new(None),
-            font_picker_repeat_key: None,
-            font_picker_repeat_next_tick: None,
-            font_picker_repeat_started: None,
-            font_picker_last_panel: None,
+            font_picker: Default::default(),
             text_background_enabled,
             text_wrap_width: None,
             text_input_mode: TextInputMode::Plain,
@@ -150,31 +154,10 @@ impl InputState {
             help_overlay_consume_only_presses: Vec::new(),
             board_picker_search: String::new(),
             board_picker_search_last_input: None,
-            command_palette_open: false,
-            command_palette_query: String::new(),
-            command_palette_selected: 0,
-            command_palette_scroll: 0,
-            command_palette_repeat_key: None,
-            command_palette_repeat_next_tick: None,
-            command_palette_recent: Vec::new(),
-            command_palette_recents_dirty: false,
+            command_palette: Default::default(),
             keybinding_capture_action: None,
             command_palette_toast_duration_ms: 1500,
-            show_status_bar,
-            status_bar_interactive: true,
-            show_status_selection_info: true,
-            show_status_board_badge: true,
-            show_status_page_badge: true,
-            show_status_color: true,
-            show_status_tool: true,
-            show_status_size: true,
-            show_status_context_indicators: true,
-            show_toolbar_hint: true,
-            show_status_help: true,
-            show_status_about: true,
-            show_floating_badge_always: false,
-            show_floating_badge: true,
-            show_zoom_chip: true,
+            ui_visibility,
             zoom_chip_display: crate::config::ZoomChipDisplay::Always,
             presenter_mode: false,
             presenter_mode_config,
@@ -210,7 +193,6 @@ impl InputState {
             toolbar_status_bar_contents_open: false,
             screen_width: 0,
             screen_height: 0,
-            show_active_output_badge: false,
             active_output_label: None,
             board_previous_color: None,
             board_recent: Vec::new(),
@@ -264,11 +246,6 @@ impl InputState {
             custom_undo_steps,
             custom_redo_steps,
             custom_section_enabled,
-            show_delay_sliders: false, // Default to hidden
-            show_marker_opacity_section: false,
-            show_preset_toasts: true,
-            idle_fade: true,
-            show_tool_preview: false,
             ocr_scan: None,
             ui_toast: None,
             toast_queue: super::super::toast_queue::ToastQueue::default(),
@@ -312,16 +289,6 @@ impl InputState {
             zoom_locked: false,
             zoom_scale: 1.0,
             zoom_view_offset: (0.0, 0.0),
-            show_more_colors: false,
-            show_actions_section: true, // Show by default
-            show_actions_advanced: false,
-            show_zoom_actions: true,
-            show_pages_section: true,
-            show_boards_section: true,
-            show_presets: true,
-            show_step_section: false,
-            show_text_controls: true,
-            context_aware_ui: true,
             preset_slot_count: PRESET_SLOTS_MAX,
             presets: vec![None; PRESET_SLOTS_MAX],
             active_preset_slot: None,

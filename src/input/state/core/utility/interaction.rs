@@ -179,8 +179,8 @@ impl InputState {
         // that newly painted geometry the picker's damage baseline, or the
         // next narrowing query clears the panel from before the resize instead
         // of the tall panel now visible at its new position.
-        if self.font_picker_open {
-            self.font_picker_last_panel = self.font_picker_panel_bounds();
+        if self.font_picker.open {
+            self.font_picker.last_panel = self.font_picker_panel_bounds();
         }
     }
 

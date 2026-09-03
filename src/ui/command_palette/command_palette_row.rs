@@ -91,7 +91,7 @@ pub(super) fn render_command_row(
     // sit on top; fuzzy-only (subsequence) matches draw nothing.
     draw_label_match_highlights(
         ctx,
-        &input_state.command_palette_query,
+        &input_state.command_palette.query,
         cmd.label,
         label_x,
         label_y,

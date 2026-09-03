@@ -639,47 +639,14 @@ fn draw_zoom_sign(ctx: &cairo::Context, m: &ZoomGlyphMetrics, run_x: f64, plus: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig, StatusBarStyle};
-    use crate::draw::{Color, FontDescriptor};
-    use crate::input::{ClickHighlightSettings, EraserMode};
+    use crate::config::{KeybindingsConfig, StatusBarStyle};
 
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();
-        let action_map = keybindings
+        let _action_map = keybindings
             .build_action_map()
             .expect("default keybindings map");
-        InputState::with_defaults(
-            Color {
-                r: 1.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            },
-            4.0,
-            4.0,
-            EraserMode::Brush,
-            0.32,
-            false,
-            32.0,
-            FontDescriptor::default(),
-            false,
-            20.0,
-            30.0,
-            false,
-            true,
-            BoardsConfig::default(),
-            action_map,
-            usize::MAX,
-            ClickHighlightSettings::disabled(),
-            0,
-            0,
-            true,
-            0,
-            0,
-            5,
-            5,
-            PresenterModeConfig::default(),
-        )
+        crate::input::state::test_support::make_test_input_state()
     }
 
     /// The chip anchors to the bottom-right corner: its right/bottom edges sit
@@ -939,7 +906,7 @@ mod tests {
     fn chip_shows_percent_in_default_config_regardless_of_pointer() {
         let mut state = make_state();
         assert!(
-            state.show_zoom_actions,
+            state.ui_visibility.show_zoom_actions,
             "default config enables zoom actions"
         );
         let style = StatusBarStyle::default();
@@ -990,9 +957,9 @@ mod tests {
             for show_zoom_chip in [true, false] {
                 for show_status_bar in [true, false] {
                     let mut state = make_state();
-                    state.show_zoom_actions = show_zoom_actions;
-                    state.show_zoom_chip = show_zoom_chip;
-                    state.show_status_bar = show_status_bar;
+                    state.ui_visibility.show_zoom_actions = show_zoom_actions;
+                    state.ui_visibility.show_zoom_chip = show_zoom_chip;
+                    state.ui_visibility.show_status_bar = show_status_bar;
                     state.set_zoom_status(true, false, 2.5, (0.0, 0.0));
 
                     // Chip: present and showing the % exactly when effectively
@@ -1047,7 +1014,7 @@ mod tests {
         let mut state = make_state();
         let style = StatusBarStyle::default();
         let (w, h) = (1920_u32, 1080_u32);
-        state.show_status_bar = true;
+        state.ui_visibility.show_status_bar = true;
         // The damage collector refreshes the status HUD layout before the chip
         // each frame; cache it by hand here at the bottom-right corner.
         state.update_status_hud_layout(crate::config::StatusPosition::BottomRight, &style, w, h);
@@ -1084,7 +1051,7 @@ mod tests {
         let mut state = make_state();
         let style = StatusBarStyle::default();
         let (w, h) = (1920_u32, 1080_u32);
-        state.show_status_bar = true;
+        state.ui_visibility.show_status_bar = true;
         state.update_status_hud_layout(crate::config::StatusPosition::BottomLeft, &style, w, h);
 
         let chip = compute_zoom_chip_layout(&state, &style, w, h).expect("chip layout");

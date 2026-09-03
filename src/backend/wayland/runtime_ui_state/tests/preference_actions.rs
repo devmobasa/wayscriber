@@ -72,19 +72,19 @@ fn keyboard_only_chrome_toggles_survive_restart_without_touching_config() {
     );
     let flips: Vec<Flip> = vec![
         (ToolbarRuntimeUiPersistenceTarget::StatusBar, |input| {
-            let previous = input.show_status_bar;
-            input.show_status_bar = !previous;
-            (previous, input.show_status_bar)
+            let previous = input.ui_visibility.show_status_bar;
+            input.ui_visibility.show_status_bar = !previous;
+            (previous, input.ui_visibility.show_status_bar)
         }),
         (ToolbarRuntimeUiPersistenceTarget::FloatingBadge, |input| {
-            let previous = input.show_floating_badge;
-            input.show_floating_badge = !previous;
-            (previous, input.show_floating_badge)
+            let previous = input.ui_visibility.show_floating_badge;
+            input.ui_visibility.show_floating_badge = !previous;
+            (previous, input.ui_visibility.show_floating_badge)
         }),
         (ToolbarRuntimeUiPersistenceTarget::ZoomChip, |input| {
-            let previous = input.show_zoom_chip;
-            input.show_zoom_chip = !previous;
-            (previous, input.show_zoom_chip)
+            let previous = input.ui_visibility.show_zoom_chip;
+            input.ui_visibility.show_zoom_chip = !previous;
+            (previous, input.ui_visibility.show_zoom_chip)
         }),
         (ToolbarRuntimeUiPersistenceTarget::InputHud, |input| {
             let previous = input.input_hud_enabled();
@@ -117,9 +117,12 @@ fn keyboard_only_chrome_toggles_survive_restart_without_touching_config() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(&mut restarted_input);
 
-    assert_eq!(restarted_input.show_status_bar, expected[0]);
-    assert_eq!(restarted_input.show_floating_badge, expected[1]);
-    assert_eq!(restarted_input.show_zoom_chip, expected[2]);
+    assert_eq!(restarted_input.ui_visibility.show_status_bar, expected[0]);
+    assert_eq!(
+        restarted_input.ui_visibility.show_floating_badge,
+        expected[1]
+    );
+    assert_eq!(restarted_input.ui_visibility.show_zoom_chip, expected[2]);
     assert_eq!(restarted_input.input_hud_enabled(), expected[3]);
     assert_eq!(fs::read(&config_path).unwrap(), AUTHORED);
     restarted.shutdown_blocking();
@@ -148,33 +151,36 @@ fn a_rollback_restores_every_durable_chrome_preference() {
     let bools: Vec<BoolPreference> = vec![
         (
             InteractionSeedTarget::StatusBar,
-            |i| i.show_status_bar,
-            |i| i.show_status_bar = !i.show_status_bar,
+            |i| i.ui_visibility.show_status_bar,
+            |i| i.ui_visibility.show_status_bar = !i.ui_visibility.show_status_bar,
         ),
         (
             InteractionSeedTarget::StatusBoardBadge,
-            |i| i.show_status_board_badge,
-            |i| i.show_status_board_badge = !i.show_status_board_badge,
+            |i| i.ui_visibility.show_status_board_badge,
+            |i| i.ui_visibility.show_status_board_badge = !i.ui_visibility.show_status_board_badge,
         ),
         (
             InteractionSeedTarget::StatusPageBadge,
-            |i| i.show_status_page_badge,
-            |i| i.show_status_page_badge = !i.show_status_page_badge,
+            |i| i.ui_visibility.show_status_page_badge,
+            |i| i.ui_visibility.show_status_page_badge = !i.ui_visibility.show_status_page_badge,
         ),
         (
             InteractionSeedTarget::FloatingBadgeAlways,
-            |i| i.show_floating_badge_always,
-            |i| i.show_floating_badge_always = !i.show_floating_badge_always,
+            |i| i.ui_visibility.show_floating_badge_always,
+            |i| {
+                i.ui_visibility.show_floating_badge_always =
+                    !i.ui_visibility.show_floating_badge_always
+            },
         ),
         (
             InteractionSeedTarget::FloatingBadge,
-            |i| i.show_floating_badge,
-            |i| i.show_floating_badge = !i.show_floating_badge,
+            |i| i.ui_visibility.show_floating_badge,
+            |i| i.ui_visibility.show_floating_badge = !i.ui_visibility.show_floating_badge,
         ),
         (
             InteractionSeedTarget::ZoomChip,
-            |i| i.show_zoom_chip,
-            |i| i.show_zoom_chip = !i.show_zoom_chip,
+            |i| i.ui_visibility.show_zoom_chip,
+            |i| i.ui_visibility.show_zoom_chip = !i.ui_visibility.show_zoom_chip,
         ),
         (
             InteractionSeedTarget::ToolbarIcons,
@@ -183,33 +189,33 @@ fn a_rollback_restores_every_durable_chrome_preference() {
         ),
         (
             InteractionSeedTarget::ToolbarMoreColors,
-            |i| i.show_more_colors,
-            |i| i.show_more_colors = !i.show_more_colors,
+            |i| i.ui_visibility.show_more_colors,
+            |i| i.ui_visibility.show_more_colors = !i.ui_visibility.show_more_colors,
         ),
         (
             InteractionSeedTarget::ToolbarContextAwareUi,
-            |i| i.context_aware_ui,
-            |i| i.context_aware_ui = !i.context_aware_ui,
+            |i| i.ui_visibility.context_aware_ui,
+            |i| i.ui_visibility.context_aware_ui = !i.ui_visibility.context_aware_ui,
         ),
         (
             InteractionSeedTarget::ToolbarPresetToasts,
-            |i| i.show_preset_toasts,
-            |i| i.show_preset_toasts = !i.show_preset_toasts,
+            |i| i.ui_visibility.show_preset_toasts,
+            |i| i.ui_visibility.show_preset_toasts = !i.ui_visibility.show_preset_toasts,
         ),
         (
             InteractionSeedTarget::ToolbarIdleFade,
-            |i| i.idle_fade,
-            |i| i.idle_fade = !i.idle_fade,
+            |i| i.ui_visibility.idle_fade,
+            |i| i.ui_visibility.idle_fade = !i.ui_visibility.idle_fade,
         ),
         (
             InteractionSeedTarget::ToolbarToolPreview,
-            |i| i.show_tool_preview,
-            |i| i.show_tool_preview = !i.show_tool_preview,
+            |i| i.ui_visibility.show_tool_preview,
+            |i| i.ui_visibility.show_tool_preview = !i.ui_visibility.show_tool_preview,
         ),
         (
             InteractionSeedTarget::ToolbarDelaySliders,
-            |i| i.show_delay_sliders,
-            |i| i.show_delay_sliders = !i.show_delay_sliders,
+            |i| i.ui_visibility.show_delay_sliders,
+            |i| i.ui_visibility.show_delay_sliders = !i.ui_visibility.show_delay_sliders,
         ),
         (
             InteractionSeedTarget::HistoryCustomSection,

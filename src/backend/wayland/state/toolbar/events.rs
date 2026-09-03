@@ -265,10 +265,10 @@ impl WaylandState {
 
             #[cfg(feature = "tablet-input")]
             if thickness_event && self.sync_stylus_thickness_cache(prev_thickness) {
-                if self.stylus_tip_down {
+                if self.tablet.tip_down {
                     self.record_stylus_peak(self.input_state.current_thickness);
                 } else {
-                    self.stylus_peak_thickness = None;
+                    self.tablet.peak_thickness = None;
                 }
             }
 
@@ -407,11 +407,11 @@ impl WaylandState {
             return false;
         }
 
-        self.stylus_base_thickness = Some(cur);
-        if self.stylus_tip_down {
-            self.stylus_pressure_thickness = Some(cur);
+        self.tablet.base_thickness = Some(cur);
+        if self.tablet.tip_down {
+            self.tablet.pressure_thickness = Some(cur);
         } else {
-            self.stylus_pressure_thickness = None;
+            self.tablet.pressure_thickness = None;
         }
         true
     }
@@ -419,8 +419,9 @@ impl WaylandState {
     /// Records the maximum stylus thickness seen during the current stroke.
     #[cfg(feature = "tablet-input")]
     pub(in crate::backend::wayland) fn record_stylus_peak(&mut self, thickness: f64) {
-        self.stylus_peak_thickness = Some(
-            self.stylus_peak_thickness
+        self.tablet.peak_thickness = Some(
+            self.tablet
+                .peak_thickness
                 .map_or(thickness, |p| p.max(thickness)),
         );
     }

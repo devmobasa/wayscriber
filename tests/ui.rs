@@ -1,51 +1,10 @@
 use cairo::{Context, ImageSurface};
-use wayscriber::config::{
-    Action, HelpOverlayStyle, KeybindingsConfig, PresenterModeConfig, StatusBarStyle,
-    StatusPosition,
-};
+use wayscriber::config::{Action, Config, HelpOverlayStyle, StatusBarStyle, StatusPosition};
 use wayscriber::draw::{Color, Shape};
-use wayscriber::input::{
-    BOARD_ID_BLACKBOARD, BOARD_ID_WHITEBOARD, ClickHighlightSettings, EraserMode, InputState,
-};
+use wayscriber::input::{BOARD_ID_BLACKBOARD, BOARD_ID_WHITEBOARD, InputState};
 
 fn make_input_state() -> InputState {
-    let keybindings = KeybindingsConfig::default();
-    let action_map = keybindings.build_action_map().unwrap();
-    let action_bindings = keybindings.build_action_bindings().unwrap();
-    let mut input = InputState::with_defaults(
-        Color {
-            r: 1.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        },
-        4.0,
-        4.0,
-        EraserMode::Brush,
-        0.32,
-        false,
-        32.0,
-        wayscriber::draw::FontDescriptor::default(),
-        false,
-        20.0,
-        30.0,
-        false,
-        true,
-        wayscriber::config::BoardsConfig::default(),
-        action_map,
-        usize::MAX,
-        ClickHighlightSettings::disabled(),
-        0,
-        0,
-        true,
-        0,
-        0,
-        5,
-        5,
-        PresenterModeConfig::default(),
-    );
-    input.set_action_bindings(action_bindings);
-    input
+    InputState::from_config(&Config::default())
 }
 
 fn surface_with_context(width: i32, height: i32) -> (ImageSurface, Context) {
@@ -171,8 +130,8 @@ fn render_command_palette_with_query_draws_content() {
     // and draw pixels (highlight boxes + rows).
     let (mut surface, ctx) = surface_with_context(900, 700);
     let mut input = make_input_state();
-    input.command_palette_open = true;
-    input.command_palette_query = "tool".to_string();
+    input.command_palette.open = true;
+    input.command_palette.query = "tool".to_string();
 
     wayscriber::ui::render_command_palette(&ctx, &input, 900, 700);
 

@@ -1,14 +1,11 @@
 use super::*;
-use crate::config::{Action, BoardsConfig, Config, PresenterModeConfig, Shortcut};
+use crate::config::{Action, Config, Shortcut};
 use crate::draw::{
     Color, EraserKind, FontDescriptor, Frame, PageDeleteOutcome, REGULAR_POLYGON_DEFAULT_SIDES,
     Shape, ShapeId,
 };
 use crate::env_vars::{CATALOG_HOOKS_TEST_ENV, XDG_DATA_HOME_ENV};
-use crate::input::{
-    BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, ClickHighlightSettings, DrawingState, EraserMode,
-    Tool,
-};
+use crate::input::{BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, DrawingState, EraserMode, Tool};
 use crate::util::Rect;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -106,38 +103,12 @@ fn can_create_probe(parent: &Path) -> bool {
 fn test_input_state() -> InputState {
     let mut action_map = HashMap::new();
     action_map.insert(Shortcut::parse("Escape").unwrap(), Action::Exit);
-    InputState::with_defaults(
-        Color {
-            r: 1.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        },
-        3.0,
-        12.0,
-        EraserMode::Brush,
-        0.32,
-        false,
-        32.0,
-        FontDescriptor::default(),
-        false,
-        20.0,
-        30.0,
-        false,
-        true,
-        BoardsConfig::default(),
-        action_map,
-        usize::MAX,
-        ClickHighlightSettings::disabled(),
-        0,
-        0,
-        true,
-        0,
-        0,
-        5,
-        5,
-        PresenterModeConfig::default(),
-    )
+    crate::input::state::test_support::TestInputStateBuilder::default()
+        .action_map(action_map)
+        .action_bindings(HashMap::new())
+        .thickness(3.0)
+        .eraser_size(12.0)
+        .build()
 }
 
 fn add_line(input: &mut InputState, x2: i32) -> ShapeId {
@@ -678,7 +649,7 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
     let _ = input.set_thickness(11.0);
     let _ = input.set_spotlight_magnification(3.5);
     input.arrow_head_at_end = false;
-    input.show_status_bar = false;
+    input.ui_visibility.show_status_bar = false;
     let mut session_state = SessionState::new(Some(current_options.clone()));
     session_state.mark_loaded(true);
 
@@ -709,7 +680,7 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
     assert_eq!(input.spotlight_magnification, 2.1);
     assert!(input.arrow_head_at_end);
     assert!(
-        !input.show_status_bar,
+        !input.ui_visibility.show_status_bar,
         "chrome is a process preference, not saved tool state: resetting tools leaves the run's own status-bar choice alone"
     );
     assert!(input.is_session_dirty());
@@ -1752,7 +1723,10 @@ fn protected_session_path_survives_a_run_only_status_bar_toggle() {
     let mut input = test_input_state();
     input.handle_action(Action::ToggleStatusBar);
 
-    assert!(!input.show_status_bar, "the toggle still moves the bar");
+    assert!(
+        !input.ui_visibility.show_status_bar,
+        "the toggle still moves the bar"
+    );
     assert!(!input.is_session_dirty());
     assert!(state.should_skip_save_for_protected_path(&path, input.is_session_dirty()));
 

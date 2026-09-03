@@ -156,7 +156,7 @@ impl WaylandState {
 
         // Handle command palette scrolling (display-row space; selection is
         // kept inside the window, skipping group headers).
-        if self.input_state.command_palette_open {
+        if self.input_state.command_palette.open {
             if scroll_direction != 0 {
                 self.input_state
                     .command_palette_wheel_scroll(scroll_direction);
@@ -317,13 +317,13 @@ impl WaylandState {
         if !eraser_active
             && (self.input_state.current_thickness - prev_thickness).abs() > f64::EPSILON
         {
-            self.stylus_base_thickness = Some(self.input_state.current_thickness);
-            if self.stylus_tip_down {
-                self.stylus_pressure_thickness = Some(self.input_state.current_thickness);
+            self.tablet.base_thickness = Some(self.input_state.current_thickness);
+            if self.tablet.tip_down {
+                self.tablet.pressure_thickness = Some(self.input_state.current_thickness);
                 self.record_stylus_peak(self.input_state.current_thickness);
             } else {
-                self.stylus_pressure_thickness = None;
-                self.stylus_peak_thickness = None;
+                self.tablet.pressure_thickness = None;
+                self.tablet.peak_thickness = None;
             }
         }
     }

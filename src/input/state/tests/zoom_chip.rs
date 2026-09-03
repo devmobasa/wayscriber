@@ -53,7 +53,7 @@ fn zoom_chip_layout_cleared_when_actions_hidden() {
     assert!(input.zoom_chip_layout().is_some());
 
     // Visibility is gated on `show_zoom_actions`: off means no layout, no hit.
-    input.show_zoom_actions = false;
+    input.ui_visibility.show_zoom_actions = false;
     update_chip_layout(&mut input, 1280, 720);
     assert!(input.zoom_chip_layout().is_none());
     assert!(!input.zoom_chip_contains(1270, 710));
@@ -70,7 +70,10 @@ fn toggle_zoom_chip_action_hides_layout_and_hit_testing() {
     // durable work.
     input.handle_action(crate::config::Action::ToggleZoomChip);
     assert!(!input.zoom_chip_enabled());
-    assert!(input.show_zoom_actions, "toolbar preference untouched");
+    assert!(
+        input.ui_visibility.show_zoom_actions,
+        "toolbar preference untouched"
+    );
     assert!(input.take_pending_backend_action().is_none());
     update_chip_layout(&mut input, 1280, 720);
     assert!(input.zoom_chip_layout().is_none());
@@ -359,7 +362,7 @@ fn zoom_chip_press_routing_consumes_left_press() {
     );
 
     // With zoom actions disabled the press draws through as before.
-    input.show_zoom_actions = false;
+    input.ui_visibility.show_zoom_actions = false;
     update_chip_layout(&mut input, 1280, 720);
     input.on_mouse_press_with_canvas(MouseButton::Left, x, y, x, y);
     assert!(matches!(input.state, DrawingState::Drawing { .. }));

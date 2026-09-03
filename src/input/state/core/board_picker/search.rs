@@ -185,52 +185,21 @@ fn fuzzy_score_with_single_swap(needle: &str, haystack: &str) -> Option<i32> {
 #[cfg(test)]
 mod tests {
     use super::{BOARD_PICKER_SEARCH_TIMEOUT, BoardPickerFocus, fuzzy_score, fuzzy_score_relaxed};
-    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
-    use crate::draw::{Color, FontDescriptor};
-    use crate::input::{ClickHighlightSettings, EraserMode, InputState};
+    use crate::config::KeybindingsConfig;
+
+    use crate::input::InputState;
     use std::time::{Duration, Instant};
 
     fn make_state() -> InputState {
         let keybindings = KeybindingsConfig::default();
-        let action_map = keybindings
+        let _action_map = keybindings
             .build_action_map()
             .expect("default keybindings map");
         let action_bindings = keybindings
             .build_action_bindings()
             .expect("default keybindings bindings");
 
-        let mut state = InputState::with_defaults(
-            Color {
-                r: 1.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            },
-            4.0,
-            4.0,
-            EraserMode::Brush,
-            0.32,
-            false,
-            32.0,
-            FontDescriptor::default(),
-            false,
-            20.0,
-            30.0,
-            false,
-            true,
-            BoardsConfig::default(),
-            action_map,
-            usize::MAX,
-            ClickHighlightSettings::disabled(),
-            0,
-            0,
-            true,
-            0,
-            0,
-            5,
-            5,
-            PresenterModeConfig::default(),
-        );
+        let mut state = crate::input::state::test_support::make_test_input_state();
         state.set_action_bindings(action_bindings);
         state
     }

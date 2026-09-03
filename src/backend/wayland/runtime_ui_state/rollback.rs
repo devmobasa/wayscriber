@@ -40,25 +40,43 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
                     apply_persisted_top_display_mode(input, *mode);
                 }
             }
-            Target::StatusBarInteractive => set_bool(value, |v| input.status_bar_interactive = v),
+            Target::StatusBarInteractive => {
+                set_bool(value, |v| input.ui_visibility.status_bar_interactive = v)
+            }
             Target::StatusBarItem(item) => set_bool(value, |v| {
                 input.set_status_bar_item_visible(*item, v);
             }),
-            Target::StatusBar => set_bool(value, |v| input.show_status_bar = v),
-            Target::StatusBoardBadge => set_bool(value, |v| input.show_status_board_badge = v),
-            Target::StatusPageBadge => set_bool(value, |v| input.show_status_page_badge = v),
-            Target::FloatingBadgeAlways => {
-                set_bool(value, |v| input.show_floating_badge_always = v)
+            Target::StatusBar => set_bool(value, |v| input.ui_visibility.show_status_bar = v),
+            Target::StatusBoardBadge => {
+                set_bool(value, |v| input.ui_visibility.show_status_board_badge = v)
             }
-            Target::FloatingBadge => set_bool(value, |v| input.show_floating_badge = v),
-            Target::ZoomChip => set_bool(value, |v| input.show_zoom_chip = v),
+            Target::StatusPageBadge => {
+                set_bool(value, |v| input.ui_visibility.show_status_page_badge = v)
+            }
+            Target::FloatingBadgeAlways => set_bool(value, |v| {
+                input.ui_visibility.show_floating_badge_always = v
+            }),
+            Target::FloatingBadge => {
+                set_bool(value, |v| input.ui_visibility.show_floating_badge = v)
+            }
+            Target::ZoomChip => set_bool(value, |v| input.ui_visibility.show_zoom_chip = v),
             Target::ToolbarIcons => set_bool(value, |v| input.toolbar_use_icons = v),
-            Target::ToolbarMoreColors => set_bool(value, |v| input.show_more_colors = v),
-            Target::ToolbarContextAwareUi => set_bool(value, |v| input.context_aware_ui = v),
-            Target::ToolbarPresetToasts => set_bool(value, |v| input.show_preset_toasts = v),
-            Target::ToolbarIdleFade => set_bool(value, |v| input.idle_fade = v),
-            Target::ToolbarToolPreview => set_bool(value, |v| input.show_tool_preview = v),
-            Target::ToolbarDelaySliders => set_bool(value, |v| input.show_delay_sliders = v),
+            Target::ToolbarMoreColors => {
+                set_bool(value, |v| input.ui_visibility.show_more_colors = v)
+            }
+            Target::ToolbarContextAwareUi => {
+                set_bool(value, |v| input.ui_visibility.context_aware_ui = v)
+            }
+            Target::ToolbarPresetToasts => {
+                set_bool(value, |v| input.ui_visibility.show_preset_toasts = v)
+            }
+            Target::ToolbarIdleFade => set_bool(value, |v| input.ui_visibility.idle_fade = v),
+            Target::ToolbarToolPreview => {
+                set_bool(value, |v| input.ui_visibility.show_tool_preview = v)
+            }
+            Target::ToolbarDelaySliders => {
+                set_bool(value, |v| input.ui_visibility.show_delay_sliders = v)
+            }
             Target::HistoryCustomSection => set_bool(value, |v| input.custom_section_enabled = v),
             Target::InputHud => set_bool(value, |v| {
                 input.set_input_hud_enabled(v);

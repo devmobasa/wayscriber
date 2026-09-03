@@ -199,7 +199,7 @@ impl WaylandState {
         // The command palette owns hover rendering (including shortcut-action
         // tooltips), so keep its screen-space pointer cache and redraw current
         // even though normal canvas motion remains blocked by the modal.
-        if self.input_state.command_palette_open {
+        if self.input_state.command_palette.open {
             let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
             self.input_state.update_pointer_positions(
                 event.position.0.round() as i32,

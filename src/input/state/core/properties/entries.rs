@@ -204,48 +204,13 @@ impl InputState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{BoardsConfig, KeybindingsConfig, PresenterModeConfig};
-    use crate::draw::{ArrowStyle, Color, FontDescriptor};
-    use crate::input::{ClickHighlightSettings, EraserMode};
+
+    use crate::draw::{ArrowStyle, Color};
 
     fn make_state() -> InputState {
-        let keybindings = KeybindingsConfig::default();
-        let action_map = keybindings
-            .build_action_map()
-            .expect("default keybindings map");
-
-        InputState::with_defaults(
-            Color {
-                r: 1.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            },
-            4.0,
-            4.0,
-            EraserMode::Brush,
-            0.32,
-            false,
-            32.0,
-            FontDescriptor::default(),
-            true,
-            20.0,
-            30.0,
-            false,
-            true,
-            BoardsConfig::default(),
-            action_map,
-            usize::MAX,
-            ClickHighlightSettings::disabled(),
-            0,
-            0,
-            true,
-            0,
-            0,
-            5,
-            5,
-            PresenterModeConfig::default(),
-        )
+        crate::input::state::test_support::TestInputStateBuilder::default()
+            .text_background_enabled(true)
+            .build()
     }
 
     fn entry<'a>(entries: &'a [SelectionPropertyEntry], label: &str) -> &'a SelectionPropertyEntry {

@@ -731,9 +731,8 @@ fn an_answered_edit_gives_its_projection_back_even_when_the_write_failed() {
 /// An input state the way the overlay's own suites build one, so the gestures
 /// below are recorded by the real code rather than poked into a field.
 fn test_input_state() -> crate::input::state::InputState {
-    use crate::config::{Action, BoardsConfig, PresenterModeConfig, Shortcut};
-    use crate::draw::{Color, FontDescriptor};
-    use crate::input::{ClickHighlightSettings, EraserMode};
+    use crate::config::{Action, Shortcut};
+
     use std::collections::HashMap;
 
     let mut action_map = HashMap::new();
@@ -741,38 +740,12 @@ fn test_input_state() -> crate::input::state::InputState {
         Shortcut::parse("Escape").expect("a chord this test spelled"),
         Action::Exit,
     );
-    crate::input::state::InputState::with_defaults(
-        Color {
-            r: 1.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        },
-        3.0,
-        12.0,
-        EraserMode::Brush,
-        0.32,
-        false,
-        32.0,
-        FontDescriptor::default(),
-        false,
-        20.0,
-        30.0,
-        false,
-        true,
-        BoardsConfig::default(),
-        action_map,
-        usize::MAX,
-        ClickHighlightSettings::disabled(),
-        0,
-        0,
-        true,
-        0,
-        0,
-        5,
-        5,
-        PresenterModeConfig::default(),
-    )
+    crate::input::state::test_support::TestInputStateBuilder::default()
+        .action_map(action_map)
+        .action_bindings(HashMap::new())
+        .thickness(3.0)
+        .eraser_size(12.0)
+        .build()
 }
 
 /// The gestures the overlay can still be holding when it is told to quit, and

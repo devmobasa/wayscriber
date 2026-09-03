@@ -21,7 +21,7 @@ impl Dispatch<ZwpTabletPadV2, ()> for WaylandState {
         match event {
             Event::Group { pad_group } => {
                 debug!("Tablet pad group announced: {:?}", pad_group.id());
-                state.tablet_pad_groups.push(pad_group);
+                state.tablet.pad_groups.push(pad_group);
             }
             Event::Path { path } => {
                 debug!("Tablet pad path: {}", path);
@@ -63,10 +63,10 @@ impl Dispatch<ZwpTabletPadV2, ()> for WaylandState {
             }
             Event::Removed => {
                 info!("Tablet pad removed");
-                state.tablet_pads.clear();
-                state.tablet_pad_groups.clear();
-                state.tablet_pad_rings.clear();
-                state.tablet_pad_strips.clear();
+                state.tablet.pads.clear();
+                state.tablet.pad_groups.clear();
+                state.tablet.pad_rings.clear();
+                state.tablet.pad_strips.clear();
             }
             _ => {}
         }

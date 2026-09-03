@@ -175,72 +175,33 @@ impl InputState {
     }
 
     /// Initialize toolbar visibility from config (called at startup).
-    #[allow(clippy::too_many_arguments)]
-    pub fn init_toolbar_from_config(
-        &mut self,
-        layout_mode: crate::config::ToolbarLayoutMode,
-        mode_overrides: crate::config::ToolbarModeOverrides,
-        items: crate::config::ToolbarItemsConfig,
-        top_pinned: bool,
-        use_icons: bool,
-        scale: f64,
-        show_more_colors: bool,
-        show_actions_section: bool,
-        show_actions_advanced: bool,
-        show_zoom_actions: bool,
-        show_pages_section: bool,
-        show_boards_section: bool,
-        show_presets: bool,
-        show_step_section: bool,
-        show_text_controls: bool,
-        context_aware_ui: bool,
-        show_delay_sliders: bool,
-        show_marker_opacity_section: bool,
-        show_preset_toasts: bool,
-        idle_fade: bool,
-        show_tool_preview: bool,
-    ) {
-        self.toolbar_top_pinned = top_pinned;
-        self.toolbar_top_visible = top_pinned;
-        self.toolbar_visible = top_pinned;
-        self.toolbar_use_icons = use_icons;
-        self.toolbar_scale = scale;
-        self.toolbar_layout_mode = layout_mode;
-        self.toolbar_mode_overrides = mode_overrides;
-        self.resolved_toolbar_items = items.resolved();
-        self.toolbar_items = items;
-        self.show_more_colors = show_more_colors;
-        self.show_actions_section = show_actions_section;
-        self.show_actions_advanced = show_actions_advanced;
-        self.show_zoom_actions = show_zoom_actions;
-        self.show_pages_section = show_pages_section;
-        self.show_boards_section = show_boards_section;
-        self.show_presets = show_presets;
-        self.show_step_section = show_step_section;
-        self.show_text_controls = show_text_controls;
-        self.context_aware_ui = context_aware_ui;
-        self.show_delay_sliders = show_delay_sliders;
-        self.show_marker_opacity_section = show_marker_opacity_section;
-        self.show_preset_toasts = show_preset_toasts;
-        self.idle_fade = idle_fade;
-        self.show_tool_preview = show_tool_preview;
+    pub fn init_toolbar_from_config(&mut self, config: &crate::config::ToolbarConfig) {
+        self.toolbar_top_pinned = config.top_pinned;
+        self.toolbar_top_visible = config.top_pinned;
+        self.toolbar_visible = config.top_pinned;
+        self.toolbar_use_icons = config.use_icons;
+        self.toolbar_scale = config.scale;
+        self.toolbar_layout_mode = config.layout_mode;
+        self.toolbar_mode_overrides = config.mode_overrides.clone();
+        self.resolved_toolbar_items = config.items.resolved();
+        self.toolbar_items = config.items.clone();
         // Fold the legacy show_* booleans into explicit item overrides,
         // then re-derive them from the one resolver. Effective visibility
         // is bit-identical; the overrides now survive mode switches.
         let mut legacy = crate::config::ToolbarSectionVisibility {
-            show_actions_section: self.show_actions_section,
-            show_actions_advanced: self.show_actions_advanced,
-            show_zoom_actions: self.show_zoom_actions,
-            show_pages_section: self.show_pages_section,
-            show_boards_section: self.show_boards_section,
-            show_presets: self.show_presets,
-            show_step_section: self.show_step_section,
-            show_text_controls: self.show_text_controls,
+            show_actions_section: self.ui_visibility.show_actions_section,
+            show_actions_advanced: self.ui_visibility.show_actions_advanced,
+            show_zoom_actions: self.ui_visibility.show_zoom_actions,
+            show_pages_section: self.ui_visibility.show_pages_section,
+            show_boards_section: self.ui_visibility.show_boards_section,
+            show_presets: self.ui_visibility.show_presets,
+            show_step_section: self.ui_visibility.show_step_section,
+            show_text_controls: self.ui_visibility.show_text_controls,
         };
-        legacy.apply_mode_override(self.toolbar_mode_overrides.for_mode(layout_mode));
+        legacy.apply_mode_override(self.toolbar_mode_overrides.for_mode(config.layout_mode));
         if crate::config::fold_legacy_section_flags(
             &legacy,
-            layout_mode,
+            config.layout_mode,
             &self.toolbar_mode_overrides,
             &mut self.toolbar_items,
         ) {
@@ -258,14 +219,14 @@ impl InputState {
             &self.toolbar_mode_overrides,
             &self.resolved_toolbar_items,
         );
-        self.show_actions_section = visibility.show_actions_section;
-        self.show_actions_advanced = visibility.show_actions_advanced;
-        self.show_zoom_actions = visibility.show_zoom_actions;
-        self.show_pages_section = visibility.show_pages_section;
-        self.show_boards_section = visibility.show_boards_section;
-        self.show_presets = visibility.show_presets;
-        self.show_step_section = visibility.show_step_section;
-        self.show_text_controls = visibility.show_text_controls;
+        self.ui_visibility.show_actions_section = visibility.show_actions_section;
+        self.ui_visibility.show_actions_advanced = visibility.show_actions_advanced;
+        self.ui_visibility.show_zoom_actions = visibility.show_zoom_actions;
+        self.ui_visibility.show_pages_section = visibility.show_pages_section;
+        self.ui_visibility.show_boards_section = visibility.show_boards_section;
+        self.ui_visibility.show_presets = visibility.show_presets;
+        self.ui_visibility.show_step_section = visibility.show_step_section;
+        self.ui_visibility.show_text_controls = visibility.show_text_controls;
     }
 
     /// Restore the persisted minimize state of the top strip (called at
@@ -524,33 +485,19 @@ mod tests {
         let mut state = make_test_input_state();
         // A legacy Regular config where zoom actions were turned off and
         // everything else matches the baseline.
-        state.init_toolbar_from_config(
-            crate::config::ToolbarLayoutMode::Regular,
-            crate::config::ToolbarModeOverrides::default(),
-            crate::config::ToolbarItemsConfig::default(),
-            true,
-            true,
-            1.0,
-            false,
-            true,  // actions
-            false, // advanced
-            false, // zoom — differs from the Regular baseline
-            true,  // pages
-            true,  // boards
-            true,  // presets
-            false, // step
-            true,  // text controls
-            true,  // context aware ui
-            false,
-            false,
-            true,
-            true,
-            false,
-        );
+        let config = crate::config::ToolbarConfig {
+            show_zoom_actions: false,
+            ..Default::default()
+        };
+        state.ui_visibility = crate::input::state::UiVisibility::from(&crate::config::UiConfig {
+            toolbar: config.clone(),
+            ..Default::default()
+        });
+        state.init_toolbar_from_config(&config);
 
         // Effective visibility is bit-identical to the legacy booleans...
-        assert!(!state.show_zoom_actions);
-        assert!(state.show_presets);
+        assert!(!state.ui_visibility.show_zoom_actions);
+        assert!(state.ui_visibility.show_presets);
         // ...and the disagreement is now an explicit override that
         // survives mode switches.
         let zoom_id = crate::config::ToolbarSectionFlag::ZoomActions.item_id();
@@ -558,7 +505,7 @@ mod tests {
         state.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::SetToolbarLayoutMode(
             crate::config::ToolbarLayoutMode::Advanced,
         ));
-        assert!(!state.show_zoom_actions);
+        assert!(!state.ui_visibility.show_zoom_actions);
     }
 
     #[test]

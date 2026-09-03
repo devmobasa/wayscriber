@@ -33,8 +33,8 @@ impl InputState {
     /// disagree. Outside Focus Mode, fallback zoom badges show exactly when
     /// the chip does not; Focus Mode deliberately suppresses both.
     pub fn zoom_chip_enabled(&self) -> bool {
-        self.show_zoom_actions
-            && self.show_zoom_chip
+        self.ui_visibility.show_zoom_actions
+            && self.ui_visibility.show_zoom_chip
             && (self.zoom_chip_display == crate::config::ZoomChipDisplay::Always
                 || self.zoom_active())
     }

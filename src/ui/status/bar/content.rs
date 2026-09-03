@@ -212,7 +212,7 @@ pub fn compute_status_hud_layout(
                 // (`[ui] status_bar_interactive = false`) will reject; the
                 // chip itself still shows the recovery binding there.
                 accent: piece.kind == Some(StatusHudSegmentKind::Toolbar)
-                    && input_state.status_bar_interactive,
+                    && input_state.ui_visibility.status_bar_interactive,
             }),
             None => runs.push(StatusHudRun::Dot { x: content_x }),
         }
@@ -278,7 +278,7 @@ fn board_segment_label(input_state: &InputState, max_name_chars: Option<usize>) 
 pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPiece> {
     let mut pieces = Vec::new();
 
-    if input_state.show_status_board_badge && input_state.boards.show_badge() {
+    if input_state.ui_visibility.show_status_board_badge && input_state.boards.show_badge() {
         pieces.push(StatusHudPiece::text(
             board_segment_label(input_state, Some(BOARD_NAME_MAX_CHARS)),
             Some(StatusHudSegmentKind::Board),
@@ -286,7 +286,7 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
         ));
     }
 
-    if input_state.show_status_page_badge {
+    if input_state.ui_visibility.show_status_page_badge {
         pieces.push(StatusHudPiece::text(
             format!(
                 "Page {}/{}",
@@ -298,19 +298,19 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
         ));
     }
 
-    if input_state.show_status_color {
+    if input_state.ui_visibility.show_status_color {
         pieces.push(StatusHudPiece::dot());
     }
 
     let tool = input_state.active_tool();
-    if input_state.show_status_tool {
+    if input_state.ui_visibility.show_status_tool {
         pieces.push(StatusHudPiece::text(
             tool_display_name(input_state, tool).to_string(),
             Some(StatusHudSegmentKind::Tool),
             false,
         ));
     }
-    if input_state.show_status_size {
+    if input_state.ui_visibility.show_status_size {
         pieces.push(StatusHudPiece::text(
             format!("{}px", input_state.size_for_active_tool() as i32),
             Some(StatusHudSegmentKind::Size),
@@ -318,7 +318,7 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
         ));
     }
 
-    if input_state.show_status_context_indicators {
+    if input_state.ui_visibility.show_status_context_indicators {
         if matches!(
             input_state.state,
             DrawingState::TextInput { .. } | DrawingState::PendingTextClick { .. }
@@ -352,7 +352,7 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
     // deliberate toolbar-less setups; suppressed while presenter mode owns
     // toolbar visibility (the toggle is a no-op there); shed first when the
     // width budget binds.
-    if input_state.show_toolbar_hint
+    if input_state.ui_visibility.show_toolbar_hint
         && !(input_state.toolbar_visible()
             || input_state.presenter_mode && input_state.presenter_mode_config.hide_toolbars)
     {
@@ -363,7 +363,7 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
         ));
     }
 
-    if input_state.show_status_help {
+    if input_state.ui_visibility.show_status_help {
         let binding = help_binding_label(input_state);
         let help_label = if binding.is_empty() {
             action_display_label(Action::ToggleHelp).to_string()
@@ -381,7 +381,7 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
     // opens About when clicked. Marked optional so it is the first piece shed
     // when the width budget binds — a version badge must never cost the board
     // name or the help hint their space.
-    if input_state.show_status_about {
+    if input_state.ui_visibility.show_status_about {
         pieces.push(StatusHudPiece::text(
             format!("About v{}", crate::build_info::version()),
             Some(StatusHudSegmentKind::About),
@@ -396,13 +396,13 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
 /// output label), or `None` when nothing applies.
 pub(super) fn build_prefix_text(input_state: &InputState) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
-    if input_state.show_active_output_badge
+    if input_state.ui_visibility.show_active_output_badge
         && let Some(label) = input_state.active_output_label.as_ref()
     {
         let label = crate::util::truncate_with_ellipsis(label, 28);
         parts.push(format!("Output: {label}"));
     }
-    if input_state.show_status_selection_info
+    if input_state.ui_visibility.show_status_selection_info
         && let Some(bounds) = input_state.selection_bounds()
     {
         let count = input_state.selected_shape_ids().len();

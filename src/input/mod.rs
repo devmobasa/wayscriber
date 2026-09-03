@@ -24,7 +24,7 @@ pub use events::{Key, MouseButton};
 pub(crate) use state::IdleHandle;
 pub use state::{
     BoardPickerCursorHint, ClickHighlightSettings, ColorPickerCursorHint, CommandPaletteCursorHint,
-    ContextMenuCursorHint, DrawingState, EyedropperUiState, HelpOverlayClick,
+    CommandPaletteState, ContextMenuCursorHint, DrawingState, EyedropperUiState, HelpOverlayClick,
     HelpOverlayCursorHint, HelpOverlayReleaseOutcome, InputHudActiveSource, InputHudEntry,
     InputHudEntryKind, InputHudSettings, InputState, OutputFocusAction, RegionInputSource,
     RegionPurposeTag, RegionSelectUiState, SelectionHandle, SelectionPropertyEntry,
