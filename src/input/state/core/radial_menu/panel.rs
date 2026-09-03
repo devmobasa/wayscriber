@@ -7,9 +7,9 @@ use crate::config::RadialMenuMouseBinding;
 /// Lifecycle, layout, and configured pointer trigger for the radial menu.
 #[derive(Debug)]
 pub struct RadialMenuPanel {
-    pub state: RadialMenuState,
-    pub layout: Option<RadialMenuLayout>,
-    pub mouse_binding: RadialMenuMouseBinding,
+    pub(crate) state: RadialMenuState,
+    pub(crate) layout: Option<RadialMenuLayout>,
+    pub(crate) mouse_binding: RadialMenuMouseBinding,
 }
 
 impl RadialMenuPanel {

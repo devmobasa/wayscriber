@@ -107,7 +107,9 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
      search, scrolling, and press/release bookkeeping. `BoardPickerPanel` similarly owns the board
      picker's modal lifecycle, search timing, layout cache, and drag/edit state. `ContextMenuPanel`
      owns context-menu visibility, targeting, enablement, and cached layout. `ColorPickerPopupPanel`
-     owns popup generation, geometry, action presses, and picker-drag lifecycle.
+     owns popup generation, geometry, action presses, and picker-drag lifecycle. `RadialMenuPanel`
+     owns radial-menu visibility, paint gating, flick arming, drag capture, cached layout, and its
+     configured pointer trigger.
    - `state/mouse/` and `state/interaction/` convert pointer gestures into drawing/state changes.
    - `render.rs` exposes provisional shape previews for live feedback.
 

@@ -340,7 +340,7 @@ pub struct InputState {
     /// Modal state, cached geometry, and press identity for the color picker popup.
     pub(crate) color_picker_popup: crate::input::state::core::ColorPickerPopupPanel,
     /// Lifecycle, layout, and configured pointer trigger for the radial menu.
-    pub radial_menu: crate::input::state::core::RadialMenuPanel,
+    pub(crate) radial_menu: crate::input::state::core::RadialMenuPanel,
     /// Cached hit-test bounds per shape id
     pub(in crate::input::state::core) hit_test_cache: HashMap<ShapeId, Rect>,
     /// Monotonic counter bumped whenever committed shape content may have
