@@ -117,12 +117,12 @@ impl WaylandState {
     pub(super) fn handle_pointer_axis(
         &mut self,
         event: &PointerEvent,
-        on_toolbar: bool,
+        routed: RoutedInput,
         vertical: AxisScroll,
         source: Option<wl_pointer::AxisSource>,
     ) {
         let stopped = vertical.stop;
-        self.handle_pointer_axis_inner(event, on_toolbar, vertical, source);
+        self.handle_pointer_axis_inner(event, routed, vertical, source);
         finalize_spotlight_wheel_if_axis_stopped(
             &mut self.input_state,
             self.spotlight.wheel_idle_deadline_mut(),
@@ -133,7 +133,7 @@ impl WaylandState {
     fn handle_pointer_axis_inner(
         &mut self,
         event: &PointerEvent,
-        on_toolbar: bool,
+        routed: RoutedInput,
         vertical: AxisScroll,
         source: Option<wl_pointer::AxisSource>,
     ) {
@@ -144,6 +144,9 @@ impl WaylandState {
         if scroll_direction != 0 {
             self.input_state
                 .note_input_hud_scroll(scroll_direction < 0, self.input_state.modifiers);
+        }
+        if routed.surface == InputSurface::Foreign {
+            return;
         }
         // Handle radial menu scroll-to-thickness
         if self.input_state.is_radial_menu_open() {
@@ -183,7 +186,8 @@ impl WaylandState {
         ) {
             return;
         }
-        let over_toolbar = on_toolbar || self.pointer_over_toolbar();
+        let over_toolbar =
+            routed.surface == InputSurface::Toolbar || self.toolbar_chrome.pointer_over_toolbar();
         let over_top_toolbar =
             over_toolbar && self.wheel_over_top_toolbar(&event.surface, event.position);
         match axis_surface_route(

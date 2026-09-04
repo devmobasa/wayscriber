@@ -101,7 +101,7 @@ impl WaylandState {
             .or_else(|| self.preferences.runtime_ui().unavailable().cloned());
         snapshot.top_viewport_max = self.top_strip_viewport_max(&snapshot);
         snapshot.top_available_height = self.top_popover_available_height(&snapshot);
-        snapshot.top_fade = self.data.top_strip_fade.value();
+        snapshot.top_fade = self.toolbar_chrome.fade().value();
         snapshot
     }
 
@@ -133,7 +133,7 @@ impl WaylandState {
         } else {
             1.0
         };
-        let surface_y = self.inline_top_base_y() + self.data.toolbar_top_offset_y;
+        let surface_y = self.inline_top_base_y() + self.toolbar_chrome.top_offset().1;
         super::geometry::remaining_top_height(screen_height, surface_y, scale)
     }
 
@@ -162,7 +162,7 @@ impl WaylandState {
         // toolbars are inline. Refresh every SHM slot even for early-returning
         // event paths (popover dismissal, rebind capture, session actions) so
         // slot rotation cannot restore stale toolbar pixels.
-        if self.inline_toolbars_active() {
+        if self.toolbar_chrome.inline_toolbars() {
             self.mark_inline_toolbar_full_damage();
         }
         self.handle_toolbar_event_with_rebind(event, rebind_requested, conn, qh);
@@ -383,7 +383,7 @@ impl WaylandState {
         else {
             return false;
         };
-        let inline_active = self.inline_toolbars_active();
+        let inline_active = self.toolbar_chrome.inline_toolbars();
         let coord_is_screen = inline_active;
         drag_log(|| {
             format!(

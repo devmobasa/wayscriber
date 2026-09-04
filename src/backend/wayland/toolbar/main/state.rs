@@ -32,8 +32,8 @@ impl ToolbarSurfaceManager {
         self.set_visible(visible);
     }
 
-    pub fn is_toolbar_surface(&self, surface: &wl_surface::WlSurface) -> bool {
-        self.top.is_surface(surface)
+    pub(in crate::backend::wayland) fn wl_surface(&self) -> Option<&wl_surface::WlSurface> {
+        self.top.wl_surface()
     }
 
     /// Whether the pointer (or keyboard focus hover) is currently on the

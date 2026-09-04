@@ -8,10 +8,7 @@ use smithay_client_toolkit::{
     shell::wlr_layer::KeyboardInteractivity,
 };
 use std::time::{Duration, Instant};
-use wayland_client::{
-    Proxy, QueueHandle,
-    protocol::{wl_output, wl_seat},
-};
+use wayland_client::{QueueHandle, protocol::wl_output};
 #[cfg(feature = "tablet-input")]
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
 use wayland_protocols::wp::{
@@ -41,24 +38,19 @@ use crate::{
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
 };
 
-use self::data::{MoveDrag, StateData};
-pub use self::data::{
-    MoveDragKind, OverlaySuppression, OverlaySuppressionKeyboardPolicy, XdgFrozenFullscreenState,
+pub(in crate::backend::wayland) use self::core::overlay::{
+    OverlaySuppression, OverlaySuppressionKeyboardPolicy,
 };
 pub(in crate::backend::wayland) use self::region_capture::WindowSnapDirection;
+pub(in crate::backend::wayland) use self::toolbar::MoveDragKind;
 use super::{
     RuntimeOperationController, RuntimeOperationIdSource,
     capture::{CapturePreflightRequest, CaptureState, PendingPdfExport},
     frozen::{ExtImageCopyManagers, FrozenState},
     overlay_passthrough::set_surface_clickthrough,
     session::SessionState,
-    surface::SurfaceState,
-    toolbar::{
-        ToolbarSurfaceManager,
-        hit::{drag_intent_for_hit, intent_for_hit, quick_color_slot_for_hit},
-        layout::top_size,
-        render::render_top_strip,
-    },
+    surface::{SurfacePlacement, SurfaceState},
+    toolbar::{ToolbarSurfaceManager, layout::top_size, render::render_top_strip},
     toolbar_intent::intent_to_event,
     zoom::ZoomState,
 };
@@ -76,9 +68,9 @@ pub(in crate::backend::wayland) use clipboard_runtime::{
 };
 mod color_picker;
 mod core;
-mod data;
 mod desktop_open;
 mod eyedropper;
+mod focus;
 mod font_catalog;
 mod gtk_toolbar;
 mod helper_launch;
@@ -137,6 +129,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub globals: ProtocolGlobals,
     pub config: Config,
     pub input_state: InputState,
+    pub startup_activation_token: Option<String>,
     pub onboarding: crate::onboarding::OnboardingStore,
     pub palette_recents: crate::palette_recents::PaletteRecentsWriter,
     pub capture_manager: CaptureManager,
@@ -169,11 +162,16 @@ pub(super) struct WaylandState {
     // Surface and buffer management
     pub(super) surface: SurfaceState,
     pub(super) toolbar: ToolbarSurfaceManager,
-    data: StateData,
+    pub(super) toolbar_chrome: toolbar::ToolbarChrome,
+    pub(super) toolbar_drag: toolbar::ToolbarDrag,
+    pub(super) render: render::RenderRuntime,
+    pub(super) suppression: core::overlay::OverlaySuppressionState,
+    shortcut_coach: onboarding::ShortcutCoachSession,
+    /// Keyboard, pointer, activation, and focus-loss lifecycle.
+    pub(super) focus: focus::FocusState,
     /// Per-buffer damage tracking for correct incremental rendering.
     pub(super) buffer_damage: buffer_damage::BufferDamageTracker,
     /// Baked committed-shapes layer for panned canvas rendering.
-    pub(super) canvas_layer_cache: canvas_layer::CanvasLayerCache,
     /// Render memory, warning latches, and wheel timing for Spotlight effects.
     pub(super) spotlight: spotlight_runtime::SpotlightRuntime,
 
@@ -196,22 +194,9 @@ pub(super) struct WaylandState {
     /// Desktop-open work completes off-dispatch; successful completion is what
     /// requests overlay exit, so runtime-owned broker teardown cannot race it.
     pub(super) desktop_open: RuntimeOperationController<DesktopOpenRequest, Result<(), String>>,
-    /// Capacity-one compositor window query for the current native region picker.
-    /// Its context owns the picker/source correlation, so stale workers cannot
-    /// mutate a later picker generation.
-    pub(super) window_query: RuntimeOperationController<
-        region_capture::WindowSnapQuery,
-        Result<
-            crate::capture::window_geometry::WindowQueryResult,
-            crate::capture::window_geometry::WindowGeometryError,
-        >,
-    >,
-    /// Capacity-one Review cut preview. Independent of capture delivery so a
-    /// replaceable preview cannot occupy the capture reservation slot.
-    pub(super) region_cut_preview: RuntimeOperationController<
-        region_capture::CutPreviewKey,
-        region_capture::CutPreviewOutcome,
-    >,
+    /// Region picker state, window-query work, and replaceable cut previews.
+    pub(super) region_capture: region_capture::RegionCaptureRuntime,
+    pub(super) acquisition: acquisition::AcquisitionRuntime,
     /// Capacity-one screen text recognition. A busy controller reports
     /// busy rather than queuing a region the user has moved on from.
     pub(super) ocr: crate::ocr::OcrController,
@@ -280,7 +265,6 @@ impl WaylandState {
     const TOP_MARGIN_BOTTOM: f64 = 0.0;
     const INLINE_TOP_Y: f64 = Self::TOP_BASE_MARGIN_TOP;
     const INLINE_TOP_X: f64 = 24.0;
-    const TOOLBAR_CONFIGURE_FAIL_THRESHOLD: u32 = 180;
     const ZOOM_STEP_KEY: f64 = 1.2;
     const ZOOM_STEP_SCROLL: f64 = 1.1;
     pub(super) const ZOOM_PAN_STEP: f64 = 32.0;

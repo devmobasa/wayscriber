@@ -17,13 +17,13 @@ impl WaylandState {
     /// `push_gtk_toolbar_update`) read `top_fade`.
     pub(in crate::backend::wayland) fn update_top_strip_fade(&mut self, now: Instant) {
         let inputs = self.top_strip_fade_inputs(now);
-        let before = self.data.top_strip_fade.value();
-        let after = self.data.top_strip_fade.update(&inputs, now);
+        let before = self.toolbar_chrome.fade().value();
+        let after = self.toolbar_chrome.fade_mut().update(&inputs, now);
         // Layer-shell (and GTK) toolbars repaint from the changed snapshot on
         // their own; inline toolbars live on the canvas surface, so a fade
         // step must damage their rect and request a canvas redraw itself.
         if before != after && self.inline_toolbars_render_active() {
-            if let Some((x, y, w, h)) = self.data.inline_top_rect
+            if let Some((x, y, w, h)) = self.toolbar_chrome.inline_rect()
                 && let Some(rect) = crate::util::Rect::new(
                     x.floor() as i32 - 1,
                     y.floor() as i32 - 1,
@@ -43,8 +43,8 @@ impl WaylandState {
         &self,
         now: Instant,
     ) -> Option<Duration> {
-        self.data
-            .top_strip_fade
+        self.toolbar_chrome
+            .fade()
             .wake_after(&self.top_strip_fade_inputs(now))
     }
 
@@ -55,17 +55,13 @@ impl WaylandState {
         let reduced_chrome = !input.toolbar_top_visible()
             || input.toolbar_top_minimized()
             || input.toolbar_top_display_mode() == crate::config::TopDisplayMode::Micro;
-        let pointer_near = self.pointer_over_toolbar()
-            || self.toolbar.top_pointer_present()
-            || self.data.inline_top_hover.is_some()
-            || self.data.gtk_top_hover;
-        TopStripFadeInputs {
-            idle_for: now.saturating_duration_since(input.last_draw_activity()),
-            pointer_near,
-            menus_open: top_menus_open(input),
+        self.toolbar_chrome.fade_inputs(
+            self.toolbar.top_pointer_present(),
+            now.saturating_duration_since(input.last_draw_activity()),
+            top_menus_open(input),
             reduced_chrome,
-            idle_fade_enabled: input.ui_visibility.idle_fade,
-        }
+            input.ui_visibility.idle_fade,
+        )
     }
 }
 

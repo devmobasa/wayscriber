@@ -207,11 +207,11 @@ impl WaylandState {
         // Fold this tick's slow-path signal into the streak first — even behind
         // a modal — so a sustained habit still accumulates toward the threshold.
         if let Some((action, repeats)) = slow_path {
-            self.data.shortcut_coach.record(action, repeats);
+            self.shortcut_coach.record(action, repeats);
         }
 
         // Never compete with real feedback or interrupt a modal overlay.
-        if !self.surface.is_configured() || self.overlay_suppressed() {
+        if !self.surface.is_configured() || self.suppression.suppressed() {
             return;
         }
         if self.input_state.presenter_mode_active()
@@ -227,7 +227,7 @@ impl WaylandState {
 
         let now = Instant::now();
         let should_fire = {
-            let session = &self.data.shortcut_coach;
+            let session = &self.shortcut_coach;
             let state = self.preferences.onboarding().state();
             shortcut_coach_should_fire(
                 session.streak,
@@ -242,12 +242,12 @@ impl WaylandState {
             return;
         }
 
-        let Some(action) = self.data.shortcut_coach.tracked_action else {
+        let Some(action) = self.shortcut_coach.tracked_action else {
             return;
         };
         let Some(shortcut) = self.input_state.shortcut_for_action(action) else {
             // The shortcut was unbound since we started counting; drop the streak.
-            self.data.shortcut_coach.clear_streak();
+            self.shortcut_coach.clear_streak();
             return;
         };
 
@@ -261,7 +261,7 @@ impl WaylandState {
             automatic_tip_toast(message, OnboardingTip::ShortcutCoach),
         );
         if outcome.accepted() {
-            let session = &mut self.data.shortcut_coach;
+            let session = &mut self.shortcut_coach;
             session.last_hint_at = Some(now);
             session.hints_this_session = session.hints_this_session.saturating_add(1);
             session.clear_streak();
@@ -276,7 +276,7 @@ impl WaylandState {
     }
 
     fn apply_contextual_feature_hints(&mut self) {
-        if !self.surface.is_configured() || self.overlay_suppressed() {
+        if !self.surface.is_configured() || self.suppression.suppressed() {
             return;
         }
         if self.input_state.presenter_mode_active()
@@ -450,7 +450,7 @@ impl WaylandState {
         if self.preferences.onboarding().state().toolbar_hint_shown {
             return;
         }
-        if !self.surface.is_configured() || self.overlay_suppressed() {
+        if !self.surface.is_configured() || self.suppression.suppressed() {
             return;
         }
         if self.input_state.presenter_mode_active() || self.input_state.help_overlay.is_visible() {

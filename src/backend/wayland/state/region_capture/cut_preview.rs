@@ -414,7 +414,7 @@ impl WaylandState {
         rect: ImagePixelRect,
         include_drawings: bool,
     ) -> Result<RegionRenderSnapshot, CaptureError> {
-        let correlation = capture_ready_correlation(self.data.active_screen_region)?;
+        let correlation = capture_ready_correlation(self.region_capture.active())?;
         let shared_image = self.retain_current_capture_image(&correlation.source)?;
         let fingerprint = self.fingerprint_for_live_render(correlation, rect, include_drawings);
         let source = self.region_pixel_source(&fingerprint, shared_image)?;
@@ -427,7 +427,7 @@ impl WaylandState {
     pub(super) fn current_region_fingerprint(&self) -> Option<RegionRenderFingerprint> {
         let rect = self.region_review_rect()?;
         let include_drawings = self.region_picker_include_drawings();
-        let correlation = capture_ready_correlation(self.data.active_screen_region).ok()?;
+        let correlation = capture_ready_correlation(self.region_capture.active()).ok()?;
         if self
             .retain_current_capture_image(&correlation.source)
             .is_err()
@@ -439,12 +439,12 @@ impl WaylandState {
 
     pub(super) fn schedule_region_cut_preview(&mut self) {
         let Some(desired) = desired_preview_to_schedule(
-            self.data.region_review_edits.as_ref(),
-            self.region_cut_preview.is_active(),
+            self.region_capture.review_edits(),
+            self.region_capture.cut_preview_active(),
         ) else {
             return;
         };
-        let Some(edits) = self.data.region_review_edits.as_ref() else {
+        let Some(edits) = self.region_capture.review_edits() else {
             return;
         };
         let cached_base = edits
@@ -500,7 +500,7 @@ impl WaylandState {
             source,
             base: cached_base,
         };
-        if let Err(failure) = self.region_cut_preview.try_submit(
+        if let Err(failure) = self.region_capture.cut_preview_mut().try_submit(
             desired,
             "wayscriber-region-cut-preview",
             move || run_cut_preview(job),
@@ -517,7 +517,7 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn poll_region_cut_preview_completion(&mut self) {
-        if let Some(outcome) = cut_preview_from_poll(self.region_cut_preview.poll()) {
+        if let Some(outcome) = cut_preview_from_poll(self.region_capture.cut_preview_mut().poll()) {
             self.finish_cut_preview_poll(outcome);
             self.schedule_region_cut_preview();
         }
@@ -525,7 +525,7 @@ impl WaylandState {
 
     fn finish_cut_preview_poll(&mut self, outcome: CutPreviewOutcome) {
         let effect = visible_effect_for_cut_preview(
-            &mut self.data.region_review_edits,
+            self.region_capture.review_edits_slot_mut(),
             outcome,
             |edits, cuts| {
                 native_extent_display(

@@ -8,7 +8,7 @@ impl WaylandState {
         width: u32,
         height: u32,
     ) -> Option<crate::ui::ShapeMeasureBadge> {
-        let pointer = self.current_mouse();
+        let pointer = self.pointer.position();
         let world = self.canvas_world_coords(pointer.0 as f64, pointer.1 as f64);
         let size = self.input_state.provisional_shape_size(world.0, world.1)?;
         crate::ui::measure_shape_badge(

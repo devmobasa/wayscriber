@@ -123,14 +123,14 @@ pub(super) fn maybe_render(
                     state.input_state.status_hud.hover(),
                     state.input_state.zoom_chip.hover(),
                 );
-                if chrome_hover_before != chrome_hover_after && state.has_pointer_focus() {
+                if chrome_hover_before != chrome_hover_after && state.focus.pointer_focused() {
                     // Layout can move under a stationary pointer (for example,
                     // Fit removes the zoom-chip Lock button). The render pass
                     // reclassifies hover; publish the matching Wayland cursor
                     // now instead of waiting for another motion event. Pointer
                     // focus is required so a leave-triggered redraw cannot
                     // publish or cache a cursor for stale coordinates.
-                    state.update_pointer_cursor(state.pointer_over_toolbar(), conn);
+                    state.update_pointer_cursor(state.toolbar_chrome.pointer_over_toolbar(), conn);
                 }
                 state.record_perf_render_complete(
                     render_start,

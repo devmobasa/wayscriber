@@ -212,7 +212,7 @@ impl WaylandState {
             self.config.ui.show_onboarding_hints,
             self.preferences.onboarding().persistence_available(),
         ) || !self.surface.is_configured()
-            || self.overlay_suppressed()
+            || self.suppression.suppressed()
         {
             return false;
         }

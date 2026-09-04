@@ -65,27 +65,6 @@ impl WaylandState {
             && matches!(self.input_state.state, DrawingState::Idle)
     }
 
-    pub(in crate::backend::wayland) fn start_board_pan(&mut self, screen_x: f64, screen_y: f64) {
-        self.data.board_panning = true;
-        self.data.board_pan_last_pos = (screen_x, screen_y);
-    }
-
-    pub(in crate::backend::wayland) fn stop_board_pan(&mut self) {
-        self.data.board_panning = false;
-    }
-
-    pub(in crate::backend::wayland) fn board_panning_active(&self) -> bool {
-        self.data.board_panning
-    }
-
-    pub(in crate::backend::wayland) fn board_pan_key_held(&self) -> bool {
-        self.data.board_pan_key_held
-    }
-
-    pub(in crate::backend::wayland) fn set_board_pan_key_held(&mut self, held: bool) {
-        self.data.board_pan_key_held = held;
-    }
-
     pub(in crate::backend::wayland) fn pan_board_by_screen_delta(
         &mut self,
         dx: f64,
@@ -112,16 +91,6 @@ impl WaylandState {
         changed
     }
 
-    pub(in crate::backend::wayland) fn update_board_pan_position(
-        &mut self,
-        screen_x: f64,
-        screen_y: f64,
-    ) -> (f64, f64) {
-        let (last_x, last_y) = self.data.board_pan_last_pos;
-        self.data.board_pan_last_pos = (screen_x, screen_y);
-        (screen_x - last_x, screen_y - last_y)
-    }
-
     pub(in crate::backend::wayland) fn should_capture_space_for_board_pan(&self) -> bool {
         self.input_state.boards.pan_enabled()
             && !self.input_state.board_is_transparent()
@@ -134,8 +103,8 @@ impl WaylandState {
             && !self.input_state.is_context_menu_open()
             && !self.input_state.is_properties_panel_open()
             && !self.input_state.is_radial_menu_open()
-            && !self.pointer_over_toolbar()
-            && !self.toolbar_focus_active()
+            && !self.toolbar_chrome.pointer_over_toolbar()
+            && !self.toolbar_chrome.focus_active()
             && matches!(self.input_state.state, DrawingState::Idle)
     }
 }

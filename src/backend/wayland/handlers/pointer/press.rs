@@ -6,7 +6,6 @@ use crate::backend::wayland::state::{RegionReviewPress, drag_log};
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 use crate::input::state::HelpOverlayPressSource;
-use crate::ui::ZoomChipPress;
 use crate::ui::toolbar::ToolbarEvent;
 
 use super::*;
@@ -22,10 +21,11 @@ impl WaylandState {
         conn: &wayland_client::Connection,
         qh: &QueueHandle<Self>,
         event: &PointerEvent,
-        on_toolbar: bool,
-        inline_active: bool,
+        routed: RoutedInput,
         button: u32,
     ) {
+        let on_toolbar = routed.surface == InputSurface::Toolbar;
+        let inline_active = routed.inline_toolbars;
         // Report the physical button to the input HUD before any modal or
         // toolbar routing consumes it. GTK toolbar surfaces are separate
         // windows and never reach this handler, so their clicks only show in
@@ -47,6 +47,10 @@ impl WaylandState {
                 .clear_help_overlay_press_for(help_press_source);
         }
 
+        if routed.surface == InputSurface::Foreign {
+            return;
+        }
+
         if self.handle_region_pointer_press(event, on_toolbar, button) {
             return;
         }
@@ -55,7 +59,7 @@ impl WaylandState {
             return;
         }
 
-        if self.handle_modal_pointer_press(event, on_toolbar, button, help_press_source) {
+        if self.handle_modal_pointer_press(event, routed, button, help_press_source) {
             return;
         }
 
@@ -71,7 +75,7 @@ impl WaylandState {
                 button,
                 on_toolbar,
                 inline_active,
-                self.is_move_dragging()
+                self.toolbar_drag.is_moving()
             );
         }
         if inline_active && self.handle_inline_pointer_press(conn, qh, event, button) {
@@ -80,9 +84,9 @@ impl WaylandState {
         if on_toolbar {
             self.handle_toolbar_pointer_press(conn, qh, event, button);
             return;
-        } else if self.pointer_over_toolbar() {
+        } else if self.toolbar_chrome.pointer_over_toolbar() {
             self.finish_toolbar_item_drag(false);
-            self.set_toolbar_dragging(false);
+            self.toolbar_drag.set_item_dragging(false);
             return;
         }
 
@@ -90,7 +94,12 @@ impl WaylandState {
             return;
         }
 
-        if button == BTN_LEFT && self.handle_overlay_pointer_press(event.position) {
+        if button == BTN_LEFT
+            && self.press_overlay_chrome(
+                event.position.0.round() as i32,
+                event.position.1.round() as i32,
+            )
+        {
             return;
         }
 
@@ -104,8 +113,9 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
             return;
         }
-        if button == BTN_LEFT && self.board_pan_key_held() && self.can_start_board_pan() {
-            self.start_board_pan(event.position.0, event.position.1);
+        if button == BTN_LEFT && self.pointer.board_pan_key_held() && self.can_start_board_pan() {
+            self.pointer
+                .start_board_pan((event.position.0, event.position.1));
             self.input_state.needs_redraw = true;
             return;
         }
@@ -134,7 +144,7 @@ impl WaylandState {
         if !self.input_state.region_is_active() {
             return false;
         }
-        if on_toolbar || self.pointer_over_toolbar() {
+        if on_toolbar || self.toolbar_chrome.pointer_over_toolbar() {
             // A toolbar interaction ends the region first, then runs normally;
             // the click never lands on the selector.
             self.cancel_region_for_toolbar_interaction();
@@ -152,14 +162,14 @@ impl WaylandState {
                     }
                     RegionReviewPress::Consumed { suppress_release } => {
                         if suppress_release {
-                            self.suppress_next_release_from(RegionInputSource::Pointer);
+                            self.pointer.suppress_release(RegionInputSource::Pointer);
                         }
                     }
                 }
             }
             BTN_RIGHT => {
                 self.cancel_active_region_selector();
-                self.suppress_next_release_from(RegionInputSource::Pointer);
+                self.pointer.suppress_release(RegionInputSource::Pointer);
             }
             _ => {}
         }
@@ -175,18 +185,18 @@ impl WaylandState {
         if !self.input_state.eyedropper_is_active() {
             return false;
         }
-        if on_toolbar || self.pointer_over_toolbar() {
+        if on_toolbar || self.toolbar_chrome.pointer_over_toolbar() {
             self.cancel_eyedropper();
             return false;
         }
         match button {
             BTN_LEFT => {
                 self.sample_eyedropper(event.position.0, event.position.1);
-                self.suppress_next_release_from(RegionInputSource::Pointer);
+                self.pointer.suppress_release(RegionInputSource::Pointer);
             }
             BTN_RIGHT => {
                 self.cancel_eyedropper();
-                self.suppress_next_release_from(RegionInputSource::Pointer);
+                self.pointer.suppress_release(RegionInputSource::Pointer);
             }
             _ => {}
         }
@@ -196,7 +206,7 @@ impl WaylandState {
     fn handle_modal_pointer_press(
         &mut self,
         event: &PointerEvent,
-        on_toolbar: bool,
+        routed: RoutedInput,
         button: u32,
         help_press_source: HelpOverlayPressSource,
     ) -> bool {
@@ -205,12 +215,7 @@ impl WaylandState {
         }
         // Help is modal: remember the target so release can require the same row.
         if self.input_state.help_overlay.is_visible() {
-            let screen_position = if on_toolbar {
-                self.toolbar_surface_screen_coords(&event.surface, event.position)
-            } else {
-                Some(event.position)
-            };
-            match screen_position {
+            match routed.screen {
                 Some((sx, sy)) => self.input_state.note_help_overlay_press(
                     help_press_source,
                     sx.round() as i32,
@@ -234,7 +239,7 @@ impl WaylandState {
                 self.surface.height(),
             );
             if handled {
-                self.suppress_next_release_from(RegionInputSource::Pointer);
+                self.pointer.suppress_release(RegionInputSource::Pointer);
             }
         }
         true
@@ -257,18 +262,18 @@ impl WaylandState {
             drag_log(|| {
                 format!(
                     "pointer press: inline handled, drag_active={}, pos=({:.3}, {:.3}), surface={}",
-                    self.toolbar_dragging(),
+                    self.toolbar_drag.item_dragging(),
                     event.position.0,
                     event.position.1,
                     surface_id(&event.surface)
                 )
             });
-            if self.is_move_dragging() {
+            if self.toolbar_drag.is_moving() {
                 self.lock_pointer_for_drag(qh, &event.surface);
             }
             return true;
         }
-        if !self.pointer_over_toolbar() {
+        if !self.toolbar_chrome.pointer_over_toolbar() {
             return false;
         }
         if button == BTN_LEFT {
@@ -323,10 +328,10 @@ impl WaylandState {
             "toolbar press: drag_start={}, surface={}, seat={:?}, inline_active={}",
             drag,
             surface_id(&event.surface),
-            self.current_seat_id(),
-            self.inline_toolbars_active()
+            self.focus.current_seat_id(),
+            self.toolbar_chrome.inline_toolbars()
         );
-        self.set_toolbar_dragging(drag);
+        self.toolbar_drag.set_item_dragging(drag);
         self.handle_toolbar_event(toolbar_event, Some(conn), Some(qh));
         self.toolbar.mark_dirty();
         self.input_state.needs_redraw = true;
@@ -334,26 +339,23 @@ impl WaylandState {
         true
     }
 
-    fn handle_overlay_pointer_press(&mut self, position: (f64, f64)) -> bool {
-        let screen_x = position.0.round() as i32;
-        let screen_y = position.1.round() as i32;
-        self.set_pending_toast_press(None);
+    pub(in crate::backend::wayland) fn press_overlay_chrome(
+        &mut self,
+        screen_x: i32,
+        screen_y: i32,
+    ) -> bool {
+        self.pointer.clear_chrome_press();
         if let Some(pressed) = self.input_state.toast_press_at(screen_x, screen_y) {
-            self.set_pending_toast_press(Some(pressed));
-            return true;
+            return self.pointer.arm_toast_press(pressed);
         }
-        self.set_pending_status_hud_press(false);
         if self.input_state.status_hud_contains(screen_x, screen_y) {
-            self.set_pending_status_hud_press(true);
-            return true;
+            return self.pointer.arm_status_hud_press();
         }
-        self.set_pending_zoom_chip_press(ZoomChipPress::None);
         if !self.input_state.zoom_chip_contains(screen_x, screen_y) {
             return false;
         }
-        let pressed = self.input_state.zoom_chip_press_at(screen_x, screen_y);
-        self.set_pending_zoom_chip_press(pressed);
-        true
+        self.pointer
+            .arm_zoom_chip_press(self.input_state.zoom_chip_press_at(screen_x, screen_y))
     }
 
     fn try_dispatch_pointer_shortcut(&mut self, button: u32) -> bool {
@@ -422,7 +424,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn dismiss_top_toolbar_menus(&mut self) -> bool {
         let changed = self.input_state.close_top_toolbar_menus();
         if changed {
-            if self.inline_toolbars_active() {
+            if self.toolbar_chrome.inline_toolbars() {
                 self.mark_inline_toolbar_full_damage();
             } else {
                 self.toolbar.mark_dirty();

@@ -13,7 +13,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn sync_zoom_board_mode(&mut self) {
         let board_is_transparent = self.input_state.board_is_transparent();
         if !board_is_transparent {
-            if self.data.overlay_suppression == OverlaySuppression::Zoom {
+            if self.suppression.reason() == OverlaySuppression::Zoom {
                 self.exit_overlay_suppression(OverlaySuppression::Zoom);
             }
             if self.zoom.abort_capture() {
@@ -88,8 +88,8 @@ impl WaylandState {
     }
 
     fn zoom_keyboard_anchor(&self) -> (f64, f64) {
-        if self.has_pointer_focus() {
-            let (sx, sy) = self.current_mouse();
+        if self.focus.pointer_focused() {
+            let (sx, sy) = self.pointer.position();
             (sx as f64, sy as f64)
         } else {
             let cx = (self.surface.width() as f64) * 0.5;

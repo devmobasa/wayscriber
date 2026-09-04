@@ -54,24 +54,23 @@ impl KeyboardHandler for WaylandState {
         _keysyms: &[smithay_client_toolkit::seat::keyboard::Keysym],
     ) {
         debug!("Keyboard focus entered");
-        self.set_keyboard_focus(true);
-        self.clear_focus_exit_suppression();
-        self.clear_xdg_close_guard();
-        self.set_last_activation_serial(Some(serial));
+        self.focus.keyboard_entered();
+        self.focus.clear_exit_suppression();
+        self.focus.clear_xdg_close_guard();
+        self.focus.note_activation_serial(serial);
         self.maybe_retry_activation(qh);
         if self.toolbar.is_focusable_surface(surface) {
-            self.set_toolbar_focus_active(true);
+            self.toolbar_chrome.set_focus_active(true);
         } else {
             self.clear_toolbar_focus();
         }
-        // Mark overlay as ready once we have focus and surface is configured
-        if self.surface.is_configured() {
-            self.set_overlay_ready(true);
+        // Mark overlay as ready once we have focus and surface is configured.
+        if self.surface.is_configured() && self.focus.mark_ready_if_focused() {
             debug!("Overlay ready for keybinds");
         }
         let is_current_main_layer_surface =
             !self.surface.is_xdg_window() && self.surface.is_surface(surface);
-        let acquisition_was_pending = self.main_layer_focus_acquiring();
+        let acquisition_was_pending = self.focus.main_layer_acquiring();
         if self.try_complete_main_layer_focus_acquisition(is_current_main_layer_surface) {
             debug!("Initial main-layer keyboard focus acquired");
             self.refresh_keyboard_interactivity();
@@ -94,7 +93,7 @@ impl KeyboardHandler for WaylandState {
         match xdg_focus_leave_action(
             self.surface.is_xdg_window(),
             self.desktop_open_in_progress(),
-            self.focus_exit_suppressed(),
+            self.focus.exit_suppressed(Instant::now()),
             self.xdg_focus_loss_exits_overlay(),
         ) {
             XdgFocusLeaveAction::Ignore => {}
@@ -109,14 +108,16 @@ impl KeyboardHandler for WaylandState {
                 warn!(
                     "Keyboard focus lost in xdg fallback; suppressing exit after clipboard action"
                 );
-                self.set_xdg_close_guard_for(Duration::from_millis(2500));
+                self.focus
+                    .guard_xdg_close_for(Instant::now(), Duration::from_millis(2500));
                 self.request_xdg_activation(qh);
             }
             XdgFocusLeaveAction::StayOpen => {
                 warn!(
                     "Keyboard focus lost in xdg fallback; keeping overlay open without auto-reactivation (ui.xdg_focus_loss_behavior=stay)"
                 );
-                self.set_xdg_close_guard_for(Duration::from_millis(2500));
+                self.focus
+                    .guard_xdg_close_for(Instant::now(), Duration::from_millis(2500));
             }
             XdgFocusLeaveAction::Exit => {
                 warn!("Keyboard focus lost in xdg fallback; exiting overlay");
@@ -141,7 +142,7 @@ impl KeyboardHandler for WaylandState {
         event: KeyEvent,
     ) {
         // Block keybinds until overlay is fully ready (prevents Ctrl+W leaking to apps)
-        if !self.is_overlay_ready() {
+        if !self.focus.is_ready() {
             debug!("Ignoring key press before overlay ready");
             return;
         }
@@ -174,7 +175,7 @@ impl KeyboardHandler for WaylandState {
             return;
         }
         if matches!(key, Key::Space) && self.should_capture_space_for_board_pan() {
-            self.set_board_pan_key_held(true);
+            self.pointer.set_board_pan_key_held(true);
             self.input_state.needs_redraw = true;
             return;
         }
@@ -232,7 +233,7 @@ impl KeyboardHandler for WaylandState {
         // dispatch. Some dedicated entry modals manage or intentionally block
         // repeat themselves; other routed overlays (for example Help search)
         // still use this timer even though they disable the canvas IME.
-        if !modal_blocks_repeat && is_repeatable_key(key) && self.has_keyboard_focus() {
+        if !modal_blocks_repeat && is_repeatable_key(key) && self.focus.keyboard_focused() {
             self.key_repeat
                 .arm(key, Instant::now(), Self::KEY_REPEAT_INITIAL_DELAY);
         }
@@ -256,8 +257,8 @@ impl KeyboardHandler for WaylandState {
         ) {
             return;
         }
-        if matches!(key, Key::Space) && self.board_pan_key_held() {
-            self.set_board_pan_key_held(false);
+        if matches!(key, Key::Space) && self.pointer.board_pan_key_held() {
+            self.pointer.set_board_pan_key_held(false);
             self.input_state.needs_redraw = true;
             return;
         }
@@ -456,7 +457,7 @@ impl WaylandState {
     /// loop otherwise sleeps until a real event and would never wake to
     /// repeat a held key.
     pub(in crate::backend::wayland) fn key_repeat_timeout(&self, now: Instant) -> Option<Duration> {
-        self.key_repeat.timeout(now, self.has_keyboard_focus())
+        self.key_repeat.timeout(now, self.focus.keyboard_focused())
     }
 
     /// Fire a repeat if one is due, then reschedule from `now` (so a long
@@ -468,7 +469,7 @@ impl WaylandState {
         qh: &QueueHandle<Self>,
     ) {
         let can_repeat =
-            self.has_keyboard_focus() && !self.input_state.modal_blocks_canvas_key_repeat();
+            self.focus.keyboard_focused() && !self.input_state.modal_blocks_canvas_key_repeat();
         let Some(key) = self
             .key_repeat
             .take_due(now, can_repeat, KEY_REPEAT_INTERVAL)
@@ -483,7 +484,7 @@ impl WaylandState {
     /// `apply_input_key`). Shared by the manual repeat tick and sctk's
     /// `repeat_key`.
     fn dispatch_key_repeat(&mut self, key: Key, conn: &Connection, qh: &QueueHandle<Self>) {
-        if !self.is_overlay_ready() {
+        if !self.focus.is_ready() {
             return;
         }
         // A held key ticks the HUD chip's repeat counter at the repeat rate,
@@ -493,7 +494,7 @@ impl WaylandState {
         if self.input_state.region_is_engaged() || self.input_state.eyedropper_is_engaged() {
             return;
         }
-        if matches!(key, Key::Space) && self.board_pan_key_held() {
+        if matches!(key, Key::Space) && self.pointer.board_pan_key_held() {
             return;
         }
         if self.zoom.active {

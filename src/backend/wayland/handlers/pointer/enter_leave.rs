@@ -11,35 +11,35 @@ impl WaylandState {
         &mut self,
         conn: &Connection,
         event: &PointerEvent,
-        on_toolbar: bool,
-        inline_active: bool,
+        routed: RoutedInput,
     ) {
+        let on_toolbar = routed.surface == InputSurface::Toolbar;
         let preview_was_eligible = self.mouse_tool_preview_eligible();
         debug!(
             "Pointer entered at ({}, {}), on_toolbar={}, is_move_dragging={}",
             event.position.0,
             event.position.1,
             on_toolbar,
-            self.is_move_dragging()
+            self.toolbar_drag.is_moving()
         );
-        self.set_pointer_focus(true);
-        self.set_pointer_over_toolbar(on_toolbar);
+        self.focus.set_pointer_focused(true);
+        self.toolbar_chrome.set_pointer_over_toolbar(on_toolbar);
         if on_toolbar {
-            if let Some((sx, sy)) =
-                self.toolbar_surface_screen_coords(&event.surface, event.position)
-            {
-                self.set_current_mouse(sx as i32, sy as i32);
+            if let Some((sx, sy)) = routed.screen {
+                self.pointer.set_position((sx as i32, sy as i32));
                 let (wx, wy) = self.zoomed_world_coords(sx, sy);
                 self.input_state
                     .update_pointer_positions(sx as i32, sy as i32, wx, wy);
             } else {
-                self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+                self.pointer
+                    .set_position((event.position.0 as i32, event.position.1 as i32));
             }
             // Ensure pointer-driven visuals (e.g. eraser hover) update once on enter.
             self.input_state.needs_redraw = true;
         }
-        if !on_toolbar {
-            self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+        if routed.surface == InputSurface::Canvas {
+            self.pointer
+                .set_position((event.position.0 as i32, event.position.1 as i32));
             let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
             self.input_state.update_pointer_positions(
                 event.position.0.round() as i32,
@@ -59,7 +59,7 @@ impl WaylandState {
             self.input_state.clear_chrome_hover();
         }
         self.update_pointer_cursor(on_toolbar, conn);
-        if inline_active {
+        if routed.inline_toolbars && routed.surface == InputSurface::Canvas {
             self.inline_toolbar_motion(event.position);
         }
         if preview_was_eligible != self.mouse_tool_preview_eligible() {
@@ -67,35 +67,31 @@ impl WaylandState {
         }
     }
 
-    pub(super) fn handle_pointer_leave(
-        &mut self,
-        event: &PointerEvent,
-        on_toolbar: bool,
-        inline_active: bool,
-    ) {
+    pub(super) fn handle_pointer_leave(&mut self, event: &PointerEvent, routed: RoutedInput) {
+        let on_toolbar = routed.surface == InputSurface::Toolbar;
         let preview_was_eligible = self.mouse_tool_preview_eligible();
         debug!(
             "Pointer left surface: on_toolbar={}, is_move_dragging={}",
             on_toolbar,
-            self.is_move_dragging()
+            self.toolbar_drag.is_moving()
         );
-        self.set_pointer_focus(false);
+        self.focus.set_pointer_focused(false);
         // The pointer is gone, so no further wheel tick can extend the burst.
         self.input_state.flush_spotlight_magnification_gesture();
         self.spotlight.clear_wheel_idle_deadline();
-        if !on_toolbar {
+        if routed.surface == InputSurface::Canvas {
             self.cancel_region_selection_from(RegionInputSource::Pointer);
         }
         if on_toolbar {
-            self.set_pointer_over_toolbar(false);
+            self.toolbar_chrome.set_pointer_over_toolbar(false);
             self.toolbar.pointer_leave(&event.surface);
             // Don't clear drag state if we're in a move drag - the user may be
             // dragging the toolbar and their pointer left the toolbar surface.
             // The drag will continue on the main surface.
-            if !self.is_move_dragging() {
+            if !self.toolbar_drag.is_moving() {
                 debug!("Clearing toolbar drag state on leave");
                 self.finish_toolbar_item_drag(false);
-                self.set_toolbar_dragging(false);
+                self.toolbar_drag.set_item_dragging(false);
                 self.cancel_toolbar_move_drag();
             } else {
                 debug!("Preserving move drag state on toolbar leave");
@@ -104,16 +100,16 @@ impl WaylandState {
             // Ensure pointer-driven visuals (e.g. eraser hover) update once on leave.
             self.input_state.needs_redraw = true;
         }
-        if !on_toolbar
+        if routed.surface == InputSurface::Canvas
             && self.input_state.style.eraser_mode == EraserMode::Stroke
             && self.input_state.active_tool() == Tool::Eraser
         {
             self.input_state.needs_redraw = true;
         }
-        if inline_active {
+        if routed.inline_toolbars {
             self.inline_toolbar_leave();
         }
-        if (on_toolbar || inline_active) && !self.is_move_dragging() {
+        if (on_toolbar || routed.inline_toolbars) && !self.toolbar_drag.is_moving() {
             self.end_toolbar_move_drag();
         }
         if preview_was_eligible != self.mouse_tool_preview_eligible() {

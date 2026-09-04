@@ -12,7 +12,7 @@ impl WaylandState {
             return false;
         }
 
-        let Some(token) = self.take_startup_activation_token() else {
+        let Some(token) = self.focus.take_startup_activation_token() else {
             return false;
         };
         let Some(activation) = self.protocol.activation() else {
@@ -41,10 +41,9 @@ impl WaylandState {
         };
 
         if let Some(seat_serial) = self
+            .focus
             .current_seat()
-            .as_ref()
-            .cloned()
-            .zip(self.last_activation_serial())
+            .zip(self.focus.last_activation_serial())
         {
             let app_id = runtime_app_id();
             activation.request_token::<Self>(
@@ -57,7 +56,7 @@ impl WaylandState {
             );
         } else {
             // Defer until we have a keyboard enter serial.
-            self.set_pending_activation_token(Some(String::new())); // marker
+            self.focus.defer_activation_until_serial();
         }
     }
 
@@ -66,7 +65,7 @@ impl WaylandState {
             return;
         }
 
-        let Some(token) = self.pending_activation_token() else {
+        let Some(token) = self.focus.activation_token_to_apply() else {
             return;
         };
 
@@ -79,13 +78,13 @@ impl WaylandState {
         };
 
         activation.activate::<WaylandState>(&wl_surface, token);
-        self.set_pending_activation_token(None);
+        self.focus.clear_pending_activation_token();
     }
 
     pub(in crate::backend::wayland) fn maybe_retry_activation(&mut self, qh: &QueueHandle<Self>) {
-        if self.pending_activation_token().is_some() && self.last_activation_serial().is_some() {
+        if self.focus.retry_activation_wanted() {
             // Drop the placeholder and re-request with the new serial.
-            self.set_pending_activation_token(None);
+            self.focus.clear_pending_activation_token();
             self.request_xdg_activation(qh);
         }
     }
@@ -95,7 +94,7 @@ impl ActivationHandler for WaylandState {
     type RequestData = RequestData;
 
     fn new_token(&mut self, token: String, _data: &Self::RequestData) {
-        self.set_pending_activation_token(Some(token));
+        self.focus.note_activation_token(token);
         self.activate_xdg_window_if_possible();
     }
 }

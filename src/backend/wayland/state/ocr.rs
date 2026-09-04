@@ -81,8 +81,8 @@ impl WaylandState {
         self.cancel_eyedropper();
         self.input_state.prepare_for_screen_modal();
         self.zoom.stop_pan();
-        self.stop_board_pan();
-        self.set_board_pan_key_held(false);
+        self.pointer.stop_board_pan();
+        self.pointer.set_board_pan_key_held(false);
         self.cancel_toolbar_move_drag();
         self.unlock_pointer();
         // The gesture just cancelled above may belong to a pen that is still
@@ -91,13 +91,13 @@ impl WaylandState {
         // wait would commit the cancelled stroke's peak pressure to the tool.
         self.retire_stylus_contact();
 
-        let generation = self.next_screen_region_generation();
+        let generation = self.region_capture.next_generation();
         match screen_source_entry(
             self.ocr_screen_source().is_some(),
             self.input_state.board_is_transparent(),
             self.zoom.is_engaged(),
             self.zoom.active,
-            self.frozen_enabled(),
+            self.frozen.enabled(),
         ) {
             ScreenSourceEntry::Activate => {
                 if !self.activate_ocr_selector(generation, FreezeOwnership::PreExisting) {
@@ -121,7 +121,7 @@ impl WaylandState {
                 }
             }
             ScreenSourceEntry::AutoFreeze => {
-                match self.request_screen_acquisition(ScreenAcquisitionOwner::Ocr) {
+                match self.acquisition.request(ScreenAcquisitionOwner::Ocr) {
                     Ok(acquisition) => self.set_pending_screen_region(
                         RegionPurposeTag::Ocr,
                         generation,
@@ -183,7 +183,7 @@ impl WaylandState {
         capture_source: ScreenCaptureSource,
         installed_generation: u64,
     ) -> bool {
-        let Some(region) = self.data.active_screen_region else {
+        let Some(region) = self.region_capture.active() else {
             return false;
         };
         let generation = region.generation();
@@ -228,8 +228,8 @@ impl WaylandState {
 
     /// Leave OCR selection, releasing only a freeze OCR created itself.
     pub(in crate::backend::wayland) fn cancel_ocr(&mut self) -> bool {
-        let Some(region) = self.data.active_screen_region else {
-            self.clear_zoom_waiter_for(ZoomWaiterOwner::Ocr);
+        let Some(region) = self.region_capture.active() else {
+            self.acquisition.clear_zoom_waiter(ZoomWaiterOwner::Ocr);
             self.input_state.cancel_region_ui_only();
             return false;
         };
@@ -312,10 +312,11 @@ impl WaylandState {
         if self.finish_region_cut_drag(source, (x, y)) {
             return true;
         }
+        let (active, review_edits) = self.region_capture.selection_parts();
         let rect = match finalize_region_selection_with_review_edits(
-            &mut self.data.active_screen_region,
+            active,
             &mut self.input_state,
-            &mut self.data.region_review_edits,
+            review_edits,
             source,
             (x, y),
         ) {
@@ -366,7 +367,7 @@ impl WaylandState {
         // Mapped before the region is released: the token is what turns the
         // authoritative image rectangle into the surface pixels the sweep is
         // painted over.
-        let scan_region = match self.data.active_screen_region {
+        let scan_region = match self.region_capture.active() {
             Some(ActiveScreenRegion::Ready { source, .. }) => Some(
                 crate::backend::wayland::state::screen_image::screen_rect_for_image_rect(
                     &source, rect,
@@ -429,7 +430,10 @@ impl WaylandState {
             Ok(id) => {
                 // wl-copy needs the overlay to stay alive long enough to serve
                 // the selection it publishes.
-                self.suppress_focus_exit_for(std::time::Duration::from_millis(1500));
+                self.focus.suppress_exit_for(
+                    std::time::Instant::now(),
+                    std::time::Duration::from_millis(1500),
+                );
                 log::debug!("OCR request {id} started");
                 Some(id)
             }

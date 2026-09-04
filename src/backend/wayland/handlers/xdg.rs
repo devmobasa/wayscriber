@@ -9,11 +9,10 @@ use super::super::state::{FullDamageReason, WaylandState};
 
 impl WindowHandler for WaylandState {
     fn request_close(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _window: &Window) {
-        if should_ignore_xdg_close_request(
-            !self.xdg_focus_loss_exits_overlay(),
-            self.has_keyboard_focus(),
-            self.xdg_close_guard_active(Instant::now()),
-        ) {
+        if self
+            .focus
+            .ignores_xdg_close(!self.xdg_focus_loss_exits_overlay(), Instant::now())
+        {
             warn!(
                 "xdg window close requested while unfocused in stay mode; keeping overlay open without auto-reactivation"
             );
@@ -21,7 +20,7 @@ impl WindowHandler for WaylandState {
         }
 
         info!("xdg window close requested by compositor");
-        self.mark_xdg_explicit_close_requested();
+        self.focus.mark_xdg_explicit_close_requested();
         self.input_state.should_exit = true;
     }
 
@@ -68,13 +67,13 @@ impl WindowHandler for WaylandState {
             .map(|h| h.get())
             .unwrap_or(fallback_dimensions.1);
 
-        if self.xdg_frozen_fullscreen_requested() {
+        if self.surface.placement().xdg_frozen().requested() {
             if let Some(output) = self.preferred_fullscreen_output() {
                 window.set_fullscreen(Some(&output));
             } else if !configure.is_fullscreen() {
                 window.set_fullscreen(None);
             }
-        } else if self.xdg_fullscreen() {
+        } else if self.surface.placement().xdg_fullscreen() {
             if let Some(output) = self.preferred_fullscreen_output() {
                 // Reassert fullscreen on the preferred output every configure in case
                 // the compositor picked a different monitor initially.
@@ -91,7 +90,7 @@ impl WindowHandler for WaylandState {
             && let Some(output) = self.protocol.output().outputs().next()
         {
             self.surface.set_current_output(output);
-            self.set_has_seen_surface_enter(false);
+            self.focus.clear_surface_enter();
         }
         self.refresh_active_output_label();
 
@@ -108,9 +107,8 @@ impl WindowHandler for WaylandState {
 
         self.surface.set_configured(true);
 
-        // Mark overlay ready if we already have keyboard focus (configure came after enter)
-        if self.has_keyboard_focus() && !self.is_overlay_ready() {
-            self.set_overlay_ready(true);
+        // Mark overlay ready if we already have keyboard focus (configure came after enter).
+        if self.focus.mark_ready_if_focused() {
             log::debug!("Overlay ready for keybinds (from xdg configure)");
         }
 
@@ -124,13 +122,15 @@ impl WindowHandler for WaylandState {
 
         self.refresh_freeze_zoom_geometry();
         self.cancel_screen_modals_if_source_changed();
-        if self.xdg_frozen_fullscreen_requested() && self.frozen.has_pending_image() {
-            if self.xdg_frozen_fullscreen_pending_configure() && !configure.is_fullscreen() {
+        if self.surface.placement().xdg_frozen().requested() && self.frozen.has_pending_image() {
+            if self.surface.placement().xdg_frozen().pending_configure()
+                && !configure.is_fullscreen()
+            {
                 warn!("xdg frozen fullscreen was not granted; activating freeze on current size");
             }
             self.activate_pending_frozen_image_for_current_surface();
         }
-        if self.xdg_frozen_fullscreen_requested()
+        if self.surface.placement().xdg_frozen().requested()
             && !self.input_state.frozen_active()
             && !self.frozen.has_pending_image()
         {
@@ -144,26 +144,5 @@ impl WindowHandler for WaylandState {
         // Fallback: xdg may not emit surface_enter before configure. Use the same epoch-bound,
         // interaction-safe transition path as surface_enter instead of loading directly.
         self.begin_configure_fallback_session_transition("xdg configure fallback");
-    }
-}
-
-fn should_ignore_xdg_close_request(
-    stay_mode: bool,
-    has_keyboard_focus: bool,
-    close_guard_active: bool,
-) -> bool {
-    stay_mode && !has_keyboard_focus && close_guard_active
-}
-
-#[cfg(test)]
-mod tests {
-    use super::should_ignore_xdg_close_request;
-
-    #[test]
-    fn ignores_close_only_for_unfocused_stay_with_active_guard() {
-        assert!(should_ignore_xdg_close_request(true, false, true));
-        assert!(!should_ignore_xdg_close_request(true, true, true));
-        assert!(!should_ignore_xdg_close_request(false, false, true));
-        assert!(!should_ignore_xdg_close_request(true, false, false));
     }
 }

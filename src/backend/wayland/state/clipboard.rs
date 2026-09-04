@@ -124,7 +124,8 @@ impl WaylandState {
     }
 
     fn start_selection_clipboard_publish(&mut self, generation: u64, payload_json: String) {
-        self.suppress_focus_exit_for(Duration::from_millis(1500));
+        self.focus
+            .suppress_exit_for(Instant::now(), Duration::from_millis(1500));
         if let Err(failure) = self.clipboard.submit_publish(generation, payload_json) {
             let (error, generation) = failure.into_parts();
             log::warn!("Could not submit clipboard publish operation: {error}");
@@ -156,7 +157,8 @@ impl WaylandState {
             request.target_page_index,
             request.target_page_generation
         );
-        self.suppress_focus_exit_for(Duration::from_millis(1500));
+        self.focus
+            .suppress_exit_for(Instant::now(), Duration::from_millis(1500));
 
         let local_selection = self.input_state.selection_clipboard_snapshot();
         let pending_shapes =

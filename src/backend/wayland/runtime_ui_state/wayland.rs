@@ -4,7 +4,10 @@ use super::*;
 impl WaylandState {
     pub(in crate::backend::wayland) fn toolbar_position_snapshot(&self) -> ToolbarPositionSnapshot {
         ToolbarPositionSnapshot {
-            top: (self.toolbar_top_offset(), self.toolbar_top_offset_y()),
+            top: (
+                self.toolbar_chrome.top_offset().0,
+                self.toolbar_chrome.top_offset().1,
+            ),
         }
     }
 
@@ -17,7 +20,7 @@ impl WaylandState {
         };
         let mut positions = self.toolbar_position_snapshot();
         apply_toolbar_runtime_rollback(&mut self.input_state, &mut positions, &rollback);
-        self.restore_toolbar_offsets(positions.top);
+        self.toolbar_chrome.set_top_offset(positions.top);
         self.toolbar.mark_dirty();
         self.input_state.dirty_tracker.mark_full();
         self.input_state.needs_redraw = true;
@@ -337,13 +340,13 @@ impl WaylandState {
         }
         if refresh.item_drag_aborted {
             self.input_state.clear_toolbar_item_drag();
-            self.set_toolbar_dragging(false);
+            self.toolbar_drag.set_item_dragging(false);
         }
         if refresh.position_drag_aborted {
             self.cancel_toolbar_move_drag();
             self.cancel_gtk_toolbar_drag_lifecycle();
         }
-        self.restore_toolbar_offsets(positions.top);
+        self.toolbar_chrome.set_top_offset(positions.top);
         self.toolbar.mark_dirty();
         self.input_state.dirty_tracker.mark_full();
         self.input_state.needs_redraw = true;
@@ -438,14 +441,14 @@ impl WaylandState {
         }
         if drain.rebuild_live {
             self.input_state.clear_toolbar_item_drag();
-            self.set_toolbar_dragging(false);
+            self.toolbar_drag.set_item_dragging(false);
             self.cancel_toolbar_move_drag();
             self.cancel_gtk_toolbar_drag_lifecycle();
             let mut positions = self.toolbar_position_snapshot();
             if let Some(runtime) = self.preferences.runtime_ui().state() {
                 runtime.apply_live_state(&mut self.input_state, &mut positions);
             }
-            self.restore_toolbar_offsets(positions.top);
+            self.toolbar_chrome.set_top_offset(positions.top);
             self.toolbar.mark_dirty();
             self.input_state.dirty_tracker.mark_full();
             self.input_state.needs_redraw = true;

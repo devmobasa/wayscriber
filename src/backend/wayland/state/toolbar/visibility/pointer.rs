@@ -17,7 +17,7 @@ impl WaylandState {
         drag_log(|| {
             format!(
                 "lock_pointer_for_drag: inline_active={}, locked={}, surface={}",
-                self.inline_toolbars_active(),
+                self.toolbar_chrome.inline_toolbars(),
                 self.pointer_lock_active(),
                 surface_id(surface)
             )
@@ -34,7 +34,7 @@ impl WaylandState {
             log::info!("pointer lock unavailable: constraints global missing");
             return;
         }
-        let Some(pointer) = self.current_pointer() else {
+        let Some(pointer) = self.pointer.current_pointer() else {
             log::info!("pointer lock unavailable: no current pointer");
             return;
         };
@@ -51,7 +51,7 @@ impl WaylandState {
                 drag_log(|| {
                     format!(
                         "pointer lock requested: seat={:?}, surface={}, pointer_id={}",
-                        self.current_seat_id(),
+                        self.focus.current_seat_id(),
                         surface_id(surface),
                         pointer.id().protocol_id()
                     )

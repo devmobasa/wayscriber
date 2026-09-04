@@ -1,8 +1,5 @@
 use super::*;
-use crate::backend::wayland::state::{
-    core::focus::{MainLayerEnterFacts, can_complete_main_layer_focus_acquisition},
-    data::MainLayerFocusPhase,
-};
+use crate::backend::wayland::state::focus::FocusState;
 
 fn separate_toolbar_policy_input() -> KeyboardInteractivityPolicyInput {
     KeyboardInteractivityPolicyInput {
@@ -202,52 +199,34 @@ fn retained_suppression_follows_acquisition_and_steady_state_policy() {
 
 #[test]
 fn stale_enter_sequence_preserves_acquisition_until_a_valid_exclusive_enter() {
-    let mut phase = MainLayerFocusPhase::default();
+    let mut focus = FocusState::new(None);
     let mut input = KeyboardInteractivityPolicyInput {
-        main_layer_focus_acquiring: phase.is_acquiring(),
+        main_layer_focus_acquiring: focus.main_layer_acquiring(),
         ..separate_toolbar_policy_input()
     };
     let mut committed = keyboard_interactivity_for(input);
     assert_eq!(committed, KeyboardInteractivity::Exclusive);
+    focus.set_keyboard_interactivity(Some(committed));
 
     input.keyboard_release_requested = true;
     committed = keyboard_interactivity_for(input);
     assert_eq!(committed, KeyboardInteractivity::None);
-    assert!(!can_complete_main_layer_focus_acquisition(
-        MainLayerEnterFacts {
-            is_current_main_layer_surface: true,
-            phase,
-            committed_keyboard_interactivity: Some(committed),
-            keyboard_release_requested: input.keyboard_release_requested,
-        }
-    ));
-    assert!(phase.is_acquiring());
+    focus.set_keyboard_interactivity(Some(committed));
+    assert!(!focus.can_complete_main_layer_acquisition(true, input.keyboard_release_requested,));
+    assert!(focus.main_layer_acquiring());
 
     input.keyboard_release_requested = false;
-    assert!(!can_complete_main_layer_focus_acquisition(
-        MainLayerEnterFacts {
-            is_current_main_layer_surface: true,
-            phase,
-            committed_keyboard_interactivity: Some(committed),
-            keyboard_release_requested: input.keyboard_release_requested,
-        }
-    ));
-    assert!(phase.is_acquiring());
+    assert!(!focus.can_complete_main_layer_acquisition(true, input.keyboard_release_requested,));
+    assert!(focus.main_layer_acquiring());
 
     committed = keyboard_interactivity_for(input);
     assert_eq!(committed, KeyboardInteractivity::Exclusive);
-    assert!(can_complete_main_layer_focus_acquisition(
-        MainLayerEnterFacts {
-            is_current_main_layer_surface: true,
-            phase,
-            committed_keyboard_interactivity: Some(committed),
-            keyboard_release_requested: input.keyboard_release_requested,
-        }
-    ));
-    assert!(phase.complete());
-    assert!(!phase.is_acquiring());
+    focus.set_keyboard_interactivity(Some(committed));
+    assert!(focus.can_complete_main_layer_acquisition(true, input.keyboard_release_requested,));
+    assert!(focus.complete_main_layer_acquisition());
+    assert!(!focus.main_layer_acquiring());
 
-    input.main_layer_focus_acquiring = phase.is_acquiring();
+    input.main_layer_focus_acquiring = focus.main_layer_acquiring();
     committed = keyboard_interactivity_for(input);
     assert_eq!(committed, KeyboardInteractivity::OnDemand);
 }

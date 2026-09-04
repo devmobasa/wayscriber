@@ -58,8 +58,8 @@ impl WaylandState {
         self.cancel_ocr();
         self.input_state.prepare_for_screen_modal();
         self.zoom.stop_pan();
-        self.stop_board_pan();
-        self.set_board_pan_key_held(false);
+        self.pointer.stop_board_pan();
+        self.pointer.set_board_pan_key_held(false);
         // Entering a different modal interaction interrupts any unfinished
         // toolbar move; it is not an accepted drop.
         self.cancel_toolbar_move_drag();
@@ -74,7 +74,7 @@ impl WaylandState {
             self.input_state.board_is_transparent(),
             self.zoom.is_engaged(),
             self.zoom.active,
-            self.frozen_enabled(),
+            self.frozen.enabled(),
         );
         match decision {
             ScreenSourceEntry::Activate => {
@@ -95,7 +95,7 @@ impl WaylandState {
                 }
             }
             ScreenSourceEntry::AutoFreeze => {
-                match self.request_screen_acquisition(ScreenAcquisitionOwner::Eyedropper) {
+                match self.acquisition.request(ScreenAcquisitionOwner::Eyedropper) {
                     Ok(_) => self
                         .input_state
                         .set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen),
@@ -179,7 +179,7 @@ impl WaylandState {
             return false;
         };
         self.retire_stylus_contact();
-        self.data.active_eyedropper_source = Some(token);
+        self.acquisition.set_eyedropper_source(token);
         self.input_state
             .activate_eyedropper(owned_frozen_generation);
         true
@@ -262,7 +262,7 @@ impl WaylandState {
         let was_active = eyedropper_state.is_engaged();
         let pending_acquisition = (eyedropper_state.pending_source()
             == Some(EyedropperCaptureSource::Frozen))
-        .then(|| self.screen_acquisition_slot())
+        .then(|| self.acquisition.slot())
         .flatten()
         .filter(|record| record.owner == ScreenAcquisitionOwner::Eyedropper)
         .map(|record| record.id);

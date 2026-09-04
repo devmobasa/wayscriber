@@ -56,7 +56,7 @@ impl WaylandState {
         match handoff_exit_intent(&completion) {
             HandoffExitIntent::None => {}
             HandoffExitIntent::ExitExplicitly => {
-                self.mark_xdg_explicit_close_requested();
+                self.focus.mark_xdg_explicit_close_requested();
                 self.input_state.should_exit = true;
             }
         }
@@ -88,7 +88,8 @@ impl WaylandState {
         );
         // If an opener partially launched an application before failing, keep
         // this failure visible instead of immediately applying focus-loss exit.
-        self.suppress_focus_exit_for(Duration::from_millis(1500));
+        self.focus
+            .suppress_exit_for(std::time::Instant::now(), Duration::from_millis(1500));
         self.input_state.push_toast(
             ToastPriority::Critical,
             "launcher",

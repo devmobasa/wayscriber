@@ -112,6 +112,8 @@ impl DirectCaptureContext {
 /// End-to-end controller for frozen mode capture and image storage.
 #[allow(clippy::type_complexity)]
 pub struct FrozenState {
+    enabled: bool,
+    pending_on_start: bool,
     pub(super) manager: Option<ZwlrScreencopyManagerV1>,
     pub(super) ext_managers: Option<ExtImageCopyManagers>,
     pub(super) portal_available: bool,
@@ -143,7 +145,7 @@ pub struct FrozenState {
 impl FrozenState {
     #[cfg(test)]
     pub fn new(manager: Option<ZwlrScreencopyManagerV1>) -> Self {
-        Self::new_inner(manager, None, false, None)
+        Self::new_inner(manager, None, false, None, true, false)
     }
 
     #[cfg(test)]
@@ -151,7 +153,7 @@ impl FrozenState {
         manager: Option<ZwlrScreencopyManagerV1>,
         runtime_wake: RuntimeWakeHandle,
     ) -> Self {
-        Self::new_inner(manager, None, true, Some(runtime_wake))
+        Self::new_inner(manager, None, true, Some(runtime_wake), true, false)
     }
 
     pub(in crate::backend::wayland) fn new_with_backends(
@@ -159,8 +161,17 @@ impl FrozenState {
         ext_managers: Option<ExtImageCopyManagers>,
         portal_available: bool,
         runtime_wake: RuntimeWakeHandle,
+        enabled: bool,
+        pending_on_start: bool,
     ) -> Self {
-        Self::new_inner(manager, ext_managers, portal_available, Some(runtime_wake))
+        Self::new_inner(
+            manager,
+            ext_managers,
+            portal_available,
+            Some(runtime_wake),
+            enabled,
+            pending_on_start,
+        )
     }
 
     fn new_inner(
@@ -168,8 +179,12 @@ impl FrozenState {
         ext_managers: Option<ExtImageCopyManagers>,
         portal_available: bool,
         runtime_wake: Option<RuntimeWakeHandle>,
+        enabled: bool,
+        pending_on_start: bool,
     ) -> Self {
         Self {
+            enabled,
+            pending_on_start,
             manager,
             ext_managers,
             portal_available,
@@ -195,6 +210,14 @@ impl FrozenState {
             acquisition_attempt: None,
             acquisition_completion: None,
         }
+    }
+
+    pub(in crate::backend::wayland) const fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub(in crate::backend::wayland) fn take_pending_on_start(&mut self) -> bool {
+        std::mem::take(&mut self.pending_on_start)
     }
 
     pub(in crate::backend::wayland) fn preferred_backend(&self) -> Option<FrozenCaptureBackend> {
@@ -834,6 +857,23 @@ mod tests {
             Some(pixel_size),
         )
         .expect("verified test output geometry")
+    }
+
+    #[test]
+    fn capability_gate_matches_construction() {
+        let enabled = FrozenState::new_inner(None, None, false, None, true, false);
+        let disabled = FrozenState::new_inner(None, None, false, None, false, false);
+
+        assert!(enabled.enabled());
+        assert!(!disabled.enabled());
+    }
+
+    #[test]
+    fn pending_on_start_is_consumed_once() {
+        let mut state = FrozenState::new_inner(None, None, false, None, true, true);
+
+        assert!(state.take_pending_on_start());
+        assert!(!state.take_pending_on_start());
     }
 
     #[test]
@@ -1490,7 +1530,7 @@ mod tests {
 
     #[test]
     fn acquisition_terminal_consumes_attempt_once_and_retains_old_image_on_failure() {
-        let mut state = FrozenState::new_inner(None, None, true, None);
+        let mut state = FrozenState::new_inner(None, None, true, None, true, false);
         let mut input_state = make_test_input_state();
         let mut registry = ScreenAcquisitionRegistry::default();
         let id = registry.request(ScreenAcquisitionOwner::Ocr).expect("id");
@@ -1668,7 +1708,7 @@ mod tests {
     #[test]
     fn every_pending_image_rejection_finishes_its_acquisition_exactly_once() {
         for fixture in PendingImageRejectionFixture::ALL {
-            let mut state = FrozenState::new_inner(None, None, true, None);
+            let mut state = FrozenState::new_inner(None, None, true, None, true, false);
             let mut input_state = make_test_input_state();
             let mut registry = ScreenAcquisitionRegistry::default();
             let owner = ScreenAcquisitionOwner::UserFreeze;
@@ -1753,7 +1793,7 @@ mod tests {
 
     #[test]
     fn undrained_terminal_is_taken_only_by_its_correlated_owner() {
-        let mut state = FrozenState::new_inner(None, None, true, None);
+        let mut state = FrozenState::new_inner(None, None, true, None, true, false);
         let mut input_state = make_test_input_state();
         let mut registry = ScreenAcquisitionRegistry::default();
         let id = registry.request(ScreenAcquisitionOwner::Ocr).expect("id");
@@ -1778,7 +1818,7 @@ mod tests {
 
     #[test]
     fn undrained_ready_terminal_transfers_its_exact_generation_once() {
-        let mut state = FrozenState::new_inner(None, None, true, None);
+        let mut state = FrozenState::new_inner(None, None, true, None, true, false);
         let mut input_state = make_test_input_state();
         let mut registry = ScreenAcquisitionRegistry::default();
         let id = registry
@@ -1820,7 +1860,7 @@ mod tests {
 
     #[test]
     fn preflight_layout_failure_is_classified_as_stale_layout() {
-        let mut state = FrozenState::new_inner(None, None, true, None);
+        let mut state = FrozenState::new_inner(None, None, true, None, true, false);
         let mut input_state = make_test_input_state();
         let mut registry = ScreenAcquisitionRegistry::default();
         let id = registry

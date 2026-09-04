@@ -1,6 +1,6 @@
 use super::super::buffer_damage::BufferDamageTracker;
 use super::super::*;
-use crate::env_vars::{FORCE_INLINE_TOOLBARS_ENV, XDG_ACTIVATION_TOKEN_ENV};
+use crate::env_vars::FORCE_INLINE_TOOLBARS_ENV;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn new(init: WaylandStateInit) -> Self {
@@ -8,6 +8,7 @@ impl WaylandState {
             globals,
             config,
             input_state,
+            startup_activation_token,
             onboarding,
             palette_recents,
             capture_manager,
@@ -41,19 +42,13 @@ impl WaylandState {
             }
         };
 
-        let mut data = StateData::new();
-        data.frozen_enabled = frozen_enabled;
-        data.pending_freeze_on_start = pending_freeze_on_start;
-        let startup_activation_token = startup_activation_token_from_env();
-        if startup_activation_token.is_some() {
-            info!("Received startup activation token from launcher environment");
-        }
-        data.startup_activation_token = startup_activation_token;
-        data.preferred_output_identity = preferred_output_identity;
-        data.xdg_fullscreen = xdg_fullscreen;
-        data.main_surface_uses_overlay_layer = main_surface_uses_overlay_layer;
+        let placement = SurfacePlacement::new(
+            preferred_output_identity,
+            xdg_fullscreen,
+            main_surface_uses_overlay_layer,
+        );
         let force_inline_toolbars = force_inline_toolbars_requested(&config);
-        data.inline_toolbars = globals.layer_shell().is_none()
+        let inline_toolbars = globals.layer_shell().is_none()
             || force_inline_toolbars
             || main_surface_uses_overlay_layer;
         if force_inline_toolbars {
@@ -76,12 +71,12 @@ impl WaylandState {
         if let Some(runtime_ui) = runtime_ui.as_ref() {
             runtime_ui.apply_startup_positions(&mut positions);
         }
-        data.toolbar_top_offset = positions.top.0;
-        data.toolbar_top_offset_y = positions.top.1;
+        let toolbar_chrome =
+            super::super::toolbar::ToolbarChrome::new(inline_toolbars, positions.top);
         drag_log(|| {
             format!(
                 "load offsets from config seeds and runtime overrides: top_offset=({}, {})",
-                data.toolbar_top_offset, data.toolbar_top_offset_y
+                positions.top.0, positions.top.1
             )
         });
         let zoom_manager = screencopy_manager.clone();
@@ -101,10 +96,10 @@ impl WaylandState {
         );
         let desktop_open =
             RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
-        let window_query =
-            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
-        let region_cut_preview =
-            RuntimeOperationController::new(runtime_operation_ids, runtime_wake.clone());
+        let region_capture = super::super::region_capture::RegionCaptureRuntime::new(
+            runtime_operation_ids,
+            runtime_wake.clone(),
+        );
         let ocr = crate::ocr::OcrController::new(runtime_wake.clone());
         let preferences = super::super::preference_stores::PreferenceStores::new(
             onboarding,
@@ -116,11 +111,15 @@ impl WaylandState {
 
         Self {
             protocol: globals,
-            surface: SurfaceState::new(),
+            surface: SurfaceState::new(placement),
             toolbar: ToolbarSurfaceManager::new(),
-            data,
+            toolbar_chrome,
+            toolbar_drag: super::super::toolbar::ToolbarDrag::new(),
+            render: super::super::render::RenderRuntime::new(),
+            suppression: Default::default(),
+            shortcut_coach: Default::default(),
+            focus: super::super::focus::FocusState::new(startup_activation_token),
             buffer_damage: BufferDamageTracker::new(buffer_count),
-            canvas_layer_cache: super::super::canvas_layer::CanvasLayerCache::new(),
             spotlight: super::super::spotlight_runtime::SpotlightRuntime::new(),
             config,
             preferences,
@@ -128,8 +127,8 @@ impl WaylandState {
             font_catalog,
             clipboard,
             desktop_open,
-            window_query,
-            region_cut_preview,
+            region_capture,
+            acquisition: Default::default(),
             ocr,
             gtk_toolbar: None,
             ui_animation,
@@ -139,6 +138,8 @@ impl WaylandState {
                 ext_image_copy_managers,
                 portal_freeze_supported,
                 runtime_wake.clone(),
+                frozen_enabled,
+                pending_freeze_on_start,
             ),
             zoom: ZoomState::new_with_runtime_wake(zoom_manager, runtime_wake.clone()),
             perf: perf::PerfMetrics::from_env(),
@@ -158,11 +159,4 @@ impl WaylandState {
             tokio_handle,
         }
     }
-}
-
-fn startup_activation_token_from_env() -> Option<String> {
-    std::env::var(XDG_ACTIVATION_TOKEN_ENV)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
 }

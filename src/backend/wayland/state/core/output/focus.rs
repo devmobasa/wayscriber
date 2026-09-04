@@ -66,7 +66,7 @@ impl WaylandState {
         let target_identity = self.output_identity_for(&target_output);
 
         if self.surface.is_xdg_window() {
-            if !self.xdg_fullscreen() {
+            if !self.surface.placement().xdg_fullscreen() {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "output",
@@ -83,7 +83,7 @@ impl WaylandState {
             window.set_fullscreen(Some(&target_output));
             window.commit();
             self.surface.set_current_output(target_output);
-            self.set_has_seen_surface_enter(false);
+            self.focus.clear_surface_enter();
             self.refresh_active_output_label();
             self.begin_session_output_transition(target_identity, "output switch");
             self.request_xdg_activation(qh);
@@ -101,7 +101,7 @@ impl WaylandState {
         self.teardown_keyboard_focus();
         self.recreate_layer_surface_for_output(qh, &target_output);
         self.surface.set_current_output(target_output);
-        self.set_has_seen_surface_enter(false);
+        self.focus.clear_surface_enter();
         self.refresh_active_output_label();
         self.begin_session_output_transition(target_identity, "output switch");
         self.input_state.needs_redraw = true;
@@ -113,14 +113,14 @@ impl WaylandState {
         qh: &QueueHandle<Self>,
         output: &wl_output::WlOutput,
     ) {
-        self.begin_main_layer_focus_acquisition();
+        self.focus.begin_main_layer_acquisition();
         let Some(layer_shell) = self.protocol.layer_shell() else {
             return;
         };
 
         let wl_surface = self.protocol.compositor().create_surface(qh);
         wl_surface.set_buffer_scale(self.surface.scale().max(1));
-        let layer = self.main_surface_layer();
+        let layer = self.surface.placement().layer();
         let layer_surface = layer_shell.create_layer_surface(
             qh,
             wl_surface,
@@ -137,10 +137,11 @@ impl WaylandState {
         layer_surface.commit();
 
         self.surface.set_layer_surface(layer_surface);
-        self.set_current_keyboard_interactivity(Some(desired_keyboard_mode));
+        self.focus
+            .set_keyboard_interactivity(Some(desired_keyboard_mode));
         self.force_sync_overlay_interactivity();
         self.buffer_damage
             .mark_all_full(FullDamageReason::LayerSurfaceRecreated);
-        self.set_toolbar_needs_recreate(true);
+        self.toolbar_chrome.set_needs_recreate(true);
     }
 }

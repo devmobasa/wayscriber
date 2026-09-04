@@ -16,8 +16,8 @@ impl WaylandState {
                 kind,
                 delta.0,
                 delta.1,
-                self.data.toolbar_top_offset,
-                self.data.toolbar_top_offset_y
+                self.toolbar_chrome.top_offset().0,
+                self.toolbar_chrome.top_offset().1
             )
         });
         let snapshot = self
@@ -28,8 +28,7 @@ impl WaylandState {
 
         match kind {
             MoveDragKind::Top => {
-                self.data.toolbar_top_offset += delta.0;
-                self.data.toolbar_top_offset_y += delta.1;
+                self.toolbar_chrome.add_top_offset(delta);
             }
         }
 
@@ -41,8 +40,8 @@ impl WaylandState {
                 kind,
                 delta.0,
                 delta.1,
-                self.data.toolbar_top_offset,
-                self.data.toolbar_top_offset_y
+                self.toolbar_chrome.top_offset().0,
+                self.toolbar_chrome.top_offset().1
             )
         });
 
@@ -61,40 +60,35 @@ impl WaylandState {
     }
 
     fn finish_toolbar_move_drag(&mut self, commit: bool) {
-        if self.data.toolbar_move_drag.is_some() {
-            if commit {
-                self.reconcile_top_base_after_drag();
-            }
-            drag_log(|| {
-                format!(
-                    "end move drag: offsets=({}, {}), active_kind={:?}, pointer_locked={}",
-                    self.data.toolbar_top_offset,
-                    self.data.toolbar_top_offset_y,
-                    self.data.active_drag_kind,
-                    self.pointer_lock_active()
-                )
-            });
-            self.data.toolbar_move_drag = None;
-            self.set_toolbar_dragging(false);
-            self.set_pointer_over_toolbar(false);
-            self.data.active_drag_kind = None;
-            self.data.drag_top_base_x = None;
-            self.data.drag_top_base_y = None;
-            self.data.last_toolbar_drag_apply = None;
-            if self.data.toolbar_drag_pending_apply {
-                let snapshot = self.toolbar_snapshot();
-                let _ = self.apply_toolbar_offsets(&snapshot);
-                self.data.toolbar_drag_pending_apply = false;
-            }
-            if self.toolbar_drag_preview_active() {
-                if commit {
-                    self.begin_toolbar_drag_handoff();
-                } else {
-                    self.finish_toolbar_drag_handoff();
-                }
-            }
-            self.finish_toolbar_position_preview(commit);
-            self.unlock_pointer();
+        let active_kind = self.toolbar_drag.kind();
+        let Some(end) = self.toolbar_drag.end_move() else {
+            return;
+        };
+        if commit && let Some(old_base_x) = end.commit_base {
+            self.reconcile_top_base_after_drag(old_base_x);
         }
+        drag_log(|| {
+            format!(
+                "end move drag: offsets=({}, {}), active_kind={:?}, pointer_locked={}",
+                self.toolbar_chrome.top_offset().0,
+                self.toolbar_chrome.top_offset().1,
+                active_kind,
+                self.pointer_lock_active()
+            )
+        });
+        self.toolbar_chrome.set_pointer_over_toolbar(false);
+        if end.pending_apply {
+            let snapshot = self.toolbar_snapshot();
+            let _ = self.apply_toolbar_offsets(&snapshot);
+        }
+        if end.had_preview {
+            if commit {
+                self.begin_toolbar_drag_handoff();
+            } else {
+                self.finish_toolbar_drag_handoff();
+            }
+        }
+        self.finish_toolbar_position_preview(commit);
+        self.unlock_pointer();
     }
 }

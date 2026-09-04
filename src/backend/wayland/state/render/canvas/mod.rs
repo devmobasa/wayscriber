@@ -103,7 +103,7 @@ impl WaylandState {
         let layer_cache_ready = if !capture_picker_active && self.canvas_layer_cache_usable() {
             self.ensure_canvas_layer_cache(width, height, scale)
         } else {
-            self.canvas_layer_cache.clear();
+            self.render.canvas_layer_cache_mut().clear();
             false
         };
         if let (Some(perf), Some(layer_cache_start)) = (perf.as_mut(), layer_cache_start) {
@@ -190,7 +190,7 @@ impl WaylandState {
         // nothing the page holds: cancelling it leaves nothing behind, and
         // completing it warns through its own action instead.
         let spotlight_cursor = render_transients.then(|| {
-            let (screen_x, screen_y) = self.current_mouse();
+            let (screen_x, screen_y) = self.pointer.position();
             self.canvas_world_coords(screen_x as f64, screen_y as f64)
         });
         let crate::input::state::SpotlightFrameRegions {
@@ -278,8 +278,10 @@ impl WaylandState {
 
         self.render_selection_overlays(ctx);
 
-        let (mx, my) =
-            self.canvas_world_coords(self.current_mouse().0 as f64, self.current_mouse().1 as f64);
+        let (mx, my) = self.canvas_world_coords(
+            self.pointer.position().0 as f64,
+            self.pointer.position().1 as f64,
+        );
         let (hover_mx, hover_my) = self
             .stylus_hover_cursor_position()
             .map(|(x, y)| self.canvas_world_coords(x, y))
@@ -345,7 +347,7 @@ impl WaylandState {
         mut perf: Option<&mut PerfRenderBreakdown>,
     ) {
         let shapes = &self.input_state.boards.active_frame().shapes;
-        if layer_cache_ready && self.canvas_layer_cache.blit(ctx) {
+        if layer_cache_ready && self.render.canvas_layer_cache().blit(ctx) {
             debug!("Rendered committed shapes from layer cache");
             if let Some(perf) = perf.as_mut() {
                 perf.shapes_total = shapes.len();

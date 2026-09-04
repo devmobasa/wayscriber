@@ -83,13 +83,96 @@ const fn resize_cursor(handle: SelectionHandle) -> CursorIcon {
     }
 }
 
+trait CursorHint {
+    fn icon(self) -> CursorIcon;
+}
+
+impl CursorHint for ColorPickerCursorHint {
+    fn icon(self) -> CursorIcon {
+        match self {
+            Self::Text => CursorIcon::Text,
+            Self::Crosshair => CursorIcon::Crosshair,
+            Self::Pointer => CursorIcon::Pointer,
+            Self::Default => CursorIcon::Default,
+        }
+    }
+}
+
+impl CursorHint for BoardPickerCursorHint {
+    fn icon(self) -> CursorIcon {
+        match self {
+            Self::Text => CursorIcon::Text,
+            Self::Pointer => CursorIcon::Pointer,
+            Self::Grab => CursorIcon::Grab,
+            Self::Grabbing => CursorIcon::Grabbing,
+            Self::Default => CursorIcon::Default,
+        }
+    }
+}
+
+impl CursorHint for ContextMenuCursorHint {
+    fn icon(self) -> CursorIcon {
+        match self {
+            Self::Pointer => CursorIcon::Pointer,
+            Self::Default => CursorIcon::Default,
+        }
+    }
+}
+
+impl CursorHint for CommandPaletteCursorHint {
+    fn icon(self) -> CursorIcon {
+        match self {
+            Self::Text => CursorIcon::Text,
+            Self::Pointer => CursorIcon::Pointer,
+            Self::Default => CursorIcon::Default,
+        }
+    }
+}
+
+impl CursorHint for HelpOverlayCursorHint {
+    fn icon(self) -> CursorIcon {
+        match self {
+            Self::Text => CursorIcon::Text,
+            Self::Pointer => CursorIcon::Pointer,
+            Self::Default => CursorIcon::Default,
+        }
+    }
+}
+
+impl CursorHint for ToolbarCursorHint {
+    fn icon(self) -> CursorIcon {
+        match self {
+            Self::Pointer => CursorIcon::Pointer,
+            Self::Grab => CursorIcon::Grab,
+            Self::Default => CursorIcon::Default,
+        }
+    }
+}
+
+fn drawing_state_cursor(state: &DrawingState) -> Option<CursorIcon> {
+    match state {
+        DrawingState::TextInput { .. } => Some(CursorIcon::Text),
+        DrawingState::MovingSelection { .. } | DrawingState::BendingArrow { .. } => {
+            Some(CursorIcon::Grabbing)
+        }
+        DrawingState::ResizingText { .. } => Some(CursorIcon::SeResize),
+        DrawingState::Drawing { .. }
+        | DrawingState::BuildingPolygon { .. }
+        | DrawingState::Selecting { .. } => Some(CursorIcon::Crosshair),
+        DrawingState::PendingTextClick { .. } => Some(CursorIcon::Default),
+        DrawingState::ResizingSelection { handle, .. } => Some(resize_cursor(*handle)),
+        DrawingState::AdjustingSpotlightMagnification { .. } => Some(CursorIcon::EwResize),
+        DrawingState::Idle => None,
+    }
+}
+
 impl WaylandState {
     pub(in crate::backend::wayland) fn update_pointer_cursor(
         &mut self,
         toolbar_hover: bool,
         conn: &Connection,
     ) {
-        if self.toolbar_dragging() && self.pointer_lock_active() {
+        if self.toolbar_drag.item_dragging() && self.pointer_lock_active() {
             self.hide_pointer_cursor();
             return;
         }
@@ -108,11 +191,15 @@ impl WaylandState {
     pub(super) fn refresh_screen_modal_cursor(
         &mut self,
         modal_before: bool,
-        on_toolbar: bool,
+        routed: RoutedInput,
         conn: &Connection,
     ) {
         if modal_before || self.input_state.screen_modal_is_active() {
-            self.update_pointer_cursor(on_toolbar || self.pointer_over_toolbar(), conn);
+            self.update_pointer_cursor(
+                routed.surface == InputSurface::Toolbar
+                    || self.toolbar_chrome.pointer_over_toolbar(),
+                conn,
+            );
         }
     }
 
@@ -128,7 +215,7 @@ impl WaylandState {
                 ..ScreenModalCursorContext::default()
             };
         }
-        let (mouse_x, mouse_y) = self.current_mouse();
+        let (mouse_x, mouse_y) = self.pointer.position();
         let point = (f64::from(mouse_x), f64::from(mouse_y));
         let dragging = region_state.selection_owner().is_some();
         // While a grip is held its identity comes from the drag, not from
@@ -156,163 +243,84 @@ impl WaylandState {
         if self.input_state.screen_modal_is_active() && !toolbar_hover {
             return screen_modal_cursor(self.screen_modal_cursor_context());
         }
+        if let Some(icon) = self.popup_cursor() {
+            return icon;
+        }
+        if let Some(icon) = self.toolbar_cursor(toolbar_hover) {
+            return icon;
+        }
+        if let Some(icon) = drawing_state_cursor(&self.input_state.state) {
+            return icon;
+        }
+        self.idle_canvas_cursor()
+    }
 
-        // Check color picker popup first (takes priority)
-        if self.input_state.is_color_picker_popup_open() {
-            let (mx, my) = self.current_mouse();
-            if let Some(layout) = self.input_state.color_picker_popup_layout() {
-                // When dragging on gradient, always show crosshair
-                if self.input_state.color_picker_popup_is_dragging() {
-                    return CursorIcon::Crosshair;
-                }
-                let recent_count = self.input_state.recent_colors().len();
-                return match layout.cursor_hint_at(mx as f64, my as f64, recent_count) {
-                    ColorPickerCursorHint::Text => CursorIcon::Text,
-                    ColorPickerCursorHint::Crosshair => CursorIcon::Crosshair,
-                    ColorPickerCursorHint::Pointer => CursorIcon::Pointer,
-                    ColorPickerCursorHint::Default => CursorIcon::Default,
-                };
+    fn popup_cursor(&self) -> Option<CursorIcon> {
+        let (mx, my) = self.pointer.position();
+        if self.input_state.is_color_picker_popup_open()
+            && let Some(layout) = self.input_state.color_picker_popup_layout()
+        {
+            if self.input_state.color_picker_popup_is_dragging() {
+                return Some(CursorIcon::Crosshair);
             }
+            return Some(
+                layout
+                    .cursor_hint_at(mx as f64, my as f64, self.input_state.recent_colors().len())
+                    .icon(),
+            );
         }
+        if self.input_state.is_board_picker_open()
+            && let Some(hint) = self.input_state.board_picker_cursor_hint_at(mx, my)
+        {
+            return Some(hint.icon());
+        }
+        if self.input_state.is_context_menu_open()
+            && let Some(hint) = self.input_state.context_menu_cursor_hint_at(mx, my)
+        {
+            return Some(hint.icon());
+        }
+        if self.input_state.command_palette.open
+            && let Some(hint) = self.input_state.command_palette_cursor_hint_at(
+                mx,
+                my,
+                self.surface.width(),
+                self.surface.height(),
+            )
+        {
+            return Some(hint.icon());
+        }
+        if self.input_state.help_overlay.is_visible()
+            && let Some(hint) = self.input_state.help_overlay_cursor_hint_at(mx, my)
+        {
+            return Some(hint.icon());
+        }
+        None
+    }
 
-        // Check board picker popup
-        if self.input_state.is_board_picker_open() {
-            let (mx, my) = self.current_mouse();
-            if let Some(hint) = self.input_state.board_picker_cursor_hint_at(mx, my) {
-                return match hint {
-                    BoardPickerCursorHint::Text => CursorIcon::Text,
-                    BoardPickerCursorHint::Pointer => CursorIcon::Pointer,
-                    BoardPickerCursorHint::Grab => CursorIcon::Grab,
-                    BoardPickerCursorHint::Grabbing => CursorIcon::Grabbing,
-                    BoardPickerCursorHint::Default => CursorIcon::Default,
-                };
-            }
+    fn toolbar_cursor(&self, toolbar_hover: bool) -> Option<CursorIcon> {
+        if self.toolbar_drag.item_dragging() || self.pointer.board_pan_active() {
+            return Some(CursorIcon::Grabbing);
         }
-
-        // Check context menu
-        if self.input_state.is_context_menu_open() {
-            let (mx, my) = self.current_mouse();
-            if let Some(hint) = self.input_state.context_menu_cursor_hint_at(mx, my) {
-                return match hint {
-                    ContextMenuCursorHint::Pointer => CursorIcon::Pointer,
-                    ContextMenuCursorHint::Default => CursorIcon::Default,
-                };
-            }
+        if self.pointer.board_pan_key_held() && self.can_start_board_pan() {
+            return Some(CursorIcon::Grab);
         }
-
-        // Check command palette
-        if self.input_state.command_palette.open {
-            let (mx, my) = self.current_mouse();
-            let screen_width = self.surface.width();
-            let screen_height = self.surface.height();
-            if let Some(hint) =
-                self.input_state
-                    .command_palette_cursor_hint_at(mx, my, screen_width, screen_height)
-            {
-                return match hint {
-                    CommandPaletteCursorHint::Text => CursorIcon::Text,
-                    CommandPaletteCursorHint::Pointer => CursorIcon::Pointer,
-                    CommandPaletteCursorHint::Default => CursorIcon::Default,
-                };
-            }
-        }
-
-        // Check help overlay
-        if self.input_state.help_overlay.is_visible() {
-            let (mx, my) = self.current_mouse();
-            if let Some(hint) = self.input_state.help_overlay_cursor_hint_at(mx, my) {
-                return match hint {
-                    HelpOverlayCursorHint::Text => CursorIcon::Text,
-                    HelpOverlayCursorHint::Pointer => CursorIcon::Pointer,
-                    HelpOverlayCursorHint::Default => CursorIcon::Default,
-                };
-            }
-        }
-
-        if self.toolbar_dragging() {
-            return CursorIcon::Grabbing;
-        }
-        if self.board_panning_active() {
-            return CursorIcon::Grabbing;
-        }
-        if self.board_pan_key_held() && self.can_start_board_pan() {
-            return CursorIcon::Grab;
-        }
-
-        // Inline toolbar cursor hints (when using inline mode)
-        if self.inline_toolbars_active()
-            && self.pointer_over_toolbar()
+        if self.toolbar_chrome.inline_toolbars()
+            && self.toolbar_chrome.pointer_over_toolbar()
             && let Some(hint) = self.inline_toolbar_cursor_hint()
         {
-            return match hint {
-                ToolbarCursorHint::Pointer => CursorIcon::Pointer,
-                ToolbarCursorHint::Grab => CursorIcon::Grab,
-                ToolbarCursorHint::Default => CursorIcon::Default,
-            };
+            return Some(hint.icon());
         }
-
-        // Layer-shell toolbar cursor hints (sliders get grab, buttons get pointer, etc.)
         if toolbar_hover {
-            if let Some(hint) = self.toolbar.cursor_hint() {
-                return match hint {
-                    ToolbarCursorHint::Pointer => CursorIcon::Pointer,
-                    ToolbarCursorHint::Grab => CursorIcon::Grab,
-                    ToolbarCursorHint::Default => CursorIcon::Default,
-                };
-            }
-            return CursorIcon::Default;
+            return Some(
+                self.toolbar
+                    .cursor_hint()
+                    .map_or(CursorIcon::Default, CursorHint::icon),
+            );
         }
+        None
+    }
 
-        // Check drawing state for context
-        match &self.input_state.state {
-            // Text input mode - show text cursor
-            DrawingState::TextInput { .. } => {
-                return CursorIcon::Text;
-            }
-            // Dragging selection - show grabbing cursor
-            DrawingState::MovingSelection { .. } => {
-                return CursorIcon::Grabbing;
-            }
-            // Resizing text - show resize cursor
-            DrawingState::ResizingText { .. } => {
-                return CursorIcon::SeResize;
-            }
-            // Drawing - use crosshair
-            DrawingState::Drawing { .. } => {
-                return CursorIcon::Crosshair;
-            }
-            DrawingState::BuildingPolygon { .. } => {
-                return CursorIcon::Crosshair;
-            }
-            // Selecting (marquee) - use crosshair
-            DrawingState::Selecting { .. } => {
-                return CursorIcon::Crosshair;
-            }
-            // Pending text click - use default
-            DrawingState::PendingTextClick { .. } => {
-                return CursorIcon::Default;
-            }
-            // Resizing selection - show appropriate resize cursor
-            DrawingState::ResizingSelection { handle, .. } => {
-                return resize_cursor(*handle);
-            }
-            // Dragging the loupe's magnification knob - horizontal travel only
-            DrawingState::AdjustingSpotlightMagnification { .. } => {
-                return CursorIcon::EwResize;
-            }
-            // Dragging a curved arrow's bend handle - free travel, the
-            // perpendicular component of which is what the arc follows
-            DrawingState::BendingArrow { .. } => {
-                return CursorIcon::Grabbing;
-            }
-            // Idle - check for hover contexts
-            DrawingState::Idle => {}
-        }
-
-        // Interactive chrome under an idle pointer: hand cursor over
-        // actionable chips/buttons, neutral arrow over the rest of the
-        // pill. Both surfaces render above the canvas, so they outrank
-        // selection-handle hover in the pixels they occupy.
+    fn idle_canvas_cursor(&mut self) -> CursorIcon {
         if self.input_state.status_hud.hover().is_some()
             || self.input_state.zoom_chip.hover().is_some()
         {
@@ -325,12 +333,6 @@ impl WaylandState {
             return CursorIcon::Default;
         }
 
-        // Hovering an on-canvas handle. Resolved through the same routing a
-        // press uses, so the cursor cannot promise one operation where a click
-        // would start another — these handles overlap, and a bend grip on a
-        // shallow arc lands within a few pixels of the selection box's edge
-        // handle. Checked on hover as well as during the drag, or a grip would
-        // look inert until it was already grabbed.
         let (canvas_x, canvas_y) = self.input_state.canvas_pointer_position();
         match self.input_state.hit_idle_handle(canvas_x, canvas_y) {
             Some(IdleHandle::SpotlightMagnification(_)) => return CursorIcon::EwResize,
@@ -339,8 +341,6 @@ impl WaylandState {
             Some(IdleHandle::SelectionResize(handle)) => return resize_cursor(handle),
             None => {}
         }
-
-        // Check if hovering over a selected shape (for move)
         if let Some(hit_id) = self.input_state.hit_test_at(canvas_x, canvas_y)
             && self
                 .input_state
@@ -349,8 +349,6 @@ impl WaylandState {
         {
             return CursorIcon::Grab;
         }
-
-        // Default: crosshair for drawing
         CursorIcon::Crosshair
     }
 
@@ -361,14 +359,184 @@ impl WaylandState {
 
 #[cfg(test)]
 mod tests {
-    use super::{ScreenModalCursorContext, screen_modal_cursor};
-    use crate::input::SelectionHandle;
+    use super::{CursorHint, ScreenModalCursorContext, drawing_state_cursor, screen_modal_cursor};
+    use crate::{
+        backend::wayland::toolbar::ToolbarCursorHint,
+        draw::{Shape, color::BLACK, frame::ShapeSnapshot},
+        input::{
+            BoardPickerCursorHint, ColorPickerCursorHint, CommandPaletteCursorHint,
+            ContextMenuCursorHint, DrawingState, HelpOverlayCursorHint, SelectionHandle, Tool,
+        },
+        util::Rect,
+    };
     use smithay_client_toolkit::seat::pointer::CursorIcon;
+    use std::sync::Arc;
 
     fn review(context: ScreenModalCursorContext) -> ScreenModalCursorContext {
         ScreenModalCursorContext {
             review: true,
             ..context
+        }
+    }
+
+    fn snapshot() -> ShapeSnapshot {
+        ShapeSnapshot {
+            shape: Shape::Line {
+                x1: 0,
+                y1: 0,
+                x2: 1,
+                y2: 1,
+                color: BLACK,
+                thick: 1.0,
+            },
+            locked: false,
+        }
+    }
+
+    #[test]
+    fn every_popup_and_toolbar_hint_has_one_cursor_mapping() {
+        for (hint, expected) in [
+            (ColorPickerCursorHint::Default, CursorIcon::Default),
+            (ColorPickerCursorHint::Text, CursorIcon::Text),
+            (ColorPickerCursorHint::Crosshair, CursorIcon::Crosshair),
+            (ColorPickerCursorHint::Pointer, CursorIcon::Pointer),
+        ] {
+            assert_eq!(hint.icon(), expected);
+        }
+        for (hint, expected) in [
+            (BoardPickerCursorHint::Default, CursorIcon::Default),
+            (BoardPickerCursorHint::Text, CursorIcon::Text),
+            (BoardPickerCursorHint::Pointer, CursorIcon::Pointer),
+            (BoardPickerCursorHint::Grab, CursorIcon::Grab),
+            (BoardPickerCursorHint::Grabbing, CursorIcon::Grabbing),
+        ] {
+            assert_eq!(hint.icon(), expected);
+        }
+        for (hint, expected) in [
+            (ContextMenuCursorHint::Default, CursorIcon::Default),
+            (ContextMenuCursorHint::Pointer, CursorIcon::Pointer),
+        ] {
+            assert_eq!(hint.icon(), expected);
+        }
+        for (hint, expected) in [
+            (CommandPaletteCursorHint::Default, CursorIcon::Default),
+            (CommandPaletteCursorHint::Text, CursorIcon::Text),
+            (CommandPaletteCursorHint::Pointer, CursorIcon::Pointer),
+        ] {
+            assert_eq!(hint.icon(), expected);
+        }
+        for (hint, expected) in [
+            (HelpOverlayCursorHint::Default, CursorIcon::Default),
+            (HelpOverlayCursorHint::Text, CursorIcon::Text),
+            (HelpOverlayCursorHint::Pointer, CursorIcon::Pointer),
+        ] {
+            assert_eq!(hint.icon(), expected);
+        }
+        for (hint, expected) in [
+            (ToolbarCursorHint::Default, CursorIcon::Default),
+            (ToolbarCursorHint::Pointer, CursorIcon::Pointer),
+            (ToolbarCursorHint::Grab, CursorIcon::Grab),
+        ] {
+            assert_eq!(hint.icon(), expected);
+        }
+    }
+
+    #[test]
+    fn every_drawing_state_arm_selects_its_cursor() {
+        let cases = [
+            (
+                DrawingState::TextInput {
+                    x: 0,
+                    y: 0,
+                    buffer: String::new(),
+                    caret: 0,
+                    selection_anchor: None,
+                },
+                Some(CursorIcon::Text),
+            ),
+            (
+                DrawingState::MovingSelection {
+                    last_x: 0,
+                    last_y: 0,
+                    snapshots: Vec::new(),
+                    moved: false,
+                },
+                Some(CursorIcon::Grabbing),
+            ),
+            (
+                DrawingState::ResizingText {
+                    shape_id: 1,
+                    snapshot: snapshot(),
+                    base_x: 0,
+                    size: 12.0,
+                },
+                Some(CursorIcon::SeResize),
+            ),
+            (
+                DrawingState::Drawing {
+                    tool: Tool::Pen,
+                    start_x: 0,
+                    start_y: 0,
+                    points: Vec::new(),
+                    point_thicknesses: Vec::new(),
+                },
+                Some(CursorIcon::Crosshair),
+            ),
+            (
+                DrawingState::BuildingPolygon {
+                    points: Vec::new(),
+                    preview: None,
+                    fill: false,
+                    color: BLACK,
+                    thick: 1.0,
+                },
+                Some(CursorIcon::Crosshair),
+            ),
+            (
+                DrawingState::Selecting {
+                    start_x: 0,
+                    start_y: 0,
+                    additive: false,
+                },
+                Some(CursorIcon::Crosshair),
+            ),
+            (
+                DrawingState::PendingTextClick {
+                    x: 0,
+                    y: 0,
+                    tool: Tool::Select,
+                    shape_id: 1,
+                },
+                Some(CursorIcon::Default),
+            ),
+            (
+                DrawingState::ResizingSelection {
+                    handle: SelectionHandle::Right,
+                    original_bounds: Rect::new(0, 0, 1, 1).unwrap(),
+                    start_x: 0,
+                    start_y: 0,
+                    snapshots: Arc::new(Vec::new()),
+                },
+                Some(CursorIcon::EwResize),
+            ),
+            (
+                DrawingState::AdjustingSpotlightMagnification {
+                    shape_id: 1,
+                    snapshot: snapshot(),
+                },
+                Some(CursorIcon::EwResize),
+            ),
+            (
+                DrawingState::BendingArrow {
+                    shape_id: 1,
+                    snapshot: snapshot(),
+                },
+                Some(CursorIcon::Grabbing),
+            ),
+            (DrawingState::Idle, None),
+        ];
+        for (state, expected) in cases {
+            assert_eq!(drawing_state_cursor(&state), expected, "{state:?}");
         }
     }
 

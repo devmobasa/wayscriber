@@ -27,42 +27,6 @@ fn gtk_toolbar_top_visible(
     requested && !unmap_suppressed && !capture_picker_suppressed
 }
 
-fn acknowledge_blocked_gtk_drag_feedback(top_seq: &mut u64, feedback: &GtkToolbarFeedback) {
-    match feedback {
-        GtkToolbarFeedback::SetTopOffset { seq, .. } => {
-            *top_seq = (*top_seq).max(*seq);
-        }
-        GtkToolbarFeedback::Event { .. }
-        | GtkToolbarFeedback::PointerShortcut { .. }
-        | GtkToolbarFeedback::TopHover { .. }
-        | GtkToolbarFeedback::CaptureSuppressionReady { .. }
-        | GtkToolbarFeedback::CaptureSuppressionFailed { .. } => {}
-    }
-}
-
-fn gtk_toolbar_feedback_is_blocked(
-    modal_engaged: bool,
-    top_drag_blocked: &mut bool,
-    feedback: &GtkToolbarFeedback,
-) -> bool {
-    match feedback {
-        GtkToolbarFeedback::CaptureSuppressionReady { .. }
-        | GtkToolbarFeedback::CaptureSuppressionFailed { .. } => false,
-        // Hover is passive state, not a user action; never gate it.
-        GtkToolbarFeedback::TopHover { .. } => false,
-        GtkToolbarFeedback::Event { .. } | GtkToolbarFeedback::PointerShortcut { .. } => {
-            modal_engaged
-        }
-        GtkToolbarFeedback::SetTopOffset { phase, .. } => {
-            let blocked = modal_engaged || *top_drag_blocked;
-            if blocked {
-                *top_drag_blocked = !phase.is_end();
-            }
-            blocked
-        }
-    }
-}
-
 impl WaylandState {
     /// True while the GTK frontend owns the toolbars (built-in bars stay
     /// unmapped).
@@ -80,7 +44,8 @@ impl WaylandState {
             feature_compiled: cfg!(feature = "toolbar-gtk"),
             layer_shell: self.protocol.layer_shell().is_some(),
             force_inline: super::force_inline_toolbars_requested(&self.config),
-            main_surface_uses_overlay_layer: self.data.main_surface_uses_overlay_layer,
+            main_surface_uses_overlay_layer: self.surface.placement().layer()
+                == smithay_client_toolkit::shell::wlr_layer::Layer::Overlay,
         };
         match resolve_frontend(request, preconditions) {
             ToolbarFrontend::Gtk => {
@@ -122,12 +87,10 @@ impl WaylandState {
             // modal first. Acknowledge rejected sequences so the authoritative
             // backend offsets pushed later in this pass snap GTK back and do
             // not become stale.
-            if gtk_toolbar_feedback_is_blocked(
-                gtk_toolbar_feedback_blocked(&self.input_state),
-                &mut self.data.gtk_top_drag_blocked,
-                &feedback,
-            ) {
-                acknowledge_blocked_gtk_drag_feedback(&mut self.data.gtk_top_offset_seq, &feedback);
+            if self
+                .toolbar_drag
+                .gtk_note_feedback(gtk_toolbar_feedback_blocked(&self.input_state), &feedback)
+            {
                 // If a modal opened after an accepted drag start, the blocked
                 // end still has to close the preview lifecycle. Keep the last
                 // accepted position rather than applying motion produced while
@@ -138,16 +101,12 @@ impl WaylandState {
                         phase,
                         ..
                     } if phase.is_end()
-                        && self.data.gtk_drag_preview
+                        && self.toolbar_drag.gtk_preview_kind()
                             == Some(crate::toolbar_gtk::GtkToolbarKind::Top) =>
                     {
-                        self.data.gtk_top_drag_rebase = None;
-                        self.apply_gtk_top_offset(
-                            self.data.toolbar_top_offset,
-                            self.data.toolbar_top_offset_y,
-                            surface_size,
-                            phase,
-                        );
+                        self.toolbar_drag.set_gtk_rebase(None);
+                        let offset = self.toolbar_chrome.top_offset();
+                        self.apply_gtk_top_offset(offset.0, offset.1, surface_size, phase);
                     }
                     _ => {}
                 }
@@ -183,7 +142,7 @@ impl WaylandState {
                     }
                 }
                 GtkToolbarFeedback::TopHover { hovered } => {
-                    self.data.gtk_top_hover = hovered;
+                    self.toolbar_chrome.set_gtk_top_hover(hovered);
                 }
                 GtkToolbarFeedback::SetTopOffset {
                     x,
@@ -198,7 +157,7 @@ impl WaylandState {
                             surface_size.width, surface_size.height,
                         )
                     });
-                    self.data.gtk_top_offset_seq = seq;
+                    self.toolbar_drag.note_gtk_offset_seq(seq);
                     self.apply_gtk_top_offset(x, y, surface_size, phase);
                 }
             }
@@ -209,7 +168,7 @@ impl WaylandState {
         if failed {
             self.cancel_overlay_capture_waiting_for_gtk();
             self.cancel_gtk_toolbar_drag_lifecycle();
-            self.data.gtk_top_hover = false;
+            self.toolbar_chrome.set_gtk_top_hover(false);
             self.gtk_toolbar = None;
         }
     }
@@ -224,7 +183,7 @@ impl WaylandState {
         // Capture suppression keeps normally visible layer surfaces mapped
         // but transparent, avoiding compositor-owned close-animation
         // snapshots. Other suppression and light passthrough still unmap.
-        let capture_suppressed = self.data.overlay_suppression.requires_capture_barrier();
+        let capture_suppressed = self.suppression.requires_capture_barrier();
         let unmap_suppressed = self.overlay_passthrough_requested() && !capture_suppressed;
         let capture_picker_suppressed = self.capture_picker_chrome_suppressed();
         let update = GtkToolbarUpdate {
@@ -233,8 +192,8 @@ impl WaylandState {
                 unmap_suppressed,
                 capture_picker_suppressed,
             ),
-            top_offset: (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y),
-            top_offset_seq: self.data.gtk_top_offset_seq,
+            top_offset: self.toolbar_chrome.top_offset(),
+            top_offset_seq: self.toolbar_drag.gtk_offset_seq(),
             top_base_x: self.gtk_top_base_x(),
             output_name: self
                 .surface
@@ -248,18 +207,15 @@ impl WaylandState {
                 self.input_state.modifiers.alt,
             ),
             modal_engaged: gtk_toolbar_feedback_blocked(&self.input_state),
-            drag_preview: self.data.gtk_drag_preview,
+            drag_preview: self.toolbar_drag.gtk_preview_kind(),
             capture_suppressed,
-            capture_suppression_generation: self
-                .data
-                .overlay_capture_barrier
-                .gtk_paint_generation(),
+            capture_suppression_generation: self.suppression.barrier.gtk_paint_generation(),
             snapshot,
         };
         if let Some(generation) = update.capture_suppression_generation {
             log::info!(
                 "capture.preflight id={generation} component=backend phase=gtk-update-queued reason={:?} top_visible={} output={:?}",
-                self.data.overlay_suppression,
+                self.suppression.reason(),
                 update.top_visible,
                 update.output_name
             );
@@ -275,14 +231,6 @@ mod modal_tests {
     use super::*;
     use crate::config::Action;
     use crate::input::state::test_support::make_test_input_state;
-    use crate::toolbar_gtk::GtkToolbarDragPhase;
-
-    const TEST_SURFACE_SIZE: crate::toolbar_gtk::GtkToolbarSurfaceSize =
-        crate::toolbar_gtk::GtkToolbarSurfaceSize {
-            width: 260,
-            height: 789,
-        };
-
     #[test]
     fn command_palette_and_shortcut_capture_block_all_gtk_feedback() {
         let mut input_state = make_test_input_state();
@@ -316,107 +264,5 @@ mod modal_tests {
         assert!(gtk_toolbar_top_visible(requested, false, false));
         assert!(!gtk_toolbar_top_visible(requested, true, false));
         assert!(requested, "the persisted/live request remains untouched");
-    }
-
-    #[test]
-    fn blocked_drag_feedback_advances_the_sequence_and_never_regresses_it() {
-        let mut top_seq = 4;
-
-        acknowledge_blocked_gtk_drag_feedback(
-            &mut top_seq,
-            &GtkToolbarFeedback::SetTopOffset {
-                x: 100.0,
-                y: 50.0,
-                surface_size: TEST_SURFACE_SIZE,
-                seq: 9,
-                phase: GtkToolbarDragPhase::End,
-            },
-        );
-        assert_eq!(top_seq, 9);
-
-        acknowledge_blocked_gtk_drag_feedback(
-            &mut top_seq,
-            &GtkToolbarFeedback::SetTopOffset {
-                x: 0.0,
-                y: 0.0,
-                surface_size: TEST_SURFACE_SIZE,
-                seq: 8,
-                phase: GtkToolbarDragPhase::Move,
-            },
-        );
-        assert_eq!(top_seq, 9);
-    }
-
-    #[test]
-    fn drag_started_under_modal_stays_blocked_until_done() {
-        let mut top_blocked = false;
-        let top_update = |phase| GtkToolbarFeedback::SetTopOffset {
-            x: 10.0,
-            y: 20.0,
-            surface_size: TEST_SURFACE_SIZE,
-            seq: 1,
-            phase,
-        };
-
-        assert!(gtk_toolbar_feedback_is_blocked(
-            true,
-            &mut top_blocked,
-            &top_update(GtkToolbarDragPhase::Start),
-        ));
-        assert!(top_blocked);
-
-        assert!(gtk_toolbar_feedback_is_blocked(
-            false,
-            &mut top_blocked,
-            &top_update(GtkToolbarDragPhase::Move),
-        ));
-        assert!(top_blocked);
-
-        assert!(gtk_toolbar_feedback_is_blocked(
-            false,
-            &mut top_blocked,
-            &top_update(GtkToolbarDragPhase::End),
-        ));
-        assert!(!top_blocked);
-
-        assert!(!gtk_toolbar_feedback_is_blocked(
-            false,
-            &mut top_blocked,
-            &top_update(GtkToolbarDragPhase::Start),
-        ));
-    }
-
-    #[test]
-    fn capture_suppression_ack_bypasses_modal_feedback_blocking() {
-        let mut top_blocked = true;
-
-        assert!(!gtk_toolbar_feedback_is_blocked(
-            true,
-            &mut top_blocked,
-            &GtkToolbarFeedback::CaptureSuppressionReady { generation: 7 },
-        ));
-        assert!(top_blocked);
-    }
-
-    #[test]
-    fn pointer_shortcuts_are_blocked_like_toolbar_events() {
-        let mut top_blocked = false;
-        let aux = GtkToolbarFeedback::PointerShortcut {
-            button: 8,
-            ctrl: false,
-            shift: false,
-            alt: false,
-            logo: false,
-        };
-        assert!(gtk_toolbar_feedback_is_blocked(
-            true,
-            &mut top_blocked,
-            &aux,
-        ));
-        assert!(!gtk_toolbar_feedback_is_blocked(
-            false,
-            &mut top_blocked,
-            &aux,
-        ));
     }
 }

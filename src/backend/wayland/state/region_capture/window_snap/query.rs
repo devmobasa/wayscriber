@@ -141,7 +141,7 @@ impl WaylandState {
         source: ScreenSourceToken,
         freeze_ownership: FreezeOwnership,
     ) {
-        self.clear_region_window_snap();
+        self.region_capture.clear_window_snap();
         if !source_has_correlated_window_layout(purpose, freeze_ownership)
             || detect_backend().is_none()
         {
@@ -151,12 +151,12 @@ impl WaylandState {
             return;
         };
         let correlation = WindowSnapCorrelation::new(generation, source);
-        self.data.window_snap = Some(WindowSnapSession::queued(correlation, provider));
-        let _ = submit_queued_window_query_with(
-            &mut self.window_query,
-            &mut self.data.window_snap,
-            |provider| query_window_targets(&provider),
-        );
+        self.region_capture
+            .set_window_snap(WindowSnapSession::queued(correlation, provider));
+        let (controller, session) = self.region_capture.window_query_parts();
+        let _ = submit_queued_window_query_with(controller, session, |provider| {
+            query_window_targets(&provider)
+        });
     }
 
     fn region_window_query_context(&self, source: ScreenSourceToken) -> Option<WindowQueryContext> {
@@ -179,17 +179,12 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn poll_region_window_query_completion(&mut self) {
-        if poll_window_query_with(
-            &mut self.window_query,
-            &mut self.data.window_snap,
-            |provider| query_window_targets(&provider),
-        ) {
+        let (controller, session) = self.region_capture.window_query_parts();
+        if poll_window_query_with(controller, session, |provider| {
+            query_window_targets(&provider)
+        }) {
             self.mark_region_window_snap_dirty();
         }
-    }
-
-    pub(in crate::backend::wayland::state) fn clear_region_window_snap(&mut self) {
-        self.data.window_snap = None;
     }
 }
 
