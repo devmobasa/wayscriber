@@ -1381,6 +1381,7 @@ fn runtime_open_current_save_failure_preserves_active_selection_move() {
 #[cfg(unix)]
 #[test]
 fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selection_move() {
+    let measurer = crate::draw::TextMeasurer::default();
     let temp = crate::test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-spatial-save-fail");
     let current_target = temp.path().join("current-spatial-symlink-target");
@@ -1410,7 +1411,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
     assert!(input.apply_translation_to_selection(200, 0));
     assert!(
         input
-            .hit_test_all_for_points(&[(205, 5)], input.hit_test_tolerance())
+            .hit_test_all_for_points_with(&measurer, &[(205, 5)], input.hit_test_tolerance())
             .contains(&shape_id)
     );
     input.state = DrawingState::MovingSelection {
@@ -1434,7 +1435,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
     assert!(input.has_spatial_index());
     assert!(
         input
-            .hit_test_all_for_points(&[(205, 5)], input.hit_test_tolerance())
+            .hit_test_all_for_points_with(&measurer, &[(205, 5)], input.hit_test_tolerance())
             .contains(&shape_id),
         "hit testing should use the restored in-progress selection position"
     );

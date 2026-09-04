@@ -7,6 +7,7 @@
 //! the chord.
 
 use crate::draw::{ArrowStyle, Shape, ShapeId};
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::InputState;
 use crate::util::{self, Rect};
 
@@ -88,6 +89,16 @@ impl InputState {
     /// never moves the endpoints, so the mapping is stable for the whole
     /// gesture and cannot drift from what is on screen.
     pub(crate) fn drag_arrow_bend_to(&mut self, x: i32, y: i32, snap: bool) -> bool {
+        with_legacy_measurer(|measurer| self.drag_arrow_bend_to_with(measurer, x, y, snap))
+    }
+
+    pub(crate) fn drag_arrow_bend_to_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        x: i32,
+        y: i32,
+        snap: bool,
+    ) -> bool {
         let crate::input::state::DrawingState::BendingArrow { shape_id, .. } = self.state else {
             return false;
         };
@@ -115,20 +126,25 @@ impl InputState {
         } else {
             bend
         };
-        self.set_arrow_shape_bend(shape_id, bend)
+        self.set_arrow_shape_bend_with(measurer, shape_id, bend)
     }
 
     /// Writes a bend onto one arrow, marking what the change repainted.
     ///
     /// Records no undo entry: the drag pushes one entry when it ends, so the
     /// whole gesture undoes in a single step instead of once per motion event.
-    pub(crate) fn set_arrow_shape_bend(&mut self, shape_id: ShapeId, bend: f64) -> bool {
+    pub(crate) fn set_arrow_shape_bend_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        shape_id: ShapeId,
+        bend: f64,
+    ) -> bool {
         let clamped = util::clamp_arrow_bend(bend);
         let frame = self.boards.active_frame_mut();
         let Some(drawn) = frame.shape_mut(shape_id) else {
             return false;
         };
-        let before = drawn.bounding_box();
+        let before = drawn.bounding_box_with(measurer);
         let Shape::Arrow { bend: current, .. } = &mut drawn.shape else {
             return false;
         };
@@ -137,10 +153,10 @@ impl InputState {
         }
         *current = clamped;
         drawn.invalidate_bounds();
-        let after = drawn.bounding_box();
+        let after = drawn.bounding_box_with(measurer);
         self.mark_selection_dirty_region(before);
         self.mark_selection_dirty_region(after);
-        self.invalidate_hit_cache_for(shape_id);
+        self.invalidate_hit_cache_for_with(measurer, shape_id);
         self.mark_session_dirty();
         self.needs_redraw = true;
         true

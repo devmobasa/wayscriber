@@ -1,4 +1,5 @@
 use crate::draw::{Shape, ShapeId};
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::InputState;
 
 const TEXT_WRAP_MIN_WIDTH: i32 = 40;
@@ -21,13 +22,24 @@ impl InputState {
     }
 
     pub(crate) fn update_text_wrap_width(&mut self, shape_id: ShapeId, new_width: i32) -> bool {
+        with_legacy_measurer(|measurer| {
+            self.update_text_wrap_width_with(measurer, shape_id, new_width)
+        })
+    }
+
+    pub(crate) fn update_text_wrap_width_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        shape_id: ShapeId,
+        new_width: i32,
+    ) -> bool {
         let updated = {
             let frame = self.boards.active_frame_mut();
             if let Some(shape) = frame.shape_mut(shape_id) {
                 if shape.locked {
                     return false;
                 }
-                let before = shape.bounding_box();
+                let before = shape.bounding_box_with(measurer);
                 match &mut shape.shape {
                     Shape::Text { wrap_width, .. } | Shape::StickyNote { wrap_width, .. } => {
                         if *wrap_width == Some(new_width) {
@@ -38,7 +50,7 @@ impl InputState {
                     _ => return false,
                 }
                 shape.invalidate_bounds();
-                let after = shape.bounding_box();
+                let after = shape.bounding_box_with(measurer);
                 Some((before, after))
             } else {
                 None
@@ -48,7 +60,7 @@ impl InputState {
         if let Some((before, after)) = updated {
             self.mark_selection_dirty_region(before);
             self.mark_selection_dirty_region(after);
-            self.invalidate_hit_cache_for(shape_id);
+            self.invalidate_hit_cache_for_with(measurer, shape_id);
             self.needs_redraw = true;
             true
         } else {

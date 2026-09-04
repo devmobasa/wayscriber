@@ -1,11 +1,16 @@
 use super::super::base::InputState;
 use crate::draw::ShapeId;
 use crate::draw::frame::UndoAction;
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use std::borrow::Cow;
 use std::collections::HashSet;
 
 impl InputState {
     pub(crate) fn delete_selection(&mut self) -> bool {
+        with_legacy_measurer(|measurer| self.delete_selection_with(measurer))
+    }
+
+    pub(crate) fn delete_selection_with(&mut self, measurer: &TextMeasurer) -> bool {
         let id_set: HashSet<ShapeId> = {
             let ids = self.selected_shape_ids();
             if ids.is_empty() {
@@ -13,19 +18,27 @@ impl InputState {
             }
             ids.iter().copied().collect()
         };
-        self.delete_shapes_by_id_set(&id_set)
+        self.delete_shapes_by_id_set(measurer, &id_set)
     }
 
-    pub(crate) fn delete_shapes_by_ids(&mut self, ids: &[ShapeId]) -> bool {
+    pub(crate) fn delete_shapes_by_ids_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        ids: &[ShapeId],
+    ) -> bool {
         if ids.is_empty() {
             return false;
         }
 
         let id_set: HashSet<ShapeId> = ids.iter().copied().collect();
-        self.delete_shapes_by_id_set(&id_set)
+        self.delete_shapes_by_id_set(measurer, &id_set)
     }
 
-    fn delete_shapes_by_id_set(&mut self, id_set: &HashSet<ShapeId>) -> bool {
+    fn delete_shapes_by_id_set(
+        &mut self,
+        measurer: &TextMeasurer,
+        id_set: &HashSet<ShapeId>,
+    ) -> bool {
         if id_set.is_empty() {
             return false;
         }
@@ -39,7 +52,7 @@ impl InputState {
                     if shape.locked {
                         continue;
                     }
-                    dirty.push((shape.id, shape.bounding_box()));
+                    dirty.push((shape.id, shape.bounding_box_with(measurer)));
                     removed.push((index, shape.clone()));
                 }
             }
@@ -64,7 +77,7 @@ impl InputState {
 
         for (shape_id, bounds) in dirty {
             self.mark_selection_dirty_region(bounds);
-            self.invalidate_hit_cache_for(shape_id);
+            self.invalidate_hit_cache_for_with(measurer, shape_id);
         }
 
         self.clear_selection();
@@ -74,9 +87,17 @@ impl InputState {
     }
 
     pub(crate) fn erase_strokes_by_points(&mut self, points: &[(i32, i32)]) -> bool {
+        with_legacy_measurer(|measurer| self.erase_strokes_by_points_with(measurer, points))
+    }
+
+    pub(crate) fn erase_strokes_by_points_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        points: &[(i32, i32)],
+    ) -> bool {
         let sampled = self.sample_eraser_path_points(points);
-        let ids = self.hit_test_all_for_points(&sampled, self.eraser_hit_radius());
-        self.delete_shapes_by_ids(&ids)
+        let ids = self.hit_test_all_for_points_with(measurer, &sampled, self.eraser_hit_radius());
+        self.delete_shapes_by_ids_with(measurer, &ids)
     }
 
     /// Samples eraser path points to ensure adequate coverage for hit testing.

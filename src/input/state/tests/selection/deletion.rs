@@ -12,7 +12,7 @@ fn delete_shapes_by_ids_ignores_missing_ids() {
         thick: state.style.current_thickness,
     });
 
-    let removed = state.delete_shapes_by_ids(&[9999]);
+    let removed = state.delete_shapes_by_ids_with(&crate::draw::TextMeasurer::default(), &[9999]);
     assert!(!removed);
     assert_eq!(state.boards.active_frame().shapes.len(), 1);
 }

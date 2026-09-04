@@ -1,12 +1,21 @@
 use super::super::base::InputState;
 use crate::draw::DirtyFullReason;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::util::Rect;
 
 const SELECTION_DAMAGE_PADDING: i32 = 8;
 
 impl InputState {
     pub(crate) fn set_selection_locked(&mut self, locked: bool) -> bool {
+        with_legacy_measurer(|measurer| self.set_selection_locked_with(measurer, locked))
+    }
+
+    pub(crate) fn set_selection_locked_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        locked: bool,
+    ) -> bool {
         let ids_len = self.selected_shape_ids().len();
         if ids_len == 0 {
             return false;
@@ -39,8 +48,9 @@ impl InputState {
 
             if let Some((before, after, shape_for_dirty)) = result {
                 actions.push(UndoAction::modify_from_snapshots(id, before, after));
-                self.dirty_tracker.mark_shape(&shape_for_dirty);
-                self.invalidate_hit_cache_for(id);
+                self.dirty_tracker
+                    .mark_shape_with(&shape_for_dirty, measurer);
+                self.invalidate_hit_cache_for_with(measurer, id);
             }
         }
 

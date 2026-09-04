@@ -4,7 +4,10 @@
 //! layer and punches all the openings out of it. That makes spotlights the only
 //! shape kind the renderer collects up front instead of drawing in z-order.
 
-use crate::draw::{Shape, ShapeId, SpotlightRegion, spotlight_regions_for_frame};
+use crate::draw::{
+    Shape, ShapeId, SpotlightRegion, TextMeasurer, spotlight_regions_for_frame,
+    with_legacy_measurer,
+};
 use crate::input::Tool;
 
 use super::{DrawingState, InputState};
@@ -291,6 +294,17 @@ impl InputState {
         shape_id: ShapeId,
         magnification: f64,
     ) -> bool {
+        with_legacy_measurer(|measurer| {
+            self.set_spotlight_shape_magnification_with(measurer, shape_id, magnification)
+        })
+    }
+
+    pub(crate) fn set_spotlight_shape_magnification_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        shape_id: ShapeId,
+        magnification: f64,
+    ) -> bool {
         let normalized = crate::draw::normalize_spotlight_magnification(magnification);
         let frame = self.boards.active_frame_mut();
         let Some(drawn) = frame.shape_mut(shape_id) else {
@@ -307,9 +321,9 @@ impl InputState {
             return false;
         }
         *current = normalized;
-        let bounds = drawn.bounding_box();
+        let bounds = drawn.bounding_box_with(measurer);
         self.mark_selection_dirty_region(bounds);
-        self.invalidate_hit_cache_for(shape_id);
+        self.invalidate_hit_cache_for_with(measurer, shape_id);
         self.mark_session_dirty();
         self.needs_redraw = true;
         true

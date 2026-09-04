@@ -22,16 +22,6 @@ impl InputState {
     }
 
     /// Returns all shapes intersecting any of the provided points within tolerance.
-    pub(crate) fn hit_test_all_for_points(
-        &mut self,
-        points: &[(i32, i32)],
-        tolerance: f64,
-    ) -> Vec<ShapeId> {
-        with_legacy_measurer(|measurer| {
-            self.hit_test_all_for_points_with(measurer, points, tolerance)
-        })
-    }
-
     pub(crate) fn hit_test_all_for_points_with(
         &mut self,
         measurer: &TextMeasurer,

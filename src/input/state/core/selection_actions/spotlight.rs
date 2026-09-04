@@ -1,4 +1,5 @@
 use crate::draw::{Shape, ShapeId};
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::InputState;
 use crate::util::Rect;
 
@@ -156,6 +157,13 @@ impl InputState {
     /// was just derived from is a message chain waiting to disagree with the
     /// knob position.
     pub(crate) fn selected_spotlight_control(&self) -> Option<SelectedSpotlightControl> {
+        with_legacy_measurer(|measurer| self.selected_spotlight_control_with(measurer))
+    }
+
+    pub(crate) fn selected_spotlight_control_with(
+        &self,
+        measurer: &TextMeasurer,
+    ) -> Option<SelectedSpotlightControl> {
         let ids = self.selected_shape_ids();
         if ids.len() != 1 {
             return None;
@@ -168,7 +176,7 @@ impl InputState {
         let Shape::Spotlight { magnification, .. } = drawn.shape else {
             return None;
         };
-        let bounds = drawn.bounding_box()?;
+        let bounds = drawn.bounding_box_with(measurer)?;
         // Canvas coordinates, so the clamp survives pan and zoom.
         let track =
             spotlight_magnification_track(bounds, magnification, Some(self.visible_canvas_rect()))?;
@@ -185,18 +193,30 @@ impl InputState {
     /// loupe's bounding box, which magnification does not move, so the mapping
     /// is stable for the whole gesture.
     pub(crate) fn drag_spotlight_magnification_to(&mut self, x: i32) -> bool {
+        with_legacy_measurer(|measurer| self.drag_spotlight_magnification_to_with(measurer, x))
+    }
+
+    pub(crate) fn drag_spotlight_magnification_to_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        x: i32,
+    ) -> bool {
         let crate::input::state::DrawingState::AdjustingSpotlightMagnification { shape_id, .. } =
             self.state
         else {
             return false;
         };
-        let Some(control) = self.selected_spotlight_control() else {
+        let Some(control) = self.selected_spotlight_control_with(measurer) else {
             return false;
         };
         if control.shape_id != shape_id {
             return false;
         }
-        self.set_spotlight_shape_magnification(shape_id, control.track.magnification_at(x))
+        self.set_spotlight_shape_magnification_with(
+            measurer,
+            shape_id,
+            control.track.magnification_at(x),
+        )
     }
 
     /// Whether the pointer is on the magnification control, and which loupe it
@@ -206,7 +226,16 @@ impl InputState {
         x: i32,
         y: i32,
     ) -> Option<SelectedSpotlightControl> {
-        let control = self.selected_spotlight_control()?;
+        with_legacy_measurer(|measurer| self.hit_spotlight_magnification_track_with(measurer, x, y))
+    }
+
+    pub(crate) fn hit_spotlight_magnification_track_with(
+        &self,
+        measurer: &TextMeasurer,
+        x: i32,
+        y: i32,
+    ) -> Option<SelectedSpotlightControl> {
+        let control = self.selected_spotlight_control_with(measurer)?;
         let tolerance = self.hit_test_tolerance().ceil() as i32;
         let hit = control
             .track
