@@ -134,8 +134,7 @@ impl ReleaseSuppression {
     }
 
     fn take(&mut self, source: RegionInputSource) -> bool {
-        self.slot_mut(source)
-            .is_some_and(|slot| std::mem::take(slot))
+        self.slot_mut(source).is_some_and(std::mem::take)
     }
 
     fn clear_all(&mut self) {
