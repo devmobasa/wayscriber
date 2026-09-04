@@ -11,7 +11,8 @@ mod types;
 #[cfg(test)]
 pub use render::install_help_hit_map_for_test;
 pub use render::{
-    HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at, render_help_overlay,
+    HelpHitMap, HelpOverlayRegion, HelpRenderResult, clear_help_overlay_hit_map,
+    help_overlay_region_at, render_help_overlay, render_help_overlay_result,
 };
 pub use sections::HelpOverlayBindings;
 

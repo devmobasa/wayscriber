@@ -294,3 +294,62 @@ fn help_overlay_footer_offers_clickable_replay_and_about() {
     );
     wayscriber::ui::clear_help_overlay_hit_map();
 }
+
+#[test]
+fn help_result_owns_rendered_footer_hits_and_preserves_legacy_paint_pixels() {
+    use wayscriber::ui::HelpOverlayRegion;
+
+    let style = HelpOverlayStyle::default();
+    let input = make_input_state();
+    let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
+    let (mut owned_surface, ctx) = surface_with_context(1400, 1000);
+    wayscriber::ui::clear_help_overlay_hit_map();
+    let result = wayscriber::ui::render_help_overlay_result(
+        &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,
+    );
+    drop(ctx);
+
+    let mut replay = None;
+    let mut about = None;
+    for y in 0..1000 {
+        for x in 0..1400 {
+            match result.hit_map.region_at(x as f64, y as f64) {
+                Some(HelpOverlayRegion::Row(Action::ReplayTour)) => replay = Some((x, y)),
+                Some(HelpOverlayRegion::Row(Action::OpenAbout)) => about = Some((x, y)),
+                _ => {}
+            }
+        }
+    }
+    for point in [
+        replay.expect("rendered Replay tour target"),
+        about.expect("rendered About target"),
+    ] {
+        assert_eq!(
+            wayscriber::ui::help_overlay_region_at(point.0 as f64, point.1 as f64),
+            None,
+            "owned result must not install the legacy singleton"
+        );
+    }
+
+    let (mut legacy_surface, ctx) = surface_with_context(1400, 1000);
+    let scroll = wayscriber::ui::render_help_overlay(
+        &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,
+    );
+    drop(ctx);
+    assert_eq!(result.scroll_max, scroll);
+    owned_surface.flush();
+    legacy_surface.flush();
+    let owned = owned_surface.data().unwrap();
+    let legacy = legacy_surface.data().unwrap();
+    assert!(
+        owned[..] == legacy[..],
+        "result and legacy paths must paint identical pixels"
+    );
+    wayscriber::ui::clear_help_overlay_hit_map();
+    let (x, y) = about.unwrap();
+    assert_eq!(
+        result.hit_map.region_at(x as f64, y as f64),
+        Some(HelpOverlayRegion::Row(Action::OpenAbout)),
+        "clearing the legacy map must not erase the owned result"
+    );
+}
