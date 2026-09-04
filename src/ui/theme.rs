@@ -684,6 +684,14 @@ pub struct Theme {
 }
 
 impl Theme {
+    /// Resolve a startup preference without reading or installing global state.
+    pub fn resolve(mode: ThemeMode) -> Self {
+        match mode {
+            ThemeMode::Light => Self::light(),
+            ThemeMode::Auto | ThemeMode::Dark => Self::dark(),
+        }
+    }
+
     /// The default OSD-dark chrome (canonical values, matching the const
     /// tokens above).
     pub fn dark() -> Self {
@@ -751,18 +759,17 @@ pub enum ThemeMode {
 
 static CURRENT: OnceLock<Theme> = OnceLock::new();
 
-/// Install the theme for this process. Call once at startup after config is
-/// loaded; later calls are no-ops (first writer wins).
+/// Install the theme used by legacy standalone public renderers.
+/// Later calls are no-ops (first writer wins). The overlay and About window
+/// resolve and own their themes independently. Retained with [`current`] until
+/// the legacy public renderers undergo an explicit API migration; new rendering
+/// code should borrow an owned [`Theme`] instead.
 pub fn init(mode: ThemeMode) {
-    let theme = match mode {
-        ThemeMode::Light => Theme::light(),
-        ThemeMode::Auto | ThemeMode::Dark => Theme::dark(),
-    };
-    let _ = CURRENT.set(theme);
+    let _ = CURRENT.set(Theme::resolve(mode));
 }
 
-/// The active theme. Falls back to dark if `init` was never called (tests,
-/// early rendering).
+/// The legacy standalone theme. Falls back to dark if [`init`] was never called.
+/// Runtime rendering borrows owner-local themes instead; see [`init`].
 pub fn current() -> &'static Theme {
     CURRENT.get_or_init(Theme::dark)
 }
@@ -776,65 +783,46 @@ pub fn current() -> &'static Theme {
 /// tokens; a partial surface-only migration is less usable than a consistently
 /// dark popup.
 pub mod popup {
-    use super::{Rgba, current, overlay};
-
-    /// Resolution split from the accessors so it can be exercised against
-    /// both variants: `current()` is a process-wide `OnceLock`, so a test
-    /// cannot install one theme and then the other.
-    pub(crate) fn surface_for(_theme: &super::Theme, dark: Rgba) -> Rgba {
-        dark
-    }
-
-    pub(crate) fn border_for(_theme: &super::Theme, dark: Rgba) -> Rgba {
-        dark
-    }
-
-    fn surface(dark: Rgba) -> Rgba {
-        surface_for(current(), dark)
-    }
-
-    fn border(dark: Rgba) -> Rgba {
-        border_for(current(), dark)
-    }
+    use super::{Rgba, overlay};
 
     pub fn bg_context_menu() -> Rgba {
-        surface(overlay::PANEL_BG_CONTEXT_MENU)
+        overlay::PANEL_BG_CONTEXT_MENU
     }
 
     pub fn bg_board_picker() -> Rgba {
-        surface(overlay::PANEL_BG_BOARD_PICKER)
+        overlay::PANEL_BG_BOARD_PICKER
     }
 
     pub fn bg_properties() -> Rgba {
-        surface(overlay::PANEL_BG_PROPERTIES)
+        overlay::PANEL_BG_PROPERTIES
     }
 
     pub fn bg_command_palette() -> Rgba {
-        surface(overlay::PANEL_BG_COMMAND_PALETTE)
+        overlay::PANEL_BG_COMMAND_PALETTE
     }
 
     pub fn bg_modal() -> Rgba {
-        surface(overlay::PANEL_BG_MODAL)
+        overlay::PANEL_BG_MODAL
     }
 
     pub fn border_context_menu() -> Rgba {
-        border(overlay::BORDER_CONTEXT_MENU)
+        overlay::BORDER_CONTEXT_MENU
     }
 
     pub fn border_board_picker() -> Rgba {
-        border(overlay::BORDER_BOARD_PICKER)
+        overlay::BORDER_BOARD_PICKER
     }
 
     pub fn border_properties() -> Rgba {
-        border(overlay::BORDER_PROPERTIES)
+        overlay::BORDER_PROPERTIES
     }
 
     pub fn border_command_palette() -> Rgba {
-        border(overlay::BORDER_COMMAND_PALETTE)
+        overlay::BORDER_COMMAND_PALETTE
     }
 
     pub fn border_modal() -> Rgba {
-        border(overlay::BORDER_MODAL)
+        overlay::BORDER_MODAL
     }
 }
 
@@ -1054,68 +1042,36 @@ mod tests {
 
 #[cfg(test)]
 mod popup_theme_tests {
-    use super::{Theme, overlay, popup};
+    use super::{Theme, ThemeMode, overlay, popup};
 
-    /// Dark chrome must be byte-identical to the const tokens it shipped
-    /// with: the popups deliberately differ in tint and translucency, and
-    /// this change is about light mode, not a dark restyle.
     #[test]
-    fn dark_popups_keep_their_exact_const_tokens() {
-        let dark = Theme::dark();
-        for (resolved, token) in [
-            (
-                popup::surface_for(&dark, overlay::PANEL_BG_CONTEXT_MENU),
-                overlay::PANEL_BG_CONTEXT_MENU,
-            ),
-            (
-                popup::surface_for(&dark, overlay::PANEL_BG_BOARD_PICKER),
-                overlay::PANEL_BG_BOARD_PICKER,
-            ),
-            (
-                popup::surface_for(&dark, overlay::PANEL_BG_PROPERTIES),
-                overlay::PANEL_BG_PROPERTIES,
-            ),
-            (
-                popup::surface_for(&dark, overlay::PANEL_BG_COMMAND_PALETTE),
-                overlay::PANEL_BG_COMMAND_PALETTE,
-            ),
-            (
-                popup::surface_for(&dark, overlay::PANEL_BG_MODAL),
-                overlay::PANEL_BG_MODAL,
-            ),
-            (
-                popup::border_for(&dark, overlay::BORDER_MODAL),
-                overlay::BORDER_MODAL,
-            ),
-        ] {
-            assert_eq!(resolved, token);
-        }
+    fn resolving_themes_is_independent_and_auto_stays_dark() {
+        assert_eq!(Theme::resolve(ThemeMode::Auto), Theme::dark());
+        assert_eq!(Theme::resolve(ThemeMode::Light), Theme::light());
+        assert_eq!(Theme::resolve(ThemeMode::Dark), Theme::dark());
     }
 
-    /// A popup cannot migrate only its outer surface: its foreground, input,
-    /// hover, divider, and nested-card tokens have to move as one palette or
-    /// the light surface leaves the existing near-white text unreadable.
     #[test]
-    fn light_mode_keeps_the_complete_legacy_popup_palette_together() {
-        let light = Theme::light();
-
-        for token in [
-            overlay::PANEL_BG_CONTEXT_MENU,
-            overlay::PANEL_BG_BOARD_PICKER,
-            overlay::PANEL_BG_PROPERTIES,
-            overlay::PANEL_BG_COMMAND_PALETTE,
-            overlay::PANEL_BG_MODAL,
+    fn popup_accessors_keep_the_complete_legacy_palette() {
+        for (actual, expected) in [
+            (popup::bg_context_menu(), overlay::PANEL_BG_CONTEXT_MENU),
+            (popup::bg_board_picker(), overlay::PANEL_BG_BOARD_PICKER),
+            (popup::bg_properties(), overlay::PANEL_BG_PROPERTIES),
+            (
+                popup::bg_command_palette(),
+                overlay::PANEL_BG_COMMAND_PALETTE,
+            ),
+            (popup::bg_modal(), overlay::PANEL_BG_MODAL),
+            (popup::border_context_menu(), overlay::BORDER_CONTEXT_MENU),
+            (popup::border_board_picker(), overlay::BORDER_BOARD_PICKER),
+            (popup::border_properties(), overlay::BORDER_PROPERTIES),
+            (
+                popup::border_command_palette(),
+                overlay::BORDER_COMMAND_PALETTE,
+            ),
+            (popup::border_modal(), overlay::BORDER_MODAL),
         ] {
-            assert_eq!(
-                popup::surface_for(&light, token),
-                token,
-                "surface-only theming would make the legacy light text unreadable"
-            );
+            assert_eq!(actual, expected);
         }
-
-        assert_eq!(
-            popup::border_for(&light, overlay::BORDER_MODAL),
-            overlay::BORDER_MODAL
-        );
     }
 }

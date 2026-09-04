@@ -37,13 +37,13 @@ use layout::Plan;
 pub fn run_about_window() -> Result<()> {
     // Chrome colors come from the same `[ui] theme` key as the overlay, so the
     // dialog matches the toolbars the user already sees.
-    match Config::load() {
-        Ok(loaded) => crate::ui::theme::init(loaded.config.ui.theme.to_theme_mode()),
+    let theme = match Config::load() {
+        Ok(loaded) => crate::ui::theme::Theme::resolve(loaded.config.ui.theme.to_theme_mode()),
         Err(err) => {
             debug!("About dialog falling back to the default theme: {err}");
-            crate::ui::theme::init(Config::default().ui.theme.to_theme_mode());
+            crate::ui::theme::Theme::resolve(Config::default().ui.theme.to_theme_mode())
         }
-    }
+    };
 
     let conn = Connection::connect_to_env().context("Failed to connect to Wayland compositor")?;
     let (globals, mut event_queue) =
@@ -82,6 +82,7 @@ pub fn run_about_window() -> Result<()> {
         window,
         content,
         plan,
+        theme,
     );
 
     // Join helpers on every return path so ProcessBrokerGuard teardown cannot
@@ -128,6 +129,7 @@ fn surface_size(plan: &Plan) -> (u32, u32) {
 }
 
 struct AboutWindowState {
+    theme: crate::ui::theme::Theme,
     registry_state: RegistryState,
     compositor_state: CompositorState,
     shm: Shm,

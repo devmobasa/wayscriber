@@ -16,7 +16,7 @@ use super::types::HelpRowHit;
 use crate::config::{Action, action_label};
 use crate::label_format::NOT_BOUND_LABEL;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
-use cache::get_or_build_overlay_layout;
+pub(in crate::ui) use cache::HelpLayoutCache;
 use frame::draw_overlay_frame;
 use header::{HeaderContent, HeaderHint, draw_hints, draw_version_pill};
 
@@ -34,7 +34,8 @@ const REPLAY_FOOTER_ICON_GAP: f64 = 7.0;
 /// Gap between the footer pills.
 const FOOTER_PILL_GAP: f64 = 10.0;
 
-/// Render help overlay showing all keybindings
+/// Render help overlay showing all keybindings with call-local paint resources.
+/// The overlay runtime uses the explicit-context entry point to retain its layout.
 #[allow(clippy::too_many_arguments)]
 pub fn render_help_overlay(
     ctx: &cairo::Context,
@@ -51,6 +52,46 @@ pub fn render_help_overlay(
     scroll_offset: f64,
     quick_mode: bool,
 ) -> f64 {
+    let mut caches = crate::ui::UiRenderCaches::default();
+    let theme = crate::ui::theme::Theme::dark();
+    render_help_overlay_with_context(
+        &mut crate::ui::UiRenderCtx {
+            cairo: ctx,
+            theme: &theme,
+            caches: &mut caches,
+        },
+        style,
+        screen_width,
+        screen_height,
+        frozen_enabled,
+        page_index,
+        bindings,
+        search_query,
+        context_filter,
+        board_enabled,
+        capture_enabled,
+        scroll_offset,
+        quick_mode,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_help_overlay_with_context(
+    render: &mut crate::ui::UiRenderCtx<'_, '_, '_>,
+    style: &crate::config::HelpOverlayStyle,
+    screen_width: u32,
+    screen_height: u32,
+    frozen_enabled: bool,
+    page_index: usize,
+    bindings: &HelpOverlayBindings,
+    search_query: &str,
+    context_filter: bool,
+    board_enabled: bool,
+    capture_enabled: bool,
+    scroll_offset: f64,
+    quick_mode: bool,
+) -> f64 {
+    let ctx = render.cairo;
     let title_text = if quick_mode {
         "Quick Reference"
     } else {
@@ -117,7 +158,7 @@ pub fn render_help_overlay(
     };
     let close_hint_text: &str = &close_hint_owned;
 
-    let layout = get_or_build_overlay_layout(
+    let layout = render.caches.help_mut().get_or_build_overlay_layout(
         ctx,
         style,
         screen_width,

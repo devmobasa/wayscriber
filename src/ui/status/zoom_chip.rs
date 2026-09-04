@@ -526,6 +526,29 @@ pub fn render_zoom_chip(
     screen_width: u32,
     screen_height: u32,
 ) {
+    // An empty paint must not initialize the legacy first-writer-wins theme.
+    if zoom_chip_geometry(input_state, screen_width, screen_height).is_none() {
+        return;
+    }
+    render_zoom_chip_with_theme(
+        ctx,
+        theme::current(),
+        input_state,
+        style,
+        screen_width,
+        screen_height,
+    );
+}
+
+/// Paint with an explicit theme; the compatibility entry point uses the legacy process theme.
+pub fn render_zoom_chip_with_theme(
+    ctx: &cairo::Context,
+    theme: &theme::Theme,
+    input_state: &InputState,
+    style: &StatusBarStyle,
+    screen_width: u32,
+    screen_height: u32,
+) {
     let Some(layout) = input_state.zoom_chip_layout() else {
         return;
     };
@@ -548,7 +571,7 @@ pub fn render_zoom_chip(
         layout.pill_height,
         ZOOM_CHIP_CORNER_RADIUS,
         (bg_color[0], bg_color[1], bg_color[2], bg_color[3]),
-        theme::current().border_hairline,
+        theme.border_hairline,
         None,
     );
 
@@ -600,7 +623,7 @@ pub fn render_zoom_chip(
                 // locked state reads without a separate label; every other run
                 // uses the shared chip text color.
                 if run.button == Some(ZoomChipButtonKind::Lock) && layout.lock_active {
-                    let (ar, ag, ab, aa) = theme::current().accent;
+                    let (ar, ag, ab, aa) = theme.accent;
                     ctx.set_source_rgba(ar, ag, ab, aa);
                 } else {
                     ctx.set_source_rgba(r, g, b, a);

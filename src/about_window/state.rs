@@ -28,6 +28,7 @@ impl AboutWindowState {
         window: super::Window,
         content: AboutContent,
         plan: Plan,
+        theme: crate::ui::theme::Theme,
     ) -> Self {
         // Opening the dialog costs no network: the row reports whatever the
         // last background check wrote, and the user can ask for a fresh one.
@@ -36,6 +37,7 @@ impl AboutWindowState {
         let (width, height) = surface_size(&plan);
 
         Self {
+            theme,
             registry_state,
             compositor_state,
             shm,

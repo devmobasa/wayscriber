@@ -19,6 +19,8 @@ mod primitives;
 pub(crate) use primitives::{draw_rounded_rect, text_extents_for};
 mod properties_panel;
 mod radial_menu;
+mod render_context;
+pub(crate) use render_context::{UiRenderCaches, UiRenderCtx};
 mod region_action_bar;
 mod region_capture_picker;
 mod region_resize_handles;
@@ -41,6 +43,7 @@ pub use font_picker::render_font_picker;
 pub use help_overlay::HelpOverlayBindings;
 #[cfg(test)]
 pub use help_overlay::install_help_hit_map_for_test;
+pub(crate) use help_overlay::render_help_overlay_with_context;
 #[allow(unused_imports)]
 pub use help_overlay::{
     HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at, render_help_overlay,
@@ -59,6 +62,7 @@ pub(crate) use primitives::ellipsize_to_fit;
 pub(crate) use primitives::{checkerboard_behind, draw_pill};
 pub use properties_panel::render_properties_panel;
 pub use radial_menu::render_radial_menu;
+pub(crate) use radial_menu::render_radial_menu_with_context;
 pub(crate) use region_action_bar::{
     RegionAction, RegionActionAvailability, RegionActionBar, RegionCutStatus,
 };
@@ -72,11 +76,16 @@ pub(crate) use spotlight_control::render_spotlight_magnification_control;
 pub use status::{
     StatusHudLayout, StatusHudSegmentKind, ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress,
     compute_status_hud_layout, compute_zoom_chip_layout, render_editing_badge, render_frozen_badge,
-    render_page_badge, render_pan_badge, render_status_bar, render_zoom_badge, render_zoom_chip,
-    status_hud_geometry, zoom_chip_geometry,
+    render_page_badge, render_pan_badge, render_status_bar, render_status_bar_with_theme,
+    render_zoom_badge, render_zoom_chip, render_zoom_chip_with_theme, status_hud_geometry,
+    zoom_chip_geometry,
 };
 pub use toasts::{
     blocked_feedback_rects, preset_toast_geometry, render_blocked_feedback, render_preset_toast,
     render_ui_toast, ui_toast_geometry,
 };
 pub use tour::render_tour;
+
+#[cfg(test)]
+#[path = "ui/tests/theme_compatibility.rs"]
+mod theme_compatibility;

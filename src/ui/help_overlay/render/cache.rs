@@ -1,6 +1,5 @@
 use super::super::sections::HelpOverlayBindings;
 use super::state::{OverlayLayout, build_overlay_layout};
-use std::cell::RefCell;
 
 /// Style fields converted to integers for stable comparison.
 /// f64 values are stored as hundredths to avoid floating-point comparison issues.
@@ -65,59 +64,66 @@ struct CachedLayout {
     layout: OverlayLayout,
 }
 
-thread_local! {
-    static LAYOUT_CACHE: RefCell<Option<CachedLayout>> = const { RefCell::new(None) };
+/// One help layout retained for one UI rendering owner.
+#[derive(Default)]
+pub(in crate::ui) struct HelpLayoutCache {
+    entry: Option<CachedLayout>,
+    #[cfg(test)]
+    builds: usize,
 }
 
-/// Get or build the overlay layout, using cached version if inputs haven't changed.
-///
-/// This avoids expensive text measurement and grid layout computations on every
-/// render frame when the help overlay is visible.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn get_or_build_overlay_layout(
-    ctx: &cairo::Context,
-    style: &crate::config::HelpOverlayStyle,
-    screen_width: u32,
-    screen_height: u32,
-    frozen_enabled: bool,
-    page_index: usize,
-    bindings: &HelpOverlayBindings,
-    search_query: &str,
-    context_filter: bool,
-    board_enabled: bool,
-    capture_enabled: bool,
-    scroll_offset: f64,
-    title_text: &str,
-    header: &super::header::HeaderContent<'_>,
-    note_text_base: &str,
-    close_hint_text: &str,
-    quick_mode: bool,
-) -> OverlayLayout {
-    let key = LayoutCacheKey {
-        style: StyleKey::from_style(style),
-        screen_width,
-        screen_height,
-        frozen_enabled,
-        page_index,
-        bindings_key: bindings.cache_key().to_string(),
-        search_query: search_query.to_string(),
-        context_filter,
-        board_enabled,
-        capture_enabled,
-        quick_mode,
-    };
-
-    LAYOUT_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
+impl HelpLayoutCache {
+    /// Get or build the overlay layout, using cached version if inputs haven't changed.
+    ///
+    /// This avoids expensive text measurement and grid layout computations on every
+    /// render frame when the help overlay is visible.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn get_or_build_overlay_layout(
+        &mut self,
+        ctx: &cairo::Context,
+        style: &crate::config::HelpOverlayStyle,
+        screen_width: u32,
+        screen_height: u32,
+        frozen_enabled: bool,
+        page_index: usize,
+        bindings: &HelpOverlayBindings,
+        search_query: &str,
+        context_filter: bool,
+        board_enabled: bool,
+        capture_enabled: bool,
+        scroll_offset: f64,
+        title_text: &str,
+        header: &super::header::HeaderContent<'_>,
+        note_text_base: &str,
+        close_hint_text: &str,
+        quick_mode: bool,
+    ) -> OverlayLayout {
+        let key = LayoutCacheKey {
+            style: StyleKey::from_style(style),
+            screen_width,
+            screen_height,
+            frozen_enabled,
+            page_index,
+            bindings_key: bindings.cache_key().to_string(),
+            search_query: search_query.to_string(),
+            context_filter,
+            board_enabled,
+            capture_enabled,
+            quick_mode,
+        };
 
         // Check if we have a valid cached layout
-        if let Some(cached) = cache.as_ref().filter(|c| c.key == key) {
+        if let Some(cached) = self.entry.as_ref().filter(|c| c.key == key) {
             // Cache hit - just update scroll offset and return
             let mut layout = cached.layout.clone();
             layout.scroll_offset = scroll_offset.clamp(0.0, layout.scroll_max);
             return layout;
         }
 
+        #[cfg(test)]
+        {
+            self.builds += 1;
+        }
         // Cache miss - build new layout
         let layout = build_overlay_layout(
             ctx,
@@ -140,11 +146,15 @@ pub(super) fn get_or_build_overlay_layout(
         );
 
         // Store in cache
-        *cache = Some(CachedLayout {
+        self.entry = Some(CachedLayout {
             key,
             layout: layout.clone(),
         });
 
         layout
-    })
+    }
 }
+
+#[cfg(test)]
+#[path = "tests/cache.rs"]
+mod tests;

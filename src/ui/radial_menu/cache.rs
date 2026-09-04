@@ -2,15 +2,12 @@
 //!
 //! The rest-state rings (color swatches, compass wedges with their glyphs,
 //! labels, and keycap hints, and the size-ring track) are rendered once into
-//! a thread-local `ImageSurface` and blitted per frame; hover overlays, the
+//! an owner-local `ImageSurface` and blitted per frame; hover overlays, the
 //! sub-ring, the size value arc, and the center well stay dynamic on top.
 //! The cache key covers everything the base bakes in — surface resolution,
 //! palette + recents, binding hints, the slice table, and the active
-//! tool/color state — so any change invalidates the surface. The theme is
-//! process-fixed (`theme::init` is first-writer-wins), so it is not part of
-//! the key.
-
-use std::cell::RefCell;
+//! tool/color state — so any change invalidates the surface. The entry also
+//! retains the theme value so changing themes replaces the baked pixels.
 
 use cairo::{Context, Format, ImageSurface};
 
@@ -46,60 +43,78 @@ pub(super) struct BaseKey {
 
 struct CachedBase {
     key: BaseKey,
+    theme: theme::Theme,
     surface: ImageSurface,
 }
 
-thread_local! {
-    static BASE_CACHE: RefCell<Option<CachedBase>> = const { RefCell::new(None) };
+#[derive(Default)]
+pub(in crate::ui) struct RadialBaseCache {
+    cached: Option<CachedBase>,
 }
 
-/// Blit the (possibly rebuilt) static base centered on the layout center.
-/// Falls back to drawing the base directly when an offscreen surface cannot
-/// be created.
-pub(super) fn paint_base(
-    ctx: &cairo::Context,
-    input_state: &InputState,
-    layout: &RadialMenuLayout,
-    theme: &theme::Theme,
-    swatches: &[RadialRingSwatch],
-) {
-    let extent = base_extent(layout);
-    let scale = base_scale(ctx);
-    let key = base_cache_key(input_state, swatches, extent, scale);
+impl RadialBaseCache {
+    /// Blit the (possibly rebuilt) static base centered on the layout center.
+    /// Falls back to drawing the base directly when an offscreen surface cannot
+    /// be created.
+    pub(super) fn paint_base(
+        &mut self,
+        ctx: &cairo::Context,
+        input_state: &InputState,
+        layout: &RadialMenuLayout,
+        theme: &theme::Theme,
+        swatches: &[RadialRingSwatch],
+    ) {
+        let extent = base_extent(layout);
+        let surface = self.surface_for(ctx, input_state, layout, theme, swatches);
 
-    let surface = BASE_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(cached) = cache.as_ref().filter(|cached| cached.key == key) {
+        match surface {
+            Some(surface) => {
+                let _ = ctx.save();
+                let _ = ctx.set_source_surface(
+                    &surface,
+                    layout.center_x - extent,
+                    layout.center_y - extent,
+                );
+                let _ = ctx.paint();
+                let _ = ctx.restore();
+            }
+            None => super::draw_static_base(
+                ctx,
+                input_state,
+                theme,
+                layout.center_x,
+                layout.center_y,
+                layout,
+                swatches,
+            ),
+        }
+    }
+
+    fn surface_for(
+        &mut self,
+        ctx: &Context,
+        input_state: &InputState,
+        layout: &RadialMenuLayout,
+        theme: &theme::Theme,
+        swatches: &[RadialRingSwatch],
+    ) -> Option<ImageSurface> {
+        let extent = base_extent(layout);
+        let scale = base_scale(ctx);
+        let key = base_cache_key(input_state, swatches, extent, scale);
+        if let Some(cached) = self
+            .cached
+            .as_ref()
+            .filter(|cached| cached.key == key && cached.theme == *theme)
+        {
             return Some(cached.surface.clone());
         }
         let surface = render_base_surface(input_state, layout, theme, swatches, extent, scale)?;
-        *cache = Some(CachedBase {
+        self.cached = Some(CachedBase {
             key,
+            theme: theme.clone(),
             surface: surface.clone(),
         });
         Some(surface)
-    });
-
-    match surface {
-        Some(surface) => {
-            let _ = ctx.save();
-            let _ = ctx.set_source_surface(
-                &surface,
-                layout.center_x - extent,
-                layout.center_y - extent,
-            );
-            let _ = ctx.paint();
-            let _ = ctx.restore();
-        }
-        None => super::draw_static_base(
-            ctx,
-            input_state,
-            theme,
-            layout.center_x,
-            layout.center_y,
-            layout,
-            swatches,
-        ),
     }
 }
 
@@ -306,7 +321,7 @@ mod tests {
         let surface = render_base_surface(
             &state,
             &layout,
-            theme::current(),
+            &theme::Theme::dark(),
             &state.radial_ring_swatches(),
             EXTENT,
             1.0,
@@ -358,3 +373,6 @@ mod tests {
         assert_ne!(key_for(&default_state), key_for(&rebound_state));
     }
 }
+
+#[cfg(test)]
+mod owner_tests;
