@@ -7,17 +7,23 @@ use crate::input::state::{
     COMMAND_PALETTE_MAX_VISIBLE, COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER,
     COMMAND_PALETTE_TOP_RATIO, CommandPaletteListRow,
 };
-use crate::ui_text::{UiTextStyle, draw_text_baseline, measure_text};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
     self, EMPTY_COMMAND_PALETTE, EMPTY_COMMAND_SUGGESTIONS, INPUT_BG, INPUT_BORDER_FOCUSED,
     OVERLAY_DIM_MEDIUM, RADIUS_LG, RADIUS_STD, SHADOW, TEXT_DESCRIPTION, TEXT_PLACEHOLDER,
     TEXT_WHITE,
 };
-use super::primitives::{draw_rounded_rect, text_extents_for};
+use super::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use super::theme::Rgba;
 
 mod command_palette_row;
+mod modals;
+
+use modals::{
+    command_palette_action_tooltip_geometry, draw_command_palette_action_tooltip,
+    keybinding_capture_geometry, render_keybinding_capture,
+};
 
 use self::command_palette_row::{command_palette_row_styles, render_command_row};
 
@@ -67,12 +73,35 @@ pub fn render_command_palette(
     screen_width: u32,
     screen_height: u32,
 ) {
+    render_command_palette_with_engine(
+        &UiTextEngine::default(),
+        ctx,
+        input_state,
+        screen_width,
+        screen_height,
+    )
+}
+
+pub(crate) fn render_command_palette_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) {
     if !input_state.command_palette_is_engaged() {
         return;
     }
 
     if let Some(action) = input_state.keybinding_capture_action() {
-        render_keybinding_capture(ctx, input_state, action, screen_width, screen_height);
+        render_keybinding_capture(
+            engine,
+            ctx,
+            input_state,
+            action,
+            screen_width,
+            screen_height,
+        );
         return;
     }
 
@@ -100,6 +129,7 @@ pub fn render_command_palette(
     let mut cursor_y = y + COMMAND_PALETTE_PADDING;
 
     cursor_y = draw_command_palette_input(
+        engine,
         ctx,
         inner_x,
         cursor_y,
@@ -107,10 +137,19 @@ pub fn render_command_palette(
         &input_state.command_palette.query,
     );
 
-    render_command_palette_rows(ctx, input_state, &rows, inner_x, inner_width, cursor_y);
+    render_command_palette_rows(
+        engine,
+        ctx,
+        input_state,
+        &rows,
+        inner_x,
+        inner_width,
+        cursor_y,
+    );
 
     if rows.is_empty() && !input_state.command_palette.query.is_empty() {
         draw_command_palette_empty_state(
+            engine,
             ctx,
             inner_x,
             inner_width,
@@ -132,6 +171,7 @@ pub fn render_command_palette(
         input_state.command_palette_action_tooltip_for_layout(&rows, geometry)
     {
         draw_command_palette_action_tooltip(
+            engine,
             ctx,
             tooltip,
             pointer_x as f64,
@@ -141,7 +181,7 @@ pub fn render_command_palette(
         );
     }
 
-    draw_command_palette_escape_hint(ctx, x, y, palette_width, height);
+    draw_command_palette_escape_hint(engine, ctx, x, y, palette_width, height);
 }
 
 /// Bounds of every pixel the command palette may change this frame, excluding
@@ -149,6 +189,20 @@ pub fn render_command_palette(
 /// Open/close already force full damage; query, selection, scroll, and tooltip
 /// updates can therefore redraw only this compact footprint.
 pub fn command_palette_visual_geometry(
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) -> Option<(f64, f64, f64, f64)> {
+    command_palette_visual_geometry_with_engine(
+        &UiTextEngine::default(),
+        input_state,
+        screen_width,
+        screen_height,
+    )
+}
+
+pub(crate) fn command_palette_visual_geometry_with_engine(
+    engine: &UiTextEngine,
     input_state: &InputState,
     screen_width: u32,
     screen_height: u32,
@@ -180,6 +234,7 @@ pub fn command_palette_visual_geometry(
     if let Some((tooltip, pointer_x, pointer_y)) =
         input_state.command_palette_action_tooltip_for_layout(&rows, geometry)
         && let Some(tooltip_bounds) = command_palette_action_tooltip_geometry(
+            engine,
             tooltip,
             pointer_x as f64,
             pointer_y as f64,
@@ -200,148 +255,6 @@ fn union_bounds(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> (f64, f64, 
     let max_y = (a.1 + a.3).max(b.1 + b.3);
     (min_x, min_y, max_x - min_x, max_y - min_y)
 }
-
-fn command_palette_action_tooltip_geometry(
-    text: &str,
-    pointer_x: f64,
-    pointer_y: f64,
-    screen_width: f64,
-    screen_height: f64,
-) -> Option<(f64, f64, f64, f64)> {
-    let style = command_palette_text_style(
-        COMMAND_PALETTE_SHORTCUT_TEXT_SIZE,
-        cairo::FontWeight::Normal,
-        cairo::FontSlant::Normal,
-    );
-    let extents = measure_text(style, text, None)?;
-    let width = extents.width() + TOOLTIP_PADDING_X * 2.0;
-    let height = style.size + TOOLTIP_PADDING_Y * 2.0;
-    let x = (pointer_x + TOOLTIP_POINTER_OFFSET)
-        .min((screen_width - width - FRAME_SHADOW_OFFSET).max(FRAME_SHADOW_OFFSET));
-    let y = (pointer_y + TOOLTIP_POINTER_OFFSET)
-        .min((screen_height - height - FRAME_SHADOW_OFFSET).max(FRAME_SHADOW_OFFSET));
-    Some((x, y, width, height))
-}
-
-fn draw_command_palette_action_tooltip(
-    ctx: &cairo::Context,
-    text: &str,
-    pointer_x: f64,
-    pointer_y: f64,
-    screen_width: f64,
-    screen_height: f64,
-) {
-    let style = command_palette_text_style(
-        COMMAND_PALETTE_SHORTCUT_TEXT_SIZE,
-        cairo::FontWeight::Normal,
-        cairo::FontSlant::Normal,
-    );
-    let Some((x, y, width, height)) = command_palette_action_tooltip_geometry(
-        text,
-        pointer_x,
-        pointer_y,
-        screen_width,
-        screen_height,
-    ) else {
-        return;
-    };
-
-    constants::set_color(ctx, TOOLTIP_BG);
-    draw_rounded_rect(ctx, x, y, width, height, 5.0);
-    let _ = ctx.fill();
-    constants::set_color(ctx, TEXT_WHITE);
-    draw_text_baseline(
-        ctx,
-        style,
-        text,
-        x + TOOLTIP_PADDING_X,
-        y + TOOLTIP_PADDING_Y + style.size,
-        None,
-    );
-}
-
-/// Frame of the shortcut-capture modal, shared by rendering and damage.
-fn keybinding_capture_geometry(screen_width: u32, screen_height: u32) -> (f64, f64, f64, f64) {
-    let width = 520.0_f64.min(screen_width as f64 - 24.0);
-    let height = 170.0;
-    let x = (screen_width as f64 - width) / 2.0;
-    let y = screen_height as f64 * COMMAND_PALETTE_TOP_RATIO;
-    (x, y, width, height)
-}
-
-fn render_keybinding_capture(
-    ctx: &cairo::Context,
-    input_state: &InputState,
-    action: crate::config::Action,
-    screen_width: u32,
-    screen_height: u32,
-) {
-    let (x, y, width, height) = keybinding_capture_geometry(screen_width, screen_height);
-    draw_command_palette_frame(
-        ctx,
-        screen_width as f64,
-        screen_height as f64,
-        x,
-        y,
-        width,
-        height,
-    );
-
-    let title_style =
-        command_palette_text_style(18.0, cairo::FontWeight::Bold, cairo::FontSlant::Normal);
-    let body_style =
-        command_palette_text_style(13.0, cairo::FontWeight::Normal, cairo::FontSlant::Normal);
-    constants::set_color(ctx, TEXT_WHITE);
-    draw_text_baseline(
-        ctx,
-        title_style,
-        &format!("Rebind {}", action_label(action)),
-        x + 22.0,
-        y + 38.0,
-        None,
-    );
-    let current = input_state.action_binding_labels(action);
-    constants::set_color(ctx, TEXT_DESCRIPTION);
-    draw_text_baseline(
-        ctx,
-        body_style,
-        &format!(
-            "Current: {}",
-            if current.is_empty() {
-                "Not bound".to_string()
-            } else {
-                current.join(", ")
-            }
-        ),
-        x + 22.0,
-        y + 70.0,
-        None,
-    );
-    constants::set_color(ctx, TEXT_WHITE);
-    draw_text_baseline(
-        ctx,
-        body_style,
-        "Press the new shortcut now",
-        x + 22.0,
-        y + 108.0,
-        None,
-    );
-    constants::set_color(ctx, TEXT_DESCRIPTION);
-    draw_text_baseline(
-        ctx,
-        body_style,
-        KEYBINDING_CAPTURE_SCOPE_NOTE,
-        x + 22.0,
-        y + 140.0,
-        None,
-    );
-}
-
-/// Says what a captured chord costs and what refuses it, at the interaction
-/// point. The edit is durable, so the line names the two things that are not
-/// obvious: backing out, and what happens to a chord that is already taken.
-const KEYBINDING_CAPTURE_SCOPE_NOTE: &str =
-    "Escape cancels • a shortcut already in use is rejected";
 
 fn command_palette_text_style(
     size: f64,
@@ -404,6 +317,7 @@ fn draw_command_palette_frame(
 }
 
 fn draw_command_palette_input(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     inner_x: f64,
     mut cursor_y: f64,
@@ -433,7 +347,7 @@ fn draw_command_palette_input(
 
     if query.is_empty() {
         constants::set_color(ctx, TEXT_PLACEHOLDER);
-        draw_text_baseline(
+        engine.draw_baseline(
             ctx,
             input_style,
             COMMAND_PALETTE_QUERY_PLACEHOLDER,
@@ -443,7 +357,7 @@ fn draw_command_palette_input(
         );
     } else {
         constants::set_color(ctx, TEXT_WHITE);
-        draw_text_baseline(ctx, input_style, query, inner_x + 10.0, text_y, None);
+        engine.draw_baseline(ctx, input_style, query, inner_x + 10.0, text_y, None);
     }
 
     cursor_y += COMMAND_PALETTE_INPUT_HEIGHT + COMMAND_PALETTE_LIST_GAP;
@@ -451,6 +365,7 @@ fn draw_command_palette_input(
 }
 
 fn render_command_palette_rows(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     input_state: &InputState,
     rows: &[CommandPaletteListRow],
@@ -470,7 +385,7 @@ fn render_command_palette_rows(
         let item_y = start_y + (visible_idx as f64 * COMMAND_PALETTE_ITEM_HEIGHT);
         match row {
             CommandPaletteListRow::Header(label) => {
-                render_command_group_header(ctx, label, inner_x, inner_width, item_y);
+                render_command_group_header(engine, ctx, label, inner_x, inner_width, item_y);
             }
             CommandPaletteListRow::Command {
                 command,
@@ -478,6 +393,7 @@ fn render_command_palette_rows(
             } => {
                 let is_selected = *command_index == input_state.command_palette.selected;
                 render_command_row(
+                    engine,
                     ctx,
                     input_state,
                     command,
@@ -495,6 +411,7 @@ fn render_command_palette_rows(
 /// Group header row: small uppercase label with a hairline rule filling the
 /// remaining width. Occupies a full item row so hit-testing stays uniform.
 fn render_command_group_header(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     label: &str,
     inner_x: f64,
@@ -509,7 +426,7 @@ fn render_command_group_header(
     let text = label.to_uppercase();
     let baseline = item_y + COMMAND_PALETTE_ITEM_HEIGHT / 2.0 + style.size / 3.0;
     constants::set_color(ctx, constants::TEXT_HINT);
-    let extents = draw_text_baseline(ctx, style, &text, inner_x + 10.0, baseline, None);
+    let extents = engine.draw_baseline(ctx, style, &text, inner_x + 10.0, baseline, None);
 
     let rule_start = inner_x + 10.0 + extents.width() + 10.0;
     let rule_end = inner_x + inner_width - 8.0;
@@ -523,6 +440,7 @@ fn render_command_group_header(
 }
 
 fn draw_command_palette_empty_state(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     inner_x: f64,
     inner_width: f64,
@@ -536,7 +454,8 @@ fn draw_command_palette_empty_state(
         cairo::FontSlant::Normal,
     );
     constants::set_color(ctx, TEXT_DESCRIPTION);
-    let msg_extents = text_extents_for(
+    let msg_extents = text_extents_for_with_engine(
+        engine,
         ctx,
         COMMAND_PALETTE_FONT_FAMILY,
         cairo::FontSlant::Normal,
@@ -544,7 +463,7 @@ fn draw_command_palette_empty_state(
         empty_style.size,
         EMPTY_COMMAND_PALETTE,
     );
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         empty_style,
         EMPTY_COMMAND_PALETTE,
@@ -559,7 +478,8 @@ fn draw_command_palette_empty_state(
         cairo::FontSlant::Italic,
     );
     constants::set_color(ctx, constants::with_alpha(TEXT_DESCRIPTION, 0.7));
-    let suggest_extents = text_extents_for(
+    let suggest_extents = text_extents_for_with_engine(
+        engine,
         ctx,
         COMMAND_PALETTE_FONT_FAMILY,
         cairo::FontSlant::Italic,
@@ -567,7 +487,7 @@ fn draw_command_palette_empty_state(
         suggest_style.size,
         EMPTY_COMMAND_SUGGESTIONS,
     );
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         suggest_style,
         EMPTY_COMMAND_SUGGESTIONS,
@@ -621,6 +541,7 @@ fn render_command_palette_scroll_indicator(
 }
 
 fn draw_command_palette_escape_hint(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     y: f64,
@@ -634,7 +555,8 @@ fn draw_command_palette_escape_hint(
     );
     constants::set_color(ctx, constants::with_alpha(TEXT_DESCRIPTION, 0.6));
     let hint_y = y + height - HINT_BASELINE_BOTTOM_OFFSET;
-    let hint_extents = text_extents_for(
+    let hint_extents = text_extents_for_with_engine(
+        engine,
         ctx,
         COMMAND_PALETTE_FONT_FAMILY,
         cairo::FontSlant::Normal,
@@ -642,7 +564,7 @@ fn draw_command_palette_escape_hint(
         COMMAND_PALETTE_HINT_TEXT_SIZE,
         COMMAND_PALETTE_INPUT_HINT,
     );
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         hint_style,
         COMMAND_PALETTE_INPUT_HINT,
@@ -652,7 +574,9 @@ fn draw_command_palette_escape_hint(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn ellipsize_to_width(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     text: &str,
     family: &str,
@@ -665,12 +589,13 @@ fn ellipsize_to_width(
         return String::new();
     }
 
-    let extents = text_extents_for(ctx, family, slant, weight, size, text);
+    let extents = text_extents_for_with_engine(engine, ctx, family, slant, weight, size, text);
     if extents.width() <= max_width {
         return text.to_string();
     }
 
-    let ellipsis_extents = text_extents_for(ctx, family, slant, weight, size, ELLIPSIS);
+    let ellipsis_extents =
+        text_extents_for_with_engine(engine, ctx, family, slant, weight, size, ELLIPSIS);
     if ellipsis_extents.width() > max_width {
         return String::new();
     }
@@ -685,7 +610,8 @@ fn ellipsize_to_width(
     while low < high {
         let mid = (low + high).div_ceil(2);
         let candidate = format!("{}{}", &text[..boundaries[mid]], ELLIPSIS);
-        let candidate_extents = text_extents_for(ctx, family, slant, weight, size, &candidate);
+        let candidate_extents =
+            text_extents_for_with_engine(engine, ctx, family, slant, weight, size, &candidate);
         if candidate_extents.width() <= max_width {
             low = mid;
         } else {
@@ -705,8 +631,9 @@ mod tests {
         cairo::Context::new(&surface).expect("context")
     }
 
-    fn text_width(ctx: &cairo::Context, text: &str) -> f64 {
-        text_extents_for(
+    fn text_width(engine: &UiTextEngine, ctx: &cairo::Context, text: &str) -> f64 {
+        text_extents_for_with_engine(
+            engine,
             ctx,
             COMMAND_PALETTE_FONT_FAMILY,
             cairo::FontSlant::Normal,
@@ -719,17 +646,19 @@ mod tests {
 
     #[test]
     fn ellipsize_keeps_full_text_when_it_fits() {
+        let engine = &UiTextEngine::default();
         let ctx = test_context();
         let text = "Short label";
         assert_eq!(
             ellipsize_to_width(
+                engine,
                 &ctx,
                 text,
                 COMMAND_PALETTE_FONT_FAMILY,
                 cairo::FontSlant::Normal,
                 cairo::FontWeight::Normal,
                 COMMAND_PALETTE_DESC_TEXT_SIZE,
-                text_width(&ctx, text),
+                text_width(engine, &ctx, text),
             ),
             text
         );
@@ -737,10 +666,12 @@ mod tests {
 
     #[test]
     fn ellipsize_binary_search_respects_width_and_unicode_boundaries() {
+        let engine = &UiTextEngine::default();
         let ctx = test_context();
         let text = "Capture 🖌️ annotation history safely";
-        let max_width = text_width(&ctx, "Capture 🖌️…");
+        let max_width = text_width(engine, &ctx, "Capture 🖌️…");
         let result = ellipsize_to_width(
+            engine,
             &ctx,
             text,
             COMMAND_PALETTE_FONT_FAMILY,
@@ -751,7 +682,11 @@ mod tests {
         );
 
         assert!(result.ends_with(ELLIPSIS));
-        assert!(text_width(&ctx, &result) <= max_width);
+        assert!(text_width(engine, &ctx, &result) <= max_width);
         assert!(result.is_char_boundary(result.len()));
     }
 }
+
+#[cfg(test)]
+#[path = "command_palette/tests/engine.rs"]
+mod engine_tests;

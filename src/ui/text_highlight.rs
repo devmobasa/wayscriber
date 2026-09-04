@@ -5,7 +5,7 @@
 //! want.
 
 use super::primitives::text_extents_for_with_engine;
-use crate::ui_text::{UiTextEngine, with_legacy_engine};
+use crate::ui_text::UiTextEngine;
 
 /// Case-insensitive substring range (byte offsets) of `needle_lower` inside
 /// `haystack`, or `None` when it does not appear literally. `needle_lower`
@@ -30,19 +30,6 @@ pub(crate) struct HighlightStyle<'a> {
 /// Fill a padded rectangle behind the glyphs of `text[range]`, positioned
 /// from the text's left edge `x` and `baseline`. The caller draws the text
 /// itself over the top afterwards.
-pub(crate) fn draw_highlight(
-    ctx: &cairo::Context,
-    x: f64,
-    baseline: f64,
-    text: &str,
-    range: (usize, usize),
-    style: &HighlightStyle<'_>,
-) {
-    with_legacy_engine(|engine| {
-        draw_highlight_with_engine(engine, ctx, x, baseline, text, range, style)
-    });
-}
-
 pub(crate) fn draw_highlight_with_engine(
     engine: &UiTextEngine,
     ctx: &cairo::Context,

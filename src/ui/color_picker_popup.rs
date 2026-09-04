@@ -10,16 +10,24 @@ use crate::input::state::{
     COLOR_PICKER_RECENT_SWATCH_SIZE as RECENT_SWATCH_SIZE, ColorPickerPopupLayout,
 };
 use crate::ui::primitives::{
-    checkerboard_behind, draw_alpha_checkerboard, draw_rounded_rect, ellipsize_to_fit,
-    text_extents_for,
+    checkerboard_behind, draw_alpha_checkerboard, draw_rounded_rect, ellipsize_to_fit_with_engine,
+    text_extents_for_with_engine,
 };
 use crate::ui::theme::{Rgba, toolbar as toolbar_theme};
-use crate::ui_text::{UiTextStyle, draw_text_baseline, measure_text};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
     self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_INPUT_SELECTION, INPUT_BG, INPUT_BORDER_FOCUSED,
     INPUT_CARET, OVERLAY_DIM_MEDIUM, RADIUS_MD, RADIUS_PANEL, RADIUS_SM, RADIUS_STD, TEXT_HINT_DIM,
     TEXT_PRIMARY,
+};
+
+mod controls;
+
+use controls::{
+    action_tooltip_geometry, draw_action_button, draw_action_tooltip, draw_alpha_bar,
+    draw_bar_marker, draw_button, draw_color_indicator, draw_hex_input, draw_hue_bar,
+    draw_preview_swatch, draw_recent_swatch, draw_sat_val_square,
 };
 
 // File-local colors with no matching theme token (M1 keep-if-not-matching
@@ -66,6 +74,20 @@ pub fn color_picker_popup_visual_geometry(
     screen_width: u32,
     screen_height: u32,
 ) -> Option<(f64, f64, f64, f64)> {
+    color_picker_popup_visual_geometry_with_engine(
+        &UiTextEngine::default(),
+        input_state,
+        screen_width,
+        screen_height,
+    )
+}
+
+pub(crate) fn color_picker_popup_visual_geometry_with_engine(
+    engine: &UiTextEngine,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) -> Option<(f64, f64, f64, f64)> {
     if !input_state.is_color_picker_popup_open() {
         return None;
     }
@@ -85,6 +107,7 @@ pub fn color_picker_popup_visual_geometry(
         && let Some((tooltip, anchor_x, anchor_y)) =
             layout.action_tooltip_anchor_at(hover_x, hover_y)
         && let Some((x, y, width, height)) = action_tooltip_geometry(
+            engine,
             tooltip,
             anchor_x,
             anchor_y,
@@ -115,6 +138,22 @@ fn union_bounds(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> (f64, f64, 
 
 /// Render the color picker popup.
 pub fn render_color_picker_popup(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) {
+    render_color_picker_popup_with_engine(
+        &UiTextEngine::default(),
+        ctx,
+        input_state,
+        screen_width,
+        screen_height,
+    )
+}
+
+pub(crate) fn render_color_picker_popup_with_engine(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     input_state: &InputState,
     screen_width: u32,
@@ -176,12 +215,13 @@ pub fn render_color_picker_popup(
     // so it is trimmed to the panel: unwrapped text wider than the panel would
     // draw outside the bounds this popup reports as damaged.
     let title = fit_title_to_panel(
+        engine,
         ctx,
         title_style,
         &input_state.color_picker_popup_title(),
         &layout,
     );
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         title_style,
         &title,
@@ -242,6 +282,7 @@ pub fn render_color_picker_popup(
 
     // Hex input field
     draw_hex_input(
+        engine,
         ctx,
         layout.hex_input_x,
         layout.hex_input_y,
@@ -311,6 +352,7 @@ pub fn render_color_picker_popup(
             .map(|(hx, hy)| layout.point_in_default_button(hx, hy))
             .unwrap_or(false);
         draw_button(
+            engine,
             ctx,
             default_x,
             default_y,
@@ -324,6 +366,7 @@ pub fn render_color_picker_popup(
 
     // OK button
     draw_button(
+        engine,
         ctx,
         layout.ok_btn_x,
         layout.ok_btn_y,
@@ -336,6 +379,7 @@ pub fn render_color_picker_popup(
 
     // Cancel button
     draw_button(
+        engine,
         ctx,
         layout.cancel_btn_x,
         layout.cancel_btn_y,
@@ -355,7 +399,8 @@ pub fn render_color_picker_popup(
     };
     constants::set_color(ctx, TEXT_HINT_DIM);
     let hint = "Enter = OK  •  Esc = Cancel";
-    let hint_extents = text_extents_for(
+    let hint_extents = text_extents_for_with_engine(
+        engine,
         ctx,
         "Sans",
         cairo::FontSlant::Normal,
@@ -365,13 +410,14 @@ pub fn render_color_picker_popup(
     );
     let hint_x = layout.origin_x + (layout.width - hint_extents.width()) / 2.0;
     let hint_y = layout.ok_btn_y + layout.btn_height + 12.0;
-    draw_text_baseline(ctx, hint_style, hint, hint_x, hint_y, None);
+    engine.draw_baseline(ctx, hint_style, hint, hint_x, hint_y, None);
 
     if let Some((hover_x, hover_y)) = hover_pos
         && let Some((tooltip, anchor_x, anchor_y)) =
             layout.action_tooltip_anchor_at(hover_x, hover_y)
     {
         draw_action_tooltip(
+            engine,
             ctx,
             tooltip,
             anchor_x,
@@ -388,13 +434,15 @@ pub fn render_color_picker_popup(
 /// `config.toml`, so no character budget can bound the shaped width; the real
 /// text is measured instead.
 fn fit_title_to_panel(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     style: UiTextStyle<'_>,
     title: &str,
     layout: &ColorPickerPopupLayout,
 ) -> String {
     let max_width = (layout.width - TITLE_INSET * 2.0).max(0.0);
-    ellipsize_to_fit(
+    ellipsize_to_fit_with_engine(
+        engine,
         ctx,
         title,
         style.family,
@@ -402,436 +450,6 @@ fn fit_title_to_panel(
         style.weight,
         max_width,
     )
-}
-
-/// Draw the HSV color gradient.
-/// Draw the saturation (x) by value (y) square for one hue.
-///
-/// White-to-hue horizontally, then black over the top vertically — the standard
-/// construction, and the one the toolbar's inline picker already uses. Both
-/// axes are real: unlike the previous hue-by-value gradient, every point here
-/// maps to the colour actually produced by clicking it.
-fn draw_sat_val_square(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, hue: f64) {
-    let full = crate::draw::color::hsv_to_rgb(hue, 1.0, 1.0);
-
-    let sat_grad = cairo::LinearGradient::new(x, y, x + w, y);
-    sat_grad.add_color_stop_rgba(0.0, 1.0, 1.0, 1.0, 1.0);
-    sat_grad.add_color_stop_rgba(1.0, full.r, full.g, full.b, 1.0);
-    ctx.rectangle(x, y, w, h);
-    let _ = ctx.set_source(&sat_grad);
-    let _ = ctx.fill();
-
-    let val_grad = cairo::LinearGradient::new(x, y, x, y + h);
-    val_grad.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.0);
-    val_grad.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 1.0);
-    ctx.rectangle(x, y, w, h);
-    let _ = ctx.set_source(&val_grad);
-    let _ = ctx.fill();
-
-    constants::set_color(ctx, GRADIENT_BORDER);
-    ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
-    ctx.set_line_width(1.0);
-    let _ = ctx.stroke();
-}
-
-/// Draw the horizontal hue bar.
-fn draw_hue_bar(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64) {
-    let hue_grad = cairo::LinearGradient::new(x, y, x + w, y);
-    for step in 0..=6 {
-        let t = f64::from(step) / 6.0;
-        let color = crate::draw::color::hsv_to_rgb(t, 1.0, 1.0);
-        hue_grad.add_color_stop_rgba(t, color.r, color.g, color.b, 1.0);
-    }
-    ctx.rectangle(x, y, w, h);
-    let _ = ctx.set_source(&hue_grad);
-    let _ = ctx.fill();
-
-    constants::set_color(ctx, GRADIENT_BORDER);
-    ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
-    ctx.set_line_width(1.0);
-    let _ = ctx.stroke();
-}
-
-/// Draw one recent-color swatch, ringed when it matches the live color.
-fn draw_recent_swatch(ctx: &cairo::Context, x: f64, y: f64, color: Color, selected: bool) {
-    if color.a < 1.0 {
-        draw_alpha_checkerboard(ctx, x, y, RECENT_SWATCH_SIZE, RECENT_SWATCH_SIZE);
-    }
-    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
-    ctx.rectangle(x, y, RECENT_SWATCH_SIZE, RECENT_SWATCH_SIZE);
-    let _ = ctx.fill();
-
-    if selected {
-        constants::set_color(ctx, INDICATOR_RING);
-        ctx.set_line_width(2.0);
-        ctx.rectangle(
-            x - 1.0,
-            y - 1.0,
-            RECENT_SWATCH_SIZE + 2.0,
-            RECENT_SWATCH_SIZE + 2.0,
-        );
-    } else {
-        constants::set_color(ctx, GRADIENT_BORDER);
-        ctx.set_line_width(1.0);
-        ctx.rectangle(
-            x + 0.5,
-            y + 0.5,
-            RECENT_SWATCH_SIZE - 1.0,
-            RECENT_SWATCH_SIZE - 1.0,
-        );
-    }
-    let _ = ctx.stroke();
-}
-
-/// Draw the alpha bar for one colour: transparent on the left, opaque on the
-/// right, over a checkerboard.
-fn draw_alpha_bar(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, color: Color) {
-    draw_alpha_checkerboard(ctx, x, y, w, h);
-
-    let ramp = cairo::LinearGradient::new(x, y, x + w, y);
-    ramp.add_color_stop_rgba(0.0, color.r, color.g, color.b, 0.0);
-    ramp.add_color_stop_rgba(1.0, color.r, color.g, color.b, 1.0);
-    ctx.rectangle(x, y, w, h);
-    let _ = ctx.set_source(&ramp);
-    let _ = ctx.fill();
-
-    constants::set_color(ctx, GRADIENT_BORDER);
-    ctx.rectangle(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
-    ctx.set_line_width(1.0);
-    let _ = ctx.stroke();
-}
-
-/// Draw the position marker for a horizontal bar.
-fn draw_bar_marker(ctx: &cairo::Context, x: f64, y: f64, h: f64) {
-    constants::set_color(ctx, INDICATOR_OUTLINE);
-    ctx.rectangle(x - 2.5, y - 1.5, 5.0, h + 3.0);
-    ctx.set_line_width(3.0);
-    let _ = ctx.stroke_preserve();
-    constants::set_color(ctx, INDICATOR_RING);
-    ctx.set_line_width(1.5);
-    let _ = ctx.stroke();
-}
-
-/// Draw the color indicator dot on the gradient.
-fn draw_color_indicator(ctx: &cairo::Context, x: f64, y: f64, color: Color) {
-    let radius = 6.0;
-
-    // Outer white ring
-    constants::set_color(ctx, INDICATOR_RING);
-    ctx.arc(x, y, radius + 2.0, 0.0, std::f64::consts::PI * 2.0);
-    let _ = ctx.fill();
-
-    // Inner color circle
-    ctx.set_source_rgba(color.r, color.g, color.b, 1.0);
-    ctx.arc(x, y, radius, 0.0, std::f64::consts::PI * 2.0);
-    let _ = ctx.fill();
-
-    // Dark outline
-    constants::set_color(ctx, INDICATOR_OUTLINE);
-    ctx.set_line_width(1.0);
-    ctx.arc(x, y, radius + 2.0, 0.0, std::f64::consts::PI * 2.0);
-    let _ = ctx.stroke();
-}
-
-/// Draw the preview swatch.
-fn draw_preview_swatch(ctx: &cairo::Context, x: f64, y: f64, size: f64, color: Color) {
-    // Checkered background for transparency preview, clipped to the rounded
-    // swatch so tiles cannot spill past its corners.
-    checkerboard_behind(ctx, color.a, |ctx| {
-        draw_rounded_rect(ctx, x, y, size, size, RADIUS_SM);
-    });
-
-    // Draw color
-    ctx.set_source_rgba(color.r, color.g, color.b, color.a);
-    draw_rounded_rect(ctx, x, y, size, size, RADIUS_SM);
-    let _ = ctx.fill();
-
-    // Border
-    let luminance = crate::draw::perceived_luminance(color.r, color.g, color.b);
-    if luminance < 0.3 {
-        constants::set_color(ctx, SWATCH_BORDER_ON_DARK);
-    } else {
-        constants::set_color(ctx, SWATCH_BORDER_ON_LIGHT);
-    }
-    ctx.set_line_width(1.5);
-    draw_rounded_rect(ctx, x, y, size, size, RADIUS_SM);
-    let _ = ctx.stroke();
-}
-
-/// Draw the hex input field with validation feedback.
-#[allow(clippy::too_many_arguments)]
-fn draw_hex_input(
-    ctx: &cairo::Context,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    value: &str,
-    focused: bool,
-    selected: bool,
-    valid: bool,
-) {
-    // Outer glow when focused - red if invalid, accent if valid
-    if focused {
-        if valid {
-            constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.2));
-        } else {
-            constants::set_color(ctx, HEX_INVALID_GLOW);
-        }
-        draw_rounded_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, RADIUS_STD);
-        let _ = ctx.fill();
-    }
-
-    // Background
-    constants::set_color(ctx, INPUT_BG);
-    draw_rounded_rect(ctx, x, y, w, h, RADIUS_SM);
-    let _ = ctx.fill();
-
-    // Border - red if invalid, blue if focused, gray otherwise
-    if !valid && focused {
-        constants::set_color(ctx, HEX_INVALID_BORDER);
-        ctx.set_line_width(2.0);
-    } else if focused {
-        constants::set_color(ctx, INPUT_BORDER_FOCUSED);
-        ctx.set_line_width(2.0);
-    } else {
-        constants::set_color(ctx, INPUT_BORDER_IDLE);
-        ctx.set_line_width(1.0);
-    }
-    draw_rounded_rect(ctx, x, y, w, h, RADIUS_SM);
-    let _ = ctx.stroke();
-
-    // Text
-    let value_style = UiTextStyle {
-        family: "Sans",
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Normal,
-        size: 13.0,
-    };
-    let extents = text_extents_for(
-        ctx,
-        "Sans",
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Normal,
-        13.0,
-        value,
-    );
-    let text_x = x + 8.0;
-    let text_y = y + h / 2.0 + extents.height() / 2.0;
-
-    // Draw selection highlight when selected (full text selected)
-    if selected {
-        constants::set_color(ctx, BG_INPUT_SELECTION);
-        draw_rounded_rect(
-            ctx,
-            text_x - 2.0,
-            y + 3.0,
-            extents.width() + 4.0,
-            h - 6.0,
-            2.0,
-        );
-        let _ = ctx.fill();
-    }
-
-    constants::set_color(ctx, TEXT_PRIMARY);
-    draw_text_baseline(ctx, value_style, value, text_x, text_y, None);
-
-    // Cursor when focused (at end of text)
-    if focused {
-        constants::set_color(ctx, INPUT_CARET);
-        let cursor_x = text_x + extents.width() + 2.0;
-        ctx.set_line_width(1.5);
-        ctx.move_to(cursor_x, y + 4.0);
-        ctx.line_to(cursor_x, y + h - 4.0);
-        let _ = ctx.stroke();
-    }
-}
-
-/// Draw one square action button (copy / paste / eyedropper) on the popup's
-/// preview row: a neutral rounded fill washed with the accent on hover, and a
-/// centered icon.
-fn draw_action_button(
-    ctx: &cairo::Context,
-    x: f64,
-    y: f64,
-    size: f64,
-    hovered: bool,
-    icon: fn(&cairo::Context, f64, f64, f64),
-    icon_size: f64,
-) {
-    draw_rounded_rect(ctx, x, y, size, size, RADIUS_MD);
-    if hovered {
-        constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.8));
-    } else {
-        constants::set_color(ctx, EYEDROPPER_BG);
-    }
-    let _ = ctx.fill_preserve();
-    constants::set_color(ctx, crate::ui::theme::popup::border_modal());
-    ctx.set_line_width(1.0);
-    let _ = ctx.stroke();
-    constants::set_color(ctx, TEXT_PRIMARY);
-    icon(
-        ctx,
-        x + (size - icon_size) / 2.0,
-        y + (size - icon_size) / 2.0,
-        icon_size,
-    );
-}
-
-fn draw_action_tooltip(
-    ctx: &cairo::Context,
-    text: &str,
-    anchor_x: f64,
-    anchor_y: f64,
-    screen_width: f64,
-    screen_height: f64,
-) {
-    let Some((x, y, width, height)) =
-        action_tooltip_geometry(text, anchor_x, anchor_y, screen_width, screen_height)
-    else {
-        return;
-    };
-    let style = action_tooltip_text_style();
-
-    constants::set_color(ctx, toolbar_theme::COLOR_TOOLTIP_SHADOW);
-    draw_rounded_rect(
-        ctx,
-        x + TOOLTIP_SHADOW_OFFSET,
-        y + TOOLTIP_SHADOW_OFFSET,
-        width,
-        height,
-        RADIUS_SM,
-    );
-    let _ = ctx.fill();
-
-    constants::set_color(ctx, toolbar_theme::COLOR_TOOLTIP_BACKGROUND);
-    draw_rounded_rect(ctx, x, y, width, height, RADIUS_SM);
-    let _ = ctx.fill_preserve();
-    constants::set_color(ctx, toolbar_theme::COLOR_TOOLTIP_BORDER);
-    ctx.set_line_width(1.0);
-    let _ = ctx.stroke();
-
-    constants::set_color(ctx, TEXT_PRIMARY);
-    draw_text_baseline(
-        ctx,
-        style,
-        text,
-        x + TOOLTIP_PADDING_X,
-        y + TOOLTIP_PADDING_Y + style.size,
-        None,
-    );
-}
-
-fn action_tooltip_text_style() -> UiTextStyle<'static> {
-    UiTextStyle {
-        family: toolbar_theme::FONT_FAMILY_DEFAULT,
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Normal,
-        size: toolbar_theme::FONT_SIZE_TOOLTIP,
-    }
-}
-
-fn action_tooltip_geometry(
-    text: &str,
-    anchor_x: f64,
-    anchor_y: f64,
-    screen_width: f64,
-    screen_height: f64,
-) -> Option<(f64, f64, f64, f64)> {
-    let style = action_tooltip_text_style();
-    let extents = measure_text(style, text, None)?;
-    let width = extents.width() + TOOLTIP_PADDING_X * 2.0;
-    let height = style.size + TOOLTIP_PADDING_Y * 2.0;
-    let max_x = (screen_width - width - TOOLTIP_SCREEN_MARGIN).max(TOOLTIP_SCREEN_MARGIN);
-    let x = (anchor_x + TOOLTIP_POINTER_OFFSET).clamp(TOOLTIP_SCREEN_MARGIN, max_x);
-    let above_y = anchor_y - height - TOOLTIP_POINTER_OFFSET;
-    let preferred_y = if above_y >= TOOLTIP_SCREEN_MARGIN {
-        above_y
-    } else {
-        anchor_y + TOOLTIP_POINTER_OFFSET
-    };
-    let max_y = (screen_height - height - TOOLTIP_SCREEN_MARGIN).max(TOOLTIP_SCREEN_MARGIN);
-    let y = preferred_y.clamp(TOOLTIP_SCREEN_MARGIN, max_y);
-    Some((x, y, width, height))
-}
-
-/// Draw a button with hover state.
-#[allow(clippy::too_many_arguments)]
-fn draw_button(
-    ctx: &cairo::Context,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    label: &str,
-    primary: bool,
-    hover: bool,
-) {
-    // Hover glow effect
-    if hover {
-        let glow_color = if primary {
-            constants::with_alpha(ACCENT_PRIMARY, 0.25)
-        } else {
-            BUTTON_HOVER_GLOW
-        };
-        constants::set_color(ctx, glow_color);
-        draw_rounded_rect(ctx, x - 2.0, y - 2.0, w + 4.0, h + 4.0, RADIUS_MD + 2.0);
-        let _ = ctx.fill();
-    }
-
-    // Background - brighter on hover
-    if primary {
-        if hover {
-            // Accent nudged towards accent-bright so hover reads brighter
-            let fill = constants::lerp_color(ACCENT_PRIMARY, ACCENT_BRIGHT, 0.25);
-            constants::set_color(ctx, constants::with_alpha(fill, 0.98));
-        } else {
-            constants::set_color(ctx, constants::with_alpha(ACCENT_PRIMARY, 0.95));
-        }
-    } else if hover {
-        constants::set_color(ctx, BUTTON_SECONDARY_BG_HOVER);
-    } else {
-        constants::set_color(ctx, BUTTON_SECONDARY_BG);
-    }
-    draw_rounded_rect(ctx, x, y, w, h, RADIUS_MD);
-    let _ = ctx.fill();
-
-    // Border - stronger on hover
-    if primary {
-        if hover {
-            constants::set_color(ctx, ACCENT_BRIGHT);
-        } else {
-            constants::set_color(ctx, constants::with_alpha(ACCENT_BRIGHT, 0.9));
-        }
-    } else if hover {
-        constants::set_color(ctx, BUTTON_SECONDARY_BORDER_HOVER);
-    } else {
-        constants::set_color(ctx, BUTTON_SECONDARY_BORDER);
-    }
-    ctx.set_line_width(1.0);
-    draw_rounded_rect(ctx, x, y, w, h, RADIUS_MD);
-    let _ = ctx.stroke();
-
-    // Label
-    let label_style = UiTextStyle {
-        family: "Sans",
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Bold,
-        size: 13.0,
-    };
-    constants::set_color(ctx, TEXT_PRIMARY);
-
-    let extents = text_extents_for(
-        ctx,
-        "Sans",
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-        13.0,
-        label,
-    );
-    let text_x = x + (w - extents.width()) / 2.0;
-    let text_y = y + h / 2.0 + extents.height() / 2.0;
-    draw_text_baseline(ctx, label_style, label, text_x, text_y, None);
 }
 
 #[cfg(test)]
@@ -853,9 +471,10 @@ mod tests {
         }
     }
 
-    fn measured_width(ctx: &cairo::Context, text: &str) -> f64 {
+    fn measured_width(engine: &UiTextEngine, ctx: &cairo::Context, text: &str) -> f64 {
         let style = title_style();
-        text_extents_for(
+        text_extents_for_with_engine(
+            engine,
             ctx,
             style.family,
             style.slant,
@@ -868,6 +487,7 @@ mod tests {
 
     #[test]
     fn wide_titles_are_trimmed_to_the_panel_not_a_character_budget() {
+        let engine = &UiTextEngine::default();
         let ctx = test_context();
         let layout = ColorPickerPopupLayout::compute(1920, 1080, true);
         let content_width = layout.width - TITLE_INSET * 2.0;
@@ -875,24 +495,28 @@ mod tests {
         // Wide glyphs: few characters, far more pixels than a Latin label of
         // the same length, which is why the budget has to be measured.
         let wide = format!("Recolor {}", "W".repeat(40));
-        let fitted = fit_title_to_panel(&ctx, title_style(), &wide, &layout);
+        let fitted = fit_title_to_panel(engine, &ctx, title_style(), &wide, &layout);
         assert!(
-            measured_width(&ctx, &wide) > content_width,
+            measured_width(engine, &ctx, &wide) > content_width,
             "fixture is wide"
         );
-        assert!(measured_width(&ctx, &fitted) <= content_width);
+        assert!(measured_width(engine, &ctx, &fitted) <= content_width);
         assert!(fitted.len() < wide.len());
 
         // Non-Latin scripts take the same path.
         let cjk = format!("Recolor {}", "測".repeat(40));
-        let fitted_cjk = fit_title_to_panel(&ctx, title_style(), &cjk, &layout);
-        assert!(measured_width(&ctx, &fitted_cjk) <= content_width);
+        let fitted_cjk = fit_title_to_panel(engine, &ctx, title_style(), &cjk, &layout);
+        assert!(measured_width(engine, &ctx, &fitted_cjk) <= content_width);
 
         // A title that already fits is left exactly as composed.
         let short = "Recolor Pink";
         assert_eq!(
-            fit_title_to_panel(&ctx, title_style(), short, &layout),
+            fit_title_to_panel(engine, &ctx, title_style(), short, &layout),
             short
         );
     }
 }
+
+#[cfg(test)]
+#[path = "color_picker_popup/tests/engine.rs"]
+mod engine_tests;

@@ -45,19 +45,6 @@ pub(crate) const ELLIPSIS: &str = "\u{2026}";
 /// Trim `text` to `max_width` logical pixels, appending an ellipsis. The
 /// complete string is measured as it will be shaped, so wide glyphs and
 /// non-Latin scripts cannot slip past a per-character budget.
-pub(crate) fn ellipsize_to_fit(
-    ctx: &cairo::Context,
-    text: &str,
-    font_family: &str,
-    font_size: f64,
-    weight: cairo::FontWeight,
-    max_width: f64,
-) -> String {
-    with_legacy_engine(|engine| {
-        ellipsize_to_fit_with_engine(engine, ctx, text, font_family, font_size, weight, max_width)
-    })
-}
-
 pub(crate) fn ellipsize_to_fit_with_engine(
     engine: &UiTextEngine,
     ctx: &cairo::Context,

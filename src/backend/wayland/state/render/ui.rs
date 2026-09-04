@@ -251,7 +251,13 @@ impl WaylandState {
         if !capture_picker && self.input_state.is_color_picker_popup_open() {
             self.input_state
                 .update_color_picker_popup_layout(width, height);
-            crate::ui::render_color_picker_popup(ctx, &self.input_state, width, height);
+            crate::ui::render_color_picker_popup_with_engine(
+                self.render.ui_text(),
+                ctx,
+                &self.input_state,
+                width,
+                height,
+            );
         } else {
             self.input_state.clear_color_picker_popup_layout();
         }
@@ -407,7 +413,13 @@ impl WaylandState {
         if let Some(card) = self.first_run_onboarding_card() {
             crate::ui::render_onboarding_card(ctx, width, height, &card);
         }
-        crate::ui::render_command_palette(ctx, &self.input_state, width, height);
+        crate::ui::render_command_palette_with_engine(
+            self.render.ui_text(),
+            ctx,
+            &self.input_state,
+            width,
+            height,
+        );
         crate::ui::render_tour(ctx, &self.input_state, width, height);
     }
 

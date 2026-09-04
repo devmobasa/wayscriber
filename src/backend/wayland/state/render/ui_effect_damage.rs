@@ -28,8 +28,13 @@ pub(super) fn effect_rect(bounds: (f64, f64, f64, f64), width: u32, height: u32)
     Rect::from_min_max(min_x, min_y, max_x, max_y)
 }
 
-fn color_picker_effect_rect(input_state: &InputState, width: u32, height: u32) -> Option<Rect> {
-    crate::ui::color_picker_popup_visual_geometry(input_state, width, height)
+fn color_picker_effect_rect(
+    engine: &crate::ui_text::UiTextEngine,
+    input_state: &InputState,
+    width: u32,
+    height: u32,
+) -> Option<Rect> {
+    crate::ui::color_picker_popup_visual_geometry_with_engine(engine, input_state, width, height)
         .and_then(|bounds| effect_rect(bounds, width, height))
 }
 
@@ -210,8 +215,13 @@ impl WaylandState {
         // optional action tooltip change, so typing and selection no longer
         // fall through to the full-surface empty-damage fallback.
         let command_palette_rect = if flags.active(UiEffect::CommandPalette) {
-            crate::ui::command_palette_visual_geometry(&self.input_state, width, height)
-                .and_then(|bounds| effect_rect(bounds, width, height))
+            crate::ui::command_palette_visual_geometry_with_engine(
+                self.render.ui_text(),
+                &self.input_state,
+                width,
+                height,
+            )
+            .and_then(|bounds| effect_rect(bounds, width, height))
         } else {
             None
         };
@@ -227,7 +237,9 @@ impl WaylandState {
         // typing cannot fall through to the full-screen empty-damage fallback.
         let color_picker_rect = flags
             .active(UiEffect::ColorPicker)
-            .then(|| color_picker_effect_rect(&self.input_state, width, height))
+            .then(|| {
+                color_picker_effect_rect(self.render.ui_text(), &self.input_state, width, height)
+            })
             .flatten();
         self.render
             .ui_damage_mut()
@@ -537,7 +549,9 @@ mod tests {
         let mut input = crate::input::state::test_support::make_test_input_state();
         input.open_color_picker_popup();
 
-        let damage = color_picker_effect_rect(&input, 1920, 1080).expect("popup damage");
+        let damage =
+            color_picker_effect_rect(&crate::ui_text::UiTextEngine::default(), &input, 1920, 1080)
+                .expect("popup damage");
 
         // Before targeted popup damage, an ordinary key used the renderer's
         // 1920x1080 empty-damage fallback (2,073,600 pixels). Now it is the
@@ -569,7 +583,9 @@ mod tests {
             layout.eyedropper_btn_y + layout.action_btn_size / 2.0,
         )));
 
-        let damage = color_picker_effect_rect(&input, 1920, 1080).expect("tooltip damage");
+        let damage =
+            color_picker_effect_rect(&crate::ui_text::UiTextEngine::default(), &input, 1920, 1080)
+                .expect("tooltip damage");
 
         assert!(damage.width > 304);
         assert!(damage.width < 1920);
