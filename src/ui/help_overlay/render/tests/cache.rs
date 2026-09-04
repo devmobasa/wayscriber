@@ -37,6 +37,7 @@ fn layout(cache: &mut HelpLayoutCache, inputs: &Inputs, scroll: f64) -> OverlayL
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).unwrap();
     let ctx = cairo::Context::new(&surface).unwrap();
     cache.get_or_build_overlay_layout(
+        &crate::ui_text::UiTextEngine::default(),
         &ctx,
         &inputs.style,
         inputs.width,
@@ -153,7 +154,12 @@ fn style_quantization_retains_existing_hundredths_policy() {
     assert_eq!(cache.builds, 2);
 }
 
-fn paint(caches: &mut crate::ui::UiRenderCaches, inputs: &Inputs, scroll: f64) -> (Vec<u8>, f64) {
+fn paint(
+    engine: &crate::ui_text::UiTextEngine,
+    caches: &mut crate::ui::UiRenderCaches,
+    inputs: &Inputs,
+    scroll: f64,
+) -> (Vec<u8>, crate::help_overlay_interaction::HelpRenderResult) {
     let mut surface = cairo::ImageSurface::create(
         cairo::Format::ARgb32,
         inputs.width as i32,
@@ -170,6 +176,7 @@ fn paint(caches: &mut crate::ui::UiRenderCaches, inputs: &Inputs, scroll: f64) -
             caches,
         };
         extent = super::super::render_help_overlay_result_with_context(
+            engine,
             &mut render,
             &inputs.style,
             inputs.width,
@@ -183,49 +190,90 @@ fn paint(caches: &mut crate::ui::UiRenderCaches, inputs: &Inputs, scroll: f64) -
             inputs.capture,
             scroll,
             inputs.quick,
-        )
-        .scroll_max;
+        );
     }
     surface.flush();
     (surface.data().unwrap().to_vec(), extent)
 }
 
+fn assert_frame_matches(
+    actual: &(Vec<u8>, crate::help_overlay_interaction::HelpRenderResult),
+    expected: &(Vec<u8>, crate::help_overlay_interaction::HelpRenderResult),
+) {
+    assert_eq!(
+        actual.1, expected.1,
+        "scroll and every hit rectangle must match"
+    );
+    assert!(
+        actual.0 == expected.0,
+        "help pixels differ at byte {:?}",
+        actual.0.iter().zip(&expected.0).position(|(a, b)| a != b)
+    );
+}
+
 #[test]
 fn owners_keep_independent_layouts_and_reused_rendering_matches_fresh_pixels() {
-    let first_input = Inputs::default();
-    let second_input = Inputs {
-        query: "draw".into(),
-        width: 640,
-        ..Inputs::default()
-    };
-    let mut first = crate::ui::UiRenderCaches::default();
-    let mut second = crate::ui::UiRenderCaches::default();
-    let initial = paint(&mut first, &first_input, 0.0);
-    let other = paint(&mut second, &second_input, 0.0);
-    assert_eq!(paint(&mut first, &first_input, 0.0), initial);
-    assert_eq!(paint(&mut second, &second_input, 0.0), other);
-    assert_eq!(first.help_mut().builds, 1);
-    assert_eq!(second.help_mut().builds, 1);
-    assert_eq!(
-        paint(&mut first, &first_input, 30.0),
-        paint(
-            &mut crate::ui::UiRenderCaches::default(),
-            &first_input,
-            30.0
-        )
-    );
-    assert_eq!(
-        paint(&mut second, &second_input, 0.0),
-        paint(
-            &mut crate::ui::UiRenderCaches::default(),
-            &second_input,
-            0.0
-        )
-    );
-    assert_eq!(
-        first.help_mut().builds,
-        1,
-        "scroll-only painting must reuse layout"
-    );
+    let engine = crate::ui_text::UiTextEngine::default();
+    let second_engine = crate::ui_text::UiTextEngine::default();
+    let mut caches = crate::ui::UiRenderCaches::default();
+    let mut other_caches = crate::ui::UiRenderCaches::default();
+    let inputs = Inputs::default();
+    let initial = paint(&engine, &mut caches, &inputs, 0.0);
     assert!(initial.0.iter().any(|&byte| byte != 0));
+    for scroll in [0.0, 30.0, 0.0] {
+        let actual = paint(&engine, &mut caches, &inputs, scroll);
+        let expected = paint(&second_engine, &mut other_caches, &inputs, scroll);
+        assert_frame_matches(&actual, &expected);
+    }
+    assert_eq!(
+        caches.help_mut().builds,
+        1,
+        "scroll keeps the cached layout"
+    );
+    assert_eq!(other_caches.help_mut().builds, 1);
+    for input in [
+        Inputs {
+            width: 320,
+            height: 180,
+            ..Inputs::default()
+        },
+        Inputs {
+            quick: true,
+            ..Inputs::default()
+        },
+        Inputs {
+            query: "draw".into(),
+            ..Inputs::default()
+        },
+        Inputs {
+            query: "你好".into(),
+            ..Inputs::default()
+        },
+        Inputs {
+            page: 1,
+            ..Inputs::default()
+        },
+    ] {
+        for scroll in [0.0, 40.0] {
+            let actual = paint(&engine, &mut caches, &input, scroll);
+            let expected = paint(
+                &crate::ui_text::UiTextEngine::default(),
+                &mut crate::ui::UiRenderCaches::default(),
+                &input,
+                scroll,
+            );
+            assert_frame_matches(&actual, &expected);
+            assert_frame_matches(&paint(&engine, &mut caches, &input, scroll), &expected);
+        }
+    }
+    assert_frame_matches(&paint(&engine, &mut caches, &inputs, 0.0), &initial);
+    assert_frame_matches(
+        &paint(&second_engine, &mut other_caches, &inputs, 0.0),
+        &initial,
+    );
+    assert_eq!(
+        other_caches.help_mut().builds,
+        1,
+        "another owner's changes cannot evict this layout"
+    );
 }

@@ -59,9 +59,11 @@ pub fn render_help_overlay_result(
     scroll_offset: f64,
     quick_mode: bool,
 ) -> HelpRenderResult {
+    let engine = crate::ui_text::UiTextEngine::default();
     let mut caches = crate::ui::UiRenderCaches::default();
     let theme = crate::ui::theme::Theme::dark();
     render_help_overlay_result_with_context(
+        &engine,
         &mut crate::ui::UiRenderCtx {
             cairo: ctx,
             theme: &theme,

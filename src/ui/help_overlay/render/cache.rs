@@ -80,6 +80,7 @@ impl HelpLayoutCache {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn get_or_build_overlay_layout(
         &mut self,
+        engine: &crate::ui_text::UiTextEngine,
         ctx: &cairo::Context,
         style: &crate::config::HelpOverlayStyle,
         screen_width: u32,
@@ -126,6 +127,7 @@ impl HelpLayoutCache {
         }
         // Cache miss - build new layout
         let layout = build_overlay_layout(
+            engine,
             ctx,
             style,
             screen_width,

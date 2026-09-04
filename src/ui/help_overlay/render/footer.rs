@@ -1,8 +1,8 @@
 use super::super::types::HelpRowHit;
 use super::header;
 use crate::config::{Action, action_label};
-use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
+use crate::ui_text::UiTextStyle;
 
 /// Horizontal padding inside the "Replay tour" footer pill, between its border
 /// and the icon/label content.
@@ -33,6 +33,7 @@ pub(super) struct FooterPillLayout<'a> {
 /// Draw the footer pills as one centred row and return their clickable rects,
 /// each tagged with the action a click should run.
 pub(super) fn draw_footer_pills(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     layout: FooterPillLayout<'_>,
     pills: &[FooterPill],
@@ -51,7 +52,8 @@ pub(super) fn draw_footer_pills(
         .iter()
         .map(|pill| {
             let label = action_label(pill.action);
-            let label_width = text_extents_for(
+            let label_width = text_extents_for_with_engine(
+                engine,
                 ctx,
                 layout.font_family,
                 cairo::FontSlant::Normal,
@@ -113,7 +115,7 @@ pub(super) fn draw_footer_pills(
             layout.accent_muted[2],
             layout.accent_muted[3],
         );
-        draw_text_baseline(
+        engine.draw_baseline(
             ctx,
             label_style,
             label,

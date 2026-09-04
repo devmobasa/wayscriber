@@ -4,7 +4,8 @@
 //! simply draws no highlight — the same graceful degradation both callers
 //! want.
 
-use super::primitives::text_extents_for;
+use super::primitives::text_extents_for_with_engine;
+use crate::ui_text::{UiTextEngine, with_legacy_engine};
 
 /// Case-insensitive substring range (byte offsets) of `needle_lower` inside
 /// `haystack`, or `None` when it does not appear literally. `needle_lower`
@@ -37,6 +38,20 @@ pub(crate) fn draw_highlight(
     range: (usize, usize),
     style: &HighlightStyle<'_>,
 ) {
+    with_legacy_engine(|engine| {
+        draw_highlight_with_engine(engine, ctx, x, baseline, text, range, style)
+    });
+}
+
+pub(crate) fn draw_highlight_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    x: f64,
+    baseline: f64,
+    text: &str,
+    range: (usize, usize),
+    style: &HighlightStyle<'_>,
+) {
     let (start, end) = range;
     if start >= end || end > text.len() {
         return;
@@ -50,7 +65,8 @@ pub(crate) fn draw_highlight(
         return;
     }
 
-    let prefix_extents = text_extents_for(
+    let prefix_extents = text_extents_for_with_engine(
+        engine,
         ctx,
         style.font_family,
         cairo::FontSlant::Normal,
@@ -58,7 +74,8 @@ pub(crate) fn draw_highlight(
         style.font_size,
         prefix,
     );
-    let match_extents = text_extents_for(
+    let match_extents = text_extents_for_with_engine(
+        engine,
         ctx,
         style.font_family,
         cairo::FontSlant::Normal,
@@ -106,5 +123,51 @@ mod tests {
     fn find_match_range_reports_byte_offsets_for_the_first_occurrence() {
         // Two occurrences: the first one wins.
         assert_eq!(find_match_range("a b a", "a"), Some((0, 1)));
+    }
+}
+
+#[cfg(test)]
+mod engine_tests {
+    use super::*;
+
+    fn paint(engine: &UiTextEngine, range: (usize, usize)) -> Vec<u8> {
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 200, 80).unwrap();
+        {
+            let ctx = cairo::Context::new(&surface).unwrap();
+            draw_highlight_with_engine(
+                engine,
+                &ctx,
+                10.0,
+                40.0,
+                "a你好b",
+                range,
+                &HighlightStyle {
+                    font_family: "Sans",
+                    font_size: 20.0,
+                    font_weight: cairo::FontWeight::Normal,
+                    color: [1.0, 0.5, 0.0, 1.0],
+                },
+            );
+        }
+        surface.flush();
+        surface.data().unwrap().to_vec()
+    }
+
+    #[test]
+    fn explicit_unicode_highlight_reuses_measurements_and_rejects_split_characters() {
+        let engine = UiTextEngine::default();
+        assert_eq!(find_match_range("a你好b", "你好"), Some((1, 7)));
+        let pixels = paint(&engine, (1, 7));
+        assert!(pixels.iter().any(|&byte| byte != 0));
+        assert!(pixels == paint(&UiTextEngine::default(), (1, 7)));
+        for invalid in [(2, 7), (1, 6), (1, 20), (7, 1), (1, 1)] {
+            assert!(paint(&engine, invalid).iter().all(|&byte| byte == 0));
+        }
+        assert!(pixels == paint(&engine, (1, 7)));
+        assert_eq!(
+            find_match_range("Éclair", "é"),
+            None,
+            "matching preserves ASCII-only folding"
+        );
     }
 }

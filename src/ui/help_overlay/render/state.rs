@@ -1,4 +1,4 @@
-use super::super::super::primitives::text_extents_for;
+use super::super::super::primitives::text_extents_for_with_engine;
 use super::super::fonts::resolve_help_font_family;
 use super::super::layout::{GridLayout, build_grid, measure_sections};
 use super::super::nav::{NavState, build_nav_state};
@@ -31,6 +31,7 @@ pub(super) struct OverlayLayout {
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build_overlay_layout(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     style: &crate::config::HelpOverlayStyle,
     screen_width: u32,
@@ -84,6 +85,7 @@ pub(super) fn build_overlay_layout(
 
     let max_search_width = (screen_width as f64 * 0.9 - metrics.padding * 2.0).max(0.0);
     let nav_state = build_nav_state(
+        engine,
         ctx,
         help_font_family.as_str(),
         nav_title,
@@ -102,6 +104,7 @@ pub(super) fn build_overlay_layout(
     );
 
     let measured_sections = measure_sections(
+        engine,
         ctx,
         sections,
         help_font_family.as_str(),
@@ -131,6 +134,7 @@ pub(super) fn build_overlay_layout(
     );
 
     let title_row = title_row_width(
+        engine,
         ctx,
         help_font_family.as_str(),
         metrics.title_font_size,
@@ -139,12 +143,14 @@ pub(super) fn build_overlay_layout(
         header.version,
     );
     let subtitle_width = measure_hints(
+        engine,
         ctx,
         help_font_family.as_str(),
         metrics.subtitle_font_size,
         header,
     );
-    let close_hint_width = text_extents_for(
+    let close_hint_width = text_extents_for_with_engine(
+        engine,
         ctx,
         help_font_family.as_str(),
         cairo::FontSlant::Normal,
@@ -183,7 +189,8 @@ pub(super) fn build_overlay_layout(
     } else {
         format!("{}  {}  {}", note_text_base, BULLET, page_label)
     };
-    let note_width = text_extents_for(
+    let note_width = text_extents_for_with_engine(
+        engine,
         ctx,
         help_font_family.as_str(),
         cairo::FontSlant::Normal,

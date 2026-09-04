@@ -198,13 +198,14 @@ impl WaylandState {
         if !capture_picker && self.input_state.help_overlay.is_visible() {
             let bindings = crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);
             let result = {
-                let (theme, caches) = self.render.ui_parts_mut();
+                let (theme, caches, engine) = self.render.ui_parts_with_text_mut();
                 let mut render = crate::ui::UiRenderCtx {
                     cairo: ctx,
                     theme,
                     caches,
                 };
                 crate::ui::render_help_overlay_result_with_context(
+                    engine,
                     &mut render,
                     &self.config.ui.help_overlay_style,
                     width,

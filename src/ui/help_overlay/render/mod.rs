@@ -15,7 +15,7 @@ mod state;
 use super::types::HelpRowHit;
 use crate::config::{Action, action_label};
 use crate::label_format::NOT_BOUND_LABEL;
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::UiTextStyle;
 pub(in crate::ui) use cache::HelpLayoutCache;
 pub use entry::{render_help_overlay, render_help_overlay_result};
 use footer::{FooterPill, FooterPillLayout, draw_footer_pills};
@@ -28,6 +28,7 @@ const BULLET: &str = "\u{2022}";
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_help_overlay_result_with_context(
+    engine: &crate::ui_text::UiTextEngine,
     render: &mut crate::ui::UiRenderCtx<'_, '_, '_>,
     style: &crate::config::HelpOverlayStyle,
     screen_width: u32,
@@ -110,6 +111,7 @@ pub(crate) fn render_help_overlay_result_with_context(
     let close_hint_text: &str = &close_hint_owned;
 
     let layout = render.caches.help_mut().get_or_build_overlay_layout(
+        engine,
         ctx,
         style,
         screen_width,
@@ -198,10 +200,11 @@ pub(crate) fn render_help_overlay_result_with_context(
         palette.body_text[3],
     );
     let title_baseline = cursor_y + metrics.title_font_size;
-    draw_text_baseline(ctx, title_style, title_text, inner_x, title_baseline, None);
+    engine.draw_baseline(ctx, title_style, title_text, inner_x, title_baseline, None);
 
     // Version pill, right-aligned on the title row.
     draw_version_pill(
+        engine,
         ctx,
         inner_x + inner_width,
         title_baseline,
@@ -223,6 +226,7 @@ pub(crate) fn render_help_overlay_result_with_context(
     ];
     let subtitle_baseline = cursor_y + metrics.subtitle_font_size + header::KEYCAP_PAD_Y;
     draw_hints(
+        engine,
         ctx,
         inner_x,
         subtitle_baseline,
@@ -245,6 +249,7 @@ pub(crate) fn render_help_overlay_result_with_context(
         extra_line_bottom_spacing: metrics.extra_line_bottom_spacing,
     };
     let nav_render = draw_nav(
+        engine,
         ctx,
         inner_x,
         cursor_y,
@@ -291,6 +296,7 @@ pub(crate) fn render_help_overlay_result_with_context(
     // pointer hit map tests the real layout rather than an approximation.
     let mut row_hits: Vec<HelpRowHit> = Vec::new();
     draw_sections_grid(
+        engine,
         ctx,
         &layout.grid,
         grid_start_y,
@@ -313,6 +319,7 @@ pub(crate) fn render_help_overlay_result_with_context(
     // map as clickable rows. About lives here rather than in the header hint
     // row because it needs no keybinding to be reachable.
     let footer_hits = draw_footer_pills(
+        engine,
         ctx,
         FooterPillLayout {
             inner_x,
@@ -353,7 +360,7 @@ pub(crate) fn render_help_overlay_result_with_context(
     );
     let note_x = inner_x + (inner_width - layout.note_width) / 2.0;
     let note_baseline = cursor_y + metrics.note_font_size;
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         note_style,
         layout.note_text.as_str(),
@@ -378,7 +385,7 @@ pub(crate) fn render_help_overlay_result_with_context(
     );
     let close_x = inner_x + (inner_width - layout.close_hint_width) / 2.0;
     let close_baseline = cursor_y + metrics.note_font_size;
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         close_style,
         close_hint_text,

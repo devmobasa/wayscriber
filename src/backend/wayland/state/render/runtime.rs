@@ -163,6 +163,16 @@ impl RenderRuntime {
         (&self.theme, &mut self.ui_caches)
     }
 
+    pub(in crate::backend::wayland::state) fn ui_parts_with_text_mut(
+        &mut self,
+    ) -> (
+        &crate::ui::theme::Theme,
+        &mut crate::ui::UiRenderCaches,
+        &crate::ui_text::UiTextEngine,
+    ) {
+        (&self.theme, &mut self.ui_caches, &self.ui_text)
+    }
+
     pub(in crate::backend::wayland::state) fn canvas_layer_cache_mut(
         &mut self,
     ) -> &mut CanvasLayerCache {

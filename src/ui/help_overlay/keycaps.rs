@@ -1,7 +1,9 @@
-use super::super::primitives::{draw_rounded_rect, keycap_size, text_extents_for};
-use crate::ui::primitives::draw_keycap;
+use super::super::primitives::{
+    draw_rounded_rect, keycap_size_with_engine, text_extents_for_with_engine,
+};
+use crate::ui::primitives::draw_keycap_with_engine;
 use crate::ui::theme::toolbar;
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::UiTextStyle;
 
 pub(crate) struct KeyComboStyle<'a> {
     pub(crate) font_family: &'a str,
@@ -31,7 +33,7 @@ fn for_each_key_token(combo: &str, mut emit: impl FnMut(&str)) {
     }
 }
 
-/// Draw a single keycap in the shared keycap language ([`crate::ui::primitives::draw_keycap`]),
+/// Draw a single keycap in the shared keycap language ([`crate::ui::primitives::draw_keycap_with_engine`]),
 /// anchored on a text `baseline` so it lines up with the row's description
 /// text. Returns the drawn cap width.
 ///
@@ -39,6 +41,7 @@ fn for_each_key_token(combo: &str, mut emit: impl FnMut(&str)) {
 /// used (`baseline - font_size / 2`), so replacing the cap did not shift the
 /// rows or the highlight geometry in [`draw_key_combo_highlight`].
 fn draw_single_keycap(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     baseline: f64,
@@ -46,9 +49,10 @@ fn draw_single_keycap(
     font_size: f64,
     text_color: [f64; 4],
 ) -> f64 {
-    let (_, cap_height) = keycap_size(ctx, text, font_size);
+    let (_, cap_height) = keycap_size_with_engine(engine, ctx, text, font_size);
     let top_y = baseline - font_size / 2.0 - cap_height / 2.0;
-    let (cap_width, _) = draw_keycap(
+    let (cap_width, _) = draw_keycap_with_engine(
+        engine,
         ctx,
         x,
         top_y,
@@ -62,6 +66,7 @@ fn draw_single_keycap(
 
 /// Measure the width of a key combination string with keycap styling
 pub(crate) fn measure_key_combo(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     key_str: &str,
     font_family: &str,
@@ -79,7 +84,8 @@ pub(crate) fn measure_key_combo(
     for (alt_idx, alt) in alternatives.iter().enumerate() {
         if alt_idx > 0 {
             // Add separator "/" width
-            let slash_ext = text_extents_for(
+            let slash_ext = text_extents_for_with_engine(
+                engine,
                 ctx,
                 font_family,
                 cairo::FontSlant::Normal,
@@ -94,7 +100,8 @@ pub(crate) fn measure_key_combo(
         for_each_key_token(alt, |key| {
             if key_idx > 0 {
                 // Add "+" separator width (matches draw_key_combo)
-                let plus_ext = text_extents_for(
+                let plus_ext = text_extents_for_with_engine(
+                    engine,
                     ctx,
                     font_family,
                     cairo::FontSlant::Normal,
@@ -107,7 +114,7 @@ pub(crate) fn measure_key_combo(
 
             // Cap width comes from the shared keycap sizer so measuring and
             // drawing can never disagree about the chip footprint.
-            let (cap_width, _) = keycap_size(ctx, key, font_size);
+            let (cap_width, _) = keycap_size_with_engine(engine, ctx, key, font_size);
             total_width += cap_width + key_gap;
             key_idx += 1;
             any_key = true;
@@ -123,6 +130,7 @@ pub(crate) fn measure_key_combo(
 
 /// Draw a key combination string with keycap styling, returns total width
 pub(crate) fn draw_key_combo(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     baseline: f64,
@@ -153,7 +161,7 @@ pub(crate) fn draw_key_combo(
                 style.separator_color[2],
                 0.85,
             );
-            let slash_ext = draw_text_baseline(ctx, slash_style, "/", cursor_x, slash_y, None);
+            let slash_ext = engine.draw_baseline(ctx, slash_style, "/", cursor_x, slash_y, None);
             cursor_x += slash_ext.width() + separator_gap;
         }
 
@@ -174,11 +182,12 @@ pub(crate) fn draw_key_combo(
                     0.85,
                 );
                 cursor_x += 3.0;
-                let plus_ext = draw_text_baseline(ctx, plus_style, "+", cursor_x, baseline, None);
+                let plus_ext = engine.draw_baseline(ctx, plus_style, "+", cursor_x, baseline, None);
                 cursor_x += plus_ext.width() + 3.0;
             }
 
             let cap_width = draw_single_keycap(
+                engine,
                 ctx,
                 cursor_x,
                 baseline,

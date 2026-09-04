@@ -275,7 +275,16 @@ const KEYCAP_PAD_Y_FACTOR: f64 = 0.3;
 /// Measured (width, height) the [`draw_keycap`] chip occupies for `label` at
 /// `font_size`, for callers that need to center the chip before drawing it.
 pub(crate) fn keycap_size(ctx: &cairo::Context, label: &str, font_size: f64) -> (f64, f64) {
-    let layout = text_layout(
+    with_legacy_engine(|engine| keycap_size_with_engine(engine, ctx, label, font_size))
+}
+
+pub(crate) fn keycap_size_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    label: &str,
+    font_size: f64,
+) -> (f64, f64) {
+    let layout = engine.layout(
         ctx,
         UiTextStyle {
             family: "Sans",
@@ -305,7 +314,23 @@ pub(crate) fn draw_keycap(
     fill: Rgba,
     text_color: Rgba,
 ) -> (f64, f64) {
-    let layout = text_layout(
+    with_legacy_engine(|engine| {
+        draw_keycap_with_engine(engine, ctx, x, y, label, font_size, fill, text_color)
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn draw_keycap_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    label: &str,
+    font_size: f64,
+    fill: Rgba,
+    text_color: Rgba,
+) -> (f64, f64) {
+    let layout = engine.layout(
         ctx,
         UiTextStyle {
             family: "Sans",
