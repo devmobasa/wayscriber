@@ -741,6 +741,54 @@ fn selecting_the_whole_image_mid_resize_leaves_review_usable() {
             .is_none(),
         "the held grip does not survive the new rectangle"
     );
+    let replaced_backend = backend;
+    let replaced_ui = input.region_state();
+    assert_eq!(
+        finalize_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Pointer,
+            (5.0, 5.0)
+        ),
+        RegionSelectionFinalize::NotOwned,
+    );
+    assert_eq!(backend, replaced_backend);
+    assert_eq!(input.region_state(), replaced_ui);
+    assert!(begin_region_selection_event(
+        &mut backend,
+        &mut input,
+        RegionInputSource::Touch,
+        (50.0, 40.0)
+    ));
+    assert_eq!(
+        input.region_state().selection_owner(),
+        Some(RegionInputSource::Touch)
+    );
+    assert_eq!(
+        finalize_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Pointer,
+            (5.0, 5.0)
+        ),
+        RegionSelectionFinalize::NotOwned,
+    );
+    assert_eq!(
+        input.region_state().selection_owner(),
+        Some(RegionInputSource::Touch)
+    );
+    assert_eq!(
+        finalize_region_selection_event(
+            &mut backend,
+            &mut input,
+            RegionInputSource::Touch,
+            (50.0, 40.0)
+        ),
+        RegionSelectionFinalize::Reviewed,
+    );
+    assert_eq!(input.region_state().selection_owner(), None);
+    assert_eq!(input.region_state().selection(), Some(display));
+    assert!(screen_region_invariant(backend, input.region_state()));
     assert!(
         backend
             .as_mut()
