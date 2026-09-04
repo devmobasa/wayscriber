@@ -159,6 +159,7 @@ impl RenderRuntime {
 mod tests {
     use super::super::tool_preview::mouse_tool_preview_damage_rect;
     use super::*;
+    use crate::backend::wayland::state::buffer_damage::{BufferDamageTracker, FullDamageReason};
 
     fn rect(x: i32) -> Rect {
         Rect::new(x, 0, 10, 10).expect("test rectangle")
@@ -221,6 +222,109 @@ mod tests {
             regions.is_empty(),
             "the hidden preview is cleared only once"
         );
+    }
+
+    #[test]
+    fn status_hud_visibility_transitions_do_not_leave_stale_history() {
+        let mut history = UiDamageHistory::default();
+        let surface = Rect::new(0, 0, 800, 600).expect("surface");
+        let first = rect(20);
+        let moved = rect(100);
+
+        for (current, expected) in [
+            (Some(first), vec![surface]),
+            (Some(first), vec![first]),
+            (Some(moved), vec![first, moved]),
+            (None, vec![surface]),
+            (None, vec![]),
+            (Some(moved), vec![surface]),
+            (Some(moved), vec![moved]),
+        ] {
+            let mut regions = Vec::new();
+            history.roll_status_hud(current, Some(surface), &mut regions);
+            assert_eq!(regions, expected, "HUD transition to {current:?}");
+            assert_eq!(history.previous(UiEffect::StatusHud), current);
+        }
+    }
+
+    #[test]
+    fn tool_preview_cleanup_reaches_each_reused_buffer() {
+        let mut history = UiDamageHistory::default();
+        let mut damage = BufferDamageTracker::new(2);
+        let first = mouse_tool_preview_damage_rect(8.0, (100.0, 100.0), 800, 600)
+            .expect("first preview footprint");
+        let moved = mouse_tool_preview_damage_rect(8.0, (400.0, 400.0), 800, 600)
+            .expect("moved preview footprint");
+
+        // Warm both slots, then let one lag behind while the other displays
+        // the preview's appearance and movement.
+        for slot in [1, 2] {
+            damage.take_buffer_damage_report(slot, 800, 600, 1, 4096);
+        }
+        for (current, expected) in [
+            (Some(first), vec![first]),
+            (Some(moved), vec![first, moved]),
+        ] {
+            let mut regions = Vec::new();
+            history.roll(UiEffect::ToolPreview, current, &mut regions);
+            damage.add_regions(regions);
+            let report = damage.take_buffer_damage_report(1, 800, 600, 1, 4096);
+            assert_eq!(report.full_reason, None);
+            assert_eq!(report.regions, expected);
+        }
+
+        let mut regions = Vec::new();
+        history.roll(UiEffect::ToolPreview, None, &mut regions);
+        damage.add_regions(regions);
+        let lagging = damage.take_buffer_damage_report(2, 800, 600, 1, 4096);
+        assert_eq!(lagging.full_reason, None);
+        assert_eq!(lagging.regions, vec![first, moved]);
+
+        let recent = damage.take_buffer_damage_report(1, 800, 600, 1, 4096);
+        assert_eq!(recent.full_reason, None);
+        assert_eq!(recent.regions, vec![moved]);
+        for slot in [1, 2] {
+            assert!(
+                damage
+                    .take_buffer_damage_report(slot, 800, 600, 1, 4096)
+                    .regions
+                    .is_empty(),
+                "cleanup must be drained independently for slot {slot}"
+            );
+        }
+    }
+
+    #[test]
+    fn full_damage_does_not_replace_effect_history_for_later_cleanup() {
+        let mut history = UiDamageHistory::default();
+        let mut damage = BufferDamageTracker::new(2);
+        let surface = Rect::new(0, 0, 800, 600).expect("surface");
+        let first = rect(20);
+        let moved = rect(100);
+        for slot in [1, 2] {
+            damage.take_buffer_damage_report(slot, 800, 600, 1, 4096);
+        }
+        history.roll(UiEffect::ToolPreview, Some(first), &mut Vec::new());
+
+        // History still advances when a separate cause forces full damage.
+        damage.mark_all_full(FullDamageReason::Zoom);
+        let mut regions = Vec::new();
+        history.roll(UiEffect::ToolPreview, Some(moved), &mut regions);
+        damage.add_regions(regions);
+        for slot in [1, 2] {
+            let report = damage.take_buffer_damage_report(slot, 800, 600, 1, 4096);
+            assert_eq!(report.regions, vec![surface]);
+            assert_eq!(report.full_reason, Some(FullDamageReason::Zoom));
+        }
+
+        let mut regions = Vec::new();
+        history.roll(UiEffect::ToolPreview, None, &mut regions);
+        damage.add_regions(regions);
+        for slot in [1, 2] {
+            let report = damage.take_buffer_damage_report(slot, 800, 600, 1, 4096);
+            assert_eq!(report.full_reason, None);
+            assert_eq!(report.regions, vec![moved]);
+        }
     }
 
     #[test]
