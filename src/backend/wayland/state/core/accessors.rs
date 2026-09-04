@@ -92,23 +92,6 @@ impl WaylandState {
     #[cfg(not(feature = "tablet-input"))]
     pub(in crate::backend::wayland) fn retire_stylus_contact(&mut self) {}
 
-    pub(in crate::backend::wayland) fn frozen_enabled(&self) -> bool {
-        self.data.frozen_enabled
-    }
-
-    #[allow(dead_code)]
-    pub(in crate::backend::wayland) fn set_frozen_enabled(&mut self, value: bool) {
-        self.data.frozen_enabled = value;
-    }
-
-    pub(in crate::backend::wayland) fn pending_freeze_on_start(&self) -> bool {
-        self.data.pending_freeze_on_start
-    }
-
-    pub(in crate::backend::wayland) fn set_pending_freeze_on_start(&mut self, value: bool) {
-        self.data.pending_freeze_on_start = value;
-    }
-
     pub(in crate::backend::wayland) fn preferred_output_identity(&self) -> Option<&str> {
         self.data.preferred_output_identity.as_deref()
     }

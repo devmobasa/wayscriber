@@ -43,8 +43,6 @@ impl WaylandState {
         };
 
         let mut data = StateData::new();
-        data.frozen_enabled = frozen_enabled;
-        data.pending_freeze_on_start = pending_freeze_on_start;
         data.preferred_output_identity = preferred_output_identity;
         data.xdg_fullscreen = xdg_fullscreen;
         data.main_surface_uses_overlay_layer = main_surface_uses_overlay_layer;
@@ -128,6 +126,7 @@ impl WaylandState {
             clipboard,
             desktop_open,
             region_capture,
+            acquisition: Default::default(),
             ocr,
             gtk_toolbar: None,
             ui_animation,
@@ -137,6 +136,8 @@ impl WaylandState {
                 ext_image_copy_managers,
                 portal_freeze_supported,
                 runtime_wake.clone(),
+                frozen_enabled,
+                pending_freeze_on_start,
             ),
             zoom: ZoomState::new_with_runtime_wake(zoom_manager, runtime_wake.clone()),
             perf: perf::PerfMetrics::from_env(),

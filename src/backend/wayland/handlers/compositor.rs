@@ -148,9 +148,8 @@ impl CompositorHandler for WaylandState {
         self.cancel_screen_modals_if_source_changed();
 
         // If freeze-on-start was requested, trigger it once the surface is configured and active.
-        if self.pending_freeze_on_start() {
+        if self.frozen.take_pending_on_start() {
             info!("Applying freeze-on-start after initial configure");
-            self.set_pending_freeze_on_start(false);
             self.input_state.request_frozen_toggle();
         }
 

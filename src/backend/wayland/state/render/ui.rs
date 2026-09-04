@@ -198,7 +198,7 @@ impl WaylandState {
                 &self.config.ui.help_overlay_style,
                 width,
                 height,
-                self.frozen_enabled(),
+                self.frozen.enabled(),
                 self.input_state.help_overlay.page(),
                 &bindings,
                 self.input_state.help_overlay.query(),

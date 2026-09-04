@@ -618,7 +618,7 @@ impl WaylandState {
             (
                 active_eyedropper_source_changed(
                     self.input_state.eyedropper_is_active(),
-                    self.data.active_eyedropper_source,
+                    self.acquisition.eyedropper_source(),
                     &source_matches,
                 ),
                 active_region_source_changed(

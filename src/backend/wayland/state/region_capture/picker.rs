@@ -148,7 +148,7 @@ impl WaylandState {
             return;
         }
 
-        if interactive && !self.frozen_enabled() {
+        if interactive && !self.frozen.enabled() {
             self.cancel_region_capture_ui_and_lifecycle();
             self.input_state.push_toast(
                 ToastPriority::Info,
@@ -157,7 +157,7 @@ impl WaylandState {
             );
             return;
         }
-        if !interactive && (region.picker == RegionPicker::Slurp || !self.frozen_enabled()) {
+        if !interactive && (region.picker == RegionPicker::Slurp || !self.frozen.enabled()) {
             self.handoff_region_capture_to_legacy();
             return;
         }
@@ -182,7 +182,7 @@ impl WaylandState {
             self.input_state.board_is_transparent(),
             self.zoom.is_engaged(),
             self.zoom.active,
-            self.frozen_enabled(),
+            self.frozen.enabled(),
         ) {
             RegionPickerEntry::Activate => {
                 if !self.activate_screen_region(
@@ -208,7 +208,10 @@ impl WaylandState {
                 }
             }
             RegionPickerEntry::AutoFreeze => {
-                match self.request_screen_acquisition(ScreenAcquisitionOwner::RegionCapture) {
+                match self
+                    .acquisition
+                    .request(ScreenAcquisitionOwner::RegionCapture)
+                {
                     Ok(acquisition) => self.set_pending_screen_region(
                         purpose,
                         generation,
@@ -310,7 +313,8 @@ impl WaylandState {
         let Some(region) = self.region_capture.active() else {
             let reserved = self.capture.active_region_action().is_some();
             if reserved {
-                self.clear_zoom_waiter_for(ZoomWaiterOwner::RegionCapture);
+                self.acquisition
+                    .clear_zoom_waiter(ZoomWaiterOwner::RegionCapture);
                 self.clear_screen_region_ui_only();
                 self.capture.finish_capture_lifecycle();
             }
@@ -344,13 +348,15 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland::state) fn cancel_region_capture_ui_and_lifecycle(&mut self) {
-        self.clear_zoom_waiter_for(ZoomWaiterOwner::RegionCapture);
+        self.acquisition
+            .clear_zoom_waiter(ZoomWaiterOwner::RegionCapture);
         self.clear_screen_region_ui_only();
         self.capture.finish_capture_lifecycle();
     }
 
     pub(super) fn clear_region_capture_ui_for_handoff(&mut self) {
-        self.clear_zoom_waiter_for(ZoomWaiterOwner::RegionCapture);
+        self.acquisition
+            .clear_zoom_waiter(ZoomWaiterOwner::RegionCapture);
         self.clear_screen_region_ui_only();
     }
 

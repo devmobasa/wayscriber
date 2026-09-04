@@ -3,9 +3,10 @@ mod transaction;
 use crate::backend::wayland::acquisition::{
     AcquisitionRecord, AcquisitionStage, ScreenAcquisitionBusy, ScreenAcquisitionCompletion,
     ScreenAcquisitionId, ScreenAcquisitionOutcome, ScreenAcquisitionOwner,
+    ScreenAcquisitionRegistry,
 };
 use crate::backend::wayland::zoom::{
-    ZoomSourceOutcome, ZoomSourceTerminal, ZoomWaiter, ZoomWaiterOwner,
+    ZoomSourceOutcome, ZoomSourceTerminal, ZoomWaiter, ZoomWaiterOwner, ZoomWaiterRegistry,
 };
 use crate::input::state::{EyedropperCaptureSource, ScreenCaptureSource};
 
@@ -17,16 +18,99 @@ pub(super) use transaction::{
     report_screen_source_activation_rejected_to, report_zoom_terminal_to,
 };
 
-use super::screen_image::displayed_screen_image;
+use super::screen_image::{ScreenSourceToken, displayed_screen_image};
 use super::{OverlaySuppression, WaylandState};
+
+#[derive(Debug, Default)]
+pub(in crate::backend::wayland) struct AcquisitionRuntime {
+    registry: ScreenAcquisitionRegistry,
+    zoom_waiter: ZoomWaiterRegistry,
+    eyedropper_source: Option<ScreenSourceToken>,
+}
+
+impl AcquisitionRuntime {
+    pub(in crate::backend::wayland) fn slot(&self) -> Option<AcquisitionRecord> {
+        self.registry.slot().copied()
+    }
+
+    fn take(&mut self) -> Option<AcquisitionRecord> {
+        self.registry.take()
+    }
+
+    fn take_matching(
+        &mut self,
+        id: ScreenAcquisitionId,
+        owner: ScreenAcquisitionOwner,
+    ) -> Option<AcquisitionRecord> {
+        self.registry.take_matching(id, owner)
+    }
+
+    pub(in crate::backend::wayland) fn request(
+        &mut self,
+        owner: ScreenAcquisitionOwner,
+    ) -> Result<ScreenAcquisitionId, ScreenAcquisitionBusy> {
+        self.registry.request(owner)
+    }
+
+    pub(in crate::backend::wayland) fn queued(&self) -> Option<AcquisitionRecord> {
+        self.slot()
+            .filter(|record| record.stage == AcquisitionStage::Queued)
+    }
+
+    pub(in crate::backend::wayland) fn mark_started(
+        &mut self,
+        id: ScreenAcquisitionId,
+        owner: ScreenAcquisitionOwner,
+    ) -> bool {
+        // This transition is a required side effect, not a debug-only check.
+        let transitioned = self.registry.mark_started(id, owner);
+        debug_assert!(transitioned, "the queued acquisition was just started");
+        transitioned
+    }
+
+    fn register_zoom_waiter(&mut self, waiter: ZoomWaiter) -> bool {
+        self.zoom_waiter.register(waiter)
+    }
+
+    pub(in crate::backend::wayland::state) fn clear_zoom_waiter(
+        &mut self,
+        owner: ZoomWaiterOwner,
+    ) -> bool {
+        self.zoom_waiter.clear_owner(owner)
+    }
+
+    fn take_zoom_waiter_for_terminal(
+        &mut self,
+        terminal: &ZoomSourceTerminal,
+    ) -> Option<(ZoomWaiter, bool)> {
+        self.zoom_waiter.take_for_terminal(terminal)
+    }
+
+    pub(in crate::backend::wayland::state) fn set_eyedropper_source(
+        &mut self,
+        source: ScreenSourceToken,
+    ) {
+        self.eyedropper_source = Some(source);
+    }
+
+    pub(in crate::backend::wayland::state) fn eyedropper_source(
+        &self,
+    ) -> Option<ScreenSourceToken> {
+        self.eyedropper_source
+    }
+
+    fn clear_eyedropper_source(&mut self) {
+        self.eyedropper_source = None;
+    }
+}
 
 impl AcquisitionTransactionRuntime for WaylandState {
     fn acquisition_slot(&self) -> Option<AcquisitionRecord> {
-        self.data.screen_acquisition.slot().copied()
+        self.acquisition.slot()
     }
 
     fn take_acquisition_record(&mut self) -> Option<AcquisitionRecord> {
-        self.data.screen_acquisition.take()
+        self.acquisition.take()
     }
 
     fn take_matching_acquisition_record(
@@ -34,7 +118,7 @@ impl AcquisitionTransactionRuntime for WaylandState {
         id: ScreenAcquisitionId,
         owner: ScreenAcquisitionOwner,
     ) -> Option<AcquisitionRecord> {
-        self.data.screen_acquisition.take_matching(id, owner)
+        self.acquisition.take_matching(id, owner)
     }
 
     fn owner_waiter_matches(
@@ -73,7 +157,7 @@ impl AcquisitionTransactionRuntime for WaylandState {
     }
 
     fn clear_zoom_waiter_effect(&mut self, owner: ZoomWaiterOwner) {
-        self.clear_zoom_waiter_for(owner);
+        self.acquisition.clear_zoom_waiter(owner);
     }
 
     fn frozen_generation(&self) -> u64 {
@@ -129,21 +213,16 @@ impl WaylandState {
         let Some(id) = self.zoom.current_capture_id() else {
             return false;
         };
-        self.data.zoom_waiter.register(ZoomWaiter { id, owner })
-    }
-
-    pub(in crate::backend::wayland) fn clear_zoom_waiter_for(
-        &mut self,
-        owner: ZoomWaiterOwner,
-    ) -> bool {
-        self.data.zoom_waiter.clear_owner(owner)
+        self.acquisition
+            .register_zoom_waiter(ZoomWaiter { id, owner })
     }
 
     pub(in crate::backend::wayland) fn resolve_zoom_waiter(
         &mut self,
         terminal: ZoomSourceTerminal,
     ) {
-        let Some((waiter, matches)) = self.data.zoom_waiter.take_for_terminal(&terminal) else {
+        let Some((waiter, matches)) = self.acquisition.take_zoom_waiter_for_terminal(&terminal)
+        else {
             report_zoom_terminal_to(&mut self.input_state, None, &terminal);
             return;
         };
@@ -252,39 +331,6 @@ impl WaylandState {
         }
     }
 
-    pub(in crate::backend::wayland) fn request_screen_acquisition(
-        &mut self,
-        owner: ScreenAcquisitionOwner,
-    ) -> Result<ScreenAcquisitionId, ScreenAcquisitionBusy> {
-        self.data.screen_acquisition.request(owner)
-    }
-
-    pub(in crate::backend::wayland) fn queued_screen_acquisition(
-        &self,
-    ) -> Option<AcquisitionRecord> {
-        self.data
-            .screen_acquisition
-            .slot()
-            .copied()
-            .filter(|record| record.stage == AcquisitionStage::Queued)
-    }
-
-    pub(in crate::backend::wayland) fn screen_acquisition_slot(&self) -> Option<AcquisitionRecord> {
-        self.data.screen_acquisition.slot().copied()
-    }
-
-    pub(in crate::backend::wayland) fn mark_screen_acquisition_started(
-        &mut self,
-        id: ScreenAcquisitionId,
-        owner: ScreenAcquisitionOwner,
-    ) {
-        // This transition is a required side effect, not a debug-only check.
-        // Keeping the mutation outside `debug_assert!` prevents release builds
-        // from leaving the record queued and starting it again next pass.
-        let transitioned = self.data.screen_acquisition.mark_started(id, owner);
-        debug_assert!(transitioned, "the queued acquisition was just started");
-    }
-
     pub(in crate::backend::wayland) fn complete_queued_acquisition(
         &mut self,
         id: ScreenAcquisitionId,
@@ -379,7 +425,7 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn cancel_eyedropper_ui_only(&mut self) {
-        self.data.active_eyedropper_source = None;
+        self.acquisition.clear_eyedropper_source();
         let _ = self.input_state.cancel_eyedropper();
     }
 
@@ -407,5 +453,29 @@ impl WaylandState {
 
     pub(super) fn release_owned_frozen_generation(&mut self, generation: u64) -> bool {
         release_owned_generation(self, generation)
+    }
+}
+
+#[cfg(test)]
+mod owner_tests {
+    use super::*;
+
+    #[test]
+    fn acquisition_slot_is_capacity_one_and_stage_checked() {
+        let mut runtime = AcquisitionRuntime::default();
+        let id = runtime
+            .request(ScreenAcquisitionOwner::Ocr)
+            .expect("first request");
+
+        assert!(runtime.request(ScreenAcquisitionOwner::Eyedropper).is_err());
+        assert_eq!(
+            runtime.slot().map(|record| record.stage),
+            Some(AcquisitionStage::Queued)
+        );
+        assert!(runtime.mark_started(id, ScreenAcquisitionOwner::Ocr));
+        assert_eq!(
+            runtime.slot().map(|record| record.stage),
+            Some(AcquisitionStage::Started)
+        );
     }
 }

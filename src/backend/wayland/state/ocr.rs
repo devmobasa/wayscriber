@@ -97,7 +97,7 @@ impl WaylandState {
             self.input_state.board_is_transparent(),
             self.zoom.is_engaged(),
             self.zoom.active,
-            self.frozen_enabled(),
+            self.frozen.enabled(),
         ) {
             ScreenSourceEntry::Activate => {
                 if !self.activate_ocr_selector(generation, FreezeOwnership::PreExisting) {
@@ -121,7 +121,7 @@ impl WaylandState {
                 }
             }
             ScreenSourceEntry::AutoFreeze => {
-                match self.request_screen_acquisition(ScreenAcquisitionOwner::Ocr) {
+                match self.acquisition.request(ScreenAcquisitionOwner::Ocr) {
                     Ok(acquisition) => self.set_pending_screen_region(
                         RegionPurposeTag::Ocr,
                         generation,
@@ -229,7 +229,7 @@ impl WaylandState {
     /// Leave OCR selection, releasing only a freeze OCR created itself.
     pub(in crate::backend::wayland) fn cancel_ocr(&mut self) -> bool {
         let Some(region) = self.region_capture.active() else {
-            self.clear_zoom_waiter_for(ZoomWaiterOwner::Ocr);
+            self.acquisition.clear_zoom_waiter(ZoomWaiterOwner::Ocr);
             self.input_state.cancel_region_ui_only();
             return false;
         };

@@ -1,10 +1,5 @@
 use std::time::Instant;
 
-use crate::backend::wayland::acquisition::ScreenAcquisitionRegistry;
-use crate::backend::wayland::zoom::ZoomWaiterRegistry;
-
-use super::screen_image::ScreenSourceToken;
-
 use super::capture::OverlayCaptureBarrier;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,11 +74,6 @@ impl OverlaySuppression {
 /// Focus/pointer/toolbar interaction data owned by WaylandState and shared with handlers.
 #[derive(Debug, Default)]
 pub struct StateData {
-    pub(super) pending_freeze_on_start: bool,
-    pub(super) screen_acquisition: ScreenAcquisitionRegistry,
-    pub(super) zoom_waiter: ZoomWaiterRegistry,
-    pub(super) active_eyedropper_source: Option<ScreenSourceToken>,
-    pub(super) frozen_enabled: bool,
     pub(super) preferred_output_identity: Option<String>,
     pub(super) xdg_fullscreen: bool,
     pub(super) xdg_frozen_fullscreen_state: XdgFrozenFullscreenState,
@@ -121,11 +111,6 @@ pub struct StateData {
 impl StateData {
     pub fn new() -> Self {
         Self {
-            pending_freeze_on_start: false,
-            screen_acquisition: ScreenAcquisitionRegistry::default(),
-            zoom_waiter: ZoomWaiterRegistry::default(),
-            active_eyedropper_source: None,
-            frozen_enabled: false,
             preferred_output_identity: None,
             xdg_fullscreen: false,
             xdg_frozen_fullscreen_state: XdgFrozenFullscreenState::Inactive,

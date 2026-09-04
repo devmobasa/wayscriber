@@ -196,6 +196,7 @@ pub(super) struct WaylandState {
     pub(super) desktop_open: RuntimeOperationController<DesktopOpenRequest, Result<(), String>>,
     /// Region picker state, window-query work, and replaceable cut previews.
     pub(super) region_capture: region_capture::RegionCaptureRuntime,
+    pub(super) acquisition: acquisition::AcquisitionRuntime,
     /// Capacity-one screen text recognition. A busy controller reports
     /// busy rather than queuing a region the user has moved on from.
     pub(super) ocr: crate::ocr::OcrController,

@@ -254,9 +254,9 @@ fn frozen_toggle_pass_decision(
 fn handle_frozen_toggle(state: &mut WaylandState, user_requested: bool) {
     let decision = frozen_toggle_pass_decision(
         user_requested,
-        state.screen_acquisition_slot(),
+        state.acquisition.slot(),
         state.input_state.frozen_active(),
-        state.frozen_enabled(),
+        state.frozen.enabled(),
     );
     match decision.user_action {
         FrozenUserToggleAction::None => {}
@@ -288,12 +288,14 @@ fn handle_frozen_toggle(state: &mut WaylandState, user_requested: bool) {
             );
         }
         FrozenUserToggleAction::RequestUserFreeze => {
-            let _ = state.request_screen_acquisition(ScreenAcquisitionOwner::UserFreeze);
+            let _ = state
+                .acquisition
+                .request(ScreenAcquisitionOwner::UserFreeze);
         }
     }
 
     let record = if decision.user_action == FrozenUserToggleAction::RequestUserFreeze {
-        state.queued_screen_acquisition()
+        state.acquisition.queued()
     } else {
         decision.queued_to_start
     };
@@ -311,7 +313,7 @@ fn handle_frozen_toggle(state: &mut WaylandState, user_requested: bool) {
     }
     match state.frozen.start_capture_for(record.id, record.owner) {
         Ok(()) => {
-            state.mark_screen_acquisition_started(record.id, record.owner);
+            state.acquisition.mark_started(record.id, record.owner);
         }
         Err(err) => {
             warn!("Frozen capture failed to start: {err}");
