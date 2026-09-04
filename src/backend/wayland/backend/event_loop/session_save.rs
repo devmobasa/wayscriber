@@ -28,7 +28,7 @@ use notifications::{
 pub(super) fn persist_session(state: &mut WaylandState) -> Result<(), anyhow::Error> {
     finalize_spotlight_wheel_for_shutdown_persistence(
         &mut state.input_state,
-        &mut state.spotlight_wheel_idle_deadline,
+        state.spotlight.wheel_idle_deadline_mut(),
     );
     if let Some(pending) = state.session.cancel_pending_output_transition() {
         log::info!(

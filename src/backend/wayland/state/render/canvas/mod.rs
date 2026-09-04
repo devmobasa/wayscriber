@@ -25,7 +25,7 @@ impl WaylandState {
         );
         // This toast already says what the standing page warning would, so
         // adopt its dedup key: the next frame must not repeat it.
-        self.spotlight_magnifier_page_warned_source = Some(source);
+        self.spotlight.note_page_source(source, true, true);
     }
 
     /// Warns once for magnified Spotlights the user arrived at rather than
@@ -41,22 +41,13 @@ impl WaylandState {
         source: crate::draw::SpotlightMagnifierSource,
         show_toast: bool,
     ) {
-        match arrived_magnification_warning(
-            self.spotlight_magnifier_page_warned_source,
-            source,
-            has_magnified_region,
-            show_toast,
-        ) {
-            ArrivedMagnificationWarning::Clear => {
-                self.spotlight_magnifier_page_warned_source = None;
-            }
-            ArrivedMagnificationWarning::Skip => {}
-            ArrivedMagnificationWarning::Warn => {
-                self.push_spotlight_magnifier_toast(
-                    "This page has magnified Spotlights. Freeze the screen to preview them.",
-                );
-                self.spotlight_magnifier_page_warned_source = Some(source);
-            }
+        if self
+            .spotlight
+            .note_page_source(source, has_magnified_region, show_toast)
+        {
+            self.push_spotlight_magnifier_toast(
+                "This page has magnified Spotlights. Freeze the screen to preview them.",
+            );
         }
     }
 
@@ -67,12 +58,9 @@ impl WaylandState {
     /// open — must not arm it, or the next real warning would be swallowed as
     /// a duplicate of a toast the user never saw.
     fn push_spotlight_magnifier_warning(&mut self, message: &str, show_toast: bool) {
-        if !spotlight_magnifier_warning_is_due(self.spotlight_magnifier_warning_active, show_toast)
-        {
-            return;
+        if self.spotlight.render_warning_due(show_toast) {
+            self.push_spotlight_magnifier_toast(message);
         }
-        self.push_spotlight_magnifier_toast(message);
-        self.spotlight_magnifier_warning_active = true;
     }
 
     fn push_spotlight_magnifier_toast(&mut self, message: &str) {
@@ -142,7 +130,7 @@ impl WaylandState {
         // backdrop. Transient handles, provisional strokes, text previews,
         // hover effects, and click highlights remain suppressed in both cases.
         if !capture_picker_draws_committed {
-            self.spotlight_dimmed_last_frame = false;
+            self.spotlight.note_frame(false);
             if let Some(perf) = perf.as_mut() {
                 perf.shapes_total = shapes_total;
                 perf.shapes_tested = 0;
@@ -221,7 +209,7 @@ impl WaylandState {
             self.input_state.style.spotlight_feather,
             magnifier_source,
             Some((phys_width, phys_height)),
-            &mut self.spotlight_magnifier_scratch,
+            self.spotlight.scratch_mut(),
         ) {
             // A missing pixel source is a standing condition, not an event:
             // the toolbar carries the inline unavailable state, and the one
@@ -233,7 +221,7 @@ impl WaylandState {
             // failing *renders*, and a frame that never attempted one must not
             // leave it armed to swallow the next real failure.
             Ok(crate::draw::SpotlightMagnifierOutcome::SourceUnavailable) => {
-                self.spotlight_magnifier_warning_active = false;
+                self.spotlight.clear_render_warning();
             }
             Ok(crate::draw::SpotlightMagnifierOutcome::AllocationFailed) => {
                 self.push_spotlight_magnifier_warning(
@@ -262,15 +250,15 @@ impl WaylandState {
                     perf.spotlight_copied_pixels = metrics.copied_pixels;
                     perf.spotlight_strategy = Some(metrics.strategy);
                 }
-                self.spotlight_magnifier_warning_active = false;
+                self.spotlight.clear_render_warning();
             }
             Ok(crate::draw::SpotlightMagnifierOutcome::NotNeeded) => {
-                self.spotlight_magnifier_warning_active = false;
+                self.spotlight.clear_render_warning();
             }
         }
         // Remember for the next frame's damage decision: once the last spotlight
         // is gone this buffer still carries its dim until a full repaint.
-        self.spotlight_dimmed_last_frame = !spotlight_regions.is_empty();
+        self.spotlight.note_frame(!spotlight_regions.is_empty());
         crate::draw::render_spotlight_pass(
             ctx,
             &spotlight_regions,
@@ -474,59 +462,6 @@ fn provisional_point_count(stroke: &crate::input::tool::ProvisionalToolStroke<'_
     }
 }
 
-/// What to do about magnified Spotlights the user arrived at rather than made.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ArrivedMagnificationWarning {
-    /// Availability changed for the better: forget the warning already shown,
-    /// so losing the source again is heard.
-    Clear,
-    /// Already warned for this availability, nothing magnified here, or this
-    /// frame cannot show toasts.
-    Skip,
-    /// Show the warning and remember the availability it was shown for.
-    Warn,
-}
-
-/// Decides the arrival warning from the four facts it depends on.
-///
-/// Keyed on availability and nothing else: the spec asks for at most one
-/// deduplicated warning *until availability changes*, so walking through
-/// several unavailable pages is one warning, and freezing then unfreezing
-/// earns a new one.
-///
-/// Only a change in availability releases the memory. A page that happens to
-/// hold no magnified Spotlight is not such a change, so passing through one on
-/// the way back to an unavailable page must not re-arm the warning.
-fn arrived_magnification_warning(
-    already_warned_for: Option<crate::draw::SpotlightMagnifierSource>,
-    source: crate::draw::SpotlightMagnifierSource,
-    has_magnified_region: bool,
-    show_toast: bool,
-) -> ArrivedMagnificationWarning {
-    if source.is_complete() {
-        return ArrivedMagnificationWarning::Clear;
-    }
-    if already_warned_for == Some(source) || !has_magnified_region {
-        return ArrivedMagnificationWarning::Skip;
-    }
-    // A suppressed frame skips without recording: the warning is still owed
-    // once the user can actually see it.
-    if !show_toast {
-        return ArrivedMagnificationWarning::Skip;
-    }
-    ArrivedMagnificationWarning::Warn
-}
-
-/// Whether a Spotlight magnifier warning should be emitted right now.
-///
-/// A frame that cannot show transients cannot show a toast either, and it must
-/// not count as "already warned": every frame with the capture picker open is
-/// such a frame, and arming the flag there would swallow the next real warning
-/// as a duplicate of a toast nobody saw.
-const fn spotlight_magnifier_warning_is_due(already_warned: bool, show_toast: bool) -> bool {
-    show_toast && !already_warned
-}
-
 const fn capture_picker_draws_committed(
     capture_picker_active: bool,
     include_drawings: bool,
@@ -537,11 +472,9 @@ const fn capture_picker_draws_committed(
 #[cfg(test)]
 mod tests {
     use super::{
-        ArrivedMagnificationWarning, arrived_magnification_warning, capture_picker_draws_committed,
-        rects_intersect, safe_shape_damage_bounds, spotlight_magnifier_warning_is_due,
+        capture_picker_draws_committed, rects_intersect, safe_shape_damage_bounds,
         union_damage_bounds,
     };
-    use crate::draw::SpotlightMagnifierSource;
     use crate::util::Rect;
 
     #[test]
@@ -573,114 +506,6 @@ mod tests {
         let damage = Rect::new(10, 10, 20, 20).unwrap();
         assert!(!rects_intersect(Rect::new(0, 10, 10, 5).unwrap(), damage));
         assert!(rects_intersect(Rect::new(9, 10, 2, 5).unwrap(), damage));
-    }
-
-    #[test]
-    fn arriving_at_a_page_of_unavailable_loupes_warns_once_not_every_frame() {
-        let unavailable = SpotlightMagnifierSource::IncompleteTransparent;
-
-        // The page switch lands: nothing has been warned for yet.
-        assert_eq!(
-            arrived_magnification_warning(None, unavailable, true, true),
-            ArrivedMagnificationWarning::Warn
-        );
-        // Every following frame draws the same unavailable page in silence.
-        assert_eq!(
-            arrived_magnification_warning(Some(unavailable), unavailable, true, true),
-            ArrivedMagnificationWarning::Skip
-        );
-    }
-
-    #[test]
-    fn only_a_change_in_availability_releases_the_warning() {
-        let unavailable = SpotlightMagnifierSource::IncompleteTransparent;
-
-        // Gaining a source is the change the spec keys on: losing it again
-        // must be heard.
-        assert_eq!(
-            arrived_magnification_warning(
-                Some(unavailable),
-                SpotlightMagnifierSource::CompleteSolid,
-                true,
-                true
-            ),
-            ArrivedMagnificationWarning::Clear
-        );
-
-        // Passing through a page with nothing magnified is not such a change,
-        // so the memory survives and returning to the unavailable page is
-        // silent rather than a second warning for the same availability.
-        assert_eq!(
-            arrived_magnification_warning(Some(unavailable), unavailable, false, true),
-            ArrivedMagnificationWarning::Skip
-        );
-        assert_eq!(
-            arrived_magnification_warning(Some(unavailable), unavailable, true, true),
-            ArrivedMagnificationWarning::Skip
-        );
-    }
-
-    #[test]
-    fn a_page_with_nothing_magnified_neither_warns_nor_arms() {
-        // Never warned yet, nothing magnified here: stay silent, and stay
-        // owing the warning for the next page that does hold one.
-        assert_eq!(
-            arrived_magnification_warning(
-                None,
-                SpotlightMagnifierSource::IncompleteTransparent,
-                false,
-                true
-            ),
-            ArrivedMagnificationWarning::Skip
-        );
-        assert_eq!(
-            arrived_magnification_warning(
-                None,
-                SpotlightMagnifierSource::IncompleteTransparent,
-                true,
-                true
-            ),
-            ArrivedMagnificationWarning::Warn
-        );
-    }
-
-    #[test]
-    fn a_suppressed_frame_still_owes_the_arrival_warning() {
-        // The capture picker is open, so no toast can be seen. Skipping must
-        // not count as having warned, or the user never learns why the loupes
-        // are flat.
-        assert_eq!(
-            arrived_magnification_warning(
-                None,
-                SpotlightMagnifierSource::IncompleteTransparent,
-                true,
-                false
-            ),
-            ArrivedMagnificationWarning::Skip
-        );
-        assert_eq!(
-            arrived_magnification_warning(
-                None,
-                SpotlightMagnifierSource::IncompleteTransparent,
-                true,
-                true
-            ),
-            ArrivedMagnificationWarning::Warn
-        );
-    }
-
-    #[test]
-    fn a_suppressed_frame_neither_warns_nor_counts_as_having_warned() {
-        // The picker suppresses transients, so no toast can be shown...
-        assert!(!spotlight_magnifier_warning_is_due(false, false));
-        // ...and because nothing was shown, the flag stays clear and the next
-        // frame that *can* warn still does.
-        assert!(spotlight_magnifier_warning_is_due(false, true));
-    }
-
-    #[test]
-    fn a_standing_warning_is_not_repeated_every_frame() {
-        assert!(!spotlight_magnifier_warning_is_due(true, true));
     }
 
     #[test]

@@ -185,7 +185,7 @@ impl WaylandState {
         self.cancel_region_for_toolbar_interaction();
         if handle_toolbar_event_preflight(
             &mut self.input_state,
-            &mut self.spotlight_wheel_idle_deadline,
+            self.spotlight.wheel_idle_deadline_mut(),
             &event,
             rebind_requested,
         ) == ToolbarEventPreflight::RebindCaptured
