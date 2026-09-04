@@ -142,8 +142,16 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
    - `render.rs` exposes provisional shape previews for live feedback.
 
 4. **Rendering to the overlay**
-   - `WaylandState::render` uses Cairo + SHM buffers.
-   - Draw order: board background → finalized shapes → provisional shape → text cursor preview → status bar (if enabled) → help overlay (if toggled).
+   - `WaylandState::render` acquires an SHM buffer, prepares mutable animation/damage state,
+     builds an owned `FramePlan`, paints with Cairo, and submits the buffer. A busy buffer pool
+     defers the frame before preparation. `state/render/{prepare,plan,paint,submit}.rs` keep
+     these boundaries explicit; the planner derives canvas policy and screen/world/buffer damage.
+   - `CanvasRenderCtx` borrows frame parameters and the local Cairo target. The canvas layer
+     cache, reusable profile baseline, and effect damage history remain in `RenderRuntime`.
+   - Draw order: board background → finalized shapes → spotlight effects → provisional shape
+     → text cursor preview → UI. Color-profile passes surround UI painting according to their
+     selected targets. Main-surface submission precedes toolbar rendering and marking capture
+     preflight rendered.
    - `ui` module encapsulates status/help overlays, while `draw` handles actual vector geometry routines.
 
 The result is a predictable pipeline: Wayland → handlers → `InputState` →

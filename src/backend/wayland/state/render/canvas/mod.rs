@@ -1,8 +1,10 @@
 mod background;
+mod context;
 mod overlays;
 mod text;
 
 use super::super::*;
+pub(super) use context::CanvasRenderCtx;
 
 const SPOTLIGHT_MAGNIFIER_TOAST_SOURCE: &str = "spotlight-magnifier";
 
@@ -71,36 +73,30 @@ impl WaylandState {
         );
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn render_canvas_layer(
         &mut self,
-        ctx: &cairo::Context,
-        width: u32,
-        height: u32,
-        scale: i32,
-        phys_width: u32,
-        phys_height: u32,
-        now: Instant,
-        damage_world: &[crate::util::Rect],
-        render_transients: bool,
+        canvas: &CanvasRenderCtx<'_>,
         mut perf: Option<&mut PerfRenderBreakdown>,
     ) -> Result<()> {
-        let capture_picker_active = self.capture_picker_chrome_suppressed();
-        let capture_picker_draws_committed = capture_picker_draws_committed(
-            capture_picker_active,
-            self.region_picker_include_drawings(),
-        );
-        let render_transients = render_transients && !capture_picker_active;
-        let canvas_transform_active = self.canvas_transform_active();
-        let (canvas_origin_x, canvas_origin_y) = self.canvas_view_origin();
+        let ctx = canvas.cairo;
+        let width = canvas.geometry.width;
+        let height = canvas.geometry.height;
+        let scale = canvas.geometry.scale;
+        let phys_width = canvas.geometry.physical_width;
+        let phys_height = canvas.geometry.physical_height;
+        let now = canvas.now;
+        let damage_world = canvas.damage_world;
+        let render_transients = canvas.canvas.render_transients;
+        let canvas_transform_active = canvas.canvas.transform_active;
+        let (canvas_origin_x, canvas_origin_y) = canvas.canvas.origin;
         let shapes_total = self.input_state.boards.active_frame().shapes.len();
-        let text_halo_enabled = self.config.drawing.text_halo_enabled;
+        let text_halo_enabled = canvas.canvas.text_halo_enabled;
 
         // For pure pan transforms, serve the board background and committed
         // shapes from the baked layer cache: pan frames force full damage, so
         // this turns an O(shapes) Cairo replay into a single aligned blit.
         let layer_cache_start = perf.as_ref().map(|_| Instant::now());
-        let layer_cache_ready = if !capture_picker_active && self.canvas_layer_cache_usable() {
+        let layer_cache_ready = if canvas.canvas.layer_cache_eligible {
             self.ensure_canvas_layer_cache(width, height, scale)
         } else {
             self.render.canvas_layer_cache_mut().clear();
@@ -129,7 +125,7 @@ impl WaylandState {
         // frozen capture. Turning the Review toggle off keeps only the raw
         // backdrop. Transient handles, provisional strokes, text previews,
         // hover effects, and click highlights remain suppressed in both cases.
-        if !capture_picker_draws_committed {
+        if !canvas.canvas.draw_committed {
             self.spotlight.note_frame(false);
             if let Some(perf) = perf.as_mut() {
                 perf.shapes_total = shapes_total;
@@ -148,8 +144,8 @@ impl WaylandState {
 
         if canvas_transform_active {
             let _ = ctx.save();
-            if self.zoom.active {
-                ctx.scale(self.zoom.scale, self.zoom.scale);
+            if let Some(zoom_scale) = canvas.canvas.zoom_scale {
+                ctx.scale(zoom_scale, zoom_scale);
             }
             ctx.translate(-canvas_origin_x, -canvas_origin_y);
         }
@@ -158,14 +154,9 @@ impl WaylandState {
 
         let completed_shapes_start = perf.as_ref().map(|_| Instant::now());
         self.render_committed_canvas_shapes(
-            ctx,
-            width,
-            height,
-            damage_world,
-            canvas_transform_active,
+            canvas,
             layer_cache_ready,
             &replay_ctx,
-            text_halo_enabled,
             perf.as_deref_mut(),
         );
         if let (Some(perf), Some(completed_shapes_start)) = (perf.as_mut(), completed_shapes_start)
@@ -317,7 +308,7 @@ impl WaylandState {
         }
 
         // Render text cursor/buffer if in text mode
-        self.render_text_input_preview(ctx);
+        self.render_text_input_preview(canvas);
 
         self.input_state.render_highlight_tool_ring(ctx, mx, my);
 
@@ -333,19 +324,19 @@ impl WaylandState {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn render_committed_canvas_shapes(
-        &mut self,
-        ctx: &cairo::Context,
-        width: u32,
-        height: u32,
-        damage_world: &[crate::util::Rect],
-        canvas_transform_active: bool,
+        &self,
+        canvas: &CanvasRenderCtx<'_>,
         layer_cache_ready: bool,
         replay_ctx: &crate::draw::EraserReplayContext<'_>,
-        text_halo_enabled: bool,
         mut perf: Option<&mut PerfRenderBreakdown>,
     ) {
+        let ctx = canvas.cairo;
+        let width = canvas.geometry.width;
+        let height = canvas.geometry.height;
+        let damage_world = canvas.damage_world;
+        let canvas_transform_active = canvas.canvas.transform_active;
+        let text_halo_enabled = canvas.canvas.text_halo_enabled;
         let shapes = &self.input_state.boards.active_frame().shapes;
         if layer_cache_ready && self.render.canvas_layer_cache().blit(ctx) {
             debug!("Rendered committed shapes from layer cache");
@@ -464,19 +455,9 @@ fn provisional_point_count(stroke: &crate::input::tool::ProvisionalToolStroke<'_
     }
 }
 
-const fn capture_picker_draws_committed(
-    capture_picker_active: bool,
-    include_drawings: bool,
-) -> bool {
-    !capture_picker_active || include_drawings
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        capture_picker_draws_committed, rects_intersect, safe_shape_damage_bounds,
-        union_damage_bounds,
-    };
+    use super::{rects_intersect, safe_shape_damage_bounds, union_damage_bounds};
     use crate::util::Rect;
 
     #[test]
@@ -508,13 +489,5 @@ mod tests {
         let damage = Rect::new(10, 10, 20, 20).unwrap();
         assert!(!rects_intersect(Rect::new(0, 10, 10, 5).unwrap(), damage));
         assert!(rects_intersect(Rect::new(9, 10, 2, 5).unwrap(), damage));
-    }
-
-    #[test]
-    fn picker_preview_follows_the_annotated_export_choice() {
-        assert!(capture_picker_draws_committed(false, false));
-        assert!(capture_picker_draws_committed(false, true));
-        assert!(capture_picker_draws_committed(true, true));
-        assert!(!capture_picker_draws_committed(true, false));
     }
 }
