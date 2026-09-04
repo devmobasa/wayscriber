@@ -1,7 +1,8 @@
 use std::f64::consts::PI;
 
 use super::super::primitives::{
-    BADGE_STACK_GAP, BadgeAlign, draw_badge, draw_pill, draw_rounded_rect, measure_badge,
+    BADGE_STACK_GAP, BadgeAlign, draw_badge_with_engine, draw_pill, draw_rounded_rect,
+    measure_badge_with_engine,
 };
 use super::super::theme::{self, overlay};
 use super::badges::{
@@ -13,7 +14,7 @@ use crate::config::{Action, StatusPosition, action_display_label};
 use crate::input::{BoardBackground, DrawingState, InputState, TextInputMode, Tool};
 use crate::label_format::{format_binding_labels, join_binding_labels};
 use crate::ui::toolbar::bindings::action_for_tool;
-use crate::ui_text::{UiTextExtents, UiTextStyle, measure_text, text_layout};
+use crate::ui_text::{UiTextEngine, UiTextExtents, UiTextStyle, with_legacy_engine};
 
 mod content;
 mod helpers;
@@ -21,6 +22,8 @@ mod measurement;
 mod render;
 
 pub use content::compute_status_hud_layout;
+pub(crate) use content::compute_status_hud_layout_with_engine;
+pub(crate) use render::render_status_bar_with_resources;
 pub use render::{render_status_bar, render_status_bar_with_theme};
 
 #[cfg(test)]

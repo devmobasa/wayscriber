@@ -20,7 +20,7 @@ mod state;
 pub use state::ZoomChipState;
 
 use crate::config::{Action, StatusBarStyle};
-use crate::ui::{ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress, compute_zoom_chip_layout};
+use crate::ui::{ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress};
 
 use super::base::InputState;
 
@@ -62,8 +62,33 @@ impl InputState {
         screen_height: u32,
         chrome_cursor_focused: bool,
     ) {
+        crate::ui_text::with_legacy_engine(|engine| {
+            self.update_zoom_chip_layout_for_pointer_with_engine(
+                engine,
+                style,
+                screen_width,
+                screen_height,
+                chrome_cursor_focused,
+            )
+        });
+    }
+
+    pub(crate) fn update_zoom_chip_layout_for_pointer_with_engine(
+        &mut self,
+        engine: &crate::ui_text::UiTextEngine,
+        style: &StatusBarStyle,
+        screen_width: u32,
+        screen_height: u32,
+        chrome_cursor_focused: bool,
+    ) {
         let layout = if self.zoom_chip_enabled() {
-            compute_zoom_chip_layout(self, style, screen_width, screen_height)
+            crate::ui::compute_zoom_chip_layout_with_engine(
+                engine,
+                self,
+                style,
+                screen_width,
+                screen_height,
+            )
         } else {
             None
         };

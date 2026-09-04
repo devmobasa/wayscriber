@@ -81,6 +81,10 @@ pub use status::{
     render_zoom_badge, render_zoom_chip, render_zoom_chip_with_theme, status_hud_geometry,
     zoom_chip_geometry,
 };
+pub(crate) use status::{
+    compute_status_hud_layout_with_engine, compute_zoom_chip_layout_with_engine,
+    render_status_bar_with_resources, render_zoom_chip_with_resources,
+};
 pub use toasts::{
     blocked_feedback_rects, preset_toast_geometry, render_blocked_feedback, render_preset_toast,
     render_ui_toast, ui_toast_geometry,

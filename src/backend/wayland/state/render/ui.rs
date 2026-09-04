@@ -156,7 +156,8 @@ impl WaylandState {
             );
         }
         if self.input_state.ui_visibility.show_status_bar {
-            crate::ui::render_status_bar_with_theme(
+            crate::ui::render_status_bar_with_resources(
+                self.render.ui_text(),
                 ctx,
                 self.render.theme(),
                 &self.input_state,
@@ -166,7 +167,8 @@ impl WaylandState {
             );
         }
         if !capture_picker && self.zoom_chip_visible() {
-            crate::ui::render_zoom_chip_with_theme(
+            crate::ui::render_zoom_chip_with_resources(
+                self.render.ui_text(),
                 ctx,
                 self.render.theme(),
                 &self.input_state,

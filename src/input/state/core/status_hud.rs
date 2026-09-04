@@ -11,7 +11,7 @@ use state::StatusHudRebuildInputs;
 pub use state::StatusHudState;
 
 use crate::config::{Action, StatusBarItem, StatusBarStyle, StatusPosition};
-use crate::ui::{StatusHudLayout, StatusHudSegmentKind, compute_status_hud_layout};
+use crate::ui::{StatusHudLayout, StatusHudSegmentKind};
 
 use super::base::InputState;
 use super::board_picker::BoardPickerFocus;
@@ -126,8 +126,36 @@ impl InputState {
         screen_height: u32,
         chrome_cursor_focused: bool,
     ) {
+        crate::ui_text::with_legacy_engine(|engine| {
+            self.update_status_hud_layout_for_pointer_with_engine(
+                engine,
+                position,
+                style,
+                screen_width,
+                screen_height,
+                chrome_cursor_focused,
+            )
+        });
+    }
+
+    pub(crate) fn update_status_hud_layout_for_pointer_with_engine(
+        &mut self,
+        engine: &crate::ui_text::UiTextEngine,
+        position: StatusPosition,
+        style: &StatusBarStyle,
+        screen_width: u32,
+        screen_height: u32,
+        chrome_cursor_focused: bool,
+    ) {
         let layout = if self.ui_visibility.show_status_bar {
-            compute_status_hud_layout(self, position, style, screen_width, screen_height)
+            crate::ui::compute_status_hud_layout_with_engine(
+                engine,
+                self,
+                position,
+                style,
+                screen_width,
+                screen_height,
+            )
         } else {
             None
         };

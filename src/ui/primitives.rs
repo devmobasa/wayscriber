@@ -408,7 +408,7 @@ pub(crate) enum BadgeAlign {
 }
 
 /// Badge box `(width, height, text_inset)` from measured label/hint extents.
-/// Shared by [`draw_badge`] and [`measure_badge`] so layout and rendering can
+/// Shared by [`draw_badge`] and [`measure_badge_with_engine`] so layout and rendering can
 /// never disagree about badge geometry.
 fn badge_box(
     label_extents: &crate::ui_text::UiTextExtents,
@@ -431,12 +431,13 @@ fn badge_box(
 
 /// Measure the `(width, height)` [`draw_badge`] would occupy, without a
 /// rendering context (used for HUD badge stacking and damage geometry).
-pub(crate) fn measure_badge(
+pub(crate) fn measure_badge_with_engine(
+    engine: &UiTextEngine,
     label: &str,
     label_font_size: f64,
     hint: Option<(&str, f64)>,
 ) -> Option<(f64, f64)> {
-    let label_extents = crate::ui_text::measure_text(
+    let label_extents = engine.measure(
         UiTextStyle {
             family: "Sans",
             slant: cairo::FontSlant::Normal,
@@ -447,7 +448,7 @@ pub(crate) fn measure_badge(
         None,
     )?;
     let hint_extents = match hint {
-        Some((text, font_size)) => Some(crate::ui_text::measure_text(
+        Some((text, font_size)) => Some(engine.measure(
             UiTextStyle {
                 family: "Sans",
                 slant: cairo::FontSlant::Normal,
@@ -477,8 +478,35 @@ pub(crate) fn draw_badge(
     hint: Option<(&str, f64)>,
     tint: [f64; 4],
 ) -> f64 {
+    with_legacy_engine(|engine| {
+        draw_badge_with_engine(
+            engine,
+            ctx,
+            anchor_x,
+            top_y,
+            align,
+            label,
+            label_font_size,
+            hint,
+            tint,
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn draw_badge_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    anchor_x: f64,
+    top_y: f64,
+    align: BadgeAlign,
+    label: &str,
+    label_font_size: f64,
+    hint: Option<(&str, f64)>,
+    tint: [f64; 4],
+) -> f64 {
     let padding = BADGE_PADDING;
-    let label_layout = text_layout(
+    let label_layout = engine.layout(
         ctx,
         UiTextStyle {
             family: "Sans",
@@ -492,7 +520,7 @@ pub(crate) fn draw_badge(
     let label_extents = label_layout.ink_extents();
 
     let hint_layout = hint.map(|(text, font_size)| {
-        let layout = text_layout(
+        let layout = engine.layout(
             ctx,
             UiTextStyle {
                 family: "Sans",

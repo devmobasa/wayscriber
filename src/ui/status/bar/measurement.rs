@@ -47,6 +47,7 @@ pub(super) struct StatusBarMeasurement {
 /// budget. When the floor binds, `overflow` asks the caller to shed optional
 /// cluster pieces (the cluster cannot re-wrap the way the M0 suffix could).
 pub(super) fn measure_status_bar(
+    engine: &UiTextEngine,
     style: &crate::config::StatusBarStyle,
     prefix_text: &str,
     cluster_width: f64,
@@ -56,7 +57,9 @@ pub(super) fn measure_status_bar(
 ) -> Option<StatusBarMeasurement> {
     let max_width = screen_width as f64 * STATUS_BAR_MAX_WIDTH_FRACTION - style.padding * 2.0;
     let text_style = status_text_style(style.font_size);
-    let sep_advance = measure_text(text_style, SEGMENT_SEPARATOR, None)?.x_advance();
+    let sep_advance = engine
+        .measure(text_style, SEGMENT_SEPARATOR, None)?
+        .x_advance();
 
     let has_prefix = !prefix_text.is_empty();
     let separator_advance = if has_prefix && cluster_width > 0.0 {
@@ -72,7 +75,7 @@ pub(super) fn measure_status_bar(
             // The floor binds when the cluster leaves less room than the
             // prefix is guaranteed; the caller sheds optional pieces then.
             let overflow = prefix_budget > available;
-            let extents = measure_text(text_style, prefix_text, Some(prefix_budget))?;
+            let extents = engine.measure(text_style, prefix_text, Some(prefix_budget))?;
             let width = extents.width().min(prefix_budget);
             (
                 prefix_budget,
@@ -111,6 +114,7 @@ struct StatusHudBadgeSpec {
 /// Mode badges (FROZEN/ZOOM/PAN/EDITING) stacked directly above the HUD, or
 /// below it for top positions, aligned to the pill's near screen edge.
 pub(super) fn layout_mode_badges(
+    engine: &UiTextEngine,
     input_state: &InputState,
     position: StatusPosition,
     pill_x: f64,
@@ -177,7 +181,9 @@ pub(super) fn layout_mode_badges(
     let mut badges = Vec::new();
     let mut offset = BADGE_STACK_GAP;
     for spec in specs {
-        let Some((width, height)) = measure_badge(&spec.label, spec.font_size, spec.hint) else {
+        let Some((width, height)) =
+            measure_badge_with_engine(engine, &spec.label, spec.font_size, spec.hint)
+        else {
             continue;
         };
         let x = if align_left {

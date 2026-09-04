@@ -20,7 +20,7 @@ use super::super::primitives::{draw_pill, draw_rounded_rect};
 use super::super::theme::{self, overlay};
 use crate::config::StatusBarStyle;
 use crate::input::{BoardBackground, InputState};
-use crate::ui_text::{UiTextExtents, UiTextStyle, measure_text, text_layout};
+use crate::ui_text::{UiTextEngine, UiTextExtents, UiTextStyle, with_legacy_engine};
 
 // ============================================================================
 // UI Layout Constants (not configurable) — mirror the status bar pill so the
@@ -258,6 +258,24 @@ pub fn compute_zoom_chip_layout(
     screen_width: u32,
     screen_height: u32,
 ) -> Option<ZoomChipLayout> {
+    with_legacy_engine(|engine| {
+        compute_zoom_chip_layout_with_engine(
+            engine,
+            input_state,
+            style,
+            screen_width,
+            screen_height,
+        )
+    })
+}
+
+pub(crate) fn compute_zoom_chip_layout_with_engine(
+    engine: &UiTextEngine,
+    input_state: &InputState,
+    style: &StatusBarStyle,
+    screen_width: u32,
+    screen_height: u32,
+) -> Option<ZoomChipLayout> {
     let text_style = chip_text_style(style.font_size);
 
     // Live percentage from the current scale (1.0 → "100%" when not zoomed):
@@ -285,7 +303,7 @@ pub fn compute_zoom_chip_layout(
     let mut digit_cap: Option<f64> = None;
     let mut pieces: Vec<ChipPiece> = Vec::with_capacity(specs.len());
     for (text, kind) in specs {
-        let extents = measure_text(text_style, &text, None)?;
+        let extents = engine.measure(text_style, &text, None)?;
         if kind.is_none() {
             digit_cap = Some(-extents.y_bearing());
         }
@@ -549,6 +567,26 @@ pub fn render_zoom_chip_with_theme(
     screen_width: u32,
     screen_height: u32,
 ) {
+    render_zoom_chip_with_resources(
+        &UiTextEngine::default(),
+        ctx,
+        theme,
+        input_state,
+        style,
+        screen_width,
+        screen_height,
+    );
+}
+
+pub(crate) fn render_zoom_chip_with_resources(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    theme: &theme::Theme,
+    input_state: &InputState,
+    style: &StatusBarStyle,
+    screen_width: u32,
+    screen_height: u32,
+) {
     let Some(layout) = input_state.zoom_chip_layout() else {
         return;
     };
@@ -628,11 +666,9 @@ pub fn render_zoom_chip_with_theme(
                 } else {
                     ctx.set_source_rgba(r, g, b, a);
                 }
-                text_layout(ctx, text_style, &run.text, None).show_at_baseline(
-                    ctx,
-                    run.x,
-                    layout.line_baseline,
-                );
+                engine
+                    .layout(ctx, text_style, &run.text, None)
+                    .show_at_baseline(ctx, run.x, layout.line_baseline);
             }
         }
     }

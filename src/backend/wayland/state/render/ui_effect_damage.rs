@@ -134,13 +134,15 @@ impl WaylandState {
         let chrome_cursor_focused =
             chrome_cursor_can_rehit(self.has_cursor_focus(), self.cursor_blocked_by_toolbar());
         let status_hud_rect = if flags.active(UiEffect::StatusHud) {
-            self.input_state.update_status_hud_layout_for_pointer(
-                self.config.ui.status_bar_position,
-                &self.config.ui.status_bar_style,
-                width,
-                height,
-                chrome_cursor_focused,
-            );
+            self.input_state
+                .update_status_hud_layout_for_pointer_with_engine(
+                    self.render.ui_text(),
+                    self.config.ui.status_bar_position,
+                    &self.config.ui.status_bar_style,
+                    width,
+                    height,
+                    chrome_cursor_focused,
+                );
             crate::ui::status_hud_geometry(&self.input_state, width, height)
                 .and_then(|bounds| effect_rect(bounds, width, height))
         } else {
@@ -162,12 +164,14 @@ impl WaylandState {
         // all read the same cache for the frame; the appear → move → disappear
         // union keeps stale pixels cleaned up when the percentage changes.
         let zoom_chip_rect = if flags.active(UiEffect::ZoomChip) {
-            self.input_state.update_zoom_chip_layout_for_pointer(
-                &self.config.ui.status_bar_style,
-                width,
-                height,
-                chrome_cursor_focused,
-            );
+            self.input_state
+                .update_zoom_chip_layout_for_pointer_with_engine(
+                    self.render.ui_text(),
+                    &self.config.ui.status_bar_style,
+                    width,
+                    height,
+                    chrome_cursor_focused,
+                );
             crate::ui::zoom_chip_geometry(&self.input_state, width, height)
                 .and_then(|bounds| effect_rect(bounds, width, height))
         } else {

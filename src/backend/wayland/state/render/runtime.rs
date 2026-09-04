@@ -122,6 +122,7 @@ pub(in crate::backend::wayland) struct RenderRuntime {
     draw_caches: crate::draw::RenderCaches,
     theme: crate::ui::theme::Theme,
     ui_caches: crate::ui::UiRenderCaches,
+    ui_text: crate::ui_text::UiTextEngine,
     ui_damage: UiDamageHistory,
     profile_ui_baseline: Vec<u8>,
 }
@@ -133,9 +134,14 @@ impl RenderRuntime {
             draw_caches: crate::draw::RenderCaches::default(),
             theme,
             ui_caches: crate::ui::UiRenderCaches::default(),
+            ui_text: crate::ui_text::UiTextEngine::default(),
             ui_damage: UiDamageHistory::default(),
             profile_ui_baseline: Vec::new(),
         }
+    }
+
+    pub(in crate::backend::wayland) fn ui_text(&self) -> &crate::ui_text::UiTextEngine {
+        &self.ui_text
     }
 
     pub(in crate::backend::wayland::state) fn theme(&self) -> &crate::ui::theme::Theme {

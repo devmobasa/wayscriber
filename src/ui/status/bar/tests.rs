@@ -27,6 +27,7 @@ fn measure(
     screen_width: u32,
 ) -> StatusBarMeasurement {
     measure_status_bar(
+        &UiTextEngine::default(),
         style,
         prefix,
         cluster_width,

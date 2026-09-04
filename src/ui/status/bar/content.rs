@@ -68,9 +68,29 @@ pub fn compute_status_hud_layout(
     screen_width: u32,
     screen_height: u32,
 ) -> Option<StatusHudLayout> {
+    with_legacy_engine(|engine| {
+        compute_status_hud_layout_with_engine(
+            engine,
+            input_state,
+            position,
+            style,
+            screen_width,
+            screen_height,
+        )
+    })
+}
+
+pub(crate) fn compute_status_hud_layout_with_engine(
+    engine: &UiTextEngine,
+    input_state: &InputState,
+    position: StatusPosition,
+    style: &crate::config::StatusBarStyle,
+    screen_width: u32,
+    screen_height: u32,
+) -> Option<StatusHudLayout> {
     let text_style = status_text_style(style.font_size);
     let dot_diameter = style.dot_radius * 2.0;
-    let sep_extents = measure_text(text_style, SEGMENT_SEPARATOR, None)?;
+    let sep_extents = engine.measure(text_style, SEGMENT_SEPARATOR, None)?;
     let sep_advance = sep_extents.x_advance();
 
     let mut pieces = build_cluster_pieces(input_state);
@@ -80,7 +100,7 @@ pub fn compute_status_hud_layout(
     }
     for piece in &mut pieces {
         if let Some(text) = &piece.text {
-            piece.extents = Some(measure_text(text_style, text, None)?);
+            piece.extents = Some(engine.measure(text_style, text, None)?);
         }
     }
     // Degradation ladder while the width budget binds: shed optional display
@@ -92,6 +112,7 @@ pub fn compute_status_hud_layout(
         let cluster_width = cluster_width(&pieces, sep_advance, dot_diameter);
         let line_metrics = cluster_line_metrics(&pieces, sep_extents);
         let measurement = measure_status_bar(
+            engine,
             style,
             prefix_text.as_deref().unwrap_or(""),
             cluster_width,
@@ -113,7 +134,7 @@ pub fn compute_status_hud_layout(
             {
                 let label = board_segment_label(input_state, limit);
                 if piece.text.as_deref() != Some(label.as_str()) {
-                    piece.extents = Some(measure_text(text_style, &label, None)?);
+                    piece.extents = Some(engine.measure(text_style, &label, None)?);
                     piece.text = Some(label);
                 }
             }
@@ -222,6 +243,7 @@ pub fn compute_status_hud_layout(
     widen_narrow_segments(&mut segments, pill_x, measurement.pill_width);
 
     let badges = layout_mode_badges(
+        engine,
         input_state,
         position,
         pill_x,

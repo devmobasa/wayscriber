@@ -37,6 +37,26 @@ pub fn render_status_bar_with_theme(
     screen_width: u32,
     screen_height: u32,
 ) {
+    render_status_bar_with_resources(
+        &UiTextEngine::default(),
+        ctx,
+        theme,
+        input_state,
+        style,
+        screen_width,
+        screen_height,
+    );
+}
+
+pub(crate) fn render_status_bar_with_resources(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    theme: &theme::Theme,
+    input_state: &InputState,
+    style: &crate::config::StatusBarStyle,
+    screen_width: u32,
+    screen_height: u32,
+) {
     let Some(layout) = input_state.status_hud_layout() else {
         return;
     };
@@ -98,7 +118,7 @@ pub fn render_status_bar_with_theme(
     if let Some(prefix) = &layout.prefix {
         // Center the (possibly wrapped) prefix block within the pill so a
         // second line never spills past the background.
-        let pango = text_layout(ctx, text_style, &prefix.text, Some(prefix.wrap_budget));
+        let pango = engine.layout(ctx, text_style, &prefix.text, Some(prefix.wrap_budget));
         let baseline =
             layout.pill_y + (layout.pill_height - prefix.height) / 2.0 - prefix.y_bearing;
         ctx.set_source_rgba(r, g, b, a);
@@ -111,12 +131,12 @@ pub fn render_status_bar_with_theme(
         match run {
             StatusHudRun::Text { text, x, accent } => {
                 ctx.set_source_rgba(r, g, b, a);
-                text_layout(ctx, text_style, text, None).show_at_baseline(
+                engine.layout(ctx, text_style, text, None).show_at_baseline(
                     ctx,
                     *x,
                     layout.line_baseline,
                 );
-                if *accent && let Some(extents) = measure_text(text_style, text, None) {
+                if *accent && let Some(extents) = engine.measure(text_style, text, None) {
                     // Underline the actionable hint run so it reads as
                     // clickable against the informational runs. Follows the
                     // palette text color, so it holds up on any board
@@ -144,7 +164,8 @@ pub fn render_status_bar_with_theme(
     let _ = ctx.restore();
 
     for badge in &layout.badges {
-        draw_badge(
+        draw_badge_with_engine(
+            engine,
             ctx,
             badge.x,
             badge.y,
