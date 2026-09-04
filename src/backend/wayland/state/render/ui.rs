@@ -195,30 +195,30 @@ impl WaylandState {
     ) {
         if !capture_picker && self.input_state.help_overlay.is_visible() {
             let bindings = crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);
-            let (theme, caches) = self.render.ui_parts_mut();
-            let mut render = crate::ui::UiRenderCtx {
-                cairo: ctx,
-                theme,
-                caches,
+            let result = {
+                let (theme, caches) = self.render.ui_parts_mut();
+                let mut render = crate::ui::UiRenderCtx {
+                    cairo: ctx,
+                    theme,
+                    caches,
+                };
+                crate::ui::render_help_overlay_result_with_context(
+                    &mut render,
+                    &self.config.ui.help_overlay_style,
+                    width,
+                    height,
+                    self.frozen.enabled(),
+                    self.input_state.help_overlay.page(),
+                    &bindings,
+                    self.input_state.help_overlay.query(),
+                    self.config.ui.help_overlay_context_filter,
+                    self.input_state.boards.board_count() > 1,
+                    self.config.capture.enabled,
+                    self.input_state.help_overlay.scroll(),
+                    self.input_state.help_overlay.is_quick_mode(),
+                )
             };
-            let scroll_max = crate::ui::render_help_overlay_with_context(
-                &mut render,
-                &self.config.ui.help_overlay_style,
-                width,
-                height,
-                self.frozen.enabled(),
-                self.input_state.help_overlay.page(),
-                &bindings,
-                self.input_state.help_overlay.query(),
-                self.config.ui.help_overlay_context_filter,
-                self.input_state.boards.board_count() > 1,
-                self.config.capture.enabled,
-                self.input_state.help_overlay.scroll(),
-                self.input_state.help_overlay.is_quick_mode(),
-            );
-            self.input_state
-                .help_overlay
-                .update_scroll_extent(scroll_max);
+            self.input_state.help_overlay.install_render_result(result);
         }
         if !capture_picker && self.input_state.is_board_picker_open() {
             self.input_state

@@ -17,4 +17,4 @@ pub use render::{
 pub use sections::HelpOverlayBindings;
 
 pub(in crate::ui) use render::HelpLayoutCache;
-pub(crate) use render::render_help_overlay_with_context;
+pub(crate) use render::render_help_overlay_result_with_context;

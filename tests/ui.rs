@@ -331,6 +331,14 @@ fn help_result_owns_rendered_footer_hits_and_preserves_legacy_paint_pixels() {
         );
     }
 
+    let mut interactive = make_input_state();
+    interactive.install_help_overlay_render_result(result.clone());
+    let (about_x, about_y) = about.unwrap();
+    assert_eq!(
+        interactive.help_overlay_click_at(about_x, about_y),
+        wayscriber::input::state::HelpOverlayClick::Run(Action::OpenAbout),
+    );
+
     let (mut legacy_surface, ctx) = surface_with_context(1400, 1000);
     let scroll = wayscriber::ui::render_help_overlay(
         &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,

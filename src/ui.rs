@@ -43,7 +43,7 @@ pub use font_picker::render_font_picker;
 pub use help_overlay::HelpOverlayBindings;
 #[cfg(test)]
 pub use help_overlay::install_help_hit_map_for_test;
-pub(crate) use help_overlay::render_help_overlay_with_context;
+pub(crate) use help_overlay::render_help_overlay_result_with_context;
 #[allow(unused_imports)]
 pub use help_overlay::{
     HelpHitMap, HelpOverlayRegion, HelpRenderResult, clear_help_overlay_hit_map,
