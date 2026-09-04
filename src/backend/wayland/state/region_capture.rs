@@ -18,6 +18,7 @@ mod picker;
 mod render;
 mod review_state;
 mod runtime;
+pub(in crate::backend::wayland) use runtime::RegionCaptureRuntime;
 mod selection_state;
 mod source_guard;
 mod window_snap;

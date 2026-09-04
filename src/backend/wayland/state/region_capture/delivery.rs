@@ -119,7 +119,8 @@ impl WaylandState {
             return false;
         };
         let cuts = self
-            .region_review_edits()
+            .region_capture
+            .review_edits()
             .map(|edits| edits.cuts.clone())
             .unwrap_or_default();
         if !self.preview_permits_submit(&cuts) {
@@ -163,7 +164,8 @@ impl WaylandState {
     fn preview_permits_submit(&self, cuts: &[crate::capture::CutBand]) -> bool {
         cuts.is_empty()
             || self
-                .region_review_edits()
+                .region_capture
+                .review_edits()
                 .is_some_and(super::cut_review::RegionReviewEdits::preview_is_current)
     }
 
@@ -176,7 +178,7 @@ impl WaylandState {
         if !limits.allows_pixels(output.0, output.1) {
             return Err(BoardSubmitError::TooLarge);
         }
-        let Some(ActiveScreenRegion::Ready { source, .. }) = self.data.active_screen_region else {
+        let Some(ActiveScreenRegion::Ready { source, .. }) = self.region_capture.active() else {
             return Err(BoardSubmitError::Unplaceable);
         };
         let Some(source_world) =
@@ -220,7 +222,7 @@ impl WaylandState {
         {
             return;
         }
-        self.clear_region_window_snap();
+        self.region_capture.clear_window_snap();
         self.retire_region_selection_owner(self.input_state.region_state().selection_owner());
         match purpose {
             RegionPurposeTag::CaptureInteractive => {
@@ -254,7 +256,7 @@ impl WaylandState {
             purpose,
             include_drawings,
             ..
-        }) = self.data.active_screen_region
+        }) = self.region_capture.active()
         else {
             self.cancel_region_capture_ui_and_lifecycle();
             return;
@@ -279,13 +281,13 @@ impl WaylandState {
             }
         };
         if !cuts.is_empty() {
-            let fingerprint_ok = self.region_review_edits().is_some_and(|edits| {
+            let fingerprint_ok = self.region_capture.review_edits().is_some_and(|edits| {
                 edits.ready_preview.as_ref().is_some_and(|preview| {
                     preview.key.fingerprint == snapshot.fingerprint && preview.key.cuts == cuts
                 })
             });
             if !fingerprint_ok {
-                if let Some(edits) = self.region_review_edits_mut() {
+                if let Some(edits) = self.region_capture.review_edits_mut() {
                     edits.invalidate_base(snapshot.fingerprint);
                 }
                 self.schedule_region_cut_preview();

@@ -170,7 +170,7 @@ impl WaylandState {
         self.unlock_pointer();
         self.retire_stylus_contact();
 
-        let generation = self.next_screen_region_generation();
+        let generation = self.region_capture.next_generation();
         let has_source = displayed_screen_image(
             &self.zoom,
             &self.frozen,
@@ -264,7 +264,7 @@ impl WaylandState {
         source: ScreenCaptureSource,
         installed_generation: u64,
     ) -> bool {
-        let Some(region) = self.data.active_screen_region else {
+        let Some(region) = self.region_capture.active() else {
             return false;
         };
         if !region.purpose().is_capture() {
@@ -307,7 +307,7 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn cancel_region_capture(&mut self) -> bool {
-        let Some(region) = self.data.active_screen_region else {
+        let Some(region) = self.region_capture.active() else {
             let reserved = self.capture.active_region_action().is_some();
             if reserved {
                 self.clear_zoom_waiter_for(ZoomWaiterOwner::RegionCapture);
@@ -335,8 +335,8 @@ impl WaylandState {
     /// XDG restoration and unfreeze happen exactly once.
     pub(in crate::backend::wayland) fn cancel_region_capture_for_teardown(&mut self) {
         let ui_owns_region = self
-            .data
-            .active_screen_region
+            .region_capture
+            .active()
             .is_some_and(|region| region.purpose().is_capture());
         if ui_owns_region || self.capture.active_region_action().is_some() {
             self.cancel_region_capture();

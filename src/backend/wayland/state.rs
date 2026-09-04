@@ -194,22 +194,8 @@ pub(super) struct WaylandState {
     /// Desktop-open work completes off-dispatch; successful completion is what
     /// requests overlay exit, so runtime-owned broker teardown cannot race it.
     pub(super) desktop_open: RuntimeOperationController<DesktopOpenRequest, Result<(), String>>,
-    /// Capacity-one compositor window query for the current native region picker.
-    /// Its context owns the picker/source correlation, so stale workers cannot
-    /// mutate a later picker generation.
-    pub(super) window_query: RuntimeOperationController<
-        region_capture::WindowSnapQuery,
-        Result<
-            crate::capture::window_geometry::WindowQueryResult,
-            crate::capture::window_geometry::WindowGeometryError,
-        >,
-    >,
-    /// Capacity-one Review cut preview. Independent of capture delivery so a
-    /// replaceable preview cannot occupy the capture reservation slot.
-    pub(super) region_cut_preview: RuntimeOperationController<
-        region_capture::CutPreviewKey,
-        region_capture::CutPreviewOutcome,
-    >,
+    /// Region picker state, window-query work, and replaceable cut previews.
+    pub(super) region_capture: region_capture::RegionCaptureRuntime,
     /// Capacity-one screen text recognition. A busy controller reports
     /// busy rather than queuing a region the user has moved on from.
     pub(super) ocr: crate::ocr::OcrController,

@@ -97,10 +97,10 @@ impl WaylandState {
         );
         let desktop_open =
             RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
-        let window_query =
-            RuntimeOperationController::new(runtime_operation_ids.clone(), runtime_wake.clone());
-        let region_cut_preview =
-            RuntimeOperationController::new(runtime_operation_ids, runtime_wake.clone());
+        let region_capture = super::super::region_capture::RegionCaptureRuntime::new(
+            runtime_operation_ids,
+            runtime_wake.clone(),
+        );
         let ocr = crate::ocr::OcrController::new(runtime_wake.clone());
         let preferences = super::super::preference_stores::PreferenceStores::new(
             onboarding,
@@ -127,8 +127,7 @@ impl WaylandState {
             font_catalog,
             clipboard,
             desktop_open,
-            window_query,
-            region_cut_preview,
+            region_capture,
             ocr,
             gtk_toolbar: None,
             ui_animation,

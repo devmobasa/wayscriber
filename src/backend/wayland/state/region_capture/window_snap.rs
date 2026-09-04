@@ -317,25 +317,22 @@ fn output_logical_to_image_point(
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn region_window_snap_available(&self) -> bool {
-        self.data
-            .window_snap
-            .as_ref()
+        self.region_capture
+            .window_snap()
             .is_some_and(WindowSnapSession::is_ready)
     }
 
     pub(in crate::backend::wayland) fn region_window_snap_active(&self) -> bool {
-        self.data
-            .window_snap
-            .as_ref()
+        self.region_capture
+            .window_snap()
             .is_some_and(WindowSnapSession::mode_active)
     }
 
     pub(in crate::backend::wayland) fn region_window_snap_display_selections(
         &self,
     ) -> &[RegionSelection] {
-        self.data
-            .window_snap
-            .as_ref()
+        self.region_capture
+            .window_snap()
             .map(WindowSnapSession::display_selections)
             .unwrap_or_default()
     }
@@ -343,9 +340,8 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn region_window_snap_highlighted_index(
         &self,
     ) -> Option<usize> {
-        self.data
-            .window_snap
-            .as_ref()
+        self.region_capture
+            .window_snap()
             .and_then(WindowSnapSession::hovered_index)
     }
 
@@ -360,16 +356,15 @@ impl WaylandState {
         }
         let owner = ui.selection_owner();
         let toggled = self
-            .data
-            .window_snap
-            .as_mut()
+            .region_capture
+            .window_snap_mut()
             .is_some_and(WindowSnapSession::toggle_mode);
         if !toggled {
             return false;
         }
         if owner.is_some() {
             super::events::rearm_region_selection_event(
-                &mut self.data.active_screen_region,
+                self.region_capture.active_slot_mut(),
                 &mut self.input_state,
             );
             self.retire_region_selection_owner(owner);
@@ -386,9 +381,8 @@ impl WaylandState {
         self.cancel_screen_modals_if_source_changed();
         let pointer = self.current_region_pointer();
         let changed = self
-            .data
-            .window_snap
-            .as_mut()
+            .region_capture
+            .window_snap_mut()
             .is_some_and(|session| session.navigate(direction, pointer));
         if changed {
             self.mark_region_window_snap_dirty();
@@ -417,9 +411,8 @@ impl WaylandState {
             return false;
         }
         let changed = self
-            .data
-            .window_snap
-            .as_mut()
+            .region_capture
+            .window_snap_mut()
             .is_some_and(|session| session.update_hover(point));
         if changed {
             self.mark_region_window_snap_dirty();
@@ -436,23 +429,22 @@ impl WaylandState {
             self.update_region_window_hover(point);
         }
         let Some(rect) = self
-            .data
-            .window_snap
-            .as_ref()
+            .region_capture
+            .window_snap()
             .and_then(WindowSnapSession::hovered_target)
             .map(WindowSnapTarget::image_rect)
         else {
             return false;
         };
         let Some(purpose) = self
-            .data
-            .active_screen_region
+            .region_capture
+            .active()
             .map(|region| region.purpose())
             .filter(|purpose| purpose.is_capture())
         else {
             return false;
         };
-        self.clear_region_window_snap();
+        self.region_capture.clear_window_snap();
         self.retire_region_selection_owner(owner);
         if purpose == RegionPurposeTag::CaptureInteractive {
             self.enter_region_review(rect)
@@ -463,9 +455,8 @@ impl WaylandState {
     }
 
     pub(super) fn highlighted_region_window_rect(&self) -> Option<ImagePixelRect> {
-        self.data
-            .window_snap
-            .as_ref()
+        self.region_capture
+            .window_snap()
             .filter(|session| session.mode_active())
             .and_then(WindowSnapSession::hovered_target)
             .map(WindowSnapTarget::image_rect)

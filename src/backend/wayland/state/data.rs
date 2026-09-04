@@ -3,7 +3,6 @@ use std::time::Instant;
 use crate::backend::wayland::acquisition::ScreenAcquisitionRegistry;
 use crate::backend::wayland::zoom::ZoomWaiterRegistry;
 
-use super::region_capture::{ActiveScreenRegion, WindowSnapSession};
 use super::screen_image::ScreenSourceToken;
 
 use super::capture::OverlayCaptureBarrier;
@@ -84,10 +83,6 @@ pub struct StateData {
     pub(super) screen_acquisition: ScreenAcquisitionRegistry,
     pub(super) zoom_waiter: ZoomWaiterRegistry,
     pub(super) active_eyedropper_source: Option<ScreenSourceToken>,
-    pub(super) active_screen_region: Option<ActiveScreenRegion>,
-    pub(super) window_snap: Option<WindowSnapSession>,
-    pub(super) region_review_edits: Option<super::region_capture::RegionReviewEdits>,
-    pub(super) next_screen_region_generation: u64,
     pub(super) frozen_enabled: bool,
     pub(super) preferred_output_identity: Option<String>,
     pub(super) xdg_fullscreen: bool,
@@ -130,10 +125,6 @@ impl StateData {
             screen_acquisition: ScreenAcquisitionRegistry::default(),
             zoom_waiter: ZoomWaiterRegistry::default(),
             active_eyedropper_source: None,
-            active_screen_region: None,
-            window_snap: None,
-            region_review_edits: None,
-            next_screen_region_generation: 1,
             frozen_enabled: false,
             preferred_output_identity: None,
             xdg_fullscreen: false,

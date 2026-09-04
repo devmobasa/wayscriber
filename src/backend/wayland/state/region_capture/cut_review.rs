@@ -597,28 +597,22 @@ fn apply_cut_history_change(
 }
 
 impl WaylandState {
-    pub(super) fn region_review_edits(&self) -> Option<&RegionReviewEdits> {
-        self.data.region_review_edits.as_ref()
-    }
-
-    pub(super) fn region_review_edits_mut(&mut self) -> Option<&mut RegionReviewEdits> {
-        self.data.region_review_edits.as_mut()
-    }
-
     pub(in crate::backend::wayland) fn region_review_crop_locked(&self) -> bool {
-        self.region_review_edits()
+        self.region_capture
+            .review_edits()
             .is_some_and(RegionReviewEdits::crop_locked)
     }
 
     pub(in crate::backend::wayland) fn region_review_loupe_suppressed(&self) -> bool {
-        self.region_review_edits()
+        self.region_capture
+            .review_edits()
             .is_some_and(RegionReviewEdits::loupe_suppressed)
     }
 
     pub(in crate::backend::wayland) fn region_cut_displayed_selection(
         &self,
     ) -> Option<RegionSelection> {
-        let edits = self.region_review_edits()?;
+        let edits = self.region_capture.review_edits()?;
         if let Some(preview) = &edits.ready_preview {
             return Some(preview.display);
         }
@@ -627,24 +621,26 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn region_cut_availability(&self) -> RegionActionAvailability {
-        self.region_review_edits()
+        self.region_capture
+            .review_edits()
             .map(RegionReviewEdits::availability)
             .unwrap_or_default()
     }
 
     pub(in crate::backend::wayland) fn region_cut_status(&self) -> Option<RegionCutStatus> {
-        self.region_review_edits()
+        self.region_capture
+            .review_edits()
             .and_then(RegionReviewEdits::status)
     }
 
     pub(in crate::backend::wayland) fn region_cut_mode_armed(&self) -> bool {
-        self.region_review_edits()
+        self.region_capture
+            .review_edits()
             .is_some_and(|edits| edits.mode == CutMode::Armed)
     }
 
     pub(super) fn create_region_review_edits(&mut self, rect: ImagePixelRect) {
-        self.data.region_review_edits =
-            review_edits_for_active_region(self.data.active_screen_region, rect);
+        self.region_capture.set_review_edits_for(rect);
     }
 
     pub(super) fn mark_region_cut_ui_dirty(&mut self) {
@@ -676,7 +672,7 @@ impl WaylandState {
     }
 
     fn toggle_region_cut_mode(&mut self) -> bool {
-        let Some(edits) = self.region_review_edits_mut() else {
+        let Some(edits) = self.region_capture.review_edits_mut() else {
             return false;
         };
         let owner = edits.toggle_mode();
@@ -690,7 +686,7 @@ impl WaylandState {
             return false;
         };
         if !apply_cut_history_change(
-            &mut self.data.region_review_edits,
+            self.region_capture.review_edits_slot_mut(),
             &mut self.input_state,
             |edits| edits.undo(fingerprint),
         ) {
@@ -706,7 +702,7 @@ impl WaylandState {
             return false;
         };
         if !apply_cut_history_change(
-            &mut self.data.region_review_edits,
+            self.region_capture.review_edits_slot_mut(),
             &mut self.input_state,
             |edits| edits.redo(fingerprint),
         ) {
@@ -719,7 +715,7 @@ impl WaylandState {
 
     fn reset_region_cuts(&mut self) -> bool {
         if !apply_cut_history_change(
-            &mut self.data.region_review_edits,
+            self.region_capture.review_edits_slot_mut(),
             &mut self.input_state,
             RegionReviewEdits::reset,
         ) {
@@ -740,14 +736,14 @@ impl WaylandState {
         if !display_contains(display, point) {
             return false;
         }
-        let Some(edits) = self.region_review_edits_mut() else {
+        let Some(edits) = self.region_capture.review_edits_mut() else {
             return false;
         };
         if !edits.begin_drag(owner, point) {
             return false;
         }
         if !self.input_state.begin_region_review_move(owner) {
-            if let Some(edits) = self.region_review_edits_mut() {
+            if let Some(edits) = self.region_capture.review_edits_mut() {
                 edits.drag = None;
             }
             return false;
@@ -761,7 +757,7 @@ impl WaylandState {
         owner: RegionInputSource,
         point: (f64, f64),
     ) -> bool {
-        let Some(edits) = self.region_review_edits_mut() else {
+        let Some(edits) = self.region_capture.review_edits_mut() else {
             return false;
         };
         if !edits.update_drag(owner, point) {
@@ -777,7 +773,8 @@ impl WaylandState {
         point: (f64, f64),
     ) -> bool {
         if !self
-            .region_review_edits()
+            .region_capture
+            .review_edits()
             .and_then(|edits| edits.drag)
             .is_some_and(|drag| drag.owner == owner)
         {
@@ -791,7 +788,7 @@ impl WaylandState {
             self.abandon_region_cut_drag(owner);
             return true;
         };
-        let Some(edits) = self.region_review_edits_mut() else {
+        let Some(edits) = self.region_capture.review_edits_mut() else {
             return false;
         };
         let commit = edits.finish_drag(owner, point, display, fingerprint);
@@ -820,7 +817,7 @@ impl WaylandState {
         &mut self,
         owner: RegionInputSource,
     ) -> bool {
-        let Some(edits) = self.region_review_edits_mut() else {
+        let Some(edits) = self.region_capture.review_edits_mut() else {
             return false;
         };
         let Some(drag) = edits.drag else {
@@ -837,9 +834,10 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn handle_region_cut_escape(&mut self) -> bool {
         let owner = self
-            .region_review_edits()
+            .region_capture
+            .review_edits()
             .and_then(|edits| edits.drag.map(|drag| drag.owner));
-        let Some(edits) = self.region_review_edits_mut() else {
+        let Some(edits) = self.region_capture.review_edits_mut() else {
             return false;
         };
         if !edits.disarm_mode() {
@@ -856,7 +854,7 @@ impl WaylandState {
         let Some(rect) = self.region_review_rect() else {
             return;
         };
-        let Some(edits) = self.region_review_edits_mut() else {
+        let Some(edits) = self.region_capture.review_edits_mut() else {
             return;
         };
         if edits.set_source_rect(rect) {
@@ -867,7 +865,8 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn region_cut_preview_pixels(
         &self,
     ) -> Option<&crate::screen_pixels::PackedArgb32> {
-        self.region_review_edits()
+        self.region_capture
+            .review_edits()
             .and_then(|edits| edits.ready_preview.as_ref())
             .map(|preview| preview.pixels.as_ref())
     }
@@ -875,7 +874,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn region_cut_drag_overlay(
         &self,
     ) -> Option<(CutAxis, RegionSelection)> {
-        let edits = self.region_review_edits()?;
+        let edits = self.region_capture.review_edits()?;
         let drag = edits.drag?;
         let axis = drag.axis?;
         let display = self.region_cut_displayed_selection()?;

@@ -202,26 +202,24 @@ impl WaylandState {
                 self.input_state.eyedropper_state().pending_source()
                     == Some(EyedropperCaptureSource::Zoom)
             }
-            ZoomWaiterOwner::Ocr => self.data.active_screen_region.is_some_and(|region| {
+            ZoomWaiterOwner::Ocr => self.region_capture.active().is_some_and(|region| {
                 region.purpose() == crate::input::state::RegionPurposeTag::Ocr
                     && matches!(
                         region,
                         super::region_capture::ActiveScreenRegion::PendingZoom { .. }
                     )
             }),
-            ZoomWaiterOwner::RegionCapture => {
-                self.data.active_screen_region.is_some_and(|region| {
-                    region.purpose().is_capture()
-                        && matches!(
-                            region,
-                            super::region_capture::ActiveScreenRegion::PendingZoom { .. }
-                        )
-                        && matches!(
-                            self.capture.region_phase(),
-                            crate::backend::wayland::capture::RegionCapturePhase::Reserved(_)
-                        )
-                })
-            }
+            ZoomWaiterOwner::RegionCapture => self.region_capture.active().is_some_and(|region| {
+                region.purpose().is_capture()
+                    && matches!(
+                        region,
+                        super::region_capture::ActiveScreenRegion::PendingZoom { .. }
+                    )
+                    && matches!(
+                        self.capture.region_phase(),
+                        crate::backend::wayland::capture::RegionCapturePhase::Reserved(_)
+                    )
+            }),
         };
         if !waiting {
             return false;
@@ -316,12 +314,12 @@ impl WaylandState {
                 self.input_state.eyedropper_state().pending_source()
                     == Some(EyedropperCaptureSource::Frozen)
             }
-            ScreenAcquisitionOwner::Ocr => self.data.active_screen_region.is_some_and(|region| {
+            ScreenAcquisitionOwner::Ocr => self.region_capture.active().is_some_and(|region| {
                 region.purpose() == crate::input::state::RegionPurposeTag::Ocr
                     && region.waits_for_acquisition(completion.id)
             }),
             ScreenAcquisitionOwner::RegionCapture => {
-                self.data.active_screen_region.is_some_and(|region| {
+                self.region_capture.active().is_some_and(|region| {
                     region.purpose().is_capture()
                         && region.waits_for_acquisition(completion.id)
                         && matches!(
