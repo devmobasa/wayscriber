@@ -142,6 +142,6 @@ impl WaylandState {
         self.force_sync_overlay_interactivity();
         self.buffer_damage
             .mark_all_full(FullDamageReason::LayerSurfaceRecreated);
-        self.set_toolbar_needs_recreate(true);
+        self.toolbar_chrome.set_needs_recreate(true);
     }
 }

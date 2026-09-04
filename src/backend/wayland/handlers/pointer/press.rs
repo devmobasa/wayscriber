@@ -79,7 +79,7 @@ impl WaylandState {
         if on_toolbar {
             self.handle_toolbar_pointer_press(conn, qh, event, button);
             return;
-        } else if self.pointer_over_toolbar() {
+        } else if self.toolbar_chrome.pointer_over_toolbar() {
             self.finish_toolbar_item_drag(false);
             self.set_toolbar_dragging(false);
             return;
@@ -139,7 +139,7 @@ impl WaylandState {
         if !self.input_state.region_is_active() {
             return false;
         }
-        if on_toolbar || self.pointer_over_toolbar() {
+        if on_toolbar || self.toolbar_chrome.pointer_over_toolbar() {
             // A toolbar interaction ends the region first, then runs normally;
             // the click never lands on the selector.
             self.cancel_region_for_toolbar_interaction();
@@ -180,7 +180,7 @@ impl WaylandState {
         if !self.input_state.eyedropper_is_active() {
             return false;
         }
-        if on_toolbar || self.pointer_over_toolbar() {
+        if on_toolbar || self.toolbar_chrome.pointer_over_toolbar() {
             self.cancel_eyedropper();
             return false;
         }
@@ -273,7 +273,7 @@ impl WaylandState {
             }
             return true;
         }
-        if !self.pointer_over_toolbar() {
+        if !self.toolbar_chrome.pointer_over_toolbar() {
             return false;
         }
         if button == BTN_LEFT {
@@ -329,7 +329,7 @@ impl WaylandState {
             drag,
             surface_id(&event.surface),
             self.focus.current_seat_id(),
-            self.inline_toolbars_active()
+            self.toolbar_chrome.inline_toolbars()
         );
         self.set_toolbar_dragging(drag);
         self.handle_toolbar_event(toolbar_event, Some(conn), Some(qh));
@@ -424,7 +424,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn dismiss_top_toolbar_menus(&mut self) -> bool {
         let changed = self.input_state.close_top_toolbar_menus();
         if changed {
-            if self.inline_toolbars_active() {
+            if self.toolbar_chrome.inline_toolbars() {
                 self.mark_inline_toolbar_full_damage();
             } else {
                 self.toolbar.mark_dirty();

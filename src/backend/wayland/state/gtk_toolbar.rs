@@ -142,12 +142,8 @@ impl WaylandState {
                             == Some(crate::toolbar_gtk::GtkToolbarKind::Top) =>
                     {
                         self.data.gtk_top_drag_rebase = None;
-                        self.apply_gtk_top_offset(
-                            self.data.toolbar_top_offset,
-                            self.data.toolbar_top_offset_y,
-                            surface_size,
-                            phase,
-                        );
+                        let offset = self.toolbar_chrome.top_offset();
+                        self.apply_gtk_top_offset(offset.0, offset.1, surface_size, phase);
                     }
                     _ => {}
                 }
@@ -183,7 +179,7 @@ impl WaylandState {
                     }
                 }
                 GtkToolbarFeedback::TopHover { hovered } => {
-                    self.data.gtk_top_hover = hovered;
+                    self.toolbar_chrome.set_gtk_top_hover(hovered);
                 }
                 GtkToolbarFeedback::SetTopOffset {
                     x,
@@ -209,7 +205,7 @@ impl WaylandState {
         if failed {
             self.cancel_overlay_capture_waiting_for_gtk();
             self.cancel_gtk_toolbar_drag_lifecycle();
-            self.data.gtk_top_hover = false;
+            self.toolbar_chrome.set_gtk_top_hover(false);
             self.gtk_toolbar = None;
         }
     }
@@ -233,7 +229,7 @@ impl WaylandState {
                 unmap_suppressed,
                 capture_picker_suppressed,
             ),
-            top_offset: (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y),
+            top_offset: self.toolbar_chrome.top_offset(),
             top_offset_seq: self.data.gtk_top_offset_seq,
             top_base_x: self.gtk_top_base_x(),
             output_name: self

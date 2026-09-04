@@ -20,10 +20,13 @@ impl WaylandState {
         if self.toolbar.is_focusable_surface(surface) {
             return true;
         }
-        self.inline_toolbars_active()
-            && self.data.inline_top_rect.is_some_and(|(x, y, w, h)| {
-                geometry::point_in_rect(position.0, position.1, x, y, w, h)
-            })
+        self.toolbar_chrome.inline_toolbars()
+            && self
+                .toolbar_chrome
+                .inline_rect()
+                .is_some_and(|(x, y, w, h)| {
+                    geometry::point_in_rect(position.0, position.1, x, y, w, h)
+                })
     }
 
     /// Scrolls the open Canvas/Session/Settings popover by wheel notches when its

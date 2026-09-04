@@ -13,7 +13,7 @@ impl WaylandState {
             }
             if toolbar_drag_preview_enabled()
                 && self.protocol.layer_shell().is_some()
-                && !self.inline_toolbars_active()
+                && !self.toolbar_chrome.inline_toolbars()
                 && !self.toolbar_drag_preview_active()
             {
                 drag_log(|| "enable inline drag preview (layer-shell toolbars hidden)");
@@ -37,7 +37,7 @@ impl WaylandState {
                     coord.0,
                     coord.1,
                     coord_is_screen,
-                    self.inline_toolbars_active(),
+                    self.toolbar_chrome.inline_toolbars(),
                     self.protocol.layer_shell().is_some()
                 )
             });
@@ -59,8 +59,8 @@ impl WaylandState {
                     kind,
                     top_base_x,
                     top_base_y,
-                    self.data.toolbar_top_offset,
-                    self.data.toolbar_top_offset_y,
+                    self.toolbar_chrome.top_offset().0,
+                    self.toolbar_chrome.top_offset().1,
                     self.surface.width(),
                     self.surface.height(),
                     self.surface.scale()
@@ -112,8 +112,8 @@ impl WaylandState {
                 kind,
                 local_coord.0,
                 local_coord.1,
-                self.data.toolbar_top_offset,
-                self.data.toolbar_top_offset_y
+                self.toolbar_chrome.top_offset().0,
+                self.toolbar_chrome.top_offset().1
             )
         });
         // For layer-shell surfaces, use local coordinates directly since they're
@@ -152,8 +152,7 @@ impl WaylandState {
 
             match kind {
                 MoveDragKind::Top => {
-                    self.data.toolbar_top_offset += delta.0;
-                    self.data.toolbar_top_offset_y += delta.1;
+                    self.toolbar_chrome.add_top_offset(delta);
                 }
             }
 
@@ -174,7 +173,7 @@ impl WaylandState {
                 self.input_state.needs_redraw = true;
             }
             if self.protocol.layer_shell().is_none() || inline_render_active {
-                self.clear_inline_toolbar_hits();
+                self.toolbar_chrome.clear_inline_hits();
             }
             return;
         }
@@ -211,8 +210,8 @@ impl WaylandState {
                 last_screen.1,
                 delta.0,
                 delta.1,
-                self.data.toolbar_top_offset,
-                self.data.toolbar_top_offset_y
+                self.toolbar_chrome.top_offset().0,
+                self.toolbar_chrome.top_offset().1
             )
         });
         log::debug!(
@@ -226,8 +225,8 @@ impl WaylandState {
             last_screen.1,
             delta.0,
             delta.1,
-            self.data.toolbar_top_offset,
-            self.data.toolbar_top_offset_y
+            self.toolbar_chrome.top_offset().0,
+            self.toolbar_chrome.top_offset().1
         );
         if delta.0 == 0.0 && delta.1 == 0.0 {
             self.data.toolbar_move_drag = Some(MoveDrag {
@@ -240,20 +239,21 @@ impl WaylandState {
 
         match kind {
             MoveDragKind::Top => {
-                self.data.toolbar_top_offset += delta.0;
-                self.data.toolbar_top_offset_y += delta.1;
+                self.toolbar_chrome.add_top_offset(delta);
             }
         }
         drag_log(|| {
             format!(
                 "move_local applied: kind={:?}, offsets_after=({}, {})",
-                kind, self.data.toolbar_top_offset, self.data.toolbar_top_offset_y
+                kind,
+                self.toolbar_chrome.top_offset().0,
+                self.toolbar_chrome.top_offset().1
             )
         });
         log::debug!(
             "After update offsets: top=({}, {})",
-            self.data.toolbar_top_offset,
-            self.data.toolbar_top_offset_y
+            self.toolbar_chrome.top_offset().0,
+            self.toolbar_chrome.top_offset().1
         );
 
         self.data.toolbar_move_drag = Some(MoveDrag {
@@ -269,7 +269,7 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
         }
         if self.protocol.layer_shell().is_none() || inline_render_active {
-            self.clear_inline_toolbar_hits();
+            self.toolbar_chrome.clear_inline_hits();
         }
     }
 
@@ -307,8 +307,8 @@ impl WaylandState {
                 kind,
                 screen_coord.0,
                 screen_coord.1,
-                self.data.toolbar_top_offset,
-                self.data.toolbar_top_offset_y
+                self.toolbar_chrome.top_offset().0,
+                self.toolbar_chrome.top_offset().1
             )
         });
         let snapshot = self
@@ -345,8 +345,8 @@ impl WaylandState {
                 last_screen_coord.1,
                 delta.0,
                 delta.1,
-                self.data.toolbar_top_offset,
-                self.data.toolbar_top_offset_y
+                self.toolbar_chrome.top_offset().0,
+                self.toolbar_chrome.top_offset().1
             )
         });
         log::debug!(
@@ -358,8 +358,8 @@ impl WaylandState {
             last_screen_coord.1,
             delta.0,
             delta.1,
-            self.data.toolbar_top_offset,
-            self.data.toolbar_top_offset_y
+            self.toolbar_chrome.top_offset().0,
+            self.toolbar_chrome.top_offset().1
         );
         if delta.0 == 0.0 && delta.1 == 0.0 {
             self.data.toolbar_move_drag = Some(MoveDrag {
@@ -371,14 +371,15 @@ impl WaylandState {
         }
         match kind {
             MoveDragKind::Top => {
-                self.data.toolbar_top_offset += delta.0;
-                self.data.toolbar_top_offset_y += delta.1;
+                self.toolbar_chrome.add_top_offset(delta);
             }
         }
         drag_log(|| {
             format!(
                 "move_screen applied: kind={:?}, offsets_after=({}, {})",
-                kind, self.data.toolbar_top_offset, self.data.toolbar_top_offset_y
+                kind,
+                self.toolbar_chrome.top_offset().0,
+                self.toolbar_chrome.top_offset().1
             )
         });
 
@@ -396,7 +397,7 @@ impl WaylandState {
         }
         if self.protocol.layer_shell().is_none() || inline_render_active {
             // Inline mode uses cached rects, so force a relayout.
-            self.clear_inline_toolbar_hits();
+            self.toolbar_chrome.clear_inline_hits();
         }
     }
 }

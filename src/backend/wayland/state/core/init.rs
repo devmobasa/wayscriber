@@ -49,7 +49,7 @@ impl WaylandState {
         data.xdg_fullscreen = xdg_fullscreen;
         data.main_surface_uses_overlay_layer = main_surface_uses_overlay_layer;
         let force_inline_toolbars = force_inline_toolbars_requested(&config);
-        data.inline_toolbars = globals.layer_shell().is_none()
+        let inline_toolbars = globals.layer_shell().is_none()
             || force_inline_toolbars
             || main_surface_uses_overlay_layer;
         if force_inline_toolbars {
@@ -72,12 +72,12 @@ impl WaylandState {
         if let Some(runtime_ui) = runtime_ui.as_ref() {
             runtime_ui.apply_startup_positions(&mut positions);
         }
-        data.toolbar_top_offset = positions.top.0;
-        data.toolbar_top_offset_y = positions.top.1;
+        let toolbar_chrome =
+            super::super::toolbar::ToolbarChrome::new(inline_toolbars, positions.top);
         drag_log(|| {
             format!(
                 "load offsets from config seeds and runtime overrides: top_offset=({}, {})",
-                data.toolbar_top_offset, data.toolbar_top_offset_y
+                positions.top.0, positions.top.1
             )
         });
         let zoom_manager = screencopy_manager.clone();
@@ -114,6 +114,7 @@ impl WaylandState {
             protocol: globals,
             surface: SurfaceState::new(),
             toolbar: ToolbarSurfaceManager::new(),
+            toolbar_chrome,
             data,
             focus: super::super::focus::FocusState::new(startup_activation_token),
             buffer_damage: BufferDamageTracker::new(buffer_count),

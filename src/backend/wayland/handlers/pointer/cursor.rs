@@ -112,7 +112,10 @@ impl WaylandState {
         conn: &Connection,
     ) {
         if modal_before || self.input_state.screen_modal_is_active() {
-            self.update_pointer_cursor(on_toolbar || self.pointer_over_toolbar(), conn);
+            self.update_pointer_cursor(
+                on_toolbar || self.toolbar_chrome.pointer_over_toolbar(),
+                conn,
+            );
         }
     }
 
@@ -240,8 +243,8 @@ impl WaylandState {
         }
 
         // Inline toolbar cursor hints (when using inline mode)
-        if self.inline_toolbars_active()
-            && self.pointer_over_toolbar()
+        if self.toolbar_chrome.inline_toolbars()
+            && self.toolbar_chrome.pointer_over_toolbar()
             && let Some(hint) = self.inline_toolbar_cursor_hint()
         {
             return match hint {

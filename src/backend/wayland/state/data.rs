@@ -1,7 +1,6 @@
 use std::time::Instant;
 
 use crate::backend::wayland::acquisition::ScreenAcquisitionRegistry;
-use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::zoom::ZoomWaiterRegistry;
 
 use super::region_capture::{ActiveScreenRegion, WindowSnapSession};
@@ -88,24 +87,8 @@ pub struct MoveDrag {
 /// Focus/pointer/toolbar interaction data owned by WaylandState and shared with handlers.
 #[derive(Debug, Default)]
 pub struct StateData {
-    pub(super) pointer_over_toolbar: bool,
     pub(super) toolbar_dragging: bool,
     pub(super) toolbar_drag_preview: bool,
-    pub(super) toolbar_needs_recreate: bool,
-    pub(super) toolbar_layer_shell_missing_logged: bool,
-    pub(super) inline_toolbars: bool,
-    pub(super) inline_top_hits: Vec<HitRegion>,
-    pub(super) inline_top_rect: Option<(f64, f64, f64, f64)>,
-    pub(super) inline_top_hover: Option<(f64, f64)>,
-    pub(super) inline_top_hover_start: Option<Instant>,
-    pub(super) inline_top_tooltip_pending: bool,
-    pub(super) inline_top_focus_index: Option<usize>,
-    pub(super) inline_top_focus_id: Option<String>,
-    /// True while keyboard focus is routed into the top toolbar.
-    pub(super) toolbar_focus_active: bool,
-    pub(super) toolbar_top_offset: f64,
-    pub(super) toolbar_top_offset_y: f64,
-    pub(super) toolbar_configure_miss_count: u32,
     /// Highest GTK drag sequence numbers drained per bar; echoed in
     /// updates so the GTK side can discard stale offset mirrors.
     pub(super) gtk_top_offset_seq: u64,
@@ -119,11 +102,6 @@ pub struct StateData {
     /// A GTK drag that emitted feedback while a modal was engaged stays
     /// blocked until its matching drag-end feedback arrives.
     pub(super) gtk_top_drag_blocked: bool,
-    /// Pointer is over the GTK top toolbar window (reported via feedback;
-    /// GTK runs on its own connection). Restores the top-strip idle fade.
-    pub(super) gtk_top_hover: bool,
-    pub(super) last_applied_top_margin: Option<i32>,
-    pub(super) last_applied_top_margin_top: Option<i32>,
     pub(super) toolbar_move_drag: Option<MoveDrag>,
     pub(super) active_drag_kind: Option<MoveDragKind>,
     pub(super) drag_top_base_x: Option<f64>,
@@ -169,9 +147,6 @@ pub struct StateData {
     pub(super) prev_ocr_scan_damage: Option<crate::util::Rect>,
     /// Previous-frame strips for Measure Mode's crosshair, frame, and readout.
     pub(super) prev_measure_picker_damage: Vec<crate::util::Rect>,
-    /// Idle-fade engine for the top-strip islands; its value is published
-    /// on every toolbar snapshot as `top_fade`.
-    pub(super) top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade,
     /// Per-session shortcut-coach accumulator (slow-path streak, cooldown, and
     /// per-session cap). Session-only; the across-session cap and learned
     /// suppression live in the persisted onboarding state.
@@ -181,30 +156,12 @@ pub struct StateData {
 impl StateData {
     pub fn new() -> Self {
         Self {
-            pointer_over_toolbar: false,
             toolbar_dragging: false,
             toolbar_drag_preview: false,
-            toolbar_needs_recreate: true,
-            toolbar_layer_shell_missing_logged: false,
-            inline_toolbars: false,
-            inline_top_hits: Vec::new(),
-            inline_top_rect: None,
-            inline_top_hover: None,
-            inline_top_hover_start: None,
-            inline_top_tooltip_pending: false,
-            inline_top_focus_index: None,
-            inline_top_focus_id: None,
-            toolbar_focus_active: false,
-            toolbar_top_offset: 0.0,
-            toolbar_top_offset_y: 0.0,
-            toolbar_configure_miss_count: 0,
             gtk_top_offset_seq: 0,
             gtk_drag_preview: None,
             gtk_top_drag_rebase: None,
             gtk_top_drag_blocked: false,
-            gtk_top_hover: false,
-            last_applied_top_margin: None,
-            last_applied_top_margin_top: None,
             toolbar_move_drag: None,
             active_drag_kind: None,
             drag_top_base_x: None,
@@ -245,7 +202,6 @@ impl StateData {
             prev_shape_measure_badge_damage: None,
             prev_ocr_scan_damage: None,
             prev_measure_picker_damage: Vec::new(),
-            top_strip_fade: crate::ui::toolbar::snapshot::fade::TopStripFade::new(),
             shortcut_coach: super::onboarding::ShortcutCoachSession::default(),
         }
     }

@@ -247,9 +247,10 @@ impl WaylandState {
     fn render_precision_entry(&mut self, ctx: &cairo::Context, width: u32, height: u32) {
         let snapshot = self.toolbar_snapshot();
         let (_, top_h) = crate::backend::wayland::toolbar::top_size(&snapshot);
+        let top_offset = self.toolbar_chrome.top_offset();
         let anchor = (
-            self.inline_top_base_x() + self.data.toolbar_top_offset,
-            self.inline_top_base_y() + self.data.toolbar_top_offset_y + top_h as f64 + 8.0,
+            self.inline_top_base_x() + top_offset.0,
+            self.inline_top_base_y() + top_offset.1 + top_h as f64 + 8.0,
         );
         crate::ui::render_precision_entry_popup(ctx, &self.input_state, width, height, anchor);
     }

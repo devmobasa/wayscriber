@@ -50,12 +50,7 @@ use super::{
     overlay_passthrough::set_surface_clickthrough,
     session::SessionState,
     surface::SurfaceState,
-    toolbar::{
-        ToolbarSurfaceManager,
-        hit::{drag_intent_for_hit, intent_for_hit, quick_color_slot_for_hit},
-        layout::top_size,
-        render::render_top_strip,
-    },
+    toolbar::{ToolbarSurfaceManager, layout::top_size, render::render_top_strip},
     toolbar_intent::intent_to_event,
     zoom::ZoomState,
 };
@@ -168,6 +163,7 @@ pub(super) struct WaylandState {
     // Surface and buffer management
     pub(super) surface: SurfaceState,
     pub(super) toolbar: ToolbarSurfaceManager,
+    pub(super) toolbar_chrome: toolbar::ToolbarChrome,
     data: StateData,
     /// Keyboard, pointer, activation, and focus-loss lifecycle.
     pub(super) focus: focus::FocusState,
@@ -281,7 +277,6 @@ impl WaylandState {
     const TOP_MARGIN_BOTTOM: f64 = 0.0;
     const INLINE_TOP_Y: f64 = Self::TOP_BASE_MARGIN_TOP;
     const INLINE_TOP_X: f64 = 24.0;
-    const TOOLBAR_CONFIGURE_FAIL_THRESHOLD: u32 = 180;
     const ZOOM_STEP_KEY: f64 = 1.2;
     const ZOOM_STEP_SCROLL: f64 = 1.1;
     pub(super) const ZOOM_PAN_STEP: f64 = 32.0;

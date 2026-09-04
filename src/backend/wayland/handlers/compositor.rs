@@ -122,7 +122,7 @@ impl CompositorHandler for WaylandState {
         self.focus.note_surface_enter();
         if output_changed {
             // Keep layer-shell toolbars pinned to the monitor that owns the drawing surface.
-            self.set_toolbar_needs_recreate(true);
+            self.toolbar_chrome.set_needs_recreate(true);
         }
         self.refresh_active_output_label();
 

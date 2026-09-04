@@ -36,8 +36,8 @@ impl RelativePointerHandler for WaylandState {
                 event.delta.0,
                 event.delta.1,
                 event.utime,
-                self.toolbar_top_offset(),
-                self.toolbar_top_offset_y()
+                self.toolbar_chrome.top_offset().0,
+                self.toolbar_chrome.top_offset().1
             )
         });
 

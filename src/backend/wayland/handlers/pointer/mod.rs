@@ -25,7 +25,7 @@ impl PointerHandler for WaylandState {
     ) {
         for event in events {
             let on_toolbar = self.toolbar.is_toolbar_surface(&event.surface);
-            let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
+            let inline_active = self.toolbar_chrome.inline_toolbars() && self.toolbar.is_visible();
             if debug_toolbar_drag_logging_enabled() {
                 debug!(
                     "pointer {:?}: seat={:?}, surface={}, on_toolbar={}, inline_active={}, pos=({:.1}, {:.1}), drag_active={}, toolbar_dragging={}, pointer_over_toolbar={}",
@@ -38,7 +38,7 @@ impl PointerHandler for WaylandState {
                     event.position.1,
                     self.is_move_dragging(),
                     self.toolbar_dragging(),
-                    self.pointer_over_toolbar()
+                    self.toolbar_chrome.pointer_over_toolbar()
                 );
             }
             match event.kind {

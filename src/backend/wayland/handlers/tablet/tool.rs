@@ -66,7 +66,7 @@ impl WaylandState {
             || self.input_state.is_board_picker_open()
             || self.input_state.is_properties_panel_open()
             || self.input_state.is_context_menu_open()
-            || (self.inline_toolbars_active() && self.toolbar.is_visible())
+            || (self.toolbar_chrome.inline_toolbars() && self.toolbar.is_visible())
     }
 
     pub(in crate::backend::wayland) fn mark_stylus_hover_cursor_dirty(
@@ -229,7 +229,7 @@ impl WaylandState {
         if self.handle_stylus_region_down() || self.handle_stylus_eyedropper_down() {
             return;
         }
-        if self.inline_toolbars_active()
+        if self.toolbar_chrome.inline_toolbars()
             && self.toolbar.is_visible()
             && self.handle_inline_stylus_down(conn, qh)
         {
@@ -320,7 +320,7 @@ impl WaylandState {
             }
             return;
         }
-        let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
+        let inline_active = self.toolbar_chrome.inline_toolbars() && self.toolbar.is_visible();
         if inline_active && self.tablet.on_toolbar {
             let (x, y) = self.pointer.position();
             self.inline_toolbar_release((x as f64, y as f64));
@@ -348,7 +348,7 @@ impl WaylandState {
         if self.handle_toolbar_stylus_motion(conn, qh, x, y) {
             return;
         }
-        if self.inline_toolbars_active() && self.toolbar.is_visible() {
+        if self.toolbar_chrome.inline_toolbars() && self.toolbar.is_visible() {
             self.tablet.last_pos = Some((x, y));
             if self.inline_toolbar_motion((x, y)) {
                 self.commit_pending_stylus_frame();

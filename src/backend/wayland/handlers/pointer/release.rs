@@ -68,7 +68,7 @@ impl WaylandState {
                 inline_active,
                 self.is_move_dragging(),
                 self.toolbar_dragging(),
-                self.pointer_over_toolbar()
+                self.toolbar_chrome.pointer_over_toolbar()
             );
         }
         // An open radial menu owns pointer releases everywhere on screen: a
@@ -82,7 +82,7 @@ impl WaylandState {
         if inline_active && self.handle_inline_pointer_release(event, button) {
             return;
         }
-        if on_toolbar || self.pointer_over_toolbar() {
+        if on_toolbar || self.toolbar_chrome.pointer_over_toolbar() {
             self.handle_toolbar_pointer_release(event, button);
             return;
         }
@@ -281,13 +281,13 @@ impl WaylandState {
                     event.position.0,
                     event.position.1,
                     self.is_move_dragging(),
-                    self.pointer_over_toolbar()
+                    self.toolbar_chrome.pointer_over_toolbar()
                 )
             });
             self.unlock_pointer();
             return true;
         }
-        if !self.pointer_over_toolbar() && !self.toolbar_dragging() {
+        if !self.toolbar_chrome.pointer_over_toolbar() && !self.toolbar_dragging() {
             return false;
         }
         drag_log(|| {
@@ -296,7 +296,7 @@ impl WaylandState {
                 event.position.0,
                 event.position.1,
                 self.is_move_dragging(),
-                self.pointer_over_toolbar()
+                self.toolbar_chrome.pointer_over_toolbar()
             )
         });
         self.end_toolbar_move_drag();
@@ -315,7 +315,7 @@ impl WaylandState {
                 event.position.0,
                 event.position.1,
                 self.is_move_dragging(),
-                self.pointer_over_toolbar()
+                self.toolbar_chrome.pointer_over_toolbar()
             )
         });
         self.end_toolbar_move_drag();

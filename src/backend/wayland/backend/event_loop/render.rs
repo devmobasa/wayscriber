@@ -130,7 +130,7 @@ pub(super) fn maybe_render(
                     // now instead of waiting for another motion event. Pointer
                     // focus is required so a leave-triggered redraw cannot
                     // publish or cache a cursor for stale coordinates.
-                    state.update_pointer_cursor(state.pointer_over_toolbar(), conn);
+                    state.update_pointer_cursor(state.toolbar_chrome.pointer_over_toolbar(), conn);
                 }
                 state.record_perf_render_complete(
                     render_start,

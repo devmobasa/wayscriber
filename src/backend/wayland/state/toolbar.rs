@@ -1,6 +1,8 @@
 #[allow(unused_imports)]
 use super::*;
 
+mod chrome;
+pub(in crate::backend::wayland) use chrome::{ConfigureVerdict, ToolbarChrome};
 mod drag;
 mod events;
 pub(in crate::backend::wayland) use events::{queue_preset_action, queue_quick_color_edit};

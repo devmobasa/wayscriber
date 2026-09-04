@@ -43,11 +43,12 @@ impl WaylandState {
         if delta.abs() <= 0.01 {
             return;
         }
-        self.data.toolbar_top_offset += delta;
+        self.toolbar_chrome.add_top_offset((delta, 0.0));
         drag_log(|| {
             format!(
                 "end move drag: preserve top position, old_base_x={old_base_x:.3}, new_base_x={new_base_x:.3}, delta={delta:.3}, top_offset=({}, {})",
-                self.data.toolbar_top_offset, self.data.toolbar_top_offset_y,
+                self.toolbar_chrome.top_offset().0,
+                self.toolbar_chrome.top_offset().1,
             )
         });
     }
@@ -70,8 +71,8 @@ impl WaylandState {
     ) -> (f64, f64) {
         match kind {
             MoveDragKind::Top => (
-                self.inline_top_base_x() + self.data.toolbar_top_offset + local_coord.0,
-                self.inline_top_base_y() + self.data.toolbar_top_offset_y + local_coord.1,
+                self.inline_top_base_x() + self.toolbar_chrome.top_offset().0 + local_coord.0,
+                self.inline_top_base_y() + self.toolbar_chrome.top_offset().1 + local_coord.1,
             ),
         }
     }

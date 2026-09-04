@@ -183,7 +183,7 @@ impl WaylandState {
         ) {
             return;
         }
-        let over_toolbar = on_toolbar || self.pointer_over_toolbar();
+        let over_toolbar = on_toolbar || self.toolbar_chrome.pointer_over_toolbar();
         let over_top_toolbar =
             over_toolbar && self.wheel_over_top_toolbar(&event.surface, event.position);
         match axis_surface_route(

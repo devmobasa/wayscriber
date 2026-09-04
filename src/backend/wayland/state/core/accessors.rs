@@ -34,7 +34,7 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn cursor_blocked_by_toolbar(&self) -> bool {
-        self.stylus_hover_cursor_position().is_none() && self.pointer_over_toolbar()
+        self.stylus_hover_cursor_position().is_none() && self.toolbar_chrome.pointer_over_toolbar()
     }
 
     #[cfg(feature = "tablet-input")]

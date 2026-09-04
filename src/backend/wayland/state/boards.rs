@@ -103,8 +103,8 @@ impl WaylandState {
             && !self.input_state.is_context_menu_open()
             && !self.input_state.is_properties_panel_open()
             && !self.input_state.is_radial_menu_open()
-            && !self.pointer_over_toolbar()
-            && !self.toolbar_focus_active()
+            && !self.toolbar_chrome.pointer_over_toolbar()
+            && !self.toolbar_chrome.focus_active()
             && matches!(self.input_state.state, DrawingState::Idle)
     }
 }

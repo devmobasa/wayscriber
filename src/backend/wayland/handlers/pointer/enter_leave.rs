@@ -23,7 +23,7 @@ impl WaylandState {
             self.is_move_dragging()
         );
         self.focus.set_pointer_focused(true);
-        self.set_pointer_over_toolbar(on_toolbar);
+        self.toolbar_chrome.set_pointer_over_toolbar(on_toolbar);
         if on_toolbar {
             if let Some((sx, sy)) =
                 self.toolbar_surface_screen_coords(&event.surface, event.position)
@@ -89,7 +89,7 @@ impl WaylandState {
             self.cancel_region_selection_from(RegionInputSource::Pointer);
         }
         if on_toolbar {
-            self.set_pointer_over_toolbar(false);
+            self.toolbar_chrome.set_pointer_over_toolbar(false);
             self.toolbar.pointer_leave(&event.surface);
             // Don't clear drag state if we're in a move drag - the user may be
             // dragging the toolbar and their pointer left the toolbar surface.

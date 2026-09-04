@@ -2,14 +2,6 @@ use super::*;
 use wayland_client::protocol::wl_surface;
 
 impl WaylandState {
-    pub(in crate::backend::wayland) fn pointer_over_toolbar(&self) -> bool {
-        self.data.pointer_over_toolbar
-    }
-
-    pub(in crate::backend::wayland) fn set_pointer_over_toolbar(&mut self, value: bool) {
-        self.data.pointer_over_toolbar = value;
-    }
-
     pub(in crate::backend::wayland) fn toolbar_dragging(&self) -> bool {
         self.data.toolbar_dragging
     }
@@ -36,33 +28,8 @@ impl WaylandState {
         requested
     }
 
-    pub(in crate::backend::wayland) fn toolbar_needs_recreate(&self) -> bool {
-        self.data.toolbar_needs_recreate
-    }
-
-    pub(in crate::backend::wayland) fn set_toolbar_needs_recreate(&mut self, value: bool) {
-        self.data.toolbar_needs_recreate = value;
-    }
-
-    pub(in crate::backend::wayland) fn toolbar_top_offset(&self) -> f64 {
-        self.data.toolbar_top_offset
-    }
-
-    pub(in crate::backend::wayland) fn toolbar_top_offset_y(&self) -> f64 {
-        self.data.toolbar_top_offset_y
-    }
-
-    pub(in crate::backend::wayland) fn restore_toolbar_offsets(&mut self, top: (f64, f64)) {
-        self.data.toolbar_top_offset = top.0;
-        self.data.toolbar_top_offset_y = top.1;
-    }
-
-    pub(in crate::backend::wayland) fn inline_toolbars_active(&self) -> bool {
-        self.data.inline_toolbars
-    }
-
     pub(in crate::backend::wayland) fn inline_toolbars_render_active(&self) -> bool {
-        self.inline_toolbars_active()
+        self.toolbar_chrome.inline_toolbars()
             || self.toolbar_drag_preview_active()
             || self.data.gtk_drag_preview.is_some()
     }

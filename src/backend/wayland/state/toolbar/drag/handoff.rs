@@ -58,7 +58,7 @@ impl WaylandState {
             )
         });
         self.data.toolbar_drag_handoff_at = Some(Instant::now() + delay);
-        self.clear_inline_toolbar_hover();
+        self.toolbar_chrome.clear_inline_hover();
         self.input_state.dirty_tracker.mark_full();
         self.input_state.needs_redraw = true;
     }
@@ -114,8 +114,8 @@ impl WaylandState {
             drag_log(|| "cancel GTK drag lifecycle (restore built-in toolbar rendering)");
         }
         self.request_toolbar_drag_flush();
-        self.clear_inline_toolbar_hits();
-        self.clear_inline_toolbar_hover();
+        self.toolbar_chrome.clear_inline_hits();
+        self.toolbar_chrome.clear_inline_hover();
         self.toolbar.mark_dirty();
         self.input_state.dirty_tracker.mark_full();
         self.input_state.needs_redraw = true;
@@ -128,8 +128,8 @@ impl WaylandState {
         if self.data.gtk_drag_preview.take().is_some() {
             drag_log(|| "finish GTK drag handoff (reveal surface at final position)");
             self.request_toolbar_drag_flush();
-            self.clear_inline_toolbar_hits();
-            self.clear_inline_toolbar_hover();
+            self.toolbar_chrome.clear_inline_hits();
+            self.toolbar_chrome.clear_inline_hover();
             self.input_state.dirty_tracker.mark_full();
             self.input_state.needs_redraw = true;
             return;
@@ -144,8 +144,8 @@ impl WaylandState {
         self.toolbar
             .set_suppressed(self.protocol.compositor(), false);
         self.request_toolbar_drag_flush();
-        self.clear_inline_toolbar_hits();
-        self.clear_inline_toolbar_hover();
+        self.toolbar_chrome.clear_inline_hits();
+        self.toolbar_chrome.clear_inline_hover();
         self.input_state.dirty_tracker.mark_full();
         self.input_state.needs_redraw = true;
     }

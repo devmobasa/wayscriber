@@ -60,7 +60,7 @@ impl KeyboardHandler for WaylandState {
         self.focus.note_activation_serial(serial);
         self.maybe_retry_activation(qh);
         if self.toolbar.is_focusable_surface(surface) {
-            self.set_toolbar_focus_active(true);
+            self.toolbar_chrome.set_focus_active(true);
         } else {
             self.clear_toolbar_focus();
         }

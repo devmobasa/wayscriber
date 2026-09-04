@@ -57,7 +57,7 @@ impl WaylandState {
         let top_base_x = self.inline_top_base_x();
         let top_base_y = self.inline_top_base_y();
 
-        let before_top = (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y);
+        let before_top = self.toolbar_chrome.top_offset();
         let input = geometry::ToolbarClampInput {
             width,
             height,
@@ -67,20 +67,21 @@ impl WaylandState {
             top_margin_right: Self::TOP_MARGIN_RIGHT,
             top_margin_bottom: Self::TOP_MARGIN_BOTTOM,
         };
+        let top_offset = self.toolbar_chrome.top_offset();
         let offsets = geometry::ToolbarOffsets {
-            top_x: self.data.toolbar_top_offset,
-            top_y: self.data.toolbar_top_offset_y,
+            top_x: top_offset.0,
+            top_y: top_offset.1,
         };
         let (clamped, bounds) = geometry::clamp_toolbar_offsets(offsets, input);
-        self.data.toolbar_top_offset = clamped.top_x;
-        self.data.toolbar_top_offset_y = clamped.top_y;
+        self.toolbar_chrome
+            .set_top_offset((clamped.top_x, clamped.top_y));
         drag_log(|| {
             format!(
                 "clamp offsets: before=({:.3}, {:.3}), after=({:.3}, {:.3}), max=({:.3}, {:.3}), size=({}, {}), top_base_x={:.3}, top_base_y={:.3}",
                 before_top.0,
                 before_top.1,
-                self.data.toolbar_top_offset,
-                self.data.toolbar_top_offset_y,
+                self.toolbar_chrome.top_offset().0,
+                self.toolbar_chrome.top_offset().1,
                 bounds.max_top_x,
                 bounds.max_top_y,
                 width,
@@ -119,12 +120,13 @@ impl WaylandState {
             return false;
         }
         let top_base_x = self.inline_top_base_x();
+        let top_offset = self.toolbar_chrome.top_offset();
         let (top_margin_left, top_margin_top) = geometry::compute_layer_margins(
             top_base_x,
             Self::TOP_BASE_MARGIN_TOP,
             geometry::ToolbarOffsets {
-                top_x: self.data.toolbar_top_offset,
-                top_y: self.data.toolbar_top_offset_y,
+                top_x: top_offset.0,
+                top_y: top_offset.1,
             },
         );
         drag_log(|| {
@@ -132,31 +134,31 @@ impl WaylandState {
                 "apply_toolbar_offsets: top_margin_left={}, top_margin_top={}, offsets=({}, {}), scale={}, top_base_x={}",
                 top_margin_left,
                 top_margin_top,
-                self.data.toolbar_top_offset,
-                self.data.toolbar_top_offset_y,
+                top_offset.0,
+                top_offset.1,
                 self.surface.scale(),
                 top_base_x
             )
         });
         if debug_toolbar_drag_logging_enabled() {
+            let last = self.toolbar_chrome.last_applied_margins();
             debug!(
                 "apply_toolbar_offsets: top_margin_left={} (last={:?}), top_margin_top={} (last={:?}), offsets=({}, {}), top_base_x={}",
                 top_margin_left,
-                self.data.last_applied_top_margin,
+                last.map(|(_, left)| left),
                 top_margin_top,
-                self.data.last_applied_top_margin_top,
-                self.data.toolbar_top_offset,
-                self.data.toolbar_top_offset_y,
+                last.map(|(top, _)| top),
+                top_offset.0,
+                top_offset.1,
                 top_base_x
             );
         }
-        let top_changed = self.data.last_applied_top_margin != Some(top_margin_left)
-            || self.data.last_applied_top_margin_top != Some(top_margin_top);
+        let top_changed = self
+            .toolbar_chrome
+            .apply_margins((top_margin_top, top_margin_left));
         if !top_changed {
             return false;
         }
-        self.data.last_applied_top_margin = Some(top_margin_left);
-        self.data.last_applied_top_margin_top = Some(top_margin_top);
         self.toolbar
             .set_top_margins(top_margin_top, top_margin_left);
         if self.toolbar_drag_preview_active() && self.pointer_lock_active() {

@@ -124,7 +124,7 @@ impl WaylandState {
         if target == TouchTarget::Toolbar {
             self.toolbar.pointer_leave(&end.surface);
             self.toolbar.mark_dirty();
-            self.set_pointer_over_toolbar(false);
+            self.toolbar_chrome.set_pointer_over_toolbar(false);
         }
         if target == TouchTarget::InlineToolbar {
             self.inline_toolbar_leave();
@@ -192,7 +192,7 @@ impl WaylandState {
         }
 
         if self.input_state.region_is_active() {
-            let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
+            let inline_active = self.toolbar_chrome.inline_toolbars() && self.toolbar.is_visible();
             let inline_hit = target == TouchTarget::Overlay
                 && inline_active
                 && self.inline_toolbar_motion(screen_position);
@@ -221,7 +221,7 @@ impl WaylandState {
         }
 
         if self.input_state.eyedropper_is_active() {
-            let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
+            let inline_active = self.toolbar_chrome.inline_toolbars() && self.toolbar.is_visible();
             let inline_hit = target == TouchTarget::Overlay
                 && inline_active
                 && self.inline_toolbar_motion(screen_position);
@@ -263,7 +263,7 @@ impl WaylandState {
             return TouchTarget::Other;
         }
 
-        let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
+        let inline_active = self.toolbar_chrome.inline_toolbars() && self.toolbar.is_visible();
         if target == TouchTarget::Overlay
             && inline_active
             && self.inline_toolbar_press(screen_position, Some(conn), Some(qh))
@@ -272,7 +272,7 @@ impl WaylandState {
         }
 
         if target == TouchTarget::Toolbar {
-            self.set_pointer_over_toolbar(true);
+            self.toolbar_chrome.set_pointer_over_toolbar(true);
             if let Some((intent, drag)) = self.toolbar.pointer_press(surface, position) {
                 let toolbar_event = intent_to_event(intent, self.toolbar.last_snapshot());
                 self.set_toolbar_dragging(drag);
@@ -284,7 +284,7 @@ impl WaylandState {
             return TouchTarget::Toolbar;
         }
 
-        self.set_pointer_over_toolbar(false);
+        self.toolbar_chrome.set_pointer_over_toolbar(false);
         if target != TouchTarget::Overlay {
             return target;
         }
@@ -367,7 +367,7 @@ impl WaylandState {
         }
 
         if target == TouchTarget::Toolbar {
-            self.set_pointer_over_toolbar(true);
+            self.toolbar_chrome.set_pointer_over_toolbar(true);
             let (wx, wy) = self.zoomed_world_coords(screen_position.0, screen_position.1);
             self.input_state
                 .update_pointer_positions(screen_x, screen_y, wx, wy);
@@ -478,7 +478,7 @@ impl WaylandState {
                 );
             }
             self.toolbar.pointer_leave(surface);
-            self.set_pointer_over_toolbar(false);
+            self.toolbar_chrome.set_pointer_over_toolbar(false);
             self.finish_toolbar_item_drag(true);
             self.set_toolbar_dragging(false);
             self.end_toolbar_move_drag();

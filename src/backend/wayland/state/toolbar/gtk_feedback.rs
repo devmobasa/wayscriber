@@ -77,16 +77,13 @@ impl WaylandState {
                 self.clamp_gtk_top_offset(surface_size);
                 self.finish_gtk_offset_change();
             } else {
-                self.data.gtk_top_drag_rebase = Some(gtk_drag_rebase(
-                    (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y),
-                    (x, y),
-                ));
+                self.data.gtk_top_drag_rebase =
+                    Some(gtk_drag_rebase(self.toolbar_chrome.top_offset(), (x, y)));
             }
             return;
         }
         let (x, y) = apply_gtk_drag_rebase((x, y), self.data.gtk_top_drag_rebase);
-        self.data.toolbar_top_offset = x;
-        self.data.toolbar_top_offset_y = y;
+        self.toolbar_chrome.set_top_offset((x, y));
         self.mark_gtk_drag_preview_dirty();
         if phase.is_end() {
             self.data.gtk_top_drag_rebase = None;
@@ -106,9 +103,9 @@ impl WaylandState {
 
     fn clamp_gtk_top_offset(&mut self, surface_size: GtkToolbarSurfaceSize) {
         let base_x = self.inline_top_base_x();
-        let before = (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y);
+        let before = self.toolbar_chrome.top_offset();
         let Some((x, y)) = clamp_gtk_surface_offset(
-            (self.data.toolbar_top_offset, self.data.toolbar_top_offset_y),
+            self.toolbar_chrome.top_offset(),
             (self.surface.width(), self.surface.height()),
             surface_size,
             (base_x, Self::TOP_BASE_MARGIN_TOP),
@@ -118,8 +115,7 @@ impl WaylandState {
             self.clamp_toolbar_offsets(&snapshot);
             return;
         };
-        self.data.toolbar_top_offset = x;
-        self.data.toolbar_top_offset_y = y;
+        self.toolbar_chrome.set_top_offset((x, y));
         drag_log(|| {
             format!(
                 "gtk top final clamp before=({:.3},{:.3}) after=({x:.3},{y:.3}) viewport={}x{} surface={}x{} base=({base_x:.3},{:.3}) end=({:.3},{:.3})",

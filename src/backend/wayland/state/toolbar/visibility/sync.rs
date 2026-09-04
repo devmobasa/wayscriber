@@ -33,13 +33,13 @@ impl WaylandState {
             main_layer_focus_acquiring: self.focus.main_layer_acquiring(),
             layer_shell_available: self.protocol.layer_shell().is_some(),
             separate_toolbar_visible: toolbar_visible,
-            inline_toolbars_active: self.inline_toolbars_active(),
+            inline_toolbars_active: self.toolbar_chrome.inline_toolbars(),
             canvas_modal_active: self.input_state.is_color_picker_popup_open(),
         })
     }
 
     fn log_toolbar_layer_shell_missing_once(&mut self) {
-        if self.data.toolbar_layer_shell_missing_logged {
+        if !self.toolbar_chrome.note_layer_shell_missing() {
             return;
         }
 
@@ -52,7 +52,6 @@ impl WaylandState {
             desktop_env,
             session_env
         );
-        self.data.toolbar_layer_shell_missing_logged = true;
     }
 
     /// Applies and commits keyboard interactivity when the desired mode changes.
@@ -89,7 +88,7 @@ impl WaylandState {
             self.data.gtk_drag_preview,
             self.capture_picker_chrome_suppressed(),
         );
-        let inline_active = self.inline_toolbars_active();
+        let inline_active = self.toolbar_chrome.inline_toolbars();
         let drag_preview =
             self.toolbar_drag_preview_active() || self.data.gtk_drag_preview.is_some();
 
@@ -100,9 +99,9 @@ impl WaylandState {
 
         let any_visible = self.toolbar.is_visible();
         if !any_visible {
-            self.set_pointer_over_toolbar(false);
-            self.data.toolbar_configure_miss_count = 0;
-            self.reset_toolbar_margin_cache();
+            self.toolbar_chrome.set_pointer_over_toolbar(false);
+            self.toolbar_chrome.reset_configure_misses();
+            self.toolbar_chrome.reset_margins();
             self.clear_toolbar_focus();
         }
 
@@ -113,17 +112,17 @@ impl WaylandState {
                 self.protocol.layer_shell().is_some(),
                 inline_active,
                 self.toolbar.top_created(),
-                self.toolbar_needs_recreate(),
+                self.toolbar_chrome.needs_recreate(),
                 self.surface.scale()
             );
             drag_log(|| {
                 format!(
                     "toolbar sync: top_offset=({}, {}), inline_active={}, layer_shell={}, needs_recreate={}",
-                    self.data.toolbar_top_offset,
-                    self.data.toolbar_top_offset_y,
+                    self.toolbar_chrome.top_offset().0,
+                    self.toolbar_chrome.top_offset().1,
                     inline_active,
                     self.protocol.layer_shell().is_some(),
-                    self.toolbar_needs_recreate()
+                    self.toolbar_chrome.needs_recreate()
                 )
             });
         }
@@ -138,10 +137,10 @@ impl WaylandState {
             // focus/input conflicts on compositors that support layer-shell.
             if self.toolbar.top_created() {
                 self.toolbar.destroy_all();
-                self.set_toolbar_needs_recreate(true);
-                self.reset_toolbar_margin_cache();
+                self.toolbar_chrome.set_needs_recreate(true);
+                self.toolbar_chrome.reset_margins();
             }
-            self.data.toolbar_configure_miss_count = 0;
+            self.toolbar_chrome.reset_configure_misses();
         }
 
         if any_visible && self.protocol.layer_shell().is_some() && !inline_active && !drag_preview {
@@ -149,40 +148,35 @@ impl WaylandState {
             // never configure after repeated attempts, fall back to inline toolbars automatically.
             let top_configured = self.toolbar.top_configured();
             let expected_top = self.toolbar.is_top_visible();
-            if expected_top && !top_configured {
-                self.data.toolbar_configure_miss_count =
-                    self.data.toolbar_configure_miss_count.saturating_add(1);
-                if debug_toolbar_drag_logging_enabled()
-                    && self.data.toolbar_configure_miss_count.is_multiple_of(60)
-                {
+            let verdict = self
+                .toolbar_chrome
+                .note_configure_result(!expected_top || top_configured);
+            if verdict == ConfigureVerdict::StillWaiting {
+                let misses = self.toolbar_chrome.configure_miss_count();
+                if debug_toolbar_drag_logging_enabled() && misses.is_multiple_of(60) {
                     debug!(
                         "Toolbar configure pending: count={}, expected_top={}, configured_top={}",
-                        self.data.toolbar_configure_miss_count, expected_top, top_configured
+                        misses, expected_top, top_configured
                     );
                 }
-            } else {
-                self.data.toolbar_configure_miss_count = 0;
             }
 
-            if self.data.toolbar_configure_miss_count > Self::TOOLBAR_CONFIGURE_FAIL_THRESHOLD {
+            if verdict == ConfigureVerdict::FallBackToInline {
                 warn!(
-                    "Toolbar layer surface did not configure after {} frames; falling back to the inline toolbar",
-                    self.data.toolbar_configure_miss_count
+                    "Toolbar layer surface did not configure after repeated frames; falling back to the inline toolbar"
                 );
                 self.toolbar.destroy_all();
-                self.reset_toolbar_margin_cache();
-                self.data.inline_toolbars = true;
-                self.set_toolbar_needs_recreate(true);
-                self.data.toolbar_configure_miss_count = 0;
+                self.toolbar_chrome.reset_margins();
+                self.toolbar_chrome.set_needs_recreate(true);
                 // Re-run visibility sync with inline mode enabled.
                 self.sync_toolbar_visibility(qh);
                 return;
             }
 
-            if self.toolbar_needs_recreate() {
+            if self.toolbar_chrome.needs_recreate() {
                 self.toolbar.destroy_all();
-                self.set_toolbar_needs_recreate(false);
-                self.reset_toolbar_margin_cache();
+                self.toolbar_chrome.set_needs_recreate(false);
+                self.toolbar_chrome.reset_margins();
             }
             let snapshot = self.toolbar_snapshot();
             if !self.is_move_dragging() {
@@ -203,8 +197,8 @@ impl WaylandState {
         }
 
         if !any_visible {
-            self.clear_inline_toolbar_hits();
-            self.clear_inline_toolbar_hover();
+            self.toolbar_chrome.clear_inline_hits();
+            self.toolbar_chrome.clear_inline_hover();
         }
 
         self.refresh_keyboard_interactivity();
@@ -238,12 +232,6 @@ impl WaylandState {
         if changed || self.toolbar.needs_render() {
             self.render_toolbars(&snapshot);
         }
-    }
-
-    /// Clear cached margins so recreated/hidden toolbars reapply offsets once.
-    fn reset_toolbar_margin_cache(&mut self) {
-        self.data.last_applied_top_margin = None;
-        self.data.last_applied_top_margin_top = None;
     }
 }
 

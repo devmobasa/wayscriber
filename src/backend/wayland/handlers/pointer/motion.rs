@@ -86,7 +86,7 @@ impl WaylandState {
             return;
         }
         if on_toolbar {
-            self.set_pointer_over_toolbar(true);
+            self.toolbar_chrome.set_pointer_over_toolbar(true);
             if let Some((sx, sy)) =
                 self.toolbar_surface_screen_coords(&event.surface, event.position)
             {
@@ -116,7 +116,7 @@ impl WaylandState {
             self.update_pointer_cursor(true, conn);
             return;
         }
-        if self.pointer_over_toolbar() {
+        if self.toolbar_chrome.pointer_over_toolbar() {
             self.pointer
                 .set_position((event.position.0 as i32, event.position.1 as i32));
             let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
@@ -276,7 +276,10 @@ impl WaylandState {
                 .set_position((x.round() as i32, y.round() as i32));
             self.update_region_selection(RegionInputSource::Pointer, x, y);
         }
-        self.update_pointer_cursor(on_toolbar || self.pointer_over_toolbar(), conn);
+        self.update_pointer_cursor(
+            on_toolbar || self.toolbar_chrome.pointer_over_toolbar(),
+            conn,
+        );
         true
     }
 
@@ -290,7 +293,7 @@ impl WaylandState {
             return false;
         }
         let inline_hover = !on_toolbar
-            && self.inline_toolbars_active()
+            && self.toolbar_chrome.inline_toolbars()
             && self.toolbar.is_visible()
             && self.inline_toolbar_motion(event.position);
         let screen_position = if on_toolbar {
@@ -304,7 +307,7 @@ impl WaylandState {
             self.update_eyedropper_hover(x, y);
         }
         self.update_pointer_cursor(
-            on_toolbar || inline_hover || self.pointer_over_toolbar(),
+            on_toolbar || inline_hover || self.toolbar_chrome.pointer_over_toolbar(),
             conn,
         );
         true

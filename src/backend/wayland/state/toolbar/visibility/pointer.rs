@@ -17,7 +17,7 @@ impl WaylandState {
         drag_log(|| {
             format!(
                 "lock_pointer_for_drag: inline_active={}, locked={}, surface={}",
-                self.inline_toolbars_active(),
+                self.toolbar_chrome.inline_toolbars(),
                 self.pointer_lock_active(),
                 surface_id(surface)
             )
