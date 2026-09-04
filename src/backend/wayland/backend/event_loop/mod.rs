@@ -216,7 +216,7 @@ fn advance_post_dispatch_state(
     if state.input_state.expire_pending_sequence(Instant::now()) {
         state.input_state.needs_redraw = true;
     }
-    if !capture_active && state.ui_animation_due(Instant::now()) {
+    if !capture_active && state.ui_animation.is_due(Instant::now()) {
         state.input_state.needs_redraw = true;
     }
     if state.input_state.ocr_scan_due(Instant::now()) {
@@ -237,7 +237,7 @@ fn advance_post_dispatch_state(
 fn persist_post_dispatch_state(state: &mut WaylandState) {
     if state.input_state.command_palette_recents_dirty() {
         let recents = state.input_state.command_palette.recent.clone();
-        if state.palette_recents.request(&recents) {
+        if state.preferences.palette_recents_mut().request(&recents) {
             state.input_state.clear_command_palette_recents_dirty();
         }
     }
@@ -265,7 +265,7 @@ fn event_loop_timeout(
     let animation_timeout = min_timeout(
         min_timeout(
             min_timeout(
-                state.ui_animation_timeout(now),
+                state.ui_animation.timeout(now),
                 state.top_strip_fade_timeout(now),
             ),
             state.inline_toolbar_tooltip_timeout(now),

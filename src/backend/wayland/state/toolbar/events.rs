@@ -94,10 +94,11 @@ impl WaylandState {
         snapshot.spotlight_magnifier_source = Some(self.current_spotlight_magnifier_source());
         populate_session_snapshot(&mut snapshot, self.session.options());
         snapshot.runtime_ui_persistence = self
-            .runtime_ui
-            .as_ref()
+            .preferences
+            .runtime_ui()
+            .state()
             .map(|runtime| runtime.persistence_snapshot())
-            .or_else(|| self.runtime_ui_unavailable.clone());
+            .or_else(|| self.preferences.runtime_ui().unavailable().cloned());
         snapshot.top_viewport_max = self.top_strip_viewport_max(&snapshot);
         snapshot.top_available_height = self.top_popover_available_height(&snapshot);
         snapshot.top_fade = self.data.top_strip_fade.value();
@@ -199,8 +200,9 @@ impl WaylandState {
             return;
         }
         let persistence_lifecycle_handled = self
-            .runtime_ui
-            .as_mut()
+            .preferences
+            .runtime_ui_mut()
+            .state_mut()
             .is_some_and(|runtime| runtime.handle_persistence_lifecycle_event(&event));
         if persistence_lifecycle_handled {
             // Read-only recovery cancellation can terminalize synchronously
@@ -246,7 +248,7 @@ impl WaylandState {
         let prepared_runtime = if starts_item_drag {
             None
         } else if let Some(target) = runtime_target {
-            match self.runtime_ui.as_ref() {
+            match self.preferences.runtime_ui().state() {
                 Some(runtime) => match runtime.begin_toolbar_mutation(target, &self.input_state) {
                     Some(prepared) => Some(prepared),
                     None => return,
@@ -282,7 +284,7 @@ impl WaylandState {
         }
         let mut pin_confirmation_allowed = applied && prepared_runtime.is_none();
         if let Some(prepared) = prepared_runtime
-            && let Some(runtime) = self.runtime_ui.as_mut()
+            && let Some(runtime) = self.preferences.runtime_ui_mut().state_mut()
         {
             let finish = runtime.finish_toolbar_mutation(prepared, applied, &self.input_state);
             pin_confirmation_allowed =

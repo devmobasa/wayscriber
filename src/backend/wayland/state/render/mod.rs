@@ -138,8 +138,8 @@ impl WaylandState {
         let animation_state =
             record_stage!(advance_animations, { self.advance_render_animations(now) });
         let ui_animation_active = animation_state.any_active();
-        self.update_ui_animation_tick(now, ui_animation_active);
-        let keep_rendering = ui_animation_active && self.ui_animation_interval.is_none();
+        self.ui_animation.schedule(now, ui_animation_active);
+        let keep_rendering = ui_animation_active && self.ui_animation.is_uncapped();
 
         // Add new dirty regions from input state to the per-buffer damage
         // tracker. This runs after the buffer is acquired but before its damage

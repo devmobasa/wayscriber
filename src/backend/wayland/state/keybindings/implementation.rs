@@ -418,7 +418,7 @@ impl WaylandState {
         queue_keybinding_edit(
             &self.config.keybindings,
             &mut self.input_state,
-            &mut self.config_edits,
+            self.preferences.config_edits_mut(),
             request,
         );
     }
