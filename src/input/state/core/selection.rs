@@ -209,10 +209,6 @@ impl InputState {
         }
     }
 
-    pub(crate) fn selection_screen_bounding_box(&self, ids: &[ShapeId]) -> Option<Rect> {
-        with_legacy_measurer(|measurer| self.selection_screen_bounding_box_with(measurer, ids))
-    }
-
     pub(crate) fn selection_screen_bounding_box_with(
         &self,
         measurer: &TextMeasurer,

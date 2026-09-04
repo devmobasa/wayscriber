@@ -289,16 +289,6 @@ impl InputState {
     /// Undo granularity belongs to the gesture, not to each step: a wheel burst
     /// and a knob drag are each one user action, so their callers snapshot at
     /// the start and push a single entry at the end.
-    pub(crate) fn set_spotlight_shape_magnification(
-        &mut self,
-        shape_id: ShapeId,
-        magnification: f64,
-    ) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.set_spotlight_shape_magnification_with(measurer, shape_id, magnification)
-        })
-    }
-
     pub(crate) fn set_spotlight_shape_magnification_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -341,6 +331,18 @@ impl InputState {
         y: i32,
         steps: i32,
     ) -> SpotlightWheelOutcome {
+        with_legacy_measurer(|measurer| {
+            self.nudge_spotlight_magnification_at_with(measurer, x, y, steps)
+        })
+    }
+
+    pub(crate) fn nudge_spotlight_magnification_at_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        x: i32,
+        y: i32,
+        steps: i32,
+    ) -> SpotlightWheelOutcome {
         let shape_id = match self.spotlight_wheel_target_at(x, y) {
             Some(SpotlightWheelTarget::Adjustable(shape_id)) => shape_id,
             Some(SpotlightWheelTarget::Locked) => {
@@ -379,7 +381,7 @@ impl InputState {
             .normalize_value(
                 magnification + crate::draw::SPOTLIGHT_MAGNIFICATION_STEP * f64::from(steps),
             );
-        if !self.set_spotlight_shape_magnification(shape_id, target) {
+        if !self.set_spotlight_shape_magnification_with(measurer, shape_id, target) {
             // An end of the range. The wheel still belongs to this loupe, so
             // the caller must not fall through to thickness: the pointer is
             // over a loupe and the user asked it to go further, not to resize

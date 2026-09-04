@@ -1,3 +1,4 @@
+use crate::draw::TextMeasurer;
 use crate::draw::{Color, RED, Shape};
 use crate::input::state::core::base::InputState;
 use crate::input::state::core::properties::utils::{
@@ -6,7 +7,18 @@ use crate::input::state::core::properties::utils::{
 
 impl InputState {
     pub(crate) fn apply_selection_color_value(&mut self, target: Color) -> bool {
-        let result = self.apply_selection_change(
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.apply_selection_color_value_with(measurer, target)
+        })
+    }
+
+    pub(crate) fn apply_selection_color_value_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        target: Color,
+    ) -> bool {
+        let result = self.apply_selection_change_with(
+            measurer,
             |shape| {
                 matches!(
                     shape,
@@ -63,6 +75,7 @@ impl InputState {
 
     pub(in crate::input::state::core::properties) fn apply_selection_color(
         &mut self,
+        measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
         let base_color = self.selection_primary_color().unwrap_or(RED);
@@ -71,7 +84,8 @@ impl InputState {
         let next = cycle_index(index, SELECTION_COLORS.len(), offset);
         let target = SELECTION_COLORS[next].1;
 
-        let result = self.apply_selection_change(
+        let result = self.apply_selection_change_with(
+            measurer,
             |shape| {
                 matches!(
                     shape,
@@ -183,6 +197,7 @@ mod tests {
 
     #[test]
     fn apply_selection_color_wraps_palette_forward_from_black_to_red() {
+        let measurer = TextMeasurer::default();
         let mut state = make_state();
         let rect_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
             x: 0,
@@ -195,7 +210,7 @@ mod tests {
         });
         state.set_selection(vec![rect_id]);
 
-        assert!(state.apply_selection_color(0));
+        assert!(state.apply_selection_color(&measurer, 0));
 
         match &state
             .boards

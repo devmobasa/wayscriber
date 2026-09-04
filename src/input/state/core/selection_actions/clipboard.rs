@@ -2,6 +2,7 @@ use super::super::base::{ClipboardFingerprint, ClipboardPasteRequest, InputState
 use super::super::selection::LocalSelectionContext;
 use crate::draw::Shape;
 use crate::draw::frame::UndoAction;
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::state::{Toast, ToastPriority};
 use crate::util::Rect;
 
@@ -40,7 +41,7 @@ impl InputState {
         count
     }
 
-    pub(crate) fn paste_selection(&mut self) -> usize {
+    pub(crate) fn paste_selection_with(&mut self, measurer: &TextMeasurer) -> usize {
         let Some(shapes) = self.selection_clipboard.shapes() else {
             return 0;
         };
@@ -49,7 +50,7 @@ impl InputState {
         }
 
         let total = shapes.len();
-        let (dx, dy) = shape_paste_translation(&shapes, self.paste_anchor());
+        let (dx, dy) = shape_paste_translation(measurer, &shapes, self.paste_anchor());
         let mut created = Vec::new();
         let mut new_ids = Vec::new();
         let mut limit_hit = false;
@@ -74,8 +75,8 @@ impl InputState {
                     .find_index(new_id)
                     .and_then(|idx| frame.shape(new_id).map(|s| (idx, s.clone())))
             } {
-                self.mark_selection_dirty_region(stored.bounding_box());
-                self.invalidate_hit_cache_for(new_id);
+                self.mark_selection_dirty_region(stored.bounding_box_with(measurer));
+                self.invalidate_hit_cache_for_with(measurer, new_id);
                 created.push((index, stored));
                 new_ids.push(new_id);
             }
@@ -164,6 +165,17 @@ impl InputState {
         request: &ClipboardPasteRequest,
         shapes: Vec<Shape>,
     ) -> usize {
+        with_legacy_measurer(|measurer| {
+            self.paste_clipboard_shapes_from_request_with(measurer, request, shapes)
+        })
+    }
+
+    pub(crate) fn paste_clipboard_shapes_from_request_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        request: &ClipboardPasteRequest,
+        shapes: Vec<Shape>,
+    ) -> usize {
         if shapes.is_empty() {
             return 0;
         }
@@ -171,7 +183,7 @@ impl InputState {
             return 0;
         }
 
-        let (dx, dy) = shape_paste_translation(&shapes, request.anchor);
+        let (dx, dy) = shape_paste_translation(measurer, &shapes, request.anchor);
         let target_active = self.clipboard_request_targets_active_page(request);
         let mut created = Vec::new();
         let mut new_ids = Vec::new();
@@ -209,7 +221,7 @@ impl InputState {
             if let Some(index) = frame.find_index(new_id)
                 && let Some(stored) = frame.shape(new_id).cloned()
             {
-                dirty_bounds.push(stored.bounding_box());
+                dirty_bounds.push(stored.bounding_box_with(measurer));
                 hit_ids.push(new_id);
                 created.push((index, stored));
                 new_ids.push(new_id);
@@ -235,7 +247,7 @@ impl InputState {
                 self.mark_selection_dirty_region(bounds);
             }
             for shape_id in hit_ids {
-                self.invalidate_hit_cache_for(shape_id);
+                self.invalidate_hit_cache_for_with(measurer, shape_id);
             }
             self.set_selection(new_ids);
             self.needs_redraw = true;
@@ -253,8 +265,12 @@ impl InputState {
     }
 }
 
-fn shape_paste_translation(shapes: &[Shape], anchor: PasteAnchor) -> (i32, i32) {
-    let Some(bounds) = shapes_bounding_box(shapes) else {
+fn shape_paste_translation(
+    measurer: &TextMeasurer,
+    shapes: &[Shape],
+    anchor: PasteAnchor,
+) -> (i32, i32) {
+    let Some(bounds) = shapes_bounding_box(measurer, shapes) else {
         return (0, 0);
     };
     let (anchor_x, anchor_y) = anchor.point();
@@ -266,7 +282,7 @@ fn shape_paste_translation(shapes: &[Shape], anchor: PasteAnchor) -> (i32, i32) 
     )
 }
 
-fn shapes_bounding_box(shapes: &[Shape]) -> Option<Rect> {
+fn shapes_bounding_box(measurer: &TextMeasurer, shapes: &[Shape]) -> Option<Rect> {
     let mut min_x = i32::MAX;
     let mut min_y = i32::MAX;
     let mut max_x = i32::MIN;
@@ -274,7 +290,7 @@ fn shapes_bounding_box(shapes: &[Shape]) -> Option<Rect> {
     let mut found = false;
 
     for shape in shapes {
-        if let Some(bounds) = shape.bounding_box() {
+        if let Some(bounds) = shape.bounding_box_with(measurer) {
             min_x = min_x.min(bounds.x);
             min_y = min_y.min(bounds.y);
             max_x = max_x.max(bounds.x + bounds.width);

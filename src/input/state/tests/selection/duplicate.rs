@@ -694,6 +694,7 @@ fn copy_selection_of_only_locked_shapes_leaves_clipboard_empty() {
 
 #[test]
 fn repeated_paste_selection_uses_current_pointer_anchor() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -708,9 +709,9 @@ fn repeated_paste_selection_uses_current_pointer_anchor() {
     assert_eq!(state.copy_selection(), 1);
 
     state.update_pointer_positions(100, 120, 100, 120);
-    assert_eq!(state.paste_selection(), 1);
+    assert_eq!(state.paste_selection_with(&measurer), 1);
     state.update_pointer_positions(200, 220, 200, 220);
-    assert_eq!(state.paste_selection(), 1);
+    assert_eq!(state.paste_selection_with(&measurer), 1);
 
     let frame = state.boards.active_frame();
     assert_eq!(frame.shapes.len(), 3);
@@ -724,6 +725,7 @@ fn repeated_paste_selection_uses_current_pointer_anchor() {
 
 #[test]
 fn paste_selection_warns_when_shape_limit_prevents_any_paste() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -738,7 +740,7 @@ fn paste_selection_warns_when_shape_limit_prevents_any_paste() {
     assert_eq!(state.copy_selection(), 1);
     state.set_max_shapes_per_frame_for_test(1);
 
-    assert_eq!(state.paste_selection(), 0);
+    assert_eq!(state.paste_selection_with(&measurer), 0);
     assert_eq!(
         state.active_toast().map(|toast| toast.message.as_str()),
         Some("Shape limit reached; nothing pasted.")
@@ -747,6 +749,7 @@ fn paste_selection_warns_when_shape_limit_prevents_any_paste() {
 
 #[test]
 fn paste_selection_warns_when_shape_limit_allows_only_partial_paste() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let first = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 0,
@@ -770,7 +773,7 @@ fn paste_selection_warns_when_shape_limit_allows_only_partial_paste() {
     assert_eq!(state.copy_selection(), 2);
     state.set_max_shapes_per_frame_for_test(3);
 
-    assert_eq!(state.paste_selection(), 1);
+    assert_eq!(state.paste_selection_with(&measurer), 1);
     assert_eq!(state.boards.active_frame().shapes.len(), 3);
     assert_eq!(state.selected_shape_ids().len(), 1);
     assert_eq!(

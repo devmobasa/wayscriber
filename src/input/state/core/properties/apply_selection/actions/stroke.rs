@@ -1,4 +1,5 @@
 use crate::draw::Shape;
+use crate::draw::TextMeasurer;
 use crate::input::state::PressureThicknessEditMode;
 use crate::input::state::core::base::{InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 use crate::input::state::core::properties::apply_selection::constants::SELECTION_THICKNESS_STEP;
@@ -6,6 +7,7 @@ use crate::input::state::core::properties::apply_selection::constants::SELECTION
 impl InputState {
     pub(in crate::input::state::core::properties) fn apply_selection_thickness(
         &mut self,
+        measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
         let delta = SELECTION_THICKNESS_STEP * direction as f64;
@@ -15,7 +17,8 @@ impl InputState {
             PressureThicknessEditMode::Add | PressureThicknessEditMode::Scale
         );
         let pressure_scale = 1.0 + (self.style.pressure_thickness_scale_step * direction as f64);
-        let result = self.apply_selection_change(
+        let result = self.apply_selection_change_with(
+            measurer,
             |shape| {
                 matches!(
                     shape,

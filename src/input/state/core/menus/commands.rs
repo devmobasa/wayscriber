@@ -45,6 +45,40 @@ impl InputState {
         }
     }
 
+    fn select_hovered_context_menu_shape_with(&mut self, measurer: &crate::draw::TextMeasurer) {
+        if let Some(hovered_shape) = self.hovered_context_menu_shape() {
+            let previous_ids = self.selected_shape_ids().to_vec();
+            let previous_bounds = {
+                let frame = self.boards.active_frame();
+                previous_ids
+                    .iter()
+                    .filter_map(|id| {
+                        frame
+                            .shape(*id)
+                            .and_then(|shape| shape.bounding_box_with(measurer))
+                    })
+                    .collect::<Vec<_>>()
+            };
+
+            self.set_selection(vec![hovered_shape]);
+
+            for bounds in previous_bounds {
+                self.mark_selection_dirty_region(Some(bounds));
+            }
+            let hovered_bounds = {
+                let frame = self.boards.active_frame();
+                frame
+                    .shape(hovered_shape)
+                    .and_then(|shape| shape.bounding_box_with(measurer))
+            };
+            self.mark_selection_dirty_region(hovered_bounds);
+
+            self.close_context_menu();
+        } else {
+            self.close_context_menu();
+        }
+    }
+
     pub fn execute_menu_command(&mut self, command: MenuCommand) {
         match command {
             MenuCommand::Copy => {
@@ -66,35 +100,9 @@ impl InputState {
                 self.close_context_menu();
             }
             MenuCommand::SelectHoveredShape => {
-                if let Some(hovered_shape) = self.hovered_context_menu_shape() {
-                    let previous_ids = self.selected_shape_ids().to_vec();
-                    let previous_bounds = {
-                        let frame = self.boards.active_frame();
-                        previous_ids
-                            .iter()
-                            .filter_map(|id| {
-                                frame.shape(*id).and_then(|shape| shape.bounding_box())
-                            })
-                            .collect::<Vec<_>>()
-                    };
-
-                    self.set_selection(vec![hovered_shape]);
-
-                    for bounds in previous_bounds {
-                        self.mark_selection_dirty_region(Some(bounds));
-                    }
-                    let hovered_bounds = {
-                        let frame = self.boards.active_frame();
-                        frame
-                            .shape(hovered_shape)
-                            .and_then(|shape| shape.bounding_box())
-                    };
-                    self.mark_selection_dirty_region(hovered_bounds);
-
-                    self.close_context_menu();
-                } else {
-                    self.close_context_menu();
-                }
+                crate::draw::with_legacy_measurer(|measurer| {
+                    self.select_hovered_context_menu_shape_with(measurer);
+                });
             }
             MenuCommand::MoveToFront => {
                 self.move_selection_to_front();

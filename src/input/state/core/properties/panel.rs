@@ -2,6 +2,7 @@ use super::super::base::InputState;
 use super::panel_layout::selection_panel_anchor;
 use super::types::{PropertiesPanelLayout, SelectionPropertyEntry, ShapePropertiesPanel};
 use super::utils::format_timestamp;
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 
 impl InputState {
     pub fn properties_panel(&self) -> Option<&ShapePropertiesPanel> {
@@ -43,6 +44,10 @@ impl InputState {
     }
 
     pub(crate) fn show_properties_panel(&mut self) -> bool {
+        with_legacy_measurer(|measurer| self.show_properties_panel_with(measurer))
+    }
+
+    pub(crate) fn show_properties_panel_with(&mut self, measurer: &TextMeasurer) -> bool {
         if self.selected_shape_ids().is_empty() {
             return false;
         }
@@ -52,8 +57,8 @@ impl InputState {
         let panel = (|| {
             let ids = self.selected_shape_ids();
             let frame = self.boards.active_frame();
-            let canvas_bounds = self.selection_bounding_box(ids);
-            let anchor_rect = self.selection_screen_bounding_box(ids);
+            let canvas_bounds = self.selection_bounding_box_with(measurer, ids);
+            let anchor_rect = self.selection_screen_bounding_box_with(measurer, ids);
             let anchor = selection_panel_anchor(anchor_rect, self.pointer.screen());
             let entries = self.build_selection_property_entries(ids);
 
@@ -102,7 +107,7 @@ impl InputState {
             if let Some(timestamp) = format_timestamp(drawn.created_at) {
                 lines.push(format!("Created: {timestamp}"));
             }
-            if let Some(bounds) = drawn.bounding_box() {
+            if let Some(bounds) = drawn.bounding_box_with(measurer) {
                 lines.push(format!("Bounds: {}×{} px", bounds.width, bounds.height));
             }
 
@@ -126,6 +131,10 @@ impl InputState {
     }
 
     pub(super) fn refresh_properties_panel(&mut self) {
+        with_legacy_measurer(|measurer| self.refresh_properties_panel_with(measurer))
+    }
+
+    pub(super) fn refresh_properties_panel_with(&mut self, measurer: &TextMeasurer) {
         self.properties.begin_refresh();
         let update = (|| {
             let ids = self.selected_shape_ids();
@@ -135,8 +144,8 @@ impl InputState {
 
             let entries = self.build_selection_property_entries(ids);
             let frame = self.boards.active_frame();
-            let canvas_bounds = self.selection_bounding_box(ids);
-            let anchor_rect = self.selection_screen_bounding_box(ids);
+            let canvas_bounds = self.selection_bounding_box_with(measurer, ids);
+            let anchor_rect = self.selection_screen_bounding_box_with(measurer, ids);
             let anchor = selection_panel_anchor(anchor_rect, self.pointer.screen());
 
             let (title, lines, multiple_selection) = if ids.len() > 1 {
@@ -173,7 +182,7 @@ impl InputState {
                 if let Some(timestamp) = format_timestamp(drawn.created_at) {
                     lines.push(format!("Created: {timestamp}"));
                 }
-                if let Some(bounds) = drawn.bounding_box() {
+                if let Some(bounds) = drawn.bounding_box_with(measurer) {
                     lines.push(format!("Bounds: {}×{} px", bounds.width, bounds.height));
                 }
                 ("Shape Properties".to_string(), lines, false)

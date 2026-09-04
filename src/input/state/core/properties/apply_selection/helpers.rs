@@ -1,6 +1,6 @@
 use super::super::super::base::InputState;
 use super::super::summary::shape_color;
-use crate::draw::{Color, Shape};
+use crate::draw::{Color, Shape, TextMeasurer, with_legacy_measurer};
 use crate::input::state::{Toast, ToastPriority};
 
 #[derive(Default)]
@@ -57,6 +57,21 @@ impl InputState {
 
     pub(in crate::input::state::core) fn apply_selection_change<A, F>(
         &mut self,
+        applicable: A,
+        apply: F,
+    ) -> SelectionApplyResult
+    where
+        A: FnMut(&Shape) -> bool,
+        F: FnMut(&mut Shape) -> bool,
+    {
+        with_legacy_measurer(|measurer| {
+            self.apply_selection_change_with(measurer, applicable, apply)
+        })
+    }
+
+    pub(in crate::input::state::core) fn apply_selection_change_with<A, F>(
+        &mut self,
+        measurer: &TextMeasurer,
         mut applicable: A,
         mut apply: F,
     ) -> SelectionApplyResult
@@ -88,7 +103,7 @@ impl InputState {
                 continue;
             }
 
-            let before_bounds = drawn.bounding_box();
+            let before_bounds = drawn.bounding_box_with(measurer);
             let before_snapshot = crate::draw::frame::ShapeSnapshot {
                 shape: drawn.shape.clone(),
                 locked: drawn.locked,
@@ -100,7 +115,7 @@ impl InputState {
                 continue;
             }
 
-            let after_bounds = drawn.bounding_box();
+            let after_bounds = drawn.bounding_box_with(measurer);
             let after_snapshot = crate::draw::frame::ShapeSnapshot {
                 shape: drawn.shape.clone(),
                 locked: drawn.locked,
@@ -136,7 +151,7 @@ impl InputState {
         for (shape_id, before, after) in dirty_regions {
             self.mark_selection_dirty_region(before);
             self.mark_selection_dirty_region(after);
-            self.invalidate_hit_cache_for(shape_id);
+            self.invalidate_hit_cache_for_with(measurer, shape_id);
         }
         self.needs_redraw = true;
 

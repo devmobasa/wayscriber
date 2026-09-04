@@ -97,31 +97,35 @@ impl InputState {
                 }
             }
             Action::SelectAll => {
-                let previous_bounds = self.selection_bounding_box(self.selected_shape_ids());
-                let ids: Vec<_> = self
-                    .boards
-                    .active_frame()
-                    .shapes
-                    .iter()
-                    .map(|shape| shape.id)
-                    .collect();
-                if ids.is_empty() {
-                    self.push_toast(
-                        ToastPriority::Info,
-                        "selection",
-                        Toast::warning("No shapes to select."),
-                    );
-                } else {
-                    self.set_selection(ids);
-                    self.mark_selection_dirty_region(previous_bounds);
-                    let new_bounds = self.selection_bounding_box(self.selected_shape_ids());
-                    self.mark_selection_dirty_region(new_bounds);
-                    self.needs_redraw = true;
-                }
+                crate::draw::with_legacy_measurer(|measurer| self.select_all_shapes_with(measurer));
             }
             _ => unreachable!("selection content dispatcher called with {action:?}"),
         }
         true
+    }
+
+    fn select_all_shapes_with(&mut self, measurer: &crate::draw::TextMeasurer) {
+        let previous_bounds = self.selection_bounding_box_with(measurer, self.selected_shape_ids());
+        let ids: Vec<_> = self
+            .boards
+            .active_frame()
+            .shapes
+            .iter()
+            .map(|shape| shape.id)
+            .collect();
+        if ids.is_empty() {
+            self.push_toast(
+                ToastPriority::Info,
+                "selection",
+                Toast::warning("No shapes to select."),
+            );
+        } else {
+            self.set_selection(ids);
+            self.mark_selection_dirty_region(previous_bounds);
+            let new_bounds = self.selection_bounding_box_with(measurer, self.selected_shape_ids());
+            self.mark_selection_dirty_region(new_bounds);
+            self.needs_redraw = true;
+        }
     }
 
     fn handle_selection_nudge_action(&mut self, action: Action) -> bool {

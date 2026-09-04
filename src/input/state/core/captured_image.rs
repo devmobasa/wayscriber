@@ -1,6 +1,7 @@
 use super::InputState;
 use crate::draw::frame::UndoAction;
 use crate::draw::{EmbeddedImage, Shape};
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::screen_pixels::EmbeddedImageLimits;
 use crate::util::Rect;
 
@@ -15,6 +16,15 @@ pub(crate) struct BoardPasteTarget {
 impl InputState {
     pub(crate) fn insert_captured_image(
         &mut self,
+        image: EmbeddedImage,
+        target: &BoardPasteTarget,
+    ) -> bool {
+        with_legacy_measurer(|measurer| self.insert_captured_image_with(measurer, image, target))
+    }
+
+    pub(crate) fn insert_captured_image_with(
+        &mut self,
+        measurer: &TextMeasurer,
         image: EmbeddedImage,
         target: &BoardPasteTarget,
     ) -> bool {
@@ -76,7 +86,7 @@ impl InputState {
         else {
             return false;
         };
-        let bounds = stored.bounding_box();
+        let bounds = stored.bounding_box_with(measurer);
         frame.push_undo_action(
             UndoAction::Create {
                 shapes: vec![(index, stored)],
@@ -86,7 +96,7 @@ impl InputState {
         self.mark_session_dirty();
         if target_active {
             self.mark_selection_dirty_region(bounds);
-            self.invalidate_hit_cache_for(id);
+            self.invalidate_hit_cache_for_with(measurer, id);
             self.set_selection(vec![id]);
         }
         self.needs_redraw = true;

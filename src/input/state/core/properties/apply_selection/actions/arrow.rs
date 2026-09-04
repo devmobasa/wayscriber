@@ -1,3 +1,4 @@
+use crate::draw::TextMeasurer;
 use crate::draw::{ArrowStyle, Shape};
 use crate::input::state::core::base::InputState;
 use crate::input::state::core::properties::apply_selection::constants::{
@@ -24,6 +25,7 @@ enum ArrowStyleTarget {
 impl InputState {
     pub(in crate::input::state::core::properties) fn apply_selection_arrow_head(
         &mut self,
+        measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
         let target = if direction == 0 {
@@ -44,7 +46,8 @@ impl InputState {
             return false;
         };
 
-        let result = self.apply_selection_change(
+        let result = self.apply_selection_change_with(
+            measurer,
             |shape| matches!(shape, Shape::Arrow { .. }),
             |shape| match shape {
                 Shape::Arrow { head_at_end, .. } if *head_at_end != target => {
@@ -65,6 +68,7 @@ impl InputState {
     /// mixed selection is a normalization, not a jump nobody can predict.
     pub(in crate::input::state::core::properties) fn apply_selection_arrow_style(
         &mut self,
+        measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
         let target = match self.selection_arrow_style_target(direction) {
@@ -85,7 +89,8 @@ impl InputState {
             ArrowStyleTarget::Style(style) => style,
         };
 
-        let result = self.apply_selection_change(
+        let result = self.apply_selection_change_with(
+            measurer,
             |shape| matches!(shape, Shape::Arrow { .. }),
             |shape| match shape {
                 Shape::Arrow { style, bend, .. } => {
@@ -144,10 +149,12 @@ impl InputState {
 
     pub(in crate::input::state::core::properties) fn apply_selection_arrow_length(
         &mut self,
+        measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
         let delta = SELECTION_ARROW_LENGTH_STEP * direction as f64;
-        let result = self.apply_selection_change(
+        let result = self.apply_selection_change_with(
+            measurer,
             |shape| matches!(shape, Shape::Arrow { .. }),
             |shape| match shape {
                 Shape::Arrow { arrow_length, .. } => {
@@ -168,10 +175,12 @@ impl InputState {
 
     pub(in crate::input::state::core::properties) fn apply_selection_arrow_angle(
         &mut self,
+        measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
         let delta = SELECTION_ARROW_ANGLE_STEP * direction as f64;
-        let result = self.apply_selection_change(
+        let result = self.apply_selection_change_with(
+            measurer,
             |shape| matches!(shape, Shape::Arrow { .. }),
             |shape| match shape {
                 Shape::Arrow { arrow_angle, .. } => {
@@ -252,12 +261,13 @@ mod tests {
 
     #[test]
     fn restyling_several_arrows_steps_them_all_in_one_undo_entry() {
+        let measurer = TextMeasurer::default();
         let mut state = make_state();
         let first = add_arrow(&mut state, true, 30.0);
         let second = add_arrow(&mut state, false, 30.0);
         state.set_selection(vec![first, second]);
 
-        assert!(state.apply_selection_arrow_style(1));
+        assert!(state.apply_selection_arrow_style(&measurer, 1));
         assert_eq!(arrow_style(&state, first), ArrowStyle::Pointy);
         assert_eq!(arrow_style(&state, second), ArrowStyle::Pointy);
 
@@ -275,6 +285,7 @@ mod tests {
 
     #[test]
     fn restyling_a_mixed_selection_makes_it_agree_before_it_steps() {
+        let measurer = TextMeasurer::default();
         let mut state = make_state();
         let standard = add_arrow(&mut state, true, 30.0);
         let curved = add_styled_arrow(&mut state, true, 30.0, ArrowStyle::Curved, 0.3);
@@ -282,49 +293,52 @@ mod tests {
 
         // First press normalizes on the first editable style rather than
         // jumping both to somewhere neither of them was.
-        assert!(state.apply_selection_arrow_style(1));
+        assert!(state.apply_selection_arrow_style(&measurer, 1));
         assert_eq!(arrow_style(&state, standard), ArrowStyle::Standard);
         assert_eq!(arrow_style(&state, curved), ArrowStyle::Standard);
 
         // Second press steps the now-uniform selection.
-        assert!(state.apply_selection_arrow_style(1));
+        assert!(state.apply_selection_arrow_style(&measurer, 1));
         assert_eq!(arrow_style(&state, standard), ArrowStyle::Pointy);
         assert_eq!(arrow_style(&state, curved), ArrowStyle::Pointy);
     }
 
     #[test]
     fn restyling_backwards_walks_the_cycle_the_other_way() {
+        let measurer = TextMeasurer::default();
         let mut state = make_state();
         let arrow = add_arrow(&mut state, true, 30.0);
         state.set_selection(vec![arrow]);
 
-        assert!(state.apply_selection_arrow_style(-1));
+        assert!(state.apply_selection_arrow_style(&measurer, -1));
         assert_eq!(arrow_style(&state, arrow), ArrowStyle::Double);
     }
 
     #[test]
     fn restyling_to_curved_gives_a_flat_arrow_an_arc_to_show() {
+        let measurer = TextMeasurer::default();
         // A curved arrow at bend zero draws exactly like the style it replaced,
         // so switching to it would look like nothing happened.
         let mut state = make_state();
         let arrow = add_arrow(&mut state, true, 30.0);
         state.set_selection(vec![arrow]);
 
-        assert!(state.apply_selection_arrow_style(1)); // Pointy
-        assert!(state.apply_selection_arrow_style(1)); // Curved
+        assert!(state.apply_selection_arrow_style(&measurer, 1)); // Pointy
+        assert!(state.apply_selection_arrow_style(&measurer, 1)); // Curved
         assert_eq!(arrow_style(&state, arrow), ArrowStyle::Curved);
         assert_eq!(arrow_bend(&state, arrow), DEFAULT_ARROW_BEND);
     }
 
     #[test]
     fn restyling_away_from_curved_and_back_keeps_the_shaped_arc() {
+        let measurer = TextMeasurer::default();
         let mut state = make_state();
         let arrow = add_styled_arrow(&mut state, true, 30.0, ArrowStyle::Curved, 0.7);
         state.set_selection(vec![arrow]);
 
         // Curved -> Double -> Standard -> Pointy -> Curved.
         for _ in 0..4 {
-            assert!(state.apply_selection_arrow_style(1));
+            assert!(state.apply_selection_arrow_style(&measurer, 1));
         }
         assert_eq!(arrow_style(&state, arrow), ArrowStyle::Curved);
         assert_eq!(
@@ -336,8 +350,9 @@ mod tests {
 
     #[test]
     fn restyling_reports_when_no_arrows_are_selected() {
+        let measurer = TextMeasurer::default();
         let mut state = make_state();
-        assert!(!state.apply_selection_arrow_style(1));
+        assert!(!state.apply_selection_arrow_style(&measurer, 1));
         assert_eq!(
             state.active_toast().map(|toast| toast.message.as_str()),
             Some("No arrows selected.")
@@ -384,6 +399,7 @@ mod tests {
 
     #[test]
     fn restyling_a_partly_locked_selection_steps_only_the_unlocked_arrows() {
+        let measurer = TextMeasurer::default();
         // The locked one must not vote on the target either — it is skipped by
         // the apply, so letting it into the "are they all the same style?"
         // check would strand the selection agreeing with a shape that cannot
@@ -399,7 +415,7 @@ mod tests {
             .locked = true;
         state.set_selection(vec![locked, editable]);
 
-        assert!(state.apply_selection_arrow_style(1));
+        assert!(state.apply_selection_arrow_style(&measurer, 1));
         assert_eq!(arrow_style(&state, editable), ArrowStyle::Pointy);
         assert_eq!(
             arrow_style(&state, locked),
@@ -410,12 +426,13 @@ mod tests {
 
     #[test]
     fn apply_selection_arrow_head_on_mixed_selection_sets_heads_to_end() {
+        let measurer = TextMeasurer::default();
         let mut state = make_state();
         let first = add_arrow(&mut state, true, 30.0);
         let second = add_arrow(&mut state, false, 30.0);
         state.set_selection(vec![first, second]);
 
-        assert!(state.apply_selection_arrow_head(0));
+        assert!(state.apply_selection_arrow_head(&measurer, 0));
 
         for id in [first, second] {
             match &state.boards.active_frame().shape(id).expect("arrow").shape {
@@ -427,12 +444,13 @@ mod tests {
 
     #[test]
     fn apply_selection_arrow_angle_clamps_to_maximum() {
+        let measurer = TextMeasurer::default();
         let mut state = make_state();
         let arrow_id = add_arrow(&mut state, true, MAX_ARROW_ANGLE - 1.0);
         state.set_selection(vec![arrow_id]);
 
-        assert!(state.apply_selection_arrow_angle(1));
-        assert!(!state.apply_selection_arrow_angle(1));
+        assert!(state.apply_selection_arrow_angle(&measurer, 1));
+        assert!(!state.apply_selection_arrow_angle(&measurer, 1));
 
         match &state
             .boards

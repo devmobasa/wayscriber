@@ -1,22 +1,41 @@
 use super::super::base::InputState;
 use super::types::SelectionPropertyKind;
-use crate::draw::Shape;
+use crate::draw::{Shape, TextMeasurer, with_legacy_measurer};
 
 impl InputState {
     pub(crate) fn activate_properties_panel_entry(&mut self) -> bool {
-        self.adjust_properties_panel_entry(0)
+        with_legacy_measurer(|measurer| self.activate_properties_panel_entry_with(measurer))
+    }
+
+    pub(crate) fn activate_properties_panel_entry_with(&mut self, measurer: &TextMeasurer) -> bool {
+        self.adjust_properties_panel_entry_with(measurer, 0)
     }
 
     pub(crate) fn adjust_properties_panel_entry(&mut self, direction: i32) -> bool {
+        with_legacy_measurer(|measurer| {
+            self.adjust_properties_panel_entry_with(measurer, direction)
+        })
+    }
+
+    pub(crate) fn adjust_properties_panel_entry_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        direction: i32,
+    ) -> bool {
         let index = self.current_properties_focus_or_hover();
         let Some(index) = index else {
             return false;
         };
 
-        self.apply_properties_entry(index, direction)
+        self.apply_properties_entry(measurer, index, direction)
     }
 
-    fn apply_properties_entry(&mut self, index: usize, direction: i32) -> bool {
+    fn apply_properties_entry(
+        &mut self,
+        measurer: &TextMeasurer,
+        index: usize,
+        direction: i32,
+    ) -> bool {
         let entry = {
             let Some(panel) = self.properties.panel.as_ref() else {
                 return false;
@@ -30,10 +49,10 @@ impl InputState {
             entry.clone()
         };
 
-        let changed = self.dispatch_selection_property(entry.kind, direction);
+        let changed = self.dispatch_selection_property(measurer, entry.kind, direction);
 
         if changed {
-            self.refresh_properties_panel();
+            self.refresh_properties_panel_with(measurer);
         }
 
         changed
@@ -61,6 +80,17 @@ impl InputState {
         kind: SelectionPropertyKind,
         direction: i32,
     ) -> bool {
+        with_legacy_measurer(|measurer| {
+            self.adjust_selection_property_kind_with(measurer, kind, direction)
+        })
+    }
+
+    pub(crate) fn adjust_selection_property_kind_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        kind: SelectionPropertyKind,
+        direction: i32,
+    ) -> bool {
         let ids = self.selected_shape_ids();
         if ids.is_empty() {
             return false;
@@ -73,10 +103,10 @@ impl InputState {
             return false;
         }
 
-        let changed = self.dispatch_selection_property(kind, direction);
+        let changed = self.dispatch_selection_property(measurer, kind, direction);
 
         if changed && self.is_properties_panel_open() {
-            self.refresh_properties_panel();
+            self.refresh_properties_panel_with(measurer);
         }
 
         changed
@@ -87,16 +117,29 @@ impl InputState {
     /// the action still reaches the shared apply reporter so it can explain why
     /// nothing changed.
     pub(crate) fn cycle_selected_arrow_style_from_action(&mut self) -> bool {
-        let changed = self.dispatch_selection_property(SelectionPropertyKind::ArrowStyle, 1);
+        with_legacy_measurer(|measurer| self.cycle_selected_arrow_style_from_action_with(measurer))
+    }
+
+    pub(crate) fn cycle_selected_arrow_style_from_action_with(
+        &mut self,
+        measurer: &TextMeasurer,
+    ) -> bool {
+        let changed =
+            self.dispatch_selection_property(measurer, SelectionPropertyKind::ArrowStyle, 1);
 
         if changed && self.is_properties_panel_open() {
-            self.refresh_properties_panel();
+            self.refresh_properties_panel_with(measurer);
         }
 
         changed
     }
 
-    fn dispatch_selection_property(&mut self, kind: SelectionPropertyKind, direction: i32) -> bool {
+    fn dispatch_selection_property(
+        &mut self,
+        measurer: &TextMeasurer,
+        kind: SelectionPropertyKind,
+        direction: i32,
+    ) -> bool {
         // Every property route lands here — the keyboard action, the toolbar's
         // AdjustSelectionProperty, and the shape properties panel — so this is
         // the one place that has to end a live bend drag first. That drag holds
@@ -108,28 +151,31 @@ impl InputState {
         // because leaving Curved hides the arc the drag is editing.
         self.finish_active_arrow_bend();
         match kind {
-            SelectionPropertyKind::Color => self.apply_selection_color(direction),
+            SelectionPropertyKind::Color => self.apply_selection_color(measurer, direction),
             SelectionPropertyKind::Thickness => {
-                self.apply_selection_thickness(direction_or_default(direction))
+                self.apply_selection_thickness(measurer, direction_or_default(direction))
             }
-            SelectionPropertyKind::Fill => self.apply_selection_fill(direction),
+            SelectionPropertyKind::Fill => self.apply_selection_fill(measurer, direction),
             SelectionPropertyKind::FontSize => {
-                self.apply_selection_font_size(direction_or_default(direction))
+                self.apply_selection_font_size(measurer, direction_or_default(direction))
             }
-            SelectionPropertyKind::ArrowHead => self.apply_selection_arrow_head(direction),
-            SelectionPropertyKind::ArrowStyle => self.apply_selection_arrow_style(direction),
+            SelectionPropertyKind::ArrowHead => {
+                self.apply_selection_arrow_head(measurer, direction)
+            }
+            SelectionPropertyKind::ArrowStyle => {
+                self.apply_selection_arrow_style(measurer, direction)
+            }
             SelectionPropertyKind::ArrowLength => {
-                self.apply_selection_arrow_length(direction_or_default(direction))
+                self.apply_selection_arrow_length(measurer, direction_or_default(direction))
             }
             SelectionPropertyKind::ArrowAngle => {
-                self.apply_selection_arrow_angle(direction_or_default(direction))
+                self.apply_selection_arrow_angle(measurer, direction_or_default(direction))
             }
             SelectionPropertyKind::TextBackground => {
-                self.apply_selection_text_background(direction)
+                self.apply_selection_text_background(measurer, direction)
             }
-            SelectionPropertyKind::SpotlightMagnification => {
-                self.apply_selection_spotlight_magnification(direction_or_default(direction))
-            }
+            SelectionPropertyKind::SpotlightMagnification => self
+                .apply_selection_spotlight_magnification(measurer, direction_or_default(direction)),
         }
     }
 }

@@ -355,3 +355,5 @@ fn explicit_arrow_and_spotlight_drag_chains_refresh_geometry_and_index() {
     );
     assert!(state.canvas_content_generation() > generation);
 }
+
+mod mutations;
