@@ -1,32 +1,6 @@
 use super::super::*;
-use smithay_client_toolkit::shell::{WaylandSurface, wlr_layer::Layer};
-use std::time::{Duration, Instant};
-
-const XDG_FROZEN_FULLSCREEN_TIMEOUT: Duration = Duration::from_millis(1500);
-
-fn xdg_frozen_fullscreen_timeout(
-    pending_configure: bool,
-    requested_at: Option<Instant>,
-    now: Instant,
-) -> Option<Duration> {
-    if !pending_configure {
-        return None;
-    }
-    Some(
-        requested_at
-            .and_then(|requested_at| requested_at.checked_add(XDG_FROZEN_FULLSCREEN_TIMEOUT))
-            .map(|deadline| deadline.saturating_duration_since(now))
-            .unwrap_or(Duration::ZERO),
-    )
-}
-
-fn finish_xdg_frozen_fullscreen_request(
-    state: &mut XdgFrozenFullscreenState,
-    requested_at: &mut Option<Instant>,
-) {
-    *state = XdgFrozenFullscreenState::Inactive;
-    *requested_at = None;
-}
+use smithay_client_toolkit::shell::WaylandSurface;
+use std::time::Instant;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn has_cursor_focus(&self) -> bool {
@@ -92,62 +66,14 @@ impl WaylandState {
     #[cfg(not(feature = "tablet-input"))]
     pub(in crate::backend::wayland) fn retire_stylus_contact(&mut self) {}
 
-    pub(in crate::backend::wayland) fn preferred_output_identity(&self) -> Option<&str> {
-        self.data.preferred_output_identity.as_deref()
-    }
-
-    #[allow(dead_code)]
-    pub(in crate::backend::wayland) fn set_preferred_output_identity(
-        &mut self,
-        value: Option<String>,
-    ) {
-        self.data.preferred_output_identity = value;
-    }
-
-    pub(in crate::backend::wayland) fn xdg_fullscreen(&self) -> bool {
-        self.data.xdg_fullscreen
-    }
-
-    pub(in crate::backend::wayland) fn xdg_frozen_fullscreen_requested(&self) -> bool {
-        !matches!(
-            self.data.xdg_frozen_fullscreen_state,
-            crate::backend::wayland::state::XdgFrozenFullscreenState::Inactive
-        )
-    }
-
-    pub(in crate::backend::wayland) fn xdg_frozen_fullscreen_pending_configure(&self) -> bool {
-        matches!(
-            self.data.xdg_frozen_fullscreen_state,
-            crate::backend::wayland::state::XdgFrozenFullscreenState::PendingConfigure
-        )
-    }
-
-    pub(in crate::backend::wayland) fn xdg_frozen_fullscreen_timeout(
-        &self,
-        now: Instant,
-    ) -> Option<Duration> {
-        xdg_frozen_fullscreen_timeout(
-            self.xdg_frozen_fullscreen_pending_configure(),
-            self.data.xdg_frozen_fullscreen_requested_at,
-            now,
-        )
-    }
-
-    pub(in crate::backend::wayland) fn xdg_frozen_fullscreen_timed_out(
-        &self,
-        now: Instant,
-    ) -> bool {
-        self.xdg_frozen_fullscreen_timeout(now)
-            .is_some_and(|timeout| timeout.is_zero())
-    }
-
     pub(in crate::backend::wayland) fn begin_xdg_frozen_fullscreen(&mut self) -> bool {
         let Some(window) = self.surface.xdg_window().cloned() else {
             return false;
         };
-        self.data.xdg_frozen_fullscreen_state =
-            crate::backend::wayland::state::XdgFrozenFullscreenState::PendingConfigure;
-        self.data.xdg_frozen_fullscreen_requested_at = Some(Instant::now());
+        self.surface
+            .placement_mut()
+            .xdg_frozen_mut()
+            .request(Instant::now());
         if let Some(output) = self.preferred_fullscreen_output() {
             window.set_fullscreen(Some(&output));
         } else {
@@ -158,11 +84,11 @@ impl WaylandState {
     }
 
     pub(in crate::backend::wayland) fn restore_xdg_after_frozen(&mut self) {
-        if !self.xdg_frozen_fullscreen_requested() {
+        if !self.surface.placement().xdg_frozen().requested() {
             return;
         }
         if let Some(window) = self.surface.xdg_window().cloned() {
-            if self.xdg_fullscreen() {
+            if self.surface.placement().xdg_fullscreen() {
                 if let Some(output) = self.preferred_fullscreen_output() {
                     window.set_fullscreen(Some(&output));
                 } else {
@@ -174,16 +100,13 @@ impl WaylandState {
             }
             window.commit();
         }
-        finish_xdg_frozen_fullscreen_request(
-            &mut self.data.xdg_frozen_fullscreen_state,
-            &mut self.data.xdg_frozen_fullscreen_requested_at,
-        );
+        self.surface.placement_mut().xdg_frozen_mut().finish();
     }
 
     pub(in crate::backend::wayland) fn activate_pending_frozen_image_for_current_surface(
         &mut self,
     ) {
-        let was_xdg_frozen_fullscreen = self.xdg_frozen_fullscreen_requested();
+        let was_xdg_frozen_fullscreen = self.surface.placement().xdg_frozen().requested();
         let (phys_width, phys_height) = self.surface.physical_dimensions();
         let live_output_count = self.live_output_count();
         match self.frozen.activate_pending_image_with_live_outputs(
@@ -194,9 +117,7 @@ impl WaylandState {
         ) {
             Ok(true) => {
                 if was_xdg_frozen_fullscreen {
-                    self.data.xdg_frozen_fullscreen_state =
-                        crate::backend::wayland::state::XdgFrozenFullscreenState::Active;
-                    self.data.xdg_frozen_fullscreen_requested_at = None;
+                    self.surface.placement_mut().xdg_frozen_mut().activate();
                 }
             }
             Ok(false) => {}
@@ -207,24 +128,11 @@ impl WaylandState {
         }
     }
 
-    pub(in crate::backend::wayland) fn main_surface_layer(&self) -> Layer {
-        if self.data.main_surface_uses_overlay_layer {
-            Layer::Overlay
-        } else {
-            Layer::Top
-        }
-    }
-
     pub(in crate::backend::wayland) fn xdg_focus_loss_exits_overlay(&self) -> bool {
         matches!(
             self.config.ui.xdg_focus_loss_behavior,
             crate::config::XdgFocusLossBehavior::Exit
         )
-    }
-
-    #[allow(dead_code)]
-    pub(in crate::backend::wayland) fn set_xdg_fullscreen(&mut self, value: bool) {
-        self.data.xdg_fullscreen = value;
     }
 
     pub(in crate::backend::wayland) fn session_options(&self) -> Option<&SessionOptions> {
@@ -236,51 +144,5 @@ impl WaylandState {
         &mut self,
     ) -> Option<&mut SessionOptions> {
         self.session.options_mut()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn xdg_frozen_fullscreen_deadline_uses_injected_time() {
-        let start = Instant::now();
-        assert_eq!(
-            xdg_frozen_fullscreen_timeout(true, Some(start), start),
-            Some(XDG_FROZEN_FULLSCREEN_TIMEOUT)
-        );
-        assert_eq!(
-            xdg_frozen_fullscreen_timeout(true, Some(start), start + XDG_FROZEN_FULLSCREEN_TIMEOUT,),
-            Some(Duration::ZERO)
-        );
-        assert_eq!(
-            xdg_frozen_fullscreen_timeout(false, Some(start), start),
-            None
-        );
-        assert_eq!(
-            xdg_frozen_fullscreen_timeout(true, None, start),
-            Some(Duration::ZERO)
-        );
-    }
-
-    #[test]
-    fn finishing_xdg_frozen_fullscreen_request_eliminates_an_expired_timeout() {
-        let start = Instant::now();
-        let mut state = XdgFrozenFullscreenState::PendingConfigure;
-        let mut requested_at = Some(start);
-
-        finish_xdg_frozen_fullscreen_request(&mut state, &mut requested_at);
-
-        assert_eq!(state, XdgFrozenFullscreenState::Inactive);
-        assert_eq!(requested_at, None);
-        assert_eq!(
-            xdg_frozen_fullscreen_timeout(
-                state == XdgFrozenFullscreenState::PendingConfigure,
-                requested_at,
-                start + XDG_FROZEN_FULLSCREEN_TIMEOUT,
-            ),
-            None
-        );
     }
 }

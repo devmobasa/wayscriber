@@ -66,7 +66,7 @@ impl WaylandState {
         let target_identity = self.output_identity_for(&target_output);
 
         if self.surface.is_xdg_window() {
-            if !self.xdg_fullscreen() {
+            if !self.surface.placement().xdg_fullscreen() {
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "output",
@@ -120,7 +120,7 @@ impl WaylandState {
 
         let wl_surface = self.protocol.compositor().create_surface(qh);
         wl_surface.set_buffer_scale(self.surface.scale().max(1));
-        let layer = self.main_surface_layer();
+        let layer = self.surface.placement().layer();
         let layer_surface = layer_shell.create_layer_surface(
             qh,
             wl_surface,

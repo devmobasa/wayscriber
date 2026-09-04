@@ -50,7 +50,7 @@ pub(super) fn capture_timeout(state: &WaylandState, now: Instant) -> Option<Dura
                 state.frozen.portal_timeout(now),
                 super::min_timeout(
                     state.zoom.portal_timeout(now),
-                    state.xdg_frozen_fullscreen_timeout(now),
+                    state.surface.placement().xdg_frozen().timeout(now),
                 ),
             ),
         ),
@@ -62,15 +62,23 @@ fn handle_pending_frozen_image(state: &mut WaylandState, now: Instant) {
         return;
     }
     if state.surface.is_xdg_window() {
-        if state.xdg_fullscreen() {
+        if state.surface.placement().xdg_fullscreen() {
             state.activate_pending_frozen_image_for_current_surface();
             return;
         }
-        if !state.xdg_frozen_fullscreen_requested() && state.begin_xdg_frozen_fullscreen() {
+        if !state.surface.placement().xdg_frozen().requested()
+            && state.begin_xdg_frozen_fullscreen()
+        {
             return;
         }
-        if state.xdg_frozen_fullscreen_pending_configure() {
-            if state.xdg_frozen_fullscreen_timed_out(now) {
+        if state.surface.placement().xdg_frozen().pending_configure() {
+            if state
+                .surface
+                .placement()
+                .xdg_frozen()
+                .timeout(now)
+                .is_some_and(|timeout| timeout.is_zero())
+            {
                 warn!("Frozen xdg fullscreen configure timed out; cancelling freeze");
                 state.restore_xdg_after_frozen();
                 if state.frozen.has_acquisition_attempt() {

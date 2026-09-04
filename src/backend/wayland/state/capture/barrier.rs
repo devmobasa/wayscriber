@@ -225,14 +225,14 @@ impl WaylandState {
         &self,
         now: Instant,
     ) -> Option<Duration> {
-        self.data.overlay_capture_barrier.frame_timeout(now)
+        self.suppression.barrier.frame_timeout(now)
     }
 
     pub(in crate::backend::wayland) fn poll_overlay_capture_barrier_timeout(
         &mut self,
         now: Instant,
     ) {
-        let Some(timeout) = self.data.overlay_capture_barrier.take_frame_timeout(now) else {
+        let Some(timeout) = self.suppression.barrier.take_frame_timeout(now) else {
             return;
         };
         log::warn!(
@@ -258,8 +258,8 @@ impl WaylandState {
         generation: u64,
         qh: &QueueHandle<Self>,
     ) {
-        self.data
-            .overlay_capture_barrier
+        self.suppression
+            .barrier
             .mark_main_surface_frame_ready(generation);
         self.begin_ready_overlay_capture(qh);
     }
@@ -271,11 +271,7 @@ impl WaylandState {
         &mut self,
         generation: u64,
     ) {
-        if self
-            .data
-            .overlay_capture_barrier
-            .acknowledge_gtk_paint(generation)
-        {
+        if self.suppression.barrier.acknowledge_gtk_paint(generation) {
             self.buffer_damage
                 .mark_all_full(FullDamageReason::OverlaySuppression);
             self.input_state.needs_redraw = true;
@@ -291,8 +287,8 @@ impl WaylandState {
         error: &str,
     ) {
         let Some(reason) = self
-            .data
-            .overlay_capture_barrier
+            .suppression
+            .barrier
             .reason_waiting_for_gtk_generation(generation)
         else {
             log::info!(
@@ -313,7 +309,7 @@ impl WaylandState {
     /// A failed GTK connection cannot prove that its mapped surfaces painted
     /// transparent. Cancel only captures still waiting for that proof.
     pub(in crate::backend::wayland) fn cancel_overlay_capture_waiting_for_gtk(&mut self) {
-        let Some(reason) = self.data.overlay_capture_barrier.reason_waiting_for_gtk() else {
+        let Some(reason) = self.suppression.barrier.reason_waiting_for_gtk() else {
             return;
         };
         log::warn!(
@@ -327,13 +323,13 @@ impl WaylandState {
     }
 
     fn begin_ready_overlay_capture(&mut self, qh: &QueueHandle<Self>) {
-        let Some(reason) = self.data.overlay_capture_barrier.take_ready() else {
+        let Some(reason) = self.suppression.barrier.take_ready() else {
             return;
         };
-        if self.data.overlay_suppression != reason {
+        if self.suppression.reason() != reason {
             log::warn!(
                 "Capture barrier completed for {reason:?} while suppression is {:?}; cancelling",
-                self.data.overlay_suppression
+                self.suppression.reason()
             );
             self.cancel_overlay_capture_preflight(reason, None);
             return;
@@ -389,7 +385,7 @@ impl WaylandState {
                     self.cancel_overlay_capture_preflight(reason, None);
                     return;
                 };
-                if !self.capture_suppressed() {
+                if !self.suppression.capture_suppressed() {
                     log::warn!(
                         "Capture preflight completed without capture suppression; cancelling"
                     );
@@ -443,7 +439,7 @@ impl WaylandState {
                 terminal_will_report
             }
             OverlaySuppression::None | OverlaySuppression::ExternalDialog => {
-                self.data.overlay_capture_barrier.cancel(reason);
+                self.suppression.barrier.cancel(reason);
                 false
             }
         }

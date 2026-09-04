@@ -197,7 +197,7 @@ impl AcquisitionTransactionRuntime for WaylandState {
     }
 
     fn frozen_suppressed(&self) -> bool {
-        self.data.overlay_suppression == OverlaySuppression::Frozen
+        self.suppression.reason() == OverlaySuppression::Frozen
     }
 
     fn end_frozen_suppression(&mut self) {

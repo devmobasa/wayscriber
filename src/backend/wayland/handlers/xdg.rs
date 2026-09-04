@@ -67,13 +67,13 @@ impl WindowHandler for WaylandState {
             .map(|h| h.get())
             .unwrap_or(fallback_dimensions.1);
 
-        if self.xdg_frozen_fullscreen_requested() {
+        if self.surface.placement().xdg_frozen().requested() {
             if let Some(output) = self.preferred_fullscreen_output() {
                 window.set_fullscreen(Some(&output));
             } else if !configure.is_fullscreen() {
                 window.set_fullscreen(None);
             }
-        } else if self.xdg_fullscreen() {
+        } else if self.surface.placement().xdg_fullscreen() {
             if let Some(output) = self.preferred_fullscreen_output() {
                 // Reassert fullscreen on the preferred output every configure in case
                 // the compositor picked a different monitor initially.
@@ -122,13 +122,15 @@ impl WindowHandler for WaylandState {
 
         self.refresh_freeze_zoom_geometry();
         self.cancel_screen_modals_if_source_changed();
-        if self.xdg_frozen_fullscreen_requested() && self.frozen.has_pending_image() {
-            if self.xdg_frozen_fullscreen_pending_configure() && !configure.is_fullscreen() {
+        if self.surface.placement().xdg_frozen().requested() && self.frozen.has_pending_image() {
+            if self.surface.placement().xdg_frozen().pending_configure()
+                && !configure.is_fullscreen()
+            {
                 warn!("xdg frozen fullscreen was not granted; activating freeze on current size");
             }
             self.activate_pending_frozen_image_for_current_surface();
         }
-        if self.xdg_frozen_fullscreen_requested()
+        if self.surface.placement().xdg_frozen().requested()
             && !self.input_state.frozen_active()
             && !self.frozen.has_pending_image()
         {

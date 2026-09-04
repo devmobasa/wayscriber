@@ -38,10 +38,11 @@ use crate::{
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
 };
 
-use self::data::StateData;
-pub use self::data::{
-    MoveDragKind, OverlaySuppression, OverlaySuppressionKeyboardPolicy, XdgFrozenFullscreenState,
+pub(in crate::backend::wayland) use self::core::overlay::{
+    OverlaySuppression, OverlaySuppressionKeyboardPolicy,
 };
+pub use self::data::MoveDragKind;
+use self::data::StateData;
 pub(in crate::backend::wayland) use self::region_capture::WindowSnapDirection;
 use super::{
     RuntimeOperationController, RuntimeOperationIdSource,
@@ -49,7 +50,7 @@ use super::{
     frozen::{ExtImageCopyManagers, FrozenState},
     overlay_passthrough::set_surface_clickthrough,
     session::SessionState,
-    surface::SurfaceState,
+    surface::{SurfacePlacement, SurfaceState},
     toolbar::{ToolbarSurfaceManager, layout::top_size, render::render_top_strip},
     toolbar_intent::intent_to_event,
     zoom::ZoomState,
@@ -166,6 +167,8 @@ pub(super) struct WaylandState {
     pub(super) toolbar_chrome: toolbar::ToolbarChrome,
     pub(super) toolbar_drag: toolbar::ToolbarDrag,
     data: StateData,
+    pub(super) suppression: core::overlay::OverlaySuppressionState,
+    shortcut_coach: onboarding::ShortcutCoachSession,
     /// Keyboard, pointer, activation, and focus-loss lifecycle.
     pub(super) focus: focus::FocusState,
     /// Per-buffer damage tracking for correct incremental rendering.

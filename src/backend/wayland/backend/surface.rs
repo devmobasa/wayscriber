@@ -18,7 +18,7 @@ pub(super) fn create_overlay_surface(
         state.focus.begin_main_layer_acquisition();
     }
     if let Some(layer_shell) = state.protocol.layer_shell() {
-        let layer = state.main_surface_layer();
+        let layer = state.surface.placement().layer();
         info!("Creating layer shell surface in {:?} layer", layer);
         let layer_surface = layer_shell.create_layer_surface(
             qh,
@@ -49,7 +49,7 @@ pub(super) fn create_overlay_surface(
         window.set_title("wayscriber overlay");
         let app_id = runtime_app_id();
         window.set_app_id(&app_id);
-        if state.xdg_fullscreen() {
+        if state.surface.placement().xdg_fullscreen() {
             if let Some(output) = state.preferred_fullscreen_output() {
                 info!("Requesting fullscreen on preferred output");
                 window.set_fullscreen(Some(&output));

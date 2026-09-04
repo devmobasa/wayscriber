@@ -68,8 +68,8 @@ impl WaylandState {
         debug!("=== RENDER START ===");
         let board_is_transparent = self.input_state.board_is_transparent();
         let suppression = self
-            .data
-            .overlay_suppression
+            .suppression
+            .reason()
             .effective_for_board(board_is_transparent);
         let render_canvas = suppression.renders_canvas();
         let render_canvas_transients = suppression.renders_canvas_transients();
@@ -410,10 +410,7 @@ impl WaylandState {
                 wl_surface.damage_buffer(region.x, region.y, region.width, region.height);
             }
 
-            let capture_generation = self
-                .data
-                .overlay_capture_barrier
-                .begin_main_surface_submission();
+            let capture_generation = self.suppression.barrier.begin_main_surface_submission();
             if self.config.performance.enable_vsync {
                 debug!("Requesting frame callback (vsync enabled)");
                 let callback = self
@@ -454,7 +451,7 @@ impl WaylandState {
             self.record_perf_render_breakdown(breakdown);
         }
 
-        if self.capture_suppressed() {
+        if self.suppression.capture_suppressed() {
             self.capture.mark_preflight_rendered();
         }
         Ok(RenderOutcome::Committed { keep_rendering })

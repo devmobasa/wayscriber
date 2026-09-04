@@ -4,7 +4,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn preferred_fullscreen_output(
         &self,
     ) -> Option<wl_output::WlOutput> {
-        if let Some(preferred) = self.preferred_output_identity()
+        if let Some(preferred) = self.surface.placement().preferred_output_identity()
             && let Some(output) = self.protocol.output().outputs().find(|output| {
                 self.output_identity_for(output)
                     .map(|id| id.eq_ignore_ascii_case(preferred))

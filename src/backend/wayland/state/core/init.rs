@@ -42,10 +42,12 @@ impl WaylandState {
             }
         };
 
-        let mut data = StateData::new();
-        data.preferred_output_identity = preferred_output_identity;
-        data.xdg_fullscreen = xdg_fullscreen;
-        data.main_surface_uses_overlay_layer = main_surface_uses_overlay_layer;
+        let data = StateData::new();
+        let placement = SurfacePlacement::new(
+            preferred_output_identity,
+            xdg_fullscreen,
+            main_surface_uses_overlay_layer,
+        );
         let force_inline_toolbars = force_inline_toolbars_requested(&config);
         let inline_toolbars = globals.layer_shell().is_none()
             || force_inline_toolbars
@@ -110,11 +112,13 @@ impl WaylandState {
 
         Self {
             protocol: globals,
-            surface: SurfaceState::new(),
+            surface: SurfaceState::new(placement),
             toolbar: ToolbarSurfaceManager::new(),
             toolbar_chrome,
             toolbar_drag: super::super::toolbar::ToolbarDrag::new(),
             data,
+            suppression: Default::default(),
+            shortcut_coach: Default::default(),
             focus: super::super::focus::FocusState::new(startup_activation_token),
             buffer_damage: BufferDamageTracker::new(buffer_count),
             canvas_layer_cache: super::super::canvas_layer::CanvasLayerCache::new(),

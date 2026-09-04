@@ -102,7 +102,7 @@ pub(super) fn run_event_loop(
         let capture_active = state.capture.is_in_progress()
             || state.frozen.is_in_progress()
             || state.zoom.is_in_progress()
-            || state.overlay_blocks_event_loop();
+            || state.suppression.blocks_event_loop();
         let timeout = event_loop_timeout(state, capture_active, last_render_time);
         if let Err(e) =
             dispatch::dispatch_events(event_queue, state, runtime_wake, signal_state, timeout)

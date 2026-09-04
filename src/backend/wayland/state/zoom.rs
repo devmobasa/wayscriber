@@ -13,7 +13,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn sync_zoom_board_mode(&mut self) {
         let board_is_transparent = self.input_state.board_is_transparent();
         if !board_is_transparent {
-            if self.data.overlay_suppression == OverlaySuppression::Zoom {
+            if self.suppression.reason() == OverlaySuppression::Zoom {
                 self.exit_overlay_suppression(OverlaySuppression::Zoom);
             }
             if self.zoom.abort_capture() {

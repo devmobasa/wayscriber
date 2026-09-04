@@ -44,7 +44,8 @@ impl WaylandState {
             feature_compiled: cfg!(feature = "toolbar-gtk"),
             layer_shell: self.protocol.layer_shell().is_some(),
             force_inline: super::force_inline_toolbars_requested(&self.config),
-            main_surface_uses_overlay_layer: self.data.main_surface_uses_overlay_layer,
+            main_surface_uses_overlay_layer: self.surface.placement().layer()
+                == smithay_client_toolkit::shell::wlr_layer::Layer::Overlay,
         };
         match resolve_frontend(request, preconditions) {
             ToolbarFrontend::Gtk => {
@@ -182,7 +183,7 @@ impl WaylandState {
         // Capture suppression keeps normally visible layer surfaces mapped
         // but transparent, avoiding compositor-owned close-animation
         // snapshots. Other suppression and light passthrough still unmap.
-        let capture_suppressed = self.data.overlay_suppression.requires_capture_barrier();
+        let capture_suppressed = self.suppression.requires_capture_barrier();
         let unmap_suppressed = self.overlay_passthrough_requested() && !capture_suppressed;
         let capture_picker_suppressed = self.capture_picker_chrome_suppressed();
         let update = GtkToolbarUpdate {
@@ -208,16 +209,13 @@ impl WaylandState {
             modal_engaged: gtk_toolbar_feedback_blocked(&self.input_state),
             drag_preview: self.toolbar_drag.gtk_preview_kind(),
             capture_suppressed,
-            capture_suppression_generation: self
-                .data
-                .overlay_capture_barrier
-                .gtk_paint_generation(),
+            capture_suppression_generation: self.suppression.barrier.gtk_paint_generation(),
             snapshot,
         };
         if let Some(generation) = update.capture_suppression_generation {
             log::info!(
                 "capture.preflight id={generation} component=backend phase=gtk-update-queued reason={:?} top_visible={} output={:?}",
-                self.data.overlay_suppression,
+                self.suppression.reason(),
                 update.top_visible,
                 update.output_name
             );
