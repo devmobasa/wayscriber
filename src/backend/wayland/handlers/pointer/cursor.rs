@@ -89,7 +89,7 @@ impl WaylandState {
         toolbar_hover: bool,
         conn: &Connection,
     ) {
-        if self.toolbar_dragging() && self.pointer_lock_active() {
+        if self.toolbar_drag.item_dragging() && self.pointer_lock_active() {
             self.hide_pointer_cursor();
             return;
         }
@@ -232,7 +232,7 @@ impl WaylandState {
             }
         }
 
-        if self.toolbar_dragging() {
+        if self.toolbar_drag.item_dragging() {
             return CursorIcon::Grabbing;
         }
         if self.pointer.board_pan_active() {

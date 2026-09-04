@@ -24,8 +24,8 @@ impl WaylandState {
             return;
         }
 
-        if self.is_move_dragging()
-            && let Some(kind) = self.active_move_drag_kind()
+        if self.toolbar_drag.is_moving()
+            && let Some(kind) = self.toolbar_drag.kind()
         {
             drag_log(|| {
                 format!(
@@ -55,7 +55,7 @@ impl WaylandState {
         // flick sampling and wedge hover must keep working when the pointer
         // crosses a toolbar region, so bypass the toolbar gates below until
         // the menu closes.
-        if self.input_state.is_radial_menu_open() && !self.is_move_dragging() {
+        if self.input_state.is_radial_menu_open() && !self.toolbar_drag.is_moving() {
             let screen_position = if on_toolbar {
                 self.toolbar_surface_screen_coords(&event.surface, event.position)
             } else {
@@ -96,7 +96,7 @@ impl WaylandState {
                     .update_pointer_positions(sx as i32, sy as i32, wx, wy);
             }
             let evt = self.toolbar.pointer_motion(&event.surface, event.position);
-            if self.toolbar_dragging() {
+            if self.toolbar_drag.item_dragging() {
                 // Use move_drag_intent if pointer_motion didn't return an intent
                 // This allows dragging to continue when mouse moves outside hit region
                 let intent =
@@ -127,7 +127,7 @@ impl WaylandState {
                 wy,
             );
             let evt = self.toolbar.pointer_motion(&event.surface, event.position);
-            if self.toolbar_dragging() {
+            if self.toolbar_drag.item_dragging() {
                 // Use move_drag_intent if pointer_motion didn't return an intent
                 // This allows dragging to continue when mouse moves outside hit region
                 let intent =
@@ -148,7 +148,7 @@ impl WaylandState {
             return;
         }
         // Handle move drag that continues on the main surface after leaving toolbar
-        if self.is_move_dragging() {
+        if self.toolbar_drag.is_moving() {
             if let Some(intent) = self.move_drag_intent(event.position.0, event.position.1) {
                 let evt = intent_to_event(intent, self.toolbar.last_snapshot());
                 self.handle_toolbar_event(evt, None, None);

@@ -70,7 +70,7 @@ impl WaylandState {
                 button,
                 on_toolbar,
                 inline_active,
-                self.is_move_dragging()
+                self.toolbar_drag.is_moving()
             );
         }
         if inline_active && self.handle_inline_pointer_press(conn, qh, event, button) {
@@ -81,7 +81,7 @@ impl WaylandState {
             return;
         } else if self.toolbar_chrome.pointer_over_toolbar() {
             self.finish_toolbar_item_drag(false);
-            self.set_toolbar_dragging(false);
+            self.toolbar_drag.set_item_dragging(false);
             return;
         }
 
@@ -262,13 +262,13 @@ impl WaylandState {
             drag_log(|| {
                 format!(
                     "pointer press: inline handled, drag_active={}, pos=({:.3}, {:.3}), surface={}",
-                    self.toolbar_dragging(),
+                    self.toolbar_drag.item_dragging(),
                     event.position.0,
                     event.position.1,
                     surface_id(&event.surface)
                 )
             });
-            if self.is_move_dragging() {
+            if self.toolbar_drag.is_moving() {
                 self.lock_pointer_for_drag(qh, &event.surface);
             }
             return true;
@@ -331,7 +331,7 @@ impl WaylandState {
             self.focus.current_seat_id(),
             self.toolbar_chrome.inline_toolbars()
         );
-        self.set_toolbar_dragging(drag);
+        self.toolbar_drag.set_item_dragging(drag);
         self.handle_toolbar_event(toolbar_event, Some(conn), Some(qh));
         self.toolbar.mark_dirty();
         self.input_state.needs_redraw = true;

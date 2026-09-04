@@ -115,6 +115,7 @@ impl WaylandState {
             surface: SurfaceState::new(),
             toolbar: ToolbarSurfaceManager::new(),
             toolbar_chrome,
+            toolbar_drag: super::super::toolbar::ToolbarDrag::new(),
             data,
             focus: super::super::focus::FocusState::new(startup_activation_token),
             buffer_damage: BufferDamageTracker::new(buffer_count),

@@ -66,8 +66,8 @@ impl WaylandState {
                 button,
                 on_toolbar,
                 inline_active,
-                self.is_move_dragging(),
-                self.toolbar_dragging(),
+                self.toolbar_drag.is_moving(),
+                self.toolbar_drag.item_dragging(),
                 self.toolbar_chrome.pointer_over_toolbar()
             );
         }
@@ -87,7 +87,7 @@ impl WaylandState {
             return;
         }
         // End move drag if released on the main surface
-        if button == BTN_LEFT && self.is_move_dragging() {
+        if button == BTN_LEFT && self.toolbar_drag.is_moving() {
             self.finish_main_surface_drag(event);
             return;
         }
@@ -246,8 +246,8 @@ impl WaylandState {
         button: u32,
     ) -> bool {
         if !self.input_state.is_radial_menu_open()
-            || self.is_move_dragging()
-            || self.toolbar_dragging()
+            || self.toolbar_drag.is_moving()
+            || self.toolbar_drag.item_dragging()
         {
             return false;
         }
@@ -280,14 +280,14 @@ impl WaylandState {
                     "pointer release: inline handled, pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
                     event.position.0,
                     event.position.1,
-                    self.is_move_dragging(),
+                    self.toolbar_drag.is_moving(),
                     self.toolbar_chrome.pointer_over_toolbar()
                 )
             });
             self.unlock_pointer();
             return true;
         }
-        if !self.toolbar_chrome.pointer_over_toolbar() && !self.toolbar_dragging() {
+        if !self.toolbar_chrome.pointer_over_toolbar() && !self.toolbar_drag.item_dragging() {
             return false;
         }
         drag_log(|| {
@@ -295,7 +295,7 @@ impl WaylandState {
                 "pointer release: inline end drag, pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
                 event.position.0,
                 event.position.1,
-                self.is_move_dragging(),
+                self.toolbar_drag.is_moving(),
                 self.toolbar_chrome.pointer_over_toolbar()
             )
         });
@@ -307,14 +307,14 @@ impl WaylandState {
     fn handle_toolbar_pointer_release(&mut self, event: &PointerEvent, button: u32) {
         if button == BTN_LEFT {
             self.finish_toolbar_item_drag(true);
-            self.set_toolbar_dragging(false);
+            self.toolbar_drag.set_item_dragging(false);
         }
         drag_log(|| {
             format!(
                 "pointer release: toolbar end drag, pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
                 event.position.0,
                 event.position.1,
-                self.is_move_dragging(),
+                self.toolbar_drag.is_moving(),
                 self.toolbar_chrome.pointer_over_toolbar()
             )
         });
@@ -324,7 +324,7 @@ impl WaylandState {
 
     fn finish_main_surface_drag(&mut self, event: &PointerEvent) {
         self.finish_toolbar_item_drag(true);
-        self.set_toolbar_dragging(false);
+        self.toolbar_drag.set_item_dragging(false);
         drag_log(|| {
             format!(
                 "pointer release: main surface end drag, pos=({:.3}, {:.3})",

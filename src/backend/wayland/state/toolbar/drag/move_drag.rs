@@ -7,17 +7,17 @@ impl WaylandState {
         coord: (f64, f64),
         coord_is_screen: bool,
     ) -> bool {
-        if self.data.toolbar_move_drag.is_none() {
+        if !self.toolbar_drag.is_moving() {
             if !self.begin_toolbar_position_preview(kind) {
                 return false;
             }
             if toolbar_drag_preview_enabled()
                 && self.protocol.layer_shell().is_some()
                 && !self.toolbar_chrome.inline_toolbars()
-                && !self.toolbar_drag_preview_active()
+                && !self.toolbar_drag.preview_active()
             {
                 drag_log(|| "enable inline drag preview (layer-shell toolbars hidden)");
-                self.set_toolbar_drag_preview_active(true);
+                self.toolbar_drag.set_preview_active(true);
                 self.toolbar
                     .set_suppressed(self.protocol.compositor(), true);
                 self.input_state.dirty_tracker.mark_full();
@@ -41,14 +41,6 @@ impl WaylandState {
                     self.protocol.layer_shell().is_some()
                 )
             });
-            // Store initial coord with explicit coordinate space (screen vs toolbar-local).
-            self.data.toolbar_move_drag = Some(MoveDrag {
-                kind,
-                last_coord: coord,
-                coord_is_screen,
-            });
-            self.data.toolbar_drag_pending_apply = false;
-            self.data.last_toolbar_drag_apply = None;
             // Freeze the base position so a relayout cannot shift the surface
             // under the pointer mid-drag.
             let top_base_x = self.inline_top_base_x();
@@ -66,11 +58,10 @@ impl WaylandState {
                     self.surface.scale()
                 )
             });
-            self.data.drag_top_base_x = Some(top_base_x);
-            self.data.drag_top_base_y = Some(top_base_y);
+            self.toolbar_drag
+                .begin_move(kind, coord, coord_is_screen, (top_base_x, top_base_y));
         }
-        self.data.active_drag_kind = Some(kind);
-        self.set_toolbar_dragging(true);
+        self.toolbar_drag.set_item_dragging(true);
         true
     }
 
@@ -86,15 +77,7 @@ impl WaylandState {
             // Consume the coordinate baseline without moving the toolbar. If
             // the exact same authority resumes this untouched preview, the
             // next accepted event applies only post-barrier movement.
-            if let Some(drag) = self
-                .data
-                .toolbar_move_drag
-                .as_mut()
-                .filter(|drag| drag.kind == kind)
-            {
-                drag.last_coord = local_coord;
-                drag.coord_is_screen = false;
-            }
+            self.toolbar_drag.note_move(kind, local_coord, false);
             return;
         }
         if self.pointer_lock_active() {
@@ -132,21 +115,12 @@ impl WaylandState {
 
         // When inline drag preview is active we keep the layer-shell toolbars
         // suppressed and only move the inline-rendered preview.
-        if self.toolbar_drag_preview_active() {
-            let last_local = match &self.data.toolbar_move_drag {
-                Some(d) if d.kind == kind && !d.coord_is_screen => d.last_coord,
-                _ => local_coord,
-            };
-
-            self.data.active_drag_kind = Some(kind);
-
-            let delta = (local_coord.0 - last_local.0, local_coord.1 - last_local.1);
+        if self.toolbar_drag.preview_active() {
+            let delta = self
+                .toolbar_drag
+                .move_to(kind, local_coord, false)
+                .unwrap_or((0.0, 0.0));
             if delta.0 == 0.0 && delta.1 == 0.0 {
-                self.data.toolbar_move_drag = Some(MoveDrag {
-                    kind,
-                    last_coord: local_coord,
-                    coord_is_screen: false,
-                });
                 return;
             }
 
@@ -155,12 +129,6 @@ impl WaylandState {
                     self.toolbar_chrome.add_top_offset(delta);
                 }
             }
-
-            self.data.toolbar_move_drag = Some(MoveDrag {
-                kind,
-                last_coord: local_coord,
-                coord_is_screen: false,
-            });
 
             // Clamp offsets; pointer-locked preview drags also move the suppressed
             // layer surface so release does not visibly replay the drag.
@@ -179,10 +147,12 @@ impl WaylandState {
         }
 
         // Check if we need to transition coordinate systems
-        let (last_coord, coord_is_screen) = match &self.data.toolbar_move_drag {
-            Some(d) if d.kind == kind => (d.last_coord, d.coord_is_screen),
-            _ => (local_coord, false), // Start fresh with local coords
-        };
+        let (last_coord, coord_is_screen) = self
+            .toolbar_drag
+            .move_sample()
+            .map_or((local_coord, false), |sample| {
+                (sample.coord, sample.is_screen)
+            });
 
         // If last coord was screen-based, convert current local to screen for comparison
         let last_screen = if coord_is_screen {
@@ -192,12 +162,13 @@ impl WaylandState {
         };
         let effective_coord = self.local_to_screen_coords(kind, local_coord);
 
-        self.data.active_drag_kind = Some(kind);
-
-        let delta = (
-            effective_coord.0 - last_screen.0,
-            effective_coord.1 - last_screen.1,
-        );
+        if !coord_is_screen {
+            self.toolbar_drag.note_move(kind, last_screen, true);
+        }
+        let delta = self
+            .toolbar_drag
+            .move_to(kind, effective_coord, true)
+            .unwrap_or((0.0, 0.0));
         drag_log(|| {
             format!(
                 "move_local delta: kind={:?}, local=({:.3}, {:.3}), effective=({:.3}, {:.3}), last_screen=({:.3}, {:.3}), delta=({:.3}, {:.3}), offsets_before=({}, {})",
@@ -229,11 +200,6 @@ impl WaylandState {
             self.toolbar_chrome.top_offset().1
         );
         if delta.0 == 0.0 && delta.1 == 0.0 {
-            self.data.toolbar_move_drag = Some(MoveDrag {
-                kind,
-                last_coord: effective_coord,
-                coord_is_screen: true,
-            });
             return;
         }
 
@@ -256,11 +222,6 @@ impl WaylandState {
             self.toolbar_chrome.top_offset().1
         );
 
-        self.data.toolbar_move_drag = Some(MoveDrag {
-            kind,
-            last_coord: effective_coord,
-            coord_is_screen: true,
-        });
         self.apply_toolbar_offsets_throttled(&snapshot);
         let inline_render_active = self.inline_toolbars_render_active();
         if inline_render_active {
@@ -281,15 +242,7 @@ impl WaylandState {
         screen_coord: (f64, f64),
     ) {
         if !self.toolbar_position_drag_update_allowed(kind) {
-            if let Some(drag) = self
-                .data
-                .toolbar_move_drag
-                .as_mut()
-                .filter(|drag| drag.kind == kind)
-            {
-                drag.last_coord = screen_coord;
-                drag.coord_is_screen = true;
-            }
+            self.toolbar_drag.note_move(kind, screen_coord, true);
             return;
         }
         if self.pointer_lock_active() {
@@ -318,23 +271,23 @@ impl WaylandState {
             .unwrap_or_else(|| self.toolbar_snapshot());
 
         // Get last coord, converting from local to screen if needed
-        let last_screen_coord = match self.data.toolbar_move_drag {
-            Some(d) if d.kind == kind => {
-                if d.coord_is_screen {
-                    d.last_coord
-                } else {
-                    self.local_to_screen_coords(kind, d.last_coord)
-                }
-            }
-            _ => screen_coord, // Start fresh
+        let last_screen_coord = match self.toolbar_drag.move_sample() {
+            Some(sample) if sample.is_screen => sample.coord,
+            Some(sample) => self.local_to_screen_coords(kind, sample.coord),
+            None => screen_coord,
         };
 
-        self.data.active_drag_kind = Some(kind);
-
-        let delta = (
-            screen_coord.0 - last_screen_coord.0,
-            screen_coord.1 - last_screen_coord.1,
-        );
+        if self
+            .toolbar_drag
+            .move_sample()
+            .is_some_and(|sample| !sample.is_screen)
+        {
+            self.toolbar_drag.note_move(kind, last_screen_coord, true);
+        }
+        let delta = self
+            .toolbar_drag
+            .move_to(kind, screen_coord, true)
+            .unwrap_or((0.0, 0.0));
         drag_log(|| {
             format!(
                 "move_screen delta: kind={:?}, screen=({:.3}, {:.3}), last_screen=({:.3}, {:.3}), delta=({:.3}, {:.3}), offsets_before=({}, {})",
@@ -362,11 +315,6 @@ impl WaylandState {
             self.toolbar_chrome.top_offset().1
         );
         if delta.0 == 0.0 && delta.1 == 0.0 {
-            self.data.toolbar_move_drag = Some(MoveDrag {
-                kind,
-                last_coord: screen_coord,
-                coord_is_screen: true,
-            });
             return;
         }
         match kind {
@@ -383,11 +331,6 @@ impl WaylandState {
             )
         });
 
-        self.data.toolbar_move_drag = Some(MoveDrag {
-            kind,
-            last_coord: screen_coord,
-            coord_is_screen: true,
-        });
         self.apply_toolbar_offsets_throttled(&snapshot);
         let inline_render_active = self.inline_toolbars_render_active();
         if inline_render_active {

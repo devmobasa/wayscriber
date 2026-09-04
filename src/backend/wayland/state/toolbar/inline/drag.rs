@@ -12,20 +12,8 @@ impl WaylandState {
         use crate::backend::wayland::toolbar_intent::ToolbarIntent;
         use crate::ui::toolbar::ToolbarEvent;
 
-        self.data.toolbar_move_drag.as_ref().map(
-            |MoveDrag {
-                 kind: MoveDragKind::Top,
-                 ..
-             }| ToolbarIntent(ToolbarEvent::MoveTopToolbar { x, y }),
-        )
-    }
-
-    /// Returns true if we're currently in a toolbar move drag operation.
-    pub(in crate::backend::wayland) fn is_move_dragging(&self) -> bool {
-        self.data.toolbar_move_drag.is_some()
-    }
-
-    pub(in crate::backend::wayland) fn active_move_drag_kind(&self) -> Option<MoveDragKind> {
-        self.data.active_drag_kind
+        self.toolbar_drag
+            .kind()
+            .map(|MoveDragKind::Top| ToolbarIntent(ToolbarEvent::MoveTopToolbar { x, y }))
     }
 }

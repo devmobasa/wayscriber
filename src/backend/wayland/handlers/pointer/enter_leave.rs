@@ -20,7 +20,7 @@ impl WaylandState {
             event.position.0,
             event.position.1,
             on_toolbar,
-            self.is_move_dragging()
+            self.toolbar_drag.is_moving()
         );
         self.focus.set_pointer_focused(true);
         self.toolbar_chrome.set_pointer_over_toolbar(on_toolbar);
@@ -79,7 +79,7 @@ impl WaylandState {
         debug!(
             "Pointer left surface: on_toolbar={}, is_move_dragging={}",
             on_toolbar,
-            self.is_move_dragging()
+            self.toolbar_drag.is_moving()
         );
         self.focus.set_pointer_focused(false);
         // The pointer is gone, so no further wheel tick can extend the burst.
@@ -94,10 +94,10 @@ impl WaylandState {
             // Don't clear drag state if we're in a move drag - the user may be
             // dragging the toolbar and their pointer left the toolbar surface.
             // The drag will continue on the main surface.
-            if !self.is_move_dragging() {
+            if !self.toolbar_drag.is_moving() {
                 debug!("Clearing toolbar drag state on leave");
                 self.finish_toolbar_item_drag(false);
-                self.set_toolbar_dragging(false);
+                self.toolbar_drag.set_item_dragging(false);
                 self.cancel_toolbar_move_drag();
             } else {
                 debug!("Preserving move drag state on toolbar leave");
@@ -115,7 +115,7 @@ impl WaylandState {
         if inline_active {
             self.inline_toolbar_leave();
         }
-        if (on_toolbar || inline_active) && !self.is_move_dragging() {
+        if (on_toolbar || inline_active) && !self.toolbar_drag.is_moving() {
             self.end_toolbar_move_drag();
         }
         if preview_was_eligible != self.mouse_tool_preview_eligible() {

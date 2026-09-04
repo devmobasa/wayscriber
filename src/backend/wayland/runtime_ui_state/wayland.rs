@@ -340,7 +340,7 @@ impl WaylandState {
         }
         if refresh.item_drag_aborted {
             self.input_state.clear_toolbar_item_drag();
-            self.set_toolbar_dragging(false);
+            self.toolbar_drag.set_item_dragging(false);
         }
         if refresh.position_drag_aborted {
             self.cancel_toolbar_move_drag();
@@ -441,7 +441,7 @@ impl WaylandState {
         }
         if drain.rebuild_live {
             self.input_state.clear_toolbar_item_drag();
-            self.set_toolbar_dragging(false);
+            self.toolbar_drag.set_item_dragging(false);
             self.cancel_toolbar_move_drag();
             self.cancel_gtk_toolbar_drag_lifecycle();
             let mut positions = self.toolbar_position_snapshot();

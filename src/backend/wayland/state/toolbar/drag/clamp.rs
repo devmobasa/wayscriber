@@ -3,38 +3,21 @@ use std::time::Instant;
 use super::*;
 
 impl WaylandState {
-    fn toolbar_drag_should_apply(&mut self) -> bool {
-        let Some(interval) = toolbar_drag_throttle_interval() else {
-            return true;
-        };
-        let now = Instant::now();
-        let should_apply = match self.data.last_toolbar_drag_apply {
-            Some(last) => now.duration_since(last) >= interval,
-            None => true,
-        };
-        if should_apply {
-            self.data.last_toolbar_drag_apply = Some(now);
-        }
-        should_apply
-    }
-
     pub(in crate::backend::wayland::state::toolbar) fn apply_toolbar_offsets_throttled(
         &mut self,
         snapshot: &ToolbarSnapshot,
     ) {
-        if self.toolbar_drag_preview_active() || toolbar_drag_throttle_interval().is_none() {
+        let now = Instant::now();
+        let Some(interval) = toolbar_drag_throttle_interval() else {
             let _ = self.apply_toolbar_offsets(snapshot);
-            self.data.toolbar_drag_pending_apply = false;
-            self.data.last_toolbar_drag_apply = Some(Instant::now());
+            self.toolbar_drag.note_applied(now);
             return;
-        }
-
-        if self.toolbar_drag_should_apply() {
+        };
+        if self.toolbar_drag.preview_active() || self.toolbar_drag.should_apply(now, interval) {
             let _ = self.apply_toolbar_offsets(snapshot);
-            self.data.toolbar_drag_pending_apply = false;
+            self.toolbar_drag.note_applied(now);
         } else {
             let _ = self.clamp_toolbar_offsets(snapshot);
-            self.data.toolbar_drag_pending_apply = true;
         }
     }
 
@@ -112,7 +95,7 @@ impl WaylandState {
         // to avoid drift as the source surface moves under the pointer. Pointer-locked
         // drags use relative deltas instead, so the suppressed real surface can track
         // the preview and avoid a visible catch-up animation on release.
-        if self.toolbar_drag_preview_active() && !self.pointer_lock_active() {
+        if self.toolbar_drag.preview_active() && !self.pointer_lock_active() {
             drag_log(|| "skip apply_toolbar_offsets: drag preview active without pointer lock");
             return false;
         }
@@ -161,8 +144,8 @@ impl WaylandState {
         }
         self.toolbar
             .set_top_margins(top_margin_top, top_margin_left);
-        if self.toolbar_drag_preview_active() && self.pointer_lock_active() {
-            self.request_toolbar_drag_flush();
+        if self.toolbar_drag.preview_active() && self.pointer_lock_active() {
+            self.toolbar_drag.request_flush();
         }
         top_changed
     }

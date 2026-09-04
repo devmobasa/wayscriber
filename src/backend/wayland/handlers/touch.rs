@@ -130,7 +130,7 @@ impl WaylandState {
             self.inline_toolbar_leave();
         }
         self.finish_toolbar_item_drag(false);
-        self.set_toolbar_dragging(false);
+        self.toolbar_drag.set_item_dragging(false);
         self.cancel_toolbar_move_drag();
         if self.pointer.board_pan_active() {
             self.pointer.stop_board_pan();
@@ -275,7 +275,7 @@ impl WaylandState {
             self.toolbar_chrome.set_pointer_over_toolbar(true);
             if let Some((intent, drag)) = self.toolbar.pointer_press(surface, position) {
                 let toolbar_event = intent_to_event(intent, self.toolbar.last_snapshot());
-                self.set_toolbar_dragging(drag);
+                self.toolbar_drag.set_item_dragging(drag);
                 self.handle_toolbar_event(toolbar_event, Some(conn), Some(qh));
                 self.toolbar.mark_dirty();
                 self.input_state.needs_redraw = true;
@@ -348,8 +348,8 @@ impl WaylandState {
             return;
         }
 
-        if self.is_move_dragging()
-            && let Some(kind) = self.active_move_drag_kind()
+        if self.toolbar_drag.is_moving()
+            && let Some(kind) = self.toolbar_drag.kind()
         {
             if target == TouchTarget::Toolbar {
                 self.handle_toolbar_move(kind, position);
@@ -372,7 +372,7 @@ impl WaylandState {
             self.input_state
                 .update_pointer_positions(screen_x, screen_y, wx, wy);
             let evt = self.toolbar.pointer_motion(surface, position);
-            if self.toolbar_dragging() {
+            if self.toolbar_drag.item_dragging() {
                 let intent = evt.or_else(|| self.move_drag_intent(position.0, position.1));
                 if let Some(intent) = intent {
                     let evt = intent_to_event(intent, self.toolbar.last_snapshot());
@@ -473,14 +473,14 @@ impl WaylandState {
                 debug!(
                     "touch release: target={:?}, drag_active={}, toolbar_dragging={}",
                     target,
-                    self.is_move_dragging(),
-                    self.toolbar_dragging()
+                    self.toolbar_drag.is_moving(),
+                    self.toolbar_drag.item_dragging()
                 );
             }
             self.toolbar.pointer_leave(surface);
             self.toolbar_chrome.set_pointer_over_toolbar(false);
             self.finish_toolbar_item_drag(true);
-            self.set_toolbar_dragging(false);
+            self.toolbar_drag.set_item_dragging(false);
             self.end_toolbar_move_drag();
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;
@@ -501,8 +501,8 @@ impl WaylandState {
             debug!(
                 "touch release: target={:?}, drag_active={}, toolbar_dragging={}",
                 target,
-                self.is_move_dragging(),
-                self.toolbar_dragging()
+                self.toolbar_drag.is_moving(),
+                self.toolbar_drag.item_dragging()
             );
         }
 
@@ -511,9 +511,9 @@ impl WaylandState {
             return;
         }
 
-        if self.is_move_dragging() {
+        if self.toolbar_drag.is_moving() {
             self.finish_toolbar_item_drag(true);
-            self.set_toolbar_dragging(false);
+            self.toolbar_drag.set_item_dragging(false);
             self.end_toolbar_move_drag();
             return;
         }

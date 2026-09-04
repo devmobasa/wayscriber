@@ -36,8 +36,8 @@ impl PointerHandler for WaylandState {
                     inline_active,
                     event.position.0,
                     event.position.1,
-                    self.is_move_dragging(),
-                    self.toolbar_dragging(),
+                    self.toolbar_drag.is_moving(),
+                    self.toolbar_drag.item_dragging(),
                     self.toolbar_chrome.pointer_over_toolbar()
                 );
             }

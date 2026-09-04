@@ -38,7 +38,7 @@ use crate::{
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
 };
 
-use self::data::{MoveDrag, StateData};
+use self::data::StateData;
 pub use self::data::{
     MoveDragKind, OverlaySuppression, OverlaySuppressionKeyboardPolicy, XdgFrozenFullscreenState,
 };
@@ -164,6 +164,7 @@ pub(super) struct WaylandState {
     pub(super) surface: SurfaceState,
     pub(super) toolbar: ToolbarSurfaceManager,
     pub(super) toolbar_chrome: toolbar::ToolbarChrome,
+    pub(super) toolbar_drag: toolbar::ToolbarDrag,
     data: StateData,
     /// Keyboard, pointer, activation, and focus-loss lifecycle.
     pub(super) focus: focus::FocusState,

@@ -77,39 +77,9 @@ impl OverlaySuppression {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct MoveDrag {
-    pub kind: MoveDragKind,
-    pub last_coord: (f64, f64),
-    /// Whether last_coord is in screen coordinates (true) or toolbar-local (false)
-    pub coord_is_screen: bool,
-}
 /// Focus/pointer/toolbar interaction data owned by WaylandState and shared with handlers.
 #[derive(Debug, Default)]
 pub struct StateData {
-    pub(super) toolbar_dragging: bool,
-    pub(super) toolbar_drag_preview: bool,
-    /// Highest GTK drag sequence numbers drained per bar; echoed in
-    /// updates so the GTK side can discard stale offset mirrors.
-    pub(super) gtk_top_offset_seq: u64,
-    /// GTK surface currently parked at its drag origin while the main overlay
-    /// renders the moving toolbar preview.
-    pub(super) gtk_drag_preview: Option<crate::toolbar_gtk::GtkToolbarKind>,
-    /// Offset corrections accumulated while a persistence barrier freezes a
-    /// start-relative GTK drag. They discard fenced motion if the exact same
-    /// preview later resumes.
-    pub(super) gtk_top_drag_rebase: Option<(f64, f64)>,
-    /// A GTK drag that emitted feedback while a modal was engaged stays
-    /// blocked until its matching drag-end feedback arrives.
-    pub(super) gtk_top_drag_blocked: bool,
-    pub(super) toolbar_move_drag: Option<MoveDrag>,
-    pub(super) active_drag_kind: Option<MoveDragKind>,
-    pub(super) drag_top_base_x: Option<f64>,
-    pub(super) drag_top_base_y: Option<f64>,
-    pub(super) toolbar_drag_handoff_at: Option<Instant>,
-    pub(super) toolbar_drag_flush_requested: bool,
-    pub(super) toolbar_drag_pending_apply: bool,
-    pub(super) last_toolbar_drag_apply: Option<Instant>,
     pub(super) pending_freeze_on_start: bool,
     pub(super) screen_acquisition: ScreenAcquisitionRegistry,
     pub(super) zoom_waiter: ZoomWaiterRegistry,
@@ -156,20 +126,6 @@ pub struct StateData {
 impl StateData {
     pub fn new() -> Self {
         Self {
-            toolbar_dragging: false,
-            toolbar_drag_preview: false,
-            gtk_top_offset_seq: 0,
-            gtk_drag_preview: None,
-            gtk_top_drag_rebase: None,
-            gtk_top_drag_blocked: false,
-            toolbar_move_drag: None,
-            active_drag_kind: None,
-            drag_top_base_x: None,
-            drag_top_base_y: None,
-            toolbar_drag_handoff_at: None,
-            toolbar_drag_flush_requested: false,
-            toolbar_drag_pending_apply: false,
-            last_toolbar_drag_apply: None,
             pending_freeze_on_start: false,
             screen_acquisition: ScreenAcquisitionRegistry::default(),
             zoom_waiter: ZoomWaiterRegistry::default(),

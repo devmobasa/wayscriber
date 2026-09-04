@@ -249,7 +249,7 @@ where
     }
 
     fn take_toolbar_drag_flush_requested(&mut self) -> bool {
-        self.state.take_toolbar_drag_flush_requested()
+        self.state.toolbar_drag.take_flush_requested()
     }
 
     fn flush(&mut self) -> Result<()> {

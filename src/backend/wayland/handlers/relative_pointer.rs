@@ -14,18 +14,18 @@ impl RelativePointerHandler for WaylandState {
         _pointer: &wl_pointer::WlPointer,
         event: RelativeMotionEvent,
     ) {
-        if !self.pointer_lock_active() || !self.is_move_dragging() {
+        if !self.pointer_lock_active() || !self.toolbar_drag.is_moving() {
             drag_log(|| {
                 format!(
                     "relative motion ignored: lock_active={}, drag_active={}",
                     self.pointer_lock_active(),
-                    self.is_move_dragging()
+                    self.toolbar_drag.is_moving()
                 )
             });
             return;
         }
 
-        let Some(kind) = self.active_move_drag_kind() else {
+        let Some(kind) = self.toolbar_drag.kind() else {
             return;
         };
 

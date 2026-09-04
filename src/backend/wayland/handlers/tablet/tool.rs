@@ -140,7 +140,7 @@ impl WaylandState {
         self.tablet.on_overlay = on_overlay;
         self.tablet.on_toolbar = on_toolbar;
         self.finish_toolbar_item_drag(false);
-        self.set_toolbar_dragging(false);
+        self.toolbar_drag.set_item_dragging(false);
         self.cancel_toolbar_move_drag();
         self.tablet.tip_down = false;
         self.tablet.base_thickness = Some(self.input_state.style.current_thickness);
@@ -192,7 +192,7 @@ impl WaylandState {
         self.tablet.on_overlay = false;
         self.tablet.on_toolbar = false;
         self.finish_toolbar_item_drag(false);
-        self.set_toolbar_dragging(false);
+        self.toolbar_drag.set_item_dragging(false);
         self.cancel_toolbar_move_drag();
         if let Some(surface) = self.tablet.surface.take()
             && self.toolbar.is_toolbar_surface(&surface)
@@ -286,7 +286,8 @@ impl WaylandState {
             return false;
         }
         self.tablet.on_toolbar = true;
-        self.set_toolbar_dragging(self.toolbar_dragging());
+        self.toolbar_drag
+            .set_item_dragging(self.toolbar_drag.item_dragging());
         true
     }
 
@@ -299,7 +300,7 @@ impl WaylandState {
         if let Some(surface) = self.tablet.surface.as_ref()
             && let Some((intent, drag)) = self.toolbar.pointer_press(surface, (x, y))
         {
-            self.set_toolbar_dragging(drag);
+            self.toolbar_drag.set_item_dragging(drag);
             let event = intent_to_event(intent, self.toolbar.last_snapshot());
             self.handle_toolbar_event(event, Some(conn), Some(qh));
             self.toolbar.mark_dirty();
@@ -325,13 +326,13 @@ impl WaylandState {
             let (x, y) = self.pointer.position();
             self.inline_toolbar_release((x as f64, y as f64));
             self.tablet.on_toolbar = false;
-            self.set_toolbar_dragging(false);
+            self.toolbar_drag.set_item_dragging(false);
             self.end_toolbar_move_drag();
             return;
         }
         if self.tablet.on_toolbar {
             self.finish_toolbar_item_drag(true);
-            self.set_toolbar_dragging(false);
+            self.toolbar_drag.set_item_dragging(false);
             self.end_toolbar_move_drag();
             return;
         }
@@ -383,10 +384,10 @@ impl WaylandState {
     }
 
     fn handle_stylus_move_drag(&mut self, x: f64, y: f64) -> bool {
-        if !self.is_move_dragging() {
+        if !self.toolbar_drag.is_moving() {
             return false;
         }
-        let Some(kind) = self.active_move_drag_kind() else {
+        let Some(kind) = self.toolbar_drag.kind() else {
             return false;
         };
         if self.tablet.on_toolbar {
@@ -413,7 +414,7 @@ impl WaylandState {
         self.tablet.last_pos = Some((x, y));
         if let Some(surface) = self.tablet.surface.as_ref() {
             let event = self.toolbar.pointer_motion(surface, (x, y));
-            if self.toolbar_dragging() {
+            if self.toolbar_drag.item_dragging() {
                 let intent = event.or_else(|| self.move_drag_intent(x, y));
                 if let Some(intent) = intent {
                     let event = intent_to_event(intent, self.toolbar.last_snapshot());

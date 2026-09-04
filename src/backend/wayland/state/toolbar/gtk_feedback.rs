@@ -65,35 +65,37 @@ impl WaylandState {
         phase: GtkToolbarDragPhase,
     ) {
         if phase == GtkToolbarDragPhase::Start {
-            self.data.gtk_top_drag_rebase = None;
+            self.toolbar_drag.set_gtk_rebase(None);
             if !self.begin_toolbar_position_preview(MoveDragKind::Top) {
-                self.data.gtk_top_drag_blocked = true;
+                self.toolbar_drag.block_gtk_drag();
                 return;
             }
             self.begin_gtk_toolbar_drag_preview(GtkToolbarKind::Top);
         } else if !self.toolbar_position_drag_update_allowed(MoveDragKind::Top) {
             if phase.is_end() {
-                self.data.gtk_top_drag_rebase = None;
+                self.toolbar_drag.set_gtk_rebase(None);
                 self.clamp_gtk_top_offset(surface_size);
                 self.finish_gtk_offset_change();
             } else {
-                self.data.gtk_top_drag_rebase =
-                    Some(gtk_drag_rebase(self.toolbar_chrome.top_offset(), (x, y)));
+                self.toolbar_drag.set_gtk_rebase(Some(gtk_drag_rebase(
+                    self.toolbar_chrome.top_offset(),
+                    (x, y),
+                )));
             }
             return;
         }
-        let (x, y) = apply_gtk_drag_rebase((x, y), self.data.gtk_top_drag_rebase);
+        let (x, y) = apply_gtk_drag_rebase((x, y), self.toolbar_drag.gtk_rebase());
         self.toolbar_chrome.set_top_offset((x, y));
         self.mark_gtk_drag_preview_dirty();
         if phase.is_end() {
-            self.data.gtk_top_drag_rebase = None;
+            self.toolbar_drag.set_gtk_rebase(None);
             self.clamp_gtk_top_offset(surface_size);
             self.finish_gtk_offset_change();
         }
     }
 
     fn mark_gtk_drag_preview_dirty(&mut self) {
-        if self.data.gtk_drag_preview.is_none() {
+        if self.toolbar_drag.gtk_preview_kind().is_none() {
             return;
         }
         self.toolbar.mark_dirty();
@@ -135,8 +137,11 @@ impl WaylandState {
     /// On drag end, persist the offset accepted against GTK's measured
     /// surface. Intermediate positions are mirrored without disk writes.
     fn finish_gtk_offset_change(&mut self) {
-        self.reconcile_top_base_after_drag();
-        self.data.drag_top_base_x = None;
+        if let Some(old_base_x) = self.toolbar_drag.frozen_base_x() {
+            self.reconcile_top_base_after_drag(old_base_x);
+            self.toolbar_drag
+                .release_gtk_frozen_base(Self::INLINE_TOP_X);
+        }
         self.finish_toolbar_position_preview(true);
         self.begin_gtk_toolbar_drag_handoff();
     }

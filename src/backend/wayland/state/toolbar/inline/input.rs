@@ -83,14 +83,14 @@ impl WaylandState {
             .set_inline_hover(top_hover, Instant::now());
         let mut over_toolbar = top_hover.is_some();
 
-        if self.toolbar_dragging()
+        if self.toolbar_drag.item_dragging()
             && let Some(intent) = self.inline_toolbar_drag_at(position)
         {
             let evt = intent_to_event(intent, self.toolbar.last_snapshot());
             self.handle_toolbar_event(evt, None, None);
             over_toolbar = true;
-        } else if self.toolbar_dragging() {
-            if let Some(kind) = self.active_move_drag_kind() {
+        } else if self.toolbar_drag.item_dragging() {
+            if let Some(kind) = self.toolbar_drag.kind() {
                 self.handle_toolbar_move(kind, position);
             }
             over_toolbar = true;
@@ -115,7 +115,7 @@ impl WaylandState {
 
         if over_toolbar {
             self.toolbar_chrome.set_pointer_over_toolbar(true);
-        } else if !self.toolbar_dragging() {
+        } else if !self.toolbar_drag.item_dragging() {
             self.toolbar_chrome.set_pointer_over_toolbar(false);
             if self.toolbar_chrome.focus_active() {
                 self.toolbar_chrome.set_focus_active(false);
@@ -145,7 +145,7 @@ impl WaylandState {
                     )
                 });
             }
-            self.set_toolbar_dragging(drag);
+            self.toolbar_drag.set_item_dragging(drag);
             let evt = intent_to_event(intent, self.toolbar.last_snapshot());
             self.handle_toolbar_event(evt, conn, qh);
             self.toolbar_chrome.set_pointer_over_toolbar(true);
@@ -163,9 +163,9 @@ impl WaylandState {
         self.toolbar_chrome.set_focus_active(false);
         self.toolbar_chrome.set_pointer_over_toolbar(false);
         // Don't clear drag state if we're in a move drag - the drag continues outside
-        if !self.is_move_dragging() {
+        if !self.toolbar_drag.is_moving() {
             self.finish_toolbar_item_drag(false);
-            self.set_toolbar_dragging(false);
+            self.toolbar_drag.set_item_dragging(false);
             self.cancel_toolbar_move_drag();
         }
         if had_hover || had_focus {
@@ -180,8 +180,8 @@ impl WaylandState {
         if !self.toolbar_chrome.inline_toolbars() || !self.toolbar.is_visible() {
             return false;
         }
-        if self.toolbar_chrome.pointer_over_toolbar() || self.toolbar_dragging() {
-            if self.toolbar_dragging()
+        if self.toolbar_chrome.pointer_over_toolbar() || self.toolbar_drag.item_dragging() {
+            if self.toolbar_drag.item_dragging()
                 && !self.pointer_lock_active()
                 && let Some(intent) = self.inline_toolbar_drag_at(position)
             {
@@ -193,12 +193,12 @@ impl WaylandState {
                     "inline release: pos=({:.3}, {:.3}), drag_active={}, pointer_over_toolbar={}",
                     position.0,
                     position.1,
-                    self.toolbar_dragging(),
+                    self.toolbar_drag.item_dragging(),
                     self.toolbar_chrome.pointer_over_toolbar()
                 )
             });
             self.finish_toolbar_item_drag(true);
-            self.set_toolbar_dragging(false);
+            self.toolbar_drag.set_item_dragging(false);
             self.toolbar_chrome.set_pointer_over_toolbar(false);
             self.end_toolbar_move_drag();
             return true;

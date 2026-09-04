@@ -85,12 +85,12 @@ impl WaylandState {
         let top_visible = toolbar_visibility_for_frontend(
             self.input_state.toolbar_top_visible(),
             gtk_active,
-            self.data.gtk_drag_preview,
+            self.toolbar_drag.gtk_preview_kind(),
             self.capture_picker_chrome_suppressed(),
         );
         let inline_active = self.toolbar_chrome.inline_toolbars();
         let drag_preview =
-            self.toolbar_drag_preview_active() || self.data.gtk_drag_preview.is_some();
+            self.toolbar_drag.preview_active() || self.toolbar_drag.gtk_preview_kind().is_some();
 
         if top_visible != self.toolbar.is_top_visible() {
             self.toolbar.set_top_visible(top_visible);
@@ -179,7 +179,7 @@ impl WaylandState {
                 self.toolbar_chrome.reset_margins();
             }
             let snapshot = self.toolbar_snapshot();
-            if !self.is_move_dragging() {
+            if !self.toolbar_drag.is_moving() {
                 let _ = self.apply_toolbar_offsets(&snapshot);
             }
             if let Some(layer_shell) = self.protocol.layer_shell() {
