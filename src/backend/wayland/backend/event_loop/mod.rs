@@ -273,7 +273,7 @@ fn event_loop_timeout(
         state.input_state.ocr_scan_wake_after(now),
     );
     let autosave_timeout = session_save::autosave_timeout(state, now);
-    let focus_exit_timeout = state.focus_exit_timeout(now);
+    let focus_exit_timeout = state.focus.exit_timeout(now);
     let base_timeout = if should_block {
         min_timeout(autosave_timeout, focus_exit_timeout)
     } else if !vsync_enabled && state.input_state.needs_redraw {
@@ -318,15 +318,15 @@ fn event_loop_timeout(
 fn handle_xdg_focus_loss(state: &mut WaylandState, qh: &wayland_client::QueueHandle<WaylandState>) {
     if !state.surface.is_xdg_window()
         || state.input_state.should_exit
-        || state.has_keyboard_focus()
+        || state.focus.keyboard_focused()
         || state.desktop_open_in_progress()
-        || !state.focus_exit_suppression_expired(Instant::now())
+        || !state.focus.exit_suppression_expired(Instant::now())
     {
         return;
     }
     if state.xdg_focus_loss_exits_overlay() {
         warn!("Keyboard focus not restored after clipboard action; exiting overlay");
-        state.clear_focus_exit_suppression();
+        state.focus.clear_exit_suppression();
         notification::send_notification_async(
             &state.tokio_handle,
             "Wayscriber lost focus".to_string(),
@@ -338,8 +338,10 @@ fn handle_xdg_focus_loss(state: &mut WaylandState, qh: &wayland_client::QueueHan
         warn!(
             "Keyboard focus not restored after clipboard action; keeping overlay open (ui.xdg_focus_loss_behavior=stay)"
         );
-        state.clear_focus_exit_suppression();
-        state.set_xdg_close_guard_for(Duration::from_millis(2500));
+        state.focus.clear_exit_suppression();
+        state
+            .focus
+            .guard_xdg_close_for(Instant::now(), Duration::from_millis(2500));
         state.request_xdg_activation(qh);
     }
 }
@@ -395,12 +397,12 @@ fn break_on_requested_exit(state: &mut WaylandState) -> bool {
     if !state.input_state.should_exit {
         return false;
     }
-    let explicit_xdg_close_requested = state.take_xdg_explicit_close_requested()
+    let explicit_xdg_close_requested = state.focus.take_xdg_explicit_close_requested()
         || state.input_state.take_explicit_exit_requested();
     if should_defer_xdg_unfocused_exit(
         state.surface.is_xdg_window(),
         !state.xdg_focus_loss_exits_overlay(),
-        state.has_keyboard_focus(),
+        state.focus.keyboard_focused(),
         explicit_xdg_close_requested,
     ) {
         warn!("Exit requested while unfocused in xdg stay mode; keeping overlay open");

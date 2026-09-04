@@ -119,7 +119,7 @@ impl CompositorHandler for WaylandState {
         let previous_output = self.surface.current_output();
         let output_changed = previous_output.as_ref() != Some(output);
         self.surface.set_current_output(output.clone());
-        self.set_has_seen_surface_enter(true);
+        self.focus.note_surface_enter();
         if output_changed {
             // Keep layer-shell toolbars pinned to the monitor that owns the drawing surface.
             self.set_toolbar_needs_recreate(true);
@@ -173,7 +173,7 @@ impl CompositorHandler for WaylandState {
         debug!("Surface left output");
         self.surface.clear_output(output);
         if self.surface.current_output().is_none() {
-            self.set_has_seen_surface_enter(false);
+            self.focus.clear_surface_enter();
         }
         self.refresh_active_output_label();
         self.frozen.set_active_output(None, None);

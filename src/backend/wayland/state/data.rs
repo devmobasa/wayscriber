@@ -32,35 +32,6 @@ pub enum OverlaySuppressionKeyboardPolicy {
     Retain,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(super) enum MainLayerFocusPhase {
-    #[default]
-    Acquiring,
-    Acquired,
-}
-
-impl MainLayerFocusPhase {
-    pub(super) fn begin(&mut self) {
-        *self = Self::Acquiring;
-    }
-
-    pub(super) fn complete(&mut self) -> bool {
-        if *self == Self::Acquired {
-            return false;
-        }
-        *self = Self::Acquired;
-        true
-    }
-
-    pub(super) fn is_acquiring(self) -> bool {
-        self == Self::Acquiring
-    }
-
-    pub(super) fn after_keyboard_teardown(self) -> Self {
-        self
-    }
-}
-
 /// One-shot release latches owned by the pointing device whose press armed
 /// them. Pointer and touch can both have an outstanding release; neither may
 /// consume or clear the other's sequence. Stylus contacts use tablet-tool
@@ -151,26 +122,17 @@ pub struct MoveDrag {
     /// Whether last_coord is in screen coordinates (true) or toolbar-local (false)
     pub coord_is_screen: bool,
 }
-use wayland_client::protocol::wl_seat;
-
 /// Focus/pointer/toolbar interaction data owned by WaylandState and shared with handlers.
 #[derive(Debug, Default)]
 pub struct StateData {
-    pub(super) has_keyboard_focus: bool,
-    pub(super) main_layer_focus_phase: MainLayerFocusPhase,
-    pub(super) has_pointer_focus: bool,
     pub(super) current_mouse_x: i32,
     pub(super) current_mouse_y: i32,
     pub(super) board_panning: bool,
     pub(super) board_pan_last_pos: (f64, f64),
     pub(super) board_pan_key_held: bool,
-    pub(super) current_seat: Option<wl_seat::WlSeat>,
-    pub(super) last_activation_serial: Option<u32>,
     pub(super) pointer_over_toolbar: bool,
     pub(super) toolbar_dragging: bool,
     pub(super) toolbar_drag_preview: bool,
-    pub(super) current_keyboard_interactivity:
-        Option<smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity>,
     pub(super) toolbar_needs_recreate: bool,
     pub(super) toolbar_layer_shell_missing_logged: bool,
     pub(super) inline_toolbars: bool,
@@ -212,8 +174,6 @@ pub struct StateData {
     pub(super) toolbar_drag_flush_requested: bool,
     pub(super) toolbar_drag_pending_apply: bool,
     pub(super) last_toolbar_drag_apply: Option<Instant>,
-    pub(super) pending_activation_token: Option<String>,
-    pub(super) startup_activation_token: Option<String>,
     pub(super) pending_freeze_on_start: bool,
     pub(super) screen_acquisition: ScreenAcquisitionRegistry,
     pub(super) zoom_waiter: ZoomWaiterRegistry,
@@ -223,7 +183,6 @@ pub struct StateData {
     pub(super) region_review_edits: Option<super::region_capture::RegionReviewEdits>,
     pub(super) next_screen_region_generation: u64,
     pub(super) frozen_enabled: bool,
-    pub(super) has_seen_surface_enter: bool,
     pub(super) preferred_output_identity: Option<String>,
     pub(super) xdg_fullscreen: bool,
     pub(super) xdg_frozen_fullscreen_state: XdgFrozenFullscreenState,
@@ -233,8 +192,6 @@ pub struct StateData {
     pub(super) overlay_suppression_keyboard_policy: OverlaySuppressionKeyboardPolicy,
     pub(super) overlay_capture_barrier: OverlayCaptureBarrier,
     pub(super) overlay_clickthrough: bool,
-    /// True when surface is configured and has keyboard focus; keys are blocked until ready.
-    pub(super) overlay_ready: bool,
     /// Suppress modal-owned pointer/touch releases without crossing devices.
     pub(super) release_suppression: ReleaseSuppression,
     /// Exact toast activation a left press began inside. A release is accepted
@@ -247,13 +204,6 @@ pub struct StateData {
     /// for an actionable button). Any pending press keeps its release consumed;
     /// a `Button` release fires only when it lands on the SAME button.
     pub(super) pending_zoom_chip_press: crate::ui::ZoomChipPress,
-    /// Suppress overlay exit on focus loss for a short window (e.g., clipboard helpers).
-    pub(super) suppress_focus_exit_until: Option<Instant>,
-    /// Short guard window after xdg focus loss where compositor close requests are ignored
-    /// in stay mode to avoid spurious GNOME close events.
-    pub(super) xdg_close_guard_until: Option<Instant>,
-    /// Explicit compositor close request received for xdg fallback window.
-    pub(super) xdg_explicit_close_requested: bool,
     /// Reused pre-UI pixel snapshot for render-profile UI-only remapping.
     pub(super) render_profile_ui_baseline: Vec<u8>,
     /// Previous-frame damage bounds for transient UI effects, so partial
@@ -285,20 +235,14 @@ pub struct StateData {
 impl StateData {
     pub fn new() -> Self {
         Self {
-            has_keyboard_focus: false,
-            main_layer_focus_phase: MainLayerFocusPhase::default(),
-            has_pointer_focus: false,
             current_mouse_x: 0,
             current_mouse_y: 0,
             board_panning: false,
             board_pan_last_pos: (0.0, 0.0),
             board_pan_key_held: false,
-            current_seat: None,
-            last_activation_serial: None,
             pointer_over_toolbar: false,
             toolbar_dragging: false,
             toolbar_drag_preview: false,
-            current_keyboard_interactivity: None,
             toolbar_needs_recreate: true,
             toolbar_layer_shell_missing_logged: false,
             inline_toolbars: false,
@@ -328,8 +272,6 @@ impl StateData {
             toolbar_drag_flush_requested: false,
             toolbar_drag_pending_apply: false,
             last_toolbar_drag_apply: None,
-            pending_activation_token: None,
-            startup_activation_token: None,
             pending_freeze_on_start: false,
             screen_acquisition: ScreenAcquisitionRegistry::default(),
             zoom_waiter: ZoomWaiterRegistry::default(),
@@ -339,7 +281,6 @@ impl StateData {
             region_review_edits: None,
             next_screen_region_generation: 1,
             frozen_enabled: false,
-            has_seen_surface_enter: false,
             preferred_output_identity: None,
             xdg_fullscreen: false,
             xdg_frozen_fullscreen_state: XdgFrozenFullscreenState::Inactive,
@@ -349,14 +290,10 @@ impl StateData {
             overlay_suppression_keyboard_policy: OverlaySuppressionKeyboardPolicy::Release,
             overlay_capture_barrier: OverlayCaptureBarrier::default(),
             overlay_clickthrough: false,
-            overlay_ready: false,
             release_suppression: ReleaseSuppression::default(),
             pending_toast_press: None,
             pending_status_hud_press: false,
             pending_zoom_chip_press: crate::ui::ZoomChipPress::None,
-            suppress_focus_exit_until: None,
-            xdg_close_guard_until: None,
-            xdg_explicit_close_requested: false,
             render_profile_ui_baseline: Vec::new(),
             prev_ui_toast_damage: None,
             prev_preset_toast_damage: None,
@@ -379,7 +316,7 @@ impl StateData {
 
 #[cfg(test)]
 mod tests {
-    use super::{MainLayerFocusPhase, OverlaySuppression};
+    use super::OverlaySuppression;
     use crate::input::state::RegionInputSource;
 
     #[test]
@@ -390,20 +327,6 @@ mod tests {
         assert!(!suppression.take(RegionInputSource::Touch));
         assert!(suppression.take(RegionInputSource::Pointer));
         assert!(!suppression.take(RegionInputSource::Pointer));
-    }
-
-    #[test]
-    fn main_layer_focus_phase_completes_once_and_restarts_for_a_new_surface() {
-        let mut phase = MainLayerFocusPhase::default();
-
-        assert!(phase.is_acquiring());
-        assert!(phase.complete());
-        assert!(!phase.is_acquiring());
-        assert!(!phase.complete());
-
-        phase.begin();
-
-        assert!(phase.is_acquiring());
     }
 
     #[test]

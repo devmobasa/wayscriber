@@ -30,7 +30,7 @@ impl PointerHandler for WaylandState {
                 debug!(
                     "pointer {:?}: seat={:?}, surface={}, on_toolbar={}, inline_active={}, pos=({:.1}, {:.1}), drag_active={}, toolbar_dragging={}, pointer_over_toolbar={}",
                     event.kind,
-                    self.current_seat_id(),
+                    self.focus.current_seat_id(),
                     surface_id(&event.surface),
                     on_toolbar,
                     inline_active,
@@ -52,7 +52,7 @@ impl PointerHandler for WaylandState {
                     self.handle_pointer_motion(conn, event, on_toolbar, inline_active);
                 }
                 PointerEventKind::Press { button, serial, .. } => {
-                    self.set_last_activation_serial(Some(serial));
+                    self.focus.note_activation_serial(serial);
                     let modal_before = self.input_state.screen_modal_is_active();
                     self.handle_pointer_press(conn, qh, event, on_toolbar, inline_active, button);
                     self.refresh_screen_modal_cursor(modal_before, on_toolbar, conn);

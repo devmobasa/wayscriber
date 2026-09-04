@@ -1,6 +1,6 @@
 use super::super::buffer_damage::BufferDamageTracker;
 use super::super::*;
-use crate::env_vars::{FORCE_INLINE_TOOLBARS_ENV, XDG_ACTIVATION_TOKEN_ENV};
+use crate::env_vars::FORCE_INLINE_TOOLBARS_ENV;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn new(init: WaylandStateInit) -> Self {
@@ -8,6 +8,7 @@ impl WaylandState {
             globals,
             config,
             input_state,
+            startup_activation_token,
             onboarding,
             palette_recents,
             capture_manager,
@@ -44,11 +45,6 @@ impl WaylandState {
         let mut data = StateData::new();
         data.frozen_enabled = frozen_enabled;
         data.pending_freeze_on_start = pending_freeze_on_start;
-        let startup_activation_token = startup_activation_token_from_env();
-        if startup_activation_token.is_some() {
-            info!("Received startup activation token from launcher environment");
-        }
-        data.startup_activation_token = startup_activation_token;
         data.preferred_output_identity = preferred_output_identity;
         data.xdg_fullscreen = xdg_fullscreen;
         data.main_surface_uses_overlay_layer = main_surface_uses_overlay_layer;
@@ -119,6 +115,7 @@ impl WaylandState {
             surface: SurfaceState::new(),
             toolbar: ToolbarSurfaceManager::new(),
             data,
+            focus: super::super::focus::FocusState::new(startup_activation_token),
             buffer_damage: BufferDamageTracker::new(buffer_count),
             canvas_layer_cache: super::super::canvas_layer::CanvasLayerCache::new(),
             spotlight: super::super::spotlight_runtime::SpotlightRuntime::new(),
@@ -158,11 +155,4 @@ impl WaylandState {
             tokio_handle,
         }
     }
-}
-
-fn startup_activation_token_from_env() -> Option<String> {
-    std::env::var(XDG_ACTIVATION_TOKEN_ENV)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
 }

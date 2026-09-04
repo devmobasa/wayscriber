@@ -429,7 +429,10 @@ impl WaylandState {
             Ok(id) => {
                 // wl-copy needs the overlay to stay alive long enough to serve
                 // the selection it publishes.
-                self.suppress_focus_exit_for(std::time::Duration::from_millis(1500));
+                self.focus.suppress_exit_for(
+                    std::time::Instant::now(),
+                    std::time::Duration::from_millis(1500),
+                );
                 log::debug!("OCR request {id} started");
                 Some(id)
             }

@@ -323,7 +323,7 @@ impl WaylandState {
             "toolbar press: drag_start={}, surface={}, seat={:?}, inline_active={}",
             drag,
             surface_id(&event.surface),
-            self.current_seat_id(),
+            self.focus.current_seat_id(),
             self.inline_toolbars_active()
         );
         self.set_toolbar_dragging(drag);

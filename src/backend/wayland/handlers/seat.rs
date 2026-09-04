@@ -25,7 +25,7 @@ impl SeatHandler for WaylandState {
         match capability {
             Capability::Keyboard => {
                 info!("Keyboard capability available");
-                self.set_current_seat(Some(seat.clone()));
+                self.focus.set_current_seat(Some(seat.clone()));
                 if self
                     .protocol
                     .seat_mut()

@@ -30,7 +30,7 @@ impl WaylandState {
                 || (self.gtk_toolbars_active() && self.input_state.toolbar_top_visible()));
         keyboard_interactivity_for(KeyboardInteractivityPolicyInput {
             keyboard_release_requested: self.overlay_keyboard_passthrough_requested(),
-            main_layer_focus_acquiring: self.main_layer_focus_acquiring(),
+            main_layer_focus_acquiring: self.focus.main_layer_acquiring(),
             layer_shell_available: self.protocol.layer_shell().is_some(),
             separate_toolbar_visible: toolbar_visible,
             inline_toolbars_active: self.inline_toolbars_active(),
@@ -58,7 +58,7 @@ impl WaylandState {
     /// Applies and commits keyboard interactivity when the desired mode changes.
     pub(in crate::backend::wayland) fn refresh_keyboard_interactivity(&mut self) {
         let desired = self.desired_keyboard_interactivity();
-        let current = self.current_keyboard_interactivity();
+        let current = self.focus.current_keyboard_interactivity();
 
         let updated = if let Some(layer) = self.surface.layer_surface_mut() {
             if current != Some(desired) {
@@ -69,12 +69,12 @@ impl WaylandState {
                 false
             }
         } else {
-            self.set_current_keyboard_interactivity(None);
+            self.focus.set_keyboard_interactivity(None);
             return;
         };
 
         if updated {
-            self.set_current_keyboard_interactivity(Some(desired));
+            self.focus.set_keyboard_interactivity(Some(desired));
         }
     }
 

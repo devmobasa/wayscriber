@@ -15,7 +15,7 @@ pub(super) fn create_overlay_surface(
     // Create surface using layer-shell when available, otherwise fall back to xdg-shell
     let wl_surface = state.protocol.compositor().create_surface(qh);
     if state.protocol.layer_shell().is_some() {
-        state.begin_main_layer_focus_acquisition();
+        state.focus.begin_main_layer_acquisition();
     }
     if let Some(layer_shell) = state.protocol.layer_shell() {
         let layer = state.main_surface_layer();
@@ -39,7 +39,9 @@ pub(super) fn create_overlay_surface(
         layer_surface.commit();
 
         state.surface.set_layer_surface(layer_surface);
-        state.set_current_keyboard_interactivity(Some(desired_keyboard_mode));
+        state
+            .focus
+            .set_keyboard_interactivity(Some(desired_keyboard_mode));
         info!("Layer shell surface created");
     } else if let Some(xdg_shell) = state.protocol.xdg_shell() {
         info!("Layer shell missing; creating xdg-shell window");

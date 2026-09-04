@@ -34,7 +34,7 @@ impl TouchHandler for WaylandState {
             return;
         }
 
-        self.set_last_activation_serial(Some(serial));
+        self.focus.note_activation_serial(serial);
         let target = self.handle_touch_down(conn, qh, &surface, position);
         self.pointer.set_touch_target(target);
     }

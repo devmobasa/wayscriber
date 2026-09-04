@@ -88,7 +88,7 @@ impl WaylandState {
     }
 
     fn zoom_keyboard_anchor(&self) -> (f64, f64) {
-        if self.has_pointer_focus() {
+        if self.focus.pointer_focused() {
             let (sx, sy) = self.current_mouse();
             (sx as f64, sy as f64)
         } else {

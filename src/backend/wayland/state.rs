@@ -8,10 +8,7 @@ use smithay_client_toolkit::{
     shell::wlr_layer::KeyboardInteractivity,
 };
 use std::time::{Duration, Instant};
-use wayland_client::{
-    Proxy, QueueHandle,
-    protocol::{wl_output, wl_seat},
-};
+use wayland_client::{QueueHandle, protocol::wl_output};
 #[cfg(feature = "tablet-input")]
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
 use wayland_protocols::wp::{
@@ -79,6 +76,7 @@ mod core;
 mod data;
 mod desktop_open;
 mod eyedropper;
+mod focus;
 mod font_catalog;
 mod gtk_toolbar;
 mod helper_launch;
@@ -137,6 +135,7 @@ pub(in crate::backend::wayland) struct WaylandStateInit {
     pub globals: ProtocolGlobals,
     pub config: Config,
     pub input_state: InputState,
+    pub startup_activation_token: Option<String>,
     pub onboarding: crate::onboarding::OnboardingStore,
     pub palette_recents: crate::palette_recents::PaletteRecentsWriter,
     pub capture_manager: CaptureManager,
@@ -170,6 +169,8 @@ pub(super) struct WaylandState {
     pub(super) surface: SurfaceState,
     pub(super) toolbar: ToolbarSurfaceManager,
     data: StateData,
+    /// Keyboard, pointer, activation, and focus-loss lifecycle.
+    pub(super) focus: focus::FocusState,
     /// Per-buffer damage tracking for correct incremental rendering.
     pub(super) buffer_damage: buffer_damage::BufferDamageTracker,
     /// Baked committed-shapes layer for panned canvas rendering.

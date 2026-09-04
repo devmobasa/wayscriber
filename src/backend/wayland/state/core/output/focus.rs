@@ -83,7 +83,7 @@ impl WaylandState {
             window.set_fullscreen(Some(&target_output));
             window.commit();
             self.surface.set_current_output(target_output);
-            self.set_has_seen_surface_enter(false);
+            self.focus.clear_surface_enter();
             self.refresh_active_output_label();
             self.begin_session_output_transition(target_identity, "output switch");
             self.request_xdg_activation(qh);
@@ -101,7 +101,7 @@ impl WaylandState {
         self.teardown_keyboard_focus();
         self.recreate_layer_surface_for_output(qh, &target_output);
         self.surface.set_current_output(target_output);
-        self.set_has_seen_surface_enter(false);
+        self.focus.clear_surface_enter();
         self.refresh_active_output_label();
         self.begin_session_output_transition(target_identity, "output switch");
         self.input_state.needs_redraw = true;
@@ -113,7 +113,7 @@ impl WaylandState {
         qh: &QueueHandle<Self>,
         output: &wl_output::WlOutput,
     ) {
-        self.begin_main_layer_focus_acquisition();
+        self.focus.begin_main_layer_acquisition();
         let Some(layer_shell) = self.protocol.layer_shell() else {
             return;
         };
@@ -137,7 +137,8 @@ impl WaylandState {
         layer_surface.commit();
 
         self.surface.set_layer_surface(layer_surface);
-        self.set_current_keyboard_interactivity(Some(desired_keyboard_mode));
+        self.focus
+            .set_keyboard_interactivity(Some(desired_keyboard_mode));
         self.force_sync_overlay_interactivity();
         self.buffer_damage
             .mark_all_full(FullDamageReason::LayerSurfaceRecreated);

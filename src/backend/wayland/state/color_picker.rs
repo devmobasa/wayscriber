@@ -13,7 +13,8 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn handle_copy_hex_color(&mut self, color: Color) {
         let hex = color_to_hex(color);
         log::info!("Hex copy requested: {}", hex);
-        self.suppress_focus_exit_for(Duration::from_millis(1500));
+        self.focus
+            .suppress_exit_for(std::time::Instant::now(), Duration::from_millis(1500));
 
         if let Err(err) = self.clipboard.queue_hex_copy(hex) {
             log::warn!("Failed to start hex clipboard copy: {err}");
@@ -93,7 +94,8 @@ impl WaylandState {
             return;
         }
         log::info!("Hex paste requested");
-        self.suppress_focus_exit_for(Duration::from_millis(1500));
+        self.focus
+            .suppress_exit_for(std::time::Instant::now(), Duration::from_millis(1500));
         let clipboard = match std::panic::catch_unwind(read_clipboard_text_via_command) {
             Ok(Ok(text)) => text,
             Ok(Err(ClipboardTextError::Empty)) => {

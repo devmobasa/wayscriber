@@ -9,7 +9,9 @@ use super::WaylandBackend;
 use super::runtime_wake::RuntimeWakeSource;
 use super::setup::WaylandSetup;
 use crate::backend::wayland::portal_capture::screenshot_portal_available;
-use crate::env_vars::{DESKTOP_SESSION_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
+use crate::env_vars::{
+    DESKTOP_SESSION_ENV, XDG_ACTIVATION_TOKEN_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV,
+};
 use crate::{
     capture::CaptureManager,
     config::Config,
@@ -103,6 +105,13 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     let direct_capture_supported = screencopy_supported || image_copy_capture_supported;
     let frozen_supported = direct_capture_supported || portal_freeze_supported;
     let tokio_handle = backend.tokio_runtime.handle().clone();
+    let startup_activation_token = env::var(XDG_ACTIVATION_TOKEN_ENV)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    if startup_activation_token.is_some() {
+        info!("Received startup activation token from launcher environment");
+    }
 
     // Set compositor capabilities based on detected Wayland protocols
     input_state.compositor_capabilities = CompositorCapabilities {
@@ -174,6 +183,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         globals: setup.state_globals,
         config,
         input_state,
+        startup_activation_token,
         onboarding,
         palette_recents,
         capture_manager,

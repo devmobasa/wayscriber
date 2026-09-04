@@ -19,7 +19,8 @@ impl WaylandState {
         if request.text.is_empty() {
             return;
         }
-        self.suppress_focus_exit_for(Duration::from_millis(1500));
+        self.focus
+            .suppress_exit_for(std::time::Instant::now(), Duration::from_millis(1500));
         if let Err(err) = self.clipboard.queue_text_copy(request) {
             log::warn!("Failed to start text clipboard copy: {err}");
             self.input_state.push_toast(
@@ -72,7 +73,8 @@ impl WaylandState {
         if !self.input_state.text_paste_target_is_current(target) {
             return;
         }
-        self.suppress_focus_exit_for(Duration::from_millis(1500));
+        self.focus
+            .suppress_exit_for(std::time::Instant::now(), Duration::from_millis(1500));
         if let Err(err) = self.clipboard.queue_text_paste(target) {
             log::warn!("Failed to start text clipboard paste: {err}");
             self.push_text_paste_failure();

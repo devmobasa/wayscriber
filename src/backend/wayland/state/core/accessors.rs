@@ -1,7 +1,5 @@
-use smithay_client_toolkit::shell::{WaylandSurface, wlr_layer::Layer};
-use wayland_client::protocol::wl_pointer;
-
 use super::super::*;
+use smithay_client_toolkit::shell::{WaylandSurface, wlr_layer::Layer};
 use std::time::{Duration, Instant};
 
 const XDG_FROZEN_FULLSCREEN_TIMEOUT: Duration = Duration::from_millis(1500);
@@ -40,22 +38,8 @@ impl WaylandState {
         self.data.current_mouse_y = y;
     }
 
-    #[allow(dead_code)]
-    pub(in crate::backend::wayland) fn has_keyboard_focus(&self) -> bool {
-        self.data.has_keyboard_focus
-    }
-
-    pub(in crate::backend::wayland) fn set_keyboard_focus(&mut self, value: bool) {
-        self.data.has_keyboard_focus = value;
-    }
-
-    #[allow(dead_code)]
-    pub(in crate::backend::wayland) fn has_pointer_focus(&self) -> bool {
-        self.data.has_pointer_focus
-    }
-
     pub(in crate::backend::wayland) fn has_cursor_focus(&self) -> bool {
-        self.has_pointer_focus() || self.stylus_hover_cursor_visible()
+        self.focus.pointer_focused() || self.stylus_hover_cursor_visible()
     }
 
     pub(in crate::backend::wayland) fn cursor_blocked_by_toolbar(&self) -> bool {
@@ -117,101 +101,6 @@ impl WaylandState {
     #[cfg(not(feature = "tablet-input"))]
     pub(in crate::backend::wayland) fn retire_stylus_contact(&mut self) {}
 
-    pub(in crate::backend::wayland) fn set_pointer_focus(&mut self, value: bool) {
-        self.data.has_pointer_focus = value;
-    }
-
-    pub(in crate::backend::wayland) fn current_seat(&self) -> Option<wl_seat::WlSeat> {
-        self.data.current_seat.clone()
-    }
-
-    #[allow(dead_code)] // Kept for potential future pointer lock support
-    pub(in crate::backend::wayland) fn current_pointer(&self) -> Option<wl_pointer::WlPointer> {
-        self.pointer.current_pointer()
-    }
-
-    pub(in crate::backend::wayland) fn current_seat_id(&self) -> Option<u32> {
-        self.data
-            .current_seat
-            .as_ref()
-            .map(|seat| seat.id().protocol_id())
-    }
-
-    pub(in crate::backend::wayland) fn set_current_seat(&mut self, seat: Option<wl_seat::WlSeat>) {
-        self.data.current_seat = seat;
-    }
-
-    pub(in crate::backend::wayland) fn last_activation_serial(&self) -> Option<u32> {
-        self.data.last_activation_serial
-    }
-
-    pub(in crate::backend::wayland) fn set_last_activation_serial(&mut self, serial: Option<u32>) {
-        self.data.last_activation_serial = serial;
-    }
-
-    pub(in crate::backend::wayland) fn current_keyboard_interactivity(
-        &self,
-    ) -> Option<KeyboardInteractivity> {
-        self.data.current_keyboard_interactivity
-    }
-
-    pub(in crate::backend::wayland) fn set_current_keyboard_interactivity(
-        &mut self,
-        interactivity: Option<KeyboardInteractivity>,
-    ) {
-        self.data.current_keyboard_interactivity = interactivity;
-    }
-
-    pub(in crate::backend::wayland) fn suppress_focus_exit_for(&mut self, duration: Duration) {
-        self.data.suppress_focus_exit_until = Some(Instant::now() + duration);
-    }
-
-    pub(in crate::backend::wayland) fn focus_exit_suppressed(&self) -> bool {
-        self.data
-            .suppress_focus_exit_until
-            .is_some_and(|until| Instant::now() <= until)
-    }
-
-    pub(in crate::backend::wayland) fn focus_exit_timeout(&self, now: Instant) -> Option<Duration> {
-        self.data
-            .suppress_focus_exit_until
-            .and_then(|until| (until > now).then(|| until.saturating_duration_since(now)))
-    }
-
-    pub(in crate::backend::wayland) fn focus_exit_suppression_expired(&self, now: Instant) -> bool {
-        self.data
-            .suppress_focus_exit_until
-            .is_some_and(|until| now >= until)
-    }
-
-    pub(in crate::backend::wayland) fn clear_focus_exit_suppression(&mut self) {
-        self.data.suppress_focus_exit_until = None;
-    }
-
-    pub(in crate::backend::wayland) fn set_xdg_close_guard_for(&mut self, duration: Duration) {
-        self.data.xdg_close_guard_until = Some(Instant::now() + duration);
-    }
-
-    pub(in crate::backend::wayland) fn clear_xdg_close_guard(&mut self) {
-        self.data.xdg_close_guard_until = None;
-    }
-
-    pub(in crate::backend::wayland) fn xdg_close_guard_active(&self, now: Instant) -> bool {
-        self.data
-            .xdg_close_guard_until
-            .is_some_and(|until| now <= until)
-    }
-
-    pub(in crate::backend::wayland) fn mark_xdg_explicit_close_requested(&mut self) {
-        self.data.xdg_explicit_close_requested = true;
-    }
-
-    pub(in crate::backend::wayland) fn take_xdg_explicit_close_requested(&mut self) -> bool {
-        let was_requested = self.data.xdg_explicit_close_requested;
-        self.data.xdg_explicit_close_requested = false;
-        was_requested
-    }
-
     pub(in crate::backend::wayland) fn frozen_enabled(&self) -> bool {
         self.data.frozen_enabled
     }
@@ -227,30 +116,6 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn set_pending_freeze_on_start(&mut self, value: bool) {
         self.data.pending_freeze_on_start = value;
-    }
-
-    #[allow(dead_code)]
-    pub(in crate::backend::wayland) fn has_seen_surface_enter(&self) -> bool {
-        self.data.has_seen_surface_enter
-    }
-
-    pub(in crate::backend::wayland) fn set_has_seen_surface_enter(&mut self, value: bool) {
-        self.data.has_seen_surface_enter = value;
-    }
-
-    pub(in crate::backend::wayland) fn pending_activation_token(&self) -> Option<String> {
-        self.data.pending_activation_token.clone()
-    }
-
-    pub(in crate::backend::wayland) fn set_pending_activation_token(
-        &mut self,
-        token: Option<String>,
-    ) {
-        self.data.pending_activation_token = token;
-    }
-
-    pub(in crate::backend::wayland) fn take_startup_activation_token(&mut self) -> Option<String> {
-        self.data.startup_activation_token.take()
     }
 
     pub(in crate::backend::wayland) fn preferred_output_identity(&self) -> Option<&str> {
@@ -397,16 +262,6 @@ impl WaylandState {
         &mut self,
     ) -> Option<&mut SessionOptions> {
         self.session.options_mut()
-    }
-
-    /// Returns true if the overlay is ready to process keybinds (surface configured + focus).
-    pub(in crate::backend::wayland) fn is_overlay_ready(&self) -> bool {
-        self.data.overlay_ready
-    }
-
-    /// Sets the overlay ready state. Should be true only when surface is configured and has focus.
-    pub(in crate::backend::wayland) fn set_overlay_ready(&mut self, value: bool) {
-        self.data.overlay_ready = value;
     }
 }
 

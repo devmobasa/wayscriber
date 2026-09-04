@@ -22,7 +22,7 @@ impl WaylandState {
             on_toolbar,
             self.is_move_dragging()
         );
-        self.set_pointer_focus(true);
+        self.focus.set_pointer_focused(true);
         self.set_pointer_over_toolbar(on_toolbar);
         if on_toolbar {
             if let Some((sx, sy)) =
@@ -79,7 +79,7 @@ impl WaylandState {
             on_toolbar,
             self.is_move_dragging()
         );
-        self.set_pointer_focus(false);
+        self.focus.set_pointer_focused(false);
         // The pointer is gone, so no further wheel tick can extend the burst.
         self.input_state.flush_spotlight_magnification_gesture();
         self.spotlight.clear_wheel_idle_deadline();
