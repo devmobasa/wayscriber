@@ -115,7 +115,9 @@ impl WaylandState {
             toolbar: ToolbarSurfaceManager::new(),
             toolbar_chrome,
             toolbar_drag: super::super::toolbar::ToolbarDrag::new(),
-            render: super::super::render::RenderRuntime::new(),
+            render: super::super::render::RenderRuntime::new(crate::ui::theme::Theme::resolve(
+                config.ui.theme.to_theme_mode(),
+            )),
             suppression: Default::default(),
             shortcut_coach: Default::default(),
             focus: super::super::focus::FocusState::new(startup_activation_token),

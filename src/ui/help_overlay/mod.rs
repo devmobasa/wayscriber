@@ -14,3 +14,6 @@ pub use render::{
     HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at, render_help_overlay,
 };
 pub use sections::HelpOverlayBindings;
+
+pub(in crate::ui) use render::HelpLayoutCache;
+pub(crate) use render::render_help_overlay_with_context;

@@ -2,6 +2,7 @@
 //! with dynamic overlays (hover, sub-ring, size arc, center well) on top.
 
 mod cache;
+pub(in crate::ui) use cache::RadialBaseCache;
 
 use std::f64::consts::PI;
 
@@ -43,8 +44,37 @@ const HINT_LABEL_LIFT: f64 = 6.0;
 /// wedge has no glyph.
 const HINT_LABEL_DROP: f64 = 8.0;
 
-/// Render the radial menu overlay.
+/// Render a standalone radial menu using the legacy [`theme::init`] preference.
+/// Runtime rendering uses explicit resources to retain its cached base.
 pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width: u32, height: u32) {
+    // An ineligible standalone paint must not initialize the first-writer-wins
+    // compatibility theme before its caller has a chance to install one.
+    if matches!(input_state.radial_menu.state(), RadialMenuState::Hidden)
+        || input_state.radial_menu.layout().is_none()
+    {
+        return;
+    }
+    let mut caches = crate::ui::UiRenderCaches::default();
+    render_radial_menu_with_context(
+        &mut crate::ui::UiRenderCtx {
+            cairo: ctx,
+            theme: theme::current(),
+            caches: &mut caches,
+        },
+        input_state,
+        width,
+        height,
+    );
+}
+
+pub(crate) fn render_radial_menu_with_context(
+    render: &mut crate::ui::UiRenderCtx<'_, '_, '_>,
+    input_state: &InputState,
+    width: u32,
+    height: u32,
+) {
+    let ctx = render.cairo;
+    let theme = render.theme;
     let (hover, expanded_sub_ring, size_dragging) = match input_state.radial_menu.state() {
         RadialMenuState::Open {
             hover,
@@ -59,7 +89,6 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
         return;
     };
 
-    let theme = theme::current();
     let swatches = input_state.radial_ring_swatches();
     let _ = ctx.save();
 
@@ -73,7 +102,10 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
 
     // ── Static wedge base (cached): rest-state color ring, compass ring,
     // size-ring track ──
-    cache::paint_base(ctx, input_state, &layout, theme, &swatches);
+    render
+        .caches
+        .radial_mut()
+        .paint_base(ctx, input_state, &layout, theme, &swatches);
 
     // ── Dynamic overlays ──
     match hover {

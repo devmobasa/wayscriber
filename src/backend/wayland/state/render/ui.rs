@@ -156,8 +156,9 @@ impl WaylandState {
             );
         }
         if self.input_state.ui_visibility.show_status_bar {
-            crate::ui::render_status_bar(
+            crate::ui::render_status_bar_with_theme(
                 ctx,
+                self.render.theme(),
                 &self.input_state,
                 &self.config.ui.status_bar_style,
                 width,
@@ -165,8 +166,9 @@ impl WaylandState {
             );
         }
         if !capture_picker && self.zoom_chip_visible() {
-            crate::ui::render_zoom_chip(
+            crate::ui::render_zoom_chip_with_theme(
                 ctx,
+                self.render.theme(),
                 &self.input_state,
                 &self.config.ui.status_bar_style,
                 width,
@@ -193,8 +195,14 @@ impl WaylandState {
     ) {
         if !capture_picker && self.input_state.help_overlay.is_visible() {
             let bindings = crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);
-            let scroll_max = crate::ui::render_help_overlay(
-                ctx,
+            let (theme, caches) = self.render.ui_parts_mut();
+            let mut render = crate::ui::UiRenderCtx {
+                cairo: ctx,
+                theme,
+                caches,
+            };
+            let scroll_max = crate::ui::render_help_overlay_with_context(
+                &mut render,
                 &self.config.ui.help_overlay_style,
                 width,
                 height,
@@ -269,7 +277,18 @@ impl WaylandState {
                 .input_state
                 .radial_menu_mark_painted_if_due(std::time::Instant::now())
             {
-                crate::ui::render_radial_menu(ctx, &self.input_state, width, height);
+                let (theme, caches) = self.render.ui_parts_mut();
+                let mut render = crate::ui::UiRenderCtx {
+                    cairo: ctx,
+                    theme,
+                    caches,
+                };
+                crate::ui::render_radial_menu_with_context(
+                    &mut render,
+                    &self.input_state,
+                    width,
+                    height,
+                );
             }
         } else {
             self.input_state.clear_radial_menu_layout();

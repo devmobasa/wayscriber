@@ -120,18 +120,32 @@ impl UiDamageHistory {
 pub(in crate::backend::wayland) struct RenderRuntime {
     canvas_layer_cache: CanvasLayerCache,
     draw_caches: crate::draw::RenderCaches,
+    theme: crate::ui::theme::Theme,
+    ui_caches: crate::ui::UiRenderCaches,
     ui_damage: UiDamageHistory,
     profile_ui_baseline: Vec<u8>,
 }
 
 impl RenderRuntime {
-    pub(in crate::backend::wayland) fn new() -> Self {
+    pub(in crate::backend::wayland) fn new(theme: crate::ui::theme::Theme) -> Self {
         Self {
             canvas_layer_cache: CanvasLayerCache::new(),
             draw_caches: crate::draw::RenderCaches::default(),
+            theme,
+            ui_caches: crate::ui::UiRenderCaches::default(),
             ui_damage: UiDamageHistory::default(),
             profile_ui_baseline: Vec::new(),
         }
+    }
+
+    pub(in crate::backend::wayland::state) fn theme(&self) -> &crate::ui::theme::Theme {
+        &self.theme
+    }
+
+    pub(in crate::backend::wayland::state) fn ui_parts_mut(
+        &mut self,
+    ) -> (&crate::ui::theme::Theme, &mut crate::ui::UiRenderCaches) {
+        (&self.theme, &mut self.ui_caches)
     }
 
     pub(in crate::backend::wayland::state) fn canvas_layer_cache_mut(
@@ -170,6 +184,21 @@ mod tests {
     use super::super::tool_preview::mouse_tool_preview_damage_rect;
     use super::*;
     use crate::backend::wayland::state::buffer_damage::{BufferDamageTracker, FullDamageReason};
+
+    #[test]
+    fn runtime_themes_are_independent_of_other_owners() {
+        let mut dark = RenderRuntime::new(crate::ui::theme::Theme::resolve(
+            crate::ui::theme::ThemeMode::Dark,
+        ));
+        let light = RenderRuntime::new(crate::ui::theme::Theme::resolve(
+            crate::ui::theme::ThemeMode::Light,
+        ));
+        assert_eq!(dark.theme(), &crate::ui::theme::Theme::dark());
+        assert_eq!(light.theme(), &crate::ui::theme::Theme::light());
+        let (theme, _caches) = dark.ui_parts_mut();
+        assert_eq!(theme, &crate::ui::theme::Theme::dark());
+        assert_ne!(dark.theme(), light.theme());
+    }
 
     fn rect(x: i32) -> Rect {
         Rect::new(x, 0, 10, 10).expect("test rectangle")

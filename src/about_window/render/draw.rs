@@ -63,9 +63,7 @@ impl Frame<'_> {
     }
 }
 
-pub(super) fn draw_about(ctx: &cairo::Context, frame: &Frame<'_>) {
-    let theme = theme::current();
-
+pub(super) fn draw_about(ctx: &cairo::Context, theme: &Theme, frame: &Frame<'_>) {
     backdrop(ctx, frame.plan, theme);
     header(ctx, frame, theme);
     update_card(ctx, frame, theme);
@@ -437,6 +435,39 @@ mod tests {
         cairo::Context::new(&surface).unwrap()
     }
 
+    #[test]
+    fn about_paints_each_explicit_theme_without_changing_plan() {
+        let content = AboutContent::build();
+        let plan = layout::plan(&content);
+        let update = UpdateState::Checking;
+        let frame = frame_for(&plan, &content, &update);
+        let paint = |theme: &Theme| {
+            let mut surface = cairo::ImageSurface::create(
+                cairo::Format::ARgb32,
+                plan.width.ceil() as i32,
+                plan.height.ceil() as i32,
+            )
+            .unwrap();
+            {
+                let ctx = cairo::Context::new(&surface).unwrap();
+                draw_about(&ctx, theme, &frame);
+                assert_eq!(ctx.status(), Ok(()));
+            }
+            surface.flush();
+            surface.data().unwrap().to_vec()
+        };
+        let dark = paint(&Theme::dark());
+        let light = paint(&Theme::light());
+        assert!(
+            dark != light,
+            "explicit About themes must change chrome colors"
+        );
+        assert!(
+            dark == paint(&Theme::dark()),
+            "another theme must not replace the first owner's theme"
+        );
+    }
+
     /// The dialog is a fixed width, so row wording has to be chosen to fit it.
     /// An ellipsis here means a row's text was written without checking.
     #[test]
@@ -499,7 +530,7 @@ mod tests {
         ];
 
         for state in &states {
-            draw_about(&ctx, &frame_for(&plan, &content, state));
+            draw_about(&ctx, &Theme::dark(), &frame_for(&plan, &content, state));
             assert_eq!(ctx.status(), Ok(()), "state {state:?} failed to paint");
         }
     }
@@ -515,12 +546,12 @@ mod tests {
         frame.hover = Some(Element::Link(0));
         frame.focus = Some(Element::Close);
         frame.notice = Some("Copied to clipboard");
-        draw_about(&ctx, &frame);
+        draw_about(&ctx, &Theme::dark(), &frame);
 
         frame.hover = Some(Element::UpdateCard);
         frame.focus = Some(Element::Button(0));
         frame.notice = None;
-        draw_about(&ctx, &frame);
+        draw_about(&ctx, &Theme::dark(), &frame);
 
         assert_eq!(ctx.status(), Ok(()));
     }

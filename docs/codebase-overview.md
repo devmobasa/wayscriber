@@ -77,7 +77,7 @@ Daemon mode therefore provides a persistent background service that reacts to us
    - Communicate with `capture::CaptureManager` for screenshot actions.
    - Exit when `InputState.should_exit` is set (Escape, tray close, etc.).
 
-`WaylandState` coordinates the runtime owners handlers need. `FocusState` owns activation, focus, and startup acquisition; `ProtocolGlobals` owns bound globals and toolkit handler state; `PointerRuntime` owns pointer position, board-pan and chrome gestures, cursor, pointer-lock, and single-contact touch protocol lifecycles; `ToolbarChrome` owns toolbar placement, inline interaction, and fade state; `ToolbarDrag` owns built-in and GTK drag lifecycles; `RegionCaptureRuntime` owns region selection generations, active/review/window-snap state, and the window-query and cut-preview workers; `AcquisitionRuntime` owns the capacity-one screen-acquisition and zoom-waiter registries plus eyedropper source correlation; `FrozenState` owns its availability and one-shot startup gate; `SurfaceState` owns output/fullscreen/layer placement and frozen-fullscreen transitions; `OverlaySuppressionState` owns suppression reason, keyboard policy, capture barrier, and clickthrough state; `RenderRuntime` owns the canvas layer cache, reusable image and blur caches, render-profile baseline, and per-effect damage history; `InputHudRuntime` owns system-reader lifecycle and reconciliation; `SpotlightRuntime` owns render memory, warning latches, and wheel timing; `ClipboardRuntime` owns single-flight clipboard workers and queue policy; `PreferenceStores` groups durable preference stores and workers; `UiAnimationClock` owns animation scheduling; and `FontCatalogPrewarm` owns the one-shot font scan. The root retains cross-owner coordination. `handlers::route::SurfaceRouter` is the single classifier for pointer, touch, and stylus surfaces and supplies overlay screen coordinates before modality-specific dispatch.
+`WaylandState` coordinates the runtime owners handlers need. `FocusState` owns activation, focus, and startup acquisition; `ProtocolGlobals` owns bound globals and toolkit handler state; `PointerRuntime` owns pointer position, board-pan and chrome gestures, cursor, pointer-lock, and single-contact touch protocol lifecycles; `ToolbarChrome` owns toolbar placement, inline interaction, and fade state; `ToolbarDrag` owns built-in and GTK drag lifecycles; `RegionCaptureRuntime` owns region selection generations, active/review/window-snap state, and the window-query and cut-preview workers; `AcquisitionRuntime` owns the capacity-one screen-acquisition and zoom-waiter registries plus eyedropper source correlation; `FrozenState` owns its availability and one-shot startup gate; `SurfaceState` owns output/fullscreen/layer placement and frozen-fullscreen transitions; `OverlaySuppressionState` owns suppression reason, keyboard policy, capture barrier, and clickthrough state; `RenderRuntime` owns the canvas layer cache, reusable image and blur caches, resolved theme, UI paint caches, render-profile baseline, and per-effect damage history; `InputHudRuntime` owns system-reader lifecycle and reconciliation; `SpotlightRuntime` owns render memory, warning latches, and wheel timing; `ClipboardRuntime` owns single-flight clipboard workers and queue policy; `PreferenceStores` groups durable preference stores and workers; `UiAnimationClock` owns animation scheduling; and `FontCatalogPrewarm` owns the one-shot font scan. The root retains cross-owner coordination. `handlers::route::SurfaceRouter` is the single classifier for pointer, touch, and stylus surfaces and supplies overlay screen coordinates before modality-specific dispatch.
 
 Within `PointerRuntime`, pending chrome targets and device-owned release suppression have separate lifecycles. Clearing a toast, HUD, or zoom-chip press preserves mouse and touch suppression; cancelling a touch clears only its own release latch.
 
@@ -147,13 +147,19 @@ Freeze capture waits for the overlay-suppression frame, then selects `wlr-screen
      defers the frame before preparation. `state/render/{prepare,plan,paint,submit}.rs` keep
      these boundaries explicit; the planner derives canvas policy and screen/world/buffer damage.
    - `CanvasRenderCtx` borrows frame parameters and the local Cairo target. `RenderRuntime`
-     owns the canvas layer cache, drawing resources, reusable profile baseline, and effect
-     damage history. Drawing resources stay outside the owned `FramePlan`.
+     owns the canvas layer cache, drawing resources, resolved theme, UI paint caches,
+     reusable profile baseline, and effect damage history. These resources stay outside
+     the owned `FramePlan`.
    - `draw::RenderCtx` borrows a Cairo target and explicit `RenderCaches` for image and blur
      rendering. The overlay shares its cache owner across direct drawing, layer baking,
      provisional previews, and board thumbnails. Each export job creates its own owner;
      PDF pages and magnified-page raster passes share that job's image cache. Export blur
      remains uncached because page backdrops can share a numeric source identifier.
+   - `ui::UiRenderCtx` borrows the Cairo target, resolved theme, and `UiRenderCaches` for
+     help and radial painting. Help layout and radial surfaces retain their one-entry
+     policies; radial reuse also compares theme values and the actual Cairo matrix scale.
+     Status and zoom painting borrow only the theme they need. The About dialog resolves
+     and owns its own theme when it starts. Legacy popup colors retain their fixed palette.
    - Draw order: board background → finalized shapes → spotlight effects → provisional shape
      → text cursor preview → UI. Color-profile passes surround UI painting according to their
      selected targets. Main-surface submission precedes toolbar rendering and marking capture
@@ -168,6 +174,14 @@ local drawing resources, as do `InputState::render_provisional_shape` and
 `ui::render_board_picker`. Repeated internal rendering uses an explicitly borrowed cache
 owner. Public PNG/PDF export functions keep their snapshot-based interfaces and create
 Cairo resources inside the rendering job, after any worker-thread handoff.
+
+The public `ui::render_help_overlay` and `ui::render_radial_menu` wrappers create local
+UI cache owners. Only the legacy radial, status-bar, and zoom-chip wrappers read
+`ui::theme::current()`, preserving standalone callers that use `ui::theme::init()`.
+Those compatibility APIs remain until a deliberate public API migration; new internal
+callers use explicit contexts or themes. Overlay and About startup neither initialize
+nor read the compatibility theme. Help hit geometry and text measurement retain their
+separate lifecycles.
 
 ---
 

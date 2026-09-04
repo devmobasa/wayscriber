@@ -21,7 +21,7 @@ mod measurement;
 mod render;
 
 pub use content::compute_status_hud_layout;
-pub use render::render_status_bar;
+pub use render::{render_status_bar, render_status_bar_with_theme};
 
 #[cfg(test)]
 use content::{build_cluster_pieces, build_prefix_text};

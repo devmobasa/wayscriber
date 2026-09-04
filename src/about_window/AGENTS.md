@@ -21,6 +21,7 @@
 - Preserve foreground/fullscreen safety for any launch, focus, or window behavior.
 - Keep protocol handlers thin and rendering deterministic.
 - Chrome colors come from `crate::ui::theme`, never hardcoded literals.
+- Resolve the configured theme at startup and retain it on the About owner; painting borrows that value independently of the overlay and legacy public theme compatibility state.
 - Every outbound link points at wayscriber.com (no code-host links); the update
   card never installs anything.
 - Nothing leaves the machine without the user asking. "Report a problem" copies

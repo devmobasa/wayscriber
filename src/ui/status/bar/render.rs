@@ -14,6 +14,29 @@ pub fn render_status_bar(
     screen_width: u32,
     screen_height: u32,
 ) {
+    // An empty paint must not initialize the legacy first-writer-wins theme.
+    if super::status_hud_geometry(input_state, screen_width, screen_height).is_none() {
+        return;
+    }
+    render_status_bar_with_theme(
+        ctx,
+        theme::current(),
+        input_state,
+        style,
+        screen_width,
+        screen_height,
+    );
+}
+
+/// Paint with an explicit theme; the compatibility entry point uses the legacy process theme.
+pub fn render_status_bar_with_theme(
+    ctx: &cairo::Context,
+    theme: &theme::Theme,
+    input_state: &InputState,
+    style: &crate::config::StatusBarStyle,
+    screen_width: u32,
+    screen_height: u32,
+) {
     let Some(layout) = input_state.status_hud_layout() else {
         return;
     };
@@ -36,7 +59,7 @@ pub fn render_status_bar(
         layout.pill_height,
         STATUS_BAR_CORNER_RADIUS,
         (bg_color[0], bg_color[1], bg_color[2], bg_color[3]),
-        theme::current().border_hairline,
+        theme.border_hairline,
         None,
     );
 

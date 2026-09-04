@@ -7,11 +7,13 @@
 ## Architecture
 - Owns Cairo-rendered overlay UI pieces: status, help overlay, command palette, context menu, board picker, properties panel, radial menu, onboarding card, color picker popup, toasts, tour UI, and primitives.
 - `toolbar/` owns input-side toolbar model/snapshot/apply plumbing, distinct from runtime backend toolbar rendering.
+- `render_context.rs` defines the borrowed `UiRenderCtx` and `UiRenderCaches` owner for help layouts and radial surfaces. The runtime owns these resources; help hit geometry and text measurement are separate concerns.
 
 ## Invariants
 - Keep layout calculations deterministic and avoid text overlap on small surfaces.
 - Prefer shared constants/primitives where present.
 - Keep UI rendering side-effect-light; durable state changes belong in input/backend owners.
+- Internal renderers receive explicit themes and cache owners. Only legacy public radial/status/zoom wrappers may read `theme::current()` to preserve `theme::init()` compatibility; introduce no new ambient callers. Popup accessors keep their fixed palette.
 
 ## Coupled Changes
 - UI changes may affect `src/input/`, `src/backend/wayland/state/render/`, action metadata, keybindings, toolbar rendering, docs, and tests.
