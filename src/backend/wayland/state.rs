@@ -7,10 +7,7 @@ use smithay_client_toolkit::{
     globals::ProvidesBoundGlobal,
     shell::wlr_layer::KeyboardInteractivity,
 };
-use std::{
-    collections::VecDeque,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 use wayland_client::{
     Proxy, QueueHandle,
     protocol::{wl_output, wl_seat},
@@ -39,7 +36,6 @@ use crate::{
     },
     config::{Action, Config},
     desktop_open::DesktopOpenRequest,
-    input::state::{ClipboardPasteRequest, TextClipboardRequest, TextPasteTarget},
     input::{DrawingState, EraserMode, InputState, Tool, ZoomAction},
     session::SessionOptions,
     ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
@@ -53,7 +49,6 @@ pub(in crate::backend::wayland) use self::region_capture::WindowSnapDirection;
 use super::{
     RuntimeOperationController, RuntimeOperationIdSource,
     capture::{CapturePreflightRequest, CaptureState, PendingPdfExport},
-    clipboard::{ClipboardPasteCompletion, ClipboardPublishCompletion},
     frozen::{ExtImageCopyManagers, FrozenState},
     overlay_passthrough::set_surface_clickthrough,
     session::SessionState,
@@ -75,6 +70,10 @@ mod buffer_damage;
 mod canvas_layer;
 mod capture;
 mod clipboard;
+mod clipboard_runtime;
+pub(in crate::backend::wayland) use clipboard_runtime::{
+    HexCopyOutcome, TextCopyOutcome, TextPasteOutcome,
+};
 mod color_picker;
 mod core;
 mod data;
@@ -194,21 +193,10 @@ pub(super) struct WaylandState {
     pub(super) font_catalog_prewarm_started: bool,
     /// System-reader lifecycle and reconciliation latches for the input HUD.
     pub(super) input_hud: input_hud::InputHudRuntime,
-    pub(super) clipboard_publish: RuntimeOperationController<u64, ClipboardPublishCompletion>,
-    pub(super) clipboard_paste:
-        RuntimeOperationController<ClipboardPasteRequest, ClipboardPasteCompletion>,
-    pub(super) clipboard_hex_copy: RuntimeOperationController<String, Result<(), String>>,
+    pub(super) clipboard: clipboard_runtime::ClipboardRuntime,
     /// Desktop-open work completes off-dispatch; successful completion is what
     /// requests overlay exit, so runtime-owned broker teardown cannot race it.
     pub(super) desktop_open: RuntimeOperationController<DesktopOpenRequest, Result<(), String>>,
-    pub(super) pending_hex_copy: Option<String>,
-    /// Async wl-copy pipeline for text-editor selections (Ctrl+C / Ctrl+X).
-    pub(super) clipboard_text_copy:
-        RuntimeOperationController<TextClipboardRequest, Result<(), String>>,
-    pub(super) pending_text_copy: VecDeque<TextClipboardRequest>,
-    /// Async wl-paste pipeline for text-editor paste requests (Ctrl+V).
-    pub(super) clipboard_text_paste:
-        RuntimeOperationController<TextPasteTarget, Result<Option<String>, String>>,
     /// Capacity-one compositor window query for the current native region picker.
     /// Its context owns the picker/source correlation, so stale workers cannot
     /// mutate a later picker generation.
@@ -225,10 +213,6 @@ pub(super) struct WaylandState {
         region_capture::CutPreviewKey,
         region_capture::CutPreviewOutcome,
     >,
-    /// Text paste requests waiting behind an active read. Repeated requests in
-    /// the current edit generation remain distinct; a new generation replaces
-    /// stale queued requests from the old edit session.
-    pub(super) pending_text_paste: VecDeque<TextPasteTarget>,
     /// Capacity-one screen text recognition. A busy controller reports
     /// busy rather than queuing a region the user has moved on from.
     pub(super) ocr: crate::ocr::OcrController,
