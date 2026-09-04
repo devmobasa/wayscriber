@@ -16,22 +16,32 @@ use page_panel::render_page_panel;
 use palette::render_board_palette;
 use rows::render_board_rows;
 
+/// Renders a standalone board picker with drawing resources local to this call.
+/// The overlay runtime uses the explicit-context entry point to reuse its owner.
 pub fn render_board_picker(
     ctx: &cairo::Context,
     input_state: &InputState,
     screen_width: u32,
     screen_height: u32,
 ) {
-    render_board_picker_with_halo(ctx, input_state, screen_width, screen_height, true);
+    let mut caches = crate::draw::RenderCaches::default();
+    render_board_picker_with_halo(
+        &mut crate::draw::RenderCtx::new(ctx, &mut caches),
+        input_state,
+        screen_width,
+        screen_height,
+        true,
+    );
 }
 
 pub(crate) fn render_board_picker_with_halo(
-    ctx: &cairo::Context,
+    render: &mut crate::draw::RenderCtx<'_, '_>,
     input_state: &InputState,
     screen_width: u32,
     screen_height: u32,
     text_halo_enabled: bool,
 ) {
+    let ctx = render.cairo;
     if !input_state.is_board_picker_open() {
         return;
     }
@@ -147,7 +157,7 @@ pub(crate) fn render_board_picker_with_halo(
     render_board_palette(ctx, input_state, layout);
 
     render_page_panel(
-        ctx,
+        render,
         input_state,
         layout,
         screen_width,

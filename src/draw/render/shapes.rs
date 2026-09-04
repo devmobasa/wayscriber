@@ -42,6 +42,9 @@ struct StepMarkerRenderSpec<'a> {
 /// Dispatches to the appropriate internal rendering function based on shape type.
 /// Handles all shape variants: Freehand, Line, Rect, Ellipse, Arrow, and Text.
 ///
+/// This convenience entry point uses temporary drawing caches. Repeated painting
+/// should use [`super::RenderCtx`] with a persistent [`super::RenderCaches`] owner.
+///
 /// # Arguments
 /// * `ctx` - Cairo drawing context to render to
 /// * `shape` - The shape to render
@@ -68,6 +71,20 @@ pub fn render_shape_over(
 
 /// [`render_shape_over`], with explicit control over text outlines.
 pub fn render_shape_over_with_halo(
+    ctx: &cairo::Context,
+    shape: &Shape,
+    known_background_luminance: Option<f64>,
+    text_halo_enabled: bool,
+) {
+    super::RenderCtx::new(ctx, &mut super::RenderCaches::default()).render_shape_over_with_halo(
+        shape,
+        known_background_luminance,
+        text_halo_enabled,
+    );
+}
+
+pub(super) fn render_shape_with_cache(
+    images: &mut super::image::ImageSurfaceCache,
     ctx: &cairo::Context,
     shape: &Shape,
     known_background_luminance: Option<f64>,
@@ -246,7 +263,7 @@ pub fn render_shape_over_with_halo(
             // Eraser strokes require an eraser replay context; ignore in generic rendering.
         }
         Shape::Image { x, y, w, h, data } => {
-            render_image_shape(ctx, *x, *y, *w, *h, data);
+            render_image_shape(images, ctx, *x, *y, *w, *h, data);
         }
     }
 }

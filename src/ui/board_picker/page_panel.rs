@@ -27,13 +27,14 @@ use thumbnail::{
 };
 
 pub(super) fn render_page_panel(
-    ctx: &cairo::Context,
+    render: &mut crate::draw::RenderCtx<'_, '_>,
     input_state: &InputState,
     layout: &BoardPickerLayout,
     screen_width: u32,
     screen_height: u32,
     text_halo_enabled: bool,
 ) {
+    let ctx = render.cairo;
     if !layout.page_panel_enabled {
         return;
     }
@@ -137,7 +138,7 @@ pub(super) fn render_page_panel(
                 && d.current_index == index
         });
         render_page_thumbnail(PageThumbnailArgs {
-            ctx,
+            render,
             frame: page,
             background: &board.spec.background,
             x: thumb_x,
@@ -172,7 +173,7 @@ pub(super) fn render_page_panel(
         let thumb_y = start_y + row as f64 * row_stride;
         let page = &pages[hover_index];
         render_page_preview(PagePreviewArgs {
-            ctx,
+            render,
             frame: page,
             background: &board.spec.background,
             thumb_x,

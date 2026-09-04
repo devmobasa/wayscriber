@@ -22,9 +22,11 @@ use super::icons::{
 };
 use super::types::{PREVIEW_SCALE, PageContentArgs, PagePreviewArgs, PageThumbnailArgs};
 
-pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageThumbnailArgs<'_>) {
+pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(
+    args: PageThumbnailArgs<'_, '_, '_>,
+) {
     let PageThumbnailArgs {
-        ctx,
+        render,
         frame,
         background,
         x,
@@ -45,6 +47,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
         duplicate_hovered,
         rename_hovered,
     } = args;
+    let ctx = render.cairo;
     let radius = RADIUS_STD;
     draw_rounded_rect(ctx, x, y, width, height, radius);
     if is_drop_target {
@@ -58,7 +61,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(args: PageT
     let _ = ctx.stroke();
 
     render_page_content(PageContentArgs {
-        ctx,
+        render,
         frame,
         background,
         x,
@@ -284,9 +287,11 @@ pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
     );
 }
 
-pub(in crate::ui::board_picker::page_panel) fn render_page_preview(args: PagePreviewArgs<'_>) {
+pub(in crate::ui::board_picker::page_panel) fn render_page_preview(
+    args: PagePreviewArgs<'_, '_, '_>,
+) {
     let PagePreviewArgs {
-        ctx,
+        render,
         frame,
         background,
         thumb_x,
@@ -298,6 +303,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(args: PagePre
         text_halo_enabled,
         page_number,
     } = args;
+    let ctx = render.cairo;
     let base_w = thumb_w * PREVIEW_SCALE;
     let base_h = thumb_h * PREVIEW_SCALE;
     let margin = 8.0;
@@ -332,7 +338,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(args: PagePre
     let _ = ctx.stroke();
 
     render_page_content(PageContentArgs {
-        ctx,
+        render,
         frame,
         background,
         x: preview_x,

@@ -184,3 +184,69 @@ fn blur_render_cache_does_not_retain_an_entry_larger_than_its_byte_budget() {
     assert_eq!(returned.surface.width(), 4);
     assert_eq!(returned.surface.height(), 4);
 }
+
+#[test]
+fn blur_hit_promotes_entry_and_replacement_updates_byte_accounting() {
+    let mut cache = BlurRenderCache::new(2, 128);
+    let key = |backdrop_cache_key| BlurCacheKey {
+        backdrop_cache_key,
+        src_x: 0,
+        src_y: 0,
+        src_w: 4,
+        src_h: 4,
+        primary_factor: 18,
+        secondary_factor: 24,
+        style: BackdropStyle::Gaussian,
+    };
+    let entry = |size| CachedBlurRegion {
+        surface: cairo::ImageSurface::create(cairo::Format::ARgb32, size, size).unwrap(),
+        stats: super::FALLBACK_BLUR_STATS,
+        approx_bytes: (size * size * 4) as usize,
+    };
+    cache.insert(key(1), entry(4));
+    cache.insert(key(2), entry(4));
+    assert!(cache.get(&key(1)).is_some());
+    cache.insert(key(3), entry(4));
+    assert!(cache.get(&key(2)).is_none(), "hit promoted the first entry");
+    assert!(cache.get(&key(1)).is_some());
+    cache.insert(key(1), entry(2));
+    assert_eq!(cache.cached_bytes, 80);
+    assert_eq!(cache.access_order.len(), 2);
+    assert_eq!(cache.get(&key(1)).unwrap().surface.width(), 2);
+    assert!(cache.get(&key(3)).is_some());
+}
+
+#[test]
+fn cacheable_blur_entry_skips_compute_on_hit_and_computes_without_a_key() {
+    let mut cache = BlurRenderCache::default();
+    let key = BlurCacheKey {
+        backdrop_cache_key: 1,
+        src_x: 0,
+        src_y: 0,
+        src_w: 4,
+        src_h: 4,
+        primary_factor: 18,
+        secondary_factor: 24,
+        style: BackdropStyle::Gaussian,
+    };
+    let mut computations = 0;
+    let mut compute = || {
+        computations += 1;
+        Some(CachedBlurRegion {
+            surface: cairo::ImageSurface::create(cairo::Format::ARgb32, 4, 4).unwrap(),
+            stats: super::FALLBACK_BLUR_STATS,
+            approx_bytes: 64,
+        })
+    };
+    assert!(super::cacheable_blur_entry(&mut cache, Some(key), &mut compute).is_some());
+    assert!(
+        super::cacheable_blur_entry(&mut cache, Some(key), || panic!("cache hit recomputed"))
+            .is_some()
+    );
+    assert!(super::cacheable_blur_entry(&mut cache, None, &mut compute).is_some());
+    assert!(super::cacheable_blur_entry(&mut cache, None, &mut compute).is_some());
+    assert_eq!(
+        computations, 3,
+        "each unkeyed call must compute independently"
+    );
+}
