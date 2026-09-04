@@ -1,12 +1,14 @@
 mod ime;
 
 use super::super::super::*;
+use super::CanvasRenderCtx;
 use crate::draw::Shape;
 use ime::{paint_preedit_selection, paint_preedit_underline};
 use std::ops::Range;
 
 impl WaylandState {
-    pub(super) fn render_text_input_preview(&self, ctx: &cairo::Context) {
+    pub(super) fn render_text_input_preview(&self, canvas: &CanvasRenderCtx<'_>) {
+        let ctx = canvas.cairo;
         if let DrawingState::TextInput { x, y, .. } = &self.input_state.state {
             let is_editing_existing = self.input_state.text_editing.edit_target().is_some();
 
@@ -18,7 +20,7 @@ impl WaylandState {
             if self.input_state.text_edit_ghost_visible()
                 && let Some((_, snapshot)) = self.input_state.text_editing.edit_target()
             {
-                self.render_text_edit_ghost(ctx, &snapshot.shape);
+                self.render_text_edit_ghost(canvas, &snapshot.shape);
             }
 
             // Render entry animation if active
@@ -53,7 +55,7 @@ impl WaylandState {
                         &self.input_state.style.font_descriptor,
                         self.input_state.style.text_background_enabled,
                         self.input_state.style.text_wrap_width,
-                        self.config.drawing.text_halo_enabled,
+                        canvas.canvas.text_halo_enabled,
                     );
                 }
                 crate::input::TextInputMode::StickyNote => {
@@ -78,7 +80,14 @@ impl WaylandState {
                 preview.underline.as_ref(),
                 decoration_color,
             );
-            self.render_caret_line(ctx, *x, *y, &preview.text, preview.caret, decoration_color);
+            self.render_caret_line(
+                canvas,
+                *x,
+                *y,
+                &preview.text,
+                preview.caret,
+                decoration_color,
+            );
         }
     }
 
@@ -88,7 +97,7 @@ impl WaylandState {
     /// cursor position keeps it correct on wrapped and multiline text.
     fn render_caret_line(
         &self,
-        ctx: &cairo::Context,
+        canvas: &CanvasRenderCtx<'_>,
         x: i32,
         y: i32,
         preview_text: &str,
@@ -111,7 +120,15 @@ impl WaylandState {
         let caret_x = x as f64 + geom.x;
         let top = y as f64 + geom.y_from_baseline;
         let bottom = top + geom.height;
-        render_caret_stroke(ctx, caret_x, top, bottom, color, size, &self.config.drawing);
+        render_caret_stroke(
+            canvas.cairo,
+            caret_x,
+            top,
+            bottom,
+            color,
+            size,
+            canvas.canvas.text_halo_enabled,
+        );
     }
 
     /// Underline the IME preedit span (a byte range into `preview_text`) so
@@ -185,7 +202,8 @@ impl WaylandState {
     }
 
     /// Renders the original text as a semi-transparent ghost during editing.
-    fn render_text_edit_ghost(&self, ctx: &cairo::Context, original_shape: &Shape) {
+    fn render_text_edit_ghost(&self, canvas: &CanvasRenderCtx<'_>, original_shape: &Shape) {
+        let ctx = canvas.cairo;
         let _ = ctx.save();
         // Apply transparency to show it as a ghost
         ctx.push_group();
@@ -211,7 +229,7 @@ impl WaylandState {
                     font_descriptor,
                     *background_enabled,
                     *wrap_width,
-                    self.config.drawing.text_halo_enabled,
+                    canvas.canvas.text_halo_enabled,
                 );
             }
             Shape::StickyNote {
@@ -312,13 +330,13 @@ fn render_caret_stroke(
     bottom: f64,
     color: crate::draw::Color,
     size: f64,
-    drawing: &crate::config::DrawingConfig,
+    text_halo_enabled: bool,
 ) {
     ctx.save().ok();
     // Widths come from the draw layer so the damage tracker sizes the caret's
     // repaint rectangle from the exact same numbers.
     let line_width = crate::draw::caret_line_width(size);
-    if drawing.text_halo_enabled {
+    if text_halo_enabled {
         // The caret stands where the glyphs will, so it asks the same question
         // they do: what is behind this point on the canvas?
         let background_luminance = crate::draw::painted_background_luminance(
@@ -360,7 +378,6 @@ fn text_preview_decoration_color(
 #[cfg(test)]
 mod tests {
     use super::{render_caret_stroke, text_preview_decoration_color};
-    use crate::config::DrawingConfig;
     use crate::draw::Color;
     use crate::input::TextInputMode;
 
@@ -390,10 +407,6 @@ mod tests {
             let ctx = cairo::Context::new(&surface).expect("caret context");
             ctx.set_source_rgb(1.0, 1.0, 1.0);
             ctx.paint().expect("white backdrop");
-            let drawing = DrawingConfig {
-                text_halo_enabled,
-                ..DrawingConfig::default()
-            };
             render_caret_stroke(
                 &ctx,
                 40.0,
@@ -401,7 +414,7 @@ mod tests {
                 80.0,
                 Color::new(0.96, 0.2, 0.25, 1.0),
                 36.0,
-                &drawing,
+                text_halo_enabled,
             );
         }
         surface.flush();
@@ -409,10 +422,50 @@ mod tests {
     }
 
     #[test]
+    fn caret_restores_cairo_state_with_and_without_halo() {
+        for text_halo_enabled in [false, true] {
+            let surface =
+                cairo::ImageSurface::create(cairo::Format::ARgb32, 80, 100).expect("caret surface");
+            let ctx = cairo::Context::new(&surface).expect("caret context");
+            ctx.translate(3.0, 5.0);
+            ctx.scale(1.25, 1.5);
+            ctx.set_line_width(7.0);
+            ctx.set_dash(&[2.0, 3.0], 1.0);
+            ctx.set_source_rgba(0.1, 0.2, 0.3, 0.4);
+            let matrix = ctx.matrix();
+            let source = cairo::SolidPattern::try_from(ctx.source())
+                .expect("solid source")
+                .rgba()
+                .expect("source color");
+
+            render_caret_stroke(
+                &ctx,
+                40.0,
+                20.0,
+                50.0,
+                Color::new(0.96, 0.2, 0.25, 1.0),
+                36.0,
+                text_halo_enabled,
+            );
+
+            assert_eq!(ctx.matrix(), matrix);
+            assert_eq!(ctx.line_width(), 7.0);
+            assert_eq!(ctx.dash(), (vec![2.0, 3.0], 1.0));
+            assert_eq!(
+                cairo::SolidPattern::try_from(ctx.source())
+                    .expect("restored solid source")
+                    .rgba()
+                    .expect("restored source color"),
+                source,
+            );
+        }
+    }
+
+    #[test]
     fn text_entry_caret_honours_the_configured_halo_setting() {
         assert!(
             caret_pixels(true) != caret_pixels(false),
-            "caret rendering must read DrawingConfig::text_halo_enabled",
+            "caret rendering must honor the frame text halo policy",
         );
     }
 }
