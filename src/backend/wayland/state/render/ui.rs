@@ -289,13 +289,14 @@ impl WaylandState {
                 .input_state
                 .radial_menu_mark_painted_if_due(std::time::Instant::now())
             {
-                let (theme, caches) = self.render.ui_parts_mut();
+                let (theme, caches, engine) = self.render.ui_parts_with_text_mut();
                 let mut render = crate::ui::UiRenderCtx {
                     cairo: ctx,
                     theme,
                     caches,
                 };
                 crate::ui::render_radial_menu_with_context(
+                    engine,
                     &mut render,
                     &self.input_state,
                     width,

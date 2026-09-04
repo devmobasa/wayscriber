@@ -123,6 +123,7 @@ fn legacy_light_wrappers_match_explicit_light_in_isolated_process() {
     state.open_radial_menu(400.0, 300.0);
     state.update_radial_menu_layout(WIDTH, HEIGHT);
     let legacy = pixels(|ctx| render_radial_menu(ctx, &state, WIDTH, HEIGHT));
+    let engine = crate::ui_text::UiTextEngine::default();
     let explicit = |theme: &Theme| {
         pixels(|ctx| {
             let mut caches = UiRenderCaches::default();
@@ -131,7 +132,7 @@ fn legacy_light_wrappers_match_explicit_light_in_isolated_process() {
                 theme,
                 caches: &mut caches,
             };
-            render_radial_menu_with_context(&mut render, &state, WIDTH, HEIGHT);
+            render_radial_menu_with_context(&engine, &mut render, &state, WIDTH, HEIGHT);
         })
     };
     equal_pixels(&legacy, &explicit(&light), "legacy radial");

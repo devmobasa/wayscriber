@@ -157,12 +157,6 @@ impl RenderRuntime {
         &self.theme
     }
 
-    pub(in crate::backend::wayland::state) fn ui_parts_mut(
-        &mut self,
-    ) -> (&crate::ui::theme::Theme, &mut crate::ui::UiRenderCaches) {
-        (&self.theme, &mut self.ui_caches)
-    }
-
     pub(in crate::backend::wayland::state) fn ui_parts_with_text_mut(
         &mut self,
     ) -> (
@@ -222,7 +216,7 @@ mod tests {
         );
         assert_eq!(dark.theme(), &crate::ui::theme::Theme::dark());
         assert_eq!(light.theme(), &crate::ui::theme::Theme::light());
-        let (theme, _caches) = dark.ui_parts_mut();
+        let (theme, _caches, _engine) = dark.ui_parts_with_text_mut();
         assert_eq!(theme, &crate::ui::theme::Theme::dark());
         assert_ne!(dark.theme(), light.theme());
     }
