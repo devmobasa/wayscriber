@@ -123,6 +123,7 @@ pub(in crate::backend::wayland) struct RenderRuntime {
     theme: crate::ui::theme::Theme,
     ui_caches: crate::ui::UiRenderCaches,
     ui_text: crate::ui_text::UiTextEngine,
+    text_measurer: crate::draw::TextMeasurer,
     ui_damage: UiDamageHistory,
     profile_ui_baseline: Vec<u8>,
 }
@@ -135,9 +136,14 @@ impl RenderRuntime {
             theme,
             ui_caches: crate::ui::UiRenderCaches::default(),
             ui_text: crate::ui_text::UiTextEngine::default(),
+            text_measurer: crate::draw::TextMeasurer::default(),
             ui_damage: UiDamageHistory::default(),
             profile_ui_baseline: Vec::new(),
         }
+    }
+
+    pub(in crate::backend::wayland) fn text_measurer(&self) -> &crate::draw::TextMeasurer {
+        &self.text_measurer
     }
 
     pub(in crate::backend::wayland) fn ui_text(&self) -> &crate::ui_text::UiTextEngine {

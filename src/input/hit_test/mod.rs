@@ -7,9 +7,10 @@ mod shapes;
 mod tests;
 
 use crate::draw::shape::{
-    arrow_label_ends, arrow_label_layout, step_marker_outline_thickness, step_marker_radius,
+    arrow_label_ends, arrow_label_layout_with, step_marker_outline_thickness,
+    step_marker_radius_with,
 };
-use crate::draw::{DrawnShape, Shape};
+use crate::draw::{DrawnShape, Shape, TextMeasurer, with_legacy_measurer};
 use crate::util::Rect;
 
 const MAX_HIT_TEST_TOLERANCE: f64 = i32::MAX as f64;
@@ -43,14 +44,24 @@ impl HitTestTolerance {
 pub(crate) use shapes::ellipse_fill_hit;
 
 pub fn compute_hit_bounds(shape: &DrawnShape, tolerance: f64) -> Option<Rect> {
-    compute_hit_bounds_with_tolerance(shape, HitTestTolerance::new(tolerance)?)
+    with_legacy_measurer(|measurer| compute_hit_bounds_with(measurer, shape, tolerance))
+}
+
+/// Computes tolerance-inflated bounds with the supplied text measurement owner.
+pub fn compute_hit_bounds_with(
+    measurer: &TextMeasurer,
+    shape: &DrawnShape,
+    tolerance: f64,
+) -> Option<Rect> {
+    compute_hit_bounds_with_tolerance(measurer, shape, HitTestTolerance::new(tolerance)?)
 }
 
 pub(crate) fn compute_hit_bounds_with_tolerance(
+    measurer: &TextMeasurer,
     shape: &DrawnShape,
     tolerance: HitTestTolerance,
 ) -> Option<Rect> {
-    let base = shape.bounding_box()?;
+    let base = shape.bounding_box_with(measurer)?;
     if matches!(shape.shape, Shape::EraserStroke { .. }) {
         return None;
     }
@@ -63,13 +74,24 @@ pub(crate) fn compute_hit_bounds_with_tolerance(
 
 /// Returns `true` if the point intersects the provided shape within tolerance.
 pub fn hit_test(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
+    with_legacy_measurer(|measurer| hit_test_with(measurer, shape, point, tolerance))
+}
+
+/// Tests stroke geometry with the supplied text measurement owner.
+pub fn hit_test_with(
+    measurer: &TextMeasurer,
+    shape: &DrawnShape,
+    point: (i32, i32),
+    tolerance: f64,
+) -> bool {
     let Some(tolerance) = HitTestTolerance::new(tolerance) else {
         return false;
     };
-    hit_test_with_tolerance(shape, point, tolerance)
+    hit_test_with_tolerance(measurer, shape, point, tolerance)
 }
 
 pub(crate) fn hit_test_with_tolerance(
+    measurer: &TextMeasurer,
     shape: &DrawnShape,
     point: (i32, i32),
     tolerance: HitTestTolerance,
@@ -160,7 +182,8 @@ pub(crate) fn hit_test_with_tolerance(
             };
             if !hit && let Some(label) = label {
                 let label_text = label.value.to_string();
-                if let Some(layout) = arrow_label_layout(
+                if let Some(layout) = arrow_label_layout_with(
+                    measurer,
                     label_tip_x,
                     label_tip_y,
                     label_tail_x,
@@ -180,7 +203,7 @@ pub(crate) fn hit_test_with_tolerance(
         }
         Shape::BlurRect { .. } => {
             let inflate = tolerance.ceil() as i32;
-            if let Some(bounds) = shape.bounding_box() {
+            if let Some(bounds) = shape.bounding_box_with(measurer) {
                 bounds
                     .inflated(inflate)
                     .unwrap_or(bounds)
@@ -190,7 +213,7 @@ pub(crate) fn hit_test_with_tolerance(
             }
         }
         Shape::Text { .. } | Shape::StickyNote { .. } | Shape::Image { .. } => {
-            if let Some(bounds) = shape.bounding_box() {
+            if let Some(bounds) = shape.bounding_box_with(measurer) {
                 let inflate = tolerance.ceil() as i32;
                 bounds
                     .inflated(inflate)
@@ -205,7 +228,8 @@ pub(crate) fn hit_test_with_tolerance(
             shapes::freehand_hit(points, point, effective_thick, tolerance)
         }
         Shape::StepMarker { x, y, label, .. } => {
-            let radius = step_marker_radius(label.value, label.size, &label.font_descriptor);
+            let radius =
+                step_marker_radius_with(measurer, label.value, label.size, &label.font_descriptor);
             let outline = step_marker_outline_thickness(label.size);
             shapes::circle_hit(*x, *y, radius + outline / 2.0, point, tolerance)
         }
@@ -218,18 +242,31 @@ pub(crate) fn hit_test_with_tolerance(
 /// Stroke erasing intentionally keeps using `hit_test`, while direct point
 /// targeting includes filled interiors for closed fill-capable shapes.
 pub fn hit_test_for_point_targeting(shape: &DrawnShape, point: (i32, i32), tolerance: f64) -> bool {
+    with_legacy_measurer(|measurer| {
+        hit_test_for_point_targeting_with(measurer, shape, point, tolerance)
+    })
+}
+
+/// Tests selection targets, including filled interiors, with explicit measurements.
+pub fn hit_test_for_point_targeting_with(
+    measurer: &TextMeasurer,
+    shape: &DrawnShape,
+    point: (i32, i32),
+    tolerance: f64,
+) -> bool {
     let Some(tolerance) = HitTestTolerance::new(tolerance) else {
         return false;
     };
-    hit_test_for_point_targeting_with_tolerance(shape, point, tolerance)
+    hit_test_for_point_targeting_with_tolerance(measurer, shape, point, tolerance)
 }
 
 pub(crate) fn hit_test_for_point_targeting_with_tolerance(
+    measurer: &TextMeasurer,
     shape: &DrawnShape,
     point: (i32, i32),
     tolerance: HitTestTolerance,
 ) -> bool {
-    if hit_test_with_tolerance(shape, point, tolerance) {
+    if hit_test_with_tolerance(measurer, shape, point, tolerance) {
         return true;
     }
 

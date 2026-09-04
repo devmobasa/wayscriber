@@ -1,4 +1,4 @@
-use crate::draw::{Frame, ShapeId};
+use crate::draw::{Frame, ShapeId, TextMeasurer};
 use crate::input::hit_test::HitTestTolerance;
 use crate::util::Rect;
 use std::collections::{HashMap, HashSet};
@@ -58,8 +58,9 @@ pub(in crate::input::state::core) struct SpatialGrid {
 }
 
 impl SpatialGrid {
-    pub(super) fn build(frame: &Frame) -> Option<Self> {
+    pub(super) fn build(measurer: &TextMeasurer, frame: &Frame) -> Option<Self> {
         Self::build_with_membership_limit(
+            measurer,
             frame,
             SPATIAL_GRID_CELL_SIZE,
             MAX_SPATIAL_GRID_MEMBERSHIPS,
@@ -67,6 +68,7 @@ impl SpatialGrid {
     }
 
     fn build_with_membership_limit(
+        measurer: &TextMeasurer,
         frame: &Frame,
         cell_size: i32,
         max_indexed_memberships: usize,
@@ -87,7 +89,7 @@ impl SpatialGrid {
         };
 
         for drawn in &frame.shapes {
-            grid.add_shape(drawn.id, drawn.bounding_box());
+            grid.add_shape(drawn.id, drawn.bounding_box_with(measurer));
         }
 
         if grid.cells.is_empty() && grid.global_shapes.is_empty() {
