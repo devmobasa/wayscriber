@@ -59,7 +59,10 @@ fn keyboard_visibility_toggle_persists_both_pins_and_startup_hides_the_toolbar()
     let mut restarted_input = input_from_config(&config);
     assert!(restarted_input.toolbar_visible());
     let mut restarted = test_runtime(&config, &runtime_path);
-    restarted.apply_startup_state(&mut restarted_input);
+    restarted.apply_startup_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut restarted_input,
+    );
     assert!(!restarted_input.toolbar_top_pinned());
     assert!(
         !restarted_input.toolbar_visible() && !restarted_input.toolbar_top_visible(),
@@ -80,7 +83,12 @@ fn a_rolled_back_hide_toggle_restores_live_visibility_from_the_pins() {
     assert!(input.set_toolbar_visible(false));
     input.set_toolbar_top_pinned(false);
 
-    apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(true));
+    apply_toolbar_runtime_rollback(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut input,
+        &mut positions,
+        &pins_rollback(true),
+    );
 
     assert!(input.toolbar_top_pinned());
     assert!(
@@ -101,7 +109,12 @@ fn a_rolled_back_show_toggle_re_hides_the_toolbar() {
     assert!(input.set_toolbar_visible(true));
     input.set_toolbar_top_pinned(true);
 
-    apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(false));
+    apply_toolbar_runtime_rollback(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut input,
+        &mut positions,
+        &pins_rollback(false),
+    );
 
     assert!(!input.toolbar_top_pinned());
     assert!(
@@ -128,7 +141,12 @@ fn a_rolled_back_pin_button_keeps_a_visible_unpinned_toolbar_visible() {
         derive_toolbar_visibility_from_pins: false,
     };
 
-    apply_toolbar_runtime_rollback(&mut input, &mut positions, &rollback);
+    apply_toolbar_runtime_rollback(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut input,
+        &mut positions,
+        &rollback,
+    );
 
     assert!(!input.toolbar_top_pinned());
     assert!(
@@ -188,7 +206,12 @@ fn visibility_toggle_rollback_through_a_failed_reset_restores_the_screen() {
     });
     let drain = runtime.drain_writer_completions();
     assert_eq!(drain.rollbacks.len(), 1);
-    apply_toolbar_runtime_rollback(&mut input, &mut positions, &drain.rollbacks[0]);
+    apply_toolbar_runtime_rollback(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut input,
+        &mut positions,
+        &drain.rollbacks[0],
+    );
     assert!(input.toolbar_top_pinned());
     assert!(
         input.toolbar_visible() && input.toolbar_top_visible(),
@@ -328,7 +351,11 @@ fn an_exit_during_an_active_reset_barrier_still_lands_the_deferred_toggle() {
     let drain = runtime.drain_writer_completions();
     assert!(drain.rollbacks.is_empty());
     if drain.rebuild_live {
-        runtime.apply_live_state(&mut input, &mut positions);
+        runtime.apply_live_state(
+            &crate::ui_text::UiTextEngine::default(),
+            &mut input,
+            &mut positions,
+        );
     }
     // ...then drains the queue; resetting an empty store changed no live
     // state, so the entry still describes a genuine pin change.
@@ -354,7 +381,10 @@ fn an_exit_during_an_active_reset_barrier_still_lands_the_deferred_toggle() {
     // Restart: the exit-time screen survived the mid-reset exit.
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
-    restarted.apply_startup_state(&mut restarted_input);
+    restarted.apply_startup_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut restarted_input,
+    );
     assert!(!restarted_input.toolbar_top_pinned());
     assert!(
         !restarted_input.toolbar_visible(),

@@ -115,19 +115,27 @@ fn apply_tray_action(state: &mut WaylandState, action: TrayAction) {
             state.input_state.needs_redraw = true;
         }
         TrayAction::ToggleLightMode => {
-            state.input_state.toggle_light_mode();
+            state
+                .input_state
+                .toggle_light_mode_with_engine(state.render.ui_text());
             state.input_state.needs_redraw = true;
         }
         TrayAction::LightDrawToggle => {
-            state.input_state.toggle_light_mode_drawing();
+            state
+                .input_state
+                .toggle_light_mode_drawing_with_engine(state.render.ui_text());
             state.input_state.needs_redraw = true;
         }
         TrayAction::LightDrawOn => {
-            state.input_state.set_light_mode_drawing(true);
+            state
+                .input_state
+                .set_light_mode_drawing_with_engine(state.render.ui_text(), true);
             state.input_state.needs_redraw = true;
         }
         TrayAction::LightDrawOff => {
-            state.input_state.set_light_mode_drawing(false);
+            state
+                .input_state
+                .set_light_mode_drawing_with_engine(state.render.ui_text(), false);
             state.input_state.needs_redraw = true;
         }
     }

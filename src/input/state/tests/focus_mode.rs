@@ -231,7 +231,11 @@ fn focus_mode_rescues_when_the_enabled_status_bar_has_no_visible_content() {
     state.ui_visibility.show_floating_badge = false;
     state.ui_visibility.show_zoom_chip = false;
     for item in StatusBarItem::ALL {
-        state.set_status_bar_item_visible(item, false);
+        state.set_status_bar_item_visible_with_engine(
+            &crate::ui_text::UiTextEngine::default(),
+            item,
+            false,
+        );
     }
     state.update_status_hud_layout(
         StatusPosition::BottomLeft,
@@ -314,7 +318,11 @@ fn focus_mode_hides_a_fallback_badge_when_the_enabled_status_bar_is_empty() {
     state.ui_visibility.show_zoom_chip = false;
     state.set_zoom_status(true, false, 2.0, (0.0, 0.0));
     for item in StatusBarItem::ALL {
-        state.set_status_bar_item_visible(item, false);
+        state.set_status_bar_item_visible_with_engine(
+            &crate::ui_text::UiTextEngine::default(),
+            item,
+            false,
+        );
     }
     state.update_status_hud_layout(
         StatusPosition::BottomLeft,

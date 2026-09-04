@@ -122,7 +122,12 @@ fn apply_finish(
     finish: ToolbarRuntimeFinish,
 ) {
     if let ToolbarRuntimeFinish::Rollback(rollback) = finish {
-        apply_toolbar_runtime_rollback(input, positions, &rollback);
+        apply_toolbar_runtime_rollback(
+            &crate::ui_text::UiTextEngine::default(),
+            input,
+            positions,
+            &rollback,
+        );
     }
 }
 
@@ -208,7 +213,7 @@ fn commit_display_mode(
     let prepared = runtime
         .begin_toolbar_mutation(target, input)
         .expect("display mode permit");
-    input.set_top_display_mode(mode);
+    input.set_top_display_mode_with_engine(&crate::ui_text::UiTextEngine::default(), mode);
     runtime.finish_toolbar_mutation(prepared, true, input)
 }
 
@@ -246,3 +251,5 @@ fn section_toggle(flag: crate::config::ToolbarSectionFlag, show: bool) -> Toolba
         Flag::TextControls => ToolbarEvent::ToggleTextControls(show),
     }
 }
+
+mod text_geometry;

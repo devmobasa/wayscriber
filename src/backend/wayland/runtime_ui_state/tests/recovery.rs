@@ -103,7 +103,11 @@ fn runtime_rebuild_reuses_minimize_transition_cleanup() {
         );
         let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
 
-        runtime.apply_live_state(&mut rebuilt, &mut positions);
+        runtime.apply_live_state(
+            &crate::ui_text::UiTextEngine::default(),
+            &mut rebuilt,
+            &mut positions,
+        );
 
         assert!(rebuilt.toolbar_top_minimized());
         assert_eq!(
@@ -155,7 +159,11 @@ fn supported_runtime_reset_returns_live_state_to_configured_defaults() {
     assert!(!runtime_path.exists());
 
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
-    runtime.apply_live_state(&mut input, &mut positions);
+    runtime.apply_live_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut input,
+        &mut positions,
+    );
     assert_eq!(input.toolbar_top_pinned(), config.ui.toolbar.top_pinned);
 }
 
@@ -362,7 +370,12 @@ fn cancelling_read_only_recovery_rebuilds_a_staged_seed_reload() {
     );
     let mut config_b = config_a;
     config_b.ui.toolbar.top_pinned = false;
-    let refresh = runtime.refresh_config_seeds(&config_b, &mut input, &mut positions);
+    let refresh = runtime.refresh_config_seeds(
+        &crate::ui_text::UiTextEngine::default(),
+        &config_b,
+        &mut input,
+        &mut positions,
+    );
     assert!(!refresh.applied, "the reload is staged behind recovery");
     assert!(
         input.toolbar_top_pinned(),
@@ -375,7 +388,11 @@ fn cancelling_read_only_recovery_rebuilds_a_staged_seed_reload() {
         drain.rebuild_live,
         "synchronous cancellation must publish the staged live authority"
     );
-    runtime.apply_live_state(&mut input, &mut positions);
+    runtime.apply_live_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut input,
+        &mut positions,
+    );
     assert!(!input.toolbar_top_pinned());
     runtime.shutdown_blocking();
 }
@@ -411,7 +428,10 @@ fn runtime_toolbar_routes_leave_authored_config_bytes_exactly_unchanged() {
                 input.test_set_toolbar_display_state(input.toolbar_top_display_mode(), true);
             }
             ToolbarRuntimeUiPersistenceTarget::TopDisplayMode => {
-                input.set_top_display_mode(crate::config::TopDisplayMode::Micro);
+                input.set_top_display_mode_with_engine(
+                    &crate::ui_text::UiTextEngine::default(),
+                    crate::config::TopDisplayMode::Micro,
+                );
             }
             _ => unreachable!(),
         }

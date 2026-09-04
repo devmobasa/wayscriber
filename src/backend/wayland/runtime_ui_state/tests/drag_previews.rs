@@ -178,7 +178,12 @@ fn relevant_reload_aborts_item_and_position_previews_without_restoring_old_seed(
         .order
         .ordered_ids(ToolbarItemOrderGroup::TopTools)
         .to_vec();
-    let refresh = runtime.refresh_config_seeds(&config_b, &mut input, &mut positions);
+    let refresh = runtime.refresh_config_seeds(
+        &crate::ui_text::UiTextEngine::default(),
+        &config_b,
+        &mut input,
+        &mut positions,
+    );
     assert!(refresh.applied);
     assert!(refresh.item_drag_aborted);
     assert!(!refresh.position_drag_aborted);
@@ -203,7 +208,12 @@ fn relevant_reload_aborts_item_and_position_previews_without_restoring_old_seed(
     let mut config_c = config_b;
     config_c.ui.toolbar.top_offset = 100.0;
     config_c.ui.toolbar.top_offset_y = 101.0;
-    let refresh = runtime.refresh_config_seeds(&config_c, &mut input, &mut positions);
+    let refresh = runtime.refresh_config_seeds(
+        &crate::ui_text::UiTextEngine::default(),
+        &config_c,
+        &mut input,
+        &mut positions,
+    );
     assert!(refresh.applied);
     assert!(!refresh.item_drag_aborted);
     assert!(refresh.position_drag_aborted);
@@ -231,7 +241,12 @@ fn unrelated_position_reload_preserves_preview_and_cancel_only_restores_its_scop
     let mut config_b = config_a;
     config_b.ui.toolbar.top_minimized = !config_b.ui.toolbar.top_minimized;
 
-    let refresh = runtime.refresh_config_seeds(&config_b, &mut input, &mut positions);
+    let refresh = runtime.refresh_config_seeds(
+        &crate::ui_text::UiTextEngine::default(),
+        &config_b,
+        &mut input,
+        &mut positions,
+    );
     assert!(refresh.applied);
     assert!(!refresh.position_drag_aborted);
     assert_eq!(
@@ -293,7 +308,12 @@ fn release_during_barrier_is_consumed_once_and_never_replayed() {
     });
     let drain = runtime.drain_writer_completions();
     assert_eq!(drain.rollbacks.len(), 1);
-    apply_toolbar_runtime_rollback(&mut input, &mut positions, &drain.rollbacks[0]);
+    apply_toolbar_runtime_rollback(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut input,
+        &mut positions,
+        &drain.rollbacks[0],
+    );
     assert_eq!(
         input
             .resolved_toolbar_items()
@@ -371,7 +391,11 @@ fn external_source_conflict_rebuilds_live_toolbar_from_external_authority() {
     let drain = runtime.drain_writer_completions();
     assert!(drain.rebuild_live);
     assert!(drain.rollbacks.is_empty());
-    runtime.apply_live_state(&mut input, &mut positions);
+    runtime.apply_live_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut input,
+        &mut positions,
+    );
     assert!(input.toolbar_top_pinned());
     assert_eq!(
         input

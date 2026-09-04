@@ -71,7 +71,10 @@ fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
     // Restart: the retried write and the deferred toggle both survived.
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
-    restarted.apply_startup_state(&mut restarted_input);
+    restarted.apply_startup_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut restarted_input,
+    );
     assert_eq!(
         stored_display_mode(&restarted),
         Some(PersistedTopDisplayMode::Micro),
@@ -107,7 +110,12 @@ fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
     input.toggle_presenter_mode();
     assert!(input.presenter_mode_active());
 
-    apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(true));
+    apply_toolbar_runtime_rollback(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut input,
+        &mut positions,
+        &pins_rollback(true),
+    );
 
     assert!(input.toolbar_top_pinned());
     assert!(
@@ -151,7 +159,12 @@ fn a_deferred_hide_rollback_lands_in_the_focus_mode_snapshot() {
     input.handle_action(Action::ToggleFocusMode);
     assert!(input.focus_mode_active());
 
-    apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(true));
+    apply_toolbar_runtime_rollback(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut input,
+        &mut positions,
+        &pins_rollback(true),
+    );
 
     assert!(input.toolbar_top_pinned());
     assert!(
@@ -186,7 +199,12 @@ fn a_deferred_hide_rollback_lands_in_the_light_mode_snapshot() {
     input.handle_action(Action::ToggleLightMode);
     assert!(input.light_mode_active());
 
-    apply_toolbar_runtime_rollback(&mut input, &mut positions, &pins_rollback(true));
+    apply_toolbar_runtime_rollback(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut input,
+        &mut positions,
+        &pins_rollback(true),
+    );
 
     assert!(input.toolbar_top_pinned());
     assert!(

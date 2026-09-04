@@ -437,7 +437,11 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
     refresh_status_hud_layout(&mut state);
     assert!(state.status_hud_layout().is_some());
     for item in StatusBarItem::ALL {
-        state.set_status_bar_item_visible(item, false);
+        state.set_status_bar_item_visible_with_engine(
+            &crate::ui_text::UiTextEngine::default(),
+            item,
+            false,
+        );
     }
     assert!(
         state.ui_visibility.show_status_bar,
@@ -449,7 +453,11 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
     );
     assert!(!state.status_hud_effectively_visible());
 
-    assert!(state.set_status_bar_item_visible(StatusBarItem::About, true));
+    assert!(state.set_status_bar_item_visible_with_engine(
+        &crate::ui_text::UiTextEngine::default(),
+        StatusBarItem::About,
+        true
+    ));
     assert!(
         state.status_hud_layout().is_some(),
         "enabling content refreshes an empty cache before the next frame"
@@ -458,7 +466,11 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
         state.status_hud_effectively_visible(),
         "policy sees the synchronously refreshed measured cache"
     );
-    assert!(state.set_status_bar_item_visible(StatusBarItem::About, false));
+    assert!(state.set_status_bar_item_visible_with_engine(
+        &crate::ui_text::UiTextEngine::default(),
+        StatusBarItem::About,
+        false
+    ));
 
     state.handle_action(Action::ToggleToolbar);
 
@@ -482,7 +494,11 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
 fn width_shed_content_never_reports_an_effectively_visible_hud() {
     let mut state = create_test_input_state();
     for item in StatusBarItem::ALL {
-        state.set_status_bar_item_visible(item, false);
+        state.set_status_bar_item_visible_with_engine(
+            &crate::ui_text::UiTextEngine::default(),
+            item,
+            false,
+        );
     }
     state.update_status_hud_layout(
         StatusPosition::BottomLeft,
@@ -492,7 +508,11 @@ fn width_shed_content_never_reports_an_effectively_visible_hud() {
     );
     assert!(state.status_hud_layout().is_none());
 
-    assert!(state.set_status_bar_item_visible(StatusBarItem::About, true));
+    assert!(state.set_status_bar_item_visible_with_engine(
+        &crate::ui_text::UiTextEngine::default(),
+        StatusBarItem::About,
+        true
+    ));
     assert!(
         state.status_hud_layout().is_none(),
         "the narrow output sheds the About-only HUD entirely"
@@ -507,7 +527,11 @@ fn width_shed_content_never_reports_an_effectively_visible_hud() {
 fn toolbar_hint_prevents_a_false_all_chrome_warning_when_it_becomes_visible() {
     let mut state = create_test_input_state();
     for item in StatusBarItem::ALL {
-        state.set_status_bar_item_visible(item, item == StatusBarItem::ToolbarHint);
+        state.set_status_bar_item_visible_with_engine(
+            &crate::ui_text::UiTextEngine::default(),
+            item,
+            item == StatusBarItem::ToolbarHint,
+        );
     }
     refresh_status_hud_layout(&mut state);
     assert!(

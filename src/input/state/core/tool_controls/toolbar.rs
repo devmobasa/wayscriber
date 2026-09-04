@@ -32,12 +32,6 @@ impl InputState {
 
     /// Re-derive live visibility from the persisted pin without surfacing a
     /// toolbar hidden by a transient chrome owner.
-    pub(crate) fn derive_toolbar_visibility_from_pins(&mut self) {
-        crate::ui_text::with_legacy_engine(|engine| {
-            self.derive_toolbar_visibility_from_pins_with_engine(engine)
-        })
-    }
-
     pub(crate) fn derive_toolbar_visibility_from_pins_with_engine(
         &mut self,
         engine: &crate::ui_text::UiTextEngine,
@@ -237,12 +231,6 @@ impl InputState {
         } else {
             TopDisplayMode::Full
         }
-    }
-
-    pub(crate) fn set_top_display_mode(&mut self, mode: TopDisplayMode) {
-        crate::ui_text::with_legacy_engine(|engine| {
-            self.set_top_display_mode_with_engine(engine, mode)
-        })
     }
 
     pub(crate) fn set_top_display_mode_with_engine(

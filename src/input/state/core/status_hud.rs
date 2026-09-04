@@ -47,16 +47,6 @@ impl InputState {
         }
     }
 
-    pub(crate) fn set_status_bar_item_visible(
-        &mut self,
-        item: StatusBarItem,
-        visible: bool,
-    ) -> bool {
-        crate::ui_text::with_legacy_engine(|engine| {
-            self.set_status_bar_item_visible_with_engine(engine, item, visible)
-        })
-    }
-
     pub(crate) fn set_status_bar_item_visible_with_engine(
         &mut self,
         engine: &crate::ui_text::UiTextEngine,

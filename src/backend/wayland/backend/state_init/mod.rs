@@ -75,6 +75,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         backend.tokio_runtime.handle(),
         &keybindings.keybinding_conflicts,
     );
+    let ui_text = crate::ui_text::UiTextEngine::default();
     let runtime_ui_path = crate::paths::runtime_ui_state_file();
     let (runtime_ui, runtime_ui_unavailable) =
         match crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState::start(
@@ -84,7 +85,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
             runtime_wake.handle(),
         ) {
             Ok(runtime_ui) => {
-                runtime_ui.apply_startup_state(&mut input_state);
+                runtime_ui.apply_startup_state(&ui_text, &mut input_state);
                 (Some(runtime_ui), None)
             }
             Err(error) => {
@@ -180,6 +181,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     };
 
     let mut state = WaylandState::new(WaylandStateInit {
+        ui_text,
         globals: setup.state_globals,
         config,
         input_state,

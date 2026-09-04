@@ -394,7 +394,11 @@ fn disabling_every_content_item_removes_the_hud_and_restores_badge_fallback() {
     let mut input = create_test_input_state();
     input.boards.new_page();
     for item in StatusBarItem::ALL {
-        input.set_status_bar_item_visible(item, false);
+        input.set_status_bar_item_visible_with_engine(
+            &crate::ui_text::UiTextEngine::default(),
+            item,
+            false,
+        );
     }
 
     update_hud_layout(&mut input, 1280, 720);
@@ -422,7 +426,11 @@ fn changing_status_hud_content_leaves_damage_to_the_effect_pass() {
     update_hud_layout(&mut input, 1280, 720);
     let _ = input.take_dirty_region_report();
 
-    assert!(input.set_status_bar_item_visible(StatusBarItem::About, false));
+    assert!(input.set_status_bar_item_visible_with_engine(
+        &crate::ui_text::UiTextEngine::default(),
+        StatusBarItem::About,
+        false
+    ));
 
     assert!(input.needs_redraw, "the HUD change still schedules a frame");
     assert!(

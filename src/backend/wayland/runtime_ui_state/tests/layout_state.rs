@@ -84,7 +84,12 @@ fn an_authored_position_edit_drops_the_stale_drag_override() {
     let mut config_b = config_a;
     config_b.ui.toolbar.top_offset = 200.0;
     config_b.ui.toolbar.top_offset_y = 201.0;
-    let refresh = runtime.refresh_config_seeds(&config_b, &mut input, &mut positions);
+    let refresh = runtime.refresh_config_seeds(
+        &crate::ui_text::UiTextEngine::default(),
+        &config_b,
+        &mut input,
+        &mut positions,
+    );
     assert!(refresh.applied);
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
     assert_eq!(
@@ -185,7 +190,10 @@ fn a_stored_display_mode_is_restored_at_startup_over_the_config_seed() {
         TopDisplayMode::Full
     );
     let restarted = test_runtime(&config, &runtime_path);
-    restarted.apply_startup_state(&mut restarted_input);
+    restarted.apply_startup_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut restarted_input,
+    );
     assert_eq!(
         restarted_input.toolbar_top_display_mode(),
         TopDisplayMode::Micro
@@ -262,7 +270,12 @@ fn an_authored_display_mode_edit_drops_the_stale_cycle_override() {
 
     let mut config_b = config_a;
     config_b.ui.toolbar.top_display_mode = TopDisplayMode::Micro;
-    let refresh = runtime.refresh_config_seeds(&config_b, &mut input, &mut positions);
+    let refresh = runtime.refresh_config_seeds(
+        &crate::ui_text::UiTextEngine::default(),
+        &config_b,
+        &mut input,
+        &mut positions,
+    );
     assert!(refresh.applied);
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
     assert_eq!(

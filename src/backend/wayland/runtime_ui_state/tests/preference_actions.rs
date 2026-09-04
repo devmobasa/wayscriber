@@ -41,7 +41,10 @@ fn click_highlight_survives_restart_from_either_path() {
 
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
-    restarted.apply_startup_state(&mut restarted_input);
+    restarted.apply_startup_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut restarted_input,
+    );
 
     assert_eq!(restarted_input.click_highlight_enabled(), enabled);
     assert_eq!(restarted_input.highlight_tool_ring_enabled(), ring);
@@ -115,7 +118,10 @@ fn keyboard_only_chrome_toggles_survive_restart_without_touching_config() {
 
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
-    restarted.apply_startup_state(&mut restarted_input);
+    restarted.apply_startup_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut restarted_input,
+    );
 
     assert_eq!(restarted_input.ui_visibility.show_status_bar, expected[0]);
     assert_eq!(
@@ -274,6 +280,7 @@ fn a_rollback_restores_every_durable_chrome_preference() {
     input.apply_toolbar_event(section_toggle(ToolbarSectionFlag::Presets, false));
 
     apply_toolbar_runtime_rollback(
+        &crate::ui_text::UiTextEngine::default(),
         &mut input,
         &mut positions,
         &PreviewRollbackSnapshot {

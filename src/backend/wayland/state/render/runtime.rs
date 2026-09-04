@@ -129,13 +129,16 @@ pub(in crate::backend::wayland) struct RenderRuntime {
 }
 
 impl RenderRuntime {
-    pub(in crate::backend::wayland) fn new(theme: crate::ui::theme::Theme) -> Self {
+    pub(in crate::backend::wayland) fn new(
+        theme: crate::ui::theme::Theme,
+        ui_text: crate::ui_text::UiTextEngine,
+    ) -> Self {
         Self {
             canvas_layer_cache: CanvasLayerCache::new(),
             draw_caches: crate::draw::RenderCaches::default(),
             theme,
             ui_caches: crate::ui::UiRenderCaches::default(),
-            ui_text: crate::ui_text::UiTextEngine::default(),
+            ui_text,
             text_measurer: crate::draw::TextMeasurer::default(),
             ui_damage: UiDamageHistory::default(),
             profile_ui_baseline: Vec::new(),
@@ -199,12 +202,14 @@ mod tests {
 
     #[test]
     fn runtime_themes_are_independent_of_other_owners() {
-        let mut dark = RenderRuntime::new(crate::ui::theme::Theme::resolve(
-            crate::ui::theme::ThemeMode::Dark,
-        ));
-        let light = RenderRuntime::new(crate::ui::theme::Theme::resolve(
-            crate::ui::theme::ThemeMode::Light,
-        ));
+        let mut dark = RenderRuntime::new(
+            crate::ui::theme::Theme::resolve(crate::ui::theme::ThemeMode::Dark),
+            crate::ui_text::UiTextEngine::default(),
+        );
+        let light = RenderRuntime::new(
+            crate::ui::theme::Theme::resolve(crate::ui::theme::ThemeMode::Light),
+            crate::ui_text::UiTextEngine::default(),
+        );
         assert_eq!(dark.theme(), &crate::ui::theme::Theme::dark());
         assert_eq!(light.theme(), &crate::ui::theme::Theme::light());
         let (theme, _caches) = dark.ui_parts_mut();

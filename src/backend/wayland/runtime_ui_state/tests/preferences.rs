@@ -36,7 +36,11 @@ fn status_bar_content_survives_restart_without_touching_config() {
     let prepared = runtime
         .begin_toolbar_mutation(target, &input)
         .expect("item permit");
-    input.set_status_bar_item_visible(StatusBarItem::Size, false);
+    input.set_status_bar_item_visible_with_engine(
+        &crate::ui_text::UiTextEngine::default(),
+        StatusBarItem::Size,
+        false,
+    );
     let finish = runtime.finish_toolbar_mutation(prepared, true, &input);
     assert!(matches!(finish, ToolbarRuntimeFinish::KeepPreview));
 
@@ -46,7 +50,10 @@ fn status_bar_content_survives_restart_without_touching_config() {
 
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
-    restarted.apply_startup_state(&mut restarted_input);
+    restarted.apply_startup_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut restarted_input,
+    );
 
     assert!(
         !restarted_input.ui_visibility.status_bar_interactive,
@@ -137,7 +144,10 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
 
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
-    restarted.apply_startup_state(&mut restarted_input);
+    restarted.apply_startup_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut restarted_input,
+    );
 
     assert_eq!(
         restarted_input.ui_visibility.show_status_bar,
@@ -189,13 +199,21 @@ fn a_seed_refresh_does_not_prune_persisted_preference_overrides() {
 
     // Whatever else the run does, the seed baseline stays authored.
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
-    runtime.refresh_config_seeds(&config, &mut input, &mut positions);
+    runtime.refresh_config_seeds(
+        &crate::ui_text::UiTextEngine::default(),
+        &config,
+        &mut input,
+        &mut positions,
+    );
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
     runtime.shutdown_blocking();
 
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
-    restarted.apply_startup_state(&mut restarted_input);
+    restarted.apply_startup_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut restarted_input,
+    );
     assert_eq!(
         restarted_input.toolbar_use_icons(),
         flipped,
@@ -246,7 +264,10 @@ fn section_visibility_survives_restart_without_touching_config() {
 
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
-    restarted.apply_startup_state(&mut restarted_input);
+    restarted.apply_startup_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut restarted_input,
+    );
 
     assert_eq!(
         live(&restarted_input, toggled),
@@ -313,7 +334,10 @@ fn toolbar_layout_mode_survives_restart_without_touching_config() {
 
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
-    restarted.apply_startup_state(&mut restarted_input);
+    restarted.apply_startup_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &mut restarted_input,
+    );
 
     assert_eq!(
         restarted_input.toolbar_layout_mode(),
