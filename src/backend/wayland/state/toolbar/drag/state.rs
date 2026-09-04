@@ -27,8 +27,7 @@ enum MoveDragPhase {
     Idle,
     Moving {
         kind: MoveDragKind,
-        last_coord: (f64, f64),
-        coord_is_screen: bool,
+        sample: MoveSample,
         frozen_base: (f64, f64),
         throttle: ApplyThrottle,
     },
@@ -45,9 +44,18 @@ enum MoveDragPhase {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(in crate::backend::wayland) struct MoveSample {
-    pub coord: (f64, f64),
-    pub is_screen: bool,
+pub(super) enum MoveSample {
+    Local((f64, f64)),
+    Screen((f64, f64)),
+}
+
+impl MoveSample {
+    fn screen_coord(self, local_origin: (f64, f64)) -> (f64, f64) {
+        match self {
+            Self::Local(coord) => (local_origin.0 + coord.0, local_origin.1 + coord.1),
+            Self::Screen(coord) => coord,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -115,8 +123,11 @@ impl ToolbarDrag {
     ) {
         self.phase = MoveDragPhase::Moving {
             kind,
-            last_coord: coord,
-            coord_is_screen,
+            sample: if coord_is_screen {
+                MoveSample::Screen(coord)
+            } else {
+                MoveSample::Local(coord)
+            },
             frozen_base,
             throttle: ApplyThrottle::new(),
         };
@@ -154,30 +165,16 @@ impl ToolbarDrag {
         }
     }
 
-    pub(in crate::backend::wayland) fn move_sample(&self) -> Option<MoveSample> {
-        match self.phase {
-            MoveDragPhase::Moving {
-                last_coord,
-                coord_is_screen,
-                ..
-            } => Some(MoveSample {
-                coord: last_coord,
-                is_screen: coord_is_screen,
-            }),
-            _ => None,
-        }
-    }
-
-    pub(in crate::backend::wayland) fn note_move(
+    /// Consume a rejected event too, so resuming the same drag authority does
+    /// not replay movement that happened behind its update barrier.
+    pub(super) fn note_move(
         &mut self,
         kind: MoveDragKind,
-        coord: (f64, f64),
-        coord_is_screen: bool,
+        sample: MoveSample,
     ) -> Option<MoveSample> {
         let MoveDragPhase::Moving {
             kind: active_kind,
-            last_coord,
-            coord_is_screen: active_is_screen,
+            sample: previous,
             ..
         } = &mut self.phase
         else {
@@ -186,26 +183,31 @@ impl ToolbarDrag {
         if *active_kind != kind {
             return None;
         }
-        let previous = MoveSample {
-            coord: *last_coord,
-            is_screen: *active_is_screen,
-        };
-        *last_coord = coord;
-        *active_is_screen = coord_is_screen;
-        Some(previous)
+        Some(std::mem::replace(previous, sample))
     }
 
-    pub(in crate::backend::wayland) fn move_to(
+    /// Compare screen samples across surfaces, except that a suppressed toolbar's
+    /// local preview keeps its own local baseline. Entering that local preview
+    /// from screen space rebases without applying a jump.
+    pub(super) fn move_to(
         &mut self,
         kind: MoveDragKind,
-        coord: (f64, f64),
-        coord_is_screen: bool,
+        sample: MoveSample,
+        local_origin: (f64, f64),
     ) -> Option<(f64, f64)> {
-        let previous = self.note_move(kind, coord, coord_is_screen)?;
-        if previous.is_screen != coord_is_screen {
-            return None;
-        }
-        Some((coord.0 - previous.coord.0, coord.1 - previous.coord.1))
+        let (coord, previous_coord) = if self.preview
+            && let MoveSample::Local(coord) = sample
+        {
+            let MoveSample::Local(previous) = self.note_move(kind, sample)? else {
+                return None;
+            };
+            (coord, previous)
+        } else {
+            let coord = sample.screen_coord(local_origin);
+            let previous = self.note_move(kind, MoveSample::Screen(coord))?;
+            (coord, previous.screen_coord(local_origin))
+        };
+        Some((coord.0 - previous_coord.0, coord.1 - previous_coord.1))
     }
 
     pub(in crate::backend::wayland) fn should_apply(
@@ -408,132 +410,5 @@ impl ToolbarDrag {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::toolbar_gtk::{GtkToolbarDragPhase, GtkToolbarSurfaceSize};
-
-    const TEST_SURFACE_SIZE: GtkToolbarSurfaceSize = GtkToolbarSurfaceSize {
-        width: 260,
-        height: 789,
-    };
-
-    fn gtk_offset(phase: GtkToolbarDragPhase, seq: u64) -> GtkToolbarFeedback {
-        GtkToolbarFeedback::SetTopOffset {
-            x: 10.0,
-            y: 20.0,
-            surface_size: TEST_SURFACE_SIZE,
-            seq,
-            phase,
-        }
-    }
-
-    fn moving(preview: bool) -> ToolbarDrag {
-        let mut drag = ToolbarDrag::new();
-        drag.set_preview_active(preview);
-        drag.begin_move(MoveDragKind::Top, (1.0, 2.0), false, (24.0, 12.0));
-        drag
-    }
-
-    #[test]
-    fn move_and_handoff_transition_table_is_explicit() {
-        let now = Instant::now();
-        let mut drag = moving(true);
-        let ended = drag.end_move().unwrap();
-        assert_eq!(ended.commit_base, Some(24.0));
-        assert!(ended.had_preview);
-
-        drag.begin_handoff(now + Duration::from_millis(10));
-        assert_eq!(drag.finish_handoff_if_due(now), None);
-        assert_eq!(
-            drag.finish_handoff_if_due(now + Duration::from_millis(10)),
-            Some(HandoffEnd::BuiltIn)
-        );
-        assert!(!drag.preview_active());
-    }
-
-    #[test]
-    fn move_cancel_can_return_directly_to_idle() {
-        let mut drag = moving(false);
-        assert!(drag.end_move().is_some());
-        assert!(!drag.is_moving());
-        assert_eq!(drag.finish_handoff(), None);
-    }
-
-    #[test]
-    fn gtk_preview_handoff_and_cancel_follow_their_own_phase() {
-        let now = Instant::now();
-        let mut drag = ToolbarDrag::new();
-        drag.begin_handoff(now);
-        drag.begin_gtk_preview(GtkToolbarKind::Top, 24.0);
-        assert_eq!(drag.handoff_timeout(now), None);
-        drag.begin_handoff(now + Duration::from_millis(10));
-        assert_eq!(
-            drag.finish_handoff_if_due(now + Duration::from_millis(10)),
-            Some(HandoffEnd::Gtk)
-        );
-
-        drag.begin_gtk_preview(GtkToolbarKind::Top, 24.0);
-        assert!(drag.cancel_gtk());
-        assert!(!drag.cancel_gtk());
-    }
-
-    #[test]
-    fn throttle_reports_a_pending_terminal_apply() {
-        let start = Instant::now();
-        let mut drag = moving(false);
-        let interval = Duration::from_millis(20);
-        assert!(drag.should_apply(start, interval));
-        assert!(!drag.should_apply(start + Duration::from_millis(5), interval));
-        assert!(drag.end_move().unwrap().pending_apply);
-    }
-
-    #[test]
-    fn blocked_gtk_drag_advances_sequence_and_stays_blocked_until_end() {
-        let mut drag = ToolbarDrag::new();
-        drag.note_gtk_offset_seq(4);
-
-        assert!(drag.gtk_note_feedback(true, &gtk_offset(GtkToolbarDragPhase::Start, 9)));
-        assert!(drag.gtk_note_feedback(false, &gtk_offset(GtkToolbarDragPhase::Move, 8)));
-        assert_eq!(drag.gtk_offset_seq(), 9);
-        assert!(drag.gtk_note_feedback(false, &gtk_offset(GtkToolbarDragPhase::End, 10)));
-        assert_eq!(drag.gtk_offset_seq(), 10);
-        assert!(!drag.gtk_note_feedback(false, &gtk_offset(GtkToolbarDragPhase::Start, 11)));
-    }
-
-    #[test]
-    fn passive_and_capture_feedback_follow_modal_policy() {
-        let mut drag = ToolbarDrag::new();
-        drag.block_gtk_drag();
-        assert!(!drag.gtk_note_feedback(
-            true,
-            &GtkToolbarFeedback::CaptureSuppressionReady { generation: 7 }
-        ));
-        let shortcut = GtkToolbarFeedback::PointerShortcut {
-            button: 8,
-            ctrl: false,
-            shift: false,
-            alt: false,
-            logo: false,
-        };
-        assert!(drag.gtk_note_feedback(true, &shortcut));
-        assert!(!drag.gtk_note_feedback(false, &shortcut));
-        assert!(drag.gtk_note_feedback(false, &gtk_offset(GtkToolbarDragPhase::Move, 1)));
-    }
-
-    #[test]
-    fn move_samples_are_updated_with_their_coordinate_space() {
-        let mut drag = moving(false);
-        assert_eq!(
-            drag.move_to(MoveDragKind::Top, (3.0, 4.0), false),
-            Some((2.0, 2.0))
-        );
-        assert_eq!(drag.move_to(MoveDragKind::Top, (5.0, 7.0), true), None);
-        assert_eq!(
-            drag.move_sample(),
-            Some(MoveSample {
-                coord: (5.0, 7.0),
-                is_screen: true,
-            })
-        );
-    }
-}
+#[path = "tests.rs"]
+mod tests;

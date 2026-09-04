@@ -15,9 +15,12 @@ module boundary.
 
 ## Workspace and toolchain
 
-The repository is one Cargo workspace using Rust 1.95 and edition 2024. The
-Nix flake compiles with `nixpkgs` rustc from `flake.lock`; after raising
-`rust-version`, run `nix flake update` so that lock is new enough.
+The repository is one Cargo workspace using Rust 1.98.1 and edition 2024.
+`rust-toolchain.toml` pins the development toolchain, including Clippy and rustfmt; CI uses
+the same version. The Nix flake selects that version through the `rust-overlay` input pinned
+in `flake.lock`, using the root package's `rust-version` for both crates and the development
+shell. When raising the version, update both manifests, `rust-toolchain.toml`, and CI pins;
+run `nix flake update rust-overlay` if the locked overlay does not yet provide it.
 
 - the root `wayscriber` package owns the overlay, daemon, CLI, shared domain/config/session code,
   rendering, and integration tests;

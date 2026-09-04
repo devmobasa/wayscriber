@@ -47,9 +47,6 @@ impl OutputHandler for WaylandState {
     ) {
         debug!("Output destroyed");
         self.surface.clear_output(&output);
-        if self.surface.current_output().is_none() {
-            self.focus.clear_surface_enter();
-        }
         self.refresh_active_output_label();
         // SCTK 0.20 calls this before removing the output from OutputState, so
         // a walk of current outputs would still include it. Exclude it here;

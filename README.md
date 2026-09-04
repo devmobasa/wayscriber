@@ -1,7 +1,7 @@
 # wayscriber
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.95%2B-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.98.1%2B-orange.svg)](https://www.rust-lang.org/)
 
 A ZoomIt-like real-time screen annotation tool for Linux/Wayland, written in Rust.
 
@@ -480,7 +480,7 @@ sudo dnf install ./wayscriber-configurator-x86_64.rpm
 
 ### From source
 
-Rust 1.95 or newer is required. If `rustup` is not already installed, install it (this also installs `cargo`), then load Cargo into your current shell:
+Rust 1.98.1 or newer is required. If `rustup` is not already installed, install it (this also installs `cargo`), then load Cargo into your current shell:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -492,12 +492,13 @@ Then clone the repository — the dependency and build steps below run from insi
 ```bash
 git clone https://github.com/devmobasa/wayscriber.git
 cd wayscriber
-rustup toolchain install 1.95.0
-rustup override set 1.95.0
+rustup toolchain install 1.98.1 --component clippy --component rustfmt
 cargo --version
 ```
 
-The override selects Rust 1.95 only inside this checkout and leaves your global default unchanged. You can instead keep any existing default that is already Rust 1.95 or newer.
+The repository's `rust-toolchain.toml` selects Rust 1.98.1 inside this checkout. If an older
+directory override is already set, remove it with `rustup override unset` from the checkout
+so the file can select the toolchain.
 
 **Dependencies:**
 

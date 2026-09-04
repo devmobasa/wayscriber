@@ -86,7 +86,7 @@ mod tests {
     fn transparent_pixels_are_fully_premultiplied_away() {
         let (_, _, argb) = decode_premultiplied_argb(ICON_PNG).expect("icon decodes");
 
-        for pixel in argb.chunks_exact(4) {
+        for pixel in argb.as_chunks::<4>().0 {
             let alpha = pixel[3];
             assert!(
                 pixel[0] <= alpha && pixel[1] <= alpha && pixel[2] <= alpha,

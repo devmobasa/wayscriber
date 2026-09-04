@@ -1,3 +1,4 @@
+use super::state::MoveSample;
 use super::*;
 
 impl WaylandState {
@@ -65,272 +66,62 @@ impl WaylandState {
         true
     }
 
-    /// Handle toolbar move with toolbar-surface-local coordinates.
-    /// On layer-shell, toolbar-local coords stay consistent as the toolbar moves,
-    /// so we use them directly for delta calculation.
+    /// Handle motion reported by the toolbar surface, preserving local samples
+    /// while its inline preview is active.
     pub(in crate::backend::wayland) fn handle_toolbar_move(
         &mut self,
         kind: MoveDragKind,
         local_coord: (f64, f64),
     ) {
-        if !self.toolbar_position_drag_update_allowed(kind) {
-            // Consume the coordinate baseline without moving the toolbar. If
-            // the exact same authority resumes this untouched preview, the
-            // next accepted event applies only post-barrier movement.
-            self.toolbar_drag.note_move(kind, local_coord, false);
-            return;
-        }
-        if self.pointer_lock_active() {
-            drag_log(|| {
-                format!(
-                    "skip handle_toolbar_move_local: pointer locked, kind={:?}, coord=({:.3}, {:.3})",
-                    kind, local_coord.0, local_coord.1
-                )
-            });
-            return;
-        }
-        drag_log(|| {
-            format!(
-                "handle_toolbar_move_local: kind={:?}, local_coord=({:.3}, {:.3}), offsets=({}, {})",
-                kind,
-                local_coord.0,
-                local_coord.1,
-                self.toolbar_chrome.top_offset().0,
-                self.toolbar_chrome.top_offset().1
-            )
-        });
-        // For layer-shell surfaces, use local coordinates directly since they're
-        // consistent within the toolbar surface. Only convert to screen coords
-        // when transitioning to/from main surface.
-        self.handle_toolbar_move_local(kind, local_coord);
+        self.handle_toolbar_move_sample(kind, MoveSample::Local(local_coord));
     }
 
-    /// Handle toolbar move with toolbar-surface-local coordinates.
-    fn handle_toolbar_move_local(&mut self, kind: MoveDragKind, local_coord: (f64, f64)) {
-        let snapshot = self
-            .toolbar
-            .last_snapshot()
-            .cloned()
-            .unwrap_or_else(|| self.toolbar_snapshot());
-
-        // When inline drag preview is active we keep the layer-shell toolbars
-        // suppressed and only move the inline-rendered preview.
-        if self.toolbar_drag.preview_active() {
-            let delta = self
-                .toolbar_drag
-                .move_to(kind, local_coord, false)
-                .unwrap_or((0.0, 0.0));
-            if delta.0 == 0.0 && delta.1 == 0.0 {
-                return;
-            }
-
-            match kind {
-                MoveDragKind::Top => {
-                    self.toolbar_chrome.add_top_offset(delta);
-                }
-            }
-
-            // Clamp offsets; pointer-locked preview drags also move the suppressed
-            // layer surface so release does not visibly replay the drag.
-            self.apply_toolbar_offsets_throttled(&snapshot);
-
-            let inline_render_active = self.inline_toolbars_render_active();
-            if inline_render_active {
-                self.toolbar.mark_dirty();
-                self.input_state.dirty_tracker.mark_full();
-                self.input_state.needs_redraw = true;
-            }
-            if self.protocol.layer_shell().is_none() || inline_render_active {
-                self.toolbar_chrome.clear_inline_hits();
-            }
-            return;
-        }
-
-        // Check if we need to transition coordinate systems
-        let (last_coord, coord_is_screen) = self
-            .toolbar_drag
-            .move_sample()
-            .map_or((local_coord, false), |sample| {
-                (sample.coord, sample.is_screen)
-            });
-
-        // If last coord was screen-based, convert current local to screen for comparison
-        let last_screen = if coord_is_screen {
-            last_coord
-        } else {
-            self.local_to_screen_coords(kind, last_coord)
-        };
-        let effective_coord = self.local_to_screen_coords(kind, local_coord);
-
-        if !coord_is_screen {
-            self.toolbar_drag.note_move(kind, last_screen, true);
-        }
-        let delta = self
-            .toolbar_drag
-            .move_to(kind, effective_coord, true)
-            .unwrap_or((0.0, 0.0));
-        drag_log(|| {
-            format!(
-                "move_local delta: kind={:?}, local=({:.3}, {:.3}), effective=({:.3}, {:.3}), last_screen=({:.3}, {:.3}), delta=({:.3}, {:.3}), offsets_before=({}, {})",
-                kind,
-                local_coord.0,
-                local_coord.1,
-                effective_coord.0,
-                effective_coord.1,
-                last_screen.0,
-                last_screen.1,
-                delta.0,
-                delta.1,
-                self.toolbar_chrome.top_offset().0,
-                self.toolbar_chrome.top_offset().1
-            )
-        });
-        log::debug!(
-            "handle_toolbar_move_local: kind={:?}, local_coord=({:.3}, {:.3}), effective_coord=({:.3}, {:.3}), last_coord=({:.3}, {:.3}), delta=({:.3}, {:.3}), offsets=({}, {})",
-            kind,
-            local_coord.0,
-            local_coord.1,
-            effective_coord.0,
-            effective_coord.1,
-            last_screen.0,
-            last_screen.1,
-            delta.0,
-            delta.1,
-            self.toolbar_chrome.top_offset().0,
-            self.toolbar_chrome.top_offset().1
-        );
-        if delta.0 == 0.0 && delta.1 == 0.0 {
-            return;
-        }
-
-        match kind {
-            MoveDragKind::Top => {
-                self.toolbar_chrome.add_top_offset(delta);
-            }
-        }
-        drag_log(|| {
-            format!(
-                "move_local applied: kind={:?}, offsets_after=({}, {})",
-                kind,
-                self.toolbar_chrome.top_offset().0,
-                self.toolbar_chrome.top_offset().1
-            )
-        });
-        log::debug!(
-            "After update offsets: top=({}, {})",
-            self.toolbar_chrome.top_offset().0,
-            self.toolbar_chrome.top_offset().1
-        );
-
-        self.apply_toolbar_offsets_throttled(&snapshot);
-        let inline_render_active = self.inline_toolbars_render_active();
-        if inline_render_active {
-            self.toolbar.mark_dirty();
-            self.input_state.dirty_tracker.mark_full();
-            self.input_state.needs_redraw = true;
-        }
-        if self.protocol.layer_shell().is_none() || inline_render_active {
-            self.toolbar_chrome.clear_inline_hits();
-        }
-    }
-
-    /// Handle toolbar move with screen-relative coordinates (no conversion).
-    /// Use this when coords are already in screen space (e.g., from main overlay surface).
+    /// Handle motion already in screen space, such as the main overlay surface.
     pub(in crate::backend::wayland) fn handle_toolbar_move_screen(
         &mut self,
         kind: MoveDragKind,
         screen_coord: (f64, f64),
     ) {
+        self.handle_toolbar_move_sample(kind, MoveSample::Screen(screen_coord));
+    }
+
+    fn handle_toolbar_move_sample(&mut self, kind: MoveDragKind, sample: MoveSample) {
         if !self.toolbar_position_drag_update_allowed(kind) {
-            self.toolbar_drag.note_move(kind, screen_coord, true);
+            self.toolbar_drag.note_move(kind, sample);
             return;
         }
         if self.pointer_lock_active() {
             drag_log(|| {
-                format!(
-                    "skip handle_toolbar_move_screen: pointer locked, kind={:?}, coord=({:.3}, {:.3})",
-                    kind, screen_coord.0, screen_coord.1
-                )
+                format!("skip toolbar move: pointer locked, kind={kind:?}, sample={sample:?}")
             });
             return;
         }
+
+        let local_origin = self.local_to_screen_coords(kind, (0.0, 0.0));
+        let Some(delta) = self.toolbar_drag.move_to(kind, sample, local_origin) else {
+            return;
+        };
         drag_log(|| {
             format!(
-                "handle_toolbar_move_screen: kind={:?}, screen_coord=({:.3}, {:.3}), offsets=({}, {})",
-                kind,
-                screen_coord.0,
-                screen_coord.1,
-                self.toolbar_chrome.top_offset().0,
-                self.toolbar_chrome.top_offset().1
+                "toolbar move: kind={kind:?}, sample={sample:?}, delta={delta:?}, offsets_before={:?}",
+                self.toolbar_chrome.top_offset(),
             )
         });
+        if delta.0 == 0.0 && delta.1 == 0.0 {
+            return;
+        }
+
         let snapshot = self
             .toolbar
             .last_snapshot()
             .cloned()
             .unwrap_or_else(|| self.toolbar_snapshot());
-
-        // Get last coord, converting from local to screen if needed
-        let last_screen_coord = match self.toolbar_drag.move_sample() {
-            Some(sample) if sample.is_screen => sample.coord,
-            Some(sample) => self.local_to_screen_coords(kind, sample.coord),
-            None => screen_coord,
-        };
-
-        if self
-            .toolbar_drag
-            .move_sample()
-            .is_some_and(|sample| !sample.is_screen)
-        {
-            self.toolbar_drag.note_move(kind, last_screen_coord, true);
-        }
-        let delta = self
-            .toolbar_drag
-            .move_to(kind, screen_coord, true)
-            .unwrap_or((0.0, 0.0));
-        drag_log(|| {
-            format!(
-                "move_screen delta: kind={:?}, screen=({:.3}, {:.3}), last_screen=({:.3}, {:.3}), delta=({:.3}, {:.3}), offsets_before=({}, {})",
-                kind,
-                screen_coord.0,
-                screen_coord.1,
-                last_screen_coord.0,
-                last_screen_coord.1,
-                delta.0,
-                delta.1,
-                self.toolbar_chrome.top_offset().0,
-                self.toolbar_chrome.top_offset().1
-            )
-        });
-        log::debug!(
-            "handle_toolbar_move_screen: kind={:?}, screen_coord=({:.3}, {:.3}), last_screen_coord=({:.3}, {:.3}), delta=({:.3}, {:.3}), offsets=({}, {})",
-            kind,
-            screen_coord.0,
-            screen_coord.1,
-            last_screen_coord.0,
-            last_screen_coord.1,
-            delta.0,
-            delta.1,
-            self.toolbar_chrome.top_offset().0,
-            self.toolbar_chrome.top_offset().1
-        );
-        if delta.0 == 0.0 && delta.1 == 0.0 {
-            return;
-        }
         match kind {
-            MoveDragKind::Top => {
-                self.toolbar_chrome.add_top_offset(delta);
-            }
+            MoveDragKind::Top => self.toolbar_chrome.add_top_offset(delta),
         }
-        drag_log(|| {
-            format!(
-                "move_screen applied: kind={:?}, offsets_after=({}, {})",
-                kind,
-                self.toolbar_chrome.top_offset().0,
-                self.toolbar_chrome.top_offset().1
-            )
-        });
 
+        // Clamp and throttle both coordinate routes identically. A preview also
+        // moves the suppressed layer surface so release does not replay the drag.
         self.apply_toolbar_offsets_throttled(&snapshot);
         let inline_render_active = self.inline_toolbars_render_active();
         if inline_render_active {
@@ -339,7 +130,6 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
         }
         if self.protocol.layer_shell().is_none() || inline_render_active {
-            // Inline mode uses cached rects, so force a relayout.
             self.toolbar_chrome.clear_inline_hits();
         }
     }

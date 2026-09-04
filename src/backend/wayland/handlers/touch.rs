@@ -122,6 +122,8 @@ impl WaylandState {
         // is dragging is untouched.
         self.cancel_region_selection_from(RegionInputSource::Touch);
         self.pointer.clear_chrome_press();
+        self.pointer
+            .clear_suppressed_release(RegionInputSource::Touch);
         self.input_state
             .clear_help_overlay_press_for(HelpOverlayPressSource::Touch);
 

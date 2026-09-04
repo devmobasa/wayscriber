@@ -111,7 +111,7 @@ fn normalize_png_rgba(
             if data.len() != pixels * 3 {
                 return Err("decoded PNG RGB data has an unexpected length".to_string());
             }
-            for pixel in data.chunks_exact(3) {
+            for pixel in data.as_chunks::<3>().0 {
                 rgba.extend_from_slice(&[pixel[0], pixel[1], pixel[2], 255]);
             }
         }
@@ -127,7 +127,7 @@ fn normalize_png_rgba(
             if data.len() != pixels * 2 {
                 return Err("decoded PNG grayscale-alpha data has an unexpected length".to_string());
             }
-            for pixel in data.chunks_exact(2) {
+            for pixel in data.as_chunks::<2>().0 {
                 rgba.extend_from_slice(&[pixel[0], pixel[0], pixel[0], pixel[1]]);
             }
         }
@@ -179,7 +179,7 @@ fn decode_jpeg_rgba(bytes: &[u8]) -> Result<DecodedImage, String> {
 
 fn rgb_to_rgba(rgb: &[u8]) -> Vec<u8> {
     let mut rgba = Vec::with_capacity(rgb.len() / 3 * 4);
-    for pixel in rgb.chunks_exact(3) {
+    for pixel in rgb.as_chunks::<3>().0 {
         rgba.extend_from_slice(&[pixel[0], pixel[1], pixel[2], 255]);
     }
     rgba

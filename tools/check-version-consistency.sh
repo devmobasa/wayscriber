@@ -350,10 +350,10 @@ if "builtins.fromTOML (builtins.readFile ./Cargo.toml)" not in flake_text:
     errors.append("flake.nix package version should be derived from Cargo.toml")
 if not all(
     token in flake_text
-    for token in ("package.rust-version", "pkgs.rustc.version", "versionAtLeast")
+    for token in ("package.rust-version", "rustToolchain.version", "versionAtLeast")
 ):
     errors.append(
-        "flake.nix should compare nixpkgs rustc against Cargo.toml rust-version"
+        "flake.nix should compare the selected rustc against Cargo.toml rust-version"
     )
 
 # Install examples that pin a concrete tag are stale one release later.

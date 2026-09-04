@@ -829,7 +829,12 @@ mod tests {
             copy_image_rect(&rotated, ImagePixelRect::new(0, 0, 2, 1, (2, 3)).unwrap()).unwrap();
 
         assert_eq!(
-            crop.data.chunks_exact(4).map(|p| p[0]).collect::<Vec<_>>(),
+            crop.data
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|p| p[0])
+                .collect::<Vec<_>>(),
             vec![4, 1]
         );
     }

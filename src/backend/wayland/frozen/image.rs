@@ -148,7 +148,7 @@ pub(in crate::backend::wayland) fn copy_shm_argb(
     }
 
     if format == wl_shm::Format::Xrgb8888 {
-        for pixel in data.chunks_exact_mut(4) {
+        for pixel in data.as_chunks_mut::<4>().0 {
             pixel[3] = 0xff;
         }
     }
@@ -252,7 +252,13 @@ mod tests {
     }
 
     fn values(image: &FrozenImage) -> Vec<u8> {
-        image.data.chunks_exact(4).map(|chunk| chunk[0]).collect()
+        image
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|chunk| chunk[0])
+            .collect()
     }
 
     #[test]

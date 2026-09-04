@@ -674,7 +674,7 @@ mod tests {
                 let mut has_alpha = false;
                 surface
                     .with_data(|pixels| {
-                        has_alpha = pixels.chunks_exact(4).any(|pixel| pixel[3] != 0);
+                        has_alpha = pixels.as_chunks::<4>().0.iter().any(|pixel| pixel[3] != 0);
                     })
                     .expect("surface data");
                 assert!(has_alpha, "{name} rendered empty at {size}px");

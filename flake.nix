@@ -4,27 +4,41 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
     # Linux only. eachDefaultSystem also evaluates x86_64-darwin, which
     # nixpkgs 26.11 dropped.
     flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ rust-overlay.overlays.default ];
+        };
         cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         version = cargoToml.package.version;
         rustVersion = cargoToml.package.rust-version;
+        rustToolchain = pkgs.rust-bin.stable.${rustVersion}.default.override {
+          extensions = [ "rust-analyzer" ];
+        };
+        rustPlatform = pkgs.makeRustPlatform {
+          cargo = rustToolchain;
+          rustc = rustToolchain;
+        };
         servicePath = pkgs.lib.makeBinPath [ pkgs.grim pkgs.slurp pkgs.wl-clipboard ];
       in
       # Instantiation (and CI `nix eval`) must fail before cargoBuildHook
-      # when flake.lock's nixpkgs rustc lags Cargo.toml's rust-version.
+      # when the selected compiler lags Cargo.toml's rust-version.
       assert pkgs.lib.assertMsg
-        (pkgs.lib.versionAtLeast pkgs.rustc.version rustVersion)
-        "nixpkgs rustc ${pkgs.rustc.version} is older than Cargo.toml rust-version ${rustVersion}; run `nix flake update`.";
+        (pkgs.lib.versionAtLeast rustToolchain.version rustVersion)
+        "selected rustc ${rustToolchain.version} is older than Cargo.toml rust-version ${rustVersion}; run `nix flake update rust-overlay`.";
       {
         packages = {
-          wayscriber = pkgs.rustPlatform.buildRustPackage {
+          wayscriber = rustPlatform.buildRustPackage {
             pname = "wayscriber";
             inherit version;
             src = ./.;
@@ -78,7 +92,7 @@
             };
           };
 
-          wayscriber-configurator = pkgs.rustPlatform.buildRustPackage {
+          wayscriber-configurator = rustPlatform.buildRustPackage {
             pname = "wayscriber-configurator";
             inherit version;
             src = ./.;
@@ -127,11 +141,7 @@
 
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            cargo
-            rustc
-            rust-analyzer
-            clippy
-            rustfmt
+            rustToolchain
             pkg-config
             cairo
             pango

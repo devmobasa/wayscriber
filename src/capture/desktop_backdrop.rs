@@ -52,7 +52,7 @@ fn rgba_to_cairo_argb(rgba: &[u8]) -> Result<Vec<u8>, CaptureError> {
     }
 
     let mut argb = Vec::with_capacity(rgba.len());
-    for pixel in rgba.chunks_exact(4) {
+    for pixel in rgba.as_chunks::<4>().0 {
         let r = pixel[0];
         let g = pixel[1];
         let b = pixel[2];

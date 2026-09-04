@@ -144,38 +144,6 @@ pub(super) struct MouseToolPreviewRedraw {
     pub rects: Vec<Rect>,
 }
 
-#[cfg(test)]
-pub(super) struct MouseToolPreviewDamageUpdate {
-    pub current: Option<Rect>,
-    pub rects: Vec<Rect>,
-}
-
-/// Per-frame damage update for the preview bubble. Unlike the pointer-motion
-/// helper, this accepts the last rendered footprint explicitly, so a visible
-/// preview becoming hidden still damages and clears its old pixels.
-#[cfg(test)]
-pub(super) fn mouse_tool_preview_damage_update(
-    previous: Option<Rect>,
-    active: bool,
-    thickness: f64,
-    position: (f64, f64),
-    width: u32,
-    height: u32,
-) -> MouseToolPreviewDamageUpdate {
-    let current = active
-        .then(|| mouse_tool_preview_damage_rect(thickness, position, width, height))
-        .flatten();
-    let mut rects = Vec::with_capacity(2);
-    match (previous, current) {
-        (Some(previous), Some(current)) if previous == current => rects.push(current),
-        (previous, current) => {
-            rects.extend(previous);
-            rects.extend(current);
-        }
-    }
-    MouseToolPreviewDamageUpdate { current, rects }
-}
-
 /// Damage the mouse tool-preview bubble needs to follow the pointer from
 /// `prev` to `next`.
 ///
@@ -351,7 +319,7 @@ mod tests {
 
     /// Little-endian ARgb32 stores premultiplied BGRA in memory.
     fn has_strong_green_pixel(pixels: &[u8]) -> bool {
-        pixels.chunks_exact(4).any(|px| {
+        pixels.as_chunks::<4>().0.iter().any(|px| {
             let (b, g, r, a) = (px[0], px[1], px[2], px[3]);
             g > 200 && r < 60 && b < 60 && a > 200
         })
@@ -386,22 +354,6 @@ mod tests {
         let out = mouse_tool_preview_redraw(false, 8.0, (100.0, 100.0), (400.0, 400.0), 800, 600);
         assert!(!out.redraw, "an ineligible preview never asks for a redraw");
         assert!(out.rects.is_empty());
-    }
-
-    #[test]
-    fn mouse_preview_visibility_loss_damages_the_last_visible_bounds() {
-        let position = (100.0, 100.0);
-        let previous = effect_rect(
-            tool_preview_bubble(8.0, position.0, position.1, 800.0, 600.0),
-            800,
-            600,
-        )
-        .expect("previous footprint");
-        let update =
-            mouse_tool_preview_damage_update(Some(previous), false, 8.0, position, 800, 600);
-
-        assert!(update.current.is_none());
-        assert_eq!(update.rects, vec![previous]);
     }
 
     #[test]

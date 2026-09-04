@@ -233,7 +233,7 @@ mod painter_tests {
                 let mut painted = false;
                 surface
                     .with_data(|pixels| {
-                        painted = pixels.chunks_exact(4).any(|pixel| pixel[3] != 0);
+                        painted = pixels.as_chunks::<4>().0.iter().any(|pixel| pixel[3] != 0);
                     })
                     .expect("surface data");
                 assert!(painted, "{name} painted nothing at {size}px");

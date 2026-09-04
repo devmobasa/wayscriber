@@ -90,7 +90,6 @@ impl WindowHandler for WaylandState {
             && let Some(output) = self.protocol.output().outputs().next()
         {
             self.surface.set_current_output(output);
-            self.focus.clear_surface_enter();
         }
         self.refresh_active_output_label();
 

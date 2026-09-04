@@ -654,8 +654,13 @@ impl WaylandState {
 
 #[cfg(test)]
 mod owner_tests {
+    use super::super::window_snap::WindowSnapCorrelation;
     use super::*;
     use crate::backend::wayland::RuntimeWakeSource;
+    use crate::backend::wayland::state::screen_image::ScreenImageKind;
+    use crate::capture::window_geometry::WindowQueryContext;
+    use crate::util::Rect;
+    use wayland_client::protocol::wl_output::Transform;
 
     fn runtime() -> RegionCaptureRuntime {
         let wake = RuntimeWakeSource::new().expect("runtime wake source");
@@ -673,14 +678,60 @@ mod owner_tests {
     #[test]
     fn clearing_retires_the_active_region() {
         let mut runtime = runtime();
-        let generation = runtime.begin_measure((1920, 1080));
-        assert_eq!(generation, 1);
+        let generation = runtime.next_generation();
+        let source = ScreenSourceToken {
+            output_id: 1,
+            output_layout_generation: 1,
+            kind: ScreenImageKind::Frozen,
+            image_generation: 1,
+            image_size: (100, 80),
+            stride: 400,
+            surface: (100, 80),
+            output_scale: 1,
+            output_transform: Transform::Normal,
+            zoom_transformed: false,
+            zoom_scale: 1.0,
+            zoom_view_offset: (0.0, 0.0),
+        };
+        runtime.set_ready(
+            RegionPurposeTag::CaptureInteractive,
+            generation,
+            source,
+            FreezeOwnership::PreExisting,
+            false,
+            false,
+        );
+        runtime.set_review_edits_for(
+            ImagePixelRect::new(10, 10, 20, 20, source.image_size).expect("review rectangle"),
+        );
+        runtime.set_window_snap(WindowSnapSession::queued(
+            WindowSnapCorrelation::new(generation, source),
+            WindowQueryContext {
+                output_name: "DP-1".to_string(),
+                output_logical_rect: Rect::new(0, 0, 100, 80).expect("output rectangle"),
+            },
+        ));
+        assert!(runtime.active().is_some());
+        assert!(runtime.review_edits().is_some());
+        assert!(runtime.window_snap().is_some());
 
         runtime.clear();
 
         assert!(runtime.active().is_none());
         assert!(runtime.review_edits().is_none());
         assert!(runtime.window_snap().is_none());
+    }
+
+    #[test]
+    fn review_edits_without_an_active_region_remain_absent() {
+        let mut runtime = runtime();
+        assert!(runtime.active().is_none());
+
+        runtime.set_review_edits_for(
+            ImagePixelRect::new(0, 0, 20, 20, (100, 80)).expect("review rectangle"),
+        );
+
+        assert!(runtime.review_edits().is_none());
     }
 
     #[test]

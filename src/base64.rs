@@ -96,7 +96,7 @@ pub(crate) fn decode_standard(encoded: &str) -> Result<Vec<u8>, DecodeError> {
 
     let mut decoded = Vec::with_capacity(values.len() / 4 * 3 + 2);
     let full_groups_len = values.len() / 4 * 4;
-    for chunk in values[..full_groups_len].chunks_exact(4) {
+    for chunk in values[..full_groups_len].as_chunks::<4>().0 {
         decoded.push((chunk[0] << 2) | (chunk[1] >> 4));
         decoded.push((chunk[1] << 4) | (chunk[2] >> 2));
         decoded.push((chunk[2] << 6) | chunk[3]);

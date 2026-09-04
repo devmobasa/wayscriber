@@ -27,7 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CARGO_TOML = Path("Cargo.toml")
 RECIPE = Path("packaging/nixpkgs/package.nix")
 FLAKE = Path("flake.nix")
-FLAKE_PACKAGE_MARKER = "wayscriber = pkgs.rustPlatform.buildRustPackage"
+FLAKE_PACKAGE_MARKER = "wayscriber = rustPlatform.buildRustPackage"
 LINUX_TARGET = "x86_64-unknown-linux-gnu"
 
 # Native tools/hooks required by the default GTK-enabled package.
