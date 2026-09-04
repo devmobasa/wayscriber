@@ -295,7 +295,7 @@ impl WaylandState {
             return false;
         }
         let (x, y) = self.current_or_pending_stylus_position();
-        self.set_current_mouse(x as i32, y as i32);
+        self.pointer.set_position((x as i32, y as i32));
         if let Some(surface) = self.tablet.surface.as_ref()
             && let Some((intent, drag)) = self.toolbar.pointer_press(surface, (x, y))
         {
@@ -322,7 +322,7 @@ impl WaylandState {
         }
         let inline_active = self.inline_toolbars_active() && self.toolbar.is_visible();
         if inline_active && self.tablet.on_toolbar {
-            let (x, y) = self.current_mouse();
+            let (x, y) = self.pointer.position();
             self.inline_toolbar_release((x as f64, y as f64));
             self.tablet.on_toolbar = false;
             self.set_toolbar_dragging(false);
@@ -367,13 +367,15 @@ impl WaylandState {
     fn handle_modal_stylus_motion(&mut self, x: f64, y: f64) -> bool {
         if self.input_state.region_is_active() && self.tablet.on_overlay {
             self.tablet.last_pos = Some((x, y));
-            self.set_current_mouse(x.round() as i32, y.round() as i32);
+            self.pointer
+                .set_position((x.round() as i32, y.round() as i32));
             self.update_region_selection(RegionInputSource::Stylus, x, y);
             return true;
         }
         if self.input_state.eyedropper_is_active() && self.tablet.on_overlay {
             self.tablet.last_pos = Some((x, y));
-            self.set_current_mouse(x.round() as i32, y.round() as i32);
+            self.pointer
+                .set_position((x.round() as i32, y.round() as i32));
             self.update_eyedropper_hover(x, y);
             return true;
         }
@@ -394,7 +396,7 @@ impl WaylandState {
         }
         self.toolbar.mark_dirty();
         self.input_state.needs_redraw = true;
-        self.set_current_mouse(x as i32, y as i32);
+        self.pointer.set_position((x as i32, y as i32));
         true
     }
 
@@ -423,7 +425,7 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
             self.refresh_keyboard_interactivity();
         }
-        self.set_current_mouse(x as i32, y as i32);
+        self.pointer.set_position((x as i32, y as i32));
         true
     }
 }

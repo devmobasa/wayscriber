@@ -9,6 +9,11 @@ use wayland_protocols::wp::{
     relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1,
 };
 
+use crate::{
+    input::state::{RegionInputSource, ToastPress},
+    ui::ZoomChipPress,
+};
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(in crate::backend::wayland) enum TouchTarget {
     #[default]
@@ -77,6 +82,125 @@ impl TouchState {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct BoardPanGesture {
+    panning: bool,
+    last_pos: (f64, f64),
+    key_held: bool,
+}
+
+impl BoardPanGesture {
+    fn start(&mut self, position: (f64, f64)) {
+        self.panning = true;
+        self.last_pos = position;
+    }
+
+    fn stop(&mut self) {
+        self.panning = false;
+    }
+
+    fn advance(&mut self, position: (f64, f64)) -> (f64, f64) {
+        let previous = self.last_pos;
+        self.last_pos = position;
+        (position.0 - previous.0, position.1 - previous.1)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct ReleaseSuppression {
+    pointer: bool,
+    touch: bool,
+}
+
+impl ReleaseSuppression {
+    fn slot_mut(&mut self, source: RegionInputSource) -> Option<&mut bool> {
+        match source {
+            RegionInputSource::Pointer => Some(&mut self.pointer),
+            RegionInputSource::Touch => Some(&mut self.touch),
+            RegionInputSource::Stylus => None,
+        }
+    }
+
+    fn arm(&mut self, source: RegionInputSource) {
+        if let Some(slot) = self.slot_mut(source) {
+            *slot = true;
+        }
+    }
+
+    fn clear(&mut self, source: RegionInputSource) {
+        if let Some(slot) = self.slot_mut(source) {
+            *slot = false;
+        }
+    }
+
+    fn take(&mut self, source: RegionInputSource) -> bool {
+        self.slot_mut(source)
+            .is_some_and(|slot| std::mem::take(slot))
+    }
+
+    fn clear_all(&mut self) {
+        self.clear(RegionInputSource::Pointer);
+        self.clear(RegionInputSource::Touch);
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct PendingChromePress {
+    toast: Option<ToastPress>,
+    status_hud: bool,
+    zoom_chip: ZoomChipPress,
+    release_suppression: ReleaseSuppression,
+}
+
+impl PendingChromePress {
+    fn occupied(&self) -> bool {
+        self.toast.is_some() || self.status_hud || self.zoom_chip.is_pending()
+    }
+
+    fn clear(&mut self) {
+        self.toast = None;
+        self.status_hud = false;
+        self.zoom_chip = ZoomChipPress::None;
+        self.release_suppression.clear_all();
+    }
+
+    fn arm_toast(&mut self, press: ToastPress) -> bool {
+        if self.occupied() {
+            return false;
+        }
+        self.toast = Some(press);
+        true
+    }
+
+    fn take_toast(&mut self) -> Option<ToastPress> {
+        self.toast.take()
+    }
+
+    fn arm_status_hud(&mut self) -> bool {
+        if self.occupied() {
+            return false;
+        }
+        self.status_hud = true;
+        true
+    }
+
+    fn take_status_hud(&mut self) -> bool {
+        std::mem::take(&mut self.status_hud)
+    }
+
+    fn arm_zoom_chip(&mut self, press: ZoomChipPress) -> bool {
+        if self.occupied() || !press.is_pending() {
+            return false;
+        }
+        self.zoom_chip = press;
+        true
+    }
+
+    fn take_zoom_chip(&mut self) -> ZoomChipPress {
+        std::mem::replace(&mut self.zoom_chip, ZoomChipPress::None)
+    }
+}
+
 /// Pointer, cursor, pointer-lock, and single-contact touch protocol runtime.
 pub(in crate::backend::wayland) struct PointerRuntime {
     themed_pointer: Option<ThemedPointer<PointerData>>,
@@ -88,6 +212,9 @@ pub(in crate::backend::wayland) struct PointerRuntime {
     current_pointer_shape: Option<CursorIcon>,
     relative_pointer: Option<ZwpRelativePointerV1>,
     cursor_hidden: bool,
+    position: (i32, i32),
+    board_pan: BoardPanGesture,
+    chrome_press: PendingChromePress,
 }
 
 impl PointerRuntime {
@@ -101,6 +228,9 @@ impl PointerRuntime {
             current_pointer_shape: None,
             relative_pointer: None,
             cursor_hidden: false,
+            position: (0, 0),
+            board_pan: BoardPanGesture::default(),
+            chrome_press: PendingChromePress::default(),
         }
     }
 
@@ -272,6 +402,83 @@ impl PointerRuntime {
             })
     }
 
+    pub(in crate::backend::wayland) fn position(&self) -> (i32, i32) {
+        self.position
+    }
+
+    pub(in crate::backend::wayland) fn set_position(&mut self, position: (i32, i32)) {
+        self.position = position;
+    }
+
+    pub(in crate::backend::wayland) fn start_board_pan(&mut self, position: (f64, f64)) {
+        self.board_pan.start(position);
+    }
+
+    pub(in crate::backend::wayland) fn stop_board_pan(&mut self) {
+        self.board_pan.stop();
+    }
+
+    pub(in crate::backend::wayland) fn board_pan_active(&self) -> bool {
+        self.board_pan.panning
+    }
+
+    pub(in crate::backend::wayland) fn board_pan_key_held(&self) -> bool {
+        self.board_pan.key_held
+    }
+
+    pub(in crate::backend::wayland) fn set_board_pan_key_held(&mut self, held: bool) {
+        self.board_pan.key_held = held;
+    }
+
+    pub(in crate::backend::wayland) fn advance_board_pan(
+        &mut self,
+        position: (f64, f64),
+    ) -> (f64, f64) {
+        self.board_pan.advance(position)
+    }
+
+    pub(in crate::backend::wayland) fn clear_chrome_press(&mut self) {
+        self.chrome_press.clear();
+    }
+
+    pub(in crate::backend::wayland) fn arm_toast_press(&mut self, press: ToastPress) -> bool {
+        self.chrome_press.arm_toast(press)
+    }
+
+    pub(in crate::backend::wayland) fn take_toast_press(&mut self) -> Option<ToastPress> {
+        self.chrome_press.take_toast()
+    }
+
+    pub(in crate::backend::wayland) fn arm_status_hud_press(&mut self) -> bool {
+        self.chrome_press.arm_status_hud()
+    }
+
+    pub(in crate::backend::wayland) fn take_status_hud_press(&mut self) -> bool {
+        self.chrome_press.take_status_hud()
+    }
+
+    pub(in crate::backend::wayland) fn arm_zoom_chip_press(
+        &mut self,
+        press: ZoomChipPress,
+    ) -> bool {
+        self.chrome_press.arm_zoom_chip(press)
+    }
+
+    pub(in crate::backend::wayland) fn take_zoom_chip_press(&mut self) -> ZoomChipPress {
+        self.chrome_press.take_zoom_chip()
+    }
+
+    pub(in crate::backend::wayland) fn suppress_release(&mut self, source: RegionInputSource) {
+        self.chrome_press.release_suppression.arm(source);
+    }
+
+    pub(in crate::backend::wayland) fn take_suppressed_release(
+        &mut self,
+        source: RegionInputSource,
+    ) -> bool {
+        self.chrome_press.release_suppression.take(source)
+    }
+
     fn reset_cursor_cache(&mut self) {
         self.current_pointer_shape = None;
         self.cursor_hidden = false;
@@ -289,7 +496,11 @@ impl PointerRuntime {
 
 #[cfg(test)]
 mod tests {
-    use super::{PointerRuntime, TouchState, TouchTarget};
+    use super::{PendingChromePress, PointerRuntime, TouchState, TouchTarget};
+    use crate::{
+        input::state::{RegionInputSource, ToastPress},
+        ui::ZoomChipPress,
+    };
     use smithay_client_toolkit::seat::pointer::CursorIcon;
 
     #[test]
@@ -332,6 +543,75 @@ mod tests {
         assert!(!touch.update_position(8, (30.0, 40.0)));
         assert!(touch.update_position(7, (50.0, 60.0)));
         assert_eq!(touch.end(7), Some(((50.0, 60.0), TouchTarget::Overlay)));
+    }
+
+    #[test]
+    fn chrome_press_priority_keeps_the_first_target() {
+        let mut press = PendingChromePress::default();
+        let toast = ToastPress::body(7);
+
+        assert!(press.arm_toast(toast));
+        assert!(!press.arm_status_hud());
+        assert!(!press.arm_zoom_chip(ZoomChipPress::Passive));
+        assert_eq!(press.take_toast(), Some(toast));
+        assert_eq!(press.take_toast(), None);
+    }
+
+    #[test]
+    fn clearing_chrome_press_empties_targets_and_release_latches() {
+        let mut runtime = PointerRuntime::new();
+        assert!(runtime.arm_status_hud_press());
+        runtime.suppress_release(RegionInputSource::Pointer);
+        runtime.suppress_release(RegionInputSource::Touch);
+
+        runtime.clear_chrome_press();
+
+        assert!(!runtime.take_status_hud_press());
+        assert_eq!(runtime.take_zoom_chip_press(), ZoomChipPress::None);
+        assert!(!runtime.take_suppressed_release(RegionInputSource::Pointer));
+        assert!(!runtime.take_suppressed_release(RegionInputSource::Touch));
+    }
+
+    #[test]
+    fn release_suppression_is_owned_by_its_source() {
+        let mut runtime = PointerRuntime::new();
+        runtime.suppress_release(RegionInputSource::Pointer);
+        runtime.suppress_release(RegionInputSource::Touch);
+        runtime
+            .chrome_press
+            .release_suppression
+            .clear(RegionInputSource::Touch);
+
+        assert!(!runtime.take_suppressed_release(RegionInputSource::Touch));
+        assert!(runtime.take_suppressed_release(RegionInputSource::Pointer));
+        assert!(!runtime.take_suppressed_release(RegionInputSource::Pointer));
+        assert!(!runtime.take_suppressed_release(RegionInputSource::Stylus));
+    }
+
+    #[test]
+    fn chrome_press_targets_are_taken_once() {
+        let mut runtime = PointerRuntime::new();
+        assert!(runtime.arm_zoom_chip_press(ZoomChipPress::Passive));
+
+        assert_eq!(runtime.take_zoom_chip_press(), ZoomChipPress::Passive);
+        assert_eq!(runtime.take_zoom_chip_press(), ZoomChipPress::None);
+    }
+
+    #[test]
+    fn board_pan_advance_uses_and_updates_the_previous_sample() {
+        let mut runtime = PointerRuntime::new();
+        runtime.start_board_pan((10.0, 20.0));
+
+        assert_eq!(runtime.advance_board_pan((13.5, 18.0)), (3.5, -2.0));
+        assert_eq!(runtime.advance_board_pan((15.0, 22.0)), (1.5, 4.0));
+    }
+
+    #[test]
+    fn pointer_position_round_trips() {
+        let mut runtime = PointerRuntime::new();
+        runtime.set_position((17, 23));
+
+        assert_eq!(runtime.position(), (17, 23));
     }
 
     #[test]

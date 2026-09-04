@@ -12,7 +12,6 @@ use crate::backend::wayland::state::{
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 use crate::input::state::{HelpOverlayPressSource, RegionInputSource};
-use crate::ui::ZoomChipPress;
 
 impl TouchHandler for WaylandState {
     fn down(
@@ -111,10 +110,7 @@ impl WaylandState {
         // owns, would outlive the touch that opened it. A region another device
         // is dragging is untouched.
         self.cancel_region_selection_from(RegionInputSource::Touch);
-        self.set_pending_toast_press(None);
-        self.set_pending_status_hud_press(false);
-        self.set_pending_zoom_chip_press(ZoomChipPress::None);
-        self.clear_suppressed_release_from(RegionInputSource::Touch);
+        self.pointer.clear_chrome_press();
         self.input_state
             .clear_help_overlay_press_for(HelpOverlayPressSource::Touch);
 
@@ -136,8 +132,8 @@ impl WaylandState {
         self.finish_toolbar_item_drag(false);
         self.set_toolbar_dragging(false);
         self.cancel_toolbar_move_drag();
-        if self.board_panning_active() {
-            self.stop_board_pan();
+        if self.pointer.board_pan_active() {
+            self.pointer.stop_board_pan();
         }
         self.input_state.cancel_active_interaction();
         self.input_state.needs_redraw = true;
@@ -186,7 +182,7 @@ impl WaylandState {
         };
         let screen_x = screen_position.0.round() as i32;
         let screen_y = screen_position.1.round() as i32;
-        self.set_current_mouse(screen_x, screen_y);
+        self.pointer.set_position((screen_x, screen_y));
 
         if !self.input_state.help_overlay.is_visible() {
             // A new touch supersedes any consume-only help ownership left by
@@ -213,7 +209,7 @@ impl WaylandState {
                     }
                     RegionReviewPress::Consumed { suppress_release } => {
                         if suppress_release {
-                            self.suppress_next_release_from(RegionInputSource::Touch);
+                            self.pointer.suppress_release(RegionInputSource::Touch);
                         }
                     }
                 }
@@ -262,7 +258,7 @@ impl WaylandState {
                 screen_width,
                 screen_height,
             ) {
-                self.suppress_next_release_from(RegionInputSource::Touch);
+                self.pointer.suppress_release(RegionInputSource::Touch);
             }
             return TouchTarget::Other;
         }
@@ -302,32 +298,13 @@ impl WaylandState {
             return target;
         }
 
-        self.set_pending_toast_press(None);
-        if let Some(pressed) = self.input_state.toast_press_at(screen_x, screen_y) {
-            self.set_pending_toast_press(Some(pressed));
+        if self.press_overlay_chrome(screen_x, screen_y) {
             return target;
         }
 
-        // Interactive status HUD: press reports the hit; release activates.
-        self.set_pending_status_hud_press(false);
-        if self.input_state.status_hud_contains(screen_x, screen_y) {
-            self.set_pending_status_hud_press(true);
-            return target;
-        }
-
-        // Interactive zoom chip: any press inside the pill is swallowed and
-        // recorded as `Passive` (the `NN%` readout / inter-piece gap) or
-        // `Button(kind)`, so its release stays consumed either way; a `Button`
-        // release activates only when it lands on the SAME button.
-        self.set_pending_zoom_chip_press(ZoomChipPress::None);
-        if self.input_state.zoom_chip_contains(screen_x, screen_y) {
-            let pressed = self.input_state.zoom_chip_press_at(screen_x, screen_y);
-            self.set_pending_zoom_chip_press(pressed);
-            return target;
-        }
-
-        if self.board_pan_key_held() && self.can_start_board_pan() {
-            self.start_board_pan(screen_position.0, screen_position.1);
+        if self.pointer.board_pan_key_held() && self.can_start_board_pan() {
+            self.pointer
+                .start_board_pan((screen_position.0, screen_position.1));
             self.input_state.needs_redraw = true;
             return target;
         }
@@ -351,7 +328,7 @@ impl WaylandState {
         };
         let screen_x = screen_position.0.round() as i32;
         let screen_y = screen_position.1.round() as i32;
-        self.set_current_mouse(screen_x, screen_y);
+        self.pointer.set_position((screen_x, screen_y));
 
         if self.input_state.region_is_active() {
             if target == TouchTarget::Overlay {
@@ -413,8 +390,10 @@ impl WaylandState {
             return;
         }
 
-        if self.board_panning_active() {
-            let (dx, dy) = self.update_board_pan_position(screen_position.0, screen_position.1);
+        if self.pointer.board_pan_active() {
+            let (dx, dy) = self
+                .pointer
+                .advance_board_pan((screen_position.0, screen_position.1));
             let _ = self.pan_board_by_screen_delta(dx, dy);
             let (wx, wy) = self.zoomed_world_coords(screen_position.0, screen_position.1);
             self.input_state
@@ -444,7 +423,10 @@ impl WaylandState {
         target: TouchTarget,
     ) {
         if self.input_state.region_is_active() {
-            if self.take_suppressed_release_from(RegionInputSource::Touch) {
+            if self
+                .pointer
+                .take_suppressed_release(RegionInputSource::Touch)
+            {
                 return;
             }
             if let Some((x, y)) = self.touch_screen_position(surface, position, target) {
@@ -455,10 +437,11 @@ impl WaylandState {
             return;
         }
 
-        if self.take_suppressed_release_from(RegionInputSource::Touch) {
-            self.set_pending_toast_press(None);
-            self.set_pending_status_hud_press(false);
-            self.set_pending_zoom_chip_press(ZoomChipPress::None);
+        if self
+            .pointer
+            .take_suppressed_release(RegionInputSource::Touch)
+        {
+            self.pointer.clear_chrome_press();
             return;
         }
 
@@ -475,16 +458,12 @@ impl WaylandState {
                 .clear_help_overlay_press_for(HelpOverlayPressSource::Touch),
         };
         if help_owned_release {
-            self.set_pending_toast_press(None);
-            self.set_pending_status_hud_press(false);
-            self.set_pending_zoom_chip_press(ZoomChipPress::None);
+            self.pointer.clear_chrome_press();
             return;
         }
 
         if self.input_state.command_palette.open || self.input_state.tour.is_active() {
-            self.set_pending_toast_press(None);
-            self.set_pending_status_hud_press(false);
-            self.set_pending_zoom_chip_press(ZoomChipPress::None);
+            self.pointer.clear_chrome_press();
             self.cancel_active_touch_sequence();
             return;
         }
@@ -514,36 +493,7 @@ impl WaylandState {
         let screen_x = screen_position.0.round() as i32;
         let screen_y = screen_position.1.round() as i32;
 
-        if let Some(pressed) = self.take_pending_toast_press() {
-            let (hit, action) = self
-                .input_state
-                .resolve_toast_release(pressed, screen_x, screen_y);
-            if hit && let Some(command) = action {
-                self.handle_toast_command(command);
-            }
-            return;
-        }
-
-        if self.take_pending_status_hud_press() {
-            let (hit, action) = self.input_state.check_status_hud_click(screen_x, screen_y);
-            if hit && let Some(action) = action {
-                self.dispatch_input_action(action);
-            }
-            return;
-        }
-
-        let pressed = self.take_pending_zoom_chip_press();
-        if pressed.is_pending() {
-            // Any pending chip press (`Passive` or `Button`) consumes its
-            // release; only a `Button` release on the SAME button dispatches.
-            if let ZoomChipPress::Button(kind) = pressed {
-                let (_, action) = self
-                    .input_state
-                    .check_zoom_chip_click(kind, screen_x, screen_y);
-                if let Some(action) = action {
-                    self.dispatch_input_action(action);
-                }
-            }
+        if self.release_overlay_chrome(screen_x, screen_y) {
             return;
         }
 
@@ -572,8 +522,8 @@ impl WaylandState {
             return;
         }
 
-        if self.board_panning_active() {
-            self.stop_board_pan();
+        if self.pointer.board_pan_active() {
+            self.pointer.stop_board_pan();
             self.input_state.needs_redraw = true;
             return;
         }

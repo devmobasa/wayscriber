@@ -538,7 +538,7 @@ pub(in crate::backend::wayland) fn should_defer_for_interaction(state: &WaylandS
         input_persistence_interaction_active(&state.input_state),
         state.toolbar_dragging(),
         state.is_move_dragging(),
-        state.board_panning_active(),
+        state.pointer.board_pan_active(),
         state.zoom_panning_active(),
         stylus_tip_down(state),
     )

@@ -128,7 +128,7 @@ impl WaylandState {
                 ..ScreenModalCursorContext::default()
             };
         }
-        let (mouse_x, mouse_y) = self.current_mouse();
+        let (mouse_x, mouse_y) = self.pointer.position();
         let point = (f64::from(mouse_x), f64::from(mouse_y));
         let dragging = region_state.selection_owner().is_some();
         // While a grip is held its identity comes from the drag, not from
@@ -159,7 +159,7 @@ impl WaylandState {
 
         // Check color picker popup first (takes priority)
         if self.input_state.is_color_picker_popup_open() {
-            let (mx, my) = self.current_mouse();
+            let (mx, my) = self.pointer.position();
             if let Some(layout) = self.input_state.color_picker_popup_layout() {
                 // When dragging on gradient, always show crosshair
                 if self.input_state.color_picker_popup_is_dragging() {
@@ -177,7 +177,7 @@ impl WaylandState {
 
         // Check board picker popup
         if self.input_state.is_board_picker_open() {
-            let (mx, my) = self.current_mouse();
+            let (mx, my) = self.pointer.position();
             if let Some(hint) = self.input_state.board_picker_cursor_hint_at(mx, my) {
                 return match hint {
                     BoardPickerCursorHint::Text => CursorIcon::Text,
@@ -191,7 +191,7 @@ impl WaylandState {
 
         // Check context menu
         if self.input_state.is_context_menu_open() {
-            let (mx, my) = self.current_mouse();
+            let (mx, my) = self.pointer.position();
             if let Some(hint) = self.input_state.context_menu_cursor_hint_at(mx, my) {
                 return match hint {
                     ContextMenuCursorHint::Pointer => CursorIcon::Pointer,
@@ -202,7 +202,7 @@ impl WaylandState {
 
         // Check command palette
         if self.input_state.command_palette.open {
-            let (mx, my) = self.current_mouse();
+            let (mx, my) = self.pointer.position();
             let screen_width = self.surface.width();
             let screen_height = self.surface.height();
             if let Some(hint) =
@@ -219,7 +219,7 @@ impl WaylandState {
 
         // Check help overlay
         if self.input_state.help_overlay.is_visible() {
-            let (mx, my) = self.current_mouse();
+            let (mx, my) = self.pointer.position();
             if let Some(hint) = self.input_state.help_overlay_cursor_hint_at(mx, my) {
                 return match hint {
                     HelpOverlayCursorHint::Text => CursorIcon::Text,
@@ -232,10 +232,10 @@ impl WaylandState {
         if self.toolbar_dragging() {
             return CursorIcon::Grabbing;
         }
-        if self.board_panning_active() {
+        if self.pointer.board_pan_active() {
             return CursorIcon::Grabbing;
         }
-        if self.board_pan_key_held() && self.can_start_board_pan() {
+        if self.pointer.board_pan_key_held() && self.can_start_board_pan() {
             return CursorIcon::Grab;
         }
 

@@ -62,7 +62,8 @@ impl WaylandState {
                 Some(event.position)
             };
             if let Some((sx, sy)) = screen_position {
-                self.set_current_mouse(sx.round() as i32, sy.round() as i32);
+                self.pointer
+                    .set_position((sx.round() as i32, sy.round() as i32));
                 let (wx, wy) = self.zoomed_world_coords(sx, sy);
                 self.input_state.update_pointer_positions(
                     sx.round() as i32,
@@ -89,7 +90,7 @@ impl WaylandState {
             if let Some((sx, sy)) =
                 self.toolbar_surface_screen_coords(&event.surface, event.position)
             {
-                self.set_current_mouse(sx as i32, sy as i32);
+                self.pointer.set_position((sx as i32, sy as i32));
                 let (wx, wy) = self.zoomed_world_coords(sx, sy);
                 self.input_state
                     .update_pointer_positions(sx as i32, sy as i32, wx, wy);
@@ -116,7 +117,8 @@ impl WaylandState {
             return;
         }
         if self.pointer_over_toolbar() {
-            self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+            self.pointer
+                .set_position((event.position.0 as i32, event.position.1 as i32));
             let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
             self.input_state.update_pointer_positions(
                 event.position.0.round() as i32,
@@ -158,7 +160,8 @@ impl WaylandState {
             return;
         }
         if self.zoom.panning {
-            self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+            self.pointer
+                .set_position((event.position.0 as i32, event.position.1 as i32));
             let (dx, dy) = self
                 .zoom
                 .update_pan_position(event.position.0, event.position.1);
@@ -177,9 +180,12 @@ impl WaylandState {
             self.update_pointer_cursor(false, conn);
             return;
         }
-        if self.board_panning_active() {
-            self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
-            let (dx, dy) = self.update_board_pan_position(event.position.0, event.position.1);
+        if self.pointer.board_pan_active() {
+            self.pointer
+                .set_position((event.position.0 as i32, event.position.1 as i32));
+            let (dx, dy) = self
+                .pointer
+                .advance_board_pan((event.position.0, event.position.1));
             let _ = self.pan_board_by_screen_delta(dx, dy);
             let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
             self.input_state.update_pointer_positions(
@@ -193,9 +199,9 @@ impl WaylandState {
         }
         // Capture the pre-motion pointer so the idle tool-preview bubble can
         // damage its old position; the new position is the incoming event.
-        let prev_mouse = self.current_mouse();
+        let prev_mouse = self.pointer.position();
         let next_mouse = (event.position.0 as i32, event.position.1 as i32);
-        self.set_current_mouse(next_mouse.0, next_mouse.1);
+        self.pointer.set_position((next_mouse.0, next_mouse.1));
         // The command palette owns hover rendering (including shortcut-action
         // tooltips), so keep its screen-space pointer cache and redraw current
         // even though normal canvas motion remains blocked by the modal.
@@ -266,7 +272,8 @@ impl WaylandState {
             Some(event.position)
         };
         if let Some((x, y)) = screen_position {
-            self.set_current_mouse(x.round() as i32, y.round() as i32);
+            self.pointer
+                .set_position((x.round() as i32, y.round() as i32));
             self.update_region_selection(RegionInputSource::Pointer, x, y);
         }
         self.update_pointer_cursor(on_toolbar || self.pointer_over_toolbar(), conn);
@@ -292,7 +299,8 @@ impl WaylandState {
             Some(event.position)
         };
         if let Some((x, y)) = screen_position {
-            self.set_current_mouse(x.round() as i32, y.round() as i32);
+            self.pointer
+                .set_position((x.round() as i32, y.round() as i32));
             self.update_eyedropper_hover(x, y);
         }
         self.update_pointer_cursor(

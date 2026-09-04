@@ -472,7 +472,7 @@ impl WaylandState {
     }
 
     fn current_region_pointer(&self) -> (f64, f64) {
-        let (x, y) = self.current_mouse();
+        let (x, y) = self.pointer.position();
         (f64::from(x), f64::from(y))
     }
 

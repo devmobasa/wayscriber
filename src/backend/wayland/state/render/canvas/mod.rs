@@ -190,7 +190,7 @@ impl WaylandState {
         // nothing the page holds: cancelling it leaves nothing behind, and
         // completing it warns through its own action instead.
         let spotlight_cursor = render_transients.then(|| {
-            let (screen_x, screen_y) = self.current_mouse();
+            let (screen_x, screen_y) = self.pointer.position();
             self.canvas_world_coords(screen_x as f64, screen_y as f64)
         });
         let crate::input::state::SpotlightFrameRegions {
@@ -278,8 +278,10 @@ impl WaylandState {
 
         self.render_selection_overlays(ctx);
 
-        let (mx, my) =
-            self.canvas_world_coords(self.current_mouse().0 as f64, self.current_mouse().1 as f64);
+        let (mx, my) = self.canvas_world_coords(
+            self.pointer.position().0 as f64,
+            self.pointer.position().1 as f64,
+        );
         let (hover_mx, hover_my) = self
             .stylus_hover_cursor_position()
             .map(|(x, y)| self.canvas_world_coords(x, y))

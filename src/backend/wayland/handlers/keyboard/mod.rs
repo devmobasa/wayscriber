@@ -175,7 +175,7 @@ impl KeyboardHandler for WaylandState {
             return;
         }
         if matches!(key, Key::Space) && self.should_capture_space_for_board_pan() {
-            self.set_board_pan_key_held(true);
+            self.pointer.set_board_pan_key_held(true);
             self.input_state.needs_redraw = true;
             return;
         }
@@ -257,8 +257,8 @@ impl KeyboardHandler for WaylandState {
         ) {
             return;
         }
-        if matches!(key, Key::Space) && self.board_pan_key_held() {
-            self.set_board_pan_key_held(false);
+        if matches!(key, Key::Space) && self.pointer.board_pan_key_held() {
+            self.pointer.set_board_pan_key_held(false);
             self.input_state.needs_redraw = true;
             return;
         }
@@ -494,7 +494,7 @@ impl WaylandState {
         if self.input_state.region_is_engaged() || self.input_state.eyedropper_is_engaged() {
             return;
         }
-        if matches!(key, Key::Space) && self.board_pan_key_held() {
+        if matches!(key, Key::Space) && self.pointer.board_pan_key_held() {
             return;
         }
         if self.zoom.active {

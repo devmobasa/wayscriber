@@ -32,43 +32,6 @@ pub enum OverlaySuppressionKeyboardPolicy {
     Retain,
 }
 
-/// One-shot release latches owned by the pointing device whose press armed
-/// them. Pointer and touch can both have an outstanding release; neither may
-/// consume or clear the other's sequence. Stylus contacts use tablet-tool
-/// retirement instead of this latch.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(super) struct ReleaseSuppression {
-    pointer: bool,
-    touch: bool,
-}
-
-impl ReleaseSuppression {
-    pub(super) fn arm(&mut self, source: crate::input::state::RegionInputSource) {
-        match source {
-            crate::input::state::RegionInputSource::Pointer => self.pointer = true,
-            crate::input::state::RegionInputSource::Touch => self.touch = true,
-            crate::input::state::RegionInputSource::Stylus => {}
-        }
-    }
-
-    pub(super) fn clear(&mut self, source: crate::input::state::RegionInputSource) {
-        match source {
-            crate::input::state::RegionInputSource::Pointer => self.pointer = false,
-            crate::input::state::RegionInputSource::Touch => self.touch = false,
-            crate::input::state::RegionInputSource::Stylus => {}
-        }
-    }
-
-    pub(super) fn take(&mut self, source: crate::input::state::RegionInputSource) -> bool {
-        let slot = match source {
-            crate::input::state::RegionInputSource::Pointer => &mut self.pointer,
-            crate::input::state::RegionInputSource::Touch => &mut self.touch,
-            crate::input::state::RegionInputSource::Stylus => return false,
-        };
-        std::mem::take(slot)
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum XdgFrozenFullscreenState {
     #[default]
@@ -125,11 +88,6 @@ pub struct MoveDrag {
 /// Focus/pointer/toolbar interaction data owned by WaylandState and shared with handlers.
 #[derive(Debug, Default)]
 pub struct StateData {
-    pub(super) current_mouse_x: i32,
-    pub(super) current_mouse_y: i32,
-    pub(super) board_panning: bool,
-    pub(super) board_pan_last_pos: (f64, f64),
-    pub(super) board_pan_key_held: bool,
     pub(super) pointer_over_toolbar: bool,
     pub(super) toolbar_dragging: bool,
     pub(super) toolbar_drag_preview: bool,
@@ -192,18 +150,6 @@ pub struct StateData {
     pub(super) overlay_suppression_keyboard_policy: OverlaySuppressionKeyboardPolicy,
     pub(super) overlay_capture_barrier: OverlayCaptureBarrier,
     pub(super) overlay_clickthrough: bool,
-    /// Suppress modal-owned pointer/touch releases without crossing devices.
-    pub(super) release_suppression: ReleaseSuppression,
-    /// Exact toast activation a left press began inside. A release is accepted
-    /// only while this same activation remains visible.
-    pub(super) pending_toast_press: Option<crate::input::state::ToastPress>,
-    /// True when a left press began inside the interactive status HUD.
-    pub(super) pending_status_hud_press: bool,
-    /// The chip press a left press began (`None` when no chip press is pending;
-    /// `Passive` for the passive `NN%` readout / inter-piece gap; `Button(kind)`
-    /// for an actionable button). Any pending press keeps its release consumed;
-    /// a `Button` release fires only when it lands on the SAME button.
-    pub(super) pending_zoom_chip_press: crate::ui::ZoomChipPress,
     /// Reused pre-UI pixel snapshot for render-profile UI-only remapping.
     pub(super) render_profile_ui_baseline: Vec<u8>,
     /// Previous-frame damage bounds for transient UI effects, so partial
@@ -235,11 +181,6 @@ pub struct StateData {
 impl StateData {
     pub fn new() -> Self {
         Self {
-            current_mouse_x: 0,
-            current_mouse_y: 0,
-            board_panning: false,
-            board_pan_last_pos: (0.0, 0.0),
-            board_pan_key_held: false,
             pointer_over_toolbar: false,
             toolbar_dragging: false,
             toolbar_drag_preview: false,
@@ -290,10 +231,6 @@ impl StateData {
             overlay_suppression_keyboard_policy: OverlaySuppressionKeyboardPolicy::Release,
             overlay_capture_barrier: OverlayCaptureBarrier::default(),
             overlay_clickthrough: false,
-            release_suppression: ReleaseSuppression::default(),
-            pending_toast_press: None,
-            pending_status_hud_press: false,
-            pending_zoom_chip_press: crate::ui::ZoomChipPress::None,
             render_profile_ui_baseline: Vec::new(),
             prev_ui_toast_damage: None,
             prev_preset_toast_damage: None,
@@ -317,29 +254,6 @@ impl StateData {
 #[cfg(test)]
 mod tests {
     use super::OverlaySuppression;
-    use crate::input::state::RegionInputSource;
-
-    #[test]
-    fn release_suppression_is_owned_by_the_originating_device() {
-        let mut suppression = super::ReleaseSuppression::default();
-        suppression.arm(RegionInputSource::Pointer);
-
-        assert!(!suppression.take(RegionInputSource::Touch));
-        assert!(suppression.take(RegionInputSource::Pointer));
-        assert!(!suppression.take(RegionInputSource::Pointer));
-    }
-
-    #[test]
-    fn clearing_one_device_keeps_the_other_devices_latch() {
-        let mut suppression = super::ReleaseSuppression::default();
-        suppression.arm(RegionInputSource::Pointer);
-        suppression.arm(RegionInputSource::Touch);
-        suppression.clear(RegionInputSource::Touch);
-
-        assert!(!suppression.take(RegionInputSource::Touch));
-        assert!(suppression.take(RegionInputSource::Pointer));
-    }
-
     #[test]
     fn desktop_backdrop_suppression_hides_canvas_and_ui() {
         let suppression = OverlaySuppression::DesktopBackdrop.effective_for_board(true);

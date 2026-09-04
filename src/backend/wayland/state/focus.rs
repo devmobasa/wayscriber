@@ -263,8 +263,8 @@ impl WaylandState {
         self.input_state.clear_focus_owned_key_state();
         self.sync_region_square_modifier(false);
         self.clear_key_repeat();
-        self.set_board_pan_key_held(false);
-        self.stop_board_pan();
+        self.pointer.set_board_pan_key_held(false);
+        self.pointer.stop_board_pan();
     }
 }
 

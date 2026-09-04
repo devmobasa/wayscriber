@@ -28,18 +28,20 @@ impl WaylandState {
             if let Some((sx, sy)) =
                 self.toolbar_surface_screen_coords(&event.surface, event.position)
             {
-                self.set_current_mouse(sx as i32, sy as i32);
+                self.pointer.set_position((sx as i32, sy as i32));
                 let (wx, wy) = self.zoomed_world_coords(sx, sy);
                 self.input_state
                     .update_pointer_positions(sx as i32, sy as i32, wx, wy);
             } else {
-                self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+                self.pointer
+                    .set_position((event.position.0 as i32, event.position.1 as i32));
             }
             // Ensure pointer-driven visuals (e.g. eraser hover) update once on enter.
             self.input_state.needs_redraw = true;
         }
         if !on_toolbar {
-            self.set_current_mouse(event.position.0 as i32, event.position.1 as i32);
+            self.pointer
+                .set_position((event.position.0 as i32, event.position.1 as i32));
             let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
             self.input_state.update_pointer_positions(
                 event.position.0.round() as i32,

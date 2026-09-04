@@ -81,8 +81,8 @@ impl WaylandState {
         self.cancel_eyedropper();
         self.input_state.prepare_for_screen_modal();
         self.zoom.stop_pan();
-        self.stop_board_pan();
-        self.set_board_pan_key_held(false);
+        self.pointer.stop_board_pan();
+        self.pointer.set_board_pan_key_held(false);
         self.cancel_toolbar_move_drag();
         self.unlock_pointer();
         // The gesture just cancelled above may belong to a pen that is still

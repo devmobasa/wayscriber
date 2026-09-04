@@ -104,7 +104,7 @@ impl WaylandState {
             .motion
             .or(self.tablet.last_pos)
             .unwrap_or_else(|| {
-                let (x, y) = self.current_mouse();
+                let (x, y) = self.pointer.position();
                 (x as f64, y as f64)
             })
     }
@@ -135,7 +135,7 @@ impl WaylandState {
 
     fn commit_stylus_motion_sample(&mut self, x: f64, y: f64, pressure_sample: bool) {
         let previous_hover_cursor_pos = self.stylus_hover_cursor_position();
-        self.set_current_mouse(x as i32, y as i32);
+        self.pointer.set_position((x as i32, y as i32));
         self.tablet.last_pos = Some((x, y));
         let (wx, wy) = self.zoomed_world_coords(x, y);
         self.input_state
@@ -192,7 +192,8 @@ impl WaylandState {
         // Record the press target but do not begin a canvas interaction.
         if self.input_state.help_overlay.is_visible() {
             let (x, y) = self.current_stylus_position();
-            self.set_current_mouse(x.round() as i32, y.round() as i32);
+            self.pointer
+                .set_position((x.round() as i32, y.round() as i32));
             self.input_state.note_help_overlay_press(
                 HelpOverlayPressSource::Stylus,
                 x.round() as i32,
@@ -217,16 +218,16 @@ impl WaylandState {
 
         let hover_cursor_pos = self.stylus_hover_cursor_position();
         let (x, y) = self.current_stylus_position();
-        self.set_current_mouse(x as i32, y as i32);
+        self.pointer.set_position((x as i32, y as i32));
         self.tablet.tip_down = true;
         self.mark_stylus_hover_cursor_dirty(hover_cursor_pos, None);
         info!(
             "Stylus DOWN at ({}, {})",
-            self.current_mouse().0,
-            self.current_mouse().1
+            self.pointer.position().0,
+            self.pointer.position().1
         );
-        let screen_x = self.current_mouse().0;
-        let screen_y = self.current_mouse().1;
+        let screen_x = self.pointer.position().0;
+        let screen_y = self.pointer.position().1;
         let (wx, wy) = self.zoomed_world_coords(x, y);
         self.input_state
             .on_mouse_press_with_canvas(MouseButton::Left, screen_x, screen_y, wx, wy);
@@ -256,13 +257,13 @@ impl WaylandState {
         self.tablet.peak_thickness = None;
         info!(
             "Stylus UP at ({}, {})",
-            self.current_mouse().0,
-            self.current_mouse().1
+            self.pointer.position().0,
+            self.pointer.position().1
         );
         let (x, y) = self.current_stylus_position();
-        self.set_current_mouse(x as i32, y as i32);
-        let screen_x = self.current_mouse().0;
-        let screen_y = self.current_mouse().1;
+        self.pointer.set_position((x as i32, y as i32));
+        let screen_x = self.pointer.position().0;
+        let screen_y = self.pointer.position().1;
         if self.handle_help_overlay_release(HelpOverlayPressSource::Stylus, screen_x, screen_y) {
             let hover_cursor_pos = self.stylus_hover_cursor_position();
             self.mark_stylus_hover_cursor_dirty(None, hover_cursor_pos);

@@ -164,8 +164,8 @@ impl WaylandState {
 
         self.input_state.prepare_for_screen_modal();
         self.zoom.stop_pan();
-        self.stop_board_pan();
-        self.set_board_pan_key_held(false);
+        self.pointer.stop_board_pan();
+        self.pointer.set_board_pan_key_held(false);
         self.cancel_toolbar_move_drag();
         self.unlock_pointer();
         self.retire_stylus_contact();

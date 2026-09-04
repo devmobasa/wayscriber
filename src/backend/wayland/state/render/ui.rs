@@ -49,7 +49,7 @@ impl WaylandState {
     ) {
         if !capture_picker && self.mouse_tool_preview_eligible() {
             let (cursor_x, cursor_y) = self.stylus_hover_cursor_position().unwrap_or_else(|| {
-                let (x, y) = self.current_mouse();
+                let (x, y) = self.pointer.position();
                 (x as f64, y as f64)
             });
             draw_tool_preview(
@@ -386,7 +386,7 @@ impl WaylandState {
         } else {
             geometry.map(|geometry| geometry.display_selection())
         };
-        let (pointer_x, pointer_y) = self.current_mouse();
+        let (pointer_x, pointer_y) = self.pointer.position();
         let pointer = (f64::from(pointer_x), f64::from(pointer_y));
         let measurement = (measure_mode
             || options.is_some_and(|options| options.show_size_readout()))
@@ -540,7 +540,7 @@ impl WaylandState {
 
     /// Damage the previous and current preview-bubble footprints and request a
     /// redraw so the bubble tracks idle pointer motion from `prev` to `next`
-    /// (screen-space, matching [`Self::current_mouse`]).
+    /// (screen-space, matching the pointer runtime position).
     ///
     /// Only the mouse-anchored bubble is handled here: when a stylus is
     /// hovering the preview follows the stylus position instead, and the tablet

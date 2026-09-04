@@ -82,8 +82,9 @@ impl WaylandState {
             return false;
         }
 
-        self.set_current_mouse(position.0 as i32, position.1 as i32);
-        let (mx, my) = self.current_mouse();
+        self.pointer
+            .set_position((position.0 as i32, position.1 as i32));
+        let (mx, my) = self.pointer.position();
         self.input_state.update_pointer_position(mx, my);
 
         let was_top_hover = self.data.inline_top_hover;

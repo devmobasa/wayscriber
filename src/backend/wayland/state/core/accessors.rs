@@ -29,15 +29,6 @@ fn finish_xdg_frozen_fullscreen_request(
 }
 
 impl WaylandState {
-    pub(in crate::backend::wayland) fn current_mouse(&self) -> (i32, i32) {
-        (self.data.current_mouse_x, self.data.current_mouse_y)
-    }
-
-    pub(in crate::backend::wayland) fn set_current_mouse(&mut self, x: i32, y: i32) {
-        self.data.current_mouse_x = x;
-        self.data.current_mouse_y = y;
-    }
-
     pub(in crate::backend::wayland) fn has_cursor_focus(&self) -> bool {
         self.focus.pointer_focused() || self.stylus_hover_cursor_visible()
     }

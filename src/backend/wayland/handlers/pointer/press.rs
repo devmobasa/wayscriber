@@ -6,7 +6,6 @@ use crate::backend::wayland::state::{RegionReviewPress, drag_log};
 use crate::backend::wayland::toolbar_intent::intent_to_event;
 use crate::input::MouseButton;
 use crate::input::state::HelpOverlayPressSource;
-use crate::ui::ZoomChipPress;
 use crate::ui::toolbar::ToolbarEvent;
 
 use super::*;
@@ -90,7 +89,12 @@ impl WaylandState {
             return;
         }
 
-        if button == BTN_LEFT && self.handle_overlay_pointer_press(event.position) {
+        if button == BTN_LEFT
+            && self.press_overlay_chrome(
+                event.position.0.round() as i32,
+                event.position.1.round() as i32,
+            )
+        {
             return;
         }
 
@@ -104,8 +108,9 @@ impl WaylandState {
             self.input_state.needs_redraw = true;
             return;
         }
-        if button == BTN_LEFT && self.board_pan_key_held() && self.can_start_board_pan() {
-            self.start_board_pan(event.position.0, event.position.1);
+        if button == BTN_LEFT && self.pointer.board_pan_key_held() && self.can_start_board_pan() {
+            self.pointer
+                .start_board_pan((event.position.0, event.position.1));
             self.input_state.needs_redraw = true;
             return;
         }
@@ -152,14 +157,14 @@ impl WaylandState {
                     }
                     RegionReviewPress::Consumed { suppress_release } => {
                         if suppress_release {
-                            self.suppress_next_release_from(RegionInputSource::Pointer);
+                            self.pointer.suppress_release(RegionInputSource::Pointer);
                         }
                     }
                 }
             }
             BTN_RIGHT => {
                 self.cancel_active_region_selector();
-                self.suppress_next_release_from(RegionInputSource::Pointer);
+                self.pointer.suppress_release(RegionInputSource::Pointer);
             }
             _ => {}
         }
@@ -182,11 +187,11 @@ impl WaylandState {
         match button {
             BTN_LEFT => {
                 self.sample_eyedropper(event.position.0, event.position.1);
-                self.suppress_next_release_from(RegionInputSource::Pointer);
+                self.pointer.suppress_release(RegionInputSource::Pointer);
             }
             BTN_RIGHT => {
                 self.cancel_eyedropper();
-                self.suppress_next_release_from(RegionInputSource::Pointer);
+                self.pointer.suppress_release(RegionInputSource::Pointer);
             }
             _ => {}
         }
@@ -234,7 +239,7 @@ impl WaylandState {
                 self.surface.height(),
             );
             if handled {
-                self.suppress_next_release_from(RegionInputSource::Pointer);
+                self.pointer.suppress_release(RegionInputSource::Pointer);
             }
         }
         true
@@ -334,26 +339,23 @@ impl WaylandState {
         true
     }
 
-    fn handle_overlay_pointer_press(&mut self, position: (f64, f64)) -> bool {
-        let screen_x = position.0.round() as i32;
-        let screen_y = position.1.round() as i32;
-        self.set_pending_toast_press(None);
+    pub(in crate::backend::wayland) fn press_overlay_chrome(
+        &mut self,
+        screen_x: i32,
+        screen_y: i32,
+    ) -> bool {
+        self.pointer.clear_chrome_press();
         if let Some(pressed) = self.input_state.toast_press_at(screen_x, screen_y) {
-            self.set_pending_toast_press(Some(pressed));
-            return true;
+            return self.pointer.arm_toast_press(pressed);
         }
-        self.set_pending_status_hud_press(false);
         if self.input_state.status_hud_contains(screen_x, screen_y) {
-            self.set_pending_status_hud_press(true);
-            return true;
+            return self.pointer.arm_status_hud_press();
         }
-        self.set_pending_zoom_chip_press(ZoomChipPress::None);
         if !self.input_state.zoom_chip_contains(screen_x, screen_y) {
             return false;
         }
-        let pressed = self.input_state.zoom_chip_press_at(screen_x, screen_y);
-        self.set_pending_zoom_chip_press(pressed);
-        true
+        self.pointer
+            .arm_zoom_chip_press(self.input_state.zoom_chip_press_at(screen_x, screen_y))
     }
 
     fn try_dispatch_pointer_shortcut(&mut self, button: u32) -> bool {

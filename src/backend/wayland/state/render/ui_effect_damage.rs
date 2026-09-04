@@ -246,7 +246,7 @@ impl WaylandState {
         self.data.prev_color_picker_damage = color_picker_rect;
 
         let preview_position = self.stylus_hover_cursor_position().unwrap_or_else(|| {
-            let (x, y) = self.current_mouse();
+            let (x, y) = self.pointer.position();
             (x as f64, y as f64)
         });
         let preview_update = mouse_tool_preview_damage_update(
@@ -293,7 +293,7 @@ impl WaylandState {
         let measure_picker_damage = if self.input_state.region_state().purpose()
             == Some(crate::input::state::RegionPurposeTag::Measure)
         {
-            let (pointer_x, pointer_y) = self.current_mouse();
+            let (pointer_x, pointer_y) = self.pointer.position();
             crate::ui::measure_picker_damage(
                 self.input_state.region_state().selection(),
                 (f64::from(pointer_x), f64::from(pointer_y)),

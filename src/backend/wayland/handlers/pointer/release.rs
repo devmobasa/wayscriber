@@ -32,8 +32,11 @@ impl WaylandState {
         }
 
         // Swallow releases after modal clicks (e.g., palette dismiss)
-        if self.take_suppressed_release_from(crate::input::state::RegionInputSource::Pointer) {
-            self.clear_pending_overlay_presses();
+        if self
+            .pointer
+            .take_suppressed_release(crate::input::state::RegionInputSource::Pointer)
+        {
+            self.pointer.clear_chrome_press();
             return;
         }
 
@@ -42,14 +45,14 @@ impl WaylandState {
         // popup. Conversely, a press that preceded help has no owner and falls
         // through to finish its original gesture.
         if self.handle_help_pointer_release(event, on_toolbar, button) {
-            self.clear_pending_overlay_presses();
+            self.pointer.clear_chrome_press();
             return;
         }
 
         // Block pointer input when modal overlays are active
         if self.input_state.command_palette.open || self.input_state.tour.is_active() {
             // For command palette, press handles the click - release is a no-op
-            self.clear_pending_overlay_presses();
+            self.pointer.clear_chrome_press();
             return;
         }
 
@@ -97,8 +100,8 @@ impl WaylandState {
             }
             return;
         }
-        if button == BTN_LEFT && self.board_panning_active() {
-            self.stop_board_pan();
+        if button == BTN_LEFT && self.pointer.board_pan_active() {
+            self.pointer.stop_board_pan();
             self.input_state.needs_redraw = true;
             return;
         }
@@ -130,7 +133,10 @@ impl WaylandState {
         if button != BTN_LEFT {
             return true;
         }
-        if self.take_suppressed_release_from(RegionInputSource::Pointer) {
+        if self
+            .pointer
+            .take_suppressed_release(RegionInputSource::Pointer)
+        {
             return true;
         }
         let screen_position = if on_toolbar {
@@ -142,12 +148,6 @@ impl WaylandState {
             self.finish_region_selection(RegionInputSource::Pointer, x, y);
         }
         true
-    }
-
-    fn clear_pending_overlay_presses(&mut self) {
-        self.set_pending_toast_press(None);
-        self.set_pending_status_hud_press(false);
-        self.set_pending_zoom_chip_press(ZoomChipPress::None);
     }
 
     fn handle_help_pointer_release(
@@ -183,75 +183,48 @@ impl WaylandState {
         if button != BTN_LEFT {
             return false;
         }
-        if let Some(pressed) = self.take_pending_toast_press() {
-            self.resolve_toast_pointer_release(event, on_toolbar, pressed);
-            return true;
-        }
-        if self.take_pending_status_hud_press() {
-            self.resolve_status_hud_pointer_release(event, on_toolbar);
-            return true;
-        }
-        let pressed = self.take_pending_zoom_chip_press();
-        if !pressed.is_pending() {
+        let Some((screen_x, screen_y)) = (if on_toolbar {
+            self.toolbar_surface_screen_coords(&event.surface, event.position)
+        } else {
+            Some(event.position)
+        }) else {
+            self.pointer.clear_chrome_press();
             return false;
+        };
+        self.release_overlay_chrome(screen_x.round() as i32, screen_y.round() as i32)
+    }
+
+    pub(in crate::backend::wayland) fn release_overlay_chrome(
+        &mut self,
+        screen_x: i32,
+        screen_y: i32,
+    ) -> bool {
+        if let Some(pressed) = self.pointer.take_toast_press() {
+            let (hit, action) = self
+                .input_state
+                .resolve_toast_release(pressed, screen_x, screen_y);
+            if hit && let Some(command) = action {
+                self.handle_toast_command(command);
+            }
+            return true;
         }
+        if self.pointer.take_status_hud_press() {
+            let (hit, action) = self.input_state.check_status_hud_click(screen_x, screen_y);
+            if hit && let Some(action) = action {
+                self.dispatch_input_action(action);
+            }
+            return true;
+        }
+        let pressed = self.pointer.take_zoom_chip_press();
         if let ZoomChipPress::Button(kind) = pressed {
-            self.resolve_zoom_chip_pointer_release(event, on_toolbar, kind);
+            let (_, action) = self
+                .input_state
+                .check_zoom_chip_click(kind, screen_x, screen_y);
+            if let Some(action) = action {
+                self.dispatch_input_action(action);
+            }
         }
-        true
-    }
-
-    fn resolve_toast_pointer_release(
-        &mut self,
-        event: &PointerEvent,
-        on_toolbar: bool,
-        pressed: crate::input::state::ToastPress,
-    ) {
-        let Some((screen_x, screen_y)) = self.pointer_release_screen_position(event, on_toolbar)
-        else {
-            return;
-        };
-        let (hit, action) = self.input_state.resolve_toast_release(
-            pressed,
-            screen_x.round() as i32,
-            screen_y.round() as i32,
-        );
-        if hit && let Some(command) = action {
-            self.handle_toast_command(command);
-        }
-    }
-
-    fn resolve_status_hud_pointer_release(&mut self, event: &PointerEvent, on_toolbar: bool) {
-        let Some((screen_x, screen_y)) = self.pointer_release_screen_position(event, on_toolbar)
-        else {
-            return;
-        };
-        let (hit, action) = self
-            .input_state
-            .check_status_hud_click(screen_x.round() as i32, screen_y.round() as i32);
-        if hit && let Some(action) = action {
-            self.dispatch_input_action(action);
-        }
-    }
-
-    fn resolve_zoom_chip_pointer_release(
-        &mut self,
-        event: &PointerEvent,
-        on_toolbar: bool,
-        kind: crate::ui::ZoomChipButtonKind,
-    ) {
-        let Some((screen_x, screen_y)) = self.pointer_release_screen_position(event, on_toolbar)
-        else {
-            return;
-        };
-        let (_, action) = self.input_state.check_zoom_chip_click(
-            kind,
-            screen_x.round() as i32,
-            screen_y.round() as i32,
-        );
-        if let Some(action) = action {
-            self.dispatch_input_action(action);
-        }
+        pressed.is_pending()
     }
 
     fn pointer_release_screen_position(

@@ -58,8 +58,8 @@ impl WaylandState {
         self.cancel_ocr();
         self.input_state.prepare_for_screen_modal();
         self.zoom.stop_pan();
-        self.stop_board_pan();
-        self.set_board_pan_key_held(false);
+        self.pointer.stop_board_pan();
+        self.pointer.set_board_pan_key_held(false);
         // Entering a different modal interaction interrupts any unfinished
         // toolbar move; it is not an accepted drop.
         self.cancel_toolbar_move_drag();
