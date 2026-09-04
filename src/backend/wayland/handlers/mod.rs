@@ -33,6 +33,7 @@ mod pointer;
 mod pointer_constraints;
 mod registry;
 mod relative_pointer;
+mod route;
 mod screencopy;
 mod seat;
 mod shm;

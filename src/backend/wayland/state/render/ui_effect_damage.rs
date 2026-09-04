@@ -7,7 +7,8 @@
 //! disappearance are cleaned up correctly.
 
 use super::super::*;
-use super::tool_preview::mouse_tool_preview_damage_update;
+use super::tool_preview::mouse_tool_preview_damage_rect;
+use super::{UiEffect, UiEffectFlags};
 use crate::util::Rect;
 
 /// Safety margin around effect bounds for anti-aliasing bleed.
@@ -37,18 +38,11 @@ fn chrome_cursor_can_rehit(has_cursor_focus: bool, cursor_blocked_by_toolbar: bo
 }
 
 /// Push damage covering an effect's previous and current footprint.
+#[cfg(test)]
 fn push_effect_damage(regions: &mut Vec<Rect>, prev: Option<Rect>, current: Option<Rect>) {
-    match (prev, current) {
-        (Some(prev), Some(current)) if prev == current => regions.push(current),
-        (prev, current) => {
-            if let Some(prev) = prev {
-                regions.push(prev);
-            }
-            if let Some(current) = current {
-                regions.push(current);
-            }
-        }
-    }
+    let mut history = super::runtime::UiDamageHistory::default();
+    history.roll(UiEffect::UiToast, prev, &mut Vec::new());
+    history.roll(UiEffect::UiToast, current, regions);
 }
 
 /// Damage the status HUD and any fallback chrome whose visibility is the
@@ -58,6 +52,7 @@ fn push_effect_damage(regions: &mut Vec<Rect>, prev: Option<Rect>, current: Opti
 /// change, so the old and new fallback badge sets are not derivable from the
 /// current input state alone. Conservatively repaint the surface on that rare
 /// transition; steady visible layouts still use their targeted footprints.
+#[cfg(test)]
 fn push_status_hud_damage(
     regions: &mut Vec<Rect>,
     prev: Option<Rect>,
@@ -65,18 +60,18 @@ fn push_status_hud_damage(
     width: u32,
     height: u32,
 ) {
-    if prev.is_some() != current.is_some()
-        && let Some(surface) = Rect::new(
+    let mut history = super::runtime::UiDamageHistory::default();
+    history.roll(UiEffect::StatusHud, prev, &mut Vec::new());
+    history.roll_status_hud(
+        current,
+        Rect::new(
             0,
             0,
             width.min(i32::MAX as u32) as i32,
             height.min(i32::MAX as u32) as i32,
-        )
-    {
-        regions.push(surface);
-        return;
-    }
-    push_effect_damage(regions, prev, current);
+        ),
+        regions,
+    );
 }
 
 impl WaylandState {
@@ -84,74 +79,61 @@ impl WaylandState {
     /// text-edit entry glow) for the current frame. Also updates the
     /// previous-frame tracking state, so this must be called exactly once per
     /// rendered frame, even on frames that force full damage for other reasons.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn collect_ui_effect_damage(
         &mut self,
-        ui_toast_active: bool,
-        preset_feedback_active: bool,
-        blocked_feedback_active: bool,
-        text_edit_entry_active: bool,
-        status_hud_active: bool,
-        zoom_chip_active: bool,
-        input_hud_active: bool,
-        command_palette_active: bool,
-        color_picker_active: bool,
-        tool_preview_active: bool,
-        shape_measure_badge_active: bool,
+        flags: UiEffectFlags,
         width: u32,
         height: u32,
     ) -> Vec<Rect> {
         let mut regions = Vec::new();
 
-        let toast_rect = if ui_toast_active {
+        let toast_rect = if flags.active(UiEffect::UiToast) {
             crate::ui::ui_toast_geometry(&self.input_state, width, height)
                 .and_then(|bounds| effect_rect(bounds, width, height))
         } else {
             None
         };
-        push_effect_damage(&mut regions, self.data.prev_ui_toast_damage, toast_rect);
-        self.data.prev_ui_toast_damage = toast_rect;
+        self.render
+            .ui_damage_mut()
+            .roll(UiEffect::UiToast, toast_rect, &mut regions);
 
-        let preset_rect = if preset_feedback_active {
+        let preset_rect = if flags.active(UiEffect::PresetToast) {
             crate::ui::preset_toast_geometry(&self.input_state, width, height)
                 .and_then(|bounds| effect_rect(bounds, width, height))
         } else {
             None
         };
-        push_effect_damage(
-            &mut regions,
-            self.data.prev_preset_toast_damage,
-            preset_rect,
-        );
-        self.data.prev_preset_toast_damage = preset_rect;
+        self.render
+            .ui_damage_mut()
+            .roll(UiEffect::PresetToast, preset_rect, &mut regions);
 
-        if blocked_feedback_active || self.data.blocked_feedback_was_active {
+        if self
+            .render
+            .ui_damage_mut()
+            .roll_blocked_feedback(flags.blocked_feedback())
+        {
             regions.extend(
                 crate::ui::blocked_feedback_rects(width, height)
                     .into_iter()
                     .filter_map(|bounds| effect_rect(bounds, width, height)),
             );
         }
-        self.data.blocked_feedback_was_active = blocked_feedback_active;
 
-        let entry_rect = if text_edit_entry_active {
+        let entry_rect = if flags.active(UiEffect::TextEditEntry) {
             self.text_edit_entry_screen_rect(width, height)
         } else {
             None
         };
-        push_effect_damage(
-            &mut regions,
-            self.data.prev_text_edit_entry_damage,
-            entry_rect,
-        );
-        self.data.prev_text_edit_entry_damage = entry_rect;
+        self.render
+            .ui_damage_mut()
+            .roll(UiEffect::TextEditEntry, entry_rect, &mut regions);
 
         // The status HUD layout is refreshed here, once per frame and before
         // rendering, so damage geometry, rendering, and pointer hit-testing
         // all read the same cache for the frame.
         let chrome_cursor_focused =
             chrome_cursor_can_rehit(self.has_cursor_focus(), self.cursor_blocked_by_toolbar());
-        let status_hud_rect = if status_hud_active {
+        let status_hud_rect = if flags.active(UiEffect::StatusHud) {
             self.input_state.update_status_hud_layout_for_pointer(
                 self.config.ui.status_bar_position,
                 &self.config.ui.status_bar_style,
@@ -165,20 +147,21 @@ impl WaylandState {
             self.input_state.clear_status_hud_layout();
             None
         };
-        push_status_hud_damage(
-            &mut regions,
-            self.data.prev_status_hud_damage,
-            status_hud_rect,
-            width,
-            height,
+        let surface = Rect::new(
+            0,
+            0,
+            width.min(i32::MAX as u32) as i32,
+            height.min(i32::MAX as u32) as i32,
         );
-        self.data.prev_status_hud_damage = status_hud_rect;
+        self.render
+            .ui_damage_mut()
+            .roll_status_hud(status_hud_rect, surface, &mut regions);
 
         // The zoom chip follows the same once-per-frame layout refresh as the
         // status HUD, so damage geometry, rendering, and pointer hit-testing
         // all read the same cache for the frame; the appear → move → disappear
         // union keeps stale pixels cleaned up when the percentage changes.
-        let zoom_chip_rect = if zoom_chip_active {
+        let zoom_chip_rect = if flags.active(UiEffect::ZoomChip) {
             self.input_state.update_zoom_chip_layout_for_pointer(
                 &self.config.ui.status_bar_style,
                 width,
@@ -191,85 +174,80 @@ impl WaylandState {
             self.input_state.clear_zoom_chip_layout();
             None
         };
-        push_effect_damage(
-            &mut regions,
-            self.data.prev_zoom_chip_damage,
-            zoom_chip_rect,
-        );
-        self.data.prev_zoom_chip_damage = zoom_chip_rect;
+        self.render
+            .ui_damage_mut()
+            .roll(UiEffect::ZoomChip, zoom_chip_rect, &mut regions);
 
         // The input HUD's chip row grows, shrinks, and fades every few frames;
         // the same appear → resize → disappear union keeps the stale chips
         // cleaned up without escalating a keystroke to the full surface.
-        let input_hud_rect = if input_hud_active {
+        let input_hud_rect = if flags.active(UiEffect::InputHud) {
             crate::ui::input_hud_geometry(&self.input_state, width, height)
                 .and_then(|bounds| effect_rect(bounds, width, height))
         } else {
             None
         };
-        push_effect_damage(
-            &mut regions,
-            self.data.prev_input_hud_damage,
-            input_hud_rect,
-        );
-        self.data.prev_input_hud_damage = input_hud_rect;
+        self.render
+            .ui_damage_mut()
+            .roll(UiEffect::InputHud, input_hud_rect, &mut regions);
 
         // Opening and closing the palette force full damage because the
         // backdrop dimmer changes. While it remains open, only the panel and
         // optional action tooltip change, so typing and selection no longer
         // fall through to the full-surface empty-damage fallback.
-        let command_palette_rect = if command_palette_active {
+        let command_palette_rect = if flags.active(UiEffect::CommandPalette) {
             crate::ui::command_palette_visual_geometry(&self.input_state, width, height)
                 .and_then(|bounds| effect_rect(bounds, width, height))
         } else {
             None
         };
-        push_effect_damage(
-            &mut regions,
-            self.data.prev_command_palette_damage,
+        self.render.ui_damage_mut().roll(
+            UiEffect::CommandPalette,
             command_palette_rect,
+            &mut regions,
         );
-        self.data.prev_command_palette_damage = command_palette_rect;
 
         // Like the command palette, the color picker owns a stable full-screen
         // dimmer while open. Opening/closing already forces full damage; while
         // engaged, redraw only its panel and optional action tooltip so hex
         // typing cannot fall through to the full-screen empty-damage fallback.
-        let color_picker_rect = color_picker_active
+        let color_picker_rect = flags
+            .active(UiEffect::ColorPicker)
             .then(|| color_picker_effect_rect(&self.input_state, width, height))
             .flatten();
-        push_effect_damage(
-            &mut regions,
-            self.data.prev_color_picker_damage,
-            color_picker_rect,
-        );
-        self.data.prev_color_picker_damage = color_picker_rect;
+        self.render
+            .ui_damage_mut()
+            .roll(UiEffect::ColorPicker, color_picker_rect, &mut regions);
 
         let preview_position = self.stylus_hover_cursor_position().unwrap_or_else(|| {
             let (x, y) = self.pointer.position();
             (x as f64, y as f64)
         });
-        let preview_update = mouse_tool_preview_damage_update(
-            self.data.prev_tool_preview_damage,
-            tool_preview_active,
-            self.input_state.thickness_for_active_tool(),
-            preview_position,
-            width,
-            height,
-        );
-        regions.extend(preview_update.rects);
-        self.data.prev_tool_preview_damage = preview_update.current;
+        let preview_rect = flags
+            .active(UiEffect::ToolPreview)
+            .then(|| {
+                mouse_tool_preview_damage_rect(
+                    self.input_state.thickness_for_active_tool(),
+                    preview_position,
+                    width,
+                    height,
+                )
+            })
+            .flatten();
+        self.render
+            .ui_damage_mut()
+            .roll(UiEffect::ToolPreview, preview_rect, &mut regions);
 
-        let measure_badge_rect = shape_measure_badge_active
+        let measure_badge_rect = flags
+            .active(UiEffect::ShapeMeasureBadge)
             .then(|| self.shape_measure_badge_visual(width, height))
             .flatten()
             .and_then(|badge| effect_rect(badge.bounds, width, height));
-        push_effect_damage(
-            &mut regions,
-            self.data.prev_shape_measure_badge_damage,
+        self.render.ui_damage_mut().roll(
+            UiEffect::ShapeMeasureBadge,
             measure_badge_rect,
+            &mut regions,
         );
-        self.data.prev_shape_measure_badge_damage = measure_badge_rect;
 
         // The scan overlay spans its region and, once settled, the outcome card
         // beside it. Both move only when the phase changes, so the previous
@@ -287,8 +265,9 @@ impl WaylandState {
                 height,
             )
         });
-        push_effect_damage(&mut regions, self.data.prev_ocr_scan_damage, ocr_scan_rect);
-        self.data.prev_ocr_scan_damage = ocr_scan_rect;
+        self.render
+            .ui_damage_mut()
+            .roll(UiEffect::OcrScan, ocr_scan_rect, &mut regions);
 
         let measure_picker_damage = if self.input_state.region_state().purpose()
             == Some(crate::input::state::RegionPurposeTag::Measure)
@@ -302,9 +281,9 @@ impl WaylandState {
         } else {
             Vec::new()
         };
-        regions.extend(self.data.prev_measure_picker_damage.iter().copied());
-        regions.extend(measure_picker_damage.iter().copied());
-        self.data.prev_measure_picker_damage = measure_picker_damage;
+        self.render
+            .ui_damage_mut()
+            .roll_measure_picker(measure_picker_damage, &mut regions);
 
         regions
     }

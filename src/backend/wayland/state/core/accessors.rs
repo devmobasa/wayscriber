@@ -138,11 +138,4 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn session_options(&self) -> Option<&SessionOptions> {
         self.session.options()
     }
-
-    #[allow(dead_code)]
-    pub(in crate::backend::wayland) fn session_options_mut(
-        &mut self,
-    ) -> Option<&mut SessionOptions> {
-        self.session.options_mut()
-    }
 }

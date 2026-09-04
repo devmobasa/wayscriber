@@ -42,7 +42,6 @@ impl WaylandState {
             }
         };
 
-        let data = StateData::new();
         let placement = SurfacePlacement::new(
             preferred_output_identity,
             xdg_fullscreen,
@@ -116,12 +115,11 @@ impl WaylandState {
             toolbar: ToolbarSurfaceManager::new(),
             toolbar_chrome,
             toolbar_drag: super::super::toolbar::ToolbarDrag::new(),
-            data,
+            render: super::super::render::RenderRuntime::new(),
             suppression: Default::default(),
             shortcut_coach: Default::default(),
             focus: super::super::focus::FocusState::new(startup_activation_token),
             buffer_damage: BufferDamageTracker::new(buffer_count),
-            canvas_layer_cache: super::super::canvas_layer::CanvasLayerCache::new(),
             spotlight: super::super::spotlight_runtime::SpotlightRuntime::new(),
             config,
             preferences,

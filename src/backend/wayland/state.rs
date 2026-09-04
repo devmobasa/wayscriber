@@ -41,9 +41,8 @@ use crate::{
 pub(in crate::backend::wayland) use self::core::overlay::{
     OverlaySuppression, OverlaySuppressionKeyboardPolicy,
 };
-pub use self::data::MoveDragKind;
-use self::data::StateData;
 pub(in crate::backend::wayland) use self::region_capture::WindowSnapDirection;
+pub(in crate::backend::wayland) use self::toolbar::MoveDragKind;
 use super::{
     RuntimeOperationController, RuntimeOperationIdSource,
     capture::{CapturePreflightRequest, CaptureState, PendingPdfExport},
@@ -69,7 +68,6 @@ pub(in crate::backend::wayland) use clipboard_runtime::{
 };
 mod color_picker;
 mod core;
-mod data;
 mod desktop_open;
 mod eyedropper;
 mod focus;
@@ -166,7 +164,7 @@ pub(super) struct WaylandState {
     pub(super) toolbar: ToolbarSurfaceManager,
     pub(super) toolbar_chrome: toolbar::ToolbarChrome,
     pub(super) toolbar_drag: toolbar::ToolbarDrag,
-    data: StateData,
+    pub(super) render: render::RenderRuntime,
     pub(super) suppression: core::overlay::OverlaySuppressionState,
     shortcut_coach: onboarding::ShortcutCoachSession,
     /// Keyboard, pointer, activation, and focus-loss lifecycle.
@@ -174,7 +172,6 @@ pub(super) struct WaylandState {
     /// Per-buffer damage tracking for correct incremental rendering.
     pub(super) buffer_damage: buffer_damage::BufferDamageTracker,
     /// Baked committed-shapes layer for panned canvas rendering.
-    pub(super) canvas_layer_cache: canvas_layer::CanvasLayerCache,
     /// Render memory, warning latches, and wheel timing for Spotlight effects.
     pub(super) spotlight: spotlight_runtime::SpotlightRuntime,
 

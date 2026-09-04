@@ -18,10 +18,10 @@ use crate::{
 pub(in crate::backend::wayland) enum TouchTarget {
     #[default]
     None,
-    Overlay,
+    Canvas,
     Toolbar,
     InlineToolbar,
-    Other,
+    Foreign,
 }
 
 pub(in crate::backend::wayland) struct TouchEnd {
@@ -134,8 +134,7 @@ impl ReleaseSuppression {
     }
 
     fn take(&mut self, source: RegionInputSource) -> bool {
-        self.slot_mut(source)
-            .is_some_and(|slot| std::mem::take(slot))
+        self.slot_mut(source).is_some_and(std::mem::take)
     }
 
     fn clear_all(&mut self) {
@@ -528,21 +527,21 @@ mod tests {
     #[test]
     fn active_touch_rejects_a_second_contact_and_foreign_end() {
         let mut touch = TouchState::default();
-        assert!(touch.begin(7, (10.0, 20.0), TouchTarget::Overlay));
+        assert!(touch.begin(7, (10.0, 20.0), TouchTarget::Canvas));
         assert!(!touch.begin(8, (30.0, 40.0), TouchTarget::Toolbar));
         assert_eq!(touch.end(8), None);
-        assert_eq!(touch.end(7), Some(((10.0, 20.0), TouchTarget::Overlay)));
+        assert_eq!(touch.end(7), Some(((10.0, 20.0), TouchTarget::Canvas)));
         assert_eq!(touch.end(7), None);
     }
 
     #[test]
     fn active_touch_updates_only_the_owned_contact() {
         let mut touch = TouchState::default();
-        assert!(touch.begin(7, (10.0, 20.0), TouchTarget::Overlay));
+        assert!(touch.begin(7, (10.0, 20.0), TouchTarget::Canvas));
 
         assert!(!touch.update_position(8, (30.0, 40.0)));
         assert!(touch.update_position(7, (50.0, 60.0)));
-        assert_eq!(touch.end(7), Some(((50.0, 60.0), TouchTarget::Overlay)));
+        assert_eq!(touch.end(7), Some(((50.0, 60.0), TouchTarget::Canvas)));
     }
 
     #[test]

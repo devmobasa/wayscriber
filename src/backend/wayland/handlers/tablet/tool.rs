@@ -8,7 +8,10 @@ use crate::{
     util::Rect,
 };
 
-use crate::backend::wayland::state::{RegionReviewPress, WaylandState};
+use crate::backend::wayland::{
+    handlers::route::InputSurface,
+    state::{RegionReviewPress, WaylandState},
+};
 use crate::input::state::RegionInputSource;
 
 const STYLUS_CURSOR_DAMAGE_RADIUS: i32 = 64;
@@ -131,11 +134,9 @@ impl WaylandState {
             "Tablet proximity in: tool {:?}, type: {:?}",
             tool_id, tool_type
         );
-        let on_overlay = self
-            .surface
-            .wl_surface()
-            .is_some_and(|candidate| candidate.id() == surface.id());
-        let on_toolbar = self.toolbar.is_toolbar_surface(&surface);
+        let routed = self.route_input(&surface, (0.0, 0.0));
+        let on_overlay = routed.surface == InputSurface::Canvas;
+        let on_toolbar = routed.surface == InputSurface::Toolbar;
         self.tablet.surface = Some(surface);
         self.tablet.on_overlay = on_overlay;
         self.tablet.on_toolbar = on_toolbar;
@@ -195,7 +196,7 @@ impl WaylandState {
         self.toolbar_drag.set_item_dragging(false);
         self.cancel_toolbar_move_drag();
         if let Some(surface) = self.tablet.surface.take()
-            && self.toolbar.is_toolbar_surface(&surface)
+            && self.route_input(&surface, (0.0, 0.0)).surface == InputSurface::Toolbar
         {
             self.toolbar.pointer_leave(&surface);
             self.toolbar.mark_dirty();

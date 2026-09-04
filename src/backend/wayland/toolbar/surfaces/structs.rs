@@ -74,6 +74,10 @@ impl ToolbarSurface {
             .unwrap_or(false)
     }
 
+    pub(in crate::backend::wayland) fn wl_surface(&self) -> Option<&wl_surface::WlSurface> {
+        self.wl_surface.as_ref()
+    }
+
     pub fn is_surface(&self, surface: &wl_surface::WlSurface) -> bool {
         self.wl_surface
             .as_ref()

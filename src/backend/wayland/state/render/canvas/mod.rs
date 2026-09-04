@@ -103,7 +103,7 @@ impl WaylandState {
         let layer_cache_ready = if !capture_picker_active && self.canvas_layer_cache_usable() {
             self.ensure_canvas_layer_cache(width, height, scale)
         } else {
-            self.canvas_layer_cache.clear();
+            self.render.canvas_layer_cache_mut().clear();
             false
         };
         if let (Some(perf), Some(layer_cache_start)) = (perf.as_mut(), layer_cache_start) {
@@ -347,7 +347,7 @@ impl WaylandState {
         mut perf: Option<&mut PerfRenderBreakdown>,
     ) {
         let shapes = &self.input_state.boards.active_frame().shapes;
-        if layer_cache_ready && self.canvas_layer_cache.blit(ctx) {
+        if layer_cache_ready && self.render.canvas_layer_cache().blit(ctx) {
             debug!("Rendered committed shapes from layer cache");
             if let Some(perf) = perf.as_mut() {
                 perf.shapes_total = shapes.len();
