@@ -53,6 +53,13 @@ impl InputState {
     }
 
     pub(crate) fn toggle_light_mode(&mut self) -> bool {
+        crate::ui_text::with_legacy_engine(|engine| self.toggle_light_mode_with_engine(engine))
+    }
+
+    pub(crate) fn toggle_light_mode_with_engine(
+        &mut self,
+        engine: &crate::ui_text::UiTextEngine,
+    ) -> bool {
         if self.light_mode_active() {
             self.exit_light_mode();
         } else {
@@ -65,21 +72,40 @@ impl InputState {
                 self.needs_redraw = true;
                 return false;
             }
-            self.enter_light_mode(false);
+            self.enter_light_mode_with_engine(engine, false);
         }
         self.light_mode_active()
     }
 
     pub fn toggle_light_mode_drawing(&mut self) -> bool {
+        crate::ui_text::with_legacy_engine(|engine| {
+            self.toggle_light_mode_drawing_with_engine(engine)
+        })
+    }
+
+    pub(crate) fn toggle_light_mode_drawing_with_engine(
+        &mut self,
+        engine: &crate::ui_text::UiTextEngine,
+    ) -> bool {
         let drawing = if self.light_mode_active() {
             !self.light_mode_drawing_active()
         } else {
             true
         };
-        self.set_light_mode_drawing(drawing)
+        self.set_light_mode_drawing_with_engine(engine, drawing)
     }
 
     pub fn set_light_mode_drawing(&mut self, drawing: bool) -> bool {
+        crate::ui_text::with_legacy_engine(|engine| {
+            self.set_light_mode_drawing_with_engine(engine, drawing)
+        })
+    }
+
+    pub(crate) fn set_light_mode_drawing_with_engine(
+        &mut self,
+        engine: &crate::ui_text::UiTextEngine,
+        drawing: bool,
+    ) -> bool {
         if !self.light_mode_active() {
             if drawing {
                 if !self.light_mode_supported() {
@@ -91,7 +117,7 @@ impl InputState {
                     self.needs_redraw = true;
                     return false;
                 }
-                self.enter_light_mode(true);
+                self.enter_light_mode_with_engine(engine, true);
             }
             return self.light_mode_drawing_active();
         }
@@ -139,12 +165,16 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    fn enter_light_mode(&mut self, drawing: bool) {
+    fn enter_light_mode_with_engine(
+        &mut self,
+        engine: &crate::ui_text::UiTextEngine,
+        drawing: bool,
+    ) {
         if self.focus_mode_active() {
-            self.toggle_focus_mode();
+            self.toggle_focus_mode_with_engine(engine);
         }
         if self.presenter_mode_active() {
-            self.toggle_presenter_mode();
+            self.toggle_presenter_mode_with_engine(engine);
         }
 
         self.cancel_active_interaction();

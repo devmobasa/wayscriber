@@ -296,11 +296,15 @@ impl InputState {
 
     /// Start the guided tour.
     pub fn start_tour(&mut self) {
+        crate::ui_text::with_legacy_engine(|engine| self.start_tour_with_engine(engine))
+    }
+
+    pub(crate) fn start_tour_with_engine(&mut self, engine: &crate::ui_text::UiTextEngine) {
         if self.focus_mode_active() {
             // The tour restores pinned chrome when it ends, so it must begin
             // from Focus Mode's real baseline rather than nesting underneath
             // that transient snapshot owner.
-            self.toggle_focus_mode();
+            self.toggle_focus_mode_with_engine(engine);
         }
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::Tour);
         self.tour.start();
@@ -313,7 +317,11 @@ impl InputState {
     /// starts the overlay regardless of the persisted `tour_shown` flag — and
     /// so a future replay-specific behavior has a single call site to hang on.
     pub fn start_tour_replay(&mut self) {
-        self.start_tour();
+        crate::ui_text::with_legacy_engine(|engine| self.start_tour_replay_with_engine(engine))
+    }
+
+    pub(crate) fn start_tour_replay_with_engine(&mut self, engine: &crate::ui_text::UiTextEngine) {
+        self.start_tour_with_engine(engine);
     }
 
     /// End the tour (skip or complete).

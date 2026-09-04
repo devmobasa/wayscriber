@@ -52,6 +52,17 @@ impl InputState {
         item: StatusBarItem,
         visible: bool,
     ) -> bool {
+        crate::ui_text::with_legacy_engine(|engine| {
+            self.set_status_bar_item_visible_with_engine(engine, item, visible)
+        })
+    }
+
+    pub(crate) fn set_status_bar_item_visible_with_engine(
+        &mut self,
+        engine: &crate::ui_text::UiTextEngine,
+        item: StatusBarItem,
+        visible: bool,
+    ) -> bool {
         if self.status_bar_item_visible(item) == visible {
             return false;
         }
@@ -70,7 +81,7 @@ impl InputState {
             StatusBarItem::Help => self.ui_visibility.show_status_help = visible,
             StatusBarItem::About => self.ui_visibility.show_status_about = visible,
         }
-        self.refresh_status_hud_layout();
+        self.refresh_status_hud_layout_with_engine(engine);
         self.needs_redraw = true;
         true
     }
@@ -81,13 +92,17 @@ impl InputState {
     /// narrow outputs — between the mutation and the next frame, and hover is
     /// re-derived so a vanished segment cannot stay lit. Damage stays with
     /// the render effect pass, which re-measures with that frame's inputs.
-    pub(crate) fn refresh_status_hud_layout(&mut self) {
+    pub(crate) fn refresh_status_hud_layout_with_engine(
+        &mut self,
+        engine: &crate::ui_text::UiTextEngine,
+    ) {
         let Some(inputs) = self.status_hud.rebuild_inputs() else {
             self.status_hud.layout = None;
             self.status_hud.hover = None;
             return;
         };
-        self.update_status_hud_layout_for_pointer(
+        self.update_status_hud_layout_for_pointer_with_engine(
+            engine,
             inputs.position,
             &inputs.style,
             inputs.screen_width,

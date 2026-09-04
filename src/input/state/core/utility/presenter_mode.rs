@@ -65,10 +65,17 @@ impl InputState {
     }
 
     pub(crate) fn toggle_presenter_mode(&mut self) -> bool {
+        crate::ui_text::with_legacy_engine(|engine| self.toggle_presenter_mode_with_engine(engine))
+    }
+
+    pub(crate) fn toggle_presenter_mode_with_engine(
+        &mut self,
+        engine: &crate::ui_text::UiTextEngine,
+    ) -> bool {
         if self.presenter_mode_active() {
             self.stop_presenter_mode()
         } else {
-            self.start_presenter_mode()
+            self.start_presenter_mode(engine)
         }
     }
 
@@ -108,7 +115,7 @@ impl InputState {
         self.presenter_mode_active()
     }
 
-    fn start_presenter_mode(&mut self) -> bool {
+    fn start_presenter_mode(&mut self, engine: &crate::ui_text::UiTextEngine) -> bool {
         let config = self.presenter_mode_config().clone();
         if self.light_mode_active() {
             self.exit_light_mode();
@@ -118,7 +125,7 @@ impl InputState {
             // own chrome baseline. This keeps the two transient owners from
             // nesting and lets micro-toolbar presenter policy operate on the
             // real pre-Focus visibility.
-            self.toggle_focus_mode();
+            self.toggle_focus_mode_with_engine(engine);
         }
 
         if config.close_help_overlay && self.help_overlay.visible {
@@ -148,7 +155,10 @@ impl InputState {
                 }
                 crate::config::PresenterToolbarMode::Micro => {
                     // The top strip stays up as the micro chip.
-                    self.set_top_display_mode(crate::config::TopDisplayMode::Micro);
+                    self.set_top_display_mode_with_engine(
+                        engine,
+                        crate::config::TopDisplayMode::Micro,
+                    );
                 }
             }
         }

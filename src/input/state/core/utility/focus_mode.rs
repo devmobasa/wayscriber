@@ -95,6 +95,10 @@ impl InputState {
     /// - nothing visible and no snapshot → show everything (rescue arm, so
     ///   the action always has a visible effect).
     pub(crate) fn toggle_focus_mode(&mut self) {
+        crate::ui_text::with_legacy_engine(|engine| self.toggle_focus_mode_with_engine(engine))
+    }
+
+    pub(crate) fn toggle_focus_mode_with_engine(&mut self, engine: &crate::ui_text::UiTextEngine) {
         if self.light_mode_active() {
             self.exit_light_mode();
         }
@@ -119,7 +123,7 @@ impl InputState {
             || self.fallback_mode_badge_may_be_active();
         if !anything_to_hide {
             self.clear_all_chrome_recovery_toast();
-            self.set_toolbar_visible(true);
+            self.set_toolbar_visible_with_engine(engine, true);
             self.ui_visibility.show_status_bar = true;
             self.ui_visibility.show_floating_badge = true;
             self.ui_visibility.show_zoom_chip = true;
