@@ -12,10 +12,11 @@ impl WaylandState {
     pub(super) fn handle_pointer_release(
         &mut self,
         event: &PointerEvent,
-        on_toolbar: bool,
-        inline_active: bool,
+        routed: RoutedInput,
         button: u32,
     ) {
+        let on_toolbar = routed.surface == InputSurface::Toolbar;
+        let inline_active = routed.inline_toolbars;
         if self
             .input_state
             .take_consumed_pointer_shortcut_button(button)
@@ -23,7 +24,7 @@ impl WaylandState {
             return;
         }
 
-        if self.handle_region_pointer_release(event, on_toolbar, button) {
+        if self.handle_region_pointer_release(routed, button) {
             return;
         }
 
@@ -44,7 +45,7 @@ impl WaylandState {
         // swallowed by help must not leak its release into a newly opened
         // popup. Conversely, a press that preceded help has no owner and falls
         // through to finish its original gesture.
-        if self.handle_help_pointer_release(event, on_toolbar, button) {
+        if self.handle_help_pointer_release(routed, button) {
             self.pointer.clear_chrome_press();
             return;
         }
@@ -56,7 +57,10 @@ impl WaylandState {
             return;
         }
 
-        if self.handle_pending_overlay_release(event, on_toolbar, button) {
+        if self.handle_pending_overlay_release(routed, button) {
+            return;
+        }
+        if routed.surface == InputSurface::Foreign {
             return;
         }
 
@@ -76,7 +80,7 @@ impl WaylandState {
         // still commit (or cancel) instead of being swallowed by the toolbar
         // gates below. The radial release router consumes every button while
         // the menu is open, so nothing leaks through to canvas handling.
-        if self.handle_radial_pointer_release(event, on_toolbar, button) {
+        if self.handle_radial_pointer_release(routed, button) {
             return;
         }
         if inline_active && self.handle_inline_pointer_release(event, button) {
@@ -121,12 +125,7 @@ impl WaylandState {
         self.input_state.needs_redraw = true;
     }
 
-    fn handle_region_pointer_release(
-        &mut self,
-        event: &PointerEvent,
-        on_toolbar: bool,
-        button: u32,
-    ) -> bool {
+    fn handle_region_pointer_release(&mut self, routed: RoutedInput, button: u32) -> bool {
         if !self.input_state.region_is_active() {
             return false;
         }
@@ -139,34 +138,19 @@ impl WaylandState {
         {
             return true;
         }
-        let screen_position = if on_toolbar {
-            self.toolbar_surface_screen_coords(&event.surface, event.position)
-        } else {
-            Some(event.position)
-        };
-        if let Some((x, y)) = screen_position {
+        if let Some((x, y)) = routed.screen {
             self.finish_region_selection(RegionInputSource::Pointer, x, y);
         }
         true
     }
 
-    fn handle_help_pointer_release(
-        &mut self,
-        event: &PointerEvent,
-        on_toolbar: bool,
-        button: u32,
-    ) -> bool {
+    fn handle_help_pointer_release(&mut self, routed: RoutedInput, button: u32) -> bool {
         let source = HelpOverlayPressSource::Pointer(button);
         if button != BTN_LEFT {
             // Non-left help presses are modal-owned but never resolve rows.
             return self.input_state.clear_help_overlay_press_for(source);
         }
-        let screen_position = if on_toolbar {
-            self.toolbar_surface_screen_coords(&event.surface, event.position)
-        } else {
-            Some(event.position)
-        };
-        match screen_position {
+        match routed.screen {
             Some((sx, sy)) => {
                 self.handle_help_overlay_release(source, sx.round() as i32, sy.round() as i32)
             }
@@ -174,20 +158,11 @@ impl WaylandState {
         }
     }
 
-    fn handle_pending_overlay_release(
-        &mut self,
-        event: &PointerEvent,
-        on_toolbar: bool,
-        button: u32,
-    ) -> bool {
+    fn handle_pending_overlay_release(&mut self, routed: RoutedInput, button: u32) -> bool {
         if button != BTN_LEFT {
             return false;
         }
-        let Some((screen_x, screen_y)) = (if on_toolbar {
-            self.toolbar_surface_screen_coords(&event.surface, event.position)
-        } else {
-            Some(event.position)
-        }) else {
+        let Some((screen_x, screen_y)) = routed.screen else {
             self.pointer.clear_chrome_press();
             return false;
         };
@@ -227,24 +202,7 @@ impl WaylandState {
         pressed.is_pending()
     }
 
-    fn pointer_release_screen_position(
-        &self,
-        event: &PointerEvent,
-        on_toolbar: bool,
-    ) -> Option<(f64, f64)> {
-        if on_toolbar {
-            self.toolbar_surface_screen_coords(&event.surface, event.position)
-        } else {
-            Some(event.position)
-        }
-    }
-
-    fn handle_radial_pointer_release(
-        &mut self,
-        event: &PointerEvent,
-        on_toolbar: bool,
-        button: u32,
-    ) -> bool {
+    fn handle_radial_pointer_release(&mut self, routed: RoutedInput, button: u32) -> bool {
         if !self.input_state.is_radial_menu_open()
             || self.toolbar_drag.is_moving()
             || self.toolbar_drag.item_dragging()
@@ -257,8 +215,7 @@ impl WaylandState {
             BTN_RIGHT => Some(MouseButton::Right),
             _ => None,
         };
-        let screen_position = self.pointer_release_screen_position(event, on_toolbar);
-        let (Some(mb), Some((sx, sy))) = (mb, screen_position) else {
+        let (Some(mb), Some((sx, sy))) = (mb, routed.screen) else {
             return false;
         };
         let (wx, wy) = self.zoomed_world_coords(sx, sy);

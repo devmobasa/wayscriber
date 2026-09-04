@@ -21,10 +21,11 @@ impl WaylandState {
         conn: &wayland_client::Connection,
         qh: &QueueHandle<Self>,
         event: &PointerEvent,
-        on_toolbar: bool,
-        inline_active: bool,
+        routed: RoutedInput,
         button: u32,
     ) {
+        let on_toolbar = routed.surface == InputSurface::Toolbar;
+        let inline_active = routed.inline_toolbars;
         // Report the physical button to the input HUD before any modal or
         // toolbar routing consumes it. GTK toolbar surfaces are separate
         // windows and never reach this handler, so their clicks only show in
@@ -46,6 +47,10 @@ impl WaylandState {
                 .clear_help_overlay_press_for(help_press_source);
         }
 
+        if routed.surface == InputSurface::Foreign {
+            return;
+        }
+
         if self.handle_region_pointer_press(event, on_toolbar, button) {
             return;
         }
@@ -54,7 +59,7 @@ impl WaylandState {
             return;
         }
 
-        if self.handle_modal_pointer_press(event, on_toolbar, button, help_press_source) {
+        if self.handle_modal_pointer_press(event, routed, button, help_press_source) {
             return;
         }
 
@@ -201,7 +206,7 @@ impl WaylandState {
     fn handle_modal_pointer_press(
         &mut self,
         event: &PointerEvent,
-        on_toolbar: bool,
+        routed: RoutedInput,
         button: u32,
         help_press_source: HelpOverlayPressSource,
     ) -> bool {
@@ -210,12 +215,7 @@ impl WaylandState {
         }
         // Help is modal: remember the target so release can require the same row.
         if self.input_state.help_overlay.is_visible() {
-            let screen_position = if on_toolbar {
-                self.toolbar_surface_screen_coords(&event.surface, event.position)
-            } else {
-                Some(event.position)
-            };
-            match screen_position {
+            match routed.screen {
                 Some((sx, sy)) => self.input_state.note_help_overlay_press(
                     help_press_source,
                     sx.round() as i32,
