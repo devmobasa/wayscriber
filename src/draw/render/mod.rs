@@ -6,6 +6,7 @@ pub use backdrop_probe::painted_luminance as painted_background_luminance;
 pub use backdrop_probe::perceived_luminance;
 mod background;
 mod blur;
+mod context;
 mod highlight;
 mod image;
 mod pressure_strokes;
@@ -19,6 +20,7 @@ mod types;
 
 pub use background::{fill_transparent, render_board_background};
 pub use blur::{BlurRectParams, render_blur_rect};
+pub use context::{RenderCaches, RenderCtx};
 pub use highlight::render_click_highlight;
 #[allow(unused_imports)]
 pub use pressure_strokes::render_freehand_pressure_borrowed;

@@ -1,5 +1,6 @@
 use crate::capture::CaptureError;
 use crate::config::{PdfExportConfig, PdfFitMode, PdfOrientation, PdfPageSize};
+use crate::draw::{RenderCaches, RenderCtx};
 
 use super::page::{
     CanvasExportBackdropSnapshot, CanvasExportRect, CanvasPageExportSnapshot, ExportBackdrop,
@@ -142,6 +143,7 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
     let ctx = cairo::Context::new(&surface)
         .map_err(|err| CaptureError::ImageError(format!("Failed to create PDF context: {err}")))?;
 
+    let mut caches = RenderCaches::default();
     for page in &snapshot.pages {
         let layout = page.layout;
         validate_page_size(layout.page_width, layout.page_height)?;
@@ -153,14 +155,19 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
         paint_pdf_page_background(&ctx, &page.page, layout.page_width, layout.page_height);
         let backdrop = ExportBackdrop::new(&page.page.backdrop)?;
         if frame_has_magnified_spotlight(&page.page.frame) {
-            render_magnified_page_raster(&ctx, &page.page, &backdrop, layout)?;
+            render_magnified_page_raster(
+                &mut RenderCtx::new(&ctx, &mut caches),
+                &page.page,
+                &backdrop,
+                layout,
+            )?;
         } else {
             let paint_content_backdrop = matches!(
                 page.page.backdrop,
                 CanvasExportBackdropSnapshot::PersistedImage { .. }
             );
             draw_canvas_page_region(
-                &ctx,
+                &mut RenderCtx::new(&ctx, &mut caches),
                 &page.page,
                 &backdrop,
                 layout.source_rect,
@@ -194,11 +201,12 @@ pub fn render_board_pdf(snapshot: &BoardPdfExportSnapshot) -> Result<Vec<u8>, Ca
 }
 
 fn render_magnified_page_raster(
-    pdf_ctx: &cairo::Context,
+    render: &mut RenderCtx<'_, '_>,
     page: &CanvasPageExportSnapshot,
     backdrop: &ExportBackdrop,
     layout: PdfPageLayout,
 ) -> Result<(), CaptureError> {
+    let pdf_ctx = render.cairo;
     let (width, height) = checked_raster_dimensions(layout.source_rect)?;
     let surface =
         cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).map_err(|err| {
@@ -210,7 +218,7 @@ fn render_magnified_page_raster(
         ))
     })?;
     draw_canvas_page_region(
-        &raster_ctx,
+        &mut RenderCtx::new(&raster_ctx, render.caches),
         page,
         backdrop,
         layout.source_rect,

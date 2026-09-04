@@ -119,6 +119,7 @@ impl UiDamageHistory {
 
 pub(in crate::backend::wayland) struct RenderRuntime {
     canvas_layer_cache: CanvasLayerCache,
+    draw_caches: crate::draw::RenderCaches,
     ui_damage: UiDamageHistory,
     profile_ui_baseline: Vec<u8>,
 }
@@ -127,19 +128,28 @@ impl RenderRuntime {
     pub(in crate::backend::wayland) fn new() -> Self {
         Self {
             canvas_layer_cache: CanvasLayerCache::new(),
+            draw_caches: crate::draw::RenderCaches::default(),
             ui_damage: UiDamageHistory::default(),
             profile_ui_baseline: Vec::new(),
         }
-    }
-
-    pub(in crate::backend::wayland::state) fn canvas_layer_cache(&self) -> &CanvasLayerCache {
-        &self.canvas_layer_cache
     }
 
     pub(in crate::backend::wayland::state) fn canvas_layer_cache_mut(
         &mut self,
     ) -> &mut CanvasLayerCache {
         &mut self.canvas_layer_cache
+    }
+
+    pub(in crate::backend::wayland::state) fn draw_caches_mut(
+        &mut self,
+    ) -> &mut crate::draw::RenderCaches {
+        &mut self.draw_caches
+    }
+
+    pub(in crate::backend::wayland::state) fn canvas_draw_parts_mut(
+        &mut self,
+    ) -> (&mut CanvasLayerCache, &mut crate::draw::RenderCaches) {
+        (&mut self.canvas_layer_cache, &mut self.draw_caches)
     }
 
     pub(in crate::backend::wayland::state) fn ui_damage_mut(&mut self) -> &mut UiDamageHistory {

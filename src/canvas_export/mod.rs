@@ -1,3 +1,6 @@
+#[cfg(test)]
+#[path = "tests/cache_tests.rs"]
+mod cache_tests;
 mod page;
 mod pdf;
 mod pdf_labels;
@@ -190,7 +193,12 @@ mod tests {
             cairo::ImageSurface::create(cairo::Format::ARgb32, 20, 20).expect("surface");
         {
             let ctx = cairo::Context::new(&surface).expect("context");
-            draw_canvas_page(&ctx, &page_snapshot(frame), 2.0).expect("draw");
+            draw_canvas_page(
+                &mut crate::draw::RenderCtx::new(&ctx, &mut crate::draw::RenderCaches::default()),
+                &page_snapshot(frame),
+                2.0,
+            )
+            .expect("draw");
         }
 
         assert_ne!(pixel(&mut surface, 9, 9), 0);

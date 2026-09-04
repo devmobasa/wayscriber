@@ -153,7 +153,11 @@ impl WaylandState {
         let replay_ctx = eraser_ctx.replay_context();
 
         let completed_shapes_start = perf.as_ref().map(|_| Instant::now());
-        self.render_committed_canvas_shapes(
+        let (layer_cache, draw_caches) = self.render.canvas_draw_parts_mut();
+        render_committed_canvas_shapes(
+            &self.input_state.boards.active_frame().shapes,
+            layer_cache,
+            draw_caches,
             canvas,
             layer_cache_ready,
             &replay_ctx,
@@ -283,13 +287,14 @@ impl WaylandState {
         let provisional = self.input_state.provisional_tool_stroke(mx, my);
         let provisional_points = provisional_point_count(&provisional);
         let provisional_start = perf.as_ref().map(|_| Instant::now());
+        let mut render = crate::draw::RenderCtx::new(ctx, self.render.draw_caches_mut());
         let rendered_provisional = match provisional {
             crate::input::tool::ProvisionalToolStroke::BlurReplayPreview(params) => {
-                crate::draw::render_blur_rect(ctx, params, &replay_ctx);
+                render.render_blur_rect(params, &replay_ctx);
                 true
             }
             _ => self.input_state.render_provisional_shape_for_damage(
-                ctx,
+                &mut render,
                 mx,
                 my,
                 damage_world,
@@ -323,70 +328,75 @@ impl WaylandState {
 
         Ok(())
     }
+}
 
-    fn render_committed_canvas_shapes(
-        &self,
-        canvas: &CanvasRenderCtx<'_>,
-        layer_cache_ready: bool,
-        replay_ctx: &crate::draw::EraserReplayContext<'_>,
-        mut perf: Option<&mut PerfRenderBreakdown>,
-    ) {
-        let ctx = canvas.cairo;
-        let width = canvas.geometry.width;
-        let height = canvas.geometry.height;
-        let damage_world = canvas.damage_world;
-        let canvas_transform_active = canvas.canvas.transform_active;
-        let text_halo_enabled = canvas.canvas.text_halo_enabled;
-        let shapes = &self.input_state.boards.active_frame().shapes;
-        if layer_cache_ready && self.render.canvas_layer_cache().blit(ctx) {
-            debug!("Rendered committed shapes from layer cache");
-            if let Some(perf) = perf.as_mut() {
-                perf.shapes_total = shapes.len();
-                perf.canvas_layer_cache_used = true;
-            }
-            return;
-        }
-        debug!("Rendering {} completed shapes", shapes.len());
+fn render_committed_canvas_shapes(
+    shapes: &[crate::draw::DrawnShape],
+    layer_cache: &super::super::canvas_layer::CanvasLayerCache,
+    draw_caches: &mut crate::draw::RenderCaches,
+    canvas: &CanvasRenderCtx<'_>,
+    layer_cache_ready: bool,
+    replay_ctx: &crate::draw::EraserReplayContext<'_>,
+    mut perf: Option<&mut PerfRenderBreakdown>,
+) {
+    let ctx = canvas.cairo;
+    let width = canvas.geometry.width;
+    let height = canvas.geometry.height;
+    let damage_world = canvas.damage_world;
+    let canvas_transform_active = canvas.canvas.transform_active;
+    let text_halo_enabled = canvas.canvas.text_halo_enabled;
+    if layer_cache_ready && layer_cache.blit(ctx) {
+        debug!("Rendered committed shapes from layer cache");
         if let Some(perf) = perf.as_mut() {
             perf.shapes_total = shapes.len();
+            perf.canvas_layer_cache_used = true;
         }
-        let render_shape = |shape: &crate::draw::DrawnShape| {
-            super::super::canvas_layer::render_committed_shape(
-                ctx,
-                shape,
-                replay_ctx,
-                text_halo_enabled,
-            )
-        };
-        let Some(bounds) = union_damage_bounds(damage_world) else {
-            for shape in shapes {
-                render_shape(shape);
-            }
-            if let Some(perf) = perf.as_mut() {
-                perf.shapes_tested = shapes.len();
-                perf.shapes_rendered = shapes.len();
-            }
-            return;
-        };
-        let Some(safe_bounds) =
-            safe_shape_damage_bounds(bounds, width, height, canvas_transform_active)
-        else {
-            return;
-        };
-        let mut shapes_rendered = 0usize;
+        return;
+    }
+    debug!("Rendering {} completed shapes", shapes.len());
+    if let Some(perf) = perf.as_mut() {
+        perf.shapes_total = shapes.len();
+    }
+    let mut render = crate::draw::RenderCtx {
+        cairo: ctx,
+        caches: draw_caches,
+    };
+    let mut render_shape = |shape: &crate::draw::DrawnShape| {
+        super::super::canvas_layer::render_committed_shape(
+            &mut render,
+            shape,
+            replay_ctx,
+            text_halo_enabled,
+        )
+    };
+    let Some(bounds) = union_damage_bounds(damage_world) else {
         for shape in shapes {
-            if shape
-                .bounding_box()
-                .is_some_and(|bounds| rects_intersect(bounds, safe_bounds))
-            {
-                render_shape(shape);
-                shapes_rendered += 1;
-            }
+            render_shape(shape);
         }
         if let Some(perf) = perf.as_mut() {
             perf.shapes_tested = shapes.len();
-            perf.shapes_rendered = shapes_rendered;
+            perf.shapes_rendered = shapes.len();
         }
+        return;
+    };
+    let Some(safe_bounds) =
+        safe_shape_damage_bounds(bounds, width, height, canvas_transform_active)
+    else {
+        return;
+    };
+    let mut shapes_rendered = 0usize;
+    for shape in shapes {
+        if shape
+            .bounding_box()
+            .is_some_and(|bounds| rects_intersect(bounds, safe_bounds))
+        {
+            render_shape(shape);
+            shapes_rendered += 1;
+        }
+    }
+    if let Some(perf) = perf.as_mut() {
+        perf.shapes_tested = shapes.len();
+        perf.shapes_rendered = shapes_rendered;
     }
 }
 
@@ -491,3 +501,6 @@ mod tests {
         assert!(rects_intersect(Rect::new(9, 10, 2, 5).unwrap(), damage));
     }
 }
+
+#[cfg(test)]
+mod resource_tests;

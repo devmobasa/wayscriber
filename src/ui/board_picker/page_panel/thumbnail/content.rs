@@ -1,7 +1,7 @@
 use crate::draw::{
     EraserReplayContext, SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass,
-    render_eraser_stroke, render_shape_with_halo, render_spotlight_magnification_pass,
-    render_spotlight_pass, spotlight_regions_for_frame,
+    render_eraser_stroke, render_spotlight_magnification_pass, render_spotlight_pass,
+    spotlight_regions_for_frame,
 };
 use crate::input::BoardBackground;
 use crate::input::state::{PAGE_NAME_HEIGHT, PAGE_NAME_PADDING};
@@ -24,9 +24,9 @@ const THUMBNAIL_SPOTLIGHT_FEATHER: f64 = 0.35;
 const TRANSPARENT_TINT: Rgba = (1.0, 1.0, 1.0, 0.06);
 const TRANSPARENT_CROSS: Rgba = (1.0, 1.0, 1.0, 0.08);
 
-pub(super) fn render_page_content(args: PageContentArgs<'_>) {
+pub(super) fn render_page_content(args: PageContentArgs<'_, '_, '_>) {
     let PageContentArgs {
-        ctx,
+        render,
         frame,
         background,
         x,
@@ -37,6 +37,7 @@ pub(super) fn render_page_content(args: PageContentArgs<'_>) {
         screen_height,
         text_halo_enabled,
     } = args;
+    let ctx = render.cairo;
     let radius = RADIUS_STD;
     let _ = ctx.save();
     draw_rounded_rect(ctx, x, y, width, height, radius);
@@ -73,7 +74,7 @@ pub(super) fn render_page_content(args: PageContentArgs<'_>) {
     ctx.translate(x + inset + offset_x, y + inset + offset_y);
     ctx.scale(scale, scale);
     render_frame_shapes(
-        ctx,
+        render,
         frame,
         background,
         screen_width,
@@ -85,13 +86,14 @@ pub(super) fn render_page_content(args: PageContentArgs<'_>) {
 }
 
 fn render_frame_shapes(
-    ctx: &cairo::Context,
+    render: &mut crate::draw::RenderCtx<'_, '_>,
     frame: &crate::draw::Frame,
     background: &BoardBackground,
     target_width: u32,
     target_height: u32,
     text_halo_enabled: bool,
 ) {
+    let ctx = render.cairo;
     let eraser_ctx = EraserReplayContext {
         pattern: None,
         surface: None,
@@ -112,7 +114,7 @@ fn render_frame_shapes(
                 render_eraser_stroke(ctx, points, brush, &eraser_ctx);
             }
             _ => {
-                render_shape_with_halo(ctx, &drawn.shape, text_halo_enabled);
+                render.render_shape_with_halo(&drawn.shape, text_halo_enabled);
             }
         }
     }
@@ -282,7 +284,10 @@ mod tests {
                 magnification,
             });
             render_page_content(PageContentArgs {
-                ctx: &ctx,
+                render: &mut crate::draw::RenderCtx::new(
+                    &ctx,
+                    &mut crate::draw::RenderCaches::default(),
+                ),
                 frame: &frame,
                 background,
                 x: 0.0,
@@ -316,7 +321,10 @@ mod tests {
                 wrap_width: None,
             });
             render_page_content(PageContentArgs {
-                ctx: &ctx,
+                render: &mut crate::draw::RenderCtx::new(
+                    &ctx,
+                    &mut crate::draw::RenderCaches::default(),
+                ),
                 frame: &frame,
                 background: &BoardBackground::Solid(Color::new(1.0, 1.0, 1.0, 1.0)),
                 x: 0.0,
@@ -364,6 +372,92 @@ mod tests {
             thumbnail_pixels(&BoardBackground::Transparent, 1.0),
             thumbnail_pixels(&BoardBackground::Transparent, 3.0),
             "an unavailable loupe must still say what it was asked for"
+        );
+    }
+
+    #[test]
+    fn thumbnail_owner_reuses_images_across_frames_with_pixel_parity() {
+        use crate::draw::{EmbeddedImage, RenderCaches, RenderCtx};
+        use std::sync::Arc;
+        let image = cairo::ImageSurface::create(cairo::Format::ARgb32, 2, 2).unwrap();
+        let ctx = cairo::Context::new(&image).unwrap();
+        ctx.set_source_rgb(1.0, 0.0, 0.0);
+        ctx.paint().unwrap();
+        let mut png = Vec::new();
+        image.write_to_png(&mut png).unwrap();
+        let bytes: Arc<[u8]> = png.into();
+        let mut frame = Frame::new();
+        frame.add_shape(Shape::Image {
+            x: 8,
+            y: 8,
+            w: 24,
+            h: 24,
+            data: EmbeddedImage {
+                mime_type: "image/png".into(),
+                width: 2,
+                height: 2,
+                bytes: Arc::clone(&bytes),
+            },
+        });
+        frame.add_shape(Shape::Text {
+            x: 40,
+            y: 36,
+            text: "Image".into(),
+            color: crate::draw::BLACK,
+            size: 20.0,
+            font_descriptor: Default::default(),
+            background_enabled: false,
+            wrap_width: None,
+        });
+        let paint = |caches: &mut RenderCaches| {
+            let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 124, 64).unwrap();
+            {
+                let ctx = cairo::Context::new(&surface).unwrap();
+                render_page_content(PageContentArgs {
+                    render: &mut RenderCtx::new(&ctx, caches),
+                    frame: &frame,
+                    background: &BoardBackground::Solid(crate::draw::WHITE),
+                    x: 0.0,
+                    y: 0.0,
+                    width: 124.0,
+                    height: 64.0,
+                    screen_width: 120,
+                    screen_height: 60,
+                    text_halo_enabled: false,
+                });
+            }
+            surface.flush();
+            surface.data().unwrap().to_vec()
+        };
+        let baseline = Arc::strong_count(&bytes);
+        let mut caches = RenderCaches::default();
+        let first = paint(&mut caches);
+        let retained = Arc::strong_count(&bytes);
+        assert!(
+            retained > baseline,
+            "thumbnail must retain its decoded image in the supplied owner"
+        );
+        assert_eq!(paint(&mut caches), first);
+        assert_eq!(Arc::strong_count(&bytes), retained);
+        assert_eq!(paint(&mut RenderCaches::default()), first);
+        let offset = (20 * 124 + 20) * 4;
+        assert_eq!(
+            u32::from_ne_bytes(first[offset..offset + 4].try_into().unwrap()),
+            0xffff0000
+        );
+        let dark = (8..42)
+            .flat_map(|y| (40..115).map(move |x| (y * 124 + x) * 4))
+            .filter(|&offset| {
+                u32::from_ne_bytes(first[offset..offset + 4].try_into().unwrap()) & 0x00ffffff
+                    < 0x00404040
+            })
+            .count();
+        assert!(dark > 30, "thumbnail must contain text beside the image");
+        drop(caches);
+        assert_eq!(
+            Arc::strong_count(&bytes),
+            baseline,
+            "owner drop releases the retained payload"
         );
     }
 }

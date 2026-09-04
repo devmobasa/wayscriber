@@ -1,14 +1,13 @@
 use crate::draw::shape::EmbeddedImage;
 use crate::image_decode::{decode_rgba, format_from_mime_or_bytes};
 use cairo::{Format, ImageSurface};
-use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::sync::Arc;
 
 const IMAGE_CACHE_ENTRIES: usize = 32;
-/// Per-render-thread budget for decoded ARGB32 image pixels.
+/// Per-owner budget for decoded ARGB32 image pixels.
 const IMAGE_CACHE_MAX_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
@@ -37,24 +36,23 @@ struct ImageCacheKey {
     height: u32,
 }
 
-thread_local! {
-    static IMAGE_CACHE: RefCell<ImageSurfaceCache> = RefCell::new(ImageSurfaceCache::new(
-        IMAGE_CACHE_ENTRIES,
-        IMAGE_CACHE_MAX_BYTES,
-    ));
-}
-
 struct CachedImageSurface {
     surface: Rc<ImageSurface>,
     decoded_bytes: usize,
 }
 
-struct ImageSurfaceCache {
+pub(super) struct ImageSurfaceCache {
     entries: HashMap<ImageCacheKey, CachedImageSurface>,
     access_order: VecDeque<ImageCacheKey>,
     max_entries: usize,
     max_bytes: usize,
     cached_bytes: usize,
+}
+
+impl Default for ImageSurfaceCache {
+    fn default() -> Self {
+        Self::new(IMAGE_CACHE_ENTRIES, IMAGE_CACHE_MAX_BYTES)
+    }
 }
 
 impl ImageSurfaceCache {
@@ -136,7 +134,8 @@ impl ImageSurfaceCache {
     }
 }
 
-pub fn render_image_shape(
+pub(super) fn render_image_shape(
+    cache: &mut ImageSurfaceCache,
     ctx: &cairo::Context,
     x: i32,
     y: i32,
@@ -147,7 +146,7 @@ pub fn render_image_shape(
     if w == 0 || h == 0 {
         return;
     }
-    let Some(surface) = cached_surface(data) else {
+    let Some(surface) = cached_surface(cache, data) else {
         render_missing_image_placeholder(ctx, x, y, w, h);
         return;
     };
@@ -170,7 +169,7 @@ pub fn render_image_shape(
     let _ = ctx.restore();
 }
 
-fn cached_surface(data: &EmbeddedImage) -> Option<Rc<ImageSurface>> {
+fn cached_surface(cache: &mut ImageSurfaceCache, data: &EmbeddedImage) -> Option<Rc<ImageSurface>> {
     let key = ImageCacheKey {
         mime_type: data.mime_type.clone(),
         bytes: ImageBytesIdentity(Arc::clone(&data.bytes)),
@@ -178,15 +177,12 @@ fn cached_surface(data: &EmbeddedImage) -> Option<Rc<ImageSurface>> {
         height: data.height,
     };
 
-    IMAGE_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(surface) = cache.get(&key) {
-            return Some(surface);
-        }
+    if let Some(surface) = cache.get(&key) {
+        return Some(surface);
+    }
 
-        let (surface, decoded_bytes) = decode_surface(data)?;
-        Some(cache.insert(key, Rc::new(surface), decoded_bytes))
-    })
+    let (surface, decoded_bytes) = decode_surface(data)?;
+    Some(cache.insert(key, Rc::new(surface), decoded_bytes))
 }
 
 fn decode_surface(data: &EmbeddedImage) -> Option<(ImageSurface, usize)> {
@@ -349,5 +345,30 @@ mod tests {
 
         assert!(first_payload.upgrade().is_none());
         assert!(weak_surface.upgrade().is_none());
+    }
+
+    #[test]
+    fn decoded_cache_reuses_only_shared_payload_and_matching_metadata() {
+        let mut bytes = Vec::new();
+        surface().write_to_png(&mut bytes).unwrap();
+        let data = crate::draw::EmbeddedImage {
+            mime_type: "image/png".into(),
+            width: 1,
+            height: 1,
+            bytes: bytes.clone().into(),
+        };
+        let mut cache = ImageSurfaceCache::default();
+        let first = super::cached_surface(&mut cache, &data).unwrap();
+        let shared = super::cached_surface(&mut cache, &data.clone()).unwrap();
+        assert!(Rc::ptr_eq(&first, &shared));
+        let separate_payload = crate::draw::EmbeddedImage {
+            bytes: bytes.into(),
+            ..data.clone()
+        };
+        let distinct = super::cached_surface(&mut cache, &separate_payload).unwrap();
+        assert!(!Rc::ptr_eq(&first, &distinct));
+        let different_metadata = crate::draw::EmbeddedImage { width: 2, ..data };
+        let distinct = super::cached_surface(&mut cache, &different_metadata).unwrap();
+        assert!(!Rc::ptr_eq(&first, &distinct));
     }
 }

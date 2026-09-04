@@ -1,8 +1,7 @@
 use crate::draw::render::{render_freehand_pressure_preview_borrowed, render_polygon_preview};
 use crate::draw::shape::bounding_box_for_points;
 use crate::draw::{
-    Color, Shape, render_freehand_borrowed, render_marker_stroke_borrowed, render_shape,
-    render_shape_with_halo,
+    Color, RenderCaches, RenderCtx, Shape, render_freehand_borrowed, render_marker_stroke_borrowed,
 };
 use crate::input::Tool;
 use crate::input::tool::{
@@ -100,10 +99,11 @@ impl InputState {
 
     pub(crate) fn render_provisional_tool_stroke(
         &self,
-        ctx: &cairo::Context,
+        render: &mut RenderCtx<'_, '_>,
         stroke: ProvisionalToolStroke<'_>,
         text_halo_enabled: bool,
     ) -> bool {
+        let ctx = render.cairo;
         match stroke {
             ProvisionalToolStroke::BorrowedFreehand {
                 points,
@@ -140,21 +140,18 @@ impl InputState {
                 true
             }
             ProvisionalToolStroke::Shape(shape) => {
-                render_shape_with_halo(ctx, &shape, text_halo_enabled);
+                render.render_shape_with_halo(&shape, text_halo_enabled);
                 true
             }
             ProvisionalToolStroke::BlurReplayPreview(params) => {
-                render_shape(
-                    ctx,
-                    &Shape::BlurRect {
-                        x: params.x,
-                        y: params.y,
-                        w: params.w,
-                        h: params.h,
-                        strength: params.strength,
-                        style: params.style,
-                    },
-                );
+                render.render_shape(&Shape::BlurRect {
+                    x: params.x,
+                    y: params.y,
+                    w: params.w,
+                    h: params.h,
+                    strength: params.strength,
+                    style: params.style,
+                });
                 true
             }
             ProvisionalToolStroke::None => false,
@@ -163,11 +160,12 @@ impl InputState {
 
     pub(crate) fn render_provisional_tool_stroke_for_damage(
         &self,
-        ctx: &cairo::Context,
+        render: &mut RenderCtx<'_, '_>,
         stroke: ProvisionalToolStroke<'_>,
         damage_regions: &[Rect],
         text_halo_enabled: bool,
     ) -> bool {
+        let ctx = render.cairo;
         match stroke {
             ProvisionalToolStroke::BorrowedFreehand {
                 points,
@@ -252,7 +250,7 @@ impl InputState {
                 }
                 true
             }
-            other => self.render_provisional_tool_stroke(ctx, other, text_halo_enabled),
+            other => self.render_provisional_tool_stroke(render, other, text_halo_enabled),
         }
     }
 
@@ -274,20 +272,27 @@ impl InputState {
         current_x: i32,
         current_y: i32,
     ) -> bool {
-        self.render_provisional_shape_with_halo(ctx, current_x, current_y, true)
+        let mut caches = RenderCaches::default();
+        self.render_provisional_shape_with_halo(
+            &mut RenderCtx::new(ctx, &mut caches),
+            current_x,
+            current_y,
+            true,
+        )
     }
 
     pub(crate) fn render_provisional_shape_with_halo(
         &self,
-        ctx: &cairo::Context,
+        render: &mut RenderCtx<'_, '_>,
         current_x: i32,
         current_y: i32,
         text_halo_enabled: bool,
     ) -> bool {
+        let ctx = render.cairo;
         match &self.state {
             DrawingState::Drawing { .. } => {
                 let stroke = self.provisional_tool_stroke(current_x, current_y);
-                self.render_provisional_tool_stroke(ctx, stroke, text_halo_enabled)
+                self.render_provisional_tool_stroke(render, stroke, text_halo_enabled)
             }
             DrawingState::Selecting {
                 start_x,
@@ -339,7 +344,7 @@ impl InputState {
 
     pub(crate) fn render_provisional_shape_for_damage(
         &self,
-        ctx: &cairo::Context,
+        render: &mut RenderCtx<'_, '_>,
         current_x: i32,
         current_y: i32,
         damage_regions: &[Rect],
@@ -348,14 +353,14 @@ impl InputState {
         if matches!(self.state, DrawingState::Drawing { .. }) {
             let stroke = self.provisional_tool_stroke(current_x, current_y);
             return self.render_provisional_tool_stroke_for_damage(
-                ctx,
+                render,
                 stroke,
                 damage_regions,
                 text_halo_enabled,
             );
         }
 
-        self.render_provisional_shape_with_halo(ctx, current_x, current_y, text_halo_enabled)
+        self.render_provisional_shape_with_halo(render, current_x, current_y, text_halo_enabled)
     }
 }
 
@@ -439,6 +444,70 @@ fn pressure_preview_needs_full_mask_render(color: Color, ranges: &[Range<usize>]
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn persistent_preview_dispatch_matches_shape_rendering() {
+        let input = crate::input::state::test_support::TestInputStateBuilder::default().build();
+        let mut png = std::io::Cursor::new(Vec::new());
+        let source = cairo::ImageSurface::create(cairo::Format::ARgb32, 2, 2).unwrap();
+        let context = cairo::Context::new(&source).unwrap();
+        context.set_source_rgb(240.0 / 255.0, 50.0 / 255.0, 20.0 / 255.0);
+        context.paint().unwrap();
+        source.write_to_png(&mut png).unwrap();
+        let shapes = [
+            Shape::Image {
+                x: 2,
+                y: 2,
+                w: 20,
+                h: 20,
+                data: crate::draw::EmbeddedImage {
+                    mime_type: "image/png".into(),
+                    width: 2,
+                    height: 2,
+                    bytes: png.into_inner().into(),
+                },
+            },
+            Shape::Text {
+                x: 2,
+                y: 42,
+                text: "Preview".into(),
+                color: crate::draw::RED,
+                size: 14.0,
+                font_descriptor: crate::draw::FontDescriptor::default(),
+                background_enabled: false,
+                wrap_width: None,
+            },
+        ];
+        let mut caches = RenderCaches::default();
+        for halo in [true, false, true] {
+            let mut actual = cairo::ImageSurface::create(cairo::Format::ARgb32, 96, 64).unwrap();
+            let mut expected = cairo::ImageSurface::create(cairo::Format::ARgb32, 96, 64).unwrap();
+            {
+                let cairo = cairo::Context::new(&actual).unwrap();
+                let mut render = RenderCtx::new(&cairo, &mut caches);
+                for shape in &shapes {
+                    assert!(input.render_provisional_tool_stroke_for_damage(
+                        &mut render,
+                        ProvisionalToolStroke::Shape(shape.clone()),
+                        &[],
+                        halo,
+                    ));
+                }
+                let cairo = cairo::Context::new(&expected).unwrap();
+                let mut fresh = RenderCaches::default();
+                let mut render = RenderCtx::new(&cairo, &mut fresh);
+                for shape in &shapes {
+                    render.render_shape_with_halo(shape, halo);
+                }
+            }
+            actual.flush();
+            expected.flush();
+            let actual = actual.data().unwrap().to_vec();
+            let expected = expected.data().unwrap().to_vec();
+            assert!(actual.iter().any(|&byte| byte != 0));
+            assert_eq!(actual, expected, "preview halo={halo}");
+        }
+    }
 
     #[test]
     fn path_damage_ranges_limits_long_path_to_intersecting_tail() {

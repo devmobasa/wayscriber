@@ -2,10 +2,9 @@ use std::sync::Arc;
 
 use crate::capture::CaptureError;
 use crate::draw::{
-    BlurRectParams, Color, EraserReplayContext, Frame, Shape, SpotlightMagnifierOutcome,
-    SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass, render_blur_rect,
-    render_eraser_stroke, render_shape_over_with_halo, render_spotlight_magnification_pass,
-    render_spotlight_pass, spotlight_regions_for_frame,
+    BlurRectParams, Color, EraserReplayContext, Frame, RenderCtx, Shape, SpotlightMagnifierOutcome,
+    SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass, render_eraser_stroke,
+    render_spotlight_magnification_pass, render_spotlight_pass, spotlight_regions_for_frame,
 };
 use crate::screen_pixels::ScreenImage;
 
@@ -98,10 +97,11 @@ impl CanvasExportRect {
 }
 
 pub fn draw_canvas_page(
-    ctx: &cairo::Context,
+    render: &mut RenderCtx<'_, '_>,
     page: &CanvasPageExportSnapshot,
     output_scale: f64,
 ) -> Result<(), CaptureError> {
+    let ctx = render.cairo;
     let backdrop = ExportBackdrop::new(&page.backdrop)?;
     let source = CanvasExportRect {
         x: page.origin_x as f64,
@@ -125,7 +125,7 @@ pub fn draw_canvas_page(
         (f64::from(page.viewport_height) * output_scale).ceil() as u32,
     );
     let rendered = draw_canvas_page_region(
-        ctx,
+        render,
         page,
         &backdrop,
         source,
@@ -138,7 +138,7 @@ pub fn draw_canvas_page(
 }
 
 pub(crate) fn draw_canvas_page_region(
-    ctx: &cairo::Context,
+    render: &mut RenderCtx<'_, '_>,
     page: &CanvasPageExportSnapshot,
     backdrop: &ExportBackdrop,
     source: CanvasExportRect,
@@ -146,6 +146,7 @@ pub(crate) fn draw_canvas_page_region(
     paint_backdrop: bool,
     fallback_target_size: Option<(u32, u32)>,
 ) -> Result<(), CaptureError> {
+    let ctx = render.cairo;
     let _ = ctx.save();
     ctx.rectangle(
         destination.x,
@@ -161,7 +162,7 @@ pub(crate) fn draw_canvas_page_region(
     );
     ctx.translate(-source.x, -source.y);
     let rendered =
-        draw_canvas_page_contents(ctx, page, backdrop, paint_backdrop, fallback_target_size);
+        draw_canvas_page_contents(render, page, backdrop, paint_backdrop, fallback_target_size);
     let _ = ctx.restore();
     rendered
 }
@@ -380,12 +381,13 @@ impl ExportBackdrop {
 }
 
 fn draw_canvas_page_contents(
-    ctx: &cairo::Context,
+    render: &mut RenderCtx<'_, '_>,
     page: &CanvasPageExportSnapshot,
     backdrop: &ExportBackdrop,
     paint_backdrop: bool,
     fallback_target_size: Option<(u32, u32)>,
 ) -> Result<(), CaptureError> {
+    let ctx = render.cairo;
     if paint_backdrop {
         backdrop.paint(ctx);
     }
@@ -408,8 +410,7 @@ fn draw_canvas_page_contents(
                 h,
                 strength,
                 style,
-            } => render_blur_rect(
-                ctx,
+            } => render.render_blur_rect(
                 BlurRectParams {
                     x: *x,
                     y: *y,
@@ -421,8 +422,7 @@ fn draw_canvas_page_contents(
                 },
                 &replay_ctx,
             ),
-            other => render_shape_over_with_halo(
-                ctx,
+            other => render.render_shape_over_with_halo(
                 other,
                 known_background_luminance,
                 page.text_halo_enabled,

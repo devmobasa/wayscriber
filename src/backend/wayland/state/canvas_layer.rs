@@ -92,14 +92,14 @@ impl CanvasLayerCache {
 /// Renders one committed shape with the standard eraser/blur replay handling.
 /// Shared between the direct canvas render path and the layer-cache bake.
 pub(in crate::backend::wayland) fn render_committed_shape(
-    ctx: &cairo::Context,
+    render: &mut crate::draw::RenderCtx<'_, '_>,
     drawn_shape: &crate::draw::DrawnShape,
     replay_ctx: &crate::draw::EraserReplayContext<'_>,
     text_halo_enabled: bool,
 ) {
     match &drawn_shape.shape {
         crate::draw::Shape::EraserStroke { points, brush } => {
-            crate::draw::render_eraser_stroke(ctx, points, brush, replay_ctx);
+            crate::draw::render_eraser_stroke(render.cairo, points, brush, replay_ctx);
         }
         crate::draw::Shape::BlurRect {
             x,
@@ -109,8 +109,7 @@ pub(in crate::backend::wayland) fn render_committed_shape(
             strength,
             style,
         } => {
-            crate::draw::render_blur_rect(
-                ctx,
+            render.render_blur_rect(
                 crate::draw::BlurRectParams {
                     x: *x,
                     y: *y,
@@ -124,7 +123,7 @@ pub(in crate::backend::wayland) fn render_committed_shape(
             );
         }
         other => {
-            crate::draw::render_shape_with_halo(ctx, other, text_halo_enabled);
+            render.render_shape_with_halo(other, text_halo_enabled);
         }
     }
 }
@@ -154,16 +153,10 @@ impl WaylandState {
         height: u32,
         scale: i32,
     ) -> bool {
-        let scale = scale.max(1);
-        let (origin_x, origin_y) = self.canvas_view_origin();
-        let view_x = origin_x.floor() as i32;
-        let view_y = origin_y.floor() as i32;
-        let logical_w = width.min(i32::MAX as u32) as i32;
-        let logical_h = height.min(i32::MAX as u32) as i32;
-        if logical_w <= 0 || logical_h <= 0 {
+        let origin = self.canvas_view_origin();
+        if width == 0 || height == 0 {
             return false;
         }
-
         let background = match self.input_state.boards.active_background() {
             crate::input::BoardBackground::Solid(color) => Some(*color),
             crate::input::BoardBackground::Transparent => None,
@@ -175,10 +168,65 @@ impl WaylandState {
         );
         let generation = self.input_state.canvas_content_generation();
         let frame = self.input_state.boards.active_frame();
-        let shapes_len = frame.shapes.len();
-        let last_shape_id = frame.shapes.last().map(|shape| shape.id);
+        let (cache, draw_caches) = self.render.canvas_draw_parts_mut();
+        cache.ensure(
+            draw_caches,
+            &frame.shapes,
+            CanvasLayerInputs {
+                width,
+                height,
+                scale,
+                origin,
+                background,
+                text_halo_enabled,
+                board_key,
+                generation,
+            },
+        )
+    }
+}
 
-        let cache = self.render.canvas_layer_cache();
+#[derive(Clone, Copy)]
+pub(super) struct CanvasLayerInputs {
+    pub(super) width: u32,
+    pub(super) height: u32,
+    pub(super) scale: i32,
+    pub(super) origin: (f64, f64),
+    pub(super) background: Option<Color>,
+    pub(super) text_halo_enabled: bool,
+    pub(super) board_key: (usize, usize),
+    pub(super) generation: u64,
+}
+
+impl CanvasLayerCache {
+    pub(super) fn ensure(
+        &mut self,
+        draw_caches: &mut crate::draw::RenderCaches,
+        shapes: &[crate::draw::DrawnShape],
+        inputs: CanvasLayerInputs,
+    ) -> bool {
+        let CanvasLayerInputs {
+            width,
+            height,
+            scale,
+            origin,
+            background,
+            text_halo_enabled,
+            board_key,
+            generation,
+        } = inputs;
+        let scale = scale.max(1);
+        let (origin_x, origin_y) = origin;
+        let view_x = origin_x.floor() as i32;
+        let view_y = origin_y.floor() as i32;
+        let logical_w = width.min(i32::MAX as u32) as i32;
+        let logical_h = height.min(i32::MAX as u32) as i32;
+        if logical_w <= 0 || logical_h <= 0 {
+            return false;
+        }
+        let shapes_len = shapes.len();
+        let last_shape_id = shapes.last().map(|shape| shape.id);
+        let cache = self;
         let params_match = cache.valid
             && cache.surface.is_some()
             && cache.scale == scale
@@ -204,37 +252,35 @@ impl WaylandState {
         let phys_w = bake_w.saturating_mul(scale);
         let phys_h = bake_h.saturating_mul(scale);
         if phys_w <= 0 || phys_h <= 0 || phys_w > CAIRO_MAX_DIM || phys_h > CAIRO_MAX_DIM {
-            self.render.canvas_layer_cache_mut().clear();
+            cache.clear();
             return false;
         }
         if phys_w as usize * phys_h as usize * 4 > MAX_CACHE_BYTES {
-            self.render.canvas_layer_cache_mut().clear();
+            cache.clear();
             return false;
         }
 
-        let reuse_surface = self
-            .render
-            .canvas_layer_cache_mut()
+        let reuse_surface = cache
             .surface
             .as_ref()
             .is_some_and(|surface| surface.width() == phys_w && surface.height() == phys_h);
         if !reuse_surface {
             match cairo::ImageSurface::create(cairo::Format::ARgb32, phys_w, phys_h) {
-                Ok(surface) => self.render.canvas_layer_cache_mut().surface = Some(surface),
+                Ok(surface) => cache.surface = Some(surface),
                 Err(err) => {
                     debug!("canvas layer cache: surface allocation failed: {err}");
-                    self.render.canvas_layer_cache_mut().clear();
+                    cache.clear();
                     return false;
                 }
             }
         }
 
         {
-            let Some(surface) = self.render.canvas_layer_cache_mut().surface.as_ref() else {
+            let Some(surface) = cache.surface.as_ref() else {
                 return false;
             };
             let Ok(bake_ctx) = cairo::Context::new(surface) else {
-                self.render.canvas_layer_cache_mut().clear();
+                cache.clear();
                 return false;
             };
 
@@ -267,20 +313,27 @@ impl WaylandState {
                 width: bake_w,
                 height: bake_h,
             };
-            let frame = self.input_state.boards.active_frame();
-            for drawn_shape in &frame.shapes {
+            let mut render = crate::draw::RenderCtx {
+                cairo: &bake_ctx,
+                caches: draw_caches,
+            };
+            for drawn_shape in shapes {
                 if let Some(bbox) = drawn_shape.bounding_box()
                     && rects_intersect(bbox, bake_bounds)
                 {
-                    render_committed_shape(&bake_ctx, drawn_shape, &replay_ctx, text_halo_enabled);
+                    render_committed_shape(
+                        &mut render,
+                        drawn_shape,
+                        &replay_ctx,
+                        text_halo_enabled,
+                    );
                 }
             }
         }
-        if let Some(surface) = self.render.canvas_layer_cache_mut().surface.as_ref() {
+        if let Some(surface) = cache.surface.as_ref() {
             surface.flush();
         }
 
-        let cache = self.render.canvas_layer_cache_mut();
         cache.world_x = world_x;
         cache.world_y = world_y;
         cache.width = bake_w;

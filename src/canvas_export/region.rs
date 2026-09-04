@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::draw::{RenderCaches, RenderCtx};
+
 use crate::canvas_export::page::{
     CanvasExportBackdropSnapshot, CanvasExportRect, CanvasPageExportSnapshot, ExportBackdrop,
     SpotlightPassSnapshot, draw_canvas_page_region,
@@ -160,6 +162,7 @@ fn packed_argb32_from_surface(
 pub(crate) fn render_canvas_region_pixels(
     snapshot: CanvasRegionExportSnapshot,
 ) -> Result<PackedArgb32, CaptureError> {
+    let mut caches = RenderCaches::default();
     let working_selection = snapshot
         .source
         .magnifier_working_selection(snapshot.selection, &snapshot.frame)
@@ -209,7 +212,7 @@ pub(crate) fn render_canvas_region_pixels(
     )
     .expect("validated non-empty destination");
     draw_canvas_page_region(
-        &ctx,
+        &mut RenderCtx::new(&ctx, &mut caches),
         &page,
         &backdrop,
         working_source_rect,

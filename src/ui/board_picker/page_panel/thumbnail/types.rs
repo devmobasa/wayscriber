@@ -2,8 +2,8 @@ use crate::input::BoardBackground;
 
 pub(in crate::ui::board_picker::page_panel) const PREVIEW_SCALE: f64 = 1.6;
 
-pub(in crate::ui::board_picker::page_panel) struct PageThumbnailArgs<'a> {
-    pub(in crate::ui::board_picker::page_panel) ctx: &'a cairo::Context,
+pub(in crate::ui::board_picker::page_panel) struct PageThumbnailArgs<'a, 'c, 'r> {
+    pub(in crate::ui::board_picker::page_panel) render: &'a mut crate::draw::RenderCtx<'c, 'r>,
     pub(in crate::ui::board_picker::page_panel) frame: &'a crate::draw::Frame,
     pub(in crate::ui::board_picker::page_panel) background: &'a BoardBackground,
     pub(in crate::ui::board_picker::page_panel) x: f64,
@@ -25,8 +25,8 @@ pub(in crate::ui::board_picker::page_panel) struct PageThumbnailArgs<'a> {
     pub(in crate::ui::board_picker::page_panel) rename_hovered: bool,
 }
 
-pub(in crate::ui::board_picker::page_panel) struct PagePreviewArgs<'a> {
-    pub(in crate::ui::board_picker::page_panel) ctx: &'a cairo::Context,
+pub(in crate::ui::board_picker::page_panel) struct PagePreviewArgs<'a, 'c, 'r> {
+    pub(in crate::ui::board_picker::page_panel) render: &'a mut crate::draw::RenderCtx<'c, 'r>,
     pub(in crate::ui::board_picker::page_panel) frame: &'a crate::draw::Frame,
     pub(in crate::ui::board_picker::page_panel) background: &'a BoardBackground,
     pub(in crate::ui::board_picker::page_panel) thumb_x: f64,
@@ -39,8 +39,8 @@ pub(in crate::ui::board_picker::page_panel) struct PagePreviewArgs<'a> {
     pub(in crate::ui::board_picker::page_panel) page_number: usize,
 }
 
-pub(in crate::ui::board_picker::page_panel) struct PageContentArgs<'a> {
-    pub(in crate::ui::board_picker::page_panel) ctx: &'a cairo::Context,
+pub(in crate::ui::board_picker::page_panel) struct PageContentArgs<'a, 'c, 'r> {
+    pub(in crate::ui::board_picker::page_panel) render: &'a mut crate::draw::RenderCtx<'c, 'r>,
     pub(in crate::ui::board_picker::page_panel) frame: &'a crate::draw::Frame,
     pub(in crate::ui::board_picker::page_panel) background: &'a BoardBackground,
     pub(in crate::ui::board_picker::page_panel) x: f64,

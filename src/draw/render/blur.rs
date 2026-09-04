@@ -1,10 +1,7 @@
 use super::types::EraserReplayContext;
 use crate::draw::shape::BlurStyle;
 use crate::util::normalize_i32_rect;
-use std::{
-    cell::RefCell,
-    collections::{HashMap, VecDeque},
-};
+use std::collections::{HashMap, VecDeque};
 
 const PLACEHOLDER_FILL: (f64, f64, f64, f64) = (0.12, 0.15, 0.2, 0.82);
 const PLACEHOLDER_STROKE: (f64, f64, f64, f64) = (0.92, 0.94, 0.98, 0.35);
@@ -85,7 +82,7 @@ struct CachedBlurRegion {
     approx_bytes: usize,
 }
 
-struct BlurRenderCache {
+pub(super) struct BlurRenderCache {
     entries: HashMap<BlurCacheKey, CachedBlurRegion>,
     access_order: VecDeque<BlurCacheKey>,
     max_entries: usize,
@@ -144,10 +141,10 @@ impl BlurRenderCache {
     }
 }
 
-thread_local! {
-    static BLUR_RENDER_CACHE: RefCell<BlurRenderCache> = RefCell::new(
-        BlurRenderCache::new(BLUR_CACHE_MAX_ENTRIES, BLUR_CACHE_MAX_BYTES)
-    );
+impl Default for BlurRenderCache {
+    fn default() -> Self {
+        Self::new(BLUR_CACHE_MAX_ENTRIES, BLUR_CACHE_MAX_BYTES)
+    }
 }
 
 fn blur_rect_geometry(x: i32, y: i32, w: i32, h: i32) -> (f64, f64, f64, f64) {
@@ -433,18 +430,19 @@ fn build_blur_cache_key(
 }
 
 fn cacheable_blur_entry(
+    cache: &mut BlurRenderCache,
     cache_key: Option<BlurCacheKey>,
     compute: impl FnOnce() -> Option<CachedBlurRegion>,
 ) -> Option<CachedBlurRegion> {
     if let Some(key) = cache_key
-        && let Some(entry) = BLUR_RENDER_CACHE.with(|cache| cache.borrow_mut().get(&key))
+        && let Some(entry) = cache.get(&key)
     {
         return Some(entry);
     }
 
     let entry = compute()?;
     if let Some(key) = cache_key {
-        return Some(BLUR_RENDER_CACHE.with(|cache| cache.borrow_mut().insert(key, entry)));
+        return Some(cache.insert(key, entry));
     }
     Some(entry)
 }
@@ -499,7 +497,19 @@ fn render_blur_region(
     })
 }
 
+/// Paints a blur rectangle using temporary drawing caches. Repeated painting
+/// should use [`super::RenderCtx::render_blur_rect`] with a persistent owner.
 pub fn render_blur_rect(
+    ctx: &cairo::Context,
+    params: BlurRectParams,
+    replay_ctx: &EraserReplayContext<'_>,
+) {
+    super::RenderCtx::new(ctx, &mut super::RenderCaches::default())
+        .render_blur_rect(params, replay_ctx);
+}
+
+pub(super) fn render_blur_rect_with_cache(
+    cache: &mut BlurRenderCache,
     ctx: &cairo::Context,
     params: BlurRectParams,
     replay_ctx: &EraserReplayContext<'_>,
@@ -552,7 +562,7 @@ pub fn render_blur_rect(
     let cache_key = cacheable
         .then(|| build_blur_cache_key(replay_ctx, recipe, style, src_x, src_y, src_w, src_h));
     let cache_key = cache_key.flatten();
-    let Some(blurred) = cacheable_blur_entry(cache_key, || {
+    let Some(blurred) = cacheable_blur_entry(cache, cache_key, || {
         render_blur_region(surface, src_x, src_y, src_w, src_h, recipe, style)
     }) else {
         render_blur_placeholder(ctx, x, y, w, h, false);
