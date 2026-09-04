@@ -1,3 +1,5 @@
+mod bounds;
+
 use super::*;
 use crate::draw::shape::text_cache::{VisualCaretDirection, VisualLineDirection, VisualLineEdge};
 

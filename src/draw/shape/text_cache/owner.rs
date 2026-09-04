@@ -4,8 +4,8 @@ use std::cell::RefCell;
 /// Canonical shape text measurements and cursor geometry for one owner.
 /// Construction creates no Cairo/Pango resources. All geometry uses the same
 /// measurement policy regardless of the eventual drawing destination.
-pub(crate) struct TextMeasurer {
-    pub(super) cache: RefCell<TextMeasurementCache>,
+pub struct TextMeasurer {
+    cache: RefCell<TextMeasurementCache>,
     context: RefCell<Option<cairo::Context>>,
 }
 

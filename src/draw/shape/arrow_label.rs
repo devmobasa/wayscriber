@@ -2,6 +2,7 @@ use crate::draw::{ArrowStyle, FontDescriptor};
 use crate::util::Rect;
 
 use super::text::{text_bounds_from_metrics, text_layout_metrics};
+use super::text_cache::{TextMeasurer, with_legacy_measurer};
 
 pub(crate) const ARROW_LABEL_BACKGROUND: bool = true;
 
@@ -64,6 +65,35 @@ pub(crate) fn arrow_label_layout(
     label_size: f64,
     font_descriptor: &FontDescriptor,
 ) -> Option<ArrowLabelLayout> {
+    with_legacy_measurer(|measurer| {
+        arrow_label_layout_with(
+            measurer,
+            tip_x,
+            tip_y,
+            tail_x,
+            tail_y,
+            thick,
+            bend,
+            label_text,
+            label_size,
+            font_descriptor,
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn arrow_label_layout_with(
+    measurer: &TextMeasurer,
+    tip_x: i32,
+    tip_y: i32,
+    tail_x: i32,
+    tail_y: i32,
+    thick: f64,
+    bend: f64,
+    label_text: &str,
+    label_size: f64,
+    font_descriptor: &FontDescriptor,
+) -> Option<ArrowLabelLayout> {
     if label_text.is_empty() {
         return None;
     }
@@ -109,7 +139,7 @@ pub(crate) fn arrow_label_layout(
     let anchor_x = base_x + nx * offset;
     let anchor_y = base_y + ny * offset;
 
-    let metrics = text_layout_metrics(label_text, label_size, font_descriptor, None)?;
+    let metrics = text_layout_metrics(measurer, label_text, label_size, font_descriptor, None)?;
     let center_offset_x = metrics.ink_x + metrics.ink_width / 2.0;
     let center_offset_y = metrics.ink_y + metrics.ink_height / 2.0;
 

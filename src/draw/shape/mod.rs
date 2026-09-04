@@ -15,6 +15,8 @@ pub use polygon::{
     REGULAR_POLYGON_MIN_SIDES, clamp_regular_sides,
 };
 pub use smoothing::{MAX_PEN_SMOOTHING, clamp_pen_smoothing, smooth_path, smooth_pressure_path};
+pub use text_cache::TextMeasurer;
+pub(crate) use text_cache::with_legacy_measurer;
 pub use types::{
     ArrowLabel, ArrowStyle, BlurStyle, EmbeddedImage, EraserBrush, EraserKind, Shape,
     StepMarkerLabel,

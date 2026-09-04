@@ -3,7 +3,7 @@ mod cursor;
 mod owner;
 
 use cache::{TextCacheKey, TextMeasurementCache};
-use owner::TextMeasurer;
+pub use owner::TextMeasurer;
 
 /// Cached text measurement results from Pango layout.
 #[derive(Clone, Debug)]
@@ -52,7 +52,7 @@ thread_local! {
     static LEGACY_TEXT_MEASURER: TextMeasurer = TextMeasurer::default();
 }
 
-fn with_legacy_measurer<R>(f: impl FnOnce(&TextMeasurer) -> R) -> R {
+pub(crate) fn with_legacy_measurer<R>(f: impl FnOnce(&TextMeasurer) -> R) -> R {
     LEGACY_TEXT_MEASURER.with(f)
 }
 
@@ -114,7 +114,7 @@ pub(crate) fn measure_text_with_context(
     size: f64,
     wrap_width: Option<i32>,
 ) -> Option<TextMeasurement> {
-    with_legacy_measurer(|measurer| measurer.measure(text, font_desc_str, size, wrap_width))
+    measure_text_cached(text, font_desc_str, size, wrap_width)
 }
 
 /// Hit-test a point against a rendered text run, returning the caret byte

@@ -2,16 +2,26 @@ use crate::draw::FontDescriptor;
 use crate::util::Rect;
 
 use super::bounds::ensure_positive_rect_f64;
-use super::text_cache::measure_text_cached;
+use super::text_cache::{TextMeasurer, with_legacy_measurer};
 
 const STEP_MARKER_PADDING_RATIO: f64 = 0.45;
 const STEP_MARKER_PADDING_MIN: f64 = 6.0;
 const STEP_MARKER_MIN_RADIUS: f64 = 10.0;
 
 pub(crate) fn step_marker_radius(value: u32, size: f64, font_descriptor: &FontDescriptor) -> f64 {
+    with_legacy_measurer(|measurer| step_marker_radius_with(measurer, value, size, font_descriptor))
+}
+
+pub(crate) fn step_marker_radius_with(
+    measurer: &TextMeasurer,
+    value: u32,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+) -> f64 {
     let text = value.to_string();
     let font_desc_str = font_descriptor.to_pango_string(size);
-    let max_dim = measure_text_cached(&text, &font_desc_str, size, None)
+    let max_dim = measurer
+        .measure(&text, &font_desc_str, size, None)
         .map(|m| m.ink_width.max(m.ink_height))
         .unwrap_or(size * 0.6);
     let padding = (size * STEP_MARKER_PADDING_RATIO).max(STEP_MARKER_PADDING_MIN);
@@ -22,14 +32,15 @@ pub(crate) fn step_marker_outline_thickness(size: f64) -> f64 {
     (size * 0.12).max(1.5)
 }
 
-pub(crate) fn step_marker_bounds(
+pub(crate) fn step_marker_bounds_with(
+    measurer: &TextMeasurer,
     x: i32,
     y: i32,
     value: u32,
     size: f64,
     font_descriptor: &FontDescriptor,
 ) -> Option<Rect> {
-    let radius = step_marker_radius(value, size, font_descriptor);
+    let radius = step_marker_radius_with(measurer, value, size, font_descriptor);
     let outline = step_marker_outline_thickness(size);
     let total = radius + (outline / 2.0);
     ensure_positive_rect_f64(
@@ -65,7 +76,8 @@ mod tests {
     #[test]
     fn step_marker_bounds_are_centered_around_marker_position() {
         let font = FontDescriptor::default();
-        let bounds = step_marker_bounds(50, 75, 3, 18.0, &font).expect("step marker bounds");
+        let bounds = step_marker_bounds_with(&TextMeasurer::default(), 50, 75, 3, 18.0, &font)
+            .expect("step marker bounds");
 
         assert!(bounds.contains(50, 75));
         assert!(bounds.width > 0);
@@ -77,8 +89,15 @@ mod tests {
         let font = FontDescriptor::default();
 
         for coordinate in [i32::MIN, i32::MAX] {
-            let bounds = step_marker_bounds(coordinate, coordinate, 3, 18.0, &font)
-                .expect("edge marker should retain visible bounds");
+            let bounds = step_marker_bounds_with(
+                &TextMeasurer::default(),
+                coordinate,
+                coordinate,
+                3,
+                18.0,
+                &font,
+            )
+            .expect("edge marker should retain visible bounds");
             assert!(bounds.contains(coordinate, coordinate));
         }
     }

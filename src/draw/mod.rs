@@ -46,11 +46,12 @@ pub use render::{
     render_text_over_with_halo, render_text_with_halo, selection_handle_rects,
     spotlight_regions_for_frame, sticky_note_foreground, text_outline_color,
 };
+pub(crate) use shape::with_legacy_measurer;
 #[allow(unused_imports)]
 pub use shape::{
     ArrowLabel, ArrowStyle, BlurStyle, EmbeddedImage, EraserBrush, EraserKind, MAX_PEN_SMOOTHING,
     PolygonKind, REGULAR_POLYGON_DEFAULT_SIDES, REGULAR_POLYGON_MAX_SIDES,
-    REGULAR_POLYGON_MIN_SIDES, Shape, StepMarkerLabel, clamp_regular_sides,
+    REGULAR_POLYGON_MIN_SIDES, Shape, StepMarkerLabel, TextMeasurer, clamp_regular_sides,
 };
 pub use spotlight::{
     DEFAULT_SPOTLIGHT_MAGNIFICATION, MAX_SPOTLIGHT_MAGNIFICATION, MIN_SPOTLIGHT_MAGNIFICATION,

@@ -2,9 +2,10 @@ use crate::draw::font::FontDescriptor;
 use crate::util::Rect;
 
 use super::bounds::ensure_positive_rect_f64;
-use super::text_cache::{TextContentExtents, TextMeasurement, measure_text_cached};
+use super::text_cache::{TextContentExtents, TextMeasurement, TextMeasurer, with_legacy_measurer};
 
 pub(super) fn text_layout_metrics(
+    measurer: &TextMeasurer,
     text: &str,
     size: f64,
     font_descriptor: &FontDescriptor,
@@ -16,7 +17,7 @@ pub(super) fn text_layout_metrics(
 
     // Use cached text measurement instead of creating a new surface each time
     let font_desc_str = font_descriptor.to_pango_string(size);
-    let measurement = measure_text_cached(text, &font_desc_str, size, wrap_width)?;
+    let measurement = measurer.measure(text, &font_desc_str, size, wrap_width)?;
 
     Some(measurement)
 }
@@ -82,7 +83,32 @@ pub(crate) fn bounding_box_for_text(
     background_enabled: bool,
     wrap_width: Option<i32>,
 ) -> Option<Rect> {
-    let metrics = text_layout_metrics(text, size, font_descriptor, wrap_width)?;
+    with_legacy_measurer(|measurer| {
+        bounding_box_for_text_with(
+            measurer,
+            x,
+            y,
+            text,
+            size,
+            font_descriptor,
+            background_enabled,
+            wrap_width,
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn bounding_box_for_text_with(
+    measurer: &TextMeasurer,
+    x: i32,
+    y: i32,
+    text: &str,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    background_enabled: bool,
+    wrap_width: Option<i32>,
+) -> Option<Rect> {
+    let metrics = text_layout_metrics(measurer, text, size, font_descriptor, wrap_width)?;
     text_bounds_from_metrics(
         x as f64,
         y as f64,
@@ -206,7 +232,8 @@ pub(crate) fn sticky_note_text_layout(
     }
 }
 
-pub(crate) fn bounding_box_for_sticky_note(
+pub(crate) fn bounding_box_for_sticky_note_with(
+    measurer: &TextMeasurer,
     x: i32,
     y: i32,
     text: &str,
@@ -217,7 +244,7 @@ pub(crate) fn bounding_box_for_sticky_note(
     if text.is_empty() {
         return None;
     }
-    bounding_box_for_sticky_note_layout(x, y, text, size, font_descriptor, wrap_width)
+    bounding_box_for_sticky_note_layout(measurer, x, y, text, size, font_descriptor, wrap_width)
 }
 
 pub(crate) fn bounding_box_for_sticky_note_preview(
@@ -228,7 +255,30 @@ pub(crate) fn bounding_box_for_sticky_note_preview(
     font_descriptor: &FontDescriptor,
     wrap_width: Option<i32>,
 ) -> Option<Rect> {
+    with_legacy_measurer(|measurer| {
+        bounding_box_for_sticky_note_preview_with(
+            measurer,
+            x,
+            y,
+            text,
+            size,
+            font_descriptor,
+            wrap_width,
+        )
+    })
+}
+
+pub(crate) fn bounding_box_for_sticky_note_preview_with(
+    measurer: &TextMeasurer,
+    x: i32,
+    y: i32,
+    text: &str,
+    size: f64,
+    font_descriptor: &FontDescriptor,
+    wrap_width: Option<i32>,
+) -> Option<Rect> {
     bounding_box_for_sticky_note_layout(
+        measurer,
         x,
         y,
         sticky_note_layout_text(text),
@@ -239,6 +289,7 @@ pub(crate) fn bounding_box_for_sticky_note_preview(
 }
 
 fn bounding_box_for_sticky_note_layout(
+    measurer: &TextMeasurer,
     x: i32,
     y: i32,
     text: &str,
@@ -248,7 +299,7 @@ fn bounding_box_for_sticky_note_layout(
 ) -> Option<Rect> {
     // Use cached text measurement instead of creating a new surface each time
     let font_desc_str = font_descriptor.to_pango_string(size);
-    let measurement = measure_text_cached(text, &font_desc_str, size, wrap_width)?;
+    let measurement = measurer.measure(text, &font_desc_str, size, wrap_width)?;
 
     let base_x = x as f64;
     let base_y = y as f64 - measurement.baseline;
