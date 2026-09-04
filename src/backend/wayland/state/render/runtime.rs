@@ -157,6 +157,7 @@ impl RenderRuntime {
 
 #[cfg(test)]
 mod tests {
+    use super::super::tool_preview::mouse_tool_preview_damage_rect;
     use super::*;
 
     fn rect(x: i32) -> Rect {
@@ -191,15 +192,35 @@ mod tests {
     }
 
     #[test]
-    fn disappearing_effect_damages_its_old_footprint() {
+    fn tool_preview_appearance_motion_and_disappearance_roll_rendered_bounds() {
         let mut history = UiDamageHistory::default();
         let mut regions = Vec::new();
-        history.roll(UiEffect::ZoomChip, Some(rect(5)), &mut regions);
+        let first = mouse_tool_preview_damage_rect(8.0, (100.0, 100.0), 800, 600)
+            .expect("first preview footprint");
+        let moved = mouse_tool_preview_damage_rect(8.0, (400.0, 400.0), 800, 600)
+            .expect("moved preview footprint");
+        assert_ne!(first, moved);
+
+        history.roll(UiEffect::ToolPreview, Some(first), &mut regions);
+        assert_eq!(regions, vec![first]);
+        assert_eq!(history.previous(UiEffect::ToolPreview), Some(first));
         regions.clear();
 
-        history.roll(UiEffect::ZoomChip, None, &mut regions);
+        history.roll(UiEffect::ToolPreview, Some(moved), &mut regions);
+        assert_eq!(regions, vec![first, moved]);
+        assert_eq!(history.previous(UiEffect::ToolPreview), Some(moved));
+        regions.clear();
 
-        assert_eq!(regions, vec![rect(5)]);
+        history.roll(UiEffect::ToolPreview, None, &mut regions);
+        assert_eq!(regions, vec![moved]);
+        assert_eq!(history.previous(UiEffect::ToolPreview), None);
+        regions.clear();
+
+        history.roll(UiEffect::ToolPreview, None, &mut regions);
+        assert!(
+            regions.is_empty(),
+            "the hidden preview is cleared only once"
+        );
     }
 
     #[test]

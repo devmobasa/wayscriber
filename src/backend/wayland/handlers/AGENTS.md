@@ -12,6 +12,7 @@
 ## Invariants
 - Keep handlers thin; do not bury durable business logic in protocol callbacks.
 - Preserve coordinate transforms, modifier synchronization, seat/device lifetimes, frame/callback ordering, and tablet feature gating.
+- Keep pending chrome targets separate from device-owned release suppression; target cleanup preserves both latches, and touch cancellation clears only Touch suppression.
 - Route protocol surfaces through `SurfaceRouter`; do not add modality-specific canvas/toolbar classifiers.
 - Avoid blocking protocol callback paths.
 

@@ -18,18 +18,18 @@ pub fn decode_image_to_argb(data: &[u8]) -> Result<(Vec<u8>, u32, u32), CaptureE
 
     let mut argb = Vec::with_capacity((info.width * info.height * 4) as usize);
     let iter: Box<dyn Iterator<Item = (u8, u8, u8, u8)>> = match info.color_type {
-        png::ColorType::Rgba => Box::new(buf[..info.buffer_size()].chunks_exact(4).map(|c| {
-            let [r, g, b, a] = *c else {
-                return (0, 0, 0, 0);
-            };
-            (r, g, b, a)
-        })),
-        png::ColorType::Rgb => Box::new(buf[..info.buffer_size()].chunks_exact(3).map(|c| {
-            let [r, g, b] = *c else {
-                return (0, 0, 0, 0xFF);
-            };
-            (r, g, b, 0xFF)
-        })),
+        png::ColorType::Rgba => Box::new(buf[..info.buffer_size()].as_chunks::<4>().0.iter().map(
+            |c| {
+                let [r, g, b, a] = *c;
+                (r, g, b, a)
+            },
+        )),
+        png::ColorType::Rgb => Box::new(buf[..info.buffer_size()].as_chunks::<3>().0.iter().map(
+            |c| {
+                let [r, g, b] = *c;
+                (r, g, b, 0xFF)
+            },
+        )),
         other => {
             return Err(CaptureError::ImageError(format!(
                 "Unsupported PNG color type: {:?}",

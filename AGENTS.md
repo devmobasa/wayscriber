@@ -4,7 +4,7 @@
 - This file applies to the whole wayscriber workspace.
 - wayscriber is a Rust desktop annotation app for Wayland compositors.
 - The workspace root crate is `wayscriber`; `configurator/` is a separate GTK4/libadwaita (Relm4) desktop configurator crate.
-- Both crates use Rust 1.95 and edition 2024.
+- Both crates use Rust 1.98.1 and edition 2024; `rust-toolchain.toml` pins the development toolchain.
 - The workspace default member is only the root crate; use `-p wayscriber-configurator` or `--workspace` when configurator coverage is needed.
 
 ## Architecture

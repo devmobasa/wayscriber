@@ -275,7 +275,7 @@ impl BufferDamageTracker {
                 (true, full_reason, Vec::new())
             } else {
                 // Take and deduplicate regions
-                let mut regions: Vec<Rect> = damage.regions.drain(..).collect();
+                let mut regions = std::mem::take(&mut damage.regions);
                 regions.retain(Rect::is_valid);
                 (false, None, regions)
             }

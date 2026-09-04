@@ -111,7 +111,7 @@ mod tests {
                         let alpha_at = |x: usize, y: usize| pixels[y * stride + x * 4 + 3];
                         let last = size as usize - 1;
                         assert!(
-                            pixels.chunks_exact(4).any(|pixel| pixel[3] != 0),
+                            pixels.as_chunks::<4>().0.iter().any(|pixel| pixel[3] != 0),
                             "{name} rendered empty at {size}px"
                         );
                         let touches_edge = (0..=last).any(|position| {

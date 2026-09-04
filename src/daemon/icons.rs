@@ -35,7 +35,7 @@ fn decode_icon_png(bytes: &[u8]) -> Option<ksni::Icon> {
     // expand channels to ARGB with duplicated gray.
     match info.color_type {
         png::ColorType::Rgba => {
-            for chunk in bytes.chunks_exact(4) {
+            for chunk in bytes.as_chunks::<4>().0 {
                 data.push(chunk[3]); // A
                 data.push(chunk[0]); // R
                 data.push(chunk[1]); // G
@@ -43,7 +43,7 @@ fn decode_icon_png(bytes: &[u8]) -> Option<ksni::Icon> {
             }
         }
         png::ColorType::GrayscaleAlpha => {
-            for chunk in bytes.chunks_exact(2) {
+            for chunk in bytes.as_chunks::<2>().0 {
                 let g = chunk[0];
                 let a = chunk[1];
                 data.push(a);
@@ -61,7 +61,7 @@ fn decode_icon_png(bytes: &[u8]) -> Option<ksni::Icon> {
             }
         }
         png::ColorType::Rgb => {
-            for chunk in bytes.chunks_exact(3) {
+            for chunk in bytes.as_chunks::<3>().0 {
                 data.push(255);
                 data.push(chunk[0]);
                 data.push(chunk[1]);
@@ -93,7 +93,13 @@ mod tests {
         for icon in icons {
             assert_eq!(icon.width, icon.height);
             assert_eq!(icon.data.len(), (icon.width * icon.height * 4) as usize);
-            assert!(icon.data.chunks_exact(4).any(|pixel| pixel[0] > 0));
+            assert!(
+                icon.data
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .any(|pixel| pixel[0] > 0)
+            );
         }
     }
 }

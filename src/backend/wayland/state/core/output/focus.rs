@@ -83,7 +83,6 @@ impl WaylandState {
             window.set_fullscreen(Some(&target_output));
             window.commit();
             self.surface.set_current_output(target_output);
-            self.focus.clear_surface_enter();
             self.refresh_active_output_label();
             self.begin_session_output_transition(target_identity, "output switch");
             self.request_xdg_activation(qh);
@@ -101,7 +100,6 @@ impl WaylandState {
         self.teardown_keyboard_focus();
         self.recreate_layer_surface_for_output(qh, &target_output);
         self.surface.set_current_output(target_output);
-        self.focus.clear_surface_enter();
         self.refresh_active_output_label();
         self.begin_session_output_transition(target_identity, "output switch");
         self.input_state.needs_redraw = true;

@@ -19,7 +19,6 @@ pub(in crate::backend::wayland) struct FocusState {
     has_pointer_focus: bool,
     current_seat: Option<wl_seat::WlSeat>,
     last_activation_serial: Option<u32>,
-    has_seen_surface_enter: bool,
     overlay_ready: bool,
     suppress_focus_exit_until: Option<Instant>,
     xdg_close_guard_until: Option<Instant>,
@@ -37,7 +36,6 @@ impl FocusState {
             has_pointer_focus: false,
             current_seat: None,
             last_activation_serial: None,
-            has_seen_surface_enter: false,
             overlay_ready: false,
             suppress_focus_exit_until: None,
             xdg_close_guard_until: None,
@@ -201,14 +199,6 @@ impl FocusState {
 
     pub(in crate::backend::wayland) fn take_xdg_explicit_close_requested(&mut self) -> bool {
         std::mem::take(&mut self.xdg_explicit_close_requested)
-    }
-
-    pub(in crate::backend::wayland) fn note_surface_enter(&mut self) {
-        self.has_seen_surface_enter = true;
-    }
-
-    pub(in crate::backend::wayland) fn clear_surface_enter(&mut self) {
-        self.has_seen_surface_enter = false;
     }
 
     pub(in crate::backend::wayland) fn activation_token_to_apply(&self) -> Option<String> {

@@ -318,8 +318,10 @@ mod tests {
     fn ids_of(pixels: &PackedArgb32) -> Vec<u32> {
         pixels
             .data()
-            .chunks_exact(4)
-            .map(|chunk| u32::from_ne_bytes(chunk.try_into().expect("pixel")))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|chunk| u32::from_ne_bytes(*chunk))
             .collect()
     }
 

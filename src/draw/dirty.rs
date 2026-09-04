@@ -111,7 +111,7 @@ impl DirtyTracker {
             self.force_full_reason = None;
             self.regions.retain(Rect::is_valid);
             DirtyRegionReport {
-                regions: self.regions.drain(..).collect(),
+                regions: std::mem::take(&mut self.regions),
                 full_reason: None,
             }
         }
