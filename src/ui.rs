@@ -41,13 +41,11 @@ pub(crate) use eyedropper_loupe::{compute_eyedropper_loupe_layout, render_eyedro
 pub use font_picker::render_font_picker;
 #[allow(unused_imports)]
 pub use help_overlay::HelpOverlayBindings;
-#[cfg(test)]
-pub use help_overlay::install_help_hit_map_for_test;
 pub(crate) use help_overlay::render_help_overlay_result_with_context;
 #[allow(unused_imports)]
 pub use help_overlay::{
-    HelpHitMap, HelpOverlayRegion, HelpRenderResult, clear_help_overlay_hit_map,
-    help_overlay_region_at, render_help_overlay, render_help_overlay_result,
+    HelpHitMap, HelpOverlayRegion, HelpRenderResult, render_help_overlay,
+    render_help_overlay_result,
 };
 pub use input_hud::{input_hud_geometry, render_input_hud};
 pub(crate) use measure_badge::{

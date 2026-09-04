@@ -8,7 +8,6 @@ mod entry;
 mod footer;
 mod frame;
 mod header;
-mod hit;
 mod metrics;
 mod palette;
 mod state;
@@ -18,17 +17,12 @@ use crate::config::{Action, action_label};
 use crate::label_format::NOT_BOUND_LABEL;
 use crate::ui_text::{UiTextStyle, draw_text_baseline};
 pub(in crate::ui) use cache::HelpLayoutCache;
-#[cfg(test)]
-pub(crate) use entry::render_help_overlay_with_context;
 pub use entry::{render_help_overlay, render_help_overlay_result};
 use footer::{FooterPill, FooterPillLayout, draw_footer_pills};
 use frame::draw_overlay_frame;
 use header::{HeaderContent, HeaderHint, draw_hints, draw_version_pill};
 
 pub use crate::help_overlay_interaction::{HelpHitMap, HelpOverlayRegion, HelpRenderResult};
-#[cfg(test)]
-pub use hit::install_help_hit_map_for_test;
-pub use hit::{clear_help_overlay_hit_map, help_overlay_region_at};
 
 const BULLET: &str = "\u{2022}";
 

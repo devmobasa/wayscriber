@@ -266,8 +266,7 @@ fn help_overlay_footer_offers_clickable_replay_and_about() {
     let (_surface, ctx) = surface_with_context(1400, 1000);
     let input = make_input_state();
     let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
-    wayscriber::ui::clear_help_overlay_hit_map();
-    wayscriber::ui::render_help_overlay(
+    let result = wayscriber::ui::render_help_overlay_result(
         &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,
     );
     drop(ctx);
@@ -276,7 +275,7 @@ fn help_overlay_footer_offers_clickable_replay_and_about() {
     for y in 0..1000 {
         for x in 0..1400 {
             if let Some(HelpOverlayRegion::Row(action)) =
-                wayscriber::ui::help_overlay_region_at(x as f64, y as f64)
+                result.hit_map.region_at(x as f64, y as f64)
                 && !found.contains(&action)
             {
                 found.push(action);
@@ -292,18 +291,16 @@ fn help_overlay_footer_offers_clickable_replay_and_about() {
         found.contains(&Action::OpenAbout),
         "about is clickable from the help overlay: {found:?}"
     );
-    wayscriber::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
-fn help_result_owns_rendered_footer_hits_and_preserves_legacy_paint_pixels() {
+fn help_result_owns_rendered_footer_hits_and_matches_drawing_only_pixels() {
     use wayscriber::ui::HelpOverlayRegion;
 
     let style = HelpOverlayStyle::default();
     let input = make_input_state();
     let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
     let (mut owned_surface, ctx) = surface_with_context(1400, 1000);
-    wayscriber::ui::clear_help_overlay_hit_map();
     let result = wayscriber::ui::render_help_overlay_result(
         &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,
     );
@@ -320,16 +317,8 @@ fn help_result_owns_rendered_footer_hits_and_preserves_legacy_paint_pixels() {
             }
         }
     }
-    for point in [
-        replay.expect("rendered Replay tour target"),
-        about.expect("rendered About target"),
-    ] {
-        assert_eq!(
-            wayscriber::ui::help_overlay_region_at(point.0 as f64, point.1 as f64),
-            None,
-            "owned result must not install the legacy singleton"
-        );
-    }
+    replay.expect("rendered Replay tour target");
+    about.expect("rendered About target");
 
     let mut interactive = make_input_state();
     interactive.install_help_overlay_render_result(result.clone());
@@ -339,25 +328,45 @@ fn help_result_owns_rendered_footer_hits_and_preserves_legacy_paint_pixels() {
         wayscriber::input::state::HelpOverlayClick::Run(Action::OpenAbout),
     );
 
-    let (mut legacy_surface, ctx) = surface_with_context(1400, 1000);
+    let (mut drawing_surface, ctx) = surface_with_context(1400, 1000);
     let scroll = wayscriber::ui::render_help_overlay(
         &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,
     );
     drop(ctx);
     assert_eq!(result.scroll_max, scroll);
     owned_surface.flush();
-    legacy_surface.flush();
+    drawing_surface.flush();
     let owned = owned_surface.data().unwrap();
-    let legacy = legacy_surface.data().unwrap();
+    let drawing = drawing_surface.data().unwrap();
     assert!(
-        owned[..] == legacy[..],
-        "result and legacy paths must paint identical pixels"
+        owned[..] == drawing[..],
+        "result and drawing-only paths must paint identical pixels"
     );
-    wayscriber::ui::clear_help_overlay_hit_map();
+    let (_surface, ctx) = surface_with_context(320, 240);
+    wayscriber::ui::render_help_overlay(
+        &ctx,
+        &style,
+        320,
+        240,
+        false,
+        0,
+        &bindings,
+        "no matching action",
+        false,
+        false,
+        false,
+        0.0,
+        true,
+    );
+    assert_eq!(
+        interactive.help_overlay_click_at(about_x, about_y),
+        wayscriber::input::state::HelpOverlayClick::Run(Action::OpenAbout),
+        "painting another overlay must not replace the installed owner's map",
+    );
     let (x, y) = about.unwrap();
     assert_eq!(
         result.hit_map.region_at(x as f64, y as f64),
         Some(HelpOverlayRegion::Row(Action::OpenAbout)),
-        "clearing the legacy map must not erase the owned result"
+        "another paint must not replace the owned result"
     );
 }

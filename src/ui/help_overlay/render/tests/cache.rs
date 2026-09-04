@@ -169,7 +169,7 @@ fn paint(caches: &mut crate::ui::UiRenderCaches, inputs: &Inputs, scroll: f64) -
             theme: &theme,
             caches,
         };
-        extent = super::super::render_help_overlay_with_context(
+        extent = super::super::render_help_overlay_result_with_context(
             &mut render,
             &inputs.style,
             inputs.width,
@@ -183,7 +183,8 @@ fn paint(caches: &mut crate::ui::UiRenderCaches, inputs: &Inputs, scroll: f64) -
             inputs.capture,
             scroll,
             inputs.quick,
-        );
+        )
+        .scroll_max;
     }
     surface.flush();
     (surface.data().unwrap().to_vec(), extent)
