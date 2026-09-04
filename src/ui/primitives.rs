@@ -424,7 +424,7 @@ pub(crate) const BADGE_RADIUS: f64 = 8.0;
 /// Vertical gap between stacked floating badges.
 pub(crate) const BADGE_STACK_GAP: f64 = 8.0;
 
-/// Horizontal anchoring for [`draw_badge`].
+/// Horizontal anchoring for [`draw_badge_with_engine`].
 pub(crate) enum BadgeAlign {
     /// `anchor_x` is the badge's left edge.
     Left,
@@ -433,7 +433,7 @@ pub(crate) enum BadgeAlign {
 }
 
 /// Badge box `(width, height, text_inset)` from measured label/hint extents.
-/// Shared by [`draw_badge`] and [`measure_badge_with_engine`] so layout and rendering can
+/// Shared by [`draw_badge_with_engine`] and [`measure_badge_with_engine`] so layout and rendering can
 /// never disagree about badge geometry.
 fn badge_box(
     label_extents: &crate::ui_text::UiTextExtents,
@@ -454,7 +454,7 @@ fn badge_box(
     }
 }
 
-/// Measure the `(width, height)` [`draw_badge`] would occupy, without a
+/// Measure the `(width, height)` [`draw_badge_with_engine`] would occupy, without a
 /// rendering context (used for HUD badge stacking and damage geometry).
 pub(crate) fn measure_badge_with_engine(
     engine: &UiTextEngine,
@@ -492,32 +492,6 @@ pub(crate) fn measure_badge_with_engine(
 /// Draw a rounded, tinted status badge with a bold `label` and an optional
 /// dimmer `(text, font_size)` hint line below it. Returns the measured badge
 /// height so callers can stack badges without hardcoding heights.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn draw_badge(
-    ctx: &cairo::Context,
-    anchor_x: f64,
-    top_y: f64,
-    align: BadgeAlign,
-    label: &str,
-    label_font_size: f64,
-    hint: Option<(&str, f64)>,
-    tint: [f64; 4],
-) -> f64 {
-    with_legacy_engine(|engine| {
-        draw_badge_with_engine(
-            engine,
-            ctx,
-            anchor_x,
-            top_y,
-            align,
-            label,
-            label_font_size,
-            hint,
-            tint,
-        )
-    })
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_badge_with_engine(
     engine: &UiTextEngine,

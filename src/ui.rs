@@ -81,11 +81,17 @@ pub use status::{
 };
 pub(crate) use status::{
     compute_status_hud_layout_with_engine, compute_zoom_chip_layout_with_engine,
-    render_status_bar_with_resources, render_zoom_chip_with_resources,
+    render_editing_badge_with_engine, render_frozen_badge_with_engine,
+    render_page_badge_with_engine, render_pan_badge_with_engine, render_status_bar_with_resources,
+    render_zoom_badge_with_engine, render_zoom_chip_with_resources,
 };
 pub use toasts::{
     blocked_feedback_rects, preset_toast_geometry, render_blocked_feedback, render_preset_toast,
     render_ui_toast, ui_toast_geometry,
+};
+pub(crate) use toasts::{
+    preset_toast_geometry_with_engine, render_preset_toast_with_engine,
+    render_ui_toast_with_engine, ui_toast_geometry_with_engine,
 };
 pub use tour::render_tour;
 

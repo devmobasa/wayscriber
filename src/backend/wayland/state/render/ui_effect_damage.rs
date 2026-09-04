@@ -88,8 +88,13 @@ impl WaylandState {
         let mut regions = Vec::new();
 
         let toast_rect = if flags.active(UiEffect::UiToast) {
-            crate::ui::ui_toast_geometry(&self.input_state, width, height)
-                .and_then(|bounds| effect_rect(bounds, width, height))
+            crate::ui::ui_toast_geometry_with_engine(
+                self.render.ui_text(),
+                &self.input_state,
+                width,
+                height,
+            )
+            .and_then(|bounds| effect_rect(bounds, width, height))
         } else {
             None
         };
@@ -98,8 +103,13 @@ impl WaylandState {
             .roll(UiEffect::UiToast, toast_rect, &mut regions);
 
         let preset_rect = if flags.active(UiEffect::PresetToast) {
-            crate::ui::preset_toast_geometry(&self.input_state, width, height)
-                .and_then(|bounds| effect_rect(bounds, width, height))
+            crate::ui::preset_toast_geometry_with_engine(
+                self.render.ui_text(),
+                &self.input_state,
+                width,
+                height,
+            )
+            .and_then(|bounds| effect_rect(bounds, width, height))
         } else {
             None
         };
@@ -264,7 +274,12 @@ impl WaylandState {
                 .result(std::time::Instant::now())
                 .map(|(outcome, _)| outcome);
             effect_rect(
-                crate::ui::ocr_scan_geometry(scan.region(), outcome, (width, height)),
+                crate::ui::ocr_scan_geometry(
+                    self.render.ui_text(),
+                    scan.region(),
+                    outcome,
+                    (width, height),
+                ),
                 width,
                 height,
             )
@@ -340,10 +355,24 @@ mod tests {
 
     #[test]
     fn shape_badge_damage_unions_appear_move_and_disappear_footprints() {
-        let first = crate::ui::measure_shape_badge(true, (20, 30), (100.0, 100.0), 800, 600)
-            .and_then(|badge| effect_rect(badge.bounds, 800, 600));
-        let second = crate::ui::measure_shape_badge(true, (200, 300), (300.0, 250.0), 800, 600)
-            .and_then(|badge| effect_rect(badge.bounds, 800, 600));
+        let first = crate::ui::measure_shape_badge(
+            &crate::ui_text::UiTextEngine::default(),
+            true,
+            (20, 30),
+            (100.0, 100.0),
+            800,
+            600,
+        )
+        .and_then(|badge| effect_rect(badge.bounds, 800, 600));
+        let second = crate::ui::measure_shape_badge(
+            &crate::ui_text::UiTextEngine::default(),
+            true,
+            (200, 300),
+            (300.0, 250.0),
+            800,
+            600,
+        )
+        .and_then(|badge| effect_rect(badge.bounds, 800, 600));
         let mut damage = Vec::new();
 
         push_effect_damage(&mut damage, None, first);

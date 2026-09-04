@@ -1,5 +1,8 @@
-use super::super::primitives::{BADGE_PADDING, BADGE_STACK_GAP, BadgeAlign, draw_badge};
+use super::super::primitives::{
+    BADGE_PADDING, BADGE_STACK_GAP, BadgeAlign, draw_badge_with_engine,
+};
 use super::super::theme::overlay;
+use crate::ui_text::UiTextEngine;
 
 /// Vertical inset of the floating page badge from the screen edge.
 const PAGE_BADGE_EDGE_PADDING: f64 = overlay::SPACING_SM;
@@ -55,7 +58,17 @@ pub(crate) fn pan_badge_label(panned: bool) -> &'static str {
 
 /// Render a small badge indicating frozen mode (visible even when status bar is hidden).
 pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_height: u32) {
-    draw_badge(
+    render_frozen_badge_with_engine(&UiTextEngine::default(), ctx, screen_width, _screen_height)
+}
+
+pub(crate) fn render_frozen_badge_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    screen_width: u32,
+    _screen_height: u32,
+) {
+    draw_badge_with_engine(
+        engine,
         ctx,
         screen_width as f64 - BADGE_PADDING,
         BADGE_PADDING,
@@ -78,8 +91,27 @@ pub fn render_zoom_badge(
     zoom_scale: f64,
     locked: bool,
 ) -> f64 {
+    render_zoom_badge_with_engine(
+        &UiTextEngine::default(),
+        ctx,
+        screen_width,
+        _screen_height,
+        zoom_scale,
+        locked,
+    )
+}
+
+pub(crate) fn render_zoom_badge_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    screen_width: u32,
+    _screen_height: u32,
+    zoom_scale: f64,
+    locked: bool,
+) -> f64 {
     let label = zoom_badge_label(zoom_scale, locked);
-    let height = draw_badge(
+    let height = draw_badge_with_engine(
+        engine,
         ctx,
         screen_width as f64 - BADGE_PADDING,
         BADGE_PADDING,
@@ -103,10 +135,29 @@ pub fn render_pan_badge(
     panned: bool,
     offset_y: f64,
 ) -> f64 {
+    render_pan_badge_with_engine(
+        &UiTextEngine::default(),
+        ctx,
+        screen_width,
+        _screen_height,
+        panned,
+        offset_y,
+    )
+}
+
+pub(crate) fn render_pan_badge_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    screen_width: u32,
+    _screen_height: u32,
+    panned: bool,
+    offset_y: f64,
+) -> f64 {
     // Same label as the HUD-stacked pill, uppercased for the top corner
     // (historic form; keeps the rendering visually unchanged).
     let label = pan_badge_label(panned).to_uppercase();
-    let height = draw_badge(
+    let height = draw_badge_with_engine(
+        engine,
         ctx,
         screen_width as f64 - BADGE_PADDING,
         BADGE_PADDING + offset_y,
@@ -126,7 +177,24 @@ pub fn render_editing_badge(
     _screen_height: u32,
     offset_y: f64,
 ) {
-    draw_badge(
+    render_editing_badge_with_engine(
+        &UiTextEngine::default(),
+        ctx,
+        screen_width,
+        _screen_height,
+        offset_y,
+    )
+}
+
+pub(crate) fn render_editing_badge_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    screen_width: u32,
+    _screen_height: u32,
+    offset_y: f64,
+) {
+    draw_badge_with_engine(
+        engine,
         ctx,
         screen_width as f64 - BADGE_PADDING,
         BADGE_PADDING + offset_y,
@@ -141,6 +209,31 @@ pub fn render_editing_badge(
 /// Render a small badge indicating the current page (visible even when status bar is hidden).
 #[allow(clippy::too_many_arguments)]
 pub fn render_page_badge(
+    ctx: &cairo::Context,
+    _screen_width: u32,
+    _screen_height: u32,
+    board_index: usize,
+    board_count: usize,
+    board_name: &str,
+    page_index: usize,
+    page_count: usize,
+) {
+    render_page_badge_with_engine(
+        &UiTextEngine::default(),
+        ctx,
+        _screen_width,
+        _screen_height,
+        board_index,
+        board_count,
+        board_name,
+        page_index,
+        page_count,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_page_badge_with_engine(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     _screen_width: u32,
     _screen_height: u32,
@@ -178,7 +271,8 @@ pub fn render_page_badge(
         (None, Some(page)) => page,
         (None, None) => return,
     };
-    draw_badge(
+    draw_badge_with_engine(
+        engine,
         ctx,
         BADGE_PADDING,
         PAGE_BADGE_EDGE_PADDING,
@@ -190,3 +284,6 @@ pub fn render_page_badge(
         [0.2, 0.32, 0.45, 0.92],
     );
 }
+
+#[cfg(test)]
+mod tests;

@@ -18,3 +18,8 @@ pub(crate) use zoom_chip::{compute_zoom_chip_layout_with_engine, render_zoom_chi
 
 #[cfg(test)]
 mod tests;
+
+pub(crate) use badges::{
+    render_editing_badge_with_engine, render_frozen_badge_with_engine,
+    render_page_badge_with_engine, render_pan_badge_with_engine, render_zoom_badge_with_engine,
+};
