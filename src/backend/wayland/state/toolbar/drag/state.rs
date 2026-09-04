@@ -1,9 +1,11 @@
 use std::time::{Duration, Instant};
 
-use crate::{
-    backend::wayland::state::MoveDragKind,
-    toolbar_gtk::{GtkToolbarFeedback, GtkToolbarKind},
-};
+use crate::toolbar_gtk::{GtkToolbarFeedback, GtkToolbarKind};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::backend::wayland) enum MoveDragKind {
+    Top,
+}
 
 #[derive(Debug, Clone, Copy)]
 struct ApplyThrottle {

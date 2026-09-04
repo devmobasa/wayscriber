@@ -144,6 +144,7 @@ pub(super) struct MouseToolPreviewRedraw {
     pub rects: Vec<Rect>,
 }
 
+#[cfg(test)]
 pub(super) struct MouseToolPreviewDamageUpdate {
     pub current: Option<Rect>,
     pub rects: Vec<Rect>,
@@ -152,6 +153,7 @@ pub(super) struct MouseToolPreviewDamageUpdate {
 /// Per-frame damage update for the preview bubble. Unlike the pointer-motion
 /// helper, this accepts the last rendered footprint explicitly, so a visible
 /// preview becoming hidden still damages and clears its old pixels.
+#[cfg(test)]
 pub(super) fn mouse_tool_preview_damage_update(
     previous: Option<Rect>,
     active: bool,
@@ -218,7 +220,7 @@ pub(super) fn mouse_tool_preview_redraw(
 
 /// Screen-space damage rect for the preview bubble anchored at `pos`, expanded
 /// by the shared UI-effect anti-aliasing margin (matches the toast/HUD damage).
-fn mouse_tool_preview_damage_rect(
+pub(super) fn mouse_tool_preview_damage_rect(
     thickness: f64,
     pos: (f64, f64),
     width: u32,

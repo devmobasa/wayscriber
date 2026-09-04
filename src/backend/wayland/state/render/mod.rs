@@ -2,6 +2,9 @@ use super::*;
 
 mod canvas;
 mod measure_badge;
+mod runtime;
+pub(in crate::backend::wayland) use runtime::RenderRuntime;
+use runtime::{UiEffect, UiEffectFlags};
 mod tool_preview;
 mod ui;
 mod ui_effect_damage;
@@ -312,8 +315,10 @@ impl WaylandState {
                     let canvas = unsafe {
                         std::slice::from_raw_parts_mut(canvas_ptr as *mut u8, canvas_len)
                     };
-                    self.data.render_profile_ui_baseline.resize(canvas_len, 0);
-                    self.data.render_profile_ui_baseline.copy_from_slice(canvas);
+                    self.render.profile_ui_baseline_mut().resize(canvas_len, 0);
+                    self.render
+                        .profile_ui_baseline_mut()
+                        .copy_from_slice(canvas);
                     has_ui_baseline = true;
                 }
             }
@@ -347,7 +352,7 @@ impl WaylandState {
                 } else if !remap_canvas && remap_ui && has_ui_baseline {
                     profile.remap_argb8888_regions_changed_from(
                         canvas,
-                        &self.data.render_profile_ui_baseline,
+                        self.render.profile_ui_baseline(),
                         phys_width as i32,
                         phys_height as i32,
                         stride,
@@ -492,21 +497,37 @@ impl WaylandState {
             ),
             ..PerfDamageDiagnostics::default()
         };
-        let ui_effect_damage = self.collect_ui_effect_damage(
-            animation.ui_toast,
-            animation.preset_feedback,
-            animation.blocked_feedback,
-            animation.text_edit_entry,
-            render_ui && self.input_state.ui_visibility.show_status_bar,
-            render_ui && self.zoom_chip_visible(),
-            render_ui && self.input_state.input_hud_visible(),
-            render_ui && self.input_state.command_palette_is_engaged(),
-            render_ui && self.input_state.is_color_picker_popup_open(),
-            render_ui && self.mouse_tool_preview_eligible(),
-            render_ui && !self.capture_picker_chrome_suppressed(),
-            width,
-            height,
-        );
+        let ui_effects = UiEffectFlags::default()
+            .with(UiEffect::UiToast, animation.ui_toast)
+            .with(UiEffect::PresetToast, animation.preset_feedback)
+            .with(UiEffect::TextEditEntry, animation.text_edit_entry)
+            .with(
+                UiEffect::StatusHud,
+                render_ui && self.input_state.ui_visibility.show_status_bar,
+            )
+            .with(UiEffect::ZoomChip, render_ui && self.zoom_chip_visible())
+            .with(
+                UiEffect::InputHud,
+                render_ui && self.input_state.input_hud_visible(),
+            )
+            .with(
+                UiEffect::CommandPalette,
+                render_ui && self.input_state.command_palette_is_engaged(),
+            )
+            .with(
+                UiEffect::ColorPicker,
+                render_ui && self.input_state.is_color_picker_popup_open(),
+            )
+            .with(
+                UiEffect::ToolPreview,
+                render_ui && self.mouse_tool_preview_eligible(),
+            )
+            .with(
+                UiEffect::ShapeMeasureBadge,
+                render_ui && !self.capture_picker_chrome_suppressed(),
+            )
+            .with_blocked_feedback(animation.blocked_feedback);
+        let ui_effect_damage = self.collect_ui_effect_damage(ui_effects, width, height);
         if let Some(reason) = self.render_force_full_damage_reason().or(input_full_reason) {
             self.buffer_damage.mark_all_full(reason);
         } else {

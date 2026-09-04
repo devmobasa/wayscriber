@@ -7,4 +7,4 @@ mod move_drag;
 mod relative;
 mod state;
 
-pub(in crate::backend::wayland) use state::{HandoffEnd, ToolbarDrag};
+pub(in crate::backend::wayland) use state::{HandoffEnd, MoveDragKind, ToolbarDrag};

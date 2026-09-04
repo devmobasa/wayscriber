@@ -178,7 +178,7 @@ impl WaylandState {
         let shapes_len = frame.shapes.len();
         let last_shape_id = frame.shapes.last().map(|shape| shape.id);
 
-        let cache = &self.canvas_layer_cache;
+        let cache = self.render.canvas_layer_cache();
         let params_match = cache.valid
             && cache.surface.is_some()
             && cache.scale == scale
@@ -204,36 +204,37 @@ impl WaylandState {
         let phys_w = bake_w.saturating_mul(scale);
         let phys_h = bake_h.saturating_mul(scale);
         if phys_w <= 0 || phys_h <= 0 || phys_w > CAIRO_MAX_DIM || phys_h > CAIRO_MAX_DIM {
-            self.canvas_layer_cache.clear();
+            self.render.canvas_layer_cache_mut().clear();
             return false;
         }
         if phys_w as usize * phys_h as usize * 4 > MAX_CACHE_BYTES {
-            self.canvas_layer_cache.clear();
+            self.render.canvas_layer_cache_mut().clear();
             return false;
         }
 
         let reuse_surface = self
-            .canvas_layer_cache
+            .render
+            .canvas_layer_cache_mut()
             .surface
             .as_ref()
             .is_some_and(|surface| surface.width() == phys_w && surface.height() == phys_h);
         if !reuse_surface {
             match cairo::ImageSurface::create(cairo::Format::ARgb32, phys_w, phys_h) {
-                Ok(surface) => self.canvas_layer_cache.surface = Some(surface),
+                Ok(surface) => self.render.canvas_layer_cache_mut().surface = Some(surface),
                 Err(err) => {
                     debug!("canvas layer cache: surface allocation failed: {err}");
-                    self.canvas_layer_cache.clear();
+                    self.render.canvas_layer_cache_mut().clear();
                     return false;
                 }
             }
         }
 
         {
-            let Some(surface) = self.canvas_layer_cache.surface.as_ref() else {
+            let Some(surface) = self.render.canvas_layer_cache_mut().surface.as_ref() else {
                 return false;
             };
             let Ok(bake_ctx) = cairo::Context::new(surface) else {
-                self.canvas_layer_cache.clear();
+                self.render.canvas_layer_cache_mut().clear();
                 return false;
             };
 
@@ -275,11 +276,11 @@ impl WaylandState {
                 }
             }
         }
-        if let Some(surface) = self.canvas_layer_cache.surface.as_ref() {
+        if let Some(surface) = self.render.canvas_layer_cache_mut().surface.as_ref() {
             surface.flush();
         }
 
-        let cache = &mut self.canvas_layer_cache;
+        let cache = self.render.canvas_layer_cache_mut();
         cache.world_x = world_x;
         cache.world_y = world_y;
         cache.width = bake_w;
