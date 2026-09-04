@@ -130,10 +130,6 @@ impl InputState {
         true
     }
 
-    pub(super) fn refresh_properties_panel(&mut self) {
-        with_legacy_measurer(|measurer| self.refresh_properties_panel_with(measurer))
-    }
-
     pub(super) fn refresh_properties_panel_with(&mut self, measurer: &TextMeasurer) {
         self.properties.begin_refresh();
         let update = (|| {
@@ -266,20 +262,22 @@ mod tests {
     #[test]
     fn show_properties_panel_returns_false_without_selection() {
         let mut state = make_state();
+        let measurer = TextMeasurer::default();
 
-        assert!(!state.show_properties_panel());
+        assert!(!state.show_properties_panel_with(&measurer));
         assert!(state.properties_panel().is_none());
     }
 
     #[test]
     fn refresh_properties_panel_closes_panel_when_selection_is_empty() {
         let mut state = make_state();
+        let measurer = TextMeasurer::default();
         let shape_id = add_rect(&mut state, 10, 20, 30, 40);
         state.set_selection(vec![shape_id]);
-        assert!(state.show_properties_panel());
+        assert!(state.show_properties_panel_with(&measurer));
 
         state.selection_interaction.clear();
-        state.refresh_properties_panel();
+        state.refresh_properties_panel_with(&measurer);
 
         assert!(state.properties_panel().is_none());
     }
@@ -287,9 +285,10 @@ mod tests {
     #[test]
     fn refresh_properties_panel_preserves_valid_keyboard_focus() {
         let mut state = make_state();
+        let measurer = TextMeasurer::default();
         let shape_id = add_rect(&mut state, 10, 20, 30, 40);
         state.set_selection(vec![shape_id]);
-        assert!(state.show_properties_panel());
+        assert!(state.show_properties_panel_with(&measurer));
         state
             .properties
             .panel
@@ -297,7 +296,7 @@ mod tests {
             .expect("panel")
             .keyboard_focus = Some(0);
 
-        state.refresh_properties_panel();
+        state.refresh_properties_panel_with(&measurer);
 
         assert_eq!(
             state
@@ -310,14 +309,15 @@ mod tests {
     #[test]
     fn refresh_properties_panel_clears_invalid_focus_and_hover() {
         let mut state = make_state();
+        let measurer = TextMeasurer::default();
         let shape_id = add_rect(&mut state, 10, 20, 30, 40);
         state.set_selection(vec![shape_id]);
-        assert!(state.show_properties_panel());
+        assert!(state.show_properties_panel_with(&measurer));
         let panel = state.properties.panel.as_mut().expect("panel");
         panel.keyboard_focus = Some(99);
         panel.hover_index = Some(99);
 
-        state.refresh_properties_panel();
+        state.refresh_properties_panel_with(&measurer);
 
         let panel = state.properties_panel().expect("panel after refresh");
         assert_eq!(panel.keyboard_focus, None);
@@ -327,13 +327,14 @@ mod tests {
     #[test]
     fn refresh_properties_panel_updates_summary_when_selection_expands() {
         let mut state = make_state();
+        let measurer = TextMeasurer::default();
         let first = add_rect(&mut state, 10, 20, 30, 40);
         let second = add_rect(&mut state, 80, 30, 20, 10);
         state.set_selection(vec![first]);
-        assert!(state.show_properties_panel());
+        assert!(state.show_properties_panel_with(&measurer));
 
         set_selection_state(&mut state, vec![first, second]);
-        state.refresh_properties_panel();
+        state.refresh_properties_panel_with(&measurer);
 
         let panel = state.properties_panel().expect("panel after refresh");
         assert_eq!(panel.title, "Selection Properties");

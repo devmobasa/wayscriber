@@ -235,8 +235,10 @@ impl WaylandState {
         if !capture_picker && self.input_state.is_board_picker_open() {
             self.input_state
                 .update_board_picker_layout(ctx, width, height);
-            let mut render = crate::draw::RenderCtx::new(ctx, self.render.draw_caches_mut());
+            let (caches, engine) = self.render.draw_ui_text_parts_mut();
+            let mut render = crate::draw::RenderCtx::new(ctx, caches);
             crate::ui::render_board_picker_with_halo(
+                engine,
                 &mut render,
                 &self.input_state,
                 width,
@@ -343,18 +345,40 @@ impl WaylandState {
         }
         if self.input_state.is_properties_panel_open() {
             self.input_state
-                .update_properties_panel_layout(ctx, width, height);
+                .update_properties_panel_layout_with_resources(
+                    self.render.ui_text(),
+                    self.render.text_measurer(),
+                    ctx,
+                    width,
+                    height,
+                );
         } else {
             self.input_state.clear_properties_panel_layout();
         }
-        crate::ui::render_properties_panel(ctx, &self.input_state, width, height);
+        crate::ui::render_properties_panel_with_engine(
+            self.render.ui_text(),
+            ctx,
+            &self.input_state,
+            width,
+            height,
+        );
         if self.input_state.is_context_menu_open() {
-            self.input_state
-                .update_context_menu_layout(ctx, width, height);
+            self.input_state.update_context_menu_layout_with_engine(
+                self.render.ui_text(),
+                ctx,
+                width,
+                height,
+            );
         } else {
             self.input_state.clear_context_menu_layout();
         }
-        crate::ui::render_context_menu(ctx, &self.input_state, width, height);
+        crate::ui::render_context_menu_with_engine(
+            self.render.ui_text(),
+            ctx,
+            &self.input_state,
+            width,
+            height,
+        );
     }
 
     fn render_inline_and_modal_ui(

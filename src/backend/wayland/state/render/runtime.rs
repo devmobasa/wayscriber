@@ -179,6 +179,15 @@ impl RenderRuntime {
         &mut self.draw_caches
     }
 
+    pub(in crate::backend::wayland::state) fn draw_ui_text_parts_mut(
+        &mut self,
+    ) -> (
+        &mut crate::draw::RenderCaches,
+        &crate::ui_text::UiTextEngine,
+    ) {
+        (&mut self.draw_caches, &self.ui_text)
+    }
+
     pub(in crate::backend::wayland::state) fn canvas_draw_parts_mut(
         &mut self,
     ) -> (&mut CanvasLayerCache, &mut crate::draw::RenderCaches) {

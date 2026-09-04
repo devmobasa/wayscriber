@@ -1,6 +1,6 @@
 use super::super::base::InputState;
 use super::types::{ContextMenuCursorHint, ContextMenuLayout, ContextMenuState};
-use crate::ui_text::{UiTextStyle, text_layout};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 use crate::util::Rect;
 use cairo::Context as CairoContext;
 
@@ -19,6 +19,21 @@ impl InputState {
     /// Recomputes context menu layout for rendering and hit-testing.
     pub fn update_context_menu_layout(
         &mut self,
+        ctx: &CairoContext,
+        screen_width: u32,
+        screen_height: u32,
+    ) {
+        self.update_context_menu_layout_with_engine(
+            &UiTextEngine::default(),
+            ctx,
+            screen_width,
+            screen_height,
+        );
+    }
+
+    pub(crate) fn update_context_menu_layout_with_engine(
+        &mut self,
+        engine: &UiTextEngine,
         ctx: &CairoContext,
         screen_width: u32,
         screen_height: u32,
@@ -52,10 +67,12 @@ impl InputState {
         let mut max_label_width: f64 = 0.0;
         let mut max_shortcut_width: f64 = 0.0;
         for entry in &entries {
-            let extents = text_layout(ctx, text_style, &entry.label, None).ink_extents();
+            let extents = engine
+                .layout(ctx, text_style, &entry.label, None)
+                .ink_extents();
             max_label_width = max_label_width.max(extents.width());
             if let Some(shortcut) = &entry.shortcut {
-                let extents = text_layout(ctx, text_style, shortcut, None).ink_extents();
+                let extents = engine.layout(ctx, text_style, shortcut, None).ink_extents();
                 max_shortcut_width = max_shortcut_width.max(extents.width());
             }
         }

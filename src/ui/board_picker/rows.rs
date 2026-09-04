@@ -1,9 +1,9 @@
 use crate::draw::Color;
 use crate::input::state::{BoardPickerEditMode, BoardPickerLayout};
 use crate::input::{BoardBackground, InputState};
-use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
+use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use crate::ui::theme::Rgba;
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
     self, ACCENT_PRIMARY, BG_SELECTED_INDICATOR, BG_SELECTION, DIVIDER_LIGHT, ICON_PIN_ACTIVE,
@@ -16,16 +16,18 @@ use super::helpers::{
 const SWATCH_TRANSPARENT_OUTLINE: Rgba = (0.62, 0.68, 0.76, 0.85);
 
 pub(super) fn render_board_rows(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     input_state: &InputState,
     layout: &BoardPickerLayout,
     board_count: usize,
     max_count: usize,
 ) {
-    BoardRowsRenderer::new(ctx, input_state, layout, board_count, max_count).render();
+    BoardRowsRenderer::new(engine, ctx, input_state, layout, board_count, max_count).render();
 }
 
 struct BoardRowsRenderer<'a> {
+    engine: &'a UiTextEngine,
     ctx: &'a cairo::Context,
     input: &'a InputState,
     layout: &'a BoardPickerLayout,
@@ -47,6 +49,7 @@ struct BoardRowsRenderer<'a> {
 
 impl<'a> BoardRowsRenderer<'a> {
     fn new(
+        engine: &'a UiTextEngine,
         ctx: &'a cairo::Context,
         input: &'a InputState,
         layout: &'a BoardPickerLayout,
@@ -68,6 +71,7 @@ impl<'a> BoardRowsRenderer<'a> {
             .unwrap_or(list_right - layout.padding_x);
         let hint_x = (layout.hint_width > 0.0).then_some(hint_right_edge - layout.hint_width);
         Self {
+            engine,
             ctx,
             input,
             layout,
@@ -107,7 +111,7 @@ impl<'a> BoardRowsRenderer<'a> {
                 ..self.body_style
             };
             constants::set_color(self.ctx, constants::with_alpha(TEXT_HINT, 0.6));
-            draw_text_baseline(
+            self.engine.draw_baseline(
                 self.ctx,
                 style,
                 "Pinned",
@@ -219,7 +223,7 @@ impl<'a> BoardRowsRenderer<'a> {
             "New board"
         };
         constants::set_color(self.ctx, TEXT_HINT);
-        draw_text_baseline(
+        self.engine.draw_baseline(
             self.ctx,
             self.body_style,
             label,
@@ -363,7 +367,7 @@ impl<'a> BoardRowsRenderer<'a> {
 
     fn render_board_name(&self, board_index: usize, row_center: f64, active: bool, name: &str) {
         constants::set_color(self.ctx, if active { TEXT_ACTIVE } else { TEXT_SECONDARY });
-        draw_text_baseline(
+        self.engine.draw_baseline(
             self.ctx,
             self.body_style,
             name,
@@ -379,7 +383,7 @@ impl<'a> BoardRowsRenderer<'a> {
         }
         let extents = self.text_extents(name);
         constants::set_color(self.ctx, constants::with_alpha(TEXT_HINT, 0.85));
-        draw_text_baseline(
+        self.engine.draw_baseline(
             self.ctx,
             self.body_style,
             &format!(" ({page_count} pages)"),
@@ -403,7 +407,7 @@ impl<'a> BoardRowsRenderer<'a> {
             return;
         };
         constants::set_color(self.ctx, TEXT_HINT);
-        draw_text_baseline(
+        self.engine.draw_baseline(
             self.ctx,
             self.body_style,
             &hint,
@@ -469,7 +473,8 @@ impl<'a> BoardRowsRenderer<'a> {
     }
 
     fn text_extents(&self, text: &str) -> cairo::TextExtents {
-        text_extents_for(
+        text_extents_for_with_engine(
+            self.engine,
             self.ctx,
             "Sans",
             cairo::FontSlant::Normal,

@@ -1,6 +1,6 @@
 use crate::input::InputState;
-use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
     self, NAV_HINT_BOARD_PICKER, OVERLAY_DIM_LIGHT, OVERLAY_DIM_MEDIUM, RADIUS_PANEL, TEXT_HINT,
@@ -24,8 +24,10 @@ pub fn render_board_picker(
     screen_width: u32,
     screen_height: u32,
 ) {
+    let engine = UiTextEngine::default();
     let mut caches = crate::draw::RenderCaches::default();
     render_board_picker_with_halo(
+        &engine,
         &mut crate::draw::RenderCtx::new(ctx, &mut caches),
         input_state,
         screen_width,
@@ -35,6 +37,7 @@ pub fn render_board_picker(
 }
 
 pub(crate) fn render_board_picker_with_halo(
+    engine: &UiTextEngine,
     render: &mut crate::draw::RenderCtx<'_, '_>,
     input_state: &InputState,
     screen_width: u32,
@@ -90,7 +93,7 @@ pub(crate) fn render_board_picker_with_halo(
     };
     constants::set_color(ctx, TEXT_PRIMARY);
     let title_y = layout.origin_y + layout.padding_y + layout.title_font_size;
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         title_style,
         &title,
@@ -110,7 +113,7 @@ pub(crate) fn render_board_picker_with_halo(
     };
     constants::set_color(ctx, TEXT_TERTIARY);
     let footer_y = layout.origin_y + layout.height - layout.padding_y;
-    let footer_extents = draw_text_baseline(
+    let footer_extents = engine.draw_baseline(
         ctx,
         footer_style,
         &footer,
@@ -119,7 +122,8 @@ pub(crate) fn render_board_picker_with_halo(
         None,
     );
     // Navigation hint on right side
-    let nav_extents = text_extents_for(
+    let nav_extents = text_extents_for_with_engine(
+        engine,
         ctx,
         "Sans",
         cairo::FontSlant::Normal,
@@ -131,7 +135,7 @@ pub(crate) fn render_board_picker_with_halo(
     let footer_end = layout.origin_x + layout.padding_x + footer_extents.width();
     if footer_end + layout.footer_font_size * 0.5 <= nav_start {
         constants::set_color(ctx, constants::with_alpha(TEXT_HINT, 0.7));
-        draw_text_baseline(
+        engine.draw_baseline(
             ctx,
             footer_style,
             NAV_HINT_BOARD_PICKER,
@@ -143,7 +147,7 @@ pub(crate) fn render_board_picker_with_halo(
     if let Some(recent) = recent {
         let recent_y = footer_y - layout.recent_height;
         constants::set_color(ctx, constants::with_alpha(TEXT_HINT, 0.8));
-        draw_text_baseline(
+        engine.draw_baseline(
             ctx,
             footer_style,
             &recent,
@@ -153,10 +157,11 @@ pub(crate) fn render_board_picker_with_halo(
         );
     }
 
-    render_board_rows(ctx, input_state, layout, board_count, max_count);
+    render_board_rows(engine, ctx, input_state, layout, board_count, max_count);
     render_board_palette(ctx, input_state, layout);
 
     render_page_panel(
+        engine,
         render,
         input_state,
         layout,
@@ -167,3 +172,6 @@ pub(crate) fn render_board_picker_with_halo(
 
     let _ = ctx.restore();
 }
+
+#[cfg(test)]
+mod tests;

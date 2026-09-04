@@ -3,9 +3,9 @@ use crate::ui::constants::{
     self, ACCENT_BRIGHT, ACCENT_PRIMARY, BG_SELECTION, BORDER_FOCUS, RADIUS_MD, RADIUS_SM,
     RADIUS_STD, SHADOW_DEEP, TEXT_WHITE,
 };
-use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
+use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use crate::ui::theme::Rgba;
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 // File-local colors with no matching theme token (kept from the pre-theme
 // literals).
@@ -23,6 +23,7 @@ use super::icons::{
 use super::types::{PREVIEW_SCALE, PageContentArgs, PagePreviewArgs, PageThumbnailArgs};
 
 pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(
+    engine: &UiTextEngine,
     args: PageThumbnailArgs<'_, '_, '_>,
 ) {
     let PageThumbnailArgs {
@@ -60,18 +61,21 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
-    render_page_content(PageContentArgs {
-        render,
-        frame,
-        background,
-        x,
-        y,
-        width,
-        height,
-        screen_width,
-        screen_height,
-        text_halo_enabled,
-    });
+    render_page_content(
+        engine,
+        PageContentArgs {
+            render,
+            frame,
+            background,
+            x,
+            y,
+            width,
+            height,
+            screen_width,
+            screen_height,
+            text_halo_enabled,
+        },
+    );
 
     if is_active {
         constants::set_color(ctx, ACCENT_PRIMARY);
@@ -128,8 +132,8 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(
         duplicate_hovered,
         delete_hovered,
     );
-    draw_page_badge(ctx, x, y, page_number, is_hovered);
-    render_page_name_label(ctx, x, y, width, height, page_name, is_hovered);
+    draw_page_badge(engine, ctx, x, y, page_number, is_hovered);
+    render_page_name_label(engine, ctx, x, y, width, height, page_name, is_hovered);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -180,7 +184,14 @@ fn draw_thumbnail_actions(
     );
 }
 
-fn draw_page_badge(ctx: &cairo::Context, x: f64, y: f64, page_number: usize, is_hovered: bool) {
+fn draw_page_badge(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    x: f64,
+    y: f64,
+    page_number: usize,
+    is_hovered: bool,
+) {
     let badge = page_number.to_string();
     let badge_font_size = if is_hovered { 10.0 } else { 9.0 };
     let badge_bg_alpha = if is_hovered { 0.6 } else { 0.35 };
@@ -190,7 +201,8 @@ fn draw_page_badge(ctx: &cairo::Context, x: f64, y: f64, page_number: usize, is_
         weight: cairo::FontWeight::Bold,
         size: badge_font_size,
     };
-    let extents = text_extents_for(
+    let extents = text_extents_for_with_engine(
+        engine,
         ctx,
         "Sans",
         cairo::FontSlant::Normal,
@@ -207,7 +219,7 @@ fn draw_page_badge(ctx: &cairo::Context, x: f64, y: f64, page_number: usize, is_
     draw_rounded_rect(ctx, badge_x, badge_y, badge_w, badge_h, RADIUS_SM);
     let _ = ctx.fill();
     constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, 0.9));
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         badge_style,
         &badge,
@@ -217,7 +229,9 @@ fn draw_page_badge(ctx: &cairo::Context, x: f64, y: f64, page_number: usize, is_
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     y: f64,
@@ -269,7 +283,8 @@ pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
     };
     let text_alpha = if is_hovered { 0.7 } else { 0.4 };
     constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, text_alpha));
-    let extents = text_extents_for(
+    let extents = text_extents_for_with_engine(
+        engine,
         ctx,
         "Sans",
         cairo::FontSlant::Normal,
@@ -277,7 +292,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
         10.0,
         label,
     );
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         label_style,
         label,
@@ -288,6 +303,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
 }
 
 pub(in crate::ui::board_picker::page_panel) fn render_page_preview(
+    engine: &UiTextEngine,
     args: PagePreviewArgs<'_, '_, '_>,
 ) {
     let PagePreviewArgs {
@@ -337,18 +353,21 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(
     ctx.set_line_width(1.2);
     let _ = ctx.stroke();
 
-    render_page_content(PageContentArgs {
-        render,
-        frame,
-        background,
-        x: preview_x,
-        y: preview_y,
-        width: preview_w,
-        height: preview_h,
-        screen_width,
-        screen_height,
-        text_halo_enabled,
-    });
+    render_page_content(
+        engine,
+        PageContentArgs {
+            render,
+            frame,
+            background,
+            x: preview_x,
+            y: preview_y,
+            width: preview_w,
+            height: preview_h,
+            screen_width,
+            screen_height,
+            text_halo_enabled,
+        },
+    );
 
     let label = frame
         .page_name()
@@ -360,7 +379,8 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(
         weight: cairo::FontWeight::Normal,
         size: 11.0,
     };
-    let extents = text_extents_for(
+    let extents = text_extents_for_with_engine(
+        engine,
         ctx,
         "Sans",
         cairo::FontSlant::Normal,
@@ -378,7 +398,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(
     let _ = ctx.save();
     ctx.rectangle(label_x + 4.0, label_y, label_w - 8.0, 16.0);
     ctx.clip();
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         label_style,
         &label,
