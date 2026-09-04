@@ -8,6 +8,7 @@
 
 use super::InputState;
 use crate::draw::{FontDescriptor, Shape, families_match};
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 
 fn text_font_descriptor(shape: &Shape) -> Option<&FontDescriptor> {
     match shape {
@@ -94,9 +95,13 @@ impl InputState {
     /// so turning bold off from here lands on `normal` rather than restoring
     /// whatever number was there.
     pub(crate) fn set_font_bold(&mut self, bold: bool) -> bool {
+        with_legacy_measurer(|measurer| self.set_font_bold_with(measurer, bold))
+    }
+
+    pub(crate) fn set_font_bold_with(&mut self, measurer: &TextMeasurer, bold: bool) -> bool {
         let weight = if bold { "bold" } else { "normal" };
         if self.selection_has_text() {
-            return self.apply_weight_to_selected_text(weight);
+            return self.apply_weight_to_selected_text(measurer, weight);
         }
         let descriptor = crate::draw::FontDescriptor::new(
             self.style.font_descriptor.family.clone(),
@@ -107,9 +112,9 @@ impl InputState {
     }
 
     /// Restyle every selected text shape to `weight`.
-    fn apply_weight_to_selected_text(&mut self, weight: &str) -> bool {
+    fn apply_weight_to_selected_text(&mut self, measurer: &TextMeasurer, weight: &str) -> bool {
         let target = weight.to_string();
-        self.apply_descriptor_to_selected_text("weight", move |descriptor| {
+        self.apply_descriptor_to_selected_text(measurer, "weight", move |descriptor| {
             if descriptor.weight.eq_ignore_ascii_case(&target) {
                 return false;
             }
@@ -128,8 +133,16 @@ impl InputState {
         &mut self,
         family: &str,
     ) -> bool {
+        with_legacy_measurer(|measurer| self.apply_family_to_selected_text_with(measurer, family))
+    }
+
+    pub(in crate::input::state::core) fn apply_family_to_selected_text_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        family: &str,
+    ) -> bool {
         let target = family.to_string();
-        self.apply_descriptor_to_selected_text("font", move |descriptor| {
+        self.apply_descriptor_to_selected_text(measurer, "font", move |descriptor| {
             if families_match(&descriptor.family, &target) {
                 return false;
             }
@@ -142,10 +155,12 @@ impl InputState {
     /// shape, preserving shared lock, undo, damage, and partial-result reporting.
     fn apply_descriptor_to_selected_text(
         &mut self,
+        measurer: &TextMeasurer,
         property: &'static str,
         mut apply: impl FnMut(&mut FontDescriptor) -> bool,
     ) -> bool {
-        let result = self.apply_selection_change(
+        let result = self.apply_selection_change_with(
+            measurer,
             |shape| text_font_descriptor(shape).is_some(),
             move |shape| text_font_descriptor_mut(shape).is_some_and(&mut apply),
         );

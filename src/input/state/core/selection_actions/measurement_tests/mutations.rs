@@ -149,3 +149,40 @@ fn explicit_keyboard_menu_anchor_projects_decorated_selection_with_pan_and_zoom(
     state.toggle_context_menu_via_keyboard_with(&owner);
     assert!(!state.is_context_menu_open());
 }
+
+#[test]
+fn explicit_cancellation_restores_decorated_move_bounds_and_hits() {
+    for (shape, probe) in fixtures() {
+        let owner = TextMeasurer::default();
+        let (mut state, id, locked_id) = state_with(shape);
+        let original = bounds(&state, &owner, id);
+        let locked = bounds(&state, &owner, locked_id);
+        let snapshots = state.capture_movable_selection_snapshots();
+        assert_eq!(state.hit_test_at_with(&owner, probe.0, probe.1 + 300), None);
+        state.hit_test_at_with(&owner, probe.0, probe.1);
+        assert!(state.apply_translation_to_selection_with(&owner, 0, 300));
+        let moved = bounds(&state, &owner, id);
+        assert_ne!(moved, original);
+        assert_eq!(
+            state.hit_test_at_with(&owner, probe.0, probe.1 + 300),
+            Some(id)
+        );
+        state.state = crate::input::DrawingState::MovingSelection {
+            last_x: probe.0,
+            last_y: probe.1 + 300,
+            snapshots,
+            moved: true,
+        };
+        state.take_dirty_regions();
+        assert!(state.try_cancel_active_interaction_with(&owner));
+        assert!(matches!(state.state, crate::input::DrawingState::Idle));
+        assert_eq!(bounds(&state, &owner, id), original);
+        assert_eq!(bounds(&state, &owner, locked_id), locked);
+        assert_eq!(state.hit_test_at_with(&owner, probe.0, probe.1), Some(id));
+        assert_eq!(state.hit_test_at_with(&owner, probe.0, probe.1 + 300), None);
+        let dirty = state.take_dirty_regions();
+        assert_dirty_covers(&dirty, original);
+        assert_dirty_covers(&dirty, moved);
+        assert!(!state.try_cancel_active_interaction_with(&owner));
+    }
+}

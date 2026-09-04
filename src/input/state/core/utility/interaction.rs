@@ -1,5 +1,6 @@
 use super::super::base::{DrawingState, InputState, PasteAnchor};
 use crate::draw::DirtyRegionReport;
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::util::Rect;
 use std::time::Instant;
 
@@ -150,7 +151,11 @@ impl InputState {
 
     /// Cancels the current text input session and restores any edited shape.
     pub(crate) fn cancel_text_input(&mut self) {
-        self.cancel_text_edit();
+        with_legacy_measurer(|measurer| self.cancel_text_input_with(measurer))
+    }
+
+    pub(crate) fn cancel_text_input_with(&mut self, measurer: &TextMeasurer) {
+        self.cancel_text_edit_with(measurer);
         self.end_text_input_session();
     }
 
@@ -169,21 +174,29 @@ impl InputState {
     ///
     /// Returns `true` when an active interaction consumed the caller's event.
     pub(crate) fn try_cancel_active_interaction(&mut self) -> bool {
+        with_legacy_measurer(|measurer| self.try_cancel_active_interaction_with(measurer))
+    }
+
+    pub(crate) fn try_cancel_active_interaction_with(&mut self, measurer: &TextMeasurer) -> bool {
         if matches!(self.state, DrawingState::Idle) {
             return false;
         }
 
-        self.cancel_active_interaction();
+        self.cancel_active_interaction_with(measurer);
         true
     }
 
     /// Cancels any in-progress interaction without exiting the application.
     pub(crate) fn cancel_active_interaction(&mut self) {
+        with_legacy_measurer(|measurer| self.cancel_active_interaction_with(measurer))
+    }
+
+    pub(crate) fn cancel_active_interaction_with(&mut self, measurer: &TextMeasurer) {
         // A canceled interaction never leaves a dangling block-move drag.
         self.text_editing.set_text_block_drag(None);
         match &self.state {
             DrawingState::TextInput { .. } => {
-                self.cancel_text_input();
+                self.cancel_text_input_with(measurer);
             }
             DrawingState::PendingTextClick { .. } => {
                 self.state = DrawingState::Idle;
@@ -200,7 +213,7 @@ impl InputState {
                 self.needs_redraw = true;
             }
             DrawingState::MovingSelection { snapshots, .. } => {
-                self.restore_selection_from_snapshots(snapshots.clone());
+                self.restore_selection_from_snapshots_with(measurer, snapshots.clone());
                 self.state = DrawingState::Idle;
             }
             DrawingState::Selecting { .. } => {
@@ -211,17 +224,23 @@ impl InputState {
             DrawingState::ResizingText {
                 shape_id, snapshot, ..
             } => {
-                self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
+                self.restore_selection_from_snapshots_with(
+                    measurer,
+                    vec![(*shape_id, snapshot.clone())],
+                );
                 self.state = DrawingState::Idle;
             }
             DrawingState::BendingArrow { shape_id, snapshot }
             | DrawingState::AdjustingSpotlightMagnification { shape_id, snapshot } => {
-                self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
+                self.restore_selection_from_snapshots_with(
+                    measurer,
+                    vec![(*shape_id, snapshot.clone())],
+                );
                 self.state = DrawingState::Idle;
             }
             DrawingState::ResizingSelection { snapshots, .. } => {
                 let snapshots = snapshots.clone();
-                self.restore_resize_from_snapshots(snapshots.as_ref());
+                self.restore_resize_from_snapshots_with(measurer, snapshots.as_ref());
                 self.state = DrawingState::Idle;
             }
             DrawingState::Idle => {}

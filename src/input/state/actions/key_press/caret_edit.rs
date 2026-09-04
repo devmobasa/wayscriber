@@ -19,14 +19,21 @@
 use std::ops::Range;
 use unicode_segmentation::{GraphemeCursor, UnicodeSegmentation};
 
-use crate::draw::shape::{
-    VisualCaretDirection, VisualLineDirection, VisualLineEdge, caret_on_adjacent_visual_line,
-    caret_on_visual_line_edge,
-};
+use crate::draw::shape::{VisualCaretDirection, VisualLineDirection, VisualLineEdge};
 use crate::input::events::Key;
 use crate::input::state::DrawingState;
 
 use super::text_input::move_horizontal_caret;
+
+/// Canonical layout inputs borrowed for one editor navigation operation.
+/// The owner is shared with damage measurement; no destination Cairo context
+/// or runtime resource is retained by the editor state.
+#[derive(Clone, Copy)]
+pub(in crate::input::state) struct TextNavigation<'a> {
+    pub(in crate::input::state) measurer: &'a crate::draw::TextMeasurer,
+    pub(in crate::input::state) font: &'a str,
+    pub(in crate::input::state) wrap_width: Option<i32>,
+}
 
 /// Maximum text-buffer length in bytes, shared by keyboard entry and IME
 /// commits so both enforce the same cap.
@@ -492,8 +499,7 @@ impl crate::input::state::core::TextEditing {
         key: Key,
         ctrl: bool,
         shift: bool,
-        font: &str,
-        wrap_width: Option<i32>,
+        navigation: TextNavigation<'_>,
     ) -> Option<bool> {
         let mutates_buffer = match key {
             Key::Char(_) | Key::Space => !ctrl,
@@ -533,8 +539,7 @@ impl crate::input::state::core::TextEditing {
             Key::Delete => delete_forward(buffer, caret, anchor),
             Key::Left => move_horizontal_caret(
                 buffer,
-                font,
-                wrap_width,
+                navigation,
                 caret,
                 anchor,
                 shift,
@@ -543,44 +548,59 @@ impl crate::input::state::core::TextEditing {
             ),
             Key::Right => move_horizontal_caret(
                 buffer,
-                font,
-                wrap_width,
+                navigation,
                 caret,
                 anchor,
                 shift,
                 ctrl,
                 VisualCaretDirection::Right,
             ),
-            Key::Up => caret_on_adjacent_visual_line(
-                buffer,
-                font,
-                wrap_width,
-                *caret,
-                VisualLineDirection::Up,
-            )
-            .map(|new| move_to_offset(caret, anchor, shift, new))
-            .unwrap_or_else(|| move_up(buffer, caret, anchor, shift)),
-            Key::Down => caret_on_adjacent_visual_line(
-                buffer,
-                font,
-                wrap_width,
-                *caret,
-                VisualLineDirection::Down,
-            )
-            .map(|new| move_to_offset(caret, anchor, shift, new))
-            .unwrap_or_else(|| move_down(buffer, caret, anchor, shift)),
+            Key::Up => navigation
+                .measurer
+                .caret_on_adjacent_visual_line(
+                    buffer,
+                    navigation.font,
+                    navigation.wrap_width,
+                    *caret,
+                    VisualLineDirection::Up,
+                )
+                .map(|new| move_to_offset(caret, anchor, shift, new))
+                .unwrap_or_else(|| move_up(buffer, caret, anchor, shift)),
+            Key::Down => navigation
+                .measurer
+                .caret_on_adjacent_visual_line(
+                    buffer,
+                    navigation.font,
+                    navigation.wrap_width,
+                    *caret,
+                    VisualLineDirection::Down,
+                )
+                .map(|new| move_to_offset(caret, anchor, shift, new))
+                .unwrap_or_else(|| move_down(buffer, caret, anchor, shift)),
             Key::Home if ctrl => move_document_start(caret, anchor, shift),
-            Key::Home => {
-                caret_on_visual_line_edge(buffer, font, wrap_width, *caret, VisualLineEdge::Start)
-                    .map(|new| move_to_offset(caret, anchor, shift, new))
-                    .unwrap_or_else(|| move_line_home(buffer, caret, anchor, shift))
-            }
+            Key::Home => navigation
+                .measurer
+                .caret_on_visual_line_edge(
+                    buffer,
+                    navigation.font,
+                    navigation.wrap_width,
+                    *caret,
+                    VisualLineEdge::Start,
+                )
+                .map(|new| move_to_offset(caret, anchor, shift, new))
+                .unwrap_or_else(|| move_line_home(buffer, caret, anchor, shift)),
             Key::End if ctrl => move_document_end(buffer, caret, anchor, shift),
-            Key::End => {
-                caret_on_visual_line_edge(buffer, font, wrap_width, *caret, VisualLineEdge::End)
-                    .map(|new| move_to_offset(caret, anchor, shift, new))
-                    .unwrap_or_else(|| move_line_end(buffer, caret, anchor, shift))
-            }
+            Key::End => navigation
+                .measurer
+                .caret_on_visual_line_edge(
+                    buffer,
+                    navigation.font,
+                    navigation.wrap_width,
+                    *caret,
+                    VisualLineEdge::End,
+                )
+                .map(|new| move_to_offset(caret, anchor, shift, new))
+                .unwrap_or_else(|| move_line_end(buffer, caret, anchor, shift)),
             _ => return None,
         };
 
@@ -621,17 +641,38 @@ mod tests {
 
     #[test]
     fn owner_key_edits_advance_revision_only_for_buffer_mutations() {
+        let measurer = crate::draw::TextMeasurer::default();
         let mut editing = crate::input::state::core::TextEditing::default();
         let mut state = DrawingState::text_input(0, 0, "ab".to_string());
         editing.begin_session();
 
         assert_eq!(
-            editing.apply_key_edit(&mut state, Key::Char('c'), false, false, "", None),
+            editing.apply_key_edit(
+                &mut state,
+                Key::Char('c'),
+                false,
+                false,
+                TextNavigation {
+                    measurer: &measurer,
+                    font: "",
+                    wrap_width: None
+                }
+            ),
             Some(true)
         );
         assert_eq!(editing.revision(), 1);
         assert_eq!(
-            editing.apply_key_edit(&mut state, Key::Left, false, false, "", None),
+            editing.apply_key_edit(
+                &mut state,
+                Key::Left,
+                false,
+                false,
+                TextNavigation {
+                    measurer: &measurer,
+                    font: "",
+                    wrap_width: None
+                }
+            ),
             Some(true)
         );
         assert_eq!(editing.revision(), 1, "caret motion is not a buffer edit");

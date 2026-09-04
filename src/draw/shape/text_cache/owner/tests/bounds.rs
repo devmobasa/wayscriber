@@ -186,7 +186,7 @@ fn dirty_and_provisional_bounds_consume_the_supplied_owner() {
     let preview = ProvisionalToolStroke::Shape(shape);
     assert_eq!(preview.bounds_with(&preview_owner), Some(expected));
     assert_eq!(preview_owner.cache.borrow().entries.len(), 1);
-    assert_eq!(preview.bounds(), Some(expected));
+    assert_eq!(preview.bounds_with(&preview_owner), Some(expected));
 
     dirty.mark_shape_with(
         &Shape::Freehand {

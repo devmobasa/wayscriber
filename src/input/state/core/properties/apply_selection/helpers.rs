@@ -1,6 +1,6 @@
 use super::super::super::base::InputState;
 use super::super::summary::shape_color;
-use crate::draw::{Color, Shape, TextMeasurer, with_legacy_measurer};
+use crate::draw::{Color, Shape, TextMeasurer};
 use crate::input::state::{Toast, ToastPriority};
 
 #[derive(Default)]
@@ -53,20 +53,6 @@ impl InputState {
         let first = editable_values[0];
         let mixed = editable_values.iter().any(|v| *v != first);
         if mixed { Some(true) } else { Some(!first) }
-    }
-
-    pub(in crate::input::state::core) fn apply_selection_change<A, F>(
-        &mut self,
-        applicable: A,
-        apply: F,
-    ) -> SelectionApplyResult
-    where
-        A: FnMut(&Shape) -> bool,
-        F: FnMut(&mut Shape) -> bool,
-    {
-        with_legacy_measurer(|measurer| {
-            self.apply_selection_change_with(measurer, applicable, apply)
-        })
     }
 
     pub(in crate::input::state::core) fn apply_selection_change_with<A, F>(

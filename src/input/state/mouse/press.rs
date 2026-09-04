@@ -1,4 +1,5 @@
 use crate::draw::Shape;
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::tool::ToolPressBehavior;
 use crate::input::{DragTool, Tool, events::MouseButton};
 use std::sync::Arc;
@@ -224,6 +225,18 @@ impl InputState {
         canvas_y: i32,
         color: Option<crate::draw::Color>,
     ) -> bool {
+        with_legacy_measurer(|measurer| {
+            self.handle_text_input_left_press_with(measurer, canvas_x, canvas_y, color)
+        })
+    }
+
+    pub(in crate::input::state) fn handle_text_input_left_press_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        canvas_x: i32,
+        canvas_y: i32,
+        color: Option<crate::draw::Color>,
+    ) -> bool {
         if !matches!(self.state, DrawingState::TextInput { .. }) {
             return false;
         }
@@ -251,9 +264,9 @@ impl InputState {
                 *selection_anchor = None;
             }
             self.needs_redraw = true;
-            self.update_text_preview_dirty_from_editor();
+            self.update_text_preview_dirty_from_editor_with(measurer);
         } else {
-            self.place_text_caret_at_canvas(canvas_x, canvas_y, self.modifiers.shift);
+            self.place_text_caret_at_canvas(measurer, canvas_x, canvas_y, self.modifiers.shift);
         }
         true
     }
@@ -265,7 +278,13 @@ impl InputState {
     /// one formula covers both. Active IME composition is hit-tested against
     /// the same effective preview as rendering, then mapped back to committed
     /// buffer coordinates.
-    fn place_text_caret_at_canvas(&mut self, canvas_x: i32, canvas_y: i32, extend: bool) {
+    fn place_text_caret_at_canvas(
+        &mut self,
+        measurer: &TextMeasurer,
+        canvas_x: i32,
+        canvas_y: i32,
+        extend: bool,
+    ) {
         let offset = {
             let DrawingState::TextInput { x, y, .. } = &self.state else {
                 return;
@@ -282,7 +301,7 @@ impl InputState {
                 .style
                 .font_descriptor
                 .to_pango_string(self.style.current_font_size);
-            let Some(preview_offset) = crate::draw::shape::hit_test_text(
+            let Some(preview_offset) = measurer.hit_test_text(
                 &preview.text,
                 &font,
                 self.style.text_wrap_width,
@@ -309,7 +328,7 @@ impl InputState {
             }
             *caret = offset;
             self.needs_redraw = true;
-            self.update_text_preview_dirty_from_editor();
+            self.update_text_preview_dirty_from_editor_with(measurer);
         }
     }
 
@@ -341,11 +360,20 @@ impl InputState {
     /// Update the active text block's origin from a canvas-space pointer during
     /// an Alt+drag, preserving the grab offset. No-op when not dragging.
     pub(in crate::input::state) fn drag_text_block_to(&mut self, canvas_x: i32, canvas_y: i32) {
+        with_legacy_measurer(|measurer| self.drag_text_block_to_with(measurer, canvas_x, canvas_y))
+    }
+
+    pub(in crate::input::state) fn drag_text_block_to_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        canvas_x: i32,
+        canvas_y: i32,
+    ) {
         if self
             .text_editing
             .drag_block_to(&mut self.state, canvas_x, canvas_y)
         {
-            self.update_text_preview_dirty();
+            self.update_text_preview_dirty_with(measurer);
             self.needs_redraw = true;
         }
     }

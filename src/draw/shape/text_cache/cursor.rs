@@ -1,6 +1,13 @@
 use super::*;
 
 impl TextMeasurer {
+    /// Hit-test a point against a rendered text run, returning the caret byte
+    /// offset nearest the point. Coordinates are relative to the text's stored
+    /// origin `(x, y)`: `local_x = point_x - x`, and `local_y_from_baseline =
+    /// point_y - y` (the stored `y` is the first-line baseline). Layout-aware, so
+    /// it is correct for wrapped and multiline text. The caret snaps to the
+    /// trailing edge of a glyph when the point is on its right half. Returns `None`
+    /// only when no measurement context is available.
     pub(crate) fn hit_test_text(
         &self,
         text: &str,
@@ -31,6 +38,8 @@ impl TextMeasurer {
             hit_position_to_byte(text, index, trailing)
         })
     }
+    /// Return the adjacent Pango cursor position in physical left/right order.
+    /// Logical byte order is insufficient for RTL and mixed-direction text.
     pub(crate) fn caret_on_adjacent_visual_position(
         &self,
         text: &str,
@@ -58,6 +67,9 @@ impl TextMeasurer {
             hit_position_to_byte(text, new_index, trailing)
         })
     }
+    /// Resolve which endpoint of a same-line selection is physically left/right.
+    /// For selections crossing visual lines, preserve the editor's established
+    /// document-order collapse behavior.
     pub(crate) fn caret_at_visual_selection_edge(
         &self,
         text: &str,
@@ -90,6 +102,8 @@ impl TextMeasurer {
             }
         })
     }
+    /// Return the logical byte offset at the start/end of the current Pango visual
+    /// line, including lines introduced by soft wrapping.
     pub(crate) fn caret_on_visual_line_edge(
         &self,
         text: &str,
@@ -120,6 +134,10 @@ impl TextMeasurer {
             }
         })
     }
+    /// Return the caret offset on the adjacent Pango visual line while preserving
+    /// the current horizontal layout position. This follows soft wrapping as well
+    /// as explicit newlines. At the first/last visual line it resolves to the
+    /// document start/end, matching the editor's existing boundary behavior.
     pub(crate) fn caret_on_adjacent_visual_line(
         &self,
         text: &str,
@@ -161,6 +179,11 @@ impl TextMeasurer {
             caret_geometry_in(&layout, text, byte_index)
         })
     }
+    /// Resolve caret geometry and logical bounds together. The damage tracker needs
+    /// both for the same text whenever a selection or composition is showing, so
+    /// sharing one layout saves building a second one for those states. Text bounds
+    /// still go through `measure_text_cached`, which lays out again on a cache miss;
+    /// this only removes the duplicate pass, it does not make damage layout-free.
     pub(crate) fn text_preview_geometry(
         &self,
         text: &str,

@@ -112,12 +112,6 @@ impl InputState {
     }
 
     /// Restore shapes from snapshots (used for cancel).
-    pub(crate) fn restore_resize_from_snapshots(&mut self, snapshots: &[(ShapeId, ShapeSnapshot)]) {
-        with_legacy_measurer(|measurer| {
-            self.restore_resize_from_snapshots_with(measurer, snapshots)
-        })
-    }
-
     pub(crate) fn restore_resize_from_snapshots_with(
         &mut self,
         measurer: &TextMeasurer,

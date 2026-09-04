@@ -788,8 +788,15 @@ mod tests {
             }
             let (min_x, min_y, max_x, max_y) =
                 painted_extents(&mut surface).expect("text paints something");
-            let bounds = crate::draw::shape::bounding_box_for_text(
-                origin.0, origin.1, text, size, &font, background, None,
+            let bounds = crate::draw::shape::bounding_box_for_text_with(
+                &crate::draw::TextMeasurer::default(),
+                origin.0,
+                origin.1,
+                text,
+                size,
+                &font,
+                background,
+                None,
             )
             .expect("non-empty text has damage bounds");
             assert!(

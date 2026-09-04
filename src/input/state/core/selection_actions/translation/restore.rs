@@ -1,18 +1,9 @@
 use crate::draw::ShapeId;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::ShapeSnapshot;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::InputState;
 
 impl InputState {
-    pub(crate) fn restore_selection_from_snapshots(
-        &mut self,
-        snapshots: Vec<(ShapeId, ShapeSnapshot)>,
-    ) {
-        with_legacy_measurer(|measurer| {
-            self.restore_selection_from_snapshots_with(measurer, snapshots)
-        })
-    }
-
     pub(crate) fn restore_selection_from_snapshots_with(
         &mut self,
         measurer: &TextMeasurer,

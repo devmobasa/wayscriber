@@ -2,7 +2,7 @@ use crate::draw::font::FontDescriptor;
 use crate::util::Rect;
 
 use super::bounds::ensure_positive_rect_f64;
-use super::text_cache::{TextContentExtents, TextMeasurement, TextMeasurer, with_legacy_measurer};
+use super::text_cache::{TextContentExtents, TextMeasurement, TextMeasurer};
 
 pub(super) fn text_layout_metrics(
     measurer: &TextMeasurer,
@@ -72,29 +72,6 @@ pub(super) fn text_bounds_from_metrics(
     }
 
     ensure_positive_rect_f64(min_x, min_y, max_x, max_y)
-}
-
-pub(crate) fn bounding_box_for_text(
-    x: i32,
-    y: i32,
-    text: &str,
-    size: f64,
-    font_descriptor: &FontDescriptor,
-    background_enabled: bool,
-    wrap_width: Option<i32>,
-) -> Option<Rect> {
-    with_legacy_measurer(|measurer| {
-        bounding_box_for_text_with(
-            measurer,
-            x,
-            y,
-            text,
-            size,
-            font_descriptor,
-            background_enabled,
-            wrap_width,
-        )
-    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -245,27 +222,6 @@ pub(crate) fn bounding_box_for_sticky_note_with(
         return None;
     }
     bounding_box_for_sticky_note_layout(measurer, x, y, text, size, font_descriptor, wrap_width)
-}
-
-pub(crate) fn bounding_box_for_sticky_note_preview(
-    x: i32,
-    y: i32,
-    text: &str,
-    size: f64,
-    font_descriptor: &FontDescriptor,
-    wrap_width: Option<i32>,
-) -> Option<Rect> {
-    with_legacy_measurer(|measurer| {
-        bounding_box_for_sticky_note_preview_with(
-            measurer,
-            x,
-            y,
-            text,
-            size,
-            font_descriptor,
-            wrap_width,
-        )
-    })
 }
 
 pub(crate) fn bounding_box_for_sticky_note_preview_with(

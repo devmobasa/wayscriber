@@ -1,7 +1,7 @@
 use super::base::{DrawingState, TextInputMode};
 use super::ime::ImeCompositionState;
 use crate::draw::frame::{Frame, ShapeSnapshot, UndoAction};
-use crate::draw::{Color, FontDescriptor, Shape, ShapeId};
+use crate::draw::{Color, FontDescriptor, Shape, ShapeId, TextMeasurer};
 use crate::util::Rect;
 
 pub(super) const TEXT_EDIT_ENTRY_DURATION_MS: u64 = 200;
@@ -251,6 +251,7 @@ impl TextEditing {
     /// the live editor owns it.
     pub(crate) fn begin_existing(
         &mut self,
+        measurer: &TextMeasurer,
         frame: &mut Frame,
         shape_id: ShapeId,
         now: std::time::Instant,
@@ -308,13 +309,13 @@ impl TextEditing {
             };
 
         let shape = frame.shape_mut(shape_id)?;
-        let before_bounds = shape.bounding_box();
+        let before_bounds = shape.bounding_box_with(measurer);
         match &mut shape.shape {
             Shape::Text { text, .. } | Shape::StickyNote { text, .. } => text.clear(),
             _ => return None,
         }
         shape.invalidate_bounds();
-        let after_bounds = shape.bounding_box();
+        let after_bounds = shape.bounding_box_with(measurer);
 
         self.text_input_mode = mode;
         self.text_edit_target = Some((shape_id, snapshot));
@@ -337,13 +338,17 @@ impl TextEditing {
         })
     }
 
-    pub(crate) fn cancel_existing(&mut self, frame: &mut Frame) -> Option<TextShapeChange> {
+    pub(crate) fn cancel_existing(
+        &mut self,
+        measurer: &TextMeasurer,
+        frame: &mut Frame,
+    ) -> Option<TextShapeChange> {
         let (shape_id, snapshot) = self.text_edit_target.take()?;
         let shape = frame.shape_mut(shape_id)?;
-        let before_bounds = shape.bounding_box();
+        let before_bounds = shape.bounding_box_with(measurer);
         shape.set_shape(snapshot.shape);
         shape.locked = snapshot.locked;
-        let after_bounds = shape.bounding_box();
+        let after_bounds = shape.bounding_box_with(measurer);
         Some(TextShapeChange {
             shape_id,
             before_bounds,
@@ -353,15 +358,16 @@ impl TextEditing {
 
     pub(crate) fn commit_existing(
         &mut self,
+        measurer: &TextMeasurer,
         frame: &mut Frame,
         new_shape: Shape,
         undo_stack_limit: usize,
     ) -> Option<TextShapeChange> {
         let (shape_id, before) = self.text_edit_target.take()?;
         let shape = frame.shape_mut(shape_id)?;
-        let before_bounds = shape.bounding_box();
+        let before_bounds = shape.bounding_box_with(measurer);
         shape.set_shape(new_shape);
-        let after_bounds = shape.bounding_box();
+        let after_bounds = shape.bounding_box_with(measurer);
         let after = ShapeSnapshot {
             shape: shape.shape.clone(),
             locked: shape.locked,
@@ -422,10 +428,11 @@ mod tests {
     fn existing_edit_hides_then_restores_the_original_shape() {
         let mut frame = Frame::new();
         let shape_id = frame.add_shape(text_shape("before"));
+        let measurer = TextMeasurer::default();
         let mut editing = TextEditing::default();
 
         let started = editing
-            .begin_existing(&mut frame, shape_id, std::time::Instant::now())
+            .begin_existing(&measurer, &mut frame, shape_id, std::time::Instant::now())
             .expect("editable text shape");
 
         assert_eq!(started.text, "before");
@@ -436,7 +443,7 @@ mod tests {
         ));
 
         let restored = editing
-            .cancel_existing(&mut frame)
+            .cancel_existing(&measurer, &mut frame)
             .expect("active edit restores");
         assert_eq!(restored.shape_id, shape_id);
         assert!(editing.edit_target().is_none());
@@ -450,13 +457,14 @@ mod tests {
     fn committing_an_existing_edit_records_one_undoable_replacement() {
         let mut frame = Frame::new();
         let shape_id = frame.add_shape(text_shape("before"));
+        let measurer = TextMeasurer::default();
         let mut editing = TextEditing::default();
         editing
-            .begin_existing(&mut frame, shape_id, std::time::Instant::now())
+            .begin_existing(&measurer, &mut frame, shape_id, std::time::Instant::now())
             .expect("editable text shape");
 
         editing
-            .commit_existing(&mut frame, text_shape("after"), 10)
+            .commit_existing(&measurer, &mut frame, text_shape("after"), 10)
             .expect("active edit commits");
 
         assert!(editing.edit_target().is_none());

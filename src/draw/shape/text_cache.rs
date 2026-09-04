@@ -117,31 +117,6 @@ pub(crate) fn measure_text_with_context(
     measure_text_cached(text, font_desc_str, size, wrap_width)
 }
 
-/// Hit-test a point against a rendered text run, returning the caret byte
-/// offset nearest the point. Coordinates are relative to the text's stored
-/// origin `(x, y)`: `local_x = point_x - x`, and `local_y_from_baseline =
-/// point_y - y` (the stored `y` is the first-line baseline). Layout-aware, so
-/// it is correct for wrapped and multiline text. The caret snaps to the
-/// trailing edge of a glyph when the point is on its right half. Returns `None`
-/// only when no measurement context is available.
-pub(crate) fn hit_test_text(
-    text: &str,
-    font_desc_str: &str,
-    wrap_width: Option<i32>,
-    local_x: f64,
-    local_y_from_baseline: f64,
-) -> Option<usize> {
-    with_legacy_measurer(|measurer| {
-        measurer.hit_test_text(
-            text,
-            font_desc_str,
-            wrap_width,
-            local_x,
-            local_y_from_baseline,
-        )
-    })
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum VisualLineDirection {
     Up,
@@ -158,85 +133,6 @@ pub(crate) enum VisualCaretDirection {
 pub(crate) enum VisualLineEdge {
     Start,
     End,
-}
-
-/// Return the adjacent Pango cursor position in physical left/right order.
-/// Logical byte order is insufficient for RTL and mixed-direction text.
-pub(crate) fn caret_on_adjacent_visual_position(
-    text: &str,
-    font_desc_str: &str,
-    wrap_width: Option<i32>,
-    byte_index: usize,
-    direction: VisualCaretDirection,
-) -> Option<usize> {
-    with_legacy_measurer(|measurer| {
-        measurer.caret_on_adjacent_visual_position(
-            text,
-            font_desc_str,
-            wrap_width,
-            byte_index,
-            direction,
-        )
-    })
-}
-
-/// Resolve which endpoint of a same-line selection is physically left/right.
-/// For selections crossing visual lines, preserve the editor's established
-/// document-order collapse behavior.
-pub(crate) fn caret_at_visual_selection_edge(
-    text: &str,
-    font_desc_str: &str,
-    wrap_width: Option<i32>,
-    start: usize,
-    end: usize,
-    direction: VisualCaretDirection,
-) -> Option<usize> {
-    with_legacy_measurer(|measurer| {
-        measurer.caret_at_visual_selection_edge(
-            text,
-            font_desc_str,
-            wrap_width,
-            start,
-            end,
-            direction,
-        )
-    })
-}
-
-/// Return the logical byte offset at the start/end of the current Pango visual
-/// line, including lines introduced by soft wrapping.
-pub(crate) fn caret_on_visual_line_edge(
-    text: &str,
-    font_desc_str: &str,
-    wrap_width: Option<i32>,
-    byte_index: usize,
-    edge: VisualLineEdge,
-) -> Option<usize> {
-    with_legacy_measurer(|measurer| {
-        measurer.caret_on_visual_line_edge(text, font_desc_str, wrap_width, byte_index, edge)
-    })
-}
-
-/// Return the caret offset on the adjacent Pango visual line while preserving
-/// the current horizontal layout position. This follows soft wrapping as well
-/// as explicit newlines. At the first/last visual line it resolves to the
-/// document start/end, matching the editor's existing boundary behavior.
-pub(crate) fn caret_on_adjacent_visual_line(
-    text: &str,
-    font_desc_str: &str,
-    wrap_width: Option<i32>,
-    byte_index: usize,
-    direction: VisualLineDirection,
-) -> Option<usize> {
-    with_legacy_measurer(|measurer| {
-        measurer.caret_on_adjacent_visual_line(
-            text,
-            font_desc_str,
-            wrap_width,
-            byte_index,
-            direction,
-        )
-    })
 }
 
 fn hit_position_to_byte(text: &str, index: i32, trailing: i32) -> usize {
@@ -301,22 +197,6 @@ pub(crate) struct TextPreviewGeometry {
     /// Present only when a caret offset was requested.
     pub caret: Option<CaretGeometry>,
     pub logical: LogicalBounds,
-}
-
-/// Resolve caret geometry and logical bounds together. The damage tracker needs
-/// both for the same text whenever a selection or composition is showing, so
-/// sharing one layout saves building a second one for those states. Text bounds
-/// still go through `measure_text_cached`, which lays out again on a cache miss;
-/// this only removes the duplicate pass, it does not make damage layout-free.
-pub(crate) fn text_preview_geometry(
-    text: &str,
-    font_desc_str: &str,
-    wrap_width: Option<i32>,
-    byte_index: Option<usize>,
-) -> Option<TextPreviewGeometry> {
-    with_legacy_measurer(|measurer| {
-        measurer.text_preview_geometry(text, font_desc_str, wrap_width, byte_index)
-    })
 }
 
 fn caret_geometry_in(layout: &pango::Layout, text: &str, byte_index: usize) -> CaretGeometry {

@@ -1,9 +1,8 @@
+use crate::draw::{TextMeasurer, with_legacy_measurer};
 use log::warn;
 
 use crate::draw::Shape;
-use crate::draw::shape::{
-    VisualCaretDirection, caret_at_visual_selection_edge, caret_on_adjacent_visual_position,
-};
+use crate::draw::shape::VisualCaretDirection;
 use crate::input::events::Key;
 use crate::input::state::core::TextEditing;
 use crate::input::state::{
@@ -12,7 +11,7 @@ use crate::input::state::{
 };
 
 use super::bindings::{fallback_unshifted_label, key_to_action_label};
-use super::caret_edit::{self, MAX_TEXT_LENGTH};
+use super::caret_edit::{self, MAX_TEXT_LENGTH, TextNavigation};
 
 impl InputState {
     pub(in crate::input::state) fn handle_text_input_key(&mut self, key: Key) {
@@ -81,66 +80,70 @@ impl InputState {
 
         // Handle Return key for finalizing text input (only plain Return, not Shift+Return)
         if matches!(key, Key::Return) && !self.modifiers.shift {
-            let (x, y, text) = if let DrawingState::TextInput { x, y, buffer, .. } = &self.state {
-                (*x, *y, buffer.clone())
-            } else {
-                (0, 0, String::new())
-            };
-
-            if text.is_empty() {
-                if self.text_editing.edit_target().is_some() {
-                    self.cancel_text_input();
-                } else {
-                    self.end_text_input_session();
-                }
-                return;
-            }
-
-            let shape = match self.text_editing.mode() {
-                TextInputMode::Plain => Shape::Text {
-                    x,
-                    y,
-                    text,
-                    color: self.style.current_color,
-                    size: self.style.current_font_size,
-                    font_descriptor: self.style.font_descriptor.clone(),
-                    background_enabled: self.style.text_background_enabled,
-                    wrap_width: self.style.text_wrap_width,
-                },
-                TextInputMode::StickyNote => Shape::StickyNote {
-                    x,
-                    y,
-                    text,
-                    background: self.style.current_color,
-                    size: self.style.current_font_size,
-                    font_descriptor: self.style.font_descriptor.clone(),
-                    wrap_width: self.style.text_wrap_width,
-                },
-            };
-            let bounds = shape.bounding_box();
-
-            if self.commit_text_edit(shape.clone()) {
-                self.end_text_input_session();
-                return;
-            }
-
-            let max_shapes = self.max_shapes_per_frame();
-            let added = self
-                .boards
-                .active_frame_mut()
-                .try_add_shape(shape, max_shapes);
-            if added {
-                self.dirty_tracker.mark_optional_rect(bounds);
-                self.needs_redraw = true;
-                self.mark_session_dirty();
-            } else {
-                warn!(
-                    "Shape limit ({}) reached; new text not added",
-                    self.max_shapes_per_frame()
-                );
-            }
-            self.end_text_input_session();
+            with_legacy_measurer(|measurer| self.finalize_text_input_with(measurer));
         }
+    }
+
+    fn finalize_text_input_with(&mut self, measurer: &TextMeasurer) {
+        let (x, y, text) = if let DrawingState::TextInput { x, y, buffer, .. } = &self.state {
+            (*x, *y, buffer.clone())
+        } else {
+            (0, 0, String::new())
+        };
+
+        if text.is_empty() {
+            if self.text_editing.edit_target().is_some() {
+                self.cancel_text_input_with(measurer);
+            } else {
+                self.end_text_input_session();
+            }
+            return;
+        }
+
+        let shape = match self.text_editing.mode() {
+            TextInputMode::Plain => Shape::Text {
+                x,
+                y,
+                text,
+                color: self.style.current_color,
+                size: self.style.current_font_size,
+                font_descriptor: self.style.font_descriptor.clone(),
+                background_enabled: self.style.text_background_enabled,
+                wrap_width: self.style.text_wrap_width,
+            },
+            TextInputMode::StickyNote => Shape::StickyNote {
+                x,
+                y,
+                text,
+                background: self.style.current_color,
+                size: self.style.current_font_size,
+                font_descriptor: self.style.font_descriptor.clone(),
+                wrap_width: self.style.text_wrap_width,
+            },
+        };
+        let bounds = shape.bounding_box_with(measurer);
+
+        if self.commit_text_edit_with(measurer, shape.clone()) {
+            self.end_text_input_session();
+            return;
+        }
+
+        let max_shapes = self.max_shapes_per_frame();
+        let added = self
+            .boards
+            .active_frame_mut()
+            .try_add_shape(shape, max_shapes);
+        if added {
+            self.dirty_tracker.mark_optional_rect(bounds);
+            self.needs_redraw = true;
+            self.mark_session_dirty();
+        } else {
+            warn!(
+                "Shape limit ({}) reached; new text not added",
+                self.max_shapes_per_frame()
+            );
+        }
+        self.end_text_input_session();
     }
 
     /// Apply caret navigation, in-place editing, and selection for keys the
@@ -148,6 +151,10 @@ impl InputState {
     /// stops routing it). Non-editing keys (Escape, F-keys, plain Return, and
     /// Ctrl/Alt shortcuts like undo/exit) return `false` and fall through.
     fn handle_text_editing_key(&mut self, key: Key) -> bool {
+        with_legacy_measurer(|measurer| self.handle_text_editing_key_with(measurer, key))
+    }
+
+    fn handle_text_editing_key_with(&mut self, measurer: &TextMeasurer, key: Key) -> bool {
         let ctrl = self.modifiers.ctrl;
         let alt = self.modifiers.alt;
         let shift = self.modifiers.shift;
@@ -206,15 +213,18 @@ impl InputState {
             key,
             ctrl,
             shift,
-            font_for_navigation.as_deref().unwrap_or_default(),
-            self.style.text_wrap_width,
+            TextNavigation {
+                measurer,
+                font: font_for_navigation.as_deref().unwrap_or_default(),
+                wrap_width: self.style.text_wrap_width,
+            },
         ) {
             Some(changed) => changed,
             None => return false,
         };
         if changed {
             self.needs_redraw = true;
-            self.update_text_preview_dirty_from_editor();
+            self.update_text_preview_dirty_from_editor_with(measurer);
         }
         true
     }
@@ -251,10 +261,18 @@ impl InputState {
     /// Insert clipboard text at the caret, then coordinate redraw and protocol
     /// effects owned by the root state.
     pub(crate) fn insert_text_at_caret(&mut self, text: &str) -> bool {
+        with_legacy_measurer(|measurer| self.insert_text_at_caret_with(measurer, text))
+    }
+
+    pub(crate) fn insert_text_at_caret_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        text: &str,
+    ) -> bool {
         let changed = self.text_editing.insert_text(&mut self.state, text);
         if changed {
             self.needs_redraw = true;
-            self.update_text_preview_dirty_from_editor();
+            self.update_text_preview_dirty_from_editor_with(measurer);
         }
         changed
     }
@@ -273,18 +291,35 @@ impl InputState {
         target: TextPasteTarget,
         text: &str,
     ) -> Option<TextPasteEdit> {
+        with_legacy_measurer(|measurer| self.apply_text_paste_with(measurer, target, text))
+    }
+
+    pub(crate) fn apply_text_paste_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        target: TextPasteTarget,
+        text: &str,
+    ) -> Option<TextPasteEdit> {
         let edit = self
             .text_editing
             .apply_paste(&mut self.state, target, text)?;
         self.needs_redraw = true;
-        self.update_text_preview_dirty_from_editor();
+        self.update_text_preview_dirty_from_editor_with(measurer);
         Some(edit)
     }
 
     pub(crate) fn complete_text_copy(&mut self, request: TextClipboardRequest) {
+        with_legacy_measurer(|measurer| self.complete_text_copy_with(measurer, request))
+    }
+
+    pub(crate) fn complete_text_copy_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        request: TextClipboardRequest,
+    ) {
         if self.text_editing.complete_copy(&mut self.state, request) {
             self.needs_redraw = true;
-            self.update_text_preview_dirty_from_editor();
+            self.update_text_preview_dirty_from_editor_with(measurer);
         }
     }
 }
@@ -456,11 +491,9 @@ impl TextEditing {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn move_horizontal_caret(
     buffer: &str,
-    font: &str,
-    wrap_width: Option<i32>,
+    navigation: TextNavigation<'_>,
     caret: &mut usize,
     anchor: &mut Option<usize>,
     extend: bool,
@@ -472,21 +505,27 @@ pub(super) fn move_horizontal_caret(
             VisualCaretDirection::Left => range.start,
             VisualCaretDirection::Right => range.end,
         };
-        let target = caret_at_visual_selection_edge(
-            buffer,
-            font,
-            wrap_width,
-            range.start,
-            range.end,
-            direction,
-        )
-        .unwrap_or(fallback);
+        let target = navigation
+            .measurer
+            .caret_at_visual_selection_edge(
+                buffer,
+                navigation.font,
+                navigation.wrap_width,
+                range.start,
+                range.end,
+                direction,
+            )
+            .unwrap_or(fallback);
         return caret_edit::move_to_offset(caret, anchor, false, target);
     }
 
-    let Some(adjacent) =
-        caret_on_adjacent_visual_position(buffer, font, wrap_width, *caret, direction)
-    else {
+    let Some(adjacent) = navigation.measurer.caret_on_adjacent_visual_position(
+        buffer,
+        navigation.font,
+        navigation.wrap_width,
+        *caret,
+        direction,
+    ) else {
         return match (direction, by_word) {
             (VisualCaretDirection::Left, false) => {
                 caret_edit::move_left(buffer, caret, anchor, extend)
@@ -555,3 +594,6 @@ mod tests {
         ));
     }
 }
+
+#[cfg(test)]
+mod measurement_tests;

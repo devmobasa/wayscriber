@@ -355,7 +355,7 @@ fn restore_selection_snapshots_reverts_translation() {
     assert_eq!(snapshots.len(), 1);
 
     assert!(state.apply_translation_to_selection(20, 30));
-    state.restore_selection_from_snapshots(snapshots);
+    state.restore_selection_from_snapshots_with(&crate::draw::TextMeasurer::default(), snapshots);
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();

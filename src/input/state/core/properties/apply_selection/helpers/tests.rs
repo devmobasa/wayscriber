@@ -216,7 +216,8 @@ fn apply_selection_change_reports_applicable_locked_and_changed_counts() {
     state.needs_redraw = false;
     state.clear_session_dirty();
 
-    let result = state.apply_selection_change(
+    let result = state.apply_selection_change_with(
+        &TextMeasurer::default(),
         |shape| matches!(shape, Shape::Rect { .. }),
         |shape| match shape {
             Shape::Rect { fill, .. } => {

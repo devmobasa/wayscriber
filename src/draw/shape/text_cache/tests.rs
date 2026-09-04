@@ -16,26 +16,33 @@ fn measurement(width: f64) -> TextMeasurement {
 
 #[test]
 fn hit_test_maps_x_extremes_to_buffer_ends() {
+    let measurer = TextMeasurer::default();
     // Far-left click lands at the start; far-right at the end; the exact
     // glyph widths do not matter, only the ordering and clamping.
     assert_eq!(
-        hit_test_text("hello", "Sans 20", None, -100.0, 0.0),
+        measurer.hit_test_text("hello", "Sans 20", None, -100.0, 0.0),
         Some(0)
     );
     assert_eq!(
-        hit_test_text("hello", "Sans 20", None, 100_000.0, 0.0),
+        measurer.hit_test_text("hello", "Sans 20", None, 100_000.0, 0.0),
         Some(5)
     );
     // Empty text always resolves to caret 0.
-    assert_eq!(hit_test_text("", "Sans 20", None, 42.0, 0.0), Some(0));
+    assert_eq!(
+        measurer.hit_test_text("", "Sans 20", None, 42.0, 0.0),
+        Some(0)
+    );
 }
 
 #[test]
 fn hit_test_result_is_always_a_char_boundary() {
+    let measurer = TextMeasurer::default();
     // '你好' is two 3-byte chars; any x must land on 0, 3, or 6.
     let text = "你好";
     for x in [-10.0, 0.0, 5.0, 12.0, 30.0, 1000.0] {
-        let offset = hit_test_text(text, "Sans 20", None, x, 0.0).unwrap();
+        let offset = measurer
+            .hit_test_text(text, "Sans 20", None, x, 0.0)
+            .unwrap();
         assert!(
             text.is_char_boundary(offset),
             "offset {offset} split a char"
