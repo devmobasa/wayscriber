@@ -1,7 +1,7 @@
 use std::f64::consts::{FRAC_PI_2, PI};
 
 use crate::ui::theme::{self, Rgba};
-use crate::ui_text::{UiTextStyle, measure_text, text_layout};
+use crate::ui_text::{UiTextEngine, UiTextStyle, measure_text, text_layout, with_legacy_engine};
 
 pub(crate) fn text_extents_for(
     ctx: &cairo::Context,
@@ -11,7 +11,21 @@ pub(crate) fn text_extents_for(
     size: f64,
     text: &str,
 ) -> cairo::TextExtents {
-    let layout = text_layout(
+    with_legacy_engine(|engine| {
+        text_extents_for_with_engine(engine, ctx, family, slant, weight, size, text)
+    })
+}
+
+pub(crate) fn text_extents_for_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    family: &str,
+    slant: cairo::FontSlant,
+    weight: cairo::FontWeight,
+    size: f64,
+    text: &str,
+) -> cairo::TextExtents {
+    let layout = engine.layout(
         ctx,
         UiTextStyle {
             family,
@@ -39,7 +53,22 @@ pub(crate) fn ellipsize_to_fit(
     weight: cairo::FontWeight,
     max_width: f64,
 ) -> String {
-    let extents = text_extents_for(
+    with_legacy_engine(|engine| {
+        ellipsize_to_fit_with_engine(engine, ctx, text, font_family, font_size, weight, max_width)
+    })
+}
+
+pub(crate) fn ellipsize_to_fit_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    text: &str,
+    font_family: &str,
+    font_size: f64,
+    weight: cairo::FontWeight,
+    max_width: f64,
+) -> String {
+    let extents = text_extents_for_with_engine(
+        engine,
         ctx,
         font_family,
         cairo::FontSlant::Normal,
@@ -52,7 +81,8 @@ pub(crate) fn ellipsize_to_fit(
     }
 
     let ellipsis = ELLIPSIS;
-    let ellipsis_extents = text_extents_for(
+    let ellipsis_extents = text_extents_for_with_engine(
+        engine,
         ctx,
         font_family,
         cairo::FontSlant::Normal,
@@ -71,7 +101,8 @@ pub(crate) fn ellipsize_to_fit(
             continue;
         }
         let candidate = format!("{}{}", &text[..end], ellipsis);
-        let candidate_extents = text_extents_for(
+        let candidate_extents = text_extents_for_with_engine(
+            engine,
             ctx,
             font_family,
             cairo::FontSlant::Normal,

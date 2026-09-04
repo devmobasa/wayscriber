@@ -129,6 +129,7 @@ fn surface_size(plan: &Plan) -> (u32, u32) {
 }
 
 struct AboutWindowState {
+    ui_text: crate::ui_text::UiTextEngine,
     theme: crate::ui::theme::Theme,
     registry_state: RegistryState,
     compositor_state: CompositorState,

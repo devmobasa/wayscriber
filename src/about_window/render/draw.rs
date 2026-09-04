@@ -5,9 +5,9 @@
 //! module only decides color and paint order, which is why the other three can
 //! be tested without a compositor.
 
-use crate::ui::ellipsize_to_fit;
+use crate::ui::ellipsize_to_fit_with_engine;
 use crate::ui::theme::{self, Rgba, Theme};
-use crate::ui_text::{UiTextStyle, measure_text};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::super::content::{AboutAction, AboutContent, UpdateState};
 use super::super::interaction::Element;
@@ -63,14 +63,19 @@ impl Frame<'_> {
     }
 }
 
-pub(super) fn draw_about(ctx: &cairo::Context, theme: &Theme, frame: &Frame<'_>) {
+pub(super) fn draw_about(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    theme: &Theme,
+    frame: &Frame<'_>,
+) {
     backdrop(ctx, frame.plan, theme);
-    header(ctx, frame, theme);
-    update_card(ctx, frame, theme);
-    link_rows(ctx, frame, theme);
-    meta_lines(ctx, frame, theme);
-    buttons(ctx, frame, theme);
-    footer(ctx, frame, theme);
+    header(engine, ctx, frame, theme);
+    update_card(engine, ctx, frame, theme);
+    link_rows(engine, ctx, frame, theme);
+    meta_lines(engine, ctx, frame, theme);
+    buttons(engine, ctx, frame, theme);
+    footer(engine, ctx, frame, theme);
 }
 
 fn backdrop(ctx: &cairo::Context, plan: &Plan, theme: &Theme) {
@@ -81,7 +86,7 @@ fn backdrop(ctx: &cairo::Context, plan: &Plan, theme: &Theme) {
     stroke_rounded_rect(ctx, rect, WINDOW_RADIUS, theme.border_hairline, 1.0);
 }
 
-fn header(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
+fn header(engine: &UiTextEngine, ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
     let plan = frame.plan;
 
     match frame.icon {
@@ -91,8 +96,9 @@ fn header(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
             // decoded.
             fill_rounded_rect(ctx, plan.icon, CARD_RADIUS, theme.accent);
             let style = style(20.0, cairo::FontWeight::Bold);
-            let x = plan.icon.0 + (plan.icon.2 - advance(style, "W")) / 2.0;
+            let x = plan.icon.0 + (plan.icon.2 - advance(engine, style, "W")) / 2.0;
             label(
+                engine,
                 ctx,
                 style,
                 (x, plan.icon.1 + plan.icon.3 * 0.72),
@@ -103,6 +109,7 @@ fn header(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
     }
 
     label(
+        engine,
         ctx,
         style(TITLE_SIZE, cairo::FontWeight::Bold),
         plan.title,
@@ -110,6 +117,7 @@ fn header(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
         frame.content.title,
     );
     label(
+        engine,
         ctx,
         style(TAGLINE_SIZE, cairo::FontWeight::Normal),
         plan.tagline,
@@ -117,6 +125,7 @@ fn header(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
         frame.content.tagline,
     );
     label(
+        engine,
         ctx,
         style(META_SIZE, cairo::FontWeight::Normal),
         plan.version,
@@ -133,7 +142,7 @@ fn header(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
     );
 }
 
-fn update_card(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
+fn update_card(engine: &UiTextEngine, ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
     let rect = frame.plan.update_card;
     let state = frame.state_of(Element::UpdateCard);
     let available = frame.update.is_update_available();
@@ -192,9 +201,10 @@ fn update_card(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
         Some(_) => {
             // The card doubles as the "check now" button whenever there is
             // nothing to open, so it says so.
-            let width = advance(action_style, CHECK_NOW);
+            let width = advance(engine, action_style, CHECK_NOW);
             let x = rect.0 + rect.2 - PADDING - width;
             label(
+                engine,
                 ctx,
                 action_style,
                 (x, rect.1 + rect.3 / 2.0 + action_style.size * 0.36),
@@ -215,22 +225,24 @@ fn update_card(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
     let headline = style(CARD_TITLE_SIZE, cairo::FontWeight::Bold);
     let detail = style(DETAIL_SIZE, cairo::FontWeight::Normal);
     label(
+        engine,
         ctx,
         headline,
         (text_left, rect.1 + 21.0),
         theme.text_primary,
-        &fit(ctx, &frame.update.headline(), headline, max_width),
+        &fit(engine, ctx, &frame.update.headline(), headline, max_width),
     );
     label(
+        engine,
         ctx,
         detail,
         (text_left, rect.1 + 36.0),
         theme.text_tertiary,
-        &fit(ctx, &frame.update.detail(), detail, max_width),
+        &fit(engine, ctx, &frame.update.detail(), detail, max_width),
     );
 }
 
-fn link_rows(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
+fn link_rows(engine: &UiTextEngine, ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
     let title_style = style(ROW_TITLE_SIZE, cairo::FontWeight::Normal);
     let detail_style = style(DETAIL_SIZE, cairo::FontWeight::Normal);
 
@@ -266,6 +278,7 @@ fn link_rows(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
 
         let (text_left, max_width) = row_text_bounds(*rect);
         label(
+            engine,
             ctx,
             title_style,
             (text_left, rect.1 + 16.0),
@@ -274,14 +287,15 @@ fn link_rows(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
             } else {
                 theme.text_primary
             },
-            &fit(ctx, link.title, title_style, max_width),
+            &fit(engine, ctx, link.title, title_style, max_width),
         );
         label(
+            engine,
             ctx,
             detail_style,
             (text_left, rect.1 + 30.0),
             theme.text_tertiary,
-            &fit(ctx, &link.detail, detail_style, max_width),
+            &fit(engine, ctx, &link.detail, detail_style, max_width),
         );
     }
 }
@@ -298,7 +312,7 @@ fn row_text_bounds(rect: Rect) -> (f64, f64) {
     (text_left, (chevron_x(rect) - 8.0 - text_left).max(0.0))
 }
 
-fn meta_lines(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
+fn meta_lines(engine: &UiTextEngine, ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
     let meta_style = style(META_SIZE, cairo::FontWeight::Normal);
     let max_width = frame.plan.width - frame.plan.icon.0 * 2.0;
 
@@ -309,16 +323,17 @@ fn meta_lines(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
         .zip(frame.content.meta_lines.iter())
     {
         label(
+            engine,
             ctx,
             meta_style,
             *baseline,
             theme.text_tertiary,
-            &fit(ctx, line, meta_style, max_width),
+            &fit(engine, ctx, line, meta_style, max_width),
         );
     }
 }
 
-fn buttons(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
+fn buttons(engine: &UiTextEngine, ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
     let button_style = style(BUTTON_SIZE, cairo::FontWeight::Normal);
     let specs = frame.content.buttons();
 
@@ -334,9 +349,10 @@ fn buttons(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
             theme.accent_bright,
         );
 
-        let label_text = fit(ctx, spec.label, button_style, rect.2 - 16.0);
-        let x = rect.0 + (rect.2 - advance(button_style, &label_text)) / 2.0;
+        let label_text = fit(engine, ctx, spec.label, button_style, rect.2 - 16.0);
+        let x = rect.0 + (rect.2 - advance(engine, button_style, &label_text)) / 2.0;
         label(
+            engine,
             ctx,
             button_style,
             (x, baseline_in(*rect, button_style.size)),
@@ -350,7 +366,7 @@ fn buttons(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
     }
 }
 
-fn footer(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
+fn footer(engine: &UiTextEngine, ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
     let hint_style = style(HINT_SIZE, cairo::FontWeight::Normal);
     let (text, color) = match frame.notice {
         Some(notice) => (notice, theme.accent_bright),
@@ -358,11 +374,12 @@ fn footer(ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
     };
     let max_width = frame.plan.width - frame.plan.icon.0 * 2.0;
     label(
+        engine,
         ctx,
         hint_style,
         frame.plan.hint,
         color,
-        &fit(ctx, text, hint_style, max_width),
+        &fit(engine, ctx, text, hint_style, max_width),
     );
 }
 
@@ -375,19 +392,42 @@ fn style(size: f64, weight: cairo::FontWeight) -> UiTextStyle<'static> {
     }
 }
 
-fn label(ctx: &cairo::Context, style: UiTextStyle<'_>, at: (f64, f64), color: Rgba, text: &str) {
+fn label(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    style: UiTextStyle<'_>,
+    at: (f64, f64),
+    color: Rgba,
+    text: &str,
+) {
     set_color(ctx, color);
-    draw_text(ctx, style, at.0, at.1, text);
+    draw_text(engine, ctx, style, at.0, at.1, text);
 }
 
 /// Trim to the available width so a long version string or install-source name
 /// cannot run under a chevron or off the surface.
-fn fit(ctx: &cairo::Context, text: &str, style: UiTextStyle<'_>, max_width: f64) -> String {
-    ellipsize_to_fit(ctx, text, style.family, style.size, style.weight, max_width)
+fn fit(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    text: &str,
+    style: UiTextStyle<'_>,
+    max_width: f64,
+) -> String {
+    ellipsize_to_fit_with_engine(
+        engine,
+        ctx,
+        text,
+        style.family,
+        style.size,
+        style.weight,
+        max_width,
+    )
 }
 
-fn advance(style: UiTextStyle<'_>, text: &str) -> f64 {
-    measure_text(style, text, None).map_or(0.0, |extents| extents.x_advance())
+fn advance(engine: &UiTextEngine, style: UiTextStyle<'_>, text: &str) -> f64 {
+    engine
+        .measure(style, text, None)
+        .map_or(0.0, |extents| extents.x_advance())
 }
 
 /// Vertically centered baseline inside `rect` for text of `size`.
@@ -404,168 +444,4 @@ fn opaque(color: Rgba) -> Rgba {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::about_window::layout;
-    use crate::update_check::{AvailableUpdate, DEFAULT_NOTES_URL, DEFAULT_UPDATE_URL};
-
-    fn frame_for<'a>(
-        plan: &'a Plan,
-        content: &'a AboutContent,
-        update: &'a UpdateState,
-    ) -> Frame<'a> {
-        Frame {
-            plan,
-            content,
-            update,
-            icon: None,
-            hover: None,
-            focus: None,
-            notice: None,
-        }
-    }
-
-    fn context(plan: &Plan) -> cairo::Context {
-        let surface = cairo::ImageSurface::create(
-            cairo::Format::ARgb32,
-            plan.width as i32,
-            plan.height as i32,
-        )
-        .unwrap();
-        cairo::Context::new(&surface).unwrap()
-    }
-
-    #[test]
-    fn about_paints_each_explicit_theme_without_changing_plan() {
-        let content = AboutContent::build();
-        let plan = layout::plan(&content);
-        let update = UpdateState::Checking;
-        let frame = frame_for(&plan, &content, &update);
-        let paint = |theme: &Theme| {
-            let mut surface = cairo::ImageSurface::create(
-                cairo::Format::ARgb32,
-                plan.width.ceil() as i32,
-                plan.height.ceil() as i32,
-            )
-            .unwrap();
-            {
-                let ctx = cairo::Context::new(&surface).unwrap();
-                draw_about(&ctx, theme, &frame);
-                assert_eq!(ctx.status(), Ok(()));
-            }
-            surface.flush();
-            surface.data().unwrap().to_vec()
-        };
-        let dark = paint(&Theme::dark());
-        let light = paint(&Theme::light());
-        assert!(
-            dark != light,
-            "explicit About themes must change chrome colors"
-        );
-        assert!(
-            dark == paint(&Theme::dark()),
-            "another theme must not replace the first owner's theme"
-        );
-    }
-
-    /// The dialog is a fixed width, so row wording has to be chosen to fit it.
-    /// An ellipsis here means a row's text was written without checking.
-    #[test]
-    fn link_row_wording_fits_without_being_ellipsized() {
-        let content = AboutContent::build();
-        let plan = layout::plan(&content);
-        let ctx = context(&plan);
-
-        let title_style = style(ROW_TITLE_SIZE, cairo::FontWeight::Normal);
-        let detail_style = style(DETAIL_SIZE, cairo::FontWeight::Normal);
-
-        for (rect, link) in plan.link_rows.iter().zip(content.links.iter()) {
-            let (_, max_width) = row_text_bounds(*rect);
-
-            assert_eq!(
-                fit(&ctx, link.title, title_style, max_width),
-                link.title,
-                "row title does not fit"
-            );
-            assert_eq!(
-                fit(&ctx, &link.detail, detail_style, max_width),
-                link.detail,
-                "detail of the {:?} row does not fit",
-                link.title
-            );
-        }
-    }
-
-    #[test]
-    fn every_update_state_paints_cleanly() {
-        let content = AboutContent::build();
-        let plan = layout::plan(&content);
-        let ctx = context(&plan);
-
-        let states = [
-            UpdateState::Unavailable,
-            UpdateState::Unknown(crate::update_check::Freshness::default()),
-            UpdateState::Checking,
-            UpdateState::UpToDate(crate::update_check::Freshness {
-                checked_seconds_ago: Some(3_600),
-                last_attempt_failed: false,
-            }),
-            UpdateState::UpToDate(crate::update_check::Freshness {
-                checked_seconds_ago: Some(3_600),
-                last_attempt_failed: true,
-            }),
-            UpdateState::Available {
-                update: Box::new(AvailableUpdate {
-                    version: "0.9.23".to_string(),
-                    released: Some("2026-07-20".to_string()),
-                    update_url: DEFAULT_UPDATE_URL.to_string(),
-                    notes_url: DEFAULT_NOTES_URL.to_string(),
-                }),
-                freshness: crate::update_check::Freshness {
-                    checked_seconds_ago: Some(0),
-                    last_attempt_failed: false,
-                },
-            },
-            UpdateState::Failed("Network unreachable".to_string()),
-        ];
-
-        for state in &states {
-            draw_about(&ctx, &Theme::dark(), &frame_for(&plan, &content, state));
-            assert_eq!(ctx.status(), Ok(()), "state {state:?} failed to paint");
-        }
-    }
-
-    #[test]
-    fn hover_focus_and_notice_paint_cleanly() {
-        let content = AboutContent::build();
-        let plan = layout::plan(&content);
-        let ctx = context(&plan);
-        let update = UpdateState::Unknown(crate::update_check::Freshness::default());
-
-        let mut frame = frame_for(&plan, &content, &update);
-        frame.hover = Some(Element::Link(0));
-        frame.focus = Some(Element::Close);
-        frame.notice = Some("Copied to clipboard");
-        draw_about(&ctx, &Theme::dark(), &frame);
-
-        frame.hover = Some(Element::UpdateCard);
-        frame.focus = Some(Element::Button(0));
-        frame.notice = None;
-        draw_about(&ctx, &Theme::dark(), &frame);
-
-        assert_eq!(ctx.status(), Ok(()));
-    }
-
-    #[test]
-    fn text_is_trimmed_to_the_width_it_is_given() {
-        let content = AboutContent::build();
-        let plan = layout::plan(&content);
-        let ctx = context(&plan);
-        let narrow = style(ROW_TITLE_SIZE, cairo::FontWeight::Normal);
-
-        let trimmed = fit(&ctx, "Setup, config, troubleshooting", narrow, 40.0);
-
-        assert!(trimmed.len() < "Setup, config, troubleshooting".len());
-        assert!(advance(narrow, &trimmed) <= 40.0);
-    }
-}
+mod tests;

@@ -135,29 +135,59 @@ impl UiLayoutCache {
     }
 }
 
-thread_local! {
-    static UI_LAYOUT_CACHE: RefCell<UiLayoutCache> = RefCell::new(UiLayoutCache::new(512));
-    /// Shared 1x1 surface + context for measuring text without a target surface.
-    static MEASUREMENT_CONTEXT: RefCell<Option<cairo::Context>> = const { RefCell::new(None) };
+/// Shaped UI text and context-free measurement resources for one owner.
+/// Cairo resources are created only when first used. Keep this owner on its
+/// rendering thread, outside snapshots and input state.
+pub(crate) struct UiTextEngine {
+    layouts: RefCell<UiLayoutCache>,
+    measurement: RefCell<Option<cairo::Context>>,
 }
 
-/// Measure UI text without a rendering context (e.g. for damage computation
-/// before a frame buffer exists). Goes through the same layout cache as
-/// `text_layout`, so measurements agree exactly with subsequent rendering.
+impl Default for UiTextEngine {
+    fn default() -> Self {
+        Self {
+            layouts: RefCell::new(UiLayoutCache::new(512)),
+            measurement: RefCell::new(None),
+        }
+    }
+}
+
+// Temporary migration bridge for unmigrated overlay/toolbar/export roots.
+// Remove when every production caller receives an explicit engine.
+thread_local! {
+    static LEGACY_UI_TEXT: UiTextEngine = UiTextEngine::default();
+}
+
+pub(crate) fn with_legacy_engine<T>(f: impl FnOnce(&UiTextEngine) -> T) -> T {
+    LEGACY_UI_TEXT.with(f)
+}
+
 pub(crate) fn measure_text(
     style: UiTextStyle<'_>,
     text: &str,
     wrap_width: Option<f64>,
 ) -> Option<UiTextExtents> {
-    MEASUREMENT_CONTEXT.with(|cell| {
-        let mut ctx_ref = cell.borrow_mut();
-        if ctx_ref.is_none() {
-            let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).ok()?;
-            *ctx_ref = cairo::Context::new(&surface).ok();
-        }
-        let ctx = ctx_ref.as_ref()?;
-        Some(text_layout(ctx, style, text, wrap_width).ink_extents())
-    })
+    with_legacy_engine(|engine| engine.measure(style, text, wrap_width))
+}
+
+impl UiTextEngine {
+    /// Measure before a target exists, using the same layout cache as painting.
+    pub(crate) fn measure(
+        &self,
+        style: UiTextStyle<'_>,
+        text: &str,
+        wrap_width: Option<f64>,
+    ) -> Option<UiTextExtents> {
+        let ctx = {
+            let mut stored = self.measurement.borrow_mut();
+            if stored.is_none() {
+                let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).ok()?;
+                *stored = cairo::Context::new(&surface).ok();
+            }
+            stored.as_ref()?.clone()
+        };
+        Some(self.layout(&ctx, style, text, wrap_width).ink_extents())
+    }
 }
 
 fn slant_key(slant: cairo::FontSlant) -> u8 {
@@ -181,56 +211,7 @@ pub(crate) fn text_layout(
     text: &str,
     wrap_width: Option<f64>,
 ) -> UiTextLayout {
-    let wrap_units = wrap_width.map_or(-1, |width| to_pango_units(width.max(1.0)));
-    let key = UiLayoutCacheKey {
-        family: style.family.to_string(),
-        slant: slant_key(style.slant),
-        weight: weight_key(style.weight),
-        size_hundredths: (style.size * 100.0).round() as i64,
-        wrap_units,
-        text: text.to_string(),
-    };
-
-    let cached = UI_LAYOUT_CACHE.with(|cache| cache.borrow_mut().get(&key));
-    if let Some(layout) = cached {
-        // Re-bind the cached layout to the current Cairo context (font options,
-        // resolution, transformation) without re-shaping the text.
-        pangocairo::functions::update_layout(ctx, &layout);
-        let (ink_rect, logical_rect, baseline) = layout_metrics(&layout);
-        return UiTextLayout {
-            layout,
-            ink_rect,
-            logical_rect,
-            baseline,
-        };
-    }
-
-    let layout = pangocairo::functions::create_layout(ctx);
-    let font_desc = font_description(style);
-    layout.set_font_description(Some(&font_desc));
-    layout.set_text(text);
-    if wrap_units >= 0 {
-        layout.set_width(wrap_units);
-        layout.set_wrap(pango::WrapMode::WordChar);
-    }
-    let (ink_rect, logical_rect, baseline) = layout_metrics(&layout);
-
-    UI_LAYOUT_CACHE.with(|cache| {
-        cache.borrow_mut().insert(
-            key,
-            CachedUiLayout {
-                layout: layout.clone(),
-                last_used: 0,
-            },
-        );
-    });
-
-    UiTextLayout {
-        layout,
-        ink_rect,
-        logical_rect,
-        baseline,
-    }
+    with_legacy_engine(|engine| engine.layout(ctx, style, text, wrap_width))
 }
 
 pub(crate) fn draw_text_baseline(
@@ -241,10 +222,81 @@ pub(crate) fn draw_text_baseline(
     y: f64,
     wrap_width: Option<f64>,
 ) -> UiTextExtents {
-    let layout = text_layout(ctx, style, text, wrap_width);
-    let extents = layout.ink_extents();
-    layout.show_at_baseline(ctx, x, y);
-    extents
+    with_legacy_engine(|engine| engine.draw_baseline(ctx, style, text, x, y, wrap_width))
+}
+
+impl UiTextEngine {
+    pub(crate) fn layout(
+        &self,
+        ctx: &cairo::Context,
+        style: UiTextStyle<'_>,
+        text: &str,
+        wrap_width: Option<f64>,
+    ) -> UiTextLayout {
+        let wrap_units = wrap_width.map_or(-1, |width| to_pango_units(width.max(1.0)));
+        let key = UiLayoutCacheKey {
+            family: style.family.to_string(),
+            slant: slant_key(style.slant),
+            weight: weight_key(style.weight),
+            size_hundredths: (style.size * 100.0).round() as i64,
+            wrap_units,
+            text: text.to_string(),
+        };
+
+        let cached = self.layouts.borrow_mut().get(&key);
+        if let Some(layout) = cached {
+            // Re-bind the cached layout to the current Cairo context (font options,
+            // resolution, transformation) without re-shaping the text.
+            pangocairo::functions::update_layout(ctx, &layout);
+            let (ink_rect, logical_rect, baseline) = layout_metrics(&layout);
+            return UiTextLayout {
+                layout,
+                ink_rect,
+                logical_rect,
+                baseline,
+            };
+        }
+
+        let layout = pangocairo::functions::create_layout(ctx);
+        let font_desc = font_description(style);
+        layout.set_font_description(Some(&font_desc));
+        layout.set_text(text);
+        if wrap_units >= 0 {
+            layout.set_width(wrap_units);
+            layout.set_wrap(pango::WrapMode::WordChar);
+        }
+        let (ink_rect, logical_rect, baseline) = layout_metrics(&layout);
+
+        self.layouts.borrow_mut().insert(
+            key,
+            CachedUiLayout {
+                layout: layout.clone(),
+                last_used: 0,
+            },
+        );
+
+        UiTextLayout {
+            layout,
+            ink_rect,
+            logical_rect,
+            baseline,
+        }
+    }
+
+    pub(crate) fn draw_baseline(
+        &self,
+        ctx: &cairo::Context,
+        style: UiTextStyle<'_>,
+        text: &str,
+        x: f64,
+        y: f64,
+        wrap_width: Option<f64>,
+    ) -> UiTextExtents {
+        let layout = self.layout(ctx, style, text, wrap_width);
+        let extents = layout.ink_extents();
+        layout.show_at_baseline(ctx, x, y);
+        extents
+    }
 }
 
 fn rect_to_extents(
@@ -306,99 +358,4 @@ fn layout_metrics(layout: &pango::Layout) -> (pango::Rectangle, pango::Rectangle
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn style(size: f64) -> UiTextStyle<'static> {
-        UiTextStyle {
-            family: "Sans",
-            slant: cairo::FontSlant::Normal,
-            weight: cairo::FontWeight::Bold,
-            size,
-        }
-    }
-
-    fn uncached_text_extents(
-        ctx: &cairo::Context,
-        style: UiTextStyle<'_>,
-        text: &str,
-        wrap_width: Option<f64>,
-    ) -> UiTextExtents {
-        let layout = pangocairo::functions::create_layout(ctx);
-        let font_desc = font_description(style);
-        layout.set_font_description(Some(&font_desc));
-        layout.set_text(text);
-        if let Some(width) = wrap_width {
-            layout.set_width(to_pango_units(width.max(1.0)));
-            layout.set_wrap(pango::WrapMode::WordChar);
-        }
-        let (ink_rect, logical_rect, baseline) = layout_metrics(&layout);
-        rect_to_extents(ink_rect, logical_rect, baseline)
-    }
-
-    fn assert_extents_eq(actual: UiTextExtents, expected: UiTextExtents) {
-        assert_eq!(actual.width(), expected.width());
-        assert_eq!(actual.height(), expected.height());
-        assert_eq!(actual.x_bearing(), expected.x_bearing());
-        assert_eq!(actual.y_bearing(), expected.y_bearing());
-    }
-
-    #[test]
-    fn cached_layout_returns_identical_extents() {
-        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 4, 4).unwrap();
-        let ctx = cairo::Context::new(&surface).unwrap();
-
-        let first = text_layout(&ctx, style(15.0), "cache me", None).ink_extents();
-        let second = text_layout(&ctx, style(15.0), "cache me", None).ink_extents();
-
-        assert_eq!(first.width(), second.width());
-        assert_eq!(first.height(), second.height());
-        assert_eq!(first.x_bearing(), second.x_bearing());
-        assert_eq!(first.y_bearing(), second.y_bearing());
-    }
-
-    #[test]
-    fn cached_layout_recomputes_extents_after_context_update() {
-        let first_surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 64, 64).unwrap();
-        let first_ctx = cairo::Context::new(&first_surface).unwrap();
-        let scaled_surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 64, 64).unwrap();
-        let scaled_ctx = cairo::Context::new(&scaled_surface).unwrap();
-        scaled_ctx.scale(2.0, 2.0);
-
-        let style = style(18.0);
-        let text = "cache scale";
-        let _ = text_layout(&first_ctx, style, text, None).ink_extents();
-        let expected_scaled = uncached_text_extents(&scaled_ctx, style, text, None);
-
-        let cached_scaled = text_layout(&scaled_ctx, style, text, None).ink_extents();
-        assert_extents_eq(cached_scaled, expected_scaled);
-    }
-
-    #[test]
-    fn measure_text_matches_rendered_layout_extents() {
-        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 4, 4).unwrap();
-        let ctx = cairo::Context::new(&surface).unwrap();
-
-        let measured = measure_text(style(16.0), "toast body", None).expect("measurement");
-        let rendered = text_layout(&ctx, style(16.0), "toast body", None).ink_extents();
-
-        assert_eq!(measured.width(), rendered.width());
-        assert_eq!(measured.height(), rendered.height());
-    }
-
-    #[test]
-    fn different_styles_produce_distinct_cache_entries() {
-        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 4, 4).unwrap();
-        let ctx = cairo::Context::new(&surface).unwrap();
-
-        let small = text_layout(&ctx, style(10.0), "sized", None).ink_extents();
-        let large = text_layout(&ctx, style(30.0), "sized", None).ink_extents();
-        assert!(large.width() > small.width());
-
-        // Wrap width participates in the key: same text, different layouts.
-        let unwrapped = text_layout(&ctx, style(12.0), "wrap wrap wrap wrap", None).ink_extents();
-        let wrapped =
-            text_layout(&ctx, style(12.0), "wrap wrap wrap wrap", Some(40.0)).ink_extents();
-        assert!(wrapped.height() >= unwrapped.height());
-    }
-}
+mod tests;
