@@ -48,11 +48,11 @@ impl InputState {
                 true
             }
             Action::ToggleToolbar => {
-                self.handle_toggle_toolbar_with_engine(resources.ui_engine);
+                self.handle_toggle_toolbar_with_resources(resources);
                 true
             }
             Action::CycleToolbarDisplay => {
-                self.handle_cycle_toolbar_display_with_engine(resources.ui_engine);
+                self.handle_cycle_toolbar_display_with_resources(resources);
                 true
             }
             Action::TogglePresenterMode => {
@@ -284,13 +284,20 @@ impl InputState {
         }
     }
 
-    fn handle_toggle_toolbar_with_engine(&mut self, engine: &crate::ui_text::UiTextEngine) {
+    fn handle_toggle_toolbar_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) {
         if self.presenter_hides_toolbars() {
             return;
         }
         self.break_focus_mode();
         let now_visible = !self.toolbar_visible();
-        if !self.set_toolbar_visible_with_engine(engine, now_visible) {
+        if !self.set_toolbar_visible_with_resources(
+            resources.ui_engine,
+            resources.measurer,
+            now_visible,
+        ) {
             return;
         }
         let previous_top_pinned = self.toolbar_top_pinned();
@@ -310,13 +317,17 @@ impl InputState {
         }
     }
 
-    fn handle_cycle_toolbar_display_with_engine(&mut self, engine: &crate::ui_text::UiTextEngine) {
+    fn handle_cycle_toolbar_display_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) {
         if self.presenter_hides_toolbars() {
             return;
         }
         self.break_focus_mode();
         let previous_mode = self.toolbar_top_display_mode();
-        let mode = self.cycle_top_toolbar_display_with_engine(engine);
+        let mode =
+            self.cycle_top_toolbar_display_with_resources(resources.ui_engine, resources.measurer);
         self.pending_onboarding_usage.used_toolbar_toggle = true;
         let toast = self.toolbar_display_toast(mode);
         self.push_toast(ToastPriority::Info, "ui", toast);

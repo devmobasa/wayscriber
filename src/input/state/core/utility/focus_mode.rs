@@ -120,7 +120,7 @@ impl InputState {
             || self.fallback_mode_badge_may_be_active();
         if !anything_to_hide {
             self.clear_all_chrome_recovery_toast();
-            self.set_toolbar_visible_with_engine(resources.ui_engine, true);
+            self.set_toolbar_visible_with_resources(resources.ui_engine, resources.measurer, true);
             self.ui_visibility.show_status_bar = true;
             self.ui_visibility.show_floating_badge = true;
             self.ui_visibility.show_zoom_chip = true;

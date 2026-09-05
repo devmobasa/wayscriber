@@ -15,7 +15,6 @@ pub(crate) use core::{InputEffect, InputEffectDrain};
 pub(in crate::input::state) use spotlight::SpotlightWheelGesture;
 pub(crate) use spotlight::{SpotlightFrameRegions, SpotlightWheelClaim, SpotlightWheelOutcome};
 pub(crate) use text_resources::InputTextResources;
-pub(in crate::input::state) use text_resources::with_scoped_text_resources;
 #[cfg(test)]
 mod tests;
 

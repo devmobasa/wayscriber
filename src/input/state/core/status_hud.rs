@@ -47,9 +47,10 @@ impl InputState {
         }
     }
 
-    pub(crate) fn set_status_bar_item_visible_with_engine(
+    pub(crate) fn set_status_bar_item_visible_with_resources(
         &mut self,
         engine: &crate::ui_text::UiTextEngine,
+        measurer: &crate::draw::TextMeasurer,
         item: StatusBarItem,
         visible: bool,
     ) -> bool {
@@ -71,7 +72,7 @@ impl InputState {
             StatusBarItem::Help => self.ui_visibility.show_status_help = visible,
             StatusBarItem::About => self.ui_visibility.show_status_about = visible,
         }
-        self.refresh_status_hud_layout_with_engine(engine);
+        self.refresh_status_hud_layout_with_resources(engine, measurer);
         self.needs_redraw = true;
         true
     }
@@ -82,17 +83,21 @@ impl InputState {
     /// narrow outputs — between the mutation and the next frame, and hover is
     /// re-derived so a vanished segment cannot stay lit. Damage stays with
     /// the render effect pass, which re-measures with that frame's inputs.
-    pub(crate) fn refresh_status_hud_layout_with_engine(
+    pub(crate) fn refresh_status_hud_layout_with_resources(
         &mut self,
         engine: &crate::ui_text::UiTextEngine,
+        measurer: &crate::draw::TextMeasurer,
     ) {
         let Some(inputs) = self.status_hud.rebuild_inputs() else {
             self.status_hud.layout = None;
             self.status_hud.hover = None;
             return;
         };
-        self.update_status_hud_layout_for_pointer_with_engine(
-            engine,
+        self.update_status_hud_layout_for_pointer_with_resources(
+            crate::input::state::InputTextResources {
+                measurer,
+                ui_engine: engine,
+            },
             inputs.position,
             &inputs.style,
             inputs.screen_width,
@@ -114,7 +119,13 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) {
-        self.update_status_hud_layout_for_pointer(
+        let engine = crate::ui_text::UiTextEngine::default();
+        let measurer = crate::draw::TextMeasurer::default();
+        self.update_status_hud_layout_for_pointer_with_resources(
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &engine,
+            },
             position,
             style,
             screen_width,
@@ -123,29 +134,9 @@ impl InputState {
         );
     }
 
-    pub(crate) fn update_status_hud_layout_for_pointer(
+    pub(crate) fn update_status_hud_layout_for_pointer_with_resources(
         &mut self,
-        position: StatusPosition,
-        style: &StatusBarStyle,
-        screen_width: u32,
-        screen_height: u32,
-        chrome_cursor_focused: bool,
-    ) {
-        crate::ui_text::with_scoped_engine(|engine| {
-            self.update_status_hud_layout_for_pointer_with_engine(
-                engine,
-                position,
-                style,
-                screen_width,
-                screen_height,
-                chrome_cursor_focused,
-            )
-        });
-    }
-
-    pub(crate) fn update_status_hud_layout_for_pointer_with_engine(
-        &mut self,
-        engine: &crate::ui_text::UiTextEngine,
+        resources: crate::input::state::InputTextResources<'_>,
         position: StatusPosition,
         style: &StatusBarStyle,
         screen_width: u32,
@@ -153,8 +144,9 @@ impl InputState {
         chrome_cursor_focused: bool,
     ) {
         let layout = if self.ui_visibility.show_status_bar {
-            crate::ui::compute_status_hud_layout_with_engine(
-                engine,
+            crate::ui::compute_status_hud_layout_with_resources(
+                resources.ui_engine,
+                resources.measurer,
                 self,
                 position,
                 style,

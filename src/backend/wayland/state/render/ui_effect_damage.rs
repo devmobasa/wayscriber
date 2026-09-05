@@ -150,8 +150,11 @@ impl WaylandState {
             chrome_cursor_can_rehit(self.has_cursor_focus(), self.cursor_blocked_by_toolbar());
         let status_hud_rect = if flags.active(UiEffect::StatusHud) {
             self.input_state
-                .update_status_hud_layout_for_pointer_with_engine(
-                    self.render.ui_text(),
+                .update_status_hud_layout_for_pointer_with_resources(
+                    crate::input::state::InputTextResources {
+                        measurer: self.render.text_measurer(),
+                        ui_engine: self.render.ui_text(),
+                    },
                     self.config.ui.status_bar_position,
                     &self.config.ui.status_bar_style,
                     width,

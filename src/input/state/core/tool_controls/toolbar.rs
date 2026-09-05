@@ -12,36 +12,38 @@ pub(crate) const CLEAR_UNDO_TOAST_MS: u64 = 2000;
 impl InputState {
     /// Sets toolbar visibility without changing its persisted pin.
     pub fn set_toolbar_visible(&mut self, visible: bool) -> bool {
-        crate::ui_text::with_scoped_engine(|engine| {
-            self.set_toolbar_visible_with_engine(engine, visible)
-        })
+        let engine = crate::ui_text::UiTextEngine::default();
+        let measurer = crate::draw::TextMeasurer::default();
+        self.set_toolbar_visible_with_resources(&engine, &measurer, visible)
     }
 
-    pub(crate) fn set_toolbar_visible_with_engine(
+    pub(crate) fn set_toolbar_visible_with_resources(
         &mut self,
         engine: &crate::ui_text::UiTextEngine,
+        measurer: &crate::draw::TextMeasurer,
         visible: bool,
     ) -> bool {
         if !self.toolbar.set_visible(visible) {
             return false;
         }
-        self.refresh_status_hud_layout_with_engine(engine);
+        self.refresh_status_hud_layout_with_resources(engine, measurer);
         self.needs_redraw = true;
         true
     }
 
     /// Re-derive live visibility from the persisted pin without surfacing a
     /// toolbar hidden by a transient chrome owner.
-    pub(crate) fn derive_toolbar_visibility_from_pins_with_engine(
+    pub(crate) fn derive_toolbar_visibility_from_pins_with_resources(
         &mut self,
         engine: &crate::ui_text::UiTextEngine,
+        measurer: &crate::draw::TextMeasurer,
     ) {
         let visible = self.toolbar.top_pinned();
         if self.modes.retarget_visibility_from_pin(visible) {
             return;
         }
         self.toolbar.derive_visibility_from_pins();
-        self.refresh_status_hud_layout_with_engine(engine);
+        self.refresh_status_hud_layout_with_resources(engine, measurer);
     }
 
     pub(crate) fn warn_if_all_chrome_hidden(&mut self) {
@@ -233,29 +235,31 @@ impl InputState {
         }
     }
 
-    pub(crate) fn set_top_display_mode_with_engine(
+    pub(crate) fn set_top_display_mode_with_resources(
         &mut self,
         engine: &crate::ui_text::UiTextEngine,
+        measurer: &crate::draw::TextMeasurer,
         mode: TopDisplayMode,
     ) {
         self.toolbar.set_top_display_mode(mode);
-        self.refresh_status_hud_layout_with_engine(engine);
+        self.refresh_status_hud_layout_with_resources(engine, measurer);
         self.needs_redraw = true;
     }
 
     pub fn cycle_top_toolbar_display(&mut self) -> TopDisplayMode {
-        crate::ui_text::with_scoped_engine(|engine| {
-            self.cycle_top_toolbar_display_with_engine(engine)
-        })
+        let engine = crate::ui_text::UiTextEngine::default();
+        let measurer = crate::draw::TextMeasurer::default();
+        self.cycle_top_toolbar_display_with_resources(&engine, &measurer)
     }
 
-    pub(crate) fn cycle_top_toolbar_display_with_engine(
+    pub(crate) fn cycle_top_toolbar_display_with_resources(
         &mut self,
         engine: &crate::ui_text::UiTextEngine,
+        measurer: &crate::draw::TextMeasurer,
     ) -> TopDisplayMode {
         let current = self.top_display_state();
         let next = self.toolbar.cycle_top_display_mode(current);
-        self.refresh_status_hud_layout_with_engine(engine);
+        self.refresh_status_hud_layout_with_resources(engine, measurer);
         self.needs_redraw = true;
         next
     }
@@ -426,9 +430,12 @@ impl InputState {
 
     /// Wrapper for undo that preserves existing action plumbing.
     pub fn toolbar_undo(&mut self) {
-        crate::input::state::with_scoped_text_resources(|resources| {
-            self.toolbar_undo_with_resources(resources)
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.toolbar_undo_with_resources(crate::input::state::InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        });
     }
 
     pub(crate) fn toolbar_undo_with_resources(
@@ -440,9 +447,12 @@ impl InputState {
 
     /// Wrapper for redo that preserves existing action plumbing.
     pub fn toolbar_redo(&mut self) {
-        crate::input::state::with_scoped_text_resources(|resources| {
-            self.toolbar_redo_with_resources(resources)
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.toolbar_redo_with_resources(crate::input::state::InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        });
     }
 
     pub(crate) fn toolbar_redo_with_resources(
@@ -454,9 +464,12 @@ impl InputState {
 
     /// Wrapper for clear that preserves existing action plumbing.
     pub fn toolbar_clear(&mut self) {
-        crate::input::state::with_scoped_text_resources(|resources| {
-            self.toolbar_clear_with_resources(resources)
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.toolbar_clear_with_resources(crate::input::state::InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        });
     }
 
     pub(crate) fn toolbar_clear_with_resources(
@@ -470,9 +483,14 @@ impl InputState {
     /// were removed without a locked-shape warning, offers a short toast with
     /// an "Undo?" chip. The keyboard action and Shift+click stay instant.
     pub fn toolbar_clear_with_undo_toast(&mut self) {
-        crate::input::state::with_scoped_text_resources(|resources| {
-            self.toolbar_clear_with_undo_toast_with_resources(resources)
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.toolbar_clear_with_undo_toast_with_resources(
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &ui_engine,
+            },
+        );
     }
 
     pub(crate) fn toolbar_clear_with_undo_toast_with_resources(
@@ -502,9 +520,12 @@ impl InputState {
 
     /// Wrapper for entering text mode.
     pub fn toolbar_enter_text_mode(&mut self) {
-        crate::input::state::with_scoped_text_resources(|resources| {
-            self.toolbar_enter_text_mode_with_resources(resources)
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.toolbar_enter_text_mode_with_resources(crate::input::state::InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        });
     }
 
     pub(crate) fn toolbar_enter_text_mode_with_resources(
@@ -516,9 +537,14 @@ impl InputState {
 
     /// Wrapper for entering sticky note mode.
     pub fn toolbar_enter_sticky_note_mode(&mut self) {
-        crate::input::state::with_scoped_text_resources(|resources| {
-            self.toolbar_enter_sticky_note_mode_with_resources(resources)
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.toolbar_enter_sticky_note_mode_with_resources(
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &ui_engine,
+            },
+        );
     }
 
     pub(crate) fn toolbar_enter_sticky_note_mode_with_resources(

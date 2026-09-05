@@ -74,6 +74,7 @@ fn live_source_reconciliation_ready(
 
 fn replace_output_session_snapshot(
     input_state: &mut crate::input::InputState,
+    measurer: &crate::draw::TextMeasurer,
     snapshot: Option<SessionSnapshot>,
     options: &session::SessionOptions,
 ) -> anyhow::Result<()> {
@@ -82,7 +83,7 @@ fn replace_output_session_snapshot(
         boards: Vec::new(),
         tool_state: None,
     });
-    session::apply_snapshot_replacing_boards(input_state, snapshot, options)
+    session::apply_snapshot_replacing_boards(input_state, measurer, snapshot, options)
 }
 
 #[cfg(test)]

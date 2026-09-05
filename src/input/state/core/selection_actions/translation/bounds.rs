@@ -1,11 +1,12 @@
-use crate::draw::{TextMeasurer, with_scoped_measurer};
+use crate::draw::TextMeasurer;
 use crate::input::InputState;
 use crate::util::Rect;
 
 impl InputState {
     /// Returns the combined bounding box of all selected shapes (public for rendering).
     pub fn selection_bounds(&self) -> Option<Rect> {
-        with_scoped_measurer(|measurer| self.selection_bounds_with(measurer))
+        let measurer = TextMeasurer::default();
+        self.selection_bounds_with(&measurer)
     }
 
     /// Combined selection bounds using the supplied text measurement owner.

@@ -56,6 +56,7 @@ impl WaylandState {
         let loaded_board_data = candidate_snapshot.has_board_data();
         stored_session::apply_snapshot_replacing_boards(
             &mut self.input_state,
+            self.render.text_measurer(),
             candidate_snapshot,
             &candidate_options,
         )?;
@@ -129,9 +130,10 @@ impl WaylandState {
 
         let snapshot = self
             .input_state
-            .with_active_interaction_canceled_for_capture(|input_state| {
-                stored_session::snapshot_from_input(input_state, &target_options)
-            })
+            .with_active_interaction_canceled_for_capture_with(
+                self.render.text_measurer(),
+                |input_state| stored_session::snapshot_from_input(input_state, &target_options),
+            )
             .ok_or_else(|| anyhow!("Save Session As has no session data to write"))?;
         let outcome = session_save::run_persistence_operation(
             self,
@@ -233,6 +235,7 @@ impl WaylandState {
         }
         stored_session::apply_snapshot_replacing_boards(
             &mut self.input_state,
+            self.render.text_measurer(),
             empty_snapshot,
             &options,
         )?;
@@ -267,7 +270,11 @@ impl WaylandState {
         } else {
             (None, None)
         };
-        stored_session::apply_tool_state_snapshot(&mut self.input_state, default_tool_state);
+        stored_session::apply_tool_state_snapshot(
+            &mut self.input_state,
+            self.render.text_measurer(),
+            default_tool_state,
+        );
         self.input_state.mark_session_dirty();
         Ok(RuntimeClearToolStateReport {
             session_path,
@@ -336,9 +343,10 @@ impl WaylandState {
         }
         let snapshot = self
             .input_state
-            .with_active_interaction_canceled_for_capture(|input_state| {
-                stored_session::snapshot_from_input(input_state, options)
-            });
+            .with_active_interaction_canceled_for_capture_with(
+                self.render.text_measurer(),
+                |input_state| stored_session::snapshot_from_input(input_state, options),
+            );
         let snapshot = if let Some(snapshot) = snapshot {
             snapshot
         } else if session_persistence_enabled(options) {

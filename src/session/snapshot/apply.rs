@@ -7,11 +7,13 @@ use std::collections::HashSet;
 
 /// Apply a session snapshot to the live [`InputState`].
 pub fn apply_snapshot(input: &mut InputState, snapshot: SessionSnapshot, options: &SessionOptions) {
-    apply_snapshot_inner(input, snapshot, options, None);
+    let measurer = crate::draw::TextMeasurer::default();
+    apply_snapshot_inner(input, &measurer, snapshot, options, None);
 }
 
 fn apply_snapshot_inner(
     input: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     snapshot: SessionSnapshot,
     options: &SessionOptions,
     replacement_board_ids: Option<&HashSet<String>>,
@@ -43,7 +45,7 @@ fn apply_snapshot_inner(
     input.clear_pending_deletes_after_board_generation_change(board_generation_before);
 
     if input.boards.has_board(&snapshot.active_board_id) {
-        input.switch_board_force(&snapshot.active_board_id);
+        input.switch_board_force_with_measurer(measurer, &snapshot.active_board_id);
     } else {
         log::warn!(
             "Session active board '{}' missing after restore; keeping current board '{}'",
@@ -54,7 +56,7 @@ fn apply_snapshot_inner(
 
     if options.restore_tool_state {
         if let Some(tool_state) = snapshot.tool_state {
-            apply_tool_state_snapshot(input, tool_state);
+            apply_tool_state_snapshot(input, measurer, tool_state);
         } else {
             log::info!("No tool state found in session; skipping tool restore");
         }
@@ -71,7 +73,11 @@ fn apply_snapshot_inner(
 /// deliberately absent from the snapshot, so restoring a session leaves the
 /// configured value in place instead of reinstating a toggle that promised to
 /// last one run.
-pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: ToolStateSnapshot) {
+pub(crate) fn apply_tool_state_snapshot(
+    input: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    tool_state: ToolStateSnapshot,
+) {
     let marker_opacity = tool_state
         .marker_opacity
         .unwrap_or(input.style.marker_opacity);
@@ -102,7 +108,7 @@ pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: Tool
     input.preset_slots.clear_active();
     input.dirty_tracker.mark_full();
     input.sync_highlight_color();
-    let _ = input.set_tool_override(tool_state.tool_override);
+    let _ = input.set_tool_override_with(measurer, tool_state.tool_override);
     input.set_board_previous_color(tool_state.board_previous_color);
     input.sync_step_marker_counter();
     input.needs_redraw = true;
@@ -117,6 +123,7 @@ pub(crate) fn apply_tool_state_snapshot(input: &mut InputState, tool_state: Tool
 #[allow(dead_code)]
 pub(crate) fn apply_snapshot_replacing_boards(
     input: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     snapshot: SessionSnapshot,
     options: &SessionOptions,
 ) -> Result<()> {
@@ -138,15 +145,21 @@ pub(crate) fn apply_snapshot_replacing_boards(
             available_slots
         ));
     }
-    clear_board_pages(input);
-    apply_snapshot_inner(input, snapshot, options, Some(&replacement_board_ids));
+    clear_board_pages(input, measurer);
+    apply_snapshot_inner(
+        input,
+        measurer,
+        snapshot,
+        options,
+        Some(&replacement_board_ids),
+    );
     input.dirty_tracker.mark_full();
     input.sync_canvas_pointer_to_current_transform();
     Ok(())
 }
 
-fn clear_board_pages(input: &mut InputState) {
-    input.cancel_active_interaction();
+fn clear_board_pages(input: &mut InputState, measurer: &crate::draw::TextMeasurer) {
+    input.cancel_active_interaction_with(measurer);
     // Every page is about to be replaced. A wheel adjustment still in flight
     // belongs to a frame that will not exist afterwards, so record it now
     // rather than letting the identity guard drop it.

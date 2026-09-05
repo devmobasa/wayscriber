@@ -1,15 +1,11 @@
 use super::super::super::base::InputState;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
-use crate::draw::{TextMeasurer, with_scoped_measurer};
 
 const DUPLICATE_OFFSET: i32 = 12;
 
 #[allow(dead_code)]
 impl InputState {
-    pub(crate) fn duplicate_selection(&mut self) -> bool {
-        with_scoped_measurer(|measurer| self.duplicate_selection_with(measurer))
-    }
-
     pub(crate) fn duplicate_selection_with(&mut self, measurer: &TextMeasurer) -> bool {
         let ids_len = self.selected_shape_ids().len();
         if ids_len == 0 {

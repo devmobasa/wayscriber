@@ -152,8 +152,9 @@ impl InputState {
                 }
                 crate::config::PresenterToolbarMode::Micro => {
                     // The top strip stays up as the micro chip.
-                    self.set_top_display_mode_with_engine(
+                    self.set_top_display_mode_with_resources(
                         resources.ui_engine,
+                        resources.measurer,
                         crate::config::TopDisplayMode::Micro,
                     );
                 }

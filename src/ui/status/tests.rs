@@ -9,8 +9,11 @@ fn state() -> InputState {
 }
 
 fn update(engine: &UiTextEngine, state: &mut InputState, style: &StatusBarStyle, focused: bool) {
-    state.update_status_hud_layout_for_pointer_with_engine(
-        engine,
+    state.update_status_hud_layout_for_pointer_with_resources(
+        crate::input::state::InputTextResources {
+            measurer: &crate::draw::TextMeasurer::default(),
+            ui_engine: engine,
+        },
         StatusPosition::BottomLeft,
         style,
         1280,

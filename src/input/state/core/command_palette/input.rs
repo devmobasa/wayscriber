@@ -485,15 +485,18 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) -> bool {
-        crate::input::state::with_scoped_text_resources(|resources| {
-            self.handle_command_palette_click_with_resources(
-                resources,
-                x,
-                y,
-                screen_width,
-                screen_height,
-            )
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.handle_command_palette_click_with_resources(
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &ui_engine,
+            },
+            x,
+            y,
+            screen_width,
+            screen_height,
+        )
     }
 
     pub(crate) fn handle_command_palette_click_with_resources(

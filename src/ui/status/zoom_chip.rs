@@ -20,7 +20,7 @@ use super::super::primitives::{draw_pill, draw_rounded_rect};
 use super::super::theme::{self, overlay};
 use crate::config::StatusBarStyle;
 use crate::input::{BoardBackground, InputState};
-use crate::ui_text::{UiTextEngine, UiTextExtents, UiTextStyle, with_scoped_engine};
+use crate::ui_text::{UiTextEngine, UiTextExtents, UiTextStyle};
 
 // ============================================================================
 // UI Layout Constants (not configurable) — mirror the status bar pill so the
@@ -258,15 +258,8 @@ pub fn compute_zoom_chip_layout(
     screen_width: u32,
     screen_height: u32,
 ) -> Option<ZoomChipLayout> {
-    with_scoped_engine(|engine| {
-        compute_zoom_chip_layout_with_engine(
-            engine,
-            input_state,
-            style,
-            screen_width,
-            screen_height,
-        )
-    })
+    let engine = UiTextEngine::default();
+    compute_zoom_chip_layout_with_engine(&engine, input_state, style, screen_width, screen_height)
 }
 
 pub(crate) fn compute_zoom_chip_layout_with_engine(

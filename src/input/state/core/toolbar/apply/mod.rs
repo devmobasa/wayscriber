@@ -14,9 +14,15 @@ impl InputState {
     ///
     /// Returns true if the event resulted in a state change.
     pub fn apply_toolbar_event(&mut self, event: ToolbarEvent) -> bool {
-        crate::input::state::with_scoped_text_resources(|resources| {
-            self.apply_toolbar_event_with_resources(resources, event)
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.apply_toolbar_event_with_resources(
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &ui_engine,
+            },
+            event,
+        )
     }
 
     pub(crate) fn apply_toolbar_event_with_resources(
@@ -216,7 +222,7 @@ impl InputState {
                 self.apply_toolbar_set_top_minimized(minimized)
             }
             ToolbarEvent::SetTopDisplayMode(mode) => {
-                self.apply_toolbar_set_top_display_mode_with_engine(resources.ui_engine, mode)
+                self.apply_toolbar_set_top_display_mode_with_resources(resources, mode)
             }
             ToolbarEvent::CloseTopToolbar => self.apply_toolbar_set_top_minimized(true),
             ToolbarEvent::PinTopToolbar(pin) => self.apply_toolbar_pin_top_toolbar(pin),
@@ -267,22 +273,18 @@ impl InputState {
             ToolbarEvent::ToggleIdleFade(enable) => self.apply_toolbar_toggle_idle_fade(enable),
             ToolbarEvent::ToggleToolPreview(show) => self.apply_toolbar_toggle_tool_preview(show),
             ToolbarEvent::ToggleStatusBar(show) => {
-                self.apply_toolbar_toggle_status_bar_with_engine(resources.ui_engine, show)
+                self.apply_toolbar_toggle_status_bar_with_resources(resources, show)
             }
             ToolbarEvent::SetStatusBarInteractive(interactive) => {
                 self.apply_toolbar_set_status_bar_interactive(interactive)
             }
             ToolbarEvent::SetStatusBarItemVisible(item, visible) => self
-                .apply_toolbar_set_status_bar_item_visible_with_engine(
-                    resources.ui_engine,
-                    item,
-                    visible,
-                ),
+                .apply_toolbar_set_status_bar_item_visible_with_resources(resources, item, visible),
             ToolbarEvent::ToggleStatusBoardBadge(show) => {
-                self.apply_toolbar_toggle_status_board_badge_with_engine(resources.ui_engine, show)
+                self.apply_toolbar_toggle_status_board_badge_with_resources(resources, show)
             }
             ToolbarEvent::ToggleStatusPageBadge(show) => {
-                self.apply_toolbar_toggle_status_page_badge_with_engine(resources.ui_engine, show)
+                self.apply_toolbar_toggle_status_page_badge_with_resources(resources, show)
             }
             ToolbarEvent::ToggleFloatingBadgeAlways(show) => {
                 self.apply_toolbar_toggle_floating_badge_always(show)

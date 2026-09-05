@@ -6,7 +6,7 @@ use super::bounds::{
 use super::polygon::{PolygonKind, bounding_box_for_polygon};
 use super::step_marker::step_marker_bounds_with;
 use super::text::{bounding_box_for_sticky_note_with, bounding_box_for_text_with};
-use super::text_cache::{TextMeasurer, with_scoped_measurer};
+use super::text_cache::TextMeasurer;
 use crate::draw::color::Color;
 use crate::draw::font::FontDescriptor;
 use crate::util::Rect;
@@ -435,7 +435,8 @@ impl Shape {
     /// Returns `None` when the shape has no drawable area or its full bounds cannot be
     /// represented safely by [`Rect`].
     pub fn bounding_box(&self) -> Option<Rect> {
-        with_scoped_measurer(|measurer| self.bounding_box_with(measurer))
+        let measurer = TextMeasurer::default();
+        self.bounding_box_with(&measurer)
     }
 
     /// Computes bounds using the caller's canonical text measurement owner.

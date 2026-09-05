@@ -16,7 +16,6 @@ pub use polygon::{
 };
 pub use smoothing::{MAX_PEN_SMOOTHING, clamp_pen_smoothing, smooth_path, smooth_pressure_path};
 pub use text_cache::TextMeasurer;
-pub(crate) use text_cache::with_scoped_measurer;
 pub use types::{
     ArrowLabel, ArrowStyle, BlurStyle, EmbeddedImage, EraserBrush, EraserKind, Shape,
     StepMarkerLabel,

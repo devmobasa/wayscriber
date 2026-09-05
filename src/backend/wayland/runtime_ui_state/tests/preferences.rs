@@ -36,8 +36,9 @@ fn status_bar_content_survives_restart_without_touching_config() {
     let prepared = runtime
         .begin_toolbar_mutation(target, &input)
         .expect("item permit");
-    input.set_status_bar_item_visible_with_engine(
+    input.set_status_bar_item_visible_with_resources(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         StatusBarItem::Size,
         false,
     );
@@ -52,6 +53,7 @@ fn status_bar_content_survives_restart_without_touching_config() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
 
@@ -146,6 +148,7 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
 
@@ -201,6 +204,7 @@ fn a_seed_refresh_does_not_prune_persisted_preference_overrides() {
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     runtime.refresh_config_seeds(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &config,
         &mut input,
         &mut positions,
@@ -212,6 +216,7 @@ fn a_seed_refresh_does_not_prune_persisted_preference_overrides() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
     assert_eq!(
@@ -266,6 +271,7 @@ fn section_visibility_survives_restart_without_touching_config() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
 
@@ -336,6 +342,7 @@ fn toolbar_layout_mode_survives_restart_without_touching_config() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
 

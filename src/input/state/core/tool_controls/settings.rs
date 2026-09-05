@@ -1,6 +1,6 @@
 use super::super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use crate::draw::TextMeasurer;
 use crate::draw::{ArrowStyle, BlurStyle, Color, FontDescriptor};
-use crate::draw::{TextMeasurer, with_scoped_measurer};
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{
     DragBinding, MouseButton,
@@ -144,7 +144,8 @@ impl InputState {
 
     /// Sets or clears an explicit tool override. Returns true if the tool changed.
     pub fn set_tool_override(&mut self, tool: Option<Tool>) -> bool {
-        with_scoped_measurer(|measurer| self.set_tool_override_with(measurer, tool))
+        let measurer = TextMeasurer::default();
+        self.set_tool_override_with(&measurer, tool)
     }
 
     pub fn set_tool_override_with(&mut self, measurer: &TextMeasurer, tool: Option<Tool>) -> bool {
@@ -295,7 +296,8 @@ impl InputState {
 
     /// Sets thickness or eraser size depending on the active tool.
     pub fn set_thickness_for_active_tool(&mut self, value: f64) -> bool {
-        with_scoped_measurer(|measurer| self.set_thickness_for_active_tool_with(measurer, value))
+        let measurer = TextMeasurer::default();
+        self.set_thickness_for_active_tool_with(&measurer, value)
     }
 
     pub fn set_thickness_for_active_tool_with(
@@ -316,7 +318,8 @@ impl InputState {
 
     /// Nudges thickness or eraser size depending on the active tool.
     pub fn nudge_thickness_for_active_tool(&mut self, delta: f64) -> bool {
-        with_scoped_measurer(|measurer| self.nudge_thickness_for_active_tool_with(measurer, delta))
+        let measurer = TextMeasurer::default();
+        self.nudge_thickness_for_active_tool_with(&measurer, delta)
     }
 
     pub fn nudge_thickness_for_active_tool_with(
@@ -357,7 +360,8 @@ impl InputState {
 
     /// Sets the absolute thickness (px), clamped to valid bounds. Returns true if changed.
     pub fn set_thickness(&mut self, thickness: f64) -> bool {
-        with_scoped_measurer(|measurer| self.set_thickness_with(measurer, thickness))
+        let measurer = TextMeasurer::default();
+        self.set_thickness_with(&measurer, thickness)
     }
 
     pub fn set_thickness_with(&mut self, measurer: &TextMeasurer, thickness: f64) -> bool {
@@ -381,7 +385,8 @@ impl InputState {
 
     /// Sets the absolute eraser size (px), clamped to valid bounds. Returns true if changed.
     pub fn set_eraser_size(&mut self, size: f64) -> bool {
-        with_scoped_measurer(|measurer| self.set_eraser_size_with(measurer, size))
+        let measurer = TextMeasurer::default();
+        self.set_eraser_size_with(&measurer, size)
     }
 
     pub fn set_eraser_size_with(&mut self, measurer: &TextMeasurer, size: f64) -> bool {

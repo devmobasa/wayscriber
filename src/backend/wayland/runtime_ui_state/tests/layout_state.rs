@@ -86,6 +86,7 @@ fn an_authored_position_edit_drops_the_stale_drag_override() {
     config_b.ui.toolbar.top_offset_y = 201.0;
     let refresh = runtime.refresh_config_seeds(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &config_b,
         &mut input,
         &mut positions,
@@ -192,6 +193,7 @@ fn a_stored_display_mode_is_restored_at_startup_over_the_config_seed() {
     let restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
     assert_eq!(
@@ -278,6 +280,7 @@ fn an_authored_display_mode_edit_drops_the_stale_cycle_override() {
     config_b.ui.toolbar.top_display_mode = TopDisplayMode::Micro;
     let refresh = runtime.refresh_config_seeds(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &config_b,
         &mut input,
         &mut positions,

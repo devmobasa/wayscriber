@@ -132,11 +132,19 @@ impl InputState {
         canvas_x: i32,
         canvas_y: i32,
     ) {
-        crate::input::state::with_scoped_text_resources(|resources| {
-            self.on_mouse_press_with_canvas_and_resources(
-                resources, button, screen_x, screen_y, canvas_x, canvas_y,
-            )
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.on_mouse_press_with_canvas_and_resources(
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &ui_engine,
+            },
+            button,
+            screen_x,
+            screen_y,
+            canvas_x,
+            canvas_y,
+        );
     }
 
     pub(crate) fn on_mouse_press_with_canvas_and_resources(

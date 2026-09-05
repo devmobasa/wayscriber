@@ -842,7 +842,7 @@ fn cancelling_a_knob_drag_restores_the_factor_it_started_from() {
         crate::draw::MAX_SPOTLIGHT_MAGNIFICATION
     );
 
-    state.cancel_active_interaction();
+    state.cancel_active_interaction_with(&crate::draw::TextMeasurer::default());
     assert!(matches!(state.state, DrawingState::Idle));
     assert_eq!(magnification_of(&state, id), 2.0);
 }

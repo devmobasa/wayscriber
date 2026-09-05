@@ -34,9 +34,15 @@ impl InputState {
     /// - Help toggle (configurable)
     /// - Modifier key tracking
     pub fn on_key_press(&mut self, key: Key) {
-        crate::input::state::with_scoped_text_resources(|resources| {
-            self.on_key_press_with_resources(resources, key)
-        });
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.on_key_press_with_resources(
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &ui_engine,
+            },
+            key,
+        );
     }
 
     pub(crate) fn on_key_press_with_resources(
@@ -48,9 +54,15 @@ impl InputState {
     }
 
     pub fn on_key_repeat(&mut self, key: Key) {
-        crate::input::state::with_scoped_text_resources(|resources| {
-            self.on_key_repeat_with_resources(resources, key)
-        });
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.on_key_repeat_with_resources(
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &ui_engine,
+            },
+            key,
+        );
     }
 
     pub(crate) fn on_key_repeat_with_resources(

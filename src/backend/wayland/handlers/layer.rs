@@ -12,9 +12,11 @@ impl LayerShellHandler for WaylandState {
     fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, layer: &LayerSurface) {
         if self.toolbar.is_toolbar_layer(layer) {
             info!("Toolbar surface closed by compositor; hiding toolbar");
-            let _ = self
-                .input_state
-                .set_toolbar_visible_with_engine(self.render.ui_text(), false);
+            let _ = self.input_state.set_toolbar_visible_with_resources(
+                self.render.ui_text(),
+                self.render.text_measurer(),
+                false,
+            );
             self.toolbar.set_visible(false);
             self.refresh_keyboard_interactivity();
             return;

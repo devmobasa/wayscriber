@@ -151,7 +151,13 @@ fn zoom_chip_layout_rebuild_preserves_cleared_hover_after_pointer_leave() {
     // Pointer leave clears hover but retains the last coordinates. A redraw
     // must not reapply that stale hit while focus is elsewhere.
     input.clear_chrome_hover();
-    input.update_zoom_chip_layout_for_pointer(&StatusBarStyle::default(), 1280, 720, false);
+    input.update_zoom_chip_layout_for_pointer_with_engine(
+        &crate::ui_text::UiTextEngine::default(),
+        &StatusBarStyle::default(),
+        1280,
+        720,
+        false,
+    );
 
     assert_eq!(
         input.zoom_chip.hover, None,
@@ -441,7 +447,7 @@ fn zoom_chip_ignored_while_eclipsing_overlay_open() {
     // An overlay rendering above the chip suppresses its presses (also covers
     // an overlay opened between press and release: check_zoom_chip_click
     // shares the same guard).
-    input.open_board_picker();
+    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
     assert!(!input.zoom_chip_contains(x, y));
     assert!(!input.check_zoom_chip_click(ZoomChipButtonKind::In, x, y).0);
     input.close_board_picker();

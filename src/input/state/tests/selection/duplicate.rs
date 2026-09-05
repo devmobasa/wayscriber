@@ -85,7 +85,11 @@ fn copy_paste_selection_centers_shape_at_pointer() {
         )
         .expect("local selection fallback");
     assert_eq!(
-        state.paste_clipboard_shapes_from_request(&request, shapes),
+        state.paste_clipboard_shapes_from_request_with(
+            test_text_resources.measurer,
+            &request,
+            shapes,
+        ),
         1
     );
     state.finish_clipboard_paste_request(request.id);
@@ -135,7 +139,11 @@ fn immediate_paste_after_copy_uses_pending_local_publish_shapes() {
         .expect("pending local publish selection");
 
     assert_eq!(
-        state.paste_clipboard_shapes_from_request(&request, shapes),
+        state.paste_clipboard_shapes_from_request_with(
+            test_text_resources.measurer,
+            &request,
+            shapes,
+        ),
         1
     );
     state.finish_clipboard_paste_request(request.id);

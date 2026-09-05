@@ -1,5 +1,5 @@
 use super::super::base::InputState;
-use crate::draw::{TextMeasurer, with_scoped_measurer};
+use crate::draw::TextMeasurer;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BOARD_ID_TRANSPARENT, BoardSpec};
 
@@ -45,7 +45,8 @@ impl InputState {
     ///
     /// Also resets drawing state to prevent partial shapes crossing modes.
     pub fn switch_board(&mut self, target_id: &str) {
-        with_scoped_measurer(|measurer| self.switch_board_with_measurer(measurer, target_id))
+        let measurer = TextMeasurer::default();
+        self.switch_board_with_measurer(&measurer, target_id);
     }
 
     pub fn switch_board_with_measurer(&mut self, measurer: &TextMeasurer, target_id: &str) {
@@ -54,7 +55,8 @@ impl InputState {
 
     /// Switches to a different board without toggle semantics.
     pub fn switch_board_force(&mut self, target_id: &str) {
-        with_scoped_measurer(|measurer| self.switch_board_force_with_measurer(measurer, target_id))
+        let measurer = TextMeasurer::default();
+        self.switch_board_force_with_measurer(&measurer, target_id);
     }
 
     pub fn switch_board_force_with_measurer(&mut self, measurer: &TextMeasurer, target_id: &str) {
@@ -88,7 +90,8 @@ impl InputState {
     }
 
     pub fn create_board(&mut self) -> bool {
-        with_scoped_measurer(|measurer| self.create_board_with_measurer(measurer))
+        let measurer = TextMeasurer::default();
+        self.create_board_with_measurer(&measurer)
     }
 
     pub fn create_board_with_measurer(&mut self, measurer: &TextMeasurer) -> bool {
@@ -111,7 +114,8 @@ impl InputState {
     }
 
     pub fn switch_board_slot(&mut self, slot: usize) {
-        with_scoped_measurer(|measurer| self.switch_board_slot_with_measurer(measurer, slot))
+        let measurer = TextMeasurer::default();
+        self.switch_board_slot_with_measurer(&measurer, slot);
     }
 
     pub fn switch_board_slot_with_measurer(&mut self, measurer: &TextMeasurer, slot: usize) {
@@ -125,7 +129,8 @@ impl InputState {
     }
 
     pub fn switch_board_next(&mut self) {
-        with_scoped_measurer(|measurer| self.switch_board_next_with_measurer(measurer))
+        let measurer = TextMeasurer::default();
+        self.switch_board_next_with_measurer(&measurer);
     }
 
     pub fn switch_board_next_with_measurer(&mut self, measurer: &TextMeasurer) {
@@ -139,7 +144,8 @@ impl InputState {
     }
 
     pub fn switch_board_prev(&mut self) {
-        with_scoped_measurer(|measurer| self.switch_board_prev_with_measurer(measurer))
+        let measurer = TextMeasurer::default();
+        self.switch_board_prev_with_measurer(&measurer);
     }
 
     pub fn switch_board_prev_with_measurer(&mut self, measurer: &TextMeasurer) {
@@ -154,7 +160,8 @@ impl InputState {
 
     /// Duplicate the active board.
     pub fn duplicate_board(&mut self) {
-        with_scoped_measurer(|measurer| self.duplicate_board_with_measurer(measurer))
+        let measurer = TextMeasurer::default();
+        self.duplicate_board_with_measurer(&measurer);
     }
 
     pub fn duplicate_board_with_measurer(&mut self, measurer: &TextMeasurer) {
@@ -215,7 +222,8 @@ impl InputState {
 
     /// Switch to the most recently used board (other than the current one).
     pub fn switch_board_recent(&mut self) {
-        with_scoped_measurer(|measurer| self.switch_board_recent_with_measurer(measurer))
+        let measurer = TextMeasurer::default();
+        self.switch_board_recent_with_measurer(&measurer);
     }
 
     pub fn switch_board_recent_with_measurer(&mut self, measurer: &TextMeasurer) {

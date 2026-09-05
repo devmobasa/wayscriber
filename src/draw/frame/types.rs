@@ -1,5 +1,5 @@
+use crate::draw::TextMeasurer;
 use crate::draw::shape::Shape;
-use crate::draw::{TextMeasurer, with_scoped_measurer};
 use crate::util::Rect;
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
@@ -60,7 +60,8 @@ impl DrawnShape {
     /// [`Self::invalidate_bounds`]) trips an assertion, so the test suite
     /// catches invalidation bugs while release builds get the O(1) fast path.
     pub fn bounding_box(&self) -> Option<Rect> {
-        with_scoped_measurer(|measurer| self.bounding_box_with(measurer))
+        let measurer = TextMeasurer::default();
+        self.bounding_box_with(&measurer)
     }
 
     /// Returns memoized bounds using the supplied owner for text measurements

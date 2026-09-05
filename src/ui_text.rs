@@ -152,13 +152,6 @@ impl Default for UiTextEngine {
     }
 }
 
-/// Run a public convenience operation with an isolated call-local owner.
-/// Runtime paths should pass their persistent `UiTextEngine` explicitly.
-pub(crate) fn with_scoped_engine<T>(f: impl FnOnce(&UiTextEngine) -> T) -> T {
-    let engine = UiTextEngine::default();
-    f(&engine)
-}
-
 impl UiTextEngine {
     /// Measure before a target exists, using the same layout cache as painting.
     pub(crate) fn measure(

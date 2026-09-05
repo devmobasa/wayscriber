@@ -252,16 +252,16 @@ fn cache_keys_keep_font_categories_quantized_size_and_wrap_units() {
 }
 
 #[test]
-fn scoped_convenience_engines_are_isolated_and_match_an_explicit_owner() {
+fn independent_engines_are_isolated_and_produce_matching_extents() {
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 4, 4).unwrap();
     let ctx = cairo::Context::new(&surface).unwrap();
-    let first =
-        with_scoped_engine(|engine| engine.layout(&ctx, style(14.0), "scoped owner", Some(50.0)));
-    let second =
-        with_scoped_engine(|engine| engine.layout(&ctx, style(14.0), "scoped owner", Some(50.0)));
+    let first_engine = UiTextEngine::default();
+    let first = first_engine.layout(&ctx, style(14.0), "first owner", Some(50.0));
+    let second_engine = UiTextEngine::default();
+    let second = second_engine.layout(&ctx, style(14.0), "first owner", Some(50.0));
     assert_ne!(first.layout, second.layout);
-    let engine = UiTextEngine::default();
-    let explicit = engine.layout(&ctx, style(14.0), "scoped owner", Some(50.0));
+    let explicit_engine = UiTextEngine::default();
+    let explicit = explicit_engine.layout(&ctx, style(14.0), "first owner", Some(50.0));
     assert_ne!(first.layout, explicit.layout);
     assert_ne!(second.layout, explicit.layout);
     assert_extents_eq(first.ink_extents(), second.ink_extents());

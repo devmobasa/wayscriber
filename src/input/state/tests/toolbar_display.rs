@@ -562,8 +562,9 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
     refresh_status_hud_layout(&mut state);
     assert!(state.status_hud_layout().is_some());
     for item in StatusBarItem::ALL {
-        state.set_status_bar_item_visible_with_engine(
+        state.set_status_bar_item_visible_with_resources(
             &crate::ui_text::UiTextEngine::default(),
+            &crate::draw::TextMeasurer::default(),
             item,
             false,
         );
@@ -578,8 +579,9 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
     );
     assert!(!state.status_hud_effectively_visible());
 
-    assert!(state.set_status_bar_item_visible_with_engine(
+    assert!(state.set_status_bar_item_visible_with_resources(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         StatusBarItem::About,
         true
     ));
@@ -591,8 +593,9 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
         state.status_hud_effectively_visible(),
         "policy sees the synchronously refreshed measured cache"
     );
-    assert!(state.set_status_bar_item_visible_with_engine(
+    assert!(state.set_status_bar_item_visible_with_resources(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         StatusBarItem::About,
         false
     ));
@@ -619,8 +622,9 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
 fn width_shed_content_never_reports_an_effectively_visible_hud() {
     let mut state = create_test_input_state();
     for item in StatusBarItem::ALL {
-        state.set_status_bar_item_visible_with_engine(
+        state.set_status_bar_item_visible_with_resources(
             &crate::ui_text::UiTextEngine::default(),
+            &crate::draw::TextMeasurer::default(),
             item,
             false,
         );
@@ -633,8 +637,9 @@ fn width_shed_content_never_reports_an_effectively_visible_hud() {
     );
     assert!(state.status_hud_layout().is_none());
 
-    assert!(state.set_status_bar_item_visible_with_engine(
+    assert!(state.set_status_bar_item_visible_with_resources(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         StatusBarItem::About,
         true
     ));
@@ -659,8 +664,9 @@ fn toolbar_hint_prevents_a_false_all_chrome_warning_when_it_becomes_visible() {
 
     let mut state = create_test_input_state();
     for item in StatusBarItem::ALL {
-        state.set_status_bar_item_visible_with_engine(
+        state.set_status_bar_item_visible_with_resources(
             &crate::ui_text::UiTextEngine::default(),
+            &crate::draw::TextMeasurer::default(),
             item,
             item == StatusBarItem::ToolbarHint,
         );

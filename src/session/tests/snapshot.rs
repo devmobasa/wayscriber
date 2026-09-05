@@ -102,7 +102,11 @@ fn every_persisted_drawing_style_survives_snapshot_serialization_and_restore() {
     let decoded: ToolStateSnapshot =
         serde_json::from_slice(&encoded).expect("deserialize tool snapshot fixture");
     let mut restored = dummy_input_state();
-    apply_tool_state_snapshot(&mut restored, decoded);
+    apply_tool_state_snapshot(
+        &mut restored,
+        &crate::draw::TextMeasurer::default(),
+        decoded,
+    );
 
     let recaptured = ToolStateSnapshot::from_input_state(&restored);
     assert_eq!(
@@ -127,7 +131,11 @@ fn non_default_pen_smoothing_survives_snapshot_serialization_and_restore() {
 
     let mut restored = dummy_input_state();
     let _ = restored.set_pen_smoothing(1);
-    apply_tool_state_snapshot(&mut restored, decoded);
+    apply_tool_state_snapshot(
+        &mut restored,
+        &crate::draw::TextMeasurer::default(),
+        decoded,
+    );
 
     assert_eq!(restored.style.pen_smoothing, 5);
 }
@@ -148,7 +156,11 @@ fn legacy_snapshot_without_pen_smoothing_preserves_the_configured_level() {
 
     let mut restored = dummy_input_state();
     let _ = restored.set_pen_smoothing(4);
-    apply_tool_state_snapshot(&mut restored, decoded);
+    apply_tool_state_snapshot(
+        &mut restored,
+        &crate::draw::TextMeasurer::default(),
+        decoded,
+    );
 
     assert_eq!(
         restored.style.pen_smoothing, 4,

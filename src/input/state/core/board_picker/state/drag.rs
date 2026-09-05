@@ -159,12 +159,6 @@ impl InputState {
         true
     }
 
-    pub(crate) fn board_picker_finish_page_drag(&mut self) -> bool {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.board_picker_finish_page_drag_with_measurer(measurer)
-        })
-    }
-
     pub(crate) fn board_picker_finish_page_drag_with_measurer(
         &mut self,
         measurer: &crate::draw::TextMeasurer,

@@ -6,6 +6,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn new(init: WaylandStateInit) -> Self {
         let WaylandStateInit {
             ui_text,
+            text_measurer,
             globals,
             config,
             input_state,
@@ -119,6 +120,7 @@ impl WaylandState {
             render: super::super::render::RenderRuntime::new(
                 crate::ui::theme::Theme::resolve(config.ui.theme.to_theme_mode()),
                 ui_text,
+                text_measurer,
             ),
             suppression: Default::default(),
             shortcut_coach: Default::default(),

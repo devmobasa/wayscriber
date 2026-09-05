@@ -464,7 +464,7 @@ fn marker_size_increase_updates_accumulated_cleanup_bounds() {
     assert!(state.set_thickness(32.0));
     let _ = state.take_dirty_regions();
 
-    state.cancel_active_interaction();
+    state.cancel_active_interaction_with(&crate::draw::TextMeasurer::default());
     let dirty = state.take_dirty_regions();
     let marker_width = (32.0f64 * 1.35).max(32.0 + 1.0);
     let expanded_bounds =
@@ -495,7 +495,7 @@ fn eraser_size_increase_updates_accumulated_cleanup_bounds() {
     assert!(state.set_eraser_size(32.0));
     let _ = state.take_dirty_regions();
 
-    state.cancel_active_interaction();
+    state.cancel_active_interaction_with(&crate::draw::TextMeasurer::default());
     let dirty = state.take_dirty_regions();
     let expanded_bounds = crate::draw::shape::bounding_box_for_eraser(&[(10, 10), (20, 10)], 32.0)
         .expect("expanded eraser preview should have bounds");
@@ -521,7 +521,7 @@ fn cancel_active_path_dirties_full_accumulated_provisional_bounds() {
     state.on_mouse_motion(30, 10);
     let _ = state.take_dirty_regions();
 
-    state.cancel_active_interaction();
+    state.cancel_active_interaction_with(&crate::draw::TextMeasurer::default());
     let dirty = state.take_dirty_regions();
     let thick = state.thickness_for_tool(Tool::Pen);
     let full_bounds = crate::draw::shape::bounding_box_for_points(&[(10, 10), (30, 10)], thick)

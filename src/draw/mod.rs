@@ -48,7 +48,6 @@ pub use render::{
     render_text_with_halo_with_measurer, render_text_with_measurer, selection_handle_rects,
     spotlight_regions_for_frame, sticky_note_foreground, text_outline_color,
 };
-pub(crate) use shape::with_scoped_measurer;
 #[allow(unused_imports)]
 pub use shape::{
     ArrowLabel, ArrowStyle, BlurStyle, EmbeddedImage, EraserBrush, EraserKind, MAX_PEN_SMOOTHING,

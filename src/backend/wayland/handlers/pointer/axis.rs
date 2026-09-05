@@ -379,7 +379,7 @@ mod tests {
     #[test]
     fn board_picker_page_panel_axis_consumes_before_thickness_changes() {
         let mut input_state = make_test_input_state();
-        input_state.open_board_picker();
+        input_state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
         let board_index = input_state
             .board_picker_page_panel_board_index()
             .expect("page panel board index");
@@ -427,7 +427,7 @@ mod tests {
         // over the board picker, which makes it the one that can have the list
         // scrolled out from under it.
         let mut input_state = make_test_input_state();
-        input_state.open_board_picker();
+        input_state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
         let board_index = input_state
             .board_picker_page_panel_board_index()
             .expect("page panel board index");

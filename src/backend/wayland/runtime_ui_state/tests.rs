@@ -124,6 +124,7 @@ fn apply_finish(
     if let ToolbarRuntimeFinish::Rollback(rollback) = finish {
         apply_toolbar_runtime_rollback(
             &crate::ui_text::UiTextEngine::default(),
+            &crate::draw::TextMeasurer::default(),
             input,
             positions,
             &rollback,
@@ -213,7 +214,11 @@ fn commit_display_mode(
     let prepared = runtime
         .begin_toolbar_mutation(target, input)
         .expect("display mode permit");
-    input.set_top_display_mode_with_engine(&crate::ui_text::UiTextEngine::default(), mode);
+    input.set_top_display_mode_with_resources(
+        &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
+        mode,
+    );
     runtime.finish_toolbar_mutation(prepared, true, input)
 }
 

@@ -13,13 +13,16 @@ fn preference_reapply_and_rollback_refresh_text_geometry_before_another_frame() 
     let engine = UiTextEngine::default();
     let mut input = input_from_config(&config);
     let mut runtime = controller_only_runtime(&config, &temp.path().join("runtime-ui.toml"));
-    runtime.apply_startup_state(&engine, &mut input);
+    runtime.apply_startup_state(&engine, &crate::draw::TextMeasurer::default(), &mut input);
     assert!(
         input.status_hud_layout().is_none(),
         "startup has no previous frame dimensions"
     );
-    input.update_status_hud_layout_for_pointer_with_engine(
-        &engine,
+    input.update_status_hud_layout_for_pointer_with_resources(
+        crate::input::state::InputTextResources {
+            measurer: &crate::draw::TextMeasurer::default(),
+            ui_engine: &engine,
+        },
         StatusPosition::BottomLeft,
         &StatusBarStyle::default(),
         1280,
@@ -45,7 +48,13 @@ fn preference_reapply_and_rollback_refresh_text_geometry_before_another_frame() 
         .set_status_bar_item_visible(StatusBarItem::Help, false);
     assert!(
         runtime
-            .refresh_config_seeds(&engine, &config, &mut input, &mut positions)
+            .refresh_config_seeds(
+                &engine,
+                &crate::draw::TextMeasurer::default(),
+                &config,
+                &mut input,
+                &mut positions
+            )
             .applied
     );
     assert!(!input.status_bar_item_visible(StatusBarItem::Help));
@@ -66,7 +75,13 @@ fn preference_reapply_and_rollback_refresh_text_geometry_before_another_frame() 
         )]),
         derive_toolbar_visibility_from_pins: false,
     };
-    apply_toolbar_runtime_rollback(&engine, &mut input, &mut positions, &rollback);
+    apply_toolbar_runtime_rollback(
+        &engine,
+        &crate::draw::TextMeasurer::default(),
+        &mut input,
+        &mut positions,
+        &rollback,
+    );
     assert!(input.status_bar_item_visible(StatusBarItem::Help));
     assert!(
         input
@@ -77,7 +92,12 @@ fn preference_reapply_and_rollback_refresh_text_geometry_before_another_frame() 
             .any(|s| s.kind == StatusHudSegmentKind::Help)
     );
     assert_ne!(format!("{:?}", input.status_hud_layout()), hidden_geometry);
-    runtime.apply_live_state(&engine, &mut input, &mut positions);
+    runtime.apply_live_state(
+        &engine,
+        &crate::draw::TextMeasurer::default(),
+        &mut input,
+        &mut positions,
+    );
     assert!(!input.status_bar_item_visible(StatusBarItem::Help));
     assert_eq!(format!("{:?}", input.status_hud_layout()), hidden_geometry);
 }

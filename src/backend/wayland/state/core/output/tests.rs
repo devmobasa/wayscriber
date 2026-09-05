@@ -34,7 +34,13 @@ fn empty_output_load_replaces_source_board_contents() {
     add_test_line(&mut input);
     assert_eq!(input.boards.active_frame().shapes.len(), 1);
 
-    replace_output_session_snapshot(&mut input, None, &options).expect("empty output replacement");
+    replace_output_session_snapshot(
+        &mut input,
+        &crate::draw::TextMeasurer::default(),
+        None,
+        &options,
+    )
+    .expect("empty output replacement");
 
     assert!(input.boards.active_frame().shapes.is_empty());
 }
@@ -58,8 +64,13 @@ fn partial_output_load_clears_boards_omitted_from_snapshot() {
         tool_state: None,
     };
 
-    replace_output_session_snapshot(&mut input, Some(snapshot), &options)
-        .expect("partial output replacement");
+    replace_output_session_snapshot(
+        &mut input,
+        &crate::draw::TextMeasurer::default(),
+        Some(snapshot),
+        &options,
+    )
+    .expect("partial output replacement");
 
     input.switch_board_force("transparent");
     assert!(input.boards.active_frame().shapes.is_empty());
@@ -85,8 +96,13 @@ fn failed_output_replacement_preserves_source_board_contents() {
         tool_state: None,
     };
 
-    let err = replace_output_session_snapshot(&mut input, Some(snapshot), &options)
-        .expect_err("oversized replacement must fail before mutating live boards");
+    let err = replace_output_session_snapshot(
+        &mut input,
+        &crate::draw::TextMeasurer::default(),
+        Some(snapshot),
+        &options,
+    )
+    .expect_err("oversized replacement must fail before mutating live boards");
 
     assert!(err.to_string().contains("current runtime allows"));
     assert_eq!(input.boards.active_frame().shapes.len(), 1);

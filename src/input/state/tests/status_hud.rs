@@ -116,7 +116,11 @@ fn status_hud_layout_rebuild_preserves_cleared_hover_after_pointer_leave() {
     // may rebuild different geometry at those stale coordinates.
     input.clear_chrome_hover();
     input.set_toolbar_visible(false);
-    input.update_status_hud_layout_for_pointer(
+    input.update_status_hud_layout_for_pointer_with_resources(
+        crate::input::state::InputTextResources {
+            measurer: &crate::draw::TextMeasurer::default(),
+            ui_engine: &crate::ui_text::UiTextEngine::default(),
+        },
         StatusPosition::BottomLeft,
         &StatusBarStyle::default(),
         1280,
@@ -423,8 +427,9 @@ fn disabling_every_content_item_removes_the_hud_and_restores_badge_fallback() {
     let mut input = create_test_input_state();
     input.boards.new_page();
     for item in StatusBarItem::ALL {
-        input.set_status_bar_item_visible_with_engine(
+        input.set_status_bar_item_visible_with_resources(
             &crate::ui_text::UiTextEngine::default(),
+            &crate::draw::TextMeasurer::default(),
             item,
             false,
         );
@@ -455,8 +460,9 @@ fn changing_status_hud_content_leaves_damage_to_the_effect_pass() {
     update_hud_layout(&mut input, 1280, 720);
     let _ = input.take_dirty_region_report();
 
-    assert!(input.set_status_bar_item_visible_with_engine(
+    assert!(input.set_status_bar_item_visible_with_resources(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         StatusBarItem::About,
         false
     ));
@@ -552,7 +558,7 @@ fn status_hud_ignored_while_other_eclipsing_overlays_are_open() {
 
     // Board picker (also covers a picker opened between press and release:
     // check_status_hud_click shares the same guard).
-    input.open_board_picker();
+    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
     assert!(!input.status_hud_contains(x, y));
     assert!(
         !input

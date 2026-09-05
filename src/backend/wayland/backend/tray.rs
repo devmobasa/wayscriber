@@ -117,27 +117,41 @@ fn apply_tray_action(state: &mut WaylandState, action: TrayAction) {
             state.input_state.needs_redraw = true;
         }
         TrayAction::ToggleLightMode => {
-            state
-                .input_state
-                .toggle_light_mode_with_engine(state.render.ui_text());
+            state.input_state.toggle_light_mode_with_resources(
+                crate::input::state::InputTextResources {
+                    measurer: state.render.text_measurer(),
+                    ui_engine: state.render.ui_text(),
+                },
+            );
             state.input_state.needs_redraw = true;
         }
         TrayAction::LightDrawToggle => {
-            state
-                .input_state
-                .toggle_light_mode_drawing_with_engine(state.render.ui_text());
+            state.input_state.toggle_light_mode_drawing_with_resources(
+                crate::input::state::InputTextResources {
+                    measurer: state.render.text_measurer(),
+                    ui_engine: state.render.ui_text(),
+                },
+            );
             state.input_state.needs_redraw = true;
         }
         TrayAction::LightDrawOn => {
-            state
-                .input_state
-                .set_light_mode_drawing_with_engine(state.render.ui_text(), true);
+            state.input_state.set_light_mode_drawing_with_resources(
+                crate::input::state::InputTextResources {
+                    measurer: state.render.text_measurer(),
+                    ui_engine: state.render.ui_text(),
+                },
+                true,
+            );
             state.input_state.needs_redraw = true;
         }
         TrayAction::LightDrawOff => {
-            state
-                .input_state
-                .set_light_mode_drawing_with_engine(state.render.ui_text(), false);
+            state.input_state.set_light_mode_drawing_with_resources(
+                crate::input::state::InputTextResources {
+                    measurer: state.render.text_measurer(),
+                    ui_engine: state.render.ui_text(),
+                },
+                false,
+            );
             state.input_state.needs_redraw = true;
         }
     }

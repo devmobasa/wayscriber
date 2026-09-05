@@ -12,18 +12,5 @@ pub(crate) struct InputTextResources<'a> {
     pub(crate) ui_engine: &'a UiTextEngine,
 }
 
-/// Run a public convenience operation with isolated call-local resources.
-/// Backend runtime paths pass their persistent owners explicitly instead.
-pub(in crate::input::state) fn with_scoped_text_resources<R>(
-    operation: impl FnOnce(InputTextResources<'_>) -> R,
-) -> R {
-    let measurer = TextMeasurer::default();
-    let ui_engine = UiTextEngine::default();
-    operation(InputTextResources {
-        measurer: &measurer,
-        ui_engine: &ui_engine,
-    })
-}
-
 #[cfg(test)]
 mod tests;

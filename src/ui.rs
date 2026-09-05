@@ -90,7 +90,7 @@ pub use status::{
     zoom_chip_geometry,
 };
 pub(crate) use status::{
-    compute_status_hud_layout_with_engine, compute_zoom_chip_layout_with_engine,
+    compute_status_hud_layout_with_resources, compute_zoom_chip_layout_with_engine,
     render_editing_badge_with_engine, render_frozen_badge_with_engine,
     render_page_badge_with_engine, render_pan_badge_with_engine, render_status_bar_with_resources,
     render_zoom_badge_with_engine, render_zoom_chip_with_resources,

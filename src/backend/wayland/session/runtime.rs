@@ -38,6 +38,7 @@ pub(in crate::backend::wayland) struct RuntimeClearToolStateReport {
 #[allow(dead_code)]
 pub(in crate::backend::wayland) fn open_named_session_runtime(
     input_state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     session_state: &mut SessionState,
     target_path: &Path,
     now: Instant,
@@ -50,6 +51,7 @@ pub(in crate::backend::wayland) fn open_named_session_runtime(
 
     let saved_current = save_current_session_before_runtime_open(
         input_state,
+        measurer,
         session_state,
         &current_options,
         now,
@@ -98,6 +100,7 @@ pub(in crate::backend::wayland) fn open_named_session_runtime(
     let loaded_board_data = candidate_snapshot.has_board_data();
     stored_session::apply_snapshot_replacing_boards(
         input_state,
+        measurer,
         candidate_snapshot,
         &candidate_options,
     )?;
@@ -118,6 +121,7 @@ pub(in crate::backend::wayland) fn open_named_session_runtime(
 #[allow(dead_code)]
 pub(in crate::backend::wayland) fn save_named_session_as_runtime(
     input_state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     session_state: &mut SessionState,
     target_path: &Path,
     overwrite: stored_session::SaveAsOverwrite,
@@ -133,6 +137,7 @@ pub(in crate::backend::wayland) fn save_named_session_as_runtime(
     if stored_session::catalog::session_paths_match(&previous_path, target_path) {
         let saved = save_current_session_before_runtime_open(
             input_state,
+            measurer,
             session_state,
             &current_options,
             now,
@@ -153,7 +158,7 @@ pub(in crate::backend::wayland) fn save_named_session_as_runtime(
     target_options.force_resume_persistence();
 
     let snapshot = input_state
-        .with_active_interaction_canceled_for_capture(|input_state| {
+        .with_active_interaction_canceled_for_capture_with(measurer, |input_state| {
             stored_session::snapshot_from_input(input_state, &target_options)
         })
         .ok_or_else(|| anyhow!("Save Session As has no session data to write"))?;
@@ -204,6 +209,7 @@ pub(in crate::backend::wayland) fn save_named_session_as_requires_overwrite(
 #[allow(dead_code)]
 pub(in crate::backend::wayland) fn clear_current_session_runtime(
     input_state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     session_state: &mut SessionState,
     now: Instant,
 ) -> Result<RuntimeClearSessionReport> {
@@ -228,7 +234,12 @@ pub(in crate::backend::wayland) fn clear_current_session_runtime(
         ));
     }
 
-    stored_session::apply_snapshot_replacing_boards(input_state, empty_snapshot, &options)?;
+    stored_session::apply_snapshot_replacing_boards(
+        input_state,
+        measurer,
+        empty_snapshot,
+        &options,
+    )?;
     input_state.set_session_preflight_options(Some(options));
     let _ = input_state.take_session_dirty();
     input_state.clear_session_dirty();
@@ -243,6 +254,7 @@ pub(in crate::backend::wayland) fn clear_current_session_runtime(
 #[allow(dead_code)]
 pub(in crate::backend::wayland) fn clear_saved_tool_state_runtime(
     input_state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     session_state: &mut SessionState,
     default_tool_state: stored_session::ToolStateSnapshot,
     now: Instant,
@@ -255,7 +267,7 @@ pub(in crate::backend::wayland) fn clear_saved_tool_state_runtime(
         (None, None)
     };
 
-    stored_session::apply_tool_state_snapshot(input_state, default_tool_state);
+    stored_session::apply_tool_state_snapshot(input_state, measurer, default_tool_state);
     input_state.mark_session_dirty();
     session_state.record_input_dirty(now, true);
 
@@ -267,6 +279,7 @@ pub(in crate::backend::wayland) fn clear_saved_tool_state_runtime(
 
 fn save_current_session_before_runtime_open(
     input_state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     session_state: &mut SessionState,
     options: &SessionOptions,
     now: Instant,
@@ -275,9 +288,10 @@ fn save_current_session_before_runtime_open(
         return Ok(false);
     }
 
-    let snapshot = input_state.with_active_interaction_canceled_for_capture(|input_state| {
-        stored_session::snapshot_from_input(input_state, options)
-    });
+    let snapshot = input_state
+        .with_active_interaction_canceled_for_capture_with(measurer, |input_state| {
+            stored_session::snapshot_from_input(input_state, options)
+        });
     if should_skip_unloaded_contentless_save(
         session_state.has_loaded_board_data(),
         session_state.is_dirty(),

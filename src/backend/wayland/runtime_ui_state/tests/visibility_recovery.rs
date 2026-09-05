@@ -80,6 +80,7 @@ fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
     assert_eq!(
@@ -125,6 +126,7 @@ fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
 
     apply_toolbar_runtime_rollback(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
         &pins_rollback(true),
@@ -181,6 +183,7 @@ fn a_deferred_hide_rollback_lands_in_the_focus_mode_snapshot() {
 
     apply_toolbar_runtime_rollback(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
         &pins_rollback(true),
@@ -228,6 +231,7 @@ fn a_deferred_hide_rollback_lands_in_the_light_mode_snapshot() {
 
     apply_toolbar_runtime_rollback(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
         &pins_rollback(true),

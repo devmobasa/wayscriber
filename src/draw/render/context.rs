@@ -27,9 +27,8 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
     }
 
     pub fn render_shape(&mut self, shape: &Shape) {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.render_shape_with_measurer(measurer, shape)
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        self.render_shape_with_measurer(&measurer, shape);
     }
 
     pub fn render_shape_with_measurer(
@@ -41,9 +40,8 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
     }
 
     pub fn render_shape_with_halo(&mut self, shape: &Shape, text_halo_enabled: bool) {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.render_shape_with_halo_with_measurer(measurer, shape, text_halo_enabled)
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        self.render_shape_with_halo_with_measurer(&measurer, shape, text_halo_enabled);
     }
 
     pub fn render_shape_with_halo_with_measurer(
@@ -56,9 +54,8 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
     }
 
     pub fn render_shape_over(&mut self, shape: &Shape, known_background_luminance: Option<f64>) {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.render_shape_over_with_measurer(measurer, shape, known_background_luminance)
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        self.render_shape_over_with_measurer(&measurer, shape, known_background_luminance);
     }
 
     pub fn render_shape_over_with_measurer(
@@ -81,14 +78,13 @@ impl<'c, 'r> RenderCtx<'c, 'r> {
         known_background_luminance: Option<f64>,
         text_halo_enabled: bool,
     ) {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.render_shape_over_with_halo_with_measurer(
-                measurer,
-                shape,
-                known_background_luminance,
-                text_halo_enabled,
-            )
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        self.render_shape_over_with_halo_with_measurer(
+            &measurer,
+            shape,
+            known_background_luminance,
+            text_halo_enabled,
+        );
     }
 
     pub fn render_shape_over_with_halo_with_measurer(

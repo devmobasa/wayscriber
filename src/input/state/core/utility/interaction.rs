@@ -1,6 +1,6 @@
 use super::super::base::{DrawingState, InputState, PasteAnchor};
 use crate::draw::DirtyRegionReport;
-use crate::draw::{TextMeasurer, with_scoped_measurer};
+use crate::draw::TextMeasurer;
 use crate::util::Rect;
 use std::time::Instant;
 
@@ -176,11 +176,6 @@ impl InputState {
 
         self.cancel_active_interaction_with(measurer);
         true
-    }
-
-    /// Cancels any in-progress interaction without exiting the application.
-    pub(crate) fn cancel_active_interaction(&mut self) {
-        with_scoped_measurer(|measurer| self.cancel_active_interaction_with(measurer))
     }
 
     pub(crate) fn cancel_active_interaction_with(&mut self, measurer: &TextMeasurer) {

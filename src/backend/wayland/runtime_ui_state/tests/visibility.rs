@@ -68,6 +68,7 @@ fn keyboard_visibility_toggle_persists_both_pins_and_startup_hides_the_toolbar()
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(!restarted_input.toolbar_top_pinned());
@@ -92,6 +93,7 @@ fn a_rolled_back_hide_toggle_restores_live_visibility_from_the_pins() {
 
     apply_toolbar_runtime_rollback(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
         &pins_rollback(true),
@@ -118,6 +120,7 @@ fn a_rolled_back_show_toggle_re_hides_the_toolbar() {
 
     apply_toolbar_runtime_rollback(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
         &pins_rollback(false),
@@ -150,6 +153,7 @@ fn a_rolled_back_pin_button_keeps_a_visible_unpinned_toolbar_visible() {
 
     apply_toolbar_runtime_rollback(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
         &rollback,
@@ -215,6 +219,7 @@ fn visibility_toggle_rollback_through_a_failed_reset_restores_the_screen() {
     assert_eq!(drain.rollbacks.len(), 1);
     apply_toolbar_runtime_rollback(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
         &drain.rollbacks[0],
@@ -374,6 +379,7 @@ fn an_exit_during_an_active_reset_barrier_still_lands_the_deferred_toggle() {
     if drain.rebuild_live {
         runtime.apply_live_state(
             &crate::ui_text::UiTextEngine::default(),
+            &crate::draw::TextMeasurer::default(),
             &mut input,
             &mut positions,
         );
@@ -404,6 +410,7 @@ fn an_exit_during_an_active_reset_barrier_still_lands_the_deferred_toggle() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(!restarted_input.toolbar_top_pinned());

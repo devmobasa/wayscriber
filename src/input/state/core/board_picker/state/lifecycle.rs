@@ -1,6 +1,6 @@
 use super::super::super::base::InputState;
 use super::super::{BoardPickerFocus, BoardPickerMode, BoardPickerPageNavMode, BoardPickerState};
-use crate::draw::{TextMeasurer, with_scoped_measurer};
+use crate::draw::TextMeasurer;
 
 impl InputState {
     pub(crate) fn is_board_picker_open(&self) -> bool {
@@ -15,16 +15,8 @@ impl InputState {
         self.board_picker_mode() == BoardPickerMode::Quick
     }
 
-    pub(crate) fn open_board_picker(&mut self) {
-        with_scoped_measurer(|measurer| self.open_board_picker_with_measurer(measurer))
-    }
-
     pub(crate) fn open_board_picker_with_measurer(&mut self, measurer: &TextMeasurer) {
         self.open_board_picker_in_mode(measurer, BoardPickerMode::Full);
-    }
-
-    pub(crate) fn open_board_picker_quick(&mut self) {
-        with_scoped_measurer(|measurer| self.open_board_picker_quick_with_measurer(measurer))
     }
 
     pub(crate) fn open_board_picker_quick_with_measurer(&mut self, measurer: &TextMeasurer) {
@@ -54,20 +46,12 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    pub(crate) fn toggle_board_picker(&mut self) {
-        with_scoped_measurer(|measurer| self.toggle_board_picker_with_measurer(measurer))
-    }
-
     pub(crate) fn toggle_board_picker_with_measurer(&mut self, measurer: &TextMeasurer) {
         if self.is_board_picker_open() {
             self.close_board_picker();
         } else {
             self.open_board_picker_with_measurer(measurer);
         }
-    }
-
-    pub(crate) fn toggle_board_picker_quick(&mut self) {
-        with_scoped_measurer(|measurer| self.toggle_board_picker_quick_with(measurer))
     }
 
     pub(crate) fn toggle_board_picker_quick_with(&mut self, measurer: &TextMeasurer) {
@@ -344,13 +328,13 @@ mod tests {
         let mut state = make_test_input_state();
 
         state.open_radial_menu(320.0, 240.0);
-        state.open_board_picker();
+        state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
         assert!(state.is_board_picker_open());
         assert!(!state.is_radial_menu_open());
 
         state.close_board_picker();
         state.open_radial_menu(320.0, 240.0);
-        state.open_board_picker_quick();
+        state.open_board_picker_quick_with_measurer(&crate::draw::TextMeasurer::default());
         assert!(state.is_board_picker_open());
         assert!(state.board_picker_is_quick());
         assert!(!state.is_radial_menu_open());

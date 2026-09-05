@@ -13,7 +13,7 @@ pub use zoom_chip::{
     render_zoom_chip_with_theme, zoom_chip_geometry,
 };
 
-pub(crate) use bar::{compute_status_hud_layout_with_engine, render_status_bar_with_resources};
+pub(crate) use bar::{compute_status_hud_layout_with_resources, render_status_bar_with_resources};
 pub(crate) use zoom_chip::{compute_zoom_chip_layout_with_engine, render_zoom_chip_with_resources};
 
 #[cfg(test)]

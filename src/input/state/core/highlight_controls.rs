@@ -1,6 +1,6 @@
 use super::base::{DrawingState, InputState};
 use super::history_limits::HistoryMode;
-use crate::draw::{TextMeasurer, with_scoped_measurer};
+use crate::draw::TextMeasurer;
 use crate::input::tool::Tool;
 use cairo::Context as CairoContext;
 use std::time::Instant;
@@ -133,7 +133,8 @@ impl InputState {
 
     /// Sets highlight-only tool mode on/off and keeps click highlight in sync.
     pub fn set_highlight_tool(&mut self, enable: bool) {
-        with_scoped_measurer(|measurer| self.set_highlight_tool_with_measurer(measurer, enable))
+        let measurer = TextMeasurer::default();
+        self.set_highlight_tool_with_measurer(&measurer, enable)
     }
 
     pub fn set_highlight_tool_with_measurer(&mut self, measurer: &TextMeasurer, enable: bool) {
@@ -162,7 +163,8 @@ impl InputState {
 
     /// Toggles the combined highlight tool and click highlight together.
     pub fn toggle_all_highlights(&mut self) -> bool {
-        with_scoped_measurer(|measurer| self.toggle_all_highlights_with_measurer(measurer))
+        let measurer = TextMeasurer::default();
+        self.toggle_all_highlights_with_measurer(&measurer)
     }
 
     pub fn toggle_all_highlights_with_measurer(&mut self, measurer: &TextMeasurer) -> bool {
@@ -234,6 +236,15 @@ impl InputState {
 
     /// Advance delayed history playback; returns true if a step was applied.
     pub fn tick_delayed_history(&mut self, now: Instant) -> bool {
+        let measurer = TextMeasurer::default();
+        self.tick_delayed_history_with(&measurer, now)
+    }
+
+    pub(crate) fn tick_delayed_history_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        now: Instant,
+    ) -> bool {
         let Some(mode) = self.history_limits.due_mode(now) else {
             return false;
         };
@@ -243,7 +254,7 @@ impl InputState {
         };
         let did_step = action.is_some();
         if let Some(action) = action {
-            self.apply_action_side_effects(&action);
+            self.apply_action_side_effects_with(measurer, &action);
         }
         self.history_limits.finish_due_step(now, did_step);
         if self.history_limits.has_pending() {

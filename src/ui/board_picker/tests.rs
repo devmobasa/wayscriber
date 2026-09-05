@@ -33,7 +33,7 @@ fn retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layou
     let measurer = crate::draw::TextMeasurer::default();
     let mut caches = crate::draw::RenderCaches::default();
     let mut state = crate::input::state::test_support::make_test_input_state();
-    state.open_board_picker();
+    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
     for (width, height, density) in [(900, 700, 1), (420, 300, 2), (900, 700, 1)] {
         let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();

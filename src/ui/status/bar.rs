@@ -14,7 +14,7 @@ use crate::config::{Action, StatusPosition, action_display_label};
 use crate::input::{BoardBackground, DrawingState, InputState, TextInputMode, Tool};
 use crate::label_format::{format_binding_labels, join_binding_labels};
 use crate::ui::toolbar::bindings::action_for_tool;
-use crate::ui_text::{UiTextEngine, UiTextExtents, UiTextStyle, with_scoped_engine};
+use crate::ui_text::{UiTextEngine, UiTextExtents, UiTextStyle};
 
 mod content;
 mod helpers;
@@ -22,7 +22,7 @@ mod measurement;
 mod render;
 
 pub use content::compute_status_hud_layout;
-pub(crate) use content::compute_status_hud_layout_with_engine;
+pub(crate) use content::compute_status_hud_layout_with_resources;
 pub(crate) use render::render_status_bar_with_resources;
 pub use render::{render_status_bar, render_status_bar_with_theme};
 

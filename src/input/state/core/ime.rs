@@ -383,7 +383,8 @@ impl InputState {
     }
 
     pub fn ime_apply_done(&mut self) -> bool {
-        crate::draw::with_scoped_measurer(|measurer| self.ime_apply_done_with(measurer))
+        let measurer = crate::draw::TextMeasurer::default();
+        self.ime_apply_done_with(&measurer)
     }
 
     pub(crate) fn ime_apply_done_with(&mut self, measurer: &crate::draw::TextMeasurer) -> bool {
@@ -396,7 +397,8 @@ impl InputState {
     }
 
     pub fn ime_clear(&mut self) -> bool {
-        crate::draw::with_scoped_measurer(|measurer| self.ime_clear_with(measurer))
+        let measurer = crate::draw::TextMeasurer::default();
+        self.ime_clear_with(&measurer)
     }
 
     pub(crate) fn ime_clear_with(&mut self, measurer: &crate::draw::TextMeasurer) -> bool {

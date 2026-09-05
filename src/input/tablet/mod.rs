@@ -31,17 +31,8 @@ impl Default for TabletSettings {
 
 /// Apply a normalized pressure value [0.0, 1.0] to a pressure-sensitive tool.
 pub fn apply_pressure_to_state(pressure01: f64, state: &mut InputState, settings: TabletSettings) {
-    try_apply_pressure_to_state(pressure01, state, settings);
-}
-
-/// Apply pressure and report whether the active tool accepted the sample.
-pub(crate) fn try_apply_pressure_to_state(
-    pressure01: f64,
-    state: &mut InputState,
-    settings: TabletSettings,
-) -> bool {
     let measurer = crate::draw::TextMeasurer::default();
-    try_apply_pressure_to_state_with(&measurer, pressure01, state, settings)
+    let _ = try_apply_pressure_to_state_with(&measurer, pressure01, state, settings);
 }
 
 pub(crate) fn try_apply_pressure_to_state_with(
@@ -97,7 +88,8 @@ mod tests {
         state.style.current_thickness = 3.0;
         state.needs_redraw = false;
 
-        assert!(!try_apply_pressure_to_state(
+        assert!(!try_apply_pressure_to_state_with(
+            &crate::draw::TextMeasurer::default(),
             0.8,
             &mut state,
             TabletSettings::default()
@@ -118,7 +110,12 @@ mod tests {
             max_thickness: 8.0,
         };
 
-        assert!(!try_apply_pressure_to_state(0.8, &mut state, settings));
+        assert!(!try_apply_pressure_to_state_with(
+            &crate::draw::TextMeasurer::default(),
+            0.8,
+            &mut state,
+            settings
+        ));
 
         assert_eq!(state.style.current_thickness, 4.0);
         assert!(!state.needs_redraw);
@@ -135,13 +132,23 @@ mod tests {
             max_thickness: 6.0,
         };
 
-        assert!(try_apply_pressure_to_state(-1.0, &mut state, settings));
+        assert!(try_apply_pressure_to_state_with(
+            &crate::draw::TextMeasurer::default(),
+            -1.0,
+            &mut state,
+            settings
+        ));
         assert_eq!(state.style.current_thickness, 2.0);
         assert_eq!(state.thickness_for_tool(Tool::Pen), 2.0);
         assert!(state.needs_redraw);
 
         state.needs_redraw = false;
-        assert!(try_apply_pressure_to_state(2.0, &mut state, settings));
+        assert!(try_apply_pressure_to_state_with(
+            &crate::draw::TextMeasurer::default(),
+            2.0,
+            &mut state,
+            settings
+        ));
         assert_eq!(state.style.current_thickness, 6.0);
         assert_eq!(state.thickness_for_tool(Tool::Pen), 6.0);
         assert!(state.needs_redraw);
@@ -157,7 +164,12 @@ mod tests {
             max_thickness: MAX_STROKE_THICKNESS + 50.0,
         };
 
-        assert!(try_apply_pressure_to_state(1.0, &mut state, settings));
+        assert!(try_apply_pressure_to_state_with(
+            &crate::draw::TextMeasurer::default(),
+            1.0,
+            &mut state,
+            settings
+        ));
 
         assert_eq!(state.style.current_thickness, MAX_STROKE_THICKNESS);
         assert_eq!(state.thickness_for_tool(Tool::Pen), MAX_STROKE_THICKNESS);
@@ -176,9 +188,19 @@ mod tests {
 
         state.set_tool_override(Some(Tool::Pen));
         state.on_mouse_press(MouseButton::Left, 0, 0);
-        assert!(try_apply_pressure_to_state(0.0, &mut state, settings));
+        assert!(try_apply_pressure_to_state_with(
+            &crate::draw::TextMeasurer::default(),
+            0.0,
+            &mut state,
+            settings
+        ));
         state.on_mouse_motion(10, 0);
-        assert!(try_apply_pressure_to_state(1.0, &mut state, settings));
+        assert!(try_apply_pressure_to_state_with(
+            &crate::draw::TextMeasurer::default(),
+            1.0,
+            &mut state,
+            settings
+        ));
         state.on_mouse_motion(20, 0);
         state.on_mouse_release(MouseButton::Left, 20, 0);
 
@@ -203,7 +225,12 @@ mod tests {
         state.set_tool_override(Some(Tool::Marker));
         assert!(state.set_thickness(31.0));
 
-        assert!(!try_apply_pressure_to_state(0.05, &mut state, settings));
+        assert!(!try_apply_pressure_to_state_with(
+            &crate::draw::TextMeasurer::default(),
+            0.05,
+            &mut state,
+            settings
+        ));
         state.on_mouse_press(MouseButton::Left, 0, 0);
         state.on_mouse_motion(10, 0);
         state.on_mouse_release(MouseButton::Left, 20, 0);
@@ -229,7 +256,12 @@ mod tests {
         state.set_tool_override(Some(Tool::StepMarker));
         assert!(state.set_thickness(30.0));
 
-        assert!(!try_apply_pressure_to_state(0.05, &mut state, settings));
+        assert!(!try_apply_pressure_to_state_with(
+            &crate::draw::TextMeasurer::default(),
+            0.05,
+            &mut state,
+            settings
+        ));
         state.on_mouse_press(MouseButton::Left, 20, 20);
         state.on_mouse_release(MouseButton::Left, 20, 20);
 

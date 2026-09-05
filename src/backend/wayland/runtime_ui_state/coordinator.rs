@@ -62,11 +62,18 @@ impl ToolbarRuntimeState {
     pub(in crate::backend::wayland) fn apply_startup_state(
         &self,
         engine: &crate::ui_text::UiTextEngine,
+        measurer: &crate::draw::TextMeasurer,
         input: &mut InputState,
     ) {
-        apply_live_toolbar_state(engine, input, self.controller.live_state(), |_| true);
+        apply_live_toolbar_state(
+            engine,
+            measurer,
+            input,
+            self.controller.live_state(),
+            |_| true,
+        );
         apply_live_board_state(input, self.controller.live_state(), |_| true);
-        input.derive_toolbar_visibility_from_pins_with_engine(engine);
+        input.derive_toolbar_visibility_from_pins_with_resources(engine, measurer);
     }
 
     /// Layer retained position overrides on top of the authored seeds the
@@ -84,10 +91,17 @@ impl ToolbarRuntimeState {
     pub(super) fn apply_live_state(
         &self,
         engine: &crate::ui_text::UiTextEngine,
+        measurer: &crate::draw::TextMeasurer,
         input: &mut InputState,
         positions: &mut ToolbarPositionSnapshot,
     ) {
-        apply_live_toolbar_state(engine, input, self.controller.live_state(), |_| true);
+        apply_live_toolbar_state(
+            engine,
+            measurer,
+            input,
+            self.controller.live_state(),
+            |_| true,
+        );
         apply_live_toolbar_positions(positions, self.controller.live_state(), |_| true);
         apply_live_board_state(input, self.controller.live_state(), |_| true);
     }
@@ -274,6 +288,7 @@ impl ToolbarRuntimeState {
     pub(in crate::backend::wayland) fn refresh_config_seeds(
         &mut self,
         engine: &crate::ui_text::UiTextEngine,
+        measurer: &crate::draw::TextMeasurer,
         config: &Config,
         input: &mut InputState,
         positions: &mut ToolbarPositionSnapshot,
@@ -324,9 +339,13 @@ impl ToolbarRuntimeState {
                 .retain(|target, _| !changed.contains(target));
             rollback
         });
-        apply_live_toolbar_state(engine, input, self.controller.live_state(), |target| {
-            changed.contains(target)
-        });
+        apply_live_toolbar_state(
+            engine,
+            measurer,
+            input,
+            self.controller.live_state(),
+            |target| changed.contains(target),
+        );
         apply_live_toolbar_positions(positions, self.controller.live_state(), |target| {
             changed.contains(target)
         });
@@ -336,7 +355,7 @@ impl ToolbarRuntimeState {
         // keeping toolbar preview updates scoped to changed targets above.
         apply_live_board_state(input, self.controller.live_state(), |_| true);
         if let Some(rollback) = position_rollback {
-            apply_toolbar_runtime_rollback(engine, input, positions, &rollback);
+            apply_toolbar_runtime_rollback(engine, measurer, input, positions, &rollback);
         }
         self.dispatch_writer_command();
         ToolbarSeedRefresh {

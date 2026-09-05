@@ -133,6 +133,7 @@ impl RenderRuntime {
     pub(in crate::backend::wayland) fn new(
         theme: crate::ui::theme::Theme,
         ui_text: crate::ui_text::UiTextEngine,
+        text_measurer: crate::draw::TextMeasurer,
     ) -> Self {
         Self {
             canvas_layer_cache: CanvasLayerCache::new(),
@@ -141,7 +142,7 @@ impl RenderRuntime {
             ui_caches: crate::ui::UiRenderCaches::default(),
             help_content: crate::ui::HelpContentCache::default(),
             ui_text,
-            text_measurer: crate::draw::TextMeasurer::default(),
+            text_measurer,
             ui_damage: UiDamageHistory::default(),
             profile_ui_baseline: Vec::new(),
         }
@@ -245,10 +246,12 @@ mod tests {
         let mut dark = RenderRuntime::new(
             crate::ui::theme::Theme::resolve(crate::ui::theme::ThemeMode::Dark),
             crate::ui_text::UiTextEngine::default(),
+            crate::draw::TextMeasurer::default(),
         );
         let light = RenderRuntime::new(
             crate::ui::theme::Theme::resolve(crate::ui::theme::ThemeMode::Light),
             crate::ui_text::UiTextEngine::default(),
+            crate::draw::TextMeasurer::default(),
         );
         assert_eq!(dark.theme(), &crate::ui::theme::Theme::dark());
         assert_eq!(light.theme(), &crate::ui::theme::Theme::light());

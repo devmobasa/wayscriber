@@ -109,6 +109,7 @@ fn board_pin_is_runtime_owned_and_survives_restart_without_touching_config() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(board_pinned(&restarted_input, "whiteboard"));
@@ -142,6 +143,7 @@ value = true
 
     let refresh = runtime.refresh_config_seeds(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &config,
         &mut input,
         &mut positions,
@@ -177,6 +179,7 @@ value = true
 
     let refresh = runtime.refresh_config_seeds(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &config,
         &mut input,
         &mut positions,
@@ -220,6 +223,7 @@ value = true
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
     runtime.apply_live_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut ToolbarPositionSnapshot { top: (0.0, 0.0) },
     );
@@ -231,6 +235,7 @@ value = true
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(!board_pinned(&restarted_input, &board_id));
@@ -264,6 +269,7 @@ fn restored_board_pin_is_replayed_after_same_authority_recovery() {
     assert!(rebuild_live);
     runtime.apply_live_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut ToolbarPositionSnapshot { top: (0.0, 0.0) },
     );
@@ -314,6 +320,7 @@ fn deferred_board_pin_restore_is_discarded_when_reset_changes_authority() {
     assert_ne!(runtime.controller.authority_epoch(), original_epoch);
     runtime.apply_live_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut ToolbarPositionSnapshot { top: (0.0, 0.0) },
     );
@@ -350,6 +357,7 @@ fn delayed_delete_and_same_id_reuse_cannot_resurrect_old_board_pin() {
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     runtime.apply_live_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
     );
@@ -360,6 +368,7 @@ fn delayed_delete_and_same_id_reuse_cannot_resurrect_old_board_pin() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(!board_pinned(&restarted_input, "whiteboard"));
@@ -392,6 +401,7 @@ fn stale_deferred_board_pin_is_rejected_after_authored_pin_reload() {
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     let refresh = runtime.refresh_config_seeds(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &config_b,
         &mut input,
         &mut positions,

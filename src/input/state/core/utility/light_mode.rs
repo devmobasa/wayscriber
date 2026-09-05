@@ -2,7 +2,7 @@ use super::super::base::{DesktopEnvironment, InputState, ShellMode};
 use super::super::modes::LightModeRestore;
 use crate::domain::Action;
 use crate::draw::TextMeasurer;
-use crate::input::state::{InputTextResources, with_scoped_text_resources};
+use crate::input::state::InputTextResources;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::tool::Tool;
 
@@ -54,18 +54,6 @@ impl InputState {
             .unwrap_or_else(|| self.active_tool())
     }
 
-    pub(crate) fn toggle_light_mode_with_engine(
-        &mut self,
-        engine: &crate::ui_text::UiTextEngine,
-    ) -> bool {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.toggle_light_mode_with_resources(InputTextResources {
-                measurer,
-                ui_engine: engine,
-            })
-        })
-    }
-
     pub(crate) fn toggle_light_mode_with_resources(
         &mut self,
         resources: InputTextResources<'_>,
@@ -88,20 +76,11 @@ impl InputState {
     }
 
     pub fn toggle_light_mode_drawing(&mut self) -> bool {
-        with_scoped_text_resources(|resources| {
-            self.toggle_light_mode_drawing_with_resources(resources)
-        })
-    }
-
-    pub(crate) fn toggle_light_mode_drawing_with_engine(
-        &mut self,
-        engine: &crate::ui_text::UiTextEngine,
-    ) -> bool {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.toggle_light_mode_drawing_with_resources(InputTextResources {
-                measurer,
-                ui_engine: engine,
-            })
+        let measurer = TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.toggle_light_mode_drawing_with_resources(InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
         })
     }
 
@@ -118,25 +97,15 @@ impl InputState {
     }
 
     pub fn set_light_mode_drawing(&mut self, drawing: bool) -> bool {
-        with_scoped_text_resources(|resources| {
-            self.set_light_mode_drawing_with_resources(resources, drawing)
-        })
-    }
-
-    pub(crate) fn set_light_mode_drawing_with_engine(
-        &mut self,
-        engine: &crate::ui_text::UiTextEngine,
-        drawing: bool,
-    ) -> bool {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.set_light_mode_drawing_with_resources(
-                InputTextResources {
-                    measurer,
-                    ui_engine: engine,
-                },
-                drawing,
-            )
-        })
+        let measurer = TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.set_light_mode_drawing_with_resources(
+            InputTextResources {
+                measurer: &measurer,
+                ui_engine: &ui_engine,
+            },
+            drawing,
+        )
     }
 
     pub(crate) fn set_light_mode_drawing_with_resources(

@@ -103,7 +103,7 @@ fn shutdown_persistence_records_wheel_history_before_capturing_the_snapshot() {
     options.persist_transparent = true;
     options.persist_history = true;
     let snapshot = input
-        .snapshot_for_persistence(&options)
+        .snapshot_for_persistence_with(&crate::draw::TextMeasurer::default(), &options)
         .expect("changed loupe snapshot");
     let mut restored = make_test_input_state();
     crate::session::apply_snapshot(&mut restored, snapshot, &options);

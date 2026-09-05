@@ -158,8 +158,9 @@ impl InputState {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn with_active_interaction_canceled_for_capture<T>(
+    pub(crate) fn with_active_interaction_canceled_for_capture_with<T>(
         &mut self,
+        measurer: &crate::draw::TextMeasurer,
         capture: impl FnOnce(&Self) -> T,
     ) -> T {
         if !self.has_cancelable_session_capture_interaction() {
@@ -167,7 +168,7 @@ impl InputState {
         }
 
         let rollback = ActiveInteractionRollback::capture(self);
-        self.cancel_active_interaction();
+        self.cancel_active_interaction_with(measurer);
         if self.is_color_picker_popup_open() {
             self.close_color_picker_popup(true);
         }
@@ -177,11 +178,12 @@ impl InputState {
     }
 
     /// Snapshot boards for persistence without writing in-progress edits as empty text.
-    pub(crate) fn snapshot_for_persistence(
+    pub(crate) fn snapshot_for_persistence_with(
         &mut self,
+        measurer: &crate::draw::TextMeasurer,
         options: &crate::session::SessionOptions,
     ) -> Option<crate::session::SessionSnapshot> {
-        self.with_active_interaction_canceled_for_capture(|input| {
+        self.with_active_interaction_canceled_for_capture_with(measurer, |input| {
             crate::session::snapshot_from_input(input, options)
         })
     }
@@ -304,9 +306,12 @@ mod tests {
         assert!(state.has_pending_board_delete());
         state.begin_pointer_drag(MouseButton::Left, None);
 
-        state.with_active_interaction_canceled_for_capture(|input| {
-            assert!(!input.has_active_pointer_interaction());
-        });
+        state.with_active_interaction_canceled_for_capture_with(
+            &crate::draw::TextMeasurer::default(),
+            |input| {
+                assert!(!input.has_active_pointer_interaction());
+            },
+        );
         assert!(state.has_active_pointer_interaction());
 
         state.delete_active_board_at_with_measurer(
@@ -328,9 +333,12 @@ mod tests {
         }));
         state.begin_pointer_drag(MouseButton::Left, None);
 
-        state.with_active_interaction_canceled_for_capture(|input| {
-            assert!(!input.has_active_pointer_interaction());
-        });
+        state.with_active_interaction_canceled_for_capture_with(
+            &crate::draw::TextMeasurer::default(),
+            |input| {
+                assert!(!input.has_active_pointer_interaction());
+            },
+        );
 
         assert!(state.text_block_drag_active());
         assert!(state.pointer_drag_button_matches(MouseButton::Left));
@@ -371,7 +379,7 @@ mod tests {
         assert_eq!(first_snapshot_text(&live), "");
 
         let persisted = state
-            .snapshot_for_persistence(&options)
+            .snapshot_for_persistence_with(&crate::draw::TextMeasurer::default(), &options)
             .expect("persistence snapshot");
         assert_eq!(first_snapshot_text(&persisted), "Original");
 

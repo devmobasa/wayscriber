@@ -30,9 +30,8 @@ const SELECTION_GLOW: Color = Color {
 
 /// Renders a selection halo overlay for a drawn shape.
 pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
-    crate::draw::with_scoped_measurer(|measurer| {
-        render_selection_halo_with_measurer(measurer, ctx, drawn)
-    })
+    let measurer = crate::draw::TextMeasurer::default();
+    render_selection_halo_with_measurer(&measurer, ctx, drawn);
 }
 
 pub fn render_selection_halo_with_measurer(

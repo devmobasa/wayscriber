@@ -127,6 +127,7 @@ pub(super) use helpers::{
 
 pub(in crate::backend::wayland) struct WaylandStateInit {
     pub ui_text: crate::ui_text::UiTextEngine,
+    pub text_measurer: crate::draw::TextMeasurer,
     pub globals: ProtocolGlobals,
     pub config: Config,
     pub input_state: InputState,

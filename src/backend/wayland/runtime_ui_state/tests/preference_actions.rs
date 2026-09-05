@@ -43,6 +43,7 @@ fn click_highlight_survives_restart_from_either_path() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
 
@@ -120,6 +121,7 @@ fn keyboard_only_chrome_toggles_survive_restart_without_touching_config() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
 
@@ -281,6 +283,7 @@ fn a_rollback_restores_every_durable_chrome_preference() {
 
     apply_toolbar_runtime_rollback(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
         &PreviewRollbackSnapshot {

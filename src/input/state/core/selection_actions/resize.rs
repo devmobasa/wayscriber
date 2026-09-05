@@ -1,8 +1,8 @@
 //! Selection resize functionality.
 
 use crate::draw::ShapeId;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::ShapeSnapshot;
-use crate::draw::{TextMeasurer, with_scoped_measurer};
 use crate::input::InputState;
 use crate::input::state::core::base::SelectionHandle;
 use crate::util::Rect;
@@ -15,7 +15,8 @@ const HANDLE_TOLERANCE: i32 = 4;
 impl InputState {
     /// Hit test for selection handles. Returns the handle if mouse is over one.
     pub fn hit_selection_handle(&self, x: i32, y: i32) -> Option<SelectionHandle> {
-        with_scoped_measurer(|measurer| self.hit_selection_handle_with(measurer, x, y))
+        let measurer = TextMeasurer::default();
+        self.hit_selection_handle_with(&measurer, x, y)
     }
 
     /// Hit-tests selection handles using the supplied text measurement owner.

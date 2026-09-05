@@ -1,6 +1,6 @@
 use super::super::base::InputState;
 use crate::draw::Color;
-use crate::draw::{TextMeasurer, with_scoped_measurer};
+use crate::draw::TextMeasurer;
 use crate::input::boards::PendingBoardRuntimeUiAction;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BoardBackground, runtime_contrast_pen_color};
@@ -337,7 +337,8 @@ impl InputState {
     }
 
     pub fn page_prev(&mut self) -> bool {
-        with_scoped_measurer(|measurer| self.page_prev_with_measurer(measurer))
+        let measurer = TextMeasurer::default();
+        self.page_prev_with_measurer(&measurer)
     }
 
     pub fn page_prev_with_measurer(&mut self, measurer: &TextMeasurer) -> bool {
@@ -352,7 +353,8 @@ impl InputState {
     }
 
     pub fn page_next(&mut self) -> bool {
-        with_scoped_measurer(|measurer| self.page_next_with_measurer(measurer))
+        let measurer = TextMeasurer::default();
+        self.page_next_with_measurer(&measurer)
     }
 
     pub fn page_next_with_measurer(&mut self, measurer: &TextMeasurer) -> bool {
@@ -367,7 +369,8 @@ impl InputState {
     }
 
     pub fn switch_to_page(&mut self, index: usize) -> bool {
-        with_scoped_measurer(|measurer| self.switch_to_page_with_measurer(measurer, index))
+        let measurer = TextMeasurer::default();
+        self.switch_to_page_with_measurer(&measurer, index)
     }
 
     pub fn switch_to_page_with_measurer(&mut self, measurer: &TextMeasurer, index: usize) -> bool {
@@ -382,7 +385,8 @@ impl InputState {
     }
 
     pub fn page_new(&mut self) {
-        with_scoped_measurer(|measurer| self.page_new_with_measurer(measurer))
+        let measurer = TextMeasurer::default();
+        self.page_new_with_measurer(&measurer);
     }
 
     pub fn page_new_with_measurer(&mut self, measurer: &TextMeasurer) {
@@ -399,7 +403,8 @@ impl InputState {
     }
 
     pub fn page_duplicate(&mut self) {
-        with_scoped_measurer(|measurer| self.page_duplicate_with_measurer(measurer))
+        let measurer = TextMeasurer::default();
+        self.page_duplicate_with_measurer(&measurer);
     }
 
     pub fn page_duplicate_with_measurer(&mut self, measurer: &TextMeasurer) {

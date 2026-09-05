@@ -1,8 +1,8 @@
 use super::super::base::{ClipboardFingerprint, ClipboardPasteRequest, InputState, PasteAnchor};
 use super::super::selection::LocalSelectionContext;
 use crate::draw::Shape;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
-use crate::draw::{TextMeasurer, with_scoped_measurer};
 use crate::input::state::{Toast, ToastPriority};
 use crate::util::Rect;
 
@@ -158,16 +158,6 @@ impl InputState {
         generation: Option<u64>,
     ) {
         self.selection_clipboard.mark_superseded(generation);
-    }
-
-    pub(crate) fn paste_clipboard_shapes_from_request(
-        &mut self,
-        request: &ClipboardPasteRequest,
-        shapes: Vec<Shape>,
-    ) -> usize {
-        with_scoped_measurer(|measurer| {
-            self.paste_clipboard_shapes_from_request_with(measurer, request, shapes)
-        })
     }
 
     pub(crate) fn paste_clipboard_shapes_from_request_with(

@@ -4,7 +4,7 @@ use super::super::base::{
 };
 use super::super::default_step_marker_size;
 use crate::config::{PresetSlotsConfig, PresetToolStatesConfig, ToolPresetConfig};
-use crate::draw::{TextMeasurer, with_scoped_measurer};
+use crate::draw::TextMeasurer;
 use crate::input::{DragModifier, tool::Tool};
 use std::time::{Duration, Instant};
 
@@ -14,7 +14,8 @@ impl InputState {
     }
 
     pub fn apply_preset(&mut self, slot: usize) -> bool {
-        with_scoped_measurer(|measurer| self.apply_preset_with(measurer, slot))
+        let measurer = TextMeasurer::default();
+        self.apply_preset_with(&measurer, slot)
     }
 
     pub fn apply_preset_with(&mut self, measurer: &TextMeasurer, slot: usize) -> bool {

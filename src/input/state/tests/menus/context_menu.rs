@@ -613,7 +613,7 @@ fn page_delete_from_context_reconciles_board_picker_page_search_cursor() {
         &[Some("Match one"), Some("Match two"), Some("Other")],
         0,
     );
-    state.open_board_picker();
+    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
     state.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
     state.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));
@@ -667,7 +667,7 @@ fn page_search_active_match_clamps_stale_cursor_after_external_page_delete() {
         &[Some("Match one"), Some("Match two"), Some("Other")],
         0,
     );
-    state.open_board_picker();
+    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
     state.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
     state.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));

@@ -44,6 +44,7 @@ pub(super) fn top_display_mode_values(
 /// else it is the live strip's mode.
 pub(super) fn apply_persisted_top_display_mode(
     engine: &crate::ui_text::UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
     input: &mut InputState,
     mode: PersistedTopDisplayMode,
 ) {
@@ -52,20 +53,21 @@ pub(super) fn apply_persisted_top_display_mode(
         return;
     }
     if input.toolbar_top_display_mode() != mode {
-        input.set_top_display_mode_with_engine(engine, mode);
+        input.set_top_display_mode_with_resources(engine, measurer, mode);
     }
 }
 
 pub(super) fn apply_live_toolbar_state(
     engine: &crate::ui_text::UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
     input: &mut InputState,
     live: &RuntimeUiLiveState,
     include: impl Fn(&InteractionSeedTarget) -> bool,
 ) {
-    apply_live_display_flags(engine, input, live, &include);
+    apply_live_display_flags(engine, measurer, input, live, &include);
     apply_live_toolbar_preferences(input, live, &include);
     apply_live_overlay_flags(input, live, &include);
-    apply_live_toolbar_structure(engine, input, live, &include);
+    apply_live_toolbar_structure(engine, measurer, input, live, &include);
 }
 
 fn live_bool(live: &RuntimeUiLiveState, target: InteractionSeedTarget) -> Option<bool> {
@@ -77,6 +79,7 @@ fn live_bool(live: &RuntimeUiLiveState, target: InteractionSeedTarget) -> Option
 
 fn apply_live_display_flags(
     engine: &crate::ui_text::UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
     input: &mut InputState,
     live: &RuntimeUiLiveState,
     include: &impl Fn(&InteractionSeedTarget) -> bool,
@@ -88,7 +91,7 @@ fn apply_live_display_flags(
         && let Some(InteractionSeedValue::TopDisplayMode(mode)) =
             live.get(&InteractionSeedTarget::TopDisplayMode)
     {
-        apply_persisted_top_display_mode(engine, input, *mode);
+        apply_persisted_top_display_mode(engine, measurer, input, *mode);
     }
     if include(&InteractionSeedTarget::StatusBar)
         && let Some(value) = live_bool(live, InteractionSeedTarget::StatusBar)
@@ -193,6 +196,7 @@ fn apply_live_overlay_flags(
 
 fn apply_live_toolbar_structure(
     engine: &crate::ui_text::UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
     input: &mut InputState,
     live: &RuntimeUiLiveState,
     include: &impl Fn(&InteractionSeedTarget) -> bool,
@@ -220,7 +224,7 @@ fn apply_live_toolbar_structure(
         if include(&InteractionSeedTarget::StatusBarItem(item))
             && let Some(value) = live_bool(live, InteractionSeedTarget::StatusBarItem(item))
         {
-            input.set_status_bar_item_visible_with_engine(engine, item, value);
+            input.set_status_bar_item_visible_with_resources(engine, measurer, item, value);
         }
     }
     if include(&InteractionSeedTarget::TopPinned)

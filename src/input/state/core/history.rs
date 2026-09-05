@@ -1,11 +1,12 @@
 use super::base::InputState;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
-use crate::draw::{TextMeasurer, with_scoped_measurer};
 
 impl InputState {
     /// Applies side effects after an undoable action mutates the frame.
     pub fn apply_action_side_effects(&mut self, action: &UndoAction) {
-        with_scoped_measurer(|measurer| self.apply_action_side_effects_with(measurer, action));
+        let measurer = TextMeasurer::default();
+        self.apply_action_side_effects_with(&measurer, action);
     }
 
     pub fn apply_action_side_effects_with(&mut self, measurer: &TextMeasurer, action: &UndoAction) {

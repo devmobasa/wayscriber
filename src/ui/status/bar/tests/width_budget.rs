@@ -44,8 +44,9 @@ fn each_core_content_flag_removes_only_its_segment() {
 
     for (item, kind) in cases {
         let mut state = make_state();
-        assert!(state.set_status_bar_item_visible_with_engine(
+        assert!(state.set_status_bar_item_visible_with_resources(
             &UiTextEngine::default(),
+            &crate::draw::TextMeasurer::default(),
             item,
             false
         ));
@@ -82,22 +83,30 @@ fn prefix_content_keeps_output_before_selection_and_honors_both_flags() {
     state.set_selection(vec![shape_id]);
 
     assert_eq!(
-        build_prefix_text(&state).as_deref(),
+        build_prefix_text(&state, &crate::draw::TextMeasurer::default()).as_deref(),
         Some("Output: DP-3 · 34×44px")
     );
 
-    state.set_status_bar_item_visible_with_engine(
+    state.set_status_bar_item_visible_with_resources(
         &UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         StatusBarItem::ActiveOutput,
         false,
     );
-    assert_eq!(build_prefix_text(&state).as_deref(), Some("34×44px"));
-    state.set_status_bar_item_visible_with_engine(
+    assert_eq!(
+        build_prefix_text(&state, &crate::draw::TextMeasurer::default()).as_deref(),
+        Some("34×44px")
+    );
+    state.set_status_bar_item_visible_with_resources(
         &UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         StatusBarItem::SelectionInfo,
         false,
     );
-    assert_eq!(build_prefix_text(&state), None);
+    assert_eq!(
+        build_prefix_text(&state, &crate::draw::TextMeasurer::default()),
+        None
+    );
 }
 
 #[test]
@@ -111,8 +120,9 @@ fn context_indicator_flag_gates_transient_status_text() {
             .any(|piece| piece.text.as_deref() == Some(label))
     );
 
-    state.set_status_bar_item_visible_with_engine(
+    state.set_status_bar_item_visible_with_resources(
         &UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         StatusBarItem::ContextIndicators,
         false,
     );
@@ -127,10 +137,16 @@ fn context_indicator_flag_gates_transient_status_text() {
 fn shedding_the_last_optional_piece_does_not_leave_an_empty_pill() {
     let mut state = make_state();
     for item in StatusBarItem::ALL {
-        state.set_status_bar_item_visible_with_engine(&UiTextEngine::default(), item, false);
+        state.set_status_bar_item_visible_with_resources(
+            &UiTextEngine::default(),
+            &crate::draw::TextMeasurer::default(),
+            item,
+            false,
+        );
     }
-    state.set_status_bar_item_visible_with_engine(
+    state.set_status_bar_item_visible_with_resources(
         &UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         StatusBarItem::About,
         true,
     );

@@ -52,25 +52,14 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) {
-        self.update_zoom_chip_layout_for_pointer(style, screen_width, screen_height, true);
-    }
-
-    pub(crate) fn update_zoom_chip_layout_for_pointer(
-        &mut self,
-        style: &StatusBarStyle,
-        screen_width: u32,
-        screen_height: u32,
-        chrome_cursor_focused: bool,
-    ) {
-        crate::ui_text::with_scoped_engine(|engine| {
-            self.update_zoom_chip_layout_for_pointer_with_engine(
-                engine,
-                style,
-                screen_width,
-                screen_height,
-                chrome_cursor_focused,
-            )
-        });
+        let engine = crate::ui_text::UiTextEngine::default();
+        self.update_zoom_chip_layout_for_pointer_with_engine(
+            &engine,
+            style,
+            screen_width,
+            screen_height,
+            true,
+        );
     }
 
     pub(crate) fn update_zoom_chip_layout_for_pointer_with_engine(

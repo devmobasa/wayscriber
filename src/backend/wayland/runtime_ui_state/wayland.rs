@@ -21,6 +21,7 @@ impl WaylandState {
         let mut positions = self.toolbar_position_snapshot();
         apply_toolbar_runtime_rollback(
             self.render.ui_text(),
+            self.render.text_measurer(),
             &mut self.input_state,
             &mut positions,
             &rollback,
@@ -340,6 +341,7 @@ impl WaylandState {
         };
         let refresh = runtime.refresh_config_seeds(
             self.render.ui_text(),
+            self.render.text_measurer(),
             &self.config,
             &mut self.input_state,
             &mut positions,
@@ -457,6 +459,7 @@ impl WaylandState {
             if let Some(runtime) = self.preferences.runtime_ui().state() {
                 runtime.apply_live_state(
                     self.render.ui_text(),
+                    self.render.text_measurer(),
                     &mut self.input_state,
                     &mut positions,
                 );

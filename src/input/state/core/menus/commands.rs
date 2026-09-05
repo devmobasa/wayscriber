@@ -80,9 +80,15 @@ impl InputState {
     }
 
     pub fn execute_menu_command(&mut self, command: MenuCommand) {
-        crate::input::state::with_scoped_text_resources(|resources| {
-            self.execute_menu_command_with_resources(resources, command)
-        })
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.execute_menu_command_with_resources(
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &ui_engine,
+            },
+            command,
+        );
     }
 
     pub(crate) fn execute_menu_command_with_resources(

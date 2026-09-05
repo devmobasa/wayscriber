@@ -105,6 +105,7 @@ fn runtime_rebuild_reuses_minimize_transition_cleanup() {
 
         runtime.apply_live_state(
             &crate::ui_text::UiTextEngine::default(),
+            &crate::draw::TextMeasurer::default(),
             &mut rebuilt,
             &mut positions,
         );
@@ -161,6 +162,7 @@ fn supported_runtime_reset_returns_live_state_to_configured_defaults() {
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     runtime.apply_live_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
     );
@@ -372,6 +374,7 @@ fn cancelling_read_only_recovery_rebuilds_a_staged_seed_reload() {
     config_b.ui.toolbar.top_pinned = false;
     let refresh = runtime.refresh_config_seeds(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &config_b,
         &mut input,
         &mut positions,
@@ -390,6 +393,7 @@ fn cancelling_read_only_recovery_rebuilds_a_staged_seed_reload() {
     );
     runtime.apply_live_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
     );
@@ -428,8 +432,9 @@ fn runtime_toolbar_routes_leave_authored_config_bytes_exactly_unchanged() {
                 input.test_set_toolbar_display_state(input.toolbar_top_display_mode(), true);
             }
             ToolbarRuntimeUiPersistenceTarget::TopDisplayMode => {
-                input.set_top_display_mode_with_engine(
+                input.set_top_display_mode_with_resources(
                     &crate::ui_text::UiTextEngine::default(),
+                    &crate::draw::TextMeasurer::default(),
                     crate::config::TopDisplayMode::Micro,
                 );
             }

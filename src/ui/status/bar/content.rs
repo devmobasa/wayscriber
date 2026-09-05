@@ -68,20 +68,22 @@ pub fn compute_status_hud_layout(
     screen_width: u32,
     screen_height: u32,
 ) -> Option<StatusHudLayout> {
-    with_scoped_engine(|engine| {
-        compute_status_hud_layout_with_engine(
-            engine,
-            input_state,
-            position,
-            style,
-            screen_width,
-            screen_height,
-        )
-    })
+    let engine = UiTextEngine::default();
+    let measurer = crate::draw::TextMeasurer::default();
+    compute_status_hud_layout_with_resources(
+        &engine,
+        &measurer,
+        input_state,
+        position,
+        style,
+        screen_width,
+        screen_height,
+    )
 }
 
-pub(crate) fn compute_status_hud_layout_with_engine(
+pub(crate) fn compute_status_hud_layout_with_resources(
     engine: &UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
     input_state: &InputState,
     position: StatusPosition,
     style: &crate::config::StatusBarStyle,
@@ -94,7 +96,7 @@ pub(crate) fn compute_status_hud_layout_with_engine(
     let sep_advance = sep_extents.x_advance();
 
     let mut pieces = build_cluster_pieces(input_state);
-    let prefix_text = build_prefix_text(input_state);
+    let prefix_text = build_prefix_text(input_state, measurer);
     if pieces.is_empty() && prefix_text.is_none() {
         return None;
     }
@@ -415,7 +417,10 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
 
 /// Wrappable non-interactive info before the segments (selection size,
 /// output label), or `None` when nothing applies.
-pub(super) fn build_prefix_text(input_state: &InputState) -> Option<String> {
+pub(super) fn build_prefix_text(
+    input_state: &InputState,
+    measurer: &crate::draw::TextMeasurer,
+) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
     if input_state.ui_visibility.show_active_output_badge
         && let Some(label) = input_state.active_output_label()
@@ -424,7 +429,7 @@ pub(super) fn build_prefix_text(input_state: &InputState) -> Option<String> {
         parts.push(format!("Output: {label}"));
     }
     if input_state.ui_visibility.show_status_selection_info
-        && let Some(bounds) = input_state.selection_bounds()
+        && let Some(bounds) = input_state.selection_bounds_with(measurer)
     {
         let count = input_state.selected_shape_ids().len();
         parts.push(if count == 1 {

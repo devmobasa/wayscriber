@@ -79,7 +79,7 @@ fn switch_board_recent_shows_toast_when_no_other_recent_board_exists() {
 #[test]
 fn switch_board_updates_open_board_picker_selection_and_clears_hover() {
     let mut state = create_test_input_state();
-    state.open_board_picker();
+    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
 
     if let BoardPickerState::Open { hover_index, .. } = &mut state.board_picker.state {
         *hover_index = Some(0);

@@ -22,7 +22,11 @@ future_entry = [1, 2, 3]
     let config = Config::default();
     let mut input = input_from_config(&config);
     let mut runtime = test_runtime(&config, &runtime_path);
-    runtime.apply_startup_state(&crate::ui_text::UiTextEngine::default(), &mut input);
+    runtime.apply_startup_state(
+        &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
+        &mut input,
+    );
     assert!(board_pinned(&input, "whiteboard"));
 
     assert!(matches!(
@@ -67,6 +71,7 @@ fn global_runtime_reset_clears_board_pin_override_and_live_value() {
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     runtime.apply_live_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
     );
@@ -109,6 +114,7 @@ fn unsupported_runtime_file_keeps_toolbar_mutations_live_only_and_byte_exact() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(!restarted_input.toolbar_top_minimized());
@@ -164,6 +170,7 @@ fn factory_visibility_reset_survives_restart_over_nondefault_authored_config() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(
@@ -216,6 +223,7 @@ fn factory_order_reset_survives_restart_over_nondefault_authored_config() {
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut restarted_input,
     );
     assert_eq!(

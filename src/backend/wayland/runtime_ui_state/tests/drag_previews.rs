@@ -180,6 +180,7 @@ fn relevant_reload_aborts_item_and_position_previews_without_restoring_old_seed(
         .to_vec();
     let refresh = runtime.refresh_config_seeds(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &config_b,
         &mut input,
         &mut positions,
@@ -210,6 +211,7 @@ fn relevant_reload_aborts_item_and_position_previews_without_restoring_old_seed(
     config_c.ui.toolbar.top_offset_y = 101.0;
     let refresh = runtime.refresh_config_seeds(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &config_c,
         &mut input,
         &mut positions,
@@ -243,6 +245,7 @@ fn unrelated_position_reload_preserves_preview_and_cancel_only_restores_its_scop
 
     let refresh = runtime.refresh_config_seeds(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &config_b,
         &mut input,
         &mut positions,
@@ -310,6 +313,7 @@ fn release_during_barrier_is_consumed_once_and_never_replayed() {
     assert_eq!(drain.rollbacks.len(), 1);
     apply_toolbar_runtime_rollback(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
         &drain.rollbacks[0],
@@ -393,6 +397,7 @@ fn external_source_conflict_rebuilds_live_toolbar_from_external_authority() {
     assert!(drain.rollbacks.is_empty());
     runtime.apply_live_state(
         &crate::ui_text::UiTextEngine::default(),
+        &crate::draw::TextMeasurer::default(),
         &mut input,
         &mut positions,
     );

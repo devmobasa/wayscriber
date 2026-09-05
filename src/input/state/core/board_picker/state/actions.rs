@@ -17,12 +17,6 @@ impl InputState {
         !self.board_picker_is_quick() && index >= self.boards.board_count()
     }
 
-    pub(crate) fn board_picker_activate_row(&mut self, index: usize) {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.board_picker_activate_row_with_measurer(measurer, index)
-        })
-    }
-
     pub(crate) fn board_picker_activate_row_with_measurer(
         &mut self,
         measurer: &crate::draw::TextMeasurer,
@@ -37,12 +31,6 @@ impl InputState {
         } else {
             self.board_picker_create_new_with_measurer(measurer);
         }
-    }
-
-    pub(crate) fn board_picker_activate_page(&mut self, page_index: usize) {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.board_picker_activate_page_with_measurer(measurer, page_index)
-        })
     }
 
     pub(crate) fn board_picker_activate_page_with_measurer(
@@ -68,12 +56,6 @@ impl InputState {
         self.close_board_picker();
     }
 
-    pub(crate) fn board_picker_add_page(&mut self) {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.board_picker_add_page_with_measurer(measurer)
-        })
-    }
-
     pub(crate) fn board_picker_add_page_with_measurer(
         &mut self,
         measurer: &crate::draw::TextMeasurer,
@@ -94,12 +76,6 @@ impl InputState {
         }
     }
 
-    pub(crate) fn board_picker_delete_page(&mut self, page_index: usize) -> PageDeleteOutcome {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.board_picker_delete_page_with_measurer(measurer, page_index)
-        })
-    }
-
     pub(crate) fn board_picker_delete_page_with_measurer(
         &mut self,
         measurer: &crate::draw::TextMeasurer,
@@ -113,12 +89,6 @@ impl InputState {
             self.board_picker_reconcile_page_nav_after_page_change();
         }
         outcome
-    }
-
-    pub(crate) fn board_picker_duplicate_page(&mut self, page_index: usize) {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.board_picker_duplicate_page_with_measurer(measurer, page_index)
-        })
     }
 
     pub(crate) fn board_picker_duplicate_page_with_measurer(
@@ -140,12 +110,6 @@ impl InputState {
             self.board_picker_set_page_focus_page_index(new_page_index);
             self.board_picker_reconcile_page_nav_after_page_change();
         }
-    }
-
-    pub(crate) fn board_picker_create_new(&mut self) {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.board_picker_create_new_with_measurer(measurer)
-        })
     }
 
     pub(crate) fn board_picker_create_new_with_measurer(
@@ -170,12 +134,6 @@ impl InputState {
         let name = self.boards.active_board_name().to_string();
         self.board_picker_start_edit(BoardPickerEditMode::Name, name);
         self.needs_redraw = true;
-    }
-
-    pub(crate) fn board_picker_delete_selected(&mut self) {
-        crate::draw::with_scoped_measurer(|measurer| {
-            self.board_picker_delete_selected_with_measurer(measurer)
-        })
     }
 
     pub(crate) fn board_picker_delete_selected_with_measurer(

@@ -260,7 +260,13 @@ impl WaylandState {
         };
         let pin_durability = pin_durability(prepared_runtime.as_ref());
 
-        let applied = self.input_state.apply_toolbar_event(event);
+        let applied = self.input_state.apply_toolbar_event_with_resources(
+            crate::input::state::InputTextResources {
+                measurer: self.render.text_measurer(),
+                ui_engine: self.render.ui_text(),
+            },
+            event,
+        );
         if applied {
             self.toolbar.mark_dirty();
             self.input_state.needs_redraw = true;

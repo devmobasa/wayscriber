@@ -37,20 +37,19 @@ pub fn render_text(
     background_enabled: bool,
     wrap_width: Option<i32>,
 ) {
-    crate::draw::with_scoped_measurer(|measurer| {
-        render_text_with_measurer(
-            measurer,
-            ctx,
-            x,
-            y,
-            text,
-            color,
-            size,
-            font_descriptor,
-            background_enabled,
-            wrap_width,
-        )
-    })
+    let measurer = crate::draw::TextMeasurer::default();
+    render_text_with_measurer(
+        &measurer,
+        ctx,
+        x,
+        y,
+        text,
+        color,
+        size,
+        font_descriptor,
+        background_enabled,
+        wrap_width,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -95,21 +94,20 @@ pub fn render_text_with_halo(
     wrap_width: Option<i32>,
     halo_enabled: bool,
 ) {
-    crate::draw::with_scoped_measurer(|measurer| {
-        render_text_with_halo_with_measurer(
-            measurer,
-            ctx,
-            x,
-            y,
-            text,
-            color,
-            size,
-            font_descriptor,
-            background_enabled,
-            wrap_width,
-            halo_enabled,
-        )
-    })
+    let measurer = crate::draw::TextMeasurer::default();
+    render_text_with_halo_with_measurer(
+        &measurer,
+        ctx,
+        x,
+        y,
+        text,
+        color,
+        size,
+        font_descriptor,
+        background_enabled,
+        wrap_width,
+        halo_enabled,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -162,21 +160,20 @@ pub fn render_text_over(
     wrap_width: Option<i32>,
     known_background_luminance: Option<f64>,
 ) {
-    crate::draw::with_scoped_measurer(|measurer| {
-        render_text_over_with_measurer(
-            measurer,
-            ctx,
-            x,
-            y,
-            text,
-            color,
-            size,
-            font_descriptor,
-            background_enabled,
-            wrap_width,
-            known_background_luminance,
-        )
-    })
+    let measurer = crate::draw::TextMeasurer::default();
+    render_text_over_with_measurer(
+        &measurer,
+        ctx,
+        x,
+        y,
+        text,
+        color,
+        size,
+        font_descriptor,
+        background_enabled,
+        wrap_width,
+        known_background_luminance,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -224,22 +221,21 @@ pub fn render_text_over_with_halo(
     known_background_luminance: Option<f64>,
     halo_enabled: bool,
 ) {
-    crate::draw::with_scoped_measurer(|measurer| {
-        render_text_over_with_halo_with_measurer(
-            measurer,
-            ctx,
-            x,
-            y,
-            text,
-            color,
-            size,
-            font_descriptor,
-            background_enabled,
-            wrap_width,
-            known_background_luminance,
-            halo_enabled,
-        )
-    })
+    let measurer = crate::draw::TextMeasurer::default();
+    render_text_over_with_halo_with_measurer(
+        &measurer,
+        ctx,
+        x,
+        y,
+        text,
+        color,
+        size,
+        font_descriptor,
+        background_enabled,
+        wrap_width,
+        known_background_luminance,
+        halo_enabled,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -413,19 +409,18 @@ pub fn render_sticky_note(
     font_descriptor: &FontDescriptor,
     wrap_width: Option<i32>,
 ) {
-    crate::draw::with_scoped_measurer(|measurer| {
-        render_sticky_note_with_measurer(
-            measurer,
-            ctx,
-            x,
-            y,
-            text,
-            background,
-            size,
-            font_descriptor,
-            wrap_width,
-        )
-    })
+    let measurer = crate::draw::TextMeasurer::default();
+    render_sticky_note_with_measurer(
+        &measurer,
+        ctx,
+        x,
+        y,
+        text,
+        background,
+        size,
+        font_descriptor,
+        wrap_width,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]

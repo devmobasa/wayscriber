@@ -26,7 +26,7 @@ fn opening_help_closes_the_color_picker_popup() {
 #[test]
 fn opening_help_closes_the_board_picker() {
     let mut state = create_test_input_state();
-    state.open_board_picker();
+    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
     assert!(state.is_board_picker_open());
 
     state.toggle_help_overlay();
@@ -40,7 +40,7 @@ fn opening_help_closes_the_board_picker() {
 #[test]
 fn a_context_menu_keeps_the_board_picker_open() {
     let mut state = create_test_input_state();
-    state.open_board_picker();
+    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
     assert!(state.is_board_picker_open());
 
     state.open_page_context_menu((10, 10), 0, 0);
@@ -63,7 +63,9 @@ fn every_opener_ends_the_tour() {
             (|state: &mut crate::input::InputState| state.toggle_help_overlay())
                 as fn(&mut crate::input::InputState),
         ),
-        ("board picker", |state| state.open_board_picker()),
+        ("board picker", |state| {
+            state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default())
+        }),
         ("palette", |state| state.toggle_command_palette()),
         ("color picker", |state| state.open_color_picker_popup()),
         ("radial", |state| state.toggle_radial_menu(100.0, 100.0)),
@@ -125,7 +127,7 @@ fn openers_leave_no_excluded_surface_behind() {
             state.open_page_context_menu((10, 10), 0, 0)
         }),
         ("board picker", ModalSurface::BoardPicker, |state| {
-            state.open_board_picker()
+            state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default())
         }),
     ];
 
