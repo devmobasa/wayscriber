@@ -36,8 +36,9 @@ impl InputState {
         true
     }
 
-    pub(in crate::input::state) fn handle_radial_menu_press(
+    pub(in crate::input::state) fn handle_radial_menu_press_with_resources(
         &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
         button: MouseButton,
         screen_x: i32,
         screen_y: i32,
@@ -55,9 +56,13 @@ impl InputState {
                 if self.radial_menu_hover_is_size_ring() {
                     // Pressing the size gauge starts a drag-capture along the
                     // arc instead of selecting.
-                    self.radial_menu_begin_size_drag(screen_x as f64, screen_y as f64);
+                    self.radial_menu_begin_size_drag_with_measurer(
+                        resources.measurer,
+                        screen_x as f64,
+                        screen_y as f64,
+                    );
                 } else {
-                    self.radial_menu_select_hovered();
+                    self.radial_menu_select_hovered_with_resources(resources);
                 }
             }
             MouseButton::Right => {
@@ -65,7 +70,13 @@ impl InputState {
                 if !self.is_radial_menu_toggle_button(MouseButton::Right) {
                     // Keep right-click context-menu flow when right button is not the
                     // configured radial-menu trigger.
-                    self.handle_right_click(screen_x, screen_y, canvas_x, canvas_y);
+                    self.handle_right_click_with_measurer(
+                        resources.measurer,
+                        screen_x,
+                        screen_y,
+                        canvas_x,
+                        canvas_y,
+                    );
                 }
             }
             MouseButton::Middle => {

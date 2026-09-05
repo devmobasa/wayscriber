@@ -26,6 +26,21 @@ impl InputState {
         canvas_x: i32,
         canvas_y: i32,
     ) {
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.on_mouse_motion_with_canvas_and_resources(
+                resources, screen_x, screen_y, canvas_x, canvas_y,
+            )
+        })
+    }
+
+    pub(crate) fn on_mouse_motion_with_canvas_and_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        screen_x: i32,
+        screen_y: i32,
+        canvas_x: i32,
+        canvas_y: i32,
+    ) {
         // Moving off the loupe ends a wheel adjustment of it. Nothing else runs
         // between two wheel bursts over one shape, so without this a visit
         // minutes later would merge into the same undo entry.
@@ -34,7 +49,7 @@ impl InputState {
             ScreenPoint::new(screen_x, screen_y),
             CanvasPoint::new(canvas_x, canvas_y),
         );
-        let _ = route_pointer_motion(self, PointerMotion::new(points));
+        let _ = route_pointer_motion(self, resources.measurer, PointerMotion::new(points));
     }
 }
 

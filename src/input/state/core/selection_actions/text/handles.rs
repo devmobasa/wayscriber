@@ -40,10 +40,6 @@ impl InputState {
         Some((shape_id, handle))
     }
 
-    pub(crate) fn hit_text_resize_handle(&self, x: i32, y: i32) -> Option<ShapeId> {
-        with_legacy_measurer(|measurer| self.hit_text_resize_handle_with(measurer, x, y))
-    }
-
     pub(crate) fn hit_text_resize_handle_with(
         &self,
         measurer: &TextMeasurer,

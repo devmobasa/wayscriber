@@ -341,6 +341,8 @@ mod tests {
 
     #[test]
     fn persistence_snapshot_keeps_original_text_during_in_place_edit() {
+        let test_text_measurer = crate::draw::TextMeasurer::default();
+
         use crate::session::SessionOptions;
         use std::path::PathBuf;
 
@@ -359,7 +361,7 @@ mod tests {
             wrap_width: Some(180),
         });
         state.set_selection(vec![shape_id]);
-        assert!(state.edit_selected_text());
+        assert!(state.edit_selected_text_with(&test_text_measurer));
         let DrawingState::TextInput { buffer, .. } = &mut state.state else {
             panic!("expected text input");
         };

@@ -464,8 +464,15 @@ mod tests {
 
     #[test]
     fn starting_tour_exits_focus_mode_before_tour_owns_chrome() {
+        let test_text_measurer = crate::draw::TextMeasurer::default();
+        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let test_text_resources = crate::input::state::InputTextResources {
+            measurer: &test_text_measurer,
+            ui_engine: &test_ui_engine,
+        };
+
         let mut state = make_test_input_state();
-        state.handle_action(Action::ToggleFocusMode);
+        state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
         assert!(state.focus_mode_active());
         assert!(!state.ui_visibility.show_status_bar);
 

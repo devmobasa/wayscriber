@@ -192,10 +192,6 @@ impl InputState {
     /// The track is recomputed rather than frozen at press: it hangs off the
     /// loupe's bounding box, which magnification does not move, so the mapping
     /// is stable for the whole gesture.
-    pub(crate) fn drag_spotlight_magnification_to(&mut self, x: i32) -> bool {
-        with_legacy_measurer(|measurer| self.drag_spotlight_magnification_to_with(measurer, x))
-    }
-
     pub(crate) fn drag_spotlight_magnification_to_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -221,14 +217,6 @@ impl InputState {
 
     /// Whether the pointer is on the magnification control, and which loupe it
     /// belongs to.
-    pub(crate) fn hit_spotlight_magnification_track(
-        &self,
-        x: i32,
-        y: i32,
-    ) -> Option<SelectedSpotlightControl> {
-        with_legacy_measurer(|measurer| self.hit_spotlight_magnification_track_with(measurer, x, y))
-    }
-
     pub(crate) fn hit_spotlight_magnification_track_with(
         &self,
         measurer: &TextMeasurer,

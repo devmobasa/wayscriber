@@ -1,7 +1,7 @@
 use super::super::base::InputState;
 use crate::draw::ShapeId;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
 use std::borrow::Cow;
 use std::collections::HashSet;
 
@@ -80,10 +80,6 @@ impl InputState {
         self.needs_redraw = true;
         self.mark_session_dirty();
         true
-    }
-
-    pub(crate) fn erase_strokes_by_points(&mut self, points: &[(i32, i32)]) -> bool {
-        with_legacy_measurer(|measurer| self.erase_strokes_by_points_with(measurer, points))
     }
 
     pub(crate) fn erase_strokes_by_points_with(

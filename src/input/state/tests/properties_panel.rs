@@ -150,6 +150,12 @@ fn style_pill_selection_docking_routes_through_the_properties_apply_machinery() 
 #[test]
 fn spotlight_magnification_property_steps_the_selected_shape_and_is_undoable() {
     let route_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Spotlight {
         cx: 100,
@@ -186,7 +192,7 @@ fn spotlight_magnification_property_steps_the_selected_shape_and_is_undoable() {
     assert_eq!(magnification(&state), 1.75);
     assert!(state.take_pending_spotlight_magnifier_feedback());
 
-    state.handle_action(Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(magnification(&state), 1.5);
 }
 
@@ -232,7 +238,7 @@ fn activate_fill_entry_toggles_rectangle_fill_and_refreshes_panel_value() {
     let fill_index = entry_index(&state, "Fill");
     state.set_properties_panel_focus(Some(fill_index));
 
-    assert!(state.activate_properties_panel_entry());
+    assert!(state.activate_properties_panel_entry_with(&route_measurer));
 
     match &state
         .boards
@@ -316,7 +322,7 @@ fn activate_text_background_entry_on_mixed_selection_turns_all_backgrounds_on() 
     let bg_index = entry_index(&state, "Text background");
     state.set_properties_panel_focus(Some(bg_index));
 
-    assert!(state.activate_properties_panel_entry());
+    assert!(state.activate_properties_panel_entry_with(&route_measurer));
 
     for id in [first, second] {
         match &state
@@ -413,6 +419,12 @@ fn magnification_entry(state: &InputState) -> Option<crate::input::SelectionProp
 #[test]
 fn a_mixed_magnification_selection_reads_mixed_and_still_steps_every_shape() {
     let route_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let low = add_spotlight(&mut state, 1.5);
     let high = add_spotlight(&mut state, 3.0);
@@ -431,7 +443,7 @@ fn a_mixed_magnification_selection_reads_mixed_and_still_steps_every_shape() {
     assert_eq!(spotlight_magnification(&state, high), 3.25);
 
     // One step, one undo entry, for the whole selection.
-    state.handle_action(Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(spotlight_magnification(&state, low), 1.5);
     assert_eq!(spotlight_magnification(&state, high), 3.0);
 }

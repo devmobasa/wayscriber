@@ -3,6 +3,8 @@ use crate::draw::ArrowStyle;
 
 #[test]
 fn erase_stroke_samples_sparse_path() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     state.style.eraser_size = 4.0;
     state.style.eraser_mode = EraserMode::Stroke;
@@ -21,7 +23,7 @@ fn erase_stroke_samples_sparse_path() {
         thick: 1.0,
     });
 
-    let erased = state.erase_strokes_by_points(&[(0, -10), (100, 10)]);
+    let erased = state.erase_strokes_by_points_with(&test_text_measurer, &[(0, -10), (100, 10)]);
     assert!(erased, "stroke eraser should remove intersected line");
     assert!(state.boards.active_frame().shape(line_id).is_none());
 }
@@ -55,6 +57,8 @@ fn erase_stroke_includes_release_segment() {
 
 #[test]
 fn erase_stroke_skips_locked_shapes() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     state.style.eraser_size = 4.0;
     state.style.eraser_mode = EraserMode::Stroke;
@@ -90,7 +94,7 @@ fn erase_stroke_skips_locked_shapes() {
         state.boards.active_frame_mut().shapes[index].locked = true;
     }
 
-    let erased = state.erase_strokes_by_points(&[(0, -10), (100, 10)]);
+    let erased = state.erase_strokes_by_points_with(&test_text_measurer, &[(0, -10), (100, 10)]);
     assert!(erased, "eraser should remove unlocked shapes");
     assert!(state.boards.active_frame().shape(unlocked_id).is_none());
     assert!(state.boards.active_frame().shape(locked_id).is_some());
@@ -98,6 +102,8 @@ fn erase_stroke_skips_locked_shapes() {
 
 #[test]
 fn erase_stroke_samples_randomized_crossings() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     fn next_unit(seed: &mut u64) -> f64 {
         *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
         let value = ((*seed >> 33) as u32) as f64;
@@ -134,10 +140,13 @@ fn erase_stroke_samples_randomized_crossings() {
         let x1 = 50.0 + dx * length;
         let y1 = 0.0 + dy * length;
 
-        let erased = state.erase_strokes_by_points(&[
-            (x0.round() as i32, y0.round() as i32),
-            (x1.round() as i32, y1.round() as i32),
-        ]);
+        let erased = state.erase_strokes_by_points_with(
+            &test_text_measurer,
+            &[
+                (x0.round() as i32, y0.round() as i32),
+                (x1.round() as i32, y1.round() as i32),
+            ],
+        );
 
         assert!(
             erased,
@@ -150,6 +159,8 @@ fn erase_stroke_samples_randomized_crossings() {
 
 #[test]
 fn erase_stroke_hits_various_shapes() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let cases = vec![
         (
             Shape::Rect {
@@ -215,7 +226,7 @@ fn erase_stroke_hits_various_shapes() {
         state.style.eraser_mode = EraserMode::Stroke;
         let shape_id = state.boards.active_frame_mut().add_shape(shape);
 
-        let erased = state.erase_strokes_by_points(&path);
+        let erased = state.erase_strokes_by_points_with(&test_text_measurer, &path);
         assert!(erased, "stroke eraser should remove intersected shape");
         assert!(state.boards.active_frame().shape(shape_id).is_none());
     }
@@ -225,6 +236,8 @@ fn erase_stroke_hits_various_shapes() {
 /// Uses a low threshold to force the grid path to be exercised.
 #[test]
 fn spatial_grid_eraser_hits_after_add_move_delete() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     state.style.eraser_size = 10.0;
     state.style.eraser_mode = EraserMode::Stroke;
@@ -301,7 +314,7 @@ fn spatial_grid_eraser_hits_after_add_move_delete() {
 
     // Test eraser with spatial grid using large tolerance
     state.set_hit_test_tolerance(20.0);
-    let erased = state.erase_strokes_by_points(&[(25, 25)]);
+    let erased = state.erase_strokes_by_points_with(&test_text_measurer, &[(25, 25)]);
     assert!(erased, "eraser should hit first shape with large tolerance");
     assert!(state.boards.active_frame().shape(shape_ids[0]).is_none());
 }

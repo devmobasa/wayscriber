@@ -147,11 +147,13 @@ fn status_hud_press_reports_hit_without_side_effect() {
 
 #[test]
 fn status_hud_click_board_segment_toggles_board_picker() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Board);
 
-    let (hit, action) = input.check_status_hud_click(x, y);
+    let (hit, action) = input.check_status_hud_click_with_measurer(&test_text_measurer, x, y);
     assert!(hit);
     assert_eq!(action, None);
     assert!(input.is_board_picker_open());
@@ -162,11 +164,13 @@ fn status_hud_click_board_segment_toggles_board_picker() {
 
 #[test]
 fn status_hud_click_page_segment_opens_board_picker_page_panel() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Page);
 
-    let (hit, action) = input.check_status_hud_click(x, y);
+    let (hit, action) = input.check_status_hud_click_with_measurer(&test_text_measurer, x, y);
     assert!(hit);
     assert_eq!(action, None);
     // The page panel lives inside the board picker, and the Page chip
@@ -177,11 +181,13 @@ fn status_hud_click_page_segment_opens_board_picker_page_panel() {
 
 #[test]
 fn status_hud_click_color_dot_opens_color_picker_popup() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Color);
 
-    let (hit, action) = input.check_status_hud_click(x, y);
+    let (hit, action) = input.check_status_hud_click_with_measurer(&test_text_measurer, x, y);
     assert!(hit);
     assert_eq!(action, None);
     assert!(input.is_color_picker_popup_open());
@@ -189,11 +195,13 @@ fn status_hud_click_color_dot_opens_color_picker_popup() {
 
 #[test]
 fn status_hud_click_tool_segment_opens_radial_menu() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Tool);
 
-    let (hit, action) = input.check_status_hud_click(x, y);
+    let (hit, action) = input.check_status_hud_click_with_measurer(&test_text_measurer, x, y);
     assert!(hit);
     assert_eq!(action, None);
     assert!(input.is_radial_menu_open());
@@ -201,11 +209,13 @@ fn status_hud_click_tool_segment_opens_radial_menu() {
 
 #[test]
 fn status_hud_click_size_segment_opens_radial_menu() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Size);
 
-    let (hit, action) = input.check_status_hud_click(x, y);
+    let (hit, action) = input.check_status_hud_click_with_measurer(&test_text_measurer, x, y);
     assert!(hit);
     assert_eq!(action, None);
     assert!(input.is_radial_menu_open());
@@ -213,11 +223,13 @@ fn status_hud_click_size_segment_opens_radial_menu() {
 
 #[test]
 fn status_hud_click_help_segment_returns_toggle_help_action() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Help);
 
-    let (hit, action) = input.check_status_hud_click(x, y);
+    let (hit, action) = input.check_status_hud_click_with_measurer(&test_text_measurer, x, y);
     assert!(hit);
     assert_eq!(action, Some(Action::ToggleHelp));
     // The action is dispatched by the backend; no surface opens here.
@@ -231,11 +243,13 @@ fn status_hud_click_help_segment_returns_toggle_help_action() {
 /// dispatch the action rather than open a surface in place.
 #[test]
 fn status_hud_click_version_chip_returns_open_about_action() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1920, 1080);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::About);
 
-    let (hit, action) = input.check_status_hud_click(x, y);
+    let (hit, action) = input.check_status_hud_click_with_measurer(&test_text_measurer, x, y);
     assert!(hit);
     assert_eq!(action, Some(Action::OpenAbout));
     // Dispatched by the backend; nothing opens inside the overlay.
@@ -266,6 +280,8 @@ fn a_narrow_status_hud_sheds_the_version_chip_first() {
 
 #[test]
 fn status_hud_click_toolbar_hint_returns_toggle_toolbar_action() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = create_test_input_state();
 
     // The hint chip only exists while every toolbar surface is hidden.
@@ -283,7 +299,7 @@ fn status_hud_click_toolbar_hint_returns_toggle_toolbar_action() {
     update_hud_layout(&mut input, 1280, 720);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Toolbar);
 
-    let (hit, action) = input.check_status_hud_click(x, y);
+    let (hit, action) = input.check_status_hud_click_with_measurer(&test_text_measurer, x, y);
     assert!(hit);
     assert_eq!(action, Some(Action::ToggleToolbar));
     // The action is dispatched by the backend; no surface opens here.
@@ -300,20 +316,27 @@ fn status_hud_click_toolbar_hint_returns_toggle_toolbar_action() {
 /// no-op.
 #[test]
 fn status_hud_toolbar_hint_recovers_cycle_hidden_top_strip() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut input = create_test_input_state();
-    input.handle_action(Action::CycleToolbarDisplay); // micro
-    input.handle_action(Action::CycleToolbarDisplay); // hidden
+    input.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // micro
+    input.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // hidden
     assert!(!input.toolbar_visible());
 
     update_hud_layout(&mut input, 1280, 720);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Toolbar);
-    let (hit, action) = input.check_status_hud_click(x, y);
+    let (hit, action) = input.check_status_hud_click_with_measurer(&test_text_measurer, x, y);
     assert!(hit);
     let action = action.expect("toolbar hint chip returns an action");
     assert_eq!(action, Action::ToggleToolbar);
 
     // Dispatch the returned action exactly as the backend does.
-    input.handle_action(action);
+    input.handle_action_with_resources(test_text_resources, action);
     assert!(
         input.toolbar_visible(),
         "clicking the recovery chip must restore the toolbar"
@@ -335,6 +358,8 @@ fn status_hud_toolbar_hint_recovers_cycle_hidden_top_strip() {
 
 #[test]
 fn status_hud_click_between_segments_consumes_without_action() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
     let layout = input.status_hud_layout().expect("layout");
@@ -351,7 +376,7 @@ fn status_hud_click_between_segments_consumes_without_action() {
     );
     let x = (pill_x + (first_segment_x - pill_x) / 2.0).round() as i32;
 
-    let (hit, action) = input.check_status_hud_click(x, y);
+    let (hit, action) = input.check_status_hud_click_with_measurer(&test_text_measurer, x, y);
     assert!(hit);
     assert_eq!(action, None);
     assert!(!input.is_board_picker_open());
@@ -361,10 +386,12 @@ fn status_hud_click_between_segments_consumes_without_action() {
 
 #[test]
 fn status_hud_click_outside_is_ignored() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
 
-    let (hit, action) = input.check_status_hud_click(1279, 1);
+    let (hit, action) = input.check_status_hud_click_with_measurer(&test_text_measurer, 1279, 1);
     assert!(!hit);
     assert_eq!(action, None);
     assert!(!input.is_board_picker_open());
@@ -374,6 +401,8 @@ fn status_hud_click_outside_is_ignored() {
 
 #[test]
 fn status_hud_ignores_clicks_when_not_interactive() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = create_test_input_state();
     input.ui_visibility.status_bar_interactive = false;
     update_hud_layout(&mut input, 1280, 720);
@@ -383,7 +412,7 @@ fn status_hud_ignores_clicks_when_not_interactive() {
 
     // ...but it consumes no clicks (pure display).
     assert!(!input.status_hud_contains(x, y));
-    let (hit, action) = input.check_status_hud_click(x, y);
+    let (hit, action) = input.check_status_hud_click_with_measurer(&test_text_measurer, x, y);
     assert!(!hit);
     assert_eq!(action, None);
     assert!(!input.is_radial_menu_open());
@@ -482,6 +511,8 @@ fn status_hud_press_routing_consumes_left_press_over_interactive_hud() {
 
 #[test]
 fn status_hud_ignored_while_radial_menu_overlays_it() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Tool);
@@ -496,7 +527,7 @@ fn status_hud_ignored_while_radial_menu_overlays_it() {
 
     // The release side cannot re-fire the chip either (no board picker or
     // second surface stacking over the open radial menu).
-    let (hit, action) = input.check_status_hud_click(x, y);
+    let (hit, action) = input.check_status_hud_click_with_measurer(&test_text_measurer, x, y);
     assert!(!hit);
     assert_eq!(action, None);
     assert!(!input.is_board_picker_open());
@@ -512,6 +543,8 @@ fn status_hud_ignored_while_radial_menu_overlays_it() {
 
 #[test]
 fn status_hud_ignored_while_other_eclipsing_overlays_are_open() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
     let (x, y) = segment_center(&input, StatusHudSegmentKind::Page);
@@ -521,7 +554,11 @@ fn status_hud_ignored_while_other_eclipsing_overlays_are_open() {
     // check_status_hud_click shares the same guard).
     input.open_board_picker();
     assert!(!input.status_hud_contains(x, y));
-    assert!(!input.check_status_hud_click(x, y).0);
+    assert!(
+        !input
+            .check_status_hud_click_with_measurer(&test_text_measurer, x, y)
+            .0
+    );
     input.close_board_picker();
     assert!(input.status_hud_contains(x, y));
 

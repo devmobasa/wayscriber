@@ -199,7 +199,7 @@ fn a_query_that_matches_nothing_leaves_an_empty_list_rather_than_the_whole_one()
 
     assert!(state.font_picker_families().is_empty());
     // Committing an empty list must close cleanly rather than index into it.
-    assert!(!state.commit_font_picker());
+    assert!(!state.commit_font_picker_with_measurer(&route_measurer));
     assert!(!state.is_font_picker_open());
 }
 
@@ -328,12 +328,14 @@ fn tab_switches_to_monospace_and_back() {
 
 #[test]
 fn choosing_a_font_with_nothing_selected_sets_what_the_next_label_uses() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = make_test_input_state();
     open_ready_font_picker(&mut state);
     state.set_font_picker_selection(2);
     let chosen = state.font_picker_families()[2].clone();
 
-    assert!(state.commit_font_picker());
+    assert!(state.commit_font_picker_with_measurer(&test_text_measurer));
 
     assert_eq!(state.style.font_descriptor.family, chosen);
     assert!(!state.is_font_picker_open());
@@ -341,6 +343,8 @@ fn choosing_a_font_with_nothing_selected_sets_what_the_next_label_uses() {
 
 #[test]
 fn choosing_a_font_with_text_selected_restyles_it_and_leaves_the_tool_alone() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = make_test_input_state();
     let tool_font = state.style.font_descriptor.family.clone();
     let id = state
@@ -353,7 +357,7 @@ fn choosing_a_font_with_text_selected_restyles_it_and_leaves_the_tool_alone() {
     assert_eq!(state.font_picker_target(), FontPickerTarget::Selection);
     state.set_font_picker_selection(2);
     let chosen = state.font_picker_families()[2].clone();
-    assert!(state.commit_font_picker());
+    assert!(state.commit_font_picker_with_measurer(&test_text_measurer));
 
     let frame = state.boards.active_frame();
     let Some(Shape::Text {
@@ -371,11 +375,13 @@ fn choosing_a_font_with_text_selected_restyles_it_and_leaves_the_tool_alone() {
 
 #[test]
 fn chosen_fonts_come_back_to_the_top_of_an_unfiltered_list() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = make_test_input_state();
     open_ready_font_picker(&mut state);
     state.set_font_picker_selection(4);
     let chosen = state.font_picker_families()[4].clone();
-    state.commit_font_picker();
+    state.commit_font_picker_with_measurer(&test_text_measurer);
 
     open_ready_font_picker(&mut state);
 
@@ -389,6 +395,8 @@ fn chosen_fonts_come_back_to_the_top_of_an_unfiltered_list() {
 
 #[test]
 fn recents_keep_the_most_recent_first_without_repeats() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = make_test_input_state();
     let families = system_font_families();
     let (first, second) = (families[0].clone(), families[1].clone());
@@ -401,7 +409,7 @@ fn recents_keep_the_most_recent_first_without_repeats() {
             .position(|name| name == family)
             .expect("family is listed");
         state.set_font_picker_selection(index);
-        state.commit_font_picker();
+        state.commit_font_picker_with_measurer(&test_text_measurer);
     }
 
     assert_eq!(state.font_picker_recents(), [first, second]);
@@ -440,7 +448,7 @@ fn a_closed_picker_consumes_nothing() {
 
     assert!(!state.handle_font_picker_key_with_measurer(&route_measurer, Key::Escape, None));
     assert!(!state.font_picker_hover(10.0, 10.0));
-    assert!(!state.font_picker_press(10.0, 10.0));
+    assert!(!state.font_picker_press_with_measurer(&route_measurer, 10.0, 10.0));
 }
 
 /// A picker open on a surface big enough for the full twelve-row window.

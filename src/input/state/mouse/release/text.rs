@@ -6,6 +6,7 @@ use super::super::{TEXT_DOUBLE_CLICK_DISTANCE, TEXT_DOUBLE_CLICK_MS};
 
 pub(super) fn handle_pending_text_click(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     x: i32,
     y: i32,
     shape_id: crate::draw::ShapeId,
@@ -20,6 +21,6 @@ pub(super) fn handle_pending_text_click(
     );
     if is_double {
         state.set_selection(vec![shape_id]);
-        let _ = state.edit_selected_text();
+        let _ = state.edit_selected_text_with(measurer);
     }
 }

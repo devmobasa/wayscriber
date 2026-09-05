@@ -86,13 +86,6 @@ impl InputState {
     }
 
     #[cfg(feature = "tablet-input")]
-    pub(crate) fn replace_active_drawing_pressure_samples(&mut self, thickness: f64) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.replace_active_drawing_pressure_samples_with(measurer, thickness)
-        })
-    }
-
-    #[cfg(feature = "tablet-input")]
     pub(crate) fn replace_active_drawing_pressure_samples_with(
         &mut self,
         measurer: &TextMeasurer,

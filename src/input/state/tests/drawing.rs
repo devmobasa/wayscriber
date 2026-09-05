@@ -184,13 +184,15 @@ fn freeform_polygon_backspace_does_not_prime_double_click_commit() {
 
 #[test]
 fn freeform_polygon_commit_records_first_stroke_onboarding() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
 
     state.on_mouse_press(MouseButton::Left, 0, 0);
     state.on_mouse_press(MouseButton::Left, 20, 0);
     state.on_mouse_press(MouseButton::Left, 20, 20);
-    state.finish_building_polygon();
+    state.finish_building_polygon_with_measurer(&test_text_measurer);
 
     assert!(state.pending_onboarding_usage.first_stroke_done);
 }
@@ -534,6 +536,8 @@ fn cancel_active_path_dirties_full_accumulated_provisional_bounds() {
 
 #[test]
 fn freeform_polygon_freezes_style_on_first_click() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
     let original = state.style.current_color;
@@ -548,7 +552,7 @@ fn freeform_polygon_freezes_style_on_first_click() {
     assert!(state.set_color(changed));
     state.on_mouse_press(MouseButton::Left, 20, 0);
     state.on_mouse_press(MouseButton::Left, 20, 20);
-    state.finish_building_polygon();
+    state.finish_building_polygon_with_measurer(&test_text_measurer);
 
     match &state.boards.active_frame().shapes[0].shape {
         Shape::Polygon { color, .. } => assert_eq!(*color, original),
@@ -716,15 +720,22 @@ fn drag_binding_color_overrides_stroke_without_changing_current_color() {
 
 #[test]
 fn toggle_click_highlight_action_changes_state() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     assert!(!state.click_highlight_enabled());
 
-    state.handle_action(Action::ToggleClickHighlight);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleClickHighlight);
     assert!(state.click_highlight_enabled());
     assert!(state.needs_redraw);
 
     state.needs_redraw = false;
-    state.handle_action(Action::ToggleClickHighlight);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleClickHighlight);
     assert!(!state.click_highlight_enabled());
     assert!(state.needs_redraw);
 }
@@ -764,16 +775,23 @@ fn toolbar_select_highlight_sticks_when_highlight_is_active_via_modifier() {
 
 #[test]
 fn highlight_tool_prevents_drawing() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     assert_eq!(state.active_tool(), Tool::Pen);
     assert!(!state.highlight_tool_active());
 
-    state.handle_action(Action::ToggleHighlightTool);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleHighlightTool);
     assert!(state.highlight_tool_active());
     assert_eq!(state.active_tool(), Tool::Highlight);
 
     // Enable highlight effect to ensure no shapes are added while clicks happen
-    state.handle_action(Action::ToggleClickHighlight);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleClickHighlight);
 
     let initial_shapes = state.boards.active_frame().shapes.len();
     state.on_mouse_press(MouseButton::Left, 10, 10);
@@ -782,7 +800,7 @@ fn highlight_tool_prevents_drawing() {
     assert!(matches!(state.state, DrawingState::Idle));
 
     // Toggle highlight tool off and ensure pen drawing resumes
-    state.handle_action(Action::ToggleHighlightTool);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleHighlightTool);
     assert!(!state.highlight_tool_active());
     state.on_mouse_press(MouseButton::Left, 0, 0);
     state.on_mouse_release(MouseButton::Left, 5, 5);

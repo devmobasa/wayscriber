@@ -6,8 +6,8 @@
 //! dragging it sets that scalar from the pointer's perpendicular distance to
 //! the chord.
 
+use crate::draw::TextMeasurer;
 use crate::draw::{ArrowStyle, Shape, ShapeId};
-use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::InputState;
 use crate::util::{self, Rect};
 
@@ -88,10 +88,6 @@ impl InputState {
     /// The chord is re-read from the shape rather than frozen at press: bending
     /// never moves the endpoints, so the mapping is stable for the whole
     /// gesture and cannot drift from what is on screen.
-    pub(crate) fn drag_arrow_bend_to(&mut self, x: i32, y: i32, snap: bool) -> bool {
-        with_legacy_measurer(|measurer| self.drag_arrow_bend_to_with(measurer, x, y, snap))
-    }
-
     pub(crate) fn drag_arrow_bend_to_with(
         &mut self,
         measurer: &TextMeasurer,

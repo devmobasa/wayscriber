@@ -9,7 +9,12 @@ use super::super::super::{DrawingState, InputState};
 use super::super::{TEXT_DOUBLE_CLICK_DISTANCE, TEXT_DOUBLE_CLICK_MS};
 
 impl InputState {
-    pub(crate) fn start_building_polygon(&mut self, x: i32, y: i32) {
+    pub(crate) fn start_building_polygon_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        x: i32,
+        y: i32,
+    ) {
         self.sync_current_settings_for_tool(Tool::FreeformPolygon);
         let color = self.color_for_tool(Tool::FreeformPolygon);
         let thick = self.thickness_for_tool(Tool::FreeformPolygon);
@@ -24,7 +29,7 @@ impl InputState {
             thick,
         };
         self.pointer.replace_provisional_bounds(None);
-        self.update_provisional_dirty(x, y);
+        self.update_provisional_dirty_with(measurer, x, y);
         self.push_toast(
             ToastPriority::Info,
             "draw.polygon",
@@ -48,15 +53,25 @@ impl InputState {
         )
     }
 
-    pub(crate) fn handle_building_polygon_left_click(&mut self, x: i32, y: i32) {
+    pub(crate) fn handle_building_polygon_left_click_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        x: i32,
+        y: i32,
+    ) {
         if self.should_finish_building_polygon_on_click(x, y) {
-            self.finish_building_polygon();
+            self.finish_building_polygon_with_measurer(measurer);
         } else {
-            self.append_building_polygon_point(x, y);
+            self.append_building_polygon_point_with_measurer(measurer, x, y);
         }
     }
 
-    pub(crate) fn append_building_polygon_point(&mut self, x: i32, y: i32) {
+    pub(crate) fn append_building_polygon_point_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        x: i32,
+        y: i32,
+    ) {
         let DrawingState::BuildingPolygon {
             points, preview, ..
         } = &mut self.state
@@ -67,7 +82,7 @@ impl InputState {
         *preview = None;
         self.selection_interaction
             .record_polygon_click(x, y, Instant::now());
-        self.update_provisional_dirty(x, y);
+        self.update_provisional_dirty_with(measurer, x, y);
         self.needs_redraw = true;
     }
 
@@ -89,12 +104,6 @@ impl InputState {
             self.update_provisional_dirty_with(measurer, x, y);
         }
         self.needs_redraw = true;
-    }
-
-    pub(crate) fn finish_building_polygon(&mut self) {
-        crate::draw::with_legacy_measurer(|measurer| {
-            self.finish_building_polygon_with_measurer(measurer)
-        })
     }
 
     pub(crate) fn finish_building_polygon_with_measurer(

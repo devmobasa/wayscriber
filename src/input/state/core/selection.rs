@@ -4,7 +4,7 @@ pub(crate) use clipboard::LocalSelectionContext;
 pub(in crate::input::state::core) use clipboard::SelectionClipboard;
 
 use super::base::{InputState, SelectionAxis};
-use crate::draw::{ShapeId, TextMeasurer, with_legacy_measurer};
+use crate::draw::{ShapeId, TextMeasurer};
 use crate::util::Rect;
 use std::collections::HashSet;
 use std::time::Instant;
@@ -172,10 +172,6 @@ impl InputState {
     {
         self.selection_interaction.extend(iter);
         self.close_properties_panel();
-    }
-
-    pub(crate) fn selection_bounding_box(&self, ids: &[ShapeId]) -> Option<Rect> {
-        with_legacy_measurer(|measurer| self.selection_bounding_box_with(measurer, ids))
     }
 
     pub(crate) fn selection_bounding_box_with(

@@ -1185,6 +1185,8 @@ fn runtime_open_closes_active_board_picker_page_drag() {
 
 #[test]
 fn runtime_open_saves_current_after_canceling_active_selection_move() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let temp = crate::test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-active-selection-move");
@@ -1196,7 +1198,7 @@ fn runtime_open_saves_current_after_canceling_active_selection_move() {
     let shape_id = add_line(&mut input, 20);
     input.set_selection(vec![shape_id]);
     let snapshots = input.capture_movable_selection_snapshots();
-    assert!(input.apply_translation_to_selection(100, 0));
+    assert!(input.apply_translation_to_selection_with(&test_text_measurer, 100, 0));
     input.state = DrawingState::MovingSelection {
         last_x: 100,
         last_y: 0,
@@ -1230,6 +1232,8 @@ fn runtime_open_saves_current_after_canceling_active_selection_move() {
 
 #[test]
 fn runtime_open_saves_current_after_canceling_active_text_edit() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let temp = crate::test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-active-text-edit");
@@ -1249,7 +1253,7 @@ fn runtime_open_saves_current_after_canceling_active_text_edit() {
         wrap_width: Some(180),
     });
     input.set_selection(vec![shape_id]);
-    assert!(input.edit_selected_text());
+    assert!(input.edit_selected_text_with(&test_text_measurer));
     let Shape::Text { text, .. } = &input
         .boards
         .active_frame()
@@ -1333,6 +1337,8 @@ fn runtime_open_saves_current_after_canceling_color_picker_preview() {
 #[cfg(unix)]
 #[test]
 fn runtime_open_current_save_failure_preserves_active_selection_move() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let temp = crate::test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-active-save-fail");
     let current_target = temp.path().join("current-active-symlink-target");
@@ -1346,7 +1352,7 @@ fn runtime_open_current_save_failure_preserves_active_selection_move() {
     let shape_id = add_line(&mut input, 9);
     input.set_selection(vec![shape_id]);
     let snapshots = input.capture_movable_selection_snapshots();
-    assert!(input.apply_translation_to_selection(100, 0));
+    assert!(input.apply_translation_to_selection_with(&test_text_measurer, 100, 0));
     input.state = DrawingState::MovingSelection {
         last_x: 100,
         last_y: 0,
@@ -1408,7 +1414,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
 
     input.set_selection(vec![shape_id]);
     let snapshots = input.capture_movable_selection_snapshots();
-    assert!(input.apply_translation_to_selection(200, 0));
+    assert!(input.apply_translation_to_selection_with(&measurer, 200, 0));
     assert!(
         input
             .hit_test_all_for_points_with(&measurer, &[(205, 5)], input.hit_test_tolerance())
@@ -1714,6 +1720,13 @@ fn protected_session_path_blocks_save_until_session_is_dirty() {
 /// autosave or final save would replace the session that failed to restore.
 #[test]
 fn protected_session_path_survives_a_run_only_status_bar_toggle() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
     options.autosave_enabled = true;
     options.persist_transparent = true;
@@ -1722,7 +1735,7 @@ fn protected_session_path_survives_a_run_only_status_bar_toggle() {
     state.protect_session_path(path.clone());
 
     let mut input = test_input_state();
-    input.handle_action(Action::ToggleStatusBar);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleStatusBar);
 
     assert!(
         !input.ui_visibility.show_status_bar,

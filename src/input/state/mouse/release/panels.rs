@@ -104,12 +104,17 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
     true
 }
 
-pub(super) fn handle_board_picker_release(state: &mut InputState, x: i32, y: i32) -> bool {
+pub(super) fn handle_board_picker_release(
+    state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
+    x: i32,
+    y: i32,
+) -> bool {
     if !state.is_board_picker_open() {
         return false;
     }
     if state.board_picker_is_page_dragging() {
-        state.board_picker_finish_page_drag();
+        state.board_picker_finish_page_drag_with_measurer(resources.measurer);
         return true;
     }
     if state.board_picker_is_dragging() {
@@ -127,12 +132,12 @@ pub(super) fn handle_board_picker_release(state: &mut InputState, x: i32, y: i32
     }
     if let Some(index) = state.board_picker_swatch_index_at(x, y) {
         state.board_picker_set_selected(index);
-        state.board_picker_edit_color_selected();
+        state.board_picker_edit_color_selected_with_measurer(resources.measurer);
         state.needs_redraw = true;
         return true;
     }
     if state.board_picker_page_add_button_at(x, y) {
-        state.board_picker_add_page();
+        state.board_picker_add_page_with_measurer(resources.measurer);
         state.needs_redraw = true;
         return true;
     }
@@ -144,12 +149,12 @@ pub(super) fn handle_board_picker_release(state: &mut InputState, x: i32, y: i32
         return true;
     }
     if let Some(index) = state.board_picker_page_duplicate_index_at(x, y) {
-        state.board_picker_duplicate_page(index);
+        state.board_picker_duplicate_page_with_measurer(resources.measurer, index);
         state.needs_redraw = true;
         return true;
     }
     if let Some(index) = state.board_picker_page_delete_index_at(x, y) {
-        state.board_picker_delete_page(index);
+        state.board_picker_delete_page_with_measurer(resources.measurer, index);
         state.needs_redraw = true;
         return true;
     }
@@ -161,27 +166,27 @@ pub(super) fn handle_board_picker_release(state: &mut InputState, x: i32, y: i32
         return true;
     }
     if let Some(index) = state.board_picker_page_index_at(x, y) {
-        state.board_picker_activate_page(index);
+        state.board_picker_activate_page_with_measurer(resources.measurer, index);
         state.needs_redraw = true;
         return true;
     }
     if state.board_picker_page_overflow_at(x, y) {
         state.update_pointer_position_synthetic(x, y);
-        state.execute_menu_command(MenuCommand::OpenPagesMenu);
+        state.execute_menu_command_with_resources(resources, MenuCommand::OpenPagesMenu);
         return true;
     }
     if let Some(index) = state.board_picker_open_icon_index_at(x, y)
         && !state.board_picker_is_new_row(index)
     {
         state.board_picker_set_selected(index);
-        state.board_picker_activate_row(index);
+        state.board_picker_activate_row_with_measurer(resources.measurer, index);
         state.needs_redraw = true;
         return true;
     }
     if let Some(index) = state.board_picker_index_at(x, y) {
         state.board_picker_set_selected(index);
         if state.board_picker_is_quick() || state.board_picker_is_new_row(index) {
-            state.board_picker_activate_row(index);
+            state.board_picker_activate_row_with_measurer(resources.measurer, index);
             state.needs_redraw = true;
             return true;
         }
@@ -199,7 +204,7 @@ pub(super) fn handle_board_picker_release(state: &mut InputState, x: i32, y: i32
             .unwrap_or(false);
         if is_double {
             state.board_picker.last_click = None;
-            state.board_picker_activate_row(index);
+            state.board_picker_activate_row_with_measurer(resources.measurer, index);
         } else {
             state.board_picker.last_click = Some(BoardPickerClickState {
                 row: index,
@@ -215,7 +220,12 @@ pub(super) fn handle_board_picker_release(state: &mut InputState, x: i32, y: i32
     true
 }
 
-pub(super) fn handle_properties_panel_release(state: &mut InputState, x: i32, y: i32) -> bool {
+pub(super) fn handle_properties_panel_release(
+    state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    x: i32,
+    y: i32,
+) -> bool {
     if !state.is_properties_panel_open() {
         return false;
     }
@@ -224,7 +234,7 @@ pub(super) fn handle_properties_panel_release(state: &mut InputState, x: i32, y:
     }
     if let Some(index) = state.properties_panel_index_at(x, y) {
         state.set_properties_panel_focus(Some(index));
-        state.activate_properties_panel_entry();
+        state.activate_properties_panel_entry_with(measurer);
     } else {
         state.close_properties_panel();
     }
@@ -232,7 +242,12 @@ pub(super) fn handle_properties_panel_release(state: &mut InputState, x: i32, y:
     true
 }
 
-pub(super) fn handle_context_menu_release(state: &mut InputState, x: i32, y: i32) -> bool {
+pub(super) fn handle_context_menu_release(
+    state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
+    x: i32,
+    y: i32,
+) -> bool {
     if !state.is_context_menu_open() {
         return false;
     }
@@ -241,7 +256,7 @@ pub(super) fn handle_context_menu_release(state: &mut InputState, x: i32, y: i32
         if let Some(entry) = entries.get(index) {
             if !entry.disabled {
                 if let Some(command) = entry.command.clone() {
-                    state.execute_menu_command(command);
+                    state.execute_menu_command_with_resources(resources, command);
                 } else {
                     state.close_context_menu();
                 }

@@ -418,13 +418,20 @@ fn right_click_toggles_radial_when_configured() {
 
 #[test]
 fn toggle_radial_menu_action_opens_and_closes_menu() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.update_pointer_position(320, 240);
 
-    state.handle_action(Action::ToggleRadialMenu);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleRadialMenu);
     assert!(state.is_radial_menu_open());
 
-    state.handle_action(Action::ToggleRadialMenu);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleRadialMenu);
     assert!(!state.is_radial_menu_open());
 
     state.state = DrawingState::Selecting {
@@ -432,7 +439,7 @@ fn toggle_radial_menu_action_opens_and_closes_menu() {
         start_y: 20,
         additive: false,
     };
-    state.handle_action(Action::ToggleRadialMenu);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleRadialMenu);
     assert!(!state.is_radial_menu_open());
 }
 
@@ -661,15 +668,40 @@ fn tick_radial_menu_paint_requests_redraw_only_at_deadline() {
 #[test]
 fn blind_flick_release_commits_wedge_by_direction() {
     let mut state = create_test_input_state();
-    let layout = open_via_right_press(&mut state);
+    let measurer = crate::draw::TextMeasurer::default();
+    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let resources = crate::input::state::InputTextResources {
+        measurer: &measurer,
+        ui_engine: &ui_engine,
+    };
+    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.on_mouse_press_with_canvas_and_resources(
+        resources,
+        MouseButton::Right,
+        400,
+        300,
+        400,
+        300,
+    );
+    state.update_radial_menu_layout(800, 600);
+    let layout = state.radial_menu.layout.unwrap();
 
     let (x, y) = point_in_compass_wedge(&layout, CompassDir::NE);
-    state.on_mouse_motion(x as i32, y as i32);
+    state.on_mouse_motion_with_canvas_and_resources(
+        resources, x as i32, y as i32, x as i32, y as i32,
+    );
     assert!(
         !state.radial_menu_has_painted(),
         "the flick happens before the paint deadline"
     );
-    state.on_mouse_release(MouseButton::Right, x as i32, y as i32);
+    state.on_mouse_release_with_canvas_and_resources(
+        resources,
+        MouseButton::Right,
+        x as i32,
+        y as i32,
+        x as i32,
+        y as i32,
+    );
 
     assert!(!state.is_radial_menu_open(), "flick commit closes the menu");
     assert_eq!(state.active_tool(), Tool::Marker);

@@ -10,21 +10,28 @@ use crate::input::state::{Toast, ToastPriority};
 
 #[test]
 fn focus_mode_hides_all_chrome_and_restores_exactly() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     // Non-default pre-state: a micro top strip and a hidden floating badge
     // must both survive the round trip untouched.
-    state.handle_action(Action::CycleToolbarDisplay); // micro
-    state.handle_action(Action::ToggleFloatingBadge); // badge hidden
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // micro
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFloatingBadge); // badge hidden
     assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
     assert!(!state.ui_visibility.show_floating_badge);
 
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
     assert!(!state.toolbar_visible());
     assert!(!state.ui_visibility.show_status_bar);
     assert!(!state.ui_visibility.show_floating_badge);
     assert!(!state.zoom_chip_enabled());
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(!state.focus_mode_active());
     assert!(state.toolbar_visible());
     assert!(state.ui_visibility.show_status_bar);
@@ -49,8 +56,15 @@ fn focus_mode_hides_all_chrome_and_restores_exactly() {
 
 #[test]
 fn focus_mode_toast_offers_restore_action() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
 
     let toast = state.active_toast().expect("focus mode toast");
     assert!(
@@ -64,10 +78,17 @@ fn focus_mode_toast_offers_restore_action() {
 
 #[test]
 fn focus_mode_suppresses_fallback_mode_badges_but_keeps_restore_toast() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.set_zoom_status(true, false, 2.0, (0.0, 0.0));
 
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
 
     assert!(state.focus_mode_active());
     assert!(state.zoom_active());
@@ -89,13 +110,20 @@ fn focus_mode_suppresses_fallback_mode_badges_but_keeps_restore_toast() {
 
 #[test]
 fn manual_chrome_toggle_breaks_focus_mode() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
 
     // F9 during focus mode: the user takes manual ownership. The toolbar
     // comes back, the snapshot is dropped, and the rest stays hidden.
-    state.handle_action(Action::ToggleToolbar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
     assert!(!state.focus_mode_active());
     assert!(state.toolbar_visible());
     assert!(!state.ui_visibility.show_status_bar);
@@ -110,13 +138,20 @@ fn manual_chrome_toggle_breaks_focus_mode() {
 
     // The next focus-mode press starts a fresh snapshot (hide again), not
     // a stale restore.
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
     assert!(!state.toolbar_visible());
 }
 
 #[test]
 fn breaking_focus_mode_retracts_a_restore_toast_queued_behind_a_warning() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.push_toast(
         ToastPriority::Critical,
@@ -124,14 +159,14 @@ fn breaking_focus_mode_retracts_a_restore_toast_queued_behind_a_warning() {
         Toast::error("Keep this warning"),
     );
 
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
     assert!(
         state.test_pending_toast_count() > 0,
         "the lower-priority Restore toast should be queued"
     );
 
-    state.handle_action(Action::ToggleToolbar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
 
     assert!(!state.focus_mode_active());
     assert!(
@@ -147,6 +182,13 @@ fn breaking_focus_mode_retracts_a_restore_toast_queued_behind_a_warning() {
 
 #[test]
 fn preset_status_bar_update_stays_hidden_until_focus_mode_restores_it() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.preset_slots.presets_mut_for_test()[0] = Some(ToolPresetConfig {
         name: None,
@@ -168,7 +210,7 @@ fn preset_status_bar_update_stays_hidden_until_focus_mode_restores_it() {
         drag_tools: None,
     });
 
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
 
     assert!(state.apply_preset(1));
@@ -178,7 +220,7 @@ fn preset_status_bar_update_stays_hidden_until_focus_mode_restores_it() {
         "Focus Mode keeps chrome suppressed"
     );
 
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(
         !state.ui_visibility.show_status_bar,
         "Focus restore must honor the status-bar value authored by the preset"
@@ -187,12 +229,19 @@ fn preset_status_bar_update_stays_hidden_until_focus_mode_restores_it() {
 
 #[test]
 fn focus_mode_rescues_a_fully_hidden_ui() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     // Hide everything by hand: no snapshot exists.
-    state.handle_action(Action::ToggleToolbar);
-    state.handle_action(Action::ToggleStatusBar);
-    state.handle_action(Action::ToggleFloatingBadge);
-    state.handle_action(Action::ToggleZoomChip);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleStatusBar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFloatingBadge);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleZoomChip);
     assert!(!state.focus_mode_active());
     assert!(!state.toolbar_visible());
     assert!(!state.ui_visibility.show_status_bar);
@@ -209,7 +258,7 @@ fn focus_mode_rescues_a_fully_hidden_ui() {
 
     // With nothing left to hide, the action restores the full UI instead
     // of snapshotting an empty screen.
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(!state.focus_mode_active());
     assert!(state.toolbar_visible());
     assert!(state.ui_visibility.show_status_bar);
@@ -226,6 +275,13 @@ fn focus_mode_rescues_a_fully_hidden_ui() {
 
 #[test]
 fn focus_mode_rescues_when_the_enabled_status_bar_has_no_visible_content() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.set_toolbar_visible(false);
     state.ui_visibility.show_floating_badge = false;
@@ -249,7 +305,7 @@ fn focus_mode_rescues_when_the_enabled_status_bar_has_no_visible_content() {
     );
     assert!(!state.status_hud_effectively_visible());
 
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
 
     assert!(
         !state.focus_mode_active(),
@@ -266,6 +322,13 @@ fn focus_mode_rescues_when_the_enabled_status_bar_has_no_visible_content() {
 
 #[test]
 fn focus_mode_hides_a_floating_badge_when_it_is_the_only_visible_chrome() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     assert!(
         state.boards.board_count() > 1 || state.boards.page_count() > 1,
@@ -276,7 +339,7 @@ fn focus_mode_hides_a_floating_badge_when_it_is_the_only_visible_chrome() {
     state.ui_visibility.show_zoom_chip = false;
     state.ui_visibility.show_floating_badge = true;
 
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
 
     assert!(
         state.focus_mode_active(),
@@ -290,6 +353,13 @@ fn focus_mode_hides_a_floating_badge_when_it_is_the_only_visible_chrome() {
 
 #[test]
 fn focus_mode_hides_a_zoom_badge_when_it_is_the_only_visible_chrome() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.set_toolbar_visible(false);
     state.ui_visibility.show_status_bar = false;
@@ -299,7 +369,7 @@ fn focus_mode_hides_a_zoom_badge_when_it_is_the_only_visible_chrome() {
     assert!(state.zoom_active());
     assert!(!state.zoom_chip_enabled());
 
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
 
     assert!(
         state.focus_mode_active(),
@@ -312,6 +382,13 @@ fn focus_mode_hides_a_zoom_badge_when_it_is_the_only_visible_chrome() {
 
 #[test]
 fn focus_mode_hides_a_fallback_badge_when_the_enabled_status_bar_is_empty() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.set_toolbar_visible(false);
     state.ui_visibility.show_floating_badge = false;
@@ -333,7 +410,7 @@ fn focus_mode_hides_a_fallback_badge_when_the_enabled_status_bar_is_empty() {
     assert!(state.ui_visibility.show_status_bar);
     assert!(!state.status_hud_effectively_visible());
 
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
 
     assert!(
         state.focus_mode_active(),
@@ -344,17 +421,24 @@ fn focus_mode_hides_a_fallback_badge_when_the_enabled_status_bar_is_empty() {
 
 #[test]
 fn focus_mode_never_enqueues_persistence() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     // Focus mode's hide/restore is transient by contract, and so is every
     // explicit ToggleFloatingBadge/ToggleZoomChip: neither reaches the disk
     // through either pending channel.
     let mut state = create_test_input_state();
     let _ = state.take_pending_backend_action();
 
-    state.handle_action(Action::ToggleFocusMode); // hide all
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode); // hide all
     assert!(state.take_pending_backend_action().is_none());
     assert!(!state.has_pending_toolbar_persistence());
 
-    state.handle_action(Action::ToggleFocusMode); // restore all
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode); // restore all
     assert!(state.take_pending_backend_action().is_none());
     assert!(!state.has_pending_toolbar_persistence());
 }
@@ -363,22 +447,29 @@ fn focus_mode_never_enqueues_persistence() {
 /// transient and neither of them queues durable work.
 #[test]
 fn visibility_toggles_stay_process_only_across_focus_mode() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.ui_visibility.show_floating_badge = false;
     state.ui_visibility.show_zoom_chip = false;
 
-    state.handle_action(Action::ToggleFloatingBadge);
-    state.handle_action(Action::ToggleZoomChip);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFloatingBadge);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleZoomChip);
     assert!(state.ui_visibility.show_floating_badge);
     assert!(state.ui_visibility.show_zoom_chip);
 
     // Suppress both live flags; focus mode owns them until it restores.
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(!state.ui_visibility.show_floating_badge);
     assert!(!state.ui_visibility.show_zoom_chip);
     assert!(state.take_pending_backend_action().is_none());
 
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(state.ui_visibility.show_floating_badge);
     assert!(state.ui_visibility.show_zoom_chip);
     assert!(state.take_pending_backend_action().is_none());
@@ -396,7 +487,7 @@ fn presenter_mode_gates_focus_mode() {
     state.toggle_presenter_mode_with_resources(route_resources);
     assert!(state.presenter_mode_active());
 
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(route_resources, Action::ToggleFocusMode);
     assert!(
         !state.focus_mode_active(),
         "presenter mode owns chrome; focus mode must not double-snapshot"
@@ -405,48 +496,69 @@ fn presenter_mode_gates_focus_mode() {
 
 #[test]
 fn focus_mode_exits_light_mode_before_taking_ownership() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.compositor_capabilities.layer_shell = true;
-    state.handle_action(Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
     assert!(state.light_mode_active());
 
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
 
     assert!(
         !state.light_mode_active(),
         "transient chrome owners must not nest"
     );
     assert!(state.focus_mode_active());
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(state.ui_visibility.show_status_bar);
 }
 
 #[test]
 fn light_mode_exits_focus_mode_before_taking_ownership() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.compositor_capabilities.layer_shell = true;
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
 
-    state.handle_action(Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
 
     assert!(state.light_mode_active());
     assert!(
         !state.focus_mode_active(),
         "transient chrome owners must not nest"
     );
-    state.handle_action(Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
     assert!(state.ui_visibility.show_status_bar);
 }
 
 #[test]
 fn unsupported_light_mode_does_not_break_focus_mode() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.compositor_capabilities.layer_shell = false;
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
 
-    state.handle_action(Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
 
     assert!(!state.light_mode_active());
     assert!(
@@ -458,12 +570,19 @@ fn unsupported_light_mode_does_not_break_focus_mode() {
 
 #[test]
 fn light_mode_drawing_exits_focus_mode_before_taking_ownership() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.compositor_capabilities.layer_shell = true;
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
 
-    state.handle_action(Action::ToggleLightModeDrawing);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightModeDrawing);
 
     assert!(state.light_mode_active());
     assert!(state.light_mode_drawing_active());
@@ -471,6 +590,6 @@ fn light_mode_drawing_exits_focus_mode_before_taking_ownership() {
         !state.focus_mode_active(),
         "every Light Mode entry path must own chrome exclusively"
     );
-    state.handle_action(Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
     assert!(state.ui_visibility.show_status_bar);
 }

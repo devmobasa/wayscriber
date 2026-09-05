@@ -120,8 +120,17 @@ impl WaylandState {
         let screen_x = event.position.0.round() as i32;
         let screen_y = event.position.1.round() as i32;
         let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
-        self.input_state
-            .on_mouse_release_with_canvas(mb, screen_x, screen_y, wx, wy);
+        self.input_state.on_mouse_release_with_canvas_and_resources(
+            crate::input::state::InputTextResources {
+                measurer: self.render.text_measurer(),
+                ui_engine: self.render.ui_text(),
+            },
+            mb,
+            screen_x,
+            screen_y,
+            wx,
+            wy,
+        );
         self.input_state.needs_redraw = true;
     }
 
@@ -184,7 +193,11 @@ impl WaylandState {
             return true;
         }
         if self.pointer.take_status_hud_press() {
-            let (hit, action) = self.input_state.check_status_hud_click(screen_x, screen_y);
+            let (hit, action) = self.input_state.check_status_hud_click_with_measurer(
+                self.render.text_measurer(),
+                screen_x,
+                screen_y,
+            );
             if hit && let Some(action) = action {
                 self.dispatch_input_action(action);
             }
@@ -219,7 +232,11 @@ impl WaylandState {
             return false;
         };
         let (wx, wy) = self.zoomed_world_coords(sx, sy);
-        self.input_state.on_mouse_release_with_canvas(
+        self.input_state.on_mouse_release_with_canvas_and_resources(
+            crate::input::state::InputTextResources {
+                measurer: self.render.text_measurer(),
+                ui_engine: self.render.ui_text(),
+            },
             mb,
             sx.round() as i32,
             sy.round() as i32,

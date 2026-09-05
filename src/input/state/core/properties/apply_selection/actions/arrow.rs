@@ -361,6 +361,13 @@ mod tests {
 
     #[test]
     fn cycle_arrow_style_reports_a_locked_arrow_while_its_property_control_stays_disabled() {
+        let test_text_measurer = crate::draw::TextMeasurer::default();
+        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let test_text_resources = crate::input::state::InputTextResources {
+            measurer: &test_text_measurer,
+            ui_engine: &test_ui_engine,
+        };
+
         // There is no style to step a locked selection to, but "no arrows"
         // is the wrong reason to give: the arrows are right there and the user
         // needs to be told to unlock them, not to select something.
@@ -385,7 +392,10 @@ mod tests {
         );
         assert_eq!(style_entry.value, "Locked");
 
-        state.handle_action(crate::domain::Action::CycleArrowStyle);
+        state.handle_action_with_resources(
+            test_text_resources,
+            crate::domain::Action::CycleArrowStyle,
+        );
         assert_eq!(
             state.active_toast().map(|toast| toast.message.as_str()),
             Some("All arrow style shapes are locked.")

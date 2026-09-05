@@ -1,12 +1,8 @@
 use super::super::base::InputState;
 use super::types::SelectionPropertyKind;
-use crate::draw::{Shape, TextMeasurer, with_legacy_measurer};
+use crate::draw::{Shape, TextMeasurer};
 
 impl InputState {
-    pub(crate) fn activate_properties_panel_entry(&mut self) -> bool {
-        with_legacy_measurer(|measurer| self.activate_properties_panel_entry_with(measurer))
-    }
-
     pub(crate) fn activate_properties_panel_entry_with(&mut self, measurer: &TextMeasurer) -> bool {
         self.adjust_properties_panel_entry_with(measurer, 0)
     }

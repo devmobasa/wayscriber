@@ -1,5 +1,5 @@
+use crate::draw::TextMeasurer;
 use crate::draw::{Shape, ShapeId};
-use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::InputState;
 
 const TEXT_WRAP_MIN_WIDTH: i32 = 40;
@@ -19,12 +19,6 @@ impl InputState {
             width = width.max(min_width);
         }
         width
-    }
-
-    pub(crate) fn update_text_wrap_width(&mut self, shape_id: ShapeId, new_width: i32) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.update_text_wrap_width_with(measurer, shape_id, new_width)
-        })
     }
 
     pub(crate) fn update_text_wrap_width_with(

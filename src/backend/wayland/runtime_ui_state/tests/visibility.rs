@@ -6,6 +6,13 @@ use super::*;
 /// exactly what the toggle left on screen.
 #[test]
 fn keyboard_visibility_toggle_persists_both_pins_and_startup_hides_the_toolbar() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     use crate::domain::Action;
     use crate::input::state::PendingToolbarPersistence;
 
@@ -20,7 +27,7 @@ fn keyboard_visibility_toggle_persists_both_pins_and_startup_hides_the_toolbar()
     // Driven through the real F9 arm and its queue: the toggle already
     // applied, so the drained entry carries the pre-toggle pins, which
     // supply the write's rollback.
-    input.handle_action(Action::ToggleToolbar);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
     assert!(!input.toolbar_top_pinned());
     assert_eq!(
         input.take_pending_toolbar_persistence(),
@@ -229,6 +236,13 @@ fn visibility_toggle_rollback_through_a_failed_reset_restores_the_screen() {
 /// instead, and the take's no-op filter then drops the entry as moot.
 #[test]
 fn a_barrier_defers_queued_visibility_persistence_instead_of_dropping_it() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     use crate::domain::Action;
     use crate::input::state::PendingToolbarPersistence;
 
@@ -250,7 +264,7 @@ fn a_barrier_defers_queued_visibility_persistence_instead_of_dropping_it() {
     assert!(runtime.mutation_barrier_active());
 
     // The press lands on screen and queues normally; only the write waits.
-    input.handle_action(Action::ToggleToolbar);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
     assert!(!input.toolbar_visible());
     assert!(input.has_pending_toolbar_persistence());
     assert!(
@@ -323,6 +337,13 @@ fn a_barrier_defers_queued_visibility_persistence_instead_of_dropping_it() {
 /// not the pre-toggle pins.
 #[test]
 fn an_exit_during_an_active_reset_barrier_still_lands_the_deferred_toggle() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     use crate::domain::Action;
     use crate::input::state::PendingToolbarPersistence;
 
@@ -341,7 +362,7 @@ fn an_exit_during_an_active_reset_barrier_still_lands_the_deferred_toggle() {
         RequestResetResult::Started { .. }
     ));
     assert!(runtime.mutation_barrier_active());
-    input.handle_action(Action::ToggleToolbar);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
     assert!(!input.toolbar_visible());
     assert!(input.has_pending_toolbar_persistence());
 

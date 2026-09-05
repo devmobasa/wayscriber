@@ -127,7 +127,10 @@ impl WaylandState {
         }
         if first_pressure_sample {
             self.input_state
-                .replace_active_drawing_pressure_samples(self.input_state.style.current_thickness);
+                .replace_active_drawing_pressure_samples_with(
+                    self.render.text_measurer(),
+                    self.input_state.style.current_thickness,
+                );
         }
         self.tablet.pressure_thickness = Some(self.input_state.style.current_thickness);
         self.record_stylus_peak(self.input_state.style.current_thickness);
@@ -138,8 +141,16 @@ impl WaylandState {
         self.pointer.set_position((x as i32, y as i32));
         self.tablet.last_pos = Some((x, y));
         let (wx, wy) = self.zoomed_world_coords(x, y);
-        self.input_state
-            .on_mouse_motion_with_canvas(x.round() as i32, y.round() as i32, wx, wy);
+        self.input_state.on_mouse_motion_with_canvas_and_resources(
+            crate::input::state::InputTextResources {
+                measurer: self.render.text_measurer(),
+                ui_engine: self.render.ui_text(),
+            },
+            x.round() as i32,
+            y.round() as i32,
+            wx,
+            wy,
+        );
         self.record_perf_input_sample(
             PerfInputSource::Stylus,
             x.round() as i32,
@@ -229,8 +240,17 @@ impl WaylandState {
         let screen_x = self.pointer.position().0;
         let screen_y = self.pointer.position().1;
         let (wx, wy) = self.zoomed_world_coords(x, y);
-        self.input_state
-            .on_mouse_press_with_canvas(MouseButton::Left, screen_x, screen_y, wx, wy);
+        self.input_state.on_mouse_press_with_canvas_and_resources(
+            crate::input::state::InputTextResources {
+                measurer: self.render.text_measurer(),
+                ui_engine: self.render.ui_text(),
+            },
+            MouseButton::Left,
+            screen_x,
+            screen_y,
+            wx,
+            wy,
+        );
         let base_thickness = self.input_state.style.current_thickness;
         self.tablet.base_thickness = Some(base_thickness);
         self.record_stylus_motion_thickness();
@@ -250,7 +270,7 @@ impl WaylandState {
             .or(self.tablet.base_thickness);
         if let Some(thick) = final_thick {
             self.input_state
-                .set_pressure_thickness_for_active_tool(thick);
+                .set_pressure_thickness_for_active_tool_with(self.render.text_measurer(), thick);
             self.tablet.base_thickness = Some(thick);
         }
         self.tablet.pressure_thickness = None;
@@ -271,7 +291,11 @@ impl WaylandState {
             return;
         }
         let (wx, wy) = self.zoomed_world_coords(x, y);
-        self.input_state.on_mouse_release_with_canvas(
+        self.input_state.on_mouse_release_with_canvas_and_resources(
+            crate::input::state::InputTextResources {
+                measurer: self.render.text_measurer(),
+                ui_engine: self.render.ui_text(),
+            },
             MouseButton::Left,
             screen_x,
             screen_y,

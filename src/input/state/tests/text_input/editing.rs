@@ -426,15 +426,21 @@ fn delayed_paste_replaces_the_selection_captured_at_invocation() {
 #[test]
 fn paste_generation_does_not_match_a_later_text_edit() {
     let measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
-    state.handle_action(Action::EnterTextMode);
+    state.handle_action_with_resources(test_text_resources, Action::EnterTextMode);
     let first = state
         .text_editing
         .generation(&state.state)
         .expect("text edit is active");
 
     state.cancel_text_input_with(&measurer);
-    state.handle_action(Action::EnterTextMode);
+    state.handle_action_with_resources(test_text_resources, Action::EnterTextMode);
 
     assert!(
         !state
@@ -445,10 +451,17 @@ fn paste_generation_does_not_match_a_later_text_edit() {
 
 #[test]
 fn first_click_places_a_new_empty_text_block() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     use crate::input::MouseButton;
 
     let mut state = create_test_input_state();
-    state.handle_action(Action::EnterTextMode);
+    state.handle_action_with_resources(test_text_resources, Action::EnterTextMode);
     state.on_mouse_press_with_canvas(MouseButton::Left, 222, 333, 222, 333);
 
     assert_eq!(origin(&state), (222, 333));
@@ -634,6 +647,8 @@ fn click_after_visible_preedit_maps_back_to_the_committed_buffer() {
 
 #[test]
 fn edit_ghost_is_hidden_in_place_and_shown_after_moving() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     use crate::draw::Shape;
 
     let mut state = create_test_input_state();
@@ -649,7 +664,7 @@ fn edit_ghost_is_hidden_in_place_and_shown_after_moving() {
     });
     state.set_selection(vec![shape_id]);
     assert!(
-        state.edit_selected_text(),
+        state.edit_selected_text_with(&test_text_measurer),
         "should enter edit mode on the existing text"
     );
 

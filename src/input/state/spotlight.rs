@@ -4,10 +4,7 @@
 //! layer and punches all the openings out of it. That makes spotlights the only
 //! shape kind the renderer collects up front instead of drawing in z-order.
 
-use crate::draw::{
-    Shape, ShapeId, SpotlightRegion, TextMeasurer, spotlight_regions_for_frame,
-    with_legacy_measurer,
-};
+use crate::draw::{Shape, ShapeId, SpotlightRegion, TextMeasurer, spotlight_regions_for_frame};
 use crate::input::Tool;
 
 use super::{DrawingState, InputState};
@@ -325,17 +322,6 @@ impl InputState {
     /// toolbar trip, and the loupe follows the ticks live. Returns whether
     /// anything changed, so the caller can fall through to its usual wheel
     /// behaviour when the pointer is not over a loupe.
-    pub(crate) fn nudge_spotlight_magnification_at(
-        &mut self,
-        x: i32,
-        y: i32,
-        steps: i32,
-    ) -> SpotlightWheelOutcome {
-        with_legacy_measurer(|measurer| {
-            self.nudge_spotlight_magnification_at_with(measurer, x, y, steps)
-        })
-    }
-
     pub(crate) fn nudge_spotlight_magnification_at_with(
         &mut self,
         measurer: &TextMeasurer,

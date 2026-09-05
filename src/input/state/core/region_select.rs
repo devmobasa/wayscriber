@@ -813,6 +813,13 @@ mod tests {
     /// remove the stroke drawn before it, proving no region history entry was added.
     #[test]
     fn the_selector_lifecycle_adds_no_shape_and_no_history_entry() {
+        let test_text_measurer = crate::draw::TextMeasurer::default();
+        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let test_text_resources = crate::input::state::InputTextResources {
+            measurer: &test_text_measurer,
+            ui_engine: &test_ui_engine,
+        };
+
         let mut state = make_test_input_state();
         state.on_mouse_press(MouseButton::Left, 0, 0);
         state.on_mouse_motion(10, 10);
@@ -825,7 +832,7 @@ mod tests {
         state.cancel_region_ui_only();
         assert_eq!(state.boards.active_frame().shapes.len(), 1);
 
-        state.handle_action(crate::domain::Action::Undo);
+        state.handle_action_with_resources(test_text_resources, crate::domain::Action::Undo);
 
         assert_eq!(state.boards.active_frame().shapes.len(), 0);
     }

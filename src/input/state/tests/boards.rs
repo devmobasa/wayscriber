@@ -143,6 +143,8 @@ fn failed_switch_board_preserves_active_interaction() {
 
 #[test]
 fn switch_board_cancels_text_edit_on_source_board_before_switching() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 40,
@@ -155,7 +157,7 @@ fn switch_board_cancels_text_edit_on_source_board_before_switching() {
         wrap_width: None,
     });
     state.set_selection(vec![shape_id]);
-    assert!(state.edit_selected_text());
+    assert!(state.edit_selected_text_with(&test_text_measurer));
     assert_board_text(&state, BOARD_ID_TRANSPARENT, shape_id, "");
 
     state.switch_board(BOARD_ID_WHITEBOARD);
@@ -168,6 +170,8 @@ fn switch_board_cancels_text_edit_on_source_board_before_switching() {
 
 #[test]
 fn switch_board_cancels_selection_move_on_source_board_before_switching() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 40,
@@ -180,7 +184,7 @@ fn switch_board_cancels_selection_move_on_source_board_before_switching() {
     });
     state.set_selection(vec![shape_id]);
     let snapshots = state.capture_movable_selection_snapshots();
-    assert!(state.apply_translation_to_selection(25, 35));
+    assert!(state.apply_translation_to_selection_with(&test_text_measurer, 25, 35));
     state.state = DrawingState::MovingSelection {
         last_x: 25,
         last_y: 35,
@@ -354,6 +358,8 @@ fn duplicate_board_preflight_handles_existing_copy_board_when_over_image_limit()
 
 #[test]
 fn duplicate_board_cancels_text_edit_before_cloning_board() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_WHITEBOARD);
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
@@ -367,7 +373,7 @@ fn duplicate_board_cancels_text_edit_before_cloning_board() {
         wrap_width: None,
     });
     state.set_selection(vec![shape_id]);
-    assert!(state.edit_selected_text());
+    assert!(state.edit_selected_text_with(&test_text_measurer));
     assert_board_text(&state, BOARD_ID_WHITEBOARD, shape_id, "");
 
     state.duplicate_board();

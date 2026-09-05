@@ -10,13 +10,14 @@ use std::sync::Arc;
 
 pub(crate) fn handle_active_motion(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
     let canvas = points.canvas();
     // An Alt+drag moves the active text block; keep TextInput draggable while
     // the flag is set (it is otherwise a passive, non-draggable state).
     if state.text_block_drag_active() && matches!(state.state, DrawingState::TextInput { .. }) {
-        state.drag_text_block_to(canvas.x(), canvas.y());
+        state.drag_text_block_to_with(measurer, canvas.x(), canvas.y());
         return Some(RoutingOutcome::Continued(ActiveInteractionKind::TextInput));
     }
 
@@ -24,7 +25,7 @@ pub(crate) fn handle_active_motion(
         state.state,
         DrawingState::AdjustingSpotlightMagnification { .. }
     ) {
-        state.drag_spotlight_magnification_to(canvas.x());
+        state.drag_spotlight_magnification_to_with(measurer, canvas.x());
         return Some(RoutingOutcome::Continued(
             ActiveInteractionKind::AdjustingSpotlightMagnification,
         ));
@@ -33,7 +34,7 @@ pub(crate) fn handle_active_motion(
     if matches!(state.state, DrawingState::BendingArrow { .. }) {
         // Shift snaps the magnitude; the arc is symmetric either way.
         let snap = state.modifiers.shift;
-        state.drag_arrow_bend_to(canvas.x(), canvas.y(), snap);
+        state.drag_arrow_bend_to_with(measurer, canvas.x(), canvas.y(), snap);
         return Some(RoutingOutcome::Continued(
             ActiveInteractionKind::BendingArrow,
         ));
@@ -47,7 +48,7 @@ pub(crate) fn handle_active_motion(
     } = &state.state
     {
         let new_width = state.clamp_text_wrap_width(*base_x, canvas.x(), *size);
-        let _ = state.update_text_wrap_width(*shape_id, new_width);
+        let _ = state.update_text_wrap_width_with(measurer, *shape_id, new_width);
         return Some(RoutingOutcome::Continued(
             ActiveInteractionKind::ResizingText,
         ));
@@ -84,7 +85,7 @@ pub(crate) fn handle_active_motion(
                 };
                 state.text_editing.set_last_click(None);
                 state.pointer.replace_provisional_bounds(None);
-                state.update_provisional_dirty(canvas.x(), canvas.y());
+                state.update_provisional_dirty_with(measurer, canvas.x(), canvas.y());
                 state.needs_redraw = true;
             }
         }
@@ -97,7 +98,7 @@ pub(crate) fn handle_active_motion(
         let dx = canvas.x() - *last_x;
         let dy = canvas.y() - *last_y;
         if (dx != 0 || dy != 0)
-            && state.apply_translation_to_selection(dx, dy)
+            && state.apply_translation_to_selection_with(measurer, dx, dy)
             && let DrawingState::MovingSelection {
                 last_x,
                 last_y,
@@ -127,7 +128,14 @@ pub(crate) fn handle_active_motion(
         let handle = *handle;
         let original_bounds = *original_bounds;
         let snapshots = Arc::clone(snapshots);
-        state.apply_selection_resize(handle, &original_bounds, dx, dy, snapshots.as_ref());
+        state.apply_selection_resize_with(
+            measurer,
+            handle,
+            &original_bounds,
+            dx,
+            dy,
+            snapshots.as_ref(),
+        );
         state.needs_redraw = true;
         return Some(RoutingOutcome::Continued(
             ActiveInteractionKind::ResizingSelection,
@@ -135,7 +143,7 @@ pub(crate) fn handle_active_motion(
     }
 
     if matches!(state.state, DrawingState::Selecting { .. }) {
-        state.update_provisional_dirty(canvas.x(), canvas.y());
+        state.update_provisional_dirty_with(measurer, canvas.x(), canvas.y());
         state.needs_redraw = true;
         return Some(RoutingOutcome::Continued(
             ActiveInteractionKind::BoxSelecting,
@@ -144,7 +152,7 @@ pub(crate) fn handle_active_motion(
 
     if let DrawingState::BuildingPolygon { preview, .. } = &mut state.state {
         *preview = Some((canvas.x(), canvas.y()));
-        state.update_provisional_dirty(canvas.x(), canvas.y());
+        state.update_provisional_dirty_with(measurer, canvas.x(), canvas.y());
         state.needs_redraw = true;
         return Some(RoutingOutcome::Continued(
             ActiveInteractionKind::BuildingPolygon,
@@ -156,6 +164,7 @@ pub(crate) fn handle_active_motion(
 
 pub(crate) fn handle_drawing_or_idle_motion(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     points: PointerPoints,
 ) -> RoutingOutcome {
     let canvas = points.canvas();
@@ -179,7 +188,7 @@ pub(crate) fn handle_drawing_or_idle_motion(
     }
 
     if drawing {
-        state.update_provisional_dirty(canvas.x(), canvas.y());
+        state.update_provisional_dirty_with(measurer, canvas.x(), canvas.y());
         state.needs_redraw = true;
         RoutingOutcome::Continued(ActiveInteractionKind::Drawing)
     } else if state.style.eraser_mode == EraserMode::Stroke

@@ -16,6 +16,7 @@ pub(super) fn finish_moving_selection(
 
 pub(super) fn finish_selection_drag(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     start_x: i32,
     start_y: i32,
     end_x: i32,
@@ -27,7 +28,7 @@ pub(super) fn finish_selection_drag(
     let dy = (end_y - start_y).abs();
     if dx < SELECTION_DRAG_THRESHOLD && dy < SELECTION_DRAG_THRESHOLD {
         if !additive {
-            let bounds = state.selection_bounding_box(state.selected_shape_ids());
+            let bounds = state.selection_bounding_box_with(measurer, state.selected_shape_ids());
             state.clear_selection();
             state.mark_selection_dirty_region(bounds);
             state.needs_redraw = true;
@@ -36,7 +37,7 @@ pub(super) fn finish_selection_drag(
     }
 
     if let Some(rect) = InputState::selection_rect_from_points(start_x, start_y, end_x, end_y) {
-        let ids = state.shape_ids_in_rect(rect);
+        let ids = state.shape_ids_in_rect_with(measurer, rect);
         if additive {
             state.extend_selection(ids);
         } else {
@@ -115,6 +116,7 @@ pub(super) fn finish_text_resize(
 
 pub(super) fn finish_selection_resize(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     snapshots: &[(ShapeId, ShapeSnapshot)],
 ) {
     // Capture after-snapshots and push undo actions
@@ -127,8 +129,8 @@ pub(super) fn finish_selection_resize(
                 locked: shape.locked,
             };
             // Check if shape bounds changed (simpler than full PartialEq on Shape)
-            let before_bounds = before_snapshot.shape.bounding_box();
-            let after_bounds = after_snapshot.shape.bounding_box();
+            let before_bounds = before_snapshot.shape.bounding_box_with(measurer);
+            let after_bounds = after_snapshot.shape.bounding_box_with(measurer);
             if before_bounds != after_bounds {
                 frame.push_undo_action(
                     UndoAction::modify_from_snapshots(

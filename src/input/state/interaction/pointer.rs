@@ -5,25 +5,36 @@ use crate::input::MouseButton;
 use crate::input::state::InputState;
 use crate::ui::ZoomChipPress;
 
-pub(crate) fn route_pointer_press(state: &mut InputState, event: PointerPress) -> RoutingOutcome {
+pub(crate) fn route_pointer_press(
+    state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
+    event: PointerPress,
+) -> RoutingOutcome {
     let points = event.points();
     // A new press invalidates any HUD or zoom-chip press still awaiting its
     // release, so a stale flag can never swallow the release of an unrelated
     // interaction.
     state.clear_status_hud_press_pending();
     state.clear_zoom_chip_press_pending();
-    if let Some(outcome) =
-        adapters::handle_building_polygon_non_left_press(state, event.button(), points)
-    {
+    if let Some(outcome) = adapters::handle_building_polygon_non_left_press(
+        state,
+        resources.measurer,
+        event.button(),
+        points,
+    ) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_radial_menu_press(state, event.button(), points) {
+    if let Some(outcome) =
+        adapters::handle_radial_menu_press(state, resources, event.button(), points)
+    {
         return outcome;
     }
     // The precise-entry popup is keyboard-only: any overlay press cancels
     // it and the press then routes normally.
     let _ = state.cancel_precision_entry();
-    if let Some(outcome) = adapters::handle_font_picker_press(state, event.button(), points) {
+    if let Some(outcome) =
+        adapters::handle_font_picker_press(state, resources.measurer, event.button(), points)
+    {
         return outcome;
     }
     if let Some(outcome) = adapters::handle_color_picker_press(state, event.button(), points) {
@@ -51,18 +62,24 @@ pub(crate) fn route_pointer_press(state: &mut InputState, event: PointerPress) -
 
     adapters::close_properties_panel_before_tool_routing(state);
 
-    if let Some(outcome) = adapters::handle_tool_button_press(state, event.button(), points) {
+    if let Some(outcome) =
+        adapters::handle_tool_button_press(state, resources.measurer, event.button(), points)
+    {
         return outcome;
     }
 
     match event.button() {
-        MouseButton::Right => adapters::handle_right_press(state, points),
-        MouseButton::Left => adapters::handle_unbound_left_press(state, points),
+        MouseButton::Right => adapters::handle_right_press(state, resources.measurer, points),
+        MouseButton::Left => adapters::handle_unbound_left_press(state, resources.measurer, points),
         MouseButton::Middle => adapters::handle_middle_press(state, points),
     }
 }
 
-pub(crate) fn route_pointer_motion(state: &mut InputState, event: PointerMotion) -> RoutingOutcome {
+pub(crate) fn route_pointer_motion(
+    state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    event: PointerMotion,
+) -> RoutingOutcome {
     let points = event.points();
     adapters::update_pointer_positions(state, points);
     // Chrome hover affordances update on every motion, before any modal
@@ -74,7 +91,7 @@ pub(crate) fn route_pointer_motion(state: &mut InputState, event: PointerMotion)
         state.update_status_hud_hover_from_pointer(screen.x(), screen.y());
         state.update_zoom_chip_hover_from_pointer(screen.x(), screen.y());
     }
-    if let Some(outcome) = adapters::handle_radial_menu_motion(state, points) {
+    if let Some(outcome) = adapters::handle_radial_menu_motion(state, measurer, points) {
         return outcome;
     }
     if let Some(outcome) = adapters::handle_font_picker_motion(state, points) {
@@ -89,17 +106,18 @@ pub(crate) fn route_pointer_motion(state: &mut InputState, event: PointerMotion)
     if let Some(outcome) = adapters::handle_properties_panel_motion(state, points) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_active_motion(state, points) {
+    if let Some(outcome) = adapters::handle_active_motion(state, measurer, points) {
         return outcome;
     }
     if let Some(outcome) = adapters::handle_context_menu_motion(state, points) {
         return outcome;
     }
-    adapters::handle_drawing_or_idle_motion(state, points)
+    adapters::handle_drawing_or_idle_motion(state, measurer, points)
 }
 
 pub(crate) fn route_pointer_release(
     state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
     event: PointerRelease,
 ) -> RoutingOutcome {
     let points = event.points();
@@ -114,9 +132,10 @@ pub(crate) fn route_pointer_release(
     // backend uses via `dispatch_input_action`.
     if event.button() == MouseButton::Left && state.take_status_hud_press_pending() {
         let screen = points.screen();
-        let (_, action) = state.check_status_hud_click(screen.x(), screen.y());
+        let (_, action) =
+            state.check_status_hud_click_with_measurer(resources.measurer, screen.x(), screen.y());
         if let Some(action) = action {
-            state.handle_action(action);
+            state.handle_action_with_resources(resources, action);
         }
         state.needs_redraw = true;
         return RoutingOutcome::Consumed(ConsumedBy::StatusHud);
@@ -137,7 +156,7 @@ pub(crate) fn route_pointer_release(
                 let screen = points.screen();
                 let (_, action) = state.check_zoom_chip_click(kind, screen.x(), screen.y());
                 if let Some(action) = action {
-                    state.handle_action(action);
+                    state.handle_action_with_resources(resources, action);
                 }
             }
             state.needs_redraw = true;
@@ -145,11 +164,15 @@ pub(crate) fn route_pointer_release(
         }
     }
 
-    if let Some(outcome) = adapters::handle_radial_menu_release(state, event.button(), points) {
+    if let Some(outcome) =
+        adapters::handle_radial_menu_release(state, resources, event.button(), points)
+    {
         return outcome;
     }
 
-    if let Some(outcome) = adapters::handle_release_overlays(state, event.button(), points) {
+    if let Some(outcome) =
+        adapters::handle_release_overlays(state, resources, event.button(), points)
+    {
         return outcome;
     }
 
@@ -165,6 +188,6 @@ pub(crate) fn route_pointer_release(
         return RoutingOutcome::NoRoute(NoRouteReason::ReleaseButtonMismatch);
     }
 
-    adapters::finish_pointer_interaction(state, points);
+    adapters::finish_pointer_interaction(state, resources.measurer, points);
     RoutingOutcome::Finished(kind)
 }

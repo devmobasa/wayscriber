@@ -282,12 +282,14 @@ fn every_pixel_of_the_track_snaps_to_the_same_grid_the_toolbar_uses() {
 
 #[test]
 fn a_wheel_tick_pulls_an_off_grid_loupe_back_onto_the_grid() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     // A factor from an older session or a hand-edited file. One tick should
     // land on a real step rather than carrying the offset forever.
     let (mut state, id) = spotlight_state_with_one_loupe(2.19);
 
     assert_eq!(
-        state.nudge_spotlight_magnification_at(200, 200, 1),
+        state.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
         SpotlightWheelOutcome::Adjusted
     );
     let value = magnification_of(&state, id);
@@ -297,18 +299,20 @@ fn a_wheel_tick_pulls_an_off_grid_loupe_back_onto_the_grid() {
 
 #[test]
 fn the_wheel_over_a_loupe_steps_its_own_magnification() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let (mut state, id) = spotlight_state_with_one_loupe(2.0);
 
     // Inside the ellipse: the wheel claims the event and the shape follows.
     assert_eq!(
-        state.nudge_spotlight_magnification_at(200, 200, 1),
+        state.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
         SpotlightWheelOutcome::Adjusted
     );
     assert_eq!(magnification_of(&state, id), 2.25);
 
     // Outside it: the wheel keeps its usual meaning for the caller.
     assert_eq!(
-        state.nudge_spotlight_magnification_at(400, 400, 1),
+        state.nudge_spotlight_magnification_at_with(&test_text_measurer, 400, 400, 1),
         SpotlightWheelOutcome::NotOverLoupe
     );
     assert_eq!(magnification_of(&state, id), 2.25);
@@ -316,11 +320,18 @@ fn the_wheel_over_a_loupe_steps_its_own_magnification() {
 
 #[test]
 fn a_wheel_burst_over_one_loupe_undoes_as_a_single_step() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let (mut state, id) = spotlight_state_with_one_loupe(2.0);
 
     for _ in 0..4 {
         assert_eq!(
-            state.nudge_spotlight_magnification_at(200, 200, 1),
+            state.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
             SpotlightWheelOutcome::Adjusted
         );
     }
@@ -328,18 +339,25 @@ fn a_wheel_burst_over_one_loupe_undoes_as_a_single_step() {
 
     // Undo flushes the in-flight gesture first, so the whole burst is one
     // entry rather than four.
-    state.handle_action(Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(magnification_of(&state, id), 2.0);
 }
 
 #[test]
 fn the_wheel_stops_at_the_end_of_the_range_without_opening_a_gesture() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let (mut state, id) = spotlight_state_with_one_loupe(crate::draw::MAX_SPOTLIGHT_MAGNIFICATION);
 
     // Still the loupe's event, so the wheel must not fall through and resize
     // a brush behind the user's back.
     assert_eq!(
-        state.nudge_spotlight_magnification_at(200, 200, 1),
+        state.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
         SpotlightWheelOutcome::AtRangeEnd,
         "an end of the range is not the same as the pointer being elsewhere"
     );
@@ -347,7 +365,7 @@ fn the_wheel_stops_at_the_end_of_the_range_without_opening_a_gesture() {
         magnification_of(&state, id),
         crate::draw::MAX_SPOTLIGHT_MAGNIFICATION
     );
-    state.handle_action(Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(
         magnification_of(&state, id),
         crate::draw::MAX_SPOTLIGHT_MAGNIFICATION,
@@ -357,6 +375,8 @@ fn the_wheel_stops_at_the_end_of_the_range_without_opening_a_gesture() {
 
 #[test]
 fn a_locked_loupe_claims_the_wheel_without_changing() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let (mut state, id) = spotlight_state_with_one_loupe(2.0);
     let index = state
         .boards
@@ -366,7 +386,7 @@ fn a_locked_loupe_claims_the_wheel_without_changing() {
     state.boards.active_frame_mut().shapes[index].locked = true;
 
     assert_eq!(
-        state.nudge_spotlight_magnification_at(200, 200, 1),
+        state.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
         SpotlightWheelOutcome::Locked
     );
     assert_eq!(magnification_of(&state, id), 2.0);
@@ -374,6 +394,8 @@ fn a_locked_loupe_claims_the_wheel_without_changing() {
 
 #[test]
 fn a_locked_topmost_loupe_hides_an_unlocked_loupe_from_the_wheel() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let (mut state, lower_id) = spotlight_state_with_one_loupe(2.0);
     let upper_id = state.boards.active_frame_mut().add_shape(Shape::Spotlight {
         cx: 200,
@@ -390,7 +412,7 @@ fn a_locked_topmost_loupe_hides_an_unlocked_loupe_from_the_wheel() {
     state.boards.active_frame_mut().shapes[upper_index].locked = true;
 
     assert_eq!(
-        state.nudge_spotlight_magnification_at(200, 200, 1),
+        state.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
         SpotlightWheelOutcome::Locked
     );
     assert_eq!(magnification_of(&state, lower_id), 2.0);
@@ -448,11 +470,18 @@ fn the_control_only_shows_on_a_page_that_already_forces_full_damage() {
 
 #[test]
 fn a_wheel_gesture_never_commits_against_a_different_page() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     // Shape ids restart per frame, so a snapshot flushed after a page change
     // would attach to an unrelated shape and corrupt that page's history.
     let (mut state, id) = spotlight_state_with_one_loupe(2.0);
     assert_eq!(
-        state.nudge_spotlight_magnification_at(200, 200, 1),
+        state.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
         SpotlightWheelOutcome::Adjusted
     );
     assert_eq!(magnification_of(&state, id), 2.25);
@@ -470,13 +499,13 @@ fn a_wheel_gesture_never_commits_against_a_different_page() {
         0,
         "the test needs an actual page switch"
     );
-    state.handle_action(Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
 
     // Back on the source page, the burst is still undoable there: the entry
     // was neither discarded nor written to the page the user moved to.
-    state.handle_action(Action::PagePrev);
+    state.handle_action_with_resources(test_text_resources, Action::PagePrev);
     assert_eq!(magnification_of(&state, id), 2.25);
-    state.handle_action(Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(
         magnification_of(&state, id),
         2.0,
@@ -515,9 +544,16 @@ fn a_changed_page_set_never_looks_like_the_frame_a_gesture_started_on() {
 
 #[test]
 fn moving_off_a_loupe_ends_its_wheel_gesture() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let (mut state, id) = spotlight_state_with_one_loupe(2.0);
     assert_eq!(
-        state.nudge_spotlight_magnification_at(200, 200, 1),
+        state.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
         SpotlightWheelOutcome::Adjusted
     );
 
@@ -525,14 +561,14 @@ fn moving_off_a_loupe_ends_its_wheel_gesture() {
     // one merged burst that only unwinds completely.
     state.on_mouse_motion(600, 600);
     assert_eq!(
-        state.nudge_spotlight_magnification_at(200, 200, 1),
+        state.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
         SpotlightWheelOutcome::Adjusted
     );
     assert_eq!(magnification_of(&state, id), 2.5);
 
-    state.handle_action(Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(magnification_of(&state, id), 2.25);
-    state.handle_action(Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(magnification_of(&state, id), 2.0);
 }
 
@@ -560,12 +596,19 @@ fn moving_off_a_loupe_discards_its_partial_wheel_step() {
 
 #[test]
 fn a_toolbar_page_switch_closes_the_wheel_gesture_too() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     // Toolbar events never reach `handle_action`, so this is a separate path
     // to the same requirement: the burst must be recorded against the page it
     // happened on, before the switch.
     let (mut state, id) = spotlight_state_with_one_loupe(2.0);
     assert_eq!(
-        state.nudge_spotlight_magnification_at(200, 200, 1),
+        state.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
         SpotlightWheelOutcome::Adjusted
     );
 
@@ -574,7 +617,7 @@ fn a_toolbar_page_switch_closes_the_wheel_gesture_too() {
 
     state.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::PagePrev);
     assert_eq!(magnification_of(&state, id), 2.25);
-    state.handle_action(Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(
         magnification_of(&state, id),
         2.0,
@@ -694,6 +737,8 @@ fn an_edge_loupe_keeps_its_control_on_screen() {
 
 #[test]
 fn extreme_loupe_coordinates_do_not_overflow_the_hit_test_or_the_track() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let id = state.boards.active_frame_mut().add_shape(Shape::Spotlight {
         cx: i32::MIN + 4,
@@ -708,11 +753,18 @@ fn extreme_loupe_coordinates_do_not_overflow_the_hit_test_or_the_track() {
     let _ = state.spotlight_at(i32::MAX, i32::MIN);
     state.set_selection(vec![id]);
     let _ = state.selected_spotlight_control();
-    let _ = state.hit_spotlight_magnification_track(0, 0);
+    let _ = state.hit_spotlight_magnification_track_with(&test_text_measurer, 0, 0);
 }
 
 #[test]
 fn dragging_the_knob_magnifies_live_and_commits_one_undo_entry() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let (mut state, id) = spotlight_state_with_one_loupe(1.0);
     state.set_selection(vec![id]);
     let track = state
@@ -744,7 +796,7 @@ fn dragging_the_knob_magnifies_live_and_commits_one_undo_entry() {
     state.on_mouse_release(MouseButton::Left, track.x + track.width, track.y + 6);
     assert!(matches!(state.state, DrawingState::Idle));
 
-    state.handle_action(Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(
         magnification_of(&state, id),
         1.0,

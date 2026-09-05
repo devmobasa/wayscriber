@@ -1,12 +1,8 @@
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::TextMeasurer;
 use crate::input::{DrawingState, InputState};
 use std::time::Instant;
 
 impl InputState {
-    pub(crate) fn edit_selected_text(&mut self) -> bool {
-        with_legacy_measurer(|measurer| self.edit_selected_text_with(measurer))
-    }
-
     pub(crate) fn edit_selected_text_with(&mut self, measurer: &TextMeasurer) -> bool {
         if self.selected_shape_ids().len() != 1 {
             return false;

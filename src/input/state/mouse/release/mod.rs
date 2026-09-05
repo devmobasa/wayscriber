@@ -37,11 +37,27 @@ impl InputState {
         canvas_x: i32,
         canvas_y: i32,
     ) {
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.on_mouse_release_with_canvas_and_resources(
+                resources, button, screen_x, screen_y, canvas_x, canvas_y,
+            )
+        })
+    }
+
+    pub(crate) fn on_mouse_release_with_canvas_and_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        button: MouseButton,
+        screen_x: i32,
+        screen_y: i32,
+        canvas_x: i32,
+        canvas_y: i32,
+    ) {
         let points = PointerPoints::new(
             ScreenPoint::new(screen_x, screen_y),
             CanvasPoint::new(canvas_x, canvas_y),
         );
-        let _ = route_pointer_release(self, PointerRelease::new(button, points));
+        let _ = route_pointer_release(self, resources, PointerRelease::new(button, points));
     }
 
     pub(in crate::input::state) fn handle_color_picker_popup_release_at(
@@ -52,32 +68,36 @@ impl InputState {
         panels::handle_color_picker_popup_release(self, x, y)
     }
 
-    pub(in crate::input::state) fn handle_context_menu_release_at(
+    pub(in crate::input::state) fn handle_context_menu_release_at_with_resources(
         &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
         x: i32,
         y: i32,
     ) -> bool {
-        panels::handle_context_menu_release(self, x, y)
+        panels::handle_context_menu_release(self, resources, x, y)
     }
 
-    pub(in crate::input::state) fn handle_board_picker_release_at(
+    pub(in crate::input::state) fn handle_board_picker_release_at_with_resources(
         &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
         x: i32,
         y: i32,
     ) -> bool {
-        panels::handle_board_picker_release(self, x, y)
+        panels::handle_board_picker_release(self, resources, x, y)
     }
 
-    pub(in crate::input::state) fn handle_properties_panel_release_at(
+    pub(in crate::input::state) fn handle_properties_panel_release_at_with_measurer(
         &mut self,
+        measurer: &crate::draw::TextMeasurer,
         x: i32,
         y: i32,
     ) -> bool {
-        panels::handle_properties_panel_release(self, x, y)
+        panels::handle_properties_panel_release(self, measurer, x, y)
     }
 
-    pub(in crate::input::state) fn finish_pointer_interaction_at(
+    pub(in crate::input::state) fn finish_pointer_interaction_at_with_measurer(
         &mut self,
+        measurer: &crate::draw::TextMeasurer,
         canvas_x: i32,
         canvas_y: i32,
     ) {
@@ -94,7 +114,7 @@ impl InputState {
                 additive,
             } => {
                 selection::finish_selection_drag(
-                    self, start_x, start_y, canvas_x, canvas_y, additive,
+                    self, measurer, start_x, start_y, canvas_x, canvas_y, additive,
                 );
             }
             DrawingState::ResizingText {
@@ -103,7 +123,7 @@ impl InputState {
                 selection::finish_text_resize(self, shape_id, snapshot);
             }
             DrawingState::ResizingSelection { snapshots, .. } => {
-                selection::finish_selection_resize(self, snapshots.as_ref());
+                selection::finish_selection_resize(self, measurer, snapshots.as_ref());
             }
             DrawingState::AdjustingSpotlightMagnification { shape_id, snapshot } => {
                 selection::finish_spotlight_magnification(self, shape_id, snapshot);
@@ -120,6 +140,7 @@ impl InputState {
             } => {
                 drawing::finish_drawing(
                     self,
+                    measurer,
                     tool,
                     drawing::DrawingRelease {
                         start: (start_x, start_y),
@@ -130,7 +151,7 @@ impl InputState {
                 );
             }
             DrawingState::PendingTextClick { x, y, shape_id, .. } => {
-                text::handle_pending_text_click(self, x, y, shape_id);
+                text::handle_pending_text_click(self, measurer, x, y, shape_id);
             }
             other_state => {
                 self.state = other_state;

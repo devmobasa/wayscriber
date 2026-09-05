@@ -37,17 +37,22 @@ impl InputState {
     /// their pixels and letting the selection box swallow them would make them
     /// unusable on exactly the shapes that need them most — a shallow arc, a
     /// loupe with the Spotlight tool still active.
-    pub(crate) fn hit_idle_handle(&self, x: i32, y: i32) -> Option<IdleHandle> {
-        if let Some(control) = self.hit_spotlight_magnification_track(x, y) {
+    pub(crate) fn hit_idle_handle_with(
+        &self,
+        measurer: &crate::draw::TextMeasurer,
+        x: i32,
+        y: i32,
+    ) -> Option<IdleHandle> {
+        if let Some(control) = self.hit_spotlight_magnification_track_with(measurer, x, y) {
             return Some(IdleHandle::SpotlightMagnification(control.shape_id));
         }
         if let Some(handle) = self.hit_arrow_bend_handle(x, y) {
             return Some(IdleHandle::ArrowBend(handle.shape_id));
         }
-        if let Some(shape_id) = self.hit_text_resize_handle(x, y) {
+        if let Some(shape_id) = self.hit_text_resize_handle_with(measurer, x, y) {
             return Some(IdleHandle::TextResize(shape_id));
         }
-        self.hit_selection_handle(x, y)
+        self.hit_selection_handle_with(measurer, x, y)
             .map(IdleHandle::SelectionResize)
     }
 

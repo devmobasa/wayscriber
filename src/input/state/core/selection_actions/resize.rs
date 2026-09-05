@@ -59,19 +59,6 @@ impl InputState {
     }
 
     /// Apply resize transformation to all selected shapes.
-    pub(crate) fn apply_selection_resize(
-        &mut self,
-        handle: SelectionHandle,
-        original_bounds: &Rect,
-        dx: i32,
-        dy: i32,
-        snapshots: &[(ShapeId, ShapeSnapshot)],
-    ) {
-        with_legacy_measurer(|measurer| {
-            self.apply_selection_resize_with(measurer, handle, original_bounds, dx, dy, snapshots)
-        })
-    }
-
     pub(crate) fn apply_selection_resize_with(
         &mut self,
         measurer: &TextMeasurer,

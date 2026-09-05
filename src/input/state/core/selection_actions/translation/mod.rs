@@ -1,6 +1,6 @@
 use crate::draw::ShapeId;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::ShapeSnapshot;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::InputState;
 
 mod bounds;
@@ -28,10 +28,6 @@ impl InputState {
                 })
             })
             .collect()
-    }
-
-    pub(crate) fn apply_translation_to_selection(&mut self, dx: i32, dy: i32) -> bool {
-        with_legacy_measurer(|measurer| self.apply_translation_to_selection_with(measurer, dx, dy))
     }
 
     pub(crate) fn apply_translation_to_selection_with(

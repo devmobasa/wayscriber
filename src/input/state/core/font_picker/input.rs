@@ -291,7 +291,12 @@ impl InputState {
     ///
     /// A press outside the panel closes the picker, which is what clicking away
     /// from a modal means everywhere else in the overlay.
-    pub(crate) fn font_picker_press(&mut self, x: f64, y: f64) -> bool {
+    pub(crate) fn font_picker_press_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        x: f64,
+        y: f64,
+    ) -> bool {
         if !self.font_picker.open {
             return false;
         }
@@ -300,7 +305,7 @@ impl InputState {
         let layout = font_picker_layout(screen_width, screen_height, families.len());
         if let Some(index) = font_picker_row_at(layout, &families, self.font_picker.scroll, x, y) {
             self.set_font_picker_selection(index);
-            self.commit_font_picker();
+            self.commit_font_picker_with_measurer(measurer);
             return true;
         }
         let inside_panel = x >= layout.panel_x

@@ -233,6 +233,8 @@ mod tests {
 
     #[test]
     fn first_pressure_sample_replaces_unpressured_stroke_samples() {
+        let test_text_measurer = crate::draw::TextMeasurer::default();
+
         let mut state = make_state();
 
         state.set_tool_override(Some(Tool::Pen));
@@ -241,7 +243,7 @@ mod tests {
         state.on_mouse_motion(10, 0);
         state.on_mouse_motion(20, 0);
 
-        assert!(state.replace_active_drawing_pressure_samples(2.0));
+        assert!(state.replace_active_drawing_pressure_samples_with(&test_text_measurer, 2.0));
 
         let DrawingState::Drawing {
             point_thicknesses, ..

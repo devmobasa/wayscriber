@@ -170,7 +170,8 @@ impl WaylandState {
             return;
         }
         self.tablet.pre_eraser_tool_override = self.input_state.tool_override();
-        self.input_state.set_tool_override(Some(Tool::Eraser));
+        self.input_state
+            .set_tool_override_with(self.render.text_measurer(), Some(Tool::Eraser));
         self.tablet.auto_switched_to_eraser = true;
         info!(
             "Auto-switched to eraser (physical eraser detected), saved previous: {:?}",
@@ -213,7 +214,8 @@ impl WaylandState {
             return;
         }
         let restored_tool = self.tablet.pre_eraser_tool_override;
-        self.input_state.set_tool_override(restored_tool);
+        self.input_state
+            .set_tool_override_with(self.render.text_measurer(), restored_tool);
         self.tablet.auto_switched_to_eraser = false;
         self.tablet.pre_eraser_tool_override = None;
         info!(

@@ -169,10 +169,6 @@ impl InputState {
     /// Cancels the current interaction when one is active.
     ///
     /// Returns `true` when an active interaction consumed the caller's event.
-    pub(crate) fn try_cancel_active_interaction(&mut self) -> bool {
-        with_legacy_measurer(|measurer| self.try_cancel_active_interaction_with(measurer))
-    }
-
     pub(crate) fn try_cancel_active_interaction_with(&mut self, measurer: &TextMeasurer) -> bool {
         if matches!(self.state, DrawingState::Idle) {
             return false;
@@ -365,10 +361,12 @@ mod tests {
 
     #[test]
     fn try_cancel_active_interaction_reports_false_when_idle() {
+        let test_text_measurer = crate::draw::TextMeasurer::default();
+
         let mut state = make_test_input_state();
         state.needs_redraw = false;
 
-        assert!(!state.try_cancel_active_interaction());
+        assert!(!state.try_cancel_active_interaction_with(&test_text_measurer));
 
         assert!(matches!(state.state, DrawingState::Idle));
         assert!(!state.needs_redraw);
@@ -376,6 +374,8 @@ mod tests {
 
     #[test]
     fn try_cancel_active_interaction_cancels_drawing_and_ends_drag() {
+        let test_text_measurer = crate::draw::TextMeasurer::default();
+
         let mut state = make_test_input_state();
         state.state = DrawingState::Drawing {
             tool: Tool::Pen,
@@ -387,7 +387,7 @@ mod tests {
         state.begin_pointer_drag(MouseButton::Left, None);
         state.needs_redraw = false;
 
-        assert!(state.try_cancel_active_interaction());
+        assert!(state.try_cancel_active_interaction_with(&test_text_measurer));
 
         assert!(matches!(state.state, DrawingState::Idle));
         assert!(!state.pointer_drag_active());

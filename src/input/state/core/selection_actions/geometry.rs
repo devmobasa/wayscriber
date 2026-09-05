@@ -1,6 +1,6 @@
 use super::super::base::InputState;
 use crate::draw::ShapeId;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::TextMeasurer;
 use crate::util::Rect;
 
 fn selection_rect(start_x: i32, start_y: i32, end_x: i32, end_y: i32) -> Option<Rect> {
@@ -23,10 +23,6 @@ impl InputState {
         end_y: i32,
     ) -> Option<Rect> {
         selection_rect(start_x, start_y, end_x, end_y)
-    }
-
-    pub(crate) fn shape_ids_in_rect(&self, rect: Rect) -> Vec<ShapeId> {
-        with_legacy_measurer(|measurer| self.shape_ids_in_rect_with(measurer, rect))
     }
 
     pub(crate) fn shape_ids_in_rect_with(

@@ -25,8 +25,8 @@ pub(crate) use state::FontPickerState;
 pub use layout::{FontPickerLayout, FontPickerRow, font_picker_layout, font_picker_rows};
 
 use super::InputState;
+use crate::draw::TextMeasurer;
 use crate::draw::{FontDescriptor, families_match, system_font_catalog_is_ready};
-use crate::draw::{TextMeasurer, with_legacy_measurer};
 
 /// The picker's memoized result list, keyed by what produced it.
 pub type FontPickerResults = Option<((String, FontPickerFilter), Vec<String>)>;
@@ -221,10 +221,6 @@ impl InputState {
     }
 
     /// Apply the highlighted family and close.
-    pub(crate) fn commit_font_picker(&mut self) -> bool {
-        with_legacy_measurer(|measurer| self.commit_font_picker_with_measurer(measurer))
-    }
-
     pub(crate) fn commit_font_picker_with_measurer(&mut self, measurer: &TextMeasurer) -> bool {
         let families = self.font_picker_families();
         let Some(family) = families.get(self.font_picker.selected).cloned() else {

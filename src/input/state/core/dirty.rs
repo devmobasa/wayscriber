@@ -36,12 +36,6 @@ impl InputState {
     }
 
     /// Updates tracked provisional shape bounds for dirty-region purposes.
-    pub(crate) fn update_provisional_dirty(&mut self, current_x: i32, current_y: i32) {
-        with_legacy_measurer(|measurer| {
-            self.update_provisional_dirty_with(measurer, current_x, current_y)
-        })
-    }
-
     pub(crate) fn update_provisional_dirty_with(
         &mut self,
         measurer: &TextMeasurer,

@@ -120,17 +120,6 @@ impl InputState {
         true
     }
 
-    pub(crate) fn reorder_page_in_board(
-        &mut self,
-        board_index: usize,
-        from: usize,
-        to: usize,
-    ) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.reorder_page_in_board_with_measurer(measurer, board_index, from, to)
-        })
-    }
-
     pub(crate) fn reorder_page_in_board_with_measurer(
         &mut self,
         measurer: &TextMeasurer,
@@ -187,16 +176,6 @@ impl InputState {
             )),
         );
         true
-    }
-
-    pub(crate) fn duplicate_page_in_board(
-        &mut self,
-        board_index: usize,
-        page_index: usize,
-    ) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.duplicate_page_in_board_with_measurer(measurer, board_index, page_index)
-        })
     }
 
     pub(crate) fn duplicate_page_in_board_with_measurer(
@@ -269,26 +248,6 @@ impl InputState {
             Toast::info("Page renamed."),
         );
         true
-    }
-
-    pub(crate) fn move_page_between_boards_with_activation(
-        &mut self,
-        source_board: usize,
-        page_index: usize,
-        target_board: usize,
-        copy: bool,
-        activate_target: bool,
-    ) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.move_page_between_boards_with_activation_with_measurer(
-                measurer,
-                source_board,
-                page_index,
-                target_board,
-                copy,
-                activate_target,
-            )
-        })
     }
 
     pub(crate) fn move_page_between_boards_with_activation_with_measurer(

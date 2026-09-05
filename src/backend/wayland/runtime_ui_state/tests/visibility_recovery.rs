@@ -10,6 +10,13 @@ use super::*;
 /// exit-time screen.
 #[test]
 fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     use crate::domain::Action;
     use crate::input::state::PendingToolbarPersistence;
     use std::os::unix::fs::PermissionsExt;
@@ -35,7 +42,7 @@ fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
         "retry must start a recovery attempt"
     );
     assert!(runtime.mutation_barrier_active());
-    input.handle_action(Action::ToggleToolbar);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
     assert!(!input.toolbar_visible());
     assert!(input.has_pending_toolbar_persistence());
 
@@ -108,7 +115,7 @@ fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
     let mut input = input_from_config(&config);
     let mut positions = config_positions(&config);
 
-    input.handle_action(Action::ToggleToolbar); // hide, pin → false
+    input.handle_action_with_resources(route_resources, Action::ToggleToolbar); // hide, pin → false
     assert!(!input.toolbar_visible());
     input.take_pending_toolbar_persistence(); // the write whose rollback arrives below
 
@@ -142,6 +149,13 @@ fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
 /// screen agreeing with the rolled-back pins.
 #[test]
 fn a_deferred_hide_rollback_lands_in_the_focus_mode_snapshot() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     use crate::config::{StatusBarStyle, StatusPosition};
     use crate::domain::Action;
 
@@ -158,11 +172,11 @@ fn a_deferred_hide_rollback_lands_in_the_focus_mode_snapshot() {
         720,
     );
 
-    input.handle_action(Action::ToggleToolbar); // hide, pin → false
+    input.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // hide, pin → false
     assert!(!input.toolbar_visible());
     input.take_pending_toolbar_persistence(); // the write whose rollback arrives below
 
-    input.handle_action(Action::ToggleFocusMode);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(input.focus_mode_active());
 
     apply_toolbar_runtime_rollback(
@@ -178,7 +192,7 @@ fn a_deferred_hide_rollback_lands_in_the_focus_mode_snapshot() {
         "the live focus-hidden flags must not move under the owner"
     );
 
-    input.handle_action(Action::ToggleFocusMode); // restore
+    input.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode); // restore
     assert!(!input.focus_mode_active());
     assert!(
         input.toolbar_visible() && input.toolbar_top_visible(),
@@ -190,6 +204,13 @@ fn a_deferred_hide_rollback_lands_in_the_focus_mode_snapshot() {
 /// toolbar flags and its exit writes the snapshot back).
 #[test]
 fn a_deferred_hide_rollback_lands_in_the_light_mode_snapshot() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     use crate::domain::Action;
 
     let config = Config::default();
@@ -198,11 +219,11 @@ fn a_deferred_hide_rollback_lands_in_the_light_mode_snapshot() {
     // Light mode refuses to start without layer-shell passthrough support.
     input.compositor_capabilities.layer_shell = true;
 
-    input.handle_action(Action::ToggleToolbar); // hide, pin → false
+    input.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // hide, pin → false
     assert!(!input.toolbar_visible());
     input.take_pending_toolbar_persistence(); // the write whose rollback arrives below
 
-    input.handle_action(Action::ToggleLightMode);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
     assert!(input.light_mode_active());
 
     apply_toolbar_runtime_rollback(
@@ -218,7 +239,7 @@ fn a_deferred_hide_rollback_lands_in_the_light_mode_snapshot() {
         "the live light-mode-hidden flags must not move under the owner"
     );
 
-    input.handle_action(Action::ToggleLightMode); // exit restores the snapshot
+    input.handle_action_with_resources(test_text_resources, Action::ToggleLightMode); // exit restores the snapshot
     assert!(!input.light_mode_active());
     assert!(
         input.toolbar_visible() && input.toolbar_top_visible(),

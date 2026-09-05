@@ -37,6 +37,8 @@ fn pointer_and_stylus_both_gate_persistence_transitions() {
 
 #[test]
 fn a_due_autosave_is_deferred_while_spotlight_wheel_history_is_pending() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut input = make_test_input_state();
     input.boards.active_frame_mut().add_shape(Shape::Spotlight {
         cx: 200,
@@ -46,7 +48,7 @@ fn a_due_autosave_is_deferred_while_spotlight_wheel_history_is_pending() {
         magnification: 2.0,
     });
     assert_eq!(
-        input.nudge_spotlight_magnification_at(200, 200, 1),
+        input.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
         SpotlightWheelOutcome::Adjusted
     );
     assert!(input.has_pending_spotlight_magnification_gesture());
@@ -73,6 +75,13 @@ fn a_due_autosave_is_deferred_while_spotlight_wheel_history_is_pending() {
 
 #[test]
 fn shutdown_persistence_records_wheel_history_before_capturing_the_snapshot() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut input = make_test_input_state();
     let shape_id = input.boards.active_frame_mut().add_shape(Shape::Spotlight {
         cx: 200,
@@ -82,7 +91,7 @@ fn shutdown_persistence_records_wheel_history_before_capturing_the_snapshot() {
         magnification: 2.0,
     });
     assert_eq!(
-        input.nudge_spotlight_magnification_at(200, 200, 1),
+        input.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
         SpotlightWheelOutcome::Adjusted
     );
     let mut deadline = Some(Instant::now() + Duration::from_millis(600));
@@ -98,7 +107,7 @@ fn shutdown_persistence_records_wheel_history_before_capturing_the_snapshot() {
         .expect("changed loupe snapshot");
     let mut restored = make_test_input_state();
     crate::session::apply_snapshot(&mut restored, snapshot, &options);
-    restored.handle_action(Action::Undo);
+    restored.handle_action_with_resources(test_text_resources, Action::Undo);
     let Shape::Spotlight { magnification, .. } = restored
         .boards
         .active_frame()

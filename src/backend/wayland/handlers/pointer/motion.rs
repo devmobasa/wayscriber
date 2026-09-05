@@ -122,8 +122,16 @@ impl WaylandState {
         let (wx, wy) = self.zoomed_world_coords(sx, sy);
         self.input_state
             .update_pointer_positions(sx.round() as i32, sy.round() as i32, wx, wy);
-        self.input_state
-            .on_mouse_motion_with_canvas(sx.round() as i32, sy.round() as i32, wx, wy);
+        self.input_state.on_mouse_motion_with_canvas_and_resources(
+            crate::input::state::InputTextResources {
+                measurer: self.render.text_measurer(),
+                ui_engine: self.render.ui_text(),
+            },
+            sx.round() as i32,
+            sy.round() as i32,
+            wx,
+            wy,
+        );
         self.update_pointer_cursor(false, conn);
         true
     }
@@ -236,8 +244,16 @@ impl WaylandState {
         let (wx, wy) = self.zoomed_world_coords(sx, sy);
         self.input_state
             .update_pointer_positions(sx.round() as i32, sy.round() as i32, wx, wy);
-        self.input_state
-            .on_mouse_motion_with_canvas(sx.round() as i32, sy.round() as i32, wx, wy);
+        self.input_state.on_mouse_motion_with_canvas_and_resources(
+            crate::input::state::InputTextResources {
+                measurer: self.render.text_measurer(),
+                ui_engine: self.render.ui_text(),
+            },
+            sx.round() as i32,
+            sy.round() as i32,
+            wx,
+            wy,
+        );
         self.update_pointer_cursor(false, conn);
         self.mark_mouse_tool_preview_dirty(previous, next);
         self.record_perf_input_sample(

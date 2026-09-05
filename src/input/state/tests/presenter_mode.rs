@@ -30,16 +30,23 @@ fn presenter_mode_forces_click_highlight() {
 
 #[test]
 fn presenter_mode_exits_focus_mode_before_taking_chrome_ownership() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.presenter_mode_config_mut_for_test().hide_status_bar = true;
     state.presenter_mode_config_mut_for_test().hide_toolbars = true;
     state.presenter_mode_config_mut_for_test().toolbar_mode = PresenterToolbarMode::Micro;
 
-    state.handle_action(Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
     assert!(!state.ui_visibility.show_status_bar);
 
-    state.handle_action(Action::TogglePresenterMode);
+    state.handle_action_with_resources(test_text_resources, Action::TogglePresenterMode);
 
     assert!(state.presenter_mode_active());
     assert!(
@@ -48,7 +55,7 @@ fn presenter_mode_exits_focus_mode_before_taking_chrome_ownership() {
     );
     assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
 
-    state.handle_action(Action::TogglePresenterMode);
+    state.handle_action_with_resources(test_text_resources, Action::TogglePresenterMode);
     assert!(!state.presenter_mode_active());
     assert!(
         state.ui_visibility.show_status_bar,

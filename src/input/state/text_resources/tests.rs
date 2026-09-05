@@ -210,3 +210,63 @@ fn explicit_precision_enter_uses_toolbar_clamping_and_escape_leaves_value_alone(
     assert!(!state.is_precision_entry_open());
     assert_eq!(state.thickness_for_active_tool(), before);
 }
+
+#[test]
+fn explicit_pointer_text_drag_rejects_wrong_release_and_damages_both_positions() {
+    use crate::domain::Action;
+    use crate::input::MouseButton;
+
+    let measurer = TextMeasurer::default();
+    let ui_engine = UiTextEngine::default();
+    let resources = InputTextResources {
+        measurer: &measurer,
+        ui_engine: &ui_engine,
+    };
+    let (mut state, id, original) = editing_state(&measurer);
+    state.cancel_active_interaction_with(&measurer);
+    state.set_tool_override_with(&measurer, Some(Tool::Select));
+    state.set_selection(vec![id]);
+    let before = original.bounding_box_with(&measurer).unwrap();
+    let x = before.x + before.width / 2;
+    let y = before.y + before.height / 2;
+    let _ = state.take_dirty_regions();
+
+    state.on_mouse_press_with_canvas_and_resources(resources, MouseButton::Left, x, y, x, y);
+    assert!(matches!(state.state, DrawingState::MovingSelection { .. }));
+    state.on_mouse_motion_with_canvas_and_resources(resources, x + 300, y + 40, x + 300, y + 40);
+    state.on_mouse_release_with_canvas_and_resources(
+        resources,
+        MouseButton::Right,
+        x + 300,
+        y + 40,
+        x + 300,
+        y + 40,
+    );
+    assert!(matches!(state.state, DrawingState::MovingSelection { .. }));
+    assert_eq!(state.boards.active_frame().undo_stack_len(), 0);
+
+    state.on_mouse_release_with_canvas_and_resources(
+        resources,
+        MouseButton::Left,
+        x + 300,
+        y + 40,
+        x + 300,
+        y + 40,
+    );
+    assert!(matches!(state.state, DrawingState::Idle));
+    assert_eq!(state.boards.active_frame().undo_stack_len(), 1);
+    let after = state
+        .boards
+        .active_frame()
+        .shape(id)
+        .unwrap()
+        .bounding_box_with(&measurer)
+        .unwrap();
+    assert_eq!(after.x, before.x + 300);
+    assert_eq!(after.y, before.y + 40);
+    let damage = state.take_dirty_regions();
+    assert!(damage.iter().any(|rect| rect.contains(x, y)));
+    assert!(damage.iter().any(|rect| rect.contains(x + 300, y + 40)));
+    state.handle_action_with_resources(resources, Action::Undo);
+    assert_restored(&state, id, &original, &measurer);
+}

@@ -2,6 +2,13 @@ use super::super::*;
 
 #[test]
 fn test_redo_restores_shape_after_undo() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
 
     {
@@ -27,22 +34,29 @@ fn test_redo_restores_shape_after_undo() {
 
     assert_eq!(state.boards.active_frame().shapes.len(), 1);
 
-    state.handle_action(Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(state.boards.active_frame().shapes.len(), 0);
 
-    state.handle_action(Action::Redo);
+    state.handle_action_with_resources(test_text_resources, Action::Redo);
     assert_eq!(state.boards.active_frame().shapes.len(), 1);
 }
 
 #[test]
 fn capture_action_sets_pending_and_clears_modifiers() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.modifiers.ctrl = true;
     state.modifiers.shift = true;
     state.modifiers.alt = true;
     state.modifiers.logo = true;
 
-    state.handle_action(Action::CaptureClipboardFull);
+    state.handle_action_with_resources(test_text_resources, Action::CaptureClipboardFull);
 
     assert!(!state.modifiers.ctrl);
     assert!(!state.modifiers.shift);
@@ -60,11 +74,18 @@ fn capture_action_sets_pending_and_clears_modifiers() {
 
 #[test]
 fn region_capture_action_preserves_live_shift_until_the_picker_arms() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.modifiers.ctrl = true;
     state.modifiers.shift = true;
 
-    state.handle_action(Action::CaptureClipboardSelection);
+    state.handle_action_with_resources(test_text_resources, Action::CaptureClipboardSelection);
 
     assert!(state.modifiers.ctrl);
     assert!(state.modifiers.shift);
@@ -78,9 +99,16 @@ fn region_capture_action_preserves_live_shift_until_the_picker_arms() {
 
 #[test]
 fn canvas_export_action_sets_pending_backend_action() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
 
-    state.handle_action(Action::ExportCanvasClipboard);
+    state.handle_action_with_resources(test_text_resources, Action::ExportCanvasClipboard);
 
     assert_eq!(
         state.take_pending_backend_action(),
@@ -92,9 +120,16 @@ fn canvas_export_action_sets_pending_backend_action() {
 
 #[test]
 fn board_pdf_export_action_sets_pending_backend_action() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
 
-    state.handle_action(Action::ExportBoardPdfFile);
+    state.handle_action_with_resources(test_text_resources, Action::ExportBoardPdfFile);
 
     assert_eq!(
         state.take_pending_backend_action(),
@@ -106,9 +141,16 @@ fn board_pdf_export_action_sets_pending_backend_action() {
 
 #[test]
 fn all_boards_pdf_export_action_sets_pending_backend_action() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
 
-    state.handle_action(Action::ExportAllBoardsPdfFile);
+    state.handle_action_with_resources(test_text_resources, Action::ExportAllBoardsPdfFile);
 
     assert_eq!(
         state.take_pending_backend_action(),

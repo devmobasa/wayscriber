@@ -16,8 +16,15 @@ fn unbind_chrome_visibility_actions(state: &mut InputState) {
 }
 
 fn hide_all_chrome(state: &mut InputState) {
-    state.handle_action(Action::ToggleToolbar);
-    state.handle_action(Action::ToggleStatusBar);
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleStatusBar);
     assert!(!state.toolbar_visible());
     assert!(!state.ui_visibility.show_status_bar);
 }
@@ -33,13 +40,20 @@ fn refresh_status_hud_layout(state: &mut InputState) {
 
 #[test]
 fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     // Keep the status bar up so the hidden rung shows its routine toast
     // instead of the all-chrome-hidden recovery warning.
     refresh_status_hud_layout(&mut state);
     assert_eq!(state.top_display_state(), TopDisplayMode::Full);
 
-    state.handle_action(Action::CycleToolbarDisplay);
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay);
     assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
     assert!(
         state.toolbar_top_visible(),
@@ -57,7 +71,7 @@ fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
         "keyboard cycle persists like the toolbar-event paths"
     );
 
-    state.handle_action(Action::CycleToolbarDisplay);
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay);
     assert_eq!(state.top_display_state(), TopDisplayMode::Hidden);
     assert!(!state.toolbar_top_visible());
     assert_eq!(
@@ -65,7 +79,7 @@ fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
         Some("Toolbar: hidden")
     );
 
-    state.handle_action(Action::CycleToolbarDisplay);
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay);
     assert_eq!(state.top_display_state(), TopDisplayMode::Full);
     assert!(state.toolbar_top_visible());
     assert_eq!(
@@ -76,6 +90,13 @@ fn cycle_action_walks_full_micro_hidden_full_with_toasts() {
 
 #[test]
 fn entering_micro_unminimizes_and_closes_top_menus() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     for menu in [
         TopMenuState::ShapePicker,
         TopMenuState::TopOverflow,
@@ -87,7 +108,7 @@ fn entering_micro_unminimizes_and_closes_top_menus() {
         state.test_set_toolbar_display_state(state.toolbar_top_display_mode(), true);
         state.test_set_toolbar_menu_state(menu, state.toolbar_top_popover_scroll());
 
-        state.handle_action(Action::CycleToolbarDisplay);
+        state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay);
         assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
         assert!(
             !state.toolbar_top_minimized(),
@@ -99,33 +120,47 @@ fn entering_micro_unminimizes_and_closes_top_menus() {
 
 #[test]
 fn toggle_toolbar_show_restores_a_cycle_hidden_top_strip() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     // A cycle-hidden top strip leaves no visible toolbar surface while every
     // raw visibility flag stays true. The raw-flag early return in
     // set_toolbar_visible used to swallow the restore in exactly this state,
     // leaving F9 (and everything else dispatching ToggleToolbar) dead.
-    state.handle_action(Action::CycleToolbarDisplay); // micro
-    state.handle_action(Action::CycleToolbarDisplay); // hidden
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // micro
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // hidden
     assert!(
         !state.toolbar_visible(),
         "a cycle-hidden strip must leave no visible surface"
     );
 
     // A single ToggleToolbar press must bring the strip back.
-    state.handle_action(Action::ToggleToolbar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
     assert!(state.toolbar_visible());
     assert_eq!(state.top_display_state(), TopDisplayMode::Full);
 }
 
 #[test]
 fn toggle_toolbar_drives_the_top_pin_and_queues_its_persistence() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     assert!(state.toolbar_visible());
     assert!(state.toolbar_top_pinned());
 
     // F9 hide: the durable form of the toggle unpins the strip, and the
     // pending action carries the pre-change pin for the preview's rollback.
-    state.handle_action(Action::ToggleToolbar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
     assert!(!state.toolbar_visible());
     assert!(!state.toolbar_top_pinned());
     assert_eq!(
@@ -137,7 +172,7 @@ fn toggle_toolbar_drives_the_top_pin_and_queues_its_persistence() {
     );
 
     // F9 show: the pin comes back on, with the hidden state as rollback.
-    state.handle_action(Action::ToggleToolbar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
     assert!(state.toolbar_visible());
     assert!(state.toolbar_top_pinned());
     assert_eq!(
@@ -152,10 +187,17 @@ fn toggle_toolbar_drives_the_top_pin_and_queues_its_persistence() {
 /// the visible state the user was looking at.
 #[test]
 fn toggle_toolbar_resolves_pins_to_what_is_on_screen() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     assert!(state.toolbar_visible());
 
-    state.handle_action(Action::ToggleToolbar); // off
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // off
     assert!(!state.toolbar_top_pinned());
     assert_eq!(
         state.take_pending_toolbar_persistence(),
@@ -164,7 +206,7 @@ fn toggle_toolbar_resolves_pins_to_what_is_on_screen() {
         }]
     );
 
-    state.handle_action(Action::ToggleToolbar); // on
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // on
     assert!(state.toolbar_visible());
     assert!(
         state.toolbar_top_pinned(),
@@ -180,14 +222,21 @@ fn toggle_toolbar_resolves_pins_to_what_is_on_screen() {
 /// runtime-only, exactly like F2's hidden rung.
 #[test]
 fn cycle_hidden_show_with_unchanged_pins_queues_no_persistence() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
-    state.handle_action(Action::CycleToolbarDisplay); // micro
-    state.handle_action(Action::CycleToolbarDisplay); // hidden
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // micro
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // hidden
     assert!(!state.toolbar_visible());
     assert!(state.toolbar_top_pinned());
     state.take_pending_toolbar_persistence(); // drain the cycle's display-mode write
 
-    state.handle_action(Action::ToggleToolbar); // show: unfolds Hidden → Full
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // show: unfolds Hidden → Full
     assert!(state.toolbar_visible());
     assert_eq!(state.top_display_state(), TopDisplayMode::Full);
     assert!(state.toolbar_top_pinned());
@@ -204,11 +253,18 @@ fn cycle_hidden_show_with_unchanged_pins_queues_no_persistence() {
 /// additional persistence and queues nothing.
 #[test]
 fn hide_with_an_already_unpinned_strip_queues_no_persistence() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.set_toolbar_top_pinned(false);
     assert!(state.toolbar_visible());
 
-    state.handle_action(Action::ToggleToolbar); // hide
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // hide
     assert!(!state.toolbar_visible());
     assert!(!state.toolbar_top_pinned());
     assert!(
@@ -231,7 +287,7 @@ fn presenter_swallowed_toggle_leaves_pins_and_persistence_untouched() {
     state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.toolbar_visible());
 
-    state.handle_action(Action::ToggleToolbar);
+    state.handle_action_with_resources(route_resources, Action::ToggleToolbar);
     assert!(state.toolbar_top_pinned());
     assert!(
         !state.has_pending_toolbar_persistence(),
@@ -245,6 +301,13 @@ fn presenter_swallowed_toggle_leaves_pins_and_persistence_untouched() {
 /// flags or queue the visibility persistence the explicit toggle uses.
 #[test]
 fn focus_and_presenter_transitions_never_queue_pin_persistence() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.presenter_mode_config_mut_for_test().hide_toolbars = true;
 
@@ -254,7 +317,7 @@ fn focus_and_presenter_transitions_never_queue_pin_persistence() {
         Action::TogglePresenterMode,
         Action::TogglePresenterMode,
     ] {
-        state.handle_action(action);
+        state.handle_action_with_resources(test_text_resources, action);
         assert!(
             state.toolbar_top_pinned(),
             "{action:?} must not touch the pin overrides"
@@ -277,13 +340,20 @@ fn focus_and_presenter_transitions_never_queue_pin_persistence() {
 /// (correctly) drops.
 #[test]
 fn a_toggle_and_a_cycle_in_one_batch_both_keep_their_persistence() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     assert!(state.toolbar_top_pinned());
-    state.handle_action(Action::CycleToolbarDisplay); // micro
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // micro
     state.take_pending_toolbar_persistence(); // drain the setup cycle's write
 
-    state.handle_action(Action::ToggleToolbar); // F9 hide
-    state.handle_action(Action::CycleToolbarDisplay); // F2: unfolds to full
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // F9 hide
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // F2: unfolds to full
 
     assert_eq!(
         state.take_pending_toolbar_persistence(),
@@ -304,10 +374,17 @@ fn a_toggle_and_a_cycle_in_one_batch_both_keep_their_persistence() {
 /// persistence queue, and neither may cost the other its delivery.
 #[test]
 fn visibility_persistence_survives_a_capture_request() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
 
-    state.handle_action(Action::ToggleToolbar); // F9 hide
-    state.handle_action(Action::CaptureFileFull);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // F9 hide
+    state.handle_action_with_resources(test_text_resources, Action::CaptureFileFull);
     assert_eq!(
         state.take_pending_backend_action(),
         Some(PendingBackendAction::Screenshot(Action::CaptureFileFull)),
@@ -322,8 +399,8 @@ fn visibility_persistence_survives_a_capture_request() {
     );
 
     // The reverse order: capture first, then the toggle (a show this time).
-    state.handle_action(Action::CaptureFileFull);
-    state.handle_action(Action::ToggleToolbar); // F9 show
+    state.handle_action_with_resources(test_text_resources, Action::CaptureFileFull);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // F9 show
     assert_eq!(
         state.take_pending_backend_action(),
         Some(PendingBackendAction::Screenshot(Action::CaptureFileFull)),
@@ -344,11 +421,18 @@ fn visibility_persistence_survives_a_capture_request() {
 /// write would be byte-identical to its own rollback.
 #[test]
 fn a_toggle_burst_coalesces_to_the_original_rollback_baseline() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     assert!(state.toolbar_top_pinned());
 
-    state.handle_action(Action::ToggleToolbar); // hide
-    state.handle_action(Action::ToggleToolbar); // show: pins back where they started
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // hide
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // show: pins back where they started
     assert!(state.toolbar_top_pinned());
 
     assert!(
@@ -366,10 +450,17 @@ fn a_toggle_burst_coalesces_to_the_original_rollback_baseline() {
 /// side may drop a queued entry when the same batch also requests an exit.
 #[test]
 fn an_exit_request_does_not_clear_queued_toolbar_persistence() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
 
-    state.handle_action(Action::ToggleToolbar); // F9 hide
-    state.handle_action(Action::Exit);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // F9 hide
+    state.handle_action_with_resources(test_text_resources, Action::Exit);
     assert!(state.should_exit, "the exit request must have landed");
 
     assert_eq!(
@@ -383,10 +474,17 @@ fn an_exit_request_does_not_clear_queued_toolbar_persistence() {
 
 #[test]
 fn micro_form_survives_a_visibility_toggle() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
-    state.handle_action(Action::CycleToolbarDisplay); // micro
-    state.handle_action(Action::ToggleToolbar); // hide all
-    state.handle_action(Action::ToggleToolbar); // show all
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // micro
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // hide all
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar); // show all
     assert_eq!(
         state.top_display_state(),
         TopDisplayMode::Micro,
@@ -396,10 +494,17 @@ fn micro_form_survives_a_visibility_toggle() {
 
 #[test]
 fn hidden_cycle_toast_offers_a_show_action() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     refresh_status_hud_layout(&mut state);
-    state.handle_action(Action::CycleToolbarDisplay); // micro
-    state.handle_action(Action::CycleToolbarDisplay); // hidden
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // micro
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // hidden
     let toast = state.active_toast().expect("hidden toast");
     assert_eq!(toast.message, "Toolbar: hidden");
     let action = toast.action.as_ref().expect("show action chip");
@@ -410,18 +515,25 @@ fn hidden_cycle_toast_offers_a_show_action() {
 
 #[test]
 fn hiding_the_last_chrome_surface_warns_with_recovery_bindings() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     refresh_status_hud_layout(&mut state);
     // F9 alone hides every toolbar surface. The status bar is
     // still up, so its hint chip covers recovery — no warning yet.
-    state.handle_action(Action::ToggleToolbar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
     assert!(
         state.active_toast().is_none(),
         "no warning while the status bar remains"
     );
 
     // Hiding the status bar too removes the last interactive chrome.
-    state.handle_action(Action::ToggleStatusBar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleStatusBar);
     let toast = state.active_toast().expect("all-chrome warning");
     assert!(
         toast.message.starts_with("All UI hidden"),
@@ -439,6 +551,13 @@ fn hiding_the_last_chrome_surface_warns_with_recovery_bindings() {
 
 #[test]
 fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     refresh_status_hud_layout(&mut state);
     assert!(state.status_hud_layout().is_some());
@@ -478,7 +597,7 @@ fn enabled_but_empty_status_bar_does_not_suppress_chrome_recovery_warning() {
         false
     ));
 
-    state.handle_action(Action::ToggleToolbar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
 
     let toast = state.active_toast().expect("all-chrome warning");
     assert!(toast.message.starts_with("All UI hidden"));
@@ -531,6 +650,13 @@ fn width_shed_content_never_reports_an_effectively_visible_hud() {
 
 #[test]
 fn toolbar_hint_prevents_a_false_all_chrome_warning_when_it_becomes_visible() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     for item in StatusBarItem::ALL {
         state.set_status_bar_item_visible_with_engine(
@@ -545,7 +671,7 @@ fn toolbar_hint_prevents_a_false_all_chrome_warning_when_it_becomes_visible() {
         "the hint is absent while a toolbar surface is visible"
     );
 
-    state.handle_action(Action::ToggleToolbar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
 
     assert!(!state.toolbar_visible());
     assert!(
@@ -560,15 +686,22 @@ fn toolbar_hint_prevents_a_false_all_chrome_warning_when_it_becomes_visible() {
 
 #[test]
 fn all_chrome_warning_fires_from_the_cycle_path_and_supersedes_its_toast() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
-    state.handle_action(Action::ToggleStatusBar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleStatusBar);
     assert!(
         state.active_toast().is_none(),
         "toolbar still up: no warning"
     );
 
-    state.handle_action(Action::CycleToolbarDisplay); // micro
-    state.handle_action(Action::CycleToolbarDisplay); // hidden: last chrome
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // micro
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // hidden: last chrome
     let toast = state.active_toast().expect("toast");
     assert!(
         toast.message.starts_with("All UI hidden"),
@@ -648,7 +781,7 @@ fn all_chrome_warning_suppressed_while_presenting() {
 
     // Hiding the status bar now leaves no chrome, but presenter mode hides
     // chrome by design and restores it on exit — no nag mid-presentation.
-    state.handle_action(Action::ToggleStatusBar);
+    state.handle_action_with_resources(route_resources, Action::ToggleStatusBar);
     assert!(!state.ui_visibility.show_status_bar);
     assert!(
         state.active_toast().is_none(),
@@ -694,14 +827,14 @@ fn presenter_owned_hidden_toolbar_falls_back_to_status_bar_recovery() {
         ui_engine: &route_ui_engine,
     };
     let mut state = create_test_input_state();
-    state.handle_action(Action::ToggleToolbar);
+    state.handle_action_with_resources(route_resources, Action::ToggleToolbar);
     assert!(!state.toolbar_visible());
 
     state.presenter_mode_config_mut_for_test().hide_toolbars = true;
     state.presenter_mode_config_mut_for_test().hide_status_bar = false;
     state.presenter_mode_config_mut_for_test().show_toast = false;
     state.toggle_presenter_mode_with_resources(route_resources);
-    state.handle_action(Action::ToggleStatusBar);
+    state.handle_action_with_resources(route_resources, Action::ToggleStatusBar);
 
     let toast = state.active_toast().expect("all-chrome warning");
     assert!(toast.message.starts_with("All UI hidden"));
@@ -712,6 +845,13 @@ fn presenter_owned_hidden_toolbar_falls_back_to_status_bar_recovery() {
 
 #[test]
 fn context_menu_offers_recovery_entries_only_while_chrome_hidden() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Canvas, None);
     let labels = |state: &InputState| -> Vec<String> {
@@ -728,8 +868,8 @@ fn context_menu_offers_recovery_entries_only_while_chrome_hidden() {
             .any(|label| label == "Show Status Bar")
     );
 
-    state.handle_action(Action::ToggleToolbar);
-    state.handle_action(Action::ToggleStatusBar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleToolbar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleStatusBar);
     assert!(labels(&state).iter().any(|label| label == "Show Toolbar"));
     assert!(
         labels(&state)
@@ -777,7 +917,7 @@ fn presenter_mode_gates_the_cycle_like_toggle_toolbar() {
     state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.toolbar_top_visible());
 
-    state.handle_action(Action::CycleToolbarDisplay);
+    state.handle_action_with_resources(route_resources, Action::CycleToolbarDisplay);
     assert!(
         !state.toolbar_top_visible(),
         "presenter mode owns toolbar visibility"
@@ -815,7 +955,7 @@ fn presenter_mode_gates_the_micro_chip_event_like_the_cycle_action() {
     // After presenter exit the chip works again.
     state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.presenter_mode_active());
-    state.handle_action(Action::CycleToolbarDisplay); // micro
+    state.handle_action_with_resources(route_resources, Action::CycleToolbarDisplay); // micro
     assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
     assert!(state.apply_toolbar_event(ToolbarEvent::SetTopDisplayMode(TopDisplayMode::Full)));
     assert_eq!(state.top_display_state(), TopDisplayMode::Full);
@@ -832,6 +972,13 @@ fn presenter_mode_gates_the_micro_chip_event_like_the_cycle_action() {
 /// autosave clobber it.
 #[test]
 fn session_independent_chrome_actions_never_mark_the_session_dirty() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     // Chrome only: with the tool behavior left at its default, presenter mode
     // would also take the tool override, which *is* session content.
@@ -860,7 +1007,7 @@ fn session_independent_chrome_actions_never_mark_the_session_dirty() {
         Action::TogglePresenterMode,
         Action::TogglePresenterMode,
     ] {
-        state.handle_action(action);
+        state.handle_action_with_resources(test_text_resources, action);
         assert!(
             !state.is_session_dirty(),
             "{action:?} moves chrome the session file does not carry"
@@ -868,7 +1015,7 @@ fn session_independent_chrome_actions_never_mark_the_session_dirty() {
     }
 
     hide_all_chrome(&mut state);
-    state.handle_action(Action::ToggleFocusMode); // rescue arm
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode); // rescue arm
     assert!(state.ui_visibility.show_status_bar);
     assert!(
         !state.is_session_dirty(),
@@ -1023,8 +1170,15 @@ fn run_only_toolbar_preference_events_never_mark_the_session_dirty() {
 
 #[test]
 fn micro_chip_event_restores_the_full_strip() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
-    state.handle_action(Action::CycleToolbarDisplay); // micro
+    state.handle_action_with_resources(test_text_resources, Action::CycleToolbarDisplay); // micro
     assert!(
         state.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::SetTopDisplayMode(
             TopDisplayMode::Full

@@ -182,7 +182,17 @@ impl InputState {
 
     /// Adjust thickness via scroll wheel while the menu is open.
     pub fn radial_menu_adjust_thickness(&mut self, delta: f64) -> bool {
-        if !self.nudge_thickness_for_active_tool(delta) {
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.radial_menu_adjust_thickness_with_measurer(measurer, delta)
+        })
+    }
+
+    pub(crate) fn radial_menu_adjust_thickness_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        delta: f64,
+    ) -> bool {
+        if !self.nudge_thickness_for_active_tool_with(measurer, delta) {
             return false;
         }
         self.dirty_tracker.mark_full();
@@ -210,17 +220,6 @@ impl InputState {
     /// color swatch once the menu is visible. Releasing back inside the
     /// center deadzone cancels; an unarmed release keeps the menu open
     /// (click-to-open browsing).
-    pub(crate) fn radial_menu_handle_release(
-        &mut self,
-        button: MouseButton,
-        x: f64,
-        y: f64,
-    ) -> bool {
-        crate::input::state::with_legacy_text_resources(|resources| {
-            self.radial_menu_handle_release_with_resources(resources, button, x, y)
-        })
-    }
-
     pub(crate) fn radial_menu_handle_release_with_resources(
         &mut self,
         resources: crate::input::state::InputTextResources<'_>,
@@ -320,14 +319,24 @@ impl InputState {
 
     /// Begin a size-ring drag at the given pointer position (applies the
     /// value immediately).
-    pub(crate) fn radial_menu_begin_size_drag(&mut self, x: f64, y: f64) {
+    pub(crate) fn radial_menu_begin_size_drag_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        x: f64,
+        y: f64,
+    ) {
         self.radial_menu.set_size_dragging(true);
-        self.radial_menu_drag_size_to(x, y);
+        self.radial_menu_drag_size_to_with_measurer(measurer, x, y);
     }
 
     /// Drag-capture update: map the pointer angle to a thickness and apply
     /// it to the active tool, regardless of pointer distance.
-    pub(crate) fn radial_menu_drag_size_to(&mut self, x: f64, y: f64) {
+    pub(crate) fn radial_menu_drag_size_to_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        x: f64,
+        y: f64,
+    ) {
         if !self.radial_menu_is_size_dragging() {
             return;
         }
@@ -336,7 +345,7 @@ impl InputState {
         };
         let angle = (y - cy).atan2(x - cx);
         let value = size_ring_value_for_angle(angle);
-        let _ = self.set_thickness_for_active_tool(value);
+        let _ = self.set_thickness_for_active_tool_with(measurer, value);
     }
 
     /// End a size-ring drag (the menu stays open).

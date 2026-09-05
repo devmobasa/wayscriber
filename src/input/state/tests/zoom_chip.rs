@@ -61,6 +61,13 @@ fn zoom_chip_layout_cleared_when_actions_hidden() {
 
 #[test]
 fn toggle_zoom_chip_action_hides_layout_and_hit_testing() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut input = create_test_input_state();
     update_chip_layout(&mut input, 1280, 720);
     assert!(input.zoom_chip_layout().is_some());
@@ -68,7 +75,7 @@ fn toggle_zoom_chip_action_hides_layout_and_hit_testing() {
     // The palette/keybinding toggle hides the chip for this run without
     // touching the `show_zoom_actions` toolbar preference or queueing any
     // durable work.
-    input.handle_action(crate::config::Action::ToggleZoomChip);
+    input.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleZoomChip);
     assert!(!input.zoom_chip_enabled());
     assert!(
         input.ui_visibility.show_zoom_actions,
@@ -80,7 +87,7 @@ fn toggle_zoom_chip_action_hides_layout_and_hit_testing() {
     assert!(!input.zoom_chip_contains(1270, 710));
 
     // Toggling again restores it.
-    input.handle_action(crate::config::Action::ToggleZoomChip);
+    input.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleZoomChip);
     assert!(input.zoom_chip_enabled());
     update_chip_layout(&mut input, 1280, 720);
     assert!(input.zoom_chip_layout().is_some());
@@ -88,6 +95,13 @@ fn toggle_zoom_chip_action_hides_layout_and_hit_testing() {
 
 #[test]
 fn zoom_chip_hover_tracks_buttons_and_clears_when_hidden() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut input = create_test_input_state();
     update_chip_layout(&mut input, 1280, 720);
     let (x, y) = button_center(&input, ZoomChipButtonKind::In);
@@ -98,7 +112,7 @@ fn zoom_chip_hover_tracks_buttons_and_clears_when_hidden() {
     assert!(input.needs_redraw, "hover transition requests a redraw");
 
     // Runtime-hiding the chip clears hover on the next layout pass.
-    input.handle_action(crate::config::Action::ToggleZoomChip);
+    input.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleZoomChip);
     update_chip_layout(&mut input, 1280, 720);
     assert_eq!(input.zoom_chip.hover, None);
 }
@@ -231,6 +245,13 @@ fn zoom_chip_click_lock_returns_toggle_lock_when_zoomed() {
 
 #[test]
 fn zoom_chip_activation_records_usage_and_coach_slow_path() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     // Activating a shortcut-bound zoom action from the chip feeds the shortcut
     // coach the same "you could have pressed the key" slow-path signal the
     // toolbar and command palette record. The chip dispatches through the
@@ -256,7 +277,7 @@ fn zoom_chip_activation_records_usage_and_coach_slow_path() {
     );
     assert_eq!(input.pending_onboarding_usage.shortcut_slow_path_repeats, 1);
 
-    input.handle_action(action.expect("zoom-chip action"));
+    input.handle_action_with_resources(test_text_resources, action.expect("zoom-chip action"));
     assert_eq!(input.take_pending_zoom_action(), Some(ZoomAction::In));
     assert!(input.pending_onboarding_usage.used_zoom_control);
 }

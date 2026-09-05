@@ -75,9 +75,16 @@ fn cycling_from_black_out_to_sampling_blur_requests_frozen_capture() {
 
 #[test]
 fn pick_screen_color_requests_backend_eyedropper_activation() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
 
-    state.handle_action(Action::PickScreenColor);
+    state.handle_action_with_resources(test_text_resources, Action::PickScreenColor);
 
     assert!(state.take_pending_eyedropper_toggle());
 }
@@ -449,13 +456,23 @@ fn tool_color_and_thickness_are_independent_between_pen_and_marker() {
 
 #[test]
 fn increase_thickness_action_changes_marker_width_not_marker_opacity() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::Marker)));
     assert!(state.set_thickness(24.0));
     let original_opacity = state.style.marker_opacity;
     let pen_thickness = state.thickness_for_tool(Tool::Pen);
 
-    state.handle_action(crate::config::Action::IncreaseThickness);
+    state.handle_action_with_resources(
+        test_text_resources,
+        crate::config::Action::IncreaseThickness,
+    );
 
     assert_eq!(state.thickness_for_tool(Tool::Marker), 25.0);
     assert_eq!(state.thickness_for_tool(Tool::Pen), pen_thickness);
@@ -2223,6 +2240,13 @@ fn a_quick_color_recolor_queues_the_write_without_touching_the_file_itself() {
 
 #[test]
 fn cycling_arrow_style_with_nothing_selected_only_moves_the_next_arrow() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let existing = state.boards.active_frame_mut().add_shape(Shape::Arrow {
         x1: 0,
@@ -2239,7 +2263,7 @@ fn cycling_arrow_style_with_nothing_selected_only_moves_the_next_arrow() {
         label: None,
     });
 
-    state.handle_action(Action::CycleArrowStyle);
+    state.handle_action_with_resources(test_text_resources, Action::CycleArrowStyle);
 
     assert_eq!(state.style.arrow_style, ArrowStyle::Pointy);
     match &state
@@ -2260,6 +2284,13 @@ fn cycling_arrow_style_with_nothing_selected_only_moves_the_next_arrow() {
 
 #[test]
 fn cycling_arrow_style_with_arrows_selected_restyles_them_instead() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let arrow = state.boards.active_frame_mut().add_shape(Shape::Arrow {
         x1: 0,
@@ -2277,7 +2308,7 @@ fn cycling_arrow_style_with_arrows_selected_restyles_them_instead() {
     });
     state.set_selection(vec![arrow]);
 
-    state.handle_action(Action::CycleArrowStyle);
+    state.handle_action_with_resources(test_text_resources, Action::CycleArrowStyle);
 
     match &state
         .boards
@@ -2298,6 +2329,13 @@ fn cycling_arrow_style_with_arrows_selected_restyles_them_instead() {
 
 #[test]
 fn cycling_arrow_style_with_a_non_arrow_selected_falls_back_to_the_default() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let rect = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 0,
@@ -2310,7 +2348,7 @@ fn cycling_arrow_style_with_a_non_arrow_selected_falls_back_to_the_default() {
     });
     state.set_selection(vec![rect]);
 
-    state.handle_action(Action::CycleArrowStyle);
+    state.handle_action_with_resources(test_text_resources, Action::CycleArrowStyle);
 
     assert_eq!(state.style.arrow_style, ArrowStyle::Pointy);
 }

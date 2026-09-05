@@ -116,10 +116,20 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_duplicate_page(&mut self, page_index: usize) {
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.board_picker_duplicate_page_with_measurer(measurer, page_index)
+        })
+    }
+
+    pub(crate) fn board_picker_duplicate_page_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        page_index: usize,
+    ) {
         let Some(board_index) = self.board_picker_page_panel_board_index() else {
             return;
         };
-        if self.duplicate_page_in_board(board_index, page_index)
+        if self.duplicate_page_in_board_with_measurer(measurer, board_index, page_index)
             && let Some(new_page_index) = self
                 .boards
                 .board_states()

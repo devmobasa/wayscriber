@@ -148,7 +148,8 @@ impl WaylandState {
         if self.pointer.board_pan_active() {
             self.pointer.stop_board_pan();
         }
-        self.input_state.cancel_active_interaction();
+        self.input_state
+            .cancel_active_interaction_with(self.render.text_measurer());
         self.input_state.needs_redraw = true;
     }
 
@@ -255,12 +256,19 @@ impl WaylandState {
         if !self.input_state.command_palette.open {
             return None;
         }
-        if self.input_state.handle_command_palette_click(
-            screen_x,
-            screen_y,
-            self.surface.width(),
-            self.surface.height(),
-        ) {
+        if self
+            .input_state
+            .handle_command_palette_click_with_resources(
+                crate::input::state::InputTextResources {
+                    measurer: self.render.text_measurer(),
+                    ui_engine: self.render.ui_text(),
+                },
+                screen_x,
+                screen_y,
+                self.surface.width(),
+                self.surface.height(),
+            )
+        {
             self.pointer.suppress_release(RegionInputSource::Touch);
         }
         Some(TouchTarget::Foreign)
@@ -319,8 +327,17 @@ impl WaylandState {
             return target;
         }
         let (wx, wy) = self.zoomed_world_coords(screen_position.0, screen_position.1);
-        self.input_state
-            .on_mouse_press_with_canvas(MouseButton::Left, screen_x, screen_y, wx, wy);
+        self.input_state.on_mouse_press_with_canvas_and_resources(
+            crate::input::state::InputTextResources {
+                measurer: self.render.text_measurer(),
+                ui_engine: self.render.ui_text(),
+            },
+            MouseButton::Left,
+            screen_x,
+            screen_y,
+            wx,
+            wy,
+        );
         self.input_state.needs_redraw = true;
         target
     }
@@ -421,8 +438,16 @@ impl WaylandState {
         let (wx, wy) = self.zoomed_world_coords(screen_position.0, screen_position.1);
         self.input_state
             .update_pointer_positions(screen_x, screen_y, wx, wy);
-        self.input_state
-            .on_mouse_motion_with_canvas(screen_x, screen_y, wx, wy);
+        self.input_state.on_mouse_motion_with_canvas_and_resources(
+            crate::input::state::InputTextResources {
+                measurer: self.render.text_measurer(),
+                ui_engine: self.render.ui_text(),
+            },
+            screen_x,
+            screen_y,
+            wx,
+            wy,
+        );
         self.record_perf_input_sample(PerfInputSource::Touch, screen_x, screen_y, wx, wy, false);
     }
 
@@ -548,7 +573,11 @@ impl WaylandState {
             return;
         }
         let (wx, wy) = self.zoomed_world_coords(screen_position.0, screen_position.1);
-        self.input_state.on_mouse_release_with_canvas(
+        self.input_state.on_mouse_release_with_canvas_and_resources(
+            crate::input::state::InputTextResources {
+                measurer: self.render.text_measurer(),
+                ui_engine: self.render.ui_text(),
+            },
             MouseButton::Left,
             screen_x,
             screen_y,

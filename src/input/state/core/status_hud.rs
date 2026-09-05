@@ -298,7 +298,12 @@ impl InputState {
     /// picker popup, radial menu at the pointer) and/or returns the action
     /// for the backend to dispatch (help, toolbar restore). Returns
     /// `(hit, action)` mirroring toast release resolver.
-    pub(crate) fn check_status_hud_click(&mut self, x: i32, y: i32) -> (bool, Option<Action>) {
+    pub(crate) fn check_status_hud_click_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        x: i32,
+        y: i32,
+    ) -> (bool, Option<Action>) {
         // `status_hud_contains` also applies the open-overlay guard, so a
         // release cannot activate a chip when an overlay opened between the
         // press and the release.
@@ -316,7 +321,7 @@ impl InputState {
         };
         match kind {
             StatusHudSegmentKind::Board => {
-                self.toggle_board_picker();
+                self.toggle_board_picker_with_measurer(measurer);
                 (true, None)
             }
             StatusHudSegmentKind::Page => {
@@ -324,13 +329,13 @@ impl InputState {
                 // the Page chip is distinguishable from the Board chip (the
                 // setter also scrolls the panel to the active page).
                 if !self.is_board_picker_open() {
-                    self.open_board_picker();
+                    self.open_board_picker_with_measurer(measurer);
                 }
                 self.board_picker_set_focus(BoardPickerFocus::PagePanel);
                 (true, None)
             }
             StatusHudSegmentKind::Color => {
-                self.open_color_picker_popup();
+                self.open_color_picker_popup_with_measurer(measurer);
                 (true, None)
             }
             StatusHudSegmentKind::Tool | StatusHudSegmentKind::Size => {

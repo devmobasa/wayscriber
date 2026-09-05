@@ -2,6 +2,13 @@ use super::*;
 
 #[test]
 fn select_all_action_selects_shapes() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let first = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -22,7 +29,7 @@ fn select_all_action_selects_shapes() {
         thick: state.style.current_thickness,
     });
 
-    state.handle_action(Action::SelectAll);
+    state.handle_action_with_resources(test_text_resources, Action::SelectAll);
     let selected = state.selected_shape_ids();
     assert_eq!(selected.len(), 2);
     assert!(selected.contains(&first));
