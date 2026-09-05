@@ -4,7 +4,7 @@ pub(crate) use clipboard::LocalSelectionContext;
 pub(in crate::input::state::core) use clipboard::SelectionClipboard;
 
 use super::base::{InputState, SelectionAxis};
-use crate::draw::ShapeId;
+use crate::draw::{ShapeId, TextMeasurer};
 use crate::util::Rect;
 use std::collections::HashSet;
 use std::time::Instant;
@@ -174,7 +174,11 @@ impl InputState {
         self.close_properties_panel();
     }
 
-    pub(crate) fn selection_bounding_box(&self, ids: &[ShapeId]) -> Option<Rect> {
+    pub(crate) fn selection_bounding_box_with(
+        &self,
+        measurer: &TextMeasurer,
+        ids: &[ShapeId],
+    ) -> Option<Rect> {
         let frame = self.boards.active_frame();
         let mut min_x = i32::MAX;
         let mut min_y = i32::MAX;
@@ -184,7 +188,7 @@ impl InputState {
 
         for id in ids {
             if let Some(shape) = frame.shape(*id)
-                && let Some(bounds) = shape.bounding_box()
+                && let Some(bounds) = shape.bounding_box_with(measurer)
             {
                 min_x = min_x.min(bounds.x);
                 min_y = min_y.min(bounds.y);
@@ -201,8 +205,12 @@ impl InputState {
         }
     }
 
-    pub(crate) fn selection_screen_bounding_box(&self, ids: &[ShapeId]) -> Option<Rect> {
-        self.selection_bounding_box(ids)
+    pub(crate) fn selection_screen_bounding_box_with(
+        &self,
+        measurer: &TextMeasurer,
+        ids: &[ShapeId],
+    ) -> Option<Rect> {
+        self.selection_bounding_box_with(measurer, ids)
             .and_then(|bounds| self.screen_rect_for_canvas(bounds))
     }
 }

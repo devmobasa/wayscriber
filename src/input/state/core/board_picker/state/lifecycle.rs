@@ -1,5 +1,6 @@
 use super::super::super::base::InputState;
 use super::super::{BoardPickerFocus, BoardPickerMode, BoardPickerPageNavMode, BoardPickerState};
+use crate::draw::TextMeasurer;
 
 impl InputState {
     pub(crate) fn is_board_picker_open(&self) -> bool {
@@ -14,19 +15,19 @@ impl InputState {
         self.board_picker_mode() == BoardPickerMode::Quick
     }
 
-    pub(crate) fn open_board_picker(&mut self) {
-        self.open_board_picker_with(BoardPickerMode::Full);
+    pub(crate) fn open_board_picker_with_measurer(&mut self, measurer: &TextMeasurer) {
+        self.open_board_picker_in_mode(measurer, BoardPickerMode::Full);
     }
 
-    pub(crate) fn open_board_picker_quick(&mut self) {
-        self.open_board_picker_with(BoardPickerMode::Quick);
+    pub(crate) fn open_board_picker_quick_with_measurer(&mut self, measurer: &TextMeasurer) {
+        self.open_board_picker_in_mode(measurer, BoardPickerMode::Quick);
         self.board_picker_select_recent();
     }
 
-    fn open_board_picker_with(&mut self, mode: BoardPickerMode) {
+    fn open_board_picker_in_mode(&mut self, measurer: &TextMeasurer, mode: BoardPickerMode) {
         self.pending_onboarding_usage.used_board_picker = true;
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::BoardPicker);
-        self.cancel_active_interaction();
+        self.cancel_active_interaction_with(measurer);
         let active_index = self.boards.active_index();
         let active_page = self.boards.active_page_index();
         let selected_row = self.board_picker_row_for_board(active_index);
@@ -45,19 +46,19 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    pub(crate) fn toggle_board_picker(&mut self) {
+    pub(crate) fn toggle_board_picker_with_measurer(&mut self, measurer: &TextMeasurer) {
         if self.is_board_picker_open() {
             self.close_board_picker();
         } else {
-            self.open_board_picker();
+            self.open_board_picker_with_measurer(measurer);
         }
     }
 
-    pub(crate) fn toggle_board_picker_quick(&mut self) {
+    pub(crate) fn toggle_board_picker_quick_with(&mut self, measurer: &TextMeasurer) {
         if self.is_board_picker_open() {
             self.close_board_picker();
         } else {
-            self.open_board_picker_quick();
+            self.open_board_picker_quick_with_measurer(measurer);
         }
     }
 
@@ -327,13 +328,13 @@ mod tests {
         let mut state = make_test_input_state();
 
         state.open_radial_menu(320.0, 240.0);
-        state.open_board_picker();
+        state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
         assert!(state.is_board_picker_open());
         assert!(!state.is_radial_menu_open());
 
         state.close_board_picker();
         state.open_radial_menu(320.0, 240.0);
-        state.open_board_picker_quick();
+        state.open_board_picker_quick_with_measurer(&crate::draw::TextMeasurer::default());
         assert!(state.is_board_picker_open());
         assert!(state.board_picker_is_quick());
         assert!(!state.is_radial_menu_open());

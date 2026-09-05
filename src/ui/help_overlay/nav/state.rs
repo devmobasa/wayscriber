@@ -1,6 +1,6 @@
-use crate::ui::primitives::text_extents_for;
+use crate::ui::primitives::text_extents_for_with_engine;
 
-use super::super::search::ellipsize_to_fit;
+use super::super::search::ellipsize_to_fit_with_engine;
 
 const BULLET: &str = "\u{2022}";
 
@@ -18,6 +18,7 @@ pub(crate) struct NavState {
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_nav_state(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     help_font_family: &str,
     nav_title: &str,
@@ -73,7 +74,8 @@ pub(crate) fn build_nav_state(
         .map(|(text, _)| text.as_str())
         .collect();
 
-    let nav_primary_width = text_extents_for(
+    let nav_primary_width = text_extents_for_with_engine(
+        engine,
         ctx,
         help_font_family,
         cairo::FontSlant::Normal,
@@ -82,7 +84,8 @@ pub(crate) fn build_nav_state(
         &nav_text_primary,
     )
     .width();
-    let nav_secondary_width = text_extents_for(
+    let nav_secondary_width = text_extents_for_with_engine(
+        engine,
         ctx,
         help_font_family,
         cairo::FontSlant::Normal,
@@ -94,7 +97,8 @@ pub(crate) fn build_nav_state(
 
     let search_text = if search_active {
         let prefix = "Search: ";
-        let prefix_extents = text_extents_for(
+        let prefix_extents = text_extents_for_with_engine(
+            engine,
             ctx,
             help_font_family,
             cairo::FontSlant::Normal,
@@ -103,7 +107,8 @@ pub(crate) fn build_nav_state(
             prefix,
         );
         let max_query_width = (max_search_width - prefix_extents.width()).max(0.0);
-        let query_display = ellipsize_to_fit(
+        let query_display = ellipsize_to_fit_with_engine(
+            engine,
             ctx,
             search_query,
             help_font_family,
@@ -118,7 +123,8 @@ pub(crate) fn build_nav_state(
     let search_hint_text = (!search_active).then(|| "Type to search".to_string());
     let extra_line_text = search_text.or(search_hint_text);
     let extra_line_width = extra_line_text.as_ref().map(|text| {
-        text_extents_for(
+        text_extents_for_with_engine(
+            engine,
             ctx,
             help_font_family,
             cairo::FontSlant::Normal,

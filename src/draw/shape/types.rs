@@ -1,11 +1,12 @@
 use super::bounds::{
-    bounding_box_for_arrow, bounding_box_for_blur, bounding_box_for_ellipse,
+    bounding_box_for_arrow_with, bounding_box_for_blur, bounding_box_for_ellipse,
     bounding_box_for_eraser, bounding_box_for_line, bounding_box_for_points,
     bounding_box_for_pressure_points, bounding_box_for_rect, ensure_positive_rect_i64,
 };
 use super::polygon::{PolygonKind, bounding_box_for_polygon};
-use super::step_marker::step_marker_bounds;
-use super::text::{bounding_box_for_sticky_note, bounding_box_for_text};
+use super::step_marker::step_marker_bounds_with;
+use super::text::{bounding_box_for_sticky_note_with, bounding_box_for_text_with};
+use super::text_cache::TextMeasurer;
 use crate::draw::color::Color;
 use crate::draw::font::FontDescriptor;
 use crate::util::Rect;
@@ -434,6 +435,13 @@ impl Shape {
     /// Returns `None` when the shape has no drawable area or its full bounds cannot be
     /// represented safely by [`Rect`].
     pub fn bounding_box(&self) -> Option<Rect> {
+        let measurer = TextMeasurer::default();
+        self.bounding_box_with(&measurer)
+    }
+
+    /// Computes bounds using the caller's canonical text measurement owner.
+    /// Numeric-only shapes do not initialize text rendering resources.
+    pub fn bounding_box_with(&self, measurer: &TextMeasurer) -> Option<Rect> {
         match self {
             Shape::Freehand { points, thick, .. } => bounding_box_for_points(points, *thick),
             Shape::FreehandPressure { points, .. } => bounding_box_for_pressure_points(points),
@@ -473,7 +481,8 @@ impl Shape {
                 bend,
                 label,
                 color: _,
-            } => bounding_box_for_arrow(
+            } => bounding_box_for_arrow_with(
+                measurer,
                 *x1,
                 *y1,
                 *x2,
@@ -496,7 +505,8 @@ impl Shape {
                 background_enabled,
                 wrap_width,
                 ..
-            } => bounding_box_for_text(
+            } => bounding_box_for_text_with(
+                measurer,
                 *x,
                 *y,
                 text,
@@ -505,9 +515,14 @@ impl Shape {
                 *background_enabled,
                 *wrap_width,
             ),
-            Shape::StepMarker { x, y, label, .. } => {
-                step_marker_bounds(*x, *y, label.value, label.size, &label.font_descriptor)
-            }
+            Shape::StepMarker { x, y, label, .. } => step_marker_bounds_with(
+                measurer,
+                *x,
+                *y,
+                label.value,
+                label.size,
+                &label.font_descriptor,
+            ),
             Shape::StickyNote {
                 x,
                 y,
@@ -516,7 +531,15 @@ impl Shape {
                 font_descriptor,
                 wrap_width,
                 ..
-            } => bounding_box_for_sticky_note(*x, *y, text, *size, font_descriptor, *wrap_width),
+            } => bounding_box_for_sticky_note_with(
+                measurer,
+                *x,
+                *y,
+                text,
+                *size,
+                font_descriptor,
+                *wrap_width,
+            ),
             Shape::MarkerStroke { points, thick, .. } => {
                 let inflated = (*thick * 1.35).max(*thick + 1.0);
                 bounding_box_for_points(points, inflated)

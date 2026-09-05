@@ -1,4 +1,5 @@
 use crate::ui::toolbar::ToolbarSnapshot;
+use crate::ui_text::UiTextEngine;
 
 use super::ToolbarLayoutSpec;
 
@@ -78,6 +79,7 @@ impl ToolbarLayoutSpec {
 
     pub(in crate::backend::wayland::toolbar) fn top_size(
         &self,
+        engine: &UiTextEngine,
         snapshot: &ToolbarSnapshot,
     ) -> (u32, u32) {
         if snapshot.top_minimized {
@@ -94,12 +96,13 @@ impl ToolbarLayoutSpec {
         let mut height = base_height as f64;
         // Popovers (shapes grid + options, overflow) and the contextual
         // highlight-ring row grow the surface below the bar.
-        height += crate::backend::wayland::toolbar::view::top::top_extra_height(snapshot);
+        height += crate::backend::wayland::toolbar::view::top::top_extra_height(engine, snapshot);
 
         // Width comes from the same tree walk the builder performs, so the
         // size math and the builder cannot drift apart.
-        let width =
-            crate::backend::wayland::toolbar::view::top::top_natural_width(snapshot, height);
+        let width = crate::backend::wayland::toolbar::view::top::top_natural_width(
+            engine, snapshot, height,
+        );
 
         (width.ceil() as u32, height.ceil() as u32)
     }

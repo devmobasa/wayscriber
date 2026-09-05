@@ -2,23 +2,35 @@ use crate::config::Action;
 use crate::input::{InputState, ZoomAction};
 
 impl InputState {
-    pub(super) fn apply_toolbar_undo(&mut self) -> bool {
-        self.toolbar_undo();
+    pub(super) fn apply_toolbar_undo_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) -> bool {
+        self.toolbar_undo_with_resources(resources);
         true
     }
 
-    pub(super) fn apply_toolbar_redo(&mut self) -> bool {
-        self.toolbar_redo();
+    pub(super) fn apply_toolbar_redo_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) -> bool {
+        self.toolbar_redo_with_resources(resources);
         true
     }
 
-    pub(super) fn apply_toolbar_undo_all(&mut self) -> bool {
-        self.undo_all_immediate();
+    pub(super) fn apply_toolbar_undo_all_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+    ) -> bool {
+        self.undo_all_immediate_with_measurer(measurer);
         true
     }
 
-    pub(super) fn apply_toolbar_redo_all(&mut self) -> bool {
-        self.redo_all_immediate();
+    pub(super) fn apply_toolbar_redo_all_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+    ) -> bool {
+        self.redo_all_immediate_with_measurer(measurer);
         true
     }
 
@@ -48,29 +60,42 @@ impl InputState {
         true
     }
 
-    pub(super) fn apply_toolbar_clear_canvas(&mut self, instant: bool) -> bool {
+    pub(super) fn apply_toolbar_clear_canvas_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        instant: bool,
+    ) -> bool {
         if instant {
-            self.toolbar_clear();
+            self.toolbar_clear_with_resources(resources);
         } else {
-            self.toolbar_clear_with_undo_toast();
+            self.toolbar_clear_with_undo_toast_with_resources(resources);
         }
         true
     }
 
-    pub(super) fn apply_toolbar_capture_screenshot(&mut self) -> bool {
-        self.handle_action(Action::CaptureSelection);
+    pub(super) fn apply_toolbar_capture_screenshot_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) -> bool {
+        self.handle_action_with_resources(resources, Action::CaptureSelection);
         self.close_top_toolbar_menus();
         true
     }
 
-    pub(super) fn apply_toolbar_copy_text_from_screen(&mut self) -> bool {
-        self.handle_action(Action::CopyTextFromScreen);
+    pub(super) fn apply_toolbar_copy_text_from_screen_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) -> bool {
+        self.handle_action_with_resources(resources, Action::CopyTextFromScreen);
         self.close_top_toolbar_menus();
         true
     }
 
-    pub(super) fn apply_toolbar_open_command_palette(&mut self) -> bool {
-        self.handle_action(Action::ToggleCommandPalette);
+    pub(super) fn apply_toolbar_open_command_palette_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) -> bool {
+        self.handle_action_with_resources(resources, Action::ToggleCommandPalette);
         self.close_top_toolbar_menus();
         true
     }

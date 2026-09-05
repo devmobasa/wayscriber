@@ -1,4 +1,5 @@
 use super::super::base::InputState;
+use crate::draw::TextMeasurer;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BOARD_ID_TRANSPARENT, BoardSpec};
 
@@ -44,15 +45,30 @@ impl InputState {
     ///
     /// Also resets drawing state to prevent partial shapes crossing modes.
     pub fn switch_board(&mut self, target_id: &str) {
-        self.switch_board_internal(target_id, true);
+        let measurer = TextMeasurer::default();
+        self.switch_board_with_measurer(&measurer, target_id);
+    }
+
+    pub fn switch_board_with_measurer(&mut self, measurer: &TextMeasurer, target_id: &str) {
+        self.switch_board_internal(measurer, target_id, true);
     }
 
     /// Switches to a different board without toggle semantics.
     pub fn switch_board_force(&mut self, target_id: &str) {
-        self.switch_board_internal(target_id, false);
+        let measurer = TextMeasurer::default();
+        self.switch_board_force_with_measurer(&measurer, target_id);
     }
 
-    fn switch_board_internal(&mut self, target_id: &str, allow_toggle: bool) {
+    pub fn switch_board_force_with_measurer(&mut self, measurer: &TextMeasurer, target_id: &str) {
+        self.switch_board_internal(measurer, target_id, false);
+    }
+
+    fn switch_board_internal(
+        &mut self,
+        measurer: &TextMeasurer,
+        target_id: &str,
+        allow_toggle: bool,
+    ) {
         let current_id = self.boards.active_board_id().to_string();
 
         // Toggle behavior: if already in target board, return to transparent.
@@ -66,6 +82,7 @@ impl InputState {
         }
 
         self.switch_board_with(
+            measurer,
             |boards| boards.can_switch_to_id(&target_id),
             |boards| boards.switch_to_id(&target_id),
             &current_id,
@@ -73,8 +90,14 @@ impl InputState {
     }
 
     pub fn create_board(&mut self) -> bool {
+        let measurer = TextMeasurer::default();
+        self.create_board_with_measurer(&measurer)
+    }
+
+    pub fn create_board_with_measurer(&mut self, measurer: &TextMeasurer) -> bool {
         let current_id = self.boards.active_board_id().to_string();
         let created = self.switch_board_with(
+            measurer,
             |boards| boards.board_count() < boards.max_count(),
             |boards| boards.create_board(),
             &current_id,
@@ -91,8 +114,14 @@ impl InputState {
     }
 
     pub fn switch_board_slot(&mut self, slot: usize) {
+        let measurer = TextMeasurer::default();
+        self.switch_board_slot_with_measurer(&measurer, slot);
+    }
+
+    pub fn switch_board_slot_with_measurer(&mut self, measurer: &TextMeasurer, slot: usize) {
         let current_id = self.boards.active_board_id().to_string();
         self.switch_board_with(
+            measurer,
             |boards| boards.can_switch_to_slot(slot),
             |boards| boards.switch_to_slot(slot),
             &current_id,
@@ -100,8 +129,14 @@ impl InputState {
     }
 
     pub fn switch_board_next(&mut self) {
+        let measurer = TextMeasurer::default();
+        self.switch_board_next_with_measurer(&measurer);
+    }
+
+    pub fn switch_board_next_with_measurer(&mut self, measurer: &TextMeasurer) {
         let current_id = self.boards.active_board_id().to_string();
         self.switch_board_with(
+            measurer,
             |boards| boards.board_count() > 1,
             |boards| boards.next_board(),
             &current_id,
@@ -109,8 +144,14 @@ impl InputState {
     }
 
     pub fn switch_board_prev(&mut self) {
+        let measurer = TextMeasurer::default();
+        self.switch_board_prev_with_measurer(&measurer);
+    }
+
+    pub fn switch_board_prev_with_measurer(&mut self, measurer: &TextMeasurer) {
         let current_id = self.boards.active_board_id().to_string();
         self.switch_board_with(
+            measurer,
             |boards| boards.board_count() > 1,
             |boards| boards.prev_board(),
             &current_id,
@@ -119,6 +160,11 @@ impl InputState {
 
     /// Duplicate the active board.
     pub fn duplicate_board(&mut self) {
+        let measurer = TextMeasurer::default();
+        self.duplicate_board_with_measurer(&measurer);
+    }
+
+    pub fn duplicate_board_with_measurer(&mut self, measurer: &TextMeasurer) {
         if self.board_is_transparent() {
             self.push_toast(
                 ToastPriority::Info,
@@ -141,7 +187,7 @@ impl InputState {
             return;
         }
 
-        self.cancel_active_interaction();
+        self.cancel_active_interaction_with(measurer);
         let generation_before = self.boards.board_identity_generation();
         if let Some(new_id) = self.boards.duplicate_active_board() {
             self.clear_pending_deletes_after_board_generation_change(generation_before);
@@ -176,6 +222,11 @@ impl InputState {
 
     /// Switch to the most recently used board (other than the current one).
     pub fn switch_board_recent(&mut self) {
+        let measurer = TextMeasurer::default();
+        self.switch_board_recent_with_measurer(&measurer);
+    }
+
+    pub fn switch_board_recent_with_measurer(&mut self, measurer: &TextMeasurer) {
         // Find the first recent board that isn't the current one
         let current_id = self.boards.active_board_id();
         let target = self
@@ -186,7 +237,7 @@ impl InputState {
             .cloned();
 
         if let Some(target_id) = target {
-            self.switch_board_force(&target_id);
+            self.switch_board_force_with_measurer(measurer, &target_id);
         } else {
             self.push_toast(
                 ToastPriority::Info,
@@ -198,6 +249,7 @@ impl InputState {
 
     pub(super) fn switch_board_with(
         &mut self,
+        measurer: &TextMeasurer,
         can_switch: impl FnOnce(&crate::input::BoardManager) -> bool,
         switch: impl FnOnce(&mut crate::input::BoardManager) -> bool,
         current_id: &str,
@@ -214,7 +266,7 @@ impl InputState {
             .map(|board| board.spec.id.clone())
             .collect::<std::collections::BTreeSet<_>>();
         let generation_before = self.boards.board_identity_generation();
-        self.cancel_active_interaction();
+        self.cancel_active_interaction_with(measurer);
         let switched = switch(&mut self.boards);
         debug_assert!(switched, "preflighted board transition failed on apply");
         if !switched {

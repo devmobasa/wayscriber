@@ -2,7 +2,9 @@
 //! with dynamic overlays (hover, sub-ring, size arc, center well) on top.
 
 mod cache;
+mod text;
 pub(in crate::ui) use cache::RadialBaseCache;
+use text::{draw_centered_label, draw_wedge_content};
 
 use std::f64::consts::PI;
 
@@ -18,9 +20,9 @@ use crate::toolbar_icons::{
     MicroChipStyle, ToolbarIconPainter, draw_icon_note, draw_icon_shape_picker, draw_micro_chip,
     top_toolbar_icon_painter,
 };
-use crate::ui::primitives::{draw_keycap, keycap_size};
+use crate::ui::primitives::{draw_keycap_with_engine, keycap_size_with_engine};
 use crate::ui::theme::{self, Rgba, overlay, toolbar};
-use crate::ui_text::{UiTextStyle, text_layout};
+use crate::ui_text::UiTextEngine;
 
 // ── File-local style values without a matching token in ui/theme.rs ──
 
@@ -37,13 +39,6 @@ const WEDGE_GAP_PX: f64 = 2.0;
 const TOOL_LABEL_SIZE: f64 = 12.0;
 /// Sub-ring wedge label font size.
 const SUB_LABEL_SIZE: f64 = 11.0;
-/// Vertical lift of the wedge label when it has no glyph but a keycap hint
-/// is shown below it.
-const HINT_LABEL_LIFT: f64 = 6.0;
-/// Drop of the keycap hint's top edge below the wedge midpoint when the
-/// wedge has no glyph.
-const HINT_LABEL_DROP: f64 = 8.0;
-
 /// Render a standalone radial menu using the legacy [`theme::init`] preference.
 /// Runtime rendering uses explicit resources to retain its cached base.
 pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width: u32, height: u32) {
@@ -54,8 +49,10 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
     {
         return;
     }
+    let engine = UiTextEngine::default();
     let mut caches = crate::ui::UiRenderCaches::default();
     render_radial_menu_with_context(
+        &engine,
         &mut crate::ui::UiRenderCtx {
             cairo: ctx,
             theme: theme::current(),
@@ -68,6 +65,7 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
 }
 
 pub(crate) fn render_radial_menu_with_context(
+    engine: &UiTextEngine,
     render: &mut crate::ui::UiRenderCtx<'_, '_, '_>,
     input_state: &InputState,
     width: u32,
@@ -105,12 +103,12 @@ pub(crate) fn render_radial_menu_with_context(
     render
         .caches
         .radial_mut()
-        .paint_base(ctx, input_state, &layout, theme, &swatches);
+        .paint_base(engine, ctx, input_state, &layout, theme, &swatches);
 
     // ── Dynamic overlays ──
     match hover {
         Some(RadialSegmentId::Tool(idx)) => {
-            draw_compass_hover(ctx, input_state, theme, cx, cy, &layout, idx);
+            draw_compass_hover(engine, ctx, input_state, theme, cx, cy, &layout, idx);
         }
         Some(RadialSegmentId::Color(idx)) => {
             draw_color_hover(ctx, cx, cy, &layout, &swatches, idx);
@@ -119,7 +117,17 @@ pub(crate) fn render_radial_menu_with_context(
     }
 
     if let Some(parent_idx) = expanded_sub_ring {
-        draw_sub_ring(ctx, input_state, theme, cx, cy, &layout, parent_idx, hover);
+        draw_sub_ring(
+            engine,
+            ctx,
+            input_state,
+            theme,
+            cx,
+            cy,
+            &layout,
+            parent_idx,
+            hover,
+        );
     }
 
     draw_size_value(
@@ -132,7 +140,7 @@ pub(crate) fn render_radial_menu_with_context(
         hover == Some(RadialSegmentId::SizeRing) || size_dragging,
     );
 
-    draw_center_well(ctx, input_state, cx, cy, &layout, hover);
+    draw_center_well(engine, ctx, input_state, cx, cy, &layout, hover);
 
     let _ = ctx.restore();
 }
@@ -143,7 +151,9 @@ pub(crate) fn render_radial_menu_with_context(
 /// compass wedge (active state included — it is part of the cache key), and
 /// the size-ring track. Hover, sub-ring, size value arc, and the center well
 /// are dynamic and drawn on top by the caller.
+#[allow(clippy::too_many_arguments)]
 fn draw_static_base(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     input_state: &InputState,
     theme: &theme::Theme,
@@ -219,6 +229,7 @@ fn draw_static_base(
         let hint =
             slice_action(slice).and_then(|action| input_state.action_binding_primary_label(action));
         draw_wedge_content(
+            engine,
             ctx,
             lx,
             ly,
@@ -254,7 +265,9 @@ fn draw_static_base(
 /// Hover overlay for a compass wedge: the state-ladder wash over the base
 /// wedge, then its glyph + label repainted in the primary content color (the
 /// keycap hint is color-independent, so the base copy stays).
+#[allow(clippy::too_many_arguments)]
 fn draw_compass_hover(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     input_state: &InputState,
     theme: &theme::Theme,
@@ -285,6 +298,7 @@ fn draw_compass_hover(
     let hint =
         slice_action(slice).and_then(|action| input_state.action_binding_primary_label(action));
     draw_wedge_content(
+        engine,
         ctx,
         lx,
         ly,
@@ -320,6 +334,7 @@ fn draw_color_hover(
 /// Expanded sub-ring (hover-dependent, drawn fully dynamically).
 #[allow(clippy::too_many_arguments)]
 fn draw_sub_ring(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     input_state: &InputState,
     theme: &theme::Theme,
@@ -372,6 +387,7 @@ fn draw_sub_ring(
             Some(_) if show_labels => {
                 let hint = input_state.action_binding_primary_label(*action);
                 draw_wedge_content(
+                    engine,
                     ctx,
                     lx,
                     ly,
@@ -388,7 +404,7 @@ fn draw_sub_ring(
                 theme::set_color(ctx, color);
                 paint(ctx, lx - size / 2.0, ly - size / 2.0, size);
             }
-            None => draw_centered_label(ctx, lx, ly, label, SUB_LABEL_SIZE, color),
+            None => draw_centered_label(engine, ctx, lx, ly, label, SUB_LABEL_SIZE, color),
         }
     }
 }
@@ -449,6 +465,7 @@ fn draw_size_value(
 
 /// Center well: HUD micro-chip echo + thickness numeral keycap.
 fn draw_center_well(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     input_state: &InputState,
     cx: f64,
@@ -483,8 +500,10 @@ fn draw_center_well(
         },
     );
     let numeral = format!("{size:.0}px");
-    let (numeral_w, numeral_h) = keycap_size(ctx, &numeral, toolbar::FONT_SIZE_SWATCH_KEY);
-    draw_keycap(
+    let (numeral_w, numeral_h) =
+        keycap_size_with_engine(engine, ctx, &numeral, toolbar::FONT_SIZE_SWATCH_KEY);
+    draw_keycap_with_engine(
+        engine,
         ctx,
         cx - numeral_w / 2.0,
         cy + overlay::RADIAL_CENTER_NUMERAL_DROP - numeral_h / 2.0,
@@ -613,73 +632,6 @@ fn wedge_content_color(theme: &theme::Theme, is_hovered: bool, is_active: bool) 
     }
 }
 
-/// Draw a wedge's content stack centered on the wedge midpoint: glyph above
-/// a short label with the primary bound shortcut as a keycap below, falling
-/// back to label-only layouts when the glyph or hint is missing. With
-/// `paint_hint` false the keycap is left to the layer below (hover repaints
-/// only the color-dependent glyph/label); the hint still shapes the layout
-/// so both layers agree on positions.
-#[allow(clippy::too_many_arguments)]
-fn draw_wedge_content(
-    ctx: &cairo::Context,
-    x: f64,
-    y: f64,
-    label: &str,
-    icon: Option<ToolbarIconPainter>,
-    hint: Option<&str>,
-    color: Rgba,
-    label_size: f64,
-    paint_hint: bool,
-) {
-    match icon {
-        Some(paint) => {
-            let size = overlay::RADIAL_WEDGE_ICON_SIZE;
-            theme::set_color(ctx, color);
-            paint(
-                ctx,
-                x - size / 2.0,
-                y - overlay::RADIAL_WEDGE_ICON_LIFT - size / 2.0,
-                size,
-            );
-            draw_centered_label(
-                ctx,
-                x,
-                y + overlay::RADIAL_WEDGE_LABEL_DROP,
-                label,
-                label_size,
-                color,
-            );
-            if paint_hint && let Some(hint) = hint {
-                draw_hint_keycap(ctx, x, y + overlay::RADIAL_WEDGE_HINT_DROP, hint);
-            }
-        }
-        None => match hint {
-            Some(hint) => {
-                draw_centered_label(ctx, x, y - HINT_LABEL_LIFT, label, label_size, color);
-                if paint_hint {
-                    draw_hint_keycap(ctx, x, y + HINT_LABEL_DROP, hint);
-                }
-            }
-            None => draw_centered_label(ctx, x, y, label, label_size, color),
-        },
-    }
-}
-
-/// Draw a keycap hint horizontally centered on `center_x` with its top edge
-/// at `top_y`, in the shared keycap language.
-fn draw_hint_keycap(ctx: &cairo::Context, center_x: f64, top_y: f64, label: &str) {
-    let (width, _height) = keycap_size(ctx, label, toolbar::FONT_SIZE_SWATCH_KEY);
-    draw_keycap(
-        ctx,
-        center_x - width / 2.0,
-        top_y,
-        label,
-        toolbar::FONT_SIZE_SWATCH_KEY,
-        toolbar::COLOR_BADGE_BACKGROUND,
-        toolbar::COLOR_BADGE_TEXT,
-    );
-}
-
 /// Draw an annular (ring) sector path.
 fn draw_annular_sector(
     ctx: &cairo::Context,
@@ -694,22 +646,6 @@ fn draw_annular_sector(
     ctx.arc(cx, cy, r_outer, start_angle, end_angle);
     ctx.arc_negative(cx, cy, r_inner, end_angle, start_angle);
     ctx.close_path();
-}
-
-/// Draw a centered text label at the given position.
-fn draw_centered_label(ctx: &cairo::Context, x: f64, y: f64, text: &str, size: f64, color: Rgba) {
-    let style = UiTextStyle {
-        family: "Sans",
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Normal,
-        size,
-    };
-    let layout = text_layout(ctx, style, text, None);
-    let extents = layout.ink_extents();
-    let tx = x - extents.width() / 2.0 - extents.x_bearing();
-    let ty = y - extents.height() / 2.0 - extents.y_bearing();
-    theme::set_color(ctx, color);
-    layout.show_at_baseline(ctx, tx, ty);
 }
 
 // ── Slice content resolution (ActionMeta registry) ──

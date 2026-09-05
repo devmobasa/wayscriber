@@ -334,14 +334,19 @@ impl WaylandState {
         }
 
         let (canvas_x, canvas_y) = self.input_state.canvas_pointer_position();
-        match self.input_state.hit_idle_handle(canvas_x, canvas_y) {
+        match self
+            .input_state
+            .hit_idle_handle_with(self.render.text_measurer(), canvas_x, canvas_y)
+        {
             Some(IdleHandle::SpotlightMagnification(_)) => return CursorIcon::EwResize,
             Some(IdleHandle::ArrowBend(_)) => return CursorIcon::Grab,
             Some(IdleHandle::TextResize(_)) => return CursorIcon::SeResize,
             Some(IdleHandle::SelectionResize(handle)) => return resize_cursor(handle),
             None => {}
         }
-        if let Some(hit_id) = self.input_state.hit_test_at(canvas_x, canvas_y)
+        if let Some(hit_id) =
+            self.input_state
+                .hit_test_at_with(self.render.text_measurer(), canvas_x, canvas_y)
             && self
                 .input_state
                 .selected_shape_ids_set()

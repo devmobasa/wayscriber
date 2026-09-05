@@ -17,7 +17,6 @@ use super::WaylandState;
 use super::acquisition::report_screen_source_activation_rejected_to;
 use super::region_capture::{
     ActiveScreenRegion, FreezeOwnership, RegionOwnerLoss, RegionSelectionFinalize,
-    finalize_region_selection_with_review_edits,
 };
 use super::screen_image::{
     CropError, DisplayedScreenImage, ScreenSourceEntry, copy_image_rect, displayed_screen_image,
@@ -79,7 +78,8 @@ impl WaylandState {
         // The two screen modals are mutually exclusive; entering one ends the
         // other, including any temporary freeze that one owned.
         self.cancel_eyedropper();
-        self.input_state.prepare_for_screen_modal();
+        self.input_state
+            .prepare_for_screen_modal_with_measurer(self.render.text_measurer());
         self.zoom.stop_pan();
         self.pointer.stop_board_pan();
         self.pointer.set_board_pan_key_held(false);
@@ -110,23 +110,17 @@ impl WaylandState {
             }
             ScreenSourceEntry::WaitForZoom => {
                 if self.wait_for_current_zoom_capture(ZoomWaiterOwner::Ocr) {
-                    self.set_pending_screen_region(
-                        RegionPurposeTag::Ocr,
-                        generation,
-                        ScreenCaptureSource::Zoom,
-                        None,
-                    );
+                    self.set_pending_zoom_screen_region(RegionPurposeTag::Ocr, generation);
                 } else {
                     self.report_ocr_zoom_image_unavailable();
                 }
             }
             ScreenSourceEntry::AutoFreeze => {
                 match self.acquisition.request(ScreenAcquisitionOwner::Ocr) {
-                    Ok(acquisition) => self.set_pending_screen_region(
+                    Ok(acquisition) => self.set_pending_frozen_screen_region(
                         RegionPurposeTag::Ocr,
                         generation,
-                        ScreenCaptureSource::Frozen,
-                        Some(acquisition),
+                        acquisition,
                     ),
                     Err(_) => self.report_terminal(
                         ScreenAcquisitionOwner::Ocr,
@@ -230,7 +224,8 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn cancel_ocr(&mut self) -> bool {
         let Some(region) = self.region_capture.active() else {
             self.acquisition.clear_zoom_waiter(ZoomWaiterOwner::Ocr);
-            self.input_state.cancel_region_ui_only();
+            self.region_capture
+                .sync_input_projection(&mut self.input_state);
             return false;
         };
         let pending_acquisition = region.pending_acquisition();
@@ -312,38 +307,35 @@ impl WaylandState {
         if self.finish_region_cut_drag(source, (x, y)) {
             return true;
         }
-        let (active, review_edits) = self.region_capture.selection_parts();
-        let rect = match finalize_region_selection_with_review_edits(
-            active,
-            &mut self.input_state,
-            review_edits,
-            source,
-            (x, y),
-        ) {
-            RegionSelectionFinalize::NotOwned => return false,
-            RegionSelectionFinalize::Rearmed => return true,
-            RegionSelectionFinalize::Reviewed => return true,
-            RegionSelectionFinalize::Measured => return true,
-            RegionSelectionFinalize::Selected {
-                purpose: RegionPurposeTag::Ocr,
-                rect,
-            } => rect,
-            RegionSelectionFinalize::Selected {
-                purpose: RegionPurposeTag::CaptureDeliver,
-                rect,
-            } => {
-                self.submit_region_capture(rect);
-                return true;
-            }
-            RegionSelectionFinalize::Selected {
-                purpose: RegionPurposeTag::CaptureInteractive,
-                ..
-            } => return true,
-            RegionSelectionFinalize::Selected {
-                purpose: RegionPurposeTag::Measure,
-                ..
-            } => return true,
-        };
+        let rect =
+            match self
+                .region_capture
+                .finalize_selection(&mut self.input_state, source, (x, y))
+            {
+                RegionSelectionFinalize::NotOwned => return false,
+                RegionSelectionFinalize::Rearmed => return true,
+                RegionSelectionFinalize::Reviewed => return true,
+                RegionSelectionFinalize::Measured => return true,
+                RegionSelectionFinalize::Selected {
+                    purpose: RegionPurposeTag::Ocr,
+                    rect,
+                } => rect,
+                RegionSelectionFinalize::Selected {
+                    purpose: RegionPurposeTag::CaptureDeliver,
+                    rect,
+                } => {
+                    self.submit_region_capture(rect);
+                    return true;
+                }
+                RegionSelectionFinalize::Selected {
+                    purpose: RegionPurposeTag::CaptureInteractive,
+                    ..
+                } => return true,
+                RegionSelectionFinalize::Selected {
+                    purpose: RegionPurposeTag::Measure,
+                    ..
+                } => return true,
+            };
 
         // The crop is taken while the capture is still held: releasing first
         // would leave the worker reading pixels that no longer exist.
@@ -585,6 +577,7 @@ impl WaylandState {
         // dismisses on the first drag through the shared selector state.
         if self.config.capture.region.show_legend && !self.region_picker_legend_dismissed() {
             crate::ui::render_region_legend(
+                self.render.ui_text(),
                 ctx,
                 (screen_width, screen_height),
                 crate::ui::OCR_LEGEND_TEXT,

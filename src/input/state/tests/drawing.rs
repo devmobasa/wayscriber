@@ -162,6 +162,7 @@ fn freeform_polygon_double_click_finishes_without_duplicate_vertex() {
 
 #[test]
 fn freeform_polygon_backspace_does_not_prime_double_click_commit() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
 
@@ -169,7 +170,7 @@ fn freeform_polygon_backspace_does_not_prime_double_click_commit() {
     state.on_mouse_press(MouseButton::Left, 20, 0);
     state.on_mouse_press(MouseButton::Left, 20, 20);
     state.on_mouse_press(MouseButton::Left, 0, 20);
-    state.pop_building_polygon_point();
+    state.pop_building_polygon_point_with_measurer(&route_measurer);
     state.on_mouse_press(MouseButton::Left, 0, 20);
 
     assert!(state.boards.active_frame().shapes.is_empty());
@@ -183,13 +184,15 @@ fn freeform_polygon_backspace_does_not_prime_double_click_commit() {
 
 #[test]
 fn freeform_polygon_commit_records_first_stroke_onboarding() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
 
     state.on_mouse_press(MouseButton::Left, 0, 0);
     state.on_mouse_press(MouseButton::Left, 20, 0);
     state.on_mouse_press(MouseButton::Left, 20, 20);
-    state.finish_building_polygon();
+    state.finish_building_polygon_with_measurer(&test_text_measurer);
 
     assert!(state.pending_onboarding_usage.first_stroke_done);
 }
@@ -340,6 +343,7 @@ fn first_stroke_onboarding_signal_keeps_release_damage_bounded() {
     );
 }
 
+#[cfg(feature = "tablet-input")]
 #[test]
 fn pressure_preview_release_cleans_wide_preview_when_final_freehand_narrows() {
     let mut state = create_test_input_state();
@@ -351,7 +355,7 @@ fn pressure_preview_release_cleans_wide_preview_when_final_freehand_narrows() {
     let _ = state.take_dirty_regions();
 
     state.on_mouse_press(MouseButton::Left, 10, 100);
-    state.set_pressure_thickness_for_active_tool(32.0);
+    state.set_pressure_thickness_for_active_tool_with(&crate::draw::TextMeasurer::default(), 32.0);
     state.on_mouse_motion(900, 100);
     let wide_preview_bounds = state
         .provisional_bounds()
@@ -365,7 +369,7 @@ fn pressure_preview_release_cleans_wide_preview_when_final_freehand_narrows() {
     );
     let _ = state.take_dirty_regions();
 
-    state.set_pressure_thickness_for_active_tool(2.0);
+    state.set_pressure_thickness_for_active_tool_with(&crate::draw::TextMeasurer::default(), 2.0);
     let _ = state.take_dirty_regions();
     state.on_mouse_release(MouseButton::Left, 900, 100);
     let dirty = state.take_dirty_regions();
@@ -419,6 +423,7 @@ fn append_path_limit_rejection_clears_provisional_damage() {
     );
 }
 
+#[cfg(feature = "tablet-input")]
 #[test]
 fn pressure_sample_shrink_dirties_previous_full_provisional_bounds() {
     let mut state = create_test_input_state();
@@ -433,7 +438,7 @@ fn pressure_sample_shrink_dirties_previous_full_provisional_bounds() {
     let old_only_probe = crate::util::Rect::new(10, old_full_bounds.y, 1, 1).unwrap();
     let _ = state.take_dirty_regions();
 
-    state.set_pressure_thickness_for_active_tool(2.0);
+    state.set_pressure_thickness_for_active_tool_with(&crate::draw::TextMeasurer::default(), 2.0);
     state.on_mouse_motion(30, 10);
     let dirty = state.take_dirty_regions();
 
@@ -459,7 +464,7 @@ fn marker_size_increase_updates_accumulated_cleanup_bounds() {
     assert!(state.set_thickness(32.0));
     let _ = state.take_dirty_regions();
 
-    state.cancel_active_interaction();
+    state.cancel_active_interaction_with(&crate::draw::TextMeasurer::default());
     let dirty = state.take_dirty_regions();
     let marker_width = (32.0f64 * 1.35).max(32.0 + 1.0);
     let expanded_bounds =
@@ -490,7 +495,7 @@ fn eraser_size_increase_updates_accumulated_cleanup_bounds() {
     assert!(state.set_eraser_size(32.0));
     let _ = state.take_dirty_regions();
 
-    state.cancel_active_interaction();
+    state.cancel_active_interaction_with(&crate::draw::TextMeasurer::default());
     let dirty = state.take_dirty_regions();
     let expanded_bounds = crate::draw::shape::bounding_box_for_eraser(&[(10, 10), (20, 10)], 32.0)
         .expect("expanded eraser preview should have bounds");
@@ -516,7 +521,7 @@ fn cancel_active_path_dirties_full_accumulated_provisional_bounds() {
     state.on_mouse_motion(30, 10);
     let _ = state.take_dirty_regions();
 
-    state.cancel_active_interaction();
+    state.cancel_active_interaction_with(&crate::draw::TextMeasurer::default());
     let dirty = state.take_dirty_regions();
     let thick = state.thickness_for_tool(Tool::Pen);
     let full_bounds = crate::draw::shape::bounding_box_for_points(&[(10, 10), (30, 10)], thick)
@@ -533,6 +538,8 @@ fn cancel_active_path_dirties_full_accumulated_provisional_bounds() {
 
 #[test]
 fn freeform_polygon_freezes_style_on_first_click() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
     let original = state.style.current_color;
@@ -547,7 +554,7 @@ fn freeform_polygon_freezes_style_on_first_click() {
     assert!(state.set_color(changed));
     state.on_mouse_press(MouseButton::Left, 20, 0);
     state.on_mouse_press(MouseButton::Left, 20, 20);
-    state.finish_building_polygon();
+    state.finish_building_polygon_with_measurer(&test_text_measurer);
 
     match &state.boards.active_frame().shapes[0].shape {
         Shape::Polygon { color, .. } => assert_eq!(*color, original),
@@ -715,15 +722,22 @@ fn drag_binding_color_overrides_stroke_without_changing_current_color() {
 
 #[test]
 fn toggle_click_highlight_action_changes_state() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     assert!(!state.click_highlight_enabled());
 
-    state.handle_action(Action::ToggleClickHighlight);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleClickHighlight);
     assert!(state.click_highlight_enabled());
     assert!(state.needs_redraw);
 
     state.needs_redraw = false;
-    state.handle_action(Action::ToggleClickHighlight);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleClickHighlight);
     assert!(!state.click_highlight_enabled());
     assert!(state.needs_redraw);
 }
@@ -763,16 +777,23 @@ fn toolbar_select_highlight_sticks_when_highlight_is_active_via_modifier() {
 
 #[test]
 fn highlight_tool_prevents_drawing() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     assert_eq!(state.active_tool(), Tool::Pen);
     assert!(!state.highlight_tool_active());
 
-    state.handle_action(Action::ToggleHighlightTool);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleHighlightTool);
     assert!(state.highlight_tool_active());
     assert_eq!(state.active_tool(), Tool::Highlight);
 
     // Enable highlight effect to ensure no shapes are added while clicks happen
-    state.handle_action(Action::ToggleClickHighlight);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleClickHighlight);
 
     let initial_shapes = state.boards.active_frame().shapes.len();
     state.on_mouse_press(MouseButton::Left, 10, 10);
@@ -781,7 +802,7 @@ fn highlight_tool_prevents_drawing() {
     assert!(matches!(state.state, DrawingState::Idle));
 
     // Toggle highlight tool off and ensure pen drawing resumes
-    state.handle_action(Action::ToggleHighlightTool);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleHighlightTool);
     assert!(!state.highlight_tool_active());
     state.on_mouse_press(MouseButton::Left, 0, 0);
     state.on_mouse_release(MouseButton::Left, 5, 5);

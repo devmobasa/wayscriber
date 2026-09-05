@@ -1,10 +1,10 @@
-use super::super::primitives::{draw_rounded_rect, text_extents_for};
+use super::super::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use super::keycaps::{KeyComboStyle, draw_key_combo, draw_key_combo_highlight, measure_key_combo};
 use super::layout::GridLayout;
-use super::search::{HighlightStyle, draw_highlight, find_match_range};
+use super::search::{HighlightStyle, draw_highlight_with_engine, find_match_range};
 use super::types::HelpRowHit;
 use crate::ui::theme::{self, Rgba};
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::UiTextStyle;
 
 /// Section badge label text: near-white, slightly softer than the pure-white
 /// token so it sits comfortably on the tinted badge fill (no matching theme
@@ -44,6 +44,7 @@ pub(crate) struct GridColors {
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_sections_grid(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     grid: &GridLayout,
     grid_start_y: f64,
@@ -162,7 +163,7 @@ pub(crate) fn draw_sections_grid(
                 heading_text_x += style.heading_icon_size + style.heading_icon_gap;
             }
             let heading_baseline = section_y + style.heading_font_size;
-            draw_text_baseline(
+            engine.draw_baseline(
                 ctx,
                 heading_style,
                 section.title,
@@ -197,6 +198,7 @@ pub(crate) fn draw_sections_grid(
                         search_active && find_match_range(&row_data.key, search_lower).is_some();
                     if key_match && !row_data.key.is_empty() {
                         let key_width = measure_key_combo(
+                            engine,
                             ctx,
                             row_data.key.as_str(),
                             style.help_font_family,
@@ -220,7 +222,8 @@ pub(crate) fn draw_sections_grid(
                             font_weight: cairo::FontWeight::Normal,
                             color: colors.highlight,
                         };
-                        draw_highlight(
+                        draw_highlight_with_engine(
+                            engine,
                             ctx,
                             desc_x,
                             baseline,
@@ -232,6 +235,7 @@ pub(crate) fn draw_sections_grid(
 
                     // Draw key with keycap styling
                     let _ = draw_key_combo(
+                        engine,
                         ctx,
                         content_x,
                         baseline,
@@ -246,7 +250,7 @@ pub(crate) fn draw_sections_grid(
                         colors.description[2],
                         colors.description[3],
                     );
-                    draw_text_baseline(ctx, body_style, row_data.action, desc_x, baseline, None);
+                    engine.draw_baseline(ctx, body_style, row_data.action, desc_x, baseline, None);
 
                     section_y += style.row_line_height;
                 }
@@ -267,7 +271,8 @@ pub(crate) fn draw_sections_grid(
                         .get(badge_index)
                         .map(|metrics| (metrics.width, metrics.height, metrics.y_bearing))
                         .unwrap_or_else(|| {
-                            let extents = text_extents_for(
+                            let extents = text_extents_for_with_engine(
+                                engine,
                                 ctx,
                                 style.help_font_family,
                                 cairo::FontSlant::Normal,
@@ -298,7 +303,7 @@ pub(crate) fn draw_sections_grid(
                     let text_x = badge_x + style.badge_padding_x;
                     let text_y =
                         section_y + (style.badge_height - badge_metrics.1) / 2.0 - badge_metrics.2;
-                    draw_text_baseline(
+                    engine.draw_baseline(
                         ctx,
                         badge_style,
                         badge.label.as_str(),

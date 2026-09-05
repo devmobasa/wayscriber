@@ -7,9 +7,9 @@ use crate::input::state::{
 use crate::ui::constants::{
     self, BG_HOVER, DIVIDER_LIGHT, RADIUS_SM, TEXT_HINT, TEXT_SECONDARY, TEXT_TERTIARY, TEXT_WHITE,
 };
-use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
+use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use crate::ui::theme::Rgba;
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 // File-local colors with no matching theme token (kept from the pre-theme
 // literals).
@@ -26,7 +26,10 @@ use thumbnail::{
     render_page_thumbnail,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render_page_panel(
+    engine: &UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
     render: &mut crate::draw::RenderCtx<'_, '_>,
     input_state: &InputState,
     layout: &BoardPickerLayout,
@@ -75,7 +78,7 @@ pub(super) fn render_page_panel(
     };
     constants::set_color(ctx, TEXT_TERTIARY);
     let label_y = layout.origin_y + layout.padding_y + layout.title_font_size;
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         footer_style,
         &label,
@@ -95,6 +98,7 @@ pub(super) fn render_page_panel(
     if page_count == 0 {
         let add_hover = input_state.board_picker_page_add_card_at(pointer_x, pointer_y);
         render_add_page_card(
+            engine,
             ctx,
             start_x,
             start_y,
@@ -137,28 +141,32 @@ pub(super) fn render_page_panel(
                 && d.target_board == Some(board_index)
                 && d.current_index == index
         });
-        render_page_thumbnail(PageThumbnailArgs {
-            render,
-            frame: page,
-            background: &board.spec.background,
-            x: thumb_x,
-            y: thumb_y,
-            width: layout.page_thumb_width,
-            height: layout.page_thumb_height,
-            screen_width,
-            screen_height,
-            text_halo_enabled,
-            page_number: index + 1,
-            page_name: page.page_name(),
-            is_active,
-            is_drop_target,
-            is_search_match: input_state.board_picker_page_matches_current_search(index),
-            is_hovered: hover_index == Some(index),
-            is_keyboard_focused: page_focus_page_index == Some(index),
-            delete_hovered: hover_delete == Some(index),
-            duplicate_hovered: hover_duplicate == Some(index),
-            rename_hovered: hover_rename == Some(index),
-        });
+        render_page_thumbnail(
+            engine,
+            measurer,
+            PageThumbnailArgs {
+                render,
+                frame: page,
+                background: &board.spec.background,
+                x: thumb_x,
+                y: thumb_y,
+                width: layout.page_thumb_width,
+                height: layout.page_thumb_height,
+                screen_width,
+                screen_height,
+                text_halo_enabled,
+                page_number: index + 1,
+                page_name: page.page_name(),
+                is_active,
+                is_drop_target,
+                is_search_match: input_state.board_picker_page_matches_current_search(index),
+                is_hovered: hover_index == Some(index),
+                is_keyboard_focused: page_focus_page_index == Some(index),
+                delete_hovered: hover_delete == Some(index),
+                duplicate_hovered: hover_duplicate == Some(index),
+                rename_hovered: hover_rename == Some(index),
+            },
+        );
     }
 
     if let Some(hover_index) = hover_index
@@ -172,19 +180,23 @@ pub(super) fn render_page_panel(
         let thumb_x = start_x + col as f64 * (layout.page_thumb_width + layout.page_thumb_gap);
         let thumb_y = start_y + row as f64 * row_stride;
         let page = &pages[hover_index];
-        render_page_preview(PagePreviewArgs {
-            render,
-            frame: page,
-            background: &board.spec.background,
-            thumb_x,
-            thumb_y,
-            thumb_w: layout.page_thumb_width,
-            thumb_h: layout.page_thumb_height,
-            screen_width,
-            screen_height,
-            text_halo_enabled,
-            page_number: hover_index + 1,
-        });
+        render_page_preview(
+            engine,
+            measurer,
+            PagePreviewArgs {
+                render,
+                frame: page,
+                background: &board.spec.background,
+                thumb_x,
+                thumb_y,
+                thumb_w: layout.page_thumb_width,
+                thumb_h: layout.page_thumb_height,
+                screen_width,
+                screen_height,
+                text_halo_enabled,
+                page_number: hover_index + 1,
+            },
+        );
     }
 
     if let Some((edit_board, edit_page, buffer)) = input_state.board_picker_page_edit_state()
@@ -198,6 +210,7 @@ pub(super) fn render_page_panel(
         let thumb_x = start_x + col as f64 * (layout.page_thumb_width + layout.page_thumb_gap);
         let thumb_y = start_y + row as f64 * row_stride;
         render_page_rename_overlay(
+            engine,
             ctx,
             thumb_x,
             thumb_y,
@@ -225,6 +238,7 @@ pub(super) fn render_page_panel(
             layout.page_thumb_height,
         );
         render_add_page_card(
+            engine,
             ctx,
             add_x,
             add_y,
@@ -235,7 +249,7 @@ pub(super) fn render_page_panel(
         );
     }
 
-    render_sticky_add_button(ctx, layout, pointer_x, pointer_y);
+    render_sticky_add_button(engine, ctx, layout, pointer_x, pointer_y);
 
     if page_count > visible {
         let first_label = first_visible + 1;
@@ -248,7 +262,7 @@ pub(super) fn render_page_panel(
             constants::set_color(ctx, TEXT_HINT);
         }
         let hint_y = layout.page_add_button_y - 4.0;
-        let extents = draw_text_baseline(ctx, footer_style, &hint, start_x, hint_y, None);
+        let extents = engine.draw_baseline(ctx, footer_style, &hint, start_x, hint_y, None);
         if overflow_hover {
             ctx.set_line_width(1.0);
             ctx.move_to(start_x, hint_y + 2.0);
@@ -259,6 +273,7 @@ pub(super) fn render_page_panel(
 }
 
 fn render_sticky_add_button(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     layout: &BoardPickerLayout,
     pointer_x: i32,
@@ -305,7 +320,8 @@ fn render_sticky_add_button(
     };
     constants::set_color(ctx, TEXT_SECONDARY);
     let label = "+ Add page";
-    let extents = text_extents_for(
+    let extents = text_extents_for_with_engine(
+        engine,
         ctx,
         "Sans",
         cairo::FontSlant::Normal,
@@ -316,7 +332,7 @@ fn render_sticky_add_button(
     let text_x = layout.page_add_button_x + (layout.page_add_button_width - extents.width()) * 0.5;
     let text_y =
         layout.page_add_button_y + (layout.page_add_button_height + extents.height()) * 0.5 - 1.0;
-    draw_text_baseline(ctx, label_style, label, text_x, text_y, None);
+    engine.draw_baseline(ctx, label_style, label, text_x, text_y, None);
 }
 
 fn point_in_rect(x: i32, y: i32, rx: f64, ry: f64, rw: f64, rh: f64) -> bool {
@@ -325,7 +341,9 @@ fn point_in_rect(x: i32, y: i32, rx: f64, ry: f64, rw: f64, rh: f64) -> bool {
     x >= rx && x <= rx + rw && y >= ry && y <= ry + rh
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_page_rename_overlay(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     y: f64,
@@ -360,10 +378,11 @@ fn render_page_rename_overlay(
     let _ = ctx.save();
     ctx.rectangle(input_x + 4.0, input_y, input_w - 8.0, input_h);
     ctx.clip();
-    draw_text_baseline(ctx, text_style, text, text_x, text_y, None);
+    engine.draw_baseline(ctx, text_style, text, text_x, text_y, None);
     let _ = ctx.restore();
 
-    let extents = text_extents_for(
+    let extents = text_extents_for_with_engine(
+        engine,
         ctx,
         "Sans",
         cairo::FontSlant::Normal,

@@ -5,7 +5,7 @@ use crate::util::Rect;
 
 use super::page::{
     CanvasExportBackdropSnapshot, CanvasPageExportSnapshot, SpotlightPassSnapshot,
-    draw_canvas_page, validate_spotlight_magnifier_source,
+    draw_canvas_page_with_measurer, validate_spotlight_magnifier_source,
 };
 
 #[derive(Debug, Clone)]
@@ -78,6 +78,7 @@ pub(crate) fn render_canvas_surface(
     snapshot: &CanvasExportSnapshot,
 ) -> Result<cairo::ImageSurface, CaptureError> {
     let mut caches = RenderCaches::default();
+    let measurer = crate::draw::TextMeasurer::default();
     let viewport = snapshot.viewport;
     let scale = viewport.scale.max(1);
     let physical_width = viewport.logical_width.saturating_mul(scale as u32);
@@ -100,7 +101,12 @@ pub(crate) fn render_canvas_surface(
         })?;
 
         let page = canvas_page_from_snapshot(snapshot);
-        draw_canvas_page(&mut RenderCtx::new(&ctx, &mut caches), &page, scale as f64)?;
+        draw_canvas_page_with_measurer(
+            &measurer,
+            &mut RenderCtx::new(&ctx, &mut caches),
+            &page,
+            scale as f64,
+        )?;
     }
 
     if let Some(profile) = snapshot.render_profile.as_ref() {

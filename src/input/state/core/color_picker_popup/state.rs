@@ -1,5 +1,6 @@
 //! Color picker popup state methods for InputState.
 
+use crate::draw::TextMeasurer;
 use std::borrow::Cow;
 
 use crate::draw::Color;
@@ -46,9 +47,14 @@ impl InputState {
 
     /// Opens the color picker popup with the current color.
     pub fn open_color_picker_popup(&mut self) {
+        let measurer = TextMeasurer::default();
+        self.open_color_picker_popup_with_measurer(&measurer);
+    }
+
+    pub fn open_color_picker_popup_with_measurer(&mut self, measurer: &TextMeasurer) {
         self.discard_open_color_picker_recolor();
         let color = self.color_for_tool(self.active_tool());
-        self.open_color_picker_popup_for(None, color);
+        self.open_color_picker_popup_for(measurer, None, color);
     }
 
     /// Opens the color picker popup bound to a quick-color slot, so editing it
@@ -56,6 +62,15 @@ impl InputState {
     /// index is past the palette — a stale click on a snapshot rendered before
     /// the palette shrank, which must open nothing.
     pub fn open_color_picker_popup_for_quick_color(&mut self, index: usize) -> bool {
+        let measurer = TextMeasurer::default();
+        self.open_color_picker_popup_for_quick_color_with_measurer(&measurer, index)
+    }
+
+    pub fn open_color_picker_popup_for_quick_color_with_measurer(
+        &mut self,
+        measurer: &TextMeasurer,
+        index: usize,
+    ) -> bool {
         if self.style.quick_colors.entry(index).is_none() {
             return false;
         }
@@ -65,7 +80,7 @@ impl InputState {
         let Some(color) = self.style.quick_colors.color_for_index(index) else {
             return false;
         };
-        self.open_color_picker_popup_for(Some(index), color);
+        self.open_color_picker_popup_for(measurer, Some(index), color);
         true
     }
 
@@ -79,10 +94,15 @@ impl InputState {
         }
     }
 
-    fn open_color_picker_popup_for(&mut self, slot: Option<usize>, color: Color) {
+    fn open_color_picker_popup_for(
+        &mut self,
+        measurer: &TextMeasurer,
+        slot: Option<usize>,
+        color: Color,
+    ) {
         self.cancel_pending_color_picker_paste();
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::ColorPicker);
-        self.cancel_active_interaction();
+        self.cancel_active_interaction_with(measurer);
 
         let tool = self.active_tool();
         self.color_picker_popup.open(tool, slot, color);

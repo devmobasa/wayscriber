@@ -4,13 +4,10 @@ pub(super) fn screen_region_invariant(
     backend: Option<ActiveScreenRegion>,
     ui: RegionSelectUiState,
 ) -> bool {
-    match (backend, ui) {
-        (None, RegionSelectUiState::Inactive) => true,
-        (None, _) | (Some(_), RegionSelectUiState::Inactive) => false,
-        (Some(region), ui) => {
-            ui.generation() == Some(region.generation()) && ui.purpose() == Some(region.purpose())
-        }
-    }
+    backend
+        .map(ActiveScreenRegion::ui_state)
+        .unwrap_or_default()
+        == ui
 }
 
 pub(super) fn active_region_source_changed(

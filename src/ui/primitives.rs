@@ -1,9 +1,10 @@
 use std::f64::consts::{FRAC_PI_2, PI};
 
 use crate::ui::theme::{self, Rgba};
-use crate::ui_text::{UiTextStyle, measure_text, text_layout};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
-pub(crate) fn text_extents_for(
+pub(crate) fn text_extents_for_with_engine(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     family: &str,
     slant: cairo::FontSlant,
@@ -11,7 +12,7 @@ pub(crate) fn text_extents_for(
     size: f64,
     text: &str,
 ) -> cairo::TextExtents {
-    let layout = text_layout(
+    let layout = engine.layout(
         ctx,
         UiTextStyle {
             family,
@@ -31,7 +32,8 @@ pub(crate) const ELLIPSIS: &str = "\u{2026}";
 /// Trim `text` to `max_width` logical pixels, appending an ellipsis. The
 /// complete string is measured as it will be shaped, so wide glyphs and
 /// non-Latin scripts cannot slip past a per-character budget.
-pub(crate) fn ellipsize_to_fit(
+pub(crate) fn ellipsize_to_fit_with_engine(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     text: &str,
     font_family: &str,
@@ -39,7 +41,8 @@ pub(crate) fn ellipsize_to_fit(
     weight: cairo::FontWeight,
     max_width: f64,
 ) -> String {
-    let extents = text_extents_for(
+    let extents = text_extents_for_with_engine(
+        engine,
         ctx,
         font_family,
         cairo::FontSlant::Normal,
@@ -52,7 +55,8 @@ pub(crate) fn ellipsize_to_fit(
     }
 
     let ellipsis = ELLIPSIS;
-    let ellipsis_extents = text_extents_for(
+    let ellipsis_extents = text_extents_for_with_engine(
+        engine,
         ctx,
         font_family,
         cairo::FontSlant::Normal,
@@ -71,7 +75,8 @@ pub(crate) fn ellipsize_to_fit(
             continue;
         }
         let candidate = format!("{}{}", &text[..end], ellipsis);
-        let candidate_extents = text_extents_for(
+        let candidate_extents = text_extents_for_with_engine(
+            engine,
             ctx,
             font_family,
             cairo::FontSlant::Normal,
@@ -236,15 +241,20 @@ pub(crate) fn draw_pill(
 }
 
 /// Keycap chip interior padding, as fractions of the label font size.
-/// Shared by [`keycap_size`] and [`draw_keycap`] so pre-measured centering
+/// Shared by [`keycap_size_with_engine`] and [`draw_keycap_with_engine`] so pre-measured centering
 /// can never drift from the drawn chip.
 const KEYCAP_PAD_X_FACTOR: f64 = 0.5;
 const KEYCAP_PAD_Y_FACTOR: f64 = 0.3;
 
-/// Measured (width, height) the [`draw_keycap`] chip occupies for `label` at
+/// Measured (width, height) the [`draw_keycap_with_engine`] chip occupies for `label` at
 /// `font_size`, for callers that need to center the chip before drawing it.
-pub(crate) fn keycap_size(ctx: &cairo::Context, label: &str, font_size: f64) -> (f64, f64) {
-    let layout = text_layout(
+pub(crate) fn keycap_size_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    label: &str,
+    font_size: f64,
+) -> (f64, f64) {
+    let layout = engine.layout(
         ctx,
         UiTextStyle {
             family: "Sans",
@@ -265,7 +275,9 @@ pub(crate) fn keycap_size(ctx: &cairo::Context, label: &str, font_size: f64) -> 
 /// Draw a flat keycap chip (rounded rect + centered label) and return its
 /// (width, height). The single keycap language that replaces the per-surface
 /// badge renderings as surfaces migrate (M2+).
-pub(crate) fn draw_keycap(
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn draw_keycap_with_engine(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     y: f64,
@@ -274,7 +286,7 @@ pub(crate) fn draw_keycap(
     fill: Rgba,
     text_color: Rgba,
 ) -> (f64, f64) {
-    let layout = text_layout(
+    let layout = engine.layout(
         ctx,
         UiTextStyle {
             family: "Sans",
@@ -315,11 +327,15 @@ pub(crate) fn keycap_text_style(font_size: f64) -> UiTextStyle<'static> {
     }
 }
 
-/// [`keycap_size`] without a rendering context, for callers that lay out
+/// [`keycap_size_with_engine`] without a rendering context, for callers that lay out
 /// before a frame buffer exists (damage geometry). Goes through the shared
 /// measurement cache, so it agrees with the drawn chip exactly.
-pub(crate) fn keycap_box_size(label: &str, font_size: f64) -> Option<(f64, f64)> {
-    let extents = measure_text(keycap_text_style(font_size), label, None)?;
+pub(crate) fn keycap_box_size(
+    engine: &UiTextEngine,
+    label: &str,
+    font_size: f64,
+) -> Option<(f64, f64)> {
+    let extents = engine.measure(keycap_text_style(font_size), label, None)?;
     Some((
         extents.width() + font_size * KEYCAP_PAD_X_FACTOR * 2.0,
         extents.height() + font_size * KEYCAP_PAD_Y_FACTOR * 2.0,
@@ -328,10 +344,11 @@ pub(crate) fn keycap_box_size(label: &str, font_size: f64) -> Option<(f64, f64)>
 
 /// Draw a keycap chip into a caller-provided box, centering the label inside
 /// it. Rows of chips use this so a shared row height survives labels with
-/// different ascenders and descenders; [`draw_keycap`] is the natural-size
+/// different ascenders and descenders; [`draw_keycap_with_engine`] is the natural-size
 /// shorthand over the same chrome.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_keycap_in_box(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     y: f64,
@@ -342,7 +359,7 @@ pub(crate) fn draw_keycap_in_box(
     fill: Rgba,
     text_color: Rgba,
 ) {
-    let layout = text_layout(ctx, keycap_text_style(font_size), label, None);
+    let layout = engine.layout(ctx, keycap_text_style(font_size), label, None);
     let extents = layout.ink_extents();
 
     theme::set_color(ctx, fill);
@@ -368,7 +385,7 @@ pub(crate) const BADGE_RADIUS: f64 = 8.0;
 /// Vertical gap between stacked floating badges.
 pub(crate) const BADGE_STACK_GAP: f64 = 8.0;
 
-/// Horizontal anchoring for [`draw_badge`].
+/// Horizontal anchoring for [`draw_badge_with_engine`].
 pub(crate) enum BadgeAlign {
     /// `anchor_x` is the badge's left edge.
     Left,
@@ -377,7 +394,7 @@ pub(crate) enum BadgeAlign {
 }
 
 /// Badge box `(width, height, text_inset)` from measured label/hint extents.
-/// Shared by [`draw_badge`] and [`measure_badge`] so layout and rendering can
+/// Shared by [`draw_badge_with_engine`] and [`measure_badge_with_engine`] so layout and rendering can
 /// never disagree about badge geometry.
 fn badge_box(
     label_extents: &crate::ui_text::UiTextExtents,
@@ -398,14 +415,15 @@ fn badge_box(
     }
 }
 
-/// Measure the `(width, height)` [`draw_badge`] would occupy, without a
+/// Measure the `(width, height)` [`draw_badge_with_engine`] would occupy, without a
 /// rendering context (used for HUD badge stacking and damage geometry).
-pub(crate) fn measure_badge(
+pub(crate) fn measure_badge_with_engine(
+    engine: &UiTextEngine,
     label: &str,
     label_font_size: f64,
     hint: Option<(&str, f64)>,
 ) -> Option<(f64, f64)> {
-    let label_extents = crate::ui_text::measure_text(
+    let label_extents = engine.measure(
         UiTextStyle {
             family: "Sans",
             slant: cairo::FontSlant::Normal,
@@ -416,7 +434,7 @@ pub(crate) fn measure_badge(
         None,
     )?;
     let hint_extents = match hint {
-        Some((text, font_size)) => Some(crate::ui_text::measure_text(
+        Some((text, font_size)) => Some(engine.measure(
             UiTextStyle {
                 family: "Sans",
                 slant: cairo::FontSlant::Normal,
@@ -436,7 +454,8 @@ pub(crate) fn measure_badge(
 /// dimmer `(text, font_size)` hint line below it. Returns the measured badge
 /// height so callers can stack badges without hardcoding heights.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn draw_badge(
+pub(crate) fn draw_badge_with_engine(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     anchor_x: f64,
     top_y: f64,
@@ -447,7 +466,7 @@ pub(crate) fn draw_badge(
     tint: [f64; 4],
 ) -> f64 {
     let padding = BADGE_PADDING;
-    let label_layout = text_layout(
+    let label_layout = engine.layout(
         ctx,
         UiTextStyle {
             family: "Sans",
@@ -461,7 +480,7 @@ pub(crate) fn draw_badge(
     let label_extents = label_layout.ink_extents();
 
     let hint_layout = hint.map(|(text, font_size)| {
-        let layout = text_layout(
+        let layout = engine.layout(
             ctx,
             UiTextStyle {
                 family: "Sans",

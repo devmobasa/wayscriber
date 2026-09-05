@@ -603,6 +603,7 @@ fn page_duplicate_from_context_duplicates_target_page_and_closes_menu() {
 
 #[test]
 fn page_delete_from_context_reconciles_board_picker_page_search_cursor() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
     state.switch_board(BOARD_ID_BLACKBOARD);
@@ -612,14 +613,14 @@ fn page_delete_from_context_reconciles_board_picker_page_search_cursor() {
         &[Some("Match one"), Some("Match two"), Some("Other")],
         0,
     );
-    state.open_board_picker();
+    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
     state.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-    state.handle_board_picker_key(Key::Char('/'));
+    state.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));
     for ch in "match".chars() {
-        state.handle_board_picker_key(Key::Char(ch));
+        state.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch));
     }
-    state.handle_board_picker_key(Key::F3);
+    state.handle_board_picker_key_with_measurer(&route_measurer, Key::F3);
     assert_eq!(
         state.board_picker_page_nav_mode(),
         BoardPickerPageNavMode::Search
@@ -646,7 +647,7 @@ fn page_delete_from_context_reconciles_board_picker_page_search_cursor() {
     assert_eq!(state.board_picker_page_search_cursor(), Some(0));
     assert_eq!(state.board_picker_page_search_active_match(), Some(0));
 
-    assert!(state.handle_board_picker_key(Key::Return));
+    assert!(state.handle_board_picker_key_with_measurer(&route_measurer, Key::Return));
     assert!(!state.is_board_picker_open());
     assert_eq!(
         state.boards.board_states()[blackboard].pages.active_index(),
@@ -656,6 +657,7 @@ fn page_delete_from_context_reconciles_board_picker_page_search_cursor() {
 
 #[test]
 fn page_search_active_match_clamps_stale_cursor_after_external_page_delete() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
     state.switch_board(BOARD_ID_BLACKBOARD);
@@ -665,25 +667,25 @@ fn page_search_active_match_clamps_stale_cursor_after_external_page_delete() {
         &[Some("Match one"), Some("Match two"), Some("Other")],
         0,
     );
-    state.open_board_picker();
+    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
     state.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-    state.handle_board_picker_key(Key::Char('/'));
+    state.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));
     for ch in "match".chars() {
-        state.handle_board_picker_key(Key::Char(ch));
+        state.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch));
     }
-    state.handle_board_picker_key(Key::F3);
+    state.handle_board_picker_key_with_measurer(&route_measurer, Key::F3);
     assert_eq!(state.board_picker_page_search_cursor(), Some(1));
     assert_eq!(state.board_picker_page_search_active_match(), Some(1));
 
-    state.delete_page_in_board(blackboard, 0);
-    state.delete_page_in_board(blackboard, 0);
+    state.delete_page_in_board_with_measurer(&route_measurer, blackboard, 0);
+    state.delete_page_in_board_with_measurer(&route_measurer, blackboard, 0);
 
     assert_eq!(state.board_picker_page_search_match_count(), 1);
     assert_eq!(state.board_picker_page_search_cursor(), Some(1));
     assert_eq!(state.board_picker_page_search_active_match(), Some(0));
 
-    assert!(state.handle_board_picker_key(Key::Return));
+    assert!(state.handle_board_picker_key_with_measurer(&route_measurer, Key::Return));
     assert!(!state.is_board_picker_open());
     assert_eq!(
         state.boards.board_states()[blackboard].pages.active_index(),

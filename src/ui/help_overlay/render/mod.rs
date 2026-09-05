@@ -1,82 +1,35 @@
+use super::content::HelpContentSnapshot;
 use super::grid::{GridColors, GridStyle, draw_sections_grid};
 use super::keycaps::KeyComboStyle;
 use super::nav::{NavDrawStyle, draw_nav};
 use super::sections::HelpOverlayBindings;
 
 mod cache;
+mod entry;
+mod footer;
 mod frame;
 mod header;
-mod hit;
 mod metrics;
 mod palette;
 mod state;
 
-use super::super::primitives::{draw_rounded_rect, text_extents_for};
 use super::types::HelpRowHit;
 use crate::config::{Action, action_label};
 use crate::label_format::NOT_BOUND_LABEL;
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::UiTextStyle;
 pub(in crate::ui) use cache::HelpLayoutCache;
+pub use entry::{render_help_overlay, render_help_overlay_result};
+use footer::{FooterPill, FooterPillLayout, draw_footer_pills};
 use frame::draw_overlay_frame;
 use header::{HeaderContent, HeaderHint, draw_hints, draw_version_pill};
 
-#[cfg(test)]
-pub use hit::install_help_hit_map_for_test;
-pub use hit::{HelpOverlayRegion, clear_help_overlay_hit_map, help_overlay_region_at};
+pub use crate::help_overlay_interaction::{HelpHitMap, HelpOverlayRegion, HelpRenderResult};
 
 const BULLET: &str = "\u{2022}";
 
-/// Horizontal padding inside the "Replay tour" footer pill, between its border
-/// and the icon/label content.
-const REPLAY_FOOTER_PAD_X: f64 = 12.0;
-/// Gap between the refresh icon and the "Replay tour" label inside the pill.
-const REPLAY_FOOTER_ICON_GAP: f64 = 7.0;
-/// Gap between the footer pills.
-const FOOTER_PILL_GAP: f64 = 10.0;
-
-/// Render help overlay showing all keybindings with call-local paint resources.
-/// The overlay runtime uses the explicit-context entry point to retain its layout.
 #[allow(clippy::too_many_arguments)]
-pub fn render_help_overlay(
-    ctx: &cairo::Context,
-    style: &crate::config::HelpOverlayStyle,
-    screen_width: u32,
-    screen_height: u32,
-    frozen_enabled: bool,
-    page_index: usize,
-    bindings: &HelpOverlayBindings,
-    search_query: &str,
-    context_filter: bool,
-    board_enabled: bool,
-    capture_enabled: bool,
-    scroll_offset: f64,
-    quick_mode: bool,
-) -> f64 {
-    let mut caches = crate::ui::UiRenderCaches::default();
-    let theme = crate::ui::theme::Theme::dark();
-    render_help_overlay_with_context(
-        &mut crate::ui::UiRenderCtx {
-            cairo: ctx,
-            theme: &theme,
-            caches: &mut caches,
-        },
-        style,
-        screen_width,
-        screen_height,
-        frozen_enabled,
-        page_index,
-        bindings,
-        search_query,
-        context_filter,
-        board_enabled,
-        capture_enabled,
-        scroll_offset,
-        quick_mode,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn render_help_overlay_with_context(
+pub(crate) fn render_help_overlay_result_with_context(
+    engine: &crate::ui_text::UiTextEngine,
     render: &mut crate::ui::UiRenderCtx<'_, '_, '_>,
     style: &crate::config::HelpOverlayStyle,
     screen_width: u32,
@@ -90,7 +43,42 @@ pub(crate) fn render_help_overlay_with_context(
     capture_enabled: bool,
     scroll_offset: f64,
     quick_mode: bool,
-) -> f64 {
+) -> HelpRenderResult {
+    let content = HelpContentSnapshot::from_bindings(
+        bindings,
+        frozen_enabled,
+        context_filter,
+        board_enabled,
+        capture_enabled,
+    );
+    render_help_overlay_result_with_content(
+        engine,
+        render,
+        style,
+        screen_width,
+        screen_height,
+        page_index,
+        &content,
+        search_query,
+        scroll_offset,
+        quick_mode,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_help_overlay_result_with_content(
+    engine: &crate::ui_text::UiTextEngine,
+    render: &mut crate::ui::UiRenderCtx<'_, '_, '_>,
+    style: &crate::config::HelpOverlayStyle,
+    screen_width: u32,
+    screen_height: u32,
+    page_index: usize,
+    content: &HelpContentSnapshot,
+    search_query: &str,
+    scroll_offset: f64,
+    quick_mode: bool,
+) -> HelpRenderResult {
+    let bindings = &content.bindings;
     let ctx = render.cairo;
     let title_text = if quick_mode {
         "Quick Reference"
@@ -159,17 +147,14 @@ pub(crate) fn render_help_overlay_with_context(
     let close_hint_text: &str = &close_hint_owned;
 
     let layout = render.caches.help_mut().get_or_build_overlay_layout(
+        engine,
         ctx,
         style,
         screen_width,
         screen_height,
-        frozen_enabled,
         page_index,
-        bindings,
+        content,
         search_query,
-        context_filter,
-        board_enabled,
-        capture_enabled,
         scroll_offset,
         title_text,
         &header,
@@ -247,10 +232,11 @@ pub(crate) fn render_help_overlay_with_context(
         palette.body_text[3],
     );
     let title_baseline = cursor_y + metrics.title_font_size;
-    draw_text_baseline(ctx, title_style, title_text, inner_x, title_baseline, None);
+    engine.draw_baseline(ctx, title_style, title_text, inner_x, title_baseline, None);
 
     // Version pill, right-aligned on the title row.
     draw_version_pill(
+        engine,
         ctx,
         inner_x + inner_width,
         title_baseline,
@@ -272,6 +258,7 @@ pub(crate) fn render_help_overlay_with_context(
     ];
     let subtitle_baseline = cursor_y + metrics.subtitle_font_size + header::KEYCAP_PAD_Y;
     draw_hints(
+        engine,
         ctx,
         inner_x,
         subtitle_baseline,
@@ -294,6 +281,7 @@ pub(crate) fn render_help_overlay_with_context(
         extra_line_bottom_spacing: metrics.extra_line_bottom_spacing,
     };
     let nav_render = draw_nav(
+        engine,
         ctx,
         inner_x,
         cursor_y,
@@ -340,6 +328,7 @@ pub(crate) fn render_help_overlay_with_context(
     // pointer hit map tests the real layout rather than an approximation.
     let mut row_hits: Vec<HelpRowHit> = Vec::new();
     draw_sections_grid(
+        engine,
         ctx,
         &layout.grid,
         grid_start_y,
@@ -362,6 +351,7 @@ pub(crate) fn render_help_overlay_with_context(
     // map as clickable rows. About lives here rather than in the header hint
     // row because it needs no keybinding to be reachable.
     let footer_hits = draw_footer_pills(
+        engine,
         ctx,
         FooterPillLayout {
             inner_x,
@@ -402,7 +392,7 @@ pub(crate) fn render_help_overlay_with_context(
     );
     let note_x = inner_x + (inner_width - layout.note_width) / 2.0;
     let note_baseline = cursor_y + metrics.note_font_size;
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         note_style,
         layout.note_text.as_str(),
@@ -427,7 +417,7 @@ pub(crate) fn render_help_overlay_with_context(
     );
     let close_x = inner_x + (inner_width - layout.close_hint_width) / 2.0;
     let close_baseline = cursor_y + metrics.note_font_size;
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         close_style,
         close_hint_text,
@@ -436,139 +426,19 @@ pub(crate) fn render_help_overlay_with_context(
         None,
     );
 
-    hit::store_help_hit_map(
-        (
-            layout.box_x,
-            layout.box_y,
-            layout.box_width,
-            layout.box_height,
+    HelpRenderResult {
+        scroll_max: layout.scroll_max,
+        hit_map: HelpHitMap::new(
+            (
+                layout.box_x,
+                layout.box_y,
+                layout.box_width,
+                layout.box_height,
+            ),
+            Some(search_rect),
+            row_hits
+                .into_iter()
+                .map(|hit| ((hit.x, hit.y, hit.w, hit.h), hit.action)),
         ),
-        Some(search_rect),
-        &row_hits,
-    );
-
-    layout.scroll_max
-}
-
-/// One footer pill: an action plus the glyph drawn beside its registry label.
-struct FooterPill {
-    action: Action,
-    icon: crate::toolbar_icons::ToolbarIconPainter,
-}
-
-/// Geometry and styling shared by every footer pill.
-struct FooterPillLayout<'a> {
-    inner_x: f64,
-    inner_width: f64,
-    top_y: f64,
-    pill_height: f64,
-    font_size: f64,
-    font_family: &'a str,
-    accent: [f64; 4],
-    accent_muted: [f64; 4],
-}
-
-/// Draw the footer pills as one centred row and return their clickable rects,
-/// each tagged with the action a click should run.
-fn draw_footer_pills(
-    ctx: &cairo::Context,
-    layout: FooterPillLayout<'_>,
-    pills: &[FooterPill],
-) -> Vec<HelpRowHit> {
-    let icon_size = layout.font_size;
-    let label_style = UiTextStyle {
-        family: layout.font_family,
-        slant: cairo::FontSlant::Normal,
-        weight: cairo::FontWeight::Bold,
-        size: layout.font_size,
-    };
-
-    // Measure first so the row can be centred as a group rather than pill by
-    // pill.
-    let measured: Vec<(&FooterPill, &str, f64)> = pills
-        .iter()
-        .map(|pill| {
-            let label = action_label(pill.action);
-            let label_width = text_extents_for(
-                ctx,
-                layout.font_family,
-                cairo::FontSlant::Normal,
-                cairo::FontWeight::Bold,
-                layout.font_size,
-                label,
-            )
-            .width();
-            let width =
-                icon_size + REPLAY_FOOTER_ICON_GAP + label_width + REPLAY_FOOTER_PAD_X * 2.0;
-            (pill, label, width)
-        })
-        .collect();
-
-    let total_width: f64 = measured.iter().map(|(_, _, width)| width).sum::<f64>()
-        + FOOTER_PILL_GAP * measured.len().saturating_sub(1) as f64;
-    let mut pill_x = layout.inner_x + (layout.inner_width - total_width) / 2.0;
-
-    let mut hits = Vec::with_capacity(measured.len());
-    for (pill, label, pill_width) in measured {
-        draw_rounded_rect(
-            ctx,
-            pill_x,
-            layout.top_y,
-            pill_width,
-            layout.pill_height,
-            header::PILL_RADIUS,
-        );
-        ctx.set_source_rgba(layout.accent[0], layout.accent[1], layout.accent[2], 0.14);
-        let _ = ctx.fill();
-        draw_rounded_rect(
-            ctx,
-            pill_x,
-            layout.top_y,
-            pill_width,
-            layout.pill_height,
-            header::PILL_RADIUS,
-        );
-        ctx.set_source_rgba(layout.accent[0], layout.accent[1], layout.accent[2], 0.38);
-        ctx.set_line_width(1.0);
-        let _ = ctx.stroke();
-
-        let content_x = pill_x + REPLAY_FOOTER_PAD_X;
-        let icon_y = layout.top_y + (layout.pill_height - icon_size) / 2.0;
-        let _ = ctx.save();
-        ctx.set_source_rgba(
-            layout.accent_muted[0],
-            layout.accent_muted[1],
-            layout.accent_muted[2],
-            layout.accent_muted[3],
-        );
-        (pill.icon)(ctx, content_x, icon_y, icon_size);
-        let _ = ctx.restore();
-
-        let label_baseline = layout.top_y + layout.pill_height / 2.0 + layout.font_size * 0.35;
-        ctx.set_source_rgba(
-            layout.accent_muted[0],
-            layout.accent_muted[1],
-            layout.accent_muted[2],
-            layout.accent_muted[3],
-        );
-        draw_text_baseline(
-            ctx,
-            label_style,
-            label,
-            content_x + icon_size + REPLAY_FOOTER_ICON_GAP,
-            label_baseline,
-            None,
-        );
-
-        hits.push(HelpRowHit {
-            x: pill_x,
-            y: layout.top_y,
-            w: pill_width,
-            h: layout.pill_height,
-            action: pill.action,
-        });
-        pill_x += pill_width + FOOTER_PILL_GAP;
     }
-
-    hits
 }

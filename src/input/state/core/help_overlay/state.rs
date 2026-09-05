@@ -1,3 +1,4 @@
+use crate::help_overlay_interaction::{HelpHitMap, HelpOverlayRegion, HelpRenderResult};
 use crate::input::state::{HelpOverlayClick, HelpOverlayPressSource, HelpOverlayReleaseOutcome};
 
 /// Upper bound for page navigation. Rendering clamps this to the actual page count.
@@ -6,6 +7,7 @@ pub(crate) const MAX_PAGES: usize = 10;
 /// Visibility, navigation, search, and pointer bookkeeping for the help overlay.
 #[derive(Debug, Default)]
 pub struct HelpOverlayState {
+    hit_map: Option<HelpHitMap>,
     pub(in crate::input::state) visible: bool,
     pub(in crate::input::state) page: usize,
     pub(in crate::input::state) search: String,
@@ -38,7 +40,19 @@ impl HelpOverlayState {
         self.quick_mode
     }
 
+    /// Install geometry and scroll bounds from the same completed help paint.
+    pub fn install_render_result(&mut self, result: HelpRenderResult) {
+        self.update_scroll_extent(result.scroll_max);
+        self.hit_map = Some(result.hit_map);
+    }
+
+    /// Query this overlay's last rendered geometry in screen coordinates.
+    pub fn region_at(&self, x: f64, y: f64) -> Option<HelpOverlayRegion> {
+        self.hit_map.as_ref()?.region_at(x, y)
+    }
+
     pub(crate) fn open(&mut self, quick_mode: bool) {
+        self.hit_map = None;
         self.visible = true;
         self.quick_mode = quick_mode;
         self.page = 0;
@@ -51,6 +65,7 @@ impl HelpOverlayState {
         if !self.visible {
             return false;
         }
+        self.hit_map = None;
         self.visible = false;
         self.quick_mode = false;
         self.scroll = 0.0;
@@ -260,7 +275,13 @@ mod tests {
         assert!(state.scroll_by(96.0));
         assert_eq!(state.scroll, 100.0);
         assert!(!state.scroll_by(1.0));
-        state.update_scroll_extent(24.0);
+        state.note_press(HelpOverlayPressSource::Touch, HelpOverlayClick::Inside);
+        state.install_render_result(HelpRenderResult {
+            scroll_max: 24.0,
+            hit_map: HelpHitMap::new((0.0, 0.0, 100.0, 100.0), None, []),
+        });
+        assert_eq!(state.region_at(50.0, 50.0), Some(HelpOverlayRegion::Inside));
+        assert_eq!(state.pending_presses.len(), 1);
         assert_eq!((state.scroll, state.scroll_max), (24.0, 24.0));
     }
 
@@ -322,9 +343,16 @@ mod tests {
     fn closing_retires_press_without_retargeting_a_reopened_overlay() {
         let mut state = HelpOverlayState::default();
         state.open(false);
+        state.install_render_result(HelpRenderResult {
+            scroll_max: 40.0,
+            hit_map: HelpHitMap::new((0.0, 0.0, 100.0, 100.0), None, []),
+        });
+        assert_eq!(state.region_at(50.0, 50.0), Some(HelpOverlayRegion::Inside));
         state.note_press(HelpOverlayPressSource::Touch, HelpOverlayClick::Outside);
         assert!(state.close());
+        assert_eq!(state.region_at(50.0, 50.0), None);
         state.open(false);
+        assert_eq!(state.region_at(50.0, 50.0), None);
         assert_eq!(
             state.resolve_release(HelpOverlayPressSource::Touch, HelpOverlayClick::Outside),
             Some(HelpOverlayReleaseOutcome::None)

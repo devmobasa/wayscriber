@@ -25,6 +25,7 @@ pub(crate) use state::FontPickerState;
 pub use layout::{FontPickerLayout, FontPickerRow, font_picker_layout, font_picker_rows};
 
 use super::InputState;
+use crate::draw::TextMeasurer;
 use crate::draw::{FontDescriptor, families_match, system_font_catalog_is_ready};
 
 /// The picker's memoized result list, keyed by what produced it.
@@ -220,13 +221,13 @@ impl InputState {
     }
 
     /// Apply the highlighted family and close.
-    pub(crate) fn commit_font_picker(&mut self) -> bool {
+    pub(crate) fn commit_font_picker_with_measurer(&mut self, measurer: &TextMeasurer) -> bool {
         let families = self.font_picker_families();
         let Some(family) = families.get(self.font_picker.selected).cloned() else {
             self.close_font_picker();
             return false;
         };
-        let applied = self.apply_font_family(&family);
+        let applied = self.apply_font_family(measurer, &family);
         if applied {
             self.font_picker.remember_choice(&family);
             log::info!("Font picker applied {family}");
@@ -241,9 +242,9 @@ impl InputState {
     }
 
     /// Set `family` on the selection, or on the tool when nothing is selected.
-    fn apply_font_family(&mut self, family: &str) -> bool {
+    fn apply_font_family(&mut self, measurer: &TextMeasurer, family: &str) -> bool {
         if self.font_picker.target == FontPickerTarget::Selection && self.selection_has_text() {
-            return self.apply_family_to_selected_text(family);
+            return self.apply_family_to_selected_text_with(measurer, family);
         }
 
         self.set_font_descriptor(FontDescriptor::new(

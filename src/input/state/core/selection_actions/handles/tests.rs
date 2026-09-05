@@ -32,6 +32,7 @@ fn a_shallow_bend_grip_outranks_the_selection_edge_handle_it_overlaps() {
     // This is the collision the ordering exists for. At a shallow bend the grip
     // sits a couple of pixels off the chord, well inside the top edge handle's
     // tolerance, and whichever probe runs first wins the pixel.
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     let id = add_shallow_curved_arrow(&mut state);
     state.set_selection(vec![id]);
@@ -45,11 +46,13 @@ fn a_shallow_bend_grip_outranks_the_selection_edge_handle_it_overlaps() {
     );
 
     assert!(
-        state.hit_selection_handle(center.0, center.1).is_some(),
+        state
+            .hit_selection_handle_with(&measurer, center.0, center.1)
+            .is_some(),
         "test setup should have put the grip inside an edge handle"
     );
     assert_eq!(
-        state.hit_idle_handle(center.0, center.1),
+        state.hit_idle_handle_with(&measurer, center.0, center.1),
         Some(IdleHandle::ArrowBend(id)),
         "the edge handle swallowed the bend grip"
     );
@@ -62,6 +65,7 @@ fn what_the_routing_reports_is_what_a_press_starts() {
     // keep matching the variants. This is what notices if one drifts, and it is
     // the bug the shared routing replaced: the pointer showed a resize arrow
     // over a grip that a click would bend.
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     let id = add_shallow_curved_arrow(&mut state);
     state.set_selection(vec![id]);
@@ -72,11 +76,23 @@ fn what_the_routing_reports_is_what_a_press_starts() {
         grip.rect.y + grip.rect.height / 2,
     );
     assert_eq!(
-        state.hit_idle_handle(center.0, center.1),
+        state.hit_idle_handle_with(&measurer, center.0, center.1),
         Some(IdleHandle::ArrowBend(id))
     );
 
-    state.on_mouse_press(crate::input::events::MouseButton::Left, center.0, center.1);
+    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let resources = crate::input::state::InputTextResources {
+        measurer: &measurer,
+        ui_engine: &ui_engine,
+    };
+    state.on_mouse_press_with_canvas_and_resources(
+        resources,
+        crate::input::events::MouseButton::Left,
+        center.0,
+        center.1,
+        center.0,
+        center.1,
+    );
     assert!(
         matches!(state.state, DrawingState::BendingArrow { .. }),
         "routing promised a bend but the press started {:?}",
@@ -86,6 +102,7 @@ fn what_the_routing_reports_is_what_a_press_starts() {
 
 #[test]
 fn empty_canvas_routes_to_no_handle() {
+    let measurer = crate::draw::TextMeasurer::default();
     let state = make_test_input_state();
-    assert_eq!(state.hit_idle_handle(50, 50), None);
+    assert_eq!(state.hit_idle_handle_with(&measurer, 50, 50), None);
 }

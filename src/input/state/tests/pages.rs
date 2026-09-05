@@ -116,11 +116,13 @@ fn set_board_background_color_updates_active_auto_adjust_pen_color() {
 
 #[test]
 fn reorder_page_in_board_moves_named_pages_and_active_index() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let index = board_index(&state, BOARD_ID_BLACKBOARD);
     set_named_pages(&mut state, index, &["One", "Two", "Three"], 0);
 
-    assert!(state.reorder_page_in_board(index, 0, 2));
+    assert!(state.reorder_page_in_board_with_measurer(&test_text_measurer, index, 0, 2));
 
     let pages = &state.boards.board_states()[index].pages;
     assert_eq!(pages.page_name(0), Some("Two"));
@@ -131,13 +133,24 @@ fn reorder_page_in_board_moves_named_pages_and_active_index() {
 
 #[test]
 fn move_page_between_boards_copy_preserves_source_and_adds_page_to_target() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let source = board_index(&state, BOARD_ID_WHITEBOARD);
     let target = board_index(&state, BOARD_ID_BLACKBOARD);
     set_named_pages(&mut state, source, &["Copied page"], 0);
     set_named_pages(&mut state, target, &["Target page"], 0);
 
-    assert!(state.move_page_between_boards_with_activation(source, 0, target, true, false));
+    assert!(
+        state.move_page_between_boards_with_activation_with_measurer(
+            &test_text_measurer,
+            source,
+            0,
+            target,
+            true,
+            false
+        )
+    );
 
     assert_eq!(state.boards.board_states()[source].pages.page_count(), 1);
     assert_eq!(state.boards.board_states()[target].pages.page_count(), 2);
@@ -168,13 +181,24 @@ fn reset_active_canvas_position_clears_view_offset_on_solid_board() {
 
 #[test]
 fn move_page_between_boards_move_removes_source_page_and_activates_target_copy() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let source = board_index(&state, BOARD_ID_WHITEBOARD);
     let target = board_index(&state, BOARD_ID_BLACKBOARD);
     set_named_pages(&mut state, source, &["Keep", "Move me"], 1);
     set_named_pages(&mut state, target, &["Target page"], 0);
 
-    assert!(state.move_page_between_boards_with_activation(source, 1, target, false, false));
+    assert!(
+        state.move_page_between_boards_with_activation_with_measurer(
+            &test_text_measurer,
+            source,
+            1,
+            target,
+            false,
+            false
+        )
+    );
 
     assert_eq!(state.boards.board_states()[source].pages.page_count(), 1);
     assert_eq!(
@@ -196,13 +220,15 @@ fn move_page_between_boards_move_removes_source_page_and_activates_target_copy()
 
 #[test]
 fn switch_to_page_cancels_text_edit_before_leaving_source_page() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let board = board_index(&state, BOARD_ID_BLACKBOARD);
     state.switch_board(BOARD_ID_BLACKBOARD);
     set_named_pages(&mut state, board, &["Source", "Target"], 0);
     let shape_id = add_active_text_shape(&mut state, "Original");
     state.set_selection(vec![shape_id]);
-    assert!(state.edit_selected_text());
+    assert!(state.edit_selected_text_with(&test_text_measurer));
 
     assert!(state.switch_to_page(1));
 
@@ -213,12 +239,14 @@ fn switch_to_page_cancels_text_edit_before_leaving_source_page() {
 
 #[test]
 fn page_duplicate_cancels_text_edit_before_cloning_source_page() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let board = board_index(&state, BOARD_ID_BLACKBOARD);
     state.switch_board(BOARD_ID_BLACKBOARD);
     let shape_id = add_active_text_shape(&mut state, "Original");
     state.set_selection(vec![shape_id]);
-    assert!(state.edit_selected_text());
+    assert!(state.edit_selected_text_with(&test_text_measurer));
 
     state.page_duplicate();
 
@@ -395,6 +423,8 @@ fn page_duplicate_blocks_uncompressed_text_when_real_save_exceeds_limit() {
 
 #[test]
 fn cross_board_page_copy_blocks_when_clone_would_exceed_persisted_session_limit() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let source = board_index(&state, BOARD_ID_WHITEBOARD);
     let target = board_index(&state, BOARD_ID_BLACKBOARD);
@@ -405,7 +435,16 @@ fn cross_board_page_copy_blocks_when_clone_would_exceed_persisted_session_limit(
     options.max_file_size_bytes = 1024;
     state.set_session_preflight_options(Some(options));
 
-    assert!(!state.move_page_between_boards_with_activation(source, 0, target, true, false));
+    assert!(
+        !state.move_page_between_boards_with_activation_with_measurer(
+            &test_text_measurer,
+            source,
+            0,
+            target,
+            true,
+            false
+        )
+    );
 
     assert_eq!(state.boards.board_states()[source].pages.page_count(), 1);
     assert_eq!(state.boards.board_states()[target].pages.page_count(), 1);
@@ -418,6 +457,8 @@ fn cross_board_page_copy_blocks_when_clone_would_exceed_persisted_session_limit(
 
 #[test]
 fn cross_board_page_copy_preflights_when_source_was_not_previously_persisted() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let source = board_index(&state, BOARD_ID_TRANSPARENT);
     let target = board_index(&state, BOARD_ID_BLACKBOARD);
@@ -434,7 +475,16 @@ fn cross_board_page_copy_preflights_when_source_was_not_previously_persisted() {
     options.max_file_size_bytes = 512;
     state.set_session_preflight_options(Some(options));
 
-    assert!(!state.move_page_between_boards_with_activation(source, 0, target, true, false));
+    assert!(
+        !state.move_page_between_boards_with_activation_with_measurer(
+            &test_text_measurer,
+            source,
+            0,
+            target,
+            true,
+            false
+        )
+    );
 
     assert_eq!(state.boards.board_states()[source].pages.page_count(), 1);
     assert_eq!(state.boards.board_states()[target].pages.page_count(), 1);
@@ -447,6 +497,8 @@ fn cross_board_page_copy_preflights_when_source_was_not_previously_persisted() {
 
 #[test]
 fn cross_board_page_copy_cancels_active_source_text_edit_before_cloning() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let source = board_index(&state, BOARD_ID_WHITEBOARD);
     let target = board_index(&state, BOARD_ID_BLACKBOARD);
@@ -455,9 +507,18 @@ fn cross_board_page_copy_cancels_active_source_text_edit_before_cloning() {
     set_named_pages(&mut state, target, &["Target"], 0);
     let shape_id = add_active_text_shape(&mut state, "Original");
     state.set_selection(vec![shape_id]);
-    assert!(state.edit_selected_text());
+    assert!(state.edit_selected_text_with(&test_text_measurer));
 
-    assert!(state.move_page_between_boards_with_activation(source, 0, target, true, false));
+    assert!(
+        state.move_page_between_boards_with_activation_with_measurer(
+            &test_text_measurer,
+            source,
+            0,
+            target,
+            true,
+            false
+        )
+    );
 
     assert!(state.text_editing.edit_target().is_none());
     assert_page_text(&state, source, 0, shape_id, "Original");

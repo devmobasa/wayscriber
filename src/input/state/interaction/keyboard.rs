@@ -1,4 +1,4 @@
-use super::actions::route_action;
+use super::actions::route_action_with_resources;
 use super::adapters;
 use super::outcome::{ConsumedBy, NoRouteReason, RoutingOutcome};
 use crate::input::events::Key;
@@ -10,15 +10,28 @@ use std::time::Instant;
 
 use super::super::core::SequenceMatch;
 
-pub(crate) fn route_key_press(state: &mut InputState, key: Key) -> RoutingOutcome {
-    route_key_event(state, key, false)
+pub(crate) fn route_key_press_with_resources(
+    state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
+    key: Key,
+) -> RoutingOutcome {
+    route_key_event(state, resources, key, false)
 }
 
-pub(crate) fn route_key_repeat(state: &mut InputState, key: Key) -> RoutingOutcome {
-    route_key_event(state, key, true)
+pub(crate) fn route_key_repeat_with_resources(
+    state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
+    key: Key,
+) -> RoutingOutcome {
+    route_key_event(state, resources, key, true)
 }
 
-fn route_key_event(state: &mut InputState, key: Key, is_repeat: bool) -> RoutingOutcome {
+fn route_key_event(
+    state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
+    key: Key,
+    is_repeat: bool,
+) -> RoutingOutcome {
     if state.engaged_modal().is_some()
         || matches!(state.state, DrawingState::TextInput { .. })
         || state.screen_modal_is_engaged()
@@ -29,7 +42,7 @@ fn route_key_event(state: &mut InputState, key: Key, is_repeat: bool) -> Routing
     if let Some(outcome) = adapters::handle_tour_key(state, key) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_command_palette_key(state, key) {
+    if let Some(outcome) = adapters::handle_command_palette_key(state, resources, key) {
         return outcome;
     }
     if let Some(outcome) = adapters::handle_help_overlay_key(state, key) {
@@ -38,27 +51,30 @@ fn route_key_event(state: &mut InputState, key: Key, is_repeat: bool) -> Routing
     if let Some(outcome) = adapters::handle_radial_menu_key(state, key) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_precision_entry_key(state, key) {
+    if let Some(outcome) = adapters::handle_precision_entry_key(state, resources, key) {
         return outcome;
     }
     if let Some(outcome) = adapters::handle_color_picker_key(state, key) {
         return outcome;
     }
-    if let Some(outcome) =
-        adapters::handle_font_picker_key(state, key, font_picker_text(key).as_deref())
-    {
+    if let Some(outcome) = adapters::handle_font_picker_key(
+        state,
+        resources.measurer,
+        key,
+        font_picker_text(key).as_deref(),
+    ) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_context_menu_key(state, key) {
+    if let Some(outcome) = adapters::handle_context_menu_key(state, resources, key) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_board_picker_key(state, key) {
+    if let Some(outcome) = adapters::handle_board_picker_key(state, resources.measurer, key) {
         return outcome;
     }
     if let Some(outcome) = adapters::handle_global_modifier_key(state, key) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_properties_panel_key(state, key) {
+    if let Some(outcome) = adapters::handle_properties_panel_key(state, resources.measurer, key) {
         return outcome;
     }
     if let Some(outcome) = adapters::handle_top_popover_dismiss_key(state, key) {
@@ -67,21 +83,27 @@ fn route_key_event(state: &mut InputState, key: Key, is_repeat: bool) -> Routing
     if let Some(outcome) = adapters::handle_pending_delete_cancel_key(state, key) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_idle_selection_cancel_key(state, key) {
+    if let Some(outcome) =
+        adapters::handle_idle_selection_cancel_key(state, resources.measurer, key)
+    {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_text_input_key(state, key) {
+    if let Some(outcome) = adapters::handle_text_input_key(state, resources, key) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_building_polygon_key(state, key) {
+    if let Some(outcome) = adapters::handle_building_polygon_key(state, resources.measurer, key) {
         return outcome;
     }
-    if let Some(outcome) = adapters::handle_drawing_escape_cancel_key(state, key) {
+    if let Some(outcome) =
+        adapters::handle_drawing_escape_cancel_key(state, resources.measurer, key)
+    {
         return outcome;
     }
 
     match match_action_for_key_binding(state, key, is_repeat) {
-        Ok(SequenceMatch::Dispatched(action)) => return route_action(state, action),
+        Ok(SequenceMatch::Dispatched(action)) => {
+            return route_action_with_resources(state, resources, action);
+        }
         Ok(SequenceMatch::Pending) => {
             return RoutingOutcome::Consumed(ConsumedBy::SequencePrefix);
         }
@@ -92,7 +114,9 @@ fn route_key_event(state: &mut InputState, key: Key, is_repeat: bool) -> Routing
         Err(reason) => return RoutingOutcome::NoRoute(reason),
     }
 
-    if let Some(outcome) = adapters::handle_return_edit_selected_text_key(state, key) {
+    if let Some(outcome) =
+        adapters::handle_return_edit_selected_text_key(state, resources.measurer, key)
+    {
         return outcome;
     }
 

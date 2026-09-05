@@ -10,6 +10,7 @@
 //! blur tools already use for their variants.
 
 use super::InputState;
+use crate::draw::TextMeasurer;
 use crate::draw::{FontDescriptor, families_match};
 
 impl InputState {
@@ -50,7 +51,7 @@ impl InputState {
     /// The toast names the family because a font change has no visible effect
     /// until something is typed, and because a family name is the only way to
     /// tell two similar faces apart at a glance.
-    pub(crate) fn cycle_font_family(&mut self) -> bool {
+    pub(crate) fn cycle_font_family_with_measurer(&mut self, measurer: &TextMeasurer) -> bool {
         if self.style.font_cycle.is_empty() {
             self.push_toast(
                 super::ToastPriority::Info,
@@ -63,7 +64,7 @@ impl InputState {
         // A selection takes the step, so the gesture edits what the user is
         // looking at rather than a setting they cannot see.
         if self.selection_has_text() {
-            return self.cycle_selected_font_family();
+            return self.cycle_selected_font_family(measurer);
         }
 
         let Some(next) = self.next_font_family(&self.style.font_descriptor.family) else {
@@ -90,7 +91,7 @@ impl InputState {
     ///
     /// The step is decided once, from the first selected text shape, so a mixed
     /// selection converges on one family instead of fanning out further.
-    fn cycle_selected_font_family(&mut self) -> bool {
+    fn cycle_selected_font_family(&mut self, measurer: &TextMeasurer) -> bool {
         let Some(next) = self
             .first_selected_text_family()
             .and_then(|family| self.next_font_family(&family))
@@ -98,7 +99,7 @@ impl InputState {
             return false;
         };
 
-        let changed = self.apply_family_to_selected_text(&next);
+        let changed = self.apply_family_to_selected_text_with(measurer, &next);
         if changed {
             log::info!("Selected text font family set to {next}");
         }
@@ -168,19 +169,21 @@ mod tests {
 
     #[test]
     fn an_empty_list_turns_the_action_off_rather_than_panicking() {
+        let route_measurer = crate::draw::TextMeasurer::default();
         let mut state = make_test_input_state();
         state.set_font_cycle(Vec::new());
 
         assert_eq!(state.next_font_family("Sans"), None);
-        assert!(!state.cycle_font_family());
+        assert!(!state.cycle_font_family_with_measurer(&route_measurer));
     }
 
     #[test]
     fn cycling_with_nothing_selected_sets_what_the_next_label_uses() {
+        let route_measurer = crate::draw::TextMeasurer::default();
         let mut state = state_with_cycle();
         let before = state.style.font_descriptor.family.clone();
 
-        assert!(state.cycle_font_family());
+        assert!(state.cycle_font_family_with_measurer(&route_measurer));
 
         assert_ne!(state.style.font_descriptor.family, before);
         assert!(
@@ -193,6 +196,7 @@ mod tests {
 
     #[test]
     fn cycling_with_text_selected_restyles_that_text_and_leaves_the_tool_alone() {
+        let route_measurer = crate::draw::TextMeasurer::default();
         let mut state = state_with_cycle();
         let tool_font = state.style.font_descriptor.family.clone();
         let id = state.boards.active_frame_mut().add_shape(Shape::Text {
@@ -211,7 +215,7 @@ mod tests {
         });
         state.set_selection(vec![id]);
 
-        assert!(state.cycle_font_family());
+        assert!(state.cycle_font_family_with_measurer(&route_measurer));
 
         let frame = state.boards.active_frame();
         let Some(Shape::Text {
@@ -229,6 +233,7 @@ mod tests {
 
     #[test]
     fn a_selection_with_no_text_in_it_falls_through_to_the_tool_font() {
+        let route_measurer = crate::draw::TextMeasurer::default();
         let mut state = state_with_cycle();
         let before = state.style.font_descriptor.family.clone();
         let id = state.boards.active_frame_mut().add_shape(Shape::Rect {
@@ -242,7 +247,7 @@ mod tests {
         });
         state.set_selection(vec![id]);
 
-        assert!(state.cycle_font_family());
+        assert!(state.cycle_font_family_with_measurer(&route_measurer));
 
         assert_ne!(state.style.font_descriptor.family, before);
     }

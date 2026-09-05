@@ -1,16 +1,17 @@
 use super::super::base::InputState;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
 
 impl InputState {
-    pub(crate) fn move_selection_to_front(&mut self) -> bool {
-        self.reorder_selection(true)
+    pub(crate) fn move_selection_to_front_with(&mut self, measurer: &TextMeasurer) -> bool {
+        self.reorder_selection(measurer, true)
     }
 
-    pub(crate) fn move_selection_to_back(&mut self) -> bool {
-        self.reorder_selection(false)
+    pub(crate) fn move_selection_to_back_with(&mut self, measurer: &TextMeasurer) -> bool {
+        self.reorder_selection(measurer, false)
     }
 
-    fn reorder_selection(&mut self, to_front: bool) -> bool {
+    fn reorder_selection(&mut self, measurer: &TextMeasurer, to_front: bool) -> bool {
         let ids_len = self.selected_shape_ids().len();
         if ids_len == 0 {
             return false;
@@ -43,8 +44,8 @@ impl InputState {
                     to: target,
                 });
                 if let Some(shape) = self.boards.active_frame().shape(id) {
-                    self.dirty_tracker.mark_shape(&shape.shape);
-                    self.invalidate_hit_cache_for(id);
+                    self.dirty_tracker.mark_shape_with(&shape.shape, measurer);
+                    self.invalidate_hit_cache_for_with(measurer, id);
                 }
             }
         }

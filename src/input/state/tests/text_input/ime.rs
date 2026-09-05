@@ -378,6 +378,7 @@ fn preedit_replacing_a_forward_selection_has_one_effective_preview_and_cursor() 
 
 #[test]
 fn preedit_start_removes_selection_and_invalidates_pending_clipboard_edit() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     state.state = DrawingState::text_input(0, 0, "hello world".to_string());
     if let DrawingState::TextInput {
@@ -422,14 +423,16 @@ fn preedit_start_removes_selection_and_invalidates_pending_clipboard_edit() {
     );
 
     state.text_editing.ime_queue_preedit(None, 0, 0);
-    assert!(state.ime_apply_done());
+    assert!(state.ime_apply_done_with(&measurer));
     assert_eq!(
         buffer(&state),
         " world",
         "canceling the preedit must not restore the removed selection"
     );
     assert!(
-        state.apply_text_paste(stale_paste, "stale").is_none(),
+        state
+            .apply_text_paste_with(&measurer, stale_paste, "stale")
+            .is_none(),
         "the paste captured before composition must remain invalid"
     );
 }

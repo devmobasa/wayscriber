@@ -3,9 +3,9 @@
 //! The hint line mirrors the keycap styling used throughout the grid rows so the
 //! header reads as part of the same visual system instead of flat plain text.
 
-use super::super::super::primitives::{draw_rounded_rect, text_extents_for};
+use super::super::super::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use super::super::keycaps::{KeyComboStyle, draw_key_combo, measure_key_combo};
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::UiTextStyle;
 
 /// Vertical headroom the subtitle keycap chips need above the text baseline,
 /// so the subtitle row reserves space for the [`super::super::keycaps`] chips.
@@ -50,13 +50,15 @@ fn normal_style(font_family: &str, font_size: f64) -> UiTextStyle<'_> {
 
 /// Measure the total width the hint line occupies (intro + hints + separators).
 pub(super) fn measure_hints(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     font_family: &str,
     font_size: f64,
     content: &HeaderContent<'_>,
 ) -> f64 {
     let text_width = |text: &str| {
-        text_extents_for(
+        text_extents_for_with_engine(
+            engine,
             ctx,
             font_family,
             cairo::FontSlant::Normal,
@@ -79,7 +81,7 @@ pub(super) fn measure_hints(
         if has_leading {
             width += SEP_GAP + text_width(BULLET) + SEP_GAP;
         }
-        width += measure_key_combo(ctx, hint.keys, font_family, font_size);
+        width += measure_key_combo(engine, ctx, hint.keys, font_family, font_size);
         width += CHIP_LABEL_GAP + text_width(hint.label);
         has_leading = true;
     }
@@ -90,6 +92,7 @@ pub(super) fn measure_hints(
 /// Draw the hint line starting at `x`, on `baseline`. Returns the width drawn.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw_hints(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     baseline: f64,
@@ -112,7 +115,7 @@ pub(super) fn draw_hints(
             muted_color[2],
             muted_color[3],
         );
-        let ext = draw_text_baseline(ctx, style, BULLET, *cursor_x, baseline, None);
+        let ext = engine.draw_baseline(ctx, style, BULLET, *cursor_x, baseline, None);
         *cursor_x += ext.width() + SEP_GAP;
     };
 
@@ -123,7 +126,7 @@ pub(super) fn draw_hints(
             label_color[2],
             label_color[3],
         );
-        let ext = draw_text_baseline(ctx, style, intro, cursor_x, baseline, None);
+        let ext = engine.draw_baseline(ctx, style, intro, cursor_x, baseline, None);
         cursor_x += ext.width();
         has_leading = true;
     }
@@ -133,7 +136,8 @@ pub(super) fn draw_hints(
             draw_separator(ctx, &mut cursor_x);
         }
 
-        let combo_width = draw_key_combo(ctx, cursor_x, baseline, hint.keys, key_combo_style);
+        let combo_width =
+            draw_key_combo(engine, ctx, cursor_x, baseline, hint.keys, key_combo_style);
         cursor_x += combo_width + CHIP_LABEL_GAP;
 
         ctx.set_source_rgba(
@@ -142,7 +146,7 @@ pub(super) fn draw_hints(
             label_color[2],
             label_color[3],
         );
-        let label_ext = draw_text_baseline(ctx, style, hint.label, cursor_x, baseline, None);
+        let label_ext = engine.draw_baseline(ctx, style, hint.label, cursor_x, baseline, None);
         cursor_x += label_ext.width();
 
         has_leading = true;
@@ -153,12 +157,14 @@ pub(super) fn draw_hints(
 
 /// Width of the version pill (rounded chip) for the given text.
 pub(super) fn measure_version_pill(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     font_family: &str,
     font_size: f64,
     version: &str,
 ) -> f64 {
-    let text_width = text_extents_for(
+    let text_width = text_extents_for_with_engine(
+        engine,
         ctx,
         font_family,
         cairo::FontSlant::Normal,
@@ -172,6 +178,7 @@ pub(super) fn measure_version_pill(
 
 /// Extra width the title row needs so the title and version pill never overlap.
 pub(super) fn title_row_width(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     font_family: &str,
     title_font_size: f64,
@@ -179,7 +186,8 @@ pub(super) fn title_row_width(
     title: &str,
     version: &str,
 ) -> f64 {
-    let title_width = text_extents_for(
+    let title_width = text_extents_for_with_engine(
+        engine,
         ctx,
         font_family,
         cairo::FontSlant::Normal,
@@ -188,7 +196,7 @@ pub(super) fn title_row_width(
         title,
     )
     .width();
-    let pill_width = measure_version_pill(ctx, font_family, pill_font_size, version);
+    let pill_width = measure_version_pill(engine, ctx, font_family, pill_font_size, version);
     title_width + TITLE_PILL_GAP + pill_width
 }
 
@@ -196,6 +204,7 @@ pub(super) fn title_row_width(
 /// centred against a title whose baseline is `title_baseline`.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw_version_pill(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     right_edge: f64,
     title_baseline: f64,
@@ -206,7 +215,7 @@ pub(super) fn draw_version_pill(
     accent: [f64; 4],
     text_color: [f64; 4],
 ) {
-    let pill_width = measure_version_pill(ctx, font_family, font_size, version);
+    let pill_width = measure_version_pill(engine, ctx, font_family, font_size, version);
     let pill_height = font_size + PILL_PADDING_Y * 2.0;
     let pill_x = right_edge - pill_width;
     // Centre the pill against the title's optical centre (~0.34 of the cap height
@@ -231,7 +240,7 @@ pub(super) fn draw_version_pill(
     };
     let text_baseline = pill_y + PILL_PADDING_Y + font_size * 0.82;
     ctx.set_source_rgba(text_color[0], text_color[1], text_color[2], text_color[3]);
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         text_style,
         version,

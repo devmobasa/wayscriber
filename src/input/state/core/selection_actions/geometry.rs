@@ -1,5 +1,6 @@
 use super::super::base::InputState;
 use crate::draw::ShapeId;
+use crate::draw::TextMeasurer;
 use crate::util::Rect;
 
 fn selection_rect(start_x: i32, start_y: i32, end_x: i32, end_y: i32) -> Option<Rect> {
@@ -24,7 +25,11 @@ impl InputState {
         selection_rect(start_x, start_y, end_x, end_y)
     }
 
-    pub(crate) fn shape_ids_in_rect(&self, rect: Rect) -> Vec<ShapeId> {
+    pub(crate) fn shape_ids_in_rect_with(
+        &self,
+        measurer: &TextMeasurer,
+        rect: Rect,
+    ) -> Vec<ShapeId> {
         let frame = self.boards.active_frame();
         frame
             .shapes
@@ -32,7 +37,7 @@ impl InputState {
             .filter_map(|shape| {
                 shape
                     .shape
-                    .bounding_box()
+                    .bounding_box_with(measurer)
                     .and_then(|bounds| rects_intersect(rect, bounds).then_some(shape.id))
             })
             .collect()

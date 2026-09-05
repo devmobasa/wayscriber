@@ -11,7 +11,7 @@ use state::StatusHudRebuildInputs;
 pub use state::StatusHudState;
 
 use crate::config::{Action, StatusBarItem, StatusBarStyle, StatusPosition};
-use crate::ui::{StatusHudLayout, StatusHudSegmentKind, compute_status_hud_layout};
+use crate::ui::{StatusHudLayout, StatusHudSegmentKind};
 
 use super::base::InputState;
 use super::board_picker::BoardPickerFocus;
@@ -47,8 +47,10 @@ impl InputState {
         }
     }
 
-    pub(crate) fn set_status_bar_item_visible(
+    pub(crate) fn set_status_bar_item_visible_with_resources(
         &mut self,
+        engine: &crate::ui_text::UiTextEngine,
+        measurer: &crate::draw::TextMeasurer,
         item: StatusBarItem,
         visible: bool,
     ) -> bool {
@@ -70,7 +72,7 @@ impl InputState {
             StatusBarItem::Help => self.ui_visibility.show_status_help = visible,
             StatusBarItem::About => self.ui_visibility.show_status_about = visible,
         }
-        self.refresh_status_hud_layout();
+        self.refresh_status_hud_layout_with_resources(engine, measurer);
         self.needs_redraw = true;
         true
     }
@@ -81,13 +83,21 @@ impl InputState {
     /// narrow outputs — between the mutation and the next frame, and hover is
     /// re-derived so a vanished segment cannot stay lit. Damage stays with
     /// the render effect pass, which re-measures with that frame's inputs.
-    pub(crate) fn refresh_status_hud_layout(&mut self) {
+    pub(crate) fn refresh_status_hud_layout_with_resources(
+        &mut self,
+        engine: &crate::ui_text::UiTextEngine,
+        measurer: &crate::draw::TextMeasurer,
+    ) {
         let Some(inputs) = self.status_hud.rebuild_inputs() else {
             self.status_hud.layout = None;
             self.status_hud.hover = None;
             return;
         };
-        self.update_status_hud_layout_for_pointer(
+        self.update_status_hud_layout_for_pointer_with_resources(
+            crate::input::state::InputTextResources {
+                measurer,
+                ui_engine: engine,
+            },
             inputs.position,
             &inputs.style,
             inputs.screen_width,
@@ -109,7 +119,13 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) {
-        self.update_status_hud_layout_for_pointer(
+        let engine = crate::ui_text::UiTextEngine::default();
+        let measurer = crate::draw::TextMeasurer::default();
+        self.update_status_hud_layout_for_pointer_with_resources(
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &engine,
+            },
             position,
             style,
             screen_width,
@@ -118,8 +134,9 @@ impl InputState {
         );
     }
 
-    pub(crate) fn update_status_hud_layout_for_pointer(
+    pub(crate) fn update_status_hud_layout_for_pointer_with_resources(
         &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
         position: StatusPosition,
         style: &StatusBarStyle,
         screen_width: u32,
@@ -127,7 +144,15 @@ impl InputState {
         chrome_cursor_focused: bool,
     ) {
         let layout = if self.ui_visibility.show_status_bar {
-            compute_status_hud_layout(self, position, style, screen_width, screen_height)
+            crate::ui::compute_status_hud_layout_with_resources(
+                resources.ui_engine,
+                resources.measurer,
+                self,
+                position,
+                style,
+                screen_width,
+                screen_height,
+            )
         } else {
             None
         };
@@ -265,7 +290,12 @@ impl InputState {
     /// picker popup, radial menu at the pointer) and/or returns the action
     /// for the backend to dispatch (help, toolbar restore). Returns
     /// `(hit, action)` mirroring toast release resolver.
-    pub(crate) fn check_status_hud_click(&mut self, x: i32, y: i32) -> (bool, Option<Action>) {
+    pub(crate) fn check_status_hud_click_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        x: i32,
+        y: i32,
+    ) -> (bool, Option<Action>) {
         // `status_hud_contains` also applies the open-overlay guard, so a
         // release cannot activate a chip when an overlay opened between the
         // press and the release.
@@ -283,7 +313,7 @@ impl InputState {
         };
         match kind {
             StatusHudSegmentKind::Board => {
-                self.toggle_board_picker();
+                self.toggle_board_picker_with_measurer(measurer);
                 (true, None)
             }
             StatusHudSegmentKind::Page => {
@@ -291,13 +321,13 @@ impl InputState {
                 // the Page chip is distinguishable from the Board chip (the
                 // setter also scrolls the panel to the active page).
                 if !self.is_board_picker_open() {
-                    self.open_board_picker();
+                    self.open_board_picker_with_measurer(measurer);
                 }
                 self.board_picker_set_focus(BoardPickerFocus::PagePanel);
                 (true, None)
             }
             StatusHudSegmentKind::Color => {
-                self.open_color_picker_popup();
+                self.open_color_picker_popup_with_measurer(measurer);
                 (true, None)
             }
             StatusHudSegmentKind::Tool | StatusHudSegmentKind::Size => {

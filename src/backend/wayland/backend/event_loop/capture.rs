@@ -375,9 +375,11 @@ fn resolve_board_capture_outcome(
                 height: image.height,
                 bytes: image.bytes.into(),
             };
-            state
-                .input_state
-                .insert_captured_image(embedded, &pending.target);
+            state.input_state.insert_captured_image_with(
+                state.render.text_measurer(),
+                embedded,
+                &pending.target,
+            );
             None
         }
         (CaptureOutcome::RenderedImageReady(_), None) => {

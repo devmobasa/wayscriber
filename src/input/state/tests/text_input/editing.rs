@@ -152,6 +152,7 @@ fn collapsing_a_selection_at_its_caret_boundary_marks_an_external_change() {
 
 #[test]
 fn keyboard_pointer_and_paste_changes_mark_an_external_ime_update() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     use crate::input::MouseButton;
 
     let mut state = text_state("abc");
@@ -162,7 +163,7 @@ fn keyboard_pointer_and_paste_changes_mark_an_external_ime_update() {
     state.on_mouse_press_with_canvas(MouseButton::Left, 10, 0, 10, 0);
     assert!(state.take_text_input_external_change_dirty());
 
-    assert!(state.insert_text_at_caret("X"));
+    assert!(state.insert_text_at_caret_with(&route_measurer, "X"));
     assert!(state.take_text_input_external_change_dirty());
 }
 
@@ -271,6 +272,7 @@ fn ctrl_x_without_a_selection_falls_through_without_editing() {
 
 #[test]
 fn ctrl_x_deletes_the_selection_only_after_clipboard_publication() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = text_state("hello");
     state.modifiers.shift = true;
     state.on_key_press(Key::Home);
@@ -289,7 +291,7 @@ fn ctrl_x_deletes_the_selection_only_after_clipboard_publication() {
         "a failed clipboard publication must leave the selection intact"
     );
 
-    state.complete_text_copy(request);
+    state.complete_text_copy_with(&measurer, request);
     assert_eq!(
         buffer(&state),
         "",
@@ -315,6 +317,7 @@ fn repeated_ctrl_x_requests_are_retained_before_backend_draining() {
 
 #[test]
 fn stale_cut_completion_never_deletes_later_edits() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = text_state("hello");
     state.modifiers.shift = true;
     state.on_key_press(Key::Home);
@@ -328,12 +331,13 @@ fn stale_cut_completion_never_deletes_later_edits() {
 
     state.on_key_press(Key::Char('X'));
     assert_eq!(buffer(&state), "X");
-    state.complete_text_copy(request);
+    state.complete_text_copy_with(&measurer, request);
     assert_eq!(buffer(&state), "X");
 }
 
 #[test]
 fn cut_completion_is_invalid_after_intervening_edits_restore_the_same_selection() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = text_state("hello");
     state.modifiers.ctrl = true;
     state.on_key_press(Key::Char('a'));
@@ -359,7 +363,7 @@ fn cut_completion_is_invalid_after_intervening_edits_restore_the_same_selection(
     state.modifiers.ctrl = false;
 
     assert_eq!(buffer(&state), "hello");
-    state.complete_text_copy(request);
+    state.complete_text_copy_with(&measurer, request);
     assert_eq!(
         buffer(&state),
         "hello",
@@ -369,6 +373,7 @@ fn cut_completion_is_invalid_after_intervening_edits_restore_the_same_selection(
 
 #[test]
 fn ctrl_v_requests_a_paste_that_inserts_at_the_caret() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = text_state("ac");
     state.modifiers.ctrl = true;
     state.on_key_press(Key::Char('v'));
@@ -384,7 +389,7 @@ fn ctrl_v_requests_a_paste_that_inserts_at_the_caret() {
 
     // The backend delivers clipboard text via insert_text_at_caret.
     state.on_key_press(Key::Left); // caret between 'a' and 'c'
-    assert!(state.insert_text_at_caret("b"));
+    assert!(state.insert_text_at_caret_with(&route_measurer, "b"));
     assert_eq!(buffer(&state), "abc");
 }
 
@@ -405,6 +410,7 @@ fn repeated_ctrl_v_requests_are_retained_before_backend_draining() {
 
 #[test]
 fn delayed_paste_replaces_the_selection_captured_at_invocation() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = text_state("hello");
     state.modifiers.ctrl = true;
     state.on_key_press(Key::Char('a'));
@@ -417,21 +423,32 @@ fn delayed_paste_replaces_the_selection_captured_at_invocation() {
     // Clipboard reads are asynchronous. Moving the caret while the read is in
     // flight must not retarget the completion away from the invoked selection.
     state.on_key_press(Key::Home);
-    assert!(state.apply_text_paste(target, "X").is_some());
+    assert!(
+        state
+            .apply_text_paste_with(&measurer, target, "X")
+            .is_some()
+    );
     assert_eq!(buffer(&state), "X");
 }
 
 #[test]
 fn paste_generation_does_not_match_a_later_text_edit() {
+    let measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
-    state.handle_action(Action::EnterTextMode);
+    state.handle_action_with_resources(test_text_resources, Action::EnterTextMode);
     let first = state
         .text_editing
         .generation(&state.state)
         .expect("text edit is active");
 
-    state.cancel_text_input();
-    state.handle_action(Action::EnterTextMode);
+    state.cancel_text_input_with(&measurer);
+    state.handle_action_with_resources(test_text_resources, Action::EnterTextMode);
 
     assert!(
         !state
@@ -442,10 +459,17 @@ fn paste_generation_does_not_match_a_later_text_edit() {
 
 #[test]
 fn first_click_places_a_new_empty_text_block() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     use crate::input::MouseButton;
 
     let mut state = create_test_input_state();
-    state.handle_action(Action::EnterTextMode);
+    state.handle_action_with_resources(test_text_resources, Action::EnterTextMode);
     state.on_mouse_press_with_canvas(MouseButton::Left, 222, 333, 222, 333);
 
     assert_eq!(origin(&state), (222, 333));
@@ -617,7 +641,9 @@ fn click_after_visible_preedit_maps_back_to_the_committed_buffer() {
         .style
         .font_descriptor
         .to_pango_string(state.style.current_font_size);
-    let geometry = crate::draw::shape::caret_geometry_text(preview, &font, None, 11)
+    let measurer = crate::draw::TextMeasurer::default();
+    let geometry = measurer
+        .caret_geometry_text(preview, &font, None, 11)
         .expect("preview caret geometry is measurable");
     let click_x = geometry.x.round() as i32;
     state.on_mouse_press_with_canvas(MouseButton::Left, click_x, 0, click_x, 0);
@@ -631,6 +657,8 @@ fn click_after_visible_preedit_maps_back_to_the_committed_buffer() {
 
 #[test]
 fn edit_ghost_is_hidden_in_place_and_shown_after_moving() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     use crate::draw::Shape;
 
     let mut state = create_test_input_state();
@@ -646,7 +674,7 @@ fn edit_ghost_is_hidden_in_place_and_shown_after_moving() {
     });
     state.set_selection(vec![shape_id]);
     assert!(
-        state.edit_selected_text(),
+        state.edit_selected_text_with(&test_text_measurer),
         "should enter edit mode on the existing text"
     );
 

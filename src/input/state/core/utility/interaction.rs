@@ -1,5 +1,6 @@
 use super::super::base::{DrawingState, InputState, PasteAnchor};
 use crate::draw::DirtyRegionReport;
+use crate::draw::TextMeasurer;
 use crate::util::Rect;
 use std::time::Instant;
 
@@ -149,8 +150,8 @@ impl InputState {
     }
 
     /// Cancels the current text input session and restores any edited shape.
-    pub(crate) fn cancel_text_input(&mut self) {
-        self.cancel_text_edit();
+    pub(crate) fn cancel_text_input_with(&mut self, measurer: &TextMeasurer) {
+        self.cancel_text_edit_with(measurer);
         self.end_text_input_session();
     }
 
@@ -168,22 +169,21 @@ impl InputState {
     /// Cancels the current interaction when one is active.
     ///
     /// Returns `true` when an active interaction consumed the caller's event.
-    pub(crate) fn try_cancel_active_interaction(&mut self) -> bool {
+    pub(crate) fn try_cancel_active_interaction_with(&mut self, measurer: &TextMeasurer) -> bool {
         if matches!(self.state, DrawingState::Idle) {
             return false;
         }
 
-        self.cancel_active_interaction();
+        self.cancel_active_interaction_with(measurer);
         true
     }
 
-    /// Cancels any in-progress interaction without exiting the application.
-    pub(crate) fn cancel_active_interaction(&mut self) {
+    pub(crate) fn cancel_active_interaction_with(&mut self, measurer: &TextMeasurer) {
         // A canceled interaction never leaves a dangling block-move drag.
         self.text_editing.set_text_block_drag(None);
         match &self.state {
             DrawingState::TextInput { .. } => {
-                self.cancel_text_input();
+                self.cancel_text_input_with(measurer);
             }
             DrawingState::PendingTextClick { .. } => {
                 self.state = DrawingState::Idle;
@@ -200,7 +200,7 @@ impl InputState {
                 self.needs_redraw = true;
             }
             DrawingState::MovingSelection { snapshots, .. } => {
-                self.restore_selection_from_snapshots(snapshots.clone());
+                self.restore_selection_from_snapshots_with(measurer, snapshots.clone());
                 self.state = DrawingState::Idle;
             }
             DrawingState::Selecting { .. } => {
@@ -211,17 +211,23 @@ impl InputState {
             DrawingState::ResizingText {
                 shape_id, snapshot, ..
             } => {
-                self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
+                self.restore_selection_from_snapshots_with(
+                    measurer,
+                    vec![(*shape_id, snapshot.clone())],
+                );
                 self.state = DrawingState::Idle;
             }
             DrawingState::BendingArrow { shape_id, snapshot }
             | DrawingState::AdjustingSpotlightMagnification { shape_id, snapshot } => {
-                self.restore_selection_from_snapshots(vec![(*shape_id, snapshot.clone())]);
+                self.restore_selection_from_snapshots_with(
+                    measurer,
+                    vec![(*shape_id, snapshot.clone())],
+                );
                 self.state = DrawingState::Idle;
             }
             DrawingState::ResizingSelection { snapshots, .. } => {
                 let snapshots = snapshots.clone();
-                self.restore_resize_from_snapshots(snapshots.as_ref());
+                self.restore_resize_from_snapshots_with(measurer, snapshots.as_ref());
                 self.state = DrawingState::Idle;
             }
             DrawingState::Idle => {}
@@ -319,12 +325,13 @@ mod tests {
 
     #[test]
     fn cancel_text_input_clears_wrap_width_and_returns_to_idle() {
+        let measurer = crate::draw::TextMeasurer::default();
         let mut state = make_test_input_state();
         state.style.text_wrap_width = Some(240);
         state.state = DrawingState::text_input(10, 20, "hello".to_string());
         state.needs_redraw = false;
 
-        state.cancel_text_input();
+        state.cancel_text_input_with(&measurer);
 
         assert!(matches!(state.state, DrawingState::Idle));
         assert!(state.style.text_wrap_width.is_none());
@@ -333,6 +340,7 @@ mod tests {
 
     #[test]
     fn cancel_text_input_releases_an_active_block_drag() {
+        let measurer = crate::draw::TextMeasurer::default();
         let mut state = make_test_input_state();
         state.state = DrawingState::text_input(10, 20, "hello".to_string());
         state.modifiers.alt = true;
@@ -340,7 +348,7 @@ mod tests {
         assert!(state.text_block_drag_active());
         assert!(state.has_active_pointer_interaction());
 
-        state.cancel_text_input();
+        state.cancel_text_input_with(&measurer);
 
         assert!(!state.text_block_drag_active());
         assert!(!state.has_active_pointer_interaction());
@@ -348,10 +356,12 @@ mod tests {
 
     #[test]
     fn try_cancel_active_interaction_reports_false_when_idle() {
+        let test_text_measurer = crate::draw::TextMeasurer::default();
+
         let mut state = make_test_input_state();
         state.needs_redraw = false;
 
-        assert!(!state.try_cancel_active_interaction());
+        assert!(!state.try_cancel_active_interaction_with(&test_text_measurer));
 
         assert!(matches!(state.state, DrawingState::Idle));
         assert!(!state.needs_redraw);
@@ -359,6 +369,8 @@ mod tests {
 
     #[test]
     fn try_cancel_active_interaction_cancels_drawing_and_ends_drag() {
+        let test_text_measurer = crate::draw::TextMeasurer::default();
+
         let mut state = make_test_input_state();
         state.state = DrawingState::Drawing {
             tool: Tool::Pen,
@@ -370,7 +382,7 @@ mod tests {
         state.begin_pointer_drag(MouseButton::Left, None);
         state.needs_redraw = false;
 
-        assert!(state.try_cancel_active_interaction());
+        assert!(state.try_cancel_active_interaction_with(&test_text_measurer));
 
         assert!(matches!(state.state, DrawingState::Idle));
         assert!(!state.pointer_drag_active());

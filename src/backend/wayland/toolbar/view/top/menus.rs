@@ -8,6 +8,8 @@
 //! proportional scrollbar. The tree painter has no clip, so rows are either
 //! fully inside the viewport or withheld entirely (paint and hits alike).
 
+use crate::ui_text::UiTextEngine;
+
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
@@ -15,7 +17,7 @@ use crate::ui::toolbar::session_format::{
     strip_session_extension, truncate_middle, truncate_start,
 };
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
-use crate::ui_text::{UiTextStyle, measure_text};
+use crate::ui_text::UiTextStyle;
 
 use super::super::node::{ButtonStyle, Interaction, LabelSpec, WidgetKind, WidgetNode};
 use super::super::popover;
@@ -73,7 +75,10 @@ const CANVAS_SLIDER_H: f64 = 18.0;
 /// natural (unclamped) content height. Canvas wins over Session over
 /// Settings if several flags are somehow set — the apply layer keeps them
 /// mutually exclusive.
-fn open_menu_content(snapshot: &ToolbarSnapshot) -> Option<(&'static str, Vec<WidgetNode>)> {
+fn open_menu_content(
+    engine: &UiTextEngine,
+    snapshot: &ToolbarSnapshot,
+) -> Option<(&'static str, Vec<WidgetNode>)> {
     if snapshot.canvas_popover_open {
         return canvas_menu_content(snapshot).map(|nodes| ("canvas", nodes));
     }
@@ -81,7 +86,7 @@ fn open_menu_content(snapshot: &ToolbarSnapshot) -> Option<(&'static str, Vec<Wi
         return session_menu_content(snapshot).map(|nodes| ("session", nodes));
     }
     if snapshot.settings_popover_open {
-        return settings_menu_content(snapshot).map(|nodes| ("settings", nodes));
+        return settings_menu_content(engine, snapshot).map(|nodes| ("settings", nodes));
     }
     None
 }
@@ -121,10 +126,11 @@ fn menu_viewport_cap(snapshot: &ToolbarSnapshot, plan: &super::TopStripPlan) -> 
 /// (natural_height, viewport_height), both in pre-scale spec units; `None`
 /// while no menu popover is open. Max scroll = (natural - viewport).max(0).
 pub(super) fn menu_scroll_bounds_planned(
+    engine: &UiTextEngine,
     snapshot: &ToolbarSnapshot,
     plan: &super::TopStripPlan,
 ) -> Option<(f64, f64)> {
-    let (_, nodes) = open_menu_content(snapshot)?;
+    let (_, nodes) = open_menu_content(engine, snapshot)?;
     let natural = content_height(&nodes);
     Some((natural, natural.min(menu_viewport_cap(snapshot, plan))))
 }
@@ -132,10 +138,11 @@ pub(super) fn menu_scroll_bounds_planned(
 /// Extra surface height the open Canvas/Session/Settings popover needs below
 /// the base band when anchored directly to the overflow button.
 pub(super) fn menu_popover_height_planned(
+    engine: &UiTextEngine,
     snapshot: &ToolbarSnapshot,
     plan: &super::TopStripPlan,
 ) -> f64 {
-    let Some((_, nodes)) = open_menu_content(snapshot) else {
+    let Some((_, nodes)) = open_menu_content(engine, snapshot) else {
         return 0.0;
     };
     let viewport = content_height(&nodes).min(menu_viewport_cap(snapshot, plan));
@@ -145,13 +152,14 @@ pub(super) fn menu_popover_height_planned(
 
 /// Build the open popover into the tree, anchored like the overflow menu.
 pub(super) fn push_menu_popover(
+    engine: &UiTextEngine,
     tree: &mut WidgetTree,
     snapshot: &ToolbarSnapshot,
     plan: &super::TopStripPlan,
     anchor: (f64, f64, f64, f64),
     bounds: (f64, f64),
 ) {
-    let Some((key, nodes)) = open_menu_content(snapshot) else {
+    let Some((key, nodes)) = open_menu_content(engine, snapshot) else {
         return;
     };
     let natural = content_height(&nodes);
@@ -384,7 +392,10 @@ fn session_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> {
 /// grid, the settings/customize button grid, and the customization
 /// sub-panel (group chooser plus per-item show/hide, reorder, and drag
 /// rows) — the Settings pane minus its collapsible-card chrome.
-fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> {
+fn settings_menu_content(
+    engine: &UiTextEngine,
+    snapshot: &ToolbarSnapshot,
+) -> Option<Vec<WidgetNode>> {
     let model = model::ToolbarSettingsModel::for_popover(snapshot)?;
     let customizing = snapshot.customize_items_open;
     let mut nodes = Vec::new();
@@ -419,7 +430,7 @@ fn settings_menu_content(snapshot: &ToolbarSnapshot) -> Option<Vec<WidgetNode>> 
         y += MENU_TOGGLE_H + MENU_TOGGLE_GAP;
     }
 
-    append_settings_notices(&model, &mut nodes, &mut y);
+    append_settings_notices(engine, &model, &mut nodes, &mut y);
 
     let buttons = model.buttons();
     if !buttons.is_empty() {
@@ -643,6 +654,7 @@ fn append_layout_mode_control(
 }
 
 fn append_settings_notices(
+    engine: &UiTextEngine,
     model: &model::ToolbarSettingsModel,
     nodes: &mut Vec<WidgetNode>,
     y: &mut f64,
@@ -653,7 +665,7 @@ fn append_settings_notices(
             model::ToolbarSettingsNoticeSeverity::Warning
                 | model::ToolbarSettingsNoticeSeverity::Error
         );
-        let notice_h = settings_notice_height(notice.text.as_ref(), bold);
+        let notice_h = settings_notice_height(engine, notice.text.as_ref(), bold);
         nodes.push(WidgetNode::decor(
             format!("top.menu.settings.notice.{index}"),
             (0.0, *y, MENU_CONTENT_W, notice_h),
@@ -663,7 +675,7 @@ fn append_settings_notices(
     }
 }
 
-fn settings_notice_height(text: &str, bold: bool) -> f64 {
+fn settings_notice_height(engine: &UiTextEngine, text: &str, bold: bool) -> f64 {
     let style = UiTextStyle {
         family: crate::ui::theme::toolbar::FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
@@ -674,7 +686,8 @@ fn settings_notice_height(text: &str, bold: bool) -> f64 {
         },
         size: MENU_META_FONT,
     };
-    measure_text(style, text, Some(MENU_CONTENT_W))
+    engine
+        .measure(style, text, Some(MENU_CONTENT_W))
         .map(|extents| extents.height() + MENU_NOTICE_PADDING_Y)
         .unwrap_or(MENU_TOGGLE_H)
         .max(MENU_TOGGLE_H)

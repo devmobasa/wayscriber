@@ -643,6 +643,12 @@ mod tests {
     ) {
         use crate::input::{MouseButton, state::DrawingState};
 
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let resources = crate::input::state::InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        };
         let mut runtime = PointerRuntime::new();
         let mut input = crate::input::state::test_support::make_test_input_state();
 
@@ -650,8 +656,15 @@ mod tests {
         // other device starts drawing. Both canvas press handlers reset chrome.
         runtime.suppress_release(consumed_source);
         runtime.clear_chrome_press();
-        input.on_mouse_press_with_canvas(MouseButton::Left, 10, 20, 10, 20);
-        input.on_mouse_motion_with_canvas(30, 40, 30, 40);
+        input.on_mouse_press_with_canvas_and_resources(
+            resources,
+            MouseButton::Left,
+            10,
+            20,
+            10,
+            20,
+        );
+        input.on_mouse_motion_with_canvas_and_resources(resources, 30, 40, 30, 40);
         assert!(matches!(input.state, DrawingState::Drawing { .. }));
 
         // Exercise the release gate shared by the pointer and touch handlers.
@@ -659,13 +672,27 @@ mod tests {
         if runtime.take_suppressed_release(consumed_source) {
             runtime.clear_chrome_press();
         } else {
-            input.on_mouse_release_with_canvas(MouseButton::Left, 30, 40, 30, 40);
+            input.on_mouse_release_with_canvas_and_resources(
+                resources,
+                MouseButton::Left,
+                30,
+                40,
+                30,
+                40,
+            );
         }
         assert!(matches!(input.state, DrawingState::Drawing { .. }));
         assert!(input.boards.active_frame().shapes.is_empty());
 
         assert!(!runtime.take_suppressed_release(drawing_source));
-        input.on_mouse_release_with_canvas(MouseButton::Left, 50, 60, 50, 60);
+        input.on_mouse_release_with_canvas_and_resources(
+            resources,
+            MouseButton::Left,
+            50,
+            60,
+            50,
+            60,
+        );
         assert!(matches!(input.state, DrawingState::Idle));
         assert_eq!(input.boards.active_frame().shapes.len(), 1);
     }

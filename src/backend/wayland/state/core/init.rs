@@ -5,6 +5,8 @@ use crate::env_vars::FORCE_INLINE_TOOLBARS_ENV;
 impl WaylandState {
     pub(in crate::backend::wayland) fn new(init: WaylandStateInit) -> Self {
         let WaylandStateInit {
+            ui_text,
+            text_measurer,
             globals,
             config,
             input_state,
@@ -115,9 +117,11 @@ impl WaylandState {
             toolbar: ToolbarSurfaceManager::new(),
             toolbar_chrome,
             toolbar_drag: super::super::toolbar::ToolbarDrag::new(),
-            render: super::super::render::RenderRuntime::new(crate::ui::theme::Theme::resolve(
-                config.ui.theme.to_theme_mode(),
-            )),
+            render: super::super::render::RenderRuntime::new(
+                crate::ui::theme::Theme::resolve(config.ui.theme.to_theme_mode()),
+                ui_text,
+                text_measurer,
+            ),
             suppression: Default::default(),
             shortcut_coach: Default::default(),
             focus: super::super::focus::FocusState::new(startup_activation_token),

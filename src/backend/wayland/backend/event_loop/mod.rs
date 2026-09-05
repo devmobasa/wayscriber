@@ -196,7 +196,10 @@ fn advance_post_dispatch_state(
     if state.finish_toolbar_drag_handoff_if_due(Instant::now()) {
         let _ = conn.flush();
     }
-    if state.input_state.tick_delayed_history(Instant::now()) {
+    if state
+        .input_state
+        .tick_delayed_history_with(state.render.text_measurer(), Instant::now())
+    {
         state.toolbar.mark_dirty();
         state.input_state.needs_redraw = true;
     }

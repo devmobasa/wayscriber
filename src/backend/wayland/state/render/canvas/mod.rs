@@ -153,8 +153,9 @@ impl WaylandState {
         let replay_ctx = eraser_ctx.replay_context();
 
         let completed_shapes_start = perf.as_ref().map(|_| Instant::now());
-        let (layer_cache, draw_caches) = self.render.canvas_draw_parts_mut();
+        let (layer_cache, draw_caches, measurer) = self.render.canvas_draw_parts_mut();
         render_committed_canvas_shapes(
+            measurer,
             &self.input_state.boards.active_frame().shapes,
             layer_cache,
             draw_caches,
@@ -287,13 +288,15 @@ impl WaylandState {
         let provisional = self.input_state.provisional_tool_stroke(mx, my);
         let provisional_points = provisional_point_count(&provisional);
         let provisional_start = perf.as_ref().map(|_| Instant::now());
-        let mut render = crate::draw::RenderCtx::new(ctx, self.render.draw_caches_mut());
+        let (caches, measurer) = self.render.draw_text_parts_mut();
+        let mut render = crate::draw::RenderCtx::new(ctx, caches);
         let rendered_provisional = match provisional {
             crate::input::tool::ProvisionalToolStroke::BlurReplayPreview(params) => {
                 render.render_blur_rect(params, &replay_ctx);
                 true
             }
             _ => self.input_state.render_provisional_shape_for_damage(
+                measurer,
                 &mut render,
                 mx,
                 my,
@@ -330,7 +333,9 @@ impl WaylandState {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_committed_canvas_shapes(
+    measurer: &crate::draw::TextMeasurer,
     shapes: &[crate::draw::DrawnShape],
     layer_cache: &super::super::canvas_layer::CanvasLayerCache,
     draw_caches: &mut crate::draw::RenderCaches,
@@ -363,6 +368,7 @@ fn render_committed_canvas_shapes(
     };
     let mut render_shape = |shape: &crate::draw::DrawnShape| {
         super::super::canvas_layer::render_committed_shape(
+            measurer,
             &mut render,
             shape,
             replay_ctx,
@@ -387,7 +393,7 @@ fn render_committed_canvas_shapes(
     let mut shapes_rendered = 0usize;
     for shape in shapes {
         if shape
-            .bounding_box()
+            .bounding_box_with(measurer)
             .is_some_and(|bounds| rects_intersect(bounds, safe_bounds))
         {
             render_shape(shape);

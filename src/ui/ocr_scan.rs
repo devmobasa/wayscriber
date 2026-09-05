@@ -3,7 +3,7 @@ use crate::ui::theme::{self, Rgba, overlay};
 use crate::util::Rect;
 
 use super::primitives::draw_rounded_rect;
-use crate::ui_text::{UiTextStyle, measure_text, text_layout};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 /// Tint held over the region for the whole sweep, so the scanned area stays
 /// identifiable even at the moment the band is off its top edge.
@@ -54,12 +54,12 @@ fn detail_style() -> UiTextStyle<'static> {
 /// Card text block size, measured without a drawing context so damage
 /// geometry and the drawn card cannot disagree. Both go through the shared
 /// measurement cache.
-fn card_text_size(outcome: OcrScanOutcome) -> Option<(f64, f64)> {
-    let headline = measure_text(headline_style(), outcome.headline(), None)?;
+fn card_text_size(engine: &UiTextEngine, outcome: OcrScanOutcome) -> Option<(f64, f64)> {
+    let headline = engine.measure(headline_style(), outcome.headline(), None)?;
     let Some(detail) = outcome.detail() else {
         return Some((headline.width(), headline.height()));
     };
-    let detail = measure_text(detail_style(), &detail, None)?;
+    let detail = engine.measure(detail_style(), &detail, None)?;
     Some((
         headline.width().max(detail.width()),
         headline.height() + CARD_GAP + detail.height(),
@@ -69,11 +69,12 @@ fn card_text_size(outcome: OcrScanOutcome) -> Option<(f64, f64)> {
 /// Place the outcome card just under the scanned region, flipping above it when
 /// there is no room and clamping onto the surface either way.
 pub(crate) fn ocr_scan_card(
+    engine: &UiTextEngine,
     region: Rect,
     outcome: OcrScanOutcome,
     screen: (u32, u32),
 ) -> Option<OcrScanCard> {
-    let (text_width, text_height) = card_text_size(outcome)?;
+    let (text_width, text_height) = card_text_size(engine, outcome)?;
     let screen_width = f64::from(screen.0);
     let screen_height = f64::from(screen.1);
     let width = (text_width + CARD_PAD * 2.0).min((screen_width - CARD_MARGIN * 2.0).max(1.0));
@@ -102,6 +103,7 @@ pub(crate) fn ocr_scan_card(
 
 /// Union of everything the overlay paints, for targeted damage.
 pub(crate) fn ocr_scan_geometry(
+    engine: &UiTextEngine,
     region: Rect,
     outcome: Option<OcrScanOutcome>,
     screen: (u32, u32),
@@ -112,7 +114,8 @@ pub(crate) fn ocr_scan_geometry(
         f64::from(region.width) + FRAME_WIDTH * 2.0,
         f64::from(region.height) + FRAME_WIDTH * 2.0,
     );
-    let Some(card) = outcome.and_then(|outcome| ocr_scan_card(region, outcome, screen)) else {
+    let Some(card) = outcome.and_then(|outcome| ocr_scan_card(engine, region, outcome, screen))
+    else {
         return region_box;
     };
     let left = region_box.0.min(card.x);
@@ -198,6 +201,7 @@ fn draw_frame(ctx: &cairo::Context, x: f64, y: f64, width: f64, height: f64, alp
 
 /// The outcome card. `shown` is how long it has been up, which drives its fade.
 pub(crate) fn render_ocr_scan_result(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     region: Rect,
     outcome: OcrScanOutcome,
@@ -208,7 +212,7 @@ pub(crate) fn render_ocr_scan_result(
     if opacity <= 0.0 {
         return;
     }
-    let Some(card) = ocr_scan_card(region, outcome, screen) else {
+    let Some(card) = ocr_scan_card(engine, region, outcome, screen) else {
         return;
     };
     let _ = ctx.save();
@@ -241,7 +245,7 @@ pub(crate) fn render_ocr_scan_result(
     let _ = ctx.save();
     ctx.rectangle(card.x, card.y, card.width, card.height);
     ctx.clip();
-    let headline = text_layout(ctx, headline_style(), outcome.headline(), None);
+    let headline = engine.layout(ctx, headline_style(), outcome.headline(), None);
     let headline_extents = headline.ink_extents();
     theme::set_color(ctx, overlay::TEXT_PRIMARY);
     headline.show_at_baseline(
@@ -250,7 +254,7 @@ pub(crate) fn render_ocr_scan_result(
         card.y + CARD_PAD - headline_extents.y_bearing(),
     );
     if let Some(detail) = outcome.detail() {
-        let layout = text_layout(ctx, detail_style(), &detail, None);
+        let layout = engine.layout(ctx, detail_style(), &detail, None);
         let extents = layout.ink_extents();
         theme::set_color(ctx, overlay::TEXT_TERTIARY);
         layout.show_at_baseline(
@@ -334,14 +338,16 @@ mod tests {
 
     #[test]
     fn the_card_sits_under_the_region_and_flips_above_it_when_it_must() {
-        let below = ocr_scan_card(region(), copied(), (320, 400)).expect("a card");
+        let below = ocr_scan_card(&UiTextEngine::default(), region(), copied(), (320, 400))
+            .expect("a card");
         assert!(
             below.y >= f64::from(region().y + region().height),
             "the usual place is under the scanned area"
         );
 
         let low = Rect::new(60, 300, 200, 90).expect("a low region");
-        let flipped = ocr_scan_card(low, copied(), (320, 400)).expect("a card");
+        let flipped =
+            ocr_scan_card(&UiTextEngine::default(), low, copied(), (320, 400)).expect("a card");
         assert!(
             flipped.y + flipped.height <= f64::from(low.y),
             "no room below, so it goes above"
@@ -351,7 +357,8 @@ mod tests {
     #[test]
     fn a_card_with_nowhere_to_go_is_still_placed_on_the_surface() {
         let full = Rect::new(0, 0, 200, 200).expect("a full-surface region");
-        let card = ocr_scan_card(full, copied(), (200, 200)).expect("a card");
+        let card =
+            ocr_scan_card(&UiTextEngine::default(), full, copied(), (200, 200)).expect("a card");
         assert!(card.x >= 0.0 && card.y >= 0.0);
         assert!(card.x + card.width <= 200.0);
         assert!(card.y + card.height <= 200.0);
@@ -359,13 +366,19 @@ mod tests {
 
     #[test]
     fn damage_covers_the_region_alone_while_scanning_and_the_card_once_settled() {
-        let scanning = ocr_scan_geometry(region(), None, (320, 400));
+        let scanning = ocr_scan_geometry(&UiTextEngine::default(), region(), None, (320, 400));
         assert!(scanning.0 <= f64::from(region().x));
         assert!(scanning.1 <= f64::from(region().y));
         assert!(scanning.0 + scanning.2 >= f64::from(region().x + region().width));
 
-        let settled = ocr_scan_geometry(region(), Some(copied()), (320, 400));
-        let card = ocr_scan_card(region(), copied(), (320, 400)).expect("a card");
+        let settled = ocr_scan_geometry(
+            &UiTextEngine::default(),
+            region(),
+            Some(copied()),
+            (320, 400),
+        );
+        let card = ocr_scan_card(&UiTextEngine::default(), region(), copied(), (320, 400))
+            .expect("a card");
         assert!(
             settled.1 + settled.3 >= card.y + card.height,
             "the union has to reach the card or its pixels are never cleared"
@@ -378,11 +391,19 @@ mod tests {
         let render = |shown: Duration| {
             let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 320, 400).unwrap();
             let ctx = cairo::Context::new(&surface).unwrap();
-            render_ocr_scan_result(&ctx, region(), copied(), shown, (320, 400));
+            render_ocr_scan_result(
+                &UiTextEngine::default(),
+                &ctx,
+                region(),
+                copied(),
+                shown,
+                (320, 400),
+            );
             drop(ctx);
             surface
         };
-        let card = ocr_scan_card(region(), copied(), (320, 400)).expect("a card");
+        let card = ocr_scan_card(&UiTextEngine::default(), region(), copied(), (320, 400))
+            .expect("a card");
         let probe = (
             (card.x + card.width / 2.0) as usize,
             (card.y + card.height / 2.0) as usize,
@@ -397,5 +418,59 @@ mod tests {
             0,
             "an expired card paints nothing at all, whatever the motion setting"
         );
+    }
+
+    #[test]
+    fn retained_ocr_owner_preserves_card_geometry_and_pixels_across_targets() {
+        let engine = UiTextEngine::default();
+        for outcome in [
+            copied(),
+            OcrScanOutcome::NoTextFound,
+            OcrScanOutcome::Failed,
+            OcrScanOutcome::Copied {
+                character_count: 1024,
+                replaced_invalid_utf8: true,
+            },
+        ] {
+            let expected = ocr_scan_geometry(&engine, region(), Some(outcome), (320, 400));
+            let card = ocr_scan_card(&engine, region(), outcome, (320, 400)).unwrap();
+            assert!(expected.0 <= card.x && expected.1 <= card.y);
+            assert!(expected.0 + expected.2 >= card.x + card.width);
+            assert!(expected.1 + expected.3 >= card.y + card.height);
+            for density in [1, 2, 1] {
+                let paint = |owner: &UiTextEngine| {
+                    let mut surface = cairo::ImageSurface::create(
+                        cairo::Format::ARgb32,
+                        320 * density,
+                        400 * density,
+                    )
+                    .unwrap();
+                    {
+                        let ctx = cairo::Context::new(&surface).unwrap();
+                        ctx.scale(f64::from(density), f64::from(density));
+                        render_ocr_scan_result(
+                            owner,
+                            &ctx,
+                            region(),
+                            outcome,
+                            Duration::ZERO,
+                            (320, 400),
+                        );
+                    }
+                    surface.flush();
+                    surface.data().unwrap().to_vec()
+                };
+                let retained = paint(&engine);
+                assert!(
+                    retained == paint(&UiTextEngine::default()),
+                    "OCR pixels differ for {outcome:?} at density {density}"
+                );
+                assert!(retained.iter().any(|byte| *byte != 0));
+                assert_eq!(
+                    ocr_scan_geometry(&engine, region(), Some(outcome), (320, 400)),
+                    expected
+                );
+            }
+        }
     }
 }

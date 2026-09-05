@@ -71,6 +71,7 @@ fn finalize_spotlight_wheel_if_axis_stopped(
 /// routing: SCTK may aggregate a final movement and stop in one frame.
 fn try_handle_spotlight_axis(
     input_state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     spotlight_wheel_idle_deadline: &mut Option<Instant>,
     canvas_position: (i32, i32),
     vertical: AxisScroll,
@@ -96,8 +97,8 @@ fn try_handle_spotlight_axis(
         }
         SpotlightWheelClaim::Adjustable(steps) => {
             if steps != 0 {
-                let outcome =
-                    input_state.nudge_spotlight_magnification_at(canvas_x, canvas_y, steps);
+                let outcome = input_state
+                    .nudge_spotlight_magnification_at_with(measurer, canvas_x, canvas_y, steps);
                 debug_assert_ne!(outcome, SpotlightWheelOutcome::NotOverLoupe);
                 debug!("Spotlight wheel at ({canvas_x}, {canvas_y}): {outcome:?}");
             }
@@ -232,6 +233,7 @@ impl WaylandState {
         let canvas_position = self.input_state.canvas_pointer_position();
         if try_handle_spotlight_axis(
             &mut self.input_state,
+            self.render.text_measurer(),
             self.spotlight.wheel_idle_deadline_mut(),
             canvas_position,
             vertical,
@@ -286,8 +288,12 @@ impl WaylandState {
         let prev_thickness = self.input_state.style.current_thickness;
 
         let changed = if radial_menu_path {
-            self.input_state.radial_menu_adjust_thickness(delta)
-        } else if self.input_state.nudge_thickness_for_active_tool(delta) {
+            self.input_state
+                .radial_menu_adjust_thickness_with_measurer(self.render.text_measurer(), delta)
+        } else if self
+            .input_state
+            .nudge_thickness_for_active_tool_with(self.render.text_measurer(), delta)
+        {
             self.input_state.needs_redraw = true;
             true
         } else {
@@ -373,7 +379,7 @@ mod tests {
     #[test]
     fn board_picker_page_panel_axis_consumes_before_thickness_changes() {
         let mut input_state = make_test_input_state();
-        input_state.open_board_picker();
+        input_state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
         let board_index = input_state
             .board_picker_page_panel_board_index()
             .expect("page panel board index");
@@ -400,7 +406,7 @@ mod tests {
     #[test]
     fn an_active_screen_modal_prevents_the_toolbar_scroll_route() {
         let mut input_state = make_test_input_state();
-        input_state.activate_eyedropper(None);
+        input_state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), None);
 
         assert_eq!(
             axis_surface_route(&input_state, true, true, 1),
@@ -421,7 +427,7 @@ mod tests {
         // over the board picker, which makes it the one that can have the list
         // scrolled out from under it.
         let mut input_state = make_test_input_state();
-        input_state.open_board_picker();
+        input_state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
         let board_index = input_state
             .board_picker_page_panel_board_index()
             .expect("page panel board index");
@@ -468,6 +474,13 @@ mod tests {
 
     #[test]
     fn a_final_axis_delta_and_stop_complete_one_spotlight_gesture() {
+        let pointer_measurer = crate::draw::TextMeasurer::default();
+        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let test_text_resources = crate::input::state::InputTextResources {
+            measurer: &pointer_measurer,
+            ui_engine: &test_ui_engine,
+        };
+
         let mut input_state = make_test_input_state();
         let shape_id = input_state
             .boards
@@ -484,6 +497,7 @@ mod tests {
 
         assert!(try_handle_spotlight_axis(
             &mut input_state,
+            &pointer_measurer,
             &mut deadline,
             (200, 200),
             AxisScroll {
@@ -498,6 +512,7 @@ mod tests {
         assert!(deadline.is_some());
         assert!(try_handle_spotlight_axis(
             &mut input_state,
+            &pointer_measurer,
             &mut deadline,
             (200, 200),
             AxisScroll {
@@ -515,7 +530,7 @@ mod tests {
             "axis stop owns the final deadline clear"
         );
 
-        input_state.handle_action(Action::Undo);
+        input_state.handle_action_with_resources(test_text_resources, Action::Undo);
         let magnification = match input_state
             .boards
             .active_frame()
@@ -534,6 +549,13 @@ mod tests {
 
     #[test]
     fn a_coalesced_value120_frame_applies_every_logical_step() {
+        let pointer_measurer = crate::draw::TextMeasurer::default();
+        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let test_text_resources = crate::input::state::InputTextResources {
+            measurer: &pointer_measurer,
+            ui_engine: &test_ui_engine,
+        };
+
         let mut input_state = make_test_input_state();
         let shape_id = input_state
             .boards
@@ -549,6 +571,7 @@ mod tests {
 
         assert!(try_handle_spotlight_axis(
             &mut input_state,
+            &pointer_measurer,
             &mut deadline,
             (200, 200),
             AxisScroll {
@@ -572,7 +595,7 @@ mod tests {
         };
         assert_eq!(magnification, 2.5);
 
-        input_state.handle_action(Action::Undo);
+        input_state.handle_action_with_resources(test_text_resources, Action::Undo);
         let Shape::Spotlight { magnification, .. } = input_state
             .boards
             .active_frame()
@@ -587,6 +610,13 @@ mod tests {
 
     #[test]
     fn partial_value120_frames_accumulate_before_applying_a_logical_step() {
+        let pointer_measurer = crate::draw::TextMeasurer::default();
+        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let test_text_resources = crate::input::state::InputTextResources {
+            measurer: &pointer_measurer,
+            ui_engine: &test_ui_engine,
+        };
+
         let mut input_state = make_test_input_state();
         let shape_id = input_state
             .boards
@@ -607,6 +637,7 @@ mod tests {
 
         assert!(try_handle_spotlight_axis(
             &mut input_state,
+            &pointer_measurer,
             &mut deadline,
             (200, 200),
             partial_tick,
@@ -627,6 +658,7 @@ mod tests {
 
         assert!(try_handle_spotlight_axis(
             &mut input_state,
+            &pointer_measurer,
             &mut deadline,
             (200, 200),
             AxisScroll {
@@ -648,7 +680,7 @@ mod tests {
         };
         assert_eq!(magnification, 2.25);
 
-        input_state.handle_action(Action::Undo);
+        input_state.handle_action_with_resources(test_text_resources, Action::Undo);
         let Shape::Spotlight { magnification, .. } = input_state
             .boards
             .active_frame()
@@ -663,6 +695,13 @@ mod tests {
 
     #[test]
     fn a_finger_axis_pause_longer_than_the_wheel_timeout_stays_one_gesture() {
+        let pointer_measurer = crate::draw::TextMeasurer::default();
+        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let test_text_resources = crate::input::state::InputTextResources {
+            measurer: &pointer_measurer,
+            ui_engine: &test_ui_engine,
+        };
+
         let mut input_state = make_test_input_state();
         let shape_id = input_state
             .boards
@@ -685,6 +724,7 @@ mod tests {
 
         assert!(try_handle_spotlight_axis(
             &mut input_state,
+            &pointer_measurer,
             &mut deadline,
             (200, 200),
             finger_delta,
@@ -695,6 +735,7 @@ mod tests {
 
         assert!(try_handle_spotlight_axis(
             &mut input_state,
+            &pointer_measurer,
             &mut deadline,
             (200, 200),
             finger_delta,
@@ -703,7 +744,7 @@ mod tests {
         ));
         finalize_spotlight_wheel_if_axis_stopped(&mut input_state, &mut deadline, true);
 
-        input_state.handle_action(Action::Undo);
+        input_state.handle_action_with_resources(test_text_resources, Action::Undo);
         let Shape::Spotlight { magnification, .. } = input_state
             .boards
             .active_frame()

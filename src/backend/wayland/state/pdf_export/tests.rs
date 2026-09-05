@@ -20,10 +20,12 @@ fn board(id: &str, name: &str, background: BoardBackground, pages: Vec<Frame>) -
 }
 
 fn snapshot_context<'a>(
+    measurer: &'a TextMeasurer,
     boards: &'a [BoardState],
     config: &'a PdfExportConfig,
 ) -> BoardPdfExportBuildContext<'a> {
     BoardPdfExportBuildContext {
+        measurer,
         logical_width: 800,
         logical_height: 600,
         boards,
@@ -51,8 +53,12 @@ fn active_board_pdf_snapshot_preserves_page_order_and_metadata() {
     )];
 
     let config = PdfExportConfig::default();
-    let snapshot =
-        build_board_pdf_export_snapshot(snapshot_context(&boards, &config)).expect("snapshot");
+    let snapshot = build_board_pdf_export_snapshot(snapshot_context(
+        &TextMeasurer::default(),
+        &boards,
+        &config,
+    ))
+    .expect("snapshot");
 
     assert_eq!(snapshot.pages.len(), 2);
     assert_eq!(snapshot.pages[0].page.frame.page_name(), Some("first"));
@@ -77,7 +83,7 @@ fn all_boards_pdf_snapshot_uses_app_board_order() {
     let snapshot = build_board_pdf_export_snapshot(BoardPdfExportBuildContext {
         active_board_index: 1,
         scope: PdfExportScope::AllBoards,
-        ..snapshot_context(&boards, &config)
+        ..snapshot_context(&TextMeasurer::default(), &boards, &config)
     })
     .expect("snapshot");
 
@@ -105,8 +111,12 @@ fn pdf_snapshot_uses_per_page_view_offset_for_solid_pannable_boards() {
     )];
 
     let config = PdfExportConfig::default();
-    let snapshot =
-        build_board_pdf_export_snapshot(snapshot_context(&boards, &config)).expect("snapshot");
+    let snapshot = build_board_pdf_export_snapshot(snapshot_context(
+        &TextMeasurer::default(),
+        &boards,
+        &config,
+    ))
+    .expect("snapshot");
 
     assert_eq!(snapshot.pages[0].page.origin_x, 100);
     assert_eq!(snapshot.pages[0].page.origin_y, -50);
@@ -126,8 +136,12 @@ fn pdf_snapshot_forces_origin_for_transparent_boards() {
     )];
 
     let config = PdfExportConfig::default();
-    let snapshot =
-        build_board_pdf_export_snapshot(snapshot_context(&boards, &config)).expect("snapshot");
+    let snapshot = build_board_pdf_export_snapshot(snapshot_context(
+        &TextMeasurer::default(),
+        &boards,
+        &config,
+    ))
+    .expect("snapshot");
 
     assert_eq!(snapshot.pages[0].page.origin_x, 0);
     assert_eq!(snapshot.pages[0].page.origin_y, 0);
@@ -156,8 +170,12 @@ fn fit_content_snapshot_uses_content_bounds() {
         ..PdfExportConfig::default()
     };
 
-    let snapshot =
-        build_board_pdf_export_snapshot(snapshot_context(&boards, &config)).expect("snapshot");
+    let snapshot = build_board_pdf_export_snapshot(snapshot_context(
+        &TextMeasurer::default(),
+        &boards,
+        &config,
+    ))
+    .expect("snapshot");
 
     assert!(snapshot.pages[0].layout.source_rect.x <= 20.0);
     assert!(snapshot.pages[0].layout.source_rect.y <= 30.0);
@@ -184,7 +202,7 @@ fn transparent_pdf_pages_use_desktop_backdrop_when_supplied() {
     let config = PdfExportConfig::default();
     let snapshot = build_board_pdf_export_snapshot(BoardPdfExportBuildContext {
         desktop_backdrop: Some(backdrop),
-        ..snapshot_context(&boards, &config)
+        ..snapshot_context(&TextMeasurer::default(), &boards, &config)
     })
     .expect("snapshot");
 
@@ -214,7 +232,7 @@ fn solid_pdf_pages_keep_solid_backdrop_when_desktop_backdrop_supplied() {
     let config = PdfExportConfig::default();
     let snapshot = build_board_pdf_export_snapshot(BoardPdfExportBuildContext {
         desktop_backdrop: Some(backdrop),
-        ..snapshot_context(&boards, &config)
+        ..snapshot_context(&TextMeasurer::default(), &boards, &config)
     })
     .expect("snapshot");
 
@@ -256,4 +274,65 @@ fn pdf_export_scope_detects_transparent_boards() {
         1,
         PdfExportScope::AllBoards
     ));
+}
+
+#[test]
+fn text_content_preflight_preserves_bounds_and_resource_free_snapshots() {
+    use crate::draw::FontDescriptor;
+
+    let measurer = TextMeasurer::default();
+    let mut first = Frame::new();
+    first.add_shape(Shape::Text {
+        x: 100,
+        y: 120,
+        text: "Wrapped العربية text for export".into(),
+        color: RED,
+        size: 24.0,
+        font_descriptor: FontDescriptor::default(),
+        background_enabled: true,
+        wrap_width: Some(100),
+    });
+    let mut second = Frame::new();
+    second.add_shape(Shape::StickyNote {
+        x: 300,
+        y: 200,
+        text: "A second page with a note".into(),
+        background: WHITE,
+        size: 24.0,
+        font_descriptor: FontDescriptor::default(),
+        wrap_width: Some(100),
+    });
+    let boards = vec![board(
+        "white",
+        "Whiteboard",
+        BoardBackground::Solid(WHITE),
+        vec![first, second],
+    )];
+    let config = PdfExportConfig {
+        fit: PdfFitMode::FitContentToPage,
+        content_source_padding: 0.0,
+        ..PdfExportConfig::default()
+    };
+    // Preflight runs without creating any destination surface or painting.
+    let initial =
+        build_board_pdf_export_snapshot(snapshot_context(&measurer, &boards, &config)).unwrap();
+    let repeated =
+        build_board_pdf_export_snapshot(snapshot_context(&measurer, &boards, &config)).unwrap();
+    let independent = TextMeasurer::default();
+    for (index, frame) in boards[0].pages.pages().iter().enumerate() {
+        let bounds = frame.shapes[0].bounding_box_with(&independent).unwrap();
+        let expected = CanvasExportRect::new(
+            bounds.x as f64,
+            bounds.y as f64,
+            bounds.width as f64,
+            bounds.height as f64,
+        )
+        .unwrap();
+        assert_eq!(initial.pages[index].layout.source_rect, expected);
+        assert_eq!(repeated.pages[index].layout.source_rect, expected);
+        assert!(expected.width > 0.0 && expected.height > 0.0);
+    }
+    fn assert_send<T: Send>(_: &T) {}
+    assert_send(&initial);
+    assert_send(&repeated);
 }

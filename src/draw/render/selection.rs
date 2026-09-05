@@ -3,7 +3,7 @@ use super::primitives::{render_arrow, render_ellipse, render_line, render_polygo
 use super::spotlight::{SpotlightRegion, render_spotlight_outline};
 use super::strokes::render_freehand_borrowed;
 use crate::draw::frame::DrawnShape;
-use crate::draw::shape::{step_marker_outline_thickness, step_marker_radius};
+use crate::draw::shape::{step_marker_outline_thickness, step_marker_radius_with};
 use crate::draw::{Color, Shape};
 use crate::util::Rect;
 
@@ -30,6 +30,15 @@ const SELECTION_GLOW: Color = Color {
 
 /// Renders a selection halo overlay for a drawn shape.
 pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
+    let measurer = crate::draw::TextMeasurer::default();
+    render_selection_halo_with_measurer(&measurer, ctx, drawn);
+}
+
+pub fn render_selection_halo_with_measurer(
+    measurer: &crate::draw::TextMeasurer,
+    ctx: &cairo::Context,
+    drawn: &DrawnShape,
+) {
     let glow = SELECTION_GLOW;
     let outline_width = 4.0;
 
@@ -123,7 +132,7 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
             );
         }
         Shape::BlurRect { .. } => {
-            if let Some(bounds) = drawn.bounding_box() {
+            if let Some(bounds) = drawn.bounding_box_with(measurer) {
                 let padding = 3.0;
                 let x = bounds.x as f64 - padding;
                 let y = bounds.y as f64 - padding;
@@ -142,7 +151,8 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
             render_freehand_borrowed(ctx, points, glow, thick + outline_width);
         }
         Shape::StepMarker { x, y, label, .. } => {
-            let radius = step_marker_radius(label.value, label.size, &label.font_descriptor);
+            let radius =
+                step_marker_radius_with(measurer, label.value, label.size, &label.font_descriptor);
             let outline = step_marker_outline_thickness(label.size);
             let halo_radius = radius + outline_width;
             let fill = Color {
@@ -165,7 +175,7 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
             render_freehand_borrowed(ctx, points, glow, outline);
         }
         Shape::Text { .. } | Shape::Image { .. } => {
-            if let Some(bounds) = drawn.bounding_box() {
+            if let Some(bounds) = drawn.bounding_box_with(measurer) {
                 let padding = 4.0;
                 let x = bounds.x as f64 - padding;
                 let y = bounds.y as f64 - padding;
@@ -181,7 +191,7 @@ pub fn render_selection_halo(ctx: &cairo::Context, drawn: &DrawnShape) {
             }
         }
         Shape::StickyNote { .. } => {
-            if let Some(bounds) = drawn.bounding_box() {
+            if let Some(bounds) = drawn.bounding_box_with(measurer) {
                 let padding = 4.0;
                 let x = bounds.x as f64 - padding;
                 let y = bounds.y as f64 - padding;

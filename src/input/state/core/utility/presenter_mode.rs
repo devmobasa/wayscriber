@@ -10,6 +10,7 @@
 use super::super::base::InputState;
 use super::super::modes::PresenterRestore;
 use crate::domain::Action;
+use crate::input::state::InputTextResources;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::tool::Tool;
 
@@ -64,15 +65,18 @@ impl InputState {
         self.modes.override_presenter_for_test(active);
     }
 
-    pub(crate) fn toggle_presenter_mode(&mut self) -> bool {
+    pub(crate) fn toggle_presenter_mode_with_resources(
+        &mut self,
+        resources: InputTextResources<'_>,
+    ) -> bool {
         if self.presenter_mode_active() {
-            self.stop_presenter_mode()
+            self.stop_presenter_mode(resources)
         } else {
-            self.start_presenter_mode()
+            self.start_presenter_mode(resources)
         }
     }
 
-    fn stop_presenter_mode(&mut self) -> bool {
+    fn stop_presenter_mode(&mut self, resources: InputTextResources<'_>) -> bool {
         let config = self.presenter_mode_config().clone();
         if let Some(restore) = self.modes.end_presenter() {
             if let Some(value) = restore.show_status_bar() {
@@ -85,7 +89,7 @@ impl InputState {
                 self.restore_toolbar_visibility(snapshot);
             }
             if let Some(value) = restore.tool_override() {
-                self.set_tool_override(value);
+                self.set_tool_override_with(resources.measurer, value);
             }
             if let Some(value) = restore.click_highlight_enabled()
                 && self.click_highlight_enabled() != value
@@ -108,24 +112,24 @@ impl InputState {
         self.presenter_mode_active()
     }
 
-    fn start_presenter_mode(&mut self) -> bool {
+    fn start_presenter_mode(&mut self, resources: InputTextResources<'_>) -> bool {
         let config = self.presenter_mode_config().clone();
         if self.light_mode_active() {
-            self.exit_light_mode();
+            self.exit_light_mode_with(resources.measurer);
         }
         if self.focus_mode_active() {
             // Restore Focus Mode's snapshot before Presenter Mode captures its
             // own chrome baseline. This keeps the two transient owners from
             // nesting and lets micro-toolbar presenter policy operate on the
             // real pre-Focus visibility.
-            self.toggle_focus_mode();
+            self.toggle_focus_mode_with_resources(resources);
         }
 
         if config.close_help_overlay && self.help_overlay.visible {
-            self.toggle_help_overlay();
+            self.close_help_overlay();
         }
 
-        self.cancel_active_interaction();
+        self.cancel_active_interaction_with(resources.measurer);
         let restore = PresenterRestore::capture(
             &config,
             self.ui_visibility.show_status_bar,
@@ -148,7 +152,11 @@ impl InputState {
                 }
                 crate::config::PresenterToolbarMode::Micro => {
                     // The top strip stays up as the micro chip.
-                    self.set_top_display_mode(crate::config::TopDisplayMode::Micro);
+                    self.set_top_display_mode_with_resources(
+                        resources.ui_engine,
+                        resources.measurer,
+                        crate::config::TopDisplayMode::Micro,
+                    );
                 }
             }
         }
@@ -156,7 +164,7 @@ impl InputState {
             config.tool_behavior,
             crate::config::PresenterToolBehavior::Keep
         ) {
-            self.set_tool_override(Some(Tool::Highlight));
+            self.set_tool_override_with(resources.measurer, Some(Tool::Highlight));
         }
         if config.enable_click_highlight && !self.click_highlight_enabled() {
             self.toggle_click_highlight();

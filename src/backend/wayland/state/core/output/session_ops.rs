@@ -50,7 +50,12 @@ impl WaylandState {
                     context,
                     options.session_file_path().display()
                 );
-                replace_output_session_snapshot(&mut self.input_state, Some(*snapshot), options)?;
+                replace_output_session_snapshot(
+                    &mut self.input_state,
+                    self.render.text_measurer(),
+                    Some(*snapshot),
+                    options,
+                )?;
             }
             session::LoadSnapshotOutcome::LoadedFromBackup(snapshot) => {
                 warn!(
@@ -58,7 +63,12 @@ impl WaylandState {
                     context,
                     options.backup_file_path().display()
                 );
-                replace_output_session_snapshot(&mut self.input_state, Some(*snapshot), options)?;
+                replace_output_session_snapshot(
+                    &mut self.input_state,
+                    self.render.text_measurer(),
+                    Some(*snapshot),
+                    options,
+                )?;
                 self.input_state.push_toast(ToastPriority::Info, "output", Toast::warning("Restored drawings from the session backup; the primary session had no board data."));
             }
             session::LoadSnapshotOutcome::LoadedFromRecovery(snapshot) => {
@@ -67,7 +77,12 @@ impl WaylandState {
                     context,
                     options.recovery_file_path().display()
                 );
-                replace_output_session_snapshot(&mut self.input_state, Some(*snapshot), options)?;
+                replace_output_session_snapshot(
+                    &mut self.input_state,
+                    self.render.text_measurer(),
+                    Some(*snapshot),
+                    options,
+                )?;
                 self.input_state.push_toast(ToastPriority::Info, "output", Toast::warning("Restored session from recovery file; normal save previously exceeded the size limit."));
             }
             session::LoadSnapshotOutcome::Empty => {
@@ -76,7 +91,12 @@ impl WaylandState {
                     options.session_file_path().display(),
                     context
                 );
-                replace_output_session_snapshot(&mut self.input_state, None, options)?;
+                replace_output_session_snapshot(
+                    &mut self.input_state,
+                    self.render.text_measurer(),
+                    None,
+                    options,
+                )?;
             }
             session::LoadSnapshotOutcome::EmptyAfterCorruption { backup_path } => {
                 // An empty canvas here is indistinguishable from "no session
@@ -88,7 +108,12 @@ impl WaylandState {
                     context,
                     backup_path.display()
                 );
-                replace_output_session_snapshot(&mut self.input_state, None, options)?;
+                replace_output_session_snapshot(
+                    &mut self.input_state,
+                    self.render.text_measurer(),
+                    None,
+                    options,
+                )?;
                 self.input_state.push_toast(
                     ToastPriority::Critical,
                     "session.corrupt",
@@ -105,13 +130,23 @@ impl WaylandState {
                     path.display(),
                     context
                 );
-                replace_output_session_snapshot(&mut self.input_state, None, options)?;
+                replace_output_session_snapshot(
+                    &mut self.input_state,
+                    self.render.text_measurer(),
+                    None,
+                    options,
+                )?;
             }
             session::LoadSnapshotOutcome::ExpandedTooLarge {
                 path,
                 max_expanded_size,
             } => {
-                replace_output_session_snapshot(&mut self.input_state, None, options)?;
+                replace_output_session_snapshot(
+                    &mut self.input_state,
+                    self.render.text_measurer(),
+                    None,
+                    options,
+                )?;
                 self.session.protect_session_path(path.clone());
                 if self.session.mark_expanded_load_notified(&path) {
                     notification::send_notification_async(

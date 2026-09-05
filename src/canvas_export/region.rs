@@ -163,6 +163,7 @@ pub(crate) fn render_canvas_region_pixels(
     snapshot: CanvasRegionExportSnapshot,
 ) -> Result<PackedArgb32, CaptureError> {
     let mut caches = RenderCaches::default();
+    let measurer = crate::draw::TextMeasurer::default();
     let working_selection = snapshot
         .source
         .magnifier_working_selection(snapshot.selection, &snapshot.frame)
@@ -212,6 +213,7 @@ pub(crate) fn render_canvas_region_pixels(
     )
     .expect("validated non-empty destination");
     draw_canvas_page_region(
+        &measurer,
         &mut RenderCtx::new(&ctx, &mut caches),
         &page,
         &backdrop,

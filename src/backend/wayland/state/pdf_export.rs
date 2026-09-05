@@ -4,7 +4,7 @@ use crate::canvas_export::{
     resolve_pdf_page_layout,
 };
 use crate::config::{Action, PdfFitMode};
-use crate::draw::Frame;
+use crate::draw::{Frame, TextMeasurer};
 use crate::input::BoardBackground;
 use crate::input::boards::BoardState;
 
@@ -33,6 +33,7 @@ impl WaylandState {
     ) -> Result<BoardPdfExportSnapshot, crate::capture::CaptureError> {
         let scope = pdf_export_scope_for_action(action);
         build_board_pdf_export_snapshot(BoardPdfExportBuildContext {
+            measurer: self.render.text_measurer(),
             logical_width: self.surface.width(),
             logical_height: self.surface.height(),
             boards: self.input_state.boards.board_states(),
@@ -68,6 +69,7 @@ enum PdfExportScope {
 }
 
 struct BoardPdfExportBuildContext<'a> {
+    measurer: &'a TextMeasurer,
     logical_width: u32,
     logical_height: u32,
     boards: &'a [BoardState],
@@ -84,6 +86,7 @@ fn build_board_pdf_export_snapshot(
     context: BoardPdfExportBuildContext<'_>,
 ) -> Result<BoardPdfExportSnapshot, crate::capture::CaptureError> {
     let BoardPdfExportBuildContext {
+        measurer,
         logical_width,
         logical_height,
         boards,
@@ -120,7 +123,7 @@ fn build_board_pdf_export_snapshot(
                 (0, 0)
             };
             let content_bounds = if config.fit == PdfFitMode::FitContentToPage {
-                frame_content_bounds(frame)
+                frame_content_bounds(frame, measurer)
             } else {
                 None
             };
@@ -247,7 +250,7 @@ fn backdrop_from_background(
     }
 }
 
-fn frame_content_bounds(frame: &Frame) -> Option<CanvasExportRect> {
+fn frame_content_bounds(frame: &Frame, measurer: &TextMeasurer) -> Option<CanvasExportRect> {
     let mut min_x = i32::MAX;
     let mut min_y = i32::MAX;
     let mut max_x = i32::MIN;
@@ -255,7 +258,7 @@ fn frame_content_bounds(frame: &Frame) -> Option<CanvasExportRect> {
     let mut found = false;
 
     for drawn in &frame.shapes {
-        let Some(bounds) = drawn.bounding_box() else {
+        let Some(bounds) = drawn.bounding_box_with(measurer) else {
             continue;
         };
         min_x = min_x.min(bounds.x);

@@ -1,10 +1,12 @@
 use crate::draw::Shape;
+use crate::draw::TextMeasurer;
 use crate::input::state::core::base::InputState;
 use crate::input::state::{Toast, ToastPriority};
 
 impl InputState {
     pub(in crate::input::state::core::properties) fn apply_selection_fill(
         &mut self,
+        measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
         let target = if direction == 0 {
@@ -27,7 +29,8 @@ impl InputState {
             return false;
         };
 
-        let result = self.apply_selection_change(
+        let result = self.apply_selection_change_with(
+            measurer,
             |shape| {
                 matches!(
                     shape,
@@ -67,6 +70,7 @@ mod tests {
 
     #[test]
     fn apply_selection_fill_on_mixed_selection_turns_all_fills_on() {
+        let measurer = TextMeasurer::default();
         let mut state = make_state();
         let rect_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
             x: 0,
@@ -88,7 +92,7 @@ mod tests {
         });
         state.set_selection(vec![rect_id, ellipse_id]);
 
-        assert!(state.apply_selection_fill(0));
+        assert!(state.apply_selection_fill(&measurer, 0));
 
         match &state
             .boards

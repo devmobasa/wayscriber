@@ -53,13 +53,18 @@ pub enum HelpOverlayReleaseOutcome {
 }
 
 impl InputState {
+    /// Install the geometry returned by the public help result renderer for
+    /// subsequent click and cursor queries on this input owner.
+    pub fn install_help_overlay_render_result(
+        &mut self,
+        result: crate::help_overlay_interaction::HelpRenderResult,
+    ) {
+        self.help_overlay.install_render_result(result);
+    }
+
     fn open_help_overlay_internal(&mut self, quick_mode: bool, track_usage: bool) {
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::HelpOverlay);
         self.help_overlay.open(quick_mode);
-        // Defensively drop any geometry left from a previous open. The hit map
-        // is normally cleared on close, but re-opening should never expose the
-        // prior layout to a click before the first fresh render repopulates it.
-        crate::ui::clear_help_overlay_hit_map();
         if track_usage {
             self.pending_onboarding_usage.used_help_overlay = true;
         }
@@ -89,7 +94,6 @@ impl InputState {
         if !self.help_overlay.close() {
             return;
         }
-        crate::ui::clear_help_overlay_hit_map();
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -97,8 +101,10 @@ impl InputState {
     /// Resolve a left-click at `(x, y)` (screen space) against the real rendered
     /// help layout: a clickable row/footer action, inside chrome, or a dismiss.
     pub fn help_overlay_click_at(&self, x: i32, y: i32) -> HelpOverlayClick {
-        match crate::ui::help_overlay_region_at(x as f64, y as f64) {
-            Some(crate::ui::HelpOverlayRegion::Row(action)) => HelpOverlayClick::Run(action),
+        match self.help_overlay.region_at(x as f64, y as f64) {
+            Some(crate::help_overlay_interaction::HelpOverlayRegion::Row(action)) => {
+                HelpOverlayClick::Run(action)
+            }
             Some(_) => HelpOverlayClick::Inside,
             None => HelpOverlayClick::Outside,
         }
@@ -154,10 +160,16 @@ impl InputState {
             return None;
         }
 
-        match crate::ui::help_overlay_region_at(x as f64, y as f64)? {
-            crate::ui::HelpOverlayRegion::Search => Some(HelpOverlayCursorHint::Text),
-            crate::ui::HelpOverlayRegion::Row(_) => Some(HelpOverlayCursorHint::Pointer),
-            crate::ui::HelpOverlayRegion::Inside => Some(HelpOverlayCursorHint::Default),
+        match self.help_overlay.region_at(x as f64, y as f64)? {
+            crate::help_overlay_interaction::HelpOverlayRegion::Search => {
+                Some(HelpOverlayCursorHint::Text)
+            }
+            crate::help_overlay_interaction::HelpOverlayRegion::Row(_) => {
+                Some(HelpOverlayCursorHint::Pointer)
+            }
+            crate::help_overlay_interaction::HelpOverlayRegion::Inside => {
+                Some(HelpOverlayCursorHint::Default)
+            }
         }
     }
 }

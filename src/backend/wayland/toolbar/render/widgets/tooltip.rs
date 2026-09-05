@@ -8,9 +8,11 @@ use super::constants::{
 use super::draw_round_rect;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 use crate::backend::wayland::toolbar::render::TOOLTIP_DELAY;
-use crate::ui_text::{UiTextStyle, text_layout};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
+#[allow(clippy::too_many_arguments)]
 pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip_with_delay(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     hits: &[HitRegion],
     hover: Option<(f64, f64)>,
@@ -41,7 +43,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_tooltip_with_delay(
             let pad = SPACING_STD;
             let max_tooltip_w = (panel_width - SPACING_LG).max(40.0);
             let max_text_w = (max_tooltip_w - pad * 2.0).max(20.0);
-            let layout = text_layout(ctx, style, text, Some(max_text_w));
+            let layout = engine.layout(ctx, style, text, Some(max_text_w));
             let ink_extents = layout.ink_extents();
             let text_w = ink_extents.width().max(1.0);
             let text_h = ink_extents.height().max(1.0);

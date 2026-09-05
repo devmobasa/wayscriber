@@ -8,10 +8,14 @@ const KEYBOARD_NUDGE_SMALL: i32 = 8;
 const KEYBOARD_NUDGE_LARGE: i32 = 32;
 
 impl InputState {
-    pub(in crate::input::state) fn handle_selection_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_selection_action_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        action: Action,
+    ) -> bool {
         match action {
             Action::CopySelection | Action::SelectAll => {
-                self.handle_selection_content_action(action)
+                self.handle_selection_content_action_with_measurer(measurer, action)
             }
             Action::PasteSelection => {
                 self.request_clipboard_paste();
@@ -19,19 +23,19 @@ impl InputState {
                 true
             }
             Action::DuplicateSelection => {
-                if self.duplicate_selection() {
+                if self.duplicate_selection_with(measurer) {
                     info!("Duplicated selection");
                 }
                 true
             }
             Action::MoveSelectionToFront => {
-                if self.move_selection_to_front() {
+                if self.move_selection_to_front_with(measurer) {
                     info!("Moved selection to front");
                 }
                 true
             }
             Action::MoveSelectionToBack => {
-                if self.move_selection_to_back() {
+                if self.move_selection_to_back_with(measurer) {
                     info!("Moved selection to back");
                 }
                 true
@@ -41,33 +45,35 @@ impl InputState {
             | Action::NudgeSelectionLeft
             | Action::NudgeSelectionRight
             | Action::NudgeSelectionUpLarge
-            | Action::NudgeSelectionDownLarge => self.handle_selection_nudge_action(action),
+            | Action::NudgeSelectionDownLarge => {
+                self.handle_selection_nudge_action_with_measurer(measurer, action)
+            }
             Action::MoveSelectionToStart => {
-                if self.move_selection_to_horizontal_edge(true) {
+                if self.move_selection_to_horizontal_edge_with(measurer, true) {
                     info!("Moved selection to start");
                 }
                 true
             }
             Action::MoveSelectionToEnd => {
-                if self.move_selection_to_horizontal_edge(false) {
+                if self.move_selection_to_horizontal_edge_with(measurer, false) {
                     info!("Moved selection to end");
                 }
                 true
             }
             Action::MoveSelectionToTop => {
-                if self.move_selection_to_vertical_edge(true) {
+                if self.move_selection_to_vertical_edge_with(measurer, true) {
                     info!("Moved selection to top");
                 }
                 true
             }
             Action::MoveSelectionToBottom => {
-                if self.move_selection_to_vertical_edge(false) {
+                if self.move_selection_to_vertical_edge_with(measurer, false) {
                     info!("Moved selection to bottom");
                 }
                 true
             }
             Action::DeleteSelection => {
-                if self.delete_selection() {
+                if self.delete_selection_with(measurer) {
                     info!("Deleted selection");
                 }
                 true
@@ -76,7 +82,11 @@ impl InputState {
         }
     }
 
-    fn handle_selection_content_action(&mut self, action: Action) -> bool {
+    fn handle_selection_content_action_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        action: Action,
+    ) -> bool {
         match action {
             Action::CopySelection => {
                 let copied = self.copy_selection();
@@ -97,34 +107,42 @@ impl InputState {
                 }
             }
             Action::SelectAll => {
-                let previous_bounds = self.selection_bounding_box(self.selected_shape_ids());
-                let ids: Vec<_> = self
-                    .boards
-                    .active_frame()
-                    .shapes
-                    .iter()
-                    .map(|shape| shape.id)
-                    .collect();
-                if ids.is_empty() {
-                    self.push_toast(
-                        ToastPriority::Info,
-                        "selection",
-                        Toast::warning("No shapes to select."),
-                    );
-                } else {
-                    self.set_selection(ids);
-                    self.mark_selection_dirty_region(previous_bounds);
-                    let new_bounds = self.selection_bounding_box(self.selected_shape_ids());
-                    self.mark_selection_dirty_region(new_bounds);
-                    self.needs_redraw = true;
-                }
+                self.select_all_shapes_with(measurer);
             }
             _ => unreachable!("selection content dispatcher called with {action:?}"),
         }
         true
     }
 
-    fn handle_selection_nudge_action(&mut self, action: Action) -> bool {
+    fn select_all_shapes_with(&mut self, measurer: &crate::draw::TextMeasurer) {
+        let previous_bounds = self.selection_bounding_box_with(measurer, self.selected_shape_ids());
+        let ids: Vec<_> = self
+            .boards
+            .active_frame()
+            .shapes
+            .iter()
+            .map(|shape| shape.id)
+            .collect();
+        if ids.is_empty() {
+            self.push_toast(
+                ToastPriority::Info,
+                "selection",
+                Toast::warning("No shapes to select."),
+            );
+        } else {
+            self.set_selection(ids);
+            self.mark_selection_dirty_region(previous_bounds);
+            let new_bounds = self.selection_bounding_box_with(measurer, self.selected_shape_ids());
+            self.mark_selection_dirty_region(new_bounds);
+            self.needs_redraw = true;
+        }
+    }
+
+    fn handle_selection_nudge_action_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        action: Action,
+    ) -> bool {
         let shifted_step = if self.modifiers.shift {
             KEYBOARD_NUDGE_LARGE
         } else {
@@ -175,7 +193,7 @@ impl InputState {
             ),
             _ => unreachable!("selection nudge dispatcher called with {action:?}"),
         };
-        if self.translate_selection_with_undo(dx, dy) {
+        if self.translate_selection_with_undo_with(measurer, dx, dy) {
             self.selection_interaction.note_axis(axis);
             info!("Moved selection {} by {} px", direction, step);
         } else if self.has_selection() {

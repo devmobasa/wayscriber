@@ -7,12 +7,14 @@ pub(crate) mod interaction;
 mod mouse;
 mod render;
 mod spotlight;
+mod text_resources;
 pub(crate) use core::{
     DrawingStyle, HistoryLimits, IdleHandle, SpotlightMagnificationTrack, TopMenuState,
 };
 pub(crate) use core::{InputEffect, InputEffectDrain};
 pub(in crate::input::state) use spotlight::SpotlightWheelGesture;
 pub(crate) use spotlight::{SpotlightFrameRegions, SpotlightWheelClaim, SpotlightWheelOutcome};
+pub(crate) use text_resources::InputTextResources;
 #[cfg(test)]
 mod tests;
 

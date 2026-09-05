@@ -51,6 +51,7 @@ pub(super) fn capture_region_at_scale(scale: f64) -> ActiveScreenRegion {
         legend_dismissed: false,
         include_drawings: false,
         review_resize: None,
+        phase: RegionInteractionPhase::Armed,
     }
 }
 
@@ -91,7 +92,11 @@ fn interactive_release_enters_review_ready_for_the_first_cut_drag() {
     let mut backend = Some(interactive_region());
     let mut input = make_test_input_state();
     let mut review_edits = None;
-    input.activate_region(RegionPurposeTag::CaptureInteractive, 1);
+    input.activate_region_with(
+        &crate::draw::TextMeasurer::default(),
+        RegionPurposeTag::CaptureInteractive,
+        1,
+    );
 
     assert!(begin_region_selection_event(
         &mut backend,
@@ -156,7 +161,11 @@ fn reselecting_before_a_cut_replaces_the_review_edit_geometry() {
     let mut backend = Some(interactive_region());
     let mut input = make_test_input_state();
     let mut review_edits = None;
-    input.activate_region(RegionPurposeTag::CaptureInteractive, 1);
+    input.activate_region_with(
+        &crate::draw::TextMeasurer::default(),
+        RegionPurposeTag::CaptureInteractive,
+        1,
+    );
 
     assert!(begin_region_selection_event(
         &mut backend,

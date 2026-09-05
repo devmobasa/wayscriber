@@ -3,22 +3,26 @@ use crate::domain::Action;
 use super::super::InputState;
 
 impl InputState {
-    pub(in crate::input::state) fn handle_preset_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_preset_action_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        action: Action,
+    ) -> bool {
         match action {
             Action::ApplyPreset1 => {
-                let _ = self.apply_preset(1);
+                let _ = self.apply_preset_with(measurer, 1);
             }
             Action::ApplyPreset2 => {
-                let _ = self.apply_preset(2);
+                let _ = self.apply_preset_with(measurer, 2);
             }
             Action::ApplyPreset3 => {
-                let _ = self.apply_preset(3);
+                let _ = self.apply_preset_with(measurer, 3);
             }
             Action::ApplyPreset4 => {
-                let _ = self.apply_preset(4);
+                let _ = self.apply_preset_with(measurer, 4);
             }
             Action::ApplyPreset5 => {
-                let _ = self.apply_preset(5);
+                let _ = self.apply_preset_with(measurer, 5);
             }
             Action::SavePreset1 => {
                 let _ = self.save_preset(1);

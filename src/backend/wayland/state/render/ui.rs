@@ -97,7 +97,7 @@ impl WaylandState {
             && !status_visible
             && fallback_visible
         {
-            crate::ui::render_frozen_badge(ctx, width, height);
+            crate::ui::render_frozen_badge_with_engine(self.render.ui_text(), ctx, width, height);
         }
         let mut offset = 0.0;
         if self.input_state.zoom_active()
@@ -105,7 +105,8 @@ impl WaylandState {
             && !self.zoom_chip_visible()
             && fallback_visible
         {
-            offset += crate::ui::render_zoom_badge(
+            offset += crate::ui::render_zoom_badge_with_engine(
+                self.render.ui_text(),
                 ctx,
                 width,
                 height,
@@ -119,7 +120,8 @@ impl WaylandState {
             && !status_visible
             && fallback_visible
         {
-            offset += crate::ui::render_pan_badge(
+            offset += crate::ui::render_pan_badge_with_engine(
+                self.render.ui_text(),
                 ctx,
                 width,
                 height,
@@ -132,7 +134,13 @@ impl WaylandState {
             && !status_visible
             && fallback_visible
         {
-            crate::ui::render_editing_badge(ctx, width, height, offset);
+            crate::ui::render_editing_badge_with_engine(
+                self.render.ui_text(),
+                ctx,
+                width,
+                height,
+                offset,
+            );
         }
     }
 
@@ -144,7 +152,8 @@ impl WaylandState {
         capture_picker: bool,
     ) {
         if !capture_picker && self.input_state.floating_badge_visible() {
-            crate::ui::render_page_badge(
+            crate::ui::render_page_badge_with_engine(
+                self.render.ui_text(),
                 ctx,
                 width,
                 height,
@@ -156,7 +165,8 @@ impl WaylandState {
             );
         }
         if self.input_state.ui_visibility.show_status_bar {
-            crate::ui::render_status_bar_with_theme(
+            crate::ui::render_status_bar_with_resources(
+                self.render.ui_text(),
                 ctx,
                 self.render.theme(),
                 &self.input_state,
@@ -166,7 +176,8 @@ impl WaylandState {
             );
         }
         if !capture_picker && self.zoom_chip_visible() {
-            crate::ui::render_zoom_chip_with_theme(
+            crate::ui::render_zoom_chip_with_resources(
+                self.render.ui_text(),
                 ctx,
                 self.render.theme(),
                 &self.input_state,
@@ -176,7 +187,8 @@ impl WaylandState {
             );
         }
         if !capture_picker && self.input_state.input_hud_visible() {
-            crate::ui::render_input_hud(
+            crate::ui::render_input_hud_with_engine(
+                self.render.ui_text(),
                 ctx,
                 &self.input_state,
                 &self.config.ui.status_bar_style,
@@ -194,37 +206,43 @@ impl WaylandState {
         capture_picker: bool,
     ) {
         if !capture_picker && self.input_state.help_overlay.is_visible() {
-            let bindings = crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);
-            let (theme, caches) = self.render.ui_parts_mut();
-            let mut render = crate::ui::UiRenderCtx {
-                cairo: ctx,
-                theme,
-                caches,
+            let result = {
+                let (theme, caches, engine, content_cache) = self.render.help_parts_mut();
+                let content = content_cache.get_or_build(
+                    &self.input_state,
+                    self.frozen.enabled(),
+                    self.config.ui.help_overlay_context_filter,
+                    self.input_state.boards.board_count() > 1,
+                    self.config.capture.enabled,
+                );
+                let mut render = crate::ui::UiRenderCtx {
+                    cairo: ctx,
+                    theme,
+                    caches,
+                };
+                crate::ui::render_help_overlay_result_with_content(
+                    engine,
+                    &mut render,
+                    &self.config.ui.help_overlay_style,
+                    width,
+                    height,
+                    self.input_state.help_overlay.page(),
+                    content,
+                    self.input_state.help_overlay.query(),
+                    self.input_state.help_overlay.scroll(),
+                    self.input_state.help_overlay.is_quick_mode(),
+                )
             };
-            let scroll_max = crate::ui::render_help_overlay_with_context(
-                &mut render,
-                &self.config.ui.help_overlay_style,
-                width,
-                height,
-                self.frozen.enabled(),
-                self.input_state.help_overlay.page(),
-                &bindings,
-                self.input_state.help_overlay.query(),
-                self.config.ui.help_overlay_context_filter,
-                self.input_state.boards.board_count() > 1,
-                self.config.capture.enabled,
-                self.input_state.help_overlay.scroll(),
-                self.input_state.help_overlay.is_quick_mode(),
-            );
-            self.input_state
-                .help_overlay
-                .update_scroll_extent(scroll_max);
+            self.input_state.help_overlay.install_render_result(result);
         }
         if !capture_picker && self.input_state.is_board_picker_open() {
             self.input_state
                 .update_board_picker_layout(ctx, width, height);
-            let mut render = crate::draw::RenderCtx::new(ctx, self.render.draw_caches_mut());
+            let (caches, engine, measurer) = self.render.draw_ui_text_parts_mut();
+            let mut render = crate::draw::RenderCtx::new(ctx, caches);
             crate::ui::render_board_picker_with_halo(
+                engine,
+                measurer,
                 &mut render,
                 &self.input_state,
                 width,
@@ -237,7 +255,13 @@ impl WaylandState {
         if !capture_picker && self.input_state.is_color_picker_popup_open() {
             self.input_state
                 .update_color_picker_popup_layout(width, height);
-            crate::ui::render_color_picker_popup(ctx, &self.input_state, width, height);
+            crate::ui::render_color_picker_popup_with_engine(
+                self.render.ui_text(),
+                ctx,
+                &self.input_state,
+                width,
+                height,
+            );
         } else {
             self.input_state.clear_color_picker_popup_layout();
         }
@@ -255,13 +279,21 @@ impl WaylandState {
 
     fn render_precision_entry(&mut self, ctx: &cairo::Context, width: u32, height: u32) {
         let snapshot = self.toolbar_snapshot();
-        let (_, top_h) = crate::backend::wayland::toolbar::top_size(&snapshot);
+        let (_, top_h) =
+            crate::backend::wayland::toolbar::top_size(self.render.ui_text(), &snapshot);
         let top_offset = self.toolbar_chrome.top_offset();
         let anchor = (
             self.inline_top_base_x() + top_offset.0,
             self.inline_top_base_y() + top_offset.1 + top_h as f64 + 8.0,
         );
-        crate::ui::render_precision_entry_popup(ctx, &self.input_state, width, height, anchor);
+        crate::ui::render_precision_entry_popup_with_engine(
+            self.render.ui_text(),
+            ctx,
+            &self.input_state,
+            width,
+            height,
+            anchor,
+        );
     }
 
     fn render_radial_menu_and_feedback(
@@ -277,13 +309,14 @@ impl WaylandState {
                 .input_state
                 .radial_menu_mark_painted_if_due(std::time::Instant::now())
             {
-                let (theme, caches) = self.render.ui_parts_mut();
+                let (theme, caches, engine) = self.render.ui_parts_with_text_mut();
                 let mut render = crate::ui::UiRenderCtx {
                     cairo: ctx,
                     theme,
                     caches,
                 };
                 crate::ui::render_radial_menu_with_context(
+                    engine,
                     &mut render,
                     &self.input_state,
                     width,
@@ -293,14 +326,26 @@ impl WaylandState {
         } else {
             self.input_state.clear_radial_menu_layout();
         }
-        let toast_geometry = crate::ui::render_ui_toast(ctx, &self.input_state, width, height);
+        let toast_geometry = crate::ui::render_ui_toast_with_engine(
+            self.render.ui_text(),
+            ctx,
+            &self.input_state,
+            width,
+            height,
+        );
         self.input_state.set_toast_geometry(
             toast_geometry.map(|geometry| geometry.0),
             toast_geometry
                 .map(|geometry| geometry.1)
                 .unwrap_or([None, None]),
         );
-        crate::ui::render_preset_toast(ctx, &self.input_state, width, height);
+        crate::ui::render_preset_toast_with_engine(
+            self.render.ui_text(),
+            ctx,
+            &self.input_state,
+            width,
+            height,
+        );
         crate::ui::render_blocked_feedback(ctx, &self.input_state, width, height);
     }
 
@@ -318,18 +363,40 @@ impl WaylandState {
         }
         if self.input_state.is_properties_panel_open() {
             self.input_state
-                .update_properties_panel_layout(ctx, width, height);
+                .update_properties_panel_layout_with_resources(
+                    self.render.ui_text(),
+                    self.render.text_measurer(),
+                    ctx,
+                    width,
+                    height,
+                );
         } else {
             self.input_state.clear_properties_panel_layout();
         }
-        crate::ui::render_properties_panel(ctx, &self.input_state, width, height);
+        crate::ui::render_properties_panel_with_engine(
+            self.render.ui_text(),
+            ctx,
+            &self.input_state,
+            width,
+            height,
+        );
         if self.input_state.is_context_menu_open() {
-            self.input_state
-                .update_context_menu_layout(ctx, width, height);
+            self.input_state.update_context_menu_layout_with_engine(
+                self.render.ui_text(),
+                ctx,
+                width,
+                height,
+            );
         } else {
             self.input_state.clear_context_menu_layout();
         }
-        crate::ui::render_context_menu(ctx, &self.input_state, width, height);
+        crate::ui::render_context_menu_with_engine(
+            self.render.ui_text(),
+            ctx,
+            &self.input_state,
+            width,
+            height,
+        );
     }
 
     fn render_inline_and_modal_ui(
@@ -356,10 +423,28 @@ impl WaylandState {
             return;
         }
         if let Some(card) = self.first_run_onboarding_card() {
-            crate::ui::render_onboarding_card(ctx, width, height, &card);
+            crate::ui::render_onboarding_card_with_engine(
+                self.render.ui_text(),
+                ctx,
+                width,
+                height,
+                &card,
+            );
         }
-        crate::ui::render_command_palette(ctx, &self.input_state, width, height);
-        crate::ui::render_tour(ctx, &self.input_state, width, height);
+        crate::ui::render_command_palette_with_engine(
+            self.render.ui_text(),
+            ctx,
+            &self.input_state,
+            width,
+            height,
+        );
+        crate::ui::render_tour_with_engine(
+            self.render.ui_text(),
+            ctx,
+            &self.input_state,
+            width,
+            height,
+        );
     }
 
     /// The scan band while recognition runs, then the outcome card. The card
@@ -371,7 +456,14 @@ impl WaylandState {
         };
         let now = std::time::Instant::now();
         if let Some((outcome, shown)) = scan.result(now) {
-            crate::ui::render_ocr_scan_result(ctx, scan.region(), outcome, shown, (width, height));
+            crate::ui::render_ocr_scan_result(
+                self.render.ui_text(),
+                ctx,
+                scan.region(),
+                outcome,
+                shown,
+                (width, height),
+            );
         } else if let Some(progress) = scan.sweep_progress(now) {
             crate::ui::render_ocr_scan_sweep(ctx, scan.region(), progress);
         } else if scan.is_scanning() {
@@ -478,6 +570,7 @@ impl WaylandState {
         };
 
         crate::ui::render_region_capture_picker(
+            self.render.ui_text(),
             ctx,
             width,
             height,

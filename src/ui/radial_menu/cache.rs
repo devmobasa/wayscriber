@@ -9,6 +9,7 @@
 //! tool/color state — so any change invalidates the surface. The entry also
 //! retains the theme value so changing themes replaces the baked pixels.
 
+use crate::ui_text::UiTextEngine;
 use cairo::{Context, Format, ImageSurface};
 
 use crate::input::state::{
@@ -58,14 +59,31 @@ impl RadialBaseCache {
     /// be created.
     pub(super) fn paint_base(
         &mut self,
+        engine: &UiTextEngine,
         ctx: &cairo::Context,
         input_state: &InputState,
         layout: &RadialMenuLayout,
         theme: &theme::Theme,
         swatches: &[RadialRingSwatch],
     ) {
+        self.paint_base_with_allocator(engine, ctx, input_state, layout, theme, swatches, |px| {
+            ImageSurface::create(Format::ARgb32, px, px).ok()
+        });
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn paint_base_with_allocator(
+        &mut self,
+        engine: &UiTextEngine,
+        ctx: &Context,
+        input_state: &InputState,
+        layout: &RadialMenuLayout,
+        theme: &theme::Theme,
+        swatches: &[RadialRingSwatch],
+        allocate: impl FnOnce(i32) -> Option<ImageSurface>,
+    ) {
         let extent = base_extent(layout);
-        let surface = self.surface_for(ctx, input_state, layout, theme, swatches);
+        let surface = self.surface_for(engine, ctx, input_state, layout, theme, swatches, allocate);
 
         match surface {
             Some(surface) => {
@@ -79,6 +97,7 @@ impl RadialBaseCache {
                 let _ = ctx.restore();
             }
             None => super::draw_static_base(
+                engine,
                 ctx,
                 input_state,
                 theme,
@@ -90,13 +109,16 @@ impl RadialBaseCache {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn surface_for(
         &mut self,
+        engine: &UiTextEngine,
         ctx: &Context,
         input_state: &InputState,
         layout: &RadialMenuLayout,
         theme: &theme::Theme,
         swatches: &[RadialRingSwatch],
+        allocate: impl FnOnce(i32) -> Option<ImageSurface>,
     ) -> Option<ImageSurface> {
         let extent = base_extent(layout);
         let scale = base_scale(ctx);
@@ -108,7 +130,16 @@ impl RadialBaseCache {
         {
             return Some(cached.surface.clone());
         }
-        let surface = render_base_surface(input_state, layout, theme, swatches, extent, scale)?;
+        let surface = render_base_surface(
+            engine,
+            input_state,
+            layout,
+            theme,
+            swatches,
+            extent,
+            scale,
+            allocate,
+        )?;
         self.cached = Some(CachedBase {
             key,
             theme: theme.clone(),
@@ -189,20 +220,32 @@ pub(super) fn base_cache_key(
 }
 
 /// Render the static base into a fresh offscreen surface, centered.
+#[allow(clippy::too_many_arguments)]
 fn render_base_surface(
+    engine: &UiTextEngine,
     input_state: &InputState,
     layout: &RadialMenuLayout,
     theme: &theme::Theme,
     swatches: &[RadialRingSwatch],
     extent: f64,
     scale: f64,
+    allocate: impl FnOnce(i32) -> Option<ImageSurface>,
 ) -> Option<ImageSurface> {
     let px = physical_size(extent, scale);
-    let surface = ImageSurface::create(Format::ARgb32, px, px).ok()?;
+    let surface = allocate(px)?;
     surface.set_device_scale(scale, scale);
     {
         let ctx = Context::new(&surface).ok()?;
-        super::draw_static_base(&ctx, input_state, theme, extent, extent, layout, swatches);
+        super::draw_static_base(
+            engine,
+            &ctx,
+            input_state,
+            theme,
+            extent,
+            extent,
+            layout,
+            swatches,
+        );
     }
     Some(surface)
 }
@@ -251,12 +294,15 @@ mod tests {
         assert_ne!(base, scaled, "device scale must be part of the key");
 
         // Recents arc
-        state.apply_color_from_ui(Color {
-            r: 0.123,
-            g: 0.456,
-            b: 0.789,
-            a: 1.0,
-        });
+        state.apply_color_from_ui_with_measurer(
+            &crate::draw::TextMeasurer::default(),
+            Color {
+                r: 0.123,
+                g: 0.456,
+                b: 0.789,
+                a: 1.0,
+            },
+        );
         let with_recent = key_for(&state);
         assert_ne!(base, with_recent, "a new recent color must invalidate");
 
@@ -319,12 +365,14 @@ mod tests {
         let layout = state.radial_menu.layout().expect("radial layout");
 
         let surface = render_base_surface(
+            &UiTextEngine::default(),
             &state,
             &layout,
             &theme::Theme::dark(),
             &state.radial_ring_swatches(),
             EXTENT,
             1.0,
+            |px| ImageSurface::create(Format::ARgb32, px, px).ok(),
         )
         .expect("base surface");
 

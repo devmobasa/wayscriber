@@ -159,14 +159,18 @@ impl InputState {
         true
     }
 
-    pub(crate) fn board_picker_finish_page_drag(&mut self) -> bool {
+    pub(crate) fn board_picker_finish_page_drag_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+    ) -> bool {
         let Some(drag) = self.board_picker.page_drag.take() else {
             return false;
         };
         let target_board = drag.target_board.unwrap_or(drag.board_index);
         if target_board != drag.board_index {
             let copy = self.modifiers.alt;
-            let _ = self.move_page_between_boards_with_activation(
+            let _ = self.move_page_between_boards_with_activation_with_measurer(
+                measurer,
                 drag.board_index,
                 drag.source_index,
                 target_board,
@@ -180,7 +184,12 @@ impl InputState {
             self.needs_redraw = true;
             return true;
         }
-        self.reorder_page_in_board(drag.board_index, drag.source_index, drag.current_index);
+        self.reorder_page_in_board_with_measurer(
+            measurer,
+            drag.board_index,
+            drag.source_index,
+            drag.current_index,
+        );
         self.needs_redraw = true;
         true
     }

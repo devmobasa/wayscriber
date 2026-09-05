@@ -12,13 +12,14 @@ fn delete_shapes_by_ids_ignores_missing_ids() {
         thick: state.style.current_thickness,
     });
 
-    let removed = state.delete_shapes_by_ids(&[9999]);
+    let removed = state.delete_shapes_by_ids_with(&crate::draw::TextMeasurer::default(), &[9999]);
     assert!(!removed);
     assert_eq!(state.boards.active_frame().shapes.len(), 1);
 }
 
 #[test]
 fn locked_shape_blocks_edit_and_delete() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 40,
@@ -36,11 +37,11 @@ fn locked_shape_blocks_edit_and_delete() {
     }
 
     state.set_selection(vec![shape_id]);
-    assert!(!state.edit_selected_text());
+    assert!(!state.edit_selected_text_with(&route_measurer));
     assert!(matches!(state.state, DrawingState::Idle));
     assert!(state.text_editing.edit_target().is_none());
 
-    assert!(!state.delete_selection());
+    assert!(!state.delete_selection_with(&route_measurer));
     assert!(state.boards.active_frame().shape(shape_id).is_some());
 }
 

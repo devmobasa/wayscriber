@@ -36,7 +36,7 @@ impl WaylandState {
             });
             return false;
         }
-        let (top_w, top_h) = top_size(snapshot);
+        let (top_w, top_h) = top_size(self.render.ui_text(), snapshot);
         let top_base_x = self.inline_top_base_x();
         let top_base_y = self.inline_top_base_y();
 

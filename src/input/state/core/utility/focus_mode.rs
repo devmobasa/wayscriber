@@ -15,6 +15,7 @@
 use super::super::base::InputState;
 use super::super::modes::FocusModeRestore;
 use crate::domain::Action;
+use crate::input::state::InputTextResources;
 use crate::input::state::{Toast, ToastPriority};
 
 const FOCUS_MODE_TOAST_KEY: &str = "focus.mode";
@@ -94,9 +95,9 @@ impl InputState {
     /// - chrome visible → snapshot and hide everything;
     /// - nothing visible and no snapshot → show everything (rescue arm, so
     ///   the action always has a visible effect).
-    pub(crate) fn toggle_focus_mode(&mut self) {
+    pub(crate) fn toggle_focus_mode_with_resources(&mut self, resources: InputTextResources<'_>) {
         if self.light_mode_active() {
-            self.exit_light_mode();
+            self.exit_light_mode_with(resources.measurer);
         }
         if let Some(restore) = self.modes.end_focus() {
             self.clear_focus_mode_toast();
@@ -119,7 +120,7 @@ impl InputState {
             || self.fallback_mode_badge_may_be_active();
         if !anything_to_hide {
             self.clear_all_chrome_recovery_toast();
-            self.set_toolbar_visible(true);
+            self.set_toolbar_visible_with_resources(resources.ui_engine, resources.measurer, true);
             self.ui_visibility.show_status_bar = true;
             self.ui_visibility.show_floating_badge = true;
             self.ui_visibility.show_zoom_chip = true;

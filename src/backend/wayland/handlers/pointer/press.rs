@@ -130,8 +130,17 @@ impl WaylandState {
         let screen_x = event.position.0.round() as i32;
         let screen_y = event.position.1.round() as i32;
         let (wx, wy) = self.zoomed_world_coords(event.position.0, event.position.1);
-        self.input_state
-            .on_mouse_press_with_canvas(mb, screen_x, screen_y, wx, wy);
+        self.input_state.on_mouse_press_with_canvas_and_resources(
+            crate::input::state::InputTextResources {
+                measurer: self.render.text_measurer(),
+                ui_engine: self.render.ui_text(),
+            },
+            mb,
+            screen_x,
+            screen_y,
+            wx,
+            wy,
+        );
         self.input_state.needs_redraw = true;
     }
 
@@ -232,12 +241,18 @@ impl WaylandState {
             return false;
         }
         if button == BTN_LEFT {
-            let handled = self.input_state.handle_command_palette_click(
-                event.position.0 as i32,
-                event.position.1 as i32,
-                self.surface.width(),
-                self.surface.height(),
-            );
+            let handled = self
+                .input_state
+                .handle_command_palette_click_with_resources(
+                    crate::input::state::InputTextResources {
+                        measurer: self.render.text_measurer(),
+                        ui_engine: self.render.ui_text(),
+                    },
+                    event.position.0 as i32,
+                    event.position.1 as i32,
+                    self.surface.width(),
+                    self.surface.height(),
+                );
             if handled {
                 self.pointer.suppress_release(RegionInputSource::Pointer);
             }

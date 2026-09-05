@@ -42,6 +42,13 @@ mod tests {
 
     #[test]
     fn polling_the_owning_path_finishes_one_idle_wheel_burst() {
+        let test_text_measurer = crate::draw::TextMeasurer::default();
+        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let test_text_resources = crate::input::state::InputTextResources {
+            measurer: &test_text_measurer,
+            ui_engine: &test_ui_engine,
+        };
+
         let mut input_state = make_test_input_state();
         let shape_id = input_state
             .boards
@@ -57,7 +64,7 @@ mod tests {
         let mut deadline = Some(now + Duration::from_millis(600));
 
         assert_eq!(
-            input_state.nudge_spotlight_magnification_at(200, 200, 1),
+            input_state.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
             SpotlightWheelOutcome::Adjusted
         );
         poll_interaction_deadlines(
@@ -81,10 +88,10 @@ mod tests {
         );
 
         assert_eq!(
-            input_state.nudge_spotlight_magnification_at(200, 200, 1),
+            input_state.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
             SpotlightWheelOutcome::Adjusted
         );
-        input_state.handle_action(Action::Undo);
+        input_state.handle_action_with_resources(test_text_resources, Action::Undo);
         let magnification = match input_state
             .boards
             .active_frame()
@@ -100,7 +107,7 @@ mod tests {
             "the post-idle tick must be a separately undoable gesture"
         );
 
-        input_state.handle_action(Action::Undo);
+        input_state.handle_action_with_resources(test_text_resources, Action::Undo);
         let magnification = match input_state
             .boards
             .active_frame()

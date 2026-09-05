@@ -181,6 +181,7 @@ fn marker_opacity_helper_preserves_current_alpha_clamp() {
 
 #[test]
 fn provisional_polygon_bounds_include_extra_preview_padding() {
+    let measurer = crate::draw::TextMeasurer::default();
     let stroke = Tool::Triangle.provisional_polygon_stroke(PolygonProvisionalSnapshot {
         tool: Tool::Triangle,
         start: (10, 10),
@@ -198,7 +199,7 @@ fn provisional_polygon_bounds_include_extra_preview_padding() {
         .bounding_box()
         .expect("polygon preview should have bounds");
     assert_eq!(
-        stroke.bounds(),
+        stroke.bounds_with(&measurer),
         base.inflated(PROVISIONAL_POLYGON_DAMAGE_PADDING),
         "polygon drag preview damage should clear antialias leftovers"
     );

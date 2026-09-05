@@ -23,6 +23,7 @@ mod selection_state;
 mod source_guard;
 mod window_snap;
 
+use active_state::RegionInteractionPhase;
 pub(super) use active_state::{ActiveScreenRegion, FreezeOwnership};
 pub(in crate::backend::wayland) use board::{
     board_bounds_for_world_rect, world_rect_for_composed_region, world_rect_for_image_rect_exact,
@@ -30,8 +31,6 @@ pub(in crate::backend::wayland) use board::{
 pub(in crate::backend::wayland) use cut_preview::CutPreviewOutcome;
 pub(in crate::backend::wayland) use cut_review::RegionReviewPress;
 pub(in crate::backend::wayland) use cut_review::{CutPreviewKey, RegionReviewEdits};
-#[cfg(test)]
-pub(super) use events::finalize_region_selection_event;
 pub(super) use events::finalize_region_selection_with_review_edits;
 use events::*;
 pub(in crate::backend::wayland) use geometry::{RegionPickerMeasurement, RegionSelectionGeometry};

@@ -114,11 +114,17 @@ impl InputState {
         changed
     }
 
-    pub(crate) fn handle_board_picker_page_nav_key(&mut self, key: Key) -> Option<bool> {
+    pub(crate) fn handle_board_picker_page_nav_key_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        key: Key,
+    ) -> Option<bool> {
         match self.board_picker_page_nav_mode() {
             BoardPickerPageNavMode::Normal => None,
             BoardPickerPageNavMode::Jump => Some(self.handle_board_picker_page_jump_key(key)),
-            BoardPickerPageNavMode::Search => Some(self.handle_board_picker_page_search_key(key)),
+            BoardPickerPageNavMode::Search => {
+                Some(self.handle_board_picker_page_search_key_with_measurer(measurer, key))
+            }
         }
     }
 
@@ -183,7 +189,11 @@ impl InputState {
         self.board_picker_set_page_focus_page_index(page_index);
     }
 
-    fn handle_board_picker_page_search_key(&mut self, key: Key) -> bool {
+    fn handle_board_picker_page_search_key_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        key: Key,
+    ) -> bool {
         match key {
             Key::Escape => {
                 self.board_picker_clear_page_nav();
@@ -191,7 +201,7 @@ impl InputState {
             }
             Key::Return => {
                 if let Some(page_index) = self.board_picker_page_search_active_match() {
-                    self.board_picker_activate_page(page_index);
+                    self.board_picker_activate_page_with_measurer(measurer, page_index);
                 }
                 true
             }

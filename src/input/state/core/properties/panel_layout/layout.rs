@@ -7,7 +7,7 @@ use super::{
     PANEL_MARGIN, PANEL_PADDING_X, PANEL_PADDING_Y, PANEL_ROW_HEIGHT, PANEL_SECTION_GAP,
     PANEL_TITLE_FONT,
 };
-use crate::ui_text::{UiTextStyle, text_layout};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 use crate::util::Rect;
 
 impl InputState {
@@ -21,8 +21,25 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) {
+        self.update_properties_panel_layout_with_resources(
+            &UiTextEngine::default(),
+            &crate::draw::TextMeasurer::default(),
+            ctx,
+            screen_width,
+            screen_height,
+        );
+    }
+
+    pub(crate) fn update_properties_panel_layout_with_resources(
+        &mut self,
+        engine: &UiTextEngine,
+        measurer: &crate::draw::TextMeasurer,
+        ctx: &CairoContext,
+        screen_width: u32,
+        screen_height: u32,
+    ) {
         if self.properties.needs_refresh() {
-            self.refresh_properties_panel();
+            self.refresh_properties_panel_with(measurer);
         }
         let Some(panel) = self.properties.panel.as_ref() else {
             self.properties.layout = None;
@@ -46,17 +63,23 @@ impl InputState {
             weight: cairo::FontWeight::Normal,
             size: PANEL_BODY_FONT,
         };
-        let extents = text_layout(ctx, title_style, &panel.title, None).ink_extents();
+        let extents = engine
+            .layout(ctx, title_style, &panel.title, None)
+            .ink_extents();
         max_line_width = max_line_width.max(extents.width());
 
         for line in &panel.lines {
-            let extents = text_layout(ctx, body_style, line, None).ink_extents();
+            let extents = engine.layout(ctx, body_style, line, None).ink_extents();
             max_line_width = max_line_width.max(extents.width());
         }
         for entry in &panel.entries {
-            let extents = text_layout(ctx, body_style, &entry.label, None).ink_extents();
+            let extents = engine
+                .layout(ctx, body_style, &entry.label, None)
+                .ink_extents();
             max_label_width = max_label_width.max(extents.width());
-            let extents = text_layout(ctx, body_style, &entry.value, None).ink_extents();
+            let extents = engine
+                .layout(ctx, body_style, &entry.value, None)
+                .ink_extents();
             max_value_width = max_value_width.max(extents.width());
         }
         let _ = ctx.restore();
@@ -212,5 +235,83 @@ fn mark_properties_panel_region(state: &mut InputState, layout: PropertiesPanelL
         state.dirty_tracker.mark_rect(rect);
     } else {
         state.dirty_tracker.mark_full();
+    }
+}
+
+#[cfg(test)]
+mod engine_tests {
+    use super::*;
+    use crate::draw::{Shape, TextMeasurer};
+
+    fn paint(engine: &UiTextEngine, state: &InputState) -> Vec<u8> {
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
+        {
+            let ctx = cairo::Context::new(&surface).unwrap();
+            crate::ui::render_properties_panel_with_engine(engine, &ctx, state, 800, 600);
+        }
+        surface.data().unwrap().to_vec()
+    }
+
+    #[test]
+    fn deferred_property_refresh_uses_both_owners_before_layout_and_paint() {
+        let engine = UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let mut state = crate::input::state::test_support::make_test_input_state();
+        let id = state.boards.active_frame_mut().add_shape(Shape::Text {
+            x: 40,
+            y: 60,
+            text: "你好 initial".into(),
+            color: crate::draw::Color::new(1.0, 0.0, 0.0, 1.0),
+            size: 18.0,
+            font_descriptor: Default::default(),
+            background_enabled: false,
+            wrap_width: None,
+        });
+        state.set_selection(vec![id]);
+        assert!(state.show_properties_panel_with(&measurer));
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
+        let ctx = cairo::Context::new(&surface).unwrap();
+        state.update_properties_panel_layout_with_resources(&engine, &measurer, &ctx, 800, 600);
+        let old = state.properties_panel().unwrap().lines.clone();
+        {
+            let frame = state.boards.active_frame_mut();
+            let shape = frame.shape_mut(id).unwrap();
+            if let Shape::Text { text, .. } = &mut shape.shape {
+                *text = "A substantially wider changed text label".into();
+            }
+            shape.invalidate_bounds();
+        }
+        state.properties.mark_needs_refresh();
+        state.update_properties_panel_layout_with_resources(&engine, &measurer, &ctx, 800, 600);
+        assert!(!state.properties.needs_refresh());
+        assert_ne!(
+            state.properties_panel().unwrap().lines,
+            old,
+            "deferred refresh updates measured shape summary"
+        );
+        let layout = *state.properties_panel_layout().unwrap();
+        let actual = paint(&engine, &state);
+        assert!(actual.iter().any(|&byte| byte != 0));
+        state.update_properties_panel_layout(&ctx, 800, 600);
+        let fresh = state.properties_panel_layout().unwrap();
+        assert_eq!(
+            (fresh.origin_x, fresh.origin_y, fresh.width, fresh.height),
+            (
+                layout.origin_x,
+                layout.origin_y,
+                layout.width,
+                layout.height
+            )
+        );
+        assert_eq!(
+            (fresh.label_x, fresh.value_x, fresh.entry_start_y),
+            (layout.label_x, layout.value_x, layout.entry_start_y)
+        );
+        assert!(actual == paint(&UiTextEngine::default(), &state));
+        state.selection_interaction.set(Vec::new());
+        state.properties.mark_needs_refresh();
+        state.update_properties_panel_layout_with_resources(&engine, &measurer, &ctx, 800, 600);
+        assert!(state.properties_panel().is_none());
+        assert!(state.properties_panel_layout().is_none());
     }
 }

@@ -1,5 +1,7 @@
+mod layout;
 use crate::input::InputState;
 use crate::input::state::{PRESET_TOAST_DURATION_MS, PresetFeedbackKind, UiToastKind};
+use layout::{toast_box_geometry, ui_toast_layout};
 use std::time::Instant;
 
 use super::anim;
@@ -8,7 +10,7 @@ use super::constants::{
     TOAST_INFO, TOAST_SUCCESS, TOAST_WARNING,
 };
 use super::primitives::draw_rounded_rect;
-use crate::ui_text::{UiTextStyle, measure_text, text_layout};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 /// Border width for blocked action feedback edge flash.
 const BLOCKED_FEEDBACK_BORDER: f64 = 6.0;
@@ -34,13 +36,6 @@ const TOAST_WARNING_TEXT: (f64, f64, f64) = (0.07, 0.09, 0.15);
 
 type ToastBounds = (f64, f64, f64, f64);
 
-#[derive(Debug)]
-struct UiToastLayout {
-    bounds: ToastBounds,
-    action_bounds: [Option<ToastBounds>; 2],
-    message: String,
-}
-
 /// Overall toast bounds plus the bounds of up to two action chips.
 pub type UiToastRenderGeometry = (ToastBounds, [Option<ToastBounds>; 2]);
 
@@ -59,23 +54,6 @@ fn preset_toast_fade(progress: f64) -> f64 {
 
 fn ui_toast_fade(elapsed_secs: f64, duration_secs: f64) -> f64 {
     anim::end_fade(elapsed_secs, duration_secs, UI_TOAST_FADE_SECONDS)
-}
-
-/// Box geometry for a toast label centered horizontally at a screen-height ratio.
-fn toast_box_geometry(
-    label: &str,
-    font_size: f64,
-    screen_width: u32,
-    screen_height: u32,
-    y_ratio: f64,
-) -> Option<(f64, f64, f64, f64)> {
-    let extents = measure_text(toast_text_style(font_size), label, None)?;
-    let width = extents.width() + TOAST_PADDING_X * 2.0;
-    let height = extents.height() + TOAST_PADDING_Y * 2.0;
-    let x = (screen_width as f64 - width) / 2.0;
-    let center_y = screen_height as f64 * y_ratio;
-    let y = center_y - height / 2.0;
-    Some((x, y, width, height))
 }
 
 /// The most recent, still-animating preset feedback entry: (slot, kind, progress).
@@ -114,93 +92,6 @@ fn preset_feedback_label(slot: usize, kind: PresetFeedbackKind) -> String {
     }
 }
 
-fn measured_width(text: &str) -> Option<f64> {
-    Some(measure_text(toast_text_style(UI_TOAST_FONT_SIZE), text, None)?.width())
-}
-
-fn ellipsize_to_width(text: &str, max_width: f64) -> Option<String> {
-    if measured_width(text)? <= max_width {
-        return Some(text.to_string());
-    }
-    const ELLIPSIS: &str = "…";
-    if measured_width(ELLIPSIS)? > max_width {
-        return Some(String::new());
-    }
-    for (end, _) in text.char_indices().rev() {
-        let candidate = format!("{}{}", text[..end].trim_end(), ELLIPSIS);
-        if measured_width(&candidate)? <= max_width {
-            return Some(candidate);
-        }
-    }
-    Some(ELLIPSIS.to_string())
-}
-
-fn ui_toast_layout(
-    input_state: &InputState,
-    screen_width: u32,
-    screen_height: u32,
-) -> Option<UiToastLayout> {
-    let toast = input_state.active_toast()?;
-    let actions = [toast.action.as_ref(), toast.secondary_action.as_ref()];
-    let action_sizes = actions.map(|action| {
-        action.and_then(|action| {
-            let extents = measure_text(toast_text_style(UI_TOAST_FONT_SIZE), &action.label, None)?;
-            Some((
-                extents.width() + TOAST_ACTION_PADDING_X * 2.0,
-                extents.height() + TOAST_ACTION_PADDING_Y * 2.0,
-            ))
-        })
-    });
-    let action_count = action_sizes.iter().flatten().count();
-    let action_width = action_sizes
-        .iter()
-        .flatten()
-        .map(|size| size.0)
-        .sum::<f64>()
-        + TOAST_ACTION_GAP * action_count.saturating_sub(1) as f64;
-    let message_action_gap = if action_count > 0 {
-        TOAST_ACTION_GAP
-    } else {
-        0.0
-    };
-    let max_box_width = (screen_width as f64 - TOAST_SCREEN_MARGIN * 2.0).max(1.0);
-    let max_message_width =
-        (max_box_width - TOAST_PADDING_X * 2.0 - action_width - message_action_gap).max(0.0);
-    let message = ellipsize_to_width(&toast.message, max_message_width)?;
-    let message_extents = measure_text(toast_text_style(UI_TOAST_FONT_SIZE), &message, None)?;
-    let content_width = message_extents.width() + message_action_gap + action_width;
-    let content_height = action_sizes
-        .iter()
-        .flatten()
-        .map(|size| size.1)
-        .fold(message_extents.height(), f64::max);
-    let width = (content_width + TOAST_PADDING_X * 2.0).min(max_box_width);
-    let height = content_height + TOAST_PADDING_Y * 2.0;
-    let x = (screen_width as f64 - width) / 2.0;
-    let y = screen_height as f64 * UI_TOAST_Y_RATIO - height / 2.0;
-
-    let mut action_x = x + TOAST_PADDING_X + message_extents.width() + message_action_gap;
-    let mut action_bounds = [None, None];
-    for (index, size) in action_sizes.into_iter().enumerate() {
-        let Some((action_width, action_height)) = size else {
-            continue;
-        };
-        action_bounds[index] = Some((
-            action_x,
-            y + (height - action_height) / 2.0,
-            action_width,
-            action_height,
-        ));
-        action_x += action_width + TOAST_ACTION_GAP;
-    }
-
-    Some(UiToastLayout {
-        bounds: (x, y, width, height),
-        action_bounds,
-        message,
-    })
-}
-
 /// On-screen bounds (x, y, width, height) the active UI toast occupies, without
 /// rendering it. Used for damage tracking; measurement goes through the same
 /// layout cache as rendering, so the two always agree.
@@ -209,12 +100,40 @@ pub fn ui_toast_geometry(
     screen_width: u32,
     screen_height: u32,
 ) -> Option<(f64, f64, f64, f64)> {
-    Some(ui_toast_layout(input_state, screen_width, screen_height)?.bounds)
+    ui_toast_geometry_with_engine(
+        &UiTextEngine::default(),
+        input_state,
+        screen_width,
+        screen_height,
+    )
+}
+
+pub(crate) fn ui_toast_geometry_with_engine(
+    engine: &UiTextEngine,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) -> Option<(f64, f64, f64, f64)> {
+    Some(ui_toast_layout(engine, input_state, screen_width, screen_height)?.bounds)
 }
 
 /// On-screen bounds (x, y, width, height) of the active preset toast, without
 /// rendering it. Returns `None` when no preset toast would be drawn.
 pub fn preset_toast_geometry(
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) -> Option<(f64, f64, f64, f64)> {
+    preset_toast_geometry_with_engine(
+        &UiTextEngine::default(),
+        input_state,
+        screen_width,
+        screen_height,
+    )
+}
+
+pub(crate) fn preset_toast_geometry_with_engine(
+    engine: &UiTextEngine,
     input_state: &InputState,
     screen_width: u32,
     screen_height: u32,
@@ -225,6 +144,7 @@ pub fn preset_toast_geometry(
     let (slot, kind, _progress) = latest_preset_feedback(input_state, Instant::now())?;
     let label = preset_feedback_label(slot, kind);
     toast_box_geometry(
+        engine,
         &label,
         PRESET_TOAST_FONT_SIZE,
         screen_width,
@@ -253,6 +173,22 @@ pub fn render_preset_toast(
     screen_width: u32,
     screen_height: u32,
 ) {
+    render_preset_toast_with_engine(
+        &UiTextEngine::default(),
+        ctx,
+        input_state,
+        screen_width,
+        screen_height,
+    )
+}
+
+pub(crate) fn render_preset_toast_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) {
     if !input_state.ui_visibility.show_preset_toasts {
         return;
     }
@@ -265,9 +201,10 @@ pub fn render_preset_toast(
     let radius = RADIUS_LG;
 
     let text_style = toast_text_style(PRESET_TOAST_FONT_SIZE);
-    let layout = text_layout(ctx, text_style, &label, None);
+    let layout = engine.layout(ctx, text_style, &label, None);
     let extents = layout.ink_extents();
     let Some((x, y, width, height)) = toast_box_geometry(
+        engine,
         &label,
         PRESET_TOAST_FONT_SIZE,
         screen_width,
@@ -302,6 +239,22 @@ pub fn render_ui_toast(
     screen_width: u32,
     screen_height: u32,
 ) -> Option<UiToastRenderGeometry> {
+    render_ui_toast_with_engine(
+        &UiTextEngine::default(),
+        ctx,
+        input_state,
+        screen_width,
+        screen_height,
+    )
+}
+
+pub(crate) fn render_ui_toast_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) -> Option<UiToastRenderGeometry> {
     let toast = input_state.active_toast()?;
 
     let now = Instant::now();
@@ -314,7 +267,7 @@ pub fn render_ui_toast(
 
     let padding_x = TOAST_PADDING_X;
     let radius = RADIUS_LG;
-    let layout = ui_toast_layout(input_state, screen_width, screen_height)?;
+    let layout = ui_toast_layout(engine, input_state, screen_width, screen_height)?;
     let (x, y, width, height) = layout.bounds;
     let text_style = toast_text_style(UI_TOAST_FONT_SIZE);
 
@@ -398,7 +351,7 @@ pub fn render_ui_toast(
 
     // Draw the message. Action labels are measured independently so the
     // message can ellipsize while every chip remains whole and clickable.
-    let label_layout = text_layout(ctx, text_style, &layout.message, None);
+    let label_layout = engine.layout(ctx, text_style, &layout.message, None);
     let label_extents = label_layout.ink_extents();
     let text_x = x + TOAST_PADDING_X - label_extents.x_bearing();
     let text_y = y + (height - label_extents.height()) / 2.0 - label_extents.y_bearing();
@@ -422,7 +375,7 @@ pub fn render_ui_toast(
         draw_rounded_rect(ctx, btn_x, btn_y, btn_w, btn_h, RADIUS_SM);
         let _ = ctx.fill();
 
-        let action_layout = text_layout(ctx, text_style, &action.label, None);
+        let action_layout = engine.layout(ctx, text_style, &action.label, None);
         let action_extents = action_layout.ink_extents();
         let action_x = btn_x + (btn_w - action_extents.width()) / 2.0 - action_extents.x_bearing();
         let action_y = btn_y + (btn_h - action_extents.height()) / 2.0 - action_extents.y_bearing();
@@ -494,7 +447,8 @@ mod tests {
             .secondary_action("Tip settings…", Action::OpenConfiguratorOnboardingHints),
         );
 
-        let layout = ui_toast_layout(&state, 360, 720).expect("toast layout");
+        let layout =
+            ui_toast_layout(&UiTextEngine::default(), &state, 360, 720).expect("toast layout");
         assert!(layout.message.ends_with('…'));
         let first = layout.action_bounds[0].expect("first chip");
         let second = layout.action_bounds[1].expect("second chip");
@@ -503,4 +457,5 @@ mod tests {
         assert!(layout.bounds.0 >= TOAST_SCREEN_MARGIN);
         assert!(layout.bounds.0 + layout.bounds.2 <= 360.0 - TOAST_SCREEN_MARGIN);
     }
+    mod engine;
 }

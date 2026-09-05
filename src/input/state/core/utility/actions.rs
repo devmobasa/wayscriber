@@ -51,6 +51,10 @@ impl InputState {
         self.keymap.set_action_bindings(action_bindings);
     }
 
+    pub(crate) fn keymap_revision(&self) -> u64 {
+        self.keymap.revision()
+    }
+
     /// Install a keymap rebuilt after a shortcut edit.
     ///
     /// Both halves move together because they are two views of one binding

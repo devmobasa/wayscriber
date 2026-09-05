@@ -162,7 +162,8 @@ impl WaylandState {
             return;
         }
 
-        self.input_state.prepare_for_screen_modal();
+        self.input_state
+            .prepare_for_screen_modal_with_measurer(self.render.text_measurer());
         self.zoom.stop_pan();
         self.pointer.stop_board_pan();
         self.pointer.set_board_pan_key_held(false);
@@ -196,12 +197,7 @@ impl WaylandState {
             }
             RegionPickerEntry::WaitForZoom => {
                 if self.wait_for_current_zoom_capture(ZoomWaiterOwner::RegionCapture) {
-                    self.set_pending_screen_region(
-                        purpose,
-                        generation,
-                        ScreenCaptureSource::Zoom,
-                        None,
-                    );
+                    self.set_pending_zoom_screen_region(purpose, generation);
                 } else {
                     self.cancel_region_capture_ui_and_lifecycle();
                     self.report_region_zoom_unavailable();
@@ -212,12 +208,9 @@ impl WaylandState {
                     .acquisition
                     .request(ScreenAcquisitionOwner::RegionCapture)
                 {
-                    Ok(acquisition) => self.set_pending_screen_region(
-                        purpose,
-                        generation,
-                        ScreenCaptureSource::Frozen,
-                        Some(acquisition),
-                    ),
+                    Ok(acquisition) => {
+                        self.set_pending_frozen_screen_region(purpose, generation, acquisition)
+                    }
                     Err(_) => {
                         self.cancel_region_capture_ui_and_lifecycle();
                         self.input_state.push_toast(

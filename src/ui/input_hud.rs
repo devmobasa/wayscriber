@@ -13,7 +13,7 @@ use super::primitives::{
     draw_keycap_in_box, draw_rounded_rect, keycap_box_size, keycap_text_style,
 };
 use super::theme::{self, overlay};
-use crate::ui_text::text_layout;
+use crate::ui_text::UiTextEngine;
 
 /// Inset between the chip row and the screen edges, matching the other
 /// corner-anchored chrome (status HUD, zoom chip).
@@ -58,7 +58,8 @@ fn chip_text(label: &str, count: u32) -> String {
 /// Lay the chip row out for the current screen size, or `None` when nothing
 /// would be drawn. Chips are measured newest-first so an overlong row drops
 /// its oldest chips rather than running off screen.
-pub(crate) fn compute_input_hud_layout(
+fn compute_input_hud_layout(
+    engine: &UiTextEngine,
     input_state: &InputState,
     screen_width: u32,
     screen_height: u32,
@@ -81,7 +82,7 @@ pub(crate) fn compute_input_hud_layout(
 
     for entry in input_state.input_hud_entries().rev() {
         let text = chip_text(entry.label(), entry.count());
-        let Some((width, height)) = keycap_box_size(&text, font_size) else {
+        let Some((width, height)) = keycap_box_size(engine, &text, font_size) else {
             continue;
         };
         // The newest chip always renders, but never wider than the available
@@ -168,7 +169,21 @@ pub fn input_hud_geometry(
     screen_width: u32,
     screen_height: u32,
 ) -> Option<(f64, f64, f64, f64)> {
-    let layout = compute_input_hud_layout(input_state, screen_width, screen_height)?;
+    input_hud_geometry_with_engine(
+        &UiTextEngine::default(),
+        input_state,
+        screen_width,
+        screen_height,
+    )
+}
+
+pub(crate) fn input_hud_geometry_with_engine(
+    engine: &UiTextEngine,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+) -> Option<(f64, f64, f64, f64)> {
+    let layout = compute_input_hud_layout(engine, input_state, screen_width, screen_height)?;
     Some((layout.x, layout.y, layout.width, layout.height))
 }
 
@@ -181,10 +196,44 @@ pub fn render_input_hud(
     screen_width: u32,
     screen_height: u32,
 ) {
-    let Some(layout) = compute_input_hud_layout(input_state, screen_width, screen_height) else {
+    render_input_hud_with_engine(
+        &UiTextEngine::default(),
+        ctx,
+        input_state,
+        style,
+        screen_width,
+        screen_height,
+    );
+}
+
+pub(crate) fn render_input_hud_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    style: &StatusBarStyle,
+    screen_width: u32,
+    screen_height: u32,
+) {
+    let Some(layout) = compute_input_hud_layout(engine, input_state, screen_width, screen_height)
+    else {
         return;
     };
-    let font_size = input_state.input_hud_font_size();
+    paint_input_hud_layout(
+        engine,
+        ctx,
+        style,
+        input_state.input_hud_font_size(),
+        &layout,
+    );
+}
+
+fn paint_input_hud_layout(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    style: &StatusBarStyle,
+    font_size: f64,
+    layout: &InputHudLayout,
+) {
     let [br, bg, bb, ba] = style.bg_color;
     let [tr, tg, tb, ta] = style.text_color;
 
@@ -204,6 +253,7 @@ pub fn render_input_hud(
         match chip.kind {
             InputHudEntryKind::Key => {
                 draw_keycap_in_box(
+                    engine,
                     ctx,
                     chip.x,
                     layout.y,
@@ -217,6 +267,7 @@ pub fn render_input_hud(
             }
             InputHudEntryKind::Mouse | InputHudEntryKind::Scroll => {
                 draw_input_hud_pill(
+                    engine,
                     ctx,
                     chip.x,
                     layout.y,
@@ -238,6 +289,7 @@ pub fn render_input_hud(
 /// keystrokes at a glance.
 #[allow(clippy::too_many_arguments)]
 fn draw_input_hud_pill(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     y: f64,
@@ -252,7 +304,7 @@ fn draw_input_hud_pill(
     draw_rounded_rect(ctx, x, y, width, height, INPUT_HUD_PILL_RADIUS);
     let _ = ctx.fill();
 
-    let layout = text_layout(ctx, keycap_text_style(font_size), text, None);
+    let layout = engine.layout(ctx, keycap_text_style(font_size), text, None);
     let extents = layout.ink_extents();
     theme::set_color(ctx, text_color);
     layout.show_at_baseline(
@@ -263,179 +315,4 @@ fn draw_input_hud_pill(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::InputHudConfig;
-    use crate::input::state::{InputHudSettings, test_support::make_test_input_state};
-    use crate::input::{Key, Modifiers};
-
-    fn state_with(config: InputHudConfig) -> InputState {
-        let mut state = make_test_input_state();
-        state.init_input_hud_from_config(InputHudSettings::from(&config));
-        state
-    }
-
-    fn enabled_state() -> InputState {
-        state_with(InputHudConfig {
-            enabled: true,
-            ..InputHudConfig::default()
-        })
-    }
-
-    #[test]
-    fn hidden_hud_has_no_geometry() {
-        let state = state_with(InputHudConfig::default());
-        assert!(input_hud_geometry(&state, 1920, 1080).is_none());
-
-        let empty = enabled_state();
-        assert!(
-            input_hud_geometry(&empty, 1920, 1080).is_none(),
-            "an enabled but empty HUD draws nothing"
-        );
-    }
-
-    #[test]
-    fn bottom_center_row_is_centered_and_bottom_anchored() {
-        let mut state = enabled_state();
-        state.note_input_hud_key(Key::Char('a'), Modifiers::new());
-        let (x, y, width, height) = input_hud_geometry(&state, 1920, 1080).expect("row geometry");
-
-        assert!((x + width / 2.0 - 960.0).abs() < 1e-6, "row is centered");
-        assert!(
-            (y + height - (1080.0 - INPUT_HUD_EDGE_INSET)).abs() < 1e-6,
-            "row sits one inset above the bottom edge"
-        );
-    }
-
-    #[test]
-    fn anchors_place_the_row_on_the_requested_edges() {
-        for position in [
-            InputHudPosition::TopLeft,
-            InputHudPosition::TopCenter,
-            InputHudPosition::TopRight,
-            InputHudPosition::CenterLeft,
-            InputHudPosition::Center,
-            InputHudPosition::CenterRight,
-            InputHudPosition::BottomLeft,
-            InputHudPosition::BottomRight,
-        ] {
-            let mut state = state_with(InputHudConfig {
-                enabled: true,
-                position,
-                ..InputHudConfig::default()
-            });
-            state.note_input_hud_key(Key::Char('a'), Modifiers::new());
-            let (x, y, width, height) =
-                input_hud_geometry(&state, 1920, 1080).expect("row geometry");
-
-            if position.is_right() {
-                assert!((x + width - (1920.0 - INPUT_HUD_EDGE_INSET)).abs() < 1e-6);
-            } else if position.is_center() {
-                assert!((x + width / 2.0 - 960.0).abs() < 1e-6, "row is centered");
-            } else {
-                assert!((x - INPUT_HUD_EDGE_INSET).abs() < 1e-6);
-            }
-            if position.is_top() {
-                assert!((y - INPUT_HUD_EDGE_INSET).abs() < 1e-6);
-            } else if position.is_middle() {
-                assert!(
-                    (y + height / 2.0 - 540.0).abs() < 1e-6,
-                    "middle anchors sit on the vertical center line"
-                );
-            } else {
-                assert!(y > 540.0, "bottom anchors stay in the lower half");
-            }
-        }
-    }
-
-    /// A valid-but-large font on a narrow output can make a single chip wider
-    /// than the inset span. The newest chip must clamp to it (rendering clips
-    /// the label at the box edge) so the row never leaves the surface.
-    #[test]
-    fn the_newest_chip_clamps_to_the_available_width() {
-        let mut state = state_with(InputHudConfig {
-            enabled: true,
-            font_size: 72.0,
-            ..InputHudConfig::default()
-        });
-        let mut modifiers = Modifiers::new();
-        modifiers.ctrl = true;
-        modifiers.shift = true;
-        state.note_input_hud_key(Key::Backspace, modifiers);
-
-        let screen_width = 160_u32;
-        let available = screen_width as f64 - INPUT_HUD_EDGE_INSET * 2.0;
-        let layout = compute_input_hud_layout(&state, screen_width, 1080).expect("layout");
-        assert_eq!(layout.chips.len(), 1);
-        assert!(
-            layout.width <= available,
-            "row width {} must not exceed the available span {available}",
-            layout.width
-        );
-        assert!(layout.x >= 0.0);
-        assert!(layout.x + layout.width <= screen_width as f64);
-
-        // A surface no wider than its insets has no drawable span at all.
-        let no_span = (INPUT_HUD_EDGE_INSET * 2.0) as u32;
-        assert!(compute_input_hud_layout(&state, no_span, 1080).is_none());
-    }
-
-    #[test]
-    fn repeat_counter_is_appended_to_the_chip_text() {
-        let mut state = enabled_state();
-        for _ in 0..7 {
-            state.note_input_hud_key(Key::Backspace, Modifiers::new());
-        }
-        let layout = compute_input_hud_layout(&state, 1920, 1080).expect("layout");
-        assert_eq!(layout.chips.len(), 1);
-        assert_eq!(layout.chips[0].text, "Backspace \u{00d7}7");
-    }
-
-    #[test]
-    fn mouse_chips_keep_the_pill_chrome() {
-        let mut state = enabled_state();
-        state.note_input_hud_mouse("Click", Modifiers::new());
-        state.note_input_hud_scroll(true, Modifiers::new());
-        let layout = compute_input_hud_layout(&state, 1920, 1080).expect("layout");
-        assert_eq!(layout.chips.len(), 2);
-        assert_eq!(layout.chips[0].kind, InputHudEntryKind::Mouse);
-        assert_eq!(layout.chips[1].kind, InputHudEntryKind::Scroll);
-    }
-
-    /// The row never runs off screen: a narrow surface keeps only the newest
-    /// chips that fit inside the inset-reduced width.
-    #[test]
-    fn overlong_rows_drop_their_oldest_chips() {
-        let mut state = enabled_state();
-        for label in ['a', 'b', 'c', 'd', 'e', 'f'] {
-            state.note_input_hud_key(Key::Char(label), Modifiers::new());
-        }
-        let layout = compute_input_hud_layout(&state, 120, 1080).expect("layout");
-
-        assert!(layout.chips.len() < 6, "narrow screens shed older chips");
-        assert!(layout.x >= 0.0);
-        assert!(layout.x + layout.width <= 120.0 + 1e-6);
-        assert_eq!(
-            layout.chips.last().map(|chip| chip.text.as_str()),
-            Some("F"),
-            "the newest chip always survives"
-        );
-    }
-
-    /// Chips share one row height so labels with different ascenders and
-    /// descenders still align.
-    #[test]
-    fn chips_share_a_single_row_height() {
-        let mut state = enabled_state();
-        state.note_input_hud_key(Key::Backspace, Modifiers::new());
-        state.note_input_hud_key(Key::Escape, Modifiers::new());
-        let layout = compute_input_hud_layout(&state, 1920, 1080).expect("layout");
-
-        assert_eq!(layout.chips.len(), 2);
-        for chip in &layout.chips {
-            let (_, natural) =
-                keycap_box_size(&chip.text, state.input_hud_font_size()).expect("chip measurement");
-            assert!(natural <= layout.height + 1e-6);
-        }
-    }
-}
+mod tests;

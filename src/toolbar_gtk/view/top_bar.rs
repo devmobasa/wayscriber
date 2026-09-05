@@ -330,8 +330,8 @@ fn effective_scale(snapshot: &ToolbarSnapshot) -> f64 {
     }
 }
 
-fn top_default_width(snapshot: &ToolbarSnapshot) -> i32 {
-    top_toolbar_size(snapshot).0.min(i32::MAX as u32) as i32
+fn top_default_width(engine: &crate::ui_text::UiTextEngine, snapshot: &ToolbarSnapshot) -> i32 {
+    top_toolbar_size(engine, snapshot).0.min(i32::MAX as u32) as i32
 }
 
 fn ring_row_active(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> bool {
@@ -371,6 +371,7 @@ fn set_island_widget_id(_widget: &impl IsA<gtk4::Widget>, _island: model::TopToo
 }
 
 pub(in crate::toolbar_gtk) struct TopBar {
+    ui_text: crate::ui_text::UiTextEngine,
     pub(in crate::toolbar_gtk) window: gtk4::Window,
     feedback: FeedbackSender,
     root: gtk4::Box,
@@ -482,6 +483,7 @@ impl TopBar {
         window.add_controller(hover);
 
         Self {
+            ui_text: crate::ui_text::UiTextEngine::default(),
             window,
             feedback,
             root,
@@ -583,7 +585,7 @@ impl TopBar {
         self.base_x.set(update.top_base_x);
         self.apply_offsets(update.top_offset, update.top_offset_seq);
 
-        let plan = plan_top_strip(snapshot);
+        let plan = plan_top_strip(&self.ui_text, snapshot);
         let key = StructureKey::of(snapshot, &plan);
         if self.structure.as_ref() != Some(&key) {
             self.rebuild(snapshot, &plan);

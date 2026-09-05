@@ -97,11 +97,15 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    pub(crate) fn activate_eyedropper(&mut self, owned_frozen_generation: Option<u64>) {
+    pub(crate) fn activate_eyedropper_with(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        owned_frozen_generation: Option<u64>,
+    ) {
         // A capture can take long enough for another interaction to begin while
         // the eyedropper is pending. Entering the modal state must cancel it so
         // the eyedropper cannot swallow the matching release event.
-        self.prepare_for_screen_modal();
+        self.prepare_for_screen_modal_with_measurer(measurer);
         self.eyedropper_ui_state = EyedropperUiState::Active {
             hover: None,
             owned_frozen_generation,
@@ -142,7 +146,7 @@ mod tests {
     fn cancel_returns_the_exact_owned_frozen_generation() {
         let mut state = make_test_input_state();
         state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
-        state.activate_eyedropper(Some(17));
+        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), Some(17));
 
         assert_eq!(state.cancel_eyedropper(), Some(17));
         assert_eq!(state.eyedropper_state(), EyedropperUiState::Inactive);
@@ -164,7 +168,7 @@ mod tests {
         state.on_mouse_press(MouseButton::Left, 10, 20);
         assert!(matches!(state.state, DrawingState::Drawing { .. }));
 
-        state.activate_eyedropper(Some(1));
+        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), Some(1));
 
         assert!(matches!(state.state, DrawingState::Idle));
         assert!(!state.pointer_drag_active());
@@ -181,7 +185,7 @@ mod tests {
         state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
         assert!(state.modal_blocks_canvas_key_repeat());
 
-        state.activate_eyedropper(Some(1));
+        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), Some(1));
         assert!(state.modal_blocks_canvas_key_repeat());
 
         state.cancel_eyedropper();

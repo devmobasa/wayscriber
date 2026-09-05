@@ -78,7 +78,10 @@ impl InputState {
         self.select_edge_context_menu_entry(false)
     }
 
-    pub(crate) fn activate_context_menu_selection(&mut self) -> bool {
+    pub(crate) fn activate_context_menu_selection_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) -> bool {
         if !self.is_context_menu_open() {
             return false;
         }
@@ -95,7 +98,7 @@ impl InputState {
                 return false;
             }
             if let Some(command) = entry.command.clone() {
-                self.execute_menu_command(command);
+                self.execute_menu_command_with_resources(resources, command);
             } else {
                 self.close_context_menu();
             }

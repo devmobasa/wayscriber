@@ -4,6 +4,7 @@ use crate::draw::shape::{
 };
 use crate::draw::{
     ArrowLabel, ArrowStyle, BlurRectParams, BlurStyle, Color, EraserBrush, EraserKind, Shape,
+    TextMeasurer,
 };
 use crate::input::tool::{
     EraserMode, Tool, ToolDrawingBehavior, ToolPathKind, ToolPressureBehavior,
@@ -408,7 +409,7 @@ impl Tool {
 }
 
 impl<'a> ProvisionalToolStroke<'a> {
-    pub(crate) fn bounds(&self) -> Option<Rect> {
+    pub(crate) fn bounds_with(&self, measurer: &TextMeasurer) -> Option<Rect> {
         match self {
             Self::BorrowedFreehand { points, size, .. } => bounding_box_for_points(points, *size),
             Self::BorrowedPressureFreehand {
@@ -425,7 +426,7 @@ impl<'a> ProvisionalToolStroke<'a> {
             }
             Self::EraserPreview { points, size } => bounding_box_for_eraser(points, *size),
             Self::Shape(shape) => {
-                let bounds = shape.bounding_box();
+                let bounds = shape.bounding_box_with(measurer);
                 if matches!(shape, Shape::Polygon { .. }) {
                     bounds.and_then(|rect| rect.inflated(PROVISIONAL_POLYGON_DAMAGE_PADDING))
                 } else {

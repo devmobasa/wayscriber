@@ -7,6 +7,13 @@ fn shape_bounds_center(shape: &Shape) -> (i32, i32) {
 
 #[test]
 fn duplicate_selection_via_action_creates_offset_shape() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -19,7 +26,7 @@ fn duplicate_selection_via_action_creates_offset_shape() {
     });
 
     state.set_selection(vec![original_id]);
-    state.handle_action(Action::DuplicateSelection);
+    state.handle_action_with_resources(test_text_resources, Action::DuplicateSelection);
 
     let frame = state.boards.active_frame();
     assert_eq!(frame.shapes.len(), 2);
@@ -44,6 +51,13 @@ fn duplicate_selection_via_action_creates_offset_shape() {
 
 #[test]
 fn copy_paste_selection_centers_shape_at_pointer() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -56,9 +70,9 @@ fn copy_paste_selection_centers_shape_at_pointer() {
     });
 
     state.set_selection(vec![original_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     state.update_pointer_positions(200, 300, 200, 300);
-    state.handle_action(Action::PasteSelection);
+    state.handle_action_with_resources(test_text_resources, Action::PasteSelection);
     let request = state
         .take_pending_clipboard_paste_request()
         .expect("pending paste request");
@@ -71,7 +85,11 @@ fn copy_paste_selection_centers_shape_at_pointer() {
         )
         .expect("local selection fallback");
     assert_eq!(
-        state.paste_clipboard_shapes_from_request(&request, shapes),
+        state.paste_clipboard_shapes_from_request_with(
+            test_text_resources.measurer,
+            &request,
+            shapes,
+        ),
         1
     );
     state.finish_clipboard_paste_request(request.id);
@@ -92,6 +110,13 @@ fn copy_paste_selection_centers_shape_at_pointer() {
 
 #[test]
 fn immediate_paste_after_copy_uses_pending_local_publish_shapes() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -103,8 +128,8 @@ fn immediate_paste_after_copy_uses_pending_local_publish_shapes() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![original_id]);
-    state.handle_action(Action::CopySelection);
-    state.handle_action(Action::PasteSelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::PasteSelection);
     let request = state
         .take_pending_clipboard_paste_request()
         .expect("pending paste request");
@@ -114,7 +139,11 @@ fn immediate_paste_after_copy_uses_pending_local_publish_shapes() {
         .expect("pending local publish selection");
 
     assert_eq!(
-        state.paste_clipboard_shapes_from_request(&request, shapes),
+        state.paste_clipboard_shapes_from_request_with(
+            test_text_resources.measurer,
+            &request,
+            shapes,
+        ),
         1
     );
     state.finish_clipboard_paste_request(request.id);
@@ -124,6 +153,13 @@ fn immediate_paste_after_copy_uses_pending_local_publish_shapes() {
 
 #[test]
 fn stale_publish_completion_is_ignored_for_newer_copy() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let first_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -135,7 +171,7 @@ fn stale_publish_completion_is_ignored_for_newer_copy() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![first_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     let first_publish = state
         .take_pending_selection_clipboard_publish()
         .expect("pending first private clipboard publish");
@@ -150,7 +186,7 @@ fn stale_publish_completion_is_ignored_for_newer_copy() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![second_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     let second_publish = state
         .take_pending_selection_clipboard_publish()
         .expect("pending second private clipboard publish");
@@ -170,6 +206,13 @@ fn stale_publish_completion_is_ignored_for_newer_copy() {
 
 #[test]
 fn failed_local_clipboard_precedence_clears_when_fingerprint_changes() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -181,7 +224,7 @@ fn failed_local_clipboard_precedence_clears_when_fingerprint_changes() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![original_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     let publish = state
         .take_pending_selection_clipboard_publish()
         .expect("pending private clipboard publish");
@@ -231,6 +274,13 @@ fn failed_local_clipboard_precedence_clears_when_fingerprint_changes() {
 
 #[test]
 fn failed_local_clipboard_without_failure_fingerprint_supersedes_when_current_is_readable() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -242,7 +292,7 @@ fn failed_local_clipboard_without_failure_fingerprint_supersedes_when_current_is
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![original_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     let publish = state
         .take_pending_selection_clipboard_publish()
         .expect("pending private clipboard publish");
@@ -268,6 +318,13 @@ fn failed_local_clipboard_without_failure_fingerprint_supersedes_when_current_is
 
 #[test]
 fn failed_local_clipboard_without_current_fingerprint_does_not_fast_path() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -279,7 +336,7 @@ fn failed_local_clipboard_without_current_fingerprint_does_not_fast_path() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![original_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     let publish = state
         .take_pending_selection_clipboard_publish()
         .expect("pending private clipboard publish");
@@ -298,6 +355,13 @@ fn failed_local_clipboard_without_current_fingerprint_does_not_fast_path() {
 
 #[test]
 fn published_selection_allows_local_fallback_until_superseded() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -309,7 +373,7 @@ fn published_selection_allows_local_fallback_until_superseded() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![original_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     let publish = state
         .take_pending_selection_clipboard_publish()
         .expect("pending private clipboard publish");
@@ -339,6 +403,13 @@ fn published_selection_allows_local_fallback_until_superseded() {
 
 #[test]
 fn fallback_generation_rejects_newer_local_copy() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -350,8 +421,8 @@ fn fallback_generation_rejects_newer_local_copy() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![original_id]);
-    state.handle_action(Action::CopySelection);
-    state.handle_action(Action::PasteSelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::PasteSelection);
     let request = state
         .take_pending_clipboard_paste_request()
         .expect("pending paste request");
@@ -359,7 +430,7 @@ fn fallback_generation_rejects_newer_local_copy() {
         .local_selection_fallback_generation
         .expect("fallback generation");
 
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
 
     assert_ne!(
         Some(request_generation),
@@ -375,6 +446,13 @@ fn fallback_generation_rejects_newer_local_copy() {
 
 #[test]
 fn private_payload_for_request_rejects_newer_same_instance_generation() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let first_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -386,11 +464,11 @@ fn private_payload_for_request_rejects_newer_same_instance_generation() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![first_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     let _first_publish = state
         .take_pending_selection_clipboard_publish()
         .expect("pending first private clipboard publish");
-    state.handle_action(Action::PasteSelection);
+    state.handle_action_with_resources(test_text_resources, Action::PasteSelection);
     let request = state
         .take_pending_clipboard_paste_request()
         .expect("pending paste request");
@@ -405,7 +483,7 @@ fn private_payload_for_request_rejects_newer_same_instance_generation() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![second_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     let second_publish = state
         .take_pending_selection_clipboard_publish()
         .expect("pending second private clipboard publish");
@@ -422,6 +500,13 @@ fn private_payload_for_request_rejects_newer_same_instance_generation() {
 
 #[test]
 fn private_payload_for_request_uses_payload_when_current_generation_changed() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let first_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -433,13 +518,13 @@ fn private_payload_for_request_uses_payload_when_current_generation_changed() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![first_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     let first_publish = state
         .take_pending_selection_clipboard_publish()
         .expect("pending first private clipboard publish");
     let first_payload: WayscriberClipboardSelection =
         serde_json::from_str(&first_publish.payload_json).expect("first payload json");
-    state.handle_action(Action::PasteSelection);
+    state.handle_action_with_resources(test_text_resources, Action::PasteSelection);
     let request = state
         .take_pending_clipboard_paste_request()
         .expect("pending paste request");
@@ -454,7 +539,7 @@ fn private_payload_for_request_uses_payload_when_current_generation_changed() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![second_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
 
     let shapes = state
         .selection_clipboard_snapshot()
@@ -471,6 +556,13 @@ fn private_payload_for_request_uses_payload_when_current_generation_changed() {
 
 #[test]
 fn same_instance_private_payload_with_no_fallback_generation_uses_payload() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -482,7 +574,7 @@ fn same_instance_private_payload_with_no_fallback_generation_uses_payload() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![original_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     let publish = state
         .take_pending_selection_clipboard_publish()
         .expect("pending private clipboard publish");
@@ -490,7 +582,7 @@ fn same_instance_private_payload_with_no_fallback_generation_uses_payload() {
         serde_json::from_str(&publish.payload_json).expect("payload json");
 
     state.mark_selection_clipboard_superseded();
-    state.handle_action(Action::PasteSelection);
+    state.handle_action_with_resources(test_text_resources, Action::PasteSelection);
     let request = state
         .take_pending_clipboard_paste_request()
         .expect("pending paste request");
@@ -510,6 +602,13 @@ fn same_instance_private_payload_with_no_fallback_generation_uses_payload() {
 
 #[test]
 fn request_generation_supersede_ignores_newer_local_copy() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let first_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -521,8 +620,8 @@ fn request_generation_supersede_ignores_newer_local_copy() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![first_id]);
-    state.handle_action(Action::CopySelection);
-    state.handle_action(Action::PasteSelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::PasteSelection);
     let request = state
         .take_pending_clipboard_paste_request()
         .expect("pending paste request");
@@ -540,7 +639,7 @@ fn request_generation_supersede_ignores_newer_local_copy() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![second_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     let current_generation = state
         .selection_clipboard_snapshot()
         .fallback_generation()
@@ -558,6 +657,13 @@ fn request_generation_supersede_ignores_newer_local_copy() {
 
 #[test]
 fn failed_local_fast_path_rejects_newer_generation() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let first_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -569,7 +675,7 @@ fn failed_local_fast_path_rejects_newer_generation() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![first_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     let first_publish = state
         .take_pending_selection_clipboard_publish()
         .expect("pending first private clipboard publish");
@@ -585,7 +691,7 @@ fn failed_local_fast_path_rejects_newer_generation() {
         Some(fingerprint.clone()),
         false,
     );
-    state.handle_action(Action::PasteSelection);
+    state.handle_action_with_resources(test_text_resources, Action::PasteSelection);
     let request = state
         .take_pending_clipboard_paste_request()
         .expect("pending paste request");
@@ -601,7 +707,7 @@ fn failed_local_fast_path_rejects_newer_generation() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![second_id]);
-    state.handle_action(Action::CopySelection);
+    state.handle_action_with_resources(test_text_resources, Action::CopySelection);
     let second_publish = state
         .take_pending_selection_clipboard_publish()
         .expect("pending second private clipboard publish");
@@ -630,6 +736,13 @@ fn failed_local_fast_path_rejects_newer_generation() {
 
 #[test]
 fn duplicate_selection_skips_locked_shapes() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let unlocked_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 0,
@@ -655,7 +768,7 @@ fn duplicate_selection_skips_locked_shapes() {
     }
 
     state.set_selection(vec![unlocked_id, locked_id]);
-    state.handle_action(Action::DuplicateSelection);
+    state.handle_action_with_resources(test_text_resources, Action::DuplicateSelection);
 
     let frame = state.boards.active_frame();
     assert_eq!(frame.shapes.len(), 3, "only one duplicate should be added");
@@ -694,6 +807,7 @@ fn copy_selection_of_only_locked_shapes_leaves_clipboard_empty() {
 
 #[test]
 fn repeated_paste_selection_uses_current_pointer_anchor() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -708,9 +822,9 @@ fn repeated_paste_selection_uses_current_pointer_anchor() {
     assert_eq!(state.copy_selection(), 1);
 
     state.update_pointer_positions(100, 120, 100, 120);
-    assert_eq!(state.paste_selection(), 1);
+    assert_eq!(state.paste_selection_with(&measurer), 1);
     state.update_pointer_positions(200, 220, 200, 220);
-    assert_eq!(state.paste_selection(), 1);
+    assert_eq!(state.paste_selection_with(&measurer), 1);
 
     let frame = state.boards.active_frame();
     assert_eq!(frame.shapes.len(), 3);
@@ -724,6 +838,7 @@ fn repeated_paste_selection_uses_current_pointer_anchor() {
 
 #[test]
 fn paste_selection_warns_when_shape_limit_prevents_any_paste() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -738,7 +853,7 @@ fn paste_selection_warns_when_shape_limit_prevents_any_paste() {
     assert_eq!(state.copy_selection(), 1);
     state.set_max_shapes_per_frame_for_test(1);
 
-    assert_eq!(state.paste_selection(), 0);
+    assert_eq!(state.paste_selection_with(&measurer), 0);
     assert_eq!(
         state.active_toast().map(|toast| toast.message.as_str()),
         Some("Shape limit reached; nothing pasted.")
@@ -747,6 +862,7 @@ fn paste_selection_warns_when_shape_limit_prevents_any_paste() {
 
 #[test]
 fn paste_selection_warns_when_shape_limit_allows_only_partial_paste() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let first = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 0,
@@ -770,7 +886,7 @@ fn paste_selection_warns_when_shape_limit_allows_only_partial_paste() {
     assert_eq!(state.copy_selection(), 2);
     state.set_max_shapes_per_frame_for_test(3);
 
-    assert_eq!(state.paste_selection(), 1);
+    assert_eq!(state.paste_selection_with(&measurer), 1);
     assert_eq!(state.boards.active_frame().shapes.len(), 3);
     assert_eq!(state.selected_shape_ids().len(), 1);
     assert_eq!(

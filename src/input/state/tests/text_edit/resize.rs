@@ -2,6 +2,7 @@ use super::*;
 
 #[test]
 fn dragging_text_resize_handle_updates_wrap_width_within_screen() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     state.update_screen_dimensions(300, 200);
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
@@ -17,7 +18,7 @@ fn dragging_text_resize_handle_updates_wrap_width_within_screen() {
 
     state.set_selection(vec![shape_id]);
     let (_, handle) = state
-        .selected_text_resize_handle()
+        .selected_text_resize_handle_with(&measurer)
         .expect("expected resize handle");
     let handle_x = handle.x + handle.width / 2;
     let handle_y = handle.y + handle.height / 2;

@@ -1,11 +1,12 @@
 use super::super::super::base::InputState;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
 
 const DUPLICATE_OFFSET: i32 = 12;
 
 #[allow(dead_code)]
 impl InputState {
-    pub(crate) fn duplicate_selection(&mut self) -> bool {
+    pub(crate) fn duplicate_selection_with(&mut self, measurer: &TextMeasurer) -> bool {
         let ids_len = self.selected_shape_ids().len();
         if ids_len == 0 {
             return false;
@@ -39,8 +40,8 @@ impl InputState {
                     .find_index(new_id)
                     .and_then(|idx| frame.shape(new_id).map(|s| (idx, s.clone())))
             } {
-                self.mark_selection_dirty_region(stored.bounding_box());
-                self.invalidate_hit_cache_for(new_id);
+                self.mark_selection_dirty_region(stored.bounding_box_with(measurer));
+                self.invalidate_hit_cache_for_with(measurer, new_id);
                 created.push((index, stored));
                 new_ids.push(new_id);
             }

@@ -20,7 +20,7 @@ fn top_structure_rebuilds_when_current_shortcuts_change() {
         &state,
         ToolbarBindingHints::from_input_state(&state),
     );
-    let initial_plan = plan_top_strip(&initial);
+    let initial_plan = plan_top_strip(&crate::ui_text::UiTextEngine::default(), &initial);
     let initial_key = StructureKey::of(&initial, &initial_plan);
 
     state.set_action_bindings(HashMap::from([(
@@ -31,7 +31,7 @@ fn top_structure_rebuilds_when_current_shortcuts_change() {
         &state,
         ToolbarBindingHints::from_input_state(&state),
     );
-    let changed_plan = plan_top_strip(&changed);
+    let changed_plan = plan_top_strip(&crate::ui_text::UiTextEngine::default(), &changed);
     let changed_key = StructureKey::of(&changed, &changed_plan);
 
     assert!(initial_key != changed_key);
@@ -202,7 +202,10 @@ fn top_structure_ignores_popover_only_section_visibility_changes() {
         &state,
         ToolbarBindingHints::from_input_state(&state),
     );
-    let base_key = StructureKey::of(&base, &plan_top_strip(&base));
+    let base_key = StructureKey::of(
+        &base,
+        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &base),
+    );
 
     for flag in [
         ToolbarSectionFlag::Actions,
@@ -236,7 +239,10 @@ fn top_structure_ignores_popover_only_section_visibility_changes() {
         }
         changed.resolved_toolbar_items.hidden.insert(flag.item_id());
         changed.resolved_toolbar_items.shown.remove(&flag.item_id());
-        let changed_key = StructureKey::of(&changed, &plan_top_strip(&changed));
+        let changed_key = StructureKey::of(
+            &changed,
+            &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &changed),
+        );
         assert!(
             base_key == changed_key,
             "popover-only {flag:?} visibility must not rebuild the top bar"
@@ -262,8 +268,13 @@ fn top_structure_still_tracks_top_item_visibility() {
         .remove(&ids::TOP_TOOL_PEN);
 
     assert!(
-        StructureKey::of(&base, &plan_top_strip(&base))
-            != StructureKey::of(&changed, &plan_top_strip(&changed)),
+        StructureKey::of(
+            &base,
+            &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &base)
+        ) != StructureKey::of(
+            &changed,
+            &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &changed)
+        ),
         "top-item visibility must still rebuild the top bar"
     );
 }
@@ -362,10 +373,13 @@ fn simple_layout_requests_its_smaller_natural_width() {
         ToolbarBindingHints::from_input_state(&state),
     );
 
-    let regular_width = top_default_width(&regular);
-    let simple_width = top_default_width(&simple);
+    let regular_width = top_default_width(&crate::ui_text::UiTextEngine::default(), &regular);
+    let simple_width = top_default_width(&crate::ui_text::UiTextEngine::default(), &simple);
     assert!(simple_width < regular_width);
-    assert_eq!(simple_width, top_toolbar_size(&simple).0 as i32);
+    assert_eq!(
+        simple_width,
+        top_toolbar_size(&crate::ui_text::UiTextEngine::default(), &simple).0 as i32
+    );
 }
 
 #[test]
@@ -377,14 +391,14 @@ fn degraded_layout_requests_the_selected_plan_width() {
     );
     snapshot.top_viewport_max = Some(700.0);
 
-    let plan = plan_top_strip(&snapshot);
+    let plan = plan_top_strip(&crate::ui_text::UiTextEngine::default(), &snapshot);
     let degraded = plan.compact
         || plan.drop_presets
         || !plan.dropped_tools.is_empty()
         || !plan.dropped_utilities.is_empty()
         || plan.swatch_count < 8;
     assert!(degraded, "the 700px budget must degrade the plan: {plan:?}");
-    assert!(top_default_width(&snapshot) <= 700);
+    assert!(top_default_width(&crate::ui_text::UiTextEngine::default(), &snapshot) <= 700);
 }
 
 /// Colors left the strip for the pill (M7-C1); the presets island is the new
@@ -1244,9 +1258,13 @@ fn builtin_semantic_records(
     snapshot: &ToolbarSnapshot,
     expected: &[SemanticAdapterRecord],
 ) -> Vec<SemanticAdapterRecord> {
-    let (width, height) = top_toolbar_size(snapshot);
-    let tree =
-        crate::backend::wayland::build_top_toolbar_view(snapshot, width as f64, height as f64);
+    let (width, height) = top_toolbar_size(&crate::ui_text::UiTextEngine::default(), snapshot);
+    let tree = crate::backend::wayland::build_top_toolbar_view(
+        &crate::ui_text::UiTextEngine::default(),
+        snapshot,
+        width as f64,
+        height as f64,
+    );
     let mut records = Vec::new();
     for node in tree.nodes() {
         let raw_id = node.id.as_str();
@@ -1318,7 +1336,7 @@ fn shared_spec_matches_builtin_order_and_full_semantics_without_starting_a_gui()
         ("shapes", shapes),
         ("highlighted", highlighted),
     ] {
-        let plan = plan_top_strip(&snapshot);
+        let plan = plan_top_strip(&crate::ui_text::UiTextEngine::default(), &snapshot);
         let spec = super::strip::top_toolbar_spec(&snapshot, &plan);
         let expected = expected_semantic_records(&snapshot, &spec, &plan);
         for record in &expected {
@@ -1428,11 +1446,15 @@ fn style_pill_spec_matches_builtin_tree_across_morph_states() {
 }
 
 fn assert_builtin_style_pill_scenario(name: &str, snapshot: &ToolbarSnapshot) {
-    let plan = plan_top_strip(snapshot);
+    let plan = plan_top_strip(&crate::ui_text::UiTextEngine::default(), snapshot);
     let expected = expected_style_pill_nodes(snapshot, &plan);
-    let (width, height) = top_toolbar_size(snapshot);
-    let tree =
-        crate::backend::wayland::build_top_toolbar_view(snapshot, width as f64, height as f64);
+    let (width, height) = top_toolbar_size(&crate::ui_text::UiTextEngine::default(), snapshot);
+    let tree = crate::backend::wayland::build_top_toolbar_view(
+        &crate::ui_text::UiTextEngine::default(),
+        snapshot,
+        width as f64,
+        height as f64,
+    );
 
     assert_eq!(
         tree.node_by_id(&"top.island.style".into()).is_some(),
@@ -1775,8 +1797,14 @@ fn top_structure_rebuilds_when_the_style_pill_morphs() {
     let pen = style_pill_tool_snapshot(&regular, Tool::Pen);
     let eraser = style_pill_tool_snapshot(&regular, Tool::Eraser);
 
-    let pen_key = StructureKey::of(&pen, &plan_top_strip(&pen));
-    let eraser_key = StructureKey::of(&eraser, &plan_top_strip(&eraser));
+    let pen_key = StructureKey::of(
+        &pen,
+        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &pen),
+    );
+    let eraser_key = StructureKey::of(
+        &eraser,
+        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &eraser),
+    );
     assert!(
         pen_key != eraser_key,
         "a pill morph change must rebuild the GTK bar structure"
@@ -1786,7 +1814,10 @@ fn top_structure_rebuilds_when_the_style_pill_morphs() {
     // run through updaters, not rebuilds.
     let mut thicker = pen.clone();
     thicker.thickness += 3.0;
-    let thicker_key = StructureKey::of(&thicker, &plan_top_strip(&thicker));
+    let thicker_key = StructureKey::of(
+        &thicker,
+        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &thicker),
+    );
     assert!(pen_key == thicker_key, "value churn must not rebuild");
 }
 
@@ -1918,7 +1949,7 @@ fn assert_gtk_widget_scenario(
     snapshot: &ToolbarSnapshot,
     widths: &mut std::collections::BTreeMap<&'static str, i32>,
 ) {
-    let plan = plan_top_strip(snapshot);
+    let plan = plan_top_strip(&crate::ui_text::UiTextEngine::default(), snapshot);
     let spec = super::strip::top_toolbar_spec(snapshot, &plan);
     let expected = expected_semantic_records(snapshot, &spec, &plan);
     let style_controls = style_pill_controls(snapshot, &plan);
@@ -2292,7 +2323,10 @@ fn assert_highlight_ring_event(
     highlighted: &ToolbarSnapshot,
     rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
 ) {
-    top.build_strip(highlighted, &plan_top_strip(highlighted));
+    top.build_strip(
+        highlighted,
+        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), highlighted),
+    );
     let ring = collect_semantic_widgets(top.root.upcast_ref())
         .into_iter()
         .find(|widget| widget.widget_name() == ids::TOP_UTILITY_HIGHLIGHT_RING.as_str())
@@ -2329,7 +2363,10 @@ fn assert_eraser_pill_interactions(
     rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
 ) {
     let eraser = style_pill_tool_snapshot(regular, Tool::Eraser);
-    top.build_strip(&eraser, &plan_top_strip(&eraser));
+    top.build_strip(
+        &eraser,
+        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &eraser),
+    );
     let segment_row = pill_widget(top, "top.style.eraser-mode");
     let mut halves = Vec::new();
     let mut child = segment_row.first_child();
@@ -2379,7 +2416,10 @@ fn assert_pen_pill_interactions(
     rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
 ) {
     let pen = style_pill_tool_snapshot(regular, Tool::Pen);
-    top.build_strip(&pen, &plan_top_strip(&pen));
+    top.build_strip(
+        &pen,
+        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &pen),
+    );
     pill_widget(top, "top.style.color-chip")
         .downcast::<gtk4::Button>()
         .expect("chip button")
@@ -2446,7 +2486,10 @@ fn assert_shape_pill_interaction(
     rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
 ) {
     let shape = style_pill_tool_snapshot(regular, Tool::Rect);
-    top.build_strip(&shape, &plan_top_strip(&shape));
+    top.build_strip(
+        &shape,
+        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &shape),
+    );
     pill_widget(top, "top.style.fill")
         .downcast::<gtk4::CheckButton>()
         .expect("fill check button")
@@ -2520,7 +2563,10 @@ fn assert_menu_popover_contracts(regular: &ToolbarSnapshot) {
     let (tx, menu_rx) = std::sync::mpsc::channel();
     let mut menu_top = TopBar::new_for_test(FeedbackSender::new(tx));
     // Building the strip creates the two overflow-anchored native popovers.
-    menu_top.build_strip(&session_snapshot, &plan_top_strip(&session_snapshot));
+    menu_top.build_strip(
+        &session_snapshot,
+        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &session_snapshot),
+    );
     assert!(menu_top.session_popover.is_some(), "session popover exists");
     assert!(
         menu_top.settings_popover.is_some(),

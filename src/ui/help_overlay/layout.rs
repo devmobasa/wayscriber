@@ -1,4 +1,4 @@
-use super::super::primitives::text_extents_for;
+use super::super::primitives::text_extents_for_with_engine;
 use super::keycaps::measure_key_combo;
 use super::types::{BadgeTextMetrics, MeasuredSection, Section};
 
@@ -13,6 +13,7 @@ pub(crate) struct GridLayout {
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn measure_sections(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     sections: Vec<Section>,
     help_font_family: &str,
@@ -39,15 +40,21 @@ pub(crate) fn measure_sections(
                 continue;
             }
             // Measure with keycap styling padding
-            let key_width =
-                measure_key_combo(ctx, row.key.as_str(), help_font_family, body_font_size);
+            let key_width = measure_key_combo(
+                engine,
+                ctx,
+                row.key.as_str(),
+                help_font_family,
+                body_font_size,
+            );
             key_max_width = key_max_width.max(key_width);
         }
 
         let mut section_width: f64 = 0.0;
         let mut section_height: f64 = 0.0;
 
-        let heading_extents = text_extents_for(
+        let heading_extents = text_extents_for_with_engine(
+            engine,
             ctx,
             help_font_family,
             cairo::FontSlant::Normal,
@@ -65,7 +72,8 @@ pub(crate) fn measure_sections(
         if !section.rows.is_empty() {
             section_height += row_gap_after_heading;
             for row in &section.rows {
-                let desc_extents = text_extents_for(
+                let desc_extents = text_extents_for_with_engine(
+                    engine,
                     ctx,
                     help_font_family,
                     cairo::FontSlant::Normal,
@@ -85,7 +93,8 @@ pub(crate) fn measure_sections(
             let mut badge_text_metrics = Vec::with_capacity(section.badges.len());
 
             for (index, badge) in section.badges.iter().enumerate() {
-                let badge_extents = text_extents_for(
+                let badge_extents = text_extents_for_with_engine(
+                    engine,
                     ctx,
                     help_font_family,
                     cairo::FontSlant::Normal,

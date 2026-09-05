@@ -6,6 +6,14 @@ pub(in crate::backend::wayland::state) enum FreezeOwnership {
     PickerOwned { image_generation: u64 },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::backend::wayland::state) enum RegionInteractionPhase {
+    Armed,
+    Selecting { owner: RegionInputSource },
+    Review { owner: Option<RegionInputSource> },
+    Measured,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(in crate::backend::wayland::state) enum ActiveScreenRegion {
     Measure {
@@ -13,6 +21,7 @@ pub(in crate::backend::wayland::state) enum ActiveScreenRegion {
         bounds: (u32, u32),
         anchor: Option<(f64, f64)>,
         edge: Option<(f64, f64)>,
+        phase: RegionInteractionPhase,
     },
     PendingFrozen {
         purpose: RegionPurposeTag,
@@ -38,10 +47,100 @@ pub(in crate::backend::wayland::state) enum ActiveScreenRegion {
         /// The grip a device is dragging in Review, if any. Mutually exclusive
         /// with `logical_anchor`, which owns a Review move-drag.
         review_resize: Option<ReviewResizeGrip>,
+        phase: RegionInteractionPhase,
     },
 }
 
 impl ActiveScreenRegion {
+    pub(super) fn ui_state(self) -> RegionSelectUiState {
+        let purpose = self.purpose();
+        let generation = self.generation();
+        match self {
+            Self::PendingFrozen { .. } => RegionSelectUiState::PendingCapture {
+                purpose,
+                generation,
+                source: ScreenCaptureSource::Frozen,
+            },
+            Self::PendingZoom { .. } => RegionSelectUiState::PendingCapture {
+                purpose,
+                generation,
+                source: ScreenCaptureSource::Zoom,
+            },
+            Self::Measure { phase, .. } | Self::Ready { phase, .. } => match phase {
+                RegionInteractionPhase::Armed => RegionSelectUiState::Armed {
+                    purpose,
+                    generation,
+                },
+                RegionInteractionPhase::Selecting { owner } => {
+                    let selection = self
+                        .display_selection()
+                        .expect("selecting screen region must own geometry");
+                    RegionSelectUiState::Selecting {
+                        purpose,
+                        generation,
+                        owner,
+                        start: selection.start,
+                        current: selection.end,
+                    }
+                }
+                RegionInteractionPhase::Review { owner } => {
+                    let display = self
+                        .review_geometry()
+                        .map(RegionSelectionGeometry::display_selection)
+                        .expect("reviewing screen region must own geometry");
+                    RegionSelectUiState::Review {
+                        purpose,
+                        generation,
+                        display,
+                        move_owner: owner,
+                    }
+                }
+                RegionInteractionPhase::Measured => {
+                    let display = self
+                        .measure_selection()
+                        .expect("completed measurement must own geometry");
+                    RegionSelectUiState::Measured {
+                        purpose,
+                        generation,
+                        display,
+                    }
+                }
+            },
+        }
+    }
+
+    pub(super) const fn phase(self) -> Option<RegionInteractionPhase> {
+        match self {
+            Self::Measure { phase, .. } | Self::Ready { phase, .. } => Some(phase),
+            Self::PendingFrozen { .. } | Self::PendingZoom { .. } => None,
+        }
+    }
+
+    pub(super) fn set_phase(&mut self, next: RegionInteractionPhase) -> bool {
+        let phase = match self {
+            Self::Measure { phase, .. } | Self::Ready { phase, .. } => phase,
+            Self::PendingFrozen { .. } | Self::PendingZoom { .. } => return false,
+        };
+        if *phase == next {
+            return false;
+        }
+        *phase = next;
+        true
+    }
+
+    pub(super) fn selection_owner(self) -> Option<RegionInputSource> {
+        match self.phase() {
+            Some(RegionInteractionPhase::Selecting { owner })
+            | Some(RegionInteractionPhase::Review { owner: Some(owner) }) => Some(owner),
+            Some(
+                RegionInteractionPhase::Armed
+                | RegionInteractionPhase::Review { owner: None }
+                | RegionInteractionPhase::Measured,
+            )
+            | None => None,
+        }
+    }
+
     pub const fn purpose(self) -> RegionPurposeTag {
         match self {
             Self::Measure { .. } => RegionPurposeTag::Measure,

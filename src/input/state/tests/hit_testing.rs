@@ -41,13 +41,14 @@ fn indexed_state_with_two_overlapping_rects() -> InputState {
 
 #[test]
 fn explicit_hit_testing_rejects_invalid_tolerances() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     add_test_line(&mut state);
 
     for tolerance in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -1.0, f64::MAX] {
         assert!(
             state
-                .hit_test_all_for_points(&[(10, 0)], tolerance)
+                .hit_test_all_for_points_with(&measurer, &[(10, 0)], tolerance)
                 .is_empty(),
             "invalid tolerance {tolerance:?} must fail closed"
         );
@@ -69,6 +70,7 @@ fn stored_hit_test_tolerance_is_always_valid() {
 
 #[test]
 fn extreme_persisted_rectangle_is_selectable_through_the_spatial_index() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     state.set_hit_test_threshold(1);
     let color = Color {
@@ -99,7 +101,7 @@ fn extreme_persisted_rectangle_is_selectable_through_the_spatial_index() {
     assert_eq!(state.hit_test_at(i32::MIN, 10), Some(extreme_id));
     assert!(state.has_spatial_index());
     assert_eq!(
-        state.hit_test_all_for_points(&[(i32::MIN, 10)], 1.0),
+        state.hit_test_all_for_points_with(&measurer, &[(i32::MIN, 10)], 1.0),
         vec![extreme_id]
     );
 }
@@ -157,11 +159,17 @@ fn unchanged_spatial_hit_tests_build_shape_indices_once() {
 
 #[test]
 fn unchanged_spatial_multi_point_hit_tests_build_shape_indices_once() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = indexed_state_with_two_overlapping_rects();
 
     InputState::reset_spatial_shape_index_build_count();
     for _ in 0..100 {
-        assert_eq!(state.hit_test_all_for_points(&[(0, 10)], 1.0).len(), 2);
+        assert_eq!(
+            state
+                .hit_test_all_for_points_with(&measurer, &[(0, 10)], 1.0)
+                .len(),
+            2
+        );
     }
 
     assert_eq!(InputState::spatial_shape_index_build_count(), 1);

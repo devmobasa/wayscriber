@@ -202,6 +202,7 @@ fn clear_all_can_be_undone_after_restore() {
 
 #[test]
 fn moved_multi_selection_with_history_survives_save_restore() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let temp = crate::test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-multi-move");
     options.persist_transparent = true;
@@ -231,7 +232,7 @@ fn moved_multi_selection_with_history_survives_save_restore() {
     });
     input.set_selection(vec![first, second]);
 
-    assert!(input.translate_selection_with_undo(25, 10));
+    assert!(input.translate_selection_with_undo_with(&route_measurer, 25, 10));
     assert_eq!(input.boards.active_frame().undo_stack_len(), 1);
     assert_eq!(
         freehand_points(input.boards.active_frame(), first),

@@ -126,7 +126,7 @@ impl WaylandState {
         if !self.text_input.detach_if_owned(removed_seat) {
             return;
         }
-        self.input_state.ime_clear();
+        self.input_state.ime_clear_with(self.render.text_measurer());
         self.input_state.take_text_input_cursor_rect_dirty();
         self.input_state.take_text_input_external_change_dirty();
 

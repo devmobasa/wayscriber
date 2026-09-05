@@ -122,30 +122,68 @@ pub(in crate::backend::wayland) struct RenderRuntime {
     draw_caches: crate::draw::RenderCaches,
     theme: crate::ui::theme::Theme,
     ui_caches: crate::ui::UiRenderCaches,
+    help_content: crate::ui::HelpContentCache,
+    ui_text: crate::ui_text::UiTextEngine,
+    text_measurer: crate::draw::TextMeasurer,
     ui_damage: UiDamageHistory,
     profile_ui_baseline: Vec<u8>,
 }
 
 impl RenderRuntime {
-    pub(in crate::backend::wayland) fn new(theme: crate::ui::theme::Theme) -> Self {
+    pub(in crate::backend::wayland) fn new(
+        theme: crate::ui::theme::Theme,
+        ui_text: crate::ui_text::UiTextEngine,
+        text_measurer: crate::draw::TextMeasurer,
+    ) -> Self {
         Self {
             canvas_layer_cache: CanvasLayerCache::new(),
             draw_caches: crate::draw::RenderCaches::default(),
             theme,
             ui_caches: crate::ui::UiRenderCaches::default(),
+            help_content: crate::ui::HelpContentCache::default(),
+            ui_text,
+            text_measurer,
             ui_damage: UiDamageHistory::default(),
             profile_ui_baseline: Vec::new(),
         }
+    }
+
+    pub(in crate::backend::wayland) fn text_measurer(&self) -> &crate::draw::TextMeasurer {
+        &self.text_measurer
+    }
+
+    pub(in crate::backend::wayland) fn ui_text(&self) -> &crate::ui_text::UiTextEngine {
+        &self.ui_text
     }
 
     pub(in crate::backend::wayland::state) fn theme(&self) -> &crate::ui::theme::Theme {
         &self.theme
     }
 
-    pub(in crate::backend::wayland::state) fn ui_parts_mut(
+    pub(in crate::backend::wayland::state) fn ui_parts_with_text_mut(
         &mut self,
-    ) -> (&crate::ui::theme::Theme, &mut crate::ui::UiRenderCaches) {
-        (&self.theme, &mut self.ui_caches)
+    ) -> (
+        &crate::ui::theme::Theme,
+        &mut crate::ui::UiRenderCaches,
+        &crate::ui_text::UiTextEngine,
+    ) {
+        (&self.theme, &mut self.ui_caches, &self.ui_text)
+    }
+
+    pub(in crate::backend::wayland::state) fn help_parts_mut(
+        &mut self,
+    ) -> (
+        &crate::ui::theme::Theme,
+        &mut crate::ui::UiRenderCaches,
+        &crate::ui_text::UiTextEngine,
+        &mut crate::ui::HelpContentCache,
+    ) {
+        (
+            &self.theme,
+            &mut self.ui_caches,
+            &self.ui_text,
+            &mut self.help_content,
+        )
     }
 
     pub(in crate::backend::wayland::state) fn canvas_layer_cache_mut(
@@ -154,16 +192,34 @@ impl RenderRuntime {
         &mut self.canvas_layer_cache
     }
 
-    pub(in crate::backend::wayland::state) fn draw_caches_mut(
+    pub(in crate::backend::wayland::state) fn draw_text_parts_mut(
         &mut self,
-    ) -> &mut crate::draw::RenderCaches {
-        &mut self.draw_caches
+    ) -> (&mut crate::draw::RenderCaches, &crate::draw::TextMeasurer) {
+        (&mut self.draw_caches, &self.text_measurer)
+    }
+
+    pub(in crate::backend::wayland::state) fn draw_ui_text_parts_mut(
+        &mut self,
+    ) -> (
+        &mut crate::draw::RenderCaches,
+        &crate::ui_text::UiTextEngine,
+        &crate::draw::TextMeasurer,
+    ) {
+        (&mut self.draw_caches, &self.ui_text, &self.text_measurer)
     }
 
     pub(in crate::backend::wayland::state) fn canvas_draw_parts_mut(
         &mut self,
-    ) -> (&mut CanvasLayerCache, &mut crate::draw::RenderCaches) {
-        (&mut self.canvas_layer_cache, &mut self.draw_caches)
+    ) -> (
+        &mut CanvasLayerCache,
+        &mut crate::draw::RenderCaches,
+        &crate::draw::TextMeasurer,
+    ) {
+        (
+            &mut self.canvas_layer_cache,
+            &mut self.draw_caches,
+            &self.text_measurer,
+        )
     }
 
     pub(in crate::backend::wayland::state) fn ui_damage_mut(&mut self) -> &mut UiDamageHistory {
@@ -187,15 +243,19 @@ mod tests {
 
     #[test]
     fn runtime_themes_are_independent_of_other_owners() {
-        let mut dark = RenderRuntime::new(crate::ui::theme::Theme::resolve(
-            crate::ui::theme::ThemeMode::Dark,
-        ));
-        let light = RenderRuntime::new(crate::ui::theme::Theme::resolve(
-            crate::ui::theme::ThemeMode::Light,
-        ));
+        let mut dark = RenderRuntime::new(
+            crate::ui::theme::Theme::resolve(crate::ui::theme::ThemeMode::Dark),
+            crate::ui_text::UiTextEngine::default(),
+            crate::draw::TextMeasurer::default(),
+        );
+        let light = RenderRuntime::new(
+            crate::ui::theme::Theme::resolve(crate::ui::theme::ThemeMode::Light),
+            crate::ui_text::UiTextEngine::default(),
+            crate::draw::TextMeasurer::default(),
+        );
         assert_eq!(dark.theme(), &crate::ui::theme::Theme::dark());
         assert_eq!(light.theme(), &crate::ui::theme::Theme::light());
-        let (theme, _caches) = dark.ui_parts_mut();
+        let (theme, _caches, _engine) = dark.ui_parts_with_text_mut();
         assert_eq!(theme, &crate::ui::theme::Theme::dark());
         assert_ne!(dark.theme(), light.theme());
     }

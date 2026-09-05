@@ -57,9 +57,15 @@ mod tests {
 
     #[test]
     fn focus_loss_clears_modal_repeats_and_modifiers() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_test_input_state();
         state.toggle_command_palette();
-        assert!(state.handle_command_palette_key(Key::Down));
+        assert!(state.handle_command_palette_key_with_resources(route_resources, Key::Down));
         state.sync_modifiers(true, true, true, true);
         state.modifiers.tab = true;
         assert!(
@@ -82,7 +88,7 @@ mod tests {
         assert!(!state.modifiers.tab);
 
         state.open_font_picker();
-        assert!(state.handle_font_picker_key(Key::Down, None));
+        assert!(state.handle_font_picker_key_with_measurer(&route_measurer, Key::Down, None));
         assert!(state.font_picker_repeat_timeout(Instant::now()).is_some());
 
         state.clear_focus_owned_key_state();

@@ -37,6 +37,7 @@ impl AboutWindowState {
         let (width, height) = surface_size(&plan);
 
         Self {
+            ui_text: crate::ui_text::UiTextEngine::default(),
             theme,
             registry_state,
             compositor_state,

@@ -9,6 +9,7 @@
 //! this module says the pair deliberately coexists.
 
 use super::DrawingState;
+use crate::draw::TextMeasurer;
 use crate::input::state::InputState;
 
 /// Every popup surface that participates in modal mutual exclusion, in the
@@ -172,8 +173,8 @@ impl InputState {
     /// reappear when the selector closed. Going through the registry also means
     /// each surface is dismissed by its own closer — the tour used to be a bare
     /// flag clear here, which left the toolbar chrome it hides still hidden.
-    pub(crate) fn prepare_for_screen_modal(&mut self) {
-        self.cancel_active_interaction();
+    pub(crate) fn prepare_for_screen_modal_with_measurer(&mut self, measurer: &TextMeasurer) {
+        self.cancel_active_interaction_with(measurer);
         for surface in ModalSurface::ALL {
             if self.modal_is_open(surface) {
                 self.close_modal(surface);
@@ -283,7 +284,7 @@ mod wheel_tests {
         // stop at them; the wheel used to carry on to zoom, Spotlight, and
         // stroke thickness behind them.
         let mut state = make_test_input_state();
-        state.activate_eyedropper(None);
+        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), None);
 
         assert!(state.eyedropper_is_active());
         assert!(state.modal_owns_wheel());
@@ -297,7 +298,7 @@ mod wheel_tests {
         state.open_font_picker();
         assert!(state.is_font_picker_open());
 
-        state.prepare_for_screen_modal();
+        state.prepare_for_screen_modal_with_measurer(&crate::draw::TextMeasurer::default());
 
         assert!(!state.is_font_picker_open());
         assert!(
@@ -310,6 +311,7 @@ mod wheel_tests {
 
     #[test]
     fn the_properties_panel_leaves_the_wheel_to_the_canvas() {
+        let route_measurer = crate::draw::TextMeasurer::default();
         // It docks beside the canvas rather than over it, and the canvas stays
         // drawable underneath, so the wheel still means what it means elsewhere.
         let mut state = make_test_input_state();
@@ -326,7 +328,7 @@ mod wheel_tests {
                 thick: 2.0,
             });
         state.set_selection(vec![id]);
-        assert!(state.show_properties_panel());
+        assert!(state.show_properties_panel_with(&route_measurer));
 
         assert!(state.is_properties_panel_open());
         assert!(!state.modal_owns_wheel());

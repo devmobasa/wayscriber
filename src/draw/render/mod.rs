@@ -26,7 +26,10 @@ pub use highlight::render_click_highlight;
 pub use pressure_strokes::render_freehand_pressure_borrowed;
 pub(crate) use pressure_strokes::render_freehand_pressure_preview_borrowed;
 pub(crate) use primitives::{render_polygon_preview, with_saved_state};
-pub use selection::{render_selection_halo, render_selection_handles, selection_handle_rects};
+pub use selection::{
+    render_selection_halo, render_selection_halo_with_measurer, render_selection_handles,
+    selection_handle_rects,
+};
 pub use shapes::{
     render_shape, render_shape_over, render_shape_over_with_halo, render_shape_with_halo,
 };
@@ -38,9 +41,12 @@ pub use spotlight::{
 };
 pub(crate) use strokes::render_eraser_stroke;
 pub use strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};
-pub(crate) use text::render_sticky_note_preview;
+pub(crate) use text::render_sticky_note_preview_with_measurer;
 pub use text::{
-    caret_line_width, caret_outline_width, render_sticky_note, render_text, render_text_over,
-    render_text_over_with_halo, render_text_with_halo, sticky_note_foreground, text_outline_color,
+    caret_line_width, caret_outline_width, render_sticky_note, render_sticky_note_with_measurer,
+    render_text, render_text_over, render_text_over_with_halo,
+    render_text_over_with_halo_with_measurer, render_text_over_with_measurer,
+    render_text_with_halo, render_text_with_halo_with_measurer, render_text_with_measurer,
+    sticky_note_foreground, text_outline_color,
 };
 pub use types::EraserReplayContext;

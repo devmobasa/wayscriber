@@ -75,6 +75,8 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
         backend.tokio_runtime.handle(),
         &keybindings.keybinding_conflicts,
     );
+    let ui_text = crate::ui_text::UiTextEngine::default();
+    let text_measurer = crate::draw::TextMeasurer::default();
     let runtime_ui_path = crate::paths::runtime_ui_state_file();
     let (runtime_ui, runtime_ui_unavailable) =
         match crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState::start(
@@ -84,7 +86,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
             runtime_wake.handle(),
         ) {
             Ok(runtime_ui) => {
-                runtime_ui.apply_startup_state(&mut input_state);
+                runtime_ui.apply_startup_state(&ui_text, &text_measurer, &mut input_state);
                 (Some(runtime_ui), None)
             }
             Err(error) => {
@@ -159,7 +161,7 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     input_state.set_command_palette_recents(palette_recents_store.recents().to_vec());
     let palette_recents = crate::palette_recents::PaletteRecentsWriter::new(palette_recents_store);
 
-    apply_initial_mode(backend, &config, &mut input_state);
+    apply_initial_mode(backend, &config, &mut input_state, &text_measurer);
 
     let capture_wake = runtime_wake.handle();
     let capture_manager =
@@ -180,6 +182,8 @@ pub(super) fn init_state(backend: &WaylandBackend, setup: WaylandSetup) -> Resul
     };
 
     let mut state = WaylandState::new(WaylandStateInit {
+        ui_text,
+        text_measurer,
         globals: setup.state_globals,
         config,
         input_state,
@@ -237,12 +241,17 @@ fn runtime_ui_unavailable_snapshot(
     }
 }
 
-fn apply_initial_mode(backend: &WaylandBackend, _config: &Config, input_state: &mut InputState) {
+fn apply_initial_mode(
+    backend: &WaylandBackend,
+    _config: &Config,
+    input_state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+) {
     // Apply initial board from CLI (if provided).
     if let Some(initial_id) = backend.initial_mode.clone() {
         if input_state.boards.has_board(&initial_id) {
             info!("Starting on board '{}'", initial_id);
-            input_state.switch_board_force(&initial_id);
+            input_state.switch_board_force_with_measurer(measurer, &initial_id);
         } else if !initial_id.is_empty() {
             warn!("Requested board '{}' not found; using default", initial_id);
         }

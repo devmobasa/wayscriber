@@ -4,12 +4,11 @@ use super::image::render_image_shape;
 use super::pressure_strokes::render_packed_freehand_pressure_borrowed;
 use super::primitives::{render_arrow, render_ellipse, render_line, render_polygon, render_rect};
 use super::strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};
-use super::text::{render_sticky_note, render_text_over_with_halo};
+use super::text::{render_sticky_note_with_measurer, render_text_over_with_halo_with_measurer};
 use crate::draw::Color;
 use crate::draw::shape::{
     ARROW_LABEL_BACKGROUND, ArrowLabel, ArrowStyle, Shape, StepMarkerLabel, arrow_label_ends,
-    arrow_label_layout, measure_text_with_context, step_marker_outline_thickness,
-    step_marker_radius,
+    arrow_label_layout_with, step_marker_outline_thickness, step_marker_radius_with,
 };
 
 #[derive(Clone, Copy)]
@@ -84,6 +83,7 @@ pub fn render_shape_over_with_halo(
 }
 
 pub(super) fn render_shape_with_cache(
+    measurer: &crate::draw::TextMeasurer,
     images: &mut super::image::ImageSurfaceCache,
     ctx: &cairo::Context,
     shape: &Shape,
@@ -161,6 +161,7 @@ pub(super) fn render_shape_with_cache(
             label,
         } => {
             render_arrow_shape(
+                measurer,
                 ctx,
                 ArrowRenderSpec {
                     start: (*x1, *y1),
@@ -207,7 +208,8 @@ pub(super) fn render_shape_with_cache(
             background_enabled,
             wrap_width,
         } => {
-            render_text_over_with_halo(
+            render_text_over_with_halo_with_measurer(
+                measurer,
                 ctx,
                 *x,
                 *y,
@@ -223,6 +225,7 @@ pub(super) fn render_shape_with_cache(
         }
         Shape::StepMarker { x, y, color, label } => {
             render_step_marker_shape(
+                measurer,
                 ctx,
                 StepMarkerRenderSpec {
                     center: (*x, *y),
@@ -241,7 +244,8 @@ pub(super) fn render_shape_with_cache(
             font_descriptor,
             wrap_width,
         } => {
-            render_sticky_note(
+            render_sticky_note_with_measurer(
+                measurer,
                 ctx,
                 *x,
                 *y,
@@ -268,7 +272,12 @@ pub(super) fn render_shape_with_cache(
     }
 }
 
-fn render_arrow_shape(ctx: &cairo::Context, arrow: ArrowRenderSpec<'_>, text: ShapeTextOptions) {
+fn render_arrow_shape(
+    measurer: &crate::draw::TextMeasurer,
+    ctx: &cairo::Context,
+    arrow: ArrowRenderSpec<'_>,
+    text: ShapeTextOptions,
+) {
     // Only the label needs these: `render_arrow` reads `head_at_end` itself.
     // `Double` deliberately ignores the flag here, matching the outline it
     // draws either way.
@@ -298,7 +307,8 @@ fn render_arrow_shape(ctx: &cairo::Context, arrow: ArrowRenderSpec<'_>, text: Sh
         return;
     };
     let label_text = label.value.to_string();
-    let Some(layout) = arrow_label_layout(
+    let Some(layout) = arrow_label_layout_with(
+        measurer,
         tip_x,
         tip_y,
         tail_x,
@@ -311,7 +321,8 @@ fn render_arrow_shape(ctx: &cairo::Context, arrow: ArrowRenderSpec<'_>, text: Sh
     ) else {
         return;
     };
-    render_text_over_with_halo(
+    render_text_over_with_halo_with_measurer(
+        measurer,
         ctx,
         layout.x,
         layout.y,
@@ -327,12 +338,14 @@ fn render_arrow_shape(ctx: &cairo::Context, arrow: ArrowRenderSpec<'_>, text: Sh
 }
 
 fn render_step_marker_shape(
+    measurer: &crate::draw::TextMeasurer,
     ctx: &cairo::Context,
     marker: StepMarkerRenderSpec<'_>,
     text: ShapeTextOptions,
 ) {
     let label_text = marker.label.value.to_string();
-    let radius = step_marker_radius(
+    let radius = step_marker_radius_with(
+        measurer,
         marker.label.value,
         marker.label.size,
         &marker.label.font_descriptor,
@@ -389,9 +402,7 @@ fn render_step_marker_shape(
         .label
         .font_descriptor
         .to_pango_string(marker.label.size);
-    let Some(metrics) =
-        measure_text_with_context(ctx, &label_text, &font_desc, marker.label.size, None)
-    else {
+    let Some(metrics) = measurer.measure(&label_text, &font_desc, marker.label.size, None) else {
         return;
     };
     let center_offset_x = metrics.ink_x + metrics.ink_width / 2.0;
@@ -399,7 +410,8 @@ fn render_step_marker_shape(
     let baseline_x = (f64::from(marker.center.0) - center_offset_x).round() as i32;
     let baseline_y =
         (f64::from(marker.center.1) - center_offset_y + metrics.baseline).round() as i32;
-    render_text_over_with_halo(
+    render_text_over_with_halo_with_measurer(
+        measurer,
         ctx,
         baseline_x,
         baseline_y,

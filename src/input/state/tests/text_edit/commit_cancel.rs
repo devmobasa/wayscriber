@@ -2,6 +2,7 @@ use super::*;
 
 #[test]
 fn edit_selected_text_commit_updates_and_undo() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 100,
@@ -15,7 +16,7 @@ fn edit_selected_text_commit_updates_and_undo() {
     });
 
     state.set_selection(vec![shape_id]);
-    assert!(state.edit_selected_text());
+    assert!(state.edit_selected_text_with(&measurer));
 
     if let DrawingState::TextInput { buffer, .. } = &mut state.state {
         buffer.push_str(" world");
@@ -49,6 +50,7 @@ fn edit_selected_text_commit_updates_and_undo() {
 
 #[test]
 fn edit_selected_text_cancel_restores_original() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 40,
@@ -62,7 +64,7 @@ fn edit_selected_text_cancel_restores_original() {
     });
 
     state.set_selection(vec![shape_id]);
-    assert!(state.edit_selected_text());
+    assert!(state.edit_selected_text_with(&measurer));
 
     if let DrawingState::TextInput { buffer, .. } = &mut state.state {
         buffer.push_str(" edit");
@@ -70,7 +72,7 @@ fn edit_selected_text_cancel_restores_original() {
         panic!("Expected text input state");
     }
 
-    state.cancel_text_input();
+    state.cancel_text_input_with(&measurer);
     assert!(matches!(state.state, DrawingState::Idle));
     assert!(state.text_editing.edit_target().is_none());
 
@@ -85,6 +87,7 @@ fn edit_selected_text_cancel_restores_original() {
 
 #[test]
 fn edit_selected_sticky_note_commit_updates_and_undo() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let background = Color {
         r: 0.9,
@@ -106,7 +109,7 @@ fn edit_selected_sticky_note_commit_updates_and_undo() {
         });
 
     state.set_selection(vec![shape_id]);
-    assert!(state.edit_selected_text());
+    assert!(state.edit_selected_text_with(&measurer));
 
     if let DrawingState::TextInput { buffer, .. } = &mut state.state {
         buffer.push_str(" updated");
@@ -154,6 +157,7 @@ fn edit_selected_sticky_note_commit_updates_and_undo() {
 
 #[test]
 fn edit_selected_sticky_note_cancel_restores_original() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let background = Color {
         r: 0.3,
@@ -175,7 +179,7 @@ fn edit_selected_sticky_note_cancel_restores_original() {
         });
 
     state.set_selection(vec![shape_id]);
-    assert!(state.edit_selected_text());
+    assert!(state.edit_selected_text_with(&measurer));
 
     if let DrawingState::TextInput { buffer, .. } = &mut state.state {
         buffer.push_str(" edit");
@@ -183,7 +187,7 @@ fn edit_selected_sticky_note_cancel_restores_original() {
         panic!("Expected text input state");
     }
 
-    state.cancel_text_input();
+    state.cancel_text_input_with(&measurer);
     assert!(matches!(state.state, DrawingState::Idle));
     assert!(state.text_editing.edit_target().is_none());
 

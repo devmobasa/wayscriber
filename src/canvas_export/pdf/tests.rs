@@ -236,3 +236,51 @@ fn pdf_page(
         },
     }
 }
+
+#[test]
+fn worker_exports_three_page_pdf_from_unicode_metadata() {
+    let source = CanvasExportRect::new(0.0, 0.0, 100.0, 100.0).unwrap();
+    let pages = (0..3)
+        .map(|index| {
+            let mut page = pdf_page(300.0, 200.0, source, index, 3);
+            page.metadata.board_name = "Board 測試 العربية".into();
+            page
+        })
+        .collect();
+    let snapshot = BoardPdfExportSnapshot {
+        pages,
+        labels: crate::config::PdfLabelConfig {
+            enabled: true,
+            content: crate::config::PdfLabelContentMode::BoardName,
+            ..Default::default()
+        },
+    };
+    // Only value snapshots cross the worker boundary; text resources are
+    // constructed by the export root on the worker thread.
+    let bytes = std::thread::spawn(move || render_board_pdf(&snapshot))
+        .join()
+        .unwrap()
+        .unwrap();
+    assert!(bytes.starts_with(b"%PDF-"));
+    // Cairo can compress page dictionaries into PDF object streams. Ask the
+    // same PDF reader used by the existing page-layout test to inspect them.
+    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let path = temp.path().join("worker-pages.pdf");
+    std::fs::write(&path, bytes).expect("write worker PDF");
+    let output = match Command::new("pdfinfo").arg(&path).output() {
+        Ok(output) => output,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+        Err(error) => panic!("failed to run pdfinfo: {error}"),
+    };
+    assert!(
+        output.status.success(),
+        "pdfinfo failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let info = String::from_utf8_lossy(&output.stdout);
+    let pages = info
+        .lines()
+        .find_map(|line| line.strip_prefix("Pages:"))
+        .expect("pdfinfo page count");
+    assert_eq!(pages.trim(), "3", "worker PDF must contain all three pages");
+}

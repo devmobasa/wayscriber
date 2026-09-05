@@ -4,6 +4,7 @@ use super::super::base::{
 };
 use super::super::default_step_marker_size;
 use crate::config::{PresetSlotsConfig, PresetToolStatesConfig, ToolPresetConfig};
+use crate::draw::TextMeasurer;
 use crate::input::{DragModifier, tool::Tool};
 use std::time::{Duration, Instant};
 
@@ -13,13 +14,18 @@ impl InputState {
     }
 
     pub fn apply_preset(&mut self, slot: usize) -> bool {
+        let measurer = TextMeasurer::default();
+        self.apply_preset_with(&measurer, slot)
+    }
+
+    pub fn apply_preset_with(&mut self, measurer: &TextMeasurer, slot: usize) -> bool {
         let Some(preset) = self.preset_slots.preset(slot) else {
             return false;
         };
 
         match self.state {
-            DrawingState::TextInput { .. } => self.cancel_text_input(),
-            DrawingState::BuildingPolygon { .. } => self.cancel_active_interaction(),
+            DrawingState::TextInput { .. } => self.cancel_text_input_with(measurer),
+            DrawingState::BuildingPolygon { .. } => self.cancel_active_interaction_with(measurer),
             _ => {}
         }
 
@@ -28,15 +34,15 @@ impl InputState {
 
         if let Some(tool_settings) = preset.tool_settings.as_ref() {
             self.apply_full_preset_tool_settings(tool_settings);
-            self.activate_preset_tool(preset.tool);
+            self.activate_preset_tool_with(measurer, preset.tool);
             self.sync_current_settings_from_active_tool();
         } else {
-            self.activate_preset_tool(preset.tool);
+            self.activate_preset_tool_with(measurer, preset.tool);
             let _ = self.set_color(preset.color.to_color());
             if preset.tool.uses_eraser_size() {
-                let _ = self.set_eraser_size(preset.size);
+                let _ = self.set_eraser_size_with(measurer, preset.size);
             } else if !legacy_step_marker_preset {
-                let _ = self.set_thickness(preset.size);
+                let _ = self.set_thickness_with(measurer, preset.size);
             }
         }
 
@@ -61,7 +67,10 @@ impl InputState {
             let _ = self.set_font_size(font_size);
         }
         if legacy_step_marker_preset {
-            let _ = self.set_thickness(default_step_marker_size(self.style.current_font_size));
+            let _ = self.set_thickness_with(
+                measurer,
+                default_step_marker_size(self.style.current_font_size),
+            );
         }
         if let Some(text_background_enabled) = preset.text_background_enabled
             && self.style.text_background_enabled != text_background_enabled
@@ -150,11 +159,11 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    fn activate_preset_tool(&mut self, tool: Tool) {
+    fn activate_preset_tool_with(&mut self, measurer: &TextMeasurer, tool: Tool) {
         if tool == Tool::Highlight {
-            self.set_highlight_tool(true);
+            self.set_highlight_tool_with_measurer(measurer, true);
         } else {
-            self.set_tool_override(Some(tool));
+            self.set_tool_override_with(measurer, Some(tool));
         }
     }
 

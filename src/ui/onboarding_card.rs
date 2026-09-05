@@ -1,6 +1,6 @@
 use super::primitives::draw_rounded_rect;
 use super::theme::{self, Rgba, overlay};
-use crate::ui_text::{UiTextStyle, draw_text_baseline, text_layout};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 pub struct OnboardingChecklistItem {
     pub label: String,
@@ -61,6 +61,16 @@ pub fn render_onboarding_card(
     height: u32,
     card: &OnboardingCard,
 ) {
+    render_onboarding_card_with_engine(&UiTextEngine::default(), ctx, width, height, card);
+}
+
+pub(crate) fn render_onboarding_card_with_engine(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    width: u32,
+    height: u32,
+    card: &OnboardingCard,
+) {
     let margin = CARD_MARGIN * CARD_TYPE_SCALE;
     let card_max_width = CARD_MAX_WIDTH * CARD_TYPE_SCALE;
     let card_min_width = CARD_MIN_WIDTH * CARD_TYPE_SCALE;
@@ -112,7 +122,8 @@ pub fn render_onboarding_card(
         size: 11.0 * CARD_TYPE_SCALE,
     };
 
-    let body_height = text_layout(ctx, body_style, &card.body, Some(content_w))
+    let body_height = engine
+        .layout(ctx, body_style, &card.body, Some(content_w))
         .ink_extents()
         .height()
         .max(body_style.size);
@@ -133,10 +144,10 @@ pub fn render_onboarding_card(
     let mut cursor_y = y + card_padding;
 
     theme::set_color(ctx, TEXT_EYEBROW);
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         eyebrow_style,
-        &fit_text(ctx, &card.eyebrow, eyebrow_style, content_w),
+        &fit_text(engine, ctx, &card.eyebrow, eyebrow_style, content_w),
         content_x,
         cursor_y + 12.0 * CARD_TYPE_SCALE,
         None,
@@ -144,10 +155,10 @@ pub fn render_onboarding_card(
     cursor_y += EYEBROW_CONTENT_HEIGHT * CARD_TYPE_SCALE;
 
     theme::set_color(ctx, overlay::TEXT_ACTIVE);
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         title_style,
-        &fit_text(ctx, &card.title, title_style, content_w),
+        &fit_text(engine, ctx, &card.title, title_style, content_w),
         content_x,
         cursor_y + 20.0 * CARD_TYPE_SCALE,
         None,
@@ -155,7 +166,7 @@ pub fn render_onboarding_card(
     cursor_y += TITLE_CONTENT_HEIGHT * CARD_TYPE_SCALE;
 
     theme::set_color(ctx, TEXT_BODY);
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         body_style,
         &card.body,
@@ -190,10 +201,10 @@ pub fn render_onboarding_card(
         theme::set_color(ctx, overlay::TEXT_SECONDARY);
         let item_x = content_x + item_dot_size + 8.0 * CARD_TYPE_SCALE;
         let item_w = content_w - item_dot_size - 8.0 * CARD_TYPE_SCALE;
-        draw_text_baseline(
+        engine.draw_baseline(
             ctx,
             item_style,
-            &fit_text(ctx, &item.label, item_style, item_w),
+            &fit_text(engine, ctx, &item.label, item_style, item_w),
             item_x,
             cursor_y + text_offset_y + item_style.size,
             None,
@@ -202,21 +213,27 @@ pub fn render_onboarding_card(
     }
 
     theme::set_color(ctx, TEXT_FOOTER);
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         footer_style,
-        &fit_text(ctx, &card.footer, footer_style, content_w),
+        &fit_text(engine, ctx, &card.footer, footer_style, content_w),
         content_x,
         y + card_height - card_padding + 2.0 * CARD_TYPE_SCALE,
         None,
     );
 }
 
-fn fit_text(ctx: &cairo::Context, text: &str, style: UiTextStyle<'_>, max_width: f64) -> String {
+fn fit_text(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    text: &str,
+    style: UiTextStyle<'_>,
+    max_width: f64,
+) -> String {
     if text.is_empty() || max_width <= 0.0 {
         return String::new();
     }
-    let text_width = |s: &str| text_layout(ctx, style, s, None).ink_extents().width();
+    let text_width = |s: &str| engine.layout(ctx, style, s, None).ink_extents().width();
     if text_width(text) <= max_width {
         return text.to_string();
     }

@@ -1,4 +1,5 @@
 use crate::draw::Shape;
+use crate::draw::TextMeasurer;
 use crate::input::tool::ToolPressBehavior;
 use crate::input::{DragTool, Tool, events::MouseButton};
 use std::sync::Arc;
@@ -42,8 +43,9 @@ impl InputState {
             && self.is_radial_menu_toggle_button(button)
     }
 
-    pub(in crate::input::state) fn handle_right_click(
+    pub(in crate::input::state) fn handle_right_click_with_measurer(
         &mut self,
+        measurer: &crate::draw::TextMeasurer,
         screen_x: i32,
         screen_y: i32,
         canvas_x: i32,
@@ -51,7 +53,7 @@ impl InputState {
     ) {
         self.update_pointer_positions(screen_x, screen_y, canvas_x, canvas_y);
         self.text_editing.set_last_click(None);
-        if self.try_cancel_active_interaction() {
+        if self.try_cancel_active_interaction_with(measurer) {
             return;
         }
         if self.zoom_active() {
@@ -61,7 +63,7 @@ impl InputState {
             return;
         }
 
-        let hit_shape = self.hit_test_at(canvas_x, canvas_y);
+        let hit_shape = self.hit_test_at_with(measurer, canvas_x, canvas_y);
         let mut focus_edit = false;
         if let Some(id) = hit_shape {
             if self.modifiers.shift {
@@ -130,6 +132,30 @@ impl InputState {
         canvas_x: i32,
         canvas_y: i32,
     ) {
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.on_mouse_press_with_canvas_and_resources(
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &ui_engine,
+            },
+            button,
+            screen_x,
+            screen_y,
+            canvas_x,
+            canvas_y,
+        );
+    }
+
+    pub(crate) fn on_mouse_press_with_canvas_and_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        button: MouseButton,
+        screen_x: i32,
+        screen_y: i32,
+        canvas_x: i32,
+        canvas_y: i32,
+    ) {
         // Any press ends a wheel adjustment of a loupe, so the burst lands in
         // history as its own entry rather than merging with what follows.
         self.flush_spotlight_magnification_gesture();
@@ -137,7 +163,7 @@ impl InputState {
             ScreenPoint::new(screen_x, screen_y),
             CanvasPoint::new(canvas_x, canvas_y),
         );
-        let _ = route_pointer_press(self, PointerPress::new(button, points));
+        let _ = route_pointer_press(self, resources, PointerPress::new(button, points));
     }
 
     pub(in crate::input::state) fn tool_for_button_press(
@@ -166,8 +192,9 @@ impl InputState {
         configured_tool
     }
 
-    fn handle_tool_button_press(
+    fn handle_tool_button_press_with_measurer(
         &mut self,
+        measurer: &crate::draw::TextMeasurer,
         button: MouseButton,
         tool: Tool,
         color: Option<crate::draw::Color>,
@@ -190,17 +217,31 @@ impl InputState {
         // Holding Alt turns the drag into a move of the whole block, which frees
         // plain-drag for text selection later.
         if button == MouseButton::Left
-            && self.handle_text_input_left_press(coords.canvas_x, coords.canvas_y, color)
+            && self.handle_text_input_left_press_with(
+                measurer,
+                coords.canvas_x,
+                coords.canvas_y,
+                color,
+            )
         {
             return;
         }
 
         match &mut self.state {
-            DrawingState::Idle => {
-                self.handle_idle_tool_click(button, tool, color, coords.canvas_x, coords.canvas_y)
-            }
+            DrawingState::Idle => self.handle_idle_tool_click_with_measurer(
+                measurer,
+                button,
+                tool,
+                color,
+                coords.canvas_x,
+                coords.canvas_y,
+            ),
             DrawingState::BuildingPolygon { .. } if button == MouseButton::Left => {
-                self.handle_building_polygon_left_click(coords.canvas_x, coords.canvas_y);
+                self.handle_building_polygon_left_click_with_measurer(
+                    measurer,
+                    coords.canvas_x,
+                    coords.canvas_y,
+                );
             }
             DrawingState::TextInput { .. }
             | DrawingState::BuildingPolygon { .. }
@@ -218,8 +259,9 @@ impl InputState {
     /// Apply the editor-owned meaning of a left press independently of drawing
     /// tool bindings: click positions/extends the caret, Alt+drag moves the
     /// block. Returns whether an active text editor consumed the press.
-    pub(in crate::input::state) fn handle_text_input_left_press(
+    pub(in crate::input::state) fn handle_text_input_left_press_with(
         &mut self,
+        measurer: &TextMeasurer,
         canvas_x: i32,
         canvas_y: i32,
         color: Option<crate::draw::Color>,
@@ -251,9 +293,9 @@ impl InputState {
                 *selection_anchor = None;
             }
             self.needs_redraw = true;
-            self.update_text_preview_dirty_from_editor();
+            self.update_text_preview_dirty_from_editor_with(measurer);
         } else {
-            self.place_text_caret_at_canvas(canvas_x, canvas_y, self.modifiers.shift);
+            self.place_text_caret_at_canvas(measurer, canvas_x, canvas_y, self.modifiers.shift);
         }
         true
     }
@@ -265,7 +307,13 @@ impl InputState {
     /// one formula covers both. Active IME composition is hit-tested against
     /// the same effective preview as rendering, then mapped back to committed
     /// buffer coordinates.
-    fn place_text_caret_at_canvas(&mut self, canvas_x: i32, canvas_y: i32, extend: bool) {
+    fn place_text_caret_at_canvas(
+        &mut self,
+        measurer: &TextMeasurer,
+        canvas_x: i32,
+        canvas_y: i32,
+        extend: bool,
+    ) {
         let offset = {
             let DrawingState::TextInput { x, y, .. } = &self.state else {
                 return;
@@ -282,7 +330,7 @@ impl InputState {
                 .style
                 .font_descriptor
                 .to_pango_string(self.style.current_font_size);
-            let Some(preview_offset) = crate::draw::shape::hit_test_text(
+            let Some(preview_offset) = measurer.hit_test_text(
                 &preview.text,
                 &font,
                 self.style.text_wrap_width,
@@ -309,7 +357,7 @@ impl InputState {
             }
             *caret = offset;
             self.needs_redraw = true;
-            self.update_text_preview_dirty_from_editor();
+            self.update_text_preview_dirty_from_editor_with(measurer);
         }
     }
 
@@ -340,25 +388,32 @@ impl InputState {
 
     /// Update the active text block's origin from a canvas-space pointer during
     /// an Alt+drag, preserving the grab offset. No-op when not dragging.
-    pub(in crate::input::state) fn drag_text_block_to(&mut self, canvas_x: i32, canvas_y: i32) {
+    pub(in crate::input::state) fn drag_text_block_to_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        canvas_x: i32,
+        canvas_y: i32,
+    ) {
         if self
             .text_editing
             .drag_block_to(&mut self.state, canvas_x, canvas_y)
         {
-            self.update_text_preview_dirty();
+            self.update_text_preview_dirty_with(measurer);
             self.needs_redraw = true;
         }
     }
 
-    pub(in crate::input::state) fn handle_tool_button_press_at(
+    pub(in crate::input::state) fn handle_tool_button_press_at_with_measurer(
         &mut self,
+        measurer: &crate::draw::TextMeasurer,
         button: MouseButton,
         tool: Tool,
         color: Option<crate::draw::Color>,
         screen: (i32, i32),
         canvas: (i32, i32),
     ) {
-        self.handle_tool_button_press(
+        self.handle_tool_button_press_with_measurer(
+            measurer,
             button,
             tool,
             color,
@@ -371,8 +426,9 @@ impl InputState {
         );
     }
 
-    fn handle_idle_tool_click(
+    fn handle_idle_tool_click_with_measurer(
         &mut self,
+        measurer: &crate::draw::TextMeasurer,
         button: MouseButton,
         tool: Tool,
         color: Option<crate::draw::Color>,
@@ -381,12 +437,12 @@ impl InputState {
     ) {
         let selection_click =
             self.modifiers.alt || matches!(tool.press_behavior(), ToolPressBehavior::Selection);
-        let hit_id = self.hit_test_at(x, y);
+        let hit_id = self.hit_test_at_with(measurer, x, y);
 
         // Handles are claimed before tool dispatch, in the order
         // `hit_idle_handle` fixes — the same order the pointer cursor previews,
         // so what the user sees is what the press does.
-        match self.hit_idle_handle(x, y) {
+        match self.hit_idle_handle_with(measurer, x, y) {
             Some(IdleHandle::SpotlightMagnification(shape_id)) => {
                 if let Some(snapshot) = self.shape_snapshot(shape_id) {
                     self.text_editing.set_last_click(None);
@@ -395,7 +451,7 @@ impl InputState {
                         DrawingState::AdjustingSpotlightMagnification { shape_id, snapshot };
                     // Jump to where the user pressed, so a click anywhere on
                     // the track is itself an adjustment rather than dead travel.
-                    self.drag_spotlight_magnification_to(x);
+                    self.drag_spotlight_magnification_to_with(measurer, x);
                     return;
                 }
             }
@@ -406,7 +462,7 @@ impl InputState {
                     self.state = DrawingState::BendingArrow { shape_id, snapshot };
                     // Jump the arc to where the user pressed, so a click beside
                     // the handle is itself an adjustment rather than dead travel.
-                    self.drag_arrow_bend_to(x, y, self.modifiers.shift);
+                    self.drag_arrow_bend_to_with(measurer, x, y, self.modifiers.shift);
                     return;
                 }
             }
@@ -429,7 +485,7 @@ impl InputState {
                 }
             }
             Some(IdleHandle::SelectionResize(handle)) => {
-                if let Some(original_bounds) = self.selection_bounds() {
+                if let Some(original_bounds) = self.selection_bounds_with(measurer) {
                     let snapshots = self.capture_resize_selection_snapshots();
                     if !snapshots.is_empty() {
                         self.text_editing.set_last_click(None);
@@ -500,7 +556,7 @@ impl InputState {
                     additive: self.modifiers.shift,
                 };
                 self.pointer.replace_provisional_bounds(None);
-                self.update_provisional_dirty(x, y);
+                self.update_provisional_dirty_with(measurer, x, y);
                 self.needs_redraw = true;
                 return;
             }
@@ -510,7 +566,7 @@ impl InputState {
             ToolPressBehavior::Selection | ToolPressBehavior::HighlightNoop => {}
             ToolPressBehavior::StartFreeformPolygon => {
                 self.mark_draw_activity();
-                self.start_building_polygon(x, y);
+                self.start_building_polygon_with_measurer(measurer, x, y);
             }
             ToolPressBehavior::StartDrawing {
                 request_blur_capture,
@@ -534,7 +590,7 @@ impl InputState {
                     point_thicknesses: vec![drawing_thickness as f32],
                 };
                 self.pointer.replace_provisional_bounds(None);
-                self.update_provisional_dirty(x, y);
+                self.update_provisional_dirty_with(measurer, x, y);
                 self.needs_redraw = true;
             }
         }

@@ -182,7 +182,11 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
 /// straight from `keyboard.rs` — so this is where an action-wide preflight
 /// belongs. Hanging one off `handle_action` alone leaves the ordinary key
 /// press, which is most of them, going around it.
-pub(crate) fn route_action(state: &mut InputState, action: Action) -> RoutingOutcome {
+pub(crate) fn route_action_with_resources(
+    state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
+    action: Action,
+) -> RoutingOutcome {
     // A wheel burst owns a snapshot from the frame where it started. Every
     // action route closes it before dispatch because page and board actions can
     // replace that frame, whose shape ids may alias the old one. Bound keys
@@ -212,6 +216,6 @@ pub(crate) fn route_action(state: &mut InputState, action: Action) -> RoutingOut
     }
 
     let route = classify_action(action);
-    adapters::dispatch_action(state, action, route);
+    adapters::dispatch_action(state, resources, action, route);
     RoutingOutcome::DispatchedAction(route)
 }

@@ -17,10 +17,12 @@ pub(crate) fn handle_tour_key(state: &mut InputState, key: Key) -> Option<Routin
 
 pub(crate) fn handle_command_palette_key(
     state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
     key: Key,
 ) -> Option<RoutingOutcome> {
-    (state.command_palette_is_engaged() && state.handle_command_palette_key(key))
-        .then_some(RoutingOutcome::Consumed(ConsumedBy::CommandPalette))
+    (state.command_palette_is_engaged()
+        && state.handle_command_palette_key_with_resources(resources, key))
+    .then_some(RoutingOutcome::Consumed(ConsumedBy::CommandPalette))
 }
 
 pub(crate) fn handle_help_overlay_key(state: &mut InputState, key: Key) -> Option<RoutingOutcome> {
@@ -60,10 +62,12 @@ pub(crate) fn handle_radial_menu_key(state: &mut InputState, key: Key) -> Option
 
 pub(crate) fn handle_precision_entry_key(
     state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
     key: Key,
 ) -> Option<RoutingOutcome> {
-    (state.is_precision_entry_open() && state.handle_precision_entry_key(key))
-        .then_some(RoutingOutcome::Consumed(ConsumedBy::PrecisionEntry))
+    (state.is_precision_entry_open()
+        && state.handle_precision_entry_key_with_resources(resources, key))
+    .then_some(RoutingOutcome::Consumed(ConsumedBy::PrecisionEntry))
 }
 
 pub(crate) fn handle_color_picker_key(state: &mut InputState, key: Key) -> Option<RoutingOutcome> {
@@ -75,20 +79,29 @@ pub(crate) fn handle_color_picker_key(state: &mut InputState, key: Key) -> Optio
 /// produced rather than only the key itself.
 pub(crate) fn handle_font_picker_key(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     key: Key,
     text: Option<&str>,
 ) -> Option<RoutingOutcome> {
-    (state.is_font_picker_open() && state.handle_font_picker_key(key, text))
+    (state.is_font_picker_open() && state.handle_font_picker_key_with_measurer(measurer, key, text))
         .then_some(RoutingOutcome::Consumed(ConsumedBy::FontPicker))
 }
 
-pub(crate) fn handle_context_menu_key(state: &mut InputState, key: Key) -> Option<RoutingOutcome> {
-    (state.is_context_menu_open() && state.handle_context_menu_key(key))
+pub(crate) fn handle_context_menu_key(
+    state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
+    key: Key,
+) -> Option<RoutingOutcome> {
+    (state.is_context_menu_open() && state.handle_context_menu_key_with_resources(resources, key))
         .then_some(RoutingOutcome::Consumed(ConsumedBy::ContextMenu))
 }
 
-pub(crate) fn handle_board_picker_key(state: &mut InputState, key: Key) -> Option<RoutingOutcome> {
-    (state.is_board_picker_open() && state.handle_board_picker_key(key))
+pub(crate) fn handle_board_picker_key(
+    state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    key: Key,
+) -> Option<RoutingOutcome> {
+    (state.is_board_picker_open() && state.handle_board_picker_key_with_measurer(measurer, key))
         .then_some(RoutingOutcome::Consumed(ConsumedBy::BoardPicker))
 }
 
@@ -103,13 +116,14 @@ pub(crate) fn handle_global_modifier_key(
 
 pub(crate) fn handle_properties_panel_key(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     key: Key,
 ) -> Option<RoutingOutcome> {
     if !state.is_properties_panel_open() {
         return None;
     }
 
-    let _ = state.handle_properties_panel_key(key);
+    let _ = state.handle_properties_panel_key_with_measurer(measurer, key);
     Some(RoutingOutcome::Consumed(ConsumedBy::PropertiesPanel))
 }
 
@@ -146,13 +160,14 @@ pub(crate) fn handle_pending_delete_cancel_key(
 
 pub(crate) fn handle_idle_selection_cancel_key(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     key: Key,
 ) -> Option<RoutingOutcome> {
     if matches!(key, Key::Escape)
         && matches!(state.state, DrawingState::Idle)
         && state.has_selection()
     {
-        let bounds = state.selection_bounding_box(state.selected_shape_ids());
+        let bounds = state.selection_bounding_box_with(measurer, state.selected_shape_ids());
         state.clear_selection();
         state.mark_selection_dirty_region(bounds);
         state.needs_redraw = true;
@@ -162,9 +177,13 @@ pub(crate) fn handle_idle_selection_cancel_key(
     None
 }
 
-pub(crate) fn handle_text_input_key(state: &mut InputState, key: Key) -> Option<RoutingOutcome> {
+pub(crate) fn handle_text_input_key(
+    state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
+    key: Key,
+) -> Option<RoutingOutcome> {
     if matches!(&state.state, DrawingState::TextInput { .. }) {
-        state.handle_text_input_key(key);
+        state.handle_text_input_key_with_resources(resources, key);
         return Some(RoutingOutcome::Consumed(ConsumedBy::TextInput));
     }
 
@@ -173,6 +192,7 @@ pub(crate) fn handle_text_input_key(state: &mut InputState, key: Key) -> Option<
 
 pub(crate) fn handle_building_polygon_key(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     key: Key,
 ) -> Option<RoutingOutcome> {
     if !matches!(state.state, DrawingState::BuildingPolygon { .. }) {
@@ -181,19 +201,19 @@ pub(crate) fn handle_building_polygon_key(
 
     match key {
         Key::Return => {
-            state.finish_building_polygon();
+            state.finish_building_polygon_with_measurer(measurer);
             Some(RoutingOutcome::Finished(
                 ActiveInteractionKind::BuildingPolygon,
             ))
         }
         Key::Escape => {
-            state.cancel_active_interaction();
+            state.cancel_active_interaction_with(measurer);
             Some(RoutingOutcome::Canceled(CancelTarget::ActiveInteraction(
                 ActiveInteractionKind::BuildingPolygon,
             )))
         }
         Key::Backspace => {
-            state.pop_building_polygon_point();
+            state.pop_building_polygon_point_with_measurer(measurer);
             Some(RoutingOutcome::Continued(
                 ActiveInteractionKind::BuildingPolygon,
             ))
@@ -204,13 +224,14 @@ pub(crate) fn handle_building_polygon_key(
 
 pub(crate) fn handle_drawing_escape_cancel_key(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     key: Key,
 ) -> Option<RoutingOutcome> {
     if matches!(key, Key::Escape)
         && let Some(ActiveInteractionKind::Drawing) = active_interaction_kind(state)
         && let Some(Action::Exit) = state.find_action("Escape")
     {
-        state.try_cancel_active_interaction();
+        state.try_cancel_active_interaction_with(measurer);
         return Some(RoutingOutcome::Canceled(CancelTarget::ActiveInteraction(
             ActiveInteractionKind::Drawing,
         )));
@@ -242,13 +263,14 @@ pub(crate) fn action_for_key_binding(
 
 pub(crate) fn handle_return_edit_selected_text_key(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     key: Key,
 ) -> Option<RoutingOutcome> {
     if matches!(key, Key::Return)
         && !state.modifiers.has_shortcut_modifier()
         && matches!(state.state, DrawingState::Idle)
     {
-        if state.edit_selected_text() {
+        if state.edit_selected_text_with(measurer) {
             return Some(RoutingOutcome::Started(ActiveInteractionKind::TextInput));
         }
         return Some(return_edit_miss_side_effect());

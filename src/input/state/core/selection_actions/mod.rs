@@ -11,3 +11,6 @@ pub(crate) use spotlight::SpotlightMagnificationTrack;
 mod state;
 mod text;
 mod translation;
+
+#[cfg(test)]
+mod measurement_tests;

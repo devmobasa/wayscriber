@@ -1,5 +1,6 @@
 use super::super::base::InputState;
 use crate::draw::Color;
+use crate::draw::TextMeasurer;
 use crate::input::boards::PendingBoardRuntimeUiAction;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BoardBackground, runtime_contrast_pen_color};
@@ -119,8 +120,9 @@ impl InputState {
         true
     }
 
-    pub(crate) fn reorder_page_in_board(
+    pub(crate) fn reorder_page_in_board_with_measurer(
         &mut self,
+        measurer: &TextMeasurer,
         board_index: usize,
         from: usize,
         to: usize,
@@ -134,7 +136,7 @@ impl InputState {
             return false;
         }
         if is_active_board {
-            self.prepare_active_page_content_change();
+            self.prepare_active_page_content_change(measurer);
         }
         let Some(board) = self.boards.board_state_mut(board_index) else {
             return false;
@@ -145,13 +147,17 @@ impl InputState {
         true
     }
 
-    pub(crate) fn add_page_in_board(&mut self, board_index: usize) -> bool {
+    pub(crate) fn add_page_in_board_with_measurer(
+        &mut self,
+        measurer: &TextMeasurer,
+        board_index: usize,
+    ) -> bool {
         let is_active_board = self.boards.active_index() == board_index;
         if self.boards.board_states().get(board_index).is_none() {
             return false;
         }
         if is_active_board {
-            self.prepare_active_page_content_change();
+            self.prepare_active_page_content_change(measurer);
         }
         let Some(board) = self.boards.board_state_mut(board_index) else {
             return false;
@@ -172,8 +178,9 @@ impl InputState {
         true
     }
 
-    pub(crate) fn duplicate_page_in_board(
+    pub(crate) fn duplicate_page_in_board_with_measurer(
         &mut self,
+        measurer: &TextMeasurer,
         board_index: usize,
         page_index: usize,
     ) -> bool {
@@ -188,7 +195,7 @@ impl InputState {
             return false;
         }
         if is_active_board {
-            self.prepare_active_page_content_change();
+            self.prepare_active_page_content_change(measurer);
         }
         let Some(board) = self.boards.board_state_mut(board_index) else {
             return false;
@@ -211,8 +218,9 @@ impl InputState {
         true
     }
 
-    pub(crate) fn rename_page_in_board(
+    pub(crate) fn rename_page_in_board_with_measurer(
         &mut self,
+        measurer: &TextMeasurer,
         board_index: usize,
         page_index: usize,
         name: Option<String>,
@@ -225,7 +233,7 @@ impl InputState {
             return false;
         }
         if is_active_board {
-            self.prepare_active_page_content_change();
+            self.prepare_active_page_content_change(measurer);
         }
         let Some(board) = self.boards.board_state_mut(board_index) else {
             return false;
@@ -242,8 +250,9 @@ impl InputState {
         true
     }
 
-    pub(crate) fn move_page_between_boards_with_activation(
+    pub(crate) fn move_page_between_boards_with_activation_with_measurer(
         &mut self,
+        measurer: &TextMeasurer,
         source_board: usize,
         page_index: usize,
         target_board: usize,
@@ -271,7 +280,7 @@ impl InputState {
         let active_board = self.boards.active_index();
         let active_involved = source_board == active_board || target_board == active_board;
         if active_involved {
-            self.prepare_active_page_content_change();
+            self.prepare_active_page_content_change(measurer);
         }
         let (new_index, target_name, target_id, target_count) = {
             let (source, target) = if source_board < target_board {
@@ -319,7 +328,7 @@ impl InputState {
         );
         self.mark_session_dirty();
         if activate_target {
-            self.switch_board_slot(target_board);
+            self.switch_board_slot_with_measurer(measurer, target_board);
             if let Some(row) = self.board_picker_row_for_board(target_board) {
                 self.board_picker_set_selected(row);
             }
@@ -328,10 +337,15 @@ impl InputState {
     }
 
     pub fn page_prev(&mut self) -> bool {
+        let measurer = TextMeasurer::default();
+        self.page_prev_with_measurer(&measurer)
+    }
+
+    pub fn page_prev_with_measurer(&mut self, measurer: &TextMeasurer) -> bool {
         if self.boards.active_page_index() == 0 {
             return false;
         }
-        self.prepare_active_page_content_change();
+        self.prepare_active_page_content_change(measurer);
         let switched = self.boards.prev_page();
         debug_assert!(switched, "preflighted previous page failed on apply");
         self.finish_active_page_content_change();
@@ -339,10 +353,15 @@ impl InputState {
     }
 
     pub fn page_next(&mut self) -> bool {
+        let measurer = TextMeasurer::default();
+        self.page_next_with_measurer(&measurer)
+    }
+
+    pub fn page_next_with_measurer(&mut self, measurer: &TextMeasurer) -> bool {
         if self.boards.active_page_index() + 1 >= self.boards.page_count() {
             return false;
         }
-        self.prepare_active_page_content_change();
+        self.prepare_active_page_content_change(measurer);
         let switched = self.boards.next_page();
         debug_assert!(switched, "preflighted next page failed on apply");
         self.finish_active_page_content_change();
@@ -350,10 +369,15 @@ impl InputState {
     }
 
     pub fn switch_to_page(&mut self, index: usize) -> bool {
+        let measurer = TextMeasurer::default();
+        self.switch_to_page_with_measurer(&measurer, index)
+    }
+
+    pub fn switch_to_page_with_measurer(&mut self, measurer: &TextMeasurer, index: usize) -> bool {
         if index >= self.boards.page_count() || index == self.boards.active_page_index() {
             return false;
         }
-        self.prepare_active_page_content_change();
+        self.prepare_active_page_content_change(measurer);
         let switched = self.boards.active_pages_mut().switch_to_page(index);
         debug_assert!(switched, "preflighted page switch failed on apply");
         self.finish_active_page_content_change();
@@ -361,7 +385,12 @@ impl InputState {
     }
 
     pub fn page_new(&mut self) {
-        self.prepare_active_page_content_change();
+        let measurer = TextMeasurer::default();
+        self.page_new_with_measurer(&measurer);
+    }
+
+    pub fn page_new_with_measurer(&mut self, measurer: &TextMeasurer) {
+        self.prepare_active_page_content_change(measurer);
         self.boards.new_page();
         self.finish_active_page_content_change();
         let page_num = self.boards.active_page_index() + 1;
@@ -374,11 +403,16 @@ impl InputState {
     }
 
     pub fn page_duplicate(&mut self) {
+        let measurer = TextMeasurer::default();
+        self.page_duplicate_with_measurer(&measurer);
+    }
+
+    pub fn page_duplicate_with_measurer(&mut self, measurer: &TextMeasurer) {
         let before_page = self.boards.active_page_index();
         if !self.session_allows_page_duplicate(self.boards.active_index(), before_page) {
             return;
         }
-        self.prepare_active_page_content_change();
+        self.prepare_active_page_content_change(measurer);
         self.boards.duplicate_page();
         self.finish_active_page_content_change();
         let page_num = self.boards.active_page_index() + 1;

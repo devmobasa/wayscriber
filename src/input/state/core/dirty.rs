@@ -1,9 +1,9 @@
 use super::base::{DrawingState, InputState, TextInputMode};
-use crate::draw::Shape;
 use crate::draw::shape::{
-    CaretGeometry, LogicalBounds, bounding_box_for_points, bounding_box_for_sticky_note_preview,
-    bounding_box_for_text,
+    CaretGeometry, LogicalBounds, bounding_box_for_points,
+    bounding_box_for_sticky_note_preview_with, bounding_box_for_text_with,
 };
+use crate::draw::{Shape, TextMeasurer};
 use crate::input::tool::{
     PROVISIONAL_POLYGON_DAMAGE_PADDING, ToolMotionBehavior, ToolMotionSizeSource,
 };
@@ -36,7 +36,12 @@ impl InputState {
     }
 
     /// Updates tracked provisional shape bounds for dirty-region purposes.
-    pub(crate) fn update_provisional_dirty(&mut self, current_x: i32, current_y: i32) {
+    pub(crate) fn update_provisional_dirty_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        current_x: i32,
+        current_y: i32,
+    ) {
         if let Some((append_bounds, append_regions)) = self.compute_append_only_provisional_damage()
         {
             for region in append_regions {
@@ -46,7 +51,7 @@ impl InputState {
             return;
         }
 
-        let new_bounds = self.compute_provisional_bounds(current_x, current_y);
+        let new_bounds = self.compute_provisional_bounds(measurer, current_x, current_y);
         let previous = self.pointer.provisional_bounds();
 
         if new_bounds != previous
@@ -65,19 +70,24 @@ impl InputState {
     ///
     /// This is needed when existing provisional geometry changes in place, for
     /// example when the first tablet pressure sample backfills previous widths.
-    pub(crate) fn mark_current_provisional_dirty_full(&mut self) {
+    pub(crate) fn mark_current_provisional_dirty_full_with(&mut self, measurer: &TextMeasurer) {
         let (current_x, current_y) = self.pointer.canvas();
-        if let Some(bounds) = self.compute_provisional_bounds(current_x, current_y) {
+        if let Some(bounds) = self.compute_provisional_bounds(measurer, current_x, current_y) {
             self.dirty_tracker.mark_rect(bounds);
             self.pointer.union_provisional_bounds(bounds);
         }
     }
 
-    fn compute_provisional_bounds(&self, current_x: i32, current_y: i32) -> Option<Rect> {
+    fn compute_provisional_bounds(
+        &self,
+        measurer: &TextMeasurer,
+        current_x: i32,
+        current_y: i32,
+    ) -> Option<Rect> {
         match &self.state {
-            DrawingState::Drawing { .. } => {
-                self.provisional_tool_stroke(current_x, current_y).bounds()
-            }
+            DrawingState::Drawing { .. } => self
+                .provisional_tool_stroke(current_x, current_y)
+                .bounds_with(measurer),
             DrawingState::Selecting {
                 start_x, start_y, ..
             } => Self::selection_rect_from_points(*start_x, *start_y, current_x, current_y)
@@ -140,9 +150,9 @@ impl InputState {
     }
 
     /// Updates dirty tracking for the live text preview/caret overlay.
-    pub(crate) fn update_text_preview_dirty(&mut self) {
+    pub(crate) fn update_text_preview_dirty_with(&mut self, measurer: &TextMeasurer) {
         self.text_editing.mark_cursor_rect_dirty();
-        let new_bounds = self.compute_text_preview_bounds();
+        let new_bounds = self.compute_text_preview_bounds(measurer);
         let previous = self.text_editing.replace_preview_bounds(new_bounds);
 
         if new_bounds != previous
@@ -156,9 +166,9 @@ impl InputState {
     /// Updates text preview damage for a change authored outside the input
     /// method. The backend uses this bit to publish text-input-v3's `Other`
     /// change cause with the coalesced surrounding-text/caret update.
-    pub(crate) fn update_text_preview_dirty_from_editor(&mut self) {
+    pub(crate) fn update_text_preview_dirty_from_editor_with(&mut self, measurer: &TextMeasurer) {
         self.text_editing.mark_external_change_dirty();
-        self.update_text_preview_dirty();
+        self.update_text_preview_dirty_with(measurer);
     }
 
     /// Clears the cached text preview bounds.
@@ -179,7 +189,7 @@ impl InputState {
         self.text_editing.take_external_change_dirty()
     }
 
-    fn compute_text_preview_bounds(&self) -> Option<Rect> {
+    fn compute_text_preview_bounds(&self, measurer: &TextMeasurer) -> Option<Rect> {
         let DrawingState::TextInput { x, y, .. } = &self.state else {
             return None;
         };
@@ -190,7 +200,8 @@ impl InputState {
         };
         let preview = self.text_input_preview(cursor_glyph)?;
         let text_bounds = match self.text_editing.mode() {
-            TextInputMode::Plain => bounding_box_for_text(
+            TextInputMode::Plain => bounding_box_for_text_with(
+                measurer,
                 *x,
                 *y,
                 &preview.text,
@@ -199,7 +210,8 @@ impl InputState {
                 self.style.text_background_enabled,
                 self.style.text_wrap_width,
             ),
-            TextInputMode::StickyNote => bounding_box_for_sticky_note_preview(
+            TextInputMode::StickyNote => bounding_box_for_sticky_note_preview_with(
+                measurer,
                 *x,
                 *y,
                 &preview.text,
@@ -229,7 +241,7 @@ impl InputState {
                 .style
                 .font_descriptor
                 .to_pango_string(self.style.current_font_size);
-            if let Some(geometry) = crate::draw::shape::text_preview_geometry(
+            if let Some(geometry) = measurer.text_preview_geometry(
                 &preview.text,
                 &font,
                 self.style.text_wrap_width,
@@ -253,7 +265,7 @@ impl InputState {
         // When the block has been moved, the ghost renders at the *original*
         // spot, away from the live text. Fold its bounds in so the ghost is
         // erased on move-back and on commit (otherwise it lingers there).
-        let ghost_bounds = self.text_edit_ghost_damage_bounds();
+        let ghost_bounds = self.text_edit_ghost_damage_bounds(measurer);
         let bounds = match (live_bounds, ghost_bounds) {
             (Some(live), Some(ghost)) => live.union(ghost).or(Some(live)),
             (Some(live), None) => Some(live),
@@ -285,14 +297,14 @@ impl InputState {
     /// Damage bounds for the edit ghost when it is visible: the original shape's
     /// bounding box, padded to cover the dashed border. `None` when no ghost
     /// shows.
-    fn text_edit_ghost_damage_bounds(&self) -> Option<Rect> {
+    fn text_edit_ghost_damage_bounds(&self, measurer: &TextMeasurer) -> Option<Rect> {
         if !self.text_edit_ghost_visible() {
             return None;
         }
         let (_, snapshot) = self.text_editing.edit_target()?;
         snapshot
             .shape
-            .bounding_box()?
+            .bounding_box_with(measurer)?
             .inflated(GHOST_DAMAGE_PADDING)
     }
 
@@ -301,15 +313,18 @@ impl InputState {
     /// shares a layout instead; this stands alone for callers that have only a
     /// buffer and an offset.
     #[cfg(test)]
-    fn caret_damage_rect_for(&self, buffer: &str, x: i32, y: i32, caret: usize) -> Option<Rect> {
+    fn caret_damage_rect_for(
+        &self,
+        measurer: &TextMeasurer,
+        buffer: &str,
+        x: i32,
+        y: i32,
+        caret: usize,
+    ) -> Option<Rect> {
         let size = self.style.current_font_size;
         let font = self.style.font_descriptor.to_pango_string(size);
-        let geom = crate::draw::shape::caret_geometry_text(
-            buffer,
-            &font,
-            self.style.text_wrap_width,
-            caret,
-        )?;
+        let geom =
+            measurer.caret_geometry_text(buffer, &font, self.style.text_wrap_width, caret)?;
         caret_damage_rect(geom, x, y, size)
     }
 
@@ -319,7 +334,7 @@ impl InputState {
     /// so it is correct mid-buffer and in wrapped/multiline text, unlike the old
     /// append-only "right edge of the preview" assumption. `None` outside text
     /// input or when no measurement context exists.
-    pub(crate) fn caret_cursor_rect_canvas(&self) -> Option<Rect> {
+    pub(crate) fn caret_cursor_rect_canvas_with(&self, measurer: &TextMeasurer) -> Option<Rect> {
         let DrawingState::TextInput { x, y, .. } = &self.state else {
             return None;
         };
@@ -334,7 +349,7 @@ impl InputState {
             .style
             .font_descriptor
             .to_pango_string(self.style.current_font_size);
-        let geom = crate::draw::shape::caret_geometry_text(
+        let geom = measurer.caret_geometry_text(
             &preview.text,
             &font,
             self.style.text_wrap_width,
@@ -485,6 +500,7 @@ mod tests {
 
     #[test]
     fn leading_whitespace_selection_damages_to_the_logical_left_edge() {
+        let measurer = TextMeasurer::default();
         // Selecting leading spaces highlights logical cells that start at the
         // text origin (x), left of the ink box; the damage must reach them.
         let mut state = make_test_input_state();
@@ -501,7 +517,7 @@ mod tests {
         }
 
         let bounds = state
-            .compute_text_preview_bounds()
+            .compute_text_preview_bounds(&measurer)
             .expect("active text input has preview bounds");
         assert!(
             bounds.x <= 100,
@@ -512,6 +528,7 @@ mod tests {
 
     #[test]
     fn a_preedit_underline_is_damaged_below_the_baseline() {
+        let measurer = TextMeasurer::default();
         // Pango draws the composition underline *below* the baseline. With text
         // that has no descenders the ink box stops at the baseline, so damage
         // built from ink alone leaves the underline behind when the block moves.
@@ -523,9 +540,10 @@ mod tests {
         assert!(state.ime_apply_done());
 
         let bounds = state
-            .compute_text_preview_bounds()
+            .compute_text_preview_bounds(&measurer)
             .expect("a composing block has preview bounds");
-        let ink = bounding_box_for_text(
+        let ink = bounding_box_for_text_with(
+            &measurer,
             100,
             100,
             "kako",
@@ -548,14 +566,16 @@ mod tests {
 
     #[test]
     fn preview_damage_carries_the_antialiasing_margin() {
+        let measurer = TextMeasurer::default();
         // The preview is dragged under the pointer, so it damages a margin
         // around its exact geometry; a shortfall would trail stray pixels.
         let mut state = make_test_input_state();
         state.state = DrawingState::text_input(100, 100, "kako".to_string());
         let bounds = state
-            .compute_text_preview_bounds()
+            .compute_text_preview_bounds(&measurer)
             .expect("active text input has preview bounds");
-        let ink = bounding_box_for_text(
+        let ink = bounding_box_for_text_with(
+            &measurer,
             100,
             100,
             "kako",
@@ -576,6 +596,7 @@ mod tests {
 
     #[test]
     fn caret_damage_covers_the_stroke_around_a_fractional_caret_position() {
+        let measurer = TextMeasurer::default();
         // The caret is stroked centred on its position: rounding the centre to a
         // pixel before subtracting a whole-pixel half-width can drop the leftmost
         // column the stroke touches, which is a 1px sliver per drag step.
@@ -585,9 +606,9 @@ mod tests {
             .style
             .font_descriptor
             .to_pango_string(state.style.current_font_size);
-        let geom = crate::draw::shape::caret_geometry_text("hi", &font, None, 1).unwrap();
+        let geom = measurer.caret_geometry_text("hi", &font, None, 1).unwrap();
         let rect = state
-            .caret_damage_rect_for("hi", 100, 100, 1)
+            .caret_damage_rect_for(&measurer, "hi", 100, 100, 1)
             .expect("caret has a damage rect");
         let half = crate::draw::caret_outline_width(state.style.current_font_size) / 2.0;
         let painted_left = 100.0 + geom.x - half;
@@ -606,17 +627,18 @@ mod tests {
 
     #[test]
     fn caret_cursor_rect_tracks_the_caret_not_the_buffer_end() {
+        let measurer = TextMeasurer::default();
         let mut state = make_test_input_state();
         state.state = DrawingState::text_input(100, 100, "hello".to_string());
         let end = state
-            .caret_cursor_rect_canvas()
+            .caret_cursor_rect_canvas_with(&measurer)
             .expect("caret at end has a rect");
 
         if let DrawingState::TextInput { caret, .. } = &mut state.state {
             *caret = 0;
         }
         let start = state
-            .caret_cursor_rect_canvas()
+            .caret_cursor_rect_canvas_with(&measurer)
             .expect("caret at start has a rect");
 
         assert!(
@@ -633,6 +655,7 @@ mod tests {
 
     #[test]
     fn ime_cursor_rect_uses_the_selection_replacement_point() {
+        let measurer = TextMeasurer::default();
         let mut state = make_test_input_state();
         state.state = DrawingState::text_input(100, 100, "hello world".to_string());
         if let DrawingState::TextInput {
@@ -650,7 +673,7 @@ mod tests {
         state.ime_apply_done();
 
         let rect = state
-            .caret_cursor_rect_canvas()
+            .caret_cursor_rect_canvas_with(&measurer)
             .expect("active preedit cursor has a rectangle");
 
         assert!(
@@ -662,14 +685,15 @@ mod tests {
 
     #[test]
     fn text_preview_damage_covers_the_full_caret_line() {
+        let measurer = TextMeasurer::default();
         let mut state = make_test_input_state();
         state.state = DrawingState::text_input(100, 100, "hi".to_string());
 
         let bounds = state
-            .compute_text_preview_bounds()
+            .compute_text_preview_bounds(&measurer)
             .expect("an active text input has preview bounds");
         let caret = state
-            .caret_damage_rect_for("hi", 100, 100, 2)
+            .caret_damage_rect_for(&measurer, "hi", 100, 100, 2)
             .expect("the caret has geometry");
 
         // The caret's exact rect (mirroring the renderer) must fall inside the
@@ -689,11 +713,12 @@ mod tests {
 
     #[test]
     fn text_preview_updates_coalesce_one_backend_cursor_request() {
+        let measurer = TextMeasurer::default();
         let mut state = make_test_input_state();
         state.state = DrawingState::text_input(100, 100, "hi".to_string());
 
-        state.update_text_preview_dirty();
-        state.update_text_preview_dirty();
+        state.update_text_preview_dirty_with(&measurer);
+        state.update_text_preview_dirty_with(&measurer);
 
         assert!(state.take_text_input_cursor_rect_dirty());
         assert!(
@@ -704,17 +729,18 @@ mod tests {
 
     #[test]
     fn external_editor_changes_are_tracked_separately_from_ime_damage() {
+        let measurer = TextMeasurer::default();
         let mut state = make_test_input_state();
         state.state = DrawingState::text_input(100, 100, "hi".to_string());
 
-        state.update_text_preview_dirty();
+        state.update_text_preview_dirty_with(&measurer);
         assert!(state.take_text_input_cursor_rect_dirty());
         assert!(
             !state.take_text_input_external_change_dirty(),
             "IME-driven preview damage keeps the protocol's InputMethod cause"
         );
 
-        state.update_text_preview_dirty_from_editor();
+        state.update_text_preview_dirty_from_editor_with(&measurer);
         assert!(state.take_text_input_cursor_rect_dirty());
         assert!(state.take_text_input_external_change_dirty());
         assert!(
@@ -725,12 +751,13 @@ mod tests {
 
     #[test]
     fn empty_sticky_note_damage_covers_the_background_not_only_the_caret() {
+        let measurer = TextMeasurer::default();
         let mut state = make_test_input_state();
         state.text_editing.set_mode(TextInputMode::StickyNote);
         state.state = DrawingState::text_input(100, 100, String::new());
 
         let bounds = state
-            .compute_text_preview_bounds()
+            .compute_text_preview_bounds(&measurer)
             .expect("empty sticky-note preview has damage bounds");
 
         assert!(

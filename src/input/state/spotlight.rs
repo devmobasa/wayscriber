@@ -4,7 +4,7 @@
 //! layer and punches all the openings out of it. That makes spotlights the only
 //! shape kind the renderer collects up front instead of drawing in z-order.
 
-use crate::draw::{Shape, ShapeId, SpotlightRegion, spotlight_regions_for_frame};
+use crate::draw::{Shape, ShapeId, SpotlightRegion, TextMeasurer, spotlight_regions_for_frame};
 use crate::input::Tool;
 
 use super::{DrawingState, InputState};
@@ -286,8 +286,9 @@ impl InputState {
     /// Undo granularity belongs to the gesture, not to each step: a wheel burst
     /// and a knob drag are each one user action, so their callers snapshot at
     /// the start and push a single entry at the end.
-    pub(crate) fn set_spotlight_shape_magnification(
+    pub(crate) fn set_spotlight_shape_magnification_with(
         &mut self,
+        measurer: &TextMeasurer,
         shape_id: ShapeId,
         magnification: f64,
     ) -> bool {
@@ -307,9 +308,9 @@ impl InputState {
             return false;
         }
         *current = normalized;
-        let bounds = drawn.bounding_box();
+        let bounds = drawn.bounding_box_with(measurer);
         self.mark_selection_dirty_region(bounds);
-        self.invalidate_hit_cache_for(shape_id);
+        self.invalidate_hit_cache_for_with(measurer, shape_id);
         self.mark_session_dirty();
         self.needs_redraw = true;
         true
@@ -321,8 +322,9 @@ impl InputState {
     /// toolbar trip, and the loupe follows the ticks live. Returns whether
     /// anything changed, so the caller can fall through to its usual wheel
     /// behaviour when the pointer is not over a loupe.
-    pub(crate) fn nudge_spotlight_magnification_at(
+    pub(crate) fn nudge_spotlight_magnification_at_with(
         &mut self,
+        measurer: &TextMeasurer,
         x: i32,
         y: i32,
         steps: i32,
@@ -365,7 +367,7 @@ impl InputState {
             .normalize_value(
                 magnification + crate::draw::SPOTLIGHT_MAGNIFICATION_STEP * f64::from(steps),
             );
-        if !self.set_spotlight_shape_magnification(shape_id, target) {
+        if !self.set_spotlight_shape_magnification_with(measurer, shape_id, target) {
             // An end of the range. The wheel still belongs to this loupe, so
             // the caller must not fall through to thickness: the pointer is
             // over a loupe and the user asked it to go further, not to resize

@@ -1,6 +1,7 @@
 use super::super::base::InputState;
 use super::types::{ContextMenuKind, MenuCommand};
 use crate::draw::ShapeId;
+use crate::draw::TextMeasurer;
 
 impl InputState {
     /// Closes the currently open context menu.
@@ -57,6 +58,11 @@ impl InputState {
     }
 
     pub fn toggle_context_menu_via_keyboard(&mut self) {
+        let measurer = TextMeasurer::default();
+        self.toggle_context_menu_via_keyboard_with(&measurer);
+    }
+
+    pub fn toggle_context_menu_via_keyboard_with(&mut self, measurer: &TextMeasurer) {
         if !self.context_menu.enabled {
             return;
         }
@@ -86,7 +92,7 @@ impl InputState {
                         )
                     })
                     .unwrap_or(false);
-            let anchor = self.keyboard_shape_menu_anchor(&selection);
+            let anchor = self.keyboard_shape_menu_anchor(measurer, &selection);
             self.update_pointer_position_synthetic(anchor.0, anchor.1);
             self.open_context_menu(anchor, selection, ContextMenuKind::Shape, None);
             self.pointer.clear_menu_hover_recalc();
@@ -110,8 +116,8 @@ impl InputState {
         (x, y)
     }
 
-    fn keyboard_shape_menu_anchor(&self, ids: &[ShapeId]) -> (i32, i32) {
-        if let Some(bounds) = self.selection_screen_bounding_box(ids) {
+    fn keyboard_shape_menu_anchor(&self, measurer: &TextMeasurer, ids: &[ShapeId]) -> (i32, i32) {
+        if let Some(bounds) = self.selection_screen_bounding_box_with(measurer, ids) {
             (bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
         } else {
             self.pointer.screen()

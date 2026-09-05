@@ -1,24 +1,30 @@
 use super::base::InputState;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
 
 impl InputState {
     /// Applies side effects after an undoable action mutates the frame.
     pub fn apply_action_side_effects(&mut self, action: &UndoAction) {
-        self.invalidate_hit_cache_from_action(action);
-        self.mark_dirty_from_action(action);
+        let measurer = TextMeasurer::default();
+        self.apply_action_side_effects_with(&measurer, action);
+    }
+
+    pub fn apply_action_side_effects_with(&mut self, measurer: &TextMeasurer, action: &UndoAction) {
+        self.invalidate_hit_cache_from_action(measurer, action);
+        self.mark_dirty_from_action(measurer, action);
         self.clear_selection();
         self.needs_redraw = true;
         self.mark_session_dirty();
     }
 
-    fn mark_dirty_from_action(&mut self, action: &UndoAction) {
+    fn mark_dirty_from_action(&mut self, measurer: &TextMeasurer, action: &UndoAction) {
         if self.is_properties_panel_open() {
             self.properties.mark_needs_refresh();
         }
         match action {
             UndoAction::Create { shapes } | UndoAction::Delete { shapes } => {
                 for (_, shape) in shapes {
-                    self.dirty_tracker.mark_shape(&shape.shape);
+                    self.dirty_tracker.mark_shape_with(&shape.shape, measurer);
                 }
             }
             UndoAction::Modify {
@@ -27,9 +33,9 @@ impl InputState {
                 shape_id,
                 ..
             } => {
-                self.dirty_tracker.mark_shape(&before.shape);
-                self.dirty_tracker.mark_shape(&after.shape);
-                self.invalidate_hit_cache_for(*shape_id);
+                self.dirty_tracker.mark_shape_with(&before.shape, measurer);
+                self.dirty_tracker.mark_shape_with(&after.shape, measurer);
+                self.invalidate_hit_cache_for_with(measurer, *shape_id);
             }
             UndoAction::ModifyImageBounds {
                 shape_id,
@@ -38,39 +44,39 @@ impl InputState {
             } => {
                 self.dirty_tracker.mark_optional_rect(before.bounding_box());
                 self.dirty_tracker.mark_optional_rect(after.bounding_box());
-                self.invalidate_hit_cache_for(*shape_id);
+                self.invalidate_hit_cache_for_with(measurer, *shape_id);
             }
             UndoAction::Reorder { shape_id, .. } => {
                 if let Some(shape) = self.boards.active_frame().shape(*shape_id) {
-                    self.dirty_tracker.mark_shape(&shape.shape);
-                    self.invalidate_hit_cache_for(*shape_id);
+                    self.dirty_tracker.mark_shape_with(&shape.shape, measurer);
+                    self.invalidate_hit_cache_for_with(measurer, *shape_id);
                 }
             }
             UndoAction::Compound { actions } => {
                 for action in actions {
-                    self.mark_dirty_from_action(action);
+                    self.mark_dirty_from_action(measurer, action);
                 }
             }
         }
     }
 
-    fn invalidate_hit_cache_from_action(&mut self, action: &UndoAction) {
+    fn invalidate_hit_cache_from_action(&mut self, measurer: &TextMeasurer, action: &UndoAction) {
         match action {
             UndoAction::Create { shapes } | UndoAction::Delete { shapes } => {
                 for (_, shape) in shapes {
-                    self.invalidate_hit_cache_for(shape.id);
+                    self.invalidate_hit_cache_for_with(measurer, shape.id);
                 }
             }
             UndoAction::Modify { shape_id, .. }
             | UndoAction::ModifyImageBounds { shape_id, .. } => {
-                self.invalidate_hit_cache_for(*shape_id);
+                self.invalidate_hit_cache_for_with(measurer, *shape_id);
             }
             UndoAction::Reorder { shape_id, .. } => {
-                self.invalidate_hit_cache_for(*shape_id);
+                self.invalidate_hit_cache_for_with(measurer, *shape_id);
             }
             UndoAction::Compound { actions } => {
                 for action in actions {
-                    self.invalidate_hit_cache_from_action(action);
+                    self.invalidate_hit_cache_from_action(measurer, action);
                 }
             }
         }
@@ -139,10 +145,11 @@ mod tests {
 
     #[test]
     fn apply_action_side_effects_closes_properties_panel_after_modify() {
+        let route_measurer = crate::draw::TextMeasurer::default();
         let mut state = make_state();
         let shape_id = state.boards.active_frame_mut().add_shape(rect(10, 20));
         state.set_selection(vec![shape_id]);
-        assert!(state.show_properties_panel());
+        assert!(state.show_properties_panel_with(&route_measurer));
         assert!(state.is_properties_panel_open());
         let _ = state.take_dirty_regions();
 

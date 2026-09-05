@@ -92,6 +92,7 @@ impl CanvasLayerCache {
 /// Renders one committed shape with the standard eraser/blur replay handling.
 /// Shared between the direct canvas render path and the layer-cache bake.
 pub(in crate::backend::wayland) fn render_committed_shape(
+    measurer: &crate::draw::TextMeasurer,
     render: &mut crate::draw::RenderCtx<'_, '_>,
     drawn_shape: &crate::draw::DrawnShape,
     replay_ctx: &crate::draw::EraserReplayContext<'_>,
@@ -123,7 +124,7 @@ pub(in crate::backend::wayland) fn render_committed_shape(
             );
         }
         other => {
-            render.render_shape_with_halo(other, text_halo_enabled);
+            render.render_shape_with_halo_with_measurer(measurer, other, text_halo_enabled);
         }
     }
 }
@@ -168,8 +169,9 @@ impl WaylandState {
         );
         let generation = self.input_state.canvas_content_generation();
         let frame = self.input_state.boards.active_frame();
-        let (cache, draw_caches) = self.render.canvas_draw_parts_mut();
+        let (cache, draw_caches, measurer) = self.render.canvas_draw_parts_mut();
         cache.ensure(
+            measurer,
             draw_caches,
             &frame.shapes,
             CanvasLayerInputs {
@@ -201,6 +203,7 @@ pub(super) struct CanvasLayerInputs {
 impl CanvasLayerCache {
     pub(super) fn ensure(
         &mut self,
+        measurer: &crate::draw::TextMeasurer,
         draw_caches: &mut crate::draw::RenderCaches,
         shapes: &[crate::draw::DrawnShape],
         inputs: CanvasLayerInputs,
@@ -318,10 +321,11 @@ impl CanvasLayerCache {
                 caches: draw_caches,
             };
             for drawn_shape in shapes {
-                if let Some(bbox) = drawn_shape.bounding_box()
+                if let Some(bbox) = drawn_shape.bounding_box_with(measurer)
                     && rects_intersect(bbox, bake_bounds)
                 {
                     render_committed_shape(
+                        measurer,
                         &mut render,
                         drawn_shape,
                         &replay_ctx,

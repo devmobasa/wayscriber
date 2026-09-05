@@ -55,7 +55,8 @@ fn help_overlay_cursor_hint_maps_real_layout_regions() {
     assert_eq!(state.help_overlay_cursor_hint_at(150, 215), None);
 
     state.toggle_help_overlay();
-    crate::ui::install_help_hit_map_for_test(
+    install_hit_map(
+        &mut state,
         (100.0, 100.0, 200.0, 300.0),
         Some((110.0, 130.0, 180.0, 24.0)),
         &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
@@ -74,15 +75,14 @@ fn help_overlay_cursor_hint_maps_real_layout_regions() {
         Some(HelpOverlayCursorHint::Default)
     );
     assert_eq!(state.help_overlay_cursor_hint_at(10, 10), None);
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
 fn help_overlay_click_runs_rows_and_dismisses_outside() {
     let mut state = make_state();
     state.toggle_help_overlay();
-    crate::ui::install_help_hit_map_for_test(
+    install_hit_map(
+        &mut state,
         (100.0, 100.0, 200.0, 300.0),
         Some((110.0, 130.0, 180.0, 24.0)),
         &[(
@@ -110,27 +110,29 @@ fn help_overlay_click_runs_rows_and_dismisses_outside() {
         state.help_overlay_click_at(10, 10),
         HelpOverlayClick::Outside
     );
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
 fn close_help_overlay_resets_state_and_clears_hit_map() {
     let mut state = make_state();
     state.toggle_help_overlay();
-    state.help_overlay.scroll = 42.0;
-    crate::ui::install_help_hit_map_for_test(
+    install_hit_map(
+        &mut state,
         (100.0, 100.0, 200.0, 300.0),
         None,
         &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
     );
+
+    state.help_overlay.update_scroll_extent(100.0);
+    assert!(state.help_overlay.scroll_by(42.0));
+    assert_eq!(state.help_overlay.scroll, 42.0);
 
     state.close_help_overlay();
 
     assert!(!state.help_overlay.visible);
     assert_eq!(state.help_overlay.scroll, 0.0);
     // Closing dropped the stale hit map, so a later click resolves outside.
-    assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
+    assert_eq!(state.help_overlay.region_at(150.0, 215.0), None);
     assert_eq!(
         state.help_overlay_click_at(150, 215),
         HelpOverlayClick::Outside
@@ -145,7 +147,8 @@ fn close_help_overlay_resets_state_and_clears_hit_map() {
 fn state_with_help_row(action: crate::config::Action) -> InputState {
     let mut state = make_state();
     state.toggle_help_overlay();
-    crate::ui::install_help_hit_map_for_test(
+    install_hit_map(
+        &mut state,
         (100.0, 100.0, 200.0, 300.0),
         Some((110.0, 130.0, 180.0, 24.0)),
         &[(120.0, 200.0, 160.0, 30.0, action)],
@@ -167,8 +170,6 @@ fn help_release_runs_row_only_when_press_and_release_share_the_row() {
     );
     // The recorded press was consumed.
     assert!(state.help_overlay.pending_presses.is_empty());
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
@@ -188,8 +189,6 @@ fn help_press_on_chrome_then_drag_onto_row_does_not_run() {
         state.resolve_help_overlay_release(HelpOverlayPressSource::Pointer(1), 150, 215),
         Some(HelpOverlayReleaseOutcome::None)
     );
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
@@ -208,8 +207,6 @@ fn help_press_outside_then_release_on_row_does_not_run() {
         state.resolve_help_overlay_release(HelpOverlayPressSource::Pointer(1), 150, 215),
         Some(HelpOverlayReleaseOutcome::None)
     );
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
@@ -221,8 +218,6 @@ fn help_press_and_release_outside_dismisses() {
         state.resolve_help_overlay_release(HelpOverlayPressSource::Pointer(1), 20, 20),
         Some(HelpOverlayReleaseOutcome::Dismiss)
     );
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
@@ -234,8 +229,6 @@ fn help_press_on_row_then_release_on_chrome_does_not_run() {
         state.resolve_help_overlay_release(HelpOverlayPressSource::Pointer(1), 150, 280),
         Some(HelpOverlayReleaseOutcome::None)
     );
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
@@ -248,8 +241,6 @@ fn help_release_without_a_recorded_press_is_inert() {
         state.resolve_help_overlay_release(HelpOverlayPressSource::Touch, 150, 215),
         None
     );
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
@@ -272,8 +263,6 @@ fn help_release_requires_the_modality_that_owned_the_press() {
             crate::config::Action::ClearCanvas
         ))
     );
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
@@ -299,8 +288,6 @@ fn help_pointer_ownership_is_tracked_per_button() {
         )),
         "middle ownership must not consume the left help click"
     );
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
@@ -321,8 +308,6 @@ fn closing_help_keeps_its_press_release_owned_without_running_the_stale_target()
     );
     assert!(state.help_overlay.pending_presses.is_empty());
     assert!(state.help_overlay.consume_only_presses.is_empty());
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
@@ -333,7 +318,8 @@ fn reopening_help_cannot_retarget_a_press_from_the_previous_layout() {
 
     state.close_help_overlay();
     state.toggle_help_overlay();
-    crate::ui::install_help_hit_map_for_test(
+    install_hit_map(
+        &mut state,
         (100.0, 100.0, 200.0, 300.0),
         None,
         &[(
@@ -350,8 +336,6 @@ fn reopening_help_cannot_retarget_a_press_from_the_previous_layout() {
         Some(HelpOverlayReleaseOutcome::None),
         "an old press may only be consumed, never resolved against a reopened layout"
     );
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
@@ -361,7 +345,8 @@ fn a_new_help_press_supersedes_consume_only_ownership_for_its_source() {
     state.note_help_overlay_press(pointer, 150, 215);
     state.close_help_overlay();
     state.toggle_help_overlay();
-    crate::ui::install_help_hit_map_for_test(
+    install_hit_map(
+        &mut state,
         (100.0, 100.0, 200.0, 300.0),
         None,
         &[(
@@ -381,15 +366,14 @@ fn a_new_help_press_supersedes_consume_only_ownership_for_its_source() {
             crate::config::Action::ClearCanvas
         ))
     );
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
 fn opening_help_drops_stale_hit_map_geometry() {
     let mut state = make_state();
     // Simulate geometry left over from a previous open.
-    crate::ui::install_help_hit_map_for_test(
+    install_hit_map(
+        &mut state,
         (100.0, 100.0, 200.0, 300.0),
         None,
         &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
@@ -400,17 +384,16 @@ fn opening_help_drops_stale_hit_map_geometry() {
     state.toggle_help_overlay();
 
     assert!(state.help_overlay.visible);
-    assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
+    assert_eq!(state.help_overlay.region_at(150.0, 215.0), None);
     assert!(state.help_overlay.pending_presses.is_empty());
-
-    crate::ui::clear_help_overlay_hit_map();
 }
 
 #[test]
 fn starting_the_tour_routes_help_close_through_the_canonical_closer() {
     let mut state = make_state();
     state.toggle_help_overlay();
-    crate::ui::install_help_hit_map_for_test(
+    install_hit_map(
+        &mut state,
         (100.0, 100.0, 200.0, 300.0),
         None,
         &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
@@ -421,16 +404,15 @@ fn starting_the_tour_routes_help_close_through_the_canonical_closer() {
     assert!(!state.help_overlay.visible);
     // Routing through close_help_overlay dropped the cached hit map, so a
     // click after help reopens can never act on this stale layout.
-    assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
-
-    crate::ui::clear_help_overlay_hit_map();
+    assert_eq!(state.help_overlay.region_at(150.0, 215.0), None);
 }
 
 #[test]
 fn opening_the_command_palette_routes_help_close_through_the_canonical_closer() {
     let mut state = make_state();
     state.toggle_help_overlay();
-    crate::ui::install_help_hit_map_for_test(
+    install_hit_map(
+        &mut state,
         (100.0, 100.0, 200.0, 300.0),
         None,
         &[(120.0, 200.0, 160.0, 30.0, crate::config::Action::ToggleHelp)],
@@ -440,7 +422,62 @@ fn opening_the_command_palette_routes_help_close_through_the_canonical_closer() 
 
     assert!(!state.help_overlay.visible);
     assert!(state.command_palette.open);
-    assert_eq!(crate::ui::help_overlay_region_at(150.0, 215.0), None);
+    assert_eq!(state.help_overlay.region_at(150.0, 215.0), None);
+}
 
-    crate::ui::clear_help_overlay_hit_map();
+fn install_hit_map(
+    state: &mut InputState,
+    bounds: (f64, f64, f64, f64),
+    search: Option<(f64, f64, f64, f64)>,
+    rows: &[(f64, f64, f64, f64, crate::config::Action)],
+) {
+    state
+        .help_overlay
+        .install_render_result(crate::help_overlay_interaction::HelpRenderResult {
+            scroll_max: 0.0,
+            hit_map: crate::help_overlay_interaction::HelpHitMap::new(
+                bounds,
+                search,
+                rows.iter()
+                    .map(|&(x, y, w, h, action)| ((x, y, w, h), action)),
+            ),
+        });
+}
+
+#[test]
+fn help_geometry_and_pending_sources_are_independent_between_owners() {
+    use crate::config::Action;
+    let mut first = state_with_help_row(Action::ClearCanvas);
+    let mut second = state_with_help_row(Action::ToggleHelp);
+    first.note_help_overlay_press(HelpOverlayPressSource::Touch, 150, 215);
+    second.note_help_overlay_press(HelpOverlayPressSource::Pointer(1), 150, 215);
+    assert_eq!(
+        first.help_overlay_click_at(150, 215),
+        HelpOverlayClick::Run(Action::ClearCanvas)
+    );
+    assert_eq!(
+        second.help_overlay_click_at(150, 215),
+        HelpOverlayClick::Run(Action::ToggleHelp)
+    );
+    first.close_help_overlay();
+    first.toggle_help_overlay();
+    assert_eq!(first.help_overlay.region_at(150.0, 215.0), None);
+    assert_eq!(
+        second.help_overlay_cursor_hint_at(150, 215),
+        Some(HelpOverlayCursorHint::Pointer)
+    );
+    install_hit_map(
+        &mut first,
+        (100.0, 100.0, 200.0, 300.0),
+        None,
+        &[(120.0, 200.0, 160.0, 30.0, Action::ClearCanvas)],
+    );
+    assert_eq!(
+        first.resolve_help_overlay_release(HelpOverlayPressSource::Touch, 150, 215),
+        Some(HelpOverlayReleaseOutcome::None)
+    );
+    assert_eq!(
+        second.resolve_help_overlay_release(HelpOverlayPressSource::Pointer(1), 150, 215),
+        Some(HelpOverlayReleaseOutcome::Run(Action::ToggleHelp))
+    );
 }

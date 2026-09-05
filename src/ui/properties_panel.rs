@@ -1,6 +1,6 @@
 use crate::input::InputState;
 use crate::ui::primitives::draw_rounded_rect;
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
     self, BG_HOVER, BORDER_FOCUS, DIVIDER, EMPTY_PROPERTIES, FOCUS_RING_WIDTH, RADIUS_PANEL,
@@ -8,6 +8,22 @@ use super::constants::{
 };
 
 pub fn render_properties_panel(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    _screen_width: u32,
+    _screen_height: u32,
+) {
+    render_properties_panel_with_engine(
+        &UiTextEngine::default(),
+        ctx,
+        input_state,
+        _screen_width,
+        _screen_height,
+    );
+}
+
+pub(crate) fn render_properties_panel_with_engine(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     input_state: &InputState,
     _screen_width: u32,
@@ -60,7 +76,7 @@ pub fn render_properties_panel(
     } else {
         constants::set_color(ctx, TEXT_PRIMARY);
     }
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         title_style,
         &panel.title,
@@ -87,7 +103,7 @@ pub fn render_properties_panel(
         };
         constants::set_color(ctx, TEXT_TERTIARY);
         let empty_y = layout.info_start_y + line_height;
-        draw_text_baseline(
+        engine.draw_baseline(
             ctx,
             empty_style,
             EMPTY_PROPERTIES,
@@ -102,7 +118,7 @@ pub fn render_properties_panel(
     constants::set_color(ctx, TEXT_SECONDARY);
     let mut text_y = layout.info_start_y;
     for line in &panel.lines {
-        draw_text_baseline(ctx, body_style, line, layout.label_x, text_y, None);
+        engine.draw_baseline(ctx, body_style, line, layout.label_x, text_y, None);
         text_y += line_height;
     }
 
@@ -150,7 +166,7 @@ pub fn render_properties_panel(
             };
             let text_a = text_color.3;
             constants::set_color(ctx, text_color);
-            draw_text_baseline(
+            engine.draw_baseline(
                 ctx,
                 body_style,
                 &entry.label,
@@ -161,7 +177,7 @@ pub fn render_properties_panel(
 
             let value_color = constants::with_alpha(TEXT_HINT, text_a);
             constants::set_color(ctx, value_color);
-            draw_text_baseline(
+            engine.draw_baseline(
                 ctx,
                 body_style,
                 &entry.value,

@@ -15,15 +15,22 @@ fn enabled_hud_state() -> InputState {
 
 #[test]
 fn toggle_input_hud_action_changes_state_and_redraws() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     assert!(!state.input_hud_enabled());
 
-    state.handle_action(Action::ToggleInputHud);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleInputHud);
     assert!(state.input_hud_enabled());
     assert!(state.needs_redraw);
 
     state.needs_redraw = false;
-    state.handle_action(Action::ToggleInputHud);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleInputHud);
     assert!(!state.input_hud_enabled());
     assert!(state.needs_redraw);
 }
@@ -34,8 +41,15 @@ fn toggle_input_hud_action_changes_state_and_redraws() {
 /// source-independent and toasts immediately.
 #[test]
 fn toggle_input_hud_defers_the_source_announcement_to_the_backend() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
-    state.handle_action(Action::ToggleInputHud);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleInputHud);
     assert!(
         state.active_toast().is_none(),
         "the enable path must not toast a source before reconciliation"
@@ -49,7 +63,7 @@ fn toggle_input_hud_defers_the_source_announcement_to_the_backend() {
         "the announcement request is consumed by the take"
     );
 
-    state.handle_action(Action::ToggleInputHud);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleInputHud);
     let toast = state.active_toast().expect("disable toast");
     assert_eq!(toast.message, "Input HUD disabled");
     assert!(
@@ -62,11 +76,17 @@ fn toggle_input_hud_defers_the_source_announcement_to_the_backend() {
 /// swallowed exactly like `ToggleClickHighlight` is.
 #[test]
 fn presenter_mode_forces_input_hud_and_gates_the_manual_toggle() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     state.presenter_mode_config_mut_for_test().enable_input_hud = true;
 
     assert!(!state.input_hud_enabled());
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(state.presenter_mode_active());
     assert!(state.input_hud_enabled());
     assert!(
@@ -75,13 +95,13 @@ fn presenter_mode_forces_input_hud_and_gates_the_manual_toggle() {
          starting is privacy-relevant regardless of what flipped the toggle"
     );
 
-    state.handle_action(Action::ToggleInputHud);
+    state.handle_action_with_resources(route_resources, Action::ToggleInputHud);
     assert!(
         state.input_hud_enabled(),
         "presenter mode must swallow the manual toggle while it forces the HUD on"
     );
 
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.presenter_mode_active());
     assert!(
         !state.input_hud_enabled(),
@@ -92,13 +112,19 @@ fn presenter_mode_forces_input_hud_and_gates_the_manual_toggle() {
 /// Presenter mode leaves an already-enabled HUD on after exit.
 #[test]
 fn presenter_mode_restores_a_manually_enabled_input_hud() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     state.presenter_mode_config_mut_for_test().enable_input_hud = true;
-    state.handle_action(Action::ToggleInputHud);
+    state.handle_action_with_resources(route_resources, Action::ToggleInputHud);
     assert!(state.input_hud_enabled());
 
-    state.toggle_presenter_mode();
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(state.input_hud_enabled());
 }
 
@@ -150,15 +176,22 @@ fn system_source_suppresses_overlay_notes() {
 /// an earlier session of the feature.
 #[test]
 fn disabling_the_hud_drops_its_chips() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = enabled_hud_state();
     state.note_input_hud_key(Key::Char('a'), Modifiers::new());
     assert!(state.input_hud_visible());
 
-    state.handle_action(Action::ToggleInputHud);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleInputHud);
     assert!(!state.input_hud_enabled());
     assert_eq!(state.input_hud_entries().len(), 0);
 
-    state.handle_action(Action::ToggleInputHud);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleInputHud);
     assert!(state.input_hud_enabled());
     assert!(!state.input_hud_visible());
 }
@@ -167,6 +200,12 @@ fn disabling_the_hud_drops_its_chips() {
 /// presenter gate applies to it too.
 #[test]
 fn toolbar_checkbox_toggles_the_input_hud() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     assert!(state.apply_toolbar_event(ToolbarEvent::ToggleInputHud(true)));
     assert!(state.input_hud_enabled());
@@ -174,7 +213,7 @@ fn toolbar_checkbox_toggles_the_input_hud() {
     assert!(!state.input_hud_enabled());
 
     state.presenter_mode_config_mut_for_test().enable_input_hud = true;
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(state.input_hud_enabled());
     assert!(!state.apply_toolbar_event(ToolbarEvent::ToggleInputHud(false)));
     assert!(state.input_hud_enabled());

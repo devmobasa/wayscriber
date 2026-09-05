@@ -248,7 +248,9 @@ impl WaylandState {
         if self.should_skip_protected_session_save(options) {
             return Ok(());
         }
-        let snapshot = self.input_state.snapshot_for_persistence(options);
+        let snapshot = self
+            .input_state
+            .snapshot_for_persistence_with(self.render.text_measurer(), options);
         if self.should_skip_unloaded_contentless_session_save(options, snapshot.as_ref())? {
             return Ok(());
         }

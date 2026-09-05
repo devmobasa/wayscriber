@@ -1,6 +1,7 @@
 //! Selection resize functionality.
 
 use crate::draw::ShapeId;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::ShapeSnapshot;
 use crate::input::InputState;
 use crate::input::state::core::base::SelectionHandle;
@@ -14,7 +15,18 @@ const HANDLE_TOLERANCE: i32 = 4;
 impl InputState {
     /// Hit test for selection handles. Returns the handle if mouse is over one.
     pub fn hit_selection_handle(&self, x: i32, y: i32) -> Option<SelectionHandle> {
-        let bounds = self.selection_bounds()?;
+        let measurer = TextMeasurer::default();
+        self.hit_selection_handle_with(&measurer, x, y)
+    }
+
+    /// Hit-tests selection handles using the supplied text measurement owner.
+    pub fn hit_selection_handle_with(
+        &self,
+        measurer: &TextMeasurer,
+        x: i32,
+        y: i32,
+    ) -> Option<SelectionHandle> {
+        let bounds = self.selection_bounds_with(measurer)?;
         let corner_radius = (HANDLE_SIZE / 2) + HANDLE_TOLERANCE;
         let edge_radius = (HANDLE_SIZE * 3 / 4) / 2 + HANDLE_TOLERANCE;
 
@@ -48,8 +60,9 @@ impl InputState {
     }
 
     /// Apply resize transformation to all selected shapes.
-    pub(crate) fn apply_selection_resize(
+    pub(crate) fn apply_selection_resize_with(
         &mut self,
+        measurer: &TextMeasurer,
         handle: SelectionHandle,
         original_bounds: &Rect,
         dx: i32,
@@ -60,7 +73,7 @@ impl InputState {
             return;
         }
 
-        let previous_bounds = self.selection_bounds();
+        let previous_bounds = self.selection_bounds_with(measurer);
         self.mark_selection_dirty_region(previous_bounds);
         // Calculate scale factors based on handle and delta
         let (scale_x, scale_y, anchor_x, anchor_y) =
@@ -81,14 +94,18 @@ impl InputState {
         }
 
         for shape_id in ids_to_invalidate {
-            self.invalidate_hit_cache_for(shape_id);
+            self.invalidate_hit_cache_for_with(measurer, shape_id);
         }
-        self.mark_selection_dirty_region(self.selection_bounds());
+        self.mark_selection_dirty_region(self.selection_bounds_with(measurer));
     }
 
     /// Restore shapes from snapshots (used for cancel).
-    pub(crate) fn restore_resize_from_snapshots(&mut self, snapshots: &[(ShapeId, ShapeSnapshot)]) {
-        let previous_bounds = self.selection_bounds();
+    pub(crate) fn restore_resize_from_snapshots_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        snapshots: &[(ShapeId, ShapeSnapshot)],
+    ) {
+        let previous_bounds = self.selection_bounds_with(measurer);
         let mut ids_to_invalidate = Vec::with_capacity(snapshots.len());
 
         {
@@ -103,9 +120,9 @@ impl InputState {
         }
 
         self.mark_selection_dirty_region(previous_bounds);
-        self.mark_selection_dirty_region(self.selection_bounds());
+        self.mark_selection_dirty_region(self.selection_bounds_with(measurer));
         for shape_id in ids_to_invalidate {
-            self.invalidate_hit_cache_for(shape_id);
+            self.invalidate_hit_cache_for_with(measurer, shape_id);
         }
         self.needs_redraw = true;
     }

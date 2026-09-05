@@ -6,12 +6,12 @@ mod keyboard;
 mod outcome;
 mod pointer;
 
-pub(crate) use actions::route_action;
+pub(crate) use actions::route_action_with_resources;
 pub(crate) use adapters::action_for_key_binding;
 pub(crate) use event::{
     CanvasPoint, PointerMotion, PointerPoints, PointerPress, PointerRelease, ScreenPoint,
 };
-pub(crate) use keyboard::{route_key_press, route_key_repeat};
+pub(crate) use keyboard::{route_key_press_with_resources, route_key_repeat_with_resources};
 pub(crate) use pointer::{route_pointer_motion, route_pointer_press, route_pointer_release};
 
 #[cfg(test)]
@@ -27,6 +27,19 @@ mod tests {
     use crate::draw::Shape;
     use crate::input::state::{TopMenuState, test_support::make_test_input_state};
     use crate::input::{BOARD_ID_BLACKBOARD, EraserMode, Key, MouseButton, Tool};
+
+    fn route_key_press(state: &mut crate::input::state::InputState, key: Key) -> RoutingOutcome {
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        route_key_press_with_resources(
+            state,
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &ui_engine,
+            },
+            key,
+        )
+    }
 
     fn points() -> PointerPoints {
         PointerPoints::new(ScreenPoint::new(10, 20), CanvasPoint::new(10, 20))
@@ -84,10 +97,11 @@ mod tests {
 
     #[test]
     fn properties_panel_unhandled_key_is_consumed() {
+        let route_measurer = crate::draw::TextMeasurer::default();
         let mut state = make_test_input_state();
         let id = add_rect(&mut state);
         state.set_selection(vec![id]);
-        assert!(state.show_properties_panel());
+        assert!(state.show_properties_panel_with(&route_measurer));
 
         assert_eq!(
             route_key_press(&mut state, Key::Char('x')),
@@ -149,6 +163,13 @@ mod tests {
 
     #[test]
     fn right_click_cancels_active_interaction_before_context_menu_policy() {
+        let pointer_measurer = crate::draw::TextMeasurer::default();
+        let pointer_ui_engine = crate::ui_text::UiTextEngine::default();
+        let pointer_resources = crate::input::state::InputTextResources {
+            measurer: &pointer_measurer,
+            ui_engine: &pointer_ui_engine,
+        };
+
         let mut state = make_test_input_state();
         state.state = crate::input::state::DrawingState::Drawing {
             tool: Tool::Pen,
@@ -160,7 +181,11 @@ mod tests {
         state.begin_pointer_drag(MouseButton::Left, None);
 
         assert_eq!(
-            route_pointer_press(&mut state, PointerPress::new(MouseButton::Right, points())),
+            route_pointer_press(
+                &mut state,
+                pointer_resources,
+                PointerPress::new(MouseButton::Right, points())
+            ),
             RoutingOutcome::Canceled(CancelTarget::ActiveInteraction(
                 ActiveInteractionKind::Drawing
             ))
@@ -174,10 +199,21 @@ mod tests {
 
     #[test]
     fn right_click_suppression_paths_return_named_side_effects() {
+        let pointer_measurer = crate::draw::TextMeasurer::default();
+        let pointer_ui_engine = crate::ui_text::UiTextEngine::default();
+        let pointer_resources = crate::input::state::InputTextResources {
+            measurer: &pointer_measurer,
+            ui_engine: &pointer_ui_engine,
+        };
+
         let mut zoomed = make_test_input_state();
         zoomed.set_zoom_status(true, false, 2.0, (0.0, 0.0));
         assert_eq!(
-            route_pointer_press(&mut zoomed, PointerPress::new(MouseButton::Right, points())),
+            route_pointer_press(
+                &mut zoomed,
+                pointer_resources,
+                PointerPress::new(MouseButton::Right, points())
+            ),
             RoutingOutcome::SideEffect(InteractionSideEffect::Pointer(
                 PointerSideEffect::RightClickSuppressedByZoom
             ))
@@ -188,6 +224,7 @@ mod tests {
         assert_eq!(
             route_pointer_press(
                 &mut disabled,
+                pointer_resources,
                 PointerPress::new(MouseButton::Right, points())
             ),
             RoutingOutcome::SideEffect(InteractionSideEffect::Pointer(
@@ -198,11 +235,22 @@ mod tests {
 
     #[test]
     fn radial_menu_release_is_consumed() {
+        let pointer_measurer = crate::draw::TextMeasurer::default();
+        let pointer_ui_engine = crate::ui_text::UiTextEngine::default();
+        let pointer_resources = crate::input::state::InputTextResources {
+            measurer: &pointer_measurer,
+            ui_engine: &pointer_ui_engine,
+        };
+
         let mut state = make_test_input_state();
         state.toggle_radial_menu(10.0, 20.0);
 
         assert_eq!(
-            route_pointer_release(&mut state, PointerRelease::new(MouseButton::Left, points())),
+            route_pointer_release(
+                &mut state,
+                pointer_resources,
+                PointerRelease::new(MouseButton::Left, points())
+            ),
             RoutingOutcome::Consumed(ConsumedBy::RadialMenu)
         );
         assert!(state.is_radial_menu_open());
@@ -210,12 +258,14 @@ mod tests {
 
     #[test]
     fn idle_eraser_hover_returns_named_pointer_side_effect() {
+        let pointer_measurer = crate::draw::TextMeasurer::default();
+
         let mut state = make_test_input_state();
         state.style.eraser_mode = EraserMode::Stroke;
         assert!(state.set_tool_override(Some(Tool::Eraser)));
 
         assert_eq!(
-            route_pointer_motion(&mut state, PointerMotion::new(points())),
+            route_pointer_motion(&mut state, &pointer_measurer, PointerMotion::new(points())),
             RoutingOutcome::SideEffect(InteractionSideEffect::Pointer(
                 PointerSideEffect::IdleEraserHover
             ))

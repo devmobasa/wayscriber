@@ -1,3 +1,4 @@
+use crate::draw::TextMeasurer;
 use crate::draw::{Shape, ShapeId};
 use crate::input::InputState;
 use crate::util::Rect;
@@ -14,7 +15,10 @@ impl InputState {
         Rect::new(center_x - half, center_y - half, size, size)
     }
 
-    pub(crate) fn selected_text_resize_handle(&self) -> Option<(ShapeId, Rect)> {
+    pub(crate) fn selected_text_resize_handle_with(
+        &self,
+        measurer: &TextMeasurer,
+    ) -> Option<(ShapeId, Rect)> {
         if self.selected_shape_ids().len() != 1 {
             return None;
         }
@@ -27,13 +31,18 @@ impl InputState {
         if !matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. }) {
             return None;
         }
-        let bounds = shape.bounding_box()?;
+        let bounds = shape.bounding_box_with(measurer)?;
         let handle = Self::text_resize_handle_rect(bounds)?;
         Some((shape_id, handle))
     }
 
-    pub(crate) fn hit_text_resize_handle(&self, x: i32, y: i32) -> Option<ShapeId> {
-        let (shape_id, handle) = self.selected_text_resize_handle()?;
+    pub(crate) fn hit_text_resize_handle_with(
+        &self,
+        measurer: &TextMeasurer,
+        x: i32,
+        y: i32,
+    ) -> Option<ShapeId> {
+        let (shape_id, handle) = self.selected_text_resize_handle_with(measurer)?;
         let tolerance = self.hit_test_tolerance().ceil() as i32;
         let hit_rect = handle.inflated(tolerance).unwrap_or(handle);
         if hit_rect.contains(x, y) {

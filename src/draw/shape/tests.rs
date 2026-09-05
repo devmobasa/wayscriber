@@ -212,17 +212,20 @@ fn double_arrow_bounds_contain_the_second_head() {
 
 #[test]
 fn arrow_label_layout_offsets_from_line() {
+    let measurer = crate::draw::TextMeasurer::default();
     let font = FontDescriptor::default();
-    let layout = super::arrow_label_layout(100, 0, 0, 0, 2.0, 0.0, "1", 12.0, &font)
-        .expect("label layout should exist");
+    let layout =
+        super::arrow_label_layout_with(&measurer, 100, 0, 0, 0, 2.0, 0.0, "1", 12.0, &font)
+            .expect("label layout should exist");
     let center_x = layout.bounds.x + layout.bounds.width / 2;
     let center_y = layout.bounds.y + layout.bounds.height / 2;
 
     assert!(center_y > 0);
     assert!((center_x - 50).abs() <= 20);
 
-    let layout = super::arrow_label_layout(0, 100, 0, 0, 2.0, 0.0, "1", 12.0, &font)
-        .expect("label layout should exist");
+    let layout =
+        super::arrow_label_layout_with(&measurer, 0, 100, 0, 0, 2.0, 0.0, "1", 12.0, &font)
+            .expect("label layout should exist");
     let center_x = layout.bounds.x + layout.bounds.width / 2;
     let center_y = layout.bounds.y + layout.bounds.height / 2;
 
@@ -493,14 +496,17 @@ fn pressure_and_image_bounds_handle_extreme_coordinates() {
 
 #[test]
 fn curved_arrow_label_follows_the_arc_not_the_chord() {
+    let measurer = crate::draw::TextMeasurer::default();
     // Anchored to the chord, the label would sit in the gap the arrow was drawn
     // to route around - far from the shaft it numbers.
     let font = FontDescriptor::default();
     // Tail at (0, 100), tip at (400, 100), bulging up by 0.5 * 400 / 2 = 100px.
-    let straight = super::arrow_label_layout(400, 100, 0, 100, 4.0, 0.0, "1", 12.0, &font)
-        .expect("straight label layout");
-    let curved = super::arrow_label_layout(400, 100, 0, 100, 4.0, 0.5, "1", 12.0, &font)
-        .expect("curved label layout");
+    let straight =
+        super::arrow_label_layout_with(&measurer, 400, 100, 0, 100, 4.0, 0.0, "1", 12.0, &font)
+            .expect("straight label layout");
+    let curved =
+        super::arrow_label_layout_with(&measurer, 400, 100, 0, 100, 4.0, 0.5, "1", 12.0, &font)
+            .expect("curved label layout");
 
     // Both sit at the middle of the span horizontally.
     assert_eq!(straight.bounds.x, curved.bounds.x);
@@ -565,8 +571,10 @@ fn flipping_the_head_still_moves_a_single_headed_arrow_label() {
 
 #[test]
 fn arrow_label_layout_handles_full_span_endpoints() {
+    let measurer = crate::draw::TextMeasurer::default();
     let font = FontDescriptor::default();
-    let layout = super::arrow_label_layout(
+    let layout = super::arrow_label_layout_with(
+        &measurer,
         i32::MAX,
         i32::MAX,
         i32::MIN,

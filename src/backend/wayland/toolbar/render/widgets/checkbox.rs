@@ -5,10 +5,11 @@ use super::constants::{
     SPACING_SM, SPACING_XS, set_color,
 };
 use super::{draw_label_left, draw_round_rect, ellipsize_to_width};
-use crate::ui_text::{UiTextStyle, text_layout};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 #[allow(clippy::too_many_arguments)]
 pub(in crate::backend::wayland::toolbar::render) fn draw_checkbox(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     y: f64,
@@ -47,12 +48,13 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_checkbox(
     let label_x = box_x + box_size + SPACING_LG;
     // Never let a long label escape the cell: truncate with an ellipsis.
     let label_w = (x + w - label_x - SPACING_LG).max(0.0);
-    let display = ellipsize_to_width(ctx, label_style, label, label_w);
-    draw_label_left(ctx, label_style, label_x, y, label_w, h, &display);
+    let display = ellipsize_to_width(engine, ctx, label_style, label, label_w);
+    draw_label_left(engine, ctx, label_style, label_x, y, label_w, h, &display);
 }
 
 #[allow(clippy::too_many_arguments)]
 pub(in crate::backend::wayland::toolbar::render) fn draw_mini_checkbox(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     y: f64,
@@ -89,7 +91,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_mini_checkbox(
         let _ = ctx.stroke();
     }
 
-    let layout = text_layout(ctx, label_style, label, None);
+    let layout = engine.layout(ctx, label_style, label, None);
     let ext = layout.ink_extents();
     let label_x = x + box_size + SPACING_LG + (w - box_size - 12.0 - ext.width()) / 2.0;
     let label_y = y + (h + ext.height()) / 2.0;

@@ -5,9 +5,9 @@
 //! when the control is visible.
 
 use crate::input::state::SpotlightMagnificationTrack;
+use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use crate::ui::theme::{self, overlay};
-use crate::ui::{draw_rounded_rect, text_extents_for};
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 /// Height of the drawn track bar, which is thinner than the knob it carries.
 const TRACK_BAR_HEIGHT: f64 = 4.0;
@@ -27,6 +27,7 @@ const READOUT_GAP: f64 = 4.0;
 /// be clipped at a screen edge; it is clamped into `visible` independently of
 /// the track it is centred on.
 pub(crate) fn render_spotlight_magnification_control(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     track: SpotlightMagnificationTrack,
     magnification: f64,
@@ -93,7 +94,8 @@ pub(crate) fn render_spotlight_magnification_control(
         weight: cairo::FontWeight::Bold,
         size: 12.0,
     };
-    let extents = text_extents_for(
+    let extents = text_extents_for_with_engine(
+        engine,
         ctx,
         style.family,
         style.slant,
@@ -128,7 +130,7 @@ pub(crate) fn render_spotlight_magnification_control(
             overlay::TEXT_PRIMARY
         },
     );
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         style,
         &label,
@@ -182,7 +184,14 @@ mod tests {
             cairo::ImageSurface::create(cairo::Format::ARgb32, 320, 120).expect("surface");
         {
             let ctx = cairo::Context::new(&surface).expect("context");
-            render_spotlight_magnification_control(&ctx, track, factor, reason, visible);
+            render_spotlight_magnification_control(
+                &UiTextEngine::default(),
+                &ctx,
+                track,
+                factor,
+                reason,
+                visible,
+            );
         }
         let mut surface = surface;
         surface.flush();
@@ -311,5 +320,41 @@ mod tests {
         // The plate is centred on the track and may be wider than it; the
         // damage region the control needs is this box, not the shape's bounds.
         assert!(x0 <= TRACK.x && x1 >= TRACK.x + TRACK.width - 1);
+    }
+    #[test]
+    fn retained_readout_owner_matches_fresh_across_density_and_reason_changes() {
+        let engine = UiTextEngine::default();
+        for density in [1, 2, 1] {
+            let paint = |engine: &UiTextEngine, reason| {
+                let mut surface = cairo::ImageSurface::create(
+                    cairo::Format::ARgb32,
+                    320 * density,
+                    120 * density,
+                )
+                .unwrap();
+                {
+                    let ctx = cairo::Context::new(&surface).unwrap();
+                    ctx.scale(f64::from(density), f64::from(density));
+                    render_spotlight_magnification_control(
+                        engine,
+                        &ctx,
+                        track_with_knob_at(45),
+                        2.25,
+                        reason,
+                        VISIBLE,
+                    );
+                }
+                surface.data().unwrap().to_vec()
+            };
+            let plain = paint(&engine, None);
+            let reason = paint(&engine, Some("Freeze screen to preview"));
+            assert!(plain.iter().any(|&byte| byte != 0));
+            assert!(
+                plain != reason,
+                "unavailable reason must change the readout"
+            );
+            assert!(plain == paint(&UiTextEngine::default(), None));
+            assert!(reason == paint(&UiTextEngine::default(), Some("Freeze screen to preview")));
+        }
     }
 }

@@ -2,7 +2,7 @@ use crate::input::InputState;
 use crate::input::state::ContextMenuState;
 use crate::ui::primitives::draw_rounded_rect;
 use crate::ui::theme::Rgba;
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::constants::{
     self, BG_HOVER, BORDER_FOCUS, FOCUS_RING_WIDTH, ICON_SUBMENU_ARROW, NAV_HINT_MENU,
@@ -18,6 +18,22 @@ const HINT_FOOTER_TEXT: Rgba = (0.65, 0.68, 0.75, 1.0);
 
 /// Renders a floating context menu for shape or canvas actions.
 pub fn render_context_menu(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    _screen_width: u32,
+    _screen_height: u32,
+) {
+    render_context_menu_with_engine(
+        &UiTextEngine::default(),
+        ctx,
+        input_state,
+        _screen_width,
+        _screen_height,
+    );
+}
+
+pub(crate) fn render_context_menu_with_engine(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     input_state: &InputState,
     _screen_width: u32,
@@ -110,7 +126,7 @@ pub fn render_context_menu(
         let text_a = text_color.3;
 
         constants::set_color(ctx, text_color);
-        draw_text_baseline(
+        engine.draw_baseline(
             ctx,
             text_style,
             &entry.label,
@@ -126,7 +142,7 @@ pub fn render_context_menu(
                 - layout.padding_x
                 - layout.arrow_width
                 - layout.shortcut_width;
-            draw_text_baseline(
+            engine.draw_baseline(
                 ctx,
                 text_style,
                 shortcut,
@@ -173,7 +189,7 @@ pub fn render_context_menu(
 
     // Draw hint text
     constants::set_color(ctx, HINT_FOOTER_TEXT);
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         hint_style,
         NAV_HINT_MENU,
@@ -183,4 +199,64 @@ pub fn render_context_menu(
     );
 
     let _ = ctx.restore();
+}
+
+#[cfg(test)]
+mod engine_tests {
+    use super::*;
+    use crate::input::state::ContextMenuKind;
+
+    fn paint(engine: &UiTextEngine, state: &InputState, density: i32) -> Vec<u8> {
+        let mut surface =
+            cairo::ImageSurface::create(cairo::Format::ARgb32, 640 * density, 480 * density)
+                .unwrap();
+        {
+            let ctx = cairo::Context::new(&surface).unwrap();
+            ctx.scale(f64::from(density), f64::from(density));
+            render_context_menu_with_engine(engine, &ctx, state, 640, 480);
+        }
+        surface.data().unwrap().to_vec()
+    }
+
+    #[test]
+    fn retained_context_menu_owner_preserves_layout_pixels_and_row_hits() {
+        let engine = UiTextEngine::default();
+        let mut state = crate::input::state::test_support::make_test_input_state();
+        for (kind, density) in [
+            (ContextMenuKind::Canvas, 1),
+            (ContextMenuKind::Zoom, 2),
+            (ContextMenuKind::Canvas, 1),
+        ] {
+            state.open_context_menu((620, 460), Vec::new(), kind, None);
+            let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 640, 480).unwrap();
+            let ctx = cairo::Context::new(&surface).unwrap();
+            state.update_context_menu_layout_with_engine(&engine, &ctx, 640, 480);
+            let layout = *state.context_menu_layout().unwrap();
+            let actual = paint(&engine, &state, density);
+            assert!(actual.iter().any(|&byte| byte != 0));
+            state.update_context_menu_layout_with_engine(&UiTextEngine::default(), &ctx, 640, 480);
+            let fresh = state.context_menu_layout().unwrap();
+            assert_eq!(
+                (fresh.origin_x, fresh.origin_y, fresh.width, fresh.height),
+                (
+                    layout.origin_x,
+                    layout.origin_y,
+                    layout.width,
+                    layout.height
+                )
+            );
+            assert_eq!(
+                (fresh.row_height, fresh.shortcut_width, fresh.arrow_width),
+                (layout.row_height, layout.shortcut_width, layout.arrow_width)
+            );
+            assert!(actual == paint(&UiTextEngine::default(), &state, density));
+            for index in 0..state.context_menu_entries().len() {
+                let x = (layout.origin_x + layout.padding_x) as i32;
+                let y = (layout.origin_y
+                    + layout.padding_y
+                    + layout.row_height * (index as f64 + 0.5)) as i32;
+                assert_eq!(state.context_menu_index_at(x, y), Some(index));
+            }
+        }
+    }
 }

@@ -1,6 +1,8 @@
 use super::*;
 
 pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
+    engine: &crate::ui_text::UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
     input: &mut InputState,
     positions: &mut ToolbarPositionSnapshot,
     rollback: &PreviewRollbackSnapshot,
@@ -37,14 +39,14 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
             }
             Target::TopDisplayMode => {
                 if let InteractionSeedValue::TopDisplayMode(mode) = value {
-                    apply_persisted_top_display_mode(input, *mode);
+                    apply_persisted_top_display_mode(engine, measurer, input, *mode);
                 }
             }
             Target::StatusBarInteractive => {
                 set_bool(value, |v| input.ui_visibility.status_bar_interactive = v)
             }
             Target::StatusBarItem(item) => set_bool(value, |v| {
-                input.set_status_bar_item_visible(*item, v);
+                input.set_status_bar_item_visible_with_resources(engine, measurer, *item, v);
             }),
             Target::StatusBar => set_bool(value, |v| input.ui_visibility.show_status_bar = v),
             Target::StatusBoardBadge => {
@@ -106,7 +108,7 @@ pub(in crate::backend::wayland) fn apply_toolbar_runtime_rollback(
     // leaves live visibility alone. The preview records which path created the
     // rollback so this cannot be guessed incorrectly from `TopPinned` alone.
     if rollback.derive_toolbar_visibility_from_pins {
-        input.derive_toolbar_visibility_from_pins();
+        input.derive_toolbar_visibility_from_pins_with_resources(engine, measurer);
     }
     input.needs_redraw = true;
 }

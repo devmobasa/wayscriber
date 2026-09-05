@@ -1,6 +1,5 @@
 use crate::backend::wayland::{RuntimeOperationController, RuntimeOperationIdSource};
 
-use super::cut_review::review_edits_for_active_region;
 use super::*;
 
 pub(in crate::backend::wayland) struct RegionCaptureRuntime {
@@ -64,27 +63,32 @@ impl RegionCaptureRuntime {
             bounds,
             anchor: None,
             edge: None,
+            phase: RegionInteractionPhase::Armed,
         });
         generation
     }
 
-    pub(in crate::backend::wayland::state) fn set_pending(
+    pub(in crate::backend::wayland::state) fn set_pending_frozen(
         &mut self,
         purpose: RegionPurposeTag,
         generation: u64,
-        source: ScreenCaptureSource,
-        acquisition: Option<ScreenAcquisitionId>,
+        acquisition: ScreenAcquisitionId,
     ) {
-        self.active = Some(match source {
-            ScreenCaptureSource::Frozen => ActiveScreenRegion::PendingFrozen {
-                purpose,
-                generation,
-                acquisition: acquisition.expect("frozen region wait has an acquisition id"),
-            },
-            ScreenCaptureSource::Zoom => ActiveScreenRegion::PendingZoom {
-                purpose,
-                generation,
-            },
+        self.active = Some(ActiveScreenRegion::PendingFrozen {
+            purpose,
+            generation,
+            acquisition,
+        });
+    }
+
+    pub(in crate::backend::wayland::state) fn set_pending_zoom(
+        &mut self,
+        purpose: RegionPurposeTag,
+        generation: u64,
+    ) {
+        self.active = Some(ActiveScreenRegion::PendingZoom {
+            purpose,
+            generation,
         });
     }
 
@@ -110,6 +114,7 @@ impl RegionCaptureRuntime {
             legend_dismissed: false,
             include_drawings,
             review_resize: None,
+            phase: RegionInteractionPhase::Armed,
         });
     }
 
@@ -135,17 +140,64 @@ impl RegionCaptureRuntime {
         &mut self.review_edits
     }
 
-    pub(in crate::backend::wayland::state) fn selection_parts(
+    pub(in crate::backend::wayland::state) fn finalize_selection(
         &mut self,
-    ) -> (
-        &mut Option<ActiveScreenRegion>,
-        &mut Option<RegionReviewEdits>,
-    ) {
-        (&mut self.active, &mut self.review_edits)
+        input_state: &mut crate::input::InputState,
+        owner: RegionInputSource,
+        logical: (f64, f64),
+    ) -> RegionSelectionFinalize {
+        finalize_region_selection_with_review_edits(
+            &mut self.active,
+            input_state,
+            &mut self.review_edits,
+            owner,
+            logical,
+        )
     }
 
-    pub(in crate::backend::wayland) fn set_review_edits_for(&mut self, rect: ImagePixelRect) {
-        self.review_edits = review_edits_for_active_region(self.active, rect);
+    fn ui_state(&self) -> RegionSelectUiState {
+        self.active
+            .map(ActiveScreenRegion::ui_state)
+            .unwrap_or_default()
+    }
+
+    pub(in crate::backend::wayland::state) fn sync_input_projection(
+        &self,
+        input_state: &mut crate::input::InputState,
+    ) {
+        input_state.sync_region_projection(self.ui_state());
+    }
+
+    pub(in crate::backend::wayland::state) fn begin_review_aux_drag(
+        &mut self,
+        input_state: &mut crate::input::InputState,
+        owner: RegionInputSource,
+    ) -> bool {
+        let Some(region) = self.active.as_mut() else {
+            return false;
+        };
+        if region.phase() != Some(RegionInteractionPhase::Review { owner: None }) {
+            return false;
+        }
+        region.set_phase(RegionInteractionPhase::Review { owner: Some(owner) });
+        self.sync_input_projection(input_state);
+        true
+    }
+
+    pub(in crate::backend::wayland::state) fn finish_review_aux_drag(
+        &mut self,
+        input_state: &mut crate::input::InputState,
+        owner: RegionInputSource,
+    ) -> bool {
+        let Some(region) = self.active.as_mut() else {
+            return false;
+        };
+        if region.phase() != Some(RegionInteractionPhase::Review { owner: Some(owner) }) {
+            return false;
+        }
+        region.set_phase(RegionInteractionPhase::Review { owner: None });
+        self.sync_input_projection(input_state);
+        true
     }
 
     pub(in crate::backend::wayland::state) fn window_snap(&self) -> Option<&WindowSnapSession> {
@@ -231,7 +283,8 @@ impl WaylandState {
             MeasureModeTransition::Start => {}
         }
 
-        self.input_state.prepare_for_screen_modal();
+        self.input_state
+            .prepare_for_screen_modal_with_measurer(self.render.text_measurer());
         self.zoom.stop_pan();
         self.pointer.stop_board_pan();
         self.pointer.set_board_pan_key_held(false);
@@ -239,10 +292,10 @@ impl WaylandState {
         self.unlock_pointer();
         self.retire_stylus_contact();
 
-        let generation = self
-            .region_capture
+        self.region_capture
             .begin_measure((self.surface.width(), self.surface.height()));
-        self.input_state.activate_measure_mode(generation);
+        self.region_capture
+            .sync_input_projection(&mut self.input_state);
         self.debug_assert_screen_region_invariant();
     }
 
@@ -288,17 +341,27 @@ impl WaylandState {
         true
     }
 
-    pub(in crate::backend::wayland::state) fn set_pending_screen_region(
+    pub(in crate::backend::wayland::state) fn set_pending_frozen_screen_region(
         &mut self,
         purpose: RegionPurposeTag,
         generation: u64,
-        source: ScreenCaptureSource,
-        acquisition: Option<ScreenAcquisitionId>,
+        acquisition: ScreenAcquisitionId,
     ) {
         self.region_capture
-            .set_pending(purpose, generation, source, acquisition);
-        self.input_state
-            .set_region_pending_capture(purpose, generation, source);
+            .set_pending_frozen(purpose, generation, acquisition);
+        self.region_capture
+            .sync_input_projection(&mut self.input_state);
+        self.debug_assert_screen_region_invariant();
+    }
+
+    pub(in crate::backend::wayland::state) fn set_pending_zoom_screen_region(
+        &mut self,
+        purpose: RegionPurposeTag,
+        generation: u64,
+    ) {
+        self.region_capture.set_pending_zoom(purpose, generation);
+        self.region_capture
+            .sync_input_projection(&mut self.input_state);
         self.debug_assert_screen_region_invariant();
     }
 
@@ -324,6 +387,11 @@ impl WaylandState {
         ) else {
             return false;
         };
+        // Activation can follow asynchronous capture completion. Cancel any
+        // interaction that began while the selector was pending before the
+        // backend publishes the armed projection.
+        self.input_state
+            .prepare_for_screen_modal_with_measurer(self.render.text_measurer());
         self.region_capture.set_ready(
             purpose,
             generation,
@@ -332,7 +400,8 @@ impl WaylandState {
             initial_square_modifier(purpose, self.input_state.modifiers.shift),
             include_drawings,
         );
-        self.input_state.activate_region(purpose, generation);
+        self.region_capture
+            .sync_input_projection(&mut self.input_state);
         self.start_region_window_query(purpose, generation, token, freeze_ownership);
         self.debug_assert_screen_region_invariant();
         true
@@ -340,7 +409,8 @@ impl WaylandState {
 
     pub(in crate::backend::wayland::state) fn clear_screen_region_ui_only(&mut self) {
         self.region_capture.clear();
-        self.input_state.cancel_region_ui_only();
+        self.region_capture
+            .sync_input_projection(&mut self.input_state);
         self.debug_assert_screen_region_invariant();
     }
 
@@ -462,14 +532,13 @@ impl WaylandState {
         let Some(region) = self.region_capture.active_mut() else {
             return false;
         };
-        let purpose = region.purpose();
-        let generation = region.generation();
-        let Some(display) = region.enter_review(rect) else {
+        let Some(seed) = region.enter_review_seed(rect) else {
             return false;
         };
-        self.input_state
-            .activate_region_review(purpose, generation, display);
-        self.create_region_review_edits(rect);
+        region.set_phase(RegionInteractionPhase::Review { owner: None });
+        *self.region_capture.review_edits_slot_mut() = Some(seed.into_edits());
+        self.region_capture
+            .sync_input_projection(&mut self.input_state);
         self.debug_assert_screen_region_invariant();
         true
     }
@@ -486,14 +555,16 @@ impl WaylandState {
         if self.region_review_crop_locked() {
             return true;
         }
-        let Some(display) = self
+        if self
             .region_capture
             .active_mut()
             .and_then(|region| region.nudge_review(delta_x, delta_y))
-        else {
+            .is_none()
+        {
             return false;
-        };
-        self.input_state.update_region_review_display(display);
+        }
+        self.region_capture
+            .sync_input_projection(&mut self.input_state);
         self.sync_region_review_source_rect();
         true
     }
@@ -701,9 +772,14 @@ mod owner_tests {
             false,
             false,
         );
-        runtime.set_review_edits_for(
-            ImagePixelRect::new(10, 10, 20, 20, source.image_size).expect("review rectangle"),
-        );
+        let seed = runtime
+            .active_mut()
+            .unwrap()
+            .enter_review_seed(
+                ImagePixelRect::new(10, 10, 20, 20, source.image_size).expect("review rectangle"),
+            )
+            .unwrap();
+        runtime.review_edits = Some(seed.into_edits());
         runtime.set_window_snap(WindowSnapSession::queued(
             WindowSnapCorrelation::new(generation, source),
             WindowQueryContext {
@@ -727,9 +803,12 @@ mod owner_tests {
         let mut runtime = runtime();
         assert!(runtime.active().is_none());
 
-        runtime.set_review_edits_for(
-            ImagePixelRect::new(0, 0, 20, 20, (100, 80)).expect("review rectangle"),
-        );
+        let seed = runtime.active_mut().and_then(|region| {
+            region.enter_review_seed(
+                ImagePixelRect::new(0, 0, 20, 20, (100, 80)).expect("review rectangle"),
+            )
+        });
+        assert!(seed.is_none());
 
         assert!(runtime.review_edits().is_none());
     }

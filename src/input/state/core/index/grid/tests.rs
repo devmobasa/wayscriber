@@ -40,8 +40,13 @@ fn mixed_candidate_grid() -> (SpatialGrid, [ShapeId; 3]) {
     let first = frame.add_shape(filled_rect(10, 10, 10, 10));
     let second = frame.add_shape(filled_rect(74, 10, 10, 10));
     let third = frame.add_shape(filled_rect(138, 10, 10, 10));
-    let grid = SpatialGrid::build_with_membership_limit(&frame, SPATIAL_GRID_CELL_SIZE, 2)
-        .expect("spatial grid");
+    let grid = SpatialGrid::build_with_membership_limit(
+        &TextMeasurer::default(),
+        &frame,
+        SPATIAL_GRID_CELL_SIZE,
+        2,
+    )
+    .expect("spatial grid");
     (grid, [first, second, third])
 }
 
@@ -54,7 +59,7 @@ fn oversized_shape_is_queried_without_per_cell_index_entries() {
     let mut frame = Frame::new();
     let shape_id = frame.add_shape(filled_rect(0, 0, 100_000, 100_000));
 
-    let grid = SpatialGrid::build(&frame).expect("spatial grid");
+    let grid = SpatialGrid::build(&TextMeasurer::default(), &frame).expect("spatial grid");
 
     assert!(grid.cells.is_empty());
     assert!(grid.shape_cells.is_empty());
@@ -85,7 +90,7 @@ fn shape_without_bounds_remains_a_global_candidate() {
             .is_none()
     );
 
-    let grid = SpatialGrid::build(&frame).expect("spatial grid");
+    let grid = SpatialGrid::build(&TextMeasurer::default(), &frame).expect("spatial grid");
 
     assert!(grid.cells.is_empty());
     assert!(grid.shape_cells.is_empty());
@@ -173,7 +178,7 @@ fn cell_coverage_enforces_per_shape_limit_boundary() {
 fn oversized_shape_can_move_back_into_regular_cells() {
     let mut frame = Frame::new();
     let shape_id = frame.add_shape(filled_rect(0, 0, 100_000, 100_000));
-    let mut grid = SpatialGrid::build(&frame).expect("spatial grid");
+    let mut grid = SpatialGrid::build(&TextMeasurer::default(), &frame).expect("spatial grid");
 
     grid.remove_shape(shape_id);
     grid.add_shape_with_bounds(shape_id, Rect::new(128, 128, 32, 32).expect("valid bounds"));
@@ -193,8 +198,13 @@ fn aggregate_membership_budget_routes_excess_shapes_to_global_candidates() {
     let second = frame.add_shape(filled_rect(74, 10, 10, 10));
     let third = frame.add_shape(filled_rect(138, 10, 10, 10));
 
-    let grid = SpatialGrid::build_with_membership_limit(&frame, SPATIAL_GRID_CELL_SIZE, 2)
-        .expect("spatial grid");
+    let grid = SpatialGrid::build_with_membership_limit(
+        &TextMeasurer::default(),
+        &frame,
+        SPATIAL_GRID_CELL_SIZE,
+        2,
+    )
+    .expect("spatial grid");
 
     assert_eq!(grid.indexed_memberships, 2);
     assert_membership_accounting(&grid);
@@ -212,8 +222,13 @@ fn aggregate_membership_budget_routes_excess_shapes_to_global_candidates() {
 fn aggregate_rejection_keeps_membership_storage_available_for_later_small_shape() {
     let mut frame = Frame::new();
     let first = frame.add_shape(filled_rect(10, 10, 10, 10));
-    let mut grid = SpatialGrid::build_with_membership_limit(&frame, SPATIAL_GRID_CELL_SIZE, 1)
-        .expect("spatial grid");
+    let mut grid = SpatialGrid::build_with_membership_limit(
+        &TextMeasurer::default(),
+        &frame,
+        SPATIAL_GRID_CELL_SIZE,
+        1,
+    )
+    .expect("spatial grid");
     let rejected = u64::MAX;
     let later_small = u64::MAX - 1;
 
@@ -243,8 +258,13 @@ fn removing_indexed_shape_releases_aggregate_membership_budget() {
         .shape(third)
         .and_then(|shape| shape.bounding_box())
         .expect("third shape bounds");
-    let mut grid = SpatialGrid::build_with_membership_limit(&frame, SPATIAL_GRID_CELL_SIZE, 2)
-        .expect("spatial grid");
+    let mut grid = SpatialGrid::build_with_membership_limit(
+        &TextMeasurer::default(),
+        &frame,
+        SPATIAL_GRID_CELL_SIZE,
+        2,
+    )
+    .expect("spatial grid");
 
     grid.remove_shape(first);
     grid.remove_shape(third);
@@ -261,8 +281,13 @@ fn reindexing_shape_beyond_remaining_budget_clears_old_cells_and_stays_queryable
     let mut frame = Frame::new();
     let first = frame.add_shape(filled_rect(10, 10, 10, 10));
     let _second = frame.add_shape(filled_rect(74, 10, 10, 10));
-    let mut grid = SpatialGrid::build_with_membership_limit(&frame, SPATIAL_GRID_CELL_SIZE, 2)
-        .expect("spatial grid");
+    let mut grid = SpatialGrid::build_with_membership_limit(
+        &TextMeasurer::default(),
+        &frame,
+        SPATIAL_GRID_CELL_SIZE,
+        2,
+    )
+    .expect("spatial grid");
 
     grid.remove_shape(first);
     grid.add_shape_with_bounds(first, Rect::new(0, 0, 128, 32).expect("valid bounds"));

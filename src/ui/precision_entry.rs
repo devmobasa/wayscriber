@@ -7,8 +7,8 @@
 //! is keyboard-only, so it renders no buttons.
 
 use crate::input::InputState;
-use crate::ui::primitives::{draw_rounded_rect, text_extents_for};
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::theme::overlay::{
     BG_INPUT_SELECTION, INPUT_BG, INPUT_BORDER_FOCUSED, INPUT_CARET, RADIUS_MD, RADIUS_STD,
@@ -34,6 +34,24 @@ fn set_rgba(ctx: &cairo::Context, color: super::theme::Rgba) {
 /// Render the precise-entry popup near `anchor` (the top-left point under
 /// the strip's style pill), clamped to the screen.
 pub fn render_precision_entry_popup(
+    ctx: &cairo::Context,
+    input_state: &InputState,
+    screen_width: u32,
+    screen_height: u32,
+    anchor: (f64, f64),
+) {
+    render_precision_entry_popup_with_engine(
+        &UiTextEngine::default(),
+        ctx,
+        input_state,
+        screen_width,
+        screen_height,
+        anchor,
+    );
+}
+
+pub(crate) fn render_precision_entry_popup_with_engine(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     input_state: &InputState,
     screen_width: u32,
@@ -67,7 +85,7 @@ pub fn render_precision_entry_popup(
         size: 13.0,
     };
     set_rgba(ctx, TEXT_PRIMARY);
-    let _ = draw_text_baseline(
+    let _ = engine.draw_baseline(
         ctx,
         title_style,
         entry.target.label(),
@@ -90,7 +108,8 @@ pub fn render_precision_entry_popup(
     let text_x = x + PAD + 10.0;
     let baseline = field_y + FIELD_H / 2.0 + 5.0;
     let buffer_advance = |text: &str| {
-        text_extents_for(
+        text_extents_for_with_engine(
+            engine,
             ctx,
             VALUE_STYLE.family,
             VALUE_STYLE.slant,
@@ -108,7 +127,7 @@ pub fn render_precision_entry_popup(
         let _ = ctx.fill();
     }
     set_rgba(ctx, TEXT_PRIMARY);
-    let _ = draw_text_baseline(ctx, VALUE_STYLE, &text, text_x, baseline, None);
+    let _ = engine.draw_baseline(ctx, VALUE_STYLE, &text, text_x, baseline, None);
 
     // Caret after the buffer (before the unit suffix).
     if !entry.selected {
@@ -120,7 +139,7 @@ pub fn render_precision_entry_popup(
 
     // Hint line.
     set_rgba(ctx, TEXT_HINT_DIM);
-    let _ = draw_text_baseline(
+    let _ = engine.draw_baseline(
         ctx,
         UiTextStyle {
             family: "Sans",
@@ -134,3 +153,6 @@ pub fn render_precision_entry_popup(
         None,
     );
 }
+
+#[cfg(test)]
+mod tests;

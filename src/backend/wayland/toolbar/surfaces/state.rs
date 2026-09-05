@@ -1,3 +1,4 @@
+use crate::ui_text::UiTextEngine;
 use smithay_client_toolkit::{compositor::CompositorState, shell::WaylandSurface};
 use wayland_client::protocol::wl_output;
 
@@ -112,7 +113,11 @@ impl ToolbarSurface {
 
     /// Restrict the top surface's input region to the bar band plus any
     /// open popover panels, in surface coordinates; full-surface otherwise.
-    pub fn sync_top_input_region(&mut self, snapshot: &crate::ui::toolbar::ToolbarSnapshot) {
+    pub fn sync_top_input_region(
+        &mut self,
+        engine: &UiTextEngine,
+        snapshot: &crate::ui::toolbar::ToolbarSnapshot,
+    ) {
         if self.width == 0 || self.height == 0 {
             return;
         }
@@ -122,6 +127,7 @@ impl ToolbarSurface {
             1.0
         };
         let rects = crate::backend::wayland::toolbar::view::top::top_input_rects(
+            engine,
             snapshot,
             self.width as f64 / ui_scale,
             self.height as f64 / ui_scale,

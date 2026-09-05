@@ -418,13 +418,20 @@ fn right_click_toggles_radial_when_configured() {
 
 #[test]
 fn toggle_radial_menu_action_opens_and_closes_menu() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.update_pointer_position(320, 240);
 
-    state.handle_action(Action::ToggleRadialMenu);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleRadialMenu);
     assert!(state.is_radial_menu_open());
 
-    state.handle_action(Action::ToggleRadialMenu);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleRadialMenu);
     assert!(!state.is_radial_menu_open());
 
     state.state = DrawingState::Selecting {
@@ -432,7 +439,7 @@ fn toggle_radial_menu_action_opens_and_closes_menu() {
         start_y: 20,
         additive: false,
     };
-    state.handle_action(Action::ToggleRadialMenu);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleRadialMenu);
     assert!(!state.is_radial_menu_open());
 }
 
@@ -661,15 +668,40 @@ fn tick_radial_menu_paint_requests_redraw_only_at_deadline() {
 #[test]
 fn blind_flick_release_commits_wedge_by_direction() {
     let mut state = create_test_input_state();
-    let layout = open_via_right_press(&mut state);
+    let measurer = crate::draw::TextMeasurer::default();
+    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let resources = crate::input::state::InputTextResources {
+        measurer: &measurer,
+        ui_engine: &ui_engine,
+    };
+    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.on_mouse_press_with_canvas_and_resources(
+        resources,
+        MouseButton::Right,
+        400,
+        300,
+        400,
+        300,
+    );
+    state.update_radial_menu_layout(800, 600);
+    let layout = state.radial_menu.layout.unwrap();
 
     let (x, y) = point_in_compass_wedge(&layout, CompassDir::NE);
-    state.on_mouse_motion(x as i32, y as i32);
+    state.on_mouse_motion_with_canvas_and_resources(
+        resources, x as i32, y as i32, x as i32, y as i32,
+    );
     assert!(
         !state.radial_menu_has_painted(),
         "the flick happens before the paint deadline"
     );
-    state.on_mouse_release(MouseButton::Right, x as i32, y as i32);
+    state.on_mouse_release_with_canvas_and_resources(
+        resources,
+        MouseButton::Right,
+        x as i32,
+        y as i32,
+        x as i32,
+        y as i32,
+    );
 
     assert!(!state.is_radial_menu_open(), "flick commit closes the menu");
     assert_eq!(state.active_tool(), Tool::Marker);
@@ -982,7 +1014,10 @@ fn recent_colors_are_deduped_most_recent_first_and_capped() {
     };
     // Steps of 0.125 are exact binary fractions, so equality is exact.
     for i in 0..8 {
-        state.apply_color_from_ui(color(i as f64 * 0.125));
+        state.apply_color_from_ui_with_measurer(
+            &crate::draw::TextMeasurer::default(),
+            color(i as f64 * 0.125),
+        );
     }
     assert_eq!(state.style.recent_colors.len(), 6, "recents are capped");
     assert_eq!(
@@ -992,7 +1027,7 @@ fn recent_colors_are_deduped_most_recent_first_and_capped() {
     );
 
     // Re-applying an existing color moves it to the front without growing.
-    state.apply_color_from_ui(color(0.5));
+    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), color(0.5));
     assert_eq!(state.style.recent_colors.len(), 6);
     assert_eq!(state.style.recent_colors[0], color(0.5));
     assert_eq!(
@@ -1016,14 +1051,14 @@ fn radial_ring_appends_recents_after_quick_palette_without_duplicates() {
         b: 0.33,
         a: 1.0,
     };
-    state.apply_color_from_ui(unique);
+    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), unique);
     // A recent identical to a quick swatch is filtered from the ring.
     let quick0 = state
         .style
         .quick_colors
         .radial_color_for_index(0)
         .expect("quick color 0");
-    state.apply_color_from_ui(quick0);
+    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), quick0);
 
     let swatches = state.radial_ring_swatches();
     assert_eq!(swatches.len(), quick_len + 1);
@@ -1041,14 +1076,14 @@ fn recent_color_segment_applies_through_the_color_path() {
         b: 0.33,
         a: 1.0,
     };
-    state.apply_color_from_ui(unique);
+    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), unique);
     // Move the current color away so applying the recent is observable.
     let quick0 = state
         .style
         .quick_colors
         .radial_color_for_index(0)
         .expect("quick color 0");
-    state.apply_color_from_ui(quick0);
+    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), quick0);
     let quick_len = state.style.quick_colors.radial_rendered_len();
 
     let layout = open_with_layout(&mut state);

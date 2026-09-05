@@ -3,14 +3,16 @@ use super::types::Row;
 // scorer, reused directly so help search and the command palette rank
 // identically (no per-surface reimplementation).
 use crate::input::state::{action_meta_token_score, fuzzy_score, query_tokens};
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::UiTextStyle;
 
 // Substring match highlighting is shared with the command palette; matching
 // itself is fuzzy (see [`row_matches`]), so a fuzzy-only match draws none.
-pub(crate) use crate::ui::text_highlight::{HighlightStyle, draw_highlight, find_match_range};
+pub(crate) use crate::ui::text_highlight::{
+    HighlightStyle, draw_highlight_with_engine, find_match_range,
+};
 // Measured trimming lives with the other shared text primitives so surfaces
 // outside this overlay (the color picker's title) use the same implementation.
-pub(crate) use crate::ui::primitives::ellipsize_to_fit;
+pub(crate) use crate::ui::primitives::ellipsize_to_fit_with_engine;
 
 /// Fuzzy row match: every query token must fuzzy-match the shortcut string
 /// (`key`), the visible action description, or — for rows that carry an action
@@ -40,7 +42,9 @@ pub(crate) fn title_matches(title: &str, needle_lower: &str) -> bool {
     tokens.iter().all(|token| fuzzy_score(token, title) > 0)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_segmented_text(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     baseline: f64,
@@ -58,7 +62,7 @@ pub(crate) fn draw_segmented_text(
     };
     for (text, color) in segments {
         ctx.set_source_rgba(color[0], color[1], color[2], color[3]);
-        let extents = draw_text_baseline(ctx, style, text, cursor_x, baseline, None);
+        let extents = engine.draw_baseline(ctx, style, text, cursor_x, baseline, None);
         cursor_x += extents.width();
     }
 }

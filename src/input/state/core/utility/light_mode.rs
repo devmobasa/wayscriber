@@ -1,6 +1,8 @@
 use super::super::base::{DesktopEnvironment, InputState, ShellMode};
 use super::super::modes::LightModeRestore;
 use crate::domain::Action;
+use crate::draw::TextMeasurer;
+use crate::input::state::InputTextResources;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::tool::Tool;
 
@@ -52,9 +54,12 @@ impl InputState {
             .unwrap_or_else(|| self.active_tool())
     }
 
-    pub(crate) fn toggle_light_mode(&mut self) -> bool {
+    pub(crate) fn toggle_light_mode_with_resources(
+        &mut self,
+        resources: InputTextResources<'_>,
+    ) -> bool {
         if self.light_mode_active() {
-            self.exit_light_mode();
+            self.exit_light_mode_with(resources.measurer);
         } else {
             if !self.light_mode_supported() {
                 self.push_toast(
@@ -65,21 +70,49 @@ impl InputState {
                 self.needs_redraw = true;
                 return false;
             }
-            self.enter_light_mode(false);
+            self.enter_light_mode_with_resources(resources, false);
         }
         self.light_mode_active()
     }
 
     pub fn toggle_light_mode_drawing(&mut self) -> bool {
+        let measurer = TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.toggle_light_mode_drawing_with_resources(InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        })
+    }
+
+    pub(crate) fn toggle_light_mode_drawing_with_resources(
+        &mut self,
+        resources: InputTextResources<'_>,
+    ) -> bool {
         let drawing = if self.light_mode_active() {
             !self.light_mode_drawing_active()
         } else {
             true
         };
-        self.set_light_mode_drawing(drawing)
+        self.set_light_mode_drawing_with_resources(resources, drawing)
     }
 
     pub fn set_light_mode_drawing(&mut self, drawing: bool) -> bool {
+        let measurer = TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.set_light_mode_drawing_with_resources(
+            InputTextResources {
+                measurer: &measurer,
+                ui_engine: &ui_engine,
+            },
+            drawing,
+        )
+    }
+
+    pub(crate) fn set_light_mode_drawing_with_resources(
+        &mut self,
+        resources: InputTextResources<'_>,
+        drawing: bool,
+    ) -> bool {
         if !self.light_mode_active() {
             if drawing {
                 if !self.light_mode_supported() {
@@ -91,7 +124,7 @@ impl InputState {
                     self.needs_redraw = true;
                     return false;
                 }
-                self.enter_light_mode(true);
+                self.enter_light_mode_with_resources(resources, true);
             }
             return self.light_mode_drawing_active();
         }
@@ -100,7 +133,7 @@ impl InputState {
             return self.light_mode_drawing_active();
         }
 
-        self.cancel_active_interaction();
+        self.cancel_active_interaction_with(resources.measurer);
         self.modes.set_light_drawing(drawing);
         let message = if drawing {
             "Light Mode drawing"
@@ -113,18 +146,18 @@ impl InputState {
         self.light_mode_drawing_active()
     }
 
-    pub(crate) fn exit_light_mode(&mut self) {
+    pub(crate) fn exit_light_mode_with(&mut self, measurer: &TextMeasurer) {
         if !self.light_mode_active() {
             return;
         }
 
-        self.cancel_active_interaction();
+        self.cancel_active_interaction_with(measurer);
 
         if let Some(restore) = self.modes.end_light() {
             self.ui_visibility.show_status_bar = restore.show_status_bar();
             self.ui_visibility.show_tool_preview = restore.show_tool_preview();
             self.restore_toolbar_visibility(restore.toolbar_visibility());
-            self.set_tool_override(restore.tool_override());
+            self.set_tool_override_with(measurer, restore.tool_override());
             if self.click_highlight_enabled() != restore.click_highlight_enabled() {
                 self.toggle_click_highlight();
             }
@@ -139,22 +172,26 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    fn enter_light_mode(&mut self, drawing: bool) {
+    fn enter_light_mode_with_resources(
+        &mut self,
+        resources: InputTextResources<'_>,
+        drawing: bool,
+    ) {
         if self.focus_mode_active() {
-            self.toggle_focus_mode();
+            self.toggle_focus_mode_with_resources(resources);
         }
         if self.presenter_mode_active() {
-            self.toggle_presenter_mode();
+            self.toggle_presenter_mode_with_resources(resources);
         }
 
-        self.cancel_active_interaction();
+        self.cancel_active_interaction_with(resources.measurer);
         self.close_context_menu();
         self.close_properties_panel();
         self.close_radial_menu();
         self.close_board_picker();
         self.close_color_picker_popup(false);
         if self.help_overlay.visible {
-            self.toggle_help_overlay();
+            self.close_help_overlay();
         }
 
         let restore = LightModeRestore::capture(
@@ -168,7 +205,7 @@ impl InputState {
         self.ui_visibility.show_status_bar = false;
         self.ui_visibility.show_tool_preview = false;
         self.hide_toolbar_visibility();
-        self.set_tool_override(Some(Tool::Pen));
+        self.set_tool_override_with(resources.measurer, Some(Tool::Pen));
         if self.click_highlight_forced_in_light_mode() && !self.click_highlight_enabled() {
             self.toggle_click_highlight();
         }

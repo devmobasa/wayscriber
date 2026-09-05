@@ -1,4 +1,5 @@
 use super::InputState;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
 use crate::draw::{EmbeddedImage, Shape};
 use crate::screen_pixels::EmbeddedImageLimits;
@@ -13,8 +14,9 @@ pub(crate) struct BoardPasteTarget {
 }
 
 impl InputState {
-    pub(crate) fn insert_captured_image(
+    pub(crate) fn insert_captured_image_with(
         &mut self,
+        measurer: &TextMeasurer,
         image: EmbeddedImage,
         target: &BoardPasteTarget,
     ) -> bool {
@@ -76,7 +78,7 @@ impl InputState {
         else {
             return false;
         };
-        let bounds = stored.bounding_box();
+        let bounds = stored.bounding_box_with(measurer);
         frame.push_undo_action(
             UndoAction::Create {
                 shapes: vec![(index, stored)],
@@ -86,7 +88,7 @@ impl InputState {
         self.mark_session_dirty();
         if target_active {
             self.mark_selection_dirty_region(bounds);
-            self.invalidate_hit_cache_for(id);
+            self.invalidate_hit_cache_for_with(measurer, id);
             self.set_selection(vec![id]);
         }
         self.needs_redraw = true;
@@ -127,7 +129,11 @@ mod tests {
         let mut state = make_test_input_state();
         let target = target(&state);
 
-        assert!(state.insert_captured_image(image(16), &target));
+        assert!(state.insert_captured_image_with(
+            &crate::draw::TextMeasurer::default(),
+            image(16),
+            &target
+        ));
 
         let frame = state.boards.active_frame();
         assert_eq!(frame.shapes.len(), 1);
@@ -151,7 +157,11 @@ mod tests {
         let mut target = target(&state);
         target.page_generation = target.page_generation.wrapping_add(1);
 
-        assert!(!state.insert_captured_image(image(16), &target));
+        assert!(!state.insert_captured_image_with(
+            &crate::draw::TextMeasurer::default(),
+            image(16),
+            &target
+        ));
         assert!(state.boards.active_frame().shapes.is_empty());
         assert_eq!(
             state.test_active_toast_message(),
@@ -165,7 +175,11 @@ mod tests {
         let target = target(&state);
         assert!(state.boards.next_board(), "test config has another board");
 
-        assert!(!state.insert_captured_image(image(16), &target));
+        assert!(!state.insert_captured_image_with(
+            &crate::draw::TextMeasurer::default(),
+            image(16),
+            &target
+        ));
         assert!(state.boards.board_states().iter().all(|board| {
             board
                 .pages
@@ -185,7 +199,11 @@ mod tests {
         let target = target(&state);
         let too_large = EmbeddedImageLimits::default().max_bytes() + 1;
 
-        assert!(!state.insert_captured_image(image(too_large), &target));
+        assert!(!state.insert_captured_image_with(
+            &crate::draw::TextMeasurer::default(),
+            image(too_large),
+            &target
+        ));
         assert!(state.boards.active_frame().shapes.is_empty());
         assert_eq!(
             state.test_active_toast_message(),

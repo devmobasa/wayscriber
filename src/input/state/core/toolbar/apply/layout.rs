@@ -62,8 +62,9 @@ impl InputState {
     }
 
     /// Set the top strip's display form (micro chip click → `Full`).
-    pub(super) fn apply_toolbar_set_top_display_mode(
+    pub(super) fn apply_toolbar_set_top_display_mode_with_resources(
         &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
         mode: crate::config::TopDisplayMode,
     ) -> bool {
         // Same presenter gate as Action::CycleToolbarDisplay: while presenter
@@ -77,7 +78,7 @@ impl InputState {
         if self.top_display_state() == mode {
             return false;
         }
-        self.set_top_display_mode(mode);
+        self.set_top_display_mode_with_resources(resources.ui_engine, resources.measurer, mode);
         true
     }
 
@@ -204,7 +205,11 @@ impl InputState {
         }
     }
 
-    pub(super) fn apply_toolbar_toggle_status_bar(&mut self, show: bool) -> bool {
+    pub(super) fn apply_toolbar_toggle_status_bar_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        show: bool,
+    ) -> bool {
         if self.presenter_mode_active() && self.presenter_mode_config().hide_status_bar {
             return false;
         }
@@ -213,7 +218,7 @@ impl InputState {
         self.break_focus_mode();
         if self.ui_visibility.show_status_bar != show {
             self.ui_visibility.show_status_bar = show;
-            self.refresh_status_hud_layout();
+            self.refresh_status_hud_layout_with_resources(resources.ui_engine, resources.measurer);
             self.needs_redraw = true;
             true
         } else {
@@ -231,20 +236,44 @@ impl InputState {
         true
     }
 
-    pub(super) fn apply_toolbar_set_status_bar_item_visible(
+    pub(super) fn apply_toolbar_set_status_bar_item_visible_with_resources(
         &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
         item: crate::config::StatusBarItem,
         visible: bool,
     ) -> bool {
-        self.set_status_bar_item_visible(item, visible)
+        self.set_status_bar_item_visible_with_resources(
+            resources.ui_engine,
+            resources.measurer,
+            item,
+            visible,
+        )
     }
 
-    pub(super) fn apply_toolbar_toggle_status_board_badge(&mut self, show: bool) -> bool {
-        self.set_status_bar_item_visible(crate::config::StatusBarItem::Board, show)
+    pub(super) fn apply_toolbar_toggle_status_board_badge_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        show: bool,
+    ) -> bool {
+        self.set_status_bar_item_visible_with_resources(
+            resources.ui_engine,
+            resources.measurer,
+            crate::config::StatusBarItem::Board,
+            show,
+        )
     }
 
-    pub(super) fn apply_toolbar_toggle_status_page_badge(&mut self, show: bool) -> bool {
-        self.set_status_bar_item_visible(crate::config::StatusBarItem::Page, show)
+    pub(super) fn apply_toolbar_toggle_status_page_badge_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        show: bool,
+    ) -> bool {
+        self.set_status_bar_item_visible_with_resources(
+            resources.ui_engine,
+            resources.measurer,
+            crate::config::StatusBarItem::Page,
+            show,
+        )
     }
 
     pub(super) fn apply_toolbar_toggle_floating_badge_always(&mut self, show: bool) -> bool {
@@ -745,5 +774,69 @@ mod tests {
                 .hidden
                 .contains(&ToolbarSectionFlag::Presets.item_id())
         );
+    }
+
+    #[test]
+    fn explicit_status_layout_events_preserve_synchronous_geometry_and_results() {
+        use crate::config::{StatusBarItem, StatusBarStyle, StatusPosition, TopDisplayMode};
+        use crate::ui_text::UiTextEngine;
+        let engine = UiTextEngine::default();
+        let measurer = crate::draw::TextMeasurer::default();
+        let resources = crate::input::state::InputTextResources {
+            measurer: &measurer,
+            ui_engine: &engine,
+        };
+        for event in [
+            ToolbarEvent::SetTopDisplayMode(TopDisplayMode::Micro),
+            ToolbarEvent::ToggleStatusBar(false),
+            ToolbarEvent::SetStatusBarItemVisible(StatusBarItem::Help, false),
+            ToolbarEvent::ToggleStatusBoardBadge(false),
+            ToolbarEvent::ToggleStatusPageBadge(false),
+        ] {
+            let mut explicit = make_test_input_state();
+            let mut legacy = make_test_input_state();
+            for input in [&mut explicit, &mut legacy] {
+                input.update_status_hud_layout_for_pointer_with_resources(
+                    crate::input::state::InputTextResources {
+                        measurer: &measurer,
+                        ui_engine: &engine,
+                    },
+                    StatusPosition::BottomLeft,
+                    &StatusBarStyle::default(),
+                    1280,
+                    720,
+                    true,
+                );
+            }
+            let changed =
+                match event.clone() {
+                    ToolbarEvent::SetTopDisplayMode(mode) => {
+                        explicit.apply_toolbar_set_top_display_mode_with_resources(resources, mode)
+                    }
+                    ToolbarEvent::ToggleStatusBar(show) => {
+                        explicit.apply_toolbar_toggle_status_bar_with_resources(resources, show)
+                    }
+                    ToolbarEvent::SetStatusBarItemVisible(item, visible) => explicit
+                        .apply_toolbar_set_status_bar_item_visible_with_resources(
+                            resources, item, visible,
+                        ),
+                    ToolbarEvent::ToggleStatusBoardBadge(show) => explicit
+                        .apply_toolbar_toggle_status_board_badge_with_resources(resources, show),
+                    ToolbarEvent::ToggleStatusPageBadge(show) => explicit
+                        .apply_toolbar_toggle_status_page_badge_with_resources(resources, show),
+                    _ => unreachable!(),
+                };
+            assert_eq!(changed, legacy.apply_toolbar_event(event));
+            assert_eq!(
+                explicit.ui_visibility.show_status_bar,
+                legacy.ui_visibility.show_status_bar
+            );
+            assert_eq!(explicit.top_display_state(), legacy.top_display_state());
+            assert_eq!(
+                format!("{:?}", explicit.status_hud_layout()),
+                format!("{:?}", legacy.status_hud_layout())
+            );
+            assert_eq!(explicit.status_hud.hover(), legacy.status_hud.hover());
+        }
     }
 }

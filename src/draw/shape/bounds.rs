@@ -1,6 +1,7 @@
 use crate::util::{self, Rect};
 
-use super::arrow_label::{arrow_label_ends, arrow_label_layout};
+use super::arrow_label::{arrow_label_ends, arrow_label_layout_with};
+use super::text_cache::TextMeasurer;
 use super::types::{ArrowLabel, ArrowStyle};
 
 const MIN_COORDINATE: i64 = i32::MIN as i64;
@@ -122,7 +123,8 @@ pub(crate) fn bounding_box_for_ellipse(
 /// behind the shaft. The arc is unioned from the same sampler the renderer
 /// walks, so the box cannot be tighter than what was drawn.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn bounding_box_for_arrow(
+pub(crate) fn bounding_box_for_arrow_with(
+    measurer: &TextMeasurer,
     x1: i32,
     y1: i32,
     x2: i32,
@@ -180,7 +182,8 @@ pub(crate) fn bounding_box_for_arrow(
 
     if let Some(label) = label {
         let label_text = label.value.to_string();
-        if let Some(layout) = arrow_label_layout(
+        if let Some(layout) = arrow_label_layout_with(
+            measurer,
             label_tip_x,
             label_tip_y,
             label_tail_x,

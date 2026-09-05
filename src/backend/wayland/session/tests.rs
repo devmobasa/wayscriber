@@ -259,6 +259,7 @@ fn runtime_save_as_new_path_writes_and_switches_active_target() {
 
     let report = save_named_session_as_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &target_options.session_file_path(),
         stored_session::SaveAsOverwrite::Deny,
@@ -312,6 +313,7 @@ fn runtime_save_as_rejects_existing_target_without_confirmation() {
 
     let err = save_named_session_as_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &target_options.session_file_path(),
         stored_session::SaveAsOverwrite::Deny,
@@ -351,6 +353,7 @@ fn runtime_save_as_rejects_existing_sidecar_without_confirmation() {
 
     let err = save_named_session_as_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &target_options.session_file_path(),
         stored_session::SaveAsOverwrite::Deny,
@@ -453,6 +456,7 @@ fn runtime_save_as_confirmed_overwrite_removes_stale_sidecars_but_keeps_lock() {
 
     save_named_session_as_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &target_options.session_file_path(),
         stored_session::SaveAsOverwrite::ConfirmReplace,
@@ -488,6 +492,7 @@ fn runtime_save_as_current_target_noop_does_not_require_overwrite_cleanup() {
     let mut session_state = SessionState::new(Some(current_options.clone()));
     let report = save_named_session_as_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &current_options.session_file_path(),
         stored_session::SaveAsOverwrite::Deny,
@@ -523,6 +528,7 @@ fn runtime_save_as_rejects_symlink_before_current_target_shortcut() {
     let mut session_state = SessionState::new(Some(current_options.clone()));
     let err = save_named_session_as_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &symlink_path,
         stored_session::SaveAsOverwrite::Deny,
@@ -556,8 +562,13 @@ fn runtime_clear_persists_boundary_then_clears_live_session() {
     session_state.mark_loaded(true);
     session_state.record_input_dirty(Instant::now(), true);
 
-    let report = clear_current_session_runtime(&mut input, &mut session_state, Instant::now())
-        .expect("runtime clear");
+    let report = clear_current_session_runtime(
+        &mut input,
+        &crate::draw::TextMeasurer::default(),
+        &mut session_state,
+        Instant::now(),
+    )
+    .expect("runtime clear");
 
     assert_eq!(report.cleared_path, current_options.session_file_path());
     assert!(report.persisted);
@@ -592,8 +603,13 @@ fn runtime_clear_primary_cleanup_failure_after_marker_still_clears_live_session(
     session_state.mark_loaded(true);
     session_state.record_input_dirty(Instant::now(), true);
 
-    let report = clear_current_session_runtime(&mut input, &mut session_state, Instant::now())
-        .expect("runtime clear should treat durable marker as committed");
+    let report = clear_current_session_runtime(
+        &mut input,
+        &crate::draw::TextMeasurer::default(),
+        &mut session_state,
+        Instant::now(),
+    )
+    .expect("runtime clear should treat durable marker as committed");
 
     assert_eq!(report.cleared_path, current_options.session_file_path());
     assert_eq!(input.boards.active_frame().shapes.len(), 0);
@@ -623,8 +639,13 @@ fn runtime_clear_persistence_failure_leaves_live_session_unchanged() {
     session_state.mark_loaded(true);
     session_state.record_input_dirty(Instant::now(), true);
 
-    let err = clear_current_session_runtime(&mut input, &mut session_state, Instant::now())
-        .expect_err("symlink primary should abort durable clear before memory mutation");
+    let err = clear_current_session_runtime(
+        &mut input,
+        &crate::draw::TextMeasurer::default(),
+        &mut session_state,
+        Instant::now(),
+    )
+    .expect_err("symlink primary should abort durable clear before memory mutation");
 
     assert!(format!("{err:#}").contains("symlink"), "{err:#}");
     assert_eq!(input.boards.active_frame().shapes.len(), 1);
@@ -660,6 +681,7 @@ fn runtime_clear_saved_tool_state_resets_live_tools_and_preserves_saved_boards()
     config.ui.show_status_bar = true;
     let report = clear_saved_tool_state_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         stored_session::ToolStateSnapshot::from_config(&config),
         Instant::now(),
@@ -705,6 +727,7 @@ fn runtime_clear_saved_tool_state_without_active_session_resets_live_tools_only(
 
     let report = clear_saved_tool_state_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         stored_session::ToolStateSnapshot::from_config(&config),
         Instant::now(),
@@ -731,6 +754,7 @@ fn runtime_open_success_commits_target_and_catalog_after_apply() {
     let mut session_state = SessionState::new(Some(current_options.clone()));
     let report = open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -781,6 +805,7 @@ fn runtime_open_marks_full_damage_after_replacing_boards() {
 
     open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -826,6 +851,7 @@ fn runtime_open_uses_recoverable_backup_without_mutating_candidate_artifacts() {
     let mut session_state = SessionState::new(Some(current_options));
     open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -869,6 +895,7 @@ fn runtime_open_replaces_boards_missing_from_candidate_snapshot() {
 
     open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -901,6 +928,7 @@ fn runtime_open_resyncs_canvas_pointer_after_same_active_board_view_offset() {
 
     open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -933,6 +961,7 @@ fn runtime_open_releases_old_board_slots_for_candidate_boards() {
 
     open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -970,6 +999,7 @@ fn runtime_open_apply_capacity_failure_keeps_current_session_active() {
 
     let err = open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1030,6 +1060,7 @@ fn runtime_open_rejects_full_candidate_snapshot_that_omits_overlay_board() {
     let mut session_state = SessionState::new(Some(current_options.clone()));
     let err = open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1079,6 +1110,7 @@ fn runtime_open_clears_deleted_page_restore_state_from_previous_session() {
 
     open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1112,6 +1144,7 @@ fn runtime_open_cancels_active_interaction_from_previous_session() {
 
     open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1133,7 +1166,7 @@ fn runtime_open_closes_active_board_picker_drag() {
     let candidate_path = candidate_options.session_file_path();
 
     let mut input = test_input_state();
-    input.open_board_picker();
+    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
     assert!(input.board_picker_start_drag(0));
     assert!(input.is_board_picker_open());
     assert!(input.board_picker_is_dragging());
@@ -1141,6 +1174,7 @@ fn runtime_open_closes_active_board_picker_drag() {
 
     open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1163,7 +1197,7 @@ fn runtime_open_closes_active_board_picker_page_drag() {
     let candidate_path = candidate_options.session_file_path();
 
     let mut input = test_input_state();
-    input.open_board_picker();
+    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
     assert!(input.board_picker_start_page_drag(0));
     assert!(input.is_board_picker_open());
     assert!(input.board_picker_is_page_dragging());
@@ -1171,6 +1205,7 @@ fn runtime_open_closes_active_board_picker_page_drag() {
 
     open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1185,6 +1220,8 @@ fn runtime_open_closes_active_board_picker_page_drag() {
 
 #[test]
 fn runtime_open_saves_current_after_canceling_active_selection_move() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let temp = crate::test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-active-selection-move");
@@ -1196,7 +1233,7 @@ fn runtime_open_saves_current_after_canceling_active_selection_move() {
     let shape_id = add_line(&mut input, 20);
     input.set_selection(vec![shape_id]);
     let snapshots = input.capture_movable_selection_snapshots();
-    assert!(input.apply_translation_to_selection(100, 0));
+    assert!(input.apply_translation_to_selection_with(&test_text_measurer, 100, 0));
     input.state = DrawingState::MovingSelection {
         last_x: 100,
         last_y: 0,
@@ -1208,6 +1245,7 @@ fn runtime_open_saves_current_after_canceling_active_selection_move() {
 
     open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1230,6 +1268,8 @@ fn runtime_open_saves_current_after_canceling_active_selection_move() {
 
 #[test]
 fn runtime_open_saves_current_after_canceling_active_text_edit() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let temp = crate::test_temp::tempdir().expect("tempdir");
     let _env = EnvGuard::set_xdg_data_home(temp.path());
     let current_options = named_options(temp.path(), "current-active-text-edit");
@@ -1249,7 +1289,7 @@ fn runtime_open_saves_current_after_canceling_active_text_edit() {
         wrap_width: Some(180),
     });
     input.set_selection(vec![shape_id]);
-    assert!(input.edit_selected_text());
+    assert!(input.edit_selected_text_with(&test_text_measurer));
     let Shape::Text { text, .. } = &input
         .boards
         .active_frame()
@@ -1269,6 +1309,7 @@ fn runtime_open_saves_current_after_canceling_active_text_edit() {
 
     open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1312,6 +1353,7 @@ fn runtime_open_saves_current_after_canceling_color_picker_preview() {
 
     open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1333,6 +1375,8 @@ fn runtime_open_saves_current_after_canceling_color_picker_preview() {
 #[cfg(unix)]
 #[test]
 fn runtime_open_current_save_failure_preserves_active_selection_move() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let temp = crate::test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-active-save-fail");
     let current_target = temp.path().join("current-active-symlink-target");
@@ -1346,7 +1390,7 @@ fn runtime_open_current_save_failure_preserves_active_selection_move() {
     let shape_id = add_line(&mut input, 9);
     input.set_selection(vec![shape_id]);
     let snapshots = input.capture_movable_selection_snapshots();
-    assert!(input.apply_translation_to_selection(100, 0));
+    assert!(input.apply_translation_to_selection_with(&test_text_measurer, 100, 0));
     input.state = DrawingState::MovingSelection {
         last_x: 100,
         last_y: 0,
@@ -1358,6 +1402,7 @@ fn runtime_open_current_save_failure_preserves_active_selection_move() {
 
     let err = open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1381,6 +1426,7 @@ fn runtime_open_current_save_failure_preserves_active_selection_move() {
 #[cfg(unix)]
 #[test]
 fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selection_move() {
+    let measurer = crate::draw::TextMeasurer::default();
     let temp = crate::test_temp::tempdir().expect("tempdir");
     let current_options = named_options(temp.path(), "current-spatial-save-fail");
     let current_target = temp.path().join("current-spatial-symlink-target");
@@ -1402,15 +1448,15 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
         color: input.style.current_color,
         thick: input.style.current_thickness,
     });
-    input.ensure_spatial_index_for_active_frame();
+    input.ensure_spatial_index_for_active_frame_with(&measurer);
     assert!(input.has_spatial_index());
 
     input.set_selection(vec![shape_id]);
     let snapshots = input.capture_movable_selection_snapshots();
-    assert!(input.apply_translation_to_selection(200, 0));
+    assert!(input.apply_translation_to_selection_with(&measurer, 200, 0));
     assert!(
         input
-            .hit_test_all_for_points(&[(205, 5)], input.hit_test_tolerance())
+            .hit_test_all_for_points_with(&measurer, &[(205, 5)], input.hit_test_tolerance())
             .contains(&shape_id)
     );
     input.state = DrawingState::MovingSelection {
@@ -1424,6 +1470,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
 
     let err = open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1434,7 +1481,7 @@ fn runtime_open_current_save_failure_preserves_spatial_index_for_active_selectio
     assert!(input.has_spatial_index());
     assert!(
         input
-            .hit_test_all_for_points(&[(205, 5)], input.hit_test_tolerance())
+            .hit_test_all_for_points_with(&measurer, &[(205, 5)], input.hit_test_tolerance())
             .contains(&shape_id),
         "hit testing should use the restored in-progress selection position"
     );
@@ -1474,6 +1521,7 @@ fn runtime_open_clears_stale_selection_and_hit_cache() {
 
     open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_path,
         Instant::now(),
@@ -1500,6 +1548,7 @@ fn runtime_open_candidate_failure_after_current_save_keeps_current_active() {
 
     let err = open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1561,6 +1610,7 @@ fn runtime_open_rejects_readonly_candidate_parent_before_commit() {
     let mut session_state = SessionState::new(Some(current_options.clone()));
     let err = open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1598,6 +1648,7 @@ fn runtime_open_current_save_failure_aborts_before_candidate_load() {
 
     let err = open_named_session_runtime(
         &mut input,
+        &crate::draw::TextMeasurer::default(),
         &mut session_state,
         &candidate_options.session_file_path(),
         Instant::now(),
@@ -1713,6 +1764,13 @@ fn protected_session_path_blocks_save_until_session_is_dirty() {
 /// autosave or final save would replace the session that failed to restore.
 #[test]
 fn protected_session_path_survives_a_run_only_status_bar_toggle() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display");
     options.autosave_enabled = true;
     options.persist_transparent = true;
@@ -1721,7 +1779,7 @@ fn protected_session_path_survives_a_run_only_status_bar_toggle() {
     state.protect_session_path(path.clone());
 
     let mut input = test_input_state();
-    input.handle_action(Action::ToggleStatusBar);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleStatusBar);
 
     assert!(
         !input.ui_visibility.show_status_bar,

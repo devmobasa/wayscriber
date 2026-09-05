@@ -18,13 +18,20 @@ fn create_light_mode_test_state_with_click_highlight(
 
 #[test]
 fn light_mode_enters_passthrough_and_hides_heavy_ui() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_light_mode_test_state();
     state.ui_visibility.show_status_bar = true;
     state.test_set_toolbar_visibility_state(true, true, state.toolbar_top_pinned());
     state.ui_visibility.show_tool_preview = true;
     state.set_tool_override(Some(Tool::Arrow));
 
-    state.handle_action(Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
 
     assert!(state.light_mode_active());
     assert!(!state.light_mode_drawing_active());
@@ -38,16 +45,23 @@ fn light_mode_enters_passthrough_and_hides_heavy_ui() {
 
 #[test]
 fn light_mode_drawing_toggle_disables_passthrough_without_exiting() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_light_mode_test_state();
 
-    state.handle_action(Action::ToggleLightMode);
-    state.handle_action(Action::ToggleLightModeDrawing);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightModeDrawing);
 
     assert!(state.light_mode_active());
     assert!(state.light_mode_drawing_active());
     assert!(!state.light_mode_passthrough());
 
-    state.handle_action(Action::ToggleLightModeDrawing);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightModeDrawing);
 
     assert!(state.light_mode_active());
     assert!(!state.light_mode_drawing_active());
@@ -66,14 +80,21 @@ fn light_draw_off_does_not_enter_light_mode() {
 
 #[test]
 fn light_mode_restores_previous_ui_and_tool_on_exit() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_light_mode_test_state();
     state.ui_visibility.show_status_bar = true;
     state.test_set_toolbar_visibility_state(true, false, state.toolbar_top_pinned());
     state.ui_visibility.show_tool_preview = true;
     state.set_tool_override(Some(Tool::Marker));
 
-    state.handle_action(Action::ToggleLightMode);
-    state.handle_action(Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
 
     assert!(!state.light_mode_active());
     assert!(!state.light_mode_drawing_active());
@@ -87,15 +108,22 @@ fn light_mode_restores_previous_ui_and_tool_on_exit() {
 
 #[test]
 fn light_mode_force_enables_click_highlight_by_default_and_restores_on_exit() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_light_mode_test_state();
     assert!(!state.click_highlight_enabled());
 
-    state.handle_action(Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
 
     assert!(state.light_mode_active());
     assert!(state.click_highlight_enabled());
 
-    state.handle_action(Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
 
     assert!(!state.light_mode_active());
     assert!(!state.click_highlight_enabled());
@@ -103,16 +131,23 @@ fn light_mode_force_enables_click_highlight_by_default_and_restores_on_exit() {
 
 #[test]
 fn light_mode_can_leave_click_highlight_disabled() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut settings = ClickHighlightSettings::disabled();
     settings.force_in_light_mode = false;
     let mut state = create_light_mode_test_state_with_click_highlight(settings);
 
-    state.handle_action(Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
 
     assert!(state.light_mode_active());
     assert!(!state.click_highlight_enabled());
 
-    state.handle_action(Action::ToggleLightModeDrawing);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightModeDrawing);
 
     assert!(state.light_mode_drawing_active());
     assert!(!state.click_highlight_enabled());
@@ -120,12 +155,19 @@ fn light_mode_can_leave_click_highlight_disabled() {
 
 #[test]
 fn light_mode_and_presenter_mode_are_mutually_exclusive() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_light_mode_test_state();
 
-    state.handle_action(Action::TogglePresenterMode);
+    state.handle_action_with_resources(test_text_resources, Action::TogglePresenterMode);
     assert!(state.presenter_mode_active());
 
-    state.handle_action(Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
 
     assert!(state.light_mode_active());
     assert!(!state.presenter_mode_active());
@@ -133,9 +175,16 @@ fn light_mode_and_presenter_mode_are_mutually_exclusive() {
 
 #[test]
 fn light_mode_does_not_enter_without_layer_shell() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
 
-    state.handle_action(Action::ToggleLightMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
 
     assert!(!state.light_mode_active());
     assert!(!state.light_mode_passthrough());

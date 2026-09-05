@@ -3,7 +3,7 @@ use crate::{
     config::Action,
     input::{
         InputState, Key,
-        state::{InputEffect, InputEffectDrain},
+        state::{InputEffect, InputEffectDrain, InputTextResources},
     },
 };
 
@@ -33,23 +33,35 @@ impl InputHudSnapshot {
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn apply_input_key(&mut self, key: Key) {
-        self.apply_input_update(|input_state| input_state.on_key_press(key));
+        self.apply_input_update(|input_state, resources| {
+            input_state.on_key_press_with_resources(resources, key)
+        });
     }
 
     pub(in crate::backend::wayland) fn apply_input_key_repeat(&mut self, key: Key) {
-        self.apply_input_update(|input_state| input_state.on_key_repeat(key));
+        self.apply_input_update(|input_state, resources| {
+            input_state.on_key_repeat_with_resources(resources, key)
+        });
     }
 
     pub(in crate::backend::wayland) fn dispatch_input_action(&mut self, action: Action) {
-        self.apply_input_update(|input_state| input_state.handle_action(action));
+        self.apply_input_update(|input_state, resources| {
+            input_state.handle_action_with_resources(resources, action)
+        });
     }
 
-    fn apply_input_update(&mut self, update: impl FnOnce(&mut InputState)) {
+    fn apply_input_update(&mut self, update: impl FnOnce(&mut InputState, InputTextResources<'_>)) {
         #[cfg(feature = "tablet-input")]
         let prev_thickness = self.input_state.style.current_thickness;
         let hud_before = InputHudSnapshot::from_input_state(&self.input_state);
 
-        update(&mut self.input_state);
+        update(
+            &mut self.input_state,
+            InputTextResources {
+                measurer: self.render.text_measurer(),
+                ui_engine: self.render.ui_text(),
+            },
+        );
         self.input_state.needs_redraw = true;
         self.sync_overlay_interactivity();
 

@@ -82,7 +82,9 @@ fn persist_final_session_direct(state: &mut WaylandState) -> Result<(), anyhow::
     if should_skip_protected_session_save(state, &options) {
         return Ok(());
     }
-    let snapshot = state.input_state.snapshot_for_persistence(&options);
+    let snapshot = state
+        .input_state
+        .snapshot_for_persistence_with(state.render.text_measurer(), &options);
     let has_board_data = snapshot
         .as_ref()
         .is_some_and(session::SessionSnapshot::has_board_data);
@@ -142,7 +144,9 @@ fn persist_final_session(state: &mut WaylandState) -> Result<(), anyhow::Error> 
         options.session_file_path().display()
     );
     let snapshot_started = Instant::now();
-    let snapshot = state.input_state.snapshot_for_persistence(&options);
+    let snapshot = state
+        .input_state
+        .snapshot_for_persistence_with(state.render.text_measurer(), &options);
     log_snapshot_capture(
         SessionSaveReason::Shutdown,
         &options,
@@ -243,7 +247,9 @@ pub(super) fn autosave_if_due(state: &mut WaylandState, now: Instant) -> Result<
 
     let started = Instant::now();
     let snapshot_started = Instant::now();
-    let snapshot = state.input_state.snapshot_for_persistence(&options);
+    let snapshot = state
+        .input_state
+        .snapshot_for_persistence_with(state.render.text_measurer(), &options);
     log_snapshot_capture(
         SessionSaveReason::Autosave,
         &options,

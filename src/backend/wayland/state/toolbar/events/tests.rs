@@ -168,6 +168,13 @@ fn runtime_toolbar_events_do_not_directly_save_config() {
 
 #[test]
 fn backend_session_dispatch_finalizes_spotlight_history_and_its_deadline() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut input_state = make_test_input_state();
     let shape_id = input_state
         .boards
@@ -180,7 +187,7 @@ fn backend_session_dispatch_finalizes_spotlight_history_and_its_deadline() {
             magnification: 2.0,
         });
     assert_eq!(
-        input_state.nudge_spotlight_magnification_at(200, 200, 1),
+        input_state.nudge_spotlight_magnification_at_with(&test_text_measurer, 200, 200, 1),
         crate::input::state::SpotlightWheelOutcome::Adjusted
     );
     let mut deadline = Some(std::time::Instant::now() + std::time::Duration::from_secs(1));
@@ -196,7 +203,7 @@ fn backend_session_dispatch_finalizes_spotlight_history_and_its_deadline() {
     );
 
     assert!(deadline.is_none());
-    input_state.handle_action(Action::Undo);
+    input_state.handle_action_with_resources(test_text_resources, Action::Undo);
     let magnification = match input_state
         .boards
         .active_frame()
@@ -326,6 +333,12 @@ fn named_section_visibility_persists_under_its_own_target() {
 /// restores on exit -- not the mode's.
 #[test]
 fn presenter_mode_persists_the_users_values_not_its_own() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut input_state = make_test_input_state();
     input_state
         .presenter_mode_config_mut_for_test()
@@ -334,7 +347,7 @@ fn presenter_mode_persists_the_users_values_not_its_own() {
         .presenter_mode_config_mut_for_test()
         .hide_tool_preview = true;
     input_state.ui_visibility.show_tool_preview = true;
-    input_state.toggle_presenter_mode();
+    input_state.toggle_presenter_mode_with_resources(route_resources);
     assert!(input_state.presenter_mode_active());
     assert!(input_state.click_highlight_enabled());
 
@@ -349,7 +362,7 @@ fn presenter_mode_persists_the_users_values_not_its_own() {
 
     // Leaving presenter mode restores the user's values, and a later toggle
     // is the user's own again.
-    input_state.toggle_presenter_mode();
+    input_state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!input_state.presenter_mode_active());
     assert!(input_state.toggle_click_highlight());
     assert!(user_click_highlight_enabled(&input_state));
@@ -359,11 +372,17 @@ fn presenter_mode_persists_the_users_values_not_its_own() {
 /// persists its runtime value even while the mode holds the enabled flag.
 #[test]
 fn presenter_mode_still_follows_the_highlight_ring_preference() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut input_state = make_test_input_state();
     input_state
         .presenter_mode_config_mut_for_test()
         .enable_click_highlight = true;
-    input_state.toggle_presenter_mode();
+    input_state.toggle_presenter_mode_with_resources(route_resources);
     assert!(input_state.set_highlight_tool_ring_enabled(true));
 
     assert!(input_state.highlight_tool_ring_enabled());
@@ -490,6 +509,13 @@ fn the_toolbar_rebind_gesture_opens_capture_for_the_controls_action() {
 
 #[test]
 fn toolbar_rebind_capture_finalizes_a_held_arrow_bend_before_its_early_return() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut input_state = make_test_input_state();
     let shape_id = input_state
         .boards
@@ -522,7 +548,7 @@ fn toolbar_rebind_capture_finalizes_a_held_arrow_bend_before_its_early_return() 
             locked: false,
         },
     };
-    assert!(input_state.drag_arrow_bend_to(200, 20, false));
+    assert!(input_state.drag_arrow_bend_to_with(&test_text_measurer, 200, 20, false));
     let mut deadline = None;
     let event = ToolbarEvent::Undo;
 
@@ -541,7 +567,7 @@ fn toolbar_rebind_capture_finalizes_a_held_arrow_bend_before_its_early_return() 
     input_state.on_key_press(crate::input::Key::Escape);
     assert!(input_state.keybinding_capture_action().is_none());
     input_state.on_mouse_release(crate::input::MouseButton::Left, 200, 20);
-    input_state.handle_action(Action::Undo);
+    input_state.handle_action_with_resources(test_text_resources, Action::Undo);
     match input_state
         .boards
         .active_frame()
@@ -1033,6 +1059,13 @@ fn section_toggle_event(flag: ToolbarSectionFlag, show: bool) -> ToolbarEvent {
 
 #[test]
 fn backend_session_dispatch_finalizes_a_held_arrow_bend() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     // Session routes return before `apply_toolbar_event`, and an open or clear
     // replaces the frame the gesture's snapshot belongs to. Shape ids restart
     // per frame, so a bend flushed after that would attach to an unrelated
@@ -1069,7 +1102,7 @@ fn backend_session_dispatch_finalizes_a_held_arrow_bend() {
             locked: false,
         },
     };
-    assert!(input_state.drag_arrow_bend_to(200, 20, false));
+    assert!(input_state.drag_arrow_bend_to_with(&test_text_measurer, 200, 20, false));
     let mut deadline = None;
 
     assert_eq!(
@@ -1087,7 +1120,7 @@ fn backend_session_dispatch_finalizes_a_held_arrow_bend() {
         "the backend barrier left the bend gesture running"
     );
     // Committed rather than discarded, so the undo stack can take it back.
-    input_state.handle_action(Action::Undo);
+    input_state.handle_action_with_resources(test_text_resources, Action::Undo);
     match input_state
         .boards
         .active_frame()

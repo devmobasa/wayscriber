@@ -8,7 +8,11 @@ impl WaylandState {
             let frame = self.input_state.boards.active_frame();
             for drawn in &frame.shapes {
                 if selected.contains(&drawn.id) {
-                    crate::draw::render_selection_halo(ctx, drawn);
+                    crate::draw::render_selection_halo_with_measurer(
+                        self.render.text_measurer(),
+                        ctx,
+                        drawn,
+                    );
                 }
             }
             !selected.is_empty()
@@ -22,7 +26,9 @@ impl WaylandState {
                 self.input_state.state,
                 DrawingState::Idle | DrawingState::ResizingText { .. }
             )
-            && let Some(bounds) = self.input_state.selection_bounds()
+            && let Some(bounds) = self
+                .input_state
+                .selection_bounds_with(self.render.text_measurer())
         {
             crate::draw::render_selection_handles(ctx, &bounds);
         }
@@ -33,7 +39,9 @@ impl WaylandState {
         if matches!(
             self.input_state.state,
             DrawingState::Idle | DrawingState::ResizingText { .. }
-        ) && let Some((_shape_id, handle)) = self.input_state.selected_text_resize_handle()
+        ) && let Some((_shape_id, handle)) = self
+            .input_state
+            .selected_text_resize_handle_with(self.render.text_measurer())
         {
             let _ = ctx.save();
             ctx.rectangle(
@@ -82,7 +90,10 @@ impl WaylandState {
         ) {
             return;
         }
-        let Some(control) = self.input_state.selected_spotlight_control() else {
+        let Some(control) = self
+            .input_state
+            .selected_spotlight_control_with(self.render.text_measurer())
+        else {
             return;
         };
         // Gated on the factor the control displays, exactly as the toolbar's
@@ -96,6 +107,7 @@ impl WaylandState {
             })
             .flatten();
         crate::ui::render_spotlight_magnification_control(
+            self.render.ui_text(),
             ctx,
             control.track,
             control.magnification,
@@ -120,7 +132,8 @@ impl WaylandState {
             && self.has_cursor_focus()
             && !self.cursor_blocked_by_toolbar();
         if eraser_stroke && (eraser_drawing || eraser_hover) {
-            self.input_state.ensure_spatial_index_for_active_frame();
+            self.input_state
+                .ensure_spatial_index_for_active_frame_with(self.render.text_measurer());
             let ids = if eraser_drawing {
                 if let DrawingState::Drawing {
                     tool: Tool::Eraser,
@@ -129,7 +142,8 @@ impl WaylandState {
                 } = &self.input_state.state
                 {
                     let sampled = self.input_state.sample_eraser_path_points(points);
-                    self.input_state.hit_test_all_for_points_cached(
+                    self.input_state.hit_test_all_for_points_cached_with(
+                        self.render.text_measurer(),
                         &sampled,
                         self.input_state.eraser_hit_radius(),
                     )
@@ -138,15 +152,22 @@ impl WaylandState {
                 }
             } else {
                 let point = [(mx, my)];
-                self.input_state
-                    .hit_test_all_for_points_cached(&point, self.input_state.eraser_hit_radius())
+                self.input_state.hit_test_all_for_points_cached_with(
+                    self.render.text_measurer(),
+                    &point,
+                    self.input_state.eraser_hit_radius(),
+                )
             };
             if !ids.is_empty() {
                 let frame = self.input_state.boards.active_frame();
                 match ids.len() {
                     1 => {
                         if let Some(drawn) = frame.shape(ids[0]) {
-                            crate::draw::render_selection_halo(ctx, drawn);
+                            crate::draw::render_selection_halo_with_measurer(
+                                self.render.text_measurer(),
+                                ctx,
+                                drawn,
+                            );
                         }
                     }
                     2..=4 => {
@@ -179,7 +200,11 @@ impl WaylandState {
                         }
                         for &index in &indices[..count] {
                             if let Some(drawn) = frame.shapes.get(index) {
-                                crate::draw::render_selection_halo(ctx, drawn);
+                                crate::draw::render_selection_halo_with_measurer(
+                                    self.render.text_measurer(),
+                                    ctx,
+                                    drawn,
+                                );
                             }
                         }
                     }
@@ -187,7 +212,11 @@ impl WaylandState {
                         let hover_ids: HashSet<_> = ids.into_iter().collect();
                         for drawn in &frame.shapes {
                             if hover_ids.contains(&drawn.id) {
-                                crate::draw::render_selection_halo(ctx, drawn);
+                                crate::draw::render_selection_halo_with_measurer(
+                                    self.render.text_measurer(),
+                                    ctx,
+                                    drawn,
+                                );
                             }
                         }
                     }

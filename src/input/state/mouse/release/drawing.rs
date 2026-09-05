@@ -16,7 +16,12 @@ pub(super) struct DrawingRelease {
     pub(super) point_thicknesses: Vec<f32>,
 }
 
-pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: DrawingRelease) {
+pub(super) fn finish_drawing(
+    state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    tool: Tool,
+    release: DrawingRelease,
+) {
     state.mark_draw_activity();
     let drawing_color = state.active_drag_color_or_tool(tool);
     let drawing_thickness = state.thickness_for_tool(tool);
@@ -85,7 +90,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
         FinishedToolStroke::Shape { shape, usage } => (shape, usage),
         FinishedToolStroke::EraseStroke { path } => {
             state.clear_provisional_dirty();
-            if state.erase_strokes_by_points(&path) {
+            if state.erase_strokes_by_points_with(measurer, &path) {
                 state.mark_session_dirty();
             }
             return;
@@ -96,7 +101,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
         }
     };
 
-    let bounds = shape.bounding_box();
+    let bounds = shape.bounding_box_with(measurer);
     let magnified_spotlight = matches!(
         shape,
         Shape::Spotlight { magnification, .. }
@@ -143,7 +148,7 @@ pub(super) fn finish_drawing(state: &mut InputState, tool: Tool, release: Drawin
     };
 
     if let Some((new_id, _snapshot)) = addition {
-        state.invalidate_hit_cache_for(new_id);
+        state.invalidate_hit_cache_for_with(measurer, new_id);
         if let Some(path_damage) = path_damage {
             let provisional_bounds = state.take_provisional_dirty_bounds();
             for region in path_damage {

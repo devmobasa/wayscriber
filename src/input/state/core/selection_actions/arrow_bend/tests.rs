@@ -97,6 +97,8 @@ fn handle_is_offered_only_for_a_single_unlocked_curved_arrow() {
 
 #[test]
 fn dragging_the_handle_bends_toward_the_pointer() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = make_test_input_state();
     let id = add_curved_arrow(&mut state, 0.0);
     state.set_selection(vec![id]);
@@ -116,17 +118,19 @@ fn dragging_the_handle_bends_toward_the_pointer() {
 
     // Pointer 80px above the chord midpoint: the arc's midpoint should follow
     // it, which needs bend = 2 * 80 / 400 = 0.4 on the left-of-travel side.
-    assert!(state.drag_arrow_bend_to(200, 20, false));
+    assert!(state.drag_arrow_bend_to_with(&test_text_measurer, 200, 20, false));
     assert!((arrow_bend(&state, id) - 0.4).abs() < 1e-9);
 
     // And the other way. A sign flip here means the arrow curves away from
     // the drag.
-    assert!(state.drag_arrow_bend_to(200, 180, false));
+    assert!(state.drag_arrow_bend_to_with(&test_text_measurer, 200, 180, false));
     assert!((arrow_bend(&state, id) + 0.4).abs() < 1e-9);
 }
 
 #[test]
 fn dragging_along_the_chord_does_not_change_the_bend() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = make_test_input_state();
     let id = add_curved_arrow(&mut state, 0.0);
     state.set_selection(vec![id]);
@@ -146,10 +150,10 @@ fn dragging_along_the_chord_does_not_change_the_bend() {
 
     // Only the perpendicular component counts, which is what keeps the arc
     // symmetric however far along it the user grabs.
-    assert!(state.drag_arrow_bend_to(120, 40, false));
+    assert!(state.drag_arrow_bend_to_with(&test_text_measurer, 120, 40, false));
     let from_left = arrow_bend(&state, id);
     assert!(
-        !state.drag_arrow_bend_to(330, 40, false),
+        !state.drag_arrow_bend_to_with(&test_text_measurer, 330, 40, false),
         "sliding along the chord should be a no-op, not a new bend"
     );
     assert!((arrow_bend(&state, id) - from_left).abs() < 1e-9);
@@ -157,6 +161,8 @@ fn dragging_along_the_chord_does_not_change_the_bend() {
 
 #[test]
 fn shift_snaps_the_bend_to_tenths() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = make_test_input_state();
     let id = add_curved_arrow(&mut state, 0.0);
     state.set_selection(vec![id]);
@@ -175,7 +181,7 @@ fn shift_snaps_the_bend_to_tenths() {
     };
 
     // 43px off the chord is bend 0.215, which snaps to 0.2.
-    assert!(state.drag_arrow_bend_to(200, 57, true));
+    assert!(state.drag_arrow_bend_to_with(&test_text_measurer, 200, 57, true));
     assert!(
         (arrow_bend(&state, id) - 0.2).abs() < 1e-9,
         "shift did not snap: got {}",
@@ -216,6 +222,13 @@ fn arrow_bend(state: &crate::input::InputState, id: crate::draw::ShapeId) -> f64
 
 #[test]
 fn restyling_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     // `CycleArrowStyle` is bindable, so it can land while the bend handle is
     // still held. Restyling on top of a live gesture pushes an undo entry while
     // the gesture is still holding a pre-bend snapshot, and the eventual
@@ -239,11 +252,11 @@ fn restyling_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
         shape_id: id,
         snapshot: before,
     };
-    assert!(state.drag_arrow_bend_to(200, 20, false));
+    assert!(state.drag_arrow_bend_to_with(&test_text_measurer, 200, 20, false));
     let bent = arrow_bend(&state, id);
     assert!(bent.abs() > 0.1, "test setup should have bent the arrow");
 
-    state.handle_action(crate::config::Action::CycleArrowStyle);
+    state.handle_action_with_resources(test_text_resources, crate::config::Action::CycleArrowStyle);
 
     assert!(
         matches!(state.state, DrawingState::Idle),
@@ -255,10 +268,10 @@ fn restyling_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
 
     // Undo the restyle, then the bend, and the arrow is back where it started
     // with nothing in between that was never drawn.
-    state.handle_action(crate::config::Action::Undo);
+    state.handle_action_with_resources(test_text_resources, crate::config::Action::Undo);
     assert_eq!(arrow_style(&state, id), ArrowStyle::Curved);
     assert!((arrow_bend(&state, id) - bent).abs() < 1e-9);
-    state.handle_action(crate::config::Action::Undo);
+    state.handle_action_with_resources(test_text_resources, crate::config::Action::Undo);
     assert_eq!(arrow_bend(&state, id), 0.0);
     assert_eq!(arrow_style(&state, id), ArrowStyle::Curved);
 }
@@ -272,6 +285,13 @@ fn arrow_style(state: &crate::input::InputState, id: crate::draw::ShapeId) -> Ar
 
 #[test]
 fn any_selection_property_change_ends_a_live_bend_first() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     // The guard sits on `dispatch_selection_property`, not on the arrow-style
     // action, because the toolbar and the shape properties panel reach the same
     // mutators by other routes — and because the hazard is not style-specific.
@@ -293,10 +313,11 @@ fn any_selection_property_change_ends_a_live_bend_first() {
             locked: false,
         },
     };
-    assert!(state.drag_arrow_bend_to(200, 20, false));
+    assert!(state.drag_arrow_bend_to_with(&route_measurer, 200, 20, false));
     let bent = arrow_bend(&state, id);
 
-    state.adjust_selection_property_kind(
+    state.adjust_selection_property_kind_with(
+        &route_measurer,
         crate::input::state::core::properties::SelectionPropertyKind::Thickness,
         1,
     );
@@ -307,12 +328,19 @@ fn any_selection_property_change_ends_a_live_bend_first() {
     );
     // Undoing the thickness change must leave the bend intact rather than
     // rolling the arrow back past a gesture that had already been committed.
-    state.handle_action(crate::config::Action::Undo);
+    state.handle_action_with_resources(test_text_resources, crate::config::Action::Undo);
     assert!((arrow_bend(&state, id) - bent).abs() < 1e-9);
 }
 
 #[test]
 fn a_nudge_key_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     // Pressed as a real key, not dispatched as an action: a bound key goes
     // from `keyboard.rs` straight into `route_action` and never touches
     // `handle_action`, so a preflight hung off the latter would leave the
@@ -338,7 +366,7 @@ fn a_nudge_key_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
             locked: false,
         },
     };
-    assert!(state.drag_arrow_bend_to(200, 20, false));
+    assert!(state.drag_arrow_bend_to_with(&test_text_measurer, 200, 20, false));
     let bent = arrow_bend(&state, id);
     assert!(bent.abs() > 0.1, "test setup should have bent the arrow");
 
@@ -351,14 +379,16 @@ fn a_nudge_key_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
     assert_eq!(state.boards.active_frame().undo_stack_len(), 2);
 
     // Undo the nudge, then the bend. Neither step may resurrect the other.
-    state.handle_action(crate::config::Action::Undo);
+    state.handle_action_with_resources(test_text_resources, crate::config::Action::Undo);
     assert!((arrow_bend(&state, id) - bent).abs() < 1e-9);
-    state.handle_action(crate::config::Action::Undo);
+    state.handle_action_with_resources(test_text_resources, crate::config::Action::Undo);
     assert_eq!(arrow_bend(&state, id), 0.0);
 }
 
 #[test]
 fn escape_still_cancels_a_bend_rather_than_committing_it() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     // `route_action` ends a live bend for every action except Exit, whose whole
     // job is to back out of the gesture. Committing first would leave Escape
     // with nothing to cancel and quietly keep the arc. Driven through the key
@@ -379,7 +409,7 @@ fn escape_still_cancels_a_bend_rather_than_committing_it() {
             locked: false,
         },
     };
-    assert!(state.drag_arrow_bend_to(200, 20, false));
+    assert!(state.drag_arrow_bend_to_with(&test_text_measurer, 200, 20, false));
 
     state.on_key_press(crate::input::Key::Escape);
 
@@ -417,6 +447,13 @@ fn an_action_with_no_bend_running_leaves_the_interaction_alone() {
 
 #[test]
 fn a_toolbar_event_mid_gesture_ends_the_bend_before_it_can_lose_the_arrow() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     // Toolbar events never reach `route_action`, and touch, tablet, and the GTK
     // toolbar all deliver them while a pointer-held gesture is running. Undo All
     // is the sharp case: it can remove the arrow outright, after which the
@@ -437,7 +474,7 @@ fn a_toolbar_event_mid_gesture_ends_the_bend_before_it_can_lose_the_arrow() {
             locked: false,
         },
     };
-    assert!(state.drag_arrow_bend_to(200, 20, false));
+    assert!(state.drag_arrow_bend_to_with(&test_text_measurer, 200, 20, false));
     let bent = arrow_bend(&state, id);
 
     state.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::UndoAll);
@@ -448,7 +485,7 @@ fn a_toolbar_event_mid_gesture_ends_the_bend_before_it_can_lose_the_arrow() {
     );
     // The bend was recorded before Undo All ran, so it is on the stack to be
     // undone rather than lost with the shape.
-    state.handle_action(crate::config::Action::RedoAll);
+    state.handle_action_with_resources(test_text_resources, crate::config::Action::RedoAll);
     assert!(
         (arrow_bend(&state, id) - bent).abs() < 1e-9,
         "the bend was dropped instead of committed before the toolbar event"

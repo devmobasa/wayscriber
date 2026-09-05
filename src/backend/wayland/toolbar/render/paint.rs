@@ -8,7 +8,7 @@
 use crate::backend::wayland::toolbar::view::{
     ButtonStyle, ShortcutBadgePlacement, WidgetKind, WidgetNode, WidgetTree,
 };
-use crate::ui_text::UiTextStyle;
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::widgets::constants::{
     COLOR_ACCENT, COLOR_BADGE_BACKGROUND, COLOR_BADGE_BORDER, COLOR_ICON_DEFAULT, COLOR_LABEL_HINT,
@@ -36,9 +36,14 @@ const TEXT_BUTTON_LABEL_INSET: f64 = 6.0;
 
 /// Paint every node of `tree` in order. `hover` is in the same logical space
 /// as the tree's rects.
-pub fn paint_tree(ctx: &cairo::Context, tree: &WidgetTree, hover: Option<(f64, f64)>) {
+pub fn paint_tree(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    tree: &WidgetTree,
+    hover: Option<(f64, f64)>,
+) {
     for node in tree.nodes() {
-        paint_node(ctx, node, hover);
+        paint_node(engine, ctx, node, hover);
     }
 }
 
@@ -116,7 +121,7 @@ fn paint_preset_color_swatch(
     let _ = ctx.stroke();
 }
 
-fn paint_shortcut_badge(ctx: &cairo::Context, node: &WidgetNode) {
+fn paint_shortcut_badge(engine: &UiTextEngine, ctx: &cairo::Context, node: &WidgetNode) {
     let Some(badge) = &node.shortcut_badge else {
         return;
     };
@@ -150,6 +155,7 @@ fn paint_shortcut_badge(ctx: &cairo::Context, node: &WidgetNode) {
         ShortcutBadgePlacement::Below => (9.0, COLOR_LABEL_HINT),
     };
     draw_label_center_color(
+        engine,
         ctx,
         label_style(font_size, true),
         badge_x,
@@ -161,7 +167,12 @@ fn paint_shortcut_badge(ctx: &cairo::Context, node: &WidgetNode) {
     );
 }
 
-fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>) {
+fn paint_node(
+    engine: &UiTextEngine,
+    ctx: &cairo::Context,
+    node: &WidgetNode,
+    hover: Option<(f64, f64)>,
+) {
     let (x, y, w, h) = node.rect;
     let is_hover = hovered(node, hover) && node.interact.is_some();
     match &node.kind {
@@ -208,27 +219,39 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             paint_button_body(ctx, node.rect, *style, is_hover);
             let text_style = label_style(label.size, label.bold);
             let display = ellipsize_to_width(
+                engine,
                 ctx,
                 text_style,
                 &label.text,
                 (w - TEXT_BUTTON_LABEL_INSET * 2.0).max(0.0),
             );
             if style.disabled {
-                draw_label_center_color(ctx, text_style, x, y, w, h, &display, COLOR_TEXT_DISABLED);
+                draw_label_center_color(
+                    engine,
+                    ctx,
+                    text_style,
+                    x,
+                    y,
+                    w,
+                    h,
+                    &display,
+                    COLOR_TEXT_DISABLED,
+                );
             } else {
-                draw_label_center(ctx, text_style, x, y, w, h, &display);
+                draw_label_center(engine, ctx, text_style, x, y, w, h, &display);
             }
         }
         WidgetKind::Label(label) => {
             let text_style = label_style(label.size, label.bold);
             if label.wrap {
-                draw_label_left_wrapped(ctx, text_style, x, y, w, h, &label.text);
+                draw_label_left_wrapped(engine, ctx, text_style, x, y, w, h, &label.text);
             } else {
-                draw_label_left(ctx, text_style, x, y, w, h, &label.text);
+                draw_label_left(engine, ctx, text_style, x, y, w, h, &label.text);
             }
         }
         WidgetKind::MiniCheckbox { checked, label } => {
             draw_mini_checkbox(
+                engine,
                 ctx,
                 x,
                 y,
@@ -242,6 +265,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
         }
         WidgetKind::Checkbox { checked, label } => {
             draw_checkbox(
+                engine,
                 ctx,
                 x,
                 y,
@@ -267,6 +291,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
                 }
             });
             draw_segmented_control(
+                engine,
                 ctx,
                 x,
                 y,
@@ -349,6 +374,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
                 // color, inviting a save.
                 None => {
                     draw_label_center_color(
+                        engine,
                         ctx,
                         label_style(FONT_SIZE_LABEL, true),
                         x,
@@ -403,7 +429,7 @@ fn paint_node(ctx: &cairo::Context, node: &WidgetNode, hover: Option<(f64, f64)>
             let _ = ctx.fill();
         }
     }
-    paint_shortcut_badge(ctx, node);
+    paint_shortcut_badge(engine, ctx, node);
 }
 
 #[cfg(test)]
@@ -453,7 +479,7 @@ mod tests {
                     selected: false,
                 },
             );
-            paint_node(&ctx, &node, None);
+            paint_node(&UiTextEngine::default(), &ctx, &node, None);
         }
         let mut surface = surface;
         pixel_at(&mut surface, 4 + size as i32 / 2, 4 + size as i32 / 2)
@@ -477,7 +503,7 @@ mod tests {
                     style: ButtonStyle::plain(),
                 },
             );
-            paint_node(&ctx, &node, None);
+            paint_node(&UiTextEngine::default(), &ctx, &node, None);
         }
 
         let mut surface = surface;

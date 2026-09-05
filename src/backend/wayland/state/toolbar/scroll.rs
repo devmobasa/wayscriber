@@ -41,7 +41,8 @@ impl WaylandState {
             return false;
         }
         let snapshot = self.toolbar_snapshot();
-        let Some((natural, viewport)) = top_popover_scroll_bounds(&snapshot) else {
+        let Some((natural, viewport)) = top_popover_scroll_bounds(self.render.ui_text(), &snapshot)
+        else {
             return false;
         };
         let max_scroll = (natural - viewport).max(0.0);

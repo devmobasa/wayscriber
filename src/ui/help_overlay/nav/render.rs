@@ -1,8 +1,8 @@
 use crate::ui::primitives::draw_rounded_rect;
 use crate::ui::theme::{self, Rgba};
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui_text::UiTextStyle;
 
-use super::super::search::{draw_segmented_text, ellipsize_to_fit};
+use super::super::search::{draw_segmented_text, ellipsize_to_fit_with_engine};
 use super::NavState;
 
 /// Dark inset fill behind the search input. Numerically equal to the theme
@@ -28,6 +28,7 @@ pub(crate) struct NavRender {
 }
 
 pub(crate) fn draw_nav(
+    engine: &crate::ui_text::UiTextEngine,
     ctx: &cairo::Context,
     inner_x: f64,
     mut cursor_y: f64,
@@ -48,7 +49,7 @@ pub(crate) fn draw_nav(
         style.subtitle_color[3],
     );
     let nav_baseline = cursor_y + nav.nav_font_size;
-    draw_text_baseline(
+    engine.draw_baseline(
         ctx,
         nav_style,
         &nav.nav_text_primary,
@@ -60,6 +61,7 @@ pub(crate) fn draw_nav(
 
     let nav_secondary_baseline = cursor_y + nav.nav_font_size;
     draw_segmented_text(
+        engine,
         ctx,
         inner_x,
         nav_secondary_baseline,
@@ -116,7 +118,8 @@ pub(crate) fn draw_nav(
 
     if let Some(ref extra_line_text) = nav.extra_line_text {
         // Search text with clipping.
-        let display_text = ellipsize_to_fit(
+        let display_text = ellipsize_to_fit_with_engine(
+            engine,
             ctx,
             extra_line_text,
             style.font_family,
@@ -131,7 +134,7 @@ pub(crate) fn draw_nav(
             style.search_color[2],
             style.search_color[3],
         );
-        draw_text_baseline(
+        engine.draw_baseline(
             ctx,
             nav_style,
             &display_text,
@@ -147,7 +150,7 @@ pub(crate) fn draw_nav(
             style.search_color[2],
             0.5,
         );
-        draw_text_baseline(
+        engine.draw_baseline(
             ctx,
             nav_style,
             "Type to search... (Esc clears)",

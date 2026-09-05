@@ -1,3 +1,4 @@
+use crate::draw::TextMeasurer;
 use crate::draw::shape::Shape;
 use crate::util::Rect;
 use serde::{Deserialize, Serialize};
@@ -59,15 +60,22 @@ impl DrawnShape {
     /// [`Self::invalidate_bounds`]) trips an assertion, so the test suite
     /// catches invalidation bugs while release builds get the O(1) fast path.
     pub fn bounding_box(&self) -> Option<Rect> {
+        let measurer = TextMeasurer::default();
+        self.bounding_box_with(&measurer)
+    }
+
+    /// Returns memoized bounds using the supplied owner for text measurements
+    /// and debug validation of the cached geometry.
+    pub fn bounding_box_with(&self, measurer: &TextMeasurer) -> Option<Rect> {
         if let CachedBounds::Known(bounds) = self.cached_bounds.get() {
             debug_assert_eq!(
                 bounds,
-                self.shape.bounding_box(),
+                self.shape.bounding_box_with(measurer),
                 "stale DrawnShape bounds cache: a mutation site is missing invalidate_bounds()"
             );
             return bounds;
         }
-        let bounds = self.shape.bounding_box();
+        let bounds = self.shape.bounding_box_with(measurer);
         self.cached_bounds.set(CachedBounds::Known(bounds));
         bounds
     }

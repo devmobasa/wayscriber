@@ -1,9 +1,16 @@
+use crate::draw::TextMeasurer;
 use crate::input::InputState;
 use crate::util::Rect;
 
 impl InputState {
     /// Returns the combined bounding box of all selected shapes (public for rendering).
     pub fn selection_bounds(&self) -> Option<Rect> {
+        let measurer = TextMeasurer::default();
+        self.selection_bounds_with(&measurer)
+    }
+
+    /// Combined selection bounds using the supplied text measurement owner.
+    pub fn selection_bounds_with(&self, measurer: &TextMeasurer) -> Option<Rect> {
         let ids = self.selected_shape_ids();
         if ids.is_empty() {
             return None;
@@ -18,7 +25,7 @@ impl InputState {
 
         for id in ids {
             if let Some(shape) = frame.shape(*id)
-                && let Some(bounds) = shape.bounding_box()
+                && let Some(bounds) = shape.bounding_box_with(measurer)
             {
                 min_x = min_x.min(bounds.x);
                 min_y = min_y.min(bounds.y);
@@ -35,7 +42,7 @@ impl InputState {
         }
     }
 
-    pub(super) fn movable_selection_bounds(&self) -> Option<Rect> {
+    pub(super) fn movable_selection_bounds(&self, measurer: &TextMeasurer) -> Option<Rect> {
         let ids = self.selected_shape_ids();
         if ids.is_empty() {
             return None;
@@ -53,7 +60,7 @@ impl InputState {
                 if shape.locked {
                     continue;
                 }
-                if let Some(bounds) = shape.bounding_box() {
+                if let Some(bounds) = shape.bounding_box_with(measurer) {
                     min_x = min_x.min(bounds.x);
                     min_y = min_y.min(bounds.y);
                     max_x = max_x.max(bounds.x + bounds.width);
@@ -85,8 +92,13 @@ impl InputState {
         delta.clamp(min_delta, max_delta)
     }
 
-    pub(super) fn clamp_selection_translation(&self, dx: i32, dy: i32) -> Option<(i32, i32)> {
-        let bounds = self.movable_selection_bounds()?;
+    pub(super) fn clamp_selection_translation(
+        &self,
+        measurer: &TextMeasurer,
+        dx: i32,
+        dy: i32,
+    ) -> Option<(i32, i32)> {
+        let bounds = self.movable_selection_bounds(measurer)?;
         let (screen_width, screen_height) = self.view.screen_size();
         let screen_width = screen_width.min(i32::MAX as u32) as i32;
         let screen_height = screen_height.min(i32::MAX as u32) as i32;

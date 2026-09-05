@@ -7,6 +7,7 @@ use super::bindings::HelpOverlayBindings;
 use quick::build_quick_sections;
 use sections::build_main_sections;
 
+#[derive(Clone)]
 pub(crate) struct SectionSets {
     pub(crate) all: Vec<Section>,
     pub(crate) page1: Vec<Section>,

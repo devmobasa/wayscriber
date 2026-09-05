@@ -1,11 +1,13 @@
 use super::super::super::base::{ClipboardPasteRequest, InputState};
+use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
 use crate::draw::{EmbeddedImage, Shape};
 use crate::input::state::{Toast, ToastPriority};
 
 impl InputState {
-    pub(crate) fn paste_external_image_from_request(
+    pub(crate) fn paste_external_image_from_request_with(
         &mut self,
+        measurer: &TextMeasurer,
         request: &ClipboardPasteRequest,
         image: EmbeddedImage,
     ) -> bool {
@@ -81,7 +83,7 @@ impl InputState {
         else {
             return false;
         };
-        let bounds = stored.bounding_box();
+        let bounds = stored.bounding_box_with(measurer);
         frame.push_undo_action(
             UndoAction::Create {
                 shapes: vec![(index, stored)],
@@ -92,7 +94,7 @@ impl InputState {
         self.mark_session_dirty();
         if target_active {
             self.mark_selection_dirty_region(bounds);
-            self.invalidate_hit_cache_for(new_id);
+            self.invalidate_hit_cache_for_with(measurer, new_id);
             self.set_selection(vec![new_id]);
             self.needs_redraw = true;
         }

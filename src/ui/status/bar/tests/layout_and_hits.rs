@@ -45,7 +45,8 @@ fn pill_height_covers_min_interactive_hit_target() {
         ..StatusBarStyle::default()
     };
 
-    let measurement = measure_status_bar(&style, "", 100.0, 9.0, 4.0, 1920).unwrap();
+    let measurement =
+        measure_status_bar(&UiTextEngine::default(), &style, "", 100.0, 9.0, 4.0, 1920).unwrap();
     assert!(measurement.pill_height >= MIN_INTERACTIVE_HEIGHT);
 }
 

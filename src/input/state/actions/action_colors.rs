@@ -10,7 +10,11 @@ impl InputState {
         self.style.quick_colors = quick_colors;
     }
 
-    pub(in crate::input::state) fn handle_color_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_color_action_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        action: Action,
+    ) -> bool {
         if action == Action::PickScreenColor {
             self.request_eyedropper_toggle();
             return true;
@@ -18,18 +22,22 @@ impl InputState {
         let Some(color) = self.style.quick_colors.color_for_action(action) else {
             return false;
         };
-        let _ = self.apply_color_from_ui(color);
+        let _ = self.apply_color_from_ui_with_measurer(measurer, color);
         true
     }
 
-    pub(crate) fn apply_color_from_ui(&mut self, color: Color) -> bool {
+    pub(crate) fn apply_color_from_ui_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        color: Color,
+    ) -> bool {
         self.note_recent_color(color);
         // First-run teaching signal: any color application (quick-color key,
         // radial swatch, picker, eyedropper) counts as "changed a color".
         self.pending_onboarding_usage.used_color_change = true;
         let mut changed = self.set_color(color);
         if self.active_tool() == Tool::Select && !self.selected_shape_ids().is_empty() {
-            let selection_changed = self.apply_selection_color_value(color);
+            let selection_changed = self.apply_selection_color_value_with(measurer, color);
             changed = selection_changed || changed;
         }
         changed

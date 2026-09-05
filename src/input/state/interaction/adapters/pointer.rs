@@ -17,18 +17,27 @@ pub(crate) fn update_pointer_positions(state: &mut InputState, points: PointerPo
 
 pub(crate) fn handle_radial_menu_press(
     state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
     let screen = points.screen();
     let canvas = points.canvas();
     state
-        .handle_radial_menu_press(button, screen.x(), screen.y(), canvas.x(), canvas.y())
+        .handle_radial_menu_press_with_resources(
+            resources,
+            button,
+            screen.x(),
+            screen.y(),
+            canvas.x(),
+            canvas.y(),
+        )
         .then_some(RoutingOutcome::Consumed(ConsumedBy::RadialMenu))
 }
 
 pub(crate) fn handle_building_polygon_non_left_press(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
@@ -41,7 +50,7 @@ pub(crate) fn handle_building_polygon_non_left_press(
     state.update_pointer_positions(screen.x(), screen.y(), canvas.x(), canvas.y());
     match button {
         MouseButton::Right => {
-            state.cancel_active_interaction();
+            state.cancel_active_interaction_with(measurer);
             Some(RoutingOutcome::Canceled(CancelTarget::ActiveInteraction(
                 ActiveInteractionKind::BuildingPolygon,
             )))
@@ -154,6 +163,7 @@ pub(crate) fn close_properties_panel_before_tool_routing(state: &mut InputState)
 
 pub(crate) fn handle_tool_button_press(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
@@ -169,7 +179,8 @@ pub(crate) fn handle_tool_button_press(
     let before = active_interaction_kind(state);
     let screen = points.screen();
     let canvas = points.canvas();
-    state.handle_tool_button_press_at(
+    state.handle_tool_button_press_at_with_measurer(
+        measurer,
         button,
         tool,
         binding.color,
@@ -188,6 +199,7 @@ pub(crate) fn handle_tool_button_press(
 
 pub(crate) fn handle_unbound_left_press(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     points: PointerPoints,
 ) -> RoutingOutcome {
     let screen = points.screen();
@@ -199,7 +211,7 @@ pub(crate) fn handle_unbound_left_press(
         return RoutingOutcome::Consumed(ConsumedBy::ContextMenu);
     }
 
-    if state.handle_text_input_left_press(canvas.x(), canvas.y(), None) {
+    if state.handle_text_input_left_press_with(measurer, canvas.x(), canvas.y(), None) {
         return if state.text_block_drag_active() {
             RoutingOutcome::Started(ActiveInteractionKind::TextInput)
         } else {
@@ -211,7 +223,11 @@ pub(crate) fn handle_unbound_left_press(
         DrawingState::Idle => RoutingOutcome::NoRoute(NoRouteReason::NoPointerBinding),
         DrawingState::TextInput { .. } => RoutingOutcome::Consumed(ConsumedBy::TextInput),
         DrawingState::BuildingPolygon { .. } => {
-            state.handle_building_polygon_left_click(canvas.x(), canvas.y());
+            state.handle_building_polygon_left_click_with_measurer(
+                measurer,
+                canvas.x(),
+                canvas.y(),
+            );
             RoutingOutcome::Continued(ActiveInteractionKind::BuildingPolygon)
         }
         DrawingState::Drawing { .. }
@@ -227,7 +243,11 @@ pub(crate) fn handle_unbound_left_press(
     }
 }
 
-pub(crate) fn handle_right_press(state: &mut InputState, points: PointerPoints) -> RoutingOutcome {
+pub(crate) fn handle_right_press(
+    state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    points: PointerPoints,
+) -> RoutingOutcome {
     let screen = points.screen();
     let canvas = points.canvas();
     if state.should_toggle_radial_menu_from_mouse(MouseButton::Right) {
@@ -238,7 +258,7 @@ pub(crate) fn handle_right_press(state: &mut InputState, points: PointerPoints) 
     state.update_pointer_positions(screen.x(), screen.y(), canvas.x(), canvas.y());
     state.text_editing.set_last_click(None);
     if let Some(kind) = active_interaction_kind(state)
-        && state.try_cancel_active_interaction()
+        && state.try_cancel_active_interaction_with(measurer)
     {
         return RoutingOutcome::Canceled(CancelTarget::ActiveInteraction(kind));
     }
@@ -253,7 +273,14 @@ pub(crate) fn handle_right_press(state: &mut InputState, points: PointerPoints) 
         ));
     }
 
-    open_context_menu_from_right_click(state, screen.x(), screen.y(), canvas.x(), canvas.y());
+    open_context_menu_from_right_click(
+        state,
+        measurer,
+        screen.x(),
+        screen.y(),
+        canvas.x(),
+        canvas.y(),
+    );
     RoutingOutcome::Consumed(ConsumedBy::RightClickContextMenu)
 }
 
@@ -269,12 +296,13 @@ pub(crate) fn handle_middle_press(state: &mut InputState, points: PointerPoints)
 
 fn open_context_menu_from_right_click(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     screen_x: i32,
     screen_y: i32,
     canvas_x: i32,
     canvas_y: i32,
 ) {
-    let hit_shape = state.hit_test_at(canvas_x, canvas_y);
+    let hit_shape = state.hit_test_at_with(measurer, canvas_x, canvas_y);
     let mut focus_edit = false;
     if let Some(id) = hit_shape {
         if state.modifiers.shift {
@@ -318,6 +346,7 @@ fn open_context_menu_from_right_click(
 
 pub(crate) fn handle_radial_menu_motion(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
     if !state.is_radial_menu_open() {
@@ -329,7 +358,7 @@ pub(crate) fn handle_radial_menu_motion(
     if state.radial_menu_is_size_dragging() {
         // Drag capture: while the size gauge is held, every motion adjusts
         // thickness, even outside the band.
-        state.radial_menu_drag_size_to(x, y);
+        state.radial_menu_drag_size_to_with_measurer(measurer, x, y);
     } else {
         state.update_radial_menu_hover(x, y);
         state.radial_menu_sample_flick(x, y);
@@ -372,6 +401,7 @@ pub(crate) fn handle_font_picker_motion(
 
 pub(crate) fn handle_font_picker_press(
     state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
@@ -385,7 +415,7 @@ pub(crate) fn handle_font_picker_press(
         return Some(RoutingOutcome::Consumed(ConsumedBy::FontPicker));
     }
     let screen = points.screen();
-    state.font_picker_press(f64::from(screen.x()), f64::from(screen.y()));
+    state.font_picker_press_with_measurer(measurer, f64::from(screen.x()), f64::from(screen.y()));
     Some(RoutingOutcome::Consumed(ConsumedBy::FontPicker))
 }
 
@@ -435,6 +465,7 @@ pub(crate) fn handle_context_menu_motion(
 
 pub(crate) fn handle_release_overlays(
     state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
@@ -445,13 +476,17 @@ pub(crate) fn handle_release_overlays(
     if state.handle_color_picker_popup_release_at(screen.x(), screen.y()) {
         return Some(RoutingOutcome::Consumed(ConsumedBy::ColorPickerPopup));
     }
-    if state.handle_context_menu_release_at(screen.x(), screen.y()) {
+    if state.handle_context_menu_release_at_with_resources(resources, screen.x(), screen.y()) {
         return Some(RoutingOutcome::Consumed(ConsumedBy::ContextMenu));
     }
-    if state.handle_board_picker_release_at(screen.x(), screen.y()) {
+    if state.handle_board_picker_release_at_with_resources(resources, screen.x(), screen.y()) {
         return Some(RoutingOutcome::Consumed(ConsumedBy::BoardPicker));
     }
-    if state.handle_properties_panel_release_at(screen.x(), screen.y()) {
+    if state.handle_properties_panel_release_at_with_measurer(
+        resources.measurer,
+        screen.x(),
+        screen.y(),
+    ) {
         return Some(RoutingOutcome::Consumed(ConsumedBy::PropertiesPanel));
     }
     None
@@ -459,16 +494,26 @@ pub(crate) fn handle_release_overlays(
 
 pub(crate) fn handle_radial_menu_release(
     state: &mut InputState,
+    resources: crate::input::state::InputTextResources<'_>,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
     let screen = points.screen();
     state
-        .radial_menu_handle_release(button, screen.x() as f64, screen.y() as f64)
+        .radial_menu_handle_release_with_resources(
+            resources,
+            button,
+            screen.x() as f64,
+            screen.y() as f64,
+        )
         .then_some(RoutingOutcome::Consumed(ConsumedBy::RadialMenu))
 }
 
-pub(crate) fn finish_pointer_interaction(state: &mut InputState, points: PointerPoints) {
+pub(crate) fn finish_pointer_interaction(
+    state: &mut InputState,
+    measurer: &crate::draw::TextMeasurer,
+    points: PointerPoints,
+) {
     let canvas = points.canvas();
-    state.finish_pointer_interaction_at(canvas.x(), canvas.y());
+    state.finish_pointer_interaction_at_with_measurer(measurer, canvas.x(), canvas.y());
 }

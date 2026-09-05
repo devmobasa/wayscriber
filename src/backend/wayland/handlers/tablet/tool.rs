@@ -170,7 +170,8 @@ impl WaylandState {
             return;
         }
         self.tablet.pre_eraser_tool_override = self.input_state.tool_override();
-        self.input_state.set_tool_override(Some(Tool::Eraser));
+        self.input_state
+            .set_tool_override_with(self.render.text_measurer(), Some(Tool::Eraser));
         self.tablet.auto_switched_to_eraser = true;
         info!(
             "Auto-switched to eraser (physical eraser detected), saved previous: {:?}",
@@ -213,7 +214,8 @@ impl WaylandState {
             return;
         }
         let restored_tool = self.tablet.pre_eraser_tool_override;
-        self.input_state.set_tool_override(restored_tool);
+        self.input_state
+            .set_tool_override_with(self.render.text_measurer(), restored_tool);
         self.tablet.auto_switched_to_eraser = false;
         self.tablet.pre_eraser_tool_override = None;
         info!(
@@ -528,7 +530,11 @@ mod tests {
             !fresh_contact(&state),
             "a stroke drawn while the capture is pending is still a real stroke"
         );
-        state.activate_region(RegionPurposeTag::Ocr, 1);
+        state.activate_region_with(
+            &crate::draw::TextMeasurer::default(),
+            RegionPurposeTag::Ocr,
+            1,
+        );
         assert!(fresh_contact(&state));
         state.start_region_selection(RegionInputSource::Stylus, (10.0, 10.0));
         assert!(fresh_contact(&state));
@@ -537,7 +543,7 @@ mod tests {
 
         state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
         assert!(!fresh_contact(&state));
-        state.activate_eyedropper(Some(1));
+        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), Some(1));
         assert!(fresh_contact(&state));
         state.cancel_eyedropper();
         assert!(!fresh_contact(&state));

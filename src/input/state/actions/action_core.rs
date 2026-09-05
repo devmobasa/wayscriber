@@ -4,10 +4,14 @@ use crate::input::state::{Toast, ToastPriority};
 use log::info;
 
 impl InputState {
-    pub(in crate::input::state) fn handle_core_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_core_action_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        action: Action,
+    ) -> bool {
         match action {
             Action::Exit => {
-                if self.try_cancel_active_interaction() {
+                if self.try_cancel_active_interaction_with(measurer) {
                     true
                 } else {
                     self.should_exit = true;
@@ -26,7 +30,7 @@ impl InputState {
                         (screen_height / 2) as i32,
                         String::new(),
                     );
-                    self.update_text_preview_dirty();
+                    self.update_text_preview_dirty_with(measurer);
                     self.needs_redraw = true;
                 }
                 true
@@ -42,7 +46,7 @@ impl InputState {
                         (screen_height / 2) as i32,
                         String::new(),
                     );
-                    self.update_text_preview_dirty();
+                    self.update_text_preview_dirty_with(measurer);
                     self.needs_redraw = true;
                 }
                 true

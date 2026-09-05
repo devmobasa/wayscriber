@@ -2,6 +2,7 @@
 
 use crate::domain::Action;
 use crate::input::events::Key;
+use crate::input::state::InputTextResources;
 
 use super::base::InputState;
 
@@ -296,11 +297,20 @@ impl InputState {
 
     /// Start the guided tour.
     pub fn start_tour(&mut self) {
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.start_tour_with_resources(InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        });
+    }
+
+    pub(crate) fn start_tour_with_resources(&mut self, resources: InputTextResources<'_>) {
         if self.focus_mode_active() {
             // The tour restores pinned chrome when it ends, so it must begin
             // from Focus Mode's real baseline rather than nesting underneath
             // that transient snapshot owner.
-            self.toggle_focus_mode();
+            self.toggle_focus_mode_with_resources(resources);
         }
         self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::Tour);
         self.tour.start();
@@ -313,7 +323,16 @@ impl InputState {
     /// starts the overlay regardless of the persisted `tour_shown` flag — and
     /// so a future replay-specific behavior has a single call site to hang on.
     pub fn start_tour_replay(&mut self) {
-        self.start_tour();
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        self.start_tour_replay_with_resources(InputTextResources {
+            measurer: &measurer,
+            ui_engine: &ui_engine,
+        });
+    }
+
+    pub(crate) fn start_tour_replay_with_resources(&mut self, resources: InputTextResources<'_>) {
+        self.start_tour_with_resources(resources);
     }
 
     /// End the tour (skip or complete).
@@ -455,8 +474,15 @@ mod tests {
 
     #[test]
     fn starting_tour_exits_focus_mode_before_tour_owns_chrome() {
+        let test_text_measurer = crate::draw::TextMeasurer::default();
+        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let test_text_resources = crate::input::state::InputTextResources {
+            measurer: &test_text_measurer,
+            ui_engine: &test_ui_engine,
+        };
+
         let mut state = make_test_input_state();
-        state.handle_action(Action::ToggleFocusMode);
+        state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
         assert!(state.focus_mode_active());
         assert!(!state.ui_visibility.show_status_bar);
 

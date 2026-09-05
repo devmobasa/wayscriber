@@ -2,6 +2,7 @@ use super::*;
 
 #[test]
 fn translate_selection_with_undo_moves_shape() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
@@ -13,7 +14,7 @@ fn translate_selection_with_undo_moves_shape() {
     });
 
     state.set_selection(vec![shape_id]);
-    assert!(state.translate_selection_with_undo(10, -5));
+    assert!(state.translate_selection_with_undo_with(&route_measurer, 10, -5));
 
     {
         let frame = state.boards.active_frame();
@@ -45,6 +46,8 @@ fn translate_selection_with_undo_moves_shape() {
 
 #[test]
 fn resizing_selection_marks_previous_live_bounds_dirty() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -62,7 +65,8 @@ fn resizing_selection_marks_previous_live_bounds_dirty() {
         .expect("selection should have bounds");
     let snapshots = state.capture_resize_selection_snapshots();
 
-    state.apply_selection_resize(
+    state.apply_selection_resize_with(
+        &test_text_measurer,
         SelectionHandle::BottomRight,
         &original_bounds,
         80,
@@ -72,7 +76,8 @@ fn resizing_selection_marks_previous_live_bounds_dirty() {
     let expanded_bounds = state.selection_bounds().expect("selection should resize");
     let _ = state.take_dirty_regions();
 
-    state.apply_selection_resize(
+    state.apply_selection_resize_with(
+        &test_text_measurer,
         SelectionHandle::BottomRight,
         &original_bounds,
         10,
@@ -100,6 +105,8 @@ fn resizing_selection_marks_previous_live_bounds_dirty() {
 
 #[test]
 fn resizing_selection_back_to_start_restores_original_geometry() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -117,7 +124,8 @@ fn resizing_selection_back_to_start_restores_original_geometry() {
         .expect("selection should have bounds");
     let snapshots = state.capture_resize_selection_snapshots();
 
-    state.apply_selection_resize(
+    state.apply_selection_resize_with(
+        &test_text_measurer,
         SelectionHandle::BottomRight,
         &original_bounds,
         80,
@@ -127,7 +135,8 @@ fn resizing_selection_back_to_start_restores_original_geometry() {
     let expanded_bounds = state.selection_bounds().expect("selection should resize");
     let _ = state.take_dirty_regions();
 
-    state.apply_selection_resize(
+    state.apply_selection_resize_with(
+        &test_text_measurer,
         SelectionHandle::BottomRight,
         &original_bounds,
         0,
@@ -160,6 +169,13 @@ fn resizing_selection_back_to_start_restores_original_geometry() {
 
 #[test]
 fn move_selection_to_horizontal_edges_uses_screen_bounds() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.update_screen_dimensions(200, 100);
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
@@ -173,7 +189,7 @@ fn move_selection_to_horizontal_edges_uses_screen_bounds() {
     });
 
     state.set_selection(vec![shape_id]);
-    state.handle_action(Action::MoveSelectionToStart);
+    state.handle_action_with_resources(test_text_resources, Action::MoveSelectionToStart);
 
     {
         let frame = state.boards.active_frame();
@@ -182,7 +198,7 @@ fn move_selection_to_horizontal_edges_uses_screen_bounds() {
         assert_eq!(bounds.x, 0);
     }
 
-    state.handle_action(Action::MoveSelectionToEnd);
+    state.handle_action_with_resources(test_text_resources, Action::MoveSelectionToEnd);
 
     {
         let frame = state.boards.active_frame();
@@ -194,6 +210,13 @@ fn move_selection_to_horizontal_edges_uses_screen_bounds() {
 
 #[test]
 fn move_selection_to_horizontal_edges_ignores_last_axis() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.update_screen_dimensions(200, 100);
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
@@ -207,8 +230,8 @@ fn move_selection_to_horizontal_edges_ignores_last_axis() {
     });
 
     state.set_selection(vec![shape_id]);
-    state.handle_action(Action::NudgeSelectionUp);
-    state.handle_action(Action::MoveSelectionToStart);
+    state.handle_action_with_resources(test_text_resources, Action::NudgeSelectionUp);
+    state.handle_action_with_resources(test_text_resources, Action::MoveSelectionToStart);
 
     {
         let frame = state.boards.active_frame();
@@ -217,7 +240,7 @@ fn move_selection_to_horizontal_edges_ignores_last_axis() {
         assert_eq!(bounds.x, 0);
     }
 
-    state.handle_action(Action::MoveSelectionToEnd);
+    state.handle_action_with_resources(test_text_resources, Action::MoveSelectionToEnd);
 
     {
         let frame = state.boards.active_frame();
@@ -229,6 +252,13 @@ fn move_selection_to_horizontal_edges_ignores_last_axis() {
 
 #[test]
 fn move_selection_to_vertical_edges_explicit_actions() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.update_screen_dimensions(200, 100);
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
@@ -242,7 +272,7 @@ fn move_selection_to_vertical_edges_explicit_actions() {
     });
 
     state.set_selection(vec![shape_id]);
-    state.handle_action(Action::MoveSelectionToTop);
+    state.handle_action_with_resources(test_text_resources, Action::MoveSelectionToTop);
 
     {
         let frame = state.boards.active_frame();
@@ -251,7 +281,7 @@ fn move_selection_to_vertical_edges_explicit_actions() {
         assert_eq!(bounds.y, 0);
     }
 
-    state.handle_action(Action::MoveSelectionToBottom);
+    state.handle_action_with_resources(test_text_resources, Action::MoveSelectionToBottom);
 
     {
         let frame = state.boards.active_frame();
@@ -263,6 +293,13 @@ fn move_selection_to_vertical_edges_explicit_actions() {
 
 #[test]
 fn nudge_selection_large_uses_large_step() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -275,7 +312,7 @@ fn nudge_selection_large_uses_large_step() {
     });
 
     state.set_selection(vec![shape_id]);
-    state.handle_action(Action::NudgeSelectionDownLarge);
+    state.handle_action_with_resources(test_text_resources, Action::NudgeSelectionDownLarge);
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
@@ -287,6 +324,13 @@ fn nudge_selection_large_uses_large_step() {
 
 #[test]
 fn nudge_selection_clamps_left_and_top_edges() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.update_screen_dimensions(100, 100);
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
@@ -300,8 +344,8 @@ fn nudge_selection_clamps_left_and_top_edges() {
     });
 
     state.set_selection(vec![shape_id]);
-    state.handle_action(Action::NudgeSelectionLeft);
-    state.handle_action(Action::NudgeSelectionUp);
+    state.handle_action_with_resources(test_text_resources, Action::NudgeSelectionLeft);
+    state.handle_action_with_resources(test_text_resources, Action::NudgeSelectionUp);
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
@@ -311,6 +355,13 @@ fn nudge_selection_clamps_left_and_top_edges() {
 
 #[test]
 fn nudge_selection_clamps_right_and_bottom_edges() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     state.update_screen_dimensions(100, 100);
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
@@ -324,8 +375,8 @@ fn nudge_selection_clamps_right_and_bottom_edges() {
     });
 
     state.set_selection(vec![shape_id]);
-    state.handle_action(Action::NudgeSelectionRight);
-    state.handle_action(Action::NudgeSelectionDown);
+    state.handle_action_with_resources(test_text_resources, Action::NudgeSelectionRight);
+    state.handle_action_with_resources(test_text_resources, Action::NudgeSelectionDown);
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
@@ -338,6 +389,8 @@ fn nudge_selection_clamps_right_and_bottom_edges() {
 
 #[test]
 fn restore_selection_snapshots_reverts_translation() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 100,
@@ -354,8 +407,8 @@ fn restore_selection_snapshots_reverts_translation() {
     let snapshots = state.capture_movable_selection_snapshots();
     assert_eq!(snapshots.len(), 1);
 
-    assert!(state.apply_translation_to_selection(20, 30));
-    state.restore_selection_from_snapshots(snapshots);
+    assert!(state.apply_translation_to_selection_with(&test_text_measurer, 20, 30));
+    state.restore_selection_from_snapshots_with(&crate::draw::TextMeasurer::default(), snapshots);
 
     let frame = state.boards.active_frame();
     let shape = frame.shape(shape_id).unwrap();
@@ -369,6 +422,8 @@ fn restore_selection_snapshots_reverts_translation() {
 
 #[test]
 fn resizing_a_curved_arrow_keeps_its_style_and_curvature() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     // `Shape::scaled` rebuilds `Shape::Arrow` field by field, so a field left out
     // there silently resets on every resize. `style` has to survive untouched;
     // `bend` has to survive as an *arc*, which a non-uniform scale means is not
@@ -395,7 +450,8 @@ fn resizing_a_curved_arrow_keeps_its_style_and_curvature() {
         .expect("selection should have bounds");
     let snapshots = state.capture_resize_selection_snapshots();
 
-    state.apply_selection_resize(
+    state.apply_selection_resize_with(
+        &test_text_measurer,
         SelectionHandle::BottomRight,
         &original_bounds,
         100,
@@ -426,6 +482,8 @@ fn resizing_a_curved_arrow_keeps_its_style_and_curvature() {
 
 #[test]
 fn stretching_a_flat_curved_arrow_downward_grows_its_arc() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+
     // A horizontal curved arrow's height is almost entirely its arc. Dragging
     // the bottom handle does not lengthen the chord, so a bend copied through
     // unchanged keeps exactly the bulge it had and the selection refuses to
@@ -453,7 +511,8 @@ fn stretching_a_flat_curved_arrow_downward_grows_its_arc() {
         .expect("selection should have bounds");
     let snapshots = state.capture_resize_selection_snapshots();
 
-    state.apply_selection_resize(
+    state.apply_selection_resize_with(
+        &test_text_measurer,
         SelectionHandle::Bottom,
         &original_bounds,
         0,

@@ -27,7 +27,7 @@ impl WaylandState {
             self.inline_top_base_y() + authored_offset.1,
         );
 
-        let top_size = top_size(snapshot);
+        let top_size = top_size(self.render.ui_text(), snapshot);
         let top_base_w = top_size.0 as f64 / ui_scale;
         let top_base_h = top_size.1 as f64 / ui_scale;
         let top_hover_local = self
@@ -43,6 +43,7 @@ impl WaylandState {
         }
         let mut hits = Vec::new();
         if let Err(err) = render_top_strip(
+            self.render.ui_text(),
             ctx,
             top_base_w,
             top_base_h,

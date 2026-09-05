@@ -7,11 +7,11 @@ use crate::input::state::{
     COMMAND_PALETTE_ROW_ACTION_COUNT, COMMAND_PALETTE_ROW_ACTION_GAP,
     COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_ROW_ICON_GAP, COMMAND_PALETTE_ROW_ICON_SIZE,
 };
-use crate::ui::text_highlight::{HighlightStyle, draw_highlight, find_match_range};
-use crate::ui_text::{UiTextStyle, draw_text_baseline};
+use crate::ui::text_highlight::{HighlightStyle, draw_highlight_with_engine, find_match_range};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::super::constants::{self, BG_INPUT_SELECTION, RADIUS_SM, TEXT_DESCRIPTION, TEXT_WHITE};
-use super::super::primitives::{draw_rounded_rect, text_extents_for};
+use super::super::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use super::{
     COMMAND_PALETTE_FONT_FAMILY, COMMAND_PALETTE_SHORTCUT_BADGE_GAP,
     COMMAND_PALETTE_SHORTCUT_BADGE_HEIGHT, COMMAND_PALETTE_SHORTCUT_BADGE_PADDING_X,
@@ -47,6 +47,7 @@ pub(super) fn command_palette_row_styles() -> CommandPaletteRowStyle {
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_command_row(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     input_state: &InputState,
     cmd: &ActionMeta,
@@ -90,6 +91,7 @@ pub(super) fn render_command_row(
     // user sees why a command surfaced. Drawn before the text so the glyphs
     // sit on top; fuzzy-only (subsequence) matches draw nothing.
     draw_label_match_highlights(
+        engine,
         ctx,
         &input_state.command_palette.query,
         cmd.label,
@@ -99,9 +101,10 @@ pub(super) fn render_command_row(
     );
 
     constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, text_alpha));
-    render_command_row_label(ctx, cmd.label, label_x, label_y, styles);
+    render_command_row_label(engine, ctx, cmd.label, label_x, label_y, styles);
 
-    let label_extents = text_extents_for(
+    let label_extents = text_extents_for_with_engine(
+        engine,
         ctx,
         COMMAND_PALETTE_FONT_FAMILY,
         cairo::FontSlant::Normal,
@@ -123,6 +126,7 @@ pub(super) fn render_command_row(
 
     let shortcut_labels = input_state.action_binding_labels(cmd.action);
     let badge_left_edge = render_command_row_shortcut_badge(
+        engine,
         ctx,
         item_y,
         content_right,
@@ -135,6 +139,7 @@ pub(super) fn render_command_row(
     let max_desc_width = (badge_left_edge - 12.0 - desc_x).max(0.0);
     let desc_alpha = if is_selected { 0.9 } else { 0.75 };
     render_command_row_description(
+        engine,
         ctx,
         &styles.desc,
         cmd.description,
@@ -180,19 +185,21 @@ fn render_command_row_actions(
 }
 
 fn render_command_row_label(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     label: &str,
     x: f64,
     y: f64,
     styles: &CommandPaletteRowStyle,
 ) {
-    draw_text_baseline(ctx, styles.label, label, x, y, None);
+    engine.draw_baseline(ctx, styles.label, label, x, y, None);
 }
 
 /// Draw the accent match backdrop for each query token that appears in the
 /// label as a literal (case-insensitive) substring. The label text itself is
 /// drawn by the caller afterwards, over these boxes.
 fn draw_label_match_highlights(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     query: &str,
     label: &str,
@@ -214,12 +221,14 @@ fn draw_label_match_highlights(
     };
     for token in query_tokens(&query_lower) {
         if let Some(range) = find_match_range(label, token) {
-            draw_highlight(ctx, label_x, label_y, label, range, &style);
+            draw_highlight_with_engine(engine, ctx, label_x, label_y, label, range, &style);
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render_command_row_shortcut_badge(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     item_y: f64,
     content_right: f64,
@@ -239,6 +248,7 @@ pub(super) fn render_command_row_shortcut_badge(
         if max_badge_w > COMMAND_PALETTE_SHORTCUT_BADGE_PADDING_X * 2.0 {
             let max_shortcut_text_w = max_badge_w - COMMAND_PALETTE_SHORTCUT_BADGE_PADDING_X * 2.0;
             let shortcut_display = ellipsize_to_width(
+                engine,
                 ctx,
                 shortcut,
                 COMMAND_PALETTE_FONT_FAMILY,
@@ -248,7 +258,8 @@ pub(super) fn render_command_row_shortcut_badge(
                 max_shortcut_text_w,
             );
             if !shortcut_display.is_empty() {
-                let shortcut_extents = text_extents_for(
+                let shortcut_extents = text_extents_for_with_engine(
+                    engine,
                     ctx,
                     COMMAND_PALETTE_FONT_FAMILY,
                     shortcut_style.slant,
@@ -281,7 +292,7 @@ pub(super) fn render_command_row_shortcut_badge(
 
                 let shortcut_alpha = if is_selected { 0.95 } else { 0.8 };
                 constants::set_color(ctx, constants::with_alpha(TEXT_WHITE, shortcut_alpha));
-                draw_text_baseline(
+                engine.draw_baseline(
                     ctx,
                     *shortcut_style,
                     &shortcut_display,
@@ -295,7 +306,9 @@ pub(super) fn render_command_row_shortcut_badge(
     badge_left_edge
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render_command_row_description(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     desc_style: &UiTextStyle,
     description: &str,
@@ -307,6 +320,7 @@ pub(super) fn render_command_row_description(
     constants::set_color(ctx, constants::with_alpha(TEXT_DESCRIPTION, desc_alpha));
     if max_desc_width > 6.0 {
         let desc_display = ellipsize_to_width(
+            engine,
             ctx,
             description,
             COMMAND_PALETTE_FONT_FAMILY,
@@ -316,7 +330,7 @@ pub(super) fn render_command_row_description(
             max_desc_width,
         );
         if !desc_display.is_empty() {
-            draw_text_baseline(ctx, *desc_style, &desc_display, desc_x, label_y, None);
+            engine.draw_baseline(ctx, *desc_style, &desc_display, desc_x, label_y, None);
         }
     }
 }

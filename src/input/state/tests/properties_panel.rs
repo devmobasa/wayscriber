@@ -27,11 +27,12 @@ fn entry_index(state: &InputState, label: &str) -> usize {
 
 #[test]
 fn show_properties_panel_for_single_shape_reports_type_layer_and_lock_state() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = add_rect(&mut state, 10, 20, 30, 40);
     state.set_selection(vec![shape_id]);
 
-    assert!(state.show_properties_panel());
+    assert!(state.show_properties_panel_with(&route_measurer));
 
     let panel = state.properties_panel().expect("properties panel");
     assert_eq!(panel.title, "Shape Properties");
@@ -50,6 +51,7 @@ fn show_properties_panel_for_single_shape_reports_type_layer_and_lock_state() {
 
 #[test]
 fn show_properties_panel_for_multi_selection_includes_locked_count_and_summary() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let first = add_rect(&mut state, 10, 10, 20, 20);
     let second = add_rect(&mut state, 50, 15, 10, 15);
@@ -61,7 +63,7 @@ fn show_properties_panel_for_multi_selection_includes_locked_count_and_summary()
     state.boards.active_frame_mut().shapes[second_index].locked = true;
     state.set_selection(vec![first, second]);
 
-    assert!(state.show_properties_panel());
+    assert!(state.show_properties_panel_with(&route_measurer));
 
     let panel = state.properties_panel().expect("properties panel");
     assert_eq!(panel.title, "Selection Properties");
@@ -147,6 +149,13 @@ fn style_pill_selection_docking_routes_through_the_properties_apply_machinery() 
 
 #[test]
 fn spotlight_magnification_property_steps_the_selected_shape_and_is_undoable() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Spotlight {
         cx: 100,
@@ -165,9 +174,11 @@ fn spotlight_magnification_property_steps_the_selected_shape_and_is_undoable() {
     assert_eq!(entry.label, "Magnification");
     assert_eq!(entry.value, "1.5x");
 
-    assert!(
-        state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, 1,)
-    );
+    assert!(state.adjust_selection_property_kind_with(
+        &route_measurer,
+        SelectionPropertyKind::SpotlightMagnification,
+        1,
+    ));
     let magnification = |state: &InputState| match &state
         .boards
         .active_frame()
@@ -181,16 +192,17 @@ fn spotlight_magnification_property_steps_the_selected_shape_and_is_undoable() {
     assert_eq!(magnification(&state), 1.75);
     assert!(state.take_pending_spotlight_magnifier_feedback());
 
-    state.handle_action(Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(magnification(&state), 1.5);
 }
 
 #[test]
 fn close_properties_panel_clears_panel_and_requests_redraw() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = add_rect(&mut state, 5, 5, 10, 10);
     state.set_selection(vec![shape_id]);
-    assert!(state.show_properties_panel());
+    assert!(state.show_properties_panel_with(&route_measurer));
     state.needs_redraw = false;
 
     state.close_properties_panel();
@@ -202,6 +214,7 @@ fn close_properties_panel_clears_panel_and_requests_redraw() {
 
 #[test]
 fn show_properties_panel_anchors_to_screen_space_on_panned_boards() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_WHITEBOARD);
     assert!(state.boards.active_frame_mut().set_view_offset(100, 50));
@@ -209,7 +222,7 @@ fn show_properties_panel_anchors_to_screen_space_on_panned_boards() {
     let shape_id = add_rect(&mut state, 140, 90, 20, 20);
     state.set_selection(vec![shape_id]);
 
-    assert!(state.show_properties_panel());
+    assert!(state.show_properties_panel_with(&route_measurer));
 
     let panel = state.properties_panel().expect("properties panel");
     assert_eq!(panel.anchor_rect, Rect::new(38, 38, 24, 24));
@@ -217,14 +230,15 @@ fn show_properties_panel_anchors_to_screen_space_on_panned_boards() {
 
 #[test]
 fn activate_fill_entry_toggles_rectangle_fill_and_refreshes_panel_value() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = add_rect(&mut state, 5, 5, 20, 20);
     state.set_selection(vec![shape_id]);
-    assert!(state.show_properties_panel());
+    assert!(state.show_properties_panel_with(&route_measurer));
     let fill_index = entry_index(&state, "Fill");
     state.set_properties_panel_focus(Some(fill_index));
 
-    assert!(state.activate_properties_panel_entry());
+    assert!(state.activate_properties_panel_entry_with(&route_measurer));
 
     match &state
         .boards
@@ -244,6 +258,7 @@ fn activate_fill_entry_toggles_rectangle_fill_and_refreshes_panel_value() {
 
 #[test]
 fn adjust_font_size_entry_increases_text_size_and_refreshes_panel_value() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 10,
@@ -256,11 +271,11 @@ fn adjust_font_size_entry_increases_text_size_and_refreshes_panel_value() {
         wrap_width: None,
     });
     state.set_selection(vec![shape_id]);
-    assert!(state.show_properties_panel());
+    assert!(state.show_properties_panel_with(&route_measurer));
     let font_index = entry_index(&state, "Font size");
     state.set_properties_panel_focus(Some(font_index));
 
-    assert!(state.adjust_properties_panel_entry(1));
+    assert!(state.adjust_properties_panel_entry_with(&route_measurer, 1));
 
     match &state
         .boards
@@ -280,6 +295,7 @@ fn adjust_font_size_entry_increases_text_size_and_refreshes_panel_value() {
 
 #[test]
 fn activate_text_background_entry_on_mixed_selection_turns_all_backgrounds_on() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let first = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 10,
@@ -302,11 +318,11 @@ fn activate_text_background_entry_on_mixed_selection_turns_all_backgrounds_on() 
         wrap_width: None,
     });
     state.set_selection(vec![first, second]);
-    assert!(state.show_properties_panel());
+    assert!(state.show_properties_panel_with(&route_measurer));
     let bg_index = entry_index(&state, "Text background");
     state.set_properties_panel_focus(Some(bg_index));
 
-    assert!(state.activate_properties_panel_entry());
+    assert!(state.activate_properties_panel_entry_with(&route_measurer));
 
     for id in [first, second] {
         match &state
@@ -330,6 +346,7 @@ fn activate_text_background_entry_on_mixed_selection_turns_all_backgrounds_on() 
 
 #[test]
 fn adjust_arrow_length_entry_clamps_to_max_and_refreshes_panel_value() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Arrow {
         x1: 0,
@@ -346,12 +363,12 @@ fn adjust_arrow_length_entry_clamps_to_max_and_refreshes_panel_value() {
         label: None,
     });
     state.set_selection(vec![shape_id]);
-    assert!(state.show_properties_panel());
+    assert!(state.show_properties_panel_with(&route_measurer));
     let length_index = entry_index(&state, "Arrow length");
     state.set_properties_panel_focus(Some(length_index));
 
-    assert!(state.adjust_properties_panel_entry(1));
-    assert!(!state.adjust_properties_panel_entry(1));
+    assert!(state.adjust_properties_panel_entry_with(&route_measurer, 1));
+    assert!(!state.adjust_properties_panel_entry_with(&route_measurer, 1));
 
     match &state
         .boards
@@ -401,6 +418,13 @@ fn magnification_entry(state: &InputState) -> Option<crate::input::SelectionProp
 
 #[test]
 fn a_mixed_magnification_selection_reads_mixed_and_still_steps_every_shape() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut state = create_test_input_state();
     let low = add_spotlight(&mut state, 1.5);
     let high = add_spotlight(&mut state, 3.0);
@@ -410,18 +434,23 @@ fn a_mixed_magnification_selection_reads_mixed_and_still_steps_every_shape() {
     assert_eq!(entry.value, "Mixed");
     assert!(!entry.disabled, "a mixed selection is still editable");
 
-    assert!(state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, 1));
+    assert!(state.adjust_selection_property_kind_with(
+        &route_measurer,
+        SelectionPropertyKind::SpotlightMagnification,
+        1
+    ));
     assert_eq!(spotlight_magnification(&state, low), 1.75);
     assert_eq!(spotlight_magnification(&state, high), 3.25);
 
     // One step, one undo entry, for the whole selection.
-    state.handle_action(Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(spotlight_magnification(&state, low), 1.5);
     assert_eq!(spotlight_magnification(&state, high), 3.0);
 }
 
 #[test]
 fn a_locked_spotlight_reports_locked_and_refuses_magnification_changes() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = add_spotlight(&mut state, 2.0);
     state.set_selection(vec![shape_id]);
@@ -436,19 +465,26 @@ fn a_locked_spotlight_reports_locked_and_refuses_magnification_changes() {
     assert_eq!(entry.value, "Locked");
     assert!(entry.disabled);
 
-    assert!(
-        !state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, 1)
-    );
+    assert!(!state.adjust_selection_property_kind_with(
+        &route_measurer,
+        SelectionPropertyKind::SpotlightMagnification,
+        1
+    ));
     assert_eq!(spotlight_magnification(&state, shape_id), 2.0);
 }
 
 #[test]
 fn magnification_steps_stop_at_both_ends_of_the_supported_range() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let lowest = add_spotlight(&mut state, crate::draw::MIN_SPOTLIGHT_MAGNIFICATION);
     state.set_selection(vec![lowest]);
     assert!(
-        !state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, -1),
+        !state.adjust_selection_property_kind_with(
+            &route_measurer,
+            SelectionPropertyKind::SpotlightMagnification,
+            -1
+        ),
         "stepping below 1x must be a no-op, not a silent clamp with an undo entry"
     );
     assert_eq!(
@@ -458,9 +494,11 @@ fn magnification_steps_stop_at_both_ends_of_the_supported_range() {
 
     let highest = add_spotlight(&mut state, crate::draw::MAX_SPOTLIGHT_MAGNIFICATION);
     state.set_selection(vec![highest]);
-    assert!(
-        !state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, 1)
-    );
+    assert!(!state.adjust_selection_property_kind_with(
+        &route_measurer,
+        SelectionPropertyKind::SpotlightMagnification,
+        1
+    ));
     assert_eq!(
         spotlight_magnification(&state, highest),
         crate::draw::MAX_SPOTLIGHT_MAGNIFICATION
@@ -469,6 +507,7 @@ fn magnification_steps_stop_at_both_ends_of_the_supported_range() {
 
 #[test]
 fn magnification_only_touches_the_spotlights_in_a_multi_kind_selection() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let spotlight = add_spotlight(&mut state, 2.0);
     let rect = add_rect(&mut state, 5, 5, 10, 10);
@@ -484,7 +523,11 @@ fn magnification_only_touches_the_spotlights_in_a_multi_kind_selection() {
         "{:?}",
         state.boards.active_frame().shape(rect).expect("rect").shape
     );
-    assert!(state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, 1));
+    assert!(state.adjust_selection_property_kind_with(
+        &route_measurer,
+        SelectionPropertyKind::SpotlightMagnification,
+        1
+    ));
     assert_eq!(spotlight_magnification(&state, spotlight), 2.25);
     assert_eq!(
         format!(
@@ -498,12 +541,17 @@ fn magnification_only_touches_the_spotlights_in_a_multi_kind_selection() {
 
 #[test]
 fn editing_a_selected_spotlight_leaves_the_next_shape_default_alone() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let default_before = state.style.spotlight_magnification;
     let shape_id = add_spotlight(&mut state, 2.0);
     state.set_selection(vec![shape_id]);
 
-    assert!(state.adjust_selection_property_kind(SelectionPropertyKind::SpotlightMagnification, 1));
+    assert!(state.adjust_selection_property_kind_with(
+        &route_measurer,
+        SelectionPropertyKind::SpotlightMagnification,
+        1
+    ));
 
     assert_eq!(spotlight_magnification(&state, shape_id), 2.25);
     assert_eq!(

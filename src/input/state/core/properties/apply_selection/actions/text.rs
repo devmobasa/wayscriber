@@ -1,4 +1,5 @@
 use crate::draw::Shape;
+use crate::draw::TextMeasurer;
 use crate::input::state::core::base::InputState;
 use crate::input::state::core::properties::apply_selection::constants::{
     MAX_FONT_SIZE, MIN_FONT_SIZE, SELECTION_FONT_SIZE_STEP,
@@ -8,10 +9,12 @@ use crate::input::state::{Toast, ToastPriority};
 impl InputState {
     pub(in crate::input::state::core::properties) fn apply_selection_font_size(
         &mut self,
+        measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
         let delta = SELECTION_FONT_SIZE_STEP * direction as f64;
-        let result = self.apply_selection_change(
+        let result = self.apply_selection_change_with(
+            measurer,
             |shape| matches!(shape, Shape::Text { .. }),
             |shape| match shape {
                 Shape::Text { size, .. } => {
@@ -32,6 +35,7 @@ impl InputState {
 
     pub(in crate::input::state::core::properties) fn apply_selection_text_background(
         &mut self,
+        measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
         let target = if direction == 0 {
@@ -54,7 +58,8 @@ impl InputState {
             return false;
         };
 
-        let result = self.apply_selection_change(
+        let result = self.apply_selection_change_with(
+            measurer,
             |shape| matches!(shape, Shape::Text { .. }),
             |shape| match shape {
                 Shape::Text {
@@ -87,6 +92,7 @@ mod tests {
 
     #[test]
     fn apply_selection_text_background_warns_when_no_text_shapes_are_selected() {
+        let measurer = TextMeasurer::default();
         let mut state = make_state();
         let rect_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
             x: 0,
@@ -99,7 +105,7 @@ mod tests {
         });
         state.set_selection(vec![rect_id]);
 
-        assert!(!state.apply_selection_text_background(0));
+        assert!(!state.apply_selection_text_background(&measurer, 0));
         assert_eq!(
             state.active_toast().map(|toast| toast.message.as_str()),
             Some("No text shapes selected.")
@@ -108,6 +114,7 @@ mod tests {
 
     #[test]
     fn apply_selection_font_size_clamps_to_maximum() {
+        let measurer = TextMeasurer::default();
         let mut state = make_state();
         let text_id = state.boards.active_frame_mut().add_shape(Shape::Text {
             x: 10,
@@ -121,8 +128,8 @@ mod tests {
         });
         state.set_selection(vec![text_id]);
 
-        assert!(state.apply_selection_font_size(1));
-        assert!(!state.apply_selection_font_size(1));
+        assert!(state.apply_selection_font_size(&measurer, 1));
+        assert!(!state.apply_selection_font_size(&measurer, 1));
 
         match &state
             .boards

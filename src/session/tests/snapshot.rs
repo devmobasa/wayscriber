@@ -102,7 +102,11 @@ fn every_persisted_drawing_style_survives_snapshot_serialization_and_restore() {
     let decoded: ToolStateSnapshot =
         serde_json::from_slice(&encoded).expect("deserialize tool snapshot fixture");
     let mut restored = dummy_input_state();
-    apply_tool_state_snapshot(&mut restored, decoded);
+    apply_tool_state_snapshot(
+        &mut restored,
+        &crate::draw::TextMeasurer::default(),
+        decoded,
+    );
 
     let recaptured = ToolStateSnapshot::from_input_state(&restored);
     assert_eq!(
@@ -127,7 +131,11 @@ fn non_default_pen_smoothing_survives_snapshot_serialization_and_restore() {
 
     let mut restored = dummy_input_state();
     let _ = restored.set_pen_smoothing(1);
-    apply_tool_state_snapshot(&mut restored, decoded);
+    apply_tool_state_snapshot(
+        &mut restored,
+        &crate::draw::TextMeasurer::default(),
+        decoded,
+    );
 
     assert_eq!(restored.style.pen_smoothing, 5);
 }
@@ -148,7 +156,11 @@ fn legacy_snapshot_without_pen_smoothing_preserves_the_configured_level() {
 
     let mut restored = dummy_input_state();
     let _ = restored.set_pen_smoothing(4);
-    apply_tool_state_snapshot(&mut restored, decoded);
+    apply_tool_state_snapshot(
+        &mut restored,
+        &crate::draw::TextMeasurer::default(),
+        decoded,
+    );
 
     assert_eq!(
         restored.style.pen_smoothing, 4,
@@ -158,6 +170,13 @@ fn legacy_snapshot_without_pen_smoothing_preserves_the_configured_level() {
 
 #[test]
 fn snapshot_uses_pre_light_mode_tool_state() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-light");
     options.restore_tool_state = true;
 
@@ -174,7 +193,7 @@ fn snapshot_uses_pre_light_mode_tool_state() {
     let _ = input.set_thickness(14.0);
     input.ui_visibility.show_status_bar = true;
 
-    input.handle_action(Action::ToggleLightMode);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
     assert!(input.light_mode_active());
     assert_eq!(input.tool_override(), Some(Tool::Pen));
     assert!(!input.ui_visibility.show_status_bar);
@@ -272,6 +291,13 @@ fn restoring_a_session_never_carries_a_rebound_shortcut() {
 /// just the live one.
 #[test]
 fn restoring_a_session_leaves_focus_modes_pending_status_bar_value_alone() {
+    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+
     let mut options = SessionOptions::new(PathBuf::from("/tmp"), "display-focus-apply");
     options.restore_tool_state = true;
 
@@ -281,7 +307,7 @@ fn restoring_a_session_leaves_focus_modes_pending_status_bar_value_alone() {
 
     let mut input = dummy_input_state();
     input.ui_visibility.show_status_bar = true;
-    input.handle_action(Action::ToggleFocusMode);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(input.focus_mode_active());
     assert!(!input.ui_visibility.show_status_bar);
 
@@ -292,7 +318,7 @@ fn restoring_a_session_leaves_focus_modes_pending_status_bar_value_alone() {
         "session restore must not reveal chrome through Focus Mode"
     );
 
-    input.handle_action(Action::ToggleFocusMode);
+    input.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(
         input.ui_visibility.show_status_bar,
         "leaving Focus Mode returns this run's own value, not one from a session file"
