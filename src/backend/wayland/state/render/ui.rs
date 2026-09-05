@@ -187,7 +187,8 @@ impl WaylandState {
             );
         }
         if !capture_picker && self.input_state.input_hud_visible() {
-            crate::ui::render_input_hud(
+            crate::ui::render_input_hud_with_engine(
+                self.render.ui_text(),
                 ctx,
                 &self.input_state,
                 &self.config.ui.status_bar_style,

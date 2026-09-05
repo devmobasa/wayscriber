@@ -201,8 +201,13 @@ impl WaylandState {
         // the same appear → resize → disappear union keeps the stale chips
         // cleaned up without escalating a keystroke to the full surface.
         let input_hud_rect = if flags.active(UiEffect::InputHud) {
-            crate::ui::input_hud_geometry(&self.input_state, width, height)
-                .and_then(|bounds| effect_rect(bounds, width, height))
+            crate::ui::input_hud_geometry_with_engine(
+                self.render.ui_text(),
+                &self.input_state,
+                width,
+                height,
+            )
+            .and_then(|bounds| effect_rect(bounds, width, height))
         } else {
             None
         };

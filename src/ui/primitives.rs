@@ -1,7 +1,7 @@
 use std::f64::consts::{FRAC_PI_2, PI};
 
 use crate::ui::theme::{self, Rgba};
-use crate::ui_text::{UiTextEngine, UiTextStyle, measure_text, text_layout, with_legacy_engine};
+use crate::ui_text::{UiTextEngine, UiTextStyle, with_legacy_engine};
 
 pub(crate) fn text_extents_for(
     ctx: &cairo::Context,
@@ -361,8 +361,12 @@ pub(crate) fn keycap_text_style(font_size: f64) -> UiTextStyle<'static> {
 /// [`keycap_size`] without a rendering context, for callers that lay out
 /// before a frame buffer exists (damage geometry). Goes through the shared
 /// measurement cache, so it agrees with the drawn chip exactly.
-pub(crate) fn keycap_box_size(label: &str, font_size: f64) -> Option<(f64, f64)> {
-    let extents = measure_text(keycap_text_style(font_size), label, None)?;
+pub(crate) fn keycap_box_size(
+    engine: &UiTextEngine,
+    label: &str,
+    font_size: f64,
+) -> Option<(f64, f64)> {
+    let extents = engine.measure(keycap_text_style(font_size), label, None)?;
     Some((
         extents.width() + font_size * KEYCAP_PAD_X_FACTOR * 2.0,
         extents.height() + font_size * KEYCAP_PAD_Y_FACTOR * 2.0,
@@ -375,6 +379,7 @@ pub(crate) fn keycap_box_size(label: &str, font_size: f64) -> Option<(f64, f64)>
 /// shorthand over the same chrome.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_keycap_in_box(
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     y: f64,
@@ -385,7 +390,7 @@ pub(crate) fn draw_keycap_in_box(
     fill: Rgba,
     text_color: Rgba,
 ) {
-    let layout = text_layout(ctx, keycap_text_style(font_size), label, None);
+    let layout = engine.layout(ctx, keycap_text_style(font_size), label, None);
     let extents = layout.ink_extents();
 
     theme::set_color(ctx, fill);

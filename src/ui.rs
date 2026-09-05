@@ -55,6 +55,7 @@ pub use help_overlay::{
     render_help_overlay_result,
 };
 pub use input_hud::{input_hud_geometry, render_input_hud};
+pub(crate) use input_hud::{input_hud_geometry_with_engine, render_input_hud_with_engine};
 pub(crate) use measure_badge::{
     ShapeMeasureBadge, measure_shape_badge, shape_measure_badge_text_style,
 };
