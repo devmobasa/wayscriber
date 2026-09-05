@@ -96,6 +96,12 @@ fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
 /// screen agreeing with the rolled-back pins.
 #[test]
 fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     use crate::domain::Action;
 
     let config = Config::default();
@@ -107,7 +113,7 @@ fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
     input.take_pending_toolbar_persistence(); // the write whose rollback arrives below
 
     input.presenter_mode_config_mut_for_test().hide_toolbars = true;
-    input.toggle_presenter_mode();
+    input.toggle_presenter_mode_with_resources(route_resources);
     assert!(input.presenter_mode_active());
 
     apply_toolbar_runtime_rollback(
@@ -123,7 +129,7 @@ fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
         "the live presenter-hidden flags must not move under the owner"
     );
 
-    input.toggle_presenter_mode();
+    input.toggle_presenter_mode_with_resources(route_resources);
     assert!(!input.presenter_mode_active());
     assert!(
         input.toolbar_visible() && input.toolbar_top_visible(),

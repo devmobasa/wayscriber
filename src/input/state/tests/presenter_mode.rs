@@ -8,13 +8,19 @@ use crate::ui::toolbar::ToolbarEvent;
 
 #[test]
 fn presenter_mode_forces_click_highlight() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     state
         .presenter_mode_config_mut_for_test()
         .enable_click_highlight = true;
 
     assert!(!state.click_highlight_enabled());
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(state.presenter_mode_active());
     assert!(state.click_highlight_enabled());
 
@@ -53,6 +59,12 @@ fn presenter_mode_exits_focus_mode_before_taking_chrome_ownership() {
 
 #[test]
 fn presenter_mode_blocks_preset_status_bar_toggle() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     state.presenter_mode_config_mut_for_test().hide_status_bar = true;
 
@@ -77,7 +89,7 @@ fn presenter_mode_blocks_preset_status_bar_toggle() {
     };
     state.preset_slots.presets_mut_for_test()[0] = Some(preset);
 
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.ui_visibility.show_status_bar);
 
     assert!(state.apply_preset(1));
@@ -86,10 +98,16 @@ fn presenter_mode_blocks_preset_status_bar_toggle() {
 
 #[test]
 fn presenter_mode_blocks_tool_preview_toggle() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     state.presenter_mode_config_mut_for_test().hide_tool_preview = true;
 
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.ui_visibility.show_tool_preview);
 
     assert!(!state.apply_toolbar_event(ToolbarEvent::ToggleToolPreview(true)));
@@ -98,11 +116,17 @@ fn presenter_mode_blocks_tool_preview_toggle() {
 
 #[test]
 fn presenter_mode_closes_help_overlay_and_switches_to_highlight_tool() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     state.help_overlay.visible = true;
     state.set_tool_override(Some(Tool::Pen));
 
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
 
     assert!(state.presenter_mode_active());
     assert!(!state.help_overlay.visible);
@@ -111,6 +135,12 @@ fn presenter_mode_closes_help_overlay_and_switches_to_highlight_tool() {
 
 #[test]
 fn presenter_locked_mode_blocks_non_left_drag_bindings() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     let mut bindings = DragToolBindings::default();
     bindings.right.drag = DragBinding::from_tool(Tool::Pen);
@@ -118,7 +148,7 @@ fn presenter_locked_mode_blocks_non_left_drag_bindings() {
     state.presenter_mode_config_mut_for_test().tool_behavior =
         PresenterToolBehavior::ForceHighlightLocked;
 
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     state.on_mouse_press(MouseButton::Right, 0, 0);
     state.on_mouse_motion(10, 10);
     state.on_mouse_release(MouseButton::Right, 10, 10);
@@ -129,17 +159,23 @@ fn presenter_locked_mode_blocks_non_left_drag_bindings() {
 
 #[test]
 fn presenter_mode_restores_status_bar_toolbars_and_tool_override_on_exit() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     state.ui_visibility.show_status_bar = true;
     state.test_set_toolbar_visibility_state(true, true, state.toolbar_top_pinned());
     state.set_tool_override(Some(Tool::Arrow));
 
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.ui_visibility.show_status_bar);
     assert!(!state.toolbar_visible());
     assert_eq!(state.tool_override(), Some(Tool::Highlight));
 
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.presenter_mode_active());
     assert!(state.ui_visibility.show_status_bar);
     assert!(state.toolbar_visible());
@@ -149,6 +185,12 @@ fn presenter_mode_restores_status_bar_toolbars_and_tool_override_on_exit() {
 
 #[test]
 fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     use crate::config::{PresenterToolbarMode, TopDisplayMode};
 
     let mut state = create_test_input_state();
@@ -157,7 +199,7 @@ fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
     state.test_set_toolbar_visibility_state(true, true, state.toolbar_top_pinned());
     state.test_set_toolbar_display_state(state.toolbar_top_display_mode(), true);
 
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(state.presenter_mode_active());
     assert!(
         state.toolbar_top_visible(),
@@ -168,7 +210,7 @@ fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
         !state.toolbar_top_minimized(),
         "the chip replaces the restore tab"
     );
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.presenter_mode_active());
     assert_eq!(state.toolbar_top_display_mode(), TopDisplayMode::Full);
     assert!(
@@ -179,22 +221,34 @@ fn presenter_micro_mapping_shows_the_chip_and_restores_on_exit() {
 
 #[test]
 fn presenter_hidden_mapping_keeps_todays_behavior() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     use crate::config::{PresenterToolbarMode, TopDisplayMode};
 
     let mut state = create_test_input_state();
     state.presenter_mode_config_mut_for_test().hide_toolbars = true;
     state.presenter_mode_config_mut_for_test().toolbar_mode = PresenterToolbarMode::Hidden;
 
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.toolbar_top_visible());
     assert_eq!(state.toolbar_top_display_mode(), TopDisplayMode::Full);
 }
 
 #[test]
 fn presenter_mode_emits_entry_and_exit_toasts() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
 
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     let entry_toast = state.active_toast().expect("entry toast");
     assert_eq!(entry_toast.message, "Presenter Mode active");
     assert_eq!(
@@ -205,7 +259,7 @@ fn presenter_mode_emits_entry_and_exit_toasts() {
         Some(crate::config::Action::TogglePresenterMode)
     );
 
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     let exit_toast = state.active_toast().expect("exit toast");
     assert_eq!(exit_toast.message, "Stopping Presenter Mode");
     assert!(exit_toast.action.is_none());

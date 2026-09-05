@@ -62,15 +62,6 @@ impl InputState {
     }
 
     /// Set the top strip's display form (micro chip click → `Full`).
-    pub(super) fn apply_toolbar_set_top_display_mode(
-        &mut self,
-        mode: crate::config::TopDisplayMode,
-    ) -> bool {
-        crate::ui_text::with_legacy_engine(|engine| {
-            self.apply_toolbar_set_top_display_mode_with_engine(engine, mode)
-        })
-    }
-
     pub(super) fn apply_toolbar_set_top_display_mode_with_engine(
         &mut self,
         engine: &crate::ui_text::UiTextEngine,
@@ -214,12 +205,6 @@ impl InputState {
         }
     }
 
-    pub(super) fn apply_toolbar_toggle_status_bar(&mut self, show: bool) -> bool {
-        crate::ui_text::with_legacy_engine(|engine| {
-            self.apply_toolbar_toggle_status_bar_with_engine(engine, show)
-        })
-    }
-
     pub(super) fn apply_toolbar_toggle_status_bar_with_engine(
         &mut self,
         engine: &crate::ui_text::UiTextEngine,
@@ -251,16 +236,6 @@ impl InputState {
         true
     }
 
-    pub(super) fn apply_toolbar_set_status_bar_item_visible(
-        &mut self,
-        item: crate::config::StatusBarItem,
-        visible: bool,
-    ) -> bool {
-        crate::ui_text::with_legacy_engine(|engine| {
-            self.apply_toolbar_set_status_bar_item_visible_with_engine(engine, item, visible)
-        })
-    }
-
     pub(super) fn apply_toolbar_set_status_bar_item_visible_with_engine(
         &mut self,
         engine: &crate::ui_text::UiTextEngine,
@@ -268,12 +243,6 @@ impl InputState {
         visible: bool,
     ) -> bool {
         self.set_status_bar_item_visible_with_engine(engine, item, visible)
-    }
-
-    pub(super) fn apply_toolbar_toggle_status_board_badge(&mut self, show: bool) -> bool {
-        crate::ui_text::with_legacy_engine(|engine| {
-            self.apply_toolbar_toggle_status_board_badge_with_engine(engine, show)
-        })
     }
 
     pub(super) fn apply_toolbar_toggle_status_board_badge_with_engine(
@@ -286,12 +255,6 @@ impl InputState {
             crate::config::StatusBarItem::Board,
             show,
         )
-    }
-
-    pub(super) fn apply_toolbar_toggle_status_page_badge(&mut self, show: bool) -> bool {
-        crate::ui_text::with_legacy_engine(|engine| {
-            self.apply_toolbar_toggle_status_page_badge_with_engine(engine, show)
-        })
     }
 
     pub(super) fn apply_toolbar_toggle_status_page_badge_with_engine(

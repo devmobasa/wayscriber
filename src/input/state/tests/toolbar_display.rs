@@ -220,9 +220,15 @@ fn hide_with_an_already_unpinned_strip_queues_no_persistence() {
 
 #[test]
 fn presenter_swallowed_toggle_leaves_pins_and_persistence_untouched() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     state.presenter_mode_config_mut_for_test().hide_toolbars = true;
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.toolbar_visible());
 
     state.handle_action(Action::ToggleToolbar);
@@ -627,11 +633,17 @@ fn unbound_chrome_warning_advertises_right_click_only_when_it_can_open_the_menu(
 
 #[test]
 fn all_chrome_warning_suppressed_while_presenting() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     state.presenter_mode_config_mut_for_test().hide_toolbars = true;
     state.presenter_mode_config_mut_for_test().hide_status_bar = false;
     state.presenter_mode_config_mut_for_test().show_toast = false;
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.toolbar_visible());
 
     // Hiding the status bar now leaves no chrome, but presenter mode hides
@@ -646,11 +658,17 @@ fn all_chrome_warning_suppressed_while_presenting() {
 
 #[test]
 fn all_chrome_warning_fires_when_presenter_mode_did_not_hide_any_chrome() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     state.presenter_mode_config_mut_for_test().hide_toolbars = false;
     state.presenter_mode_config_mut_for_test().hide_status_bar = false;
     state.presenter_mode_config_mut_for_test().show_toast = false;
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
 
     hide_all_chrome(&mut state);
     let toast = state.active_toast().expect("all-chrome warning");
@@ -669,6 +687,12 @@ fn all_chrome_warning_fires_when_presenter_mode_did_not_hide_any_chrome() {
 
 #[test]
 fn presenter_owned_hidden_toolbar_falls_back_to_status_bar_recovery() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     state.handle_action(Action::ToggleToolbar);
     assert!(!state.toolbar_visible());
@@ -676,7 +700,7 @@ fn presenter_owned_hidden_toolbar_falls_back_to_status_bar_recovery() {
     state.presenter_mode_config_mut_for_test().hide_toolbars = true;
     state.presenter_mode_config_mut_for_test().hide_status_bar = false;
     state.presenter_mode_config_mut_for_test().show_toast = false;
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     state.handle_action(Action::ToggleStatusBar);
 
     let toast = state.active_toast().expect("all-chrome warning");
@@ -742,9 +766,15 @@ fn context_menu_offers_recovery_entries_only_while_chrome_hidden() {
 
 #[test]
 fn presenter_mode_gates_the_cycle_like_toggle_toolbar() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
     state.presenter_mode_config_mut_for_test().hide_toolbars = true;
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.toolbar_top_visible());
 
     state.handle_action(Action::CycleToolbarDisplay);
@@ -757,13 +787,19 @@ fn presenter_mode_gates_the_cycle_like_toggle_toolbar() {
 
 #[test]
 fn presenter_mode_gates_the_micro_chip_event_like_the_cycle_action() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     use crate::config::PresenterToolbarMode;
     use crate::ui::toolbar::ToolbarEvent;
 
     let mut state = create_test_input_state();
     state.presenter_mode_config_mut_for_test().hide_toolbars = true;
     state.presenter_mode_config_mut_for_test().toolbar_mode = PresenterToolbarMode::Micro;
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
 
     // Clicking the chip while presenter mode owns toolbar visibility is a
@@ -777,7 +813,7 @@ fn presenter_mode_gates_the_micro_chip_event_like_the_cycle_action() {
     assert_eq!(state.top_display_state(), TopDisplayMode::Micro);
 
     // After presenter exit the chip works again.
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(!state.presenter_mode_active());
     state.handle_action(Action::CycleToolbarDisplay); // micro
     assert_eq!(state.top_display_state(), TopDisplayMode::Micro);

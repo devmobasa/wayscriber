@@ -1,5 +1,5 @@
+use crate::draw::TextMeasurer;
 use crate::draw::{Color, FontDescriptor};
-use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::input::{DrawingState, EraserMode, InputState, Tool};
 
 use crate::ui::toolbar::PrecisionEntryTarget;
@@ -17,16 +17,6 @@ impl InputState {
 
     /// Commit a typed precise-entry value, clamped to the target's shared
     /// slider range, and close the popup if it is still open.
-    pub(super) fn apply_toolbar_commit_precision_entry(
-        &mut self,
-        target: PrecisionEntryTarget,
-        value: f64,
-    ) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.apply_toolbar_commit_precision_entry_with(measurer, target, value)
-        })
-    }
-
     pub(super) fn apply_toolbar_commit_precision_entry_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -47,10 +37,6 @@ impl InputState {
                 self.apply_toolbar_set_font_size(value.clamp(spec.min, spec.max))
             }
         }
-    }
-
-    pub(super) fn apply_toolbar_select_tool(&mut self, tool: Tool) -> bool {
-        with_legacy_measurer(|measurer| self.apply_toolbar_select_tool_with(measurer, tool))
     }
 
     pub(super) fn apply_toolbar_select_tool_with(
@@ -78,12 +64,12 @@ impl InputState {
         changed
     }
 
-    pub(super) fn apply_toolbar_set_color(&mut self, color: Color) -> bool {
-        self.apply_color_from_ui(color)
-    }
-
-    pub(super) fn apply_toolbar_set_thickness(&mut self, value: f64) -> bool {
-        with_legacy_measurer(|measurer| self.apply_toolbar_set_thickness_with(measurer, value))
+    pub(super) fn apply_toolbar_set_color_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        color: Color,
+    ) -> bool {
+        self.apply_color_from_ui_with_measurer(measurer, color)
     }
 
     pub(super) fn apply_toolbar_set_thickness_with(
@@ -121,10 +107,6 @@ impl InputState {
 
     pub(super) fn apply_toolbar_set_font(&mut self, descriptor: FontDescriptor) -> bool {
         self.set_font_descriptor(descriptor)
-    }
-
-    pub(super) fn apply_toolbar_set_font_bold(&mut self, bold: bool) -> bool {
-        with_legacy_measurer(|measurer| self.apply_toolbar_set_font_bold_with(measurer, bold))
     }
 
     pub(super) fn apply_toolbar_set_font_bold_with(
@@ -170,10 +152,6 @@ impl InputState {
         self.reset_step_marker_counter()
     }
 
-    pub(super) fn apply_toolbar_nudge_thickness(&mut self, delta: f64) -> bool {
-        with_legacy_measurer(|measurer| self.apply_toolbar_nudge_thickness_with(measurer, delta))
-    }
-
     pub(super) fn apply_toolbar_nudge_thickness_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -186,24 +164,24 @@ impl InputState {
         self.set_marker_opacity(self.style.marker_opacity + delta)
     }
 
-    pub(super) fn apply_toolbar_enter_text_mode(&mut self) -> bool {
-        let _ = self.set_tool_override(None);
-        self.toolbar_enter_text_mode();
+    pub(super) fn apply_toolbar_enter_text_mode_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) -> bool {
+        let _ = self.set_tool_override_with(resources.measurer, None);
+        self.toolbar_enter_text_mode_with_resources(resources);
         self.close_top_toolbar_menus();
         true
     }
 
-    pub(super) fn apply_toolbar_enter_sticky_note_mode(&mut self) -> bool {
-        let _ = self.set_tool_override(None);
-        self.toolbar_enter_sticky_note_mode();
+    pub(super) fn apply_toolbar_enter_sticky_note_mode_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) -> bool {
+        let _ = self.set_tool_override_with(resources.measurer, None);
+        self.toolbar_enter_sticky_note_mode_with_resources(resources);
         self.close_top_toolbar_menus();
         true
-    }
-
-    pub(super) fn apply_toolbar_toggle_all_highlight(&mut self, enable: bool) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.apply_toolbar_toggle_all_highlight_with(measurer, enable)
-        })
     }
 
     pub(super) fn apply_toolbar_toggle_all_highlight_with(
@@ -235,10 +213,6 @@ impl InputState {
         self.set_input_hud_enabled(enable)
     }
 
-    pub(super) fn apply_toolbar_apply_preset(&mut self, slot: usize) -> bool {
-        with_legacy_measurer(|measurer| self.apply_toolbar_apply_preset_with(measurer, slot))
-    }
-
     pub(super) fn apply_toolbar_apply_preset_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -265,10 +239,6 @@ impl InputState {
         true
     }
 
-    pub(super) fn apply_toolbar_open_color_picker_popup(&mut self) -> bool {
-        with_legacy_measurer(|measurer| self.apply_toolbar_open_color_picker_popup_with(measurer))
-    }
-
     pub(super) fn apply_toolbar_open_color_picker_popup_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -280,10 +250,6 @@ impl InputState {
     /// Open the color picker popup bound to a quick-color slot, so accepting
     /// it recolors that swatch. An index past the palette is a stale snapshot
     /// (the palette shrank between render and click) and opens nothing.
-    pub(super) fn apply_toolbar_edit_quick_color(&mut self, index: usize) -> bool {
-        with_legacy_measurer(|measurer| self.apply_toolbar_edit_quick_color_with(measurer, index))
-    }
-
     pub(super) fn apply_toolbar_edit_quick_color_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -294,10 +260,6 @@ impl InputState {
 
     /// Open the color picker popup ready for typing: the hex field is
     /// focused and its content selected, so the first keystroke replaces it.
-    pub(super) fn apply_toolbar_edit_hex_color(&mut self) -> bool {
-        with_legacy_measurer(|measurer| self.apply_toolbar_edit_hex_color_with(measurer))
-    }
-
     pub(super) fn apply_toolbar_edit_hex_color_with(&mut self, measurer: &TextMeasurer) -> bool {
         self.open_color_picker_popup_with_measurer(measurer);
         self.color_picker_popup_set_hex_editing(true);

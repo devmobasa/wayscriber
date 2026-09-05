@@ -25,7 +25,11 @@ impl InputState {
         self.push_toast(ToastPriority::Info, "pen-smoothing", Toast::info(message));
     }
 
-    pub(in crate::input::state) fn handle_tool_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_tool_action_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        action: Action,
+    ) -> bool {
         if let Some(tool) = Tool::from_select_action(action) {
             if tool == Tool::Highlight {
                 // Picking the highlight tool switches the click highlight on
@@ -33,22 +37,22 @@ impl InputState {
                 // explicit toggle makes.
                 let previous_enabled = self.click_highlight_enabled();
                 let previous_tool_ring = self.highlight_tool_ring_enabled();
-                self.set_highlight_tool(true);
+                self.set_highlight_tool_with_measurer(measurer, true);
                 self.queue_toolbar_persistence(PendingToolbarPersistence::ClickHighlight {
                     previous_enabled,
                     previous_tool_ring,
                 });
             }
-            self.set_tool_override(Some(tool));
+            self.set_tool_override_with(measurer, Some(tool));
             return true;
         }
 
         match action {
             Action::IncreaseThickness => {
-                self.nudge_thickness_for_active_tool(1.0);
+                self.nudge_thickness_for_active_tool_with(measurer, 1.0);
             }
             Action::DecreaseThickness => {
-                self.nudge_thickness_for_active_tool(-1.0);
+                self.nudge_thickness_for_active_tool_with(measurer, -1.0);
             }
             Action::IncreaseMarkerOpacity => {
                 self.set_marker_opacity(self.style.marker_opacity + 0.05);
@@ -57,7 +61,7 @@ impl InputState {
                 self.set_marker_opacity(self.style.marker_opacity - 0.05);
             }
             Action::CycleFontFamily => {
-                self.cycle_font_family();
+                self.cycle_font_family_with_measurer(measurer);
             }
             Action::OpenFontPicker => {
                 self.open_font_picker();
@@ -70,7 +74,7 @@ impl InputState {
                 }
             }
             Action::SelectSpotlightTool => {
-                self.set_tool_override(Some(Tool::Spotlight));
+                self.set_tool_override_with(measurer, Some(Tool::Spotlight));
             }
             Action::CycleBlurStyle => {
                 if self.cycle_blur_style() {
@@ -88,7 +92,7 @@ impl InputState {
                 // key both restyles what is on screen and sets what the next
                 // arrow will be, without a modifier to remember.
                 if self.selection_contains_arrow() {
-                    self.cycle_selected_arrow_style_from_action();
+                    self.cycle_selected_arrow_style_from_action_with(measurer);
                 } else if self.cycle_arrow_style() {
                     let label = self.style.arrow_style.label();
                     info!("Arrow style set to {label}");
@@ -124,7 +128,7 @@ impl InputState {
             Action::ToggleHighlightTool => {
                 let previous_enabled = self.click_highlight_enabled();
                 let previous_tool_ring = self.highlight_tool_ring_enabled();
-                let enabled = self.toggle_all_highlights();
+                let enabled = self.toggle_all_highlights_with_measurer(measurer);
                 self.queue_toolbar_persistence(PendingToolbarPersistence::ClickHighlight {
                     previous_enabled,
                     previous_tool_ring,

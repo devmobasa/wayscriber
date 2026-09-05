@@ -272,6 +272,7 @@ fn arrow_style(state: &crate::input::InputState, id: crate::draw::ShapeId) -> Ar
 
 #[test]
 fn any_selection_property_change_ends_a_live_bend_first() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     // The guard sits on `dispatch_selection_property`, not on the arrow-style
     // action, because the toolbar and the shape properties panel reach the same
     // mutators by other routes — and because the hazard is not style-specific.
@@ -296,7 +297,8 @@ fn any_selection_property_change_ends_a_live_bend_first() {
     assert!(state.drag_arrow_bend_to(200, 20, false));
     let bent = arrow_bend(&state, id);
 
-    state.adjust_selection_property_kind(
+    state.adjust_selection_property_kind_with(
+        &route_measurer,
         crate::input::state::core::properties::SelectionPropertyKind::Thickness,
         1,
     );

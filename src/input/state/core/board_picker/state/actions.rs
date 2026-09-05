@@ -18,18 +18,38 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_activate_row(&mut self, index: usize) {
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.board_picker_activate_row_with_measurer(measurer, index)
+        })
+    }
+
+    pub(crate) fn board_picker_activate_row_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        index: usize,
+    ) {
         let board_count = self.boards.board_count();
         if index < board_count {
             if let Some(board_index) = self.board_picker_board_index_for_row(index) {
-                self.switch_board_slot(board_index);
+                self.switch_board_slot_with_measurer(measurer, board_index);
                 self.close_board_picker();
             }
         } else {
-            self.board_picker_create_new();
+            self.board_picker_create_new_with_measurer(measurer);
         }
     }
 
     pub(crate) fn board_picker_activate_page(&mut self, page_index: usize) {
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.board_picker_activate_page_with_measurer(measurer, page_index)
+        })
+    }
+
+    pub(crate) fn board_picker_activate_page_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        page_index: usize,
+    ) {
         let Some(board_index) = self.board_picker_page_panel_board_index() else {
             return;
         };
@@ -42,17 +62,26 @@ impl InputState {
             return;
         }
         if self.boards.active_index() != board_index {
-            self.switch_board_slot(board_index);
+            self.switch_board_slot_with_measurer(measurer, board_index);
         }
-        self.switch_to_page(page_index);
+        self.switch_to_page_with_measurer(measurer, page_index);
         self.close_board_picker();
     }
 
     pub(crate) fn board_picker_add_page(&mut self) {
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.board_picker_add_page_with_measurer(measurer)
+        })
+    }
+
+    pub(crate) fn board_picker_add_page_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+    ) {
         let Some(board_index) = self.board_picker_page_panel_board_index() else {
             return;
         };
-        if self.add_page_in_board(board_index)
+        if self.add_page_in_board_with_measurer(measurer, board_index)
             && let Some(page_index) = self
                 .boards
                 .board_states()
@@ -66,10 +95,20 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_delete_page(&mut self, page_index: usize) -> PageDeleteOutcome {
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.board_picker_delete_page_with_measurer(measurer, page_index)
+        })
+    }
+
+    pub(crate) fn board_picker_delete_page_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        page_index: usize,
+    ) -> PageDeleteOutcome {
         let Some(board_index) = self.board_picker_page_panel_board_index() else {
             return PageDeleteOutcome::Pending;
         };
-        let outcome = self.delete_page_in_board(board_index, page_index);
+        let outcome = self.delete_page_in_board_with_measurer(measurer, board_index, page_index);
         if !matches!(outcome, PageDeleteOutcome::Pending) {
             self.board_picker_reconcile_page_nav_after_page_change();
         }
@@ -94,10 +133,19 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_create_new(&mut self) {
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.board_picker_create_new_with_measurer(measurer)
+        })
+    }
+
+    pub(crate) fn board_picker_create_new_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+    ) {
         if self.board_picker_is_quick() {
             self.board_picker_promote_to_full();
         }
-        if !self.create_board() {
+        if !self.create_board_with_measurer(measurer) {
             self.push_toast(
                 ToastPriority::Info,
                 "board_picker",
@@ -115,6 +163,15 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_delete_selected(&mut self) {
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.board_picker_delete_selected_with_measurer(measurer)
+        })
+    }
+
+    pub(crate) fn board_picker_delete_selected_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+    ) {
         let Some(index) = self.board_picker_selected_index() else {
             return;
         };
@@ -125,9 +182,9 @@ impl InputState {
             return;
         };
         if self.boards.active_index() != board_index {
-            self.switch_board_slot(board_index);
+            self.switch_board_slot_with_measurer(measurer, board_index);
         }
-        self.delete_active_board();
+        self.delete_active_board_with_measurer(measurer);
         if let Some(row) = self.board_picker_row_for_board(self.boards.active_index()) {
             self.board_picker_set_selected(row);
         }

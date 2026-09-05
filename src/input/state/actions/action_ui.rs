@@ -9,7 +9,11 @@ use log::info;
 use super::super::{DrawingState, InputState, PendingBackendAction, PendingToolbarPersistence};
 
 impl InputState {
-    pub(in crate::input::state) fn handle_ui_action(&mut self, action: Action) -> bool {
+    pub(in crate::input::state) fn handle_ui_action_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        action: Action,
+    ) -> bool {
         match action {
             Action::ToggleHelp => {
                 self.toggle_help_overlay();
@@ -20,7 +24,7 @@ impl InputState {
                 true
             }
             Action::ToggleFocusMode => {
-                self.handle_toggle_focus_mode();
+                self.handle_toggle_focus_mode_with_resources(resources);
                 true
             }
             Action::ToggleStatusBar => {
@@ -44,15 +48,15 @@ impl InputState {
                 true
             }
             Action::ToggleToolbar => {
-                self.handle_toggle_toolbar();
+                self.handle_toggle_toolbar_with_engine(resources.ui_engine);
                 true
             }
             Action::CycleToolbarDisplay => {
-                self.handle_cycle_toolbar_display();
+                self.handle_cycle_toolbar_display_with_engine(resources.ui_engine);
                 true
             }
             Action::TogglePresenterMode => {
-                let enabled = self.toggle_presenter_mode();
+                let enabled = self.toggle_presenter_mode_with_resources(resources);
                 info!(
                     "Presenter mode {}",
                     if enabled { "enabled" } else { "disabled" }
@@ -60,7 +64,7 @@ impl InputState {
                 true
             }
             Action::ToggleLightMode => {
-                let enabled = self.toggle_light_mode();
+                let enabled = self.toggle_light_mode_with_resources(resources);
                 info!(
                     "Light mode {}",
                     if enabled { "enabled" } else { "disabled" }
@@ -68,7 +72,7 @@ impl InputState {
                 true
             }
             Action::ToggleLightModeDrawing => {
-                let drawing = self.toggle_light_mode_drawing();
+                let drawing = self.toggle_light_mode_drawing_with_resources(resources);
                 info!(
                     "Light mode drawing {}",
                     if drawing { "enabled" } else { "disabled" }
@@ -112,12 +116,12 @@ impl InputState {
             }
             Action::OpenContextMenu => {
                 if !self.zoom_active() {
-                    self.toggle_context_menu_via_keyboard();
+                    self.toggle_context_menu_via_keyboard_with(resources.measurer);
                 }
                 true
             }
             Action::ToggleSelectionProperties => {
-                self.handle_toggle_selection_properties();
+                self.handle_toggle_selection_properties_with_measurer(resources.measurer);
                 true
             }
             Action::OpenConfigurator => {
@@ -163,7 +167,7 @@ impl InputState {
                 true
             }
             Action::ReplayTour => {
-                self.start_tour_replay();
+                self.start_tour_replay_with_resources(resources);
                 true
             }
             Action::ToggleCommandPalette => {
@@ -174,13 +178,16 @@ impl InputState {
         }
     }
 
-    fn handle_toggle_focus_mode(&mut self) {
+    fn handle_toggle_focus_mode_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) {
         // Presenter mode already owns chrome visibility and restores it on
         // exit; a second snapshot layer would fight it.
         if self.presenter_mode_active() {
             return;
         }
-        self.toggle_focus_mode();
+        self.toggle_focus_mode_with_resources(resources);
         info!(
             "Focus mode {}",
             if self.focus_mode_active() {
@@ -277,13 +284,13 @@ impl InputState {
         }
     }
 
-    fn handle_toggle_toolbar(&mut self) {
+    fn handle_toggle_toolbar_with_engine(&mut self, engine: &crate::ui_text::UiTextEngine) {
         if self.presenter_hides_toolbars() {
             return;
         }
         self.break_focus_mode();
         let now_visible = !self.toolbar_visible();
-        if !self.set_toolbar_visible(now_visible) {
+        if !self.set_toolbar_visible_with_engine(engine, now_visible) {
             return;
         }
         let previous_top_pinned = self.toolbar_top_pinned();
@@ -303,13 +310,13 @@ impl InputState {
         }
     }
 
-    fn handle_cycle_toolbar_display(&mut self) {
+    fn handle_cycle_toolbar_display_with_engine(&mut self, engine: &crate::ui_text::UiTextEngine) {
         if self.presenter_hides_toolbars() {
             return;
         }
         self.break_focus_mode();
         let previous_mode = self.toolbar_top_display_mode();
-        let mode = self.cycle_top_toolbar_display();
+        let mode = self.cycle_top_toolbar_display_with_engine(engine);
         self.pending_onboarding_usage.used_toolbar_toggle = true;
         let toast = self.toolbar_display_toast(mode);
         self.push_toast(ToastPriority::Info, "ui", toast);
@@ -347,13 +354,16 @@ impl InputState {
         }
     }
 
-    fn handle_toggle_selection_properties(&mut self) {
+    fn handle_toggle_selection_properties_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+    ) {
         if !matches!(self.state, DrawingState::Idle) {
             return;
         }
         if self.properties_panel().is_some() {
             self.close_properties_panel();
-        } else if self.show_properties_panel() {
+        } else if self.show_properties_panel_with(measurer) {
             self.close_context_menu();
         } else {
             self.push_toast(

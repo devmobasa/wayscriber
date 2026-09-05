@@ -426,23 +426,59 @@ impl InputState {
 
     /// Wrapper for undo that preserves existing action plumbing.
     pub fn toolbar_undo(&mut self) {
-        self.handle_action(Action::Undo);
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.toolbar_undo_with_resources(resources)
+        })
+    }
+
+    pub(crate) fn toolbar_undo_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) {
+        self.handle_action_with_resources(resources, Action::Undo);
     }
 
     /// Wrapper for redo that preserves existing action plumbing.
     pub fn toolbar_redo(&mut self) {
-        self.handle_action(Action::Redo);
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.toolbar_redo_with_resources(resources)
+        })
+    }
+
+    pub(crate) fn toolbar_redo_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) {
+        self.handle_action_with_resources(resources, Action::Redo);
     }
 
     /// Wrapper for clear that preserves existing action plumbing.
     pub fn toolbar_clear(&mut self) {
-        self.handle_action(Action::ClearCanvas);
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.toolbar_clear_with_resources(resources)
+        })
+    }
+
+    pub(crate) fn toolbar_clear_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) {
+        self.handle_action_with_resources(resources, Action::ClearCanvas);
     }
 
     /// Mouse-path clear: clears like `Action::ClearCanvas` and, when shapes
     /// were removed without a locked-shape warning, offers a short toast with
     /// an "Undo?" chip. The keyboard action and Shift+click stay instant.
     pub fn toolbar_clear_with_undo_toast(&mut self) {
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.toolbar_clear_with_undo_toast_with_resources(resources)
+        })
+    }
+
+    pub(crate) fn toolbar_clear_with_undo_toast_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) {
         let (has_locked, has_unlocked) = {
             let frame = self.boards.active_frame();
             (
@@ -450,7 +486,7 @@ impl InputState {
                 frame.shapes.iter().any(|shape| !shape.locked),
             )
         };
-        self.toolbar_clear();
+        self.toolbar_clear_with_resources(resources);
         // The locked-shape paths already raise their own warning toasts in
         // `handle_action`; only the silent success path gets the undo offer.
         if has_unlocked && !has_locked {
@@ -466,12 +502,30 @@ impl InputState {
 
     /// Wrapper for entering text mode.
     pub fn toolbar_enter_text_mode(&mut self) {
-        self.handle_action(Action::EnterTextMode);
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.toolbar_enter_text_mode_with_resources(resources)
+        })
+    }
+
+    pub(crate) fn toolbar_enter_text_mode_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) {
+        self.handle_action_with_resources(resources, Action::EnterTextMode);
     }
 
     /// Wrapper for entering sticky note mode.
     pub fn toolbar_enter_sticky_note_mode(&mut self) {
-        self.handle_action(Action::EnterStickyNoteMode);
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.toolbar_enter_sticky_note_mode_with_resources(resources)
+        })
+    }
+
+    pub(crate) fn toolbar_enter_sticky_note_mode_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) {
+        self.handle_action_with_resources(resources, Action::EnterStickyNoteMode);
     }
 }
 

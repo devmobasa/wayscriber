@@ -162,6 +162,7 @@ fn freeform_polygon_double_click_finishes_without_duplicate_vertex() {
 
 #[test]
 fn freeform_polygon_backspace_does_not_prime_double_click_commit() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     assert!(state.set_tool_override(Some(Tool::FreeformPolygon)));
 
@@ -169,7 +170,7 @@ fn freeform_polygon_backspace_does_not_prime_double_click_commit() {
     state.on_mouse_press(MouseButton::Left, 20, 0);
     state.on_mouse_press(MouseButton::Left, 20, 20);
     state.on_mouse_press(MouseButton::Left, 0, 20);
-    state.pop_building_polygon_point();
+    state.pop_building_polygon_point_with_measurer(&route_measurer);
     state.on_mouse_press(MouseButton::Left, 0, 20);
 
     assert!(state.boards.active_frame().shapes.is_empty());

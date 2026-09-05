@@ -10,7 +10,7 @@
 use super::super::base::InputState;
 use super::super::modes::PresenterRestore;
 use crate::domain::Action;
-use crate::input::state::{InputTextResources, with_legacy_text_resources};
+use crate::input::state::InputTextResources;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::tool::Tool;
 
@@ -63,10 +63,6 @@ impl InputState {
     #[cfg(test)]
     pub(crate) fn override_presenter_mode_for_test(&mut self, active: bool) {
         self.modes.override_presenter_for_test(active);
-    }
-
-    pub(crate) fn toggle_presenter_mode(&mut self) -> bool {
-        with_legacy_text_resources(|resources| self.toggle_presenter_mode_with_resources(resources))
     }
 
     pub(crate) fn toggle_presenter_mode_with_resources(

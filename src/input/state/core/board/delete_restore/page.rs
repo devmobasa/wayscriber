@@ -11,16 +11,6 @@ use crate::input::state::{Toast, ToastPriority};
 use std::time::Instant;
 
 impl InputState {
-    pub(crate) fn delete_page_in_board(
-        &mut self,
-        board_index: usize,
-        page_index: usize,
-    ) -> CanvasPageDeleteOutcome {
-        with_legacy_measurer(|measurer| {
-            self.delete_page_in_board_with_measurer(measurer, board_index, page_index)
-        })
-    }
-
     pub(crate) fn delete_page_in_board_with_measurer(
         &mut self,
         measurer: &TextMeasurer,

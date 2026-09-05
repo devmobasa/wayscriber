@@ -124,6 +124,7 @@ fn catalog_worker_failure_is_visible_and_reopening_allows_a_retry() {
 
 #[test]
 fn opening_lists_every_installed_family_and_closing_forgets_the_query() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
 
     open_ready_font_picker(&mut state);
@@ -133,7 +134,7 @@ fn opening_lists_every_installed_family_and_closing_forgets_the_query() {
         system_font_families().len()
     );
 
-    state.handle_font_picker_key(Key::Char('x'), Some("x"));
+    state.handle_font_picker_key_with_measurer(&route_measurer, Key::Char('x'), Some("x"));
     assert_eq!(state.font_picker_query(), "x");
 
     state.close_font_picker();
@@ -162,28 +163,38 @@ fn the_picker_opens_on_the_font_already_in_use() {
 
 #[test]
 fn typing_narrows_the_list_and_backspace_widens_it_again() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     open_ready_font_picker(&mut state);
     let all = state.font_picker_families().len();
 
     for ch in "zzzz".chars() {
-        state.handle_font_picker_key(Key::Char(ch), Some(&ch.to_string()));
+        state.handle_font_picker_key_with_measurer(
+            &route_measurer,
+            Key::Char(ch),
+            Some(&ch.to_string()),
+        );
     }
     assert!(state.font_picker_families().len() < all);
 
     for _ in 0..4 {
-        state.handle_font_picker_key(Key::Backspace, None);
+        state.handle_font_picker_key_with_measurer(&route_measurer, Key::Backspace, None);
     }
     assert_eq!(state.font_picker_families().len(), all);
 }
 
 #[test]
 fn a_query_that_matches_nothing_leaves_an_empty_list_rather_than_the_whole_one() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     open_ready_font_picker(&mut state);
 
     for ch in "qqzzxxjj".chars() {
-        state.handle_font_picker_key(Key::Char(ch), Some(&ch.to_string()));
+        state.handle_font_picker_key_with_measurer(
+            &route_measurer,
+            Key::Char(ch),
+            Some(&ch.to_string()),
+        );
     }
 
     assert!(state.font_picker_families().is_empty());
@@ -194,21 +205,22 @@ fn a_query_that_matches_nothing_leaves_an_empty_list_rather_than_the_whole_one()
 
 #[test]
 fn arrow_keys_clamp_at_both_ends_instead_of_wrapping() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     open_ready_font_picker(&mut state);
     let count = state.font_picker_families().len();
 
     state.set_font_picker_selection(0);
-    state.handle_font_picker_key(Key::Up, None);
+    state.handle_font_picker_key_with_measurer(&route_measurer, Key::Up, None);
     assert_eq!(
         state.font_picker_selected(),
         0,
         "wrapping to the bottom of a 269-item list is never what Up meant"
     );
 
-    state.handle_font_picker_key(Key::End, None);
+    state.handle_font_picker_key_with_measurer(&route_measurer, Key::End, None);
     assert_eq!(state.font_picker_selected(), count - 1);
-    state.handle_font_picker_key(Key::Down, None);
+    state.handle_font_picker_key_with_measurer(&route_measurer, Key::Down, None);
     assert_eq!(state.font_picker_selected(), count - 1);
 }
 
@@ -300,15 +312,16 @@ fn a_short_output_scrolls_by_the_rows_it_actually_shows() {
 
 #[test]
 fn tab_switches_to_monospace_and_back() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     open_ready_font_picker(&mut state);
     let all = state.font_picker_families().len();
 
-    state.handle_font_picker_key(Key::Tab, None);
+    state.handle_font_picker_key_with_measurer(&route_measurer, Key::Tab, None);
     assert_eq!(state.font_picker_filter(), FontPickerFilter::Monospace);
     assert!(state.font_picker_families().len() <= all);
 
-    state.handle_font_picker_key(Key::Tab, None);
+    state.handle_font_picker_key_with_measurer(&route_measurer, Key::Tab, None);
     assert_eq!(state.font_picker_filter(), FontPickerFilter::All);
     assert_eq!(state.font_picker_families().len(), all);
 }
@@ -396,12 +409,13 @@ fn recents_keep_the_most_recent_first_without_repeats() {
 
 #[test]
 fn escape_closes_without_changing_anything() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     let before = state.style.font_descriptor.family.clone();
     open_ready_font_picker(&mut state);
     state.set_font_picker_selection(3);
 
-    state.handle_font_picker_key(Key::Escape, None);
+    state.handle_font_picker_key_with_measurer(&route_measurer, Key::Escape, None);
 
     assert!(!state.is_font_picker_open());
     assert_eq!(state.style.font_descriptor.family, before);
@@ -410,19 +424,21 @@ fn escape_closes_without_changing_anything() {
 
 #[test]
 fn stray_keys_are_swallowed_rather_than_reaching_the_canvas_behind_the_modal() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     open_ready_font_picker(&mut state);
 
-    assert!(state.handle_font_picker_key(Key::Delete, None));
-    assert!(state.handle_font_picker_key(Key::Ctrl, None));
+    assert!(state.handle_font_picker_key_with_measurer(&route_measurer, Key::Delete, None));
+    assert!(state.handle_font_picker_key_with_measurer(&route_measurer, Key::Ctrl, None));
     assert!(state.is_font_picker_open());
 }
 
 #[test]
 fn a_closed_picker_consumes_nothing() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
 
-    assert!(!state.handle_font_picker_key(Key::Escape, None));
+    assert!(!state.handle_font_picker_key_with_measurer(&route_measurer, Key::Escape, None));
     assert!(!state.font_picker_hover(10.0, 10.0));
     assert!(!state.font_picker_press(10.0, 10.0));
 }
@@ -502,6 +518,7 @@ fn scrolling_carries_the_highlight_only_when_it_would_be_left_behind() {
 
 #[test]
 fn a_held_arrow_repeats_after_a_delay_and_stops_on_release() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     use std::time::{Duration, Instant};
 
     let mut state = open_picker();
@@ -510,7 +527,7 @@ fn a_held_arrow_repeats_after_a_delay_and_stops_on_release() {
     }
     let now = Instant::now();
 
-    state.handle_font_picker_key(Key::Down, None);
+    state.handle_font_picker_key_with_measurer(&route_measurer, Key::Down, None);
     assert_eq!(
         state.font_picker_selected(),
         1,
@@ -536,6 +553,7 @@ fn a_held_arrow_repeats_after_a_delay_and_stops_on_release() {
 
 #[test]
 fn a_long_hold_repeats_faster_than_a_short_one() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     use std::time::{Duration, Instant};
 
     // The list runs to hundreds of families. At the command palette's flat rate
@@ -546,7 +564,7 @@ fn a_long_hold_repeats_faster_than_a_short_one() {
         return;
     }
     let start = Instant::now();
-    state.handle_font_picker_key(Key::Down, None);
+    state.handle_font_picker_key_with_measurer(&route_measurer, Key::Down, None);
 
     let steps_in = |state: &mut InputState, from: Duration, window: Duration| {
         let deadline = start + from + window;
@@ -580,12 +598,13 @@ fn a_long_hold_repeats_faster_than_a_short_one() {
 
 #[test]
 fn moving_the_highlight_repaints_the_panel_rather_than_the_screen() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     // A held arrow ticks up to fifty times a second. Marking the whole surface
     // each time is the entire canvas re-rendered per row.
     let mut state = open_picker();
     let _ = state.take_dirty_regions();
 
-    state.handle_font_picker_key(Key::Down, None);
+    state.handle_font_picker_key_with_measurer(&route_measurer, Key::Down, None);
     let regions = state.take_dirty_regions();
 
     assert!(!regions.is_empty(), "the move has to repaint something");
@@ -599,6 +618,7 @@ fn moving_the_highlight_repaints_the_panel_rather_than_the_screen() {
 
 #[test]
 fn the_first_query_that_shrinks_the_list_repaints_the_panel_it_is_leaving() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     // Opening on the installed catalog draws a tall panel; the first query can
     // cut it to no rows. Partial repaints clip to their damage, so unless the
     // taller panel is damaged too its lower half stays on screen underneath.
@@ -614,7 +634,7 @@ fn the_first_query_that_shrinks_the_list_repaints_the_panel_it_is_leaving() {
     // mutation. Any earlier mutation would record the tall panel as a side
     // effect and hide the defect this test protects.
     let query = impossible_family_query();
-    state.handle_font_picker_key(Key::Char('x'), Some(&query));
+    state.handle_font_picker_key_with_measurer(&route_measurer, Key::Char('x'), Some(&query));
     assert!(state.font_picker_families().is_empty());
     let short = state
         .font_picker_panel_bounds()
@@ -635,6 +655,7 @@ fn the_first_query_that_shrinks_the_list_repaints_the_panel_it_is_leaving() {
 
 #[test]
 fn the_first_narrowing_query_after_resize_repaints_the_resized_panel() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = make_test_input_state();
     state.update_screen_dimensions(1920, 1080);
     open_ready_font_picker(&mut state);
@@ -658,7 +679,7 @@ fn the_first_narrowing_query_after_resize_repaints_the_resized_panel() {
     let _ = state.take_dirty_regions();
 
     let query = impossible_family_query();
-    state.handle_font_picker_key(Key::Char('x'), Some(&query));
+    state.handle_font_picker_key_with_measurer(&route_measurer, Key::Char('x'), Some(&query));
     assert!(state.font_picker_families().is_empty());
 
     let regions = state.take_dirty_regions();
@@ -670,12 +691,13 @@ fn the_first_narrowing_query_after_resize_repaints_the_resized_panel() {
 
 #[test]
 fn reopening_the_picker_does_not_leave_the_old_key_repeating() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     use std::time::{Duration, Instant};
 
     let mut state = make_test_input_state();
     state.update_screen_dimensions(1920, 1080);
     open_ready_font_picker(&mut state);
-    state.handle_font_picker_key(Key::Down, None);
+    state.handle_font_picker_key_with_measurer(&route_measurer, Key::Down, None);
     assert!(state.font_picker_repeat_timeout(Instant::now()).is_some());
 
     open_ready_font_picker(&mut state);

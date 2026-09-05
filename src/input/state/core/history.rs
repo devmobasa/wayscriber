@@ -144,10 +144,11 @@ mod tests {
 
     #[test]
     fn apply_action_side_effects_closes_properties_panel_after_modify() {
+        let route_measurer = crate::draw::TextMeasurer::default();
         let mut state = make_state();
         let shape_id = state.boards.active_frame_mut().add_shape(rect(10, 20));
         state.set_selection(vec![shape_id]);
-        assert!(state.show_properties_panel());
+        assert!(state.show_properties_panel_with(&route_measurer));
         assert!(state.is_properties_panel_open());
         let _ = state.take_dirty_regions();
 

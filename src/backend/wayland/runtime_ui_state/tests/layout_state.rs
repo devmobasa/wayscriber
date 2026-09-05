@@ -201,6 +201,12 @@ fn a_stored_display_mode_is_restored_at_startup_over_the_config_seed() {
 }
 #[test]
 fn a_display_mode_change_during_presenter_mode_stores_the_pre_presenter_value() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     use crate::config::{PresenterToolbarMode, TopDisplayMode};
 
     let temp = crate::test_temp::tempdir().unwrap();
@@ -210,7 +216,7 @@ fn a_display_mode_change_during_presenter_mode_stores_the_pre_presenter_value() 
     input.presenter_mode_config_mut_for_test().hide_toolbars = true;
     input.presenter_mode_config_mut_for_test().toolbar_mode = PresenterToolbarMode::Micro;
     input.test_set_toolbar_display_state(TopDisplayMode::Full, input.toolbar_top_minimized());
-    input.toggle_presenter_mode();
+    input.toggle_presenter_mode_with_resources(route_resources);
     assert_eq!(input.toolbar_top_display_mode(), TopDisplayMode::Micro);
 
     // The live strip is presenter's; the persisted value stays the saved
@@ -236,7 +242,7 @@ fn a_display_mode_change_during_presenter_mode_stores_the_pre_presenter_value() 
 
     // Exiting presenter mode restores the live value; a change after that
     // persists the user's own choice again.
-    input.toggle_presenter_mode();
+    input.toggle_presenter_mode_with_resources(route_resources);
     assert!(!input.presenter_restore_pending());
     assert!(matches!(
         commit_display_mode(&mut runtime, &mut input, TopDisplayMode::Micro),

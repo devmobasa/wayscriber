@@ -80,9 +80,19 @@ impl InputState {
     }
 
     pub fn execute_menu_command(&mut self, command: MenuCommand) {
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.execute_menu_command_with_resources(resources, command)
+        })
+    }
+
+    pub(crate) fn execute_menu_command_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        command: MenuCommand,
+    ) {
         match command {
             MenuCommand::Copy => {
-                self.handle_action(Action::CopySelection);
+                self.handle_action_with_resources(resources, Action::CopySelection);
                 self.close_context_menu();
             }
             MenuCommand::Paste => {
@@ -92,41 +102,39 @@ impl InputState {
                 self.close_context_menu();
             }
             MenuCommand::Delete => {
-                self.delete_selection();
+                self.delete_selection_with(resources.measurer);
                 self.close_context_menu();
             }
             MenuCommand::Duplicate => {
-                self.duplicate_selection();
+                self.duplicate_selection_with(resources.measurer);
                 self.close_context_menu();
             }
             MenuCommand::SelectHoveredShape => {
-                crate::draw::with_legacy_measurer(|measurer| {
-                    self.select_hovered_context_menu_shape_with(measurer);
-                });
+                self.select_hovered_context_menu_shape_with(resources.measurer);
             }
             MenuCommand::MoveToFront => {
-                self.move_selection_to_front();
+                self.move_selection_to_front_with(resources.measurer);
                 self.close_context_menu();
             }
             MenuCommand::MoveToBack => {
-                self.move_selection_to_back();
+                self.move_selection_to_back_with(resources.measurer);
                 self.close_context_menu();
             }
             MenuCommand::Lock => {
-                self.set_selection_locked(true);
+                self.set_selection_locked_with(resources.measurer, true);
                 self.close_context_menu();
             }
             MenuCommand::Unlock => {
-                self.set_selection_locked(false);
+                self.set_selection_locked_with(resources.measurer, false);
                 self.close_context_menu();
             }
             MenuCommand::Properties => {
-                if self.show_properties_panel() {
+                if self.show_properties_panel_with(resources.measurer) {
                     self.close_context_menu();
                 }
             }
             MenuCommand::EditText => {
-                if self.edit_selected_text() {
+                if self.edit_selected_text_with(resources.measurer) {
                     self.close_context_menu();
                 }
             }
@@ -163,7 +171,7 @@ impl InputState {
                 // Through the action, not the primitive: the action is what
                 // queues the durable click-highlight change, and the other
                 // chrome commands in this menu already route the same way.
-                self.handle_action(Action::ToggleHighlightTool);
+                self.handle_action_with_resources(resources, Action::ToggleHighlightTool);
                 self.close_context_menu();
             }
             MenuCommand::OpenPagesMenu => {
@@ -198,23 +206,26 @@ impl InputState {
                 self.needs_redraw = true;
             }
             MenuCommand::PagePrev => {
-                self.page_prev();
+                self.page_prev_with_measurer(resources.measurer);
                 self.close_context_menu();
             }
             MenuCommand::PageNext => {
-                self.page_next();
+                self.page_next_with_measurer(resources.measurer);
                 self.close_context_menu();
             }
             MenuCommand::PageNew => {
-                self.page_new();
+                self.page_new_with_measurer(resources.measurer);
                 self.close_context_menu();
             }
             MenuCommand::PageDuplicate => {
-                self.page_duplicate();
+                self.page_duplicate_with_measurer(resources.measurer);
                 self.close_context_menu();
             }
             MenuCommand::PageDelete => {
-                if matches!(self.page_delete(), crate::draw::PageDeleteOutcome::Cleared) {
+                if matches!(
+                    self.page_delete_with_measurer(resources.measurer),
+                    crate::draw::PageDeleteOutcome::Cleared
+                ) {
                     self.push_toast(
                         ToastPriority::Info,
                         "ui",
@@ -233,8 +244,11 @@ impl InputState {
                 if let Some(target) = self.context_menu.page_target {
                     let affects_panel =
                         self.board_picker_page_context_change_affects_panel(target.board_index);
-                    if self.duplicate_page_in_board(target.board_index, target.page_index)
-                        && affects_panel
+                    if self.duplicate_page_in_board_with_measurer(
+                        resources.measurer,
+                        target.board_index,
+                        target.page_index,
+                    ) && affects_panel
                     {
                         self.board_picker_reconcile_page_nav_after_page_change();
                     }
@@ -245,7 +259,11 @@ impl InputState {
                 if let Some(target) = self.context_menu.page_target {
                     let affects_panel =
                         self.board_picker_page_context_change_affects_panel(target.board_index);
-                    let outcome = self.delete_page_in_board(target.board_index, target.page_index);
+                    let outcome = self.delete_page_in_board_with_measurer(
+                        resources.measurer,
+                        target.board_index,
+                        target.page_index,
+                    );
                     if !matches!(outcome, crate::draw::PageDeleteOutcome::Pending) && affects_panel
                     {
                         self.board_picker_reconcile_page_nav_after_page_change();
@@ -265,7 +283,8 @@ impl InputState {
                         .iter()
                         .position(|board| board.spec.id == id)
                     {
-                        let moved = self.move_page_between_boards_with_activation(
+                        let moved = self.move_page_between_boards_with_activation_with_measurer(
+                            resources.measurer,
                             source_board,
                             page_index,
                             target_index,
@@ -280,52 +299,52 @@ impl InputState {
                 self.close_context_menu();
             }
             MenuCommand::SwitchToPage(index) => {
-                self.switch_to_page(index);
+                self.switch_to_page_with_measurer(resources.measurer, index);
                 self.close_context_menu();
             }
             MenuCommand::OpenBoardPicker => {
                 self.close_context_menu();
-                self.toggle_board_picker();
+                self.toggle_board_picker_with_measurer(resources.measurer);
             }
             MenuCommand::BoardPrev => {
-                self.switch_board_prev();
+                self.switch_board_prev_with_measurer(resources.measurer);
                 self.close_context_menu();
             }
             MenuCommand::BoardNext => {
-                self.switch_board_next();
+                self.switch_board_next_with_measurer(resources.measurer);
                 self.close_context_menu();
             }
             MenuCommand::BoardNew => {
-                self.create_board();
+                self.create_board_with_measurer(resources.measurer);
                 self.close_context_menu();
             }
             MenuCommand::BoardDuplicate => {
-                self.duplicate_board();
+                self.duplicate_board_with_measurer(resources.measurer);
                 self.close_context_menu();
             }
             MenuCommand::BoardDelete => {
-                self.delete_active_board();
+                self.delete_active_board_with_measurer(resources.measurer);
                 self.close_context_menu();
             }
             MenuCommand::SwitchToBoard { id } => {
-                self.switch_board(&id);
+                self.switch_board_with_measurer(resources.measurer, &id);
                 self.close_context_menu();
             }
             MenuCommand::SwitchToWhiteboard => {
-                self.switch_board(BOARD_ID_WHITEBOARD);
+                self.switch_board_with_measurer(resources.measurer, BOARD_ID_WHITEBOARD);
                 self.close_context_menu();
             }
             MenuCommand::SwitchToBlackboard => {
-                self.switch_board(BOARD_ID_BLACKBOARD);
+                self.switch_board_with_measurer(resources.measurer, BOARD_ID_BLACKBOARD);
                 self.close_context_menu();
             }
             MenuCommand::ReturnToTransparent => {
-                self.switch_board(BOARD_ID_TRANSPARENT);
+                self.switch_board_with_measurer(resources.measurer, BOARD_ID_TRANSPARENT);
                 self.close_context_menu();
             }
             MenuCommand::OpenRadialMenu => {
                 self.close_context_menu();
-                self.handle_action(Action::ToggleRadialMenu);
+                self.handle_action_with_resources(resources, Action::ToggleRadialMenu);
             }
             MenuCommand::ToggleHelp => {
                 self.toggle_help_overlay();
@@ -333,11 +352,11 @@ impl InputState {
             }
             MenuCommand::ShowToolbar => {
                 self.close_context_menu();
-                self.handle_action(Action::ToggleToolbar);
+                self.handle_action_with_resources(resources, Action::ToggleToolbar);
             }
             MenuCommand::ShowStatusBar => {
                 self.close_context_menu();
-                self.handle_action(Action::ToggleStatusBar);
+                self.handle_action_with_resources(resources, Action::ToggleStatusBar);
             }
             MenuCommand::OpenCommandPalette => {
                 self.close_context_menu();

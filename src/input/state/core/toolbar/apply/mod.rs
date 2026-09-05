@@ -14,6 +14,16 @@ impl InputState {
     ///
     /// Returns true if the event resulted in a state change.
     pub fn apply_toolbar_event(&mut self, event: ToolbarEvent) -> bool {
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.apply_toolbar_event_with_resources(resources, event)
+        })
+    }
+
+    pub(crate) fn apply_toolbar_event_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        event: ToolbarEvent,
+    ) -> bool {
         // Resolve the keyboard-action equivalent before the event is consumed
         // so the shortcut coach can learn from toolbar use (the slow path the
         // palette also feeds).
@@ -27,7 +37,7 @@ impl InputState {
         // can delete the arrow outright — after which the release finds no
         // shape and drops the bend without a trace.
         self.finish_active_arrow_bend();
-        let changed = self.apply_toolbar_event_inner(event);
+        let changed = self.apply_toolbar_event_inner_with_resources(resources, event);
         self.note_toolbar_shortcut_slow_path(coach_action, changed);
         changed
     }
@@ -53,13 +63,27 @@ impl InputState {
         }
     }
 
-    fn apply_toolbar_event_inner(&mut self, event: ToolbarEvent) -> bool {
+    fn apply_toolbar_event_inner_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        event: ToolbarEvent,
+    ) -> bool {
         match event {
-            ToolbarEvent::SelectTool(tool) => self.apply_toolbar_select_tool(tool),
-            ToolbarEvent::SetColor(color) => self.apply_toolbar_set_color(color),
-            ToolbarEvent::SetQuickColor { color, .. } => self.apply_toolbar_set_color(color),
-            ToolbarEvent::EditQuickColor { index } => self.apply_toolbar_edit_quick_color(index),
-            ToolbarEvent::SetThickness(value) => self.apply_toolbar_set_thickness(value),
+            ToolbarEvent::SelectTool(tool) => {
+                self.apply_toolbar_select_tool_with(resources.measurer, tool)
+            }
+            ToolbarEvent::SetColor(color) => {
+                self.apply_toolbar_set_color_with_measurer(resources.measurer, color)
+            }
+            ToolbarEvent::SetQuickColor { color, .. } => {
+                self.apply_toolbar_set_color_with_measurer(resources.measurer, color)
+            }
+            ToolbarEvent::EditQuickColor { index } => {
+                self.apply_toolbar_edit_quick_color_with(resources.measurer, index)
+            }
+            ToolbarEvent::SetThickness(value) => {
+                self.apply_toolbar_set_thickness_with(resources.measurer, value)
+            }
             ToolbarEvent::SetMarkerOpacity(value) => self.apply_toolbar_set_marker_opacity(value),
             ToolbarEvent::SetSpotlightMagnification(value) => {
                 self.apply_toolbar_set_spotlight_magnification(value)
@@ -68,7 +92,9 @@ impl InputState {
             ToolbarEvent::OpenFontPicker => self.apply_toolbar_open_font_picker(),
             ToolbarEvent::SetEraserMode(mode) => self.apply_toolbar_set_eraser_mode(mode),
             ToolbarEvent::SetFont(descriptor) => self.apply_toolbar_set_font(descriptor),
-            ToolbarEvent::SetFontBold(bold) => self.apply_toolbar_set_font_bold(bold),
+            ToolbarEvent::SetFontBold(bold) => {
+                self.apply_toolbar_set_font_bold_with(resources.measurer, bold)
+            }
             ToolbarEvent::SetFontSize(size) => self.apply_toolbar_set_font_size(size),
             ToolbarEvent::NudgeFontSize(delta) => {
                 self.apply_toolbar_set_font_size(self.style.current_font_size + delta)
@@ -96,37 +122,55 @@ impl InputState {
             ToolbarEvent::SetCustomRedoSteps(steps) => {
                 self.apply_toolbar_set_custom_redo_steps(steps)
             }
-            ToolbarEvent::NudgeThickness(delta) => self.apply_toolbar_nudge_thickness(delta),
+            ToolbarEvent::NudgeThickness(delta) => {
+                self.apply_toolbar_nudge_thickness_with(resources.measurer, delta)
+            }
             ToolbarEvent::NudgeMarkerOpacity(delta) => {
                 self.apply_toolbar_nudge_marker_opacity(delta)
             }
-            ToolbarEvent::Undo => self.apply_toolbar_undo(),
-            ToolbarEvent::Redo => self.apply_toolbar_redo(),
-            ToolbarEvent::UndoAll => self.apply_toolbar_undo_all(),
-            ToolbarEvent::RedoAll => self.apply_toolbar_redo_all(),
+            ToolbarEvent::Undo => self.apply_toolbar_undo_with_resources(resources),
+            ToolbarEvent::Redo => self.apply_toolbar_redo_with_resources(resources),
+            ToolbarEvent::UndoAll => self.apply_toolbar_undo_all_with_measurer(resources.measurer),
+            ToolbarEvent::RedoAll => self.apply_toolbar_redo_all_with_measurer(resources.measurer),
             ToolbarEvent::UndoAllDelayed => self.apply_toolbar_undo_all_delayed(),
             ToolbarEvent::RedoAllDelayed => self.apply_toolbar_redo_all_delayed(),
             ToolbarEvent::CustomUndo => self.apply_toolbar_custom_undo(),
             ToolbarEvent::CustomRedo => self.apply_toolbar_custom_redo(),
-            ToolbarEvent::ClearCanvas { instant } => self.apply_toolbar_clear_canvas(instant),
-            ToolbarEvent::CaptureScreenshot => self.apply_toolbar_capture_screenshot(),
-            ToolbarEvent::CopyTextFromScreen => self.apply_toolbar_copy_text_from_screen(),
-            ToolbarEvent::PagePrev => self.apply_toolbar_page_prev(),
-            ToolbarEvent::PageNext => self.apply_toolbar_page_next(),
-            ToolbarEvent::PageNew => self.apply_toolbar_page_new(),
-            ToolbarEvent::PageDuplicate => self.apply_toolbar_page_duplicate(),
-            ToolbarEvent::PageDelete => self.apply_toolbar_page_delete(),
-            ToolbarEvent::BoardPrev => self.apply_toolbar_board_prev(),
-            ToolbarEvent::BoardNext => self.apply_toolbar_board_next(),
-            ToolbarEvent::BoardNew => self.apply_toolbar_board_new(),
-            ToolbarEvent::BoardDelete => self.apply_toolbar_board_delete(),
-            ToolbarEvent::BoardDuplicate => self.apply_toolbar_board_duplicate(),
-            ToolbarEvent::BoardRename => self.apply_toolbar_board_rename(),
-            ToolbarEvent::ToggleBoardPicker => self.apply_toolbar_toggle_board_picker(),
-            ToolbarEvent::EnterTextMode => self.apply_toolbar_enter_text_mode(),
-            ToolbarEvent::EnterStickyNoteMode => self.apply_toolbar_enter_sticky_note_mode(),
+            ToolbarEvent::ClearCanvas { instant } => {
+                self.apply_toolbar_clear_canvas_with_resources(resources, instant)
+            }
+            ToolbarEvent::CaptureScreenshot => {
+                self.apply_toolbar_capture_screenshot_with_resources(resources)
+            }
+            ToolbarEvent::CopyTextFromScreen => {
+                self.apply_toolbar_copy_text_from_screen_with_resources(resources)
+            }
+            ToolbarEvent::PagePrev => self.apply_toolbar_page_prev_with(resources.measurer),
+            ToolbarEvent::PageNext => self.apply_toolbar_page_next_with(resources.measurer),
+            ToolbarEvent::PageNew => self.apply_toolbar_page_new_with(resources.measurer),
+            ToolbarEvent::PageDuplicate => {
+                self.apply_toolbar_page_duplicate_with(resources.measurer)
+            }
+            ToolbarEvent::PageDelete => self.apply_toolbar_page_delete_with(resources.measurer),
+            ToolbarEvent::BoardPrev => self.apply_toolbar_board_prev_with(resources.measurer),
+            ToolbarEvent::BoardNext => self.apply_toolbar_board_next_with(resources.measurer),
+            ToolbarEvent::BoardNew => self.apply_toolbar_board_new_with(resources.measurer),
+            ToolbarEvent::BoardDelete => self.apply_toolbar_board_delete_with(resources.measurer),
+            ToolbarEvent::BoardDuplicate => {
+                self.apply_toolbar_board_duplicate_with(resources.measurer)
+            }
+            ToolbarEvent::BoardRename => self.apply_toolbar_board_rename_with(resources.measurer),
+            ToolbarEvent::ToggleBoardPicker => {
+                self.apply_toolbar_toggle_board_picker_with(resources.measurer)
+            }
+            ToolbarEvent::EnterTextMode => {
+                self.apply_toolbar_enter_text_mode_with_resources(resources)
+            }
+            ToolbarEvent::EnterStickyNoteMode => {
+                self.apply_toolbar_enter_sticky_note_mode_with_resources(resources)
+            }
             ToolbarEvent::ToggleAllHighlight(enable) => {
-                self.apply_toolbar_toggle_all_highlight(enable)
+                self.apply_toolbar_toggle_all_highlight_with(resources.measurer, enable)
             }
             ToolbarEvent::ToggleHighlightToolRing(enable) => {
                 self.apply_toolbar_toggle_highlight_tool_ring(enable)
@@ -154,7 +198,9 @@ impl InputState {
             | ToolbarEvent::ConfirmPreserveInvalidRuntimeUiReset
             | ToolbarEvent::CancelPreserveInvalidRuntimeUiReset
             | ToolbarEvent::CancelRuntimeUiRecovery => false,
-            ToolbarEvent::OpenCommandPalette => self.apply_toolbar_open_command_palette(),
+            ToolbarEvent::OpenCommandPalette => {
+                self.apply_toolbar_open_command_palette_with_resources(resources)
+            }
             ToolbarEvent::ToggleTopOverflow(open) => self.apply_toolbar_toggle_top_overflow(open),
             ToolbarEvent::ToggleSessionPopover(open) => {
                 self.apply_toolbar_toggle_session_popover(open)
@@ -169,7 +215,9 @@ impl InputState {
             ToolbarEvent::SetTopMinimized(minimized) => {
                 self.apply_toolbar_set_top_minimized(minimized)
             }
-            ToolbarEvent::SetTopDisplayMode(mode) => self.apply_toolbar_set_top_display_mode(mode),
+            ToolbarEvent::SetTopDisplayMode(mode) => {
+                self.apply_toolbar_set_top_display_mode_with_engine(resources.ui_engine, mode)
+            }
             ToolbarEvent::CloseTopToolbar => self.apply_toolbar_set_top_minimized(true),
             ToolbarEvent::PinTopToolbar(pin) => self.apply_toolbar_pin_top_toolbar(pin),
             ToolbarEvent::ToggleIconMode(use_icons) => {
@@ -178,16 +226,20 @@ impl InputState {
             ToolbarEvent::ToggleMoreColors(show) => self.apply_toolbar_toggle_more_colors(show),
             ToolbarEvent::CopyHexColor => self.apply_toolbar_copy_hex_color(),
             ToolbarEvent::PasteHexColor => self.apply_toolbar_paste_hex_color(),
-            ToolbarEvent::EditHexColor => self.apply_toolbar_edit_hex_color(),
-            ToolbarEvent::OpenColorPickerPopup => self.apply_toolbar_open_color_picker_popup(),
+            ToolbarEvent::EditHexColor => {
+                self.apply_toolbar_edit_hex_color_with(resources.measurer)
+            }
+            ToolbarEvent::OpenColorPickerPopup => {
+                self.apply_toolbar_open_color_picker_popup_with(resources.measurer)
+            }
             ToolbarEvent::AdjustSelectionProperty { kind, direction } => {
-                self.adjust_selection_property_kind(kind, direction)
+                self.adjust_selection_property_kind_with(resources.measurer, kind, direction)
             }
             ToolbarEvent::OpenPrecisionEntry(target) => {
                 self.apply_toolbar_open_precision_entry(target)
             }
             ToolbarEvent::CommitPrecisionEntry { target, value } => {
-                self.apply_toolbar_commit_precision_entry(target, value)
+                self.apply_toolbar_commit_precision_entry_with(resources.measurer, target, value)
             }
             ToolbarEvent::CancelPrecisionEntry => self.cancel_precision_entry(),
             ToolbarEvent::PickScreenColor => {
@@ -214,18 +266,23 @@ impl InputState {
             ToolbarEvent::TogglePresetToasts(show) => self.apply_toolbar_toggle_preset_toasts(show),
             ToolbarEvent::ToggleIdleFade(enable) => self.apply_toolbar_toggle_idle_fade(enable),
             ToolbarEvent::ToggleToolPreview(show) => self.apply_toolbar_toggle_tool_preview(show),
-            ToolbarEvent::ToggleStatusBar(show) => self.apply_toolbar_toggle_status_bar(show),
+            ToolbarEvent::ToggleStatusBar(show) => {
+                self.apply_toolbar_toggle_status_bar_with_engine(resources.ui_engine, show)
+            }
             ToolbarEvent::SetStatusBarInteractive(interactive) => {
                 self.apply_toolbar_set_status_bar_interactive(interactive)
             }
-            ToolbarEvent::SetStatusBarItemVisible(item, visible) => {
-                self.apply_toolbar_set_status_bar_item_visible(item, visible)
-            }
+            ToolbarEvent::SetStatusBarItemVisible(item, visible) => self
+                .apply_toolbar_set_status_bar_item_visible_with_engine(
+                    resources.ui_engine,
+                    item,
+                    visible,
+                ),
             ToolbarEvent::ToggleStatusBoardBadge(show) => {
-                self.apply_toolbar_toggle_status_board_badge(show)
+                self.apply_toolbar_toggle_status_board_badge_with_engine(resources.ui_engine, show)
             }
             ToolbarEvent::ToggleStatusPageBadge(show) => {
-                self.apply_toolbar_toggle_status_page_badge(show)
+                self.apply_toolbar_toggle_status_page_badge_with_engine(resources.ui_engine, show)
             }
             ToolbarEvent::ToggleFloatingBadgeAlways(show) => {
                 self.apply_toolbar_toggle_floating_badge_always(show)
@@ -260,7 +317,9 @@ impl InputState {
                 self.apply_toolbar_set_status_bar_contents_open(open)
             }
             ToolbarEvent::ToggleShapePicker(open) => self.apply_toolbar_toggle_shape_picker(open),
-            ToolbarEvent::ApplyPreset(slot) => self.apply_toolbar_apply_preset(slot),
+            ToolbarEvent::ApplyPreset(slot) => {
+                self.apply_toolbar_apply_preset_with(resources.measurer, slot)
+            }
             ToolbarEvent::SavePreset(slot) => self.apply_toolbar_save_preset(slot),
             ToolbarEvent::ClearPreset(slot) => self.apply_toolbar_clear_preset(slot),
             ToolbarEvent::OpenSession

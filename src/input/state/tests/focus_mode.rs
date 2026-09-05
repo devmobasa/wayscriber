@@ -386,8 +386,14 @@ fn visibility_toggles_stay_process_only_across_focus_mode() {
 
 #[test]
 fn presenter_mode_gates_focus_mode() {
+    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_resources = crate::input::state::InputTextResources {
+        measurer: &route_measurer,
+        ui_engine: &route_ui_engine,
+    };
     let mut state = create_test_input_state();
-    state.toggle_presenter_mode();
+    state.toggle_presenter_mode_with_resources(route_resources);
     assert!(state.presenter_mode_active());
 
     state.handle_action(Action::ToggleFocusMode);

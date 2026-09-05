@@ -1,16 +1,12 @@
 use super::super::base::InputState;
 use crate::draw::DirtyFullReason;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
-use crate::draw::{TextMeasurer, with_legacy_measurer};
 use crate::util::Rect;
 
 const SELECTION_DAMAGE_PADDING: i32 = 8;
 
 impl InputState {
-    pub(crate) fn set_selection_locked(&mut self, locked: bool) -> bool {
-        with_legacy_measurer(|measurer| self.set_selection_locked_with(measurer, locked))
-    }
-
     pub(crate) fn set_selection_locked_with(
         &mut self,
         measurer: &TextMeasurer,

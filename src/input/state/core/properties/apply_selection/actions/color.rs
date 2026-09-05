@@ -6,12 +6,6 @@ use crate::input::state::core::properties::utils::{
 };
 
 impl InputState {
-    pub(crate) fn apply_selection_color_value(&mut self, target: Color) -> bool {
-        crate::draw::with_legacy_measurer(|measurer| {
-            self.apply_selection_color_value_with(measurer, target)
-        })
-    }
-
     pub(crate) fn apply_selection_color_value_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -157,6 +151,7 @@ mod tests {
 
     #[test]
     fn apply_selection_color_value_preserves_marker_alpha() {
+        let route_measurer = crate::draw::TextMeasurer::default();
         let mut state = make_state();
         let marker_id = state
             .boards
@@ -173,7 +168,7 @@ mod tests {
             });
         state.set_selection(vec![marker_id]);
 
-        assert!(state.apply_selection_color_value(RED));
+        assert!(state.apply_selection_color_value_with(&route_measurer, RED));
 
         match &state
             .boards

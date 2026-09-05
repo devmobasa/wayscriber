@@ -11,12 +11,6 @@ impl InputState {
         self.adjust_properties_panel_entry_with(measurer, 0)
     }
 
-    pub(crate) fn adjust_properties_panel_entry(&mut self, direction: i32) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.adjust_properties_panel_entry_with(measurer, direction)
-        })
-    }
-
     pub(crate) fn adjust_properties_panel_entry_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -75,16 +69,6 @@ impl InputState {
     /// popup: adjusts the selection property of `kind` when the current
     /// selection exposes it and the entry is editable. Refreshes the
     /// popup if it happens to be open.
-    pub(crate) fn adjust_selection_property_kind(
-        &mut self,
-        kind: SelectionPropertyKind,
-        direction: i32,
-    ) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.adjust_selection_property_kind_with(measurer, kind, direction)
-        })
-    }
-
     pub(crate) fn adjust_selection_property_kind_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -116,10 +100,6 @@ impl InputState {
     /// selected arrow is locked. Visible property controls stay disabled, while
     /// the action still reaches the shared apply reporter so it can explain why
     /// nothing changed.
-    pub(crate) fn cycle_selected_arrow_style_from_action(&mut self) -> bool {
-        with_legacy_measurer(|measurer| self.cycle_selected_arrow_style_from_action_with(measurer))
-    }
-
     pub(crate) fn cycle_selected_arrow_style_from_action_with(
         &mut self,
         measurer: &TextMeasurer,

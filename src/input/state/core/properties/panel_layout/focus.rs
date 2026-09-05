@@ -129,6 +129,7 @@ mod tests {
     }
 
     fn open_rect_panel(state: &mut InputState) {
+        let route_measurer = crate::draw::TextMeasurer::default();
         let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
             x: 10,
             y: 20,
@@ -139,7 +140,7 @@ mod tests {
             thick: state.style.current_thickness,
         });
         state.set_selection(vec![shape_id]);
-        assert!(state.show_properties_panel());
+        assert!(state.show_properties_panel_with(&route_measurer));
     }
 
     #[test]

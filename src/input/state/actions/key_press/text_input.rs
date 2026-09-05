@@ -14,12 +14,16 @@ use super::bindings::{fallback_unshifted_label, key_to_action_label};
 use super::caret_edit::{self, MAX_TEXT_LENGTH, TextNavigation};
 
 impl InputState {
-    pub(in crate::input::state) fn handle_text_input_key(&mut self, key: Key) {
+    pub(in crate::input::state) fn handle_text_input_key_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        key: Key,
+    ) {
         // Editing and caret navigation own their keys in text mode, ahead of
         // the action layer — otherwise arrows/Delete/Home/End would be swallowed
         // as tool shortcuts. Escape, F-keys, plain Return, and non-editing
         // Ctrl/Alt shortcuts (undo, exit, …) are left to fall through below.
-        if self.handle_text_editing_key(key) {
+        if self.handle_text_editing_key_with(resources.measurer, key) {
             return;
         }
 
@@ -53,14 +57,14 @@ impl InputState {
             if let Some(action) = self.find_action(&key_str) {
                 // Actions work in text mode.
                 // Exit action has special logic in handle_action.
-                self.handle_action(action);
+                self.handle_action_with_resources(resources, action);
                 return;
             }
             if self.modifiers.shift
                 && let Some(fallback) = fallback_unshifted_label(&key_str)
                 && let Some(action) = self.find_action(fallback)
             {
-                self.handle_action(action);
+                self.handle_action_with_resources(resources, action);
                 return;
             }
         }
@@ -74,13 +78,13 @@ impl InputState {
             && !c.is_control()
         {
             let mut encoded = [0u8; 4];
-            self.insert_text_at_caret(c.encode_utf8(&mut encoded));
+            self.insert_text_at_caret_with(resources.measurer, c.encode_utf8(&mut encoded));
             return;
         }
 
         // Handle Return key for finalizing text input (only plain Return, not Shift+Return)
         if matches!(key, Key::Return) && !self.modifiers.shift {
-            with_legacy_measurer(|measurer| self.finalize_text_input_with(measurer));
+            self.finalize_text_input_with(resources.measurer);
         }
     }
 
@@ -150,10 +154,6 @@ impl InputState {
     /// text editor owns. Returns whether the key was consumed (so the caller
     /// stops routing it). Non-editing keys (Escape, F-keys, plain Return, and
     /// Ctrl/Alt shortcuts like undo/exit) return `false` and fall through.
-    fn handle_text_editing_key(&mut self, key: Key) -> bool {
-        with_legacy_measurer(|measurer| self.handle_text_editing_key_with(measurer, key))
-    }
-
     fn handle_text_editing_key_with(&mut self, measurer: &TextMeasurer, key: Key) -> bool {
         let ctrl = self.modifiers.ctrl;
         let alt = self.modifiers.alt;
@@ -260,10 +260,6 @@ impl InputState {
 
     /// Insert clipboard text at the caret, then coordinate redraw and protocol
     /// effects owned by the root state.
-    pub(crate) fn insert_text_at_caret(&mut self, text: &str) -> bool {
-        with_legacy_measurer(|measurer| self.insert_text_at_caret_with(measurer, text))
-    }
-
     pub(crate) fn insert_text_at_caret_with(
         &mut self,
         measurer: &TextMeasurer,

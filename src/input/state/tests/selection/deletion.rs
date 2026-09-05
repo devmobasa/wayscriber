@@ -19,6 +19,7 @@ fn delete_shapes_by_ids_ignores_missing_ids() {
 
 #[test]
 fn locked_shape_blocks_edit_and_delete() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {
         x: 40,
@@ -40,7 +41,7 @@ fn locked_shape_blocks_edit_and_delete() {
     assert!(matches!(state.state, DrawingState::Idle));
     assert!(state.text_editing.edit_target().is_none());
 
-    assert!(!state.delete_selection());
+    assert!(!state.delete_selection_with(&route_measurer));
     assert!(state.boards.active_frame().shape(shape_id).is_some());
 }
 

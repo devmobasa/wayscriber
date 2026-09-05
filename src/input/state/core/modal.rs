@@ -315,6 +315,7 @@ mod wheel_tests {
 
     #[test]
     fn the_properties_panel_leaves_the_wheel_to_the_canvas() {
+        let route_measurer = crate::draw::TextMeasurer::default();
         // It docks beside the canvas rather than over it, and the canvas stays
         // drawable underneath, so the wheel still means what it means elsewhere.
         let mut state = make_test_input_state();
@@ -331,7 +332,7 @@ mod wheel_tests {
                 thick: 2.0,
             });
         state.set_selection(vec![id]);
-        assert!(state.show_properties_panel());
+        assert!(state.show_properties_panel_with(&route_measurer));
 
         assert!(state.is_properties_panel_open());
         assert!(!state.modal_owns_wheel());

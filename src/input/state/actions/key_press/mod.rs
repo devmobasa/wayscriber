@@ -34,10 +34,30 @@ impl InputState {
     /// - Help toggle (configurable)
     /// - Modifier key tracking
     pub fn on_key_press(&mut self, key: Key) {
-        let _ = interaction::route_key_press(self, key);
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.on_key_press_with_resources(resources, key)
+        });
+    }
+
+    pub(crate) fn on_key_press_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        key: Key,
+    ) {
+        let _ = interaction::route_key_press_with_resources(self, resources, key);
     }
 
     pub fn on_key_repeat(&mut self, key: Key) {
-        let _ = interaction::route_key_repeat(self, key);
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.on_key_repeat_with_resources(resources, key)
+        });
+    }
+
+    pub(crate) fn on_key_repeat_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        key: Key,
+    ) {
+        let _ = interaction::route_key_repeat_with_resources(self, resources, key);
     }
 }

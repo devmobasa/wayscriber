@@ -6,10 +6,6 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 
 impl InputState {
-    pub(crate) fn delete_selection(&mut self) -> bool {
-        with_legacy_measurer(|measurer| self.delete_selection_with(measurer))
-    }
-
     pub(crate) fn delete_selection_with(&mut self, measurer: &TextMeasurer) -> bool {
         let id_set: HashSet<ShapeId> = {
             let ids = self.selected_shape_ids();

@@ -89,10 +89,6 @@ impl InputState {
         moved_any
     }
 
-    pub(crate) fn translate_selection_with_undo(&mut self, dx: i32, dy: i32) -> bool {
-        with_legacy_measurer(|measurer| self.translate_selection_with_undo_with(measurer, dx, dy))
-    }
-
     pub(crate) fn translate_selection_with_undo_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -111,12 +107,6 @@ impl InputState {
         }
         self.push_translation_undo(before);
         true
-    }
-
-    pub(crate) fn move_selection_to_horizontal_edge(&mut self, to_start: bool) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.move_selection_to_horizontal_edge_with(measurer, to_start)
-        })
     }
 
     pub(crate) fn move_selection_to_horizontal_edge_with(
@@ -142,12 +132,6 @@ impl InputState {
             return false;
         }
         self.translate_selection_with_undo_with(measurer, dx, 0)
-    }
-
-    pub(crate) fn move_selection_to_vertical_edge(&mut self, to_start: bool) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.move_selection_to_vertical_edge_with(measurer, to_start)
-        })
     }
 
     pub(crate) fn move_selection_to_vertical_edge_with(

@@ -139,6 +139,15 @@ impl InputState {
 
     /// Select the currently hovered segment and close the menu.
     pub fn radial_menu_select_hovered(&mut self) {
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.radial_menu_select_hovered_with_resources(resources)
+        })
+    }
+
+    pub(crate) fn radial_menu_select_hovered_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+    ) {
         let hover = match &self.radial_menu.state {
             RadialMenuState::Open { hover, .. } => *hover,
             _ => return,
@@ -151,13 +160,13 @@ impl InputState {
                 return;
             }
             Some(RadialSegmentId::Tool(idx)) => {
-                self.dispatch_tool_segment(idx);
+                self.dispatch_tool_segment_with_resources(resources, idx);
             }
             Some(RadialSegmentId::SubTool(parent, child)) => {
-                self.dispatch_sub_tool_segment(parent, child);
+                self.dispatch_sub_tool_segment_with_resources(resources, parent, child);
             }
             Some(RadialSegmentId::Color(idx)) => {
-                self.dispatch_color_segment(idx);
+                self.dispatch_color_segment_with_measurer(resources.measurer, idx);
             }
             Some(RadialSegmentId::SizeRing) => {
                 // The gauge is a drag/scroll surface, never a commit target.
@@ -207,6 +216,18 @@ impl InputState {
         x: f64,
         y: f64,
     ) -> bool {
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.radial_menu_handle_release_with_resources(resources, button, x, y)
+        })
+    }
+
+    pub(crate) fn radial_menu_handle_release_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        button: MouseButton,
+        x: f64,
+        y: f64,
+    ) -> bool {
         if !self.is_radial_menu_open() {
             return false;
         }
@@ -251,12 +272,12 @@ impl InputState {
                 y,
             ) {
                 Some(RadialSegmentId::SubTool(parent, child)) => {
-                    self.dispatch_sub_tool_segment(parent, child);
+                    self.dispatch_sub_tool_segment_with_resources(resources, parent, child);
                     self.close_radial_menu();
                     return true;
                 }
                 Some(RadialSegmentId::Color(idx)) => {
-                    self.dispatch_color_segment(idx);
+                    self.dispatch_color_segment_with_measurer(resources.measurer, idx);
                     self.close_radial_menu();
                     return true;
                 }
@@ -273,7 +294,7 @@ impl InputState {
             self.radial_menu_expand_sub_ring(idx);
             return true;
         }
-        self.dispatch_tool_segment(idx);
+        self.dispatch_tool_segment_with_resources(resources, idx);
         self.close_radial_menu();
         true
     }
@@ -372,23 +393,36 @@ impl InputState {
     // never behave differently from the same action fired by a keybinding
     // or the toolbar.
 
-    fn dispatch_tool_segment(&mut self, idx: u8) {
+    fn dispatch_tool_segment_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        idx: u8,
+    ) {
         if let Some(slice) = compass_slice(idx)
             && let RadialSliceKind::Action(action) = slice.kind
         {
-            self.handle_action(action);
+            self.handle_action_with_resources(resources, action);
         }
     }
 
-    fn dispatch_sub_tool_segment(&mut self, parent: u8, child: u8) {
+    fn dispatch_sub_tool_segment_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        parent: u8,
+        child: u8,
+    ) {
         if let Some(action) = sub_ring_children(parent).get(child as usize) {
-            self.handle_action(*action);
+            self.handle_action_with_resources(resources, *action);
         }
     }
 
-    fn dispatch_color_segment(&mut self, idx: u8) {
+    fn dispatch_color_segment_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        idx: u8,
+    ) {
         if let Some(swatch) = self.radial_ring_swatches().get(idx as usize) {
-            self.apply_color_from_ui(swatch.color);
+            self.apply_color_from_ui_with_measurer(measurer, swatch.color);
         }
     }
 

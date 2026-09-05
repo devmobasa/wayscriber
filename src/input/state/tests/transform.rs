@@ -2,6 +2,7 @@ use super::*;
 
 #[test]
 fn translate_selection_with_undo_moves_shape() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = create_test_input_state();
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
@@ -13,7 +14,7 @@ fn translate_selection_with_undo_moves_shape() {
     });
 
     state.set_selection(vec![shape_id]);
-    assert!(state.translate_selection_with_undo(10, -5));
+    assert!(state.translate_selection_with_undo_with(&route_measurer, 10, -5));
 
     {
         let frame = state.boards.active_frame();

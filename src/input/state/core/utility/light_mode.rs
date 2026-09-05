@@ -54,10 +54,6 @@ impl InputState {
             .unwrap_or_else(|| self.active_tool())
     }
 
-    pub(crate) fn toggle_light_mode(&mut self) -> bool {
-        with_legacy_text_resources(|resources| self.toggle_light_mode_with_resources(resources))
-    }
-
     pub(crate) fn toggle_light_mode_with_engine(
         &mut self,
         engine: &crate::ui_text::UiTextEngine,

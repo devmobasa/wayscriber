@@ -71,7 +71,10 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    pub(crate) fn pop_building_polygon_point(&mut self) {
+    pub(crate) fn pop_building_polygon_point_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+    ) {
         let DrawingState::BuildingPolygon { points, .. } = &mut self.state else {
             return;
         };
@@ -83,12 +86,21 @@ impl InputState {
         } else {
             let (x, y) = self.canvas_pointer_position();
             self.selection_interaction.clear_polygon_click();
-            self.update_provisional_dirty(x, y);
+            self.update_provisional_dirty_with(measurer, x, y);
         }
         self.needs_redraw = true;
     }
 
     pub(crate) fn finish_building_polygon(&mut self) {
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.finish_building_polygon_with_measurer(measurer)
+        })
+    }
+
+    pub(crate) fn finish_building_polygon_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+    ) {
         let state = std::mem::replace(&mut self.state, DrawingState::Idle);
         let DrawingState::BuildingPolygon {
             points,
@@ -116,7 +128,7 @@ impl InputState {
             color,
             thick,
         };
-        let bounds = shape.bounding_box();
+        let bounds = shape.bounding_box_with(measurer);
         let max_shapes = self.max_shapes_per_frame();
         let addition = {
             let frame = self.boards.active_frame_mut();
@@ -135,7 +147,7 @@ impl InputState {
                 })
         };
         if let Some((new_id, _snapshot)) = addition {
-            self.invalidate_hit_cache_for(new_id);
+            self.invalidate_hit_cache_for_with(measurer, new_id);
             self.dirty_tracker.mark_optional_rect(bounds);
             self.mark_session_dirty();
             self.record_first_stroke_done_for_onboarding();

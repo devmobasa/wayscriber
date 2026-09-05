@@ -109,7 +109,11 @@ impl InputState {
 
     /// Keyboard handling while the popup is open (the same shape as
     /// `handle_color_picker_popup_key`): every key is consumed.
-    pub(in crate::input::state) fn handle_precision_entry_key(&mut self, key: Key) -> bool {
+    pub(in crate::input::state) fn handle_precision_entry_key_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        key: Key,
+    ) -> bool {
         if !self.is_precision_entry_open() {
             return false;
         }
@@ -121,7 +125,7 @@ impl InputState {
                 if let Some((target, value)) = self.take_precision_entry_commit() {
                     let event =
                         crate::ui::toolbar::ToolbarEvent::CommitPrecisionEntry { target, value };
-                    let _ = self.apply_toolbar_event(event);
+                    let _ = self.apply_toolbar_event_with_resources(resources, event);
                 }
             }
             Key::Backspace | Key::Delete => self.precision_entry_backspace(),
@@ -140,6 +144,12 @@ mod tests {
 
     #[test]
     fn open_prefills_the_selected_current_value_and_typing_replaces_it() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_test_input_state();
         state.style.current_thickness = 4.0;
         assert!(state.apply_toolbar_event(ToolbarEvent::OpenPrecisionEntry(
@@ -152,29 +162,35 @@ mod tests {
 
         // First digit replaces the selection; further digits append; only
         // digits and one decimal point are accepted.
-        assert!(state.handle_precision_entry_key(Key::Char('1')));
-        assert!(state.handle_precision_entry_key(Key::Char('2')));
-        assert!(state.handle_precision_entry_key(Key::Char('.')));
-        assert!(state.handle_precision_entry_key(Key::Char('.')));
-        assert!(state.handle_precision_entry_key(Key::Char('x')));
-        assert!(state.handle_precision_entry_key(Key::Char('5')));
+        assert!(state.handle_precision_entry_key_with_resources(route_resources, Key::Char('1')));
+        assert!(state.handle_precision_entry_key_with_resources(route_resources, Key::Char('2')));
+        assert!(state.handle_precision_entry_key_with_resources(route_resources, Key::Char('.')));
+        assert!(state.handle_precision_entry_key_with_resources(route_resources, Key::Char('.')));
+        assert!(state.handle_precision_entry_key_with_resources(route_resources, Key::Char('x')));
+        assert!(state.handle_precision_entry_key_with_resources(route_resources, Key::Char('5')));
         let entry = state.precision_entry().expect("open entry");
         assert_eq!(entry.buffer, "12.5");
         assert!(!entry.selected);
 
-        assert!(state.handle_precision_entry_key(Key::Backspace));
+        assert!(state.handle_precision_entry_key_with_resources(route_resources, Key::Backspace));
         assert_eq!(state.precision_entry().expect("entry").buffer, "12.");
     }
 
     #[test]
     fn enter_commits_the_clamped_value_and_esc_cancels() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_test_input_state();
         state.style.current_thickness = 4.0;
         state.open_precision_entry(PrecisionEntryTarget::Thickness);
         for ch in "999".chars() {
-            let _ = state.handle_precision_entry_key(Key::Char(ch));
+            let _ = state.handle_precision_entry_key_with_resources(route_resources, Key::Char(ch));
         }
-        assert!(state.handle_precision_entry_key(Key::Return));
+        assert!(state.handle_precision_entry_key_with_resources(route_resources, Key::Return));
         assert!(!state.is_precision_entry_open());
         // Clamped to the shared thickness slider range.
         assert_eq!(
@@ -185,17 +201,23 @@ mod tests {
         // Esc restores nothing and applies nothing.
         let before = state.style.current_thickness;
         state.open_precision_entry(PrecisionEntryTarget::Thickness);
-        let _ = state.handle_precision_entry_key(Key::Char('7'));
-        assert!(state.handle_precision_entry_key(Key::Escape));
+        let _ = state.handle_precision_entry_key_with_resources(route_resources, Key::Char('7'));
+        assert!(state.handle_precision_entry_key_with_resources(route_resources, Key::Escape));
         assert!(!state.is_precision_entry_open());
         assert_eq!(state.style.current_thickness, before);
 
         // A closed popup consumes no keys.
-        assert!(!state.handle_precision_entry_key(Key::Char('1')));
+        assert!(!state.handle_precision_entry_key_with_resources(route_resources, Key::Char('1')));
     }
 
     #[test]
     fn font_size_target_commits_through_the_font_apply_arm() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_test_input_state();
         state.open_precision_entry(PrecisionEntryTarget::FontSize);
         assert_eq!(
@@ -216,7 +238,7 @@ mod tests {
 
         // An unparseable buffer commits nothing.
         state.open_precision_entry(PrecisionEntryTarget::FontSize);
-        let _ = state.handle_precision_entry_key(Key::Backspace);
+        let _ = state.handle_precision_entry_key_with_resources(route_resources, Key::Backspace);
         assert!(state.take_precision_entry_commit().is_none());
     }
 

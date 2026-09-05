@@ -101,7 +101,7 @@ fn explicit_mode_cycles_match_legacy_without_an_intervening_frame() {
     let mut legacy = seeded(&UiTextEngine::default());
     // Enter/leave Focus, then make Light's drawing-entry path leave Focus.
     explicit.toggle_focus_mode_with_resources(resources);
-    legacy.toggle_focus_mode();
+    legacy.toggle_focus_mode_with_resources(resources);
     assert_same_chrome(&explicit, &legacy);
     assert!(explicit.focus_mode_active());
     assert!(explicit.set_light_mode_drawing_with_resources(resources, true));
@@ -116,25 +116,25 @@ fn explicit_mode_cycles_match_legacy_without_an_intervening_frame() {
     assert_same_chrome(&explicit, &legacy);
     assert_eq!(
         explicit.toggle_light_mode_with_resources(resources),
-        legacy.toggle_light_mode()
+        legacy.toggle_light_mode_with_resources(resources)
     );
     assert_same_chrome(&explicit, &legacy);
     assert!(!explicit.light_mode_active());
     // Presenter and Light replace each other's numeric visibility snapshots.
     assert_eq!(
         explicit.toggle_presenter_mode_with_resources(resources),
-        legacy.toggle_presenter_mode()
+        legacy.toggle_presenter_mode_with_resources(resources)
     );
     assert_same_chrome(&explicit, &legacy);
     assert!(explicit.presenter_mode_active());
     assert_eq!(
         explicit.toggle_light_mode_with_resources(resources),
-        legacy.toggle_light_mode()
+        legacy.toggle_light_mode_with_resources(resources)
     );
     assert_same_chrome(&explicit, &legacy);
     assert!(!explicit.presenter_mode_active());
     explicit.toggle_focus_mode_with_resources(resources);
-    legacy.toggle_focus_mode();
+    legacy.toggle_focus_mode_with_resources(resources);
     assert_same_chrome(&explicit, &legacy);
     explicit.start_tour_replay_with_resources(resources);
     legacy.start_tour_replay();
@@ -172,4 +172,43 @@ fn explicit_focus_rescue_and_display_cycle_refresh_saved_geometry() {
     );
     input.derive_toolbar_visibility_from_pins_with_engine(&engine);
     assert!(input.status_hud_layout().is_some());
+}
+
+#[test]
+fn explicit_action_and_toolbar_routes_refresh_status_geometry_before_another_frame() {
+    let engine = UiTextEngine::default();
+    let measurer = crate::draw::TextMeasurer::default();
+    let resources = crate::input::state::InputTextResources {
+        measurer: &measurer,
+        ui_engine: &engine,
+    };
+    let mut input = seeded(&engine);
+    input.set_toolbar_visible_with_engine(&engine, true);
+    input.handle_action_with_resources(resources, crate::domain::Action::ToggleToolbar);
+    assert!(!input.toolbar_visible());
+    assert!(
+        input
+            .status_hud_layout()
+            .unwrap()
+            .segments
+            .iter()
+            .any(|segment| segment.kind == StatusHudSegmentKind::Toolbar)
+    );
+
+    let (x, y) = segment_center(&input, StatusHudSegmentKind::Help);
+    input.on_mouse_motion(x, y);
+    assert_eq!(input.status_hud.hover, Some(StatusHudSegmentKind::Help));
+    assert!(input.apply_toolbar_event_with_resources(
+        resources,
+        crate::ui::toolbar::ToolbarEvent::SetStatusBarItemVisible(StatusBarItem::Help, false)
+    ));
+    assert_eq!(input.status_hud.hover, None);
+    assert!(
+        !input
+            .status_hud_layout()
+            .unwrap()
+            .segments
+            .iter()
+            .any(|segment| segment.kind == StatusHudSegmentKind::Help)
+    );
 }

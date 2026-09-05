@@ -1,18 +1,10 @@
 use super::super::base::InputState;
+use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
 
 impl InputState {
-    pub(crate) fn move_selection_to_front(&mut self) -> bool {
-        with_legacy_measurer(|measurer| self.move_selection_to_front_with(measurer))
-    }
-
     pub(crate) fn move_selection_to_front_with(&mut self, measurer: &TextMeasurer) -> bool {
         self.reorder_selection(measurer, true)
-    }
-
-    pub(crate) fn move_selection_to_back(&mut self) -> bool {
-        with_legacy_measurer(|measurer| self.move_selection_to_back_with(measurer))
     }
 
     pub(crate) fn move_selection_to_back_with(&mut self, measurer: &TextMeasurer) -> bool {

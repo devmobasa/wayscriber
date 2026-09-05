@@ -80,10 +80,24 @@ mod tests {
     /// owns the keymap; the modal closes itself in the same step.
     #[test]
     fn shortcut_capture_emits_a_replace_request() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         assert!(state.begin_keybinding_capture(Action::SelectPenTool));
-        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('p')));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Ctrl
+            )
+        );
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('p')
+        ));
 
         assert_eq!(
             state.take_pending_keybinding_edits(),
@@ -105,15 +119,35 @@ mod tests {
     /// Recording them in a slot dropped the first with nothing said about it.
     #[test]
     fn two_chords_captured_before_a_drain_both_survive_in_order() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
 
         assert!(state.begin_keybinding_capture(Action::SelectPenTool));
-        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
-        assert!(state.handle_command_palette_key(crate::input::Key::Alt));
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('p')));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Ctrl
+            )
+        );
+        assert!(
+            state
+                .handle_command_palette_key_with_resources(route_resources, crate::input::Key::Alt)
+        );
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('p')
+        ));
 
         assert!(state.begin_keybinding_capture(Action::SelectMarkerTool));
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('m')));
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('m')
+        ));
 
         assert_eq!(
             state.take_pending_keybinding_edits(),
@@ -142,11 +176,22 @@ mod tests {
     /// Escape leaves the modal without queueing anything.
     #[test]
     fn shortcut_capture_is_cancelled_by_escape() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         assert!(state.begin_keybinding_capture(Action::SelectPenTool));
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Escape));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Escape
+            )
+        );
 
         assert_eq!(state.keybinding_capture_action(), None);
         assert!(state.take_pending_keybinding_edits().is_empty());
@@ -157,6 +202,12 @@ mod tests {
     /// the command.
     #[test]
     fn ctrl_e_starts_capture_for_the_selected_row() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "pen tool".to_string();
@@ -164,7 +215,10 @@ mod tests {
         assert_eq!(action, Action::SelectPenTool);
 
         state.modifiers.ctrl = true;
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('e')
+        ));
 
         assert_eq!(state.keybinding_capture_action(), Some(action));
         assert!(state.take_pending_keybinding_edits().is_empty());
@@ -175,14 +229,33 @@ mod tests {
     /// the modifier flags directly.
     #[test]
     fn shift_held_through_the_palette_turns_ctrl_e_into_the_configurator_route() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "pen tool".to_string();
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
-        assert!(state.handle_command_palette_key(crate::input::Key::Shift));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Ctrl
+            )
+        );
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Shift
+            )
+        );
         assert!(state.modifiers.shift, "the palette must track Shift itself");
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('E')));
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('E')
+        ));
 
         assert_eq!(
             state.keybinding_capture_action(),
@@ -197,7 +270,10 @@ mod tests {
         assert!(!state.modifiers.shift);
         state.toggle_command_palette();
         state.command_palette.query = "pen tool".to_string();
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('e')
+        ));
         assert_eq!(
             state.keybinding_capture_action(),
             Some(Action::SelectPenTool)
@@ -210,22 +286,42 @@ mod tests {
     /// driven here as a real press instead of a flag.
     #[test]
     fn alt_held_through_the_palette_reaches_the_captured_chord() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "pen tool".to_string();
 
         // Alt goes down while the list, not the modal, owns the keyboard.
-        assert!(state.handle_command_palette_key(crate::input::Key::Alt));
+        assert!(
+            state
+                .handle_command_palette_key_with_resources(route_resources, crate::input::Key::Alt)
+        );
         assert!(state.modifiers.alt, "the palette must track Alt itself");
-        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Ctrl
+            )
+        );
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('e')
+        ));
         assert_eq!(
             state.keybinding_capture_action(),
             Some(Action::SelectPenTool)
         );
 
         // Still held when the modal reads the chord.
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('k')));
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('k')
+        ));
 
         assert_eq!(
             state.take_pending_keybinding_edits(),
@@ -244,20 +340,42 @@ mod tests {
 
     #[test]
     fn super_held_through_the_palette_reaches_the_captured_chord() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "pen tool".to_string();
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Super));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Super
+            )
+        );
         assert!(state.modifiers.logo, "the palette must track Super itself");
-        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Ctrl
+            )
+        );
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('e')
+        ));
         assert_eq!(
             state.keybinding_capture_action(),
             Some(Action::SelectPenTool)
         );
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('k')));
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('k')
+        ));
         assert_eq!(
             state.take_pending_keybinding_edits(),
             vec![crate::input::state::KeybindingEditRequest {
@@ -274,13 +392,24 @@ mod tests {
 
     #[test]
     fn palette_shortcut_controls_request_delete_and_reset() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "pen tool".to_string();
         let action = state.selected_command().expect("selected command").action;
 
         state.modifiers.ctrl = true;
-        assert!(state.handle_command_palette_key(crate::input::Key::Delete));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Delete
+            )
+        );
         assert_eq!(
             state.take_pending_keybinding_edits(),
             vec![crate::input::state::KeybindingEditRequest {
@@ -289,7 +418,10 @@ mod tests {
             }]
         );
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('r')));
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('r')
+        ));
         assert_eq!(
             state.take_pending_keybinding_edits(),
             vec![crate::input::state::KeybindingEditRequest {
@@ -387,6 +519,12 @@ mod tests {
 
     #[test]
     fn ctrl_shift_e_requests_the_rows_keybindings_section() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         use crate::configurator_destination::{
             ConfiguratorDestination, ConfiguratorScreen, KeybindingsSection,
         };
@@ -398,7 +536,10 @@ mod tests {
         state.modifiers.ctrl = true;
         state.modifiers.shift = true;
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('e')));
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('e')
+        ));
         assert_eq!(
             state.take_pending_backend_action(),
             Some(PendingBackendAction::HelperLaunch(
@@ -609,13 +750,22 @@ mod tests {
 
     #[test]
     fn backspace_resets_selection_and_scroll_when_query_changes() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "zoom".to_string();
         state.command_palette.selected = 4;
         state.command_palette.scroll = 3;
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Backspace));
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Backspace
+        ));
         assert_eq!(state.command_palette.query, "zoo");
         assert_eq!(state.command_palette.selected, 0);
         assert_eq!(state.command_palette.scroll, 0);
@@ -623,14 +773,28 @@ mod tests {
 
     #[test]
     fn ctrl_backspace_deletes_previous_query_word_and_resets_position() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "export canvas clipboard  ".to_string();
         state.command_palette.selected = 4;
         state.command_palette.scroll = 3;
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
-        assert!(state.handle_command_palette_key(crate::input::Key::Backspace));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Ctrl
+            )
+        );
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Backspace
+        ));
 
         assert_eq!(state.command_palette.query, "export canvas ");
         assert_eq!(state.command_palette.selected, 0);
@@ -639,38 +803,80 @@ mod tests {
 
     #[test]
     fn ctrl_backspace_stops_at_shortcut_token_separator() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "ctrl+shift+f".to_string();
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
-        assert!(state.handle_command_palette_key(crate::input::Key::Backspace));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Ctrl
+            )
+        );
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Backspace
+        ));
 
         assert_eq!(state.command_palette.query, "ctrl+shift+");
     }
 
     #[test]
     fn ctrl_backspace_stops_at_slash_token_separator() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "capture/file".to_string();
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
-        assert!(state.handle_command_palette_key(crate::input::Key::Backspace));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Ctrl
+            )
+        );
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Backspace
+        ));
 
         assert_eq!(state.command_palette.query, "capture/");
     }
 
     #[test]
     fn ctrl_u_clears_query_and_resets_position() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "status bar".to_string();
         state.command_palette.selected = 4;
         state.command_palette.scroll = 3;
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Ctrl));
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('u')));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Ctrl
+            )
+        );
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('u')
+        ));
 
         assert!(state.command_palette.query.is_empty());
         assert_eq!(state.command_palette.selected, 0);
@@ -679,6 +885,12 @@ mod tests {
 
     #[test]
     fn down_key_keeps_selection_visible_while_scrolling_past_headers() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         // Enough commands that walking twice the window is always valid.
@@ -687,7 +899,10 @@ mod tests {
 
         let mut scrolled = false;
         for step in 0..COMMAND_PALETTE_MAX_VISIBLE * 2 {
-            assert!(state.handle_command_palette_key(crate::input::Key::Down));
+            assert!(state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Down
+            ));
             // Selection advances one command per press.
             assert_eq!(state.command_palette.selected, step + 1);
             // The selected command's display row stays inside the visible window
@@ -708,12 +923,23 @@ mod tests {
 
     #[test]
     fn home_key_jumps_to_first_command() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.selected = 5;
         state.command_palette.scroll = 3;
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Home));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Home
+            )
+        );
 
         assert_eq!(state.command_palette.selected, 0);
         assert_eq!(state.command_palette.scroll, 0);
@@ -721,12 +947,21 @@ mod tests {
 
     #[test]
     fn end_key_jumps_to_last_command_and_scrolls_into_view() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         let filtered_len = state.filtered_commands().len();
         assert!(filtered_len > COMMAND_PALETTE_MAX_VISIBLE);
 
-        assert!(state.handle_command_palette_key(crate::input::Key::End));
+        assert!(
+            state
+                .handle_command_palette_key_with_resources(route_resources, crate::input::Key::End)
+        );
 
         assert_eq!(state.command_palette.selected, filtered_len - 1);
         // Scroll is measured in display rows (headers included), so the bottom of
@@ -744,10 +979,21 @@ mod tests {
 
     #[test]
     fn held_down_key_repeats_after_delay_until_release() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Down));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Down
+            )
+        );
         assert_eq!(state.command_palette.selected, 1);
         assert!(
             state
@@ -808,16 +1054,33 @@ mod tests {
 
     #[test]
     fn escape_key_closes_command_palette() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         assert!(state.command_palette.open);
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Escape));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Escape
+            )
+        );
         assert!(!state.command_palette.open);
     }
 
     #[test]
     fn return_key_executes_selected_command_and_records_it() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "status bar".to_string();
@@ -828,7 +1091,12 @@ mod tests {
         );
         assert!(state.ui_visibility.show_status_bar);
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Return));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Return
+            )
+        );
         assert!(!state.command_palette.open);
         assert!(!state.ui_visibility.show_status_bar);
         assert_eq!(
@@ -839,6 +1107,12 @@ mod tests {
 
     #[test]
     fn return_key_sets_pending_canvas_export_backend_action() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "export canvas clipboard".to_string();
@@ -848,7 +1122,12 @@ mod tests {
             crate::config::keybindings::Action::ExportCanvasClipboard
         );
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Return));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Return
+            )
+        );
 
         assert_eq!(
             state.take_pending_backend_action(),
@@ -860,6 +1139,12 @@ mod tests {
 
     #[test]
     fn return_key_sets_pending_board_pdf_export_backend_action() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "export pdf".to_string();
@@ -869,7 +1154,12 @@ mod tests {
             crate::config::keybindings::Action::ExportBoardPdfFile
         );
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Return));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Return
+            )
+        );
 
         assert_eq!(
             state.take_pending_backend_action(),
@@ -881,6 +1171,12 @@ mod tests {
 
     #[test]
     fn return_key_sets_pending_all_boards_pdf_export_backend_action() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "all boards pdf".to_string();
@@ -890,7 +1186,12 @@ mod tests {
             crate::config::keybindings::Action::ExportAllBoardsPdfFile
         );
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Return));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Return
+            )
+        );
 
         assert_eq!(
             state.take_pending_backend_action(),
@@ -902,6 +1203,12 @@ mod tests {
 
     #[test]
     fn return_key_sets_pending_clear_saved_tool_state_backend_action() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.query = "clear saved tool state".to_string();
@@ -911,7 +1218,12 @@ mod tests {
             crate::config::keybindings::Action::ClearSavedToolState
         );
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Return));
+        assert!(
+            state.handle_command_palette_key_with_resources(
+                route_resources,
+                crate::input::Key::Return
+            )
+        );
 
         assert_eq!(
             state.take_pending_backend_action(),
@@ -930,12 +1242,21 @@ mod tests {
 
     #[test]
     fn char_key_appends_query_and_resets_selection_and_scroll() {
+        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_resources = crate::input::state::InputTextResources {
+            measurer: &route_measurer,
+            ui_engine: &route_ui_engine,
+        };
         let mut state = make_state();
         state.toggle_command_palette();
         state.command_palette.selected = 3;
         state.command_palette.scroll = 2;
 
-        assert!(state.handle_command_palette_key(crate::input::Key::Char('z')));
+        assert!(state.handle_command_palette_key_with_resources(
+            route_resources,
+            crate::input::Key::Char('z')
+        ));
         assert_eq!(state.command_palette.query, "z");
         assert_eq!(state.command_palette.selected, 0);
         assert_eq!(state.command_palette.scroll, 0);

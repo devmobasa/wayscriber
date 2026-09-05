@@ -64,7 +64,11 @@ impl InputState {
         }
     }
 
-    pub(in crate::input::state) fn handle_board_picker_key(&mut self, key: Key) -> bool {
+    pub(in crate::input::state) fn handle_board_picker_key_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        key: Key,
+    ) -> bool {
         if !self.is_board_picker_open() {
             return false;
         }
@@ -76,7 +80,7 @@ impl InputState {
                     true
                 }
                 Key::Return => {
-                    self.board_picker_commit_page_edit();
+                    self.board_picker_commit_page_edit_with_measurer(measurer);
                     true
                 }
                 Key::Backspace | Key::Delete => {
@@ -96,7 +100,7 @@ impl InputState {
         } else if self.board_picker_edit_state().is_some() {
             match key {
                 Key::F2 => {
-                    self.board_picker_rename_selected();
+                    self.board_picker_rename_selected_with_measurer(measurer);
                     true
                 }
                 Key::Escape => {
@@ -122,17 +126,23 @@ impl InputState {
                 _ => true,
             }
         } else if self.board_picker_focus() == BoardPickerFocus::PagePanel {
-            if let Some(consumed) = self.handle_board_picker_page_nav_key(key) {
+            if let Some(consumed) =
+                self.handle_board_picker_page_nav_key_with_measurer(measurer, key)
+            {
                 consumed
             } else {
-                self.handle_board_picker_page_panel_key(key)
+                self.handle_board_picker_page_panel_key_with_measurer(measurer, key)
             }
         } else {
-            self.handle_board_picker_board_list_key(key)
+            self.handle_board_picker_board_list_key_with_measurer(measurer, key)
         }
     }
 
-    fn handle_board_picker_board_list_key(&mut self, key: Key) -> bool {
+    fn handle_board_picker_board_list_key_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        key: Key,
+    ) -> bool {
         if self.board_picker_is_quick() {
             match key {
                 Key::Delete | Key::F2 => return true,
@@ -189,12 +199,12 @@ impl InputState {
             }
             Key::Return | Key::Space => {
                 if let Some(index) = self.board_picker_selected_index() {
-                    self.board_picker_activate_row(index);
+                    self.board_picker_activate_row_with_measurer(measurer, index);
                 }
                 true
             }
             Key::Delete => {
-                self.board_picker_delete_selected();
+                self.board_picker_delete_selected_with_measurer(measurer);
                 true
             }
             Key::Tab | Key::Right => {
@@ -208,15 +218,15 @@ impl InputState {
                 true
             }
             Key::Char('n') | Key::Char('N') if self.modifiers.ctrl => {
-                self.board_picker_create_new();
+                self.board_picker_create_new_with_measurer(measurer);
                 true
             }
             Key::Char('r') | Key::Char('R') if self.modifiers.ctrl => {
-                self.board_picker_rename_selected();
+                self.board_picker_rename_selected_with_measurer(measurer);
                 true
             }
             Key::Char('c') | Key::Char('C') if self.modifiers.ctrl => {
-                self.board_picker_edit_color_selected();
+                self.board_picker_edit_color_selected_with_measurer(measurer);
                 true
             }
             Key::Char('p') | Key::Char('P') if self.modifiers.ctrl => {
@@ -230,14 +240,18 @@ impl InputState {
                 true
             }
             Key::F2 => {
-                self.board_picker_rename_selected();
+                self.board_picker_rename_selected_with_measurer(measurer);
                 true
             }
             _ => true,
         }
     }
 
-    fn handle_board_picker_page_panel_key(&mut self, key: Key) -> bool {
+    fn handle_board_picker_page_panel_key_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        key: Key,
+    ) -> bool {
         let (page_count, current) = self.board_picker_page_panel_position();
         match key {
             Key::Escape => {
@@ -263,13 +277,13 @@ impl InputState {
             }
             Key::Return | Key::Space => {
                 if page_count > 0 {
-                    self.board_picker_activate_page(current);
+                    self.board_picker_activate_page_with_measurer(measurer, current);
                 }
                 true
             }
             Key::Delete => {
                 if page_count > 0 {
-                    let outcome = self.board_picker_delete_page(current);
+                    let outcome = self.board_picker_delete_page_with_measurer(measurer, current);
                     if matches!(outcome, PageDeleteOutcome::Pending) {
                         return true;
                     }
@@ -296,7 +310,7 @@ impl InputState {
                 true
             }
             Key::Char('n') | Key::Char('N') if self.modifiers.ctrl => {
-                self.board_picker_add_page();
+                self.board_picker_add_page_with_measurer(measurer);
                 true
             }
             Key::Char('g') | Key::Char('G') if self.modifiers.ctrl => {
@@ -390,7 +404,11 @@ impl InputState {
         }
     }
 
-    pub(in crate::input::state) fn handle_properties_panel_key(&mut self, key: Key) -> bool {
+    pub(in crate::input::state) fn handle_properties_panel_key_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        key: Key,
+    ) -> bool {
         let adjust_step = if self.modifiers.shift {
             PROPERTIES_PANEL_COARSE_STEP
         } else {
@@ -405,16 +423,24 @@ impl InputState {
             Key::Down => self.focus_next_properties_entry(),
             Key::Home => self.focus_first_properties_entry(),
             Key::End => self.focus_last_properties_entry(),
-            Key::Return | Key::Space => self.activate_properties_panel_entry(),
-            Key::Left => self.adjust_properties_panel_entry(-adjust_step),
-            Key::Right => self.adjust_properties_panel_entry(adjust_step),
-            Key::Char('+') | Key::Char('=') => self.adjust_properties_panel_entry(adjust_step),
-            Key::Char('-') | Key::Char('_') => self.adjust_properties_panel_entry(-adjust_step),
+            Key::Return | Key::Space => self.activate_properties_panel_entry_with(measurer),
+            Key::Left => self.adjust_properties_panel_entry_with(measurer, -adjust_step),
+            Key::Right => self.adjust_properties_panel_entry_with(measurer, adjust_step),
+            Key::Char('+') | Key::Char('=') => {
+                self.adjust_properties_panel_entry_with(measurer, adjust_step)
+            }
+            Key::Char('-') | Key::Char('_') => {
+                self.adjust_properties_panel_entry_with(measurer, -adjust_step)
+            }
             _ => false,
         }
     }
 
-    pub(in crate::input::state) fn handle_context_menu_key(&mut self, key: Key) -> bool {
+    pub(in crate::input::state) fn handle_context_menu_key_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        key: Key,
+    ) -> bool {
         match key {
             Key::Escape => {
                 self.close_context_menu();
@@ -424,7 +450,9 @@ impl InputState {
             Key::Down => self.focus_next_context_menu_entry(),
             Key::Home => self.focus_first_context_menu_entry(),
             Key::End => self.focus_last_context_menu_entry(),
-            Key::Return | Key::Space => self.activate_context_menu_selection(),
+            Key::Return | Key::Space => {
+                self.activate_context_menu_selection_with_resources(resources)
+            }
             _ => false,
         }
     }

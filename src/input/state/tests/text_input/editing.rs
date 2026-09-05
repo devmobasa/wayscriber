@@ -152,6 +152,7 @@ fn collapsing_a_selection_at_its_caret_boundary_marks_an_external_change() {
 
 #[test]
 fn keyboard_pointer_and_paste_changes_mark_an_external_ime_update() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     use crate::input::MouseButton;
 
     let mut state = text_state("abc");
@@ -162,7 +163,7 @@ fn keyboard_pointer_and_paste_changes_mark_an_external_ime_update() {
     state.on_mouse_press_with_canvas(MouseButton::Left, 10, 0, 10, 0);
     assert!(state.take_text_input_external_change_dirty());
 
-    assert!(state.insert_text_at_caret("X"));
+    assert!(state.insert_text_at_caret_with(&route_measurer, "X"));
     assert!(state.take_text_input_external_change_dirty());
 }
 
@@ -369,6 +370,7 @@ fn cut_completion_is_invalid_after_intervening_edits_restore_the_same_selection(
 
 #[test]
 fn ctrl_v_requests_a_paste_that_inserts_at_the_caret() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut state = text_state("ac");
     state.modifiers.ctrl = true;
     state.on_key_press(Key::Char('v'));
@@ -384,7 +386,7 @@ fn ctrl_v_requests_a_paste_that_inserts_at_the_caret() {
 
     // The backend delivers clipboard text via insert_text_at_caret.
     state.on_key_press(Key::Left); // caret between 'a' and 'c'
-    assert!(state.insert_text_at_caret("b"));
+    assert!(state.insert_text_at_caret_with(&route_measurer, "b"));
     assert_eq!(buffer(&state), "abc");
 }
 

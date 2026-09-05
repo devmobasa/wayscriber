@@ -6,12 +6,12 @@ mod keyboard;
 mod outcome;
 mod pointer;
 
-pub(crate) use actions::route_action;
+pub(crate) use actions::route_action_with_resources;
 pub(crate) use adapters::action_for_key_binding;
 pub(crate) use event::{
     CanvasPoint, PointerMotion, PointerPoints, PointerPress, PointerRelease, ScreenPoint,
 };
-pub(crate) use keyboard::{route_key_press, route_key_repeat};
+pub(crate) use keyboard::{route_key_press_with_resources, route_key_repeat_with_resources};
 pub(crate) use pointer::{route_pointer_motion, route_pointer_press, route_pointer_release};
 
 #[cfg(test)]
@@ -27,6 +27,19 @@ mod tests {
     use crate::draw::Shape;
     use crate::input::state::{TopMenuState, test_support::make_test_input_state};
     use crate::input::{BOARD_ID_BLACKBOARD, EraserMode, Key, MouseButton, Tool};
+
+    fn route_key_press(state: &mut crate::input::state::InputState, key: Key) -> RoutingOutcome {
+        let measurer = crate::draw::TextMeasurer::default();
+        let ui_engine = crate::ui_text::UiTextEngine::default();
+        route_key_press_with_resources(
+            state,
+            crate::input::state::InputTextResources {
+                measurer: &measurer,
+                ui_engine: &ui_engine,
+            },
+            key,
+        )
+    }
 
     fn points() -> PointerPoints {
         PointerPoints::new(ScreenPoint::new(10, 20), CanvasPoint::new(10, 20))
@@ -84,10 +97,11 @@ mod tests {
 
     #[test]
     fn properties_panel_unhandled_key_is_consumed() {
+        let route_measurer = crate::draw::TextMeasurer::default();
         let mut state = make_test_input_state();
         let id = add_rect(&mut state);
         state.set_selection(vec![id]);
-        assert!(state.show_properties_panel());
+        assert!(state.show_properties_panel_with(&route_measurer));
 
         assert_eq!(
             route_key_press(&mut state, Key::Char('x')),

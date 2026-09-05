@@ -2,7 +2,7 @@ use super::super::base::InputState;
 use super::panel_layout::selection_panel_anchor;
 use super::types::{PropertiesPanelLayout, SelectionPropertyEntry, ShapePropertiesPanel};
 use super::utils::format_timestamp;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::TextMeasurer;
 
 impl InputState {
     pub fn properties_panel(&self) -> Option<&ShapePropertiesPanel> {
@@ -41,10 +41,6 @@ impl InputState {
         self.properties.open(panel);
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
-    }
-
-    pub(crate) fn show_properties_panel(&mut self) -> bool {
-        with_legacy_measurer(|measurer| self.show_properties_panel_with(measurer))
     }
 
     pub(crate) fn show_properties_panel_with(&mut self, measurer: &TextMeasurer) -> bool {

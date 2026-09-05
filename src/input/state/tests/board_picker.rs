@@ -540,6 +540,7 @@ fn board_picker_sticky_add_works_when_visible_grid_is_full() {
 
 #[test]
 fn board_picker_ctrl_n_adds_page_while_page_panel_focused() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     let board_index = input
@@ -550,7 +551,7 @@ fn board_picker_ctrl_n_adds_page_while_page_panel_focused() {
 
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
     input.modifiers.ctrl = true;
-    assert!(input.handle_board_picker_key(Key::Char('n')));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('n')));
 
     assert_eq!(
         input.boards.board_states()[board_index].pages.page_count(),
@@ -678,6 +679,7 @@ fn board_picker_wheel_scroll_up_clamps_focus_to_last_visible_page() {
 
 #[test]
 fn board_picker_page_search_wheel_scroll_syncs_cursor_with_visible_focus() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     let board_index = input
@@ -699,9 +701,9 @@ fn board_picker_page_search_wheel_scroll_syncs_cursor_with_visible_focus() {
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-    input.handle_board_picker_key(Key::Char('/'));
+    input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));
     for ch in "match".chars() {
-        input.handle_board_picker_key(Key::Char(ch));
+        input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch));
     }
     assert_eq!(input.board_picker_page_search_cursor(), Some(0));
     assert_eq!(input.board_picker_page_search_active_match(), Some(0));
@@ -721,7 +723,7 @@ fn board_picker_page_search_wheel_scroll_syncs_cursor_with_visible_focus() {
     );
     assert_page_visible(*input.board_picker_layout().expect("layout"), second_match);
 
-    assert!(input.handle_board_picker_key(Key::Return));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Return));
     assert!(!input.is_board_picker_open());
     assert_eq!(
         input.boards.board_states()[board_index]
@@ -733,6 +735,7 @@ fn board_picker_page_search_wheel_scroll_syncs_cursor_with_visible_focus() {
 
 #[test]
 fn board_picker_page_search_wheel_scroll_without_visible_match_clears_cursor() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     let board_index = input
@@ -744,9 +747,9 @@ fn board_picker_page_search_wheel_scroll_without_visible_match_clears_cursor() {
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-    input.handle_board_picker_key(Key::Char('/'));
+    input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));
     for ch in "match".chars() {
-        input.handle_board_picker_key(Key::Char(ch));
+        input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch));
     }
     assert_eq!(input.board_picker_page_search_cursor(), Some(0));
     assert_eq!(input.board_picker_page_search_active_match(), Some(0));
@@ -758,10 +761,10 @@ fn board_picker_page_search_wheel_scroll_without_visible_match_clears_cursor() {
     assert_eq!(input.board_picker_page_search_cursor(), None);
     assert_eq!(input.board_picker_page_search_active_match(), None);
     assert_eq!(input.board_picker_page_focus_page_index(), None);
-    assert!(input.handle_board_picker_key(Key::Return));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Return));
     assert!(input.is_board_picker_open());
 
-    assert!(input.handle_board_picker_key(Key::F3));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::F3));
     update_picker_layout(&mut input, 1280, 720);
     assert_eq!(input.board_picker_page_search_cursor(), Some(0));
     assert_eq!(input.board_picker_page_search_active_match(), Some(0));
@@ -793,6 +796,7 @@ fn board_picker_column_change_keeps_focused_absolute_page_visible() {
 
 #[test]
 fn board_picker_page_jump_focuses_absolute_page_and_scrolls_visible() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     let board_index = input
@@ -803,13 +807,13 @@ fn board_picker_page_jump_focuses_absolute_page_and_scrolls_visible() {
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
     input.modifiers.ctrl = true;
-    assert!(input.handle_board_picker_key(Key::Char('g')));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('g')));
     input.modifiers.ctrl = false;
     for ch in "12".chars() {
-        assert!(input.handle_board_picker_key(Key::Char(ch)));
+        assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch)));
     }
     assert_eq!(input.board_picker_page_jump_buffer(), Some("12"));
-    assert!(input.handle_board_picker_key(Key::Return));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Return));
     update_picker_layout(&mut input, 1280, 720);
 
     assert_eq!(
@@ -822,6 +826,7 @@ fn board_picker_page_jump_focuses_absolute_page_and_scrolls_visible() {
 
 #[test]
 fn board_picker_page_jump_edges_keep_picker_open() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     let board_index = input
@@ -831,12 +836,12 @@ fn board_picker_page_jump_edges_keep_picker_open() {
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
     input.modifiers.ctrl = true;
-    input.handle_board_picker_key(Key::Char('g'));
+    input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('g'));
     input.modifiers.ctrl = false;
 
-    assert!(input.handle_board_picker_key(Key::Char('x')));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('x')));
     assert_eq!(input.board_picker_page_jump_buffer(), Some(""));
-    assert!(input.handle_board_picker_key(Key::Return));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Return));
     assert!(input.is_board_picker_open());
     assert_eq!(
         input.board_picker_page_nav_mode(),
@@ -844,9 +849,9 @@ fn board_picker_page_jump_edges_keep_picker_open() {
     );
 
     for ch in "99".chars() {
-        input.handle_board_picker_key(Key::Char(ch));
+        input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch));
     }
-    assert!(input.handle_board_picker_key(Key::Return));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Return));
     assert!(input.is_board_picker_open());
     assert_eq!(
         input.board_picker_page_nav_mode(),
@@ -857,7 +862,7 @@ fn board_picker_page_jump_edges_keep_picker_open() {
         Some("Page number out of range.")
     );
 
-    assert!(input.handle_board_picker_key(Key::Escape));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Escape));
     assert!(input.is_board_picker_open());
     assert_eq!(
         input.board_picker_page_nav_mode(),
@@ -867,12 +872,13 @@ fn board_picker_page_jump_edges_keep_picker_open() {
 
 #[test]
 fn board_picker_page_search_slash_starts_without_inserting_slash() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-    assert!(input.handle_board_picker_key(Key::Char('/')));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/')));
 
     assert_eq!(
         input.board_picker_page_nav_mode(),
@@ -883,14 +889,15 @@ fn board_picker_page_search_slash_starts_without_inserting_slash() {
 
 #[test]
 fn board_picker_selecting_current_board_row_clears_page_nav_mode() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-    input.handle_board_picker_key(Key::Char('/'));
+    input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));
     for ch in "target".chars() {
-        input.handle_board_picker_key(Key::Char(ch));
+        input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch));
     }
     assert_eq!(
         input.board_picker_page_nav_mode(),
@@ -910,6 +917,7 @@ fn board_picker_selecting_current_board_row_clears_page_nav_mode() {
 
 #[test]
 fn board_picker_page_search_finds_named_page_beyond_visible_window() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     let board_index = input
@@ -921,9 +929,9 @@ fn board_picker_page_search_finds_named_page_beyond_visible_window() {
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-    assert!(input.handle_board_picker_key(Key::Char('/')));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/')));
     for ch in "cap".chars() {
-        assert!(input.handle_board_picker_key(Key::Char(ch)));
+        assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch)));
     }
     update_picker_layout(&mut input, 1280, 720);
 
@@ -934,6 +942,7 @@ fn board_picker_page_search_finds_named_page_beyond_visible_window() {
 
 #[test]
 fn board_picker_page_search_numeric_is_exact_page_number() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     let board_index = input
@@ -945,9 +954,9 @@ fn board_picker_page_search_numeric_is_exact_page_number() {
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-    assert!(input.handle_board_picker_key(Key::Char('/')));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/')));
     for ch in "12".chars() {
-        assert!(input.handle_board_picker_key(Key::Char(ch)));
+        assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch)));
     }
 
     assert_eq!(input.board_picker_page_search_active_match(), Some(11));
@@ -957,6 +966,7 @@ fn board_picker_page_search_numeric_is_exact_page_number() {
 
 #[test]
 fn board_picker_page_search_no_match_enter_is_noop() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     let board_index = input
@@ -966,12 +976,12 @@ fn board_picker_page_search_no_match_enter_is_noop() {
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-    assert!(input.handle_board_picker_key(Key::Char('/')));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/')));
     for ch in "missing".chars() {
-        input.handle_board_picker_key(Key::Char(ch));
+        input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch));
     }
     assert_eq!(input.board_picker_page_search_match_count(), 0);
-    assert!(input.handle_board_picker_key(Key::Return));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Return));
 
     assert!(input.is_board_picker_open());
     assert_eq!(
@@ -980,7 +990,7 @@ fn board_picker_page_search_no_match_enter_is_noop() {
             .active_index(),
         0
     );
-    assert!(input.handle_board_picker_key(Key::Escape));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Escape));
     assert!(input.is_board_picker_open());
     assert_eq!(
         input.board_picker_page_nav_mode(),
@@ -990,6 +1000,7 @@ fn board_picker_page_search_no_match_enter_is_noop() {
 
 #[test]
 fn board_picker_page_search_f3_cycles_matches() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     let board_index = input
@@ -1002,16 +1013,16 @@ fn board_picker_page_search_f3_cycles_matches() {
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-    input.handle_board_picker_key(Key::Char('/'));
+    input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));
     for ch in "match".chars() {
-        input.handle_board_picker_key(Key::Char(ch));
+        input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch));
     }
     assert_eq!(input.board_picker_page_search_active_match(), Some(2));
 
-    assert!(input.handle_board_picker_key(Key::F3));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::F3));
     assert_eq!(input.board_picker_page_search_active_match(), Some(11));
     input.modifiers.shift = true;
-    assert!(input.handle_board_picker_key(Key::F3));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::F3));
     input.modifiers.shift = false;
 
     assert_eq!(input.board_picker_page_search_active_match(), Some(2));
@@ -1019,6 +1030,7 @@ fn board_picker_page_search_f3_cycles_matches() {
 
 #[test]
 fn board_picker_page_search_enter_opens_absolute_page_beyond_nine() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     let board_index = input
@@ -1030,12 +1042,12 @@ fn board_picker_page_search_enter_opens_absolute_page_beyond_nine() {
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-    input.handle_board_picker_key(Key::Char('/'));
+    input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));
     for ch in "target".chars() {
-        input.handle_board_picker_key(Key::Char(ch));
+        input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch));
     }
     assert_eq!(input.board_picker_page_search_active_match(), Some(11));
-    assert!(input.handle_board_picker_key(Key::Return));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Return));
 
     assert!(!input.is_board_picker_open());
     assert_eq!(
@@ -1048,6 +1060,7 @@ fn board_picker_page_search_enter_opens_absolute_page_beyond_nine() {
 
 #[test]
 fn board_picker_page_search_rename_updates_derived_match() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     let board_index = input
@@ -1057,9 +1070,9 @@ fn board_picker_page_search_rename_updates_derived_match() {
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-    input.handle_board_picker_key(Key::Char('/'));
+    input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));
     for ch in "target".chars() {
-        input.handle_board_picker_key(Key::Char(ch));
+        input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch));
     }
     assert_eq!(input.board_picker_page_search_match_count(), 0);
 
@@ -1076,6 +1089,7 @@ fn board_picker_page_search_rename_updates_derived_match() {
 
 #[test]
 fn board_picker_page_search_pending_delete_preserves_confirmed_delete_clamps() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker();
     let board_index = input
@@ -1089,11 +1103,11 @@ fn board_picker_page_search_pending_delete_preserves_confirmed_delete_clamps() {
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
-    input.handle_board_picker_key(Key::Char('/'));
+    input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));
     for ch in "match".chars() {
-        input.handle_board_picker_key(Key::Char(ch));
+        input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char(ch));
     }
-    input.handle_board_picker_key(Key::F3);
+    input.handle_board_picker_key_with_measurer(&route_measurer, Key::F3);
     assert_eq!(input.board_picker_page_search_cursor(), Some(1));
     assert_eq!(input.board_picker_page_search_active_match(), Some(1));
 
@@ -1211,6 +1225,7 @@ fn board_picker_footer_text_prefers_active_search_query() {
 
 #[test]
 fn board_picker_footer_text_changes_for_quick_and_page_panel_modes() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     input.open_board_picker_quick();
     assert_eq!(
@@ -1237,15 +1252,15 @@ fn board_picker_footer_text_changes_for_quick_and_page_panel_modes() {
     );
 
     input.modifiers.ctrl = true;
-    input.handle_board_picker_key(Key::Char('g'));
+    input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('g'));
     input.modifiers.ctrl = false;
     assert_eq!(
         input.board_picker_footer_text(),
         "Go to page:   Enter: go  Esc: cancel"
     );
 
-    input.handle_board_picker_key(Key::Escape);
-    input.handle_board_picker_key(Key::Char('/'));
+    input.handle_board_picker_key_with_measurer(&route_measurer, Key::Escape);
+    input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));
     assert_eq!(
         input.board_picker_footer_text(),
         "Search pages:   Enter: open  F3: next  Esc: clear"
@@ -1300,6 +1315,7 @@ fn board_picker_rename_selected_promotes_quick_mode_to_full_editing() {
 
 #[test]
 fn board_picker_f2_starts_board_name_edit_not_color_edit() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     let blackboard_index = input
         .boards
@@ -1313,7 +1329,7 @@ fn board_picker_f2_starts_board_name_edit_not_color_edit() {
         .board_picker_row_for_board(blackboard_index)
         .expect("blackboard row");
     input.board_picker_set_selected(selected_row);
-    assert!(input.handle_board_picker_key(Key::F2));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::F2));
 
     assert_eq!(
         input.board_picker_edit_state(),
@@ -1346,6 +1362,7 @@ fn board_picker_f2_key_route_starts_board_name_edit_not_color_edit() {
 
 #[test]
 fn board_picker_f2_switches_color_edit_back_to_name_edit() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     let blackboard_index = input
         .boards
@@ -1365,7 +1382,7 @@ fn board_picker_f2_switches_color_edit_back_to_name_edit() {
         Some((BoardPickerEditMode::Color, selected_row, "#111111"))
     );
 
-    assert!(input.handle_board_picker_key(Key::F2));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::F2));
 
     assert_eq!(
         input.board_picker_edit_state(),
@@ -1375,6 +1392,7 @@ fn board_picker_f2_switches_color_edit_back_to_name_edit() {
 
 #[test]
 fn board_picker_ctrl_c_starts_board_color_edit() {
+    let route_measurer = crate::draw::TextMeasurer::default();
     let mut input = create_test_input_state();
     let blackboard_index = input
         .boards
@@ -1389,7 +1407,7 @@ fn board_picker_ctrl_c_starts_board_color_edit() {
         .expect("blackboard row");
     input.board_picker_set_selected(selected_row);
     input.modifiers.ctrl = true;
-    assert!(input.handle_board_picker_key(Key::Char('c')));
+    assert!(input.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('c')));
 
     assert_eq!(
         input.board_picker_edit_state(),

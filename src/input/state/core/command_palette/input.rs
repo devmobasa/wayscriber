@@ -139,7 +139,11 @@ impl InputState {
 
     /// Handle a key press while the command palette is open.
     /// Returns true if the key was handled.
-    pub(crate) fn handle_command_palette_key(&mut self, key: Key) -> bool {
+    pub(crate) fn handle_command_palette_key_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        key: Key,
+    ) -> bool {
         if !self.command_palette_is_engaged() {
             return false;
         }
@@ -175,7 +179,7 @@ impl InputState {
                     self.dirty_tracker.mark_full();
                     self.needs_redraw = true;
                     self.record_command_palette_action(command.action);
-                    self.handle_action(command.action);
+                    self.handle_action_with_resources(resources, command.action);
                 }
                 true
             }
@@ -481,6 +485,25 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) -> bool {
+        crate::input::state::with_legacy_text_resources(|resources| {
+            self.handle_command_palette_click_with_resources(
+                resources,
+                x,
+                y,
+                screen_width,
+                screen_height,
+            )
+        })
+    }
+
+    pub(crate) fn handle_command_palette_click_with_resources(
+        &mut self,
+        resources: crate::input::state::InputTextResources<'_>,
+        x: i32,
+        y: i32,
+        screen_width: u32,
+        screen_height: u32,
+    ) -> bool {
         if !self.command_palette_is_engaged() {
             return false;
         }
@@ -558,7 +581,7 @@ impl InputState {
                 Toast::info(command.label).duration_ms(self.command_palette_toast_duration_ms()),
             );
 
-            self.handle_action(command.action);
+            self.handle_action_with_resources(resources, command.action);
             return true;
         }
 

@@ -25,7 +25,12 @@ impl InputState {
     /// Every printable character goes into the query, so a family name can be
     /// typed straight in without a mode change. That is also why the filter
     /// toggle is `Tab` rather than a letter.
-    pub(crate) fn handle_font_picker_key(&mut self, key: Key, text: Option<&str>) -> bool {
+    pub(crate) fn handle_font_picker_key_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        key: Key,
+        text: Option<&str>,
+    ) -> bool {
         if !self.font_picker.open {
             return false;
         }
@@ -34,7 +39,7 @@ impl InputState {
                 self.close_font_picker();
             }
             Key::Return => {
-                self.commit_font_picker();
+                self.commit_font_picker_with_measurer(measurer);
             }
             Key::Tab => {
                 self.font_picker.filter = self.font_picker.filter.next();

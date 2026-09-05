@@ -158,10 +158,6 @@ impl InputState {
         true
     }
 
-    pub(crate) fn add_page_in_board(&mut self, board_index: usize) -> bool {
-        with_legacy_measurer(|measurer| self.add_page_in_board_with_measurer(measurer, board_index))
-    }
-
     pub(crate) fn add_page_in_board_with_measurer(
         &mut self,
         measurer: &TextMeasurer,
@@ -241,17 +237,6 @@ impl InputState {
             )),
         );
         true
-    }
-
-    pub(crate) fn rename_page_in_board(
-        &mut self,
-        board_index: usize,
-        page_index: usize,
-        name: Option<String>,
-    ) -> bool {
-        with_legacy_measurer(|measurer| {
-            self.rename_page_in_board_with_measurer(measurer, board_index, page_index, name)
-        })
     }
 
     pub(crate) fn rename_page_in_board_with_measurer(

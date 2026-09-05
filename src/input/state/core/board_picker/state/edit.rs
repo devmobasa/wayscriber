@@ -69,12 +69,26 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_commit_page_edit(&mut self) -> bool {
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.board_picker_commit_page_edit_with_measurer(measurer)
+        })
+    }
+
+    pub(crate) fn board_picker_commit_page_edit_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+    ) -> bool {
         let Some(edit) = self.board_picker.page_edit.take() else {
             return false;
         };
         let name = edit.buffer.trim().to_string();
         let name = if name.is_empty() { None } else { Some(name) };
-        let _ = self.rename_page_in_board(edit.board_index, edit.page_index, name);
+        let _ = self.rename_page_in_board_with_measurer(
+            measurer,
+            edit.board_index,
+            edit.page_index,
+            name,
+        );
         self.board_picker_reconcile_page_nav_after_page_change();
         self.needs_redraw = true;
         true
@@ -254,6 +268,15 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_rename_selected(&mut self) {
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.board_picker_rename_selected_with_measurer(measurer)
+        })
+    }
+
+    pub(crate) fn board_picker_rename_selected_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+    ) {
         let Some(index) = self.board_picker_selected_index() else {
             return;
         };
@@ -261,7 +284,7 @@ impl InputState {
             self.board_picker_promote_to_full();
         }
         if self.board_picker_is_new_row(index) {
-            self.board_picker_create_new();
+            self.board_picker_create_new_with_measurer(measurer);
             return;
         }
         let Some(board_index) = self.board_picker_board_index_for_row(index) else {
@@ -273,6 +296,15 @@ impl InputState {
     }
 
     pub(crate) fn board_picker_edit_color_selected(&mut self) {
+        crate::draw::with_legacy_measurer(|measurer| {
+            self.board_picker_edit_color_selected_with_measurer(measurer)
+        })
+    }
+
+    pub(crate) fn board_picker_edit_color_selected_with_measurer(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+    ) {
         let Some(index) = self.board_picker_selected_index() else {
             return;
         };
@@ -280,7 +312,7 @@ impl InputState {
             self.board_picker_promote_to_full();
         }
         if self.board_picker_is_new_row(index) {
-            self.board_picker_create_new();
+            self.board_picker_create_new_with_measurer(measurer);
             return;
         }
         let Some(board_index) = self.board_picker_board_index_for_row(index) else {
