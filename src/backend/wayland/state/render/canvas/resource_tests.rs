@@ -71,6 +71,7 @@ fn shapes() -> Vec<DrawnShape> {
 }
 
 fn paint(
+    measurer: &crate::draw::TextMeasurer,
     shapes: &[DrawnShape],
     layer: &CanvasLayerCache,
     caches: &mut crate::draw::RenderCaches,
@@ -118,7 +119,9 @@ fn paint(
             logical_image_origin_x: 0.0,
             logical_image_origin_y: 0.0,
         };
-        render_committed_canvas_shapes(shapes, layer, caches, &canvas, cached, &replay, None);
+        render_committed_canvas_shapes(
+            measurer, shapes, layer, caches, &canvas, cached, &replay, None,
+        );
     }
     surface.flush();
     surface.data().unwrap().to_vec()
@@ -137,14 +140,16 @@ fn assert_pixels_match(actual: &[u8], expected: &[u8], label: &str) {
 }
 
 fn fresh_baked(shapes: &[DrawnShape], request: CanvasLayerInputs) -> Vec<u8> {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut layer = CanvasLayerCache::new();
     let mut caches = crate::draw::RenderCaches::default();
-    assert!(layer.ensure(&mut caches, shapes, request));
-    paint(shapes, &layer, &mut caches, request, true)
+    assert!(layer.ensure(&measurer, &mut caches, shapes, request));
+    paint(&measurer, shapes, &layer, &mut caches, request, true)
 }
 
 #[test]
 fn baked_and_direct_passes_match_fresh_owners_across_reuse_and_invalidation() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut layer = CanvasLayerCache::new();
     let mut caches = crate::draw::RenderCaches::default();
     let mut shapes = shapes();
@@ -192,9 +197,9 @@ fn baked_and_direct_passes_match_fresh_owners_across_reuse_and_invalidation() {
                 fill: true,
             });
         }
-        assert!(layer.ensure(&mut caches, &shapes, request));
-        let baked = paint(&shapes, &layer, &mut caches, request, true);
-        let direct = paint(&shapes, &layer, &mut caches, request, false);
+        assert!(layer.ensure(&measurer, &mut caches, &shapes, request));
+        let baked = paint(&measurer, &shapes, &layer, &mut caches, request, true);
+        let direct = paint(&measurer, &shapes, &layer, &mut caches, request, false);
         // Direct eraser edges retain partial alpha; a baked surface is later
         // composited over the background. Compare each established rendering
         // route to itself with fresh resources, not to the other route.
@@ -205,6 +210,7 @@ fn baked_and_direct_passes_match_fresh_owners_across_reuse_and_invalidation() {
         );
         let mut fresh = crate::draw::RenderCaches::default();
         let expected_direct = paint(
+            &crate::draw::TextMeasurer::default(),
             &shapes,
             &CanvasLayerCache::new(),
             &mut fresh,
@@ -221,12 +227,14 @@ fn baked_and_direct_passes_match_fresh_owners_across_reuse_and_invalidation() {
 
 #[test]
 fn rejected_bake_clears_previous_layer_and_direct_fallback_still_paints() {
+    let measurer = crate::draw::TextMeasurer::default();
     let mut layer = CanvasLayerCache::new();
     let mut caches = crate::draw::RenderCaches::default();
     let shapes = shapes();
     let request = inputs();
-    assert!(layer.ensure(&mut caches, &shapes, request));
+    assert!(layer.ensure(&measurer, &mut caches, &shapes, request));
     assert!(!layer.ensure(
+        &measurer,
         &mut caches,
         &shapes,
         CanvasLayerInputs {
@@ -237,14 +245,15 @@ fn rejected_bake_clears_previous_layer_and_direct_fallback_still_paints() {
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1).unwrap();
     assert!(!layer.blit(&cairo::Context::new(&surface).unwrap()));
     assert_pixels_match(
-        &paint(&shapes, &layer, &mut caches, request, true),
-        &paint(&shapes, &layer, &mut caches, request, false),
+        &paint(&measurer, &shapes, &layer, &mut caches, request, true),
+        &paint(&measurer, &shapes, &layer, &mut caches, request, false),
         "invalid layer falls back to direct rendering",
     );
 }
 
 #[test]
 fn each_scene_key_rebakes_without_shape_identity_changes() {
+    let measurer = crate::draw::TextMeasurer::default();
     let initial = inputs();
     for (name, changed, replace_image) in [
         (
@@ -296,8 +305,8 @@ fn each_scene_key_rebakes_without_shape_identity_changes() {
         let mut layer = CanvasLayerCache::new();
         let mut caches = crate::draw::RenderCaches::default();
         let mut scene = shapes();
-        assert!(layer.ensure(&mut caches, &scene, initial));
-        let before = paint(&scene, &layer, &mut caches, initial, true);
+        assert!(layer.ensure(&measurer, &mut caches, &scene, initial));
+        let before = paint(&measurer, &scene, &layer, &mut caches, initial, true);
         if replace_image {
             // Shape count and IDs remain unchanged; only the scene key can
             // invalidate the already baked pixels for this different scene.
@@ -316,8 +325,8 @@ fn each_scene_key_rebakes_without_shape_identity_changes() {
                 fill: true,
             });
         }
-        assert!(layer.ensure(&mut caches, &scene, changed));
-        let actual = paint(&scene, &layer, &mut caches, changed, true);
+        assert!(layer.ensure(&measurer, &mut caches, &scene, changed));
+        let actual = paint(&measurer, &scene, &layer, &mut caches, changed, true);
         let expected = fresh_baked(&scene, changed);
         assert!(before != expected, "fixture must change pixels for {name}");
         assert_pixels_match(

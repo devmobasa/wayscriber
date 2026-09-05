@@ -135,22 +135,6 @@ pub(crate) struct CaretGeometry {
     pub height: f64,
 }
 
-/// Compute the caret geometry for `byte_index` into `text` using Pango's strong
-/// cursor position, so it lands correctly on wrapped and multiline text and at
-/// the string end. Works for empty text (caret at the origin). `byte_index` is
-/// snapped down to a char boundary. Returns `None` only when no measurement
-/// context is available.
-pub(crate) fn caret_geometry_text(
-    text: &str,
-    font_desc_str: &str,
-    wrap_width: Option<i32>,
-    byte_index: usize,
-) -> Option<CaretGeometry> {
-    with_legacy_measurer(|measurer| {
-        measurer.caret_geometry_text(text, font_desc_str, wrap_width, byte_index)
-    })
-}
-
 /// Full logical bounds of a text run — the advance width and line-box height,
 /// including the leading/trailing whitespace and empty trailing advance that
 /// the ink box omits — in pixels, relative to the stored `(x, y)` baseline

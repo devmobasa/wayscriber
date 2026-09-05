@@ -41,7 +41,7 @@ pub use spotlight::{
 };
 pub(crate) use strokes::render_eraser_stroke;
 pub use strokes::{render_freehand_borrowed, render_marker_stroke_borrowed};
-pub(crate) use text::render_sticky_note_preview;
+pub(crate) use text::render_sticky_note_preview_with_measurer;
 pub use text::{
     caret_line_width, caret_outline_width, render_sticky_note, render_sticky_note_with_measurer,
     render_text, render_text_over, render_text_over_with_halo,

@@ -32,7 +32,7 @@ pub(crate) use text::{
 };
 pub(crate) use text_cache::{
     CaretGeometry, LogicalBounds, TextMeasurement, VisualCaretDirection, VisualLineDirection,
-    VisualLineEdge, caret_geometry_text, configured_layout,
+    VisualLineEdge, configured_layout,
 };
 
 #[cfg(test)]

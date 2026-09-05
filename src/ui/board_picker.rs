@@ -25,9 +25,11 @@ pub fn render_board_picker(
     screen_height: u32,
 ) {
     let engine = UiTextEngine::default();
+    let measurer = crate::draw::TextMeasurer::default();
     let mut caches = crate::draw::RenderCaches::default();
     render_board_picker_with_halo(
         &engine,
+        &measurer,
         &mut crate::draw::RenderCtx::new(ctx, &mut caches),
         input_state,
         screen_width,
@@ -38,6 +40,7 @@ pub fn render_board_picker(
 
 pub(crate) fn render_board_picker_with_halo(
     engine: &UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
     render: &mut crate::draw::RenderCtx<'_, '_>,
     input_state: &InputState,
     screen_width: u32,
@@ -162,6 +165,7 @@ pub(crate) fn render_board_picker_with_halo(
 
     render_page_panel(
         engine,
+        measurer,
         render,
         input_state,
         layout,

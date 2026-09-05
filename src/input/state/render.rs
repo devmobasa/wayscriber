@@ -99,6 +99,7 @@ impl InputState {
 
     pub(crate) fn render_provisional_tool_stroke(
         &self,
+        measurer: &crate::draw::TextMeasurer,
         render: &mut RenderCtx<'_, '_>,
         stroke: ProvisionalToolStroke<'_>,
         text_halo_enabled: bool,
@@ -140,18 +141,21 @@ impl InputState {
                 true
             }
             ProvisionalToolStroke::Shape(shape) => {
-                render.render_shape_with_halo(&shape, text_halo_enabled);
+                render.render_shape_with_halo_with_measurer(measurer, &shape, text_halo_enabled);
                 true
             }
             ProvisionalToolStroke::BlurReplayPreview(params) => {
-                render.render_shape(&Shape::BlurRect {
-                    x: params.x,
-                    y: params.y,
-                    w: params.w,
-                    h: params.h,
-                    strength: params.strength,
-                    style: params.style,
-                });
+                render.render_shape_with_measurer(
+                    measurer,
+                    &Shape::BlurRect {
+                        x: params.x,
+                        y: params.y,
+                        w: params.w,
+                        h: params.h,
+                        strength: params.strength,
+                        style: params.style,
+                    },
+                );
                 true
             }
             ProvisionalToolStroke::None => false,
@@ -160,6 +164,7 @@ impl InputState {
 
     pub(crate) fn render_provisional_tool_stroke_for_damage(
         &self,
+        measurer: &crate::draw::TextMeasurer,
         render: &mut RenderCtx<'_, '_>,
         stroke: ProvisionalToolStroke<'_>,
         damage_regions: &[Rect],
@@ -250,7 +255,9 @@ impl InputState {
                 }
                 true
             }
-            other => self.render_provisional_tool_stroke(render, other, text_halo_enabled),
+            other => {
+                self.render_provisional_tool_stroke(measurer, render, other, text_halo_enabled)
+            }
         }
     }
 
@@ -273,7 +280,9 @@ impl InputState {
         current_y: i32,
     ) -> bool {
         let mut caches = RenderCaches::default();
+        let measurer = crate::draw::TextMeasurer::default();
         self.render_provisional_shape_with_halo(
+            &measurer,
             &mut RenderCtx::new(ctx, &mut caches),
             current_x,
             current_y,
@@ -283,6 +292,7 @@ impl InputState {
 
     pub(crate) fn render_provisional_shape_with_halo(
         &self,
+        measurer: &crate::draw::TextMeasurer,
         render: &mut RenderCtx<'_, '_>,
         current_x: i32,
         current_y: i32,
@@ -292,7 +302,7 @@ impl InputState {
         match &self.state {
             DrawingState::Drawing { .. } => {
                 let stroke = self.provisional_tool_stroke(current_x, current_y);
-                self.render_provisional_tool_stroke(render, stroke, text_halo_enabled)
+                self.render_provisional_tool_stroke(measurer, render, stroke, text_halo_enabled)
             }
             DrawingState::Selecting {
                 start_x,
@@ -344,6 +354,7 @@ impl InputState {
 
     pub(crate) fn render_provisional_shape_for_damage(
         &self,
+        measurer: &crate::draw::TextMeasurer,
         render: &mut RenderCtx<'_, '_>,
         current_x: i32,
         current_y: i32,
@@ -353,6 +364,7 @@ impl InputState {
         if matches!(self.state, DrawingState::Drawing { .. }) {
             let stroke = self.provisional_tool_stroke(current_x, current_y);
             return self.render_provisional_tool_stroke_for_damage(
+                measurer,
                 render,
                 stroke,
                 damage_regions,
@@ -360,7 +372,13 @@ impl InputState {
             );
         }
 
-        self.render_provisional_shape_with_halo(render, current_x, current_y, text_halo_enabled)
+        self.render_provisional_shape_with_halo(
+            measurer,
+            render,
+            current_x,
+            current_y,
+            text_halo_enabled,
+        )
     }
 }
 
@@ -447,6 +465,7 @@ mod tests {
 
     #[test]
     fn persistent_preview_dispatch_matches_shape_rendering() {
+        let measurer = crate::draw::TextMeasurer::default();
         let input = crate::input::state::test_support::TestInputStateBuilder::default().build();
         let mut png = std::io::Cursor::new(Vec::new());
         let source = cairo::ImageSurface::create(cairo::Format::ARgb32, 2, 2).unwrap();
@@ -477,16 +496,46 @@ mod tests {
                 background_enabled: false,
                 wrap_width: None,
             },
+            Shape::Arrow {
+                x1: 110,
+                y1: 80,
+                x2: 210,
+                y2: 80,
+                color: crate::draw::RED,
+                thick: 3.0,
+                arrow_length: 12.0,
+                arrow_angle: 30.0,
+                head_at_end: true,
+                style: crate::draw::ArrowStyle::Standard,
+                bend: 0.0,
+                label: Some(crate::draw::ArrowLabel {
+                    value: 72,
+                    size: 18.0,
+                    font_descriptor: Default::default(),
+                }),
+            },
+            Shape::StepMarker {
+                x: 55,
+                y: 105,
+                color: crate::draw::RED,
+                label: crate::draw::StepMarkerLabel {
+                    value: 108,
+                    size: 18.0,
+                    font_descriptor: Default::default(),
+                },
+            },
         ];
         let mut caches = RenderCaches::default();
         for halo in [true, false, true] {
-            let mut actual = cairo::ImageSurface::create(cairo::Format::ARgb32, 96, 64).unwrap();
-            let mut expected = cairo::ImageSurface::create(cairo::Format::ARgb32, 96, 64).unwrap();
+            let mut actual = cairo::ImageSurface::create(cairo::Format::ARgb32, 240, 160).unwrap();
+            let mut expected =
+                cairo::ImageSurface::create(cairo::Format::ARgb32, 240, 160).unwrap();
             {
                 let cairo = cairo::Context::new(&actual).unwrap();
                 let mut render = RenderCtx::new(&cairo, &mut caches);
                 for shape in &shapes {
                     assert!(input.render_provisional_tool_stroke_for_damage(
+                        &measurer,
                         &mut render,
                         ProvisionalToolStroke::Shape(shape.clone()),
                         &[],
@@ -497,7 +546,7 @@ mod tests {
                 let mut fresh = RenderCaches::default();
                 let mut render = RenderCtx::new(&cairo, &mut fresh);
                 for shape in &shapes {
-                    render.render_shape_with_halo(shape, halo);
+                    render.render_shape_with_halo_with_measurer(&measurer, shape, halo);
                 }
             }
             actual.flush();

@@ -45,7 +45,8 @@ impl WaylandState {
             );
             match self.input_state.text_editing.mode() {
                 crate::input::TextInputMode::Plain => {
-                    crate::draw::render_text_with_halo(
+                    crate::draw::render_text_with_halo_with_measurer(
+                        self.render.text_measurer(),
                         ctx,
                         *x,
                         *y,
@@ -59,7 +60,8 @@ impl WaylandState {
                     );
                 }
                 crate::input::TextInputMode::StickyNote => {
-                    crate::draw::render_sticky_note_preview(
+                    crate::draw::render_sticky_note_preview_with_measurer(
+                        self.render.text_measurer(),
                         ctx,
                         *x,
                         *y,
@@ -109,7 +111,7 @@ impl WaylandState {
         };
         let size = self.input_state.style.current_font_size;
         let font_desc = self.input_state.style.font_descriptor.to_pango_string(size);
-        let Some(geom) = crate::draw::shape::caret_geometry_text(
+        let Some(geom) = self.render.text_measurer().caret_geometry_text(
             preview_text,
             &font_desc,
             self.input_state.style.text_wrap_width,
@@ -219,7 +221,8 @@ impl WaylandState {
                 background_enabled,
                 wrap_width,
             } if !text.is_empty() => {
-                crate::draw::render_text_with_halo(
+                crate::draw::render_text_with_halo_with_measurer(
+                    self.render.text_measurer(),
                     ctx,
                     *x,
                     *y,
@@ -241,7 +244,8 @@ impl WaylandState {
                 font_descriptor,
                 wrap_width,
             } if !text.is_empty() => {
-                crate::draw::render_sticky_note(
+                crate::draw::render_sticky_note_with_measurer(
+                    self.render.text_measurer(),
                     ctx,
                     *x,
                     *y,
@@ -260,7 +264,7 @@ impl WaylandState {
         let _ = ctx.restore();
 
         // Render dashed border around ghost text bounds
-        if let Some(bounds) = original_shape.bounding_box() {
+        if let Some(bounds) = original_shape.bounding_box_with(self.render.text_measurer()) {
             self.render_ghost_border(ctx, bounds);
         }
     }

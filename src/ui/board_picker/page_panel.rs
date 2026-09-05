@@ -26,8 +26,10 @@ use thumbnail::{
     render_page_thumbnail,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render_page_panel(
     engine: &UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
     render: &mut crate::draw::RenderCtx<'_, '_>,
     input_state: &InputState,
     layout: &BoardPickerLayout,
@@ -141,6 +143,7 @@ pub(super) fn render_page_panel(
         });
         render_page_thumbnail(
             engine,
+            measurer,
             PageThumbnailArgs {
                 render,
                 frame: page,
@@ -179,6 +182,7 @@ pub(super) fn render_page_panel(
         let page = &pages[hover_index];
         render_page_preview(
             engine,
+            measurer,
             PagePreviewArgs {
                 render,
                 frame: page,

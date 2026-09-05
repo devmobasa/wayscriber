@@ -24,7 +24,11 @@ const THUMBNAIL_SPOTLIGHT_FEATHER: f64 = 0.35;
 const TRANSPARENT_TINT: Rgba = (1.0, 1.0, 1.0, 0.06);
 const TRANSPARENT_CROSS: Rgba = (1.0, 1.0, 1.0, 0.08);
 
-pub(super) fn render_page_content(engine: &UiTextEngine, args: PageContentArgs<'_, '_, '_>) {
+pub(super) fn render_page_content(
+    engine: &UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
+    args: PageContentArgs<'_, '_, '_>,
+) {
     let PageContentArgs {
         render,
         frame,
@@ -75,6 +79,7 @@ pub(super) fn render_page_content(engine: &UiTextEngine, args: PageContentArgs<'
     ctx.scale(scale, scale);
     render_frame_shapes(
         engine,
+        measurer,
         render,
         frame,
         background,
@@ -86,8 +91,10 @@ pub(super) fn render_page_content(engine: &UiTextEngine, args: PageContentArgs<'
     let _ = ctx.restore();
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_frame_shapes(
     engine: &UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
     render: &mut crate::draw::RenderCtx<'_, '_>,
     frame: &crate::draw::Frame,
     background: &BoardBackground,
@@ -116,7 +123,11 @@ fn render_frame_shapes(
                 render_eraser_stroke(ctx, points, brush, &eraser_ctx);
             }
             _ => {
-                render.render_shape_with_halo(&drawn.shape, text_halo_enabled);
+                render.render_shape_with_halo_with_measurer(
+                    measurer,
+                    &drawn.shape,
+                    text_halo_enabled,
+                );
             }
         }
     }
@@ -291,6 +302,7 @@ mod tests {
             });
             render_page_content(
                 &UiTextEngine::default(),
+                &crate::draw::TextMeasurer::default(),
                 PageContentArgs {
                     render: &mut crate::draw::RenderCtx::new(
                         &ctx,
@@ -331,6 +343,7 @@ mod tests {
             });
             render_page_content(
                 &UiTextEngine::default(),
+                &crate::draw::TextMeasurer::default(),
                 PageContentArgs {
                     render: &mut crate::draw::RenderCtx::new(
                         &ctx,
@@ -421,40 +434,58 @@ mod tests {
             background_enabled: false,
             wrap_width: None,
         });
-        let paint = |caches: &mut RenderCaches| {
-            let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 124, 64).unwrap();
-            {
-                let ctx = cairo::Context::new(&surface).unwrap();
-                render_page_content(
-                    &UiTextEngine::default(),
-                    PageContentArgs {
-                        render: &mut RenderCtx::new(&ctx, caches),
-                        frame: &frame,
-                        background: &BoardBackground::Solid(crate::draw::WHITE),
-                        x: 0.0,
-                        y: 0.0,
-                        width: 124.0,
-                        height: 64.0,
-                        screen_width: 120,
-                        screen_height: 60,
-                        text_halo_enabled: false,
-                    },
-                );
-            }
-            surface.flush();
-            surface.data().unwrap().to_vec()
-        };
+        let measurer = crate::draw::TextMeasurer::default();
+        let engine = UiTextEngine::default();
+        let paint =
+            |measurer: &crate::draw::TextMeasurer, caches: &mut RenderCaches, density: i32| {
+                let mut surface =
+                    cairo::ImageSurface::create(cairo::Format::ARgb32, 124 * density, 64 * density)
+                        .unwrap();
+                surface.set_device_scale(density as f64, density as f64);
+                {
+                    let ctx = cairo::Context::new(&surface).unwrap();
+                    render_page_content(
+                        &engine,
+                        measurer,
+                        PageContentArgs {
+                            render: &mut RenderCtx::new(&ctx, caches),
+                            frame: &frame,
+                            background: &BoardBackground::Solid(crate::draw::WHITE),
+                            x: 0.0,
+                            y: 0.0,
+                            width: 124.0,
+                            height: 64.0,
+                            screen_width: 120,
+                            screen_height: 60,
+                            text_halo_enabled: false,
+                        },
+                    );
+                }
+                surface.flush();
+                surface.data().unwrap().to_vec()
+            };
         let baseline = Arc::strong_count(&bytes);
         let mut caches = RenderCaches::default();
-        let first = paint(&mut caches);
+        let first = paint(&measurer, &mut caches, 1);
         let retained = Arc::strong_count(&bytes);
         assert!(
             retained > baseline,
             "thumbnail must retain its decoded image in the supplied owner"
         );
-        assert_eq!(paint(&mut caches), first);
+        assert_eq!(paint(&measurer, &mut caches, 1), first);
         assert_eq!(Arc::strong_count(&bytes), retained);
-        assert_eq!(paint(&mut RenderCaches::default()), first);
+        for density in [1, 2, 1] {
+            let actual = paint(&measurer, &mut caches, density);
+            let fresh = paint(
+                &crate::draw::TextMeasurer::default(),
+                &mut RenderCaches::default(),
+                density,
+            );
+            assert!(
+                actual == fresh,
+                "thumbnail text/image parity at density {density}"
+            );
+        }
         let offset = (20 * 124 + 20) * 4;
         assert_eq!(
             u32::from_ne_bytes(first[offset..offset + 4].try_into().unwrap()),

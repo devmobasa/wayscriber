@@ -24,6 +24,7 @@ use super::types::{PREVIEW_SCALE, PageContentArgs, PagePreviewArgs, PageThumbnai
 
 pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(
     engine: &UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
     args: PageThumbnailArgs<'_, '_, '_>,
 ) {
     let PageThumbnailArgs {
@@ -63,6 +64,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(
 
     render_page_content(
         engine,
+        measurer,
         PageContentArgs {
             render,
             frame,
@@ -304,6 +306,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
 
 pub(in crate::ui::board_picker::page_panel) fn render_page_preview(
     engine: &UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
     args: PagePreviewArgs<'_, '_, '_>,
 ) {
     let PagePreviewArgs {
@@ -355,6 +358,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(
 
     render_page_content(
         engine,
+        measurer,
         PageContentArgs {
             render,
             frame,

@@ -236,10 +236,11 @@ impl WaylandState {
         if !capture_picker && self.input_state.is_board_picker_open() {
             self.input_state
                 .update_board_picker_layout(ctx, width, height);
-            let (caches, engine) = self.render.draw_ui_text_parts_mut();
+            let (caches, engine, measurer) = self.render.draw_ui_text_parts_mut();
             let mut render = crate::draw::RenderCtx::new(ctx, caches);
             crate::ui::render_board_picker_with_halo(
                 engine,
+                measurer,
                 &mut render,
                 &self.input_state,
                 width,

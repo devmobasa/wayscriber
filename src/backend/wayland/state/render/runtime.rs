@@ -173,10 +173,10 @@ impl RenderRuntime {
         &mut self.canvas_layer_cache
     }
 
-    pub(in crate::backend::wayland::state) fn draw_caches_mut(
+    pub(in crate::backend::wayland::state) fn draw_text_parts_mut(
         &mut self,
-    ) -> &mut crate::draw::RenderCaches {
-        &mut self.draw_caches
+    ) -> (&mut crate::draw::RenderCaches, &crate::draw::TextMeasurer) {
+        (&mut self.draw_caches, &self.text_measurer)
     }
 
     pub(in crate::backend::wayland::state) fn draw_ui_text_parts_mut(
@@ -184,14 +184,23 @@ impl RenderRuntime {
     ) -> (
         &mut crate::draw::RenderCaches,
         &crate::ui_text::UiTextEngine,
+        &crate::draw::TextMeasurer,
     ) {
-        (&mut self.draw_caches, &self.ui_text)
+        (&mut self.draw_caches, &self.ui_text, &self.text_measurer)
     }
 
     pub(in crate::backend::wayland::state) fn canvas_draw_parts_mut(
         &mut self,
-    ) -> (&mut CanvasLayerCache, &mut crate::draw::RenderCaches) {
-        (&mut self.canvas_layer_cache, &mut self.draw_caches)
+    ) -> (
+        &mut CanvasLayerCache,
+        &mut crate::draw::RenderCaches,
+        &crate::draw::TextMeasurer,
+    ) {
+        (
+            &mut self.canvas_layer_cache,
+            &mut self.draw_caches,
+            &self.text_measurer,
+        )
     }
 
     pub(in crate::backend::wayland::state) fn ui_damage_mut(&mut self) -> &mut UiDamageHistory {

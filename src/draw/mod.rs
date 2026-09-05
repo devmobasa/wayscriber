@@ -31,7 +31,7 @@ pub(crate) use font::{
 pub use frame::{DrawnShape, Frame, ShapeId};
 #[allow(unused_imports)]
 pub(crate) use render::render_eraser_stroke;
-pub(crate) use render::render_sticky_note_preview;
+pub(crate) use render::render_sticky_note_preview_with_measurer;
 pub(crate) use render::with_saved_state;
 #[allow(unused_imports)]
 pub use render::{

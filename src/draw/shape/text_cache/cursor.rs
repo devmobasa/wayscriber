@@ -167,6 +167,9 @@ impl TextMeasurer {
             hit_position_to_byte(text, hit.index(), hit.trailing())
         })
     }
+    /// Compute the strong caret position on wrapped and multiline text, including
+    /// empty text and the string end. Off-boundary byte indices snap down to a
+    /// character boundary; missing measurement resources return `None`.
     pub(crate) fn caret_geometry_text(
         &self,
         text: &str,
@@ -182,7 +185,7 @@ impl TextMeasurer {
     /// Resolve caret geometry and logical bounds together. The damage tracker needs
     /// both for the same text whenever a selection or composition is showing, so
     /// sharing one layout saves building a second one for those states. Text bounds
-    /// still go through `measure_text_cached`, which lays out again on a cache miss;
+    /// still go through `TextMeasurer::measure`, which lays out again on a cache miss;
     /// this only removes the duplicate pass, it does not make damage layout-free.
     pub(crate) fn text_preview_geometry(
         &self,

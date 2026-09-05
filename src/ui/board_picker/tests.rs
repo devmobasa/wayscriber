@@ -2,6 +2,7 @@ use super::*;
 
 fn pixels(
     engine: &UiTextEngine,
+    measurer: &crate::draw::TextMeasurer,
     caches: &mut crate::draw::RenderCaches,
     state: &InputState,
     size: (i32, i32),
@@ -15,6 +16,7 @@ fn pixels(
         ctx.scale(f64::from(density), f64::from(density));
         render_board_picker_with_halo(
             engine,
+            measurer,
             &mut crate::draw::RenderCtx::new(&ctx, caches),
             state,
             size.0 as u32,
@@ -28,6 +30,7 @@ fn pixels(
 #[test]
 fn retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layouts() {
     let engine = UiTextEngine::default();
+    let measurer = crate::draw::TextMeasurer::default();
     let mut caches = crate::draw::RenderCaches::default();
     let mut state = crate::input::state::test_support::make_test_input_state();
     state.open_board_picker();
@@ -35,7 +38,14 @@ fn retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layou
         let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         state.update_board_picker_layout(&ctx, width as u32, height as u32);
-        let before = pixels(&engine, &mut caches, &state, (width, height), density);
+        let before = pixels(
+            &engine,
+            &measurer,
+            &mut caches,
+            &state,
+            (width, height),
+            density,
+        );
         let board_index = state
             .board_picker_layout()
             .unwrap()
@@ -45,9 +55,17 @@ fn retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layou
         for ch in "你好 Καλημέρα long page name".chars() {
             state.board_picker_page_edit_append(ch);
         }
-        let actual = pixels(&engine, &mut caches, &state, (width, height), density);
+        let actual = pixels(
+            &engine,
+            &measurer,
+            &mut caches,
+            &state,
+            (width, height),
+            density,
+        );
         let expected = pixels(
             &UiTextEngine::default(),
+            &crate::draw::TextMeasurer::default(),
             &mut crate::draw::RenderCaches::default(),
             &state,
             (width, height),
@@ -60,6 +78,15 @@ fn retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layou
             "rename overlay must paint the edited label"
         );
         state.board_picker_cancel_page_edit();
-        assert!(pixels(&engine, &mut caches, &state, (width, height), density) == before);
+        assert!(
+            pixels(
+                &engine,
+                &measurer,
+                &mut caches,
+                &state,
+                (width, height),
+                density
+            ) == before
+        );
     }
 }
