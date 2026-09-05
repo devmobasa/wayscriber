@@ -28,7 +28,10 @@ fn capture_hover_motion_requests_a_repaint_while_armed_and_in_review() {
 
     let mut review_region = interactive_region();
     let rect = ImagePixelRect::new(20, 20, 30, 25, (100, 80)).unwrap();
-    let display = review_region.enter_review(rect).unwrap();
+    let display = review_region
+        .enter_review_seed(rect)
+        .map(|seed| seed.display)
+        .unwrap();
     let mut review_backend = Some(review_region);
     let mut review_input = make_test_input_state();
     review_input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
@@ -59,7 +62,10 @@ fn capture_hover_motion_requests_a_repaint_while_armed_and_in_review() {
 fn review_nudge_and_move_clamp_without_resizing_and_owner_loss_keeps_review() {
     let mut region = interactive_region();
     let rect = ImagePixelRect::new(70, 60, 20, 15, (100, 80)).unwrap();
-    let display = region.enter_review(rect).unwrap();
+    let display = region
+        .enter_review_seed(rect)
+        .map(|seed| seed.display)
+        .unwrap();
     let mut backend = Some(region);
     let mut input = make_test_input_state();
     input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
@@ -106,7 +112,10 @@ fn review_nudge_and_move_clamp_without_resizing_and_owner_loss_keeps_review() {
 fn review_move_preserves_subpixel_motion_until_it_reaches_a_pixel() {
     let mut region = interactive_region();
     let rect = ImagePixelRect::new(20, 20, 30, 25, (100, 80)).unwrap();
-    region.enter_review(rect).unwrap();
+    region
+        .enter_review_seed(rect)
+        .map(|seed| seed.display)
+        .unwrap();
     assert!(region.begin_review_move((25.0, 25.0)));
 
     for x in [25.6, 26.2, 26.8, 27.4, 28.0] {
@@ -125,7 +134,10 @@ fn review_move_preserves_subpixel_motion_until_it_reaches_a_pixel() {
 fn second_device_press_cannot_replace_an_in_progress_review_move() {
     let mut region = interactive_region();
     let rect = ImagePixelRect::new(20, 20, 30, 25, (100, 80)).unwrap();
-    let display = region.enter_review(rect).unwrap();
+    let display = region
+        .enter_review_seed(rect)
+        .map(|seed| seed.display)
+        .unwrap();
     let mut backend = Some(region);
     let mut input = make_test_input_state();
     input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
@@ -175,9 +187,10 @@ fn capture_finalize_is_purpose_aware_and_one_axis_empty_rearms() {
         (10.8, 20.6),
     ));
     assert_eq!(
-        finalize_region_selection_event(
+        finalize_region_selection_with_review_edits(
             &mut backend,
             &mut input,
+            &mut None,
             RegionInputSource::Pointer,
             (18.2, 35.8),
         ),
@@ -197,9 +210,10 @@ fn capture_finalize_is_purpose_aware_and_one_axis_empty_rearms() {
         (10.8, 20.6),
     ));
     assert_eq!(
-        finalize_region_selection_event(
+        finalize_region_selection_with_review_edits(
             &mut backend,
             &mut input,
+            &mut None,
             RegionInputSource::Touch,
             (10.0, 40.0),
         ),
@@ -579,7 +593,10 @@ fn pressing_a_grip_resizes_while_pressing_the_interior_still_moves() {
     let bounds = (100, 80);
     let mut region = interactive_region();
     let rect = ImagePixelRect::new(20, 20, 40, 30, bounds).unwrap();
-    let display = region.enter_review(rect).unwrap();
+    let display = region
+        .enter_review_seed(rect)
+        .map(|seed| seed.display)
+        .unwrap();
     let mut backend = Some(region);
     let mut input = make_test_input_state();
     input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
@@ -612,9 +629,10 @@ fn pressing_a_grip_resizes_while_pressing_the_interior_still_moves() {
     );
 
     assert_eq!(
-        finalize_region_selection_event(
+        finalize_region_selection_with_review_edits(
             &mut backend,
             &mut input,
+            &mut None,
             RegionInputSource::Pointer,
             (75.0, 65.0),
         ),
@@ -661,7 +679,10 @@ fn a_held_grip_blocks_nudging_and_a_second_devices_press() {
     let bounds = (100, 80);
     let mut region = interactive_region();
     let rect = ImagePixelRect::new(20, 20, 40, 30, bounds).unwrap();
-    let display = region.enter_review(rect).unwrap();
+    let display = region
+        .enter_review_seed(rect)
+        .map(|seed| seed.display)
+        .unwrap();
     let mut backend = Some(region);
     let mut input = make_test_input_state();
     input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
@@ -711,7 +732,10 @@ fn selecting_the_whole_image_mid_resize_leaves_review_usable() {
     let bounds = (100, 80);
     let mut region = interactive_region();
     let rect = ImagePixelRect::new(20, 20, 40, 30, bounds).unwrap();
-    let display = region.enter_review(rect).unwrap();
+    let display = region
+        .enter_review_seed(rect)
+        .map(|seed| seed.display)
+        .unwrap();
     let mut backend = Some(region);
     let mut input = make_test_input_state();
     input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
@@ -731,7 +755,7 @@ fn selecting_the_whole_image_mid_resize_leaves_review_usable() {
     let whole = ImagePixelRect::whole(bounds).unwrap();
     let display = backend
         .as_mut()
-        .and_then(|region| region.enter_review(whole))
+        .and_then(|region| region.enter_review_seed(whole).map(|seed| seed.display))
         .unwrap();
     input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
 
@@ -744,9 +768,10 @@ fn selecting_the_whole_image_mid_resize_leaves_review_usable() {
     let replaced_backend = backend;
     let replaced_ui = input.region_state();
     assert_eq!(
-        finalize_region_selection_event(
+        finalize_region_selection_with_review_edits(
             &mut backend,
             &mut input,
+            &mut None,
             RegionInputSource::Pointer,
             (5.0, 5.0)
         ),
@@ -765,9 +790,10 @@ fn selecting_the_whole_image_mid_resize_leaves_review_usable() {
         Some(RegionInputSource::Touch)
     );
     assert_eq!(
-        finalize_region_selection_event(
+        finalize_region_selection_with_review_edits(
             &mut backend,
             &mut input,
+            &mut None,
             RegionInputSource::Pointer,
             (5.0, 5.0)
         ),
@@ -778,9 +804,10 @@ fn selecting_the_whole_image_mid_resize_leaves_review_usable() {
         Some(RegionInputSource::Touch)
     );
     assert_eq!(
-        finalize_region_selection_event(
+        finalize_region_selection_with_review_edits(
             &mut backend,
             &mut input,
+            &mut None,
             RegionInputSource::Touch,
             (50.0, 40.0)
         ),
@@ -816,7 +843,7 @@ fn a_grip_click_without_motion_leaves_the_rectangle_untouched_at_any_scale() {
             *purpose = RegionPurposeTag::CaptureInteractive;
         }
         let rect = ImagePixelRect::new(21, 17, 43, 31, bounds).unwrap();
-        let Some(display) = region.enter_review(rect) else {
+        let Some(display) = region.enter_review_seed(rect).map(|seed| seed.display) else {
             continue;
         };
         let mut backend = Some(region);
@@ -844,9 +871,10 @@ fn a_grip_click_without_motion_leaves_the_rectangle_untouched_at_any_scale() {
                 "scale {scale}: {grip:?} grabbed the interior instead of a grip"
             );
             assert_eq!(
-                finalize_region_selection_event(
+                finalize_region_selection_with_review_edits(
                     &mut backend,
                     &mut input,
+                    &mut None,
                     RegionInputSource::Pointer,
                     grip,
                 ),
@@ -867,7 +895,10 @@ fn a_grip_drag_tracks_the_pointer_from_where_it_was_grabbed() {
     let mut region = interactive_region();
     // Tall enough that the right edge keeps its midpoint grip.
     let rect = ImagePixelRect::new(20, 10, 40, 60, bounds).unwrap();
-    let display = region.enter_review(rect).unwrap();
+    let display = region
+        .enter_review_seed(rect)
+        .map(|seed| seed.display)
+        .unwrap();
     let mut backend = Some(region);
     let mut input = make_test_input_state();
     input.activate_region_review(RegionPurposeTag::CaptureInteractive, 1, display);
@@ -898,4 +929,54 @@ fn a_grip_drag_tracks_the_pointer_from_where_it_was_grabbed() {
         Some((20, 50)),
         "the grabbed edge keeps its offset from the pointer"
     );
+}
+
+#[test]
+fn rejected_review_rectangle_preserves_the_active_resize() {
+    let mut region = interactive_region();
+    let rect = ImagePixelRect::new(20, 20, 30, 25, (100, 80)).unwrap();
+    let seed = region.enter_review_seed(rect).unwrap();
+    assert_eq!(seed.rect, rect);
+    assert_eq!(seed.generation, 1);
+    assert!(region.begin_review_resize(SelectionHandle::BottomRight, (50.0, 45.0)));
+    let before = region;
+    let outside_source = ImagePixelRect::new(95, 70, 20, 20, (200, 200)).unwrap();
+
+    assert!(region.enter_review_seed(outside_source).is_none());
+    assert_eq!(region, before);
+    assert!(region.update_review_resize((55.0, 50.0)));
+    assert_eq!(region.selection_rect().unwrap().size(), (35, 30));
+}
+
+#[test]
+fn mismatched_generation_release_preserves_selection_and_owner() {
+    let mut backend = Some(interactive_region());
+    let mut input = make_test_input_state();
+    input.activate_region(RegionPurposeTag::CaptureInteractive, 1);
+    assert!(begin_region_selection_event(
+        &mut backend,
+        &mut input,
+        RegionInputSource::Pointer,
+        (20.0, 20.0),
+    ));
+    if let Some(ActiveScreenRegion::Ready { generation, .. }) = backend.as_mut() {
+        *generation = 2;
+    }
+    let before_backend = backend;
+    let before_ui = input.region_state();
+    let mut edits = None;
+
+    assert_eq!(
+        finalize_region_selection_with_review_edits(
+            &mut backend,
+            &mut input,
+            &mut edits,
+            RegionInputSource::Pointer,
+            (60.0, 50.0),
+        ),
+        RegionSelectionFinalize::NotOwned
+    );
+    assert_eq!(backend, before_backend);
+    assert_eq!(input.region_state(), before_ui);
+    assert!(edits.is_none());
 }

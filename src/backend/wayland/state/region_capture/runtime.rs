@@ -1,6 +1,5 @@
 use crate::backend::wayland::{RuntimeOperationController, RuntimeOperationIdSource};
 
-use super::cut_review::review_edits_for_active_region;
 use super::*;
 
 pub(in crate::backend::wayland) struct RegionCaptureRuntime {
@@ -68,23 +67,27 @@ impl RegionCaptureRuntime {
         generation
     }
 
-    pub(in crate::backend::wayland::state) fn set_pending(
+    pub(in crate::backend::wayland::state) fn set_pending_frozen(
         &mut self,
         purpose: RegionPurposeTag,
         generation: u64,
-        source: ScreenCaptureSource,
-        acquisition: Option<ScreenAcquisitionId>,
+        acquisition: ScreenAcquisitionId,
     ) {
-        self.active = Some(match source {
-            ScreenCaptureSource::Frozen => ActiveScreenRegion::PendingFrozen {
-                purpose,
-                generation,
-                acquisition: acquisition.expect("frozen region wait has an acquisition id"),
-            },
-            ScreenCaptureSource::Zoom => ActiveScreenRegion::PendingZoom {
-                purpose,
-                generation,
-            },
+        self.active = Some(ActiveScreenRegion::PendingFrozen {
+            purpose,
+            generation,
+            acquisition,
+        });
+    }
+
+    pub(in crate::backend::wayland::state) fn set_pending_zoom(
+        &mut self,
+        purpose: RegionPurposeTag,
+        generation: u64,
+    ) {
+        self.active = Some(ActiveScreenRegion::PendingZoom {
+            purpose,
+            generation,
         });
     }
 
@@ -142,10 +145,6 @@ impl RegionCaptureRuntime {
         &mut Option<RegionReviewEdits>,
     ) {
         (&mut self.active, &mut self.review_edits)
-    }
-
-    pub(in crate::backend::wayland) fn set_review_edits_for(&mut self, rect: ImagePixelRect) {
-        self.review_edits = review_edits_for_active_region(self.active, rect);
     }
 
     pub(in crate::backend::wayland::state) fn window_snap(&self) -> Option<&WindowSnapSession> {
@@ -288,17 +287,30 @@ impl WaylandState {
         true
     }
 
-    pub(in crate::backend::wayland::state) fn set_pending_screen_region(
+    pub(in crate::backend::wayland::state) fn set_pending_frozen_screen_region(
         &mut self,
         purpose: RegionPurposeTag,
         generation: u64,
-        source: ScreenCaptureSource,
-        acquisition: Option<ScreenAcquisitionId>,
+        acquisition: ScreenAcquisitionId,
     ) {
         self.region_capture
-            .set_pending(purpose, generation, source, acquisition);
+            .set_pending_frozen(purpose, generation, acquisition);
+        self.input_state.set_region_pending_capture(
+            purpose,
+            generation,
+            ScreenCaptureSource::Frozen,
+        );
+        self.debug_assert_screen_region_invariant();
+    }
+
+    pub(in crate::backend::wayland::state) fn set_pending_zoom_screen_region(
+        &mut self,
+        purpose: RegionPurposeTag,
+        generation: u64,
+    ) {
+        self.region_capture.set_pending_zoom(purpose, generation);
         self.input_state
-            .set_region_pending_capture(purpose, generation, source);
+            .set_region_pending_capture(purpose, generation, ScreenCaptureSource::Zoom);
         self.debug_assert_screen_region_invariant();
     }
 
@@ -462,14 +474,15 @@ impl WaylandState {
         let Some(region) = self.region_capture.active_mut() else {
             return false;
         };
-        let purpose = region.purpose();
-        let generation = region.generation();
-        let Some(display) = region.enter_review(rect) else {
+        let Some(seed) = region.enter_review_seed(rect) else {
             return false;
         };
-        self.input_state
-            .activate_region_review(purpose, generation, display);
-        self.create_region_review_edits(rect);
+        self.input_state.activate_region_review(
+            RegionPurposeTag::CaptureInteractive,
+            seed.generation,
+            seed.display,
+        );
+        *self.region_capture.review_edits_slot_mut() = Some(seed.into_edits());
         self.debug_assert_screen_region_invariant();
         true
     }
@@ -701,9 +714,14 @@ mod owner_tests {
             false,
             false,
         );
-        runtime.set_review_edits_for(
-            ImagePixelRect::new(10, 10, 20, 20, source.image_size).expect("review rectangle"),
-        );
+        let seed = runtime
+            .active_mut()
+            .unwrap()
+            .enter_review_seed(
+                ImagePixelRect::new(10, 10, 20, 20, source.image_size).expect("review rectangle"),
+            )
+            .unwrap();
+        runtime.review_edits = Some(seed.into_edits());
         runtime.set_window_snap(WindowSnapSession::queued(
             WindowSnapCorrelation::new(generation, source),
             WindowQueryContext {
@@ -727,9 +745,12 @@ mod owner_tests {
         let mut runtime = runtime();
         assert!(runtime.active().is_none());
 
-        runtime.set_review_edits_for(
-            ImagePixelRect::new(0, 0, 20, 20, (100, 80)).expect("review rectangle"),
-        );
+        let seed = runtime.active_mut().and_then(|region| {
+            region.enter_review_seed(
+                ImagePixelRect::new(0, 0, 20, 20, (100, 80)).expect("review rectangle"),
+            )
+        });
+        assert!(seed.is_none());
 
         assert!(runtime.review_edits().is_none());
     }

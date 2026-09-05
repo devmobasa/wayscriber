@@ -186,65 +186,77 @@ pub(super) fn region_owner_lost_event(
     RegionOwnerLoss::Rearmed
 }
 
-pub(in crate::backend::wayland::state) fn finalize_region_selection_event(
+enum SelectionFinalization {
+    Complete(RegionSelectionFinalize),
+    Review(super::review_state::InteractiveReviewSeed),
+}
+
+fn finalize_region_selection(
     backend: &mut Option<ActiveScreenRegion>,
     input_state: &mut crate::input::InputState,
     owner: RegionInputSource,
     logical: (f64, f64),
-) -> RegionSelectionFinalize {
+) -> SelectionFinalization {
     if !input_state.region_selection_is_owned_by(owner) {
-        return RegionSelectionFinalize::NotOwned;
+        return SelectionFinalization::Complete(RegionSelectionFinalize::NotOwned);
+    }
+    if !backend.as_ref().is_some_and(|region| {
+        input_state.region_state().purpose() == Some(region.purpose())
+            && input_state.region_state().generation() == Some(region.generation())
+    }) {
+        return SelectionFinalization::Complete(RegionSelectionFinalize::NotOwned);
     }
     if input_state.region_state().purpose() == Some(RegionPurposeTag::Measure) {
         update_region_selection_event(backend, input_state, owner, logical);
-        return if backend
-            .as_ref()
-            .and_then(|region| region.measure_selection())
-            .is_some()
-            && input_state.complete_measurement(owner)
-        {
-            RegionSelectionFinalize::Measured
-        } else {
-            RegionSelectionFinalize::NotOwned
-        };
+        return SelectionFinalization::Complete(
+            if backend
+                .as_ref()
+                .and_then(|region| region.measure_selection())
+                .is_some()
+                && input_state.complete_measurement(owner)
+            {
+                RegionSelectionFinalize::Measured
+            } else {
+                RegionSelectionFinalize::NotOwned
+            },
+        );
     }
     if input_state.region_state().is_review() {
         update_region_selection_event(backend, input_state, owner, logical);
         let finished_backend = backend.as_mut().is_some_and(finish_review_drag);
         let finished_ui = input_state.finish_region_review_move(owner);
         debug_assert_eq!(finished_backend, finished_ui);
-        return if finished_backend {
+        return SelectionFinalization::Complete(if finished_backend {
             RegionSelectionFinalize::Reviewed
         } else {
             RegionSelectionFinalize::NotOwned
-        };
+        });
     }
-    update_region_selection_event(backend, input_state, owner, logical);
-    let Some(rect) = backend
-        .as_ref()
-        .copied()
-        .and_then(ActiveScreenRegion::selection_rect)
-    else {
-        rearm_region_selection_event(backend, input_state);
-        return RegionSelectionFinalize::Rearmed;
+    let Some(region @ ActiveScreenRegion::Ready { .. }) = backend.as_mut() else {
+        return SelectionFinalization::Complete(RegionSelectionFinalize::NotOwned);
     };
-    let purpose = backend
-        .as_ref()
-        .expect("a selected region still has backend state")
-        .purpose();
-    if purpose == RegionPurposeTag::CaptureInteractive {
-        let generation = backend
-            .as_ref()
-            .expect("a reviewed region still has backend state")
-            .generation();
-        let display = backend
-            .as_mut()
-            .and_then(|region| region.enter_review(rect))
-            .expect("an interactive rectangle enters review");
-        input_state.activate_region_review(purpose, generation, display);
-        return RegionSelectionFinalize::Reviewed;
+    if region.purpose().is_capture() && input_state.region_is_active() {
+        input_state.dirty_tracker.mark_full();
+        input_state.needs_redraw = true;
     }
-    RegionSelectionFinalize::Selected { purpose, rect }
+    if region.update_endpoint(logical)
+        && let Some(preview) = region.display_selection()
+    {
+        input_state.update_region_selection(owner, preview.end);
+    }
+    let Some(rect) = region.selection_rect() else {
+        rearm_region_selection_event(backend, input_state);
+        return SelectionFinalization::Complete(RegionSelectionFinalize::Rearmed);
+    };
+    let purpose = region.purpose();
+    if purpose == RegionPurposeTag::CaptureInteractive {
+        let Some(seed) = region.enter_review_seed(rect) else {
+            return SelectionFinalization::Complete(RegionSelectionFinalize::NotOwned);
+        };
+        input_state.activate_region_review(purpose, seed.generation, seed.display);
+        return SelectionFinalization::Review(seed);
+    }
+    SelectionFinalization::Complete(RegionSelectionFinalize::Selected { purpose, rect })
 }
 
 pub(in crate::backend::wayland::state) fn finalize_region_selection_with_review_edits(
@@ -254,13 +266,19 @@ pub(in crate::backend::wayland::state) fn finalize_region_selection_with_review_
     owner: RegionInputSource,
     logical: (f64, f64),
 ) -> RegionSelectionFinalize {
-    let was_review = input_state.region_state().is_review();
-    let result = finalize_region_selection_event(backend, input_state, owner, logical);
-    if result == RegionSelectionFinalize::Reviewed
-        && (!was_review || review_edits.is_none())
-        && let Some(rect) = backend.and_then(ActiveScreenRegion::selection_rect)
-    {
-        *review_edits = super::cut_review::review_edits_for_active_region(*backend, rect);
+    match finalize_region_selection(backend, input_state, owner, logical) {
+        SelectionFinalization::Review(seed) => {
+            *review_edits = Some(seed.into_edits());
+            RegionSelectionFinalize::Reviewed
+        }
+        SelectionFinalization::Complete(result) => {
+            if result == RegionSelectionFinalize::Reviewed
+                && review_edits.is_none()
+                && let Some(rect) = backend.as_ref().and_then(|region| region.selection_rect())
+            {
+                *review_edits = super::cut_review::review_edits_for_active_region(*backend, rect);
+            }
+            result
+        }
     }
-    result
 }

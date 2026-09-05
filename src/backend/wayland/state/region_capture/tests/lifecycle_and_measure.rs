@@ -68,9 +68,10 @@ fn measure_mode_owns_logical_geometry_without_a_screen_image() {
         (35.2, 60.1),
     );
     assert_eq!(
-        finalize_region_selection_event(
+        finalize_region_selection_with_review_edits(
             &mut backend,
             &mut input,
+            &mut None,
             RegionInputSource::Pointer,
             (35.2, 60.1),
         ),

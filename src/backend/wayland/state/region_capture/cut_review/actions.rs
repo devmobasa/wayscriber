@@ -94,13 +94,6 @@ impl WaylandState {
             .is_some_and(|edits| edits.mode == CutMode::Armed)
     }
 
-    pub(in crate::backend::wayland::state::region_capture) fn create_region_review_edits(
-        &mut self,
-        rect: ImagePixelRect,
-    ) {
-        self.region_capture.set_review_edits_for(rect);
-    }
-
     pub(in crate::backend::wayland::state::region_capture) fn mark_region_cut_ui_dirty(&mut self) {
         self.input_state.dirty_tracker.mark_full();
         self.input_state.needs_redraw = true;

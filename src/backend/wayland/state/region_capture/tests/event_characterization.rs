@@ -90,9 +90,10 @@ fn each_purpose_keeps_its_event_geometry_and_terminal_ownership_contract() {
             (80.0, 75.0),
         );
         assert_eq!(
-            finalize_region_selection_event(
+            finalize_region_selection_with_review_edits(
                 &mut backend,
                 &mut input,
+                &mut None,
                 RegionInputSource::Touch,
                 (90.0, 79.0)
             ),
@@ -101,9 +102,10 @@ fn each_purpose_keeps_its_event_geometry_and_terminal_ownership_contract() {
         assert_eq!(input.region_state(), moving);
         assert_eq!(backend, active);
 
-        let result = finalize_region_selection_event(
+        let result = finalize_region_selection_with_review_edits(
             &mut backend,
             &mut input,
+            &mut None,
             RegionInputSource::Pointer,
             (30.0, 40.0),
         );

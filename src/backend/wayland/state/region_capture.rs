@@ -30,8 +30,6 @@ pub(in crate::backend::wayland) use board::{
 pub(in crate::backend::wayland) use cut_preview::CutPreviewOutcome;
 pub(in crate::backend::wayland) use cut_review::RegionReviewPress;
 pub(in crate::backend::wayland) use cut_review::{CutPreviewKey, RegionReviewEdits};
-#[cfg(test)]
-pub(super) use events::finalize_region_selection_event;
 pub(super) use events::finalize_region_selection_with_review_edits;
 use events::*;
 pub(in crate::backend::wayland) use geometry::{RegionPickerMeasurement, RegionSelectionGeometry};

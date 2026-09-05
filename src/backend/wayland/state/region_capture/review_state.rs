@@ -1,9 +1,33 @@
 use super::*;
 
+pub(super) struct InteractiveReviewSeed {
+    pub(super) generation: u64,
+    pub(super) source: ScreenSourceToken,
+    pub(super) rect: ImagePixelRect,
+    pub(super) display: RegionSelection,
+}
+
+impl InteractiveReviewSeed {
+    pub(super) fn into_edits(self) -> RegionReviewEdits {
+        RegionReviewEdits::new(
+            super::cut_review::RegionReviewCorrelation {
+                generation: self.generation,
+                source: self.source,
+            },
+            self.rect,
+        )
+    }
+}
+
 impl ActiveScreenRegion {
-    pub(super) fn enter_review(&mut self, rect: ImagePixelRect) -> Option<RegionSelection> {
+    pub(super) fn enter_review_seed(
+        &mut self,
+        rect: ImagePixelRect,
+    ) -> Option<InteractiveReviewSeed> {
         let Self::Ready {
             purpose,
+            generation,
+            source,
             anchor,
             raw_edge,
             logical_anchor,
@@ -17,6 +41,26 @@ impl ActiveScreenRegion {
         if *purpose != RegionPurposeTag::CaptureInteractive {
             return None;
         }
+        ImagePixelRect::new(
+            rect.x(),
+            rect.y(),
+            rect.width(),
+            rect.height(),
+            source.image_size,
+        )?;
+        let display = super::super::screen_image::screen_rect_for_image_rect(source, rect);
+        let seed = InteractiveReviewSeed {
+            generation: *generation,
+            source: *source,
+            rect,
+            display: RegionSelection {
+                start: (f64::from(display.x), f64::from(display.y)),
+                end: (
+                    f64::from(display.x.saturating_add(display.width)),
+                    f64::from(display.y.saturating_add(display.height)),
+                ),
+            },
+        };
         // Re-entering Review replaces the rectangle wholesale — `Ctrl+A` can
         // do that while a grip is still held — so the old grip must not
         // survive to block the next move, resize or nudge.
@@ -30,8 +74,7 @@ impl ActiveScreenRegion {
             f64::from(rect.x() + rect.width()),
             f64::from(rect.y() + rect.height()),
         ));
-        self.review_geometry()
-            .map(|geometry| geometry.display_selection())
+        Some(seed)
     }
 
     pub(super) fn begin_review_move(&mut self, logical: (f64, f64)) -> bool {

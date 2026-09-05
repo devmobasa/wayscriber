@@ -110,23 +110,17 @@ impl WaylandState {
             }
             ScreenSourceEntry::WaitForZoom => {
                 if self.wait_for_current_zoom_capture(ZoomWaiterOwner::Ocr) {
-                    self.set_pending_screen_region(
-                        RegionPurposeTag::Ocr,
-                        generation,
-                        ScreenCaptureSource::Zoom,
-                        None,
-                    );
+                    self.set_pending_zoom_screen_region(RegionPurposeTag::Ocr, generation);
                 } else {
                     self.report_ocr_zoom_image_unavailable();
                 }
             }
             ScreenSourceEntry::AutoFreeze => {
                 match self.acquisition.request(ScreenAcquisitionOwner::Ocr) {
-                    Ok(acquisition) => self.set_pending_screen_region(
+                    Ok(acquisition) => self.set_pending_frozen_screen_region(
                         RegionPurposeTag::Ocr,
                         generation,
-                        ScreenCaptureSource::Frozen,
-                        Some(acquisition),
+                        acquisition,
                     ),
                     Err(_) => self.report_terminal(
                         ScreenAcquisitionOwner::Ocr,

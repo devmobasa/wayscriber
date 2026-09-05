@@ -134,9 +134,10 @@ fn production_ocr_event_adapter_uses_release_endpoint_at_every_scale() {
                 let RegionSelectionFinalize::Selected {
                     purpose: RegionPurposeTag::Ocr,
                     rect,
-                } = finalize_region_selection_event(
+                } = finalize_region_selection_with_review_edits(
                     &mut backend,
                     &mut input,
+                    &mut None,
                     RegionInputSource::Pointer,
                     release,
                 )
@@ -180,9 +181,10 @@ fn production_ocr_event_adapter_rearms_small_drag_and_ignores_shift_square_polic
     let RegionSelectionFinalize::Selected {
         purpose: RegionPurposeTag::Ocr,
         rect,
-    } = finalize_region_selection_event(
+    } = finalize_region_selection_with_review_edits(
         &mut backend,
         &mut input,
+        &mut None,
         RegionInputSource::Pointer,
         (14.0, 28.0),
     )
@@ -201,9 +203,10 @@ fn production_ocr_event_adapter_rearms_small_drag_and_ignores_shift_square_polic
         (10.0, 20.0),
     ));
     assert_eq!(
-        finalize_region_selection_event(
+        finalize_region_selection_with_review_edits(
             &mut backend,
             &mut input,
+            &mut None,
             RegionInputSource::Pointer,
             (13.0, 23.0),
         ),
