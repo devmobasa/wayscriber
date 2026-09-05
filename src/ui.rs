@@ -47,7 +47,7 @@ pub(crate) use eyedropper_loupe::{compute_eyedropper_loupe_layout, render_eyedro
 pub use font_picker::render_font_picker;
 #[allow(unused_imports)]
 pub use help_overlay::HelpOverlayBindings;
-pub(crate) use help_overlay::render_help_overlay_result_with_context;
+pub(crate) use help_overlay::{HelpContentCache, render_help_overlay_result_with_content};
 #[allow(unused_imports)]
 pub use help_overlay::{
     HelpHitMap, HelpOverlayRegion, HelpRenderResult, render_help_overlay,

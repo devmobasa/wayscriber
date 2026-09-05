@@ -1,3 +1,4 @@
+use super::content::HelpContentSnapshot;
 use super::grid::{GridColors, GridStyle, draw_sections_grid};
 use super::keycaps::KeyComboStyle;
 use super::nav::{NavDrawStyle, draw_nav};
@@ -43,6 +44,41 @@ pub(crate) fn render_help_overlay_result_with_context(
     scroll_offset: f64,
     quick_mode: bool,
 ) -> HelpRenderResult {
+    let content = HelpContentSnapshot::from_bindings(
+        bindings,
+        frozen_enabled,
+        context_filter,
+        board_enabled,
+        capture_enabled,
+    );
+    render_help_overlay_result_with_content(
+        engine,
+        render,
+        style,
+        screen_width,
+        screen_height,
+        page_index,
+        &content,
+        search_query,
+        scroll_offset,
+        quick_mode,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_help_overlay_result_with_content(
+    engine: &crate::ui_text::UiTextEngine,
+    render: &mut crate::ui::UiRenderCtx<'_, '_, '_>,
+    style: &crate::config::HelpOverlayStyle,
+    screen_width: u32,
+    screen_height: u32,
+    page_index: usize,
+    content: &HelpContentSnapshot,
+    search_query: &str,
+    scroll_offset: f64,
+    quick_mode: bool,
+) -> HelpRenderResult {
+    let bindings = &content.bindings;
     let ctx = render.cairo;
     let title_text = if quick_mode {
         "Quick Reference"
@@ -116,13 +152,9 @@ pub(crate) fn render_help_overlay_result_with_context(
         style,
         screen_width,
         screen_height,
-        frozen_enabled,
         page_index,
-        bindings,
+        content,
         search_query,
-        context_filter,
-        board_enabled,
-        capture_enabled,
         scroll_offset,
         title_text,
         &header,

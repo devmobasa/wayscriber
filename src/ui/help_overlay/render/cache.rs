@@ -1,4 +1,4 @@
-use super::super::sections::HelpOverlayBindings;
+use super::super::content::HelpContentSnapshot;
 use super::state::{OverlayLayout, build_overlay_layout};
 
 /// Style fields converted to integers for stable comparison.
@@ -49,13 +49,9 @@ struct LayoutCacheKey {
     style: StyleKey,
     screen_width: u32,
     screen_height: u32,
-    frozen_enabled: bool,
     page_index: usize,
-    bindings_key: String,
+    content_revision: u64,
     search_query: String,
-    context_filter: bool,
-    board_enabled: bool,
-    capture_enabled: bool,
     quick_mode: bool,
 }
 
@@ -85,13 +81,9 @@ impl HelpLayoutCache {
         style: &crate::config::HelpOverlayStyle,
         screen_width: u32,
         screen_height: u32,
-        frozen_enabled: bool,
         page_index: usize,
-        bindings: &HelpOverlayBindings,
+        content: &HelpContentSnapshot,
         search_query: &str,
-        context_filter: bool,
-        board_enabled: bool,
-        capture_enabled: bool,
         scroll_offset: f64,
         title_text: &str,
         header: &super::header::HeaderContent<'_>,
@@ -103,13 +95,9 @@ impl HelpLayoutCache {
             style: StyleKey::from_style(style),
             screen_width,
             screen_height,
-            frozen_enabled,
             page_index,
-            bindings_key: bindings.cache_key().to_string(),
+            content_revision: content.revision,
             search_query: search_query.to_string(),
-            context_filter,
-            board_enabled,
-            capture_enabled,
             quick_mode,
         };
 
@@ -132,13 +120,9 @@ impl HelpLayoutCache {
             style,
             screen_width,
             screen_height,
-            frozen_enabled,
             page_index,
-            bindings,
+            content,
             search_query,
-            context_filter,
-            board_enabled,
-            capture_enabled,
             scroll_offset,
             title_text,
             header,

@@ -1,8 +1,9 @@
 use super::super::super::primitives::text_extents_for_with_engine;
+use super::super::content::HelpContentSnapshot;
 use super::super::fonts::resolve_help_font_family;
 use super::super::layout::{GridLayout, build_grid, measure_sections};
 use super::super::nav::{NavState, build_nav_state};
-use super::super::sections::{HelpOverlayBindings, build_section_sets, filter_sections_for_search};
+use super::super::sections::filter_sections_for_search;
 use super::BULLET;
 use super::header::{HeaderContent, measure_hints, title_row_width};
 use super::metrics::RenderMetrics;
@@ -36,13 +37,9 @@ pub(super) fn build_overlay_layout(
     style: &crate::config::HelpOverlayStyle,
     screen_width: u32,
     screen_height: u32,
-    frozen_enabled: bool,
     page_index: usize,
-    bindings: &HelpOverlayBindings,
+    content: &HelpContentSnapshot,
     search_query: &str,
-    context_filter: bool,
-    board_enabled: bool,
-    capture_enabled: bool,
     scroll_offset: f64,
     title_text: &str,
     header: &HeaderContent<'_>,
@@ -55,13 +52,7 @@ pub(super) fn build_overlay_layout(
     let search_lower = search_query.to_ascii_lowercase();
     let help_font_family = resolve_help_font_family(&style.font_family);
 
-    let section_sets = build_section_sets(
-        bindings,
-        frozen_enabled,
-        context_filter,
-        board_enabled,
-        capture_enabled,
-    );
+    let section_sets = &content.sections;
     let page_count = if quick_mode || section_sets.page2.is_empty() {
         1
     } else {
@@ -71,13 +62,13 @@ pub(super) fn build_overlay_layout(
     let nav_title = if quick_mode { "Quick Ref" } else { "Controls" };
 
     let sections = if quick_mode {
-        section_sets.quick
+        section_sets.quick.clone()
     } else if search_active {
-        filter_sections_for_search(section_sets.all, &search_lower)
+        filter_sections_for_search(section_sets.all.clone(), &search_lower)
     } else if page_index == 0 {
-        section_sets.page1
+        section_sets.page1.clone()
     } else {
-        section_sets.page2
+        section_sets.page2.clone()
     };
 
     let metrics = RenderMetrics::from_style(style, screen_width, screen_height);

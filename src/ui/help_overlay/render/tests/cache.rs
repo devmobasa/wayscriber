@@ -1,5 +1,6 @@
 use super::*;
 use crate::config::HelpOverlayStyle;
+use crate::ui::HelpOverlayBindings;
 
 struct Inputs {
     style: HelpOverlayStyle,
@@ -42,13 +43,15 @@ fn layout(cache: &mut HelpLayoutCache, inputs: &Inputs, scroll: f64) -> OverlayL
         &inputs.style,
         inputs.width,
         inputs.height,
-        inputs.frozen,
         inputs.page,
-        &inputs.bindings,
+        &HelpContentSnapshot::from_bindings(
+            &inputs.bindings,
+            inputs.frozen,
+            inputs.context_filter,
+            inputs.board,
+            inputs.capture,
+        ),
         &inputs.query,
-        inputs.context_filter,
-        inputs.board,
-        inputs.capture,
         scroll,
         "Wayscriber Controls",
         &super::super::header::HeaderContent {

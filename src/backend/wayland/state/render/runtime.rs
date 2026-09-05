@@ -122,6 +122,7 @@ pub(in crate::backend::wayland) struct RenderRuntime {
     draw_caches: crate::draw::RenderCaches,
     theme: crate::ui::theme::Theme,
     ui_caches: crate::ui::UiRenderCaches,
+    help_content: crate::ui::HelpContentCache,
     ui_text: crate::ui_text::UiTextEngine,
     text_measurer: crate::draw::TextMeasurer,
     ui_damage: UiDamageHistory,
@@ -138,6 +139,7 @@ impl RenderRuntime {
             draw_caches: crate::draw::RenderCaches::default(),
             theme,
             ui_caches: crate::ui::UiRenderCaches::default(),
+            help_content: crate::ui::HelpContentCache::default(),
             ui_text,
             text_measurer: crate::draw::TextMeasurer::default(),
             ui_damage: UiDamageHistory::default(),
@@ -165,6 +167,22 @@ impl RenderRuntime {
         &crate::ui_text::UiTextEngine,
     ) {
         (&self.theme, &mut self.ui_caches, &self.ui_text)
+    }
+
+    pub(in crate::backend::wayland::state) fn help_parts_mut(
+        &mut self,
+    ) -> (
+        &crate::ui::theme::Theme,
+        &mut crate::ui::UiRenderCaches,
+        &crate::ui_text::UiTextEngine,
+        &mut crate::ui::HelpContentCache,
+    ) {
+        (
+            &self.theme,
+            &mut self.ui_caches,
+            &self.ui_text,
+            &mut self.help_content,
+        )
     }
 
     pub(in crate::backend::wayland::state) fn canvas_layer_cache_mut(

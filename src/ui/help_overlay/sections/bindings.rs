@@ -6,6 +6,7 @@ use crate::config::{
 use crate::input::InputState;
 use crate::label_format::{format_binding_labels_or, join_binding_labels};
 
+#[derive(Clone)]
 pub struct HelpOverlayBindings {
     labels: HashMap<Action, Vec<String>>,
     cache_key: String,

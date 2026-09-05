@@ -206,27 +206,29 @@ impl WaylandState {
         capture_picker: bool,
     ) {
         if !capture_picker && self.input_state.help_overlay.is_visible() {
-            let bindings = crate::ui::HelpOverlayBindings::from_input_state(&self.input_state);
             let result = {
-                let (theme, caches, engine) = self.render.ui_parts_with_text_mut();
+                let (theme, caches, engine, content_cache) = self.render.help_parts_mut();
+                let content = content_cache.get_or_build(
+                    &self.input_state,
+                    self.frozen.enabled(),
+                    self.config.ui.help_overlay_context_filter,
+                    self.input_state.boards.board_count() > 1,
+                    self.config.capture.enabled,
+                );
                 let mut render = crate::ui::UiRenderCtx {
                     cairo: ctx,
                     theme,
                     caches,
                 };
-                crate::ui::render_help_overlay_result_with_context(
+                crate::ui::render_help_overlay_result_with_content(
                     engine,
                     &mut render,
                     &self.config.ui.help_overlay_style,
                     width,
                     height,
-                    self.frozen.enabled(),
                     self.input_state.help_overlay.page(),
-                    &bindings,
+                    content,
                     self.input_state.help_overlay.query(),
-                    self.config.ui.help_overlay_context_filter,
-                    self.input_state.boards.board_count() > 1,
-                    self.config.capture.enabled,
                     self.input_state.help_overlay.scroll(),
                     self.input_state.help_overlay.is_quick_mode(),
                 )
