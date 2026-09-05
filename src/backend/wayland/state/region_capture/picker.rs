@@ -162,7 +162,8 @@ impl WaylandState {
             return;
         }
 
-        self.input_state.prepare_for_screen_modal();
+        self.input_state
+            .prepare_for_screen_modal_with_measurer(self.render.text_measurer());
         self.zoom.stop_pan();
         self.pointer.stop_board_pan();
         self.pointer.set_board_pan_key_held(false);

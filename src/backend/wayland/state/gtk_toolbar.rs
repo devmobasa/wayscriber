@@ -249,11 +249,19 @@ mod modal_tests {
         use crate::input::state::RegionPurposeTag;
 
         let mut input_state = make_test_input_state();
-        input_state.activate_region(RegionPurposeTag::Ocr, 1);
+        input_state.activate_region_with(
+            &crate::draw::TextMeasurer::default(),
+            RegionPurposeTag::Ocr,
+            1,
+        );
         assert!(!gtk_toolbar_feedback_blocked(&input_state));
 
         input_state.cancel_region_ui_only();
-        input_state.activate_region(RegionPurposeTag::CaptureDeliver, 2);
+        input_state.activate_region_with(
+            &crate::draw::TextMeasurer::default(),
+            RegionPurposeTag::CaptureDeliver,
+            2,
+        );
         assert!(gtk_toolbar_feedback_blocked(&input_state));
     }
 

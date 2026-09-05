@@ -58,13 +58,7 @@ impl InputState {
 
     /// Updates the active drawing thickness from tablet pressure without
     /// treating every pressure sample as a persisted user preference edit.
-    #[cfg_attr(not(feature = "tablet-input"), allow(dead_code))]
-    pub(crate) fn set_pressure_thickness_for_active_tool(&mut self, thickness: f64) -> f64 {
-        with_legacy_measurer(|measurer| {
-            self.set_pressure_thickness_for_active_tool_with(measurer, thickness)
-        })
-    }
-
+    #[cfg(feature = "tablet-input")]
     pub(crate) fn set_pressure_thickness_for_active_tool_with(
         &mut self,
         measurer: &TextMeasurer,
@@ -117,6 +111,7 @@ impl InputState {
         true
     }
 
+    #[cfg(feature = "tablet-input")]
     fn update_initial_pressure_sample(&mut self, thickness: f64) {
         let DrawingState::Drawing {
             points,
@@ -131,6 +126,7 @@ impl InputState {
         }
     }
 
+    #[cfg(feature = "tablet-input")]
     fn active_initial_pressure_sample_changes(&self, thickness: f32) -> bool {
         let DrawingState::Drawing {
             points,

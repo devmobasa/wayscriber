@@ -9,7 +9,7 @@
 //! this module says the pair deliberately coexists.
 
 use super::DrawingState;
-use crate::draw::{TextMeasurer, with_legacy_measurer};
+use crate::draw::TextMeasurer;
 use crate::input::state::InputState;
 
 /// Every popup surface that participates in modal mutual exclusion, in the
@@ -173,10 +173,6 @@ impl InputState {
     /// reappear when the selector closed. Going through the registry also means
     /// each surface is dismissed by its own closer — the tour used to be a bare
     /// flag clear here, which left the toolbar chrome it hides still hidden.
-    pub(crate) fn prepare_for_screen_modal(&mut self) {
-        with_legacy_measurer(|measurer| self.prepare_for_screen_modal_with_measurer(measurer))
-    }
-
     pub(crate) fn prepare_for_screen_modal_with_measurer(&mut self, measurer: &TextMeasurer) {
         self.cancel_active_interaction_with(measurer);
         for surface in ModalSurface::ALL {
@@ -288,7 +284,7 @@ mod wheel_tests {
         // stop at them; the wheel used to carry on to zoom, Spotlight, and
         // stroke thickness behind them.
         let mut state = make_test_input_state();
-        state.activate_eyedropper(None);
+        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), None);
 
         assert!(state.eyedropper_is_active());
         assert!(state.modal_owns_wheel());
@@ -302,7 +298,7 @@ mod wheel_tests {
         state.open_font_picker();
         assert!(state.is_font_picker_open());
 
-        state.prepare_for_screen_modal();
+        state.prepare_for_screen_modal_with_measurer(&crate::draw::TextMeasurer::default());
 
         assert!(!state.is_font_picker_open());
         assert!(

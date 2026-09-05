@@ -294,12 +294,15 @@ mod tests {
         assert_ne!(base, scaled, "device scale must be part of the key");
 
         // Recents arc
-        state.apply_color_from_ui(Color {
-            r: 0.123,
-            g: 0.456,
-            b: 0.789,
-            a: 1.0,
-        });
+        state.apply_color_from_ui_with_measurer(
+            &crate::draw::TextMeasurer::default(),
+            Color {
+                r: 0.123,
+                g: 0.456,
+                b: 0.789,
+                a: 1.0,
+            },
+        );
         let with_recent = key_for(&state);
         assert_ne!(base, with_recent, "a new recent color must invalidate");
 

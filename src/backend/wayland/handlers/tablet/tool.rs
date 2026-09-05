@@ -530,7 +530,11 @@ mod tests {
             !fresh_contact(&state),
             "a stroke drawn while the capture is pending is still a real stroke"
         );
-        state.activate_region(RegionPurposeTag::Ocr, 1);
+        state.activate_region_with(
+            &crate::draw::TextMeasurer::default(),
+            RegionPurposeTag::Ocr,
+            1,
+        );
         assert!(fresh_contact(&state));
         state.start_region_selection(RegionInputSource::Stylus, (10.0, 10.0));
         assert!(fresh_contact(&state));
@@ -539,7 +543,7 @@ mod tests {
 
         state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
         assert!(!fresh_contact(&state));
-        state.activate_eyedropper(Some(1));
+        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), Some(1));
         assert!(fresh_contact(&state));
         state.cancel_eyedropper();
         assert!(!fresh_contact(&state));

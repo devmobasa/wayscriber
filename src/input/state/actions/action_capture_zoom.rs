@@ -192,7 +192,7 @@ mod tests {
                     );
                 } else {
                     state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
-                    state.activate_eyedropper(None);
+                    state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), None);
                 }
 
                 assert!(state.handle_capture_zoom_action(action));

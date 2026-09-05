@@ -343,6 +343,7 @@ fn first_stroke_onboarding_signal_keeps_release_damage_bounded() {
     );
 }
 
+#[cfg(feature = "tablet-input")]
 #[test]
 fn pressure_preview_release_cleans_wide_preview_when_final_freehand_narrows() {
     let mut state = create_test_input_state();
@@ -354,7 +355,7 @@ fn pressure_preview_release_cleans_wide_preview_when_final_freehand_narrows() {
     let _ = state.take_dirty_regions();
 
     state.on_mouse_press(MouseButton::Left, 10, 100);
-    state.set_pressure_thickness_for_active_tool(32.0);
+    state.set_pressure_thickness_for_active_tool_with(&crate::draw::TextMeasurer::default(), 32.0);
     state.on_mouse_motion(900, 100);
     let wide_preview_bounds = state
         .provisional_bounds()
@@ -368,7 +369,7 @@ fn pressure_preview_release_cleans_wide_preview_when_final_freehand_narrows() {
     );
     let _ = state.take_dirty_regions();
 
-    state.set_pressure_thickness_for_active_tool(2.0);
+    state.set_pressure_thickness_for_active_tool_with(&crate::draw::TextMeasurer::default(), 2.0);
     let _ = state.take_dirty_regions();
     state.on_mouse_release(MouseButton::Left, 900, 100);
     let dirty = state.take_dirty_regions();
@@ -422,6 +423,7 @@ fn append_path_limit_rejection_clears_provisional_damage() {
     );
 }
 
+#[cfg(feature = "tablet-input")]
 #[test]
 fn pressure_sample_shrink_dirties_previous_full_provisional_bounds() {
     let mut state = create_test_input_state();
@@ -436,7 +438,7 @@ fn pressure_sample_shrink_dirties_previous_full_provisional_bounds() {
     let old_only_probe = crate::util::Rect::new(10, old_full_bounds.y, 1, 1).unwrap();
     let _ = state.take_dirty_regions();
 
-    state.set_pressure_thickness_for_active_tool(2.0);
+    state.set_pressure_thickness_for_active_tool_with(&crate::draw::TextMeasurer::default(), 2.0);
     state.on_mouse_motion(30, 10);
     let dirty = state.take_dirty_regions();
 

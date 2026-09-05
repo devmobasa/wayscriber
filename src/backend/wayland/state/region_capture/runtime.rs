@@ -230,7 +230,8 @@ impl WaylandState {
             MeasureModeTransition::Start => {}
         }
 
-        self.input_state.prepare_for_screen_modal();
+        self.input_state
+            .prepare_for_screen_modal_with_measurer(self.render.text_measurer());
         self.zoom.stop_pan();
         self.pointer.stop_board_pan();
         self.pointer.set_board_pan_key_held(false);
@@ -241,7 +242,8 @@ impl WaylandState {
         let generation = self
             .region_capture
             .begin_measure((self.surface.width(), self.surface.height()));
-        self.input_state.activate_measure_mode(generation);
+        self.input_state
+            .activate_measure_mode_with(self.render.text_measurer(), generation);
         self.debug_assert_screen_region_invariant();
     }
 
@@ -344,7 +346,8 @@ impl WaylandState {
             initial_square_modifier(purpose, self.input_state.modifiers.shift),
             include_drawings,
         );
-        self.input_state.activate_region(purpose, generation);
+        self.input_state
+            .activate_region_with(self.render.text_measurer(), purpose, generation);
         self.start_region_window_query(purpose, generation, token, freeze_ownership);
         self.debug_assert_screen_region_invariant();
         true

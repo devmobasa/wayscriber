@@ -40,6 +40,16 @@ pub(crate) fn try_apply_pressure_to_state(
     state: &mut InputState,
     settings: TabletSettings,
 ) -> bool {
+    let measurer = crate::draw::TextMeasurer::default();
+    try_apply_pressure_to_state_with(&measurer, pressure01, state, settings)
+}
+
+pub(crate) fn try_apply_pressure_to_state_with(
+    measurer: &crate::draw::TextMeasurer,
+    pressure01: f64,
+    state: &mut InputState,
+    settings: TabletSettings,
+) -> bool {
     if !settings.enabled
         || !settings.pressure_enabled
         || !state.active_tool().supports_pressure_thickness()
@@ -61,7 +71,7 @@ pub(crate) fn try_apply_pressure_to_state(
         );
     }
 
-    state.set_pressure_thickness_for_active_tool(new_thickness);
+    state.set_pressure_thickness_for_active_tool_with(measurer, new_thickness);
     true
 }
 

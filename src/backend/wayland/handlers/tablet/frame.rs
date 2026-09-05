@@ -118,7 +118,8 @@ impl WaylandState {
         let first_pressure_sample =
             self.tablet.tip_down && self.tablet.pressure_thickness.is_none();
         let p01 = (pressure as f64) / 65535.0;
-        if !crate::input::tablet::try_apply_pressure_to_state(
+        if !crate::input::tablet::try_apply_pressure_to_state_with(
+            self.render.text_measurer(),
             p01,
             &mut self.input_state,
             self.tablet.settings,
@@ -365,14 +366,18 @@ mod tests {
 
         state.set_region_pending_capture(RegionPurposeTag::Ocr, 1, ScreenCaptureSource::Frozen);
         assert!(modal_blocks_stylus_barrel_actions(&state));
-        state.activate_region(RegionPurposeTag::Ocr, 1);
+        state.activate_region_with(
+            &crate::draw::TextMeasurer::default(),
+            RegionPurposeTag::Ocr,
+            1,
+        );
         assert!(modal_blocks_stylus_barrel_actions(&state));
         state.cancel_region_ui_only();
         assert!(!modal_blocks_stylus_barrel_actions(&state));
 
         state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
         assert!(modal_blocks_stylus_barrel_actions(&state));
-        state.activate_eyedropper(Some(1));
+        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), Some(1));
         assert!(modal_blocks_stylus_barrel_actions(&state));
         state.cancel_eyedropper();
         assert!(!modal_blocks_stylus_barrel_actions(&state));

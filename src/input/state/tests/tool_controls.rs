@@ -678,7 +678,9 @@ fn accepting_a_recolor_keeps_the_swatch_and_queues_the_durable_write() {
 fn recoloring_the_swatch_in_use_moves_the_tool_color_with_it() {
     let mut state = create_test_input_state();
     let slot_color = state.style.quick_colors.color_for_index(3).expect("slot 3");
-    assert!(state.apply_color_from_ui(slot_color));
+    assert!(
+        state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), slot_color)
+    );
     state.preset_slots.restore_active(Some(2));
     state.clear_session_dirty();
 
@@ -1126,13 +1128,16 @@ fn recent_swatches_are_hit_testable_in_the_popup() {
         b: 0.875,
         a: 1.0,
     };
-    state.apply_color_from_ui(stashed);
-    state.apply_color_from_ui(Color {
-        r: 1.0,
-        g: 1.0,
-        b: 0.0,
-        a: 1.0,
-    });
+    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), stashed);
+    state.apply_color_from_ui_with_measurer(
+        &crate::draw::TextMeasurer::default(),
+        Color {
+            r: 1.0,
+            g: 1.0,
+            b: 0.0,
+            a: 1.0,
+        },
+    );
 
     state.open_color_picker_popup();
     state.update_color_picker_popup_layout(1920, 1080);
@@ -1260,7 +1265,7 @@ fn a_picker_drag_released_over_a_recent_swatch_does_not_adopt_it() {
         b: 0.875,
         a: 1.0,
     };
-    state.apply_color_from_ui(stashed);
+    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), stashed);
 
     state.open_color_picker_popup();
     state.color_picker_popup_set_hue(0.1);

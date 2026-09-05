@@ -129,7 +129,9 @@ impl WaylandState {
         if let Some(color) = parse_hex_color(clipboard.trim()) {
             match target {
                 HexPasteTarget::ActiveTool => {
-                    let _ = self.input_state.apply_color_from_ui(color);
+                    let _ = self
+                        .input_state
+                        .apply_color_from_ui_with_measurer(self.render.text_measurer(), color);
                 }
                 HexPasteTarget::ColorPickerPopup { generation } => {
                     if !self

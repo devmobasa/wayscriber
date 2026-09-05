@@ -220,8 +220,12 @@ impl RegionSelectUiState {
 }
 
 impl InputState {
-    pub(crate) fn activate_measure_mode(&mut self, generation: u64) {
-        self.activate_region(RegionPurposeTag::Measure, generation);
+    pub(crate) fn activate_measure_mode_with(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        generation: u64,
+    ) {
+        self.activate_region_with(measurer, RegionPurposeTag::Measure, generation);
     }
 
     pub(crate) fn request_copy_text_from_screen(&mut self) {
@@ -265,11 +269,16 @@ impl InputState {
         self.mark_region_dirty();
     }
 
-    pub(crate) fn activate_region(&mut self, purpose: RegionPurposeTag, generation: u64) {
+    pub(crate) fn activate_region_with(
+        &mut self,
+        measurer: &crate::draw::TextMeasurer,
+        purpose: RegionPurposeTag,
+        generation: u64,
+    ) {
         // A capture can take long enough for another interaction to begin while
         // OCR is pending. Entering the modal state must cancel it so the
         // selector cannot swallow the matching release event.
-        self.prepare_for_screen_modal();
+        self.prepare_for_screen_modal_with_measurer(measurer);
         self.region_select_ui_state = RegionSelectUiState::Armed {
             purpose,
             generation,
@@ -473,7 +482,11 @@ mod tests {
     // interaction, tool, and history guarantees at their generalized seam.
 
     fn activate_ocr_region(state: &mut InputState, generation: u64) {
-        state.activate_region(RegionPurposeTag::Ocr, generation);
+        state.activate_region_with(
+            &crate::draw::TextMeasurer::default(),
+            RegionPurposeTag::Ocr,
+            generation,
+        );
     }
 
     #[test]
@@ -576,7 +589,7 @@ mod tests {
     #[test]
     fn measure_mode_keeps_the_completed_rectangle_without_capture_state() {
         let mut state = make_test_input_state();
-        state.activate_measure_mode(7);
+        state.activate_measure_mode_with(&crate::draw::TextMeasurer::default(), 7);
         assert!(state.start_region_selection(RegionInputSource::Pointer, (12.0, 18.0)));
         state.update_region_selection(RegionInputSource::Pointer, (42.0, 63.0));
 

@@ -1014,7 +1014,10 @@ fn recent_colors_are_deduped_most_recent_first_and_capped() {
     };
     // Steps of 0.125 are exact binary fractions, so equality is exact.
     for i in 0..8 {
-        state.apply_color_from_ui(color(i as f64 * 0.125));
+        state.apply_color_from_ui_with_measurer(
+            &crate::draw::TextMeasurer::default(),
+            color(i as f64 * 0.125),
+        );
     }
     assert_eq!(state.style.recent_colors.len(), 6, "recents are capped");
     assert_eq!(
@@ -1024,7 +1027,7 @@ fn recent_colors_are_deduped_most_recent_first_and_capped() {
     );
 
     // Re-applying an existing color moves it to the front without growing.
-    state.apply_color_from_ui(color(0.5));
+    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), color(0.5));
     assert_eq!(state.style.recent_colors.len(), 6);
     assert_eq!(state.style.recent_colors[0], color(0.5));
     assert_eq!(
@@ -1048,14 +1051,14 @@ fn radial_ring_appends_recents_after_quick_palette_without_duplicates() {
         b: 0.33,
         a: 1.0,
     };
-    state.apply_color_from_ui(unique);
+    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), unique);
     // A recent identical to a quick swatch is filtered from the ring.
     let quick0 = state
         .style
         .quick_colors
         .radial_color_for_index(0)
         .expect("quick color 0");
-    state.apply_color_from_ui(quick0);
+    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), quick0);
 
     let swatches = state.radial_ring_swatches();
     assert_eq!(swatches.len(), quick_len + 1);
@@ -1073,14 +1076,14 @@ fn recent_color_segment_applies_through_the_color_path() {
         b: 0.33,
         a: 1.0,
     };
-    state.apply_color_from_ui(unique);
+    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), unique);
     // Move the current color away so applying the recent is observable.
     let quick0 = state
         .style
         .quick_colors
         .radial_color_for_index(0)
         .expect("quick color 0");
-    state.apply_color_from_ui(quick0);
+    state.apply_color_from_ui_with_measurer(&crate::draw::TextMeasurer::default(), quick0);
     let quick_len = state.style.quick_colors.radial_rendered_len();
 
     let layout = open_with_layout(&mut state);

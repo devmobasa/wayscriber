@@ -6,7 +6,11 @@ use super::*;
 fn capture_hover_motion_requests_a_repaint_while_armed_and_in_review() {
     let mut armed_backend = Some(capture_region());
     let mut armed_input = make_test_input_state();
-    armed_input.activate_region(RegionPurposeTag::CaptureDeliver, 1);
+    armed_input.activate_region_with(
+        &crate::draw::TextMeasurer::default(),
+        RegionPurposeTag::CaptureDeliver,
+        1,
+    );
     let _ = armed_input.dirty_tracker.take_region_report(100, 80);
     armed_input.needs_redraw = false;
 
@@ -179,7 +183,11 @@ fn capture_pixel_span_reports_one_axis_empty_without_submitting_it() {
 fn capture_finalize_is_purpose_aware_and_one_axis_empty_rearms() {
     let mut backend = Some(capture_region());
     let mut input = make_test_input_state();
-    input.activate_region(RegionPurposeTag::CaptureDeliver, 1);
+    input.activate_region_with(
+        &crate::draw::TextMeasurer::default(),
+        RegionPurposeTag::CaptureDeliver,
+        1,
+    );
     assert!(begin_region_selection_event(
         &mut backend,
         &mut input,
@@ -202,7 +210,11 @@ fn capture_finalize_is_purpose_aware_and_one_axis_empty_rearms() {
 
     let mut backend = Some(capture_region());
     let mut input = make_test_input_state();
-    input.activate_region(RegionPurposeTag::CaptureDeliver, 1);
+    input.activate_region_with(
+        &crate::draw::TextMeasurer::default(),
+        RegionPurposeTag::CaptureDeliver,
+        1,
+    );
     assert!(begin_region_selection_event(
         &mut backend,
         &mut input,
@@ -336,7 +348,11 @@ fn capture_measurement_maps_armed_pointer_and_reports_exact_selecting_span() {
 fn compositor_shift_sync_recomputes_capture_preview_without_changing_ownership() {
     let mut backend = Some(capture_region());
     let mut input = make_test_input_state();
-    input.activate_region(RegionPurposeTag::CaptureDeliver, 1);
+    input.activate_region_with(
+        &crate::draw::TextMeasurer::default(),
+        RegionPurposeTag::CaptureDeliver,
+        1,
+    );
 
     assert!(sync_region_square_modifier_event(
         &mut backend,
@@ -381,7 +397,11 @@ fn compositor_shift_sync_recomputes_capture_preview_without_changing_ownership()
 fn capture_owner_loss_rearms_without_releasing_backend_ownership() {
     let mut backend = Some(capture_region());
     let mut input = make_test_input_state();
-    input.activate_region(RegionPurposeTag::CaptureDeliver, 1);
+    input.activate_region_with(
+        &crate::draw::TextMeasurer::default(),
+        RegionPurposeTag::CaptureDeliver,
+        1,
+    );
     assert!(begin_region_selection_event(
         &mut backend,
         &mut input,
@@ -429,7 +449,11 @@ fn capture_owner_loss_rearms_without_releasing_backend_ownership() {
 fn ocr_owner_loss_requests_its_existing_terminal_cancel_path() {
     let mut backend = Some(ocr_region(1.0));
     let mut input = make_test_input_state();
-    input.activate_region(RegionPurposeTag::Ocr, 1);
+    input.activate_region_with(
+        &crate::draw::TextMeasurer::default(),
+        RegionPurposeTag::Ocr,
+        1,
+    );
     assert!(begin_region_selection_event(
         &mut backend,
         &mut input,
@@ -952,7 +976,11 @@ fn rejected_review_rectangle_preserves_the_active_resize() {
 fn mismatched_generation_release_preserves_selection_and_owner() {
     let mut backend = Some(interactive_region());
     let mut input = make_test_input_state();
-    input.activate_region(RegionPurposeTag::CaptureInteractive, 1);
+    input.activate_region_with(
+        &crate::draw::TextMeasurer::default(),
+        RegionPurposeTag::CaptureInteractive,
+        1,
+    );
     assert!(begin_region_selection_event(
         &mut backend,
         &mut input,

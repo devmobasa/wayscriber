@@ -111,7 +111,9 @@ fn apply_tray_action(state: &mut WaylandState, action: TrayAction) {
             state.input_state.toggle_help_overlay();
         }
         TrayAction::ToggleBoardPicker => {
-            state.input_state.toggle_board_picker();
+            state
+                .input_state
+                .toggle_board_picker_with_measurer(state.render.text_measurer());
             state.input_state.needs_redraw = true;
         }
         TrayAction::ToggleLightMode => {

@@ -53,7 +53,7 @@ fn measure_mode_owns_logical_geometry_without_a_screen_image() {
         edge: None,
     });
     let mut input = make_test_input_state();
-    input.activate_measure_mode(7);
+    input.activate_measure_mode_with(&crate::draw::TextMeasurer::default(), 7);
 
     assert!(begin_region_selection_event(
         &mut backend,
@@ -129,7 +129,7 @@ fn lost_measure_drag_rearms_for_another_device() {
         edge: None,
     });
     let mut input = make_test_input_state();
-    input.activate_measure_mode(8);
+    input.activate_measure_mode_with(&crate::draw::TextMeasurer::default(), 8);
     assert!(begin_region_selection_event(
         &mut backend,
         &mut input,
@@ -161,7 +161,7 @@ fn reversed_measure_drag_uses_outward_integer_edges() {
         edge: None,
     });
     let mut input = make_test_input_state();
-    input.activate_measure_mode(9);
+    input.activate_measure_mode_with(&crate::draw::TextMeasurer::default(), 9);
     assert!(begin_region_selection_event(
         &mut backend,
         &mut input,

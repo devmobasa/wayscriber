@@ -406,7 +406,7 @@ mod tests {
     #[test]
     fn an_active_screen_modal_prevents_the_toolbar_scroll_route() {
         let mut input_state = make_test_input_state();
-        input_state.activate_eyedropper(None);
+        input_state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), None);
 
         assert_eq!(
             axis_surface_route(&input_state, true, true, 1),

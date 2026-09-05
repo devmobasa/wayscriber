@@ -26,12 +26,6 @@ impl InputState {
         true
     }
 
-    pub(crate) fn apply_color_from_ui(&mut self, color: Color) -> bool {
-        crate::draw::with_legacy_measurer(|measurer| {
-            self.apply_color_from_ui_with_measurer(measurer, color)
-        })
-    }
-
     pub(crate) fn apply_color_from_ui_with_measurer(
         &mut self,
         measurer: &crate::draw::TextMeasurer,

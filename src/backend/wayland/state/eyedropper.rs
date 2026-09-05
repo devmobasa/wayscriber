@@ -56,7 +56,8 @@ impl WaylandState {
         // The two screen modals are mutually exclusive; entering one ends the
         // other, including any temporary freeze that one owned.
         self.cancel_ocr();
-        self.input_state.prepare_for_screen_modal();
+        self.input_state
+            .prepare_for_screen_modal_with_measurer(self.render.text_measurer());
         self.zoom.stop_pan();
         self.pointer.stop_board_pan();
         self.pointer.set_board_pan_key_held(false);
@@ -181,7 +182,7 @@ impl WaylandState {
         self.retire_stylus_contact();
         self.acquisition.set_eyedropper_source(token);
         self.input_state
-            .activate_eyedropper(owned_frozen_generation);
+            .activate_eyedropper_with(self.render.text_measurer(), owned_frozen_generation);
         true
     }
 
@@ -207,7 +208,8 @@ impl WaylandState {
         let (image_x, image_y) = self.eyedropper_image_coords(&source, x, y);
         let color = sample_at(source.image, image_x, image_y);
         if let Some(color) = color {
-            self.input_state.apply_color_from_ui(color);
+            self.input_state
+                .apply_color_from_ui_with_measurer(self.render.text_measurer(), color);
         } else {
             self.input_state.push_toast(
                 ToastPriority::Critical,

@@ -152,6 +152,7 @@ impl DrawingStyle {
         true
     }
 
+    #[cfg(feature = "tablet-input")]
     pub(crate) fn set_pressure_thickness(&mut self, tool: Tool, thickness: f64) -> f64 {
         let clamped = thickness.clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS);
         if tool.uses_drawing_thickness() {
